@@ -23,6 +23,14 @@ describe('search shortcut', () => {
     expect(isPaletteShortcut(key({ metaKey: true }), false)).toBe(false);
   });
 
+  it('a keydown with no key (Android autofill) is never the shortcut and never throws', () => {
+    const noKey = { ...key({ ctrlKey: true, metaKey: true }), key: undefined as unknown as string };
+    expect(() => isPaletteShortcut(noKey, true)).not.toThrow();
+    expect(isPaletteShortcut(noKey, true)).toBe(false);
+    expect(isPaletteShortcut(noKey, false)).toBe(false);
+    expect(isPaletteShortcut(key({ metaKey: true }), true)).toBe(true);
+  });
+
   it('never with Alt or Shift, or another key', () => {
     expect(isPaletteShortcut(key({ ctrlKey: true, shiftKey: true }), false)).toBe(false);
     expect(isPaletteShortcut(key({ ctrlKey: true, altKey: true }), false)).toBe(false);

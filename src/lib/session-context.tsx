@@ -97,6 +97,17 @@ interface SessionContextValue {
   retry: () => void;
 }
 
+/** A read aborted because the tab is closing or navigating away: harmless, never logged. Pure. */
+export function isClosingTabAbort(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const { name, message } = error as { name?: unknown; message?: unknown };
+  return (
+    name === 'AbortError' &&
+    typeof message === 'string' &&
+    message.includes('browsing context is going away')
+  );
+}
+
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -130,7 +141,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           if (!active || mine !== generation) return;
           clearTimeout(timer);
           if (sessionReadFailed(data.session, error, storedSessionUserId())) {
-            logger.error('getSession failed', { error: String(error) });
+            if (!isClosingTabAbort(error)) {
+              logger.error('getSession failed', { error: String(error) });
+            }
             onFail();
             return;
           }
@@ -144,7 +157,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           settled = true;
           if (!active || mine !== generation) return;
           clearTimeout(timer);
-          logger.error('getSession failed', { error: String(error) });
+          if (!isClosingTabAbort(error)) {
+            logger.error('getSession failed', { error: String(error) });
+          }
           if (storedSessionUserId() !== null) {
             onFail();
             return;
