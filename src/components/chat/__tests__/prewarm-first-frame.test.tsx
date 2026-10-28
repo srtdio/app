@@ -106,7 +106,7 @@ function bundle(scheduled: ScheduledRow[] = []): ChatOpenBundle {
   };
 }
 
-/** A client that answers every read empty and counts them (the open must need none for its first frame). */
+/** A client that answers every read empty and counts them (the first frame needs none). */
 function countingClient(): { db: Client; reads: () => number } {
   let n = 0;
   const builder = (): unknown => {
@@ -266,7 +266,7 @@ afterEach(() => {
 });
 
 describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
-  it('first commit: the rows, the cursors, the parts in hand, no skeleton, nothing read', async () => {
+  it('first commit: rows, cursors, parts in hand, no skeleton, nothing read', async () => {
     const memory = createOpenCache();
     const { db, reads } = countingClient();
     expect(await prewarm(memory, bundle([scheduledAt('2026-10-25T18:00:00.000Z')]))).toBe(1);
@@ -318,7 +318,12 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
     expect(hold(false, true, false)).toBe(false);
     // Done (released or capped) never holds again.
     expect(
-      openHoldApplies({ keptOpen: true, holdDone: true, partsSettled: false, keptPartsSettled: false }),
+      openHoldApplies({
+        keptOpen: true,
+        holdDone: true,
+        partsSettled: false,
+        keptPartsSettled: false,
+      }),
     ).toBe(false);
   });
 
@@ -333,8 +338,7 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
     // Another viewer or workspace knows nothing of it.
     expect(planCardsSized(PEER, WS, ['p-1'])).toBe(false);
     expect(planCardsSized(ME, 'ws-2', ['p-1'])).toBe(false);
-    // The chat memory clearing (sign-out, a switch) forgets the shapes.
-    createOpenCache().clear();
+    // The chat memory's clear (sign-out, a switch: openCache's onClear) forgets them.
     clearPlanShapes();
     expect(planCardsSized(ME, WS, ['p-1'])).toBe(false);
   });
@@ -356,7 +360,7 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
     ).toBe(true);
   });
 
-  it('a scheduled row due since the pre-warm: not taken, its rows not remembered (the read runs)', async () => {
+  it('a scheduled row due since the pre-warm: not taken, nothing remembered', async () => {
     const memory = createOpenCache();
     await prewarm(memory, bundle([scheduledAt('2026-10-25T12:00:20.000Z')]));
     vi.setSystemTime(new Date('2026-10-25T12:00:30.000Z'));
@@ -369,7 +373,7 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
     expect(d.asked()).toBe(1);
   });
 
-  it('names the held members cannot answer: none seeded, the names read runs as before', async () => {
+  it('names the held members cannot answer: none seeded (the read runs)', async () => {
     const memory = createOpenCache();
     await prewarm(memory, bundle());
     const page = memory.recall(KEY, 'thread');

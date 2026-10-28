@@ -121,7 +121,7 @@ afterEach(() => {
 });
 
 describe('press-in starts the open bundle; the tap joins it', () => {
-  it('a cold chat: one bundle read, started at the press, shared by the tap and the thread', async () => {
+  it('a cold chat: one read, started at the press, shared by tap and thread', async () => {
     const store = createOpenCache();
     const d = deps(store);
     // The press stashes the open's bundle at once; its read (withReadTimeout)
@@ -191,7 +191,7 @@ describe('press-in starts the open bundle; the tap joins it', () => {
     expect(d.asked).toHaveLength(0);
   });
 
-  it('a stale pre-warm is not held: the press starts the reopen read, the tap joins it', async () => {
+  it('a stale pre-warm is not held: the press reads, the tap joins it', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-26T10:05:00Z'));
     const store = createOpenCache();
@@ -266,7 +266,7 @@ function tenRows(
 }
 
 describe('press-in never reads on a scroll', () => {
-  it('a scroll over 10 rows (moves, the pan cancel, list scrolls) fires 0 bundle reads', async () => {
+  it('a scroll gesture over 10 chat rows fires 0 bundle reads', async () => {
     const store = createOpenCache();
     const d = deps(store);
     const clock = fakeClock();
@@ -317,7 +317,7 @@ describe('press-in never reads on a scroll', () => {
     expect(press.armed()).toBe(false);
   });
 
-  it('a tap held past the settle mark: one read, started at 80 ms, shared with the open', async () => {
+  it('a tap held past 80 ms: one read, shared with the open', async () => {
     const store = createOpenCache();
     const d = deps(store);
     const clock = fakeClock();
