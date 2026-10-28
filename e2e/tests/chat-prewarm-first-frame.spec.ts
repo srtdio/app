@@ -127,6 +127,22 @@ function seedPlanDm(network: HarnessNetwork): void {
   });
 }
 
+/** Each row's on-screen top and the thread's distance from its bottom, now. */
+async function rowOffsets(
+  page: Page,
+): Promise<{ at: number; tops: Record<string, number>; gap: number }> {
+  return page.evaluate(() => {
+    const tops: Record<string, number> = {};
+    for (const row of document.querySelectorAll('[data-msg-id]')) {
+      tops[row.getAttribute('data-msg-id') ?? ''] = Math.round(row.getBoundingClientRect().top);
+    }
+    const list = document.querySelector('[data-thread-viewport] > ul');
+    const gap =
+      list !== null ? Math.round(list.scrollHeight - list.scrollTop - list.clientHeight) : 0;
+    return { at: Math.round(performance.now()), tops, gap };
+  });
+}
+
 /** The User Timing marks by name (the ?paintlog marks), first entry's time. */
 async function marks(page: Page): Promise<Record<string, number>> {
   return page.evaluate(() => {
@@ -169,6 +185,7 @@ test('a pre-warmed chat paints its rows in the first frame, never skeleton bubbl
   // The rows are up while this open's plan read is still out: the card waits
   // in its skeleton, at its final height.
   await expect(page.locator('[data-plan-skeleton]').first()).toBeVisible();
+  const before = await rowOffsets(page);
   const skeletonHeight = await page
     .locator('[data-plan-skeleton]')
     .first()
@@ -176,6 +193,7 @@ test('a pre-warmed chat paints its rows in the first frame, never skeleton bubbl
   // The slow plan read lands (the card and ticker fill in place).
   await expect(page.locator('[data-plan-card]').first()).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(1_000);
+  const after = await rowOffsets(page);
   const cardHeight = await page
     .locator('[data-plan-card]')
     .first()
@@ -188,8 +206,9 @@ test('a pre-warmed chat paints its rows in the first frame, never skeleton bubbl
     .map((f) => ({ ...f, at: Math.round(f.at - tap) }));
   const shown = frames.map((f) => `${f.at} msgs=${f.msgs} skel=${f.skeleton ? 'y' : 'n'}`);
   const timing = await marks(page);
-  const moves = log.rowMoves.filter((m) => m.at >= tap);
-  const gaps = log.bottomGaps.filter((g) => g.at >= tap);
+  // The window the plan read landed in: from the rows-up snapshot to the settled one.
+  const moves = log.rowMoves.filter((m) => m.at >= before.at && m.at <= after.at);
+  const gaps = log.bottomGaps.filter((g) => g.at >= before.at && g.at <= after.at);
   test.info().annotations.push({
     type: 'b2 first frame',
     description: JSON.stringify({ frames: shown, marks: timing, moves, gaps }),
@@ -212,7 +231,10 @@ test('a pre-warmed chat paints its rows in the first frame, never skeleton bubbl
   // No layout shift: the card filled its placeholder at the same height, no
   // row on screen moved when it landed, and the bottom anchor held throughout.
   expect(cardHeight, 'the skeleton is the card height').toBe(skeletonHeight);
-  expect(moves, 'rows on screen never moved').toEqual([]);
+  expect(after.tops, 'row offsets before and after the plan landed').toEqual(before.tops);
+  expect(moves, 'no row on screen moved while it landed').toEqual([]);
+  expect(Math.abs(before.gap), 'pinned to the bottom with the rows up').toBeLessThanOrEqual(1);
+  expect(Math.abs(after.gap), 'still pinned after the plan landed').toBeLessThanOrEqual(1);
   for (const g of gaps) expect(Math.abs(g.gap), JSON.stringify(gaps)).toBeLessThanOrEqual(1);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   expect([...new Set(network.unmatched)], 'unrecognised fixture requests').toEqual([]);
