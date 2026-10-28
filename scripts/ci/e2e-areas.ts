@@ -38,6 +38,7 @@ const CHAT_SPECS = [
   'chat-keyboard-gap',
   'chat-open-at-once',
   'chat-personal-notes',
+  'chat-prewarm-first-frame',
   'chat-plan-card-paint',
   'chat-plan-compose-edit',
   'chat-plan-concept-upload',
@@ -104,6 +105,7 @@ export const AREAS: Area[] = [
     entries: ['src/components/pages/NotificationsPage.tsx', 'src/components/pages/PlanPage.tsx'],
     routed: true,
     specs: [
+      'activity-first-paint',
       'activity-plan',
       'agency-actions',
       'chat-back-navigation',
@@ -144,7 +146,9 @@ export const AREAS: Area[] = [
       'onboarding-creator',
       'onboarding-invited',
       'onboarding-approver',
+      'pipeline-back-scroll',
       'plan-desktop',
+      'post-open-media-cover',
       'workspace-platform',
     ].map(t),
   },
@@ -169,6 +173,7 @@ export const AREAS: Area[] = [
       'overlay-esc',
       'pdf-opens-instantly',
       'post-delete-undo',
+      'post-open-media-cover',
     ].map(t),
   },
   {
