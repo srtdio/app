@@ -222,6 +222,7 @@ import {
   type UseStatusCounts,
 } from '@/lib/chat/use-status-counts';
 import { chatKey, openCache, OPEN_HOLD_MS } from '@/lib/chat/open-cache';
+import { notePlanShapes, planCardsSized } from '@/lib/chat/plan-shapes';
 import type { PlanBundle } from '@/lib/chat/plans';
 import {
   currentSharedPlans,
@@ -694,17 +695,21 @@ export function openHoldSettled(parts: {
 }
 
 /**
- * Whether the open hold keeps the first page off screen now: a cold open's
- * only, until its parts settle or the hold is done (released or capped). A
- * kept open (the chat's page was remembered: opened before or pre-warmed)
- * never holds: its rows are the first frame. Pure.
+ * Whether the open hold keeps the first page off screen now, until the hold
+ * is done (released or capped). A cold open holds until all its parts settle.
+ * A kept open (the chat's page was remembered: opened before or pre-warmed)
+ * holds only for the parts that would move its rows when they land
+ * (`keptPartsSettled`: its marks, and plan cards of unknown shape); with those
+ * in hand its rows are the first frame. Pure.
  */
 export function openHoldApplies(input: {
   keptOpen: boolean;
   holdDone: boolean;
   partsSettled: boolean;
+  keptPartsSettled: boolean;
 }): boolean {
-  return !input.keptOpen && !input.holdDone && !input.partsSettled;
+  if (input.holdDone) return false;
+  return input.keptOpen ? !input.keptPartsSettled : !input.partsSettled;
 }
 
 /**
@@ -5538,15 +5543,43 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const pageCards = useMemo(() => threadCardIds(props.messages), [props.messages]);
   const pagePlanIds = pageCards.planIds;
   // A chat whose page is remembered (opened before, or pre-warmed) paints its
-  // kept rows in the first frame: the hold above is a cold open's only. Its
-  // parts still loading (the plan bundles, never remembered; the ticker) keep
-  // their same-size placeholders and fill in place, as after the hold's cap.
+  // kept rows in the first frame while nothing on it can change height after:
+  // its marks are in hand (a badge adds a line) and every plan card on it is
+  // known to be a full card (its skeleton is the card's exact 217px). The
+  // ticker's pending slot and the side-dependent cards keep their same-size
+  // placeholders and fill in place. A card of unknown or other shape, or
+  // marks still loading, keep it on the cold open's hold (same cap).
   const [keptOpen] = useState(() => {
     const key = chatKey(props.currentUserId, workspaceId, channelId);
     return key !== null && openCache.recall(key, 'thread') !== undefined;
   });
+  const marksSettled =
+    props.marks === undefined || props.marksLoaded || props.marksFailed === true;
+  const cardsSnapshot =
+    statusPlanCards !== null && pagePlanIds.length > 0
+      ? statusPlanCards.cache.snapshot(pagePlanIds)
+      : null;
+  const cardsSettled = cardsSnapshot === null || !cardsSnapshot.loading;
+  const viewerId = props.currentUserId ?? null;
+  const cardsSized =
+    cardsSettled ||
+    (viewerId !== null &&
+      workspaceId !== null &&
+      planCardsSized(viewerId, workspaceId, pagePlanIds));
+  // Each settled plan read teaches the shapes the next kept open sizes from.
+  useEffect(() => {
+    if (cardsSnapshot === null || cardsSnapshot.loading) return;
+    if (viewerId === null || workspaceId === null) return;
+    notePlanShapes(
+      viewerId,
+      workspaceId,
+      pagePlanIds,
+      cardsSnapshot.bundles,
+      cardsSnapshot.failed,
+    );
+  }, [cardsSnapshot, pagePlanIds, viewerId, workspaceId]);
   const openPartsSettled = openHoldSettled({
-    marks: props.marks === undefined || props.marksLoaded || props.marksFailed === true,
+    marks: marksSettled,
     // The side words the ticker and the post and plan cards: only they wait on it.
     side:
       viewerSide.ready ||
@@ -5554,15 +5587,13 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     ticker:
       props.marks === undefined ||
       (openPosts.ready && statusCounts.plans.ready && statusCounts.briefs.ready),
-    cards:
-      statusPlanCards === null ||
-      pagePlanIds.length === 0 ||
-      !statusPlanCards.cache.snapshot(pagePlanIds).loading,
+    cards: cardsSettled,
   });
   const openHeld = openHoldApplies({
     keptOpen,
     holdDone: openHoldDone,
     partsSettled: openPartsSettled,
+    keptPartsSettled: marksSettled && cardsSized,
   });
   const onOpenPlanCompose = props.onOpenPlanCompose;
   const [selecting, setSelecting] = useState(false);
