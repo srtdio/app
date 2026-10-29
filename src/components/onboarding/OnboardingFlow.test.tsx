@@ -125,7 +125,7 @@ vi.mock('@/components/ui/Select', () => ({
   ),
 }));
 
-import { OnboardingFlow } from './OnboardingFlow';
+import { OnboardingFlow, initialEmailOptIn } from './OnboardingFlow';
 import { WORKSPACE_STEP } from '@/lib/induction';
 import { ONBOARDING_COPY } from '@/lib/induction-copy';
 import { SIGNOUT_EVENT } from '@/lib/events';
@@ -280,6 +280,23 @@ async function renderInvitee(): Promise<void> {
     await vi.advanceTimersByTimeAsync(0);
   });
 }
+
+describe('initialEmailOptIn', () => {
+  it('takes the sign-up choice from user_metadata when it is a boolean', () => {
+    expect(initialEmailOptIn({ email_opt_in: false }, true)).toBe(false);
+    expect(initialEmailOptIn({ email_opt_in: true }, false)).toBe(true);
+  });
+
+  it('defaults to on with no sign-up choice (invitees)', () => {
+    expect(initialEmailOptIn({}, undefined)).toBe(true);
+    expect(initialEmailOptIn(undefined, null)).toBe(true);
+    expect(initialEmailOptIn({ email_opt_in: 'false' }, undefined)).toBe(true);
+  });
+
+  it('keeps a saved profile value when there is no sign-up choice', () => {
+    expect(initialEmailOptIn({}, false)).toBe(false);
+  });
+});
 
 describe('invited welcome', () => {
   it('opens an invitee on the welcome, never on the side question or a password', async () => {
