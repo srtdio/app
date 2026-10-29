@@ -5,7 +5,8 @@
 // A workspace whose owner is an active platform operator is unlimited, and an
 // induction sample group (induction_sample_rows kind='group') never counts.
 // capabilities_for_workspace answers the same rule as 'group.create_more';
-// a non-member gets false.
+// a non-member gets no row at all (read as not allowed), so the cross-tenant
+// "no rows" rule holds.
 //
 // seedWorkspace inserts the workspace directly (no default group), so the
 // first group_create here is the workspace's one free group.
@@ -171,8 +172,8 @@ describe.runIf(RPC_SUITE)('group limit: group_create and group.create_more', () 
     expect(next.error?.message).toContain('group_limit_reached');
   });
 
-  it('a non-member gets group.create_more false and cannot create', async () => {
-    expect(await canCreateMore(outsider, opWs.id)).toBe(false);
+  it('a non-member gets no group.create_more row and cannot create', async () => {
+    expect(await canCreateMore(outsider, opWs.id)).toBeNull();
     const res = await create(outsider, opWs.id);
     expect(res.error?.message).toContain('workspace_member_only');
   });

@@ -1,6 +1,8 @@
 -- Schema already applied via MCP (project movnexawfhsyuluspxoc). Recorded for parity only; idempotent.
 -- One chat group per workspace free; more only after workspaces.group_allowance is raised by SQL.
 -- Operator-owned workspaces are unlimited; induction sample groups never count.
+-- capabilities_for_workspace adds the group.create_more row for active members only,
+-- so a non-member still gets no rows (cross-tenant rule).
 
 ALTER TABLE public.workspaces ADD COLUMN IF NOT EXISTS group_allowance integer NOT NULL DEFAULT 1 CONSTRAINT workspaces_group_allowance_min CHECK (group_allowance >= 1);
 
@@ -61,4 +63,5 @@ AS $function$
     JOIN public.workspace_members wm ON wm.workspace_id = wrp.workspace_id AND wm.role = wrp.role
    WHERE wm.workspace_id = p_workspace_id AND wm.user_id = (SELECT auth.uid()) AND wm.active = true
   UNION ALL SELECT 'group.create_more', public.group_limit_allows(p_workspace_id)
+   WHERE public.is_active_workspace_member(p_workspace_id)
 $function$;

@@ -542,7 +542,7 @@ is_default boolean not null default false: the workspace's default chat group, c
 
 avatar_url text nullable, check avatar_url IS NULL OR ~ '^https?://' (groups_avatar_url_check); set via group_avatar_set (permission = creator or workspace owner/admin, same as group_rename); NULL clears.
 
-Group limit: group_create takes a per-workspace advisory lock and raises 'group_limit_reached' (HINT free_plan_one_group) unless group_limit_allows(workspace_id): active member AND (owner is an active platform_operators row OR non-deleted groups, excluding induction_sample_rows kind='group', < workspaces.group_allowance). capabilities_for_workspace returns it as 'group.create_more' (20261029120000).
+Group limit: group_create takes a per-workspace advisory lock and raises 'group_limit_reached' (HINT free_plan_one_group) unless group_limit_allows(workspace_id): active member AND (owner is an active platform_operators row OR non-deleted groups, excluding induction_sample_rows kind='group', < workspaces.group_allowance). capabilities_for_workspace returns it as 'group.create_more' (active members only; a non-member gets no rows) (20261029120000).
 
 ### group_members
 
