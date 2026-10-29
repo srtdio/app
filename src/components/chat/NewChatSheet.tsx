@@ -14,6 +14,12 @@ import { createGroupChannel, startDmChannel } from '@/components/chat/chat-actio
 import { MemberPicker } from '@/components/chat/MemberPicker';
 import { excludeMembers } from '@/components/chat/member-picker';
 import { useWorkspaceMembers, withMembersLoadCopy } from '@/lib/workspace-members';
+import { isGroupLimitError, useWorkspace } from '@/lib/workspace-context';
+import { dropCachedCapability, useWorkspaceCapability } from '@/lib/workspace-context-capability';
+import { moreGroupsRequest } from '@/lib/support';
+import { SupportRows } from '@/components/support/SupportRows';
+import { ContactSheet } from '@/components/support/ContactSheet';
+import { BookCallSheet } from '@/components/support/BookCallSheet';
 
 interface NewChatSheetProps {
   open: boolean;
@@ -44,6 +50,56 @@ export const NEW_CHAT_DISCARD = {
 /** Inline reasons a tap on Start chat / Create group cannot go yet (FT47). */
 export const PICK_SOMEONE = 'Pick at least one person';
 export const NAME_THE_GROUP = 'Name the group';
+
+/** The capability that says this workspace may add another chat group. */
+export const GROUP_CREATE_MORE = 'group.create_more';
+
+/** The blocked New group note for the workspace owner; Contact us and Book a call follow. */
+export const GROUP_LIMIT_OWNER =
+  'On the free plan a workspace has one group. Need another? Talk to us.';
+
+/** Who a member asks when the owner's name is not in the members cache. */
+export const GROUP_LIMIT_OWNER_FALLBACK = 'the workspace owner';
+
+/** The blocked New group note for anyone but the owner. */
+export function groupLimitMemberCopy(ownerName: string | null): string {
+  const who =
+    ownerName !== null && ownerName.trim() !== '' ? ownerName : GROUP_LIMIT_OWNER_FALLBACK;
+  return `This workspace has one group. Ask ${who} about adding more.`;
+}
+
+/**
+ * Whether New group is blocked: the cached capability says no, or the server
+ * refused a create in this workspace. null (not read yet) and true leave it open.
+ */
+export function newGroupBlocked(canCreateMore: boolean | null, serverRefused: boolean): boolean {
+  return canCreateMore === false || serverRefused;
+}
+
+/**
+ * The capability answer and the active workspace's owner, from what the session
+ * already holds (no read, no await). Isolated renders without a
+ * WorkspaceProvider (useWorkspace throws there) read as unknown: New group
+ * stays open, as before this rule.
+ */
+function useGroupLimit(): {
+  canCreateMore: boolean | null;
+  ownerUserId: string | null;
+  workspaceName: string;
+} {
+  try {
+    const workspace = useWorkspace();
+    const canCreateMore = useWorkspaceCapability(GROUP_CREATE_MORE);
+    const row = workspace.workspaces.find((w) => w.id === workspace.workspaceId);
+    return {
+      canCreateMore,
+      ownerUserId: row?.owner_user_id ?? null,
+      workspaceName: workspace.workspaceDisplayName ?? '',
+    };
+  } catch {
+    return { canCreateMore: null, ownerUserId: null, workspaceName: '' };
+  }
+}
 
 /** Whether the sheet holds input worth a discard confirm. Pure. */
 export function newChatDirty(state: {
@@ -83,6 +139,15 @@ export function newChatFailureCopy(kind: 'dm' | 'group', failure: DomainError): 
 export function NewChatSheet(props: NewChatSheetProps): ReactElement {
   const newTrace = useNewTrace();
   const members = withMembersLoadCopy(useWorkspaceMembers(props.workspaceId));
+  const limit = useGroupLimit();
+  // The workspace whose group_create the server refused (group_limit_reached).
+  const [refusedIn, setRefusedIn] = useState<string | null>(null);
+  // Contact us / Book a call replace this sheet: one sheet at a time.
+  const [support, setSupport] = useState<'contact' | 'book' | null>(null);
+  // The two support sheets mount on first use only: chat home paints as before.
+  const [supportMounted, setSupportMounted] = useState(false);
+  const blocked = newGroupBlocked(limit.canCreateMore, refusedIn === props.workspaceId);
+  const isOwner = limit.ownerUserId !== null && limit.ownerUserId === props.currentUserId;
 
   const [mode, setMode] = useState<Mode>('choose');
   const [peerId, setPeerId] = useState<string | null>(null);
@@ -158,7 +223,25 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
       (groupId) => props.onGroupCreated(groupId, selectedIds),
     );
     setBusy(false);
-    if (failure !== null) setError(newChatFailureCopy('group', failure));
+    if (failure === null) return;
+    if (isGroupLimitError(failure.message)) {
+      // Server backstop: show the blocked choose state, and forget only this
+      // capability so the next open answers from the cache correctly.
+      logger.info('chat: group create refused by group limit', { code: failure.code });
+      dropCachedCapability(props.currentUserId, props.workspaceId, GROUP_CREATE_MORE);
+      setRefusedIn(props.workspaceId);
+      setName('');
+      setSelectedIds([]);
+      setMode('choose');
+      return;
+    }
+    setError(newChatFailureCopy('group', failure));
+  }
+
+  function openSupport(next: 'contact' | 'book'): void {
+    props.onClose();
+    setSupportMounted(true);
+    setSupport(next);
   }
 
   const title = mode === 'group' ? 'New group' : mode === 'dm' ? 'New direct message' : 'New chat';
@@ -173,20 +256,66 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
     ) : null;
 
   return (
-    <Sheet
-      open={props.open}
-      onClose={props.onClose}
-      title={title}
-      footer={footer()}
-      dirty={dirty}
-      discard={NEW_CHAT_DISCARD}
-      busy={busy}
-      busyLabel={mode === 'dm' ? 'Starting…' : 'Creating…'}
-    >
-      {errorBanner}
-      {body()}
-    </Sheet>
+    <>
+      <Sheet
+        open={props.open}
+        onClose={props.onClose}
+        title={title}
+        footer={footer()}
+        dirty={dirty}
+        discard={NEW_CHAT_DISCARD}
+        busy={busy}
+        busyLabel={mode === 'dm' ? 'Starting…' : 'Creating…'}
+      >
+        {errorBanner}
+        {body()}
+      </Sheet>
+      {supportMounted ? (
+        <>
+          <ContactSheet
+            open={support === 'contact'}
+            onClose={() => setSupport(null)}
+            workspaceName={limit.workspaceName}
+            request={moreGroupsRequest(limit.workspaceName)}
+          />
+          <BookCallSheet
+            open={support === 'book'}
+            onClose={() => setSupport(null)}
+            workspaceId={props.workspaceId}
+          />
+        </>
+      ) : null}
+    </>
   );
+
+  function ownerName(): string | null {
+    if (limit.ownerUserId === null) return null;
+    // The members cache the comment author names read from; no new read.
+    const name = members.profiles.get(limit.ownerUserId)?.displayName;
+    return name ?? null;
+  }
+
+  function groupLimitNote(): ReactElement {
+    return (
+      <>
+        <p
+          id="group-limit-note"
+          data-group-limit-note=""
+          className="px-1 text-base leading-snug text-fg-2 text-pretty"
+        >
+          {isOwner ? GROUP_LIMIT_OWNER : groupLimitMemberCopy(ownerName())}
+        </p>
+        {isOwner ? (
+          <div className="-mx-3 flex flex-col">
+            <SupportRows
+              onContact={() => openSupport('contact')}
+              onBook={() => openSupport('book')}
+            />
+          </div>
+        ) : null}
+      </>
+    );
+  }
 
   function footer(): ReactElement | undefined {
     if (mode === 'choose') return undefined;
@@ -247,12 +376,16 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
             New direct message
           </PressableRow>
           <PressableRow
-            className="flex items-center gap-2 border border-border bg-panel px-4 text-base font-medium text-fg"
+            className="flex items-center gap-2 border border-border bg-panel px-4 text-base font-medium text-fg disabled:cursor-not-allowed disabled:text-fg-2 disabled:hover:bg-panel"
+            disabled={blocked}
+            aria-describedby={blocked ? 'group-limit-note' : undefined}
+            data-new-group-row=""
             onClick={() => setMode('group')}
           >
             <IconChat size={ICON_SIZE.inline} />
             New group
           </PressableRow>
+          {blocked ? groupLimitNote() : null}
         </div>
       );
     }

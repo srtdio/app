@@ -122,6 +122,7 @@ One workspace = one end-client = one platform.
 | platform | text | not null: instagram / x / threads / linkedin / facebook / tiktok / youtube_shorts. Existing rows backfilled to linkedin |
 | client_domain | text | nullable, ^[a-z0-9.-]+\.[a-z]{2,}$. Recorded by member_invite from the first client invite; later client invites must pass the approver email rule (see workspace_client_domains) |
 | logo_url | text | nullable, must start with https:// |
+| group_allowance | integer | not null, default 1, check >= 1 (workspaces_group_allowance_min). Chat groups allowed; raised only by SQL after the customer talks to us (20261029120000) |
 | row_version | bigint | default 1 |
 | created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
 
@@ -540,6 +541,8 @@ PK id. Fields: workspace_id FK, name ^[A-Za-z0-9 -]{1,40}$, created_by FK, creat
 is_default boolean not null default false: the workspace's default chat group, created by workspace_create. At most one per workspace among non-deleted groups (groups_one_default_per_workspace).
 
 avatar_url text nullable, check avatar_url IS NULL OR ~ '^https?://' (groups_avatar_url_check); set via group_avatar_set (permission = creator or workspace owner/admin, same as group_rename); NULL clears.
+
+Group limit: group_create takes a per-workspace advisory lock and raises 'group_limit_reached' (HINT free_plan_one_group) unless group_limit_allows(workspace_id): active member AND (owner is an active platform_operators row OR non-deleted groups, excluding induction_sample_rows kind='group', < workspaces.group_allowance). capabilities_for_workspace returns it as 'group.create_more' (20261029120000).
 
 ### group_members
 

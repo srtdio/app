@@ -13,6 +13,7 @@ import { IconTrash, ICON_SIZE } from '@/components/ui/icons';
 import { Sheet } from '@/components/ui/Sheet';
 import { humanizeSize } from '@/lib/assets';
 import { useWorkspaceFullSheet } from '@/lib/storage-full';
+import { anotherWorkspaceRequest } from '@/lib/support';
 import { useWorkspace } from '@/lib/workspace-context';
 
 export const RECENTLY_DELETED_PATH = '/deleted';
@@ -72,6 +73,7 @@ export function WorkspaceFullSheet() {
         open={support === 'contact'}
         onClose={() => setSupport(null)}
         workspaceName={workspaceDisplayName ?? ''}
+        request={anotherWorkspaceRequest(workspaceDisplayName ?? '')}
       />
       {workspaceId !== null ? (
         <BookCallSheet

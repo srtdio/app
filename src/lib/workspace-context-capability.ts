@@ -61,6 +61,26 @@ export function clearCapabilityCache(): void {
   cacheEpoch += 1;
 }
 
+/**
+ * Drop one capability from one user's cached set in one workspace, leaving every
+ * other capability as read (the set holds allowed ones only, so it then reads as
+ * not allowed). Used when the server refuses what the cache allowed
+ * (group_create's group_limit_reached for 'group.create_more'). No read.
+ */
+export function dropCachedCapability(
+  userId: string,
+  workspaceId: string,
+  capability: string,
+): void {
+  const key = workspaceCapabilitiesKey(userId, workspaceId);
+  if (key === null) return;
+  const hit = capabilityCache.get(key);
+  if (hit === undefined || !hit.has(capability)) return;
+  const next = new Set(hit);
+  next.delete(capability);
+  capabilityCache.set(key, next);
+}
+
 // Signout clears the cache at once, before the next person signs in.
 if (typeof window !== 'undefined') {
   window.addEventListener(SIGNOUT_EVENT, clearCapabilityCache);
