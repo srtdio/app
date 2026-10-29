@@ -58,6 +58,8 @@ describe.runIf(RPC_SUITE)('group limit: group_create and group.create_more', () 
   let member: SeededUser;
   let outsider: SeededUser;
   let operator: SeededUser;
+  // A second owner: the free plan allows one owned workspace per person.
+  let sampleOwner: SeededUser;
   let ws: SeededWorkspace;
   let opWs: SeededWorkspace;
   let sampleWs: SeededWorkspace;
@@ -93,15 +95,20 @@ describe.runIf(RPC_SUITE)('group limit: group_create and group.create_more', () 
     member = await seedUser(env, admin);
     outsider = await seedUser(env, admin);
     operator = await seedUser(env, admin);
+    sampleOwner = await seedUser(env, admin);
     ws = await seedWorkspace(admin, owner, `Group limit ${owner.email}`);
     await seedMember(g, ws, member, 'agency');
     await seedOperator(g, operator);
     opWs = await seedWorkspace(admin, operator, `Group limit op ${operator.email}`);
-    sampleWs = await seedWorkspace(admin, owner, `Group limit sample ${owner.email}`);
+    sampleWs = await seedWorkspace(admin, sampleOwner, `Group limit sample ${sampleOwner.email}`);
   });
 
   afterAll(async () => {
-    await cleanupWorkspaces(admin, [ws, opWs, sampleWs], [owner, member, outsider, operator]);
+    await cleanupWorkspaces(
+      admin,
+      [ws, opWs, sampleWs],
+      [owner, member, outsider, operator, sampleOwner],
+    );
   });
 
   it('a fresh workspace has room for its one group, then refuses a second', async () => {
@@ -143,17 +150,17 @@ describe.runIf(RPC_SUITE)('group limit: group_create and group.create_more', () 
     const sample = await insertRow(g, 'groups', {
       workspace_id: sampleWs.id,
       name: 'Sample group',
-      created_by: owner.id,
+      created_by: sampleOwner.id,
     });
     await insertRow(g, 'induction_sample_rows', {
       workspace_id: sampleWs.id,
       kind: 'group',
       row_id: String(sample.id),
     });
-    expect(await canCreateMore(owner, sampleWs.id)).toBe(true);
-    const own = await create(owner, sampleWs.id);
+    expect(await canCreateMore(sampleOwner, sampleWs.id)).toBe(true);
+    const own = await create(sampleOwner, sampleWs.id);
     expect(own.error).toBeNull();
-    const next = await create(owner, sampleWs.id);
+    const next = await create(sampleOwner, sampleWs.id);
     expect(next.error?.message).toContain('group_limit_reached');
   });
 
