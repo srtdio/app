@@ -134,7 +134,14 @@ describe.runIf(RPC_SUITE)('group limit: group_create and group.create_more', () 
   });
 
   it('the allowance never goes below 1', async () => {
-    const res = await admin.from('workspaces').update({ group_allowance: 0 }).eq('id', ws.id);
+    // row_version bumps by 1 so only the allowance check can refuse the write.
+    const read = await admin.from('workspaces').select('row_version').eq('id', ws.id);
+    expect(read.error).toBeNull();
+    const version = Number(read.data?.[0]?.row_version ?? 1);
+    const res = await admin
+      .from('workspaces')
+      .update({ group_allowance: 0, row_version: version + 1 })
+      .eq('id', ws.id);
     expect(res.error?.message).toContain('workspaces_group_allowance_min');
   });
 
