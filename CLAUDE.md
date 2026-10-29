@@ -135,6 +135,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Tab return paints the kept view with no skeleton or fade; never drop a session read on page leave; own writes update kept values (src/lib/session-read.ts, src/lib/kept-view.ts).
 - Speed: screens paint on the first frame from what the device or session already holds. No network read before first paint for data the device can keep (recents, titles, drafts, settings). Background refresh runs after paint, batched (one read per table, never per item), at most once per session per screen, and never repaints rows already on screen. Any unavoidable wait states its ceiling in ms and its reason in the PR body.
 - Recent lists (search) offer Clear all with UndoStrip and a per-row remove X; never a confirm dialog.
+- Auth sign-in uses a 6-digit email code on one input with autocomplete=one-time-code; never add a sign-in link.
 
 ## Canonical living docs
 

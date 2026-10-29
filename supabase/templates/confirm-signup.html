@@ -12,8 +12,7 @@
     .t-fg2 { color:#9aa0a8 !important; }
     .t-fg3 { color:#6b7178 !important; }
     .rule  { background-color:#23262c !important; }
-    .btn   { background-color:#6f79e3 !important; }
-    .lnk   { color:#6f79e3 !important; }
+    .code  { background-color:#0c0d10 !important; border-color:#23262c !important; }
   }
 </style>
 </head>
@@ -25,39 +24,34 @@
         <tr>
           <td style="padding:36px 28px 28px;">
 
-            <table role="presentation" cellpadding="0" cellspacing="0">
-              <tr>
-                <td class="btn" style="width:18px;height:18px;background-color:#5e6ad2;border-radius:5px;font-size:0;line-height:0;">&nbsp;</td>
-                <td class="t-fg" style="padding-left:9px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:15px;font-weight:600;color:#1b1c20;">Sorted</td>
-              </tr>
-            </table>
+            <div class="t-fg" style="font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:20px;font-weight:600;letter-spacing:-0.01em;color:#1b1c20;">srtd.</div>
 
-            <div class="t-fg" style="padding-top:26px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:20px;font-weight:600;color:#1b1c20;">Confirm your email</div>
-            <div class="t-fg2" style="padding-top:8px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.55;color:#62666d;">Tap the button to finish creating your Sorted account. The link works on the device you open it on and expires in 1 hour.</div>
+            <div class="t-fg2" style="padding-top:26px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.55;color:#62666d;">Enter this code in Sorted to sign in.</div>
 
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td align="center" style="padding-top:28px;">
+                <td align="center" style="padding-top:20px;">
                   <table role="presentation" cellpadding="0" cellspacing="0">
                     <tr>
-                      <td class="btn" align="center" style="background-color:#5e6ad2;border-radius:10px;">
-                        <a href="{{ .RedirectTo }}/auth/callback?token_hash={{ .TokenHash }}&type=email" style="display:inline-block;padding:14px 28px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;">Confirm and continue</a>
-                      </td>
+                      <td class="code t-fg" align="center" style="padding:16px 24px;background-color:#f7f8f9;border:1px solid #e6e8eb;border-radius:12px;font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:32px;font-weight:600;letter-spacing:0.3em;color:#1b1c20;">{{ .Token }}</td>
                     </tr>
                   </table>
                 </td>
               </tr>
             </table>
 
+            <div class="t-fg2" style="padding-top:20px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.55;color:#62666d;">The code expires in 1 hour.</div>
+            <div class="t-fg2" style="padding-top:4px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:14px;line-height:1.55;color:#62666d;">Don&rsquo;t share it with anyone.</div>
+
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td style="padding-top:28px;"><div class="rule" style="height:1px;background-color:#e6e8eb;font-size:0;line-height:1px;">&nbsp;</div></td>
               </tr>
               <tr>
-                <td class="t-fg3" style="padding-top:16px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:12px;line-height:1.6;color:#8b9096;">Requested for <span class="t-fg2" style="color:#62666d;">{{ .Email }}</span>. Didn&rsquo;t sign up? Ignore this email.</td>
+                <td class="t-fg3" style="padding-top:16px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:12px;line-height:1.6;color:#8b9096;">Didn&rsquo;t ask for this? Ignore this email.</td>
               </tr>
               <tr>
-                <td class="t-fg3" style="padding-top:12px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:12px;color:#8b9096;">Sorted &middot; <a class="lnk" href="https://srtd.io" style="color:#5e6ad2;text-decoration:none;">srtd.io</a></td>
+                <td class="t-fg3" style="padding-top:12px;font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:12px;color:#8b9096;">Sent to <span class="t-fg2" style="color:#62666d;">{{ .Email }}</span> &middot; srtd.io</td>
               </tr>
             </table>
 

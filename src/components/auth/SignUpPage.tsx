@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthShell } from '@/components/auth/AuthShell';
+import { CodeStep, RESEND_COOLDOWN_SECONDS } from '@/components/auth/CodeStep';
+import { guestDestination } from '@/components/auth/RouteGuards';
 import { TestSiteStart } from '@/components/test-site/TestSiteStart';
 import { isTestSite, startTestSession } from '@/lib/test-site';
 import { Button } from '@/components/ui/Button';
@@ -13,8 +15,8 @@ import { supabase } from '@/lib/supabase';
 import { prefetchShellWhenIdle } from '@/lib/chunk-reload';
 import { deviceTimeZone } from '@/lib/time';
 
-/** Seconds before Resend link can be tapped again. */
-export const RESEND_COOLDOWN_SECONDS = 60;
+/** Seconds before Resend code can be tapped again; lives with CodeStep. */
+export { RESEND_COOLDOWN_SECONDS };
 
 /** Runtime-detected IANA timezone, stored for the workspace step. */
 function detectTimezone(): string {
@@ -51,13 +53,13 @@ export const POLICY_CONSENT_MESSAGE = 'Tick the box to agree to the Terms and Pr
 /** Alias of CHECK_EMAIL_COPY.rateLimited, kept for callers and tests. */
 export const RATE_LIMIT_MESSAGE = CHECK_EMAIL_COPY.rateLimited;
 
-/** Supabase answers 429 (or 403 on some limits) when links are asked for too often. */
+/** Supabase answers 429 (or 403 on some limits) when codes are asked for too often. */
 export function isRateLimitError(error: { message: string; status?: number | undefined }): boolean {
   if (error.status === 429 || error.status === 403) return true;
   return /rate limit|security purposes/i.test(error.message);
 }
 
-/** A link request's refusal in plain words: never the provider's raw text. */
+/** A code request's refusal in plain words: never the provider's raw text. */
 export function linkErrorMessage(error: { message: string; status?: number | undefined }): string {
   return isRateLimitError(error) ? RATE_LIMIT_MESSAGE : CHECK_EMAIL_COPY.genericError;
 }
@@ -70,11 +72,11 @@ export function emailFieldError(email: string): string | null {
 }
 
 /**
- * Passwordless sign-up: email a sign-in link that creates the account. Name,
+ * Passwordless sign-up: email a 6-digit code that creates the account. Name,
  * username, role and the workspace come one question at a time in onboarding
  * (OnboardingFlow), which the app shell shows to anyone whose profile is
  * unfinished or who has no workspace. emailRedirectTo is the origin only, as
- * on sign in: the email template appends our own /auth/callback path.
+ * on sign in, so an old link email still returns to the right site.
  */
 export async function performSignUp(
   client: SignUpAuthClient,
@@ -94,17 +96,6 @@ export async function performSignUp(
     return { status: 'error', message: linkErrorMessage(error) };
   }
   return { status: 'sent' };
-}
-
-/** Counts down once a second to zero; the timer is cleared on every change and unmount. */
-function useCooldown(): [number, (seconds: number) => void] {
-  const [left, setLeft] = useState(0);
-  useEffect(() => {
-    if (left <= 0) return;
-    const id = window.setTimeout(() => setLeft((n) => n - 1), 1000);
-    return () => window.clearTimeout(id);
-  }, [left]);
-  return [left, setLeft];
 }
 
 const client = supabase as unknown as SignUpAuthClient;
@@ -132,26 +123,29 @@ export function SignUpPage(): ReactElement {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
-  const [cooldown, startCooldown] = useCooldown();
 
   // Never disabled for the consent box: an unticked tap says why instead.
   const canSubmit = email.trim().length > 0 && !submitting;
 
   /** One request per call; the caller decides when (a tap), never a retry loop. */
-  async function sendLink(): Promise<boolean> {
-    setError(null);
-    setSubmitting(true);
+  async function requestCode(): Promise<string | null> {
     const result = await performSignUp(client, {
       email,
       timezone: detectTimezone(),
       policyConsent,
     });
+    return result.status === 'error' ? result.message : null;
+  }
+
+  async function sendCode(): Promise<boolean> {
+    setError(null);
+    setSubmitting(true);
+    const failure = await requestCode();
     setSubmitting(false);
-    if (result.status === 'error') {
-      setError(result.message);
+    if (failure !== null) {
+      setError(failure);
       return false;
     }
-    startCooldown(RESEND_COOLDOWN_SECONDS);
     return true;
   }
 
@@ -167,10 +161,10 @@ export function SignUpPage(): ReactElement {
       await testSignUp();
       return;
     }
-    if (await sendLink()) setSent(true);
+    if (await sendCode()) setSent(true);
   }
 
-  /** Test site: the typed email signs in at once as a test account (no link). */
+  /** Test site: the typed email signs in at once as a test account (no code). */
   async function testSignUp(): Promise<void> {
     setError(null);
     setSubmitting(true);
@@ -183,9 +177,9 @@ export function SignUpPage(): ReactElement {
     }
   }
 
-  function handleResend(): void {
-    if (cooldown > 0 || submitting) return;
-    void sendLink();
+  /** Where the link callback lands a new account: /pipeline, where onboarding opens. */
+  function handleSignedIn(): void {
+    navigate(guestDestination(null, null), { replace: true });
   }
 
   function backToForm(): void {
@@ -196,8 +190,8 @@ export function SignUpPage(): ReactElement {
   if (sent) {
     return (
       <AuthShell
-        title={CHECK_EMAIL_COPY.title}
-        subtitle={fillCopy(CHECK_EMAIL_COPY.body, entryCopyContext({ email: email.trim() }))}
+        title={CHECK_EMAIL_COPY.codeTitle}
+        subtitle={fillCopy(CHECK_EMAIL_COPY.sentTo, entryCopyContext({ email: email.trim() }))}
         footer={
           <Link
             to="/signin"
@@ -207,29 +201,12 @@ export function SignUpPage(): ReactElement {
           </Link>
         }
       >
-        <div className="flex flex-col gap-3">
-          {error !== null ? (
-            <p role="alert" className="text-base text-bad">
-              {error}
-            </p>
-          ) : null}
-          <Button
-            variant="default"
-            className="w-full"
-            onClick={handleResend}
-            disabled={cooldown > 0 || submitting}
-          >
-            {cooldown > 0 ? `${CHECK_EMAIL_COPY.resend} (${cooldown}s)` : CHECK_EMAIL_COPY.resend}
-          </Button>
-          <Button
-            type="button"
-            onClick={backToForm}
-            variant="link"
-            className="w-full hover:underline"
-          >
-            {CHECK_EMAIL_COPY.differentEmail}
-          </Button>
-        </div>
+        <CodeStep
+          email={email}
+          onResend={requestCode}
+          onDifferentEmail={backToForm}
+          onSignedIn={handleSignedIn}
+        />
       </AuthShell>
     );
   }
@@ -237,7 +214,7 @@ export function SignUpPage(): ReactElement {
   return (
     <AuthShell
       title="Create your free account"
-      subtitle={CHECK_EMAIL_COPY.signUpSubtitle}
+      subtitle={CHECK_EMAIL_COPY.subtitle}
       footer={
         <span className="inline-flex flex-wrap items-center justify-center gap-x-1">
           <span>Already have an account?</span>
@@ -324,7 +301,7 @@ export function SignUpPage(): ReactElement {
         ) : null}
 
         <Button variant="primary" className="w-full" type="submit" disabled={!canSubmit}>
-          {submitting ? CHECK_EMAIL_COPY.sending : CHECK_EMAIL_COPY.createAccount}
+          {submitting ? CHECK_EMAIL_COPY.sendingCode : CHECK_EMAIL_COPY.sendCode}
         </Button>
       </form>
     </AuthShell>

@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthShell } from '@/components/auth/AuthShell';
+import { CodeStep } from '@/components/auth/CodeStep';
+import { guestDestination } from '@/components/auth/RouteGuards';
 import { TestSiteStart } from '@/components/test-site/TestSiteStart';
 import { Button, buttonClass } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { emailFieldError, linkErrorMessage } from '@/components/auth/SignUpPage';
-import { CHECK_EMAIL_COPY } from '@/lib/induction-copy';
+import { CHECK_EMAIL_COPY, fillCopy } from '@/lib/induction-copy';
+import { entryCopyContext } from '@/lib/onboarding';
 import { supabase } from '@/lib/supabase';
 import { prefetchShellWhenIdle } from '@/lib/chunk-reload';
 import { resolveNext, safeNextPath } from '@/components/auth/next-param';
 
-const RESEND_COOLDOWN_SECONDS = 60;
-
-/** localStorage key holding the ?next= destination while a magic link is in flight. */
+/** localStorage key holding the ?next= destination while a code (or an old link) is in flight. */
 export const NEXT_STORAGE_KEY = 'srtd.auth.next';
 
 /** The slice of Storage the next helpers use, so tests pass a plain fake. */
@@ -96,11 +97,10 @@ function isNoAccountError(message: string): boolean {
 }
 
 /**
- * Email an existing user a sign-in link; never creates a user. emailRedirectTo
- * is the current origin (no path) so the template's {{ .RedirectTo }} sends the
- * link back to the site it was requested from. The template still appends our
- * own /auth/callback path, never Supabase's verify endpoint. A non-allowlisted
- * origin falls back to the project Site URL.
+ * Email an existing user a 6-digit sign-in code; never creates a user. The
+ * templates carry {{ .Token }} only. emailRedirectTo stays the current origin
+ * (no path) so a link email still pasted in the dashboard returns to the site it
+ * was requested from; a non-allowlisted origin falls back to the Site URL.
  */
 export async function sendSignInLink(
   client: SignInAuthClient,
@@ -134,19 +134,13 @@ export function SignInPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const next = resolveNext(searchParams.get('next'), location.state);
+  const navigate = useNavigate();
   const [sent, setSent] = useState(false);
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [noAccount, setNoAccount] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [cooldown, setCooldown] = useState(0);
-
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const id = window.setTimeout(() => setCooldown((n) => n - 1), 1000);
-    return () => window.clearTimeout(id);
-  }, [cooldown]);
 
   function reset(): void {
     setError(null);
@@ -171,19 +165,21 @@ export function SignInPage() {
       return;
     }
     setSent(true);
-    setCooldown(RESEND_COOLDOWN_SECONDS);
   }
 
-  async function handleResend(): Promise<void> {
-    if (cooldown > 0) return;
-    setError(null);
+  /** CodeStep's resend: the line to show on failure, null once sent. */
+  async function handleResend(): Promise<string | null> {
     rememberNext(next);
     const result = await sendSignInLink(client, email);
-    if (result.status === 'error') {
-      setError(signInErrorMessage(result));
-      return;
-    }
-    setCooldown(RESEND_COOLDOWN_SECONDS);
+    if (result.status === 'error') return signInErrorMessage(result);
+    if (result.status === 'no-account') return CHECK_EMAIL_COPY.genericError;
+    return null;
+  }
+
+  /** Where the link callback lands: the remembered ?next=, else /pipeline. */
+  function handleSignedIn(): void {
+    forgetNext();
+    navigate(guestDestination(next, null), { replace: true });
   }
 
   /** Back to the form with the email kept, to fix a typo. */
@@ -207,33 +203,16 @@ export function SignInPage() {
   if (sent) {
     return (
       <AuthShell
-        title="Check your email"
-        subtitle={`We sent a sign-in link to ${email}. Open it on this device.`}
+        title={CHECK_EMAIL_COPY.codeTitle}
+        subtitle={fillCopy(CHECK_EMAIL_COPY.sentTo, entryCopyContext({ email: email.trim() }))}
         footer={footer}
       >
-        <div className="flex flex-col gap-4">
-          {error !== null ? (
-            <p role="alert" className="text-base text-bad">
-              {error}
-            </p>
-          ) : null}
-          <Button
-            variant="default"
-            className="w-full"
-            onClick={handleResend}
-            disabled={cooldown > 0}
-          >
-            {cooldown > 0 ? `Send again in ${cooldown}s` : 'Send again'}
-          </Button>
-          <Button
-            type="button"
-            onClick={startOverWithNewEmail}
-            variant="link"
-            className="w-full hover:underline"
-          >
-            {CHECK_EMAIL_COPY.differentEmail}
-          </Button>
-        </div>
+        <CodeStep
+          email={email}
+          onResend={handleResend}
+          onDifferentEmail={startOverWithNewEmail}
+          onSignedIn={handleSignedIn}
+        />
       </AuthShell>
     );
   }
@@ -241,11 +220,7 @@ export function SignInPage() {
   const busy = submitting;
 
   return (
-    <AuthShell
-      title="Sign in"
-      subtitle="We email you a link. Open it to sign in, no password needed."
-      footer={footer}
-    >
+    <AuthShell title="Sign in" subtitle={CHECK_EMAIL_COPY.subtitle} footer={footer}>
       <TestSiteStart />
       <form
         className="flex flex-col gap-4"
@@ -303,7 +278,7 @@ export function SignInPage() {
           className="w-full"
           disabled={busy || email.trim().length === 0}
         >
-          {busy ? 'Sending link' : 'Email me a sign-in link'}
+          {busy ? CHECK_EMAIL_COPY.sendingCode : CHECK_EMAIL_COPY.sendCode}
         </Button>
       </form>
     </AuthShell>

@@ -22,7 +22,8 @@ import type { Step } from '../../src/lib/induction-model';
 // fresh page: `prepare` edits the fixture world (and may add routes) after the
 // harness network is installed, then `steps` walks from `url` to the state.
 //
-// Covered: sign up, sign in, the invite link's Join card (signed out); the
+// Covered: sign up, sign in, the sign-in code step (empty, filled, wrong code)
+// and the sign-up code step, the invite link's Join card (signed out); the
 // pre-app screens of OnboardingFlow (the invitee's welcome; the self sign-up's
 // side, name, the photo's positioning sheet, role; the approver's brand and
 // waiting screens); the creator's setup in the shell (the workspace slot, the
@@ -442,6 +443,52 @@ async function tourCommentButton(page: Page): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Email code step (sign in and sign up)
+
+/**
+ * Answers Supabase's /auth/v1/verify for the code step: 'hold' never answers
+ * (the boxes stay filled), 'wrong' refuses as Supabase does for a bad code.
+ * Preflights fall through to the harness.
+ */
+async function routeVerify(page: Page, mode: 'hold' | 'wrong'): Promise<void> {
+  await page.route(`${SUPABASE}/auth/v1/verify*`, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    if (mode === 'hold') return;
+    await route.fulfill({
+      status: 403,
+      headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        code: 403,
+        error_code: 'otp_expired',
+        msg: 'Token has expired or is invalid',
+      }),
+    });
+  });
+}
+
+/**
+ * The resend countdown keeps running under the pinned Date. Waiting past 1:00
+ * leaves only its last digit to move between runs: one tabular glyph, well
+ * under the 0.2% screen threshold.
+ */
+async function pastFirstSecond(page: Page): Promise<void> {
+  await waitFor([page.getByRole('button', { name: /Resend in 0:5\d/ })], 'resend countdown');
+}
+
+/** From the sign-in card: type the email, Send code, wait for the code step. */
+async function toSignInCode(page: Page): Promise<void> {
+  await waitFor([page.getByRole('button', { name: CHECK_EMAIL_COPY.sendCode })], 'sign in');
+  await page.locator('#signin-email').fill('dana@kite.in');
+  await page.getByRole('button', { name: CHECK_EMAIL_COPY.sendCode }).click();
+  await waitFor([page.getByText(CHECK_EMAIL_COPY.codeTitle, { exact: true })], 'code step');
+  await waitFor([page.locator('#auth-code')], 'code input');
+  await pastFirstSecond(page);
+}
+
+// ---------------------------------------------------------------------------
 // Screens
 
 const INVITE_ID = '0190f000-0000-7000-8000-0000000000e1';
@@ -453,16 +500,62 @@ export const ONBOARDING_SCREENS: OnboardingScreen[] = [
     signedOut: true,
     steps: async (page) =>
       waitFor(
-        [page.getByRole('button', { name: CHECK_EMAIL_COPY.createAccount, exact: true })],
+        [page.getByRole('button', { name: CHECK_EMAIL_COPY.sendCode, exact: true })],
         'sign up',
       ),
+  },
+  {
+    // The same card after Send code: title, Sent to, six empty boxes, resend countdown.
+    name: 'onboarding-sign-up-code',
+    url: '/signup?email=dana@kite.in',
+    signedOut: true,
+    steps: async (page) => {
+      await waitFor(
+        [page.getByRole('button', { name: CHECK_EMAIL_COPY.sendCode, exact: true })],
+        'sign up',
+      );
+      await page.locator('#signup-policy-consent').check();
+      await page.getByRole('button', { name: CHECK_EMAIL_COPY.sendCode, exact: true }).click();
+      await waitFor([page.getByText(CHECK_EMAIL_COPY.codeTitle, { exact: true })], 'code step');
+      await pastFirstSecond(page);
+    },
   },
   {
     name: 'onboarding-sign-in',
     url: '/signin',
     signedOut: true,
     steps: async (page) =>
-      waitFor([page.getByRole('button', { name: 'Email me a sign-in link' })], 'sign in'),
+      waitFor([page.getByRole('button', { name: CHECK_EMAIL_COPY.sendCode })], 'sign in'),
+  },
+  {
+    name: 'onboarding-sign-in-code',
+    url: '/signin',
+    signedOut: true,
+    steps: toSignInCode,
+  },
+  {
+    // Six digits typed; the verify call is held so the filled boxes stay.
+    name: 'onboarding-sign-in-code-filled',
+    url: '/signin',
+    signedOut: true,
+    prepare: (_network, page) => routeVerify(page, 'hold'),
+    steps: async (page) => {
+      await toSignInCode(page);
+      await page.locator('#auth-code').fill('123456');
+      await waitFor([page.locator('[data-code-box]').nth(5).getByText('6')], 'filled boxes');
+    },
+  },
+  {
+    // A wrong code: boxes cleared, the error under them.
+    name: 'onboarding-sign-in-code-error',
+    url: '/signin',
+    signedOut: true,
+    prepare: (_network, page) => routeVerify(page, 'wrong'),
+    steps: async (page) => {
+      await toSignInCode(page);
+      await page.locator('#auth-code').fill('000000');
+      await waitFor([page.getByText(CHECK_EMAIL_COPY.wrongCode)], 'wrong code');
+    },
   },
   {
     // The invite email's tap-to-join link (?th=), opened signed out: the Join card.
