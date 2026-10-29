@@ -962,15 +962,46 @@ const CAPABILITY_RPC: Record<string, RpcHandler> = {
     const role = typeof member?.role === 'string' ? member.role : '';
     return (ROLE_CAPABILITIES[role] ?? []).includes(String(args.p_capability));
   },
-  // capabilities_for_workspace: the caller's allowed capabilities in one read.
+  // capabilities_for_workspace: the caller's allowed capabilities in one read,
+  // plus the group.create_more row the proc always adds (20261029120000_group_limit.sql).
   capabilities_for_workspace: (args, tables) => {
     const member = (tables.workspace_members ?? []).find(
       (m) => m.workspace_id === args.p_workspace_id && m.user_id === ME && m.active === true,
     );
     const role = typeof member?.role === 'string' ? member.role : '';
-    return (ROLE_CAPABILITIES[role] ?? []).map((capability) => ({ capability, allowed: true }));
+    const rows = (ROLE_CAPABILITIES[role] ?? []).map((capability) => ({
+      capability,
+      allowed: true,
+    }));
+    const createMore =
+      member !== undefined && groupLimitAllows(tables, String(args.p_workspace_id));
+    return [...rows, { capability: 'group.create_more', allowed: createMore }];
   },
 };
+
+/**
+ * public.group_limit_allows over the fixture world: live groups (induction
+ * sample groups excluded) below workspaces.group_allowance. The fixture
+ * workspace sets no group_allowance, so New group stays open on every screen
+ * that does not ask for the limit; a screen that sets one gets the proc's count.
+ */
+function groupLimitAllows(tables: Tables, workspaceId: string): boolean {
+  const ws = (tables.workspaces ?? []).find((w) => w.id === workspaceId);
+  const allowance = ws?.group_allowance;
+  if (typeof allowance !== 'number') return true;
+  const samples = new Set(
+    (tables.induction_sample_rows ?? [])
+      .filter((s) => s.workspace_id === workspaceId && s.kind === 'group')
+      .map((s) => String(s.row_id)),
+  );
+  const live = (tables.groups ?? []).filter(
+    (g) =>
+      g.workspace_id === workspaceId &&
+      (g.deleted_at ?? null) === null &&
+      !samples.has(String(g.id)),
+  );
+  return live.length < allowance;
+}
 
 /**
  * public.activity_badge_read over the fixture inbox: the caller's unread, not

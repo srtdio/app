@@ -74,6 +74,15 @@ export function isWorkspaceLimitError(message: string): boolean {
   return message.includes('workspace_limit_reached');
 }
 
+/**
+ * Whether a group_create failure is the free plan's groups-per-workspace rule.
+ * group_create raises 'group_limit_reached'; PostgREST passes the raised text
+ * through as the error message.
+ */
+export function isGroupLimitError(message: string): boolean {
+  return message.includes('group_limit_reached');
+}
+
 /** The create form's message for a workspace_create failure. */
 export function workspaceCreateErrorMessage(message: string): string {
   return isWorkspaceLimitError(message) ? WORKSPACE_LIMIT_MESSAGE : message;

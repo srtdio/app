@@ -8936,6 +8936,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           digest_default_time: string
+          group_allowance: number
           id: string
           key: string
           logo_url: string | null
@@ -8961,6 +8962,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           digest_default_time?: string
+          group_allowance?: number
           id?: string
           key: string
           logo_url?: string | null
@@ -8986,6 +8988,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           digest_default_time?: string
+          group_allowance?: number
           id?: string
           key?: string
           logo_url?: string | null
@@ -9809,6 +9812,7 @@ export type Database = {
         Args: { p_group_id: string; p_trace_id: string }
         Returns: undefined
       }
+      group_limit_allows: { Args: { p_workspace_id: string }; Returns: boolean }
       group_member_add: {
         Args: { p_group_id: string; p_trace_id: string; p_user_id: string }
         Returns: undefined

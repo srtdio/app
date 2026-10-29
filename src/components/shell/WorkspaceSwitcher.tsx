@@ -19,6 +19,7 @@ import { PlatformMark } from '@/components/ui/PlatformMark';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { IconCheck, IconPlus, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { storeInductionStep } from '@/components/induction/induction-data';
+import { anotherWorkspaceRequest } from '@/lib/support';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import {
@@ -530,6 +531,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
         open={support === 'contact'}
         onClose={() => setSupport(null)}
         workspaceName={activeDisplayName ?? ''}
+        request={anotherWorkspaceRequest(activeDisplayName ?? '')}
       />
       {workspaceId !== null ? (
         <BookCallSheet

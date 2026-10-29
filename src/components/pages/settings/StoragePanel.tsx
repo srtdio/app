@@ -18,6 +18,7 @@ import { ICON_SIZE, IconTrash } from '@/components/ui/icons';
 import { LoadError } from '@/components/ui/LoadError';
 import { cn } from '@/lib/cn';
 import { CAP_BYTES } from '@/lib/storage-limits';
+import { anotherWorkspaceRequest } from '@/lib/support';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -163,6 +164,7 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
         open={support === 'contact'}
         onClose={() => setSupport(null)}
         workspaceName={workspace}
+        request={anotherWorkspaceRequest(workspace)}
       />
       <BookCallSheet
         open={support === 'book'}
