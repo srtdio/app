@@ -98,7 +98,7 @@ async function mount(currentUserId: string) {
 }
 
 async function typeName(value: string) {
-  const input = document.querySelector<HTMLInputElement>('#new-group-name');
+  const input = document.querySelector<HTMLInputElement>('[id="new-group-name"]');
   if (!input) throw new Error('no group name input');
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
   await act(async () => {
@@ -194,7 +194,7 @@ describe('New chat sheet: New group blocked', () => {
     expect(groupRow()?.hasAttribute('aria-describedby')).toBe(false);
     expect(note()).toBeNull();
     await act(async () => button('New group')?.click());
-    expect(document.querySelector('#new-group-name')).not.toBeNull();
+    expect(document.querySelector('[id="new-group-name"]')).not.toBeNull();
   });
 });
 
@@ -213,7 +213,7 @@ describe('New chat sheet: server backstop', () => {
   it('group_limit_reached: back to choose, blocked, no failure line, one cache entry dropped', async () => {
     await createRefused('group_limit_reached');
     expect(document.body.textContent).not.toContain(NEW_GROUP_FAILED);
-    expect(document.querySelector('#new-group-name')).toBeNull();
+    expect(document.querySelector('[id="new-group-name"]')).toBeNull();
     expect(groupRow()?.disabled).toBe(true);
     expect(note()?.textContent).toBe(GROUP_LIMIT_OWNER);
     expect(h.drop).toHaveBeenCalledOnce();
