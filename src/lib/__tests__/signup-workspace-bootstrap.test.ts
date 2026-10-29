@@ -62,7 +62,7 @@ describe('performSignUp', () => {
       expect.objectContaining({
         options: expect.objectContaining({
           shouldCreateUser: true,
-          data: { timezone: 'UTC' },
+          data: { timezone: 'UTC', email_opt_in: true },
           emailRedirectTo: ORIGIN,
         }),
       }),
