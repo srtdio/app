@@ -44,6 +44,8 @@ export interface SignUpInput {
   email: string;
   timezone: string;
   policyConsent: boolean;
+  /** Catch-up emails; onboarding reads it back from user_metadata. Absent = true. */
+  emailOptIn?: boolean;
 }
 
 export type SignUpResult = { status: 'error'; message: string } | { status: 'sent' };
@@ -88,7 +90,7 @@ export async function performSignUp(
     email: input.email.trim(),
     options: {
       shouldCreateUser: true,
-      data: { timezone: input.timezone },
+      data: { timezone: input.timezone, email_opt_in: input.emailOptIn ?? true },
       emailRedirectTo: window.location.origin,
     },
   });
@@ -118,6 +120,8 @@ export function SignUpPage(): ReactElement {
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState(() => searchParams.get('email') ?? '');
   const [policyConsent, setPolicyConsent] = useState(false);
+  // Ticked by default; never required to continue.
+  const [emailOptIn, setEmailOptIn] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Checked when the field loses focus, and again on Create.
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -133,6 +137,7 @@ export function SignUpPage(): ReactElement {
       email,
       timezone: detectTimezone(),
       policyConsent,
+      emailOptIn,
     });
     return result.status === 'error' ? result.message : null;
   }
@@ -256,6 +261,22 @@ export function SignUpPage(): ReactElement {
             </p>
           ) : null}
         </Field>
+
+        <div className="flex flex-wrap items-center gap-x-1 text-base text-fg-2">
+          <label
+            htmlFor="signup-email-opt-in"
+            className="flex min-h-11 cursor-pointer items-center gap-3"
+          >
+            <input
+              id="signup-email-opt-in"
+              type="checkbox"
+              checked={emailOptIn}
+              onChange={(event) => setEmailOptIn(event.target.checked)}
+              className="m-0 h-4 w-4 shrink-0 accent-accent"
+            />
+            <span>Email me updates I miss</span>
+          </label>
+        </div>
 
         <div className="flex flex-wrap items-center gap-x-1 text-base text-fg-2">
           <label

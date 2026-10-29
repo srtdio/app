@@ -200,6 +200,20 @@ async function readWelcomeFacts(ids: {
   };
 }
 
+/**
+ * The catch-up email choice onboarding saves: the sign-up checkbox (user_metadata,
+ * when a boolean), else the saved profile value, else on. Invitees never see the
+ * sign-up page, so they keep the default. Pure.
+ */
+export function initialEmailOptIn(
+  metadata: Record<string, unknown> | null | undefined,
+  saved: boolean | null | undefined,
+): boolean {
+  const picked = metadata?.email_opt_in;
+  if (typeof picked === 'boolean') return picked;
+  return saved ?? true;
+}
+
 export function OnboardingFlow({
   profile,
   workspaceId: joinedWorkspaceId,
@@ -291,7 +305,9 @@ export function OnboardingFlow({
   }, []);
   const [role, setRole] = useState(draft?.role ?? '');
   const [roleOther, setRoleOther] = useState(draft?.roleOther ?? '');
-  const [emailOptIn] = useState(profile?.email_opt_in ?? true);
+  const [emailOptIn] = useState(() =>
+    initialEmailOptIn(session?.user.user_metadata, profile?.email_opt_in),
+  );
 
   // The approver who signed up alone: who makes their posts.
   const [teamEmail, setTeamEmail] = useState(draft?.teamEmail ?? '');

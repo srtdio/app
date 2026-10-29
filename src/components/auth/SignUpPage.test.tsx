@@ -47,7 +47,7 @@ describe('performSignUp', () => {
       email: 'dana@kite.in',
       options: {
         shouldCreateUser: true,
-        data: { timezone: 'Asia/Kolkata' },
+        data: { timezone: 'Asia/Kolkata', email_opt_in: true },
         emailRedirectTo: window.location.origin,
       },
     });
@@ -189,6 +189,31 @@ describe('SignUpPage', () => {
     });
     expect(document.body.textContent).toContain('Enter a valid email, like name@company.com');
     expect(input.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('sends email_opt_in true when the updates box stays ticked (the default)', async () => {
+    await render();
+    const optIn = document.querySelector<HTMLInputElement>('#signup-email-opt-in')!;
+    expect(optIn.checked).toBe(true);
+    expect(document.body.textContent).toContain('Email me updates I miss');
+    await submit();
+    expect(signInWithOtp.mock.calls[0]?.[0].options.data.email_opt_in).toBe(true);
+  });
+
+  it('sends email_opt_in false when the updates box is unticked, and still continues', async () => {
+    await render();
+    await click(document.querySelector<HTMLInputElement>('#signup-email-opt-in')!);
+    await submit();
+    expect(signInWithOtp).toHaveBeenCalledTimes(1);
+    expect(signInWithOtp.mock.calls[0]?.[0].options.data.email_opt_in).toBe(false);
+    expect(document.body.textContent).toContain('Enter the code');
+  });
+
+  it('places the updates box above the Terms box', async () => {
+    await render();
+    const optIn = document.querySelector('#signup-email-opt-in')!;
+    const terms = document.querySelector('#signup-policy-consent')!;
+    expect(optIn.compareDocumentPosition(terms) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('Send code swaps the same card to the code step with the address', async () => {
