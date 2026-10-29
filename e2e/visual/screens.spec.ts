@@ -3,6 +3,7 @@ import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
 import {
   buildWorld,
+  COLLEAGUE_B,
   DM_CHANNEL,
   GROUP_NAME,
   ME,
@@ -718,11 +719,26 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // Owner viewer: every active row carries the catch-up email tag; Ana has
+    // opted out, so both "On" and "Emails off" paint.
     name: 'members',
     seed: creator,
+    extra: (network) => {
+      for (const u of network.world.tables.users ?? []) {
+        if (u.id === COLLEAGUE_B) u.email_opt_in = false;
+      }
+    },
     url: '/settings?panel=members',
     steps: async (page) =>
-      waitFor([page.getByText('Creators', { exact: true })], 'settings members'),
+      waitFor([page.getByText('Emails off', { exact: true }).first()], 'settings members'),
+  },
+  {
+    // Settings > Profile: the Catch-up emails tick box under the fields.
+    name: 'settings-profile',
+    seed: creator,
+    url: '/settings?panel=profile',
+    steps: async (page) =>
+      waitFor([page.getByText('Catch-up emails', { exact: true })], 'settings profile'),
   },
   {
     name: 'composer-tray',

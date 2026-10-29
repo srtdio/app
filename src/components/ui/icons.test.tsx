@@ -46,6 +46,8 @@ const DOCUMENTED = [
   'IconInfo',
   'IconLink',
   'IconLock',
+  'IconMail',
+  'IconMailOff',
   'IconMenu',
   'IconMic',
   'IconMinus',
@@ -114,7 +116,14 @@ describe('icon set', () => {
   });
 
   it('exports the one size scale', () => {
-    expect(ICON_SIZE).toEqual({ inline: 16, nav: 18, control: 20, tray: 22, status: 28 });
+    expect(ICON_SIZE).toEqual({
+      text: 12,
+      inline: 16,
+      nav: 18,
+      control: 20,
+      tray: 22,
+      status: 28,
+    });
   });
 
   for (const [name, Icon] of iconEntries) {

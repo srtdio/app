@@ -39,10 +39,11 @@ import {
   profileReadKey,
   profileViewFor,
   resetProfileStore,
+  setProfileEmailOptIn,
   subscribeProfile,
   type CurrentProfile,
 } from '@/lib/use-current-profile';
-import { primeRead, resetSessionReads } from '@/lib/session-read';
+import { peekKept, primeRead, resetSessionReads } from '@/lib/session-read';
 
 function row(name: string, avatar: string | null = null): CurrentProfile {
   return {
@@ -338,5 +339,30 @@ describe('device cache (cold open)', () => {
     primeRead(profileReadKey('u-1'), row('Saved'));
     void loadProfile('u-2');
     expect(getProfileSnapshot()).toMatchObject({ userId: 'u-2', profile: null, loading: true });
+  });
+});
+
+describe('setProfileEmailOptIn (own write)', () => {
+  it('patches the held row and the saved copy with no read', async () => {
+    void loadProfile('u-1');
+    reads[0]?.resolve({ data: row('Asha'), error: null });
+    await flush();
+    const listener = vi.fn();
+    const off = subscribeProfile(listener);
+    setProfileEmailOptIn('u-1', false);
+    expect(reads).toHaveLength(1);
+    expect(getProfileSnapshot().profile?.email_opt_in).toBe(false);
+    expect(getProfileSnapshot().profile?.display_name).toBe('Asha');
+    expect(peekKept<CurrentProfile>(profileReadKey('u-1'))?.email_opt_in).toBe(false);
+    expect(listener).toHaveBeenCalledOnce();
+    off();
+  });
+
+  it('leaves another user, or no row yet, alone', () => {
+    void loadProfile('u-1');
+    setProfileEmailOptIn('u-1', false);
+    expect(getProfileSnapshot().profile).toBeNull();
+    setProfileEmailOptIn('u-2', false);
+    expect(getProfileSnapshot().userId).toBe('u-1');
   });
 });

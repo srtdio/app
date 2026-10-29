@@ -3,6 +3,7 @@ import type { Client } from '@srtdio/rpc';
 import {
   dmPeerId,
   listChannelSummaries,
+  READ_USERS_COLUMNS,
   readProfiles,
   shapeChannelSummaries,
 } from '@/lib/chat-reads';
@@ -329,6 +330,47 @@ describe('readProfiles', () => {
       { userId: PEER1, displayName: 'Ada', avatarUrl: null, username: 'ada' },
       { userId: PEER2, displayName: 'Bay', avatarUrl: 'http://x/b.png', username: null },
     ]);
+  });
+
+  it('selects email_opt_in in the same one users query', async () => {
+    const selects: unknown[][] = [];
+    const b: Record<string, unknown> = {};
+    b.select = (...args: unknown[]) => {
+      selects.push(args);
+      return b;
+    };
+    b.in = () => b;
+    b.then = (resolve: (v: unknown) => unknown) =>
+      Promise.resolve({ data: [], error: null }).then(resolve);
+    const from = vi.fn(() => b);
+    await readProfiles({ from } as unknown as Client, [PEER1]);
+    expect(READ_USERS_COLUMNS).toBe('id, display_name, avatar_url, username, email_opt_in');
+    expect(from).toHaveBeenCalledOnce();
+    expect(selects).toEqual([[READ_USERS_COLUMNS]]);
+  });
+
+  it('maps email_opt_in to emailOptIn; a row without it has no field', async () => {
+    const { client } = makeClient({
+      users: {
+        data: [
+          {
+            id: PEER1,
+            display_name: 'Ada',
+            avatar_url: null,
+            username: 'ada',
+            email_opt_in: false,
+          },
+          { id: PEER2, display_name: 'Bay', avatar_url: null, username: null, email_opt_in: true },
+          { id: ME, display_name: 'Me', avatar_url: null, username: null },
+        ],
+        error: null,
+      },
+    });
+    const result = await readProfiles(client, [PEER1, PEER2, ME]);
+    const data = result.ok ? result.data : [];
+    expect(data[0]?.emailOptIn).toBe(false);
+    expect(data[1]?.emailOptIn).toBe(true);
+    expect(data[2] !== undefined && 'emailOptIn' in data[2]).toBe(false);
   });
 
   it('returns an empty list without a read when given no ids', async () => {

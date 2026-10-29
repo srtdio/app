@@ -6,6 +6,8 @@ import type { Client, Result, UserProfileUpdateArgs } from '@srtdio/rpc';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   CameraBadge,
+  EMAIL_OPT_IN_FAILED,
+  EmailOptInRow,
   PHOTO_VIEW_INITIAL,
   PhotoPickActions,
   TEXT_FIELDS_INITIAL,
@@ -19,6 +21,8 @@ import {
   settlePhotoChange,
   shownPhoto,
   submitProfileChange,
+  submitEmailOptIn,
+  tickEmailOptIn,
   type PhotoIntent,
   type PhotoView,
 } from '@/components/settings/ProfileSettingsPanel';
@@ -470,5 +474,108 @@ describe('tokens', () => {
       expect(out).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
       expect(out).not.toContain('dark:');
     }
+  });
+});
+
+describe('Catch-up emails tick', () => {
+  function saveFn(result: Result<string> = { ok: true, data: 'u-me' }) {
+    return vi.fn<(c: Client, a: UserProfileUpdateArgs) => Promise<Result<string>>>(() =>
+      Promise.resolve(result),
+    );
+  }
+
+  it('saves the SAVED name and designation, keeps the photo, changes only p_email_opt_in', async () => {
+    const save = saveFn();
+    const result = await submitEmailOptIn({
+      client,
+      save,
+      newTrace: () => TRACE,
+      saved: { display_name: 'Asha Rao', designation: 'Brand Manager' },
+      emailOptIn: false,
+    });
+    expect(result).toEqual({ ok: true, data: undefined });
+    expect(save).toHaveBeenCalledOnce();
+    expect(save).toHaveBeenCalledWith(client, {
+      p_display_name: 'Asha Rao',
+      p_designation: 'Brand Manager',
+      p_avatar_url: null,
+      p_email_opt_in: false,
+      p_trace_id: TRACE,
+    });
+  });
+
+  it('a null saved designation goes out blank (leave unchanged)', async () => {
+    const save = saveFn();
+    await submitEmailOptIn({
+      client,
+      save,
+      newTrace: () => TRACE,
+      saved: { display_name: 'Asha Rao', designation: null },
+      emailOptIn: true,
+    });
+    expect(save.mock.calls[0]?.[1].p_designation).toBe('');
+    expect(save.mock.calls[0]?.[1].p_email_opt_in).toBe(true);
+  });
+
+  it('applies at once and keeps the value on success', async () => {
+    const apply = vi.fn();
+    const onFail = vi.fn();
+    await tickEmailOptIn({
+      previous: true,
+      next: false,
+      apply,
+      submit: () => Promise.resolve({ ok: true, data: undefined }),
+      isLatest: () => true,
+      onFail,
+    });
+    expect(apply.mock.calls).toEqual([[false]]);
+    expect(onFail).not.toHaveBeenCalled();
+  });
+
+  it('a failure reverts and reports', async () => {
+    const apply = vi.fn();
+    const onFail = vi.fn();
+    await tickEmailOptIn({
+      previous: true,
+      next: false,
+      apply,
+      submit: () => Promise.resolve({ ok: false, error: { code: 'unknown', message: 'boom' } }),
+      isLatest: () => true,
+      onFail,
+    });
+    expect(apply.mock.calls).toEqual([[false], [true]]);
+    expect(onFail).toHaveBeenCalledWith('boom');
+    expect(EMAIL_OPT_IN_FAILED).toBe("Couldn't save. Try again.");
+  });
+
+  it('a late failure after a newer tick does not revert', async () => {
+    const apply = vi.fn();
+    const onFail = vi.fn();
+    await tickEmailOptIn({
+      previous: true,
+      next: false,
+      apply,
+      submit: () => Promise.resolve({ ok: false, error: { code: 'unknown', message: 'boom' } }),
+      isLatest: () => false,
+      onFail,
+    });
+    expect(apply.mock.calls).toEqual([[false]]);
+    expect(onFail).not.toHaveBeenCalled();
+  });
+
+  it('renders the native tick box with the approved copy and a 44px row', () => {
+    const on = renderToStaticMarkup(<EmailOptInRow checked onChange={() => {}} />);
+    expect(on).toContain('type="checkbox"');
+    expect(on).toContain('checked=""');
+    expect(on).toContain('min-h-11');
+    expect(on).toContain('h-4 w-4 shrink-0 accent-accent');
+    expect(on).toContain('Catch-up emails');
+    expect(on).toContain(
+      'Unread updates by email, weekdays. Sign-in codes and invites always arrive.',
+    );
+    expect(on).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    expect(on).not.toContain('dark:');
+    const off = renderToStaticMarkup(<EmailOptInRow checked={false} onChange={() => {}} />);
+    expect(off).not.toContain('checked=""');
   });
 });

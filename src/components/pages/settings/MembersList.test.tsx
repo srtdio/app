@@ -84,6 +84,58 @@ describe('memberActionItems', () => {
 });
 
 describe('MembersList', () => {
+  it('owner/admin viewers see the email tag on active rows, self included', () => {
+    const out = renderToStaticMarkup(
+      <MembersList
+        {...listProps({
+          canManage: true,
+          derived: {
+            agency: [
+              entry({ id: 'm-self', displayName: 'Sam Self', isSelf: true, emailOptIn: true }),
+              entry({ id: 'm-off', displayName: 'Oli Off', emailOptIn: false }),
+              entry({ id: 'm-old', displayName: 'Ola Old' }),
+            ],
+            client: [],
+            pending: [
+              entry({
+                id: 'p-1',
+                displayName: 'pia',
+                role: 'client',
+                acceptedAt: null,
+                emailOptIn: false,
+              }),
+            ],
+          },
+        })}
+      />,
+    );
+    expect(out.match(/>On</g)).toHaveLength(1);
+    expect(out.match(/>Emails off</g)).toHaveLength(1);
+    // The tag sits in the self row and the opted-out row only.
+    const self = out.slice(out.indexOf('Sam Self'), out.indexOf('Oli Off'));
+    expect(self).toContain('>On<');
+    const old = out.slice(out.indexOf('Ola Old'));
+    expect(old).not.toContain('>On<');
+    expect(old).not.toContain('>Emails off<');
+  });
+
+  it('creator and approver viewers never see the email tag', () => {
+    const out = renderToStaticMarkup(
+      <MembersList
+        {...listProps({
+          canManage: false,
+          derived: {
+            agency: [entry({ id: 'm-a', emailOptIn: true })],
+            client: [entry({ id: 'm-c', role: 'client', emailOptIn: false })],
+            pending: [],
+          },
+        })}
+      />,
+    );
+    expect(out).not.toContain('>On<');
+    expect(out).not.toContain('>Emails off<');
+  });
+
   it('shows the owner lock and no action kebabs for a read-only (client) viewer', () => {
     const out = renderToStaticMarkup(<MembersList {...listProps({ canManage: false })} />);
     expect(out).toContain(OWNER_LOCK_TITLE);
