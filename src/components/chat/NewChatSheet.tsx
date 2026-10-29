@@ -87,17 +87,30 @@ function useGroupLimit(): {
   ownerUserId: string | null;
   workspaceName: string;
 } {
+  const workspace = useOptionalWorkspace();
+  const canCreateMore = useOptionalCapability(GROUP_CREATE_MORE);
+  if (workspace === null) return { canCreateMore: null, ownerUserId: null, workspaceName: '' };
+  const row = workspace.workspaces.find((w) => w.id === workspace.workspaceId);
+  return {
+    canCreateMore,
+    ownerUserId: row?.owner_user_id ?? null,
+    workspaceName: workspace.workspaceDisplayName ?? '',
+  };
+}
+
+function useOptionalWorkspace(): ReturnType<typeof useWorkspace> | null {
   try {
-    const workspace = useWorkspace();
-    const canCreateMore = useWorkspaceCapability(GROUP_CREATE_MORE);
-    const row = workspace.workspaces.find((w) => w.id === workspace.workspaceId);
-    return {
-      canCreateMore,
-      ownerUserId: row?.owner_user_id ?? null,
-      workspaceName: workspace.workspaceDisplayName ?? '',
-    };
+    return useWorkspace();
   } catch {
-    return { canCreateMore: null, ownerUserId: null, workspaceName: '' };
+    return null;
+  }
+}
+
+function useOptionalCapability(capability: string): boolean | null {
+  try {
+    return useWorkspaceCapability(capability);
+  } catch {
+    return null;
   }
 }
 

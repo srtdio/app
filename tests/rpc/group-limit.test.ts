@@ -45,6 +45,12 @@ function createArgs(workspaceId: string): CreateArgs {
   };
 }
 
+type CapsArgs = Database['public']['Functions']['capabilities_for_workspace']['Args'];
+
+function capsArgs(workspaceId: string): CapsArgs {
+  return { p_trace_id: generateTraceId(), p_workspace_id: workspaceId };
+}
+
 describe.runIf(RPC_SUITE)('group limit: group_create and group.create_more', () => {
   let admin: SupabaseClient<Database>;
   let g: GenericClient;
@@ -61,10 +67,7 @@ describe.runIf(RPC_SUITE)('group limit: group_create and group.create_more', () 
   }
 
   async function canCreateMore(as: SeededUser, workspaceId: string): Promise<boolean | null> {
-    const res = await clientFor(as.id).rpc('capabilities_for_workspace', {
-      p_trace_id: generateTraceId(),
-      p_workspace_id: workspaceId,
-    });
+    const res = await clientFor(as.id).rpc('capabilities_for_workspace', capsArgs(workspaceId));
     if (res.error) throw new Error(`capabilities_for_workspace failed: ${res.error.message}`);
     const row = (res.data ?? []).find((r) => r.capability === 'group.create_more');
     return row === undefined ? null : row.allowed;
@@ -161,10 +164,7 @@ describe.runIf(RPC_SUITE)('group limit: group_create and group.create_more', () 
   });
 
   it('the new row leaves every other capability as it was', async () => {
-    const res = await clientFor(member.id).rpc('capabilities_for_workspace', {
-      p_trace_id: generateTraceId(),
-      p_workspace_id: ws.id,
-    });
+    const res = await clientFor(member.id).rpc('capabilities_for_workspace', capsArgs(ws.id));
     expect(res.error).toBeNull();
     const rows = res.data ?? [];
     expect(rows.filter((r) => r.capability === 'group.create_more')).toHaveLength(1);
