@@ -73,11 +73,19 @@ import {
 } from '@heroicons/react/24/solid';
 
 /**
- * The one icon size scale. 16 beside text or in a chip, 18 sidebar (the
- * default), 20 alone in a 44 button or the tab bar, 22 tray tiles, composer
- * and long-press menu, 28 status glyphs (empty states, file tiles).
+ * The one icon size scale. 12 at tag text size (ui/Tag's leading icon), 16
+ * beside text or in a chip, 18 sidebar (the default), 20 alone in a 44 button
+ * or the tab bar, 22 tray tiles, composer and long-press menu, 28 status
+ * glyphs (empty states, file tiles).
  */
-export const ICON_SIZE = { inline: 16, nav: 18, control: 20, tray: 22, status: 28 } as const;
+export const ICON_SIZE = {
+  text: 12,
+  inline: 16,
+  nav: 18,
+  control: 20,
+  tray: 22,
+  status: 28,
+} as const;
 
 export interface IconProps {
   className?: string;
@@ -530,6 +538,27 @@ export function IconMenu(props: IconProps) {
 
 export function IconMinus(props: IconProps) {
   return <Hero icon={MinusIcon} {...props} />;
+}
+
+/** Mail (email on). Hand-drawn on the Svg contract: an envelope with its flap. */
+export function IconMail(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </Svg>
+  );
+}
+
+/** Mail off (email off): the same envelope, struck through. */
+export function IconMailOff(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+      <path d="M3 3l18 18" />
+    </Svg>
+  );
 }
 
 /**

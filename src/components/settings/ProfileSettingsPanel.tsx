@@ -1,7 +1,12 @@
 // Settings -> Profile editor. The photo is optional: the user can rename or
 // re-title without re-uploading. It orchestrates its own upload-then-save, only uploading when the cropper actually holds a new photo and
-// otherwise sending NULL for the photo (the proc keeps the current one). The email
-// preference is passed through unchanged because there is no toggle on this screen.
+// otherwise sending NULL for the photo (the proc keeps the current one).
+//
+// The Catch-up emails tick box saves on tick (no Save button) with the SAVED
+// name, designation and photo, only p_email_opt_in changed; unsaved form edits
+// are never sent and stay in the form. It is optimistic: the shared profile
+// store is patched at once (setProfileEmailOptIn) and a failure reverts it and
+// toasts. No read follows the write.
 //
 // The photo carries a camera badge that opens the shared PhotoOptionsSheet ("Your
 // photo"). The photo saves on its own, like WhatsApp: a picked file opens the
@@ -29,6 +34,7 @@ import { Field } from '@/components/ui/Field';
 import { IconCamera, ICON_SIZE } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { PhotoOptionsSheet } from '@/components/ui/PhotoOptionsSheet';
+import { useOptionalToast } from '@/components/ui/toast';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import { logger } from '@/lib/logger';
@@ -37,7 +43,11 @@ import { useNewTrace } from '@/lib/trace-context';
 import { fireAvatarCleanup, makeAvatarCleanup, uploadAvatarFile } from '@/lib/avatar-upload';
 import { generateTraceId } from '@/lib/trace';
 import { useSession } from '@/lib/session-context';
-import { useCurrentProfile, type CurrentProfile } from '@/lib/use-current-profile';
+import {
+  setProfileEmailOptIn,
+  useCurrentProfile,
+  type CurrentProfile,
+} from '@/lib/use-current-profile';
 
 /** What a save does to the photo: leave it, replace it, or clear it. */
 type PhotoChange = { kind: 'keep' } | { kind: 'set'; url: string } | { kind: 'clear' };
@@ -186,6 +196,49 @@ export function submitTextFields(deps: {
   return submitProfileChange({ ...deps, photo: { kind: 'keep' } });
 }
 
+/**
+ * Catch-up emails tick: save with the SAVED fields (never unsaved form input),
+ * the photo kept (NULL), only p_email_opt_in changed. Never throws.
+ */
+export function submitEmailOptIn(deps: {
+  client: Client;
+  save: typeof userProfileUpdate;
+  newTrace: () => string;
+  saved: Pick<CurrentProfile, 'display_name' | 'designation'>;
+  emailOptIn: boolean;
+}): Promise<Result<void>> {
+  return submitProfileChange({
+    client: deps.client,
+    save: deps.save,
+    newTrace: deps.newTrace,
+    displayName: deps.saved.display_name,
+    designation: deps.saved.designation ?? '',
+    emailOptIn: deps.emailOptIn,
+    photo: { kind: 'keep' },
+  });
+}
+
+export const EMAIL_OPT_IN_FAILED = "Couldn't save. Try again.";
+
+/**
+ * One tick: apply `next` at once, save, and on failure revert to `previous` and
+ * report, unless a newer tick has started (it owns the value now). Never throws.
+ */
+export async function tickEmailOptIn(deps: {
+  previous: boolean;
+  next: boolean;
+  apply: (value: boolean) => void;
+  submit: () => Promise<Result<void>>;
+  isLatest: () => boolean;
+  onFail: (message: string) => void;
+}): Promise<void> {
+  deps.apply(deps.next);
+  const result = await deps.submit();
+  if (result.ok || !deps.isLatest()) return;
+  deps.apply(deps.previous);
+  deps.onFail(result.error.message);
+}
+
 /** The panel's local photo override on top of the loaded avatar_url. */
 export interface PhotoView {
   /** Object URL of the cropped PNG being (or just) saved. */
@@ -325,6 +378,9 @@ export function ProfileSettingsPanel(): React.ReactElement {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const toast = useOptionalToast();
+  // Only the newest tick may revert, so a late failure never undoes a later tick.
+  const emailSeqRef = useRef(0);
 
   useEffect(
     () => () => {
@@ -424,6 +480,32 @@ export function ProfileSettingsPanel(): React.ReactElement {
       photoBusyRef.current = false;
       setPhotoBusy(false);
     }
+  }
+
+  function handleEmailOptIn(next: boolean): void {
+    if (profile === null || userId === null) return;
+    const owner = userId;
+    emailSeqRef.current += 1;
+    const seq = emailSeqRef.current;
+    // Fire and forget: the tick already shows the new value.
+    void tickEmailOptIn({
+      previous: profile.email_opt_in,
+      next,
+      apply: (value) => setProfileEmailOptIn(owner, value),
+      submit: () =>
+        submitEmailOptIn({
+          client: supabase,
+          save: userProfileUpdate,
+          newTrace,
+          saved: profile,
+          emailOptIn: next,
+        }),
+      isLatest: () => seq === emailSeqRef.current,
+      onFail: (message) => {
+        logger.error('settings email opt-in save failed', { error: message });
+        toast?.show({ title: EMAIL_OPT_IN_FAILED, tone: 'error' });
+      },
+    });
   }
 
   function handleCancelPhoto(): void {
@@ -595,6 +677,8 @@ export function ProfileSettingsPanel(): React.ReactElement {
         />
       </Field>
 
+      <EmailOptInRow checked={profile.email_opt_in} onChange={handleEmailOptIn} />
+
       {formError !== null ? <p className="text-base text-bad">{formError}</p> : null}
 
       <div className="flex items-center gap-3">
@@ -636,6 +720,39 @@ export function CameraBadge(props: { disabled: boolean; onPress: () => void }): 
         <IconCamera size={ICON_SIZE.inline} />
       </span>
     </Button>
+  );
+}
+
+/**
+ * Catch-up emails: the same native tick box as sign-up. The whole label is the
+ * 44px tap target; the helper sits under the label text.
+ */
+export function EmailOptInRow(props: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}): React.ReactElement {
+  return (
+    <label
+      htmlFor="settings-email-opt-in"
+      className="flex min-h-11 cursor-pointer items-start gap-3 py-1"
+    >
+      <span className="flex h-6 shrink-0 items-center">
+        <input
+          id="settings-email-opt-in"
+          type="checkbox"
+          checked={props.checked}
+          aria-describedby="settings-email-opt-in-help"
+          onChange={(event) => props.onChange(event.target.checked)}
+          className="m-0 h-4 w-4 shrink-0 accent-accent"
+        />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-base text-fg">Catch-up emails</span>
+        <span id="settings-email-opt-in-help" className="text-sm text-fg-2">
+          Unread updates by email, weekdays. Sign-in codes and invites always arrive.
+        </span>
+      </span>
+    </label>
   );
 }
 

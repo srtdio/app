@@ -51,6 +51,8 @@ export interface MemberEntry {
   acceptedAt: string | null;
   isOwner: boolean;
   isSelf: boolean;
+  /** users.email_opt_in; absent when the profile was read without it (older cache). */
+  emailOptIn?: boolean;
 }
 
 export interface DerivedMembers {
@@ -87,6 +89,7 @@ export function deriveMembers(params: {
       acceptedAt: row.accepted_at,
       isOwner: row.role === 'owner',
       isSelf,
+      ...(profile?.emailOptIn !== undefined ? { emailOptIn: profile.emailOptIn } : {}),
     };
   };
 
@@ -117,6 +120,15 @@ export function activeMemberRole(
   if (currentUserId === null) return null;
   const own = rows.find((r) => r.user_id === currentUserId && isActiveMember(r));
   return own?.role ?? null;
+}
+
+/**
+ * The catch-up email tag an active row shows: only to an owner or admin
+ * viewer, only when the field was read. Pending invites never call this. Pure.
+ */
+export function memberEmailTag(member: MemberEntry, viewerCanManage: boolean): 'on' | 'off' | null {
+  if (!viewerCanManage || member.emailOptIn === undefined) return null;
+  return member.emailOptIn ? 'on' : 'off';
 }
 
 /** Clients can invite clients, but cannot manage or remove workspace members. */

@@ -12,7 +12,15 @@ import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import { IconButton } from '@/components/ui/IconButton';
 import { Tag } from '@/components/ui/Tag';
-import { ICON_SIZE, IconLock, IconMore, IconTrash, IconUser } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconLock,
+  IconMail,
+  IconMailOff,
+  IconMore,
+  IconTrash,
+  IconUser,
+} from '@/components/ui/icons';
 import type { SelectOption } from '@/components/ui/Select';
 import { cn } from '@/lib/cn';
 import {
@@ -24,7 +32,7 @@ import {
 } from './MembersInviteForm';
 import type { InviteRole, RoleChoice } from './MembersInviteForm';
 import { canChangeMemberRole } from './MemberActionSheet';
-import { formatJoined, isUndelivered, roleLabel } from './members-data';
+import { formatJoined, isUndelivered, memberEmailTag, roleLabel } from './members-data';
 import type { DerivedMembers, InviteDeliveryStatus, MemberEntry } from './members-data';
 
 const OWNER_LOCK_TITLE = 'Transfer ownership before the owner can be removed';
@@ -35,6 +43,22 @@ function RoleBadge({ role }: { role: string }) {
 
 function SelfChip() {
   return <Tag label="You" tone="accent" />;
+}
+
+/** Catch-up emails, read-only: owner and admin viewers only (UI rule). */
+function EmailTag({ member, canManage }: { member: MemberEntry; canManage: boolean }) {
+  const tag = memberEmailTag(member, canManage);
+  if (tag === null) return null;
+  return tag === 'on' ? (
+    <Tag label="On" tone="neutral" icon={IconMail} className="shrink-0 whitespace-nowrap" />
+  ) : (
+    <Tag
+      label="Emails off"
+      tone="neutral"
+      icon={IconMailOff}
+      className="shrink-0 whitespace-nowrap"
+    />
+  );
 }
 
 /** A member row's ⋯ actions. */
@@ -98,6 +122,7 @@ function MemberRowItem({ member, canManage, onChangeRole, onRemove }: RowProps) 
         <div className="flex items-center gap-1.5">
           <span className="truncate text-base font-medium text-fg">{member.displayName}</span>
           {member.isSelf ? <SelfChip /> : null}
+          <EmailTag member={member} canManage={canManage} />
         </div>
         {member.email !== null ? (
           <div className="truncate text-sm text-fg-3">{member.email}</div>

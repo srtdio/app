@@ -29,6 +29,11 @@ export interface ChatProfile {
   avatarUrl: string | null;
   /** The @username mentions show; absent or null for a profile read without it. */
   username?: string | null;
+  /**
+   * users.email_opt_in (catch-up emails). Absent for a profile read without it
+   * (an older device-cache entry); the Members tag shows only when present.
+   */
+  emailOptIn?: boolean;
 }
 
 /** One conversation in the channel list, with display info already resolved. */
@@ -340,12 +345,17 @@ export async function readProfiles(
   if (!res.ok) return res;
   return {
     ok: true,
-    data: res.data.map((u) => ({
-      userId: u.id,
-      displayName: u.display_name,
-      avatarUrl: u.avatar_url,
-      username: u.username ?? null,
-    })),
+    data: res.data.map((u) => {
+      // Typed NOT NULL, but a row read without the column carries none.
+      const optIn: unknown = u.email_opt_in;
+      return {
+        userId: u.id,
+        displayName: u.display_name,
+        avatarUrl: u.avatar_url,
+        username: u.username ?? null,
+        ...(typeof optIn === 'boolean' ? { emailOptIn: optIn } : {}),
+      };
+    }),
   };
 }
 
@@ -587,6 +597,9 @@ async function readGroups(
   return { ok: true, data: (res.data ?? []) as GroupRow[] };
 }
 
+/** The users columns readUsers selects: one query, the profile slice plus email_opt_in. */
+export const READ_USERS_COLUMNS = 'id, display_name, avatar_url, username, email_opt_in';
+
 async function readUsers(
   client: Client,
   ids: string[],
@@ -594,7 +607,7 @@ async function readUsers(
 ): Promise<Result<UserRow[]>> {
   if (ids.length === 0) return { ok: true, data: [] };
   const res = await abortable(
-    client.from('users').select('id, display_name, avatar_url, username').in('id', ids),
+    client.from('users').select(READ_USERS_COLUMNS).in('id', ids),
     signal,
   );
   if (res.error) return fail(`readProfiles users: ${res.error.message}`);

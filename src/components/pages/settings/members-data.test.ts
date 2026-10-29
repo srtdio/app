@@ -13,6 +13,7 @@ import {
   isActiveMember,
   isUndelivered,
   isPendingInvite,
+  memberEmailTag,
   memberRemoveErrorMessage,
   roleLabel,
   type WorkspaceMemberRow,
@@ -232,5 +233,48 @@ describe('invite delivery status', () => {
     expect(isUndelivered(map.get('m-1'))).toBe(true);
     expect(isUndelivered(map.get('m-2'))).toBe(false);
     expect(isUndelivered(undefined)).toBe(false);
+  });
+});
+
+describe('catch-up email tag', () => {
+  const base = {
+    id: 'm-1',
+    userId: 'u-1',
+    role: 'agency',
+    displayName: 'Ada',
+    avatarUrl: null,
+    email: null,
+    acceptedAt: null,
+    isOwner: false,
+    isSelf: false,
+  };
+
+  it('deriveMembers carries emailOptIn from the profile; a missing field stays absent', () => {
+    const withField = new Map<string, ChatProfile>([
+      ['u-on', { userId: 'u-on', displayName: 'On', avatarUrl: null, emailOptIn: true }],
+      ['u-off', { userId: 'u-off', displayName: 'Off', avatarUrl: null, emailOptIn: false }],
+      ['u-old', { userId: 'u-old', displayName: 'Old', avatarUrl: null }],
+    ]);
+    const out = deriveMembers({
+      rows: [
+        row({ id: 'a', user_id: 'u-on' }),
+        row({ id: 'b', user_id: 'u-off' }),
+        row({ id: 'c', user_id: 'u-old' }),
+      ],
+      profiles: withField,
+      currentUserId: null,
+    });
+    expect(out.agency.map((m) => m.emailOptIn)).toEqual([true, false, undefined]);
+    expect('emailOptIn' in out.agency[2]!).toBe(false);
+  });
+
+  it('shows On / Emails off only to an owner or admin viewer', () => {
+    expect(memberEmailTag({ ...base, emailOptIn: true }, true)).toBe('on');
+    expect(memberEmailTag({ ...base, emailOptIn: false }, true)).toBe('off');
+    expect(memberEmailTag({ ...base, emailOptIn: false }, false)).toBeNull();
+  });
+
+  it('a missing field (older device cache) shows no tag', () => {
+    expect(memberEmailTag(base, true)).toBeNull();
   });
 });

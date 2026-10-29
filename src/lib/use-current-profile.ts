@@ -168,6 +168,19 @@ export function loadProfile(userId: string, force = false): Promise<void> {
   return inflight;
 }
 
+/**
+ * Own write: set email_opt_in on the held row (and the saved device copy) for
+ * `userId` without a read, so every consumer paints the new value at once. A
+ * snapshot for another user, or no row yet, is left alone. Synchronous.
+ */
+export function setProfileEmailOptIn(userId: string, emailOptIn: boolean): void {
+  if (snapshot.userId !== userId || snapshot.profile === null) return;
+  if (snapshot.profile.email_opt_in === emailOptIn) return;
+  const profile = { ...snapshot.profile, email_opt_in: emailOptIn };
+  primeRead(profileReadKey(userId), profile);
+  publish({ ...snapshot, profile });
+}
+
 export function getProfileSnapshot(): ProfileSnapshot {
   return snapshot;
 }
