@@ -3,6 +3,7 @@ import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
 import {
   buildWorld,
+  COLLEAGUE_A,
   COLLEAGUE_B,
   DM_CHANNEL,
   GROUP_NAME,
@@ -957,6 +958,75 @@ SCREENS.push({
   url: `/plan/${TAB_SHARED_PLAN_ID}`,
   steps: planScreenToday,
 });
+
+// The New chat sheet with New group blocked by the groups-per-workspace rule
+// (20261029120000_group_limit.sql): the workspace's group_allowance (1, the
+// default) is already used, so capabilities_for_workspace answers
+// group.create_more false. The owner sees the note plus Contact us and Book a
+// call; anyone else sees "Ask {owner} about adding more." with no rows. Every
+// project (iPhone light and dark, laptop light) plus laptop dark.
+
+/** The owner's blocked note (GROUP_LIMIT_OWNER in NewChatSheet.tsx). */
+const GROUP_LIMIT_OWNER_COPY =
+  'On the free plan a workspace has one group. Need another? Talk to us.';
+/** Who the member is told to ask: the owner the member variant moves the workspace to. */
+const GROUP_LIMIT_OWNER_NAME = 'Leo Martins';
+
+/** The fixture workspace at its group allowance: its live groups already fill it. */
+function fillGroupAllowance(network: HarnessNetwork): void {
+  for (const w of network.world.tables.workspaces ?? []) {
+    if (w.id === WORKSPACE_ID) w.group_allowance = 1;
+  }
+}
+
+/** Leo Martins owns the workspace; ME is a plain agency member. */
+function makeColleagueOwner(network: HarnessNetwork): void {
+  fillGroupAllowance(network);
+  for (const w of network.world.tables.workspaces ?? []) {
+    if (w.id === WORKSPACE_ID) w.owner_user_id = COLLEAGUE_A;
+  }
+  for (const m of network.world.tables.workspace_members ?? []) {
+    if (m.user_id === ME) m.role = 'agency';
+    if (m.user_id === COLLEAGUE_A) m.role = 'owner';
+  }
+}
+
+async function openNewChatBlocked(page: Page, owner: boolean): Promise<void> {
+  await chatListReady(page);
+  await tap([page.getByRole('button', { name: 'New chat', exact: true })], 'New chat');
+  const sheet = await firstVisible([page.getByRole('dialog')], 'new chat sheet');
+  await waitFor([sheet.locator('[data-new-group-row]:disabled')], 'New group blocked');
+  if (owner) {
+    await waitFor([sheet.getByText(GROUP_LIMIT_OWNER_COPY, { exact: true })], 'owner note');
+    await waitFor([sheet.getByRole('button', { name: /Book a call/ })], 'support rows');
+  } else {
+    await waitFor(
+      [sheet.getByText(`Ask ${GROUP_LIMIT_OWNER_NAME} about adding more.`, { exact: false })],
+      'member note',
+    );
+  }
+}
+
+for (const dark of [false, true]) {
+  const suffix = dark ? '-dark' : '';
+  const laptopDark = dark ? { only: 'laptop' as const, dark } : {};
+  SCREENS.push({
+    name: `new-chat-group-limit-owner${suffix}`,
+    seed: creator,
+    extra: fillGroupAllowance,
+    ...laptopDark,
+    url: '/chat',
+    steps: (page) => openNewChatBlocked(page, true),
+  });
+  SCREENS.push({
+    name: `new-chat-group-limit-member${suffix}`,
+    seed: creator,
+    extra: makeColleagueOwner,
+    ...laptopDark,
+    url: '/chat',
+    steps: (page) => openNewChatBlocked(page, false),
+  });
+}
 
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));

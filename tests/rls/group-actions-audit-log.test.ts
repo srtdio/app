@@ -181,6 +181,21 @@ async function seedGroup(
   return groupId;
 }
 
+/** Service-role raise of workspaces.group_allowance, bumping row_version like every write. */
+async function raiseGroupAllowance(
+  admin: Client,
+  workspaceId: string,
+  allowance: number,
+): Promise<void> {
+  const cur = await admin.from('workspaces').select('row_version').eq('id', workspaceId).single();
+  if (cur.error) throw new Error(`workspaces read failed: ${cur.error.message}`);
+  const res = await admin
+    .from('workspaces')
+    .update({ group_allowance: allowance, row_version: cur.data.row_version + 1 })
+    .eq('id', workspaceId);
+  if (res.error) throw new Error(`group_allowance update failed: ${res.error.message}`);
+}
+
 /** A fresh avatar URL; groups_avatar_url_check requires an http(s) URL. */
 function avatarUrlFor(): string {
   return `https://example.test/avatars/${randomSuffix()}.png`;
@@ -226,6 +241,12 @@ describe.runIf(RLS_SUITE)('group and DM actions write to audit_log', () => {
       await seedMember(adminGeneric, wsA, user, 'agency');
     }
     await seedMember(adminGeneric, wsB, memberBws, 'agency');
+    // group_create refuses with group_limit_reached once a workspace holds
+    // group_allowance live groups (20261029120000_group_limit.sql), and that
+    // check runs before member_not_in_workspace. This file seeds ~17 groups in
+    // wsA (seedGroup plus one real group_create), so raise wsA's allowance well
+    // above that; the limit itself is covered by its own spec.
+    await raiseGroupAllowance(admin, wsA.id, 100);
   });
 
   afterAll(async () => {

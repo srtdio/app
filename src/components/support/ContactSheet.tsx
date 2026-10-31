@@ -1,28 +1,40 @@
 // "Write to us": the support address in a copy box with the suggested line,
 // and a mailto that opens the viewer's mail app with both filled in. Copy puts
-// the address and the suggested line on the clipboard together.
+// the address and the suggested line on the clipboard together. The caller
+// passes the suggested line and mailto (request); without one it is the
+// another-workspace ask.
 
 import { Sheet } from '@/components/ui/Sheet';
 import { Button, buttonClass } from '@/components/ui/Button';
 import { useOptionalToast } from '@/components/ui/toast';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { anotherWorkspaceBody, anotherWorkspaceMailto, SUPPORT_EMAIL } from '@/lib/support';
+import {
+  anotherWorkspaceBody,
+  anotherWorkspaceRequest,
+  SUPPORT_EMAIL,
+  type ContactRequest,
+} from '@/lib/support';
 
 interface ContactSheetProps {
   open: boolean;
   onClose: () => void;
   workspaceName: string;
+  request?: ContactRequest;
 }
 
 /** What Copy puts on the clipboard: the address, then the suggested line. */
-export function contactClipboardText(workspaceName: string): string {
-  return `${SUPPORT_EMAIL}\n${anotherWorkspaceBody(workspaceName)}`;
+export function contactClipboardText(
+  workspaceName: string,
+  body: string = anotherWorkspaceBody(workspaceName),
+): string {
+  return `${SUPPORT_EMAIL}\n${body}`;
 }
 
-export function ContactSheet({ open, onClose, workspaceName }: ContactSheetProps) {
+export function ContactSheet({ open, onClose, workspaceName, request }: ContactSheetProps) {
   const toast = useOptionalToast();
+  const ask = request ?? anotherWorkspaceRequest(workspaceName);
   async function copy(): Promise<void> {
-    if (!(await copyText(contactClipboardText(workspaceName)))) {
+    if (!(await copyText(contactClipboardText(workspaceName, ask.body)))) {
       toast?.show({ title: COPY_FAILED });
     }
   }
@@ -38,7 +50,7 @@ export function ContactSheet({ open, onClose, workspaceName }: ContactSheetProps
             Close
           </Button>
           <a
-            href={anotherWorkspaceMailto(workspaceName)}
+            href={ask.mailto}
             className={buttonClass(
               'primary',
               'default',
@@ -64,7 +76,7 @@ export function ContactSheet({ open, onClose, workspaceName }: ContactSheetProps
         </div>
         <div className="flex flex-col gap-1">
           <p className="text-sm text-fg-3">Suggested line, copied with the address:</p>
-          <p className="text-base text-fg">{anotherWorkspaceBody(workspaceName)}</p>
+          <p className="text-base text-fg">{ask.body}</p>
         </div>
       </div>
     </Sheet>
