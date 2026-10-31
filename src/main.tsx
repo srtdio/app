@@ -1,3 +1,4 @@
+import { installDomMutationGuard } from '@/lib/dom-mutation-guard';
 import { mark } from '@/lib/perf-marks';
 import { StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
@@ -21,6 +22,10 @@ import { captureEarlyErrors, scheduleSentry } from '@/lib/sentry-lazy';
 // Entry point. Decides synchronously whether "/" is a guest visit; a guest gets
 // the homepage chunk only (no App, router, Supabase, Sentry, Agora or app CSS).
 // Everyone else gets the app, booted exactly as before.
+
+// Before any render: absorb foreign DOM moves (Translate, extensions) so
+// React's removeChild/insertBefore cannot crash the app (FRONTEND-N).
+installDomMutationGuard();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
