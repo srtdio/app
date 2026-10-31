@@ -1794,6 +1794,8 @@ export const COMPOSE_MAX_POSTS = 50;
 
 /** Longest plan the New plan screen allows: 5 weeks (end - start <= 34). */
 export const COMPOSE_MAX_SPAN_DAYS = 34;
+/** The copy for a range over COMPOSE_MAX_SPAN_DAYS (New plan and edit mode's dates). */
+export const PLAN_TOO_LONG_COPY = 'A plan can cover up to 5 weeks. Shorten the dates.';
 
 /** Whether a civil day is inside the plan (inclusive). Pure. */
 export function inComposeRange(day: string | null, range: ComposeRange): boolean {
@@ -1976,7 +1978,7 @@ export function composeRangeProblem(range: ComposeRange): string | null {
   if (span < 0 || range.endsOn < range.startsOn) {
     return 'The end date must be on or after the start date.';
   }
-  if (span > COMPOSE_MAX_SPAN_DAYS) return 'A plan can cover up to 5 weeks. Shorten the dates.';
+  if (span > COMPOSE_MAX_SPAN_DAYS) return PLAN_TOO_LONG_COPY;
   return null;
 }
 

@@ -78,12 +78,15 @@ describe('the header update op', () => {
     expect(twice[0]).toMatchObject({ op: 'update', title: 'Week', ends_on: '2026-10-19' });
   });
 
-  it('back to the plan’s own values drops the op; an empty title keeps the plan’s', () => {
+  it('back to the plan’s own values drops the op; an empty title is never swapped for the plan’s', () => {
     const draft = headerDraftOf(bundle.plan);
     const edited = withHeaderUpdate([], bundle.plan, { ...draft, title: 'X' });
     expect(hasQueuedOps(edited)).toBe(true);
     expect(withHeaderUpdate(edited, bundle.plan, draft)).toEqual([]);
-    expect(withHeaderUpdate([], bundle.plan, { ...draft, title: '   ' })).toEqual([]);
+    // F11: an emptied title stays empty in the queue (Save is blocked by "Add a title.").
+    expect(withHeaderUpdate([], bundle.plan, { ...draft, title: '   ' })).toEqual([
+      { op: 'update', title: '', starts_on: '2026-10-12', ends_on: '2026-10-16' },
+    ]);
   });
 });
 

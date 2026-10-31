@@ -4,7 +4,7 @@
 // changes, the discard confirm, plan_save failure copy) and its one primary
 // footer action. No React, no reads, so every rule is unit-tested directly.
 
-import { planItemDayInZone } from '@/lib/chat/plans';
+import { COMPOSE_MAX_SPAN_DAYS, PLAN_TOO_LONG_COPY, planItemDayInZone } from '@/lib/chat/plans';
 import type {
   PlanAudience,
   PlanBundle,
@@ -41,8 +41,11 @@ export const DRAFT_LABEL = 'Draft';
 export const DRAFT_NOT_READY = 'Not ready to view yet';
 export const COMMENT_FAILED = "Couldn't send. Try again.";
 
-/** The longest plan, in days between From and To (plans_dates). */
-export const PLAN_MAX_DAYS = 92;
+/**
+ * The longest plan, in days between From and To: the New plan screen's 5-week
+ * cap (COMPOSE_MAX_SPAN_DAYS), so edit mode's dates allow the same span.
+ */
+export const PLAN_MAX_DAYS = COMPOSE_MAX_SPAN_DAYS;
 /** Title bounds (plans.title). */
 export const PLAN_TITLE_MAX = 200;
 /** Files per concept (plan_concept_add). */
@@ -394,7 +397,7 @@ export function draftProblem(input: {
 export const DRAFT_PROBLEM_COPY: Record<Exclude<DraftProblem, null>, string> = {
   title: 'Add a title.',
   dates: 'To must be on or after From.',
-  too_long: 'A plan can cover at most 92 days.',
+  too_long: PLAN_TOO_LONG_COPY,
 };
 
 // ---------------------------------------------------------------------------

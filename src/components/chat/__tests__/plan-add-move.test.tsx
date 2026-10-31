@@ -173,7 +173,9 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     expect(src).toContain("setConceptForm({ ...EMPTY_CONCEPT, date: addFor.day ?? '' });");
     expect(src).toContain('targetDate: date,');
     expect(src).toContain('...(day !== null ? { p_target_date: day } : {}),');
-    expect(src).toContain('onClick={() => openAdd(null)}');
+    // The header "+" has no target; No date's own Add is an explicit No date target.
+    expect(src).toContain('onClick={openHeaderAdd}');
+    expect(src).toContain('setAddFor({ day: null, noDate: false })');
     expect(src).toContain('excludePostIds={inPlan}');
     // A drop queues one 'move' op with the full order; plan_save writes it.
     expect(src).toContain('item_ids: order,');

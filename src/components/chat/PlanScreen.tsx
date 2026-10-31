@@ -80,7 +80,7 @@ import {
   planShareWithClient,
   planUpdate,
 } from '@srtdio/rpc';
-import type { PostCardFields } from '@srtdio/posts';
+import { postUpdate, type PostCardFields } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
@@ -126,6 +126,7 @@ import {
   PLAN_DELETED_TOAST,
   PLAN_NOT_AVAILABLE,
   PLAN_SAVED_TOAST,
+  PLAN_SAVE_ERROR_COPY,
   PLAN_TITLE_MAX,
   RENAMED_TOAST,
   RENAME_FAILED,
@@ -213,6 +214,7 @@ import {
   isNoop,
   moveItem,
   queueOp,
+  rebuildOps,
   withHeaderUpdate,
   type DayIds,
   type DayIndex,
@@ -234,6 +236,7 @@ import {
   READ_TIMEOUT_MS,
   readProfiles,
   withLateRead,
+  withReadTimeout,
   type ChatProfile,
 } from '@/lib/chat-reads';
 import { peekWorkspaceMembers } from '@/lib/workspace-members';
@@ -246,7 +249,6 @@ import { useBackGuard } from '@/lib/back-guard';
 import { useModalFocus } from '@/lib/modal-focus';
 import { useSession } from '@/lib/session-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
-import { UNDO_MS } from '@/lib/undo';
 import {
   PLAN_CHANGED_EVENT,
   dispatchPlanChanged,
@@ -256,6 +258,7 @@ import {
   planItemDayInZone,
   skippedOutsideNote,
   splitPickedByRange,
+  readPlanBundles,
   readPlanScreen,
   refusedForClient,
   type ConceptThumb,
@@ -605,15 +608,22 @@ export type ScreenRead<T> =
 /**
  * One bounded read per open (and per `key`): loading until it settles, an error
  * at 5s, and a late answer within the grace still lands. `reload` re-reads
- * keeping what is shown. Aborted on close, key change and unmount.
+ * keeping what is shown; a reload from the error state (Retry) shows loading
+ * at once. A reload that fails while data is shown keeps it and bumps
+ * `refreshFailed`, so the screen can say so (never unconfirmed data in
+ * silence). Aborted on close, key change and unmount.
  */
 export function useScreenRead<T>(
   open: boolean,
   key: string,
   run: (signal: AbortSignal) => Promise<Result<T>>,
-): { read: ScreenRead<T>; reload: () => void } {
+): { read: ScreenRead<T>; reload: () => void; refreshFailed: number } {
   const [read, setRead] = useState<ScreenRead<T>>({ status: 'loading' });
   const [tick, setTick] = useState(0);
+  const [refreshFailed, setRefreshFailed] = useState(0);
+  // Whether data is on screen now (a failed reload keeps it).
+  const shownRef = useRef(false);
+  shownRef.current = read.status === 'ready';
   const runRef = useRef(run);
   runRef.current = run;
   const seenKey = useRef<string | null>(null);
@@ -623,8 +633,10 @@ export function useScreenRead<T>(
       setRead({ status: 'loading' });
       return;
     }
-    // A new key starts from loading; a reload keeps what is shown.
+    // A new key starts from loading; a reload keeps what is shown, but a
+    // Retry after a failed read shows loading right away.
     if (seenKey.current !== key) setRead({ status: 'loading' });
+    else setRead((prev) => (prev.status === 'error' ? { status: 'loading' } : prev));
     seenKey.current = key;
     const cancel = new AbortController();
     void withLateRead((signal) => runRef.current(signal), {
@@ -636,13 +648,17 @@ export function useScreenRead<T>(
       },
     }).then((result) => {
       if (cancel.signal.aborted) return;
-      if (result.ok) setRead({ status: 'ready', data: result.data });
-      else setRead((prev) => (prev.status === 'ready' ? prev : { status: 'error' }));
+      if (result.ok) {
+        setRead({ status: 'ready', data: result.data });
+        return;
+      }
+      if (shownRef.current) setRefreshFailed((n) => n + 1);
+      else setRead({ status: 'error' });
     });
     return () => cancel.abort();
   }, [open, key, tick]);
   const reload = useCallback(() => setTick((t) => t + 1), []);
-  return { read, reload };
+  return { read, reload, refreshFailed };
 }
 
 /** A confirm as a bottom sheet: the question, Cancel and the action (44px each). */
@@ -827,11 +843,14 @@ function ScreenSkeleton(): ReactElement {
   );
 }
 
+/** The screens' load-failure copy (the failed body, and a failed re-read's toast). */
+export const SCREEN_LOAD_FAILED = "Couldn't load. Try again.";
+
 /** A read that failed: neutral copy and a Retry. */
 export function ScreenFailed(props: { onRetry: () => void }): ReactElement {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-      <p className="text-base text-fg-2">Couldn&apos;t load. Try again.</p>
+      <p className="text-base text-fg-2">{SCREEN_LOAD_FAILED}</p>
       <Button onClick={props.onRetry}>Retry</Button>
     </div>
   );
@@ -1017,7 +1036,7 @@ export function PlanScreen(props: {
     if (!rest.ok) return known.length > 0 ? { ok: true, data: known } : rest;
     return { ok: true, data: [...known, ...rest.data] };
   };
-  const { read, reload } = useScreenRead<PlanScreenData>(
+  const { read, reload, refreshFailed } = useScreenRead<PlanScreenData>(
     props.open,
     `${planId}:${workspaceId ?? ''}:${timeZone}:${sentInChannelId ?? ''}`,
     // One plan_bundle_read (the plan, its rows, tiles, Also in and the last
@@ -1035,12 +1054,12 @@ export function PlanScreen(props: {
   // The Item screen was opened by a row's Not OK: its note box opens focused.
   const [askChanges, setAskChanges] = useState(false);
   const entryItemId = props.initialItemId ?? null;
-  // Add: the sheet (its day; undefined = closed), the concept sheet, the picker.
-  const [addFor, setAddFor] = useState<{ day: string | null } | null>(null);
-  const [conceptFor, setConceptFor] = useState<{ day: string | null } | null>(null);
+  // Add: the sheet (its target; null = closed), the concept sheet, the picker.
+  const [addFor, setAddFor] = useState<AddTarget | null>(null);
+  const [conceptFor, setConceptFor] = useState<AddTarget | null>(null);
   const [conceptForm, setConceptForm] = useState<ConceptForm>(EMPTY_CONCEPT);
   const [conceptBusy, setConceptBusy] = useState(false);
-  const [pickFor, setPickFor] = useState<{ day: string | null } | null>(null);
+  const [pickFor, setPickFor] = useState<AddTarget | null>(null);
   const [picked, setPicked] = useState<PostCardFields[]>([]);
   // Header "+" picks dated outside the plan: one day sheet per post, in turn.
   const [outside, setOutside] = useState<{
@@ -1067,6 +1086,9 @@ export function PlanScreen(props: {
   // The kind of the tap that started the send (a Retry keeps it): only a
   // "Send in {chat}" turns Sent.
   const sendKindRef = useRef<PrimaryAction['kind']>('none');
+  // The mode of the last send (true: the second step of "Send to approvers"):
+  // the footer's Retry sends the same way, so its failure reads the same.
+  const sendAfterOpenRef = useRef(false);
   const [keepAsk, setKeepAsk] = useState<KeepAsk | null>(null);
   const [sendGuard] = useState(createInFlightGuard);
   const { canAttach, uploadFile } = useCommentAttachments();
@@ -1100,6 +1122,9 @@ export function PlanScreen(props: {
     setConceptFor(null);
     setPickFor(null);
     setPicked([]);
+    // The header "+" day sheets and their notes never come back on the next open.
+    setOutside(null);
+    setSkippedNotes([]);
     setMenuOpen(false);
     setRenaming(null);
     setOpenConfirm(false);
@@ -1151,13 +1176,32 @@ export function PlanScreen(props: {
     });
   }, [shownBundle]);
   // A saved queue stays painted until the re-read lands (no flash of the old
-  // list), then goes; a cancelled one goes at once (exitEdit).
-  const savedRef = useRef(false);
+  // list), then goes; a cancelled one goes at once (exitEdit). The clear is
+  // tied to the save that asked for it: the save stores its edit session, and
+  // a newer session (enterEdit) drops the token, so its queue is never wiped.
+  const editSessionRef = useRef(0);
+  const savedTokenRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!savedRef.current) return;
-    savedRef.current = false;
-    setOps([]);
+    const token = savedTokenRef.current;
+    if (token === null) return;
+    savedTokenRef.current = null;
+    if (token === editSessionRef.current) setOps([]);
   }, [shownBundle]);
+  // A re-read that failed while the screen shows data (after a save, an add,
+  // a tick): the load-failure copy as a toast with Retry, never silence.
+  const seenRefreshFailed = useRef(refreshFailed);
+  useEffect(() => {
+    if (refreshFailed === seenRefreshFailed.current) return;
+    seenRefreshFailed.current = refreshFailed;
+    if (!props.open) return;
+    toast.show({
+      title: SCREEN_LOAD_FAILED,
+      tone: 'error',
+      action: { label: RETRY_LABEL, onPress: reload },
+    });
+    // toast is the provider's stable api.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshFailed, props.open, reload]);
   const bundle = useMemo(() => {
     if (shownBundle === null) return null;
     const ticked =
@@ -1279,10 +1323,10 @@ export function PlanScreen(props: {
   };
 
   // Delete plan: at once, no confirm. The screen closes and the bottom strip
-  // offers Undo for UNDO_MS; the write goes only when the strip ends (Undo
-  // means it never goes). The toast outlives this screen, so the commit rides
-  // the toast's onExpire rather than useUndoableAction (which flushes on
-  // unmount). A failed write says so in the bad tone.
+  // offers Undo for UNDO_MS (useUndoableAction); the write goes only when the
+  // strip ends, or at once when the page is hidden, the app is switched or
+  // the screen unmounts (so it is never lost); Undo means it never goes. A
+  // failed write says so in the bad tone.
   const commitDelete = async (): Promise<void> => {
     const traceId = generateTraceId();
     const result = await planDelete(supabase, { p_plan_id: planId, p_trace_id: traceId });
@@ -1299,13 +1343,7 @@ export function PlanScreen(props: {
   };
   const deletePlan = (): void => {
     props.onClose();
-    toast.show({
-      title: PLAN_DELETED_TOAST,
-      action: { label: 'Undo', onPress: () => undefined },
-      durationMs: UNDO_MS,
-      kind: 'undo',
-      onExpire: () => void commitDelete(),
-    });
+    undoable.run({ label: PLAN_DELETED_TOAST, commit: commitDelete });
   };
 
   const chat = props.chat ?? null;
@@ -1316,6 +1354,7 @@ export function PlanScreen(props: {
   const sendHere = async (afterOpen = false): Promise<void> => {
     if (chat === null || sendBusy || sendingRef.current) return;
     sendingRef.current = true;
+    sendAfterOpenRef.current = afterOpen;
     setSendError(null);
     setSendBusy(true);
     const result = await sharePlanToChannel(
@@ -1402,8 +1441,8 @@ export function PlanScreen(props: {
   const onPrimary = (): void => {
     if (sendingRef.current || sendState !== 'idle') return;
     if (sendError !== null) {
-      // Retry only reposts the card.
-      void sendHere(true);
+      // Retry only reposts the card, the same way as the send that failed.
+      void sendHere(sendAfterOpenRef.current);
       return;
     }
     sendKindRef.current = primary.kind;
@@ -1486,6 +1525,9 @@ export function PlanScreen(props: {
   // changes asks; Save sends the queue as one plan_save.
   const enterEdit = (): void => {
     if (bundle === null || !agency) return;
+    // A new session: an earlier save's pending clear no longer applies.
+    editSessionRef.current += 1;
+    savedTokenRef.current = null;
     setHeaderDraft(headerDraftOf(bundle.plan));
     setOps([]);
     setSaveError(null);
@@ -1533,7 +1575,8 @@ export function PlanScreen(props: {
   const headerProblem =
     bundle !== null && editMode
       ? draftProblem({
-          title: headerDraft.title.trim() === '' ? bundle.plan.title : headerDraft.title,
+          // The title as typed: an empty one reads "Add a title." and blocks Save.
+          title: headerDraft.title,
           startsOn: headerDraft.startsOn,
           endsOn: headerDraft.endsOn,
         })
@@ -1542,6 +1585,33 @@ export function PlanScreen(props: {
     if (shownBundle === null) return;
     setHeaderDraft(next);
     setOps((prev) => withHeaderUpdate(prev, shownBundle.plan, next));
+  };
+  // Save changes: one read of the plan as it is now (on the tap only), the
+  // queue rebuilt on it (rebuildOps: every move's full order from the fresh
+  // items, this session's placement on top), then one plan_save. A move that
+  // still finds something gone ("no longer available") reads once more,
+  // rebuilds and retries once; a second failure shows the failure line. Retry
+  // runs this same path, so it never re-sends an old order.
+  const sendQueued = async (
+    queued: readonly PlanSaveOp[],
+    traceId: string,
+  ): Promise<Awaited<ReturnType<typeof planSave>>> => {
+    const fresh = await withReadTimeout((signal) =>
+      readPlanBundles(supabase, [planId], signal, timeZone, workspaceId ?? undefined),
+    );
+    if (!fresh.ok) return { ok: false, error: { code: 'unknown', message: fresh.error.message } };
+    const now = fresh.data.get(planId);
+    if (now === undefined) {
+      return { ok: false, error: { code: 'unknown', message: 'invalid_payload' } };
+    }
+    const rebuilt = rebuildOps(now, queued, timeZone);
+    // Everything this session touched is gone already: nothing left to write.
+    if (rebuilt.length === 0) return { ok: true, data: undefined };
+    try {
+      return await planSave(supabase, { p_plan_id: planId, p_ops: rebuilt, p_trace_id: traceId });
+    } catch (thrown) {
+      return { ok: false, error: { code: 'unknown', message: String(thrown) } };
+    }
   };
   const saveChanges = async (): Promise<void> => {
     if (saving || bundle === null) return;
@@ -1553,25 +1623,27 @@ export function PlanScreen(props: {
     setSaving(true);
     setSaveError(null);
     const traceId = generateTraceId();
-    let result: Awaited<ReturnType<typeof planSave>>;
-    try {
-      result = await planSave(supabase, { p_plan_id: planId, p_ops: ops, p_trace_id: traceId });
-    } catch (thrown) {
-      result = { ok: false, error: { code: 'unknown', message: String(thrown) } };
+    const queued = ops;
+    let result = await sendQueued(queued, traceId);
+    if (
+      !result.ok &&
+      planSaveErrorCopy(result.error.message) === PLAN_SAVE_ERROR_COPY.invalid_payload
+    ) {
+      result = await sendQueued(queued, traceId);
     }
     setSaving(false);
     if (!result.ok) {
       logger.warn('chat: plan save failed', {
         trace_id: traceId,
         plan_id: planId,
-        ops: ops.length,
+        ops: queued.length,
         error: result.error.message,
       });
       setSaveError(planSaveErrorCopy(result.error.message));
       return;
     }
-    // The queue stays painted until the re-read lands.
-    savedRef.current = true;
+    // The queue stays painted until the re-read lands; only this session's.
+    savedTokenRef.current = editSessionRef.current;
     setEditMode(false);
     setSaveError(null);
     setDayFor(null);
@@ -1861,8 +1933,11 @@ export function PlanScreen(props: {
     if (day !== null) scrollDayToTop(body, day);
   }, [props.open, bundle, planId, timeZone, entryItemId]);
 
-  // Add (view mode, instant): a concept on that day, or picked posts on that day.
-  const openAdd = (day: string | null): void => setAddFor({ day });
+  // Add (view mode, instant): a concept on that day, or picked posts on that
+  // day. A group's Add with day null is No date (an explicit No date target);
+  // the header "+" has no target (day null, noDate false).
+  const openAdd = (day: string | null): void => setAddFor({ day, noDate: day === null });
+  const openHeaderAdd = (): void => setAddFor({ day: null, noDate: false });
   const startConcept = (): void => {
     if (addFor === null) return;
     setConceptForm({ ...EMPTY_CONCEPT, date: addFor.day ?? '' });
@@ -1908,8 +1983,9 @@ export function PlanScreen(props: {
     toast.show({ title: addedToast('concept', dayHeaderOf(date)) });
     dispatchPlanChanged(window, planId);
   };
-  // One plan_posts_add; `day` puts every post on that plan day. False on failure (toasted).
-  const addPosts = async (ids: string[], day: string | null): Promise<boolean> => {
+  // One plan_posts_add; `day` puts every post on that plan day. The raw error
+  // message on failure (logged, not toasted), null when added.
+  const addPostsQuiet = async (ids: string[], day: string | null): Promise<string | null> => {
     const traceId = generateTraceId();
     const result = await planPostsAdd(supabase, {
       p_plan_id: planId,
@@ -1923,15 +1999,54 @@ export function PlanScreen(props: {
         plan_id: planId,
         error: result.error.message,
       });
-      toast.show({ title: planWriteErrorCopy(result.error.message, ADD_FAILED) });
+      return result.error.message;
+    }
+    return null;
+  };
+  // addPostsQuiet with its failure toasted. False on failure.
+  const addPosts = async (ids: string[], day: string | null): Promise<boolean> => {
+    const error = await addPostsQuiet(ids, day);
+    if (error === null) return true;
+    toast.show({ title: planWriteErrorCopy(error, ADD_FAILED) });
+    return false;
+  };
+  // No date's Add: a post slot's day is its post's date, so each dated post's
+  // date is cleared (post_update, target_date null) before the add, whatever
+  // its Pipeline date; then one plan_posts_add with no day. False on failure
+  // (toasted with the add copy).
+  const addPostsNoDate = async (
+    posts: ReadonlyArray<PostCardFields & { target_date?: string | null }>,
+  ): Promise<boolean> => {
+    const dated = posts.filter((p) => p.target_date !== null);
+    const cleared = await Promise.all(
+      dated.map(async (p) => {
+        const traceId = generateTraceId();
+        const result = await postUpdate(supabase, { postId: p.id, targetDate: null }, traceId);
+        if (!result.ok) {
+          logger.warn('chat: plan no date clear failed', {
+            trace_id: traceId,
+            post_id: p.id,
+            error: result.error.message,
+          });
+        }
+        return result;
+      }),
+    );
+    const failed = cleared.find((r) => !r.ok);
+    if (failed !== undefined && !failed.ok) {
+      toast.show({ title: planWriteErrorCopy(failed.error.message, ADD_FAILED) });
       return false;
     }
-    return true;
+    return addPosts(
+      posts.map((p) => p.id),
+      null,
+    );
   };
   const planRange = {
     startsOn: bundle?.plan.starts_on ?? '',
     endsOn: bundle?.plan.ends_on ?? '',
   };
+  // The picker's Done: the ticked posts are added to the picker's target.
   const closePicker = async (): Promise<void> => {
     if (pickFor === null) return;
     const day = pickFor.day;
@@ -1940,6 +2055,14 @@ export function PlanScreen(props: {
     setPicked([]);
     setSkippedNotes([]);
     if (posts.length === 0) return;
+    if (pickFor.noDate) {
+      // No date's Add row: every post goes on No date (target_date null).
+      const dated = posts as Array<PostCardFields & { target_date?: string | null }>;
+      if (!(await addPostsNoDate(dated))) return;
+      toast.show({ title: addedToast('post', null) });
+      dispatchPlanChanged(window, planId);
+      return;
+    }
     if (day !== null) {
       // A day's Add row: every post goes on that day.
       if (
@@ -1991,17 +2114,25 @@ export function PlanScreen(props: {
     setOutside(null);
     void addOnDays(choices);
   };
+  // Every day is tried (one failure never stops the rest): all added, the
+  // success toast; any failed, one error toast (the add copy) and no success
+  // toast. Anything added re-reads the plan either way.
   const addOnDays = async (choices: Array<{ postId: string; day: string }>): Promise<void> => {
     const groups = groupPostsByDay(choices);
     let added = 0;
+    let firstError: string | null = null;
     for (const group of groups) {
-      if (!(await addPosts(group.postIds, group.day))) break;
-      added += 1;
+      const error = await addPostsQuiet(group.postIds, group.day);
+      if (error === null) added += 1;
+      else firstError ??= error;
     }
-    if (added === 0) return;
-    const only = groups.length === 1 ? groups[0] : undefined;
-    toast.show({ title: addedToast('post', only !== undefined ? dayHeaderOf(only.day) : null) });
-    dispatchPlanChanged(window, planId);
+    if (firstError !== null) {
+      toast.show({ title: planWriteErrorCopy(firstError, ADD_FAILED) });
+    } else if (added > 0) {
+      const only = groups.length === 1 ? groups[0] : undefined;
+      toast.show({ title: addedToast('post', only !== undefined ? dayHeaderOf(only.day) : null) });
+    }
+    if (added > 0) dispatchPlanChanged(window, planId);
   };
   const outsidePost = outside?.posts[outside.at] ?? null;
   const lastOutside = useRef<OutsidePost | null>(null);
@@ -2063,7 +2194,7 @@ export function PlanScreen(props: {
         inline
         aria-label="Add to plan"
         data-plan-add-header=""
-        onClick={() => openAdd(null)}
+        onClick={openHeaderAdd}
         className="group flex h-11 shrink-0 items-center"
       >
         <span
@@ -2391,7 +2522,13 @@ export function PlanScreen(props: {
           />
           <PostPicker
             open={props.open && pickFor !== null}
-            onClose={() => void closePicker()}
+            // Done adds the ticked posts; a dismiss (X, backdrop, swipe, Back,
+            // Esc) drops the selection and adds nothing.
+            onDone={() => void closePicker()}
+            onClose={() => {
+              setPickFor(null);
+              setPicked([]);
+            }}
             mode="posts"
             selected={picked}
             onToggle={(post) =>
@@ -2428,6 +2565,12 @@ export function PlanScreen(props: {
       ) : null}
     </>
   );
+}
+
+/** Where an Add goes: a plan day, No date (`noDate`), or the header "+" (day null). */
+interface AddTarget {
+  day: string | null;
+  noDate: boolean;
 }
 
 /** A header "+" pick dated outside the plan, waiting for a day. */

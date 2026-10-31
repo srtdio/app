@@ -106,7 +106,14 @@ export function PlanTabAdd(props: {
     dispatchPlanChanged(window, planId);
   };
 
-  const closePicker = async (): Promise<void> => {
+  // Dismissing the picker (X, backdrop, swipe, Escape, Back) drops the ticks
+  // and adds nothing; only Done adds them.
+  const dismissPicker = (): void => {
+    close();
+    setPicked([]);
+  };
+
+  const addPicked = async (): Promise<void> => {
     const posts = picked;
     close();
     setPicked([]);
@@ -161,7 +168,8 @@ export function PlanTabAdd(props: {
       />
       <PostPicker
         open={stage === 'pick'}
-        onClose={() => void closePicker()}
+        onClose={dismissPicker}
+        onDone={() => void addPicked()}
         mode="posts"
         selected={picked}
         onToggle={(post) =>

@@ -215,10 +215,9 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
     expect(deletePlanErrorCopy('boom')).toBe("Couldn't delete. Try again.");
     const src = read('PlanScreen.tsx');
     expect(src).toContain('planDelete(supabase, { p_plan_id: planId, p_trace_id: traceId })');
-    // At once, no confirm: the Undo strip for UNDO_MS, the write on its expiry.
-    expect(src).toMatch(
-      /title: PLAN_DELETED_TOAST,[\s\S]*?durationMs: UNDO_MS,[\s\S]*?kind: 'undo',[\s\S]*?onExpire: \(\) => void commitDelete\(\),/,
-    );
+    // At once, no confirm: the Undo strip (useUndoableAction, UNDO_MS), the
+    // write on its expiry or on page hide / app switch.
+    expect(src).toContain('undoable.run({ label: PLAN_DELETED_TOAST, commit: commitDelete });');
     expect(src).not.toContain('DELETE_PLAN_TITLE');
   });
 

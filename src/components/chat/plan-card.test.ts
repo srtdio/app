@@ -6,7 +6,9 @@ import {
   clientApproveConfirm,
   defaultPlanRange,
   draftProblem,
+  DRAFT_PROBLEM_COPY,
   NO_DATE_LABEL,
+  PLAN_MAX_DAYS,
   itemDateLabel,
   itemKindLabel,
   itemPills,
@@ -23,7 +25,7 @@ import {
   sentAfterChange,
   type PrimaryAction,
 } from '@/components/chat/plan-card';
-import { planLastChangedAt } from '@/lib/chat/plans';
+import { COMPOSE_MAX_SPAN_DAYS, PLAN_TOO_LONG_COPY, planLastChangedAt } from '@/lib/chat/plans';
 import type { PlanBundle, PlanItemRow, PlanReviewRow } from '@/lib/chat/plans';
 
 function item(over: Partial<PlanItemRow>): PlanItemRow {
@@ -203,14 +205,18 @@ describe('New plan defaults and checks', () => {
     });
   });
 
-  it('title 1..200, To on or after From, at most 92 days', () => {
+  it('title 1..200, To on or after From, at most 5 weeks (the New plan cap)', () => {
     const base = { title: 'Plan', startsOn: '2026-10-12', endsOn: '2026-10-18' };
     expect(draftProblem(base)).toBeNull();
     expect(draftProblem({ ...base, title: '   ' })).toBe('title');
     expect(draftProblem({ ...base, title: 'x'.repeat(201) })).toBe('title');
     expect(draftProblem({ ...base, endsOn: '2026-10-11' })).toBe('dates');
-    expect(draftProblem({ ...base, endsOn: '2027-01-13' })).toBe('too_long');
-    expect(draftProblem({ ...base, endsOn: '2027-01-12' })).toBeNull();
+    // 12 Oct + 34 days = 15 Nov (5 weeks); one more day is too long.
+    expect(draftProblem({ ...base, endsOn: '2026-11-15' })).toBeNull();
+    expect(draftProblem({ ...base, endsOn: '2026-11-16' })).toBe('too_long');
+    expect(draftProblem({ ...base, endsOn: '2027-01-12' })).toBe('too_long');
+    expect(DRAFT_PROBLEM_COPY.too_long).toBe(PLAN_TOO_LONG_COPY);
+    expect(PLAN_MAX_DAYS).toBe(COMPOSE_MAX_SPAN_DAYS);
   });
 });
 
