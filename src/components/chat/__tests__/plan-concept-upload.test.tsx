@@ -211,7 +211,7 @@ describe('the files read (U5)', () => {
     const states: string[] = [];
     const loaded: string[][] = [];
     const answers: Array<(r: Result<string[]>) => void> = [];
-    const read = createConceptFilesRead({
+    const read = createConceptFilesRead<string[]>({
       load: () => new Promise((resolve) => answers.push(resolve)),
       onState: (s) => states.push(s),
       onLoaded: (f) => loaded.push(f),
@@ -232,7 +232,7 @@ describe('the files read (U5)', () => {
     let signal: AbortSignal | undefined;
     let answer: (r: Result<string[]>) => void = () => {};
     const onLoaded = vi.fn();
-    const read = createConceptFilesRead({
+    const read = createConceptFilesRead<string[]>({
       load: (cancel) => {
         signal = cancel;
         return new Promise((resolve) => {

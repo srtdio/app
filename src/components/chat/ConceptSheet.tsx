@@ -42,6 +42,7 @@ import {
   type ConceptUploads,
   type ComposeDay,
   type ComposeRange,
+  type PlanItemFile,
   wordCounterLabel,
 } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
@@ -96,8 +97,8 @@ export function conceptFilesRoom(picked: number, uploads: number): number {
  */
 export function useConceptFilesRead(
   active: boolean,
-  load: (cancel: AbortSignal) => Promise<Result<string[]>>,
-  onLoaded: (files: string[]) => void,
+  load: (cancel: AbortSignal) => Promise<Result<PlanItemFile[]>>,
+  onLoaded: (files: PlanItemFile[]) => void,
 ): { state: ConceptFilesReadState; retry: () => void } {
   const [state, setState] = useState<ConceptFilesReadState>('loading');
   const loadRef = useRef(load);
@@ -430,15 +431,24 @@ export function ConceptSheet(props: {
                     <div
                       key={f.versionId}
                       data-plan-concept-file=""
-                      className="relative overflow-hidden rounded-lg border border-border bg-panel-2"
+                      title={f.name}
+                      className="relative flex min-w-0 flex-col gap-1"
                     >
-                      <Thumbnail
-                        assetVersionId={f.versionId}
-                        cache={sharedCardPresignCache()}
-                        presignEnabled={PRESIGN_ENABLED}
-                        fallback={{ kind: 'glyph' }}
-                        alt={f.name}
-                      />
+                      <span className="block overflow-hidden rounded-lg border border-border bg-panel-2">
+                        <Thumbnail
+                          assetVersionId={f.versionId}
+                          cache={sharedCardPresignCache()}
+                          presignEnabled={PRESIGN_ENABLED}
+                          fallback={{ kind: 'glyph' }}
+                          alt={f.name}
+                        />
+                      </span>
+                      <span
+                        data-plan-concept-file-name=""
+                        className="block truncate text-sm text-fg-3"
+                      >
+                        {f.name}
+                      </span>
                       <PressableRow
                         type="button"
                         inline

@@ -150,6 +150,11 @@ export interface PlanBundle {
   postStages: Record<string, string>;
   /** Post title and target date by post id, for the post rows. */
   postInfo: Record<string, PlanPostInfo>;
+  /**
+   * Visible comments per item id, when the read that built the bundle carried
+   * them (plan_bundle_read: the Plan tab calendar's counts). Absent otherwise.
+   */
+  commentCounts?: Record<string, number>;
 }
 
 export interface PlanPostInfo {
@@ -292,13 +297,36 @@ export function sortPlanItemsByDate(
  * bundle's own workspace zone when absent). Pure.
  */
 export function bundlesOfRead(read: PlanBundleRead, timeZone?: string): Map<string, PlanBundle> {
-  return assembleBundles(
+  const bundles = assembleBundles(
     read.plans,
     mergeDraftRows(read.items, read.draftRows),
     read.reviews,
     read.posts,
     timeZone ?? read.timezone,
   );
+  return withCommentCounts(bundles, read.commentCounts);
+}
+
+/**
+ * Each bundle with the comment counts of its own items (the read's counts,
+ * kept instead of dropped). Items without comments are absent. Mutates and
+ * returns `bundles` (a fresh map from assembleBundles). Pure otherwise.
+ */
+export function withCommentCounts(
+  bundles: Map<string, PlanBundle>,
+  counts: Readonly<Record<string, number>> | undefined,
+): Map<string, PlanBundle> {
+  if (counts === undefined) return bundles;
+  for (const [id, bundle] of bundles) {
+    const own: Record<string, number> = {};
+    for (const item of bundle.items) {
+      const n = counts[item.id];
+      if (n !== undefined && n > 0) own[item.id] = n;
+    }
+    // A bundle with no comments stays as assembled (no empty map).
+    if (Object.keys(own).length > 0) bundles.set(id, { ...bundle, commentCounts: own });
+  }
+  return bundles;
 }
 
 /**
@@ -644,18 +672,71 @@ export function sortComments(rows: readonly PlanCommentRow[]): PlanCommentRow[] 
   );
 }
 
-/** One concept's library files (asset version ids, in position order). Never throws. */
+/** One concept file: its library version, display name, MIME type and kind. */
+export interface PlanItemFile {
+  versionId: string;
+  /** assets.display_name, else assets.filename ('' when neither is readable). */
+  name: string;
+  mimeType: string | null;
+  kind: string | null;
+}
+
+/** One asset_attachments row as the concept files read selects it (embeds may be arrays). */
+export interface ItemFileRow {
+  asset_version_id: string;
+  position: number;
+  asset_versions?:
+    | { mime_type: string | null; kind: string | null }
+    | Array<{ mime_type: string | null; kind: string | null }>
+    | null;
+  assets?:
+    | { display_name: string | null; filename: string | null }
+    | Array<{ display_name: string | null; filename: string | null }>
+    | null;
+}
+
+/** The asset_attachments columns of the concept files read: one select, embeds included. */
+export const ITEM_FILE_COLUMNS =
+  'asset_version_id, position, asset_versions(mime_type, kind), assets(display_name, filename)';
+
+function oneEmbed<T>(value: T | T[] | null | undefined): T | null {
+  if (value === null || value === undefined) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+/** The files of a concept's attachment rows, in position order. Pure. */
+export function itemFilesOfRows(rows: readonly ItemFileRow[]): PlanItemFile[] {
+  return [...rows]
+    .sort((a, b) => a.position - b.position)
+    .map((r) => {
+      const version = oneEmbed(r.asset_versions);
+      const asset = oneEmbed(r.assets);
+      const display = asset?.display_name?.trim() ?? '';
+      return {
+        versionId: r.asset_version_id,
+        name: display !== '' ? display : (asset?.filename ?? ''),
+        mimeType: version?.mime_type ?? null,
+        kind: version?.kind ?? null,
+      };
+    });
+}
+
+/**
+ * One concept's library files (version, name, MIME type, kind), in position
+ * order: one asset_attachments select embedding asset_versions and assets.
+ * Never throws.
+ */
 export async function readItemFiles(
   client: Client,
   itemId: string,
   signal?: AbortSignal,
-): Promise<Result<string[]>> {
+): Promise<Result<PlanItemFile[]>> {
   try {
-    const rows = await selectIn<{ asset_version_id: string; position: number }>(
+    const rows = await selectIn<ItemFileRow>(
       client,
       // A concept's files: entity_type plan_item, entity_id = the item id.
       'asset_attachments',
-      'asset_version_id, position',
+      ITEM_FILE_COLUMNS,
       'entity_id',
       [itemId],
       signal,
@@ -666,10 +747,7 @@ export async function readItemFiles(
           .order('position', { ascending: true }),
     );
     if (!rows.ok) return rows;
-    return {
-      ok: true,
-      data: [...rows.data].sort((a, b) => a.position - b.position).map((r) => r.asset_version_id),
-    };
+    return { ok: true, data: itemFilesOfRows(rows.data) };
   } catch (error) {
     return fail(String(error));
   }
@@ -1424,8 +1502,8 @@ export async function planScreenOfRead(
 /** The Item screen: comments (oldest first), a concept's files, and author names. */
 export interface ItemScreenData {
   comments: PlanCommentRow[];
-  /** Library asset version ids (concepts only; empty for a post item). */
-  files: string[];
+  /** Library files, in position order (concepts only; empty for a post item). */
+  files: PlanItemFile[];
   /** Author display names by user id. */
   names: Record<string, string>;
 }
@@ -1441,7 +1519,7 @@ export async function readItemScreen(
     readItemComments(client, item.id, signal),
     item.kind === 'concept'
       ? readItemFiles(client, item.id, signal)
-      : Promise.resolve<Result<string[]>>({ ok: true, data: [] }),
+      : Promise.resolve<Result<PlanItemFile[]>>({ ok: true, data: [] }),
   ]);
   if (!comments.ok) return comments;
   if (!files.ok) return files;
@@ -1477,7 +1555,7 @@ export function readConceptFiles(
   itemId: string,
   cancel: AbortSignal,
   timeoutMs: number = READ_TIMEOUT_MS,
-): Promise<Result<string[]>> {
+): Promise<Result<PlanItemFile[]>> {
   return withReadTimeout((signal) => {
     const linked = new AbortController();
     const abort = (): void => linked.abort();
@@ -1506,10 +1584,10 @@ export interface ConceptFilesRead {
  * onLoaded, anything else reports 'failed'. stop() aborts, after which nothing
  * is reported. Framework-free.
  */
-export function createConceptFilesRead(deps: {
-  load: (cancel: AbortSignal) => Promise<Result<string[]>>;
+export function createConceptFilesRead<T = PlanItemFile[]>(deps: {
+  load: (cancel: AbortSignal) => Promise<Result<T>>;
   onState: (state: ConceptFilesReadState) => void;
-  onLoaded: (files: string[]) => void;
+  onLoaded: (files: T) => void;
 }): ConceptFilesRead {
   let current: AbortController | null = null;
   const stop = (): void => {
@@ -1523,7 +1601,7 @@ export function createConceptFilesRead(deps: {
     deps.onState('loading');
     void deps
       .load(cancel.signal)
-      .catch((error: unknown) => fail<string[]>(String(error)))
+      .catch((error: unknown) => fail<T>(String(error)))
       .then((result) => {
         if (cancel.signal.aborted) return;
         current = null;

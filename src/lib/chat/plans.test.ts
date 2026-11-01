@@ -12,6 +12,9 @@ import {
   conceptEditArgs,
   createShareEpoch,
   readItemFiles,
+  itemFilesOfRows,
+  withCommentCounts,
+  ITEM_FILE_COLUMNS,
   createPlanCardCache,
   initialShareProgress,
   planChunks,
@@ -623,8 +626,8 @@ describe('share epoch (F2)', () => {
   });
 });
 
-describe('readItemFiles (F5)', () => {
-  it('filters plan_item attachments on entity and deleted_at is null', async () => {
+describe('readItemFiles (F5, D1)', () => {
+  it('one asset_attachments select embedding the version and the asset; files in position order', async () => {
     const calls: Array<[string, unknown[]]> = [];
     const q: Record<string, unknown> = {};
     for (const m of ['select', 'in', 'eq', 'is', 'order', 'abortSignal']) {
@@ -636,17 +639,78 @@ describe('readItemFiles (F5)', () => {
     q.then = (resolve: (v: unknown) => unknown) =>
       Promise.resolve({
         data: [
-          { asset_version_id: 'v2', position: 1 },
-          { asset_version_id: 'v1', position: 0 },
+          {
+            asset_version_id: 'v2',
+            position: 1,
+            asset_versions: { mime_type: 'application/pdf', kind: 'document' },
+            assets: { display_name: null, filename: 'brief.pdf' },
+          },
+          {
+            asset_version_id: 'v1',
+            position: 0,
+            asset_versions: [{ mime_type: 'image/jpeg', kind: 'image' }],
+            assets: [{ display_name: 'Hero shot', filename: 'IMG_1.jpg' }],
+          },
         ],
         error: null,
       }).then(resolve);
-    const client = { from: () => q } as unknown as Client;
+    const from = vi.fn(() => q);
+    const client = { from } as unknown as Client;
     const result = await readItemFiles(client, 'item1');
-    expect(result.ok && result.data).toEqual(['v1', 'v2']);
+    expect(result.ok && result.data).toEqual([
+      { versionId: 'v1', name: 'Hero shot', mimeType: 'image/jpeg', kind: 'image' },
+      { versionId: 'v2', name: 'brief.pdf', mimeType: 'application/pdf', kind: 'document' },
+    ]);
+    // One round trip: the same single select, never one read per file.
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(calls.filter(([m]) => m === 'select')).toEqual([['select', [ITEM_FILE_COLUMNS]]]);
+    expect(ITEM_FILE_COLUMNS).toContain('asset_versions(mime_type, kind)');
+    expect(ITEM_FILE_COLUMNS).toContain('assets(display_name, filename)');
     expect(calls).toContainEqual(['eq', ['entity_type', 'plan_item']]);
     expect(calls).toContainEqual(['is', ['deleted_at', null]]);
     expect(calls).toContainEqual(['in', ['entity_id', ['item1']]]);
+  });
+
+  it('itemFilesOfRows: display name, else filename, else empty; missing embeds read null', () => {
+    expect(
+      itemFilesOfRows([
+        { asset_version_id: 'b', position: 2, asset_versions: null, assets: null },
+        {
+          asset_version_id: 'a',
+          position: 0,
+          asset_versions: { mime_type: null, kind: 'video' },
+          assets: { display_name: '  ', filename: 'clip.mov' },
+        },
+      ]),
+    ).toEqual([
+      { versionId: 'a', name: 'clip.mov', mimeType: null, kind: 'video' },
+      { versionId: 'b', name: '', mimeType: null, kind: null },
+    ]);
+  });
+});
+
+describe('withCommentCounts (D2)', () => {
+  it("keeps each bundle's own items' counts; a bundle with none stays as assembled", () => {
+    const row = (id: string, planId: string) =>
+      ({ id, plan_id: planId, kind: 'concept', position: 0 }) as unknown as PlanItemRow;
+    const a = {
+      plan: { id: 'a' },
+      items: [row('i1', 'a'), row('i2', 'a')],
+      reviews: [],
+      postStages: {},
+      postInfo: {},
+    } as unknown as PlanBundle;
+    const b = { ...a, plan: { id: 'b' }, items: [row('i3', 'b')] } as unknown as PlanBundle;
+    const out = withCommentCounts(
+      new Map([
+        ['a', a],
+        ['b', b],
+      ]),
+      { i1: 2, i2: 0, i3: 0, other: 5 },
+    );
+    expect(out.get('a')?.commentCounts).toEqual({ i1: 2 });
+    expect(out.get('b')).toBe(b);
+    expect(out.get('b')?.commentCounts).toBeUndefined();
   });
 });
 

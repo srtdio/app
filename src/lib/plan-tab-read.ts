@@ -11,7 +11,8 @@
 // The client keeps the zone handling (post days in the bundle's zone), the
 // loose-post filter (a post that is an item of a read plan is never loose, and
 // a dated post is kept when its day in the zone is in the range), the order
-// (starts_on, then id) and mergeDraftRows. Approvers (onlyShared) read shared
+// (starts_on, then id) and mergeDraftRows. The read's comment counts are kept
+// (PlanTabData.commentCounts and each bundle's commentCounts): no extra read. Approvers (onlyShared) read shared
 // plans only. Never throws.
 
 import type { Client, Result } from '@srtdio/rpc';
@@ -33,6 +34,12 @@ export interface PlanTabData {
   posts: LoosePost[];
   /** Item and post tiles. */
   thumbs: PlanThumbs;
+  /**
+   * Visible comments per item id, from the same read (also on each bundle as
+   * PlanBundle.commentCounts, which is how the calendar gets them). Absent in
+   * data built before the counts were kept.
+   */
+  commentCounts?: Record<string, number>;
   /** Whether the workspace holds any plan the viewer can read (the zero state). */
   anyPlan: boolean;
   /** The workspace zone, from the bundle (post days and the loose-post filter use it). */
@@ -102,6 +109,7 @@ export function planTabDataOf(
     bundles,
     posts: loosePosts(read.loosePosts, bundles, range, timeZone),
     thumbs: read.thumbs,
+    commentCounts: read.commentCounts,
     anyPlan: read.anyPlan || bundles.length > 0,
     timeZone,
     nextCursor: read.nextCursor,
@@ -131,6 +139,7 @@ export function mergePlanTabPages(
       posts: { ...shown.thumbs.posts, ...next.thumbs.posts },
       concepts: { ...shown.thumbs.concepts, ...next.thumbs.concepts },
     },
+    commentCounts: { ...shown.commentCounts, ...next.commentCounts },
     anyPlan: shown.anyPlan || next.anyPlan,
     timeZone,
     nextCursor: next.nextCursor,

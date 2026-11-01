@@ -17,7 +17,13 @@
 // entry: a plan item in the docked Plan screen, a post on its page. While the
 // range reads, the grid keeps its final size. The range reads a page of plans
 // at a time: while more overlap it, Load more (PlanTabLoadMore, the phone
-// list's control) ends the chip row. Tokens only.
+// list's control) ends the chip row. Each plan item shows its comment count
+// (PlanCommentCount, from the read's counts on its bundle) at its right end,
+// and a concept's week card shows its first image. On a coarse pointer (iPad)
+// the month lines and "+N more" are 44px (fewer lines fit, the rest go to
+// "+N more"), and a creator's long-press (500ms, no drift) on a plan item opens
+// the day picker (its plan days and No date): a pick moves it the way a drop
+// does. A tap still opens it; approvers see no change. Tokens only.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -27,8 +33,10 @@ import type {
   ReactElement,
 } from 'react';
 import { PlanKeepApprovalSheet } from '@/components/chat/PlanMoveSheet';
+import { PlanDayPickerSheet, dayPickerSubline } from '@/components/chat/PlanDayPickerSheet';
+import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
-import { rowTitle } from '@/components/chat/PlanScreen';
+import { PlanCommentCount, rowTitle } from '@/components/chat/PlanScreen';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -51,7 +59,6 @@ import {
   canOpenDayMenu,
   capEntries,
   isDraftPlan,
-  monthCellCap,
   monthGrid,
   moreLabel,
   planPill,
@@ -71,13 +78,23 @@ import {
 } from '@/lib/plan-tab';
 import { civilDayOf, civilWeekdayShort, dayOfMonth, formatCivilDayHeader } from '@/lib/plan-week';
 import { useFitHeight } from '@/lib/use-fit-height';
+import { useCoarsePointer } from '@/lib/use-is-laptop';
 import { PlanDayMenu } from './PlanDayMenu';
 import { DraftTag, PlanTabLoadMore, type PlanTabMore } from './PlanTabList';
 import type { AddTarget } from './PlanTabAdd';
 import { usePlanTabMove } from './use-plan-tab-move';
+import { monthCellCapFor, useLongPress } from './plan-calendar-touch';
 
 /** Pointer travel (px) that lifts an entry into a drag. */
 const DRAG_SLOP_PX = 4;
+
+type ItemEntry = Extract<CalendarEntry, { kind: 'item' }>;
+
+/** A plan item's visible comments (the read's counts on its bundle); 0 for a post in no plan. Pure. */
+export function entryCommentCount(entry: CalendarEntry): number {
+  if (entry.kind !== 'item') return 0;
+  return entry.bundle.commentCounts?.[entry.item.id] ?? 0;
+}
 
 /** The calendar's data: the plans in the range and the dated posts in no plan. */
 interface CalendarData {
@@ -152,12 +169,23 @@ export function PlanCalendar(props: {
   const [menu, setMenu] = useState<{ day: string; anchor: HTMLElement } | null>(null);
   const draggable = canDragEntries(side);
   const drag = useEntryDrag({ enabled: draggable, onDrop: mover.move });
+  const coarse = useCoarsePointer();
+  // iPad: a creator's long-press on a plan item opens the day picker.
+  // The picked entry stays while the sheet slides out (open false).
+  const [pick, setPick] = useState<{ entry: ItemEntry; open: boolean } | null>(null);
+  const closePick = (): void => setPick((p) => (p !== null ? { ...p, open: false } : p));
+  const longPress = useLongPress<CalendarEntry>({
+    enabled: coarse && draggable,
+    onFire: (entry) => {
+      if (entry.kind === 'item') setPick({ entry, open: true });
+    },
+  });
   const rootRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<HTMLDivElement>(null);
   const fit = useFitHeight(fitRef, rootRef);
 
   const openEntry = (entry: CalendarEntry): void => {
-    if (drag.consumeClick()) return;
+    if (drag.consumeClick() || longPress.consumeClick()) return;
     props.onOpen(entry);
   };
   const dayClick = (day: string, cell: HTMLElement, event: ReactMouseEvent): void => {
@@ -182,9 +210,19 @@ export function PlanCalendar(props: {
     entry,
     lifted: drag.state?.entry.key === entry.key,
     draggable,
+    coarse,
+    holdable: coarse && draggable && entry.kind === 'item',
     onOpen: openEntry,
-    onPointerDown: drag.press,
+    onPointerDown: (e, event) => {
+      drag.press(e, event);
+      longPress.press(e, event);
+    },
   });
+  const picking = pick?.entry ?? null;
+  const pickRange =
+    picking !== null
+      ? { startsOn: picking.bundle.plan.starts_on, endsOn: picking.bundle.plan.ends_on }
+      : { startsOn: today, endsOn: today };
 
   return (
     <div
@@ -244,6 +282,7 @@ export function PlanCalendar(props: {
             entries={entries}
             cellProps={cellProps}
             entryProps={entryProps}
+            coarse={coarse}
             onMore={props.onWeekOf}
           />
         ) : (
@@ -273,6 +312,28 @@ export function PlanCalendar(props: {
             props.onNewPlan(weekRangeOf(menu.day));
           }}
           onClose={() => setMenu(null)}
+        />
+      ) : null}
+      {draggable ? (
+        <PlanDayPickerSheet
+          open={pick?.open === true}
+          title={picking?.title ?? ''}
+          subline={
+            picking !== null
+              ? picking.item.kind === 'concept'
+                ? dayPickerSubline({ kind: 'concept' }, pickRange)
+                : dayPickerSubline({ kind: 'post', orig: picking.day }, pickRange)
+              : ''
+          }
+          range={pickRange}
+          selected={picking?.day ?? null}
+          today={today}
+          onPick={(day) => {
+            const entry = pick?.open === true ? pick.entry : null;
+            closePick();
+            if (entry !== null) mover.move(entry, day === 'none' ? null : day);
+          }}
+          onClose={closePick}
         />
       ) : null}
       <PlanKeepApprovalSheet
@@ -385,6 +446,10 @@ interface EntryProps {
   entry: CalendarEntry;
   lifted: boolean;
   draggable: boolean;
+  /** A coarse pointer: 44px lines. */
+  coarse: boolean;
+  /** A creator's plan item on a coarse pointer: long-press opens the day picker. */
+  holdable: boolean;
   onOpen: (entry: CalendarEntry) => void;
   onPointerDown: (entry: CalendarEntry, event: ReactPointerEvent<HTMLElement>) => void;
 }
@@ -430,6 +495,8 @@ function MonthGrid(props: {
   entries: ReadonlyMap<string, CalendarEntry[]>;
   cellProps: (day: string) => CellProps;
   entryProps: (entry: CalendarEntry) => EntryProps;
+  /** A coarse pointer: 44px lines and "+N more", so fewer lines fit. */
+  coarse: boolean;
   onMore: (day: string) => void;
 }): ReactElement {
   const weeks = monthGrid(props.anchor);
@@ -459,7 +526,9 @@ function MonthGrid(props: {
             const all = props.entries.get(cell.day) ?? [];
             const { shown, more } = capEntries(
               all,
-              rowHeight !== null ? monthCellCap({ rowHeight, count: all.length }) : undefined,
+              rowHeight !== null
+                ? monthCellCapFor({ rowHeight, count: all.length, coarse: props.coarse })
+                : undefined,
             );
             const isToday = cell.day === cp.today;
             return (
@@ -500,7 +569,7 @@ function MonthGrid(props: {
                 {more > 0 ? (
                   <PressableRow
                     inline
-                    dense
+                    dense={!props.coarse}
                     type="button"
                     data-plan-tab-more={cell.day}
                     onClick={() => props.onMore(cell.day)}
@@ -529,11 +598,21 @@ function entryLook(entry: CalendarEntry): { soft: string; dot: string } {
   return { soft: tone.soft, dot: cn(tone.dot, 'rounded-full') };
 }
 
+/** The long-press guards on a holdable entry: no iOS callout, no text selection, no menu. */
+function holdAttrs(props: EntryProps): {
+  onContextMenu?: (event: ReactMouseEvent) => void;
+  'data-plan-tab-holdable'?: string;
+} {
+  return props.holdable
+    ? { onContextMenu: (event) => event.preventDefault(), 'data-plan-tab-holdable': '' }
+    : {};
+}
+
 function MonthEntry(props: EntryProps): ReactElement {
   const look = entryLook(props.entry);
   return (
     <PressableRow
-      dense
+      dense={!props.coarse}
       type="button"
       data-plan-tab-entry={props.entry.key}
       data-plan-tab-lifted={props.lifted ? '' : undefined}
@@ -542,14 +621,19 @@ function MonthEntry(props: EntryProps): ReactElement {
         props.draggable ? (event) => props.onPointerDown(props.entry, event) : undefined
       }
       onClick={() => props.onOpen(props.entry)}
+      {...holdAttrs(props)}
       className={cn(
-        'flex h-[22px] min-w-0 shrink-0 items-center gap-1.5 px-1.5 text-xs text-fg',
+        'flex min-w-0 shrink-0 items-center gap-1.5 px-1.5',
+        !props.coarse && 'h-[22px]',
+        'text-xs text-fg',
         look.soft,
+        props.holdable && NO_TOUCH_SELECT,
         props.lifted && 'opacity-40',
       )}
     >
       <span aria-hidden="true" className={cn('h-2 w-2 shrink-0', look.dot)} />
-      <span className="truncate">{props.entry.title}</span>
+      <span className="min-w-0 flex-1 truncate">{props.entry.title}</span>
+      <PlanCommentCount count={entryCommentCount(props.entry)} />
     </PressableRow>
   );
 }
@@ -632,9 +716,16 @@ const PILL_TONES = {
   neutral: 'bg-panel-2 text-fg-2',
 } as const;
 
-/** The card's tile: the post's cover, else the plan-coloured (or neutral) soft tile. */
-function cardCover(entry: CalendarEntry, thumbs: PlanThumbs): string | null {
+/**
+ * The card's tile: the post's cover, a concept's first image (the tab read's
+ * concept tiles), else the plan-coloured (or neutral) soft tile. Pure.
+ */
+export function cardCover(entry: CalendarEntry, thumbs: PlanThumbs): string | null {
   if (entry.kind === 'post') return thumbs.posts[entry.post.id] ?? null;
+  if (entry.item.kind === 'concept') {
+    const tile = thumbs.concepts[entry.item.id];
+    return tile !== undefined && tile.kind === 'image' ? tile.versionId : null;
+  }
   const postId = entry.item.post_id;
   return postId !== null ? (thumbs.posts[postId] ?? null) : null;
 }
@@ -652,8 +743,10 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
       data-plan-tab-draggable={props.draggable ? '' : undefined}
       onPointerDown={props.draggable ? (event) => props.onPointerDown(entry, event) : undefined}
       onClick={() => props.onOpen(entry)}
+      {...holdAttrs(props)}
       className={cn(
         'flex min-w-0 shrink-0 flex-col overflow-hidden border border-border bg-panel transition-colors',
+        props.holdable && NO_TOUCH_SELECT,
         props.lifted && 'opacity-40',
       )}
     >
@@ -689,10 +782,13 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
             {pill.label}
           </span>
         ) : null}
-        <span className="truncate text-sm text-fg-3">
-          {entry.kind === 'item'
-            ? postStageLine(entry.bundle, entry.item)
-            : `Post: ${stageStatusWord(entry.post.stage)}`}
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-sm text-fg-3">
+            {entry.kind === 'item'
+              ? postStageLine(entry.bundle, entry.item)
+              : `Post: ${stageStatusWord(entry.post.stage)}`}
+          </span>
+          <PlanCommentCount count={entryCommentCount(entry)} />
         </span>
       </span>
     </PressableRow>
