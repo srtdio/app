@@ -159,17 +159,22 @@ test.describe('phone', () => {
     await item.locator('[data-plan-edit-date]').click();
     const sheet = page.getByRole('dialog', { name: 'Edit concept' });
     await expect(sheet).toBeVisible();
-    await expect(sheet.locator('[data-plan-concept-date]')).toHaveValue('');
-    await expect(sheet.locator('[data-plan-concept-date-clear]')).toHaveCount(0);
-    await sheet.locator('[data-plan-concept-date]').fill('2026-10-11');
-    const clear = sheet.locator('[data-plan-concept-date-clear]');
-    const box = await clear.boundingBox();
-    expectMinTouchTarget(box);
+    // F1: the plan's day tiles, same as Add concept; No date is selected and
+    // only the plan's days (12 to 18 Oct) can be picked.
+    await expect(sheet.locator('[data-plan-concept-date]')).toHaveCount(0);
+    const noDate = sheet.locator('[data-plan-day-none]');
+    await expect(noDate).toHaveAttribute('aria-pressed', 'true');
+    expectMinTouchTarget(await noDate.boundingBox());
+    await expect(sheet.locator('[data-plan-day-tile]')).toHaveCount(7);
+    await expect(sheet.locator('[data-plan-day-tile="2026-10-11"]')).toHaveCount(0);
+    await expect(sheet.locator('[data-plan-day-tile="2026-10-19"]')).toHaveCount(0);
+    await sheet.locator('[data-plan-day-tile="2026-10-12"]').click();
+    await expect(noDate).toHaveAttribute('aria-pressed', 'false');
     await sheet.locator('[data-plan-concept-save]').click();
     await expect(sheet).toBeHidden();
-    await expect(item.locator('[data-plan-item-date]')).toHaveText('11 Oct');
+    await expect(item.locator('[data-plan-item-date]')).toHaveText('12 Oct');
     const row = (network.world.tables.plan_items ?? []).find((i) => i.id === target.id);
-    expect(row?.target_date).toBe('2026-10-11');
+    expect(row?.target_date).toBe('2026-10-12');
     // Files went as null: the one link is untouched (not re-attached).
     expect(linksOf()).toEqual([link]);
     await expect(item.getByText(`Concept 1 of ${conceptCount}`)).toBeVisible();
@@ -182,9 +187,12 @@ test.describe('phone', () => {
     await expect(item).toBeVisible();
     await item.locator('[data-plan-edit-date]').click();
     await expect(sheet).toBeVisible();
-    await expect(sheet.locator('[data-plan-concept-date]')).toHaveValue('2026-10-11');
-    await sheet.locator('[data-plan-concept-date-clear]').click();
-    await expect(sheet.locator('[data-plan-concept-date]')).toHaveValue('');
+    await expect(sheet.locator('[data-plan-day-tile="2026-10-12"]')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await sheet.locator('[data-plan-day-none]').click();
+    await expect(sheet.locator('[data-plan-day-none]')).toHaveAttribute('aria-pressed', 'true');
     await sheet.locator('[data-plan-concept-save]').click();
     await expect(sheet).toBeHidden();
     await expect(item.locator('[data-plan-item-date]')).toHaveText('No date');

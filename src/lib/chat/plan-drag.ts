@@ -151,22 +151,37 @@ export function headerDraftOf(
 }
 
 /**
+ * Whether the draft's From and To make a range the list can render: both set
+ * and From on or before To. Pure.
+ */
+export function isRenderableRange(draft: Pick<PlanHeaderDraft, 'startsOn' | 'endsOn'>): boolean {
+  return draft.startsOn !== '' && draft.endsOn !== '' && draft.startsOn <= draft.endsOn;
+}
+
+/**
  * The queue with the header draft laid in: one 'update' op, first (dates
  * widen before any move lands on a new day), replaced on every edit and
  * dropped when the draft is back to what the plan holds. The title is
- * trimmed; an empty one keeps the plan's. Pure.
+ * trimmed and never swapped for the plan's: an empty one stays empty (Save is
+ * blocked with "Add a title."). A From or To that is empty, or a From after
+ * To, keeps the last range that rendered (the queued op's, else the plan's),
+ * so the list, the picker and the drag never see a broken range; Save stays
+ * blocked by the draft's own check. Pure.
  */
 export function withHeaderUpdate(
   ops: readonly PlanSaveOp[],
   plan: Pick<PlanBundle['plan'], 'title' | 'starts_on' | 'ends_on'>,
   draft: PlanHeaderDraft,
 ): PlanSaveOp[] {
+  const prev = ops.find((op): op is Extract<PlanSaveOp, { op: 'update' }> => op.op === 'update');
   const rest = ops.filter((op) => op.op !== 'update');
-  const title = draft.title.trim() === '' ? plan.title : draft.title.trim();
-  const same =
-    title === plan.title && draft.startsOn === plan.starts_on && draft.endsOn === plan.ends_on;
+  const title = draft.title.trim();
+  const valid = isRenderableRange(draft);
+  const startsOn = valid ? draft.startsOn : (prev?.starts_on ?? plan.starts_on);
+  const endsOn = valid ? draft.endsOn : (prev?.ends_on ?? plan.ends_on);
+  const same = title === plan.title && startsOn === plan.starts_on && endsOn === plan.ends_on;
   if (same) return rest;
-  return [{ op: 'update', title, starts_on: draft.startsOn, ends_on: draft.endsOn }, ...rest];
+  return [{ op: 'update', title, starts_on: startsOn, ends_on: endsOn }, ...rest];
 }
 
 /** The queue with one more op at its end. Pure. */
@@ -218,4 +233,94 @@ export function applyPlanOps(
     }
   }
   return next;
+}
+
+// ---------------------------------------------------------------------------
+// Save changes on fresh data
+// ---------------------------------------------------------------------------
+
+/**
+ * A bundle's items as day groups in display order: the items' own order
+ * (sorted by date, then position), grouped by plan day, days ascending and
+ * No date last. Pure.
+ */
+export function dayIdsOf(bundle: PlanBundle, timeZone = 'UTC'): DayIds[] {
+  const byDay = new Map<string | null, string[]>();
+  for (const item of bundle.items) {
+    const day = planItemDayInZone(item, bundle.postInfo, timeZone);
+    const ids = byDay.get(day);
+    if (ids === undefined) byDay.set(day, [item.id]);
+    else ids.push(item.id);
+  }
+  return sortDays([...byDay].map(([day, ids]) => ({ day, ids })));
+}
+
+function sortDays(days: DayIds[]): DayIds[] {
+  return [...days].sort((a, b) =>
+    a.day === b.day ? 0 : a.day === null ? 1 : b.day === null ? -1 : a.day < b.day ? -1 : 1,
+  );
+}
+
+/**
+ * The full plan order with each day's items in the session's order: in every
+ * day, the ids `intended` holds come first in its order, then the ones it
+ * lacks (added by someone else since) in their current order. Ids no longer
+ * in `days` (removed by someone else) are gone. Pure.
+ */
+export function orderLike(days: readonly DayIds[], intended: readonly string[]): string[] {
+  const rank = new Map(intended.map((id, i) => [id, i]));
+  return days.flatMap((d) => {
+    const mine = d.ids
+      .filter((id) => rank.has(id))
+      .sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0));
+    const theirs = d.ids.filter((id) => !rank.has(id));
+    return [...mine, ...theirs];
+  });
+}
+
+/**
+ * This session's queue rebuilt on a fresh read of the plan (Save changes, and
+ * its retry): each op is laid on the plan as it is now, in order. A remove or
+ * move of an item someone else removed is dropped; every move and reorder
+ * gets a new full item order from the fresh items, this session's placement
+ * on top: the moved item lands on its day, and within each day the items this
+ * session ordered keep that order, with items someone else added after them.
+ * The header update is kept as is. Pure.
+ */
+export function rebuildOps(
+  fresh: PlanBundle,
+  ops: readonly PlanSaveOp[],
+  timeZone = 'UTC',
+): PlanSaveOp[] {
+  let current = fresh;
+  const out: PlanSaveOp[] = [];
+  const has = (id: string): boolean => current.items.some((i) => i.id === id);
+  for (const op of ops) {
+    if (op.op === 'update') {
+      out.push(op);
+      current = applyPlanOps(current, [op], timeZone);
+    } else if (op.op === 'remove') {
+      if (!has(op.item_id)) continue;
+      out.push(op);
+      current = applyPlanOps(current, [op], timeZone);
+    } else if (op.op === 'move') {
+      if (!has(op.item_id)) continue;
+      const days = dayIdsOf(current, timeZone);
+      const withTarget = days.some((d) => d.day === op.target_date)
+        ? days
+        : sortDays([...days, { day: op.target_date, ids: [] }]);
+      const placed = moveToEnd(withTarget, op.item_id, op.target_date);
+      const next: PlanSaveOp = { ...op, item_ids: orderLike(placed, op.item_ids) };
+      out.push(next);
+      current = applyPlanOps(current, [next], timeZone);
+    } else {
+      const next: PlanSaveOp = {
+        op: 'reorder',
+        item_ids: orderLike(dayIdsOf(current, timeZone), op.item_ids),
+      };
+      out.push(next);
+      current = applyPlanOps(current, [next], timeZone);
+    }
+  }
+  return out;
 }

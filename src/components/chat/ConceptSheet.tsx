@@ -149,21 +149,24 @@ export function conceptDiscardCopy(mode: 'add' | 'edit'): { title: string; messa
 
 /**
  * Whether closing would lose work: an upload in flight, or the text, date or
- * (Add) files differ from what the sheet opened with. Edit's files load after
- * open, so they are not compared there. Pure.
+ * files differ from what the sheet opened with. Edit's files may load after
+ * open: they are compared only once known (`filesKnown`), against the files as
+ * loaded; until then only the text and date count. Pure.
  */
 export function conceptDirty(input: {
   mode: 'add' | 'edit';
   form: ConceptForm;
   baseline: ConceptForm;
   uploads: number;
+  /** Edit: the concept's files are known and `baseline.files` holds them. */
+  filesKnown?: boolean;
 }): boolean {
   const { form, baseline } = input;
   if (input.uploads > 0) return true;
   if (form.title.trim() !== baseline.title.trim()) return true;
   if (form.description.trim() !== baseline.description.trim()) return true;
   if (form.date !== baseline.date) return true;
-  if (input.mode === 'add') {
+  if (input.mode === 'add' || input.filesKnown === true) {
     const before = baseline.files.map((f) => f.versionId).join(',');
     return form.files.map((f) => f.versionId).join(',') !== before;
   }
@@ -261,16 +264,26 @@ export function ConceptSheet(props: {
 
   const edit = props.mode === 'edit';
   // What the sheet opened with: Add compares against an empty concept (a kept
-  // draft still counts as work), Edit against the concept as it was.
+  // draft still counts as work), Edit against the concept as it was. Edit's
+  // files join the baseline once known: at open when already read, else on the
+  // first render after the read lands (the parent sets the files with it).
   const wasOpen = useRef(false);
   const baseline = useRef<ConceptForm>(EMPTY_CONCEPT);
-  if (props.open && !wasOpen.current) baseline.current = edit ? form : EMPTY_CONCEPT;
+  const filesKnown = useRef(false);
+  if (props.open && !wasOpen.current) {
+    baseline.current = edit ? form : EMPTY_CONCEPT;
+    filesKnown.current = edit && filesState === 'ready';
+  } else if (props.open && edit && !filesKnown.current && filesState === 'ready') {
+    baseline.current = { ...baseline.current, files: form.files };
+    filesKnown.current = true;
+  }
   wasOpen.current = props.open;
   const dirty = conceptDirty({
     mode: props.mode,
     form,
     baseline: baseline.current,
     uploads: uploads.length,
+    filesKnown: filesKnown.current,
   });
   const discardCopy = conceptDiscardCopy(props.mode);
   // The footer's Cancel goes through the guard too: dirty asks, clean closes.

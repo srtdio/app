@@ -102,7 +102,13 @@ const SEARCH_DEBOUNCE_MS = 200;
 
 interface PostPickerProps {
   open: boolean;
+  /** Dismiss: the sheet's X, backdrop tap, swipe down, Escape and Back. */
   onClose: () => void;
+  /**
+   * The Done button. Absent, Done calls onClose (today's behaviour), so a
+   * caller that commits picks on Done passes this and lets dismiss drop them.
+   */
+  onDone?: (() => void) | undefined;
   /** The composer's current shared-post selection (controlled). */
   selected: readonly PostCardFields[];
   /** Toggle one post in/out of the selection (adds/removes its chip). */
@@ -680,7 +686,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       // and filters all fill it, so the sheet never grows or shrinks.
       fixedHeight
       footer={
-        <Button variant="primary" className="ml-auto" onClick={props.onClose}>
+        <Button variant="primary" className="ml-auto" onClick={props.onDone ?? props.onClose}>
           {count > 0 ? `Done (${count})` : 'Done'}
         </Button>
       }

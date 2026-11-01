@@ -12,7 +12,20 @@ vi.mock('@/lib/workspace-context', () => ({
 vi.mock('@/lib/session-context', () => ({
   useSession: () => ({ session: { user: { id: 'u-1' } } }),
 }));
+// The Sheet is stubbed to record its props: every dismiss path (X, backdrop,
+// swipe, Escape) funnels into its onClose (ui/Sheet requestClose), and the
+// picker's Done button is its footer. No sheet test renders the real one.
+const sheet = vi.hoisted(() => ({
+  last: null as null | { onClose: () => void; footer?: unknown },
+}));
+vi.mock('@/components/ui/Sheet', () => ({
+  Sheet: (p: { onClose: () => void; footer?: unknown }) => {
+    sheet.last = p;
+    return null;
+  },
+}));
 
+import type { ReactElement } from 'react';
 import type { Client } from '@srtdio/rpc';
 import {
   BRIEFS_EMPTY_COPY,
@@ -576,5 +589,48 @@ describe('empty copy', () => {
       BRIEFS_EMPTY_COPY,
     ];
     for (const line of lines) expect(line).not.toContain('\u2014');
+  });
+});
+
+describe('F6: Done vs dismiss (the add-posts picker never adds on close)', () => {
+  function renderSheet(handlers: { onClose: () => void; onDone?: () => void }) {
+    sheet.last = null;
+    renderToStaticMarkup(
+      <PostPicker
+        open={false}
+        mode="posts"
+        selected={[]}
+        onToggle={() => undefined}
+        selectedBriefs={[]}
+        onToggleBrief={() => undefined}
+        {...handlers}
+      />,
+    );
+    const props = sheet.last as { onClose: () => void; footer?: unknown } | null;
+    if (props === null) throw new Error('sheet not rendered');
+    const done = props.footer as ReactElement<{ onClick: () => void }>;
+    return { dismiss: props.onClose, done: () => done.props.onClick() };
+  }
+
+  it('Done calls onDone when given, never onClose', () => {
+    const onClose = vi.fn();
+    const onDone = vi.fn();
+    renderSheet({ onClose, onDone }).done();
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('Done falls back to onClose when no onDone is passed (Composer, PlanComposeScreen)', () => {
+    const onClose = vi.fn();
+    renderSheet({ onClose }).done();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('X, backdrop, swipe and Escape (the Sheet onClose) call onClose, not onDone', () => {
+    const onClose = vi.fn();
+    const onDone = vi.fn();
+    renderSheet({ onClose, onDone }).dismiss();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onDone).not.toHaveBeenCalled();
   });
 });

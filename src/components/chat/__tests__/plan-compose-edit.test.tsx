@@ -293,7 +293,7 @@ describe('existing plan header "+": no outside post without a day (F)', () => {
       planSrc.indexOf('const addOnDays'),
       planSrc.indexOf('const outsidePost'),
     );
-    expect(days).toContain('addPosts(group.postIds, group.day)');
+    expect(days).toContain('addPostsQuiet(group.postIds, group.day)');
     expect(planSrc).toMatch(/<PlanDayPickerSheet[\s\S]*?hideNoDate/);
   });
 });

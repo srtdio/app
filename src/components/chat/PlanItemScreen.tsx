@@ -111,6 +111,7 @@ import {
   type ReviewStatus,
 } from '@/lib/chat/plans';
 import { formatRelative, safeTimeZone } from '@/lib/time';
+import { civilToday } from '@/lib/plan-week';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
 import { logger } from '@/lib/logger';
@@ -504,7 +505,7 @@ export function PlanItemScreen(props: {
         item_id: forItem,
         error: result.error.message,
       });
-      toast.show({ title: CONCEPT_SAVE_FAILED });
+      toast.show({ title: planWriteErrorCopy(result.error.message, CONCEPT_SAVE_FAILED) });
       return;
     }
     setEditOpen(false);
@@ -603,6 +604,10 @@ export function PlanItemScreen(props: {
   const currentDay = groups
     .flatMap((w) => w.days)
     .find((d) => d.items.some((i) => i.id === item.id))?.day;
+  // Items per plan day for the Edit concept sheet's day tiles (as the Plan
+  // screen counts them), from the bundle already held: no read.
+  const dayCounts: Record<string, number> = {};
+  for (const d of planDayIds(groups)) if (d.day !== null) dayCounts[d.day] = d.ids.length;
   const pickDay = (day: string | null): void => {
     if (!planActions || planBusy) return;
     if (day === currentDay) {
@@ -622,20 +627,26 @@ export function PlanItemScreen(props: {
     keep: boolean,
     order: string[],
   ): Promise<boolean> => {
+    const forItem = item.id;
     setPlanBusy(true);
     const traceId = generateTraceId();
     const result = await planItemMove(supabase, {
-      p_item_id: item.id,
+      p_item_id: forItem,
       p_target_date: day,
       p_item_ids: order,
       p_keep_reviews: keep,
       p_trace_id: traceId,
     });
     setPlanBusy(false);
+    // Left this item (or closed) meanwhile: no toast; the list still refreshes.
+    if (!stillOn(forItem)) {
+      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
+      return false;
+    }
     if (!result.ok) {
       logger.warn('chat: plan item move failed', {
         trace_id: traceId,
-        item_id: item.id,
+        item_id: forItem,
         error: result.error.message,
       });
       toast.show({ title: planWriteErrorCopy(result.error.message, MOVE_FAILED) });
@@ -662,18 +673,25 @@ export function PlanItemScreen(props: {
       return;
     }
     // A tick is reset: the agency cannot put a client's tick back, so no Undo.
+    // writeMove is false when the viewer left this item, so no toast then.
     if (await writeMove(day, keep, order)) toast.show({ title: spec.title });
   };
   const removeFromPlan = async (): Promise<void> => {
     if (!planActions || planBusy) return;
+    const forItem = item.id;
     setPlanBusy(true);
     const traceId = generateTraceId();
-    const result = await planItemRemove(supabase, { p_item_id: item.id, p_trace_id: traceId });
+    const result = await planItemRemove(supabase, { p_item_id: forItem, p_trace_id: traceId });
     setPlanBusy(false);
+    // Left this item (or closed) meanwhile: no close, no toast; the list still refreshes.
+    if (!stillOn(forItem)) {
+      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
+      return;
+    }
     if (!result.ok) {
       logger.warn('chat: plan item remove failed', {
         trace_id: traceId,
-        item_id: item.id,
+        item_id: forItem,
         error: result.error.message,
       });
       toast.show({ title: REMOVE_FAILED });
@@ -859,7 +877,10 @@ export function PlanItemScreen(props: {
                 <input
                   ref={commentRef}
                   value={text}
-                  onChange={(e) => setText(e.target.value)}
+                  onChange={(e) => {
+                    setText(e.target.value);
+                    setSendError(null);
+                  }}
                   aria-label="Comment"
                   autoComplete="off"
                   enterKeyHint="send"
@@ -1101,6 +1122,9 @@ export function PlanItemScreen(props: {
           note={editResets ? CONCEPT_EDIT_RESET_HINT : null}
           filesState={editFiles !== null ? 'ready' : filesRead.state}
           onRetryFiles={filesRead.retry}
+          range={{ startsOn: bundle.plan.starts_on, endsOn: bundle.plan.ends_on }}
+          today={civilToday(new Date(), timeZone)}
+          dayCounts={dayCounts}
           {...(canAttach ? { uploadFile } : {})}
         />
       ) : null}
