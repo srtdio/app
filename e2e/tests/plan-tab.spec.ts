@@ -32,8 +32,6 @@ import { expectAllVisibleControlsTouchSized, expectMinTouchTarget } from '../hel
 const NOW = Date.now();
 const TODAY = new Date(NOW).toISOString().slice(0, 10);
 const MONDAY = mondayOf(NOW);
-/** A day of this week other than today (the drag's target). */
-const OTHER_DAY = TODAY === MONDAY ? civilPlus(TODAY, 1) : civilPlus(TODAY, -1);
 
 // The laptop Month specs pin the page clock to a mid-month Wednesday in a
 // 5-week month. The grid has a row per Mon-Sun week, so a 6-week month (one
@@ -43,6 +41,7 @@ const OTHER_DAY = TODAY === MONDAY ? civilPlus(TODAY, 1) : civilPlus(TODAY, -1);
 const PINNED_NOW = Date.UTC(2026, 9, 14, 12);
 const PINNED_TODAY = new Date(PINNED_NOW).toISOString().slice(0, 10);
 const PINNED_MONDAY = mondayOf(PINNED_NOW);
+/** A day of the pinned week other than today (the drag's target). */
 const PINNED_OTHER_DAY = civilPlus(PINNED_TODAY, -1);
 
 function laptopOnly(page: Page): void {
