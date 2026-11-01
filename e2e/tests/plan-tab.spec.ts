@@ -35,6 +35,16 @@ const MONDAY = mondayOf(NOW);
 /** A day of this week other than today (the drag's target). */
 const OTHER_DAY = TODAY === MONDAY ? civilPlus(TODAY, 1) : civilPlus(TODAY, -1);
 
+// The laptop Month specs pin the page clock to a mid-month Wednesday in a
+// 5-week month. The grid has a row per Mon-Sun week, so a 6-week month (one
+// whose 1st is late in the week, like Nov 2026) gives every cell less height,
+// and monthCellCap shows fewer lines and "+N more" by design. With the real
+// clock those specs depended on the day they ran.
+const PINNED_NOW = Date.UTC(2026, 9, 14, 12);
+const PINNED_TODAY = new Date(PINNED_NOW).toISOString().slice(0, 10);
+const PINNED_MONDAY = mondayOf(PINNED_NOW);
+const PINNED_OTHER_DAY = civilPlus(PINNED_TODAY, -1);
+
 function laptopOnly(page: Page): void {
   test.skip((page.viewportSize()?.width ?? 0) < 768, 'laptop only');
 }
@@ -290,8 +300,9 @@ test('laptop: Month, Week, a chip filter, a drag to another day and the empty-da
 }) => {
   laptopOnly(page);
   test.setTimeout(120_000);
+  await page.clock.install({ time: PINNED_NOW });
   const network = await installHarnessNetwork(page);
-  seedPlanTab(network.world, { sender: ME });
+  seedPlanTab(network.world, { sender: ME, now: PINNED_NOW });
   await openTab(page);
 
   // Month: today's number in the accent circle, the plans' items on today.
@@ -300,7 +311,7 @@ test('laptop: Month, Week, a chip filter, a drag to another day and the empty-da
     'aria-pressed',
     'true',
   );
-  const today = day(page, TODAY);
+  const today = day(page, PINNED_TODAY);
   await expect(today.locator('[data-plan-tab-today]')).toBeVisible();
   await expect(today).toContainText(TAB_OK_ITEM_TITLE);
   await expect(today).toContainText(TAB_DRAFT_ITEM_TITLE);
@@ -315,7 +326,7 @@ test('laptop: Month, Week, a chip filter, a drag to another day and the empty-da
     dimension: 'height',
   });
   await shootBoth(page, 'plan-tab-month', async () => {
-    await expect(day(page, TODAY)).toContainText(TAB_OK_ITEM_TITLE, { timeout: 15_000 });
+    await expect(day(page, PINNED_TODAY)).toContainText(TAB_OK_ITEM_TITLE, { timeout: 15_000 });
   });
 
   // Week: the cards with their Plan pill and post line.
@@ -341,7 +352,7 @@ test('laptop: Month, Week, a chip filter, a drag to another day and the empty-da
   await shootBoth(page, 'plan-tab-week', async () => {
     await page.locator('[data-plan-tab-view="week"]').click();
     await expect(page.locator('[data-plan-tab-week]')).toBeVisible({ timeout: 15_000 });
-    await expect(day(page, TODAY)).toContainText(TAB_OK_ITEM_TITLE);
+    await expect(day(page, PINNED_TODAY)).toContainText(TAB_OK_ITEM_TITLE);
   });
 
   // Drag "Market stall story" to another day of this week: lifted card, the
@@ -349,7 +360,7 @@ test('laptop: Month, Week, a chip filter, a drag to another day and the empty-da
   const card = entry(page, TAB_MOVE_ITEM_ID);
   const box = await card.boundingBox();
   if (box === null) throw new Error('card box');
-  const target = await day(page, OTHER_DAY).boundingBox();
+  const target = await day(page, PINNED_OTHER_DAY).boundingBox();
   if (target === null) throw new Error('target box');
   await page.mouse.move(box.x + box.width / 2, box.y + 10);
   await page.mouse.down();
@@ -358,10 +369,10 @@ test('laptop: Month, Week, a chip filter, a drag to another day and the empty-da
   await page.mouse.move(target.x + target.width / 2, target.y + Math.min(target.height - 20, 200), {
     steps: 8,
   });
-  await expect(day(page, OTHER_DAY)).toHaveAttribute('data-plan-tab-drop', '');
+  await expect(day(page, PINNED_OTHER_DAY)).toHaveAttribute('data-plan-tab-drop', '');
   await page.mouse.up();
   await expect(page.locator('[data-plan-tab-drag-card]')).toHaveCount(0);
-  await expect(day(page, OTHER_DAY)).toContainText(TAB_MOVE_ITEM_TITLE);
+  await expect(day(page, PINNED_OTHER_DAY)).toContainText(TAB_MOVE_ITEM_TITLE);
   await expect(page).toHaveURL(/\/plan$/);
   await expect
     .poll(() => network.rpcCalls.filter((c) => c.name === 'plan_item_move').length, {
@@ -371,14 +382,14 @@ test('laptop: Month, Week, a chip filter, a drag to another day and the empty-da
   expect(network.rpcCalls.find((c) => c.name === 'plan_item_move')?.args).toEqual(
     expect.objectContaining({
       p_item_id: TAB_MOVE_ITEM_ID,
-      p_target_date: OTHER_DAY,
+      p_target_date: PINNED_OTHER_DAY,
       p_keep_reviews: false,
     }),
   );
 
   // The empty-day menu on next Monday: only the shared plan covers it.
   await page.locator('[data-plan-tab-next]').click();
-  const nextMonday = civilPlus(MONDAY, 7);
+  const nextMonday = civilPlus(PINNED_MONDAY, 7);
   const cell = day(page, nextMonday);
   await expect(cell).toBeVisible();
   const cellBox = await cell.boundingBox();
@@ -398,11 +409,11 @@ test('laptop: Month, Week, a chip filter, a drag to another day and the empty-da
 
   // This week's Monday: both plans cover it, the Draft tagged.
   await page.locator('[data-plan-tab-prev]').click();
-  const monday = day(page, MONDAY);
+  const monday = day(page, PINNED_MONDAY);
   const mondayBox = await monday.boundingBox();
   if (mondayBox === null) throw new Error('monday box');
   await monday.click({ position: { x: mondayBox.width / 2, y: mondayBox.height - 20 } });
-  const both = page.locator(`[data-plan-tab-day-menu="${MONDAY}"]`);
+  const both = page.locator(`[data-plan-tab-day-menu="${PINNED_MONDAY}"]`);
   await expect(both.locator('[data-plan-tab-menu-plan]')).toHaveCount(2);
   await expect(both.locator(`[data-plan-tab-menu-plan="${TAB_DRAFT_PLAN_ID}"]`)).toContainText(
     TAB_DRAFT_PLAN_TITLE,
@@ -568,8 +579,9 @@ test('laptop: Month and Week fit the window with no page scroll at 720 and 900 t
   page,
 }) => {
   laptopOnly(page);
+  await page.clock.install({ time: PINNED_NOW });
   const network = await installHarnessNetwork(page);
-  seedPlanTab(network.world, { sender: ME });
+  seedPlanTab(network.world, { sender: ME, now: PINNED_NOW });
   await openTab(page);
   await expect(page.locator('[data-plan-tab-month]')).toBeVisible();
 
@@ -594,7 +606,7 @@ test('laptop: Month and Week fit the window with no page scroll at 720 and 900 t
       const grid = await page.locator(`[data-plan-tab-${view}]`).boundingBox();
       if (grid === null) throw new Error(`${view} grid box`);
       expect(grid.y + grid.height).toBeLessThanOrEqual(vh);
-      await expect(day(page, TODAY)).toContainText(TAB_OK_ITEM_TITLE);
+      await expect(day(page, PINNED_TODAY)).toContainText(TAB_OK_ITEM_TITLE);
       await expectNoPageScroll(page, `${view} at 1280x${vh}`);
     }
     // 180px more window, 180px more grid.

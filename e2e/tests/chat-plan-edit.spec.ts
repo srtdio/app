@@ -86,7 +86,28 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   const sheet = page.getByRole('dialog', { name: 'Edit concept' });
   await expect(sheet).toBeVisible();
   await expect(sheet.locator('[data-plan-concept-title]')).toHaveValue(target.title);
-  await expect(sheet.locator('[data-plan-concept-date]')).toHaveValue(target.date ?? '');
+  // F1: the plan's day tiles (same as Add concept), the current day selected;
+  // only the plan's days (12 to 18 Oct) are offered, never a free date field.
+  await expect(sheet.locator('[data-plan-concept-date]')).toHaveCount(0);
+  const tiles = sheet.locator('[data-plan-day-tile]');
+  await expect(tiles).toHaveCount(7);
+  expect(
+    await tiles.evaluateAll((els) => els.map((el) => el.getAttribute('data-plan-day-tile'))),
+  ).toEqual([
+    '2026-10-12',
+    '2026-10-13',
+    '2026-10-14',
+    '2026-10-15',
+    '2026-10-16',
+    '2026-10-17',
+    '2026-10-18',
+  ]);
+  await expect(sheet.locator('[data-plan-day-tile="2026-10-11"]')).toHaveCount(0);
+  await expect(sheet.locator(`[data-plan-day-tile="${target.date}"]`)).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(sheet.locator('[data-plan-day-none]')).toHaveAttribute('aria-pressed', 'false');
   await expect(sheet.locator('[data-plan-concept-save]')).toHaveText('Save');
   await expect(sheet.locator('[data-plan-concept-reset]')).toHaveText(
     'Saving sends this back to waiting for creators and approvers.',
@@ -100,13 +121,13 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   await edit.click();
   await expect(sheet).toBeVisible();
   await sheet.locator('[data-plan-concept-title]').fill('Lamp lighting reel v2');
-  await sheet.locator('[data-plan-concept-date]').fill('2026-10-11');
+  await sheet.locator('[data-plan-day-tile="2026-10-12"]').click();
   await sheet.locator('[data-plan-concept-save]').click();
   await expect(sheet).toBeHidden();
   await expect(page.getByText('Concept updated')).toBeVisible();
   expect(edits.count()).toBe(1);
   await expect(item.getByRole('heading', { name: 'Lamp lighting reel v2' })).toBeVisible();
-  await expect(item.locator('[data-plan-item-date]')).toHaveText('11 Oct');
+  await expect(item.locator('[data-plan-item-date]')).toHaveText('12 Oct');
   await expect(item.locator('[data-plan-pill="client"]')).toHaveText(/Waiting/);
   expect(
     (network.world.tables.plan_item_reviews ?? [])
@@ -116,13 +137,16 @@ test('agency edits an approved concept: reset line, Waiting, new title, new posi
   await expect(item.getByText(/^Concept 1 of \d+$/)).toBeVisible();
   const row = (network.world.tables.plan_items ?? []).find((i) => i.id === target.id);
   expect(row?.title).toBe('Lamp lighting reel v2');
-  expect(row?.target_date).toBe('2026-10-11');
+  expect(row?.target_date).toBe('2026-10-12');
 
   // The Date row's Edit opens the same sheet, prefilled; no reset line now.
   await item.locator('[data-plan-edit-date]').click();
   await expect(sheet).toBeVisible();
   await expect(sheet.locator('[data-plan-concept-title]')).toHaveValue('Lamp lighting reel v2');
-  await expect(sheet.locator('[data-plan-concept-date]')).toHaveValue('2026-10-11');
+  await expect(sheet.locator('[data-plan-day-tile="2026-10-12"]')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await expect(sheet.locator('[data-plan-concept-reset]')).toHaveCount(0);
   await sheet.getByRole('button', { name: 'Cancel' }).click();
   await expect(sheet).toBeHidden();
