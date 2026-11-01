@@ -7,7 +7,9 @@
 // resets ticks writes at once with no Undo. A dated post in no plan: one
 // post_update of its target_date (12:00 on the new day in the workspace zone),
 // behind the same Undo toast. A failed write puts the entry back and toasts
-// the existing move copy. The override goes once the re-read is in.
+// the existing move copy. The override goes once the re-read is in. A plan
+// item can also go to No date (the touch day picker): day null, shown nowhere
+// on the grid until the re-read (override NO_DAY_KEY).
 
 import { useCallback, useRef, useState } from 'react';
 import { postUpdate } from '@srtdio/posts';
@@ -36,17 +38,21 @@ import { useUndoableAction } from '@/lib/use-undoable-action';
 
 type ItemEntry = Extract<CalendarEntry, { kind: 'item' }>;
 
+/** The override of an entry moved to No date: a key no grid day matches. */
+export const NO_DAY_KEY = 'none';
+
 /** The keep-approval question for one drop. */
 interface KeepAsk {
   title: string;
   body: string;
   entry: ItemEntry;
-  day: string;
+  day: string | null;
 }
 
 export function usePlanTabMove(input: { timeZone: string; reload: () => Promise<void> }): {
   overrides: Readonly<Record<string, string>>;
-  move: (entry: CalendarEntry, day: string) => void;
+  /** day null: No date (plan items only; a post in no plan always keeps a day). */
+  move: (entry: CalendarEntry, day: string | null) => void;
   keepAsk: KeepAsk | null;
   answerKeep: (keep: boolean) => void;
   cancelKeep: () => void;
@@ -85,7 +91,7 @@ export function usePlanTabMove(input: { timeZone: string; reload: () => Promise<
   );
 
   const writeItem = useCallback(
-    async (entry: ItemEntry, day: string, keep: boolean): Promise<boolean> => {
+    async (entry: ItemEntry, day: string | null, keep: boolean): Promise<boolean> => {
       const { bundle, item } = entry;
       const groups = planListGroups(bundle, timeZone, 'agency');
       const order = flattenOrder(moveToEnd(planDayIds(groups), item.id, day));
@@ -135,12 +141,17 @@ export function usePlanTabMove(input: { timeZone: string; reload: () => Promise<
   );
 
   const run = useCallback(
-    (entry: CalendarEntry, day: string, keep: boolean): void => {
+    (entry: CalendarEntry, day: string | null, keep: boolean): void => {
       const key = entry.key;
+      if (entry.kind === 'post' && day === null) return;
       busy.current.add(key);
-      place(key, day);
+      place(key, day ?? NO_DAY_KEY);
       const write = (): Promise<boolean> =>
-        entry.kind === 'item' ? writeItem(entry, day, keep) : writePost(entry, day);
+        entry.kind === 'item'
+          ? writeItem(entry, day, keep)
+          : day !== null
+            ? writePost(entry, day)
+            : Promise.resolve(false);
       const reset = entry.kind === 'item' && !keep && hasTicks(entry.bundle, entry.item.id);
       const spec = dayMoveToast(
         dayHeaderOf(day),
@@ -169,8 +180,9 @@ export function usePlanTabMove(input: { timeZone: string; reload: () => Promise<
   );
 
   const move = useCallback(
-    (entry: CalendarEntry, day: string): void => {
+    (entry: CalendarEntry, day: string | null): void => {
       if (busy.current.has(entry.key) || day === entry.day) return;
+      if (entry.kind === 'post' && day === null) return;
       if (entry.kind === 'item' && moveAsksKeep(entry.bundle, entry.item, entry.day, day)) {
         const userId = approvedBy(entry.bundle, entry.item)?.userId ?? null;
         const ask = (name: string): void =>

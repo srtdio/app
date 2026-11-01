@@ -90,6 +90,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
 import {
   ICON_SIZE,
+  IconChat,
   IconCheck,
   IconChevronDown,
   IconChevronLeft,
@@ -2340,6 +2341,7 @@ export function PlanScreen(props: {
               timeZone={timeZone}
               thumbs={read.status === 'ready' ? read.data.thumbs : {}}
               conceptThumbs={read.status === 'ready' ? (read.data.conceptThumbs ?? {}) : {}}
+              commentCounts={read.status === 'ready' ? read.data.commentCounts : {}}
               alsoIn={read.status === 'ready' ? (read.data.alsoIn ?? {}) : {}}
               drag={drag.state}
               onOpenItem={openItem}
@@ -3233,6 +3235,8 @@ export function PlanBody(props: {
   thumbs: Record<string, string>;
   /** Concept tiles by item id (the first image, or a file tile). */
   conceptThumbs?: Readonly<Record<string, ConceptThumb>>;
+  /** Visible comments by item id (the count under each row's tile). */
+  commentCounts?: Readonly<Record<string, number>>;
   /** Other plans' titles by post id (the Also in pill). */
   alsoIn?: Readonly<Record<string, string[]>>;
   /** The drag in progress, or null. */
@@ -3341,6 +3345,7 @@ export function PlanBody(props: {
                             item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null
                           }
                           conceptThumb={props.conceptThumbs?.[item.id] ?? null}
+                          commentCount={props.commentCounts?.[item.id] ?? 0}
                           dimmed={lifted}
                           tile={index === 0 ? tile : null}
                           timeZone={props.timeZone}
@@ -3770,12 +3775,49 @@ function RowTile(props: {
   );
 }
 
+/** "1 comment" / "4 comments": the count's accessible name. Pure. */
+export function commentCountLabel(count: number): string {
+  return `${count} ${count === 1 ? 'comment' : 'comments'}`;
+}
+
+/**
+ * An item's comment count: IconChat and the number (sm, tabular-nums, fg-2),
+ * named "{n} comment(s)". Nothing at all for 0, so a row keeps its height.
+ * The Plan rows (under the tile) and the Plan tab calendar entries use it.
+ */
+export function PlanCommentCount(props: { count: number }): ReactElement | null {
+  if (!(props.count > 0)) return null;
+  return (
+    <span
+      data-plan-comment-count={props.count}
+      role="img"
+      aria-label={commentCountLabel(props.count)}
+      className="inline-flex shrink-0 items-center gap-1 text-sm tabular-nums text-fg-2"
+    >
+      <IconChat size={ICON_SIZE.inline} />
+      <span aria-hidden="true">{props.count}</span>
+    </span>
+  );
+}
+
+/** The row's 56px tile column: the tile, then the comment count under it (when above 0). */
+function TileColumn(props: { count: number; children: ReactNode }): ReactElement {
+  return (
+    <span data-plan-row-tile-col="" className="flex w-14 shrink-0 flex-col items-center gap-1">
+      {props.children}
+      <PlanCommentCount count={props.count} />
+    </span>
+  );
+}
+
 function PlanRow(props: {
   bundle: PlanBundle;
   item: PlanItemRow;
   side: ViewerSide;
   thumb: string | null;
   conceptThumb?: ConceptThumb | null;
+  /** Visible comments on the item; 0 shows nothing. */
+  commentCount?: number;
   dimmed: boolean;
   /** The day's date tile on its first row; null on the rows under it. */
   tile: ReactNode;
@@ -3844,7 +3886,9 @@ function PlanRow(props: {
             <span className="truncate text-sm text-fg-3">{DRAFT_NOT_READY}</span>
             {dateLine}
           </span>
-          <RowTile item={props.item} thumb={null} muted />
+          <TileColumn count={props.commentCount ?? 0}>
+            <RowTile item={props.item} thumb={null} muted />
+          </TileColumn>
         </div>
       </div>
     );
@@ -3886,12 +3930,14 @@ function PlanRow(props: {
         ) : null}
         {dateLine}
       </span>
-      <RowTile
-        item={props.item}
-        thumb={props.thumb}
-        conceptThumb={props.conceptThumb ?? null}
-        muted={false}
-      />
+      <TileColumn count={props.commentCount ?? 0}>
+        <RowTile
+          item={props.item}
+          thumb={props.thumb}
+          conceptThumb={props.conceptThumb ?? null}
+          muted={false}
+        />
+      </TileColumn>
     </PressableRow>
   );
   const lines = (

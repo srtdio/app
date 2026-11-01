@@ -26,7 +26,6 @@ import {
 } from '@/lib/chat/older-page-status';
 import { ThreadHoldTip } from '@/components/chat/ThreadHoldTip';
 import { flushSync } from 'react-dom';
-import { Link } from 'react-router-dom';
 import { isNearBottom } from '@/lib/chat/scroll';
 import { centreDelta, holdActive, JUMP_HOLD_MS, recentreNeeded } from '@/components/chat/jump-hold';
 import {
@@ -80,18 +79,10 @@ import {
   sizeChangeAction,
   type ScrollSource,
 } from '@/lib/chat/stick-to-bottom';
-import {
-  APP_ENTITY_ROUTES,
-  classify,
-  currentOrigin,
-  displayUrl,
-  firstExternalUrl,
-  tokenize,
-} from '@/lib/chat/message-links';
+import { currentOrigin, firstExternalUrl } from '@/lib/chat/message-links';
+import { bodyLinkClass, markSearchWords, renderMessageBody } from '@/components/chat/message-body';
 import { Avatar } from '@/components/ui/Avatar';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
-import { UnsafeLinkText } from '@/components/ui/UnsafeLinkSheet';
-import { checkLink } from '@/lib/links/safety';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
@@ -1743,71 +1734,13 @@ export const OWN_BUBBLE_CONTENT = cn(
   '[&_.text-fg-3]:text-accent-fg [&_.text-fg-3]:opacity-90',
 );
 
-/** Link ink per side: accent on a peer bubble, accent-fg on the solid own bubble. */
-export function bodyLinkClass(mine: boolean): string {
-  return cn('underline', mine ? 'text-accent-fg' : 'text-accent');
-}
-
-/**
- * A message body as text runs and links. External urls open in a new tab and
- * show without the scheme; links to this app's own post or brief pages are
- * router links that open in-app. The whole link text is the tap target. Pure:
- * the origin is read at call time, so the first paint is final.
- */
-export function renderMessageBody(
-  body: string,
-  mine: boolean,
-  origin: string | null = currentOrigin(),
-  highlight: readonly string[] = [],
-): ReactNode[] {
-  const className = bodyLinkClass(mine);
-  return tokenize(body).map((segment, i) => {
-    if (segment.kind === 'text') {
-      return highlight.length === 0 ? (
-        segment.text
-      ) : (
-        <Fragment key={i}>{markSearchWords(segment.text, highlight)}</Fragment>
-      );
-    }
-    const target = classify(segment.url, origin, APP_ENTITY_ROUTES);
-    const label = displayUrl(segment.url);
-    // An unsafe link opens the check sheet, never the site (its card warns too).
-    const verdict = target.kind === 'external' ? checkLink(segment.url) : null;
-    if (verdict !== null && verdict.verdict === 'unsafe') {
-      return (
-        <UnsafeLinkText
-          key={i}
-          url={segment.url}
-          reasons={verdict.reasons}
-          className={cn('inline', className)}
-          msgLink
-        >
-          {label}
-        </UnsafeLinkText>
-      );
-    }
-    return target.kind === 'external' ? (
-      <a
-        key={i}
-        data-msg-link=""
-        href={segment.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={className}
-      >
-        {label}
-      </a>
-    ) : (
-      <Link key={i} data-msg-link="" to={target.path} className={className}>
-        {label}
-      </Link>
-    );
-  });
-}
+// renderMessageBody, bodyLinkClass and markSearchWords live in message-body.tsx
+// (the Plan item screen renders descriptions with them without importing this
+// module); re-exported here so every importer keeps its path.
+export { bodyLinkClass, markSearchWords, renderMessageBody };
 
 /** A searched word in a bubble: the shared search highlight (SearchHighlight.tsx). */
 export { SEARCH_MARK_CLASS } from '@/components/ui/SearchHighlight';
-export const markSearchWords = highlightNodes;
 
 /**
  * Whether the thread takes its initial (Activity) jump now: there is one, it

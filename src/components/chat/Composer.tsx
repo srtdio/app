@@ -142,6 +142,7 @@ import {
   useVoiceDraft,
 } from '@/lib/chat/voice-draft';
 import { StopRecordingDialog, VoiceDraftBar, leaveAfterGuard } from '@/components/chat/VoiceDraft';
+import { isSendKeydown } from '@/lib/chat/send-key';
 
 export interface ComposerProps {
   /**
@@ -732,20 +733,9 @@ export async function withLinkCards(
   return { text: onlyLinks ? '' : draft.text, sharedPostIds, sharedBriefIds };
 }
 
-/**
- * Whether a composer keydown should send rather than insert a newline: plain
- * Enter only. Shift+Enter (newline) and Enter mid-IME-composition are excluded,
- * and a coarse (touch-primary) pointer never sends on Enter so phones and
- * touch-only tablets keep the newline and tap Send instead.
- */
-export function isSendKeydown(input: {
-  key: string;
-  shiftKey: boolean;
-  isComposing: boolean;
-  coarsePointer: boolean;
-}): boolean {
-  return input.key === 'Enter' && !input.shiftKey && !input.isComposing && !input.coarsePointer;
-}
+// isSendKeydown lives in src/lib/chat/send-key.ts (the Plan item comment box
+// uses it too); re-exported here so every importer keeps its path.
+export { isSendKeydown };
 
 /**
  * Whether the composer's trailing control is the record-voice-note mic rather

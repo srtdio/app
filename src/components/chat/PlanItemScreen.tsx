@@ -21,10 +21,17 @@
 // (RLS). A comment appends at once and keeps its text on failure. One read
 // per table per open, bounded at 5s; the body paints once it settles. The
 // phone page is a modal dialog: focus moves in and returns on close
-// (PlanPage). Tokens only.
+// (PlanPage). A concept lists its Files first (each tile opens the image
+// gallery or the file viewer, loaded on tap, with its name under it), then
+// the description card (links as in chat, the link preview inside it), then
+// Date and Approvers, then Comments. A post item reads its comments only, in
+// parallel with the embedded post (never before it), and lists them under
+// "Plan notes" below the post (nothing when there are none). The comment box
+// is the shared Textarea (1 to 4 lines): Enter sends on a fine pointer,
+// Shift+Enter (and Return on touch) adds a line. Tokens only.
 
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import type { FormEvent, ReactElement } from 'react';
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   planConceptEdit,
@@ -35,7 +42,10 @@ import {
 } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { PressableRow } from '@/components/ui/PressableRow';
+import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/toast';
+import type { ViewerKind } from '@/components/ui/FileViewer';
 import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
 import { DUR_SLOW_MS } from '@/lib/motion';
 import { ICON_SIZE, IconArrowUp, IconLock, IconMore, IconX } from '@/components/ui/icons';
@@ -53,11 +63,13 @@ import {
 import { flattenOrder, hasTicks, moveToEnd } from '@/lib/chat/plan-drag';
 import { dayMoveToast } from '@/lib/chat/plan-keyboard-move';
 import {
+  CONCEPT_FILES_READ_FAILED,
   ConceptSheet,
   EMPTY_CONCEPT,
   useConceptFilesRead,
   type ConceptForm,
 } from '@/components/chat/ConceptSheet';
+import { renderMessageBody } from '@/components/chat/message-body';
 import { postRoute } from '@/components/chat/post-card';
 import {
   COMMENT_FAILED,
@@ -106,10 +118,14 @@ import {
   type ItemScreenData,
   type PlanBundle,
   type PlanCommentRow,
+  type PlanItemFile,
   type PlanItemRow,
   type ReviewSide,
   type ReviewStatus,
 } from '@/lib/chat/plans';
+import { classifyFileKind } from '@/lib/chat/attachments';
+import { isSendKeydown } from '@/lib/chat/send-key';
+import { useCoarsePointer, useIsLaptop } from '@/lib/use-is-laptop';
 import { formatRelative, safeTimeZone } from '@/lib/time';
 import { civilToday } from '@/lib/plan-week';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
@@ -132,6 +148,30 @@ function ConceptLinkCard(props: { text: string }): ReactElement | null {
     <LinkPreviewCard key={url} url={url} className="mt-1 w-full max-w-[420px]" />
   ) : null;
 }
+
+// The viewers load on the first tap of a file tile, never on the item's paint.
+const ImageLightbox = lazy(() =>
+  import('@/components/ui/ImageLightbox').then((m) => ({ default: m.ImageLightbox })),
+);
+const ConceptFileViewer = lazy(() =>
+  import('@/components/ui/FileViewer').then((m) => ({
+    default: function ConceptFileViewer(props: {
+      versionId: string;
+      name: string;
+      kind: ViewerKind;
+      onClose: () => void;
+    }): ReactElement | null {
+      const { versionId } = props;
+      const source = useMemo(
+        () => m.remoteFileSource(sharedCardPresignCache(), versionId),
+        [versionId],
+      );
+      return (
+        <m.FileViewer name={props.name} kind={props.kind} source={source} onClose={props.onClose} />
+      );
+    },
+  })),
+);
 
 // Loaded on first post item open: the post view's graph (PCS, the chat SDK)
 // stays out of the chat bundle and out of node imports of this module.
@@ -247,18 +287,41 @@ export function conceptEditResets(team: ReviewStatus, client: ReviewStatus): boo
   return team !== 'waiting' || client !== 'waiting';
 }
 
+/** A concept file's shown name: its asset name, else "Concept file". Pure. */
+export function conceptFileName(file: Pick<PlanItemFile, 'name'>): string {
+  return file.name.trim() !== '' ? file.name : 'Concept file';
+}
+
+/** Whether a concept file opens in the image gallery (an image/* MIME, else kind image). Pure. */
+export function isConceptImage(file: Pick<PlanItemFile, 'mimeType' | 'kind'>): boolean {
+  if (file.mimeType !== null) return file.mimeType.toLowerCase().startsWith('image/');
+  return file.kind === 'image';
+}
+
+/** The file viewer kind for a non-image concept file (PDF, video, office, other). Pure. */
+export function conceptViewerKind(file: Pick<PlanItemFile, 'mimeType' | 'kind'>): ViewerKind {
+  if (file.mimeType !== null) return classifyFileKind(file.mimeType);
+  return file.kind === 'video' ? 'video' : 'file';
+}
+
 /** The Edit concept sheet's prefill from the item and its read files (none when unread). Pure. */
 export function conceptEditForm(
   item: Pick<PlanItemRow, 'title' | 'description' | 'target_date'>,
-  files: readonly string[] | null,
+  files: readonly PlanItemFile[] | null,
 ): ConceptForm {
   return {
     title: item.title ?? '',
     description: item.description ?? '',
     date: item.target_date?.slice(0, 10) ?? '',
-    files: (files ?? []).map((versionId, i) => ({ versionId, name: `File ${i + 1}` })),
+    files: (files ?? []).map((f) => ({ versionId: f.versionId, name: conceptFileName(f) })),
   };
 }
+
+/** The laptop hint under the comment box (chat's send rule). */
+export const COMMENT_SEND_HINT = 'Enter to send · Shift+Enter for a new line';
+
+/** The post item's comments block label. */
+export const PLAN_NOTES_LABEL = 'Plan notes';
 
 /** A comment shown in the list: a recorded row, or a pending own one. */
 interface ShownComment {
@@ -296,11 +359,11 @@ export function PlanItemScreen(props: {
   const { session } = useSession();
   const me = session?.user.id ?? null;
   const navigate = useNavigate();
-  // A post item reads nothing here: the embedded post view does its own reads.
-  const { read, reload } = useScreenRead<ItemScreenData>(
-    props.open && item.kind === 'concept',
-    item.id,
-    (signal) => readItemScreen(supabase, item, (ids, s) => readProfiles(supabase, ids, s), signal),
+  // A concept reads its comments and files; a post item its comments only (the
+  // Plan notes), in parallel with the embedded post view's own reads, so the
+  // post never waits for it.
+  const { read, reload } = useScreenRead<ItemScreenData>(props.open, item.id, (signal) =>
+    readItemScreen(supabase, item, (ids, s) => readProfiles(supabase, ids, s), signal),
   );
   // Hand-typed mention tokens resolve through the shared batched name read
   // (users + workspace_members, one .in() each); the tick re-renders once it lands.
@@ -342,13 +405,16 @@ export function PlanItemScreen(props: {
   const [sending, setSending] = useState(false);
   // "Ask changes" opened the composer: Send records the note, then the review.
   const [askingChanges, setAskingChanges] = useState(false);
-  const commentRef = useRef<HTMLInputElement>(null);
+  const commentRef = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const coarse = useCoarsePointer();
+  const isLaptop = useIsLaptop();
   const toast = useToast();
   const undoable = useUndoableAction();
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<ConceptForm>(EMPTY_CONCEPT);
   // The concept's files when the sheet opened; null when not read yet.
-  const [editFiles, setEditFiles] = useState<string[] | null>(null);
+  const [editFiles, setEditFiles] = useState<PlanItemFile[] | null>(null);
   const [editBusy, setEditBusy] = useState(false);
   // Uploads go as comments' do (library origin).
   const { canAttach, uploadFile } = useCommentAttachments();
@@ -483,7 +549,7 @@ export function PlanItemScreen(props: {
       title: editForm.title.trim(),
       description: editForm.description.trim(),
       targetDate: editForm.date === '' ? null : editForm.date,
-      currentFiles: editFiles,
+      currentFiles: editFiles !== null ? editFiles.map((f) => f.versionId) : null,
       pickedFiles: editFiles !== null ? editForm.files.map((f) => f.versionId) : null,
     };
     if (conceptEditUnchanged(item, edit)) {
@@ -575,12 +641,29 @@ export function PlanItemScreen(props: {
       return false;
     }
     setText('');
+    // The box keeps focus after a send (it shrinks back to one line).
+    commentRef.current?.focus();
     setPending((prev) =>
       prev.map((p) => (p.id === localId ? { ...p, id: result.data, pending: false } : p)),
     );
     reload();
     dispatchPlanChanged(window, bundle.plan.id);
     return true;
+  };
+  // Chat's send rule: plain Enter sends on a fine pointer; Shift+Enter, IME
+  // composition and every Return on touch add a line (the button sends).
+  const commentKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
+    if (
+      !isSendKeydown({
+        key: event.key,
+        shiftKey: event.shiftKey,
+        isComposing: event.nativeEvent.isComposing,
+        coarsePointer: coarse,
+      })
+    )
+      return;
+    event.preventDefault();
+    formRef.current?.requestSubmit();
   };
   const send = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
@@ -819,6 +902,7 @@ export function PlanItemScreen(props: {
         footer={
           item.kind === 'post' && !askingChanges ? undefined : (
             <form
+              ref={formRef}
               onSubmit={(e) => void send(e)}
               className="flex flex-col gap-1.5"
               aria-label="Add a comment"
@@ -873,17 +957,21 @@ export function PlanItemScreen(props: {
                   {actionError}
                 </p>
               ) : null}
-              <div className="flex items-center gap-1.5">
-                <input
+              <div className="flex items-end gap-1.5">
+                <Textarea
                   ref={commentRef}
+                  compact
+                  rows={1}
                   value={text}
                   onChange={(e) => {
                     setText(e.target.value);
                     setSendError(null);
                   }}
+                  onKeyDown={commentKeyDown}
+                  data-plan-comment-input=""
                   aria-label="Comment"
                   autoComplete="off"
-                  enterKeyHint="send"
+                  enterKeyHint={coarse ? 'enter' : 'send'}
                   maxLength={5000}
                   placeholder={
                     askingChanges
@@ -893,9 +981,10 @@ export function PlanItemScreen(props: {
                         : 'Comment for everyone'
                   }
                   className={cn(
-                    'min-h-[44px] min-w-0 flex-1 rounded-full border bg-bg px-3.5 text-input text-fg placeholder:text-fg-3 md:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                    teamNote ? 'border-warn' : askingChanges ? 'border-accent' : 'border-border',
+                    'min-w-0 flex-1',
+                    teamNote ? 'border-warn' : askingChanges ? 'border-accent' : null,
                   )}
+                  style={{ maxHeight: COMMENT_BOX_MAX_PX }}
                 />
                 <Button
                   type="submit"
@@ -909,6 +998,11 @@ export function PlanItemScreen(props: {
                   <IconArrowUp size={ICON_SIZE.control} />
                 </Button>
               </div>
+              {isLaptop && !coarse ? (
+                <p data-plan-comment-hint="" className="text-sm text-fg-3">
+                  {COMMENT_SEND_HINT}
+                </p>
+              ) : null}
             </form>
           )
         }
@@ -936,14 +1030,23 @@ export function PlanItemScreen(props: {
                 </Suspense>
               </PostSheetPlanRowsContext.Provider>
             ) : null}
+            <PlanNotes notes={read.status === 'ready' ? shown : []} workspaceId={workspaceId} />
             {removeButton}
           </>
         ) : (
           <div className="flex flex-col gap-3.5 p-4">
-            <ItemMedia read={read} />
-            <div className="flex flex-col gap-1.5">
+            <section data-plan-files="" aria-label="Files" className="flex flex-col gap-2">
+              <h4 className={SECTION_LABEL}>Files</h4>
+              <ItemMedia read={read} onRetry={reload} />
+            </section>
+            <div
+              data-plan-description-card=""
+              className="flex flex-col gap-1.5 rounded-lg border border-border bg-panel p-3"
+            >
               <div className="flex items-start justify-between gap-2">
-                <h3 className="min-w-0 break-words pt-3 text-lg font-semibold text-fg">{title}</h3>
+                <h3 className="min-w-0 break-words pt-2.5 text-lg font-semibold text-fg">
+                  {title}
+                </h3>
                 {editable ? (
                   <Button
                     type="button"
@@ -957,7 +1060,12 @@ export function PlanItemScreen(props: {
                 ) : null}
               </div>
               {description !== '' ? (
-                <p className="whitespace-pre-wrap text-base text-fg-2">{description}</p>
+                <p
+                  data-plan-description=""
+                  className="whitespace-pre-wrap break-words text-base text-fg-2"
+                >
+                  {renderMessageBody(description, false)}
+                </p>
               ) : null}
               <ConceptLinkCard text={description} />
             </div>
@@ -1035,9 +1143,7 @@ export function PlanItemScreen(props: {
               </div>
             ) : null}
             <section ref={commentsRef} className="flex flex-col gap-2.5" aria-label="Comments">
-              <h4 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-                Comments
-              </h4>
+              <h4 className={SECTION_LABEL}>Comments</h4>
               {read.status === 'loading' ? (
                 <div className="h-[72px] animate-pulse rounded-lg bg-panel-2" />
               ) : read.status === 'error' ? (
@@ -1132,16 +1238,46 @@ export function PlanItemScreen(props: {
   );
 }
 
+/** The section label style (design rules: sm/600 uppercase, fg-2). */
+const SECTION_LABEL = 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+
+/** The comment box's tallest: 4 lines (16px at 1.4) plus its padding; then it scrolls. */
+const COMMENT_BOX_MAX_PX = 110;
+
+/**
+ * The concept's files: the loading box (its size kept, so nothing jumps), the
+ * failed copy with Retry, "No files", or a tile per file (a button: an image
+ * opens the gallery of every image at it, any other file the file viewer),
+ * each with its name under it.
+ */
 function ItemMedia(props: {
   read: ReturnType<typeof useScreenRead<ItemScreenData>>['read'];
+  onRetry: () => void;
 }): ReactElement {
   const { read } = props;
+  // The open viewer: an image index in the gallery, or one file.
+  const [gallery, setGallery] = useState<number | null>(null);
+  const [fileOpen, setFileOpen] = useState<PlanItemFile | null>(null);
+  const files = read.status === 'ready' ? read.data.files : [];
+  const images = useMemo(() => files.filter(isConceptImage), [files]);
+  if (read.status === 'error') {
+    return (
+      <div
+        data-plan-media="failed"
+        className="flex min-h-[72px] items-center justify-between gap-3 rounded-lg border border-border bg-panel px-3.5"
+      >
+        <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
+        <Button data-plan-media-retry="" onClick={props.onRetry}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
   if (read.status !== 'ready') {
     return (
       <div data-plan-media="loading" className="h-[170px] animate-pulse rounded-lg bg-panel-2" />
     );
   }
-  const files = read.data.files;
   if (files.length === 0) {
     return (
       <div
@@ -1152,20 +1288,97 @@ function ItemMedia(props: {
       </div>
     );
   }
+  const open = (file: PlanItemFile): void => {
+    if (isConceptImage(file)) {
+      setGallery(
+        Math.max(
+          0,
+          images.findIndex((i) => i.versionId === file.versionId),
+        ),
+      );
+      return;
+    }
+    setFileOpen(file);
+  };
   return (
-    <div data-plan-media="files" className="grid grid-cols-3 gap-1.5">
-      {files.map((versionId) => (
-        <div key={versionId} className="overflow-hidden rounded-lg border border-border bg-panel-2">
-          <Thumbnail
-            assetVersionId={versionId}
+    <>
+      <div data-plan-media="files" className="grid grid-cols-3 gap-1.5">
+        {files.map((file) => {
+          const name = conceptFileName(file);
+          return (
+            <PressableRow
+              key={file.versionId}
+              type="button"
+              data-plan-file={file.versionId}
+              data-plan-file-kind={isConceptImage(file) ? 'image' : conceptViewerKind(file)}
+              aria-label={`Open ${name}`}
+              title={name}
+              onClick={() => open(file)}
+              className="flex min-w-0 flex-col gap-1"
+            >
+              <span className="block w-full overflow-hidden rounded-lg border border-border bg-panel-2">
+                <Thumbnail
+                  assetVersionId={file.versionId}
+                  cache={sharedCardPresignCache()}
+                  presignEnabled={PRESIGN_ENABLED}
+                  fallback={{ kind: 'glyph' }}
+                  alt=""
+                />
+              </span>
+              <span data-plan-file-name="" className="block w-full truncate text-sm text-fg-3">
+                {name}
+              </span>
+            </PressableRow>
+          );
+        })}
+      </div>
+      {gallery !== null && images.length > 0 ? (
+        <Suspense fallback={null}>
+          <ImageLightbox
+            images={images.map((i) => ({ assetId: i.versionId, name: conceptFileName(i) }))}
+            index={Math.min(gallery, images.length - 1)}
             cache={sharedCardPresignCache()}
             presignEnabled={PRESIGN_ENABLED}
-            fallback={{ kind: 'glyph' }}
-            alt="Concept file"
+            onIndexChange={setGallery}
+            onClose={() => setGallery(null)}
           />
-        </div>
+        </Suspense>
+      ) : null}
+      {fileOpen !== null ? (
+        <Suspense fallback={null}>
+          <ConceptFileViewer
+            versionId={fileOpen.versionId}
+            name={conceptFileName(fileOpen)}
+            kind={conceptViewerKind(fileOpen)}
+            onClose={() => setFileOpen(null)}
+          />
+        </Suspense>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * A post item's plan notes (its plan comments, e.g. a Not OK note) under the
+ * embedded post: the "Plan notes" label and a CommentRow each. Nothing at all
+ * while there are none (or the read has not landed), so nothing shifts above.
+ */
+function PlanNotes(props: {
+  notes: ShownComment[];
+  workspaceId: string | null;
+}): ReactElement | null {
+  if (props.notes.length === 0) return null;
+  return (
+    <section
+      data-plan-notes=""
+      aria-label={PLAN_NOTES_LABEL}
+      className="flex flex-col gap-2.5 px-4 pb-2 pt-4"
+    >
+      <h4 className={SECTION_LABEL}>{PLAN_NOTES_LABEL}</h4>
+      {props.notes.map((c) => (
+        <CommentRow key={c.id} comment={c} workspaceId={props.workspaceId} />
       ))}
-    </div>
+    </section>
   );
 }
 

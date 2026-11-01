@@ -148,7 +148,8 @@ describe('plan titles: one line, then an ellipsis', () => {
   });
 
   it('a month grid row truncates', () => {
-    expect(classesOf(calendar('month'), ITEM_TITLE)).toEqual(['truncate']);
+    // The title shrinks (min-w-0 flex-1) so the comment count keeps the line's right end.
+    expect(classesOf(calendar('month'), ITEM_TITLE)).toEqual(['min-w-0 flex-1 truncate']);
   });
 });
 

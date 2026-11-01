@@ -259,9 +259,10 @@ describe('files never open in another tab or window from chat', () => {
 
   it('no target=_blank in src/components/chat except the two external-link spots', () => {
     const hits = sources.flatMap((f) => [...read(f).matchAll(/target="_blank"/g)].map(() => f));
-    // Message-text links (MessageThread renderMessageBody) and the Links tab
-    // (ChatInfoTabs LinkRow) open external web pages, not files; both unchanged.
-    expect(hits.sort()).toEqual(['ChatInfoTabs.tsx', 'MessageThread.tsx']);
+    // Message-text links (renderMessageBody, moved from MessageThread to
+    // message-body.tsx) and the Links tab (ChatInfoTabs LinkRow) open external
+    // web pages, not files; both unchanged.
+    expect(hits.sort()).toEqual(['ChatInfoTabs.tsx', 'message-body.tsx']);
     const tabs = read('ChatInfoTabs.tsx');
     const link = tabs.indexOf('export function LinkRow');
     const blank = tabs.indexOf('target="_blank"');

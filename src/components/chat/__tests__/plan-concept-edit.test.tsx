@@ -71,11 +71,20 @@ describe('one concept sheet (E2, E5)', () => {
   });
 
   it('prefills title, description, date and files', () => {
-    expect(conceptEditForm(item, ['v1'])).toEqual({
+    // D1: the files carry their asset names (never "File 1"); a nameless one reads "Concept file".
+    expect(
+      conceptEditForm(item, [
+        { versionId: 'v1', name: 'Hero shot.jpg', mimeType: 'image/jpeg', kind: 'image' },
+        { versionId: 'v2', name: '', mimeType: 'application/pdf', kind: 'document' },
+      ]),
+    ).toEqual({
       title: 'Reel',
       description: 'Morning light',
       date: '2026-10-14',
-      files: [{ versionId: 'v1', name: 'File 1' }],
+      files: [
+        { versionId: 'v1', name: 'Hero shot.jpg' },
+        { versionId: 'v2', name: 'Concept file' },
+      ],
     });
     expect(conceptEditForm({ title: null, description: null, target_date: null }, null)).toEqual({
       title: '',
@@ -170,5 +179,16 @@ describe('save (E4, E6)', () => {
     for (const name of ['ConceptSheet.tsx', 'PlanItemScreen.tsx', 'PlanComposeScreen.tsx']) {
       expect(read(name)).not.toContain(String.fromCharCode(0x2014));
     }
+  });
+});
+
+describe('Edit concept sheet file names (U9)', () => {
+  it('each file tile shows its name under it (truncated, meta style) with the full name on hover', () => {
+    const sheet = read('ConceptSheet.tsx');
+    expect(sheet).toMatch(
+      /data-plan-concept-file=""\s+title=\{f\.name\}[\s\S]*?data-plan-concept-file-name=""\s+className="block truncate text-sm text-fg-3"\s*>\s*\{f\.name\}/,
+    );
+    // The names come from the read (D1), never "File N".
+    expect(read('PlanItemScreen.tsx')).not.toContain('`File ${');
   });
 });

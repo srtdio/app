@@ -11,6 +11,7 @@ import {
   PEER_NAME,
   PLAN_CONCEPT_ITEM,
   PLAN_ID,
+  PLAN_POST_ITEM,
   POST_IDS,
   seedClientPlan,
   seedPlanTab,
@@ -253,6 +254,29 @@ function seedChatPlan(network: HarnessNetwork): void {
     sender: ME,
     fileVersionId: LIB_IMAGE_VERSION,
     now: NOW + 30_000,
+  });
+  // The concept files read embeds the version and the asset (one select), so
+  // the item screen's tile shows the file's name under it.
+  for (const link of network.world.tables.asset_attachments ?? []) {
+    if (link.entity_id !== PLAN_CONCEPT_ITEM) continue;
+    link.asset_versions = { mime_type: 'image/png', kind: 'image' };
+    link.assets = { display_name: null, filename: 'reel-moodboard.png' };
+  }
+}
+
+/** The chat plan plus a Not OK note on its post item (the item's Plan notes). */
+function seedChatPlanNote(network: HarnessNetwork): void {
+  seedChatPlan(network);
+  (network.world.tables.plan_item_comments ??= []).push({
+    id: '0190d300-0000-7000-8000-00000000d3f1',
+    workspace_id: WORKSPACE_ID,
+    item_id: PLAN_POST_ITEM,
+    author_user_id: ME,
+    body: 'Swap the cover for the morning shot.',
+    visibility: 'everyone',
+    created_at: '2026-10-09T10:30:00Z',
+    edited_at: null,
+    deleted_at: null,
   });
 }
 
@@ -645,6 +669,23 @@ const SCREENS: Screen[] = [
         .locator(`[data-plan-row="${PLAN_CONCEPT_ITEM}"]`)
         .click();
       await waitFor([page.locator('[data-plan-page="item"]')], 'plan item');
+      await waitFor([page.locator('[data-plan-file-name]')], 'plan item files');
+    },
+  },
+  {
+    name: 'plan-item-notes',
+    seed: creator,
+    extra: seedChatPlanNote,
+    url: '/chat',
+    steps: async (page) => {
+      await openChatPlan(page);
+      await page
+        .locator('[data-plan-page="plan"]')
+        .locator(`[data-plan-row="${PLAN_POST_ITEM}"]`)
+        .click();
+      const notes = page.locator('[data-plan-page="item"] [data-plan-notes]');
+      await waitFor([notes], 'plan notes');
+      await notes.scrollIntoViewIfNeeded();
     },
   },
   {

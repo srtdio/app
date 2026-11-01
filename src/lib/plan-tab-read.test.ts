@@ -10,6 +10,7 @@ interface World {
   plans: Row[];
   items: Row[];
   posts: Row[];
+  commentCounts?: Record<string, number>;
 }
 
 /** `plans` plans, one a day back from 25 Oct, each with one post item; `loose` posts on 22 Oct. */
@@ -87,7 +88,7 @@ function fakeClient(w: World) {
             : null,
         reviews: [],
         posts: w.posts.filter((p) => postIds.has(p.id)),
-        comment_counts: {},
+        comment_counts: w.commentCounts ?? {},
         thumbs: {
           posts: Object.fromEntries([...postIds].map((id) => [String(id), `v-${String(id)}`])),
           concepts: {},
@@ -258,5 +259,38 @@ describe('mergePlanTabPages', () => {
     expect(merged.nextCursor).toBeNull();
     expect(merged.thumbs.posts.x).toBe('v-x');
     expect(merged.thumbs.posts['post-0']).toBe('v-post-0');
+  });
+});
+
+describe('the comment counts (D2)', () => {
+  it("keeps the read's comment_counts: on the tab data and on each bundle, with no extra request", async () => {
+    const w = { ...world(2, 0), commentCounts: { 'item-0': 3, 'item-1': 0 } };
+    const fake = fakeClient(w);
+    const res = await readPlanTab(fake.client, INPUT);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(fake.rpc).toHaveBeenCalledTimes(1);
+    expect(fake.from).not.toHaveBeenCalled();
+    expect(res.data.commentCounts).toEqual({ 'item-0': 3, 'item-1': 0 });
+    const byPlan = new Map(res.data.bundles.map((b) => [b.plan.id, b]));
+    expect(byPlan.get('plan-000')?.commentCounts).toEqual({ 'item-0': 3 });
+    // A plan whose items have no comments carries no counts (the calendar shows nothing).
+    expect(byPlan.get('plan-001')?.commentCounts).toBeUndefined();
+  });
+
+  it('Load more merges the counts of both pages', () => {
+    const base = {
+      bundles: [],
+      posts: [],
+      thumbs: { posts: {}, concepts: {} },
+      anyPlan: true,
+      timeZone: 'UTC',
+      nextCursor: null,
+    };
+    const merged = mergePlanTabPages(
+      { ...base, commentCounts: { a: 1 } },
+      { ...base, commentCounts: { b: 2 } },
+    );
+    expect(merged.commentCounts).toEqual({ a: 1, b: 2 });
   });
 });

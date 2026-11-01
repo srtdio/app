@@ -328,7 +328,8 @@ describe('FT56 and FN25 copy', () => {
     const compose = read('PlanComposeScreen.tsx');
     expect(compose).toContain('placeholder={composeTitlePlaceholder(range)}');
     expect(compose).toContain('enterKeyHint="done"');
-    expect(read('PlanItemScreen.tsx')).toContain('enterKeyHint="send"');
+    // The comment box: Send on a fine pointer, a new line (Return) on touch.
+    expect(read('PlanItemScreen.tsx')).toContain("enterKeyHint={coarse ? 'enter' : 'send'}");
   });
 });
 
