@@ -21,7 +21,7 @@
 // (PlanCommentCount, from the read's counts on its bundle) at its right end,
 // and a concept's week card shows its first image. On a coarse pointer (iPad)
 // the month lines and "+N more" are 44px (fewer lines fit, the rest go to
-// "+N more"), and a creator's long-press (500ms, no drift) on a plan item opens
+// "+N more"), and a creator's long-press (the shared LONG_PRESS_MS, no drift) on a plan item opens
 // the day picker (its plan days and No date): a pick moves it the way a drop
 // does. A tap still opens it; approvers see no change. Tokens only.
 

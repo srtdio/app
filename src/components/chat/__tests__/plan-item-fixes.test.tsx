@@ -107,7 +107,7 @@ describe('F4: Move and Remove land only on the item still open', () => {
 describe('F5: typing clears the comment send error', () => {
   it("the comment input's onChange sets the text and clears sendError", () => {
     expect(item()).toMatch(
-      /ref=\{commentRef\}\s*value=\{text\}\s*onChange=\{\(e\) => \{\s*setText\(e\.target\.value\);\s*setSendError\(null\);\s*\}\}/,
+      /ref=\{commentRef\}\s*compact\s*rows=\{1\}\s*value=\{text\}\s*onChange=\{\(e\) => \{\s*setText\(e\.target\.value\);\s*setSendError\(null\);\s*\}\}/,
     );
   });
 });

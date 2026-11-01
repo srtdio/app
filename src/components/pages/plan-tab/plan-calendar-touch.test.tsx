@@ -1,20 +1,15 @@
 // @vitest-environment jsdom
 // The Plan tab calendar on a coarse pointer (U6, U7): the month cell holds
 // 44px lines (fewer fit; a fine pointer is exactly monthCellCap), and a touch
-// long-press (500ms, no drift) fires once and swallows the click after it.
+// long-press (the shared LONG_PRESS_MS, no drift) fires once and swallows the click after it.
 
 import { act } from 'react';
 import type { ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { monthCellCap } from '@/lib/plan-tab';
-import {
-  COARSE_LINE_PX,
-  LONG_PRESS_MS,
-  monthCellCapFor,
-  useLongPress,
-  withinDrift,
-} from './plan-calendar-touch';
+import { LONG_PRESS_MS } from '@/components/ui/useLongPress';
+import { COARSE_LINE_PX, monthCellCapFor, useLongPress, withinDrift } from './plan-calendar-touch';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -91,7 +86,7 @@ describe('useLongPress (U7)', () => {
     vi.useRealTimers();
   });
 
-  it('a 500ms touch hold fires once; the click after it does not open', async () => {
+  it('a LONG_PRESS_MS touch hold fires once; the click after it does not open', async () => {
     const el = await mount(true);
     act(() => {
       el.dispatchEvent(pointer('pointerdown'));
