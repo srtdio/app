@@ -241,7 +241,7 @@ describe('edit mode header and copy (items 3, 4, 5)', () => {
     expect(src).toContain('titleSlot: editHeaderSlot');
     expect(src).toContain('{saving ? SAVING_LABEL : SAVE_CHANGES_LABEL}');
     expect(src).toContain(
-      'planSave(supabase, { p_plan_id: planId, p_ops: ops, p_trace_id: traceId })',
+      'planSave(supabase, { p_plan_id: planId, p_ops: rebuilt, p_trace_id: traceId })',
     );
     expect(src.match(/planSave\(supabase/g)).toHaveLength(1);
     expect(src).toContain('toast.show({ title: PLAN_SAVED_TOAST })');
@@ -301,7 +301,7 @@ describe('the footer (item 6)', () => {
       "Couldn't post the card. Try again. The plan is open for approvers.",
     );
     // Retry only reposts.
-    expect(src).toMatch(/if \(sendError !== null\) \{[\s\S]*?void sendHere\(true\);/);
+    expect(src).toMatch(/if \(sendError !== null\) \{[\s\S]*?void sendHere\(sendAfterOpenRef\.current\);/);
     expect(src).not.toContain('data-plan-go-card');
     expect(src).not.toContain('GO_TO_CARD_LABEL');
   });
