@@ -130,7 +130,7 @@ vi.mock('@/lib/chat/plans', async (importOriginal) => ({
 }));
 
 import { PlanScreen } from '@/components/chat/PlanScreen';
-import { ToastProvider } from '@/components/ui/toast';
+import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { DRAFT_PROBLEM_COPY, PLAN_SAVE_ERROR_COPY, SEND_FAILED } from '@/components/chat/plan-card';
 import { PLAN_TOO_LONG_COPY, dispatchPlanChanged } from '@/lib/chat/plans';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
@@ -168,6 +168,7 @@ async function mount(opts: { chat?: ChatProp } = {}) {
             onClose={onClose}
             {...(opts.chat !== undefined ? { chat: opts.chat } : {})}
           />
+          <ToastViewport />
         </ToastProvider>
       </MemoryRouter>,
     );
