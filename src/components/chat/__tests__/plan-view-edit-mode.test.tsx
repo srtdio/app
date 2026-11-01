@@ -301,7 +301,9 @@ describe('the footer (item 6)', () => {
       "Couldn't post the card. Try again. The plan is open for approvers.",
     );
     // Retry only reposts.
-    expect(src).toMatch(/if \(sendError !== null\) \{[\s\S]*?void sendHere\(sendAfterOpenRef\.current\);/);
+    expect(src).toMatch(
+      /if \(sendError !== null\) \{[\s\S]*?void sendHere\(sendAfterOpenRef\.current\);/,
+    );
     expect(src).not.toContain('data-plan-go-card');
     expect(src).not.toContain('GO_TO_CARD_LABEL');
   });
