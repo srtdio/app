@@ -72,8 +72,8 @@ describe('Reply privately bubble width', () => {
       );
       const box = document.body.firstElementChild as HTMLElement;
       expect(tokens(box.className)).toEqual(expect.arrayContaining(['min-w-0', 'overflow-hidden']));
-      const header = [...document.querySelectorAll('span')].find((s) =>
-        (s.textContent ?? '').startsWith('Priya Shah'),
+      const header = [...document.querySelectorAll('span')].find(
+        (s) => s.children.length === 0 && (s.textContent ?? '').startsWith('Priya Shah'),
       );
       expect(header !== undefined && tokens(header.className)).toEqual(
         expect.arrayContaining(['line-clamp-1']),
