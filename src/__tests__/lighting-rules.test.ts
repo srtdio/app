@@ -192,6 +192,49 @@ describe('lighting rules', () => {
     }
   });
 
+  it('every token has at most one soft (blurred) outer shadow (speed)', () => {
+    // A blurred layer is the costly paint; dozens of cards double it. Insets
+    // and 0 0 0 Npx rings (no blur) do not count.
+    const block = (sel: string): string => {
+      const start = CSS.indexOf(`${sel} {`);
+      return CSS.slice(start, CSS.indexOf('\n}', start));
+    };
+    const layers = (v: string): string[] => {
+      const out: string[] = [];
+      let depth = 0;
+      let cur = '';
+      for (const ch of v) {
+        if (ch === '(') depth += 1;
+        if (ch === ')') depth -= 1;
+        if (ch === ',' && depth === 0) {
+          out.push(cur.trim());
+          cur = '';
+        } else cur += ch;
+      }
+      out.push(cur.trim());
+      return out;
+    };
+    const blurred = (layer: string): boolean => {
+      if (layer.startsWith('inset') || layer.startsWith('var(')) return false;
+      const parts = layer
+        .replace(/rgba?\([^)]*\)|#\w+|var\([^)]*\)/g, '')
+        .trim()
+        .split(/\s+/)
+        .map((p) => Number.parseFloat(p));
+      return parts.length >= 3 && (parts[2] ?? 0) > 0;
+    };
+    const offenders: string[] = [];
+    for (const sel of [':root', '\n.dark']) {
+      for (const m of block(sel).matchAll(/\n {2}(--lit-[\w-]+):([^;]+);/g)) {
+        const value = (m[2] ?? '').replace(/\s+/g, ' ').trim();
+        if (/gradient|^#|^rgba|^var\(/.test(value)) continue;
+        const soft = layers(value).filter(blurred).length;
+        if (soft > 1) offenders.push(`${sel.trim()} ${m[1] ?? ''}: ${soft}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('the shared primitives carry their lit class', () => {
     const button = src('ui/Button.tsx');
     for (const c of ['lit-btn-primary', 'lit-btn-secondary', 'lit-btn-success', 'lit-btn-danger']) {
