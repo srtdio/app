@@ -454,17 +454,19 @@ describe('error view (F4)', () => {
 });
 
 describe('tokens', () => {
-  it('the camera badge ring is the page canvas token; no hex or dark: literals', () => {
+  it('the camera badge cut-out is the page canvas token and the badge is lit; no hex or dark: literals', () => {
     const badge = renderToStaticMarkup(<CameraBadge disabled={false} onPress={() => {}} />);
-    expect(badge).toContain('ring-bg');
-    expect(badge).not.toContain('ring-panel');
+    expect(badge).toContain('outline-bg');
+    expect(badge).not.toContain('outline-panel');
+    // A ring would override the lit box-shadow; the cut-out is an outline.
+    expect(badge).not.toMatch(/\bring-(2|bg)\b/);
     expect(badge).toContain('h-11');
     expect(badge).toContain('w-11');
     expect(badge).toContain('rounded-full');
-    // A 32px badge with a 2px canvas ring, overlapping the avatar edge by 4px.
+    // A 32px badge with a 2px canvas outline, overlapping the avatar edge by 4px.
     expect(badge).toContain('absolute -bottom-1 -right-1');
     expect(badge).toContain(
-      'flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg ring-2 ring-bg',
+      'flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg outline outline-2 outline-bg lit-btn-primary',
     );
     expect(badge).toContain('width="16"');
     const actions = renderToStaticMarkup(

@@ -85,7 +85,7 @@ export function CockpitDot() {
         if (open) cockpitPoller().close();
         else cockpitPoller().open();
       }}
-      className={cn('shrink-0', open && 'bg-accent-soft')}
+      className={cn('shrink-0', open && 'bg-accent-soft lit-active')}
     >
       <StatusDot level={level} />
     </IconButton>
@@ -122,7 +122,7 @@ function Tiles({ state, onPick }: { state: CockpitState; onPick: (tab: CockpitTa
             onClick={() => onPick(tab)}
             className={cn(
               'flex min-w-0 flex-col gap-1 border px-3 py-2.5',
-              selected ? 'border-accent-line bg-accent-soft' : 'border-border',
+              selected ? 'border-accent-line lit-chip-selected' : 'lit-card',
             )}
           >
             <span className="flex w-full items-center gap-1.5">

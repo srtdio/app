@@ -64,7 +64,7 @@ export function NeedsYouTab({
   if (alerts === null) return <Pending />;
   if (alerts.length === 0) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-border px-3 py-3">
+      <div className="flex items-center gap-3 rounded-xl border bg-panel lit-card px-3 py-3">
         <span className="text-good">
           <IconCheckCircle size={ICON_SIZE.control} />
         </span>

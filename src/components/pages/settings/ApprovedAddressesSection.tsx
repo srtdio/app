@@ -89,7 +89,7 @@ export function ApprovedAddressesSection({
   return (
     <section
       aria-labelledby="approved-addresses-title"
-      className="flex flex-col gap-3 rounded-xl border border-border bg-panel p-4"
+      className="flex flex-col gap-3 rounded-xl border bg-panel lit-card p-4"
     >
       <div>
         <h3

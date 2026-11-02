@@ -700,8 +700,8 @@ export function OnboardingFlow({
               className={cn(
                 'flex flex-col items-start justify-center gap-0.5 border px-3.5 py-2.5',
                 side === tile.side
-                  ? 'border-accent bg-accent-soft ring-1 ring-accent'
-                  : 'border-border bg-panel-2',
+                  ? 'border-accent lit-chip-selected'
+                  : 'bg-panel lit-chip',
               )}
             >
               <span className="text-base font-medium text-fg">{tile.title}</span>
@@ -975,7 +975,7 @@ export function OnboardingFlow({
             <StepLabel.Provider
               value={progressAt >= 0 ? setupCounter(progressAt + 1, progress.length) : null}
             >
-              <div className="flex flex-col gap-5 rounded-2xl border border-border bg-panel p-6 shadow-2xl">
+              <div className="flex flex-col gap-5 rounded-2xl border bg-panel p-6 lit-raised">
                 {body}
                 {photoNotice !== null && (step === 'brand' || readyForShell) ? (
                   <p role="status" className="text-base text-fg-2 [text-wrap:pretty]">
@@ -1155,7 +1155,7 @@ function WelcomeBody({
       <p className="min-h-[20px] text-base text-fg-2 [text-wrap:balance]" aria-live="polite">
         {subline}
       </p>
-      <p className="rounded-lg border border-border bg-panel px-4 py-3 text-base text-fg">
+      <p className="rounded-lg border bg-panel lit-card px-4 py-3 text-base text-fg">
         {joiningAs}
       </p>
     </div>
@@ -1183,9 +1183,9 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
         {WAITING_LINES.map((line, i) => (
           <li
             key={line}
-            className="flex items-center gap-3 rounded-lg border border-border bg-panel p-3.5"
+            className="flex items-center gap-3 rounded-lg border bg-panel lit-card p-3.5"
           >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft font-mono text-base font-medium text-accent">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft lit-pill font-mono text-base font-medium text-accent">
               {i + 1}
             </span>
             <span className="text-base text-fg [text-wrap:pretty]">{line}</span>
@@ -1203,7 +1203,7 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
 
 function PreviewCard({ label, children }: { label: string; children: ReactNode }): ReactElement {
   return (
-    <div className="w-full max-w-[340px] rounded-xl border border-border bg-panel p-3.5">
+    <div className="w-full max-w-[340px] rounded-xl border bg-panel lit-card p-3.5">
       <p className="mb-2 text-sm text-fg-3">{label}</p>
       {children}
     </div>

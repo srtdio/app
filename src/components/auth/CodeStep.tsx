@@ -180,7 +180,7 @@ export function CodeStep({
               key={i}
               data-code-box=""
               className={cn(
-                'flex h-14 items-center justify-center rounded-lg border bg-panel-2 font-mono text-2xl font-medium tabular-nums text-fg transition-colors duration-fast ease-enter',
+                'flex h-14 items-center justify-center rounded-lg border bg-panel-2 lit-well font-mono text-2xl font-medium tabular-nums text-fg transition-colors duration-fast ease-enter',
                 invalid ? 'border-bad' : i === active ? 'border-accent' : 'border-border',
               )}
             >

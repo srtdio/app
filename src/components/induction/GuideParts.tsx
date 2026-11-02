@@ -17,14 +17,13 @@ const GUIDE_Z = 'z-[55]';
 /**
  * The guide tokens (src/index.css): amber fill and ink, the deep fill, the light
  * tint, two triplets. They have no Tailwind colour names, so they read their CSS
- * variable directly; LABEL_GLOW is the label pill's own guide shadow token.
+ * variable directly. The label pill floats with lit-float (one light above).
  */
 const AMBER_BG = 'bg-[var(--guide)]';
 const AMBER_INK = 'text-[var(--guide-ink)]';
 const AMBER_DEEP_BG = 'bg-[var(--guide-deep)]';
 const AMBER_LIGHT_BG = 'bg-[var(--guide-light)]';
 const LABEL_EDGE = 'border border-[rgb(var(--guide-ink-rgb)/0.12)]';
-const LABEL_GLOW = 'shadow-[0_2px_8px_rgb(var(--guide-rgb)/0.35)]';
 
 /**
  * Keyframes for the hand, its ripple and the nudge; reduced motion holds them
@@ -154,7 +153,7 @@ export const GuideLabel = forwardRef<
       key={nudge}
       data-induction-label=""
       data-guide-nudge={nudge > 0 ? 'on' : 'off'}
-      className={`pointer-events-none fixed ${GUIDE_Z} max-w-[min(280px,calc(100vw-32px))] rounded-full px-3 py-1.5 text-base font-semibold leading-tight ${LABEL_EDGE} ${LABEL_GLOW} ${AMBER_BG} ${AMBER_INK}`}
+      className={`pointer-events-none fixed ${GUIDE_Z} max-w-[min(280px,calc(100vw-32px))] rounded-full px-3 py-1.5 text-base font-semibold leading-tight ${LABEL_EDGE} lit-float ${AMBER_BG} ${AMBER_INK}`}
       style={{ top: at.top, left: at.left }}
     >
       {text}
@@ -219,7 +218,7 @@ export const GuideBar = forwardRef<
       data-induction-bar={dock.side}
       aria-label={copy.aria.bar}
       aria-live="polite"
-      className={`fixed ${GUIDE_Z} ${placed.className} overflow-hidden rounded-xl border border-border-strong bg-panel text-fg shadow-2xl`}
+      className={`fixed ${GUIDE_Z} ${placed.className} overflow-hidden rounded-xl border bg-panel text-fg lit-overlay`}
       style={placed.style}
     >
       <div
@@ -228,11 +227,11 @@ export const GuideBar = forwardRef<
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(progress * 100)}
-        className={`h-1 w-full ${AMBER_LIGHT_BG}`}
+        className={`h-1 w-full ${AMBER_LIGHT_BG} lit-well`}
       >
         <div
           data-induction-progress=""
-          className={`h-full ${AMBER_DEEP_BG}`}
+          className={`h-full ${AMBER_DEEP_BG} lit-fill`}
           style={{ width: `${Math.round(progress * 1000) / 10}%` }}
         />
       </div>
@@ -348,16 +347,16 @@ export function GuideCard({
   dock: DockAt;
 }): ReactElement {
   const placed = dockStyle(dock);
-  // The intro is the step card's role (sheet/dialog: 16, shadow-2xl); the
+  // The intro is the step card's role (sheet/dialog: 16, lit-overlay); the
   // closing and clear cards keep the popover radius.
-  const shape = kind === 'intro' ? 'rounded-2xl border-border' : 'rounded-xl border-border-strong';
+  const shape = kind === 'intro' ? 'rounded-2xl' : 'rounded-xl';
   return (
     <section
       {...{ [CHROME_ATTR]: '' }}
       data-induction-card={kind}
       aria-label={copy.title}
       aria-live="polite"
-      className={`fixed ${GUIDE_Z} ${placed.className} ${shape} border bg-panel p-4 text-fg shadow-2xl`}
+      className={`fixed ${GUIDE_Z} ${placed.className} ${shape} border bg-panel p-4 text-fg lit-overlay`}
       style={placed.style}
     >
       {copy.eyebrow !== '' ? <p className="font-mono text-sm text-fg-3">{copy.eyebrow}</p> : null}
@@ -378,7 +377,7 @@ export function GuideCard({
           {copy.pills.map((pill) => (
             <span
               key={pill}
-              className="rounded-full bg-panel-2 px-2.5 py-1 text-sm font-semibold text-fg-2"
+              className="rounded-full bg-panel-2 px-2.5 py-1 text-sm font-semibold text-fg-2 lit-pill"
             >
               {pill}
             </span>

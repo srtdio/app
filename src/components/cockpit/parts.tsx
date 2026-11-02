@@ -59,7 +59,7 @@ export function Stats({
       {items.map((item) => (
         <div
           key={item.label}
-          className="flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-panel px-3 py-2.5"
+          className="flex min-w-0 flex-col gap-1 rounded-xl border bg-panel lit-card px-3 py-2.5"
         >
           <dt className="truncate text-sm text-fg-2">{item.label}</dt>
           <dd className="font-mono text-2xl font-semibold tabular-nums text-fg">

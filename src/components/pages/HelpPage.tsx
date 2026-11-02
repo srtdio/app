@@ -159,7 +159,7 @@ export function HelpPage() {
     <>
       <PageHead title="Help" />
       <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
-        <section className="rounded-2xl border border-border bg-panel-2 p-5 md:p-8">
+        <section className="rounded-2xl border bg-panel-2 lit-card-muted p-5 md:p-8">
           <p className="text-base font-medium text-accent">Sorted Help Center</p>
           <h2 className="mt-2 text-lg font-semibold">Find your way through the workflow</h2>
           <p className="mt-2 max-w-2xl text-base leading-6 text-fg-2">
@@ -182,7 +182,7 @@ export function HelpPage() {
               <NavLink
                 key={link.to}
                 to={link.to}
-                className="inline-flex min-h-[44px] items-center rounded-full border border-border bg-panel px-4 text-base font-medium text-fg-2 transition-colors hover:bg-panel-3 hover:text-fg"
+                className="inline-flex min-h-[44px] items-center rounded-full border bg-panel lit-chip px-4 text-base font-medium text-fg transition-colors hover:bg-panel-3"
               >
                 {link.label}
               </NavLink>
@@ -224,7 +224,7 @@ export function HelpPage() {
               {articles.map((article) => (
                 <details
                   key={article.id}
-                  className="group rounded-xl border border-border bg-panel px-4"
+                  className="group rounded-xl border bg-panel lit-card px-4"
                 >
                   <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-4 text-left text-base font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                     <span>{article.title}</span>

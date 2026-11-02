@@ -9,7 +9,7 @@ type PageState = 'loading' | 'subscribed' | 'unsubscribed' | 'invalid';
 
 function Card({ children }: { children: ReactNode }) {
   return (
-    <div className="w-full max-w-[420px] rounded-2xl border border-border bg-panel p-6">
+    <div className="w-full max-w-[420px] rounded-2xl border bg-panel p-6 lit-raised">
       {children}
     </div>
   );

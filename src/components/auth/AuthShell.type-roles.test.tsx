@@ -67,13 +67,15 @@ describe('AuthShell type roles', () => {
     expect(classesOf('Welcome to Sorted.')).toContain('[text-wrap:balance]');
   });
 
-  it('card uses the shared card shadow token and the 16px radius', async () => {
+  it('card is lit raised (no shadow utility) with the 16px radius', async () => {
     await render(
       <AuthShell title="Sign up" subtitle="s" footer="f">
         <p>form</p>
       </AuthShell>,
     );
-    expect(card().className).toContain('shadow-[var(--shadow-card)]');
+    expect(card().className).toContain('lit-raised');
+    expect(card().className).not.toMatch(/(^|\s)shadow-/);
+    expect(card().className).not.toContain('border-border');
     expect(card().className).toContain('rounded-2xl');
     expect(card().className).not.toContain('rgba(');
   });
