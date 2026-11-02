@@ -242,7 +242,9 @@ test('4: Notifications -> chat mention card (marked read) -> back = Notification
   expectClean(network);
 });
 
-test('5: chat A -> @mention tap -> DM B; back = chat A', async ({ page }) => {
+test('5: chat A -> @mention tap -> person card Message -> DM B; back = chat A', async ({
+  page,
+}) => {
   const network = await installHarnessNetwork(page);
   // The group gains the DM peer and a message mentioning them (this test's world only).
   const tables = network.world.tables;
@@ -292,6 +294,8 @@ test('5: chat A -> @mention tap -> DM B; back = chat A', async ({ page }) => {
   const mention = page.locator(`button[data-mention="${PEER}"]`).first();
   await mention.scrollIntoViewIfNeeded();
   await mention.click();
+  // The mention opens the person card; its Message button opens the DM.
+  await page.getByRole('button', { name: 'Message', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(encodeURIComponent(DM_CHANNEL)));
   await expect(header(page, PEER_NAME)).toBeVisible();
   await page.goBack();
