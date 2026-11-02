@@ -86,7 +86,7 @@ describe('Pipeline controls buttons', () => {
       expect(classOf(tag)).toContain('rounded-lg');
     }
     const active = tags.find((tag) => tag.includes('aria-current="true"'));
-    expect(classOf(active ?? '')).toContain('bg-accent-soft');
+    expect(classOf(active ?? '')).toContain('lit-chip-selected');
     expect(html).toContain('<span class="tabular-nums">3</span>');
     expect(html).toContain('<span class="tabular-nums">1</span>');
     expect(html).not.toContain('<span class="tabular-nums">0</span>');

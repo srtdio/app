@@ -197,7 +197,7 @@ function MenuShell(props: {
             <div className="fixed inset-0 z-40" aria-hidden="true" onClick={props.onClose} />
             <div
               ref={panelRef}
-              className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl"
+              className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border bg-panel p-1.5 lit-overlay"
             >
               {props.body}
             </div>
@@ -285,7 +285,7 @@ export function PipelineDateControl({
       onClick={() => setOpen((prev) => !prev)}
       className={cn(
         TRIGGER,
-        active ? 'border-accent-line bg-accent-soft text-accent' : 'text-fg-2',
+        active ? 'border-accent-line text-accent lit-chip-selected' : 'text-fg-2',
       )}
     >
       <IconCalendar size={ICON_SIZE.inline} />

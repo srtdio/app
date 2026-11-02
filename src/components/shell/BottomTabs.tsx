@@ -31,12 +31,15 @@ export function chatTabLabel(unread: number): string {
 
 /**
  * A pill tab: inactive is the icon alone in a 44x44 target; active is icon and
- * label in an accent-soft capsule. The switch is instant (no width animation).
+ * label in an accent-soft capsule (--lit-tab-active-bg: accent 22% in dark).
+ * The switch is instant (no width animation).
  */
 function tabClass(active: boolean): string {
   return cn(
     'relative flex h-11 min-w-[44px] shrink-0 items-center justify-center rounded-full',
-    active ? 'gap-1.5 bg-accent-soft pl-3 pr-2.5 text-accent' : 'w-11 text-fg-2',
+    active
+      ? 'gap-1.5 bg-[var(--lit-tab-active-bg)] pl-3 pr-2.5 text-accent lit-active'
+      : 'w-11 text-fg',
   );
 }
 
@@ -73,7 +76,7 @@ export function BottomTabs() {
       >
         <div
           data-tab-pill=""
-          className="flex h-[60px] min-w-0 flex-1 items-center justify-between rounded-full border border-border bg-panel p-1 shadow-[var(--shadow-card)]"
+          className="flex h-[60px] min-w-0 flex-1 items-center justify-between rounded-full border bg-panel p-1 lit-raised"
         >
           {PILL_NAV.map((item) => (
             <NavLink
@@ -106,7 +109,7 @@ export function BottomTabs() {
               {unreadCount > 0 ? (
                 <CountBadge
                   count={unreadCount}
-                  className="absolute -right-2 -top-1.5 border-2 border-panel"
+                  className="absolute -right-2 -top-1.5 border-2 border-[var(--lit-surface-top)]"
                 />
               ) : null}
             </span>
@@ -124,7 +127,7 @@ export function BottomTabs() {
             // the chat rows would show through the circle on /chat.
             className={({ isActive }) =>
               cn(
-                'relative flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border border-border bg-panel shadow-[var(--shadow-card)]',
+                'relative flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border bg-panel lit-raised',
                 isActive ? 'text-accent' : 'text-fg',
               )
             }
@@ -135,7 +138,7 @@ export function BottomTabs() {
                   <span
                     aria-hidden
                     data-chat-tab-tint=""
-                    className="pointer-events-none absolute inset-0 rounded-full bg-accent-soft"
+                    className="pointer-events-none absolute inset-0 rounded-full bg-accent-soft lit-active"
                   />
                 ) : null}
                 <span className="relative">
@@ -144,7 +147,7 @@ export function BottomTabs() {
                 {total > 0 ? (
                   <CountBadge
                     count={total}
-                    className="absolute right-0 top-0 border-2 border-panel"
+                    className="absolute right-0 top-0 border-2 border-[var(--lit-surface-top)]"
                   />
                 ) : null}
               </>

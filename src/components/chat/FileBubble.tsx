@@ -211,7 +211,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
       onClick={props.onOpen}
       aria-label={`Open ${props.name}`}
       className={cn(
-        'relative flex flex-col overflow-hidden border border-border bg-panel',
+        'relative flex flex-col overflow-hidden border bg-panel lit-card',
         'select-none [-webkit-touch-callout:none]',
       )}
     >
@@ -237,7 +237,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
             />
           ) : null}
           {kind === 'video' && thumbUrl !== null ? (
-            <span className="absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-overlay text-overlay-fg">
+            <span className="absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-overlay text-overlay-fg lit-media">
               <IconPlay size={ICON_SIZE.nav} />
             </span>
           ) : null}
@@ -276,10 +276,10 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
         <span
           data-file-progress=""
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-[3px] bg-panel-3"
+          className="absolute inset-x-0 bottom-0 h-[3px] bg-panel-3 lit-well"
         >
           <span
-            className="block h-full origin-left bg-accent transition-transform duration-base"
+            className="block h-full origin-left bg-accent lit-fill transition-transform duration-base"
             style={{ transform: `scaleX(${uploading ? progress : 0})` }}
           />
         </span>

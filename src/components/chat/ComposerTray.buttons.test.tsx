@@ -24,7 +24,7 @@ describe('composer buttons', () => {
     expect(plus).toBeDefined();
     expectOnSystem(plus ?? '');
     expect(plus).toContain('rounded-full w-11 px-0');
-    expect(plus).toContain('border-border');
+    expect(plus).toContain('lit-btn-secondary');
     expect(plus).toContain('aria-label="Add attachment"');
   });
 
@@ -70,6 +70,10 @@ describe('composer buttons', () => {
     expect(src).toMatch(/variant="primary"\s+shape="round"\s+aria-label="Schedule options"/);
     expect(src).toMatch(/variant="primary"\s+shape=\{scheduleBusy \? 'default' : 'round'\}/);
     expect(src).toContain("showChevron && 'rounded-r-none'");
+    // Split send/schedule: one lit primary on the shared wrapper.
+    expect(src).toMatch(/showChevron &&\s+cn\(\s*'lit-btn-primary'/);
+    // The composer dock is lit, its neutral top border colour dropped.
+    expect(src).toContain('border-t bg-panel px-3 py-2.5 lit-dock');
     expect(src).not.toMatch(/size="lg"/);
   });
 });

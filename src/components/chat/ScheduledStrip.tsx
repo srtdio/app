@@ -137,7 +137,7 @@ export function ScheduledAttachments(props: {
           data-scheduled-file=""
           className={cn(
             'flex min-w-0 items-center gap-1.5 text-fg-2',
-            !strip && 'max-w-[85%] rounded-lg border border-border bg-panel px-2 py-1.5',
+            !strip && 'max-w-[85%] rounded-lg border bg-panel px-2 py-1.5 lit-card',
           )}
         >
           <IconFile size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
@@ -175,7 +175,7 @@ export function ScheduledStrip(props: {
       onClick={props.onOpen}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        'flex h-12 shrink-0 items-center gap-3 border-t border-border bg-accent-soft px-4 hover:bg-accent-soft focus-visible:ring-inset',
+        'flex h-12 shrink-0 items-center gap-3 border-t bg-accent-soft px-4 lit-dock hover:bg-accent-soft focus-visible:ring-inset',
         NO_TOUCH_SELECT,
       )}
     >
@@ -204,7 +204,7 @@ export function ScheduleModeStrip(props: { label: string; onStop: () => void }):
       <div
         data-schedule-mode=""
         className={cn(
-          'flex min-w-0 items-center gap-2 bg-accent-soft pl-3 transition-transform duration-slow ease-enter motion-reduce:transition-none',
+          'flex min-w-0 items-center gap-2 bg-accent-soft pl-3 lit-tint transition-transform duration-slow ease-enter motion-reduce:transition-none',
           entered ? 'translate-y-0' : 'translate-y-full',
           NO_TOUCH_SELECT,
         )}

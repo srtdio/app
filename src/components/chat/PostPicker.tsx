@@ -757,7 +757,7 @@ export function InlinePickerPanel(props: {
       data-post-picker-inline=""
       role="region"
       aria-label="Bring a post into the conversation"
-      className="flex max-h-[45vh] flex-col overflow-y-auto rounded-lg border border-border bg-panel [&>ul]:mx-0 [&>ul]:max-h-none [&>ul]:border-t-0"
+      className="flex max-h-[45vh] flex-col overflow-y-auto rounded-lg border bg-panel lit-overlay [&>ul]:mx-0 [&>ul]:max-h-none [&>ul]:border-t-0"
     >
       {props.children}
     </div>

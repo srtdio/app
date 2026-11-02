@@ -323,7 +323,7 @@ function PendingEditFields({
             setEmail(event.target.value);
             setError(null);
           }}
-          className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 px-3 text-input text-fg outline-none placeholder:text-fg-3 focus:border-accent-line focus:ring-2 focus:ring-accent-soft md:text-base"
+          className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 lit-well px-3 text-input text-fg outline-none placeholder:text-fg-3 focus:border-accent-line focus:ring-2 focus:ring-accent-soft md:text-base"
         />
         <RolePicker
           label={`Role for ${trimmed}`}
@@ -373,11 +373,8 @@ function Group({
   children: ReactNode;
 }) {
   return (
-    <section
-      aria-label={title}
-      className="overflow-hidden rounded-xl border border-border bg-panel"
-    >
-      <header className="border-b border-border px-4 py-3">
+    <section aria-label={title} className="overflow-hidden rounded-xl border bg-panel lit-card">
+      <header className="border-b lit-header px-4 py-3">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{title}</h3>
           <span className="text-sm text-fg-3">{count}</span>

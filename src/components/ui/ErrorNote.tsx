@@ -13,7 +13,7 @@ export function ErrorNote({ children, className }: ErrorNoteProps) {
     <div
       role="alert"
       className={cn(
-        'rounded-lg border border-bad bg-bad-soft px-3 py-2 text-base text-bad',
+        'lit-tint rounded-lg border border-bad bg-bad-soft px-3 py-2 text-base text-bad',
         className,
       )}
     >

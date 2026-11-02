@@ -105,7 +105,7 @@ export function SortMenu<T extends string>({
             <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
             <div
               ref={panelRef}
-              className="absolute right-0 top-full z-50 mt-1.5 w-44 rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl"
+              className="absolute right-0 top-full z-50 mt-1.5 w-44 rounded-xl border bg-panel p-1.5 lit-overlay"
             >
               {list}
             </div>

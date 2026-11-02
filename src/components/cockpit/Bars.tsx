@@ -62,9 +62,9 @@ export function ShareBars({ rows }: { rows: { key: string; name: string; value: 
               {shareText(r.value, total)}
             </span>
           </div>
-          <div className="h-1.5 w-full bg-panel-2">
+          <div className="h-1.5 w-full bg-panel-2 lit-well">
             <div
-              className="h-full bg-accent"
+              className="h-full bg-accent lit-fill"
               style={{ width: `${((r.value / max) * 100).toString()}%` }}
             />
           </div>

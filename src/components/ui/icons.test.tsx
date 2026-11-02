@@ -146,13 +146,13 @@ describe('icon set', () => {
         expect(svg.getAttribute('class')).toContain('text-accent');
       });
 
-      it(SOLID.has(name) ? 'is solid, no stroke width' : 'strokes at 1.7', () => {
+      it(SOLID.has(name) ? 'is solid, no stroke width' : 'strokes at 1.85', () => {
         const svg = svgOf(Icon);
         if (SOLID.has(name)) {
           expect(svg.getAttribute('stroke-width')).toBeNull();
           expect(svg.getAttribute('fill')).toBe('currentColor');
         } else {
-          expect(svg.getAttribute('stroke-width')).toBe('1.7');
+          expect(svg.getAttribute('stroke-width')).toBe('1.85');
         }
       });
 
@@ -170,7 +170,7 @@ describe('non-icon glyphs drawn in the icon file', () => {
     const todo = renderToStaticMarkup(<Icons.TaskBoxGlyph done={false} size={ICON_SIZE.nav} />);
     expect(todo).toContain('width="18"');
     expect(todo).toContain('viewBox="0 0 16 16"');
-    expect(todo).toContain('stroke-width="1.7"');
+    expect(todo).toContain('stroke-width="1.85"');
     expect(todo).toContain('class="text-fg-3"');
     expect(todo).toContain('rx="3.6" stroke="currentColor"');
     const done = renderToStaticMarkup(<Icons.TaskBoxGlyph done size={ICON_SIZE.inline} />);

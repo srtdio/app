@@ -261,7 +261,7 @@ const TOOLBAR_BUTTON =
 // Prev/next arrows: a translucent chip keeps them legible over any photo. 44x44.
 const ARROW_BUTTON =
   'absolute top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center ' +
-  'rounded-full bg-overlay-surface text-overlay-fg hover:bg-overlay-line ' +
+  'rounded-full bg-overlay-surface lit-media text-overlay-fg hover:bg-overlay-line ' +
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
 
 // The Try again control on the failure state: auto width, same token palette.

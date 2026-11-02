@@ -37,7 +37,7 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
   return (
     <div
       data-mention-picker=""
-      className="flex max-h-[45vh] flex-col overflow-y-auto rounded-lg border border-border bg-panel"
+      className="flex max-h-[45vh] flex-col overflow-y-auto rounded-lg border bg-panel lit-overlay"
     >
       <ul role="listbox" aria-label={MENTION_PICKER_LABEL} className="flex flex-col">
         {props.members.map((member, index) => (

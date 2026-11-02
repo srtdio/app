@@ -104,7 +104,7 @@ export function ThreadViewFrame(props: {
       <div
         data-thread-view-header=""
         className={cn(
-          'grid h-14 shrink-0 grid-cols-[88px_minmax(0,1fr)_88px] items-center border-b border-border bg-panel',
+          'grid h-14 shrink-0 grid-cols-[88px_minmax(0,1fr)_88px] items-center border-b bg-panel lit-header',
           NO_TOUCH_SELECT,
         )}
         {...(coarse

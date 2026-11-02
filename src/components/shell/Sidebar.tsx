@@ -22,7 +22,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
   return (
-    <aside className="hidden md:flex md:flex-col w-[244px] shrink-0 border-r border-border bg-panel">
+    <aside className="hidden md:flex md:flex-col w-[244px] shrink-0 border-r bg-panel lit-side">
       <div className="p-2.5">
         <PressableRow
           type="button"
@@ -57,7 +57,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
               cn(
                 'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-base font-medium transition-colors',
                 isActive
-                  ? 'bg-accent-soft text-accent'
+                  ? 'bg-accent-soft text-accent lit-active'
                   : 'text-fg-2 hover:bg-panel-2 hover:text-fg',
               )
             }

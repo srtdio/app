@@ -94,14 +94,20 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Type: Tailwind fontSize scale only (xs 11, sm 12, md 13, base 14, lg 15, xl 17, 2xl 20, 3xl 28). No text-[Npx]. Inputs render 16px on phone (iOS zoom). Weights 400/500/600 only.
 - Roles: page title 3xl/600; screen header lg/600; section label sm/600 uppercase tracking-[0.06em] fg-2; card title base/500; body base fg; meta sm fg-3, meta only, never copy or controls.
 - Buttons: only Button / IconButton / Chip from src/components/ui. 44 tall. Variants primary secondary ghost link success danger; shape round for the composer.
-- Icons: only src/components/ui/icons.tsx, stroke 1.7, sizes 16 beside text, 18 sidebar, 20 alone or tab bar, 22 tray/menu. One icon per concept. No inline <svg> outside ui/.
+- Icons: only src/components/ui/icons.tsx, stroke 1.85, sizes 16 beside text, 18 sidebar, 20 alone or tab bar, 22 tray/menu. One icon per concept. No inline <svg> outside ui/.
 - Colour: token classes only; /opacity allowed. No hex, no dark:. text-accent is for text, bg-accent for fills. good/warn/bad for state; stage-\* only on stage chips and dots. No text-white or bg-white; on solid fills use text-accent-fg.
 - Contrast: every text token passes 4.5:1 on bg and panel in both themes.
 - Radius roles: badges (ui/Tag) 6, controls and fields 8, cards/popovers/menus 12, sheets/dialogs 16, pills full. rounded-sm only for highlights, dots and grabbers. Chat bubble radii live only in chat/chat-type.ts.
 - Focus: Button, IconButton and Chip carry the one focus ring (accent, 2px, offset 2). Never add a second ring on a call site except for overlay or danger colours.
 - Text fields: ui/Input or ui/Textarea only; date and time fields add font-mono. Composer bars and borderless inline edits are the only exceptions (allowlist in ui-rules.test.ts).
 - Inline errors: ui/ErrorNote only. Small labels (stage, status, role, draft): ui/Tag only.
-- Shadows: cards none; menus/popovers/sheets/dialogs shadow-2xl; dragged items shadow-lg; tokens for toast, auth card, spotlight.
+- Lighting: one light, straight above. Every surface takes exactly one lit-\* class from src/index.css; never box-shadow, shadow-\*, drop-shadow or backdrop-blur on a call site (guard: lighting-rules.test.ts).
+  - Heights: flat (list rows, page), card (lit-card / lit-card-muted), raised (nav, chat circle, auth/onboarding cards), float (toasts, strip, unread/latest pills, drags), overlay (menus, popovers, sheets, dialogs, side panels). Headers lit-header, bottom bars lit-dock, sidebar lit-side.
+  - Controls: buttons via Button variants; chips, radios and segment thumbs lit-chip / lit-chip-selected; inputs and tracks lit-well; small parts lit-pill / lit-badge / lit-avatar / lit-media; tinted banners lit-tint.
+  - Dark mode: higher is lighter; never rely on a shadow alone; raised surfaces add a faint bottom rim dimmer than the top edge.
+  - At most one soft (blurred) shadow per token; use a 1px ring for edge definition (speed).
+  - New surface: pick a height from this list, in light and dark, and add it to docs/lighting.md.
+  - Labels and icons on raised controls use full ink (text-fg); icon stroke 1.85.
 - A panel beside the page is ui/SidePanel only (laptop via useIsLaptop, 380px, translateX, nothing dims, Esc closes); phone shows the same content in a Sheet (guard: cockpit/side-panel-rule.test.ts).
 - Phone nav: floating pill (Pipeline, Briefs, Assets, Plan, Activity) plus separate Chat circle, 12px from sides and bottom; only the active tab shows its label.
 - Tappable rows and tiles use PressableRow; dim layers use Backdrop; upload targets use DropZone; never override a ui primitive with "!".

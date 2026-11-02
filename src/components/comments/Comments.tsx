@@ -2502,9 +2502,9 @@ export function Comments({
         key={comment.id}
         id={commentDomId(comment.id)}
         className={cn(
-          'rounded-xl border bg-panel-2 px-4 py-3',
+          'rounded-xl border bg-panel-2 px-4 py-3 lit-card-muted',
           COMMENT_ROW_SCROLL_CLASS,
-          isResolved ? 'border-good' : 'border-border',
+          isResolved ? 'border-good' : '',
         )}
       >
         {tombstone
@@ -2606,7 +2606,7 @@ export function Comments({
     return (
       <li
         key={`batch-${group.authorId}-${first.id}`}
-        className="rounded-xl border border-border bg-panel-2 px-4 py-3"
+        className="rounded-xl border bg-panel-2 px-4 py-3 lit-card-muted"
       >
         <ol className="flex flex-col">
           {group.threads.map(({ comment, replies, tombstone }, index) => (
@@ -2705,14 +2705,14 @@ export function Comments({
       ) : threads.length === 0 ? (
         <div
           data-comments-empty=""
-          className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-base text-fg-3"
+          className="rounded-xl border bg-panel-2 px-4 py-8 text-center text-base text-fg-3 lit-card-muted"
         >
           {emptyListText(entityType, 'all')}
         </div>
       ) : groups.length === 0 ? (
         <div
           data-comments-empty=""
-          className="rounded-xl border border-border bg-panel-2 px-4 py-8 text-center text-base text-fg-3"
+          className="rounded-xl border bg-panel-2 px-4 py-8 text-center text-base text-fg-3 lit-card-muted"
         >
           {emptyListText(entityType, 'open')}
         </div>

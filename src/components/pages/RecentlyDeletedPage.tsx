@@ -102,7 +102,7 @@ export function RecentlyDeletedView({
         </div>
       ) : items.length > 0 ? (
         <>
-          <ul className="mt-4 divide-y divide-border rounded-xl border border-border bg-panel">
+          <ul className="mt-4 divide-y divide-border rounded-xl border bg-panel lit-card">
             {items.map((item) => (
               <li key={item.id} className="px-4 py-3">
                 <p className="text-base font-medium text-fg [overflow-wrap:anywhere]">

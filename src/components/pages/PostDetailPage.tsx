@@ -1461,7 +1461,7 @@ export function PostDetailPage({
         <section
           id={COMMENTS_SECTION_ID}
           hidden={pending}
-          className="scroll-mt-16 rounded-xl border border-border bg-panel-2 p-4"
+          className="scroll-mt-16 rounded-xl border bg-panel-2 p-4 lit-card-muted"
           {...(focusInsetBottom !== undefined
             ? { style: { ['--focus-inset-bottom' as string]: focusInsetBottom } }
             : {})}
@@ -1517,7 +1517,7 @@ export function PostDetailPage({
     return (
       <SearchWordsContext.Provider value={searchJump.words}>
         {embedded ? null : (
-          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
+          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
             {backButton}
             <div aria-hidden className="flex min-w-0 flex-1 items-center gap-2">
               <div className="h-4 w-32 animate-pulse rounded bg-panel-3" />
@@ -1544,7 +1544,7 @@ export function PostDetailPage({
             <div className="aspect-[4/5] w-full animate-pulse rounded-xl bg-panel-3" />
           </div>
           <div aria-hidden className={cn(grid.body, 'flex flex-col gap-6')}>
-            <div className="rounded-xl border border-border bg-panel-2 p-4">
+            <div className="rounded-xl border bg-panel-2 p-4 lit-card-muted">
               <div className="h-3 w-full animate-pulse rounded bg-panel-3" />
               <div className="mt-2 h-3 w-5/6 animate-pulse rounded bg-panel-3" />
               <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-panel-3" />
@@ -1562,7 +1562,7 @@ export function PostDetailPage({
     return (
       <>
         {embedded ? null : (
-          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
+          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
             {backButton}
           </div>
         )}
@@ -1577,7 +1577,7 @@ export function PostDetailPage({
     return (
       <>
         {embedded ? null : (
-          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
+          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
             {backButton}
           </div>
         )}
@@ -1770,7 +1770,7 @@ export function PostDetailPage({
   ) : null;
   const phoneStageNotes =
     stageHelper !== null ? (
-      <section className="rounded-xl border border-border bg-panel-2 p-4">
+      <section className="rounded-xl border bg-panel-2 p-4 lit-card-muted">
         <p className="text-base text-fg-2">{stageHelper}</p>
       </section>
     ) : null;
@@ -1789,7 +1789,7 @@ export function PostDetailPage({
     approvedLocked && !readOnly ? (
       <div
         data-approved-banner=""
-        className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-xl bg-good-soft px-3.5 py-2 text-base text-fg"
+        className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-xl bg-good-soft px-3.5 py-2 text-base text-fg lit-tint"
       >
         <span aria-hidden className="shrink-0 text-good">
           <IconLock size={ICON_SIZE.nav} />
@@ -1844,7 +1844,7 @@ export function PostDetailPage({
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
       {embedded ? null : (
-        <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
+        <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
           {backButton}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <span
@@ -2078,7 +2078,7 @@ export function PostDetailPage({
               the version button lives in the gallery tools row. */}
             <section
               data-caption-block=""
-              className="rounded-xl border border-border bg-panel-2 p-4"
+              className="rounded-xl border bg-panel-2 p-4 lit-card-muted"
             >
               <div className="flex items-center gap-3">
                 <Avatar name={workspaceName ?? ''} role="header" kind="group" />

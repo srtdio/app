@@ -55,7 +55,7 @@ export function MenuPopover({ open, onClose, align = 'right', children }: MenuPo
         role="menu"
         className={cn(
           // Axis: scale only, anchored to the trigger corner. No translation.
-          'absolute z-50 mt-2 min-w-[220px] rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl transition-[opacity,transform] duration-fast will-change-transform',
+          'absolute z-50 mt-2 min-w-[220px] rounded-xl border bg-panel p-1.5 lit-overlay transition-[opacity,transform] duration-fast will-change-transform',
           align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
           entered ? 'scale-100 opacity-100 ease-enter' : 'scale-[0.96] opacity-0 ease-exit',
         )}

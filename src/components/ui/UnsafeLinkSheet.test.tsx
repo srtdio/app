@@ -38,6 +38,9 @@ describe('UnsafeLinkSheet', () => {
     const { dialog } = await open();
     expect(dialog.textContent).toContain('Check before opening');
     expect(dialog.querySelector('[data-unsafe-url]')?.className).toContain('font-mono');
+    // Lit by the one light: the sheet is an overlay, with no shadow utility.
+    expect(dialog.className).toContain('lit-overlay');
+    expect(dialog.className).not.toMatch(/shadow-|border-border-strong/);
     expect(document.activeElement?.textContent).toBe("Don't open");
     expect(dialog.querySelector('[aria-label="Close"]')).not.toBeNull();
     const buttons = [...dialog.querySelectorAll('button:not([aria-label="Close"]), a')];

@@ -22,7 +22,7 @@ export function CountBadge({ count, className }: CountBadgeProps) {
     <span
       data-count-badge=""
       className={cn(
-        'inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-accent px-1 text-xs font-semibold leading-none text-accent-fg',
+        'lit-badge inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-accent px-1 text-xs font-semibold leading-none text-accent-fg',
         className,
       )}
     >

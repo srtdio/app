@@ -123,10 +123,10 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
           aria-valuemax={ALLOWANCE_BYTES}
           aria-valuenow={Math.min(usedBytes, ALLOWANCE_BYTES)}
           data-tone={tone}
-          className="h-2 w-full overflow-hidden rounded-full bg-panel-3"
+          className="h-2 w-full overflow-hidden rounded-full bg-panel-3 lit-well"
         >
           <div
-            className={cn('h-full rounded-full', TONE_CLASS[tone])}
+            className={cn('h-full rounded-full lit-fill', TONE_CLASS[tone])}
             style={{ width: `${fill * 100}%` }}
           />
         </div>

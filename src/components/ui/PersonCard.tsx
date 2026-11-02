@@ -171,7 +171,7 @@ export function PersonCardBody({
         </p>
       </div>
       {data.action === 'removed' ? (
-        <p className="w-full rounded-lg bg-panel-2 px-4 py-3 text-base text-fg-2">
+        <p className="w-full rounded-lg bg-panel-2 lit-well-soft px-4 py-3 text-base text-fg-2">
           {PERSON_CARD_COPY.removed}
         </p>
       ) : (

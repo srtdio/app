@@ -313,7 +313,7 @@ export function AssetTile(props: {
             alt={asset.name}
           />
           {props.active ? (
-            <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-fg">
+            <span className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-fg lit-badge">
               <IconCheck size={ICON_SIZE.inline} />
             </span>
           ) : null}

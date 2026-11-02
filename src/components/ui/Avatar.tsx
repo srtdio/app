@@ -72,7 +72,7 @@ export function avatarShapeClass(role: AvatarRole, kind: AvatarKind = 'person'):
   return AVATAR_PX[role] <= 40 ? 'rounded-lg' : 'rounded-xl';
 }
 
-const base = 'inline-flex shrink-0 items-center justify-center select-none';
+const base = 'lit-avatar inline-flex shrink-0 items-center justify-center select-none';
 
 export function Avatar({ presence, ...props }: AvatarProps) {
   if (presence !== 'online') return <AvatarFace {...props} />;
@@ -82,7 +82,7 @@ export function Avatar({ presence, ...props }: AvatarProps) {
       <span
         data-presence="online"
         aria-hidden="true"
-        className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-good ring-2 ring-panel"
+        className="lit-avatar absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-good outline outline-2 outline-panel"
       />
     </span>
   );

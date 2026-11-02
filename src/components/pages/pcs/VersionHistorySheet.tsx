@@ -209,7 +209,7 @@ export function versionHistorySheet({
               key={version.id}
               className={cn(
                 'flex min-w-0 items-center gap-1 rounded-lg border border-transparent',
-                selected && 'border-accent-line bg-accent-soft',
+                selected && 'border-accent-line bg-accent-soft lit-active',
               )}
             >
               <IconButton

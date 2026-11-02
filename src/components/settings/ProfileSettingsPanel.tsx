@@ -715,7 +715,7 @@ export function CameraBadge(props: { disabled: boolean; onPress: () => void }): 
       <span
         data-camera-badge=""
         aria-hidden="true"
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg ring-2 ring-bg"
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg outline outline-2 outline-bg lit-btn-primary"
       >
         <IconCamera size={ICON_SIZE.inline} />
       </span>

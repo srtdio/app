@@ -178,7 +178,7 @@ export function attachmentItemList(
     return (
       <li
         key={`${item.versionId}-${index}`}
-        className="flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 py-2"
+        className="flex min-h-[44px] w-full items-center gap-2 rounded-lg border bg-panel-2 px-3 py-2 lit-card-muted"
       >
         <span className="shrink-0 text-fg-3">
           {item.kind === 'link' ? (
@@ -963,7 +963,7 @@ export function AttachmentsField({
         <div
           data-upload-failed=""
           role="alert"
-          className="flex flex-wrap items-center gap-2 rounded-lg border border-bad bg-bad-soft px-3 py-1"
+          className="flex flex-wrap items-center gap-2 rounded-lg border border-bad bg-bad-soft px-3 py-1 lit-tint"
         >
           <p className="min-w-0 flex-1 text-base text-bad">{failedFilesLine(failedCount)}</p>
           <Button type="button" variant="link" className="shrink-0" onClick={retryFailed}>
@@ -983,7 +983,7 @@ export function AttachmentsField({
       {framed && !dropzoneEmpty ? addButtons : null}
 
       {linkOpen ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-border bg-panel-2 p-3">
+        <div className="flex flex-col gap-2 rounded-lg border bg-panel-2 p-3 lit-card-muted">
           <Input
             type="url"
             inputMode="url"
@@ -1138,6 +1138,6 @@ export function firstMedia(
 
 function cnPending(error: string | null): string {
   return error !== null
-    ? 'flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-bad bg-panel-2 px-3 py-2'
-    : 'flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 py-2';
+    ? 'flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-bad bg-panel-2 px-3 py-2 lit-card-muted'
+    : 'flex min-h-[44px] w-full items-center gap-2 rounded-lg border bg-panel-2 px-3 py-2 lit-card-muted';
 }

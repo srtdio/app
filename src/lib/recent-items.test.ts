@@ -524,7 +524,7 @@ describe('session refresh', () => {
     expect(calls).toHaveLength(2);
   });
 
-  it('a failed read drops nothing of that type; an aborted pass runs again next time', async () => {
+  it('a failed read drops nothing of that type; a pass aborted before reading runs again', async () => {
     const s = memoryStorage();
     s.setItem(
       recentKey(ME, WS),
@@ -552,10 +552,51 @@ describe('session refresh', () => {
     await refreshRecentTitles(base);
     expect(readRecents(s, ME, WS)).toHaveLength(1);
     resetRecentsRefresh();
+    const callsBefore = from.mock.calls.length;
     const controller = new AbortController();
     controller.abort();
     await refreshRecentTitles({ ...base, signal: controller.signal });
+    expect(from.mock.calls.length).toBe(callsBefore);
     expect(recentsRefreshed(ME, WS)).toBe(false);
     expect(readRecents(s, ME, WS)).toHaveLength(1);
+  });
+
+  it('a pass aborted after its read was sent still counts: a second call makes no read', async () => {
+    const s = memoryStorage();
+    s.setItem(
+      recentKey(ME, WS),
+      JSON.stringify([
+        { type: 'post', id: 'p1', openedAt: 1, title: 'Kept', target: { path: '/p/gbl-1' } },
+      ]),
+    );
+    const controller = new AbortController();
+    const from = vi.fn(() => {
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        is: () => chain,
+        in: () => chain,
+        // The read is in flight when the palette's effect re-runs and aborts it.
+        then: (resolve: (v: unknown) => void) => {
+          controller.abort();
+          resolve({ data: [], error: null });
+        },
+      };
+      return chain;
+    });
+    const base = {
+      client: { from } as unknown as Client,
+      storage: s,
+      workspaceId: WS,
+      workspaceKey: 'GBL',
+      userId: ME,
+    };
+    await refreshRecentTitles({ ...base, signal: controller.signal });
+    expect(from).toHaveBeenCalledTimes(1);
+    expect(recentsRefreshed(ME, WS)).toBe(true);
+    // Aborted mid-read: nothing written, the stored title stays.
+    expect(readRecents(s, ME, WS).map((i) => i.title)).toEqual(['Kept']);
+    await refreshRecentTitles({ ...base, signal: new AbortController().signal });
+    expect(from).toHaveBeenCalledTimes(1);
   });
 });

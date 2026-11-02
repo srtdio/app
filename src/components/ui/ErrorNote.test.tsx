@@ -7,7 +7,7 @@ describe('ErrorNote', () => {
   it('renders the one bad-toned alert box around its copy', () => {
     const html = renderToStaticMarkup(<ErrorNote>{"Couldn't save. Try again."}</ErrorNote>);
     expect(html).toBe(
-      '<div role="alert" class="rounded-lg border border-bad bg-bad-soft px-3 py-2 text-base text-bad">Couldn&#x27;t save. Try again.</div>',
+      '<div role="alert" class="lit-tint rounded-lg border border-bad bg-bad-soft px-3 py-2 text-base text-bad">Couldn&#x27;t save. Try again.</div>',
     );
   });
 
@@ -16,7 +16,7 @@ describe('ErrorNote', () => {
       <ErrorNote className="mt-3 flex items-center gap-3">{"Couldn't post."}</ErrorNote>,
     );
     expect(html).toContain(
-      'class="rounded-lg border border-bad bg-bad-soft px-3 py-2 text-base text-bad mt-3 flex items-center gap-3"',
+      'class="lit-tint rounded-lg border border-bad bg-bad-soft px-3 py-2 text-base text-bad mt-3 flex items-center gap-3"',
     );
   });
 

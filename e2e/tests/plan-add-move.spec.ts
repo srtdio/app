@@ -142,9 +142,42 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   // number centred below it.
   const wed = dayBlock(plan, '2026-10-14');
   await expect(wed.locator('[data-plan-day-col]')).toHaveCount(1);
-  const col = await wed.locator('[data-plan-day-col]').boundingBox();
-  const weekday = await wed.locator('[data-plan-day-weekday]').boundingBox();
-  const digits = await wed.locator('[data-plan-day-number]').boundingBox();
+  const tile = wed.locator('[data-plan-day-col]');
+  // The plan screen slides in: wait until the tile's rect holds still across
+  // one animation frame (max 5s), so the boxes are not read mid-motion.
+  await tile.evaluate(
+    (el) =>
+      new Promise<void>((resolve, reject) => {
+        const key = (): string => {
+          const r = el.getBoundingClientRect();
+          return `${r.x},${r.y},${r.width},${r.height}`;
+        };
+        const deadline = performance.now() + 5000;
+        let last = key();
+        const tick = (): void => {
+          const next = key();
+          if (next === last) return resolve();
+          if (performance.now() > deadline) return reject(new Error('day tile never settled'));
+          last = next;
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+  // All three boxes from one frame.
+  const boxes = await tile.evaluate((el) => {
+    const rect = (node: Element | null) => {
+      if (node === null) return null;
+      const r = node.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    return {
+      col: rect(el),
+      weekday: rect(el.querySelector('[data-plan-day-weekday]')),
+      digits: rect(el.querySelector('[data-plan-day-number]')),
+    };
+  });
+  const { col, weekday, digits } = boxes;
   if (col === null || weekday === null || digits === null) throw new Error('day boxes');
   expect(col.width).toBe(56);
   expect(col.height).toBe(56);

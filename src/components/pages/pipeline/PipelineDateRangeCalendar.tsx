@@ -194,7 +194,7 @@ export function PipelineDateRangeCalendar({
         aria-label="Select a date range"
         onClick={(event) => event.stopPropagation()}
         className={cn(
-          'relative w-[320px] max-w-full rounded-2xl border border-border-strong bg-panel p-3 shadow-2xl transition-all duration-base ease-enter',
+          'relative w-[320px] max-w-full rounded-2xl border bg-panel p-3 lit-overlay transition-all duration-base ease-enter',
           shown ? 'scale-100 opacity-100' : 'scale-95 opacity-0',
         )}
       >
@@ -248,7 +248,7 @@ export function PipelineDateRangeCalendar({
                 className={cn(
                   'flex items-center justify-center font-sans text-base tabular-nums transition-colors',
                   isEndpoint
-                    ? 'bg-accent font-semibold text-accent-fg'
+                    ? 'bg-accent font-semibold text-accent-fg lit-pill'
                     : between
                       ? 'bg-accent-soft text-accent'
                       : 'text-fg',

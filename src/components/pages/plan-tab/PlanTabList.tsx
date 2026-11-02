@@ -157,7 +157,7 @@ export function PlanTabCard(props: {
       type="button"
       data-plan-tab-card={props.bundle.plan.id}
       onClick={props.onOpen}
-      className="flex flex-col gap-2 border border-border bg-panel px-3.5 pb-3 pt-3 transition-colors"
+      className="lit-card flex flex-col gap-2 border bg-panel px-3.5 pb-3 pt-3 transition-colors"
     >
       <PlanCardTop plan={props.bundle.plan} wrapTitle />
       {props.covers.length > 0 ? (

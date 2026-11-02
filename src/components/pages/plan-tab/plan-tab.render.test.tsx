@@ -288,7 +288,7 @@ describe('PlanTabPage', () => {
     const cell = between(html, 'data-plan-tab-today-cell', 'data-plan-tab-day=');
     expect(cell).toContain(`data-plan-tab-day="${TODAY}"`);
     expect(cell).toContain('bg-accent-soft');
-    expect(cell).toContain('shadow-[inset_0_0_0_2px_var(--accent)]');
+    expect(cell).toContain('ring-2 ring-inset ring-accent');
     // The keyboard ring stays visible over the today ring.
     expect(cell).toContain('focus-visible:ring-4');
     expect(cell).toMatch(/data-plan-tab-today=""[^>]*class="[^"]*bg-accent text-accent-fg/);
@@ -311,7 +311,7 @@ describe('PlanTabPage', () => {
     );
     const col = between(html, 'data-plan-tab-today-cell', '>');
     expect(col).toContain('bg-accent-soft');
-    expect(col).toContain('shadow-[inset_0_0_0_2px_var(--accent)]');
+    expect(col).toContain('ring-2 ring-inset ring-accent');
     expect(
       html.match(/data-plan-tab-day="[^"]+"[^>]*class="[^"]*min-h-0[^"]*overflow-y-auto/g),
     ).toHaveLength(7);

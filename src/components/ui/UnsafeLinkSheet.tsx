@@ -108,7 +108,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         aria-labelledby="unsafe-link-title"
         style={drag > 0 ? { transform: `translateY(${drag}px)` } : undefined}
         className={cn(
-          'flex max-h-[90vh] w-full max-w-[480px] touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border border-border-strong bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg shadow-2xl will-change-transform',
+          'flex max-h-[90vh] w-full max-w-[480px] touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg lit-overlay will-change-transform',
           drag > 0 ? 'transition-none' : 'transition-transform',
           entered
             ? 'translate-y-0 duration-slow ease-enter'
@@ -142,7 +142,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         </div>
         <p
           data-unsafe-url=""
-          className="break-all rounded-lg border border-border bg-panel-2 px-2.5 py-2 font-mono text-sm text-fg"
+          className="break-all rounded-lg border border-border bg-panel-2 lit-well-soft px-2.5 py-2 font-mono text-sm text-fg"
         >
           {url}
         </p>

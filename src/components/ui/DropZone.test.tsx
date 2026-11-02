@@ -26,6 +26,7 @@ describe('DropZone', () => {
       'border-dashed',
       'border-border-strong',
       'bg-panel-2',
+      'lit-well-soft',
       'rounded-xl',
       'flex-col',
       'items-center',

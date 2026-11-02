@@ -6,13 +6,13 @@ import { IconMail, IconMailOff } from '@/components/ui/icons';
 describe('Tag', () => {
   it('with no icon renders exactly the markup it did before the icon slot', () => {
     expect(renderToStaticMarkup(<Tag label="Approver" />)).toBe(
-      '<span class="inline-flex h-5 items-center rounded-md px-2 text-xs font-medium bg-panel-2 text-fg-2">Approver</span>',
+      '<span class="lit-pill inline-flex h-5 items-center rounded-md px-2 text-xs font-medium bg-panel-2 text-fg-2">Approver</span>',
     );
     expect(renderToStaticMarkup(<Tag label="Not delivered" tone="bad" />)).toBe(
-      '<span class="inline-flex h-5 items-center rounded-md px-2 text-xs font-medium bg-bad-soft text-bad">Not delivered</span>',
+      '<span class="lit-pill inline-flex h-5 items-center rounded-md px-2 text-xs font-medium bg-bad-soft text-bad">Not delivered</span>',
     );
     expect(renderToStaticMarkup(<Tag label="Review" dot="review" />)).toBe(
-      '<span class="inline-flex h-5 items-center rounded-md px-2 text-xs font-medium bg-panel-2 text-fg-2 gap-1.5"><span aria-hidden="true" class="h-2 w-2 shrink-0 rounded-full bg-stage-review"></span>Review</span>',
+      '<span class="lit-pill inline-flex h-5 items-center rounded-md px-2 text-xs font-medium bg-panel-2 text-fg-2 gap-1.5"><span aria-hidden="true" class="h-2 w-2 shrink-0 rounded-full bg-stage-review"></span>Review</span>',
     );
   });
 
@@ -20,7 +20,7 @@ describe('Tag', () => {
     const out = renderToStaticMarkup(<Tag label="On" icon={IconMail} />);
     expect(
       out.startsWith(
-        '<span class="inline-flex h-5 items-center rounded-md px-2 text-xs font-medium bg-panel-2 text-fg-2 gap-1"><svg',
+        '<span class="lit-pill inline-flex h-5 items-center rounded-md px-2 text-xs font-medium bg-panel-2 text-fg-2 gap-1"><svg',
       ),
     ).toBe(true);
     expect(out.indexOf('<svg')).toBeLessThan(out.indexOf('On'));

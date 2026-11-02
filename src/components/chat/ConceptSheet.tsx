@@ -416,7 +416,7 @@ export function ConceptSheet(props: {
           ) : filesState === 'failed' ? (
             <div
               data-plan-concept-files-failed=""
-              className="flex min-h-[72px] items-center justify-between gap-3 rounded-lg border border-border bg-panel px-3.5"
+              className="flex min-h-[72px] items-center justify-between gap-3 rounded-lg border bg-panel px-3.5 lit-card"
             >
               <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
               <Button data-plan-concept-files-retry="" onClick={props.onRetryFiles}>
@@ -434,7 +434,7 @@ export function ConceptSheet(props: {
                       title={f.name}
                       className="relative flex min-w-0 flex-col gap-1"
                     >
-                      <span className="block overflow-hidden rounded-lg border border-border bg-panel-2">
+                      <span className="block overflow-hidden rounded-lg border bg-panel-2 lit-card-muted">
                         <Thumbnail
                           assetVersionId={f.versionId}
                           cache={sharedCardPresignCache()}
@@ -463,7 +463,7 @@ export function ConceptSheet(props: {
                         }
                         className="absolute right-0 top-0 flex h-11 w-11 items-start justify-end p-1"
                       >
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-panel text-fg-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-panel text-fg-2 lit-media">
                           <IconX size={ICON_SIZE.inline} />
                         </span>
                       </PressableRow>

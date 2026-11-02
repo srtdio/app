@@ -120,7 +120,7 @@ export function dayCells(
           past
             ? 'cursor-default text-fg-3 opacity-50'
             : selected
-              ? 'bg-accent text-accent-fg'
+              ? 'bg-accent text-accent-fg lit-pill'
               : 'text-fg hover:bg-panel-2',
           !selected && !past && isToday ? 'border border-accent-line' : '',
         )}
@@ -201,7 +201,7 @@ export function DatePicker({
         aria-expanded={open}
         {...(label !== undefined ? { 'aria-label': label } : {})}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-base transition-colors hover:bg-panel-3"
+        className="lit-well flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-base transition-colors hover:bg-panel-3"
       >
         <IconCalendar size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
         <span
@@ -226,7 +226,7 @@ export function DatePicker({
                 ref={panelRef}
                 role="dialog"
                 aria-label="Choose a date"
-                className="fixed z-[57] rounded-xl border border-border-strong bg-panel p-2 shadow-2xl"
+                className="lit-overlay fixed z-[57] rounded-xl border bg-panel p-2"
                 style={popoverPlacement(triggerRef.current.getBoundingClientRect(), viewportSize())}
               >
                 <div className="mb-1 flex items-center justify-between">

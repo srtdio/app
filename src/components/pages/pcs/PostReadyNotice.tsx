@@ -209,7 +209,7 @@ export function PostReadyNotice({
   if (view === null && !showSend) return null;
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-border bg-panel-2 p-4">
+    <section className="flex flex-col gap-3 rounded-xl border bg-panel-2 p-4 lit-card-muted">
       {view !== null ? (
         <div className="flex flex-col gap-1">
           <p className="text-base font-medium text-fg">{view.headline}</p>

@@ -226,7 +226,7 @@ describe('post item header (W7, W8)', () => {
     expect(header).toContain('<h2 className="truncate');
     expect(header.indexOf('{props.action}')).toBeGreaterThan(header.indexOf('</h2>'));
     // 16px on both sides for every header (no pl-1 with a back button).
-    expect(header).toContain('border-b border-border bg-panel pl-4 pr-4');
+    expect(header).toContain('border-b bg-panel pl-4 pr-4 lit-header');
     expect(header).not.toContain("showBack ? 'pl-1'");
     const item = read('PlanItemScreen.tsx');
     expect(item).toContain('action: (');
@@ -273,8 +273,13 @@ describe('Undo restores the exact previous status (A3)', () => {
 describe('week list layout (L1-L4)', () => {
   it('date tile: 56x56, weekday strip over the number; today solid accent with a Today pill; No date', () => {
     const today = renderToStaticMarkup(<DayColumn day="2026-10-14" today="2026-10-14" />);
-    expect(today).toContain('flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border');
-    expect(today).toMatch(/data-plan-day-col="" data-plan-today=""[^>]*border-accent bg-accent"/);
+    expect(today).toContain(
+      'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border lit-card',
+    );
+    // Today keeps its solid accent: bg-none drops lit-card's gradient.
+    expect(today).toMatch(
+      /data-plan-day-col="" data-plan-today=""[^>]*border-accent bg-accent bg-none"/,
+    );
     expect(today).toMatch(/data-plan-day-weekday=""[^>]*bg-accent text-accent-fg">Wed</);
     expect(today).toMatch(
       /data-plan-day-number=""[^>]*font-mono[^>]*tabular-nums text-accent-fg">14</,
@@ -282,13 +287,15 @@ describe('week list layout (L1-L4)', () => {
     // The Today pill, centred under the tile in its 56px column, 6px below.
     expect(today).toMatch(/^<div class="flex w-14 shrink-0 flex-col items-center gap-1.5">/);
     expect(today).toMatch(
-      /data-plan-today-pill="" class="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-fg">Today</,
+      /data-plan-today-pill="" class="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-fg lit-pill">Today</,
     );
     // The weekday is no longer accent text on the panel.
     expect(today).not.toMatch(/ text-accent">/);
     const other = renderToStaticMarkup(<DayColumn day="2026-10-15" today="2026-10-14" />);
     expect(other).not.toContain('data-plan-today');
-    expect(other).toContain('border-border-strong bg-panel');
+    // A lit card: lit-card draws the edges (no border-border-strong).
+    expect(other).toContain('rounded-lg border lit-card bg-panel');
+    expect(other).not.toContain('border-border-strong');
     expect(other).toMatch(/^<div data-plan-day-col=""/);
     expect(other).toMatch(/data-plan-day-weekday=""[^>]*bg-panel-2 text-fg-2">Thu</);
     expect(other).toMatch(/tabular-nums text-fg">15</);
@@ -319,7 +326,7 @@ describe('week list layout (L1-L4)', () => {
     );
     expect(none).not.toContain('data-plan-today');
     expect(none).not.toContain('border-accent');
-    expect(none).toContain('border-border-strong');
+    expect(none).toContain('lit-card');
   });
 
   it('dated tile: weekday in the strip, day number in mono', () => {

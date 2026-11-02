@@ -795,8 +795,9 @@ export function resetRecentsRefresh(): void {
  * The palette's freshness pass, at most once per page session per user and
  * workspace: re-read every stored item's title (one batched read per type) and
  * write the result into storage; anything no longer returned drops. Storage
- * only: rows on screen are never repainted, changes show on the next open. An
- * aborted pass does not count, so the next open tries again.
+ * only: rows on screen are never repainted, changes show on the next open.
+ * At most once per page session per user and workspace; an aborted pass still
+ * counts once its read was sent (only a pass aborted before reading runs again).
  */
 export async function refreshRecentTitles(params: {
   client: Client;
@@ -808,13 +809,15 @@ export async function refreshRecentTitles(params: {
 }): Promise<void> {
   const key = recentKey(params.userId, params.workspaceId);
   if (refreshed.has(key)) return;
+  // A function, so the check after the await is not narrowed by the one before it.
+  const aborted = (): boolean => params.signal?.aborted === true;
+  if (aborted()) return;
   const items = readRecents(params.storage, params.userId, params.workspaceId);
   if (items.length === 0) return;
+  // The read goes out now: from here this session's pass counts, aborted or not.
   refreshed.add(key);
   const titles = await readRecentTitles({ ...params, items });
-  if (params.signal?.aborted === true) {
-    refreshed.delete(key);
-    return;
-  }
+  // Aborted mid-read: write nothing, and never send a second read.
+  if (aborted()) return;
   writeRecentTitles(params.storage, params.userId, params.workspaceId, items, titles, true);
 }

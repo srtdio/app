@@ -464,7 +464,7 @@ export function PlanComposeScreen(props: {
         <div
           role="alert"
           data-plan-share-error=""
-          className="rounded-xl bg-bad-soft px-3 py-2.5 text-md leading-[1.45] text-bad"
+          className="rounded-xl bg-bad-soft px-3 py-2.5 text-md leading-[1.45] text-bad lit-tint"
         >
           <p className="font-semibold">{error.heading}</p>
           {error.list === true ? (
@@ -531,7 +531,7 @@ export function PlanComposeScreen(props: {
 
           <div
             data-plan-dates-row=""
-            className="flex min-h-[48px] items-center justify-between gap-2 rounded-xl bg-panel-2 pl-3 pr-1"
+            className="flex min-h-[48px] items-center justify-between gap-2 rounded-xl bg-panel-2 pl-3 pr-1 lit-card-muted"
           >
             <div className="flex min-w-0 flex-col">
               <span className="text-base text-fg">
@@ -736,8 +736,8 @@ export function ComposeItemRow(props: {
       data-plan-compose-item={item.kind}
       data-plan-compose-flag={need ? 'need' : 'ok'}
       className={cn(
-        'flex flex-col gap-2 rounded-xl border p-2.5',
-        need ? 'border-warn bg-warn-soft' : 'border-border bg-panel',
+        'flex flex-col gap-2 rounded-xl border p-2.5 lit-card-muted',
+        need ? 'border-warn bg-warn-soft' : 'bg-panel',
       )}
     >
       <div className="flex items-center gap-2.5">
@@ -873,7 +873,7 @@ export function PlanSharedNotice(props: {
       )}
     >
       {shown ? (
-        <span className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-base font-medium text-fg shadow-[var(--strip-shadow)]">
+        <span className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-base font-medium text-fg lit-float">
           {props.text}
         </span>
       ) : null}

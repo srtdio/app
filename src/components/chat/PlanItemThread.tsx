@@ -360,7 +360,7 @@ function PlanDayLine(props: { label: string }): ReactElement {
     <li role="separator" aria-label={props.label} data-plan-day="" className="flex justify-center">
       <span
         className={cn(
-          'mb-1.5 mt-2 self-center rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-fg-3',
+          'mb-1.5 mt-2 self-center rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-fg-3 lit-pill',
           sized(DATE_PILL_TYPE, layout),
         )}
       >
@@ -460,10 +460,11 @@ function PlanBubble(props: {
             sized(BUBBLE_SHAPE, layout),
             sized(BUBBLE_PAD, layout),
             team
-              ? 'border border-[color:var(--warn-line)] bg-warn-soft text-fg'
+              ? // bg-none: the warn fill shows through the bubble's lit gradient.
+                'border border-[color:var(--warn-line)] bg-warn-soft bg-none text-fg lit-bubble-other'
               : mine
-                ? 'bg-bubble-own text-accent-fg'
-                : 'bg-panel-2 text-fg',
+                ? 'bg-bubble-own text-accent-fg lit-bubble-own'
+                : 'bg-panel-2 text-fg lit-bubble-other',
             c.pending && 'opacity-70',
             props.highlighted &&
               'ring-2 ring-accent transition-shadow duration-slow motion-reduce:transition-none',

@@ -582,15 +582,18 @@ async function runSignOut(page: Page): Promise<void> {
     },
     { paths: urls, session: { access_token: other.accessToken, refresh_token: 'harness-refresh' } },
   );
-  // In the app: the Chat tab, then the same chat.
-  await page.getByRole('link', { name: 'Chat' }).last().click();
+  // In the app: the Chat tab, then the same chat. Count from before the tab
+  // tap: the chat list fetches the plan bundle for this user as it mounts, and
+  // that read can land while the click is still settling.
   const plansBefore = reads('plans');
+  await page.getByRole('link', { name: 'Chat' }).last().click();
   const tap = await tapChat(page, GROUP_NAME);
   await page.locator(`[data-plan-card="${DRAFT_PLAN_ID}"]`).waitFor({ timeout: 10_000 });
   await page.waitForTimeout(1_500);
   const frames = framesSince(await logOf(page), tap);
   report('other user', { frames: show(frames) });
-  // A first open for this user: fresh reads, never the first user's card.
+  // A first open for this user (from the Chat tab on): fresh reads, never
+  // the first user's card.
   expect(reads('plans') - plansBefore).toBeGreaterThanOrEqual(1);
   for (const f of frames) {
     expect(f.card, show(frames).join('\n')).not.toBe(`${DRAFT_PLAN_ID}:${DRAFT_PLAN_TITLE}`);

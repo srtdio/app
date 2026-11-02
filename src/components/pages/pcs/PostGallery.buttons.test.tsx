@@ -84,7 +84,7 @@ describe('PostGallery buttons', () => {
     expect(tags).toHaveLength(5);
     for (const tag of tags) {
       expectShared(tag);
-      expect(classOf(tag)).toContain('border-border');
+      expect(classOf(tag)).toContain('lit-btn-secondary');
     }
   });
 

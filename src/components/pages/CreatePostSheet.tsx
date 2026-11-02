@@ -1549,7 +1549,7 @@ export function CreatePostSheet({
                 {newBucketOpen ? (
                   <div
                     data-new-bucket=""
-                    className="mt-2 flex flex-col gap-2 rounded-lg border border-border bg-panel-2 p-3"
+                    className="mt-2 flex flex-col gap-2 rounded-lg border bg-panel-2 p-3 lit-card-muted"
                   >
                     <Input
                       aria-label="New bucket name"
@@ -1697,7 +1697,7 @@ export function FormatRow({
       <span className="shrink-0 text-base font-medium text-fg">Format</span>
       <span
         data-format-pill=""
-        className="inline-flex h-7 shrink-0 items-center rounded-full border border-border bg-panel-2 px-3 text-sm font-medium text-fg"
+        className="inline-flex h-7 shrink-0 items-center rounded-full border border-border bg-panel-2 px-3 text-sm font-medium text-fg lit-pill"
       >
         {name}
       </span>
@@ -1899,13 +1899,13 @@ function ShareToggle({
         <span
           aria-hidden
           className={cn(
-            'relative inline-flex h-11 w-[60px] items-center rounded-full px-1 transition-colors motion-reduce:transition-none',
+            'relative inline-flex h-11 w-[60px] items-center rounded-full px-1 lit-well transition-colors motion-reduce:transition-none',
             checked ? 'bg-accent' : 'bg-panel-3',
           )}
         >
           <span
             className={cn(
-              'h-7 w-7 rounded-full bg-panel transition-transform motion-reduce:transition-none',
+              'h-7 w-7 rounded-full bg-panel lit-knob transition-transform motion-reduce:transition-none',
               checked ? 'translate-x-[24px]' : 'translate-x-0',
             )}
           />

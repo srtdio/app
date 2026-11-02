@@ -30,7 +30,7 @@ import {
 } from '@/components/chat/chat-type';
 
 /** The box without its radius: the tappable quote takes PressableRow's. */
-const REPLY_QUOTE_LAYOUT = 'flex min-w-0 gap-2 overflow-hidden bg-panel-3';
+const REPLY_QUOTE_LAYOUT = 'flex min-w-0 gap-2 overflow-hidden bg-panel-3 lit-well';
 const REPLY_QUOTE_BOX = `${REPLY_QUOTE_LAYOUT} rounded-lg`;
 
 /** The rule and author ink: accent for a reply, warn for the editing bar. */

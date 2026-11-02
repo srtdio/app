@@ -124,7 +124,7 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
             state === 'open' ? 'open' : row.accepted_at !== null ? 'filled' : 'hollow'
           }
           className={cn(
-            'flex h-7 w-7 items-center justify-center rounded-full border font-mono text-sm font-medium tabular-nums',
+            'flex h-7 w-7 items-center justify-center rounded-full border font-mono text-sm font-medium tabular-nums lit-pill',
             chipCircleClass(state, row.accepted_at !== null),
           )}
         >
@@ -246,7 +246,7 @@ export function CheckpointStrip({
   return (
     <div
       data-checkpoint-strip=""
-      className={cn('sticky top-0 z-10 flex border-b border-border py-2', STRIP_SURFACE_CLASS)}
+      className={cn('sticky top-0 z-10 flex border-b py-2 lit-header', STRIP_SURFACE_CLASS)}
     >
       {/* axis: horizontal scroll only (overflow-x). Never overflow-y, never wrap:
           a twenty-point post stays one row and never grows vertically. */}

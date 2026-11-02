@@ -523,9 +523,11 @@ export interface ChannelRowState {
 }
 
 /**
- * The tile's tap target classes: the whole tile is one button. Panel fill with
- * a hairline border; a checked tile takes the accent tint, the open chat on
- * desktop takes panel-2. Token classes only, so light and dark stay at parity.
+ * The tile's tap target classes: the whole tile is one button, a lit card
+ * (lit-card draws the edges); a checked tile takes the selected tint
+ * (lit-chip-selected, accent line), the open chat on desktop takes panel-2
+ * (bg-none drops the card gradient so the fill shows). Token classes only, so
+ * light and dark stay at parity.
  */
 export function channelRowClass(state: ChannelRowState): string {
   const checked = state.selecting && state.checked;
@@ -533,8 +535,9 @@ export function channelRowClass(state: ChannelRowState): string {
   return cn(
     tileBoxClass(state.kind, state.more === true),
     CHANNEL_ROW_BUTTON,
-    checked ? 'border-accent-line bg-accent-soft' : 'border-border',
-    checked ? undefined : open ? 'bg-panel-2' : 'bg-panel hover:bg-panel-2',
+    checked
+      ? 'border-accent-line lit-chip-selected'
+      : cn('lit-card', open ? 'bg-panel-2 bg-none' : 'bg-panel hover:bg-panel-2'),
   );
 }
 
@@ -929,8 +932,8 @@ export function notesTile(props: {
         className={cn(
           tileBoxClass('wide'),
           CHANNEL_ROW_BUTTON,
-          'group/notes-row border-border disabled:cursor-default',
-          props.selected && !props.selecting ? 'bg-panel-2' : 'bg-panel',
+          'group/notes-row lit-card disabled:cursor-default',
+          props.selected && !props.selecting ? 'bg-panel-2 bg-none' : 'bg-panel',
           !props.selecting && 'hover:bg-panel-2',
         )}
       >
@@ -1120,7 +1123,7 @@ function selectHeader(select: ChannelSelectMode): ReactElement {
 /** Bottom bar in select mode (SelectionBar styling): one Hide, disabled at 0. */
 function selectBar(select: ChannelSelectMode): ReactElement {
   return (
-    <div className="flex items-center gap-2 border-t border-border bg-panel px-4 py-3">
+    <div className="flex items-center gap-2 border-t bg-panel px-4 py-3 lit-dock">
       <Button
         variant="primary"
         className="ml-auto"

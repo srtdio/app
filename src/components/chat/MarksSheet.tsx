@@ -343,7 +343,7 @@ export function MarkSheetRow(props: {
           role="group"
           aria-label={markConfirmCopy(mark.type, action)}
           data-mark-confirm={action}
-          className="mx-2 mb-1 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 py-2"
+          className="mx-2 mb-1 flex flex-wrap items-center gap-2 rounded-lg border bg-panel-2 px-3 py-2 lit-card-muted"
         >
           <span className="min-w-0 flex-1 text-base text-fg">
             {markConfirmCopy(mark.type, action)}

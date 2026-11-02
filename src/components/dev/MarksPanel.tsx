@@ -67,9 +67,9 @@ function MarksStrip(): ReactElement {
     <div
       data-marks-panel=""
       style={{ bottom: inset }}
-      className="fixed inset-x-0 z-[60] flex max-h-[40vh] flex-col overflow-hidden rounded-t-2xl border-t border-border bg-panel text-fg shadow-2xl"
+      className="fixed inset-x-0 z-[60] flex max-h-[40vh] flex-col overflow-hidden rounded-t-2xl border-t bg-panel text-fg lit-overlay"
     >
-      <div className="flex shrink-0 items-center gap-1 border-b border-border px-2">
+      <div className="flex shrink-0 items-center gap-1 border-b lit-header px-2">
         <span className="flex-1 truncate text-sm font-semibold text-fg-2">
           {`Marks (${marks.length})`}
         </span>

@@ -232,7 +232,7 @@ export function inviteStatus(outcome: InviteOutcome): 'sent' | 'test' | 'not-sen
 export function InviteNotSent(props: { email: string; acceptUrl: string | null }) {
   const toast = useOptionalToast();
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-warn bg-warn-soft p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-warn bg-warn-soft p-3 lit-tint">
       <p role="status" className="text-base text-fg">
         <span className="font-medium">{props.email}: </span>
         {INVITE_NOT_SENT_MESSAGE}
@@ -392,7 +392,7 @@ export function RolePicker({
   return (
     <label
       className={cn(
-        'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel px-2.5 py-1 text-base transition-colors duration-fast focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft',
+        'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel lit-well px-2.5 py-1 text-base transition-colors duration-fast focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft',
         invalid ? 'border-bad bg-bad-soft' : 'border-border',
         current === undefined ? 'text-fg-3' : 'text-fg',
         fill ? 'min-w-0 flex-1' : 'max-w-[45%] shrink-0',
@@ -741,7 +741,7 @@ export function MembersInviteForm({
               return (
                 <li
                   key={row.key}
-                  className="flex flex-col rounded-lg border border-border bg-panel-2 py-1 pl-3 pr-1 motion-safe:[animation:sorted-invite-row-in_var(--dur-base)_var(--ease-enter)_both]"
+                  className="flex flex-col rounded-lg border bg-panel-2 lit-card-muted py-1 pl-3 pr-1 motion-safe:[animation:sorted-invite-row-in_var(--dur-base)_var(--ease-enter)_both]"
                 >
                   <div className="flex items-center gap-2">
                     <input

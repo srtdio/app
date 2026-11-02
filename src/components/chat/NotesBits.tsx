@@ -150,7 +150,7 @@ export function notesAvatarView(input: {
     >
       <span
         className={cn(
-          'flex h-full w-full items-center justify-center overflow-hidden bg-accent-soft text-accent',
+          'flex h-full w-full items-center justify-center overflow-hidden bg-accent-soft text-accent lit-avatar',
           box,
         )}
       >
@@ -175,7 +175,7 @@ export function notesAvatarView(input: {
           aria-hidden="true"
           data-notes-badge=""
           className={cn(
-            'absolute flex items-center justify-center rounded-full bg-accent text-accent-fg',
+            'absolute flex items-center justify-center rounded-full bg-accent text-accent-fg lit-badge',
             badge.box,
             RING[input.surface],
             input.hoverSurface !== undefined && HOVER_RING[input.hoverSurface],

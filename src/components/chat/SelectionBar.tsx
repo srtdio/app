@@ -76,7 +76,7 @@ interface SelectionStar {
 
 /** The bottom bar's frame: a top border on the panel, clear of the safe-area inset. */
 const SELECTION_BAR_CLASS =
-  'flex shrink-0 flex-col gap-1 border-t border-border bg-panel px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3';
+  'flex shrink-0 flex-col gap-1 border-t bg-panel lit-dock px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3';
 
 /**
  * The remove-only bottom bar (chat info Media and Files select mode): the same

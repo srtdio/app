@@ -231,7 +231,7 @@ function ViewSwitch(props: {
     { view: 'week', label: WEEK_LABEL },
   ];
   return (
-    <div className="flex overflow-hidden rounded-lg border border-border bg-panel-2">
+    <div className="lit-well flex overflow-hidden rounded-lg border border-border bg-panel-2">
       {options.map((o) => (
         <PressableRow
           key={o.view}
@@ -244,7 +244,7 @@ function ViewSwitch(props: {
           onClick={() => props.onView(o.view)}
           className={cn(
             'min-w-[64px] px-3 text-base font-medium transition-colors duration-fast focus-visible:ring-inset',
-            props.view === o.view ? 'bg-accent-soft text-accent' : 'text-fg-2 hover:text-fg',
+            props.view === o.view ? 'lit-chip text-accent' : 'text-fg-2 hover:text-fg',
           )}
         >
           {o.label}

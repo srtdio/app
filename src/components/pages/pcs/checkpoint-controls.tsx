@@ -76,7 +76,7 @@ export function tickCircle(done: boolean, live = false, hollow = false): ReactEl
     <span
       data-tick={done ? 'filled' : isHollow ? 'hollow' : 'open'}
       className={cn(
-        'flex h-7 w-7 items-center justify-center rounded-full border',
+        'flex h-7 w-7 items-center justify-center rounded-full border lit-pill',
         done
           ? RESOLVED_FILL_CLASS
           : isHollow

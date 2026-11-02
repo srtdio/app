@@ -205,7 +205,7 @@ function CarouselBadge() {
   return (
     <span
       aria-label="Carousel"
-      className="pointer-events-none absolute left-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-lg bg-overlay-badge text-overlay-fg"
+      className="pointer-events-none absolute left-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-lg bg-overlay-badge text-overlay-fg lit-media"
     >
       <IconCarousel size={ICON_SIZE.inline} />
     </span>
@@ -217,7 +217,7 @@ function PlayBadge() {
   return (
     <span
       aria-label="Video"
-      className="pointer-events-none absolute left-1/2 top-1/2 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-overlay-badge text-overlay-fg"
+      className="pointer-events-none absolute left-1/2 top-1/2 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-overlay-badge text-overlay-fg lit-media"
     >
       <IconPlay size={ICON_SIZE.control} />
     </span>
@@ -371,7 +371,7 @@ export function PostCard({
             },
           }
         : {})}
-      className="relative flex h-full min-w-0 flex-col rounded-xl border border-border bg-panel transition-colors hover:bg-panel-2"
+      className="relative flex h-full min-w-0 flex-col rounded-xl border bg-panel lit-card transition-colors hover:bg-panel-2"
     >
       <PressableRow
         type="button"

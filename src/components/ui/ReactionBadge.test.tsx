@@ -29,6 +29,12 @@ describe('ReactionBadge', () => {
     expect(cls.some((c) => /^(min-)?h-/.test(c))).toBe(false);
   });
 
+  it('is lit as a pill, with no shadow utility', () => {
+    const cls = REACTION_BADGE_CLASS.split(' ');
+    expect(cls).toContain('lit-pill');
+    expect(cls.some((c) => /shadow/.test(c))).toBe(false);
+  });
+
   it('adds a ::before hit area of at least 44x44 around the drawn badge', () => {
     const html = render();
     for (const c of ['before:absolute', 'before:-inset-x-2', 'before:-inset-y-3.5']) {

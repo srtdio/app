@@ -110,7 +110,7 @@ export function SectionHeader<S extends string = string>({
   // app top bar. z-20 sits above the grid (z-0) and below the top bar (z-30).
   const childRowClass = cn(
     'px-4 md:px-6 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-    stickyChildren ? 'sticky top-0 z-20 border-b border-border bg-bg py-3' : 'mt-3',
+    stickyChildren ? 'sticky top-0 z-20 border-b bg-bg py-3 lit-header' : 'mt-3',
   );
   return (
     <>
@@ -143,7 +143,7 @@ export function SectionHeader<S extends string = string>({
               placeholder={search.placeholder}
               {...(search.label !== undefined ? { 'aria-label': search.label } : {})}
               className={cn(
-                'h-11 w-full min-w-0 rounded-lg border border-border bg-panel-2 pl-7 text-input md:text-base text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none',
+                'h-11 w-full min-w-0 rounded-lg border border-border bg-panel-2 pl-7 text-input md:text-base text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none lit-well',
                 searching ? 'pr-11' : 'pr-2',
               )}
             />

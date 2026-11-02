@@ -129,7 +129,7 @@ export function FileTileBody(props: FileTileBodyProps): ReactElement {
   return (
     <span
       data-file-tile={kind}
-      className={cn('flex w-full flex-col bg-panel text-left', !card && 'h-full')}
+      className={cn('flex w-full flex-col bg-panel text-left lit-card', !card && 'h-full')}
     >
       <span
         className={cn(
@@ -161,7 +161,7 @@ export function FileTileBody(props: FileTileBodyProps): ReactElement {
         )}
         {kind === 'video' && thumbUrl !== null ? (
           <span className="absolute inset-0 flex items-center justify-center">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-overlay text-overlay-fg">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-overlay text-overlay-fg lit-media">
               <IconPlay size={ICON_SIZE.inline} />
             </span>
           </span>

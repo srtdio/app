@@ -81,7 +81,7 @@ export function PriorityChip(props: {
     <span
       data-task-p={props.priority}
       className={cn(
-        'inline-flex h-[22px] items-center gap-0.5 rounded-lg px-1.5 font-mono text-sm',
+        'inline-flex h-[22px] items-center gap-0.5 rounded-lg px-1.5 font-mono text-sm lit-pill',
         P_TAG[props.priority],
         props.ringed === true && 'ring-2 ring-accent ring-offset-1 ring-offset-panel',
       )}
@@ -182,7 +182,7 @@ function PriorityMenu(props: {
       data-task-menu=""
       style={{ top: pos.top, left: pos.left, width: MENU_W }}
       className={cn(
-        'fixed z-[60] rounded-xl border border-border-strong bg-panel p-1 shadow-2xl transition-opacity duration-fast motion-reduce:transition-none',
+        'fixed z-[60] rounded-xl border bg-panel p-1 lit-overlay transition-opacity duration-fast motion-reduce:transition-none',
         shown ? 'opacity-100' : 'opacity-0',
       )}
     >

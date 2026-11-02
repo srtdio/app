@@ -755,6 +755,12 @@ describe('fix round regressions', () => {
     expect(label).toContain('bg-[var(--guide)]');
     expect(label).toContain('text-[var(--guide-ink)]');
     expect(q('[data-induction-progress]').className).toContain('bg-[var(--guide-deep)]');
+    // One light from above: the label floats, the bar is an overlay, the fill shines.
+    expect(label).toContain('lit-float');
+    expect(label).not.toMatch(/(^|\s)shadow-/);
+    expect(q('[data-induction-progress]').className).toContain('lit-fill');
+    expect(q('[data-induction-bar]').className).toContain('lit-overlay');
+    expect(q('[data-induction-bar]').className).not.toMatch(/(^|\s)shadow-|border-border/);
     const dim = q('[data-induction-box]').className;
     expect(dim).toContain('shadow-[var(--shadow-spotlight)]');
     expect(dim).not.toContain('dark:');

@@ -8,6 +8,11 @@ interface ChipProps extends Omit<
   label: string;
   /** An optional leading mark before the label (Pipeline's stage dot). */
   dot?: ReactNode;
+  /**
+   * An optional mark after the label (the Plan tab's Draft tag). When set, the
+   * label truncates in its own span so the mark keeps the chip's right end.
+   */
+  trailing?: ReactNode;
   /** A filter's count, shown after the label only when above 0. */
   count?: number;
   selected?: boolean;
@@ -36,6 +41,7 @@ const sizes: Record<NonNullable<ChipProps['size']>, string> = {
 export function Chip({
   label,
   dot,
+  trailing,
   count,
   selected = false,
   variant = 'default',
@@ -52,16 +58,19 @@ export function Chip({
       ref={buttonRef}
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg border text-base font-normal transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+        'inline-flex items-center gap-1.5 rounded-lg border text-base font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
         sizes[size],
-        'border-border text-fg-2 hover:bg-panel-2',
-        selected && 'bg-accent-soft text-accent border-accent-line',
-        variant === 'add' && 'border-dashed border-border text-fg-3',
+        variant === 'add'
+          ? 'border-dashed border-border text-fg-3 hover:bg-panel-2'
+          : selected
+            ? 'lit-chip-selected text-accent border-accent-line'
+            : 'lit-chip text-fg hover:bg-panel-2',
         className,
       )}
     >
       {dot}
-      {label}
+      {trailing === undefined ? label : <span className="truncate">{label}</span>}
+      {trailing}
       {count !== undefined && count > 0 ? (
         <>
           {' '}

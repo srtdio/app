@@ -133,7 +133,7 @@ export function ComposerSheet({
         data-composer-sheet=""
         className={cn(
           // Axis: translateY only, as the shared Sheet.
-          'flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
+          'flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border bg-panel lit-overlay transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
           wide && 'lg:w-[960px]',
           entered
             ? 'translate-y-0 opacity-100 duration-slow ease-enter sm:duration-base'

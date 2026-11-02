@@ -234,7 +234,7 @@ export function WorkspaceSettingsPanel() {
 
       <section
         aria-labelledby="workspace-danger-title"
-        className="flex flex-col gap-3 rounded-xl border border-border bg-panel p-4"
+        className="flex flex-col gap-3 rounded-xl border bg-panel lit-card p-4"
       >
         <h3
           id="workspace-danger-title"

@@ -93,9 +93,11 @@ export function PlanDayTiles(props: {
                   onClick={() => props.onPick(day)}
                   className={cn(
                     'relative flex min-h-[62px] flex-col items-center justify-center gap-px border',
+                    // A selection fill, not a button: solid accent with a pill
+                    // light (no glow), lit-chip when idle.
                     on
-                      ? 'border-accent bg-accent text-accent-fg hover:bg-accent'
-                      : 'border-border bg-panel text-fg',
+                      ? 'border-accent bg-accent text-accent-fg hover:bg-accent lit-pill'
+                      : 'bg-panel text-fg lit-chip',
                   )}
                 >
                   <span
@@ -277,7 +279,7 @@ export function PlanDatesSheet(props: {
           ))}
         </div>
         {error !== null ? (
-          <p role="alert" className="rounded-xl bg-bad-soft px-3 py-2.5 text-md text-bad">
+          <p role="alert" className="rounded-xl bg-bad-soft px-3 py-2.5 text-md text-bad lit-tint">
             {error}
           </p>
         ) : null}
