@@ -216,11 +216,8 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(item).toBeVisible();
   await expect(item.getByText('Concept 1 of 1')).toBeVisible();
   await expect(item.locator('[data-plan-media="files"]')).toBeVisible();
-  // Remove from plan: the header More menu's last row, never a body button.
+  // Remove from plan is never a body button (the More menu row: plan-add-move.spec.ts).
   await expect(item.locator('[data-plan-remove]')).toHaveCount(0);
-  await item.locator('[data-plan-item-more]').click();
-  await expect(page.getByRole('menuitem').last()).toHaveText(/Remove from plan/);
-  await page.keyboard.press('Escape');
   await item.locator('[data-plan-approve]').click();
   const confirm = page.getByRole('dialog', { name: 'Mark checked' });
   await expect(confirm).toBeVisible();
