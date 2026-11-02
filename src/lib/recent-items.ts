@@ -809,13 +809,15 @@ export async function refreshRecentTitles(params: {
 }): Promise<void> {
   const key = recentKey(params.userId, params.workspaceId);
   if (refreshed.has(key)) return;
-  if (params.signal?.aborted === true) return;
+  // A function, so the check after the await is not narrowed by the one before it.
+  const aborted = (): boolean => params.signal?.aborted === true;
+  if (aborted()) return;
   const items = readRecents(params.storage, params.userId, params.workspaceId);
   if (items.length === 0) return;
   // The read goes out now: from here this session's pass counts, aborted or not.
   refreshed.add(key);
   const titles = await readRecentTitles({ ...params, items });
   // Aborted mid-read: write nothing, and never send a second read.
-  if (params.signal?.aborted === true) return;
+  if (aborted()) return;
   writeRecentTitles(params.storage, params.userId, params.workspaceId, items, titles, true);
 }
