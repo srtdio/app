@@ -145,7 +145,7 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
         aria-label={title}
         onKeyDown={onKeyDown}
         className={cn(
-          'absolute inset-y-0 right-0 flex w-full max-w-[460px] flex-col border-l border-border-strong bg-panel shadow-2xl transition-transform duration-base motion-reduce:transition-none',
+          'absolute inset-y-0 right-0 flex w-full max-w-[460px] flex-col border-l bg-panel lit-overlay transition-transform duration-base motion-reduce:transition-none',
           entered ? 'translate-x-0 ease-enter' : 'translate-x-full ease-exit',
         )}
       >
@@ -263,7 +263,7 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
   if (kind === 'document') {
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex min-h-[44px] items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 py-2">
+        <div className="flex min-h-[44px] items-center gap-2 rounded-lg border bg-panel-2 px-3 py-2 lit-card-muted">
           <IconFile size={ICON_SIZE.inline} />
           <span className="min-w-0 flex-1 truncate text-base text-fg">{firstMedia?.filename}</span>
         </div>
@@ -362,7 +362,7 @@ function SizePicker({
             onClick={() => onChange(size.label)}
             className={cn(
               'flex flex-col items-start justify-center border px-3 py-1.5 transition-colors motion-reduce:transition-none',
-              selected ? 'border-accent-line bg-accent-soft text-fg' : 'border-border text-fg-2',
+              selected ? 'border-accent-line text-fg lit-chip-selected' : 'font-medium text-fg lit-chip',
             )}
           >
             <span className="text-base font-medium">{size.label}</span>
@@ -411,7 +411,7 @@ function LayoutMock({
     return (
       <figure
         aria-label="Feed preview"
-        className="overflow-hidden rounded-xl border border-border bg-panel"
+        className="overflow-hidden rounded-xl border bg-panel lit-card"
       >
         <div className="flex items-center gap-2 px-3 py-2">
           {avatar}

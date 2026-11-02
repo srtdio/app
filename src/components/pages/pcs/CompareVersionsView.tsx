@@ -96,7 +96,7 @@ function renderMarked(
 
 function Panel({ label, children }: { label?: string; children: ReactNode }): ReactNode {
   return (
-    <div className="rounded-xl border border-border bg-panel p-[18px]">
+    <div className="rounded-xl border bg-panel p-[18px] lit-card">
       {label !== undefined ? (
         <div className="mb-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
           {label}
@@ -153,7 +153,7 @@ export function compareVersionsView({
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 md:px-6">
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-accent-line bg-accent-soft px-4 py-3 text-accent">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-accent-line bg-accent-soft px-4 py-3 text-accent lit-tint">
         <div className="flex min-w-0 flex-col">
           <span className="text-base font-medium">
             Comparing v{fromVersionNumber} → v{toVersionNumber}
@@ -179,7 +179,7 @@ export function compareVersionsView({
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="inline-flex rounded-lg border border-border bg-panel-2 p-[3px]">
+            <div className="inline-flex rounded-lg border border-border bg-panel-2 p-[3px] lit-well">
               {MODES.map((option) => {
                 const active = mode === option.value;
                 return (

@@ -72,7 +72,7 @@ export function ReminderOptions(props: {
       {props.preview !== null ? (
         <p
           data-reminder-preview=""
-          className="mb-2 truncate rounded-lg bg-panel-2 px-3 py-2 text-base text-fg-2"
+          className="mb-2 truncate rounded-lg bg-panel-2 px-3 py-2 text-base text-fg-2 lit-well-soft"
         >
           {props.preview}
         </p>
@@ -159,7 +159,7 @@ function PresetRow(props: {
         onClick={props.onClick}
         className="flex min-h-[56px] items-center gap-3 px-2 text-fg"
       >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-panel-2 text-fg-2">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-panel-2 text-fg-2 lit-btn-secondary">
           <IconAlarmClock size={ICON_SIZE.control} />
         </span>
         <span className="flex-1 text-lg font-medium">{props.label}</span>
@@ -183,7 +183,7 @@ function CancelReminderRow(props: { onClick: () => void }): ReactElement {
         onClick={props.onClick}
         className="flex min-h-[56px] items-center gap-3 px-2 text-bad hover:bg-bad-soft"
       >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-bad-soft text-bad">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-bad-soft text-bad lit-tint">
           <IconX size={ICON_SIZE.control} />
         </span>
         <span className="flex-1 text-lg font-medium">{CANCEL_REMINDER_LABEL}</span>

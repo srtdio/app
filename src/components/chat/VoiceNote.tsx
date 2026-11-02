@@ -828,7 +828,7 @@ function TranscriptDrop(props: {
           <p
             dir="auto"
             className={cn(
-              'select-text whitespace-pre-wrap rounded-xl px-3 py-2 [overflow-wrap:anywhere] text-lg',
+              'select-text whitespace-pre-wrap rounded-xl px-3 py-2 [overflow-wrap:anywhere] text-lg lit-well-soft',
               props.panel,
               props.ink,
             )}
@@ -1315,7 +1315,7 @@ export function VoiceNote({
         >
           <span
             className={cn(
-              'flex h-6 items-center rounded-full px-2 text-sm font-semibold leading-4 tabular-nums',
+              'flex h-6 items-center rounded-full px-2 text-sm font-semibold leading-4 tabular-nums lit-pill',
               tone.pill,
             )}
           >

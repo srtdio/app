@@ -164,7 +164,7 @@ function PresetRow(props: {
         onClick={props.onClick}
         className="flex min-h-[56px] items-center gap-3 px-2 text-fg"
       >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-panel-2 text-fg-2">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-panel-2 text-fg-2 lit-btn-secondary">
           <IconCalendarClock size={ICON_SIZE.control} />
         </span>
         <span className="flex-1 text-lg font-medium">{props.label}</span>
@@ -277,7 +277,7 @@ export function ScheduleMenu(props: {
       aria-label={SCHEDULE_SHEET_TITLE}
       data-schedule-menu=""
       className={cn(
-        'absolute bottom-full right-3 z-30 mb-2 flex w-[340px] max-w-[calc(100%-24px)] flex-col rounded-xl border border-border-strong bg-panel shadow-2xl transition-opacity duration-base motion-reduce:transition-none',
+        'absolute bottom-full right-3 z-30 mb-2 flex w-[340px] max-w-[calc(100%-24px)] flex-col rounded-xl border bg-panel lit-overlay transition-opacity duration-base motion-reduce:transition-none',
         shown ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
       )}
     >

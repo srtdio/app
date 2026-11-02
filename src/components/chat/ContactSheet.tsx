@@ -70,7 +70,7 @@ function contactPage(props: {
       data-contact-page=""
       className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
     >
-      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-panel px-2 md:px-4">
+      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header">
         {select?.selecting === true ? (
           select.header
         ) : (

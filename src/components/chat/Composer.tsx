@@ -509,7 +509,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
       data-about-bar={post?.id ?? ''}
       data-about-loading={post === null ? '' : undefined}
       className={cn(
-        'flex min-w-0 items-center gap-2 overflow-hidden rounded-lg bg-panel-3',
+        'flex min-w-0 items-center gap-2 overflow-hidden rounded-lg bg-panel-3 lit-well',
         NO_TOUCH_SELECT,
       )}
     >
@@ -1067,9 +1067,9 @@ function PendingThumb(props: {
         <span
           data-schedule-upload-bar={progress}
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-[3px] bg-panel-3"
+          className="absolute inset-x-0 bottom-0 h-[3px] bg-panel-3 lit-well"
         >
-          <span className="block h-full bg-accent" style={{ width: `${progress}%` }} />
+          <span className="block h-full bg-accent lit-fill" style={{ width: `${progress}%` }} />
         </span>
       ) : null}
     </span>
@@ -2135,7 +2135,7 @@ export function Composer(props: ComposerProps): ReactElement {
         ref={formRef}
         onSubmit={submit}
         {...bottomAnchorProps}
-        className="relative flex flex-col gap-2 border-t border-border bg-panel px-3 py-2.5"
+        className="relative flex flex-col gap-2 border-t bg-panel px-3 py-2.5 lit-dock"
       >
         {mentionRows.length > 0 ? (
           <div data-mention-anchor="" className="absolute inset-x-3 bottom-full z-20 mb-2">
@@ -2312,7 +2312,7 @@ export function Composer(props: ComposerProps): ReactElement {
               >
                 <IconTrash size={ICON_SIZE.control} />
               </IconButton>
-              <div className="flex h-11 flex-1 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3">
+              <div className="flex h-11 flex-1 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 lit-well">
                 <span
                   aria-hidden="true"
                   className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-bad"
@@ -2430,7 +2430,14 @@ export function Composer(props: ComposerProps): ReactElement {
                   <IconMic size={ICON_SIZE.control} />
                 </Button>
               ) : (
-                <div className="flex shrink-0">
+                <div
+                  className={cn(
+                    'flex shrink-0',
+                    // Split send/schedule: one lit button on the shared wrapper.
+                    showChevron &&
+                      cn('lit-btn-primary', scheduleBusy ? 'rounded-l-lg rounded-r-full' : 'rounded-full'),
+                  )}
+                >
                   <Button
                     type="submit"
                     variant="primary"

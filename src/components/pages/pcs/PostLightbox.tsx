@@ -217,7 +217,7 @@ export function fitFrameStyle(width: number, height: number): CSSProperties {
 // the design system). Icon buttons overlaid on the image (close/prev/next): a
 // translucent chip keeps them legible over any photo, dark in both app themes.
 const OVERLAY_SKIN =
-  'bg-overlay-surface text-overlay-fg hover:bg-overlay-line hover:text-overlay-fg ' +
+  'bg-overlay-surface text-overlay-fg lit-media hover:bg-overlay-line hover:text-overlay-fg ' +
   'disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
 
 // Icon buttons in the action bar below the image, which sits on the viewer's own
@@ -457,7 +457,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
             keep both legible over any photo. */}
         <span
           className={cn(
-            'pointer-events-none absolute left-2 top-2 rounded-lg bg-overlay-surface px-2 py-1 font-mono text-base tabular-nums text-overlay-fg',
+            'pointer-events-none absolute left-2 top-2 rounded-lg bg-overlay-surface px-2 py-1 font-mono text-base tabular-nums text-overlay-fg lit-media',
             chromeMotion(chromeVisible),
           )}
         >
@@ -601,7 +601,7 @@ function FileSlideCard({
 }): ReactElement {
   return (
     <div data-file-slide="" className="flex flex-col items-center gap-3 px-6 text-center">
-      <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-overlay-surface text-base font-medium text-overlay-fg">
+      <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-overlay-surface text-base font-medium text-overlay-fg lit-media">
         {label}
       </span>
       <Button
@@ -611,7 +611,7 @@ function FileSlideCard({
           event.stopPropagation();
           onOpen();
         }}
-        className="bg-overlay-surface text-overlay-fg hover:bg-overlay-line hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg"
+        className="bg-overlay-surface text-overlay-fg lit-media hover:bg-overlay-line hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg"
       >
         Open
       </Button>
@@ -634,7 +634,7 @@ function GracefulPanel({
   busy?: boolean;
 }) {
   return (
-    <div className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-2xl">
+    <div className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg lit-overlay">
       <p className="text-sm text-fg-3">{message}</p>
       {onDownload !== undefined ? (
         <Button type="button" variant="primary" onClick={onDownload} disabled={busy}>

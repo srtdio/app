@@ -108,7 +108,7 @@ export function UploadRing({
       <span
         aria-hidden="true"
         data-upload-disc=""
-        className={cn(LAYER, RING_CLASS[variant], 'rounded-full bg-overlay opacity-60')}
+        className={cn(LAYER, RING_CLASS[variant], 'rounded-full bg-overlay opacity-60 lit-media')}
       />
       <ProgressRing
         progress={progress}

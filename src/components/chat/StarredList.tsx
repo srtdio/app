@@ -308,7 +308,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
         onClick={selecting !== undefined ? selecting.onToggle : props.onOpen}
         onContextMenu={noCallout}
         className={cn(
-          'flex min-w-0 items-center gap-3 rounded-2xl border border-border bg-panel p-3',
+          'flex min-w-0 items-center gap-3 rounded-2xl border bg-panel p-3 lit-card',
           NO_TOUCH_SELECT,
         )}
       >
@@ -340,7 +340,9 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
               props.fullText === true
                 ? 'min-w-0 [overflow-wrap:anywhere]'
                 : 'line-clamp-3 break-words',
-              props.mine ? 'bg-bubble-own text-accent-fg' : 'bg-panel-2 text-fg',
+              props.mine
+                ? 'bg-bubble-own text-accent-fg lit-bubble-own'
+                : 'bg-panel-2 text-fg lit-bubble-other',
             )}
           >
             {props.text}
@@ -672,7 +674,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
       {editing ? (
         <div
           data-starred-bar=""
-          className="sticky bottom-0 mt-3 flex items-center justify-end border-t border-border bg-panel px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3"
+          className="sticky bottom-0 mt-3 flex items-center justify-end border-t bg-panel px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 lit-dock"
         >
           <Button
             variant="ghost"
@@ -727,7 +729,7 @@ export function StarredSheet(props: {
       data-starred-sheet=""
       className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
     >
-      <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-panel px-2 md:px-4">
+      <div className="flex h-14 shrink-0 items-center gap-1 border-b bg-panel px-2 md:px-4 lit-header">
         <IconButton label="Back" onClick={onClose}>
           <IconChevronLeft size={ICON_SIZE.control} />
         </IconButton>

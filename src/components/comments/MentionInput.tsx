@@ -430,11 +430,11 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
         }}
         onBlur={saveSelection}
         onKeyDown={onKeyDown}
-        className="w-full whitespace-pre-wrap break-words rounded-lg border border-border bg-panel-2 px-3 py-2.5 text-base text-fg outline-none focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[44px] empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3"
+        className="w-full whitespace-pre-wrap break-words rounded-lg border border-border bg-panel-2 px-3 py-2.5 text-base text-fg outline-none lit-well focus:border-accent-line focus:ring-2 focus:ring-accent-soft min-h-[44px] empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3"
       />
 
       {open ? (
-        <ul className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-xl border border-border bg-panel py-1 shadow-2xl">
+        <ul className="absolute left-0 right-0 z-20 mt-1 max-h-64 overflow-auto rounded-xl border bg-panel py-1 lit-overlay">
           {matches.map((member, index) => (
             <li key={member.id}>
               <PressableRow

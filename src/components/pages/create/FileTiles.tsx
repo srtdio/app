@@ -208,7 +208,7 @@ export function FileTiles({
             className={cn(
               'relative h-16 w-16 shrink-0 touch-pan-x select-none [-webkit-touch-callout:none]',
               dragging
-                ? 'z-20 cursor-grabbing shadow-lg'
+                ? 'z-20 cursor-grabbing lit-float'
                 : 'transition-transform duration-fast motion-reduce:transition-none',
               count > 1 && !dragging && 'cursor-grab',
             )}

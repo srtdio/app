@@ -23,7 +23,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
 import { ICON_SIZE, IconChat, IconPlan } from '@/components/ui/icons';
-import { CouldntLoadCard, SHARED_CARD } from '@/components/chat/PostCard';
+import { CouldntLoadCard, SHARED_CARD_MUTED } from '@/components/chat/PostCard';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { usePaintLogCommit } from '@/components/chat/PaintLog';
 import {
@@ -78,7 +78,7 @@ export type PlanCardView = { kind: 'plan'; bundle: PlanBundle } | { kind: 'unava
  * skeleton's height: the swap from skeleton to card never moves the thread.
  */
 export const PLAN_CARD =
-  'flex h-[217px] w-[284px] max-w-full flex-col overflow-hidden rounded-xl border border-border bg-panel text-left';
+  'flex h-[217px] w-[284px] max-w-full flex-col overflow-hidden rounded-xl border bg-panel text-left lit-card';
 
 /** A loading plan card: exactly the card's height. */
 export const PLAN_CARD_SKELETON =
@@ -228,11 +228,11 @@ export function PlanCardBar(props: {
       aria-valuemin={0}
       aria-valuemax={props.max}
       aria-valuenow={props.value}
-      className="block h-1.5 overflow-hidden rounded-full bg-panel-3"
+      className="block h-1.5 overflow-hidden rounded-full bg-panel-3 lit-well"
     >
       <span
         data-plan-card-bar={props.side}
-        className={cn('block h-1.5', props.side === 'team' ? 'bg-accent' : 'bg-good')}
+        className={cn('block h-1.5 lit-fill', props.side === 'team' ? 'bg-accent' : 'bg-good')}
         style={{ width: `${props.percent}%` }}
       />
     </span>
@@ -248,7 +248,7 @@ export function PlanCardBody(props: {
 }): ReactElement {
   if (props.view.kind === 'unavailable') {
     return (
-      <div data-plan-card="unavailable" className={cn(SHARED_CARD, 'bg-panel-2 text-fg-2')}>
+      <div data-plan-card="unavailable" className={cn(SHARED_CARD_MUTED, 'text-fg-2')}>
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
           <IconPlan size={ICON_SIZE.nav} />
         </span>
@@ -270,7 +270,7 @@ export function PlanCardBody(props: {
               key={chip.label}
               data-plan-chip={chip.tone}
               className={cn(
-                'inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-lg border px-2 text-md',
+                'inline-flex h-6 shrink-0 items-center whitespace-nowrap rounded-lg border px-2 text-md lit-pill',
                 chip.tone === 'warn'
                   ? 'border-warn bg-warn-soft text-warn'
                   : 'border-transparent bg-panel-2 text-fg-2',
@@ -503,7 +503,7 @@ function forwardList(
             {agencyOnly && summaryHasClient(channel) === true ? (
               <span
                 data-plan-has-client=""
-                className="shrink-0 whitespace-nowrap rounded-full bg-warn-soft px-2 py-0.5 text-xs font-semibold leading-4 text-warn"
+                className="shrink-0 whitespace-nowrap rounded-full bg-warn-soft px-2 py-0.5 text-xs font-semibold leading-4 text-warn lit-pill"
               >
                 {HAS_CLIENT_TAG}
               </span>

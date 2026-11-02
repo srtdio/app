@@ -112,7 +112,7 @@ export function ScheduledListSheet(
             <li
               key={row.id}
               data-scheduled-card={row.id}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-panel-2 p-3"
+              className="flex flex-col gap-2 rounded-lg border bg-panel-2 p-3 lit-card-muted"
             >
               <div className={cn('flex items-center gap-2 text-fg-2', NO_TOUCH_SELECT)}>
                 <IconCalendarClock size={ICON_SIZE.inline} className="text-accent" />
@@ -140,7 +140,7 @@ export function ScheduledListSheet(
                       <p
                         data-scheduled-preview=""
                         className={cn(
-                          'max-w-[85%] whitespace-pre-wrap break-words bg-bubble-own px-3 py-2 text-lg leading-snug text-accent-fg',
+                          'max-w-[85%] whitespace-pre-wrap break-words bg-bubble-own px-3 py-2 text-lg leading-snug text-accent-fg lit-bubble-own',
                           BUBBLE_SHAPE.touch,
                           BUBBLE_TAIL.mine,
                         )}

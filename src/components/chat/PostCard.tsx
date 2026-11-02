@@ -355,7 +355,7 @@ export function CouldntLoadCard(props: { onRetry: () => void; className?: string
       // inline (w-auto) plus a fixed min/max of 240: the shared card's width
       // without a w-* class against PressableRow's own.
       className={cn(
-        `${SHARED_CARD_BODY} min-w-[240px] max-w-[240px] bg-panel-2 text-fg-2`,
+        `${SHARED_CARD_BODY} min-w-[240px] max-w-[240px] bg-panel-2 text-fg-2 lit-card-muted`,
         props.className,
       )}
     >
@@ -624,18 +624,26 @@ export function SharedPostCardList(
   );
 }
 
-/** The shared card box: one tappable row, thumb + title over meta. */
+/**
+ * The shared card box: one tappable row, thumb + title over meta. No border
+ * colour: the lit class draws the edges (lit-card live, lit-card-muted neutral).
+ */
 const SHARED_CARD_BODY =
-  'flex items-center gap-2.5 rounded-xl border border-border px-2.5 py-2 min-h-[44px]';
+  'flex items-center gap-2.5 rounded-xl border px-2.5 py-2 min-h-[44px]';
 const SHARED_CARD_BOX = `w-[240px] ${SHARED_CARD_BODY}`;
-export const SHARED_CARD = `${SHARED_CARD_BOX} bg-panel`;
+export const SHARED_CARD = `${SHARED_CARD_BOX} bg-panel lit-card`;
+/** The same box on the neutral fill (unavailable, not visible): lit-card-muted. */
+export const SHARED_CARD_MUTED = `${SHARED_CARD_BOX} bg-panel-2 lit-card-muted`;
 
 /**
  * The live post card frame: media box, body, footer stacked, at the one fixed
  * outer height (cardBoxStyle). Every child keeps its own size (shrink-0).
  */
 export const POST_CARD =
-  'flex w-[240px] flex-col overflow-hidden rounded-xl border border-border bg-panel text-left';
+  'flex w-[240px] flex-col overflow-hidden rounded-xl border bg-panel text-left lit-card';
+/** POST_CARD's box on the neutral fill (not visible to this viewer). */
+export const POST_CARD_MUTED =
+  'flex w-[240px] flex-col overflow-hidden rounded-xl border bg-panel-2 text-left lit-card-muted';
 
 /** A loading card's frame: POST_CARD's box on a neutral fill, no pulse. */
 export const CARD_SKELETON =
@@ -724,7 +732,7 @@ export function PostCardSkeleton(props: { platform: string | null }): ReactEleme
 
 /** A small pill laid over the cover image. */
 const MEDIA_PILL =
-  'inline-flex h-5 items-center gap-1 rounded-lg bg-panel px-1.5 text-xs font-medium text-fg';
+  'inline-flex h-5 items-center gap-1 rounded-lg bg-panel px-1.5 text-xs font-medium text-fg lit-media';
 
 /**
  * The card's tap and Enter key: both open its sheet, neither navigates (the sheet
@@ -1121,7 +1129,7 @@ function CardVideo(props: CardMediaProps): ReactElement {
         data-card-play=""
         className="pointer-events-none absolute inset-0 flex items-center justify-center"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-overlay text-overlay-fg">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-overlay text-overlay-fg lit-media">
           <IconPlay size={ICON_SIZE.inline} />
         </span>
       </span>
@@ -1270,7 +1278,7 @@ export function NotVisibleCard(props: { platform?: string | null }): ReactElemen
     <div
       data-card-not-visible=""
       style={cardBoxStyle(platform, layout)}
-      className={cn(POST_CARD, 'bg-panel-2 text-fg-2')}
+      className={cn(POST_CARD_MUTED, 'text-fg-2')}
     >
       <CardMediaSlot platform={platform} />
       <div className={CARD_BODY}>
@@ -1303,7 +1311,7 @@ export function PostCouldntLoadCard(props: {
       style={cardBoxStyle(props.platform, layout)}
       // inline (w-auto) plus a fixed min/max of 240: the card's width without a
       // w-* class against PressableRow's own.
-      className="flex min-w-[240px] max-w-[240px] flex-col overflow-hidden border border-border bg-panel-2 text-fg-2"
+      className="flex min-w-[240px] max-w-[240px] flex-col overflow-hidden border bg-panel-2 text-fg-2 lit-card-muted"
     >
       <CardMediaSlot platform={props.platform} />
       <span className={CARD_BODY}>

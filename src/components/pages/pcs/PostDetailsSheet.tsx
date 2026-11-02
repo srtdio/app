@@ -384,7 +384,7 @@ export function PostDetailsSheet({
           {onCreateBucket !== undefined && newBucketOpen ? (
             <div
               data-new-bucket=""
-              className="mt-1 flex flex-col gap-2 rounded-lg border border-border bg-panel-2 p-3"
+              className="mt-1 flex flex-col gap-2 rounded-lg border bg-panel-2 p-3 lit-card-muted"
             >
               <Input
                 autoFocus

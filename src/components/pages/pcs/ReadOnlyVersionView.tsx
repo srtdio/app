@@ -49,7 +49,7 @@ export function ReadOnlyVersionView({
       <div
         role="status"
         data-version-banner=""
-        className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-panel-2 px-4 py-3 text-base text-fg-2"
+        className="flex flex-wrap items-center gap-2 rounded-xl border bg-panel-2 px-4 py-3 text-base text-fg-2 lit-card-muted"
       >
         <span className="font-medium text-fg">Versions can&apos;t be changed</span>
         <span aria-hidden>·</span>
@@ -72,7 +72,7 @@ export function ReadOnlyVersionView({
             size="lg"
           />
         ) : (
-          <div className="rounded-lg border border-border bg-panel-2 px-4 py-6 text-center text-base text-fg-3">
+          <div className="rounded-lg border bg-panel-2 px-4 py-6 lit-card-muted text-center text-base text-fg-3">
             {imageCountLabel(imageCount)}
           </div>
         )}

@@ -246,7 +246,7 @@ describe('PostDetailPage embedded', () => {
   it('non-embedded keeps the h-14 header with Back', () => {
     const html = paint(false);
     expect(html).toContain('Loading post');
-    expect(html).toContain('flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border');
+    expect(html).toContain('flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header');
     expect(html).toContain('aria-label="Back"');
   });
 

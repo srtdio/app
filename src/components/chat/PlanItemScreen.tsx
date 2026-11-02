@@ -1079,7 +1079,7 @@ export function PlanItemScreen(props: {
                   {picker.hiddenApprovers ? (
                     <p
                       data-plan-mention-note=""
-                      className="rounded-lg border border-border bg-panel px-3 py-2 text-sm text-fg-3"
+                      className="rounded-lg border bg-panel px-3 py-2 text-sm text-fg-3 lit-overlay"
                     >
                       {MENTION_TEAM_NOTE}
                     </p>
@@ -1089,7 +1089,7 @@ export function PlanItemScreen(props: {
               {askingChanges ? (
                 <div
                   data-plan-ask-hint=""
-                  className="flex items-center gap-2 rounded-xl bg-panel-2 py-1 pl-3 pr-1 text-md text-fg-2"
+                  className="flex items-center gap-2 rounded-xl bg-panel-2 py-1 pl-3 pr-1 text-md text-fg-2 lit-card-muted"
                 >
                   <p className="min-w-0 flex-1 py-2">{ASK_CHANGES_HINT}</p>
                   <IconButton
@@ -1171,7 +1171,10 @@ export function PlanItemScreen(props: {
                     onClick={() => setVisibility(teamNote ? 'everyone' : 'team')}
                     className={cn(
                       'shrink-0',
-                      teamNote ? 'border-[color:var(--warn-line)] bg-warn-soft text-warn' : null,
+                      // bg-none: the warn fill shows through the chip's lit gradient.
+                      teamNote
+                        ? 'border-[color:var(--warn-line)] bg-warn-soft bg-none text-warn'
+                        : null,
                     )}
                   />
                 ) : (
@@ -1228,7 +1231,7 @@ export function PlanItemScreen(props: {
             </section>
             <div
               data-plan-description-card=""
-              className="flex flex-col gap-1.5 rounded-lg border border-border bg-panel p-3"
+              className="flex flex-col gap-1.5 rounded-lg border bg-panel p-3 lit-card"
             >
               <div className="flex items-start justify-between gap-2">
                 <h3 className="min-w-0 break-words pt-2.5 text-lg font-semibold text-fg">
@@ -1258,7 +1261,7 @@ export function PlanItemScreen(props: {
             </div>
             <div
               data-plan-status=""
-              className="flex flex-col gap-1.5 rounded-lg border border-border bg-panel p-3"
+              className="flex flex-col gap-1.5 rounded-lg border bg-panel p-3 lit-card"
             >
               <div className="flex min-h-[28px] items-center justify-between gap-2">
                 <span className="text-base text-fg-3">Date</span>
@@ -1445,7 +1448,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="failed"
-        className="flex min-h-[72px] items-center justify-between gap-3 rounded-lg border border-border bg-panel px-3.5"
+        className="flex min-h-[72px] items-center justify-between gap-3 rounded-lg border bg-panel px-3.5 lit-card"
       >
         <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
         <Button data-plan-media-retry="" onClick={props.onRetry}>
@@ -1497,7 +1500,7 @@ function ItemMedia(props: {
               onClick={() => open(file)}
               className="flex min-w-0 flex-col gap-1"
             >
-              <span className="block w-full overflow-hidden rounded-lg border border-border bg-panel-2">
+              <span className="block w-full overflow-hidden rounded-lg border bg-panel-2 lit-card-muted">
                 <Thumbnail
                   assetVersionId={file.versionId}
                   cache={sharedCardPresignCache()}

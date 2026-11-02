@@ -78,7 +78,7 @@ const ICON_TONE: Record<StatusTone, string> = {
 const FULL_CHEVRON_GAP = 12;
 
 const BAR =
-  'relative z-10 flex h-9 w-full shrink-0 items-center border-b border-border bg-panel px-4';
+  'relative z-10 flex h-9 w-full shrink-0 items-center border-b bg-panel px-4 lit-header';
 
 /**
  * One bar item; compact drops the word and the "+K" (a plan keeps its lead).

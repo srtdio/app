@@ -444,9 +444,9 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
           <div
             key={column}
             aria-hidden="true"
-            className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2"
+            className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2 lit-well-soft"
           >
-            <div className="flex h-11 items-center gap-2 border-b border-border px-3">
+            <div className="flex h-11 items-center gap-2 border-b px-3 lit-header">
               <div className="h-3 w-1/3 rounded bg-panel-3" />
             </div>
             <div className="flex flex-col gap-2 p-2">

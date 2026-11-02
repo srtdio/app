@@ -335,7 +335,7 @@ export function isTextField(target: EventTarget | null): boolean {
  * (role dialog, aria-modal) whose focus moves in on open and returns to the
  * opener on close (useModalFocus). Laptop (md and up): a right-docked panel,
  * full height and at its final width from its first frame (PLAN_PANEL_WIDTH),
- * border-left, a left-edge shadow while it overlays (below 1180px), no scrim,
+ * border-left, lit as an overlay (lit-overlay) at every width, no scrim,
  * not modal (role complementary), entering on translateX 24px to 0 with
  * opacity (reduced motion: none), a close X in the header. Opening focuses its
  * heading; closing hands focus back to what opened it. Escape: a key inside
@@ -508,7 +508,7 @@ export function PlanPage(props: {
         desktop
           ? // Laptop: the box is final on its first frame; axis: translateX only.
             cn(
-              'fixed inset-y-0 right-0 z-40 flex flex-col border-l border-border bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] [box-shadow:var(--shadow-panel-left)] transition-[transform,opacity] duration-base motion-reduce:transition-none min-[1180px]:[box-shadow:none]',
+              'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] lit-overlay transition-[transform,opacity] duration-base motion-reduce:transition-none',
               PLAN_PANEL_WIDTH,
             )
           : 'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] transition-transform duration-slow ease-enter motion-reduce:transition-none',
@@ -528,7 +528,7 @@ export function PlanPage(props: {
         // is always drawn so the header never grows after the plan loads.
         <header
           data-plan-header-two-line=""
-          className="relative z-20 flex shrink-0 flex-col gap-[2px] border-b border-border bg-panel px-4"
+          className="relative z-20 flex shrink-0 flex-col gap-[2px] border-b bg-panel px-4 lit-header"
         >
           <div data-plan-header-line="1" className="flex min-h-[48px] items-center gap-2">
             {backButton}
@@ -560,7 +560,7 @@ export function PlanPage(props: {
         <header
           className={cn(
             // 16px on both sides: the back glyph and the last text action sit on the lines.
-            'relative z-20 flex min-h-[60px] shrink-0 items-center gap-2 border-b border-border bg-panel pl-4 pr-4',
+            'relative z-20 flex min-h-[60px] shrink-0 items-center gap-2 border-b bg-panel pl-4 pr-4 lit-header',
           )}
         >
           {backButton}
@@ -592,7 +592,7 @@ export function PlanPage(props: {
         {props.children}
       </div>
       {props.footer !== undefined ? (
-        <div className="shrink-0 border-t border-border bg-panel px-4 pb-3 pt-2.5">
+        <div className="shrink-0 border-t bg-panel px-4 pb-3 pt-2.5 lit-dock">
           {props.footer}
         </div>
       ) : null}
@@ -756,7 +756,7 @@ export function PlanPill(props: { pill: StatusPill }): ReactElement {
     <span
       data-plan-pill={props.pill.side}
       className={cn(
-        'inline-flex min-h-[24px] items-center rounded-lg px-2 text-md',
+        'inline-flex min-h-[24px] items-center rounded-lg px-2 text-md lit-pill',
         PILL_TONES[props.pill.tone],
       )}
     >
@@ -807,16 +807,16 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }
         <div
           key={box.key}
           data-plan-screen-progress={box.key}
-          className="flex min-w-0 flex-col gap-1.5 rounded-xl bg-panel-2 p-3"
+          className="flex min-w-0 flex-col gap-1.5 rounded-xl bg-panel-2 p-3 lit-card-muted"
         >
           <span className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
             {box.label}
           </span>
           <span className="truncate font-mono text-md text-fg">{box.text}</span>
-          <span className="block h-1 overflow-hidden rounded-full bg-panel-3">
+          <span className="block h-1 overflow-hidden rounded-full bg-panel-3 lit-well">
             <span
               data-plan-progress-bar={box.tone}
-              className={cn('block h-1', box.bar)}
+              className={cn('block h-1 lit-fill', box.bar)}
               style={{ width: `${box.percent}%` }}
             />
           </span>
@@ -2200,7 +2200,7 @@ export function PlanScreen(props: {
       >
         <span
           data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-lg border border-transparent bg-accent-soft px-3 text-base font-semibold leading-5 text-accent group-hover:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+          className="flex h-[34px] items-center gap-1.5 rounded-lg border border-transparent px-3 text-base font-semibold leading-5 text-accent lit-chip-selected group-hover:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-accent"
         >
           <IconPlus size={ICON_SIZE.inline} />
           Add
@@ -2215,7 +2215,7 @@ export function PlanScreen(props: {
       >
         <span
           data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-lg border border-border-strong bg-panel px-3 text-base font-semibold leading-5 text-fg group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+          className="flex h-[34px] items-center gap-1.5 rounded-lg border bg-panel px-3 text-base font-semibold leading-5 text-fg lit-btn-secondary group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent"
         >
           <IconEdit size={ICON_SIZE.inline} />
           {EDIT_LABEL}
@@ -2290,7 +2290,7 @@ export function PlanScreen(props: {
           <div
             role="status"
             data-plan-skipped-notes=""
-            className="mx-3 mt-3 flex items-start gap-2 rounded-xl bg-warn-soft py-1 pl-3 pr-1 text-md text-warn"
+            className="mx-3 mt-3 flex items-start gap-2 rounded-xl bg-warn-soft py-1 pl-3 pr-1 text-md text-warn lit-tint"
           >
             <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-2">
               {skippedNotes.map((note, at) => (
@@ -2610,7 +2610,7 @@ export function PlanEditHeader(props: {
         <div
           role="alert"
           data-plan-save-error=""
-          className="flex items-center justify-between gap-2 rounded-xl bg-bad-soft py-1 pl-3 pr-1 text-md leading-[1.45] text-bad"
+          className="flex items-center justify-between gap-2 rounded-xl bg-bad-soft py-1 pl-3 pr-1 text-md leading-[1.45] text-bad lit-tint"
         >
           <p className="min-w-0 flex-1 py-2">{props.error}</p>
           <Button
@@ -2772,7 +2772,7 @@ export function PlanHeaderMenu(props: {
       data-plan-header-menu=""
       onKeyDown={onKeyDown}
       className={cn(
-        'absolute left-12 top-full z-20 mt-1 flex w-56 flex-col overflow-hidden rounded-xl border border-border-strong bg-panel py-1 shadow-2xl transition-transform duration-fast ease-enter motion-reduce:transition-none',
+        'absolute left-12 top-full z-20 mt-1 flex w-56 flex-col overflow-hidden rounded-xl border bg-panel py-1 lit-overlay transition-transform duration-fast ease-enter motion-reduce:transition-none',
         entered ? 'translate-y-0' : '-translate-y-1',
         NO_TOUCH_SELECT,
       )}
@@ -2895,7 +2895,7 @@ export function PlanFooter(props: {
           data-plan-primary={action.kind}
           data-plan-send-state="sent"
           disabled
-          className="w-full min-w-0 cursor-default border-accent-line bg-accent-soft text-accent disabled:opacity-100"
+          className="w-full min-w-0 cursor-default border-accent-line text-accent lit-chip-selected disabled:opacity-100"
         >
           <span className="truncate">{label}</span>
         </Button>
@@ -3140,7 +3140,7 @@ function DragCard(props: {
       {props.desktop === true ? <style>{'*{cursor:grabbing !important}'}</style> : null}
       <div
         className={cn(
-          'flex items-start gap-3 rounded-lg border border-border bg-panel p-2 shadow-lg transition-transform ease-enter motion-reduce:scale-100 motion-reduce:transition-none',
+          'flex items-start gap-3 rounded-lg border border-border bg-panel p-2 lit-float transition-transform ease-enter motion-reduce:scale-100 motion-reduce:transition-none',
           lifted && props.desktop !== true ? 'scale-[1.02]' : 'scale-100',
         )}
         style={{ transitionDuration: `${DRAG_LIFT_MS}ms` }}
@@ -3447,8 +3447,9 @@ export function DayColumn(props: {
       data-plan-day-col=""
       {...(isToday ? { 'data-plan-today': '' } : {})}
       className={cn(
-        'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border',
-        isToday ? 'border-accent bg-accent' : 'border-border-strong bg-panel',
+        'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border lit-card',
+        // Today keeps its solid accent fill: bg-none drops lit-card's gradient.
+        isToday ? 'border-accent bg-accent bg-none' : 'bg-panel',
       )}
     >
       <span
@@ -3482,7 +3483,7 @@ export function DayColumn(props: {
       {tile}
       <span
         data-plan-today-pill=""
-        className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-fg"
+        className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-fg lit-pill"
       >
         {TODAY_LABEL}
       </span>
@@ -3527,8 +3528,8 @@ export function PlanSwitch(props: {
           segment,
           'rounded-r-none text-good hover:text-good',
           props.current === 'approved'
-            ? 'border-good bg-good-soft'
-            : 'border-border-strong bg-panel',
+            ? 'border-good bg-good-soft lit-active'
+            : 'border-border-strong bg-panel lit-chip',
         )}
       >
         <IconCheck size={ICON_SIZE.inline} />
@@ -3543,7 +3544,9 @@ export function PlanSwitch(props: {
         className={cn(
           segment,
           '-ml-px rounded-l-none text-bad hover:text-bad',
-          props.current === 'changes' ? 'border-bad bg-bad-soft' : 'border-border-strong bg-panel',
+          props.current === 'changes'
+            ? 'border-bad bg-bad-soft lit-active'
+            : 'border-border-strong bg-panel lit-chip',
         )}
       >
         <IconX size={ICON_SIZE.inline} />
@@ -3923,7 +3926,7 @@ function PlanRow(props: {
         {alsoIn !== null ? (
           <span
             data-plan-row-also-in=""
-            className="inline-flex max-w-full self-start truncate rounded px-1.5 text-xs font-semibold bg-warn-soft text-warn"
+            className="inline-flex max-w-full self-start truncate rounded px-1.5 text-xs font-semibold bg-warn-soft text-warn lit-pill"
           >
             {alsoIn}
           </span>

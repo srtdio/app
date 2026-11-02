@@ -1049,11 +1049,11 @@ export function EmojiPickerShell(props: {
         <div className="flex shrink-0 items-center gap-1 px-2 pt-2">
           <div
             aria-hidden="true"
-            className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2"
+            className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 lit-well"
           />
           {close}
         </div>
-        <div aria-hidden="true" className="h-11 shrink-0 border-b border-border" />
+        <div aria-hidden="true" className="h-11 shrink-0 border-b border-border lit-well" />
         {failed ? (
           <EmojiPickerLoadFailed onRetry={retryLoad} />
         ) : (
@@ -1079,7 +1079,7 @@ export function EmojiPickerShell(props: {
           {...dialogProps}
           data-emoji-picker="laptop"
           className={cn(
-            'fixed z-[60] flex h-[400px] w-[352px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border border-border-strong bg-panel shadow-2xl transition-opacity duration-fast focus:outline-none motion-reduce:transition-none',
+            'fixed z-[60] flex h-[400px] w-[352px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay transition-opacity duration-fast focus:outline-none motion-reduce:transition-none',
             shown ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
           )}
           style={{ top: position?.top ?? 8, left: position?.left ?? 8 }}
@@ -1098,7 +1098,7 @@ export function EmojiPickerShell(props: {
         data-emoji-picker="touch"
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          'absolute inset-x-0 bottom-0 flex h-[70vh] flex-col overflow-hidden rounded-t-2xl border-t border-border-strong bg-panel pb-[env(safe-area-inset-bottom)] shadow-2xl transition-transform duration-base focus:outline-none motion-reduce:transition-none',
+          'absolute inset-x-0 bottom-0 flex h-[70vh] flex-col overflow-hidden rounded-t-2xl border-t bg-panel pb-[env(safe-area-inset-bottom)] lit-overlay transition-transform duration-base focus:outline-none motion-reduce:transition-none',
           shown ? 'translate-y-0 ease-enter' : 'translate-y-full ease-exit',
         )}
       >

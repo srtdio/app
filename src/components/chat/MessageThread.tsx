@@ -1723,7 +1723,9 @@ export function bubbleClass(
     bubbleCorners(state),
     state.album === true ? 'min-w-[240px] p-[3px]' : sized(BUBBLE_PAD, state.layout),
     state.voiceOnly && 'min-w-[220px]',
-    state.mine ? 'bg-bubble-own text-accent-fg' : 'bg-panel-2 text-fg',
+    state.mine
+      ? 'bg-bubble-own text-accent-fg lit-bubble-own'
+      : 'bg-panel-2 text-fg lit-bubble-other',
     state.failed && 'border border-bad',
   );
 }
@@ -4843,7 +4845,7 @@ export function DayPill({ label, layout }: { label: string; layout: ChatLayout }
     <li role="separator" aria-label={label} className="flex justify-center">
       <span
         className={cn(
-          'self-center mb-1.5 mt-2 rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-fg-3',
+          'self-center mb-1.5 mt-2 rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-fg-3 lit-pill',
           sized(DATE_PILL_TYPE, layout),
         )}
       >
@@ -4932,7 +4934,7 @@ export function threadOpeningSkeleton(
     <div data-thread-opening="" aria-busy="true" className="flex h-full min-h-0 flex-col bg-bg">
       <div
         className={cn(
-          'flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-panel',
+          'flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel lit-header',
           sized(HEADER_PAD, layout),
         )}
       >
@@ -6838,7 +6840,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     <div ref={rootRef} className="relative flex h-full flex-col bg-bg">
       <div
         className={cn(
-          'flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-panel',
+          'flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel lit-header',
           sized(HEADER_PAD, layout),
         )}
       >
@@ -6909,7 +6911,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         <div
           data-loops-strip="unread"
           aria-hidden="true"
-          className="h-9 w-full shrink-0 border-b border-border bg-panel"
+          className="h-9 w-full shrink-0 border-b bg-panel lit-header"
         />
       ) : stripSlot === 'loops' ? (
         <ChatStatus

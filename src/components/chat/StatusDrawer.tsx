@@ -148,7 +148,8 @@ const ROW = 'flex items-center gap-3 py-1 transition-colors active:bg-panel-2';
 const DATE_COL = 'w-12 shrink-0 font-mono text-sm leading-4 tabular-nums text-fg-3';
 const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base leading-5 text-fg';
 const ROW_SUB = 'block truncate text-sm leading-4 text-fg-3';
-const PILL = 'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold leading-4';
+const PILL =
+  'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold leading-4 lit-pill';
 
 const SEGMENT_CLASS: Record<PlanSegment, string> = {
   client: 'bg-accent',
@@ -443,7 +444,7 @@ export function StatusMarkRow(props: {
           role="group"
           aria-label={markConfirmCopy(mark.type, 'resolve')}
           data-mark-confirm="resolve"
-          className="mb-1 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 py-2"
+          className="mb-1 flex flex-wrap items-center gap-2 rounded-lg border bg-panel-2 px-3 py-2 lit-card-muted"
         >
           <span className="min-w-0 flex-1 text-base text-fg">
             {markConfirmCopy(mark.type, 'resolve')}
@@ -720,7 +721,7 @@ export function StatusDrawerPanel(props: {
         role="dialog"
         aria-label="Open in this chat"
         className={cn(
-          'absolute inset-x-0 top-0 flex max-h-[calc(100%-48px)] flex-col rounded-b-2xl border-b border-border bg-panel transition-transform',
+          'absolute inset-x-0 top-0 flex max-h-[calc(100%-48px)] flex-col rounded-b-2xl border-b bg-panel lit-overlay transition-transform',
           transition,
         )}
         style={{ transform: props.transform }}

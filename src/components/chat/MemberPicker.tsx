@@ -29,7 +29,7 @@ export function MemberPicker(props: MemberPickerProps): ReactElement {
     return (
       <div
         role="alert"
-        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad"
+        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad lit-tint"
       >
         {props.error}
       </div>
@@ -51,7 +51,7 @@ export function MemberPicker(props: MemberPickerProps): ReactElement {
               onClick={() => props.onToggle(option.userId)}
               className={cn(
                 'flex items-center gap-3 px-2 transition-colors',
-                isSelected ? 'bg-accent-soft text-accent' : 'text-fg-2',
+                isSelected ? 'bg-accent-soft text-accent lit-active' : 'text-fg-2',
               )}
             >
               <Avatar

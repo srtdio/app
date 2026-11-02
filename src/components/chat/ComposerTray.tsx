@@ -209,7 +209,7 @@ export function ComposerTray(props: {
           data-tray=""
           data-induction={INDUCTION_KEYS.chatAttachTray}
           className={cn(
-            'absolute inset-x-0 bottom-full z-20 border-t border-border bg-panel px-3 pb-2 pt-3 transition-[opacity,transform] duration-slow ease-enter motion-reduce:transition-none',
+            'absolute inset-x-0 bottom-full z-20 border-t bg-panel lit-dock px-3 pb-2 pt-3 transition-[opacity,transform] duration-slow ease-enter motion-reduce:transition-none',
             shown ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
           )}
         >
@@ -253,7 +253,7 @@ export function TrayGrid(props: {
           }}
           className="flex h-[72px] min-w-[44px] flex-col items-center justify-center gap-1.5 text-fg-2 hover:text-fg"
         >
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-panel-2 text-fg">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-panel-2 text-fg lit-btn-secondary">
             <tile.Icon size={ICON_SIZE.tray} />
           </span>
           <span className="text-sm font-medium">{tile.label}</span>

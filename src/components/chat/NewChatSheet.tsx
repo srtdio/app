@@ -262,7 +262,7 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
     error !== null ? (
       <div
         role="alert"
-        className="mb-3 rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad"
+        className="mb-3 rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad lit-tint"
       >
         {error}
       </div>

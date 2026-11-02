@@ -132,7 +132,7 @@ function CoverMedia(props: {
       {props.video ? (
         <span
           data-post-cover-play=""
-          className="pointer-events-none absolute bottom-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-overlay text-overlay-fg"
+          className="pointer-events-none absolute bottom-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-overlay text-overlay-fg lit-media"
         >
           <IconPlay size={12} />
         </span>

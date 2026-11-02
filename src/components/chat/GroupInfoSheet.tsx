@@ -396,7 +396,7 @@ export function GroupHero(props: {
             <span
               data-camera-badge=""
               aria-hidden="true"
-              className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-fg ring-4 ring-bg"
+              className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-fg outline outline-4 outline-bg lit-btn-primary"
             >
               <IconCamera size={ICON_SIZE.control} />
             </span>
@@ -439,7 +439,7 @@ export function groupInfoPage(props: {
       data-group-page=""
       className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
     >
-      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border bg-panel px-2 md:px-4">
+      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header">
         {select?.selecting === true ? (
           select.header
         ) : (
@@ -457,7 +457,7 @@ export function groupInfoPage(props: {
           {props.error !== null ? (
             <div
               role="alert"
-              className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad"
+              className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad lit-tint"
             >
               {props.error}
             </div>
@@ -822,7 +822,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
         ) : members.error !== null ? (
           <div
             role="alert"
-            className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad"
+            className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad lit-tint"
           >
             {members.error}
           </div>

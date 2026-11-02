@@ -24,7 +24,7 @@ describe('composer buttons', () => {
     expect(plus).toBeDefined();
     expectOnSystem(plus ?? '');
     expect(plus).toContain('rounded-full w-11 px-0');
-    expect(plus).toContain('border-border');
+    expect(plus).toContain('lit-btn-secondary');
     expect(plus).toContain('aria-label="Add attachment"');
   });
 

@@ -170,7 +170,7 @@ export function PostDecisionBar(props: {
     <div
       data-decision-bar=""
       {...bottomAnchorProps}
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t bg-panel lit-dock px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden"
     >
       {decisionContent(props.model, props.busy, props.error)}
     </div>
