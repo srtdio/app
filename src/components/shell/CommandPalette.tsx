@@ -717,6 +717,13 @@ export function CommandPalette({
     };
   }, [open, workspaceId, workspaceKey, userId, storedRecents]);
 
+  // The workspace key (link paths) can arrive after the palette opens; the
+  // freshness pass reads it through a ref so a late key never restarts it.
+  const workspaceKeyRef = useRef(workspaceKey);
+  useEffect(() => {
+    workspaceKeyRef.current = workspaceKey;
+  }, [workspaceKey]);
+
   // Freshness: once per session per workspace, WARM_DEBOUNCE_MS after paint and
   // in idle time, re-read every stored title into storage (one batched read
   // per type). Storage only; closing or switching workspace aborts it.
@@ -732,7 +739,7 @@ export function CommandPalette({
           client: supabase,
           storage: deviceStorage(),
           workspaceId,
-          workspaceKey,
+          workspaceKey: workspaceKeyRef.current,
           userId,
           signal: controller.signal,
         });
@@ -743,7 +750,7 @@ export function CommandPalette({
       cancelIdle();
       controller.abort();
     };
-  }, [open, workspaceId, workspaceKey, userId]);
+  }, [open, workspaceId, userId]);
 
   useEffect(() => {
     runnerRef.current?.setQuery(query);

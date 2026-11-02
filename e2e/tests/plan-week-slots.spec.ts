@@ -461,8 +461,41 @@ test('header: agency sees the 28px title, then boxed Add and Edit on line 2 (bot
   await expect(title).toHaveCSS('font-size', '28px');
   await expect(title).toHaveCSS('font-weight', '600');
   await expect(line1.locator('[data-plan-add-header], [data-plan-edit]')).toHaveCount(0);
-  const l1 = await boxOf(line1);
-  const l2 = await boxOf(line2);
+  // The plan screen slides in: wait until line 2 holds still across one
+  // animation frame (max 5s), then read both lines in the same frame.
+  await line2.evaluate(
+    (el) =>
+      new Promise<void>((resolve, reject) => {
+        const key = (): string => {
+          const r = el.getBoundingClientRect();
+          return `${r.x},${r.y},${r.width},${r.height}`;
+        };
+        const deadline = performance.now() + 5000;
+        let last = key();
+        const tick = (): void => {
+          const next = key();
+          if (next === last) return resolve();
+          if (performance.now() > deadline) return reject(new Error('plan header never settled'));
+          last = next;
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+  const lines = await plan.evaluate((el) => {
+    const rect = (sel: string) => {
+      const node = el.querySelector(sel);
+      if (node === null) return null;
+      const r = node.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    return {
+      l1: rect('[data-plan-header-line="1"]'),
+      l2: rect('[data-plan-header-line="2"]'),
+    };
+  });
+  const { l1, l2 } = lines;
+  if (l1 === null || l2 === null) throw new Error('no header lines');
   expect(Math.round(l2.y - (l1.y + l1.height))).toBe(2);
   expect(Math.round(l2.height)).toBe(44);
   expect(Math.round(l2.x)).toBe(16);

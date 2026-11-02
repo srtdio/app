@@ -754,3 +754,18 @@ describe('CommandPalette Recent from the device', () => {
     ).toEqual(['Fresh', 'Recent post 1']);
   });
 });
+
+describe('recent titles freshness pass', () => {
+  // Effects are shimmed in this env, so the effect's wiring is read from source.
+  const src = readFileSync(fileURLToPath(new URL('./CommandPalette.tsx', import.meta.url)), 'utf8');
+  const start = src.indexOf('// Freshness: once per session per workspace');
+  const effect = src.slice(start, src.indexOf('}, [', start) + 40);
+
+  it('a workspace key arriving while the palette is open does not start a second pass', () => {
+    // The key is read through a ref at pass time, never an effect dependency.
+    expect(effect).toContain('workspaceKey: workspaceKeyRef.current');
+    expect(effect).toContain('}, [open, workspaceId, userId]);');
+    expect(effect).not.toMatch(/\}, \[[^\]]*workspaceKey[^\]]*\]\);/);
+    expect(src).toContain('workspaceKeyRef.current = workspaceKey;');
+  });
+});
