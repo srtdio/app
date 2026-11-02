@@ -462,7 +462,8 @@ describe('bubble shell', () => {
     let column = '';
     walk(headRow, (el) => {
       const cls = (el.props as { className?: string }).className ?? '';
-      if (cls.includes('max-w-')) column = cls;
+      // The column's BUBBLE_MAX (the bubble itself carries max-w-full).
+      if (cls.includes('max-w-[')) column = cls;
     });
     expect(column).toContain('max-w-[76%]');
   });
@@ -1600,7 +1601,7 @@ describe('bubble text sizes', () => {
       let column = '';
       walk(renderBubble(makeMessage({}), { layout }), (el) => {
         const c = (el.props as { className?: string }).className ?? '';
-        if (c.includes('max-w-')) column = c;
+        if (c.includes('max-w-[')) column = c;
       });
       return column;
     };

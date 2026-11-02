@@ -1356,6 +1356,81 @@ function seedQuotedReply(network: HarnessNetwork): void {
   });
 }
 
+/** A 200-char excerpt and a 60-char where label: the long Reply privately quote. */
+const LONG_EXCERPT = (
+  'Love the new cover shot, ship it today but please swap the second slide for the ' +
+  'warmer morning frame and tighten the caption so the hook lands before the fold, ' +
+  'then send it back to me for a final look.'
+)
+  .padEnd(200, '.')
+  .slice(0, 200);
+const LONG_WHERE = 'Monday carousel for the spring launch across all three market'
+  .padEnd(60, 's')
+  .slice(0, 60);
+const LONG_MINE_BODY = 'On it, swapping the frame now.';
+const LONG_THEIRS_BODY = 'Thanks, take a look when you can.';
+
+/** The DM's two newest messages carry the long quote: mine, then theirs. */
+function seedLongPrivateReplies(network: HarnessNetwork): void {
+  (network.world.tables.comments ??= []).push(
+    postComment(ME_COMMENT_ID, ME, LONG_EXCERPT, NOW - 3_600_000),
+    postComment(PEER_COMMENT_ID, PEER, LONG_EXCERPT, NOW - 3_500_000),
+  );
+  const quote = (author: string, source: string): Row => ({
+    kind: 'comment',
+    source_id: source,
+    author_user_id: author,
+    excerpt: LONG_EXCERPT,
+    where_label: LONG_WHERE,
+    source_created_at: new Date(NOW - 3_600_000).toISOString(),
+    link: { entity_type: 'post', entity_id: POST, comment_id: source },
+  });
+  (network.world.tables.chat_messages ??= []).push(
+    {
+      ...groupMessage('0190b000-0000-7000-8a00-0000000000e2', ME, LONG_MINE_BODY, NOW - 20_000),
+      channel_id: DM_CHANNEL,
+      private_reply: quote(PEER, PEER_COMMENT_ID),
+    },
+    {
+      ...groupMessage('0190b000-0000-7000-8a00-0000000000e3', PEER, LONG_THEIRS_BODY, NOW - 10_000),
+      channel_id: DM_CHANNEL,
+      private_reply: quote(ME, ME_COMMENT_ID),
+    },
+  );
+}
+
+/**
+ * The bubble stays inside its column (BUBBLE_MAX of the row: 76% touch, 65%
+ * laptop) and inside the viewport, mine and theirs.
+ */
+async function expectBubbleInsideColumn(page: Page, body: string): Promise<void> {
+  const bubble = await lastVisible(page.locator('[data-bubble]', { hasText: body }), body);
+  await bubble.scrollIntoViewIfNeeded();
+  const max = isLaptop(page) ? 0.65 : 0.76;
+  const box = await bubble.evaluate((el, cap) => {
+    const b = el.getBoundingClientRect();
+    let col: Element | null = el.parentElement;
+    while (col !== null && !/max-w-\[(76|65)%\]/.test(col.className)) col = col.parentElement;
+    const c = col?.getBoundingClientRect() ?? null;
+    const row = el.closest('li');
+    const rowWidth = row !== null ? row.clientWidth : 0;
+    return {
+      left: b.left,
+      right: b.right,
+      width: b.width,
+      colLeft: c?.left ?? Number.NaN,
+      colRight: c?.right ?? Number.NaN,
+      cap: rowWidth * cap,
+      vw: window.innerWidth,
+    };
+  }, max);
+  expect(box.left, `${body}: left edge inside column`).toBeGreaterThanOrEqual(box.colLeft - 0.5);
+  expect(box.right, `${body}: right edge inside column`).toBeLessThanOrEqual(box.colRight + 0.5);
+  expect(box.width, `${body}: width <= BUBBLE_MAX`).toBeLessThanOrEqual(box.cap + 0.5);
+  expect(box.left, `${body}: on screen`).toBeGreaterThanOrEqual(0);
+  expect(box.right, `${body}: on screen`).toBeLessThanOrEqual(box.vw);
+}
+
 /** The last visible match (the newest row in a thread). */
 async function lastVisible(locator: Locator, what: string): Promise<Locator> {
   const until = Date.now() + READY_MS;
@@ -1498,6 +1573,25 @@ SCREENS.push(
       );
       await bubble.scrollIntoViewIfNeeded();
       await waitFor([page.getByText(QUOTE_EXCERPT, { exact: false })], 'bubble quote');
+    },
+  },
+  {
+    // A long Reply privately quote (200-char excerpt, 60-char where), mine
+    // and theirs: each bubble stops at BUBBLE_MAX, the quote cuts with an
+    // ellipsis, the body wraps below. Phone light/dark, laptop light.
+    name: 'chat-dm-private-reply-long',
+    seed: creator,
+    extra: seedLongPrivateReplies,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, PEER_NAME);
+      await expectBubbleInsideColumn(page, LONG_MINE_BODY);
+      await expectBubbleInsideColumn(page, LONG_THEIRS_BODY);
+      const theirs = await lastVisible(
+        page.locator('[data-bubble]', { hasText: LONG_THEIRS_BODY }),
+        'theirs bubble',
+      );
+      await theirs.scrollIntoViewIfNeeded();
     },
   },
   {
