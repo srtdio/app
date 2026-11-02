@@ -95,7 +95,7 @@ import {
   planThreadRows,
   type ShownComment,
 } from '@/components/chat/PlanItemThread';
-import { ToastProvider } from '@/components/ui/toast';
+import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
 import { rememberMentionNames, resetMentionNames, type MentionMember } from '@/lib/chat/mentions';
 
@@ -432,6 +432,7 @@ async function mount(side: 'agency' | 'client', bundle: PlanBundle = BUNDLE): Pr
       <MemoryRouter>
         <ToastProvider>
           <PlanItemScreen open bundle={bundle} item={CONCEPT} side={side} onClose={() => {}} />
+          <ToastViewport />
         </ToastProvider>
       </MemoryRouter>,
     );
