@@ -325,7 +325,9 @@ export function StatusTickerBar(props: {
           data-status-measure=""
           className="pointer-events-none invisible absolute left-0 top-0 flex w-max gap-3"
         >
-          {items?.map((item) => <TickerItem key={item.id} item={item} compact={false} measure />)}
+          {items?.map((item) => (
+            <TickerItem key={item.id} item={item} compact={false} measure />
+          ))}
         </div>
         <div
           ref={compactRef}
@@ -333,7 +335,9 @@ export function StatusTickerBar(props: {
           data-status-measure="compact"
           className="pointer-events-none invisible absolute left-0 top-0 flex w-max gap-2"
         >
-          {items?.map((item) => <TickerItem key={item.id} item={item} compact measure />)}
+          {items?.map((item) => (
+            <TickerItem key={item.id} item={item} compact measure />
+          ))}
         </div>
         <span
           ref={ellipsisRef}

@@ -1,8 +1,10 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 
-interface ChipProps
-  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'onClick' | 'children'> {
+interface ChipProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'className' | 'onClick' | 'children'
+> {
   label: string;
   /** An optional leading mark before the label (Pipeline's stage dot). */
   dot?: ReactNode;
