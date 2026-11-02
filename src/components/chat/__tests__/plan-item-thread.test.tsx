@@ -10,7 +10,7 @@
 // heavy children are stubbed; the members come from the held cache.
 
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createRoot, type Root } from 'react-dom/client';
@@ -101,8 +101,8 @@ import { rememberMentionNames, resetMentionNames, type MentionMember } from '@/l
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const read = (rel: string): string =>
-  readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+// Repo-relative reads (the jsdom environment's import.meta.url is not a file URL).
+const read = (rel: string): string => readFileSync(resolve(process.cwd(), rel), 'utf8');
 
 // ---------------------------------------------------------------------------
 // Pure: runs and day lines
@@ -332,7 +332,7 @@ describe('Remove from plan: only in the More menu', () => {
   });
 
   it('the concept body has no red button; the screen never imports the chat thread or composer', () => {
-    const src = read('../PlanItemScreen.tsx');
+    const src = read('src/components/chat/PlanItemScreen.tsx');
     const concept = src.slice(
       src.indexOf('data-plan-description-card'),
       src.indexOf('</PlanPage>'),
@@ -347,15 +347,7 @@ describe('Remove from plan: only in the More menu', () => {
 
 describe('the migration record', () => {
   it('is the approved SQL: three functions, the revoke, no DROP and no trigger', () => {
-    const sql = readFileSync(
-      fileURLToPath(
-        new URL(
-          '../../../../supabase/migrations/20261102090000_plan_comment_mentions.sql',
-          import.meta.url,
-        ),
-      ),
-      'utf8',
-    );
+    const sql = read('supabase/migrations/20261102090000_plan_comment_mentions.sql');
     expect(sql.match(/CREATE OR REPLACE FUNCTION/g)).toHaveLength(3);
     expect(sql).toContain(
       'CREATE OR REPLACE FUNCTION public._plan_item_notify_except(p_item_id uuid, p_event_type text, p_team_only boolean, p_payload jsonb, p_exclude uuid[])',

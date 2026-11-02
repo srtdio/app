@@ -19,7 +19,6 @@ import { Avatar } from '@/components/ui/Avatar';
 import { ICON_SIZE, IconLock } from '@/components/ui/icons';
 import { dayPillLabel } from '@/components/chat/day-separators';
 import {
-  BUBBLE_BODY_TYPE,
   BUBBLE_PAD,
   BUBBLE_SHAPE,
   DATE_PILL_TYPE,
@@ -363,7 +362,7 @@ function PlanBubble(props: {
         )}
       >
         {!mine && head ? (
-          <span data-plan-comment-author="" className="truncate text-sm font-medium text-fg-2">
+          <span data-plan-comment-author="" className="truncate text-base font-medium text-fg-2">
             {role !== null ? `${c.authorName} · ${role}` : c.authorName}
           </span>
         ) : null}
@@ -392,7 +391,12 @@ function PlanBubble(props: {
               {TEAM_ONLY_LABEL}
             </span>
           ) : null}
-          <p className={cn('whitespace-pre-wrap break-words', sized(BUBBLE_BODY_TYPE, layout))}>
+          <p
+            className={cn(
+              'whitespace-pre-wrap break-words text-base',
+              ownTone ? 'text-accent-fg' : 'text-fg',
+            )}
+          >
             {bodyNodes(c.body, ownTone, props.workspaceId)}
           </p>
         </div>
