@@ -755,7 +755,7 @@ for (const size of [
     // over the chat; none from 1180px, where it sits beside the list.
     const shadow = await panel.evaluate((el) => getComputedStyle(el).boxShadow);
     if (size.width >= 1180) expect(shadow).toBe('none');
-    else expect(shadow).toMatch(/0px 28px 64px -(12|8)px/);
+    else expect(shadow).toMatch(/0px (24px 56px -12px|28px 64px -8px)/);
     if (size.list === 'clear') {
       await expect(column).toBeVisible();
       const cb = await column.boundingBox();

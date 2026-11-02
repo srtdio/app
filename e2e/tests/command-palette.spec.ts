@@ -160,7 +160,11 @@ test.describe('command palette Recent from the device', () => {
     await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
     const titleReads: string[] = [];
     page.on('request', (req) => {
-      if (req.url().includes('e2e-recent')) titleReads.push(req.url());
+      // supabase-js retries a failed read once (x-retry-count); that is the
+      // same read, not a second one.
+      if (req.url().includes('e2e-recent') && req.headers()['x-retry-count'] === undefined) {
+        titleReads.push(req.url());
+      }
     });
     await openPalette(page);
     const recent = page.locator('[data-palette-group="Recent"]');
