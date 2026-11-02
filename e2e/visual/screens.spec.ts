@@ -1370,9 +1370,28 @@ async function lastVisible(locator: Locator, what: string): Promise<Locator> {
   throw new Error(`not reached: ${what}`);
 }
 
+/** Wait until the open thread stops moving (its newest row holds still for a few frames). */
+async function threadStill(page: Page): Promise<void> {
+  const rows = page.locator('[data-msg-id]');
+  let last = '';
+  let still = 0;
+  const until = Date.now() + READY_MS;
+  while (Date.now() < until && still < 4) {
+    const box = await rows
+      .last()
+      .boundingBox()
+      .catch(() => null);
+    const now = box === null ? '' : `${Math.round(box.y)}:${Math.round(box.height)}`;
+    still = now !== '' && now === last ? still + 1 : 0;
+    last = now;
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  }
+}
+
 /** The group thread, then a tap on one person's photo or name: the card opens. */
 async function openPersonCardFor(page: Page, userId: string): Promise<void> {
   await openChat(page, GROUP_NAME);
+  await threadStill(page);
   const trigger = await lastVisible(
     page.locator(`[data-person-trigger="${userId}"]`),
     `person trigger ${userId}`,
@@ -1380,11 +1399,13 @@ async function openPersonCardFor(page: Page, userId: string): Promise<void> {
   await trigger.scrollIntoViewIfNeeded();
   await trigger.click();
   await waitFor([page.locator('[data-person-card]')], 'person card');
+  await threadStill(page);
 }
 
 /** Long-press (phone) or right-click (laptop) Leo's last group message: its menu. */
 async function openGroupMessageMenu(page: Page): Promise<void> {
   await openChat(page, GROUP_NAME);
+  await threadStill(page);
   const bubble = await lastVisible(
     page.locator('[data-bubble]', { hasText: GROUP_PLAIN_BODY }),
     'Leo bubble',
