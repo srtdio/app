@@ -150,7 +150,7 @@ function AddRow(props: {
       <form
         data-task-add=""
         onSubmit={submit}
-        className="flex min-h-[44px] items-center gap-1 pl-1 pr-1"
+        className="flex min-h-[44px] items-center gap-1 pl-1 pr-1 lit-well"
       >
         <span aria-hidden="true" className="w-11 shrink-0" />
         <span className="w-6 shrink-0 font-mono text-sm text-fg-3">{props.preview}</span>
@@ -542,7 +542,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         tabIndex={-1}
         aria-label={TASK_SHEET_TITLE}
         className={cn(
-          'relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border border-border-strong bg-panel shadow-2xl transition-[opacity,transform] will-change-transform focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
+          'relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border bg-panel lit-overlay transition-[opacity,transform] will-change-transform focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
           entered
             ? 'translate-y-0 opacity-100 duration-slow ease-enter sm:duration-base'
             : 'translate-y-full opacity-100 duration-base ease-exit sm:translate-y-2 sm:opacity-0',
@@ -600,7 +600,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
           {strip !== null && ready ? (
             <p
               data-task-strip=""
-              className="mx-3 mt-3 flex items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-md text-fg"
+              className="mx-3 mt-3 flex items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-md text-fg lit-tint"
             >
               <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
               {strip}
@@ -717,7 +717,7 @@ function DiscardConfirm(props: {
         aria-label={DISCARD_TITLE}
         tabIndex={-1}
         data-task-discard=""
-        className="relative w-full max-w-sm rounded-2xl border border-border bg-panel p-5 shadow-2xl outline-none"
+        className="relative w-full max-w-sm rounded-2xl border bg-panel p-5 lit-overlay outline-none"
       >
         <h2 className="text-lg font-semibold text-fg">{DISCARD_TITLE}</h2>
         <div className="mt-5 flex justify-end gap-2">

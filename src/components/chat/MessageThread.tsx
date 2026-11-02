@@ -1522,7 +1522,7 @@ function metaInk(mine: boolean): string {
 /** Each placement's position: two overlays at the bottom-right, the row in flow. */
 const META_POSITION: Record<MetaPlacement, string> = {
   inline: 'pointer-events-none absolute bottom-[3px] right-2 inline-flex',
-  pill: 'pointer-events-none absolute bottom-2 right-2 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-[color:var(--media-meta-fg)]',
+  pill: 'pointer-events-none absolute bottom-2 right-2 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-[color:var(--media-meta-fg)] lit-media',
   row: 'pointer-events-none mt-1 flex justify-end',
 };
 
@@ -1784,6 +1784,10 @@ export const SELECTED_ROW_TINT = 'pointer-events-none absolute inset-0 -z-10 bg-
  */
 export const OWN_BUBBLE_CONTENT = cn(
   '[&_.bg-panel]:bg-black/[.12] [&_.bg-panel-2]:bg-black/[.12] [&_.bg-panel-3]:bg-black/[.12] [&_.border-border]:border-white/[.16]',
+  // Lit surfaces inside the fill: drop their light gradient (it would paint
+  // over the black/12 overlay) and take the same white/16 edge.
+  '[&_.lit-card]:bg-none [&_.lit-card-muted]:bg-none [&_.lit-chip]:bg-none [&_.lit-btn-secondary]:bg-none',
+  '[&_.lit-card]:border-white/[.16] [&_.lit-card-muted]:border-white/[.16] [&_.lit-chip]:border-white/[.16]',
   '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-white/[.24] [&_a:hover>span]:bg-white/[.24]',
   '[&_.bg-accent]:bg-white/70 [&_.bg-accent.text-accent-fg]:bg-white/[.16] [&_.bg-fg-3]:bg-white/40',
   '[&_.text-fg]:text-accent-fg [&_.text-accent]:text-accent-fg',
