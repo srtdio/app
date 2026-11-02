@@ -7,21 +7,30 @@
 // (every file now in dist/assets/ with the date it was first deployed) so the
 // next deploy knows what to keep.
 //
+// Cloudflare Pages takes at most 20,000 files per deployment. Carried files
+// are kept for RETAIN_DAYS (2: an older open tab recovers through the app's
+// chunk-reload path, src/lib/chunk-reload.ts reloadIfStale), and a hard cap
+// keeps the whole of dist/ at or under MAX_DIST_FILES: past it, carried files
+// are dropped oldest-first (by their first deploy date). A file of the
+// current build is never dropped.
+//
 // SITE_URL (set per workflow step) is the live site to read from: production
 // https://srtd.io, the test site for previews. A file that cannot be fetched
 // is skipped with one log line; it never fails the deploy. A failure writing
 // dist/ does.
 
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const RETAIN_DAYS = 14;
+export const RETAIN_DAYS = 2;
+/** The most files dist/ may hold after carrying (Pages' limit is 20,000). */
+export const MAX_DIST_FILES = 19_000;
 const RETAIN_MS = RETAIN_DAYS * 24 * 60 * 60 * 1000;
 const CONCURRENCY = 8;
 const HISTORY_FILE = 'asset-history.json';
 
-interface HistoryEntry {
+export interface HistoryEntry {
   path: string;
   firstSeen: string;
 }
@@ -82,6 +91,37 @@ async function download(site: string, path: string): Promise<Uint8Array | null> 
   }
 }
 
+/**
+ * The carried files to drop so dist/ holds at most `ceiling` files: the
+ * oldest first deploys first (ties by path), never more than are carried.
+ * `carried` lists only files copied from earlier deploys, so a file of the
+ * current build can never be returned. Pure.
+ */
+export function filesToDrop(
+  distFileCount: number,
+  carried: readonly HistoryEntry[],
+  ceiling: number = MAX_DIST_FILES,
+): string[] {
+  const excess = distFileCount - ceiling;
+  if (excess <= 0) return [];
+  return [...carried]
+    .sort(
+      (a, b) => Date.parse(a.firstSeen) - Date.parse(b.firstSeen) || a.path.localeCompare(b.path),
+    )
+    .slice(0, excess)
+    .map((entry) => entry.path);
+}
+
+/** Every file under `dir`, in every folder. */
+export function countFiles(dir: string): number {
+  let count = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) count += countFiles(join(dir, entry.name));
+    else if (entry.isFile()) count += 1;
+  }
+  return count;
+}
+
 /** Run `task` over `items`, at most `limit` at a time. */
 async function eachLimited<T>(
   items: readonly T[],
@@ -119,7 +159,7 @@ async function main(): Promise<void> {
     .filter(([path, seen]) => now - Date.parse(seen) < RETAIN_MS && !existsSync(join(dist, path)))
     .map(([path]) => path);
 
-  let carried = 0;
+  const carriedFiles: HistoryEntry[] = [];
   await eachLimited(toCarry, CONCURRENCY, async (path) => {
     const bytes = await download(site, path);
     if (bytes === null) return;
@@ -127,8 +167,14 @@ async function main(): Promise<void> {
     const target = join(dist, path);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, bytes);
-    carried += 1;
+    carriedFiles.push({ path, firstSeen: firstSeen.get(path) ?? new Date(now).toISOString() });
   });
+
+  // The hard cap. The history file this run writes counts too.
+  const historyPath = join(dist, HISTORY_FILE);
+  const before = countFiles(dist) + (existsSync(historyPath) ? 0 : 1);
+  const dropped = filesToDrop(before, carriedFiles);
+  for (const path of dropped) unlinkSync(join(dist, path));
 
   const stamp = new Date(now).toISOString();
   const files: HistoryEntry[] = readdirSync(assetsDir, { withFileTypes: true })
@@ -138,13 +184,19 @@ async function main(): Promise<void> {
       return { path, firstSeen: firstSeen.get(path) ?? stamp };
     })
     .sort((a, b) => a.path.localeCompare(b.path));
-  writeFileSync(join(dist, HISTORY_FILE), `${JSON.stringify({ files }, null, 2)}\n`);
-  log(`carried ${carried}/${toCarry.length} old assets; history lists ${files.length} files`);
+  writeFileSync(historyPath, `${JSON.stringify({ files }, null, 2)}\n`);
+  log(
+    `carried ${carriedFiles.length - dropped.length}/${toCarry.length} old assets; history lists ${files.length} files`,
+  );
+  process.stdout.write(`carry-assets: dist ${countFiles(dist)} files, dropped ${dropped.length}\n`);
 }
 
-main().catch((err: unknown) => {
-  process.stderr.write(
-    `[carry-assets] failed: ${err instanceof Error ? err.stack : String(err)}\n`,
-  );
-  process.exit(1);
-});
+// Run only as the CI step (node scripts/carry-assets.ts), never on import (tests).
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err: unknown) => {
+    process.stderr.write(
+      `[carry-assets] failed: ${err instanceof Error ? err.stack : String(err)}\n`,
+    );
+    process.exit(1);
+  });
+}
