@@ -304,6 +304,19 @@ export function dmChannelEnsure(
   return callProc(client, 'dm_channel_ensure', args);
 }
 
+/**
+ * Send a DM that quotes someone's words from a group chat, a post or brief
+ * comment, or a plan item comment (Reply privately). Returns the chat_messages
+ * row, private_reply included.
+ */
+export type ChatPrivateReplySendArgs = ProcArgs<'chat_private_reply_send'>;
+export function chatPrivateReplySend(
+  client: Client,
+  args: ChatPrivateReplySendArgs,
+): Promise<Result<ProcReturns<'chat_private_reply_send'>>> {
+  return callProc(client, 'chat_private_reply_send', args);
+}
+
 export type InboxMarkReadArgs = ProcArgs<'inbox_mark_read'>;
 export function inboxMarkRead(
   client: Client,

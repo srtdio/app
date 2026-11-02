@@ -8,6 +8,9 @@ import { cn } from '@/lib/cn';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace, workspaceDisplayName } from '@/lib/workspace-context';
 import { chatDisplayName } from '@/lib/chat/chat-name';
+import { useOpenPersonDm } from '@/components/ui/use-open-person-dm';
+import { setPrivateReplyDraft } from '@/lib/chat/drafts';
+import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import {
   peekMentionProfiles,
   readGroupMemberIdsShared,
@@ -108,8 +111,8 @@ import {
   useHistoryStep,
 } from '@/lib/chat/use-history-step';
 import { hasSearchJump, readSearchJump, withoutSearchJump } from '@/lib/search/jump';
-import { startDmChannel } from '@/components/chat/chat-actions';
-import { MENTION_DM_FAILED } from '@/lib/person-card';
+import { MENTION_DM_FAILED, type PersonCardHint } from '@/lib/person-card';
+import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
 import { mentionGone, useChannelMembersState } from '@/components/chat/use-channel-members';
 import { channelHasClient } from '@/components/chat/ComposerTray';
 import {
@@ -658,7 +661,18 @@ export interface MentionDmDeps {
   onFailed: (traceId: string, message: string) => void;
 }
 
-/** Open (or create) my DM with a mentioned person, one fresh trace per tap. */
+/**
+ * A tapped bubble @mention opens the shared person card (its Message button
+ * opens the DM through use-open-person-dm). Stable: no re-render of the rows.
+ */
+export function openMentionCard(hint: PersonCardHint, el: HTMLElement): void {
+  openPersonCardFrom(el, hint);
+}
+
+/**
+ * Open (or create) my DM with a mentioned person, one fresh trace per tap. No
+ * longer a tap path (a mention opens the person card); kept for its tests.
+ */
 export async function openMentionDm(userId: string, deps: MentionDmDeps): Promise<void> {
   const traceId = generateTraceId();
   const failure = await deps.start(
@@ -2051,20 +2065,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     membersLoad !== null && membersLoad.ok ? membersLoad.members : null,
   );
 
-  // Tapping a mentioned name opens my DM with them (created on first use).
-  const onOpenMention = useCallback(
-    (userId: string) =>
-      void openMentionDm(userId, {
-        workspaceId,
-        start: (params, onOpen) => startDmChannel(supabase, params, onOpen),
-        onOpen: onDmReady,
-        onFailed: (traceId, message) => {
-          logger.warn('chat: mention dm open failed', { trace_id: traceId, error: message });
-          toast.show({ title: MENTION_DM_FAILED });
-        },
-      }),
-    [workspaceId, onDmReady, toast],
-  );
 
   // The header arrow: back to where the chat was opened from (a cold open: the list).
   const onBack = useCallback((): void => {
@@ -2133,6 +2133,17 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       });
     },
     [notesChat, ensureNotes, outboxEnqueue, toast, openChannel, workspaceId],
+  );
+  // Reply privately: my DM with the sender (the cached one opens with no
+  // read), its draft carrying the quote before it opens, so the composer's
+  // first frame shows it.
+  const openPersonDm = useOpenPersonDm();
+  const replyPrivately = useCallback(
+    (senderUserId: string, quote: PrivateReplyDraft) =>
+      openPersonDm(senderUserId, {
+        beforeOpen: (channelId) => setPrivateReplyDraft(channelId, quote),
+      }),
+    [openPersonDm],
   );
   // A forward that includes notes waits on its ensure first.
   const threadForward = thread.forward;
@@ -2285,6 +2296,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                         : {})}
                       notes={notesOpen}
                       {...(!notesOpen ? { onSaveToNotes: saveToNotes } : {})}
+                      {...(isGroup && !notesOpen ? { onReplyPrivately: replyPrivately } : {})}
                       isGroup={isGroup}
                       profiles={profiles}
                       messages={threadCurrent ? threadMessages : NO_MESSAGES}
@@ -2328,7 +2340,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       mentions={{
                         peerUserId:
                           selected.channelType === 'dm' ? (selected.peerUserId ?? null) : null,
-                        onOpen: onOpenMention,
+                        onOpen: openMentionCard,
                       }}
                       channelHasClient={hasClient}
                       {...(!notesOpen

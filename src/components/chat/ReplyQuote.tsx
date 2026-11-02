@@ -152,6 +152,7 @@ function quoteLines(
   inBubble: ChatLayout | undefined,
   media: QuoteMedia | null,
   thumbSource: QuoteThumbSource | undefined,
+  oneLine = false,
 ): ReactElement {
   const label = media !== null && media.showLabel && !deleted;
   const thumb =
@@ -180,8 +181,13 @@ function quoteLines(
         <span
           data-quote-deleted={deleted ? '' : undefined}
           className={cn(
-            // A media line is one row whose label ellipsizes; text clamps to two.
-            label ? 'flex min-w-0' : 'line-clamp-2 [overflow-wrap:anywhere]',
+            // A media line is one row whose label ellipsizes; text clamps to two
+            // (one, truncated, for a Reply privately quote).
+            label
+              ? 'flex min-w-0'
+              : oneLine
+                ? 'truncate'
+                : 'line-clamp-2 [overflow-wrap:anywhere]',
             inBubble !== undefined ? sized(QUOTE_TEXT_TYPE, inBubble) : 'text-sm',
             deleted ? 'italic text-fg-3' : 'text-fg-2',
           )}
@@ -221,6 +227,8 @@ export function ReplyQuoteBox(props: {
   media?: QuoteMedia | null | undefined;
   /** Where the image thumbnail presigns from. */
   thumbSource?: QuoteThumbSource | undefined;
+  /** The preview on one truncated line (a Reply privately quote); default two lines. */
+  oneLine?: boolean;
 }): ReactElement {
   const tone = props.tone ?? 'accent';
   const deleted = props.deleted === true;
@@ -238,13 +246,31 @@ export function ReplyQuoteBox(props: {
         }}
         className={cn(REPLY_QUOTE_LAYOUT, props.className)}
       >
-        {quoteLines(props.author, props.preview, tone, deleted, inBubble, media, props.thumbSource)}
+        {quoteLines(
+          props.author,
+          props.preview,
+          tone,
+          deleted,
+          inBubble,
+          media,
+          props.thumbSource,
+          props.oneLine === true,
+        )}
       </PressableRow>
     );
   }
   return (
     <div className={cn(REPLY_QUOTE_BOX, 'items-center', props.className)}>
-      {quoteLines(props.author, props.preview, tone, deleted, inBubble, media, props.thumbSource)}
+      {quoteLines(
+        props.author,
+        props.preview,
+        tone,
+        deleted,
+        inBubble,
+        media,
+        props.thumbSource,
+        props.oneLine === true,
+      )}
       {props.trailing}
     </div>
   );

@@ -32,6 +32,7 @@ import {
   type ReplyQuote,
 } from '@/lib/chat/attachments';
 import { parsePeaks } from '@/lib/chat/waveform-peaks';
+import { parseStoredPrivateReply } from '@/lib/chat/private-reply';
 
 /** Sender label written before the preview when the current user sent it. */
 export const OWN_PREFIX = 'You';
@@ -1009,6 +1010,13 @@ function parseEntry(value: unknown): OutboxEntry | null {
   if (!isRecord(value) || !isRecord(value.local)) return null;
   const { id, text, createdMs } = value;
   const { attachments, sharedPostIds, sharedBriefIds, reply, forwardedFromMessageId } = value.local;
+  // Reply privately: a stored quote that no longer reads drops the entry (it
+  // must never go out as a plain message).
+  const privateReply =
+    value.local.privateReply === undefined
+      ? undefined
+      : parseStoredPrivateReply(value.local.privateReply);
+  if (privateReply === null) return null;
   if (typeof id !== 'string' || typeof text !== 'string') return null;
   if (forwardedFromMessageId !== undefined && typeof forwardedFromMessageId !== 'string')
     return null;
@@ -1029,6 +1037,7 @@ function parseEntry(value: unknown): OutboxEntry | null {
       ...(sharedBriefIds !== undefined ? { sharedBriefIds } : {}),
       reply: parsedReply,
       ...(forwardedFromMessageId !== undefined ? { forwardedFromMessageId } : {}),
+      ...(privateReply !== undefined ? { privateReply } : {}),
     },
     state: filesMissing ? 'failed' : 'sending',
     ...(typeof createdMs === 'number' && Number.isFinite(createdMs) && createdMs > 0

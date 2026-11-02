@@ -170,6 +170,7 @@ import {
   type ReplyQuote,
 } from '@/lib/chat/attachments';
 import type { ChatConnection, ChatStatus } from '@/lib/chat/types';
+import type { PrivateReply } from '@/lib/chat/private-reply';
 import { channelOlderKey, setOlderPageFailed } from '@/lib/chat/older-page-status';
 
 /**
@@ -286,6 +287,8 @@ export interface UseChatThread {
     sharedPostIds?: readonly string[],
     reply?: ReplyQuote | null,
     sharedBriefIds?: readonly string[],
+    /** Reply privately: the quote this DM send carries (chat_private_reply_send). */
+    privateReply?: PrivateReply | null,
   ) => void;
   /**
    * Delete own messages for everyone (chunked at 100 per proc call). Accepted
@@ -2016,7 +2019,14 @@ export function useChatThread(params: {
   );
 
   const send = useCallback<UseChatThread['send']>(
-    (text, attachments = [], sharedPostIds = [], reply = null, sharedBriefIds = []) => {
+    (
+      text,
+      attachments = [],
+      sharedPostIds = [],
+      reply = null,
+      sharedBriefIds = [],
+      privateReply = null,
+    ) => {
       const forChannel = channelRef.current;
       const trimmed = text.trim();
       if (
@@ -2035,6 +2045,7 @@ export function useChatThread(params: {
           sharedPostIds: [...sharedPostIds],
           sharedBriefIds: [...sharedBriefIds],
           reply,
+          ...(privateReply !== null ? { privateReply } : {}),
         },
         state: 'sending',
       };

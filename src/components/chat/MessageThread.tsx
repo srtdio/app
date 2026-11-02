@@ -87,6 +87,8 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
+import type { PersonCardHint } from '@/lib/person-card';
 import { ReactionBadge } from '@/components/ui/ReactionBadge';
 import {
   ICON_SIZE,
@@ -239,6 +241,15 @@ import {
   useStarStore,
 } from '@/lib/chat/stars';
 import { quoteMedia, ReplyQuoteBox } from '@/components/chat/ReplyQuote';
+import {
+  canReplyPrivatelyInChat,
+  chatPrivateReplyDraft,
+  privateReplyHeader,
+  privateReplyHref,
+  privateReplyLine,
+  type PrivateReply,
+  type PrivateReplyDraft,
+} from '@/lib/chat/private-reply';
 import { dayPillLabel, withDaySeparators, type ThreadItem } from '@/components/chat/day-separators';
 import { ForwardPicker, type ForwardSendResult } from '@/components/chat/ForwardPicker';
 import { TaskButton, readTasksSeen, writeTasksSeen } from '@/components/chat/tasks/TaskButton';
@@ -527,7 +538,7 @@ interface MessageThreadProps {
    * left; only those drop from a restored draft or an edit. Absent: none.
    */
   mentionGone?: (userId: string) => boolean;
-  /** Bubble @mentions: tap opens a DM with that person (never me or our DM's peer). */
+  /** Bubble @mentions: a tap opens the shared person card for that person. */
   mentions?: BubbleMentions;
   /** Open with this message in view (an Activity mention); a miss toasts, the chat stays at the bottom. */
   initialMessageId?: string | null;
@@ -579,6 +590,11 @@ interface MessageThreadProps {
   notes?: boolean;
   /** Menu "Save to notes" in any other chat; absent hides it. */
   onSaveToNotes?: (message: ThreadMessage) => void;
+  /**
+   * Group chats: menu "Reply privately" on someone else's message opens my DM
+   * with them carrying this quote (use-open-person-dm); absent hides the row.
+   */
+  onReplyPrivately?: (senderUserId: string, quote: PrivateReplyDraft) => void;
 }
 
 /** Pointer handlers on a bubble: the long-press and swipe-to-reply controllers, composed. */
@@ -1270,6 +1286,41 @@ export function ThreadHeaderIdentity(props: {
   );
 }
 
+/**
+ * A bubble's Reply privately quote: the in-bubble reply quote's look, headed
+ * "<Full name> · <where>" (the held profile, else the workspace's remembered
+ * name), over one line of their words. With onOpen the box is a 44px button to
+ * where it points (privateReplyHref); otherwise it is static.
+ */
+function PrivateReplyQuote(props: {
+  reply: PrivateReply;
+  profiles: Map<string, ChatProfile>;
+  workspaceId: string | null;
+  layout: ChatLayout;
+  onOpen?: ((reply: PrivateReply) => void) | undefined;
+  className?: string;
+}): ReactElement {
+  const { reply, profiles, workspaceId } = props;
+  const author =
+    profiles.get(reply.authorUserId)?.displayName ??
+    knownMentionName(workspaceId, reply.authorUserId) ??
+    'Member';
+  const onOpen = props.onOpen;
+  return (
+    <ReplyQuoteBox
+      author={privateReplyHeader(author, reply.whereLabel)}
+      preview={resolveMentionText(
+        privateReplyLine(reply.excerpt),
+        profileNameOf(profiles, workspaceId),
+      )}
+      inBubble={props.layout}
+      oneLine
+      {...(onOpen !== undefined ? { onJump: () => onOpen(reply) } : {})}
+      {...(props.className !== undefined ? { className: props.className } : {})}
+    />
+  );
+}
+
 function senderName(message: ThreadMessage, profiles: Map<string, ChatProfile>): string {
   if (message.mine) return 'You';
   const profile = message.senderUserId !== null ? profiles.get(message.senderUserId) : undefined;
@@ -1757,10 +1808,10 @@ export function initialJumpDue(input: {
 
 /** What a bubble needs to make its @mentions tappable. */
 export interface BubbleMentions {
-  /** The DM's other person: a mention of them inside our DM does nothing. */
+  /** The DM's other person (kept for the row memo; their mention opens the card too). */
   peerUserId: string | null;
-  /** Open (or create) my DM with the mentioned person. */
-  onOpen: (userId: string) => void;
+  /** Open the shared person card for the mentioned person, anchored to the tapped name. */
+  onOpen: (hint: PersonCardHint, el: HTMLElement) => void;
 }
 
 /** How one body draws its mentions. */
@@ -1847,9 +1898,9 @@ export function profileNameOf(
 
 /**
  * A message body with its @[uuid] tokens drawn as "@Name" (never the raw
- * token); the text between keeps renderMessageBody's links. A mention of a known
- * person other than me (and, in a DM, the other person) is a button that opens
- * my DM with them.
+ * token); the text between keeps renderMessageBody's links. A mention of a
+ * person (me, the DM's other person and a former member included) is a button
+ * that opens the shared person card; "@all" and a name not resolved yet stay inert.
  */
 export function renderBodyWithMentions(
   body: string,
@@ -1880,9 +1931,11 @@ export function renderBodyWithMentions(
     // A searched word inside the mention is marked too (the shared highlight).
     const label = highlight.length > 0 ? highlightNodes(name, highlight) : name;
     const open = ctx.mentions;
-    // An unresolvable id ("@Former member", or not loaded yet) has no one to open a chat with.
-    const known = ctx.nameOf(id) !== undefined;
-    if (open === undefined || self || everyone || !known || id === open.peerUserId) {
+    // A confirmed former member opens the card in its "no longer here" state; a
+    // name not resolved yet (an empty label) has no one to show.
+    const former = ctx.nameOf.former?.(id) === true;
+    const known = ctx.nameOf(id) !== undefined || former;
+    if (open === undefined || everyone || !known) {
       return (
         <span key={i} data-mention={id} className={mentionClass(mine, tint)}>
           {label}
@@ -1896,8 +1949,12 @@ export function renderBodyWithMentions(
         type="button"
         data-mention={id}
         data-msg-link=""
-        onClick={() => open.onOpen(id)}
-        className={cn(mentionClass(mine, false), MENTION_HIT)}
+        data-person-trigger={id}
+        onClick={(event: MouseEvent<HTMLElement>) => {
+          event.stopPropagation();
+          open.onOpen({ userId: id, ...(former ? { former: true } : {}) }, event.currentTarget);
+        }}
+        className={cn(mentionClass(mine, tint), MENTION_HIT)}
       >
         {label}
       </PressableRow>
@@ -2096,6 +2153,8 @@ export function MessageBubble(props: {
   /** Cancels this own send while its files upload (the UploadRing's X). */
   onCancelUpload?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
+  /** A Reply privately quote tapped: open where it points; absent: the quote is static. */
+  onOpenPrivateReply?: (reply: PrivateReply) => void;
   /** The message's mark; drives the badge. */
   mark?: ChatMark | undefined;
   /** Opens the priority chooser from an open pending badge. */
@@ -2195,11 +2254,37 @@ export function MessageBubble(props: {
       ? () => onCancelUpload(message.id)
       : undefined;
   const column = cn('flex min-w-0 flex-col gap-1', sized(BUBBLE_MAX, layout), mine && 'items-end');
-  const senderLine = showMeta ? (
-    <span className={cn('text-fg', sized(GROUP_SENDER_TYPE, layout))}>{name}</span>
-  ) : null;
   const shape: BubbleShape = { mine, head, tail, layout };
   const selecting = selection !== undefined;
+  // The sender's photo and name open the person card (never while selecting:
+  // a tap there toggles the row).
+  const senderId = !selecting && !mine ? message.senderUserId : null;
+  const senderAvatar = senderAvatarProps(message, profiles);
+  const asPerson = (
+    node: ReactElement,
+    display: 'inline' | 'block',
+    className?: string,
+  ): ReactElement =>
+    senderId !== null ? (
+      <PersonTrigger
+        userId={senderId}
+        {...(className !== undefined ? { className } : {})}
+        name={profiles.has(senderId) ? name : null}
+        avatarUrl={profiles.get(senderId)?.avatarUrl ?? null}
+        display={display}
+      >
+        {node}
+      </PersonTrigger>
+    ) : (
+      node
+    );
+  const senderLine = showMeta
+    ? asPerson(
+        <span className={cn('text-fg', sized(GROUP_SENDER_TYPE, layout))}>{name}</span>,
+        'inline',
+        'self-start',
+      )
+    : null;
   // The rail is never drawn while selecting: the row keeps today's place.
   const rail = selecting ? undefined : props.rail;
   const railEdge = { head, afterLabel: props.afterLabel === true, hasReactions };
@@ -2215,7 +2300,7 @@ export function MessageBubble(props: {
   );
   const photo = showMeta
     ? withRailPhoto(
-        <Avatar name={name} {...senderAvatarProps(message, profiles)} role="header" />,
+        asPerson(<Avatar name={name} {...senderAvatar} role="header" />, 'block'),
         rail,
         railEdge,
       )
@@ -2418,6 +2503,16 @@ export function MessageBubble(props: {
                   media={parentDeleted ? null : quoteMedia(props.quoted)}
                   thumbSource={{ cache, presignEnabled }}
                   onJump={() => props.onJumpToMessage?.(reply.id)}
+                  className={album ? 'mx-[9px] mb-1 mt-[5px]' : 'mb-1'}
+                />
+              ) : null}
+              {message.privateReply != null ? (
+                <PrivateReplyQuote
+                  reply={message.privateReply}
+                  profiles={profiles}
+                  workspaceId={props.workspaceId ?? null}
+                  layout={layout}
+                  onOpen={props.onOpenPrivateReply}
                   className={album ? 'mx-[9px] mb-1 mt-[5px]' : 'mb-1'}
                 />
               ) : null}
@@ -2885,6 +2980,7 @@ interface MessageRowProps {
   onDiscard?: (messageId: string) => void;
   onCancelUpload?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
+  onOpenPrivateReply?: (reply: PrivateReply) => void;
   mark: ChatMark | undefined;
   onChangePriority?: (messageId: string) => void;
   selection?: RowSelection;
@@ -3072,6 +3168,9 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       {...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {})}
       {...(props.onCancelUpload !== undefined ? { onCancelUpload: props.onCancelUpload } : {})}
       {...(props.onJumpToMessage !== undefined ? { onJumpToMessage: props.onJumpToMessage } : {})}
+      {...(props.onOpenPrivateReply !== undefined
+        ? { onOpenPrivateReply: props.onOpenPrivateReply }
+        : {})}
       mark={props.mark}
       {...(onChangePriority !== undefined
         ? { onChangePriority: () => onChangePriority(props.message.id) }
@@ -3422,6 +3521,16 @@ function ThreadBody(
     notes?: boolean;
     /** Menu "Save to notes" picked; absent hides it. */
     onSaveToNotes?: (message: ThreadMessage) => void;
+    /**
+     * Menu "Reply privately" (group chats): open my DM with the sender carrying
+     * the quote, and whether the sender left (no row then); absent hides it.
+     */
+    replyPrivately?: {
+      open: (message: ThreadMessage) => void;
+      senderGone: (userId: string) => boolean;
+    };
+    /** A bubble's Reply privately quote tapped (its href); absent: the quote is static. */
+    onOpenPrivateReplyHref?: (href: string) => void;
     /** Menu "Star" / "Unstar" picked (the new value); absent hides the row. */
     onStar?: (message: ThreadMessage, starred: boolean) => void;
     /** The chat's task changes for the loaded window (thread lines); absent: none. */
@@ -4155,6 +4264,12 @@ function ThreadBody(
     window.setTimeout(() => flash.classList.remove(...ring), 1200);
   };
   const onJumpToMessage = useStableCallback(scrollToMessage);
+  // A bubble's Reply privately quote: the group message, comment or plan comment it quotes.
+  const openPrivateReplyHref = props.onOpenPrivateReplyHref;
+  const onOpenPrivateReply = useStableCallback((reply: PrivateReply): void => {
+    const href = privateReplyHref(reply.link);
+    if (href !== null) openPrivateReplyHref?.(href);
+  });
   useLayoutEffect(() => {
     const id = pendingQuoteRef.current;
     if (id === null) return;
@@ -4254,6 +4369,20 @@ function ThreadBody(
         )
       : { canEdit: false, canDelete: false, lockedByMark: false };
   const menuFailed = menu !== null && canDiscardFailed(menu.message);
+  const replyPrivately = props.replyPrivately;
+  const menuSender = menu?.message.senderUserId ?? null;
+  const menuReplyPrivately =
+    menu !== null &&
+    replyPrivately !== undefined &&
+    canReplyPrivatelyInChat({
+      mine: menu.message.mine,
+      senderUserId: menuSender,
+      isGroup: props.isGroup,
+      notes: props.notes === true,
+      senderRemoved: menuSender !== null && replyPrivately.senderGone(menuSender),
+      state: menu.message.state,
+      ...(menu.message.deleted !== undefined ? { deleted: menu.message.deleted } : {}),
+    });
   const viewerMessage =
     viewer !== null ? props.messages.find((m) => m.id === viewer.messageId) : undefined;
   const viewerData =
@@ -4470,6 +4599,7 @@ function ThreadBody(
                       reducedMotion={reducedMotion}
                       onSwipeReply={onSwipeReply}
                       onJumpToMessage={onJumpToMessage}
+                      {...(openPrivateReplyHref !== undefined ? { onOpenPrivateReply } : {})}
                       nextVoiceId={voiceNext.get(row.message.id) ?? null}
                       onTranscribe={onTranscribeRow}
                       quoted={
@@ -4663,6 +4793,11 @@ function ThreadBody(
         }}
         onReply={() => {
           if (menu) props.onReply(menu.message);
+        }}
+        canReplyPrivately={menuReplyPrivately}
+        replyPrivatelyName={menu !== null ? senderName(menu.message, props.profiles) : ''}
+        onReplyPrivately={() => {
+          if (menu !== null && menuReplyPrivately) replyPrivately?.open(menu.message);
         }}
         onCopy={() => {
           if (menu) {
@@ -6430,7 +6565,14 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     aboutPost,
     aboutDraft !== null ? messagesById.get(aboutDraft.cardMessageId) : undefined,
   );
-  const composerSend: ComposerSend = (text, attachments, sharedPostIds, reply, sharedBriefIds) => {
+  const composerSend: ComposerSend = (
+    text,
+    attachments,
+    sharedPostIds,
+    reply,
+    sharedBriefIds,
+    privateReply,
+  ) => {
     const [shared] = sharedPostIds;
     if (sharedPostIds.length === 1 && shared !== undefined) expectCard(shared);
     if (sharedPostIds.length > 1) {
@@ -6439,13 +6581,13 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     }
     const quote = replyForSend(reply, aboutReply, sharedPostIds.length > 0);
     // The root rides the send (optimistic row, live ext) when the parent is loaded.
-    props.onSend(
-      text,
-      attachments,
-      sharedPostIds,
-      withThreadRoot(quote, quote !== null ? known.get(quote.id) : undefined),
-      sharedBriefIds,
-    );
+    const rooted = withThreadRoot(quote, quote !== null ? known.get(quote.id) : undefined);
+    // Reply privately's quote rides as the sixth argument only when attached.
+    if (privateReply !== undefined) {
+      props.onSend(text, attachments, sharedPostIds, rooted, sharedBriefIds, privateReply);
+      return;
+    }
+    props.onSend(text, attachments, sharedPostIds, rooted, sharedBriefIds);
   };
   // Delete follows the 30 minute window on server time; the bar says why not.
   // One timeout re-computes it when the earliest selected own message ages out.
@@ -6580,6 +6722,28 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   });
   // What the chat's list and the thread view's list share: one bubble, one
   // menu, the same marks, selection, edit and delete windows and reactions.
+  // Reply privately (group chats only): the quote of the held message, then my DM with its sender.
+  const onReplyPrivatelyProp = props.onReplyPrivately;
+  const replyPrivatelyOpen =
+    onReplyPrivatelyProp !== undefined &&
+    channelId !== undefined &&
+    props.isGroup === true &&
+    !notes
+      ? (message: ThreadMessage): void => {
+          if (message.senderUserId === null) return;
+          onReplyPrivatelyProp(
+            message.senderUserId,
+            chatPrivateReplyDraft({
+              channelId,
+              messageId: message.id,
+              authorUserId: message.senderUserId,
+              authorName: senderName(message, props.profiles),
+              excerpt: replyPreview(message),
+              groupName: props.title,
+            }),
+          );
+        }
+      : undefined;
   const bodyActions: Omit<
     ThreadBodyProps,
     'messages' | 'loading' | 'onReply' | 'jumpRequest' | 'threads'
@@ -6648,6 +6812,16 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     ...(props.onSaveToNotes !== undefined && !notes && !selecting
       ? { onSaveToNotes: props.onSaveToNotes }
       : {}),
+    ...(replyPrivatelyOpen !== undefined && !selecting
+      ? {
+          replyPrivately: {
+            open: replyPrivatelyOpen,
+            senderGone: (userId: string) =>
+              isFormerMember(workspaceId ?? null, userId) || props.mentionGone?.(userId) === true,
+          },
+        }
+      : {}),
+    ...(props.onNavigate !== undefined ? { onOpenPrivateReplyHref: props.onNavigate } : {}),
     ...(starStore !== null && channelId !== undefined && !selecting
       ? {
           onStar: (message: ThreadMessage, starred: boolean) =>

@@ -14,6 +14,7 @@ import {
   setDraft,
   setDraftScope,
   setDraftStorage,
+  setPrivateReplyDraft,
   type DraftStorage,
   stripDeletedReplies,
   subscribeDrafts,
@@ -185,6 +186,7 @@ describe('persisted drafts (per user + workspace)', () => {
       sharedPosts: [POST],
       sharedBriefs: [BRIEF],
       pendingFiles: [],
+      privateReply: null,
     });
     expect(fresh.draftText(A)).toBe('half typed');
     fresh.resetDrafts();
@@ -423,5 +425,65 @@ describe('a new user never inherits in-memory drafts', () => {
     setDraftScope({ userId: 'u2', workspaceId: 'ws-a' });
     expect(getDraft(A)).toBe(EMPTY_DRAFT);
     expect(storage.data.has(DRAFTS_STORAGE_KEY)).toBe(false);
+  });
+});
+
+const PRIVATE_REPLY = {
+  kind: 'chat' as const,
+  sourceId: 'msg-9',
+  authorUserId: 'user-asha',
+  authorName: 'Asha Rao',
+  excerpt: 'Can you send the deck?',
+  whereLabel: 'Launch team',
+  link: { kind: 'chat' as const, channelId: 'grp-1', messageId: 'msg-9' },
+};
+
+describe('Reply privately quote on a draft', () => {
+  afterEach(() => {
+    resetDrafts();
+    setDraftStorage(undefined);
+    vi.useRealTimers();
+  });
+
+  it('setPrivateReplyDraft attaches the quote; the draft is not empty; null removes it', () => {
+    setPrivateReplyDraft(A, PRIVATE_REPLY);
+    expect(getDraft(A).privateReply).toEqual(PRIVATE_REPLY);
+    expect(isEmptyDraft(getDraft(A))).toBe(false);
+    setDraft(A, { text: 'hi' });
+    expect(getDraft(A).privateReply).toEqual(PRIVATE_REPLY);
+    setPrivateReplyDraft(A, null);
+    expect(getDraft(A).privateReply).toBeNull();
+    expect(getDraft(A).text).toBe('hi');
+    setDraft(A, { text: '' });
+    expect(getDraft(A)).toBe(EMPTY_DRAFT);
+  });
+
+  it('clearDraft (a send) drops the quote', () => {
+    setPrivateReplyDraft(A, PRIVATE_REPLY);
+    clearDraft(A);
+    expect(getDraft(A).privateReply).toBeNull();
+  });
+
+  it('the quote survives a reload; a malformed stored quote reads as none', async () => {
+    vi.useFakeTimers();
+    const storage = memoryStorage();
+    setDraftStorage(storage);
+    setDraftScope(U1);
+    setPrivateReplyDraft(A, PRIVATE_REPLY);
+    setDraft(B, { text: 'x' });
+    vi.advanceTimersByTime(DRAFTS_WRITE_DEBOUNCE_MS);
+    // Corrupt B's quote in storage.
+    const blob = JSON.parse(storage.data.get(DRAFTS_STORAGE_KEY) ?? '{}');
+    blob.byWorkspace['ws-a'][B].privateReply = { kind: 'chat', sourceId: 7 };
+    storage.data.set(DRAFTS_STORAGE_KEY, JSON.stringify(blob));
+
+    vi.resetModules();
+    const fresh = await import('@/lib/chat/drafts');
+    fresh.setDraftStorage(storage);
+    fresh.setDraftScope(U1);
+    expect(fresh.getDraft(A).privateReply).toEqual(PRIVATE_REPLY);
+    expect(fresh.getDraft(B).privateReply).toBeNull();
+    expect(fresh.getDraft(B).text).toBe('x');
+    fresh.resetDrafts();
   });
 });

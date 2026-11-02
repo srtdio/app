@@ -1495,6 +1495,9 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
                         attachments: input.local.attachments,
                         sharedPostIds: input.local.sharedPostIds,
                         reply: input.local.reply,
+                        ...(input.local.privateReply !== undefined
+                          ? { privateReply: input.local.privateReply }
+                          : {}),
                         createMessage: createTextMessage,
                         liveIds: {
                           sorted_message_id: input.id,

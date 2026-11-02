@@ -31,6 +31,12 @@ import {
   type MessageExt,
   type ReplyQuote,
 } from '@/lib/chat/attachments';
+import {
+  parsePrivateReply,
+  privateReplyToRow,
+  type PrivateReply,
+  type PrivateReplyRow,
+} from '@/lib/chat/private-reply';
 
 /** One chat_messages row as PostgREST returns it. */
 export type ChatMessageRow = Database['public']['Tables']['chat_messages']['Row'];
@@ -265,6 +271,12 @@ export interface ThreadMessage {
    * forward). Absent while the row has not been read from Postgres (live).
    */
   mentions?: string[] | null;
+  /**
+   * Reply privately: the quote this DM message carries (row private_reply,
+   * the live ext's private_reply, or an own send's draft quote). Absent is the
+   * same as null.
+   */
+  privateReply?: PrivateReply | null;
 }
 
 /** Per-kind counts of files removed from a message (chat_messages.removed_files). */
@@ -545,6 +557,17 @@ export interface LocalMessageContent {
    * send that carries it sends no mentions. Absent on ordinary sends.
    */
   forwardedFromMessageId?: string;
+  /**
+   * Reply privately: the quote this send carries (records through
+   * chat_private_reply_send). Absent on ordinary sends.
+   */
+  privateReply?: PrivateReply;
+}
+
+/** A row's private_reply (one schema; malformed throws); a row read without the column is none. */
+function rowPrivateReply(row: ChatMessageRow): PrivateReply | null {
+  const raw: unknown = (row as { private_reply?: unknown }).private_reply;
+  return parsePrivateReply(raw);
 }
 
 /**
@@ -581,9 +604,12 @@ export function rowToThreadMessage(
       : null);
   const root = rowThreadRoot(row);
   const removedFiles = parseRemovedFiles(row.removed_files);
+  // The record's snapshot wins; an own echo read without the column keeps the draft's quote.
+  const privateReply = rowPrivateReply(row) ?? local?.privateReply ?? null;
   return {
     ...(root !== null ? { threadRootId: root } : {}),
     ...(removedFiles !== null ? { removedFiles } : {}),
+    ...(privateReply !== null ? { privateReply } : {}),
     id: row.id,
     senderUserId,
     body: row.body ?? '',
@@ -925,12 +951,23 @@ export function mapLiveTextMessage(
       sharedBriefIds: [],
       reply: parseReply(raw.ext),
       ...liveThreadRoot(raw.ext),
+      ...livePrivateReply(raw.ext),
       state: 'sent',
       status: 'sent',
       reactions: [],
       ...(parseForwardedFrom(raw.ext) !== null ? { forwarded: true } : {}),
     },
   };
+}
+
+/** The live ext key carrying a Reply privately quote (the row's private_reply jsonb as is). */
+export const LIVE_PRIVATE_REPLY_KEY = 'private_reply';
+
+/** A live message's Reply privately quote from its ext (parsePrivateReply: malformed throws). */
+function livePrivateReply(ext: unknown): Pick<ThreadMessage, 'privateReply'> {
+  if (typeof ext !== 'object' || ext === null) return {};
+  const reply = parsePrivateReply((ext as Record<string, unknown>)[LIVE_PRIVATE_REPLY_KEY]);
+  return reply !== null ? { privateReply: reply } : {};
 }
 
 /** A live message's thread root from its ext (store previews); absent when not carried. */
@@ -1024,12 +1061,22 @@ export function mergeFetched(messages: ThreadMessage[], fetched: ThreadMessage[]
       sharedBriefIds:
         existing.sharedBriefIds.length > 0 ? existing.sharedBriefIds : incoming.sharedBriefIds,
       ...keptPlanIds(existing, incoming),
+      ...keptPrivateReply(existing, incoming),
       reply: existing.reply ?? incoming.reply,
       reactions: existing.reactions,
       status: existing.status,
     });
   }
   return syncDeletedQuotes([...byId.values()].sort(compareMessages));
+}
+
+/** The row's Reply privately quote, else the live (or own send's) one. */
+function keptPrivateReply(
+  existing: ThreadMessage,
+  incoming: ThreadMessage,
+): Pick<ThreadMessage, 'privateReply'> {
+  const reply = incoming.privateReply ?? existing.privateReply ?? null;
+  return reply !== null ? { privateReply: reply } : {};
 }
 
 /** Append a live message, ignoring a duplicate id (already fetched or echoed). */
@@ -1208,6 +1255,9 @@ export function pendingMessage(params: {
     sharedBriefIds: [...(params.local.sharedBriefIds ?? [])],
     reply: params.local.reply,
     ...pendingThreadRoot(params.local.reply),
+    ...(params.local.privateReply !== undefined
+      ? { privateReply: params.local.privateReply }
+      : {}),
     state: 'sending',
     status: 'sent',
     reactions: [],
@@ -1579,6 +1629,8 @@ export function sendText(params: {
   liveIds?: LiveMessageIds;
   /** The source message id when this send forwards it. */
   forwardedFrom?: string | null;
+  /** Reply privately: the record's quote, carried live so the peer sees it at once. */
+  privateReply?: PrivateReply | null;
 }): Promise<AgoraChat.SendMsgResult> {
   const built = buildLiveTextExt(params);
   const ext = built !== null ? { ext: built } : {};
@@ -1598,13 +1650,23 @@ export function buildLiveTextExt(params: {
   reply: ReplyQuote | null;
   liveIds?: LiveMessageIds;
   forwardedFrom?: string | null;
-}): (MessageExt & Partial<LiveMessageIds> & { [LIVE_THREAD_ROOT_KEY]?: string }) | null {
+  /** Reply privately: rides the ext as private_reply (the row's jsonb shape). */
+  privateReply?: PrivateReply | null;
+}):
+  | (MessageExt &
+      Partial<LiveMessageIds> & {
+        [LIVE_THREAD_ROOT_KEY]?: string;
+        [LIVE_PRIVATE_REPLY_KEY]?: PrivateReplyRow;
+      })
+  | null {
   const forwardedFrom = params.forwardedFrom ?? null;
+  const privateReply = params.privateReply ?? null;
   const hasContentExt =
     params.attachments.length > 0 ||
     params.sharedPostIds.length > 0 ||
     params.reply !== null ||
-    forwardedFrom !== null;
+    forwardedFrom !== null ||
+    privateReply !== null;
   const hasExt = hasContentExt || params.liveIds !== undefined;
   if (!hasExt) return null;
   return {
@@ -1616,6 +1678,7 @@ export function buildLiveTextExt(params: {
     }),
     ...(params.liveIds !== undefined ? params.liveIds : {}),
     ...(params.reply?.rootId !== undefined ? { [LIVE_THREAD_ROOT_KEY]: params.reply.rootId } : {}),
+    ...(privateReply !== null ? { [LIVE_PRIVATE_REPLY_KEY]: privateReplyToRow(privateReply) } : {}),
   };
 }
 

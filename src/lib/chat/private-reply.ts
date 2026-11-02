@@ -6,6 +6,7 @@
 // (src/lib/chat/drafts.ts), so it survives a reload like the text does.
 
 import { z } from 'zod';
+import { chatMessageHref, planHref } from '@/lib/inbox/bell-types';
 
 export const PRIVATE_REPLY_KINDS = ['chat', 'comment', 'plan_comment'] as const;
 export type PrivateReplyKind = (typeof PRIVATE_REPLY_KINDS)[number];
@@ -179,4 +180,116 @@ export function privateReplyLine(excerpt: string): string {
 export const REPLY_PRIVATELY = 'Reply privately';
 export function replyPrivatelyTo(firstName: string): string {
   return `to ${firstName}`;
+}
+
+/**
+ * A quote as the app stored it (the outbox's persisted send, camelCase) back
+ * to a PrivateReply; null when absent or malformed (device storage is never
+ * trusted, so this never throws). Pure.
+ */
+export function parseStoredPrivateReply(value: unknown): PrivateReply | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Partial<PrivateReply>;
+  const l = v.link;
+  if (typeof l !== 'object' || l === null) return null;
+  try {
+    const link =
+      l.kind === 'chat'
+        ? { channel_id: l.channelId, message_id: l.messageId }
+        : l.kind === 'comment'
+          ? { entity_type: l.entityType, entity_id: l.entityId, comment_id: l.commentId }
+          : { plan_id: l.planId, item_id: l.itemId, comment_id: l.commentId };
+    return parsePrivateReply({
+      kind: v.kind,
+      source_id: v.sourceId,
+      author_user_id: v.authorUserId,
+      excerpt: v.excerpt,
+      where_label: v.whereLabel,
+      source_created_at: v.sourceCreatedAt ?? null,
+      link,
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** The quote a send carries, from the composer's draft (the server's snapshot replaces it). Pure. */
+export function privateReplyFromDraft(draft: PrivateReplyDraft): PrivateReply {
+  return {
+    kind: draft.kind,
+    sourceId: draft.sourceId,
+    authorUserId: draft.authorUserId,
+    excerpt: draft.excerpt,
+    whereLabel: draft.whereLabel,
+    sourceCreatedAt: null,
+    link: draft.link,
+  };
+}
+
+/**
+ * Whether a message offers Reply privately: someone else's recorded, live
+ * message in a group chat, from a person who is still a member. Never on my
+ * own message, in a DM or in Personal notes, and never with no known sender.
+ * Pure.
+ */
+export function canReplyPrivatelyInChat(input: {
+  mine: boolean;
+  senderUserId: string | null;
+  /** The chat is a group (not a DM, not notes). */
+  isGroup: boolean;
+  notes: boolean;
+  /** The sender left or was removed (a former member). */
+  senderRemoved: boolean;
+  state: 'sending' | 'sent' | 'failed';
+  deleted?: boolean;
+}): boolean {
+  if (input.mine || !input.isGroup || input.notes) return false;
+  if (input.senderUserId === null || input.senderUserId === '') return false;
+  if (input.senderRemoved) return false;
+  return input.state === 'sent' && input.deleted !== true;
+}
+
+/** Reply privately's quote of a group chat message (what the DM's composer shows). Pure. */
+export function chatPrivateReplyDraft(input: {
+  channelId: string;
+  messageId: string;
+  authorUserId: string;
+  authorName: string;
+  /** One line of their words (the reply quote's preview: text, or the media label). */
+  excerpt: string;
+  /** The group's display name (chatDisplayName). */
+  groupName: string;
+}): PrivateReplyDraft {
+  return {
+    kind: 'chat',
+    sourceId: input.messageId,
+    authorUserId: input.authorUserId,
+    authorName: input.authorName,
+    excerpt: privateReplyLine(input.excerpt),
+    whereLabel: input.groupName,
+    link: { kind: 'chat', channelId: input.channelId, messageId: input.messageId },
+  };
+}
+
+/**
+ * Where a bubble's quote opens, by its link: the group message
+ * (chatMessageHref, the thread's jump-to-message), the post or brief with the
+ * comment (?comment=, landed by focus-target.ts, which toasts a deleted or
+ * hidden one), or the plan item with the comment (&comment=, the Activity
+ * plan comment link). Pure.
+ */
+export function privateReplyHref(link: PrivateReplyLink): string | null {
+  switch (link.kind) {
+    case 'chat':
+      return chatMessageHref(link.channelId, link.messageId);
+    case 'comment': {
+      const id = encodeURIComponent(link.entityId);
+      const comment = `?comment=${encodeURIComponent(link.commentId)}`;
+      if (link.entityType === 'post') return `/posts/${id}${comment}`;
+      if (link.entityType === 'brief') return `/briefs/${id}${comment}`;
+      return null;
+    }
+    case 'plan_comment':
+      return `${planHref(link.planId, link.itemId)}&comment=${encodeURIComponent(link.commentId)}`;
+  }
 }
