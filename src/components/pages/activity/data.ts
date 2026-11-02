@@ -465,9 +465,22 @@ const PLAN_EVENTS: ReadonlySet<string> = new Set(['plan_comment', 'plan_review']
 /** The entity_type of a plan event row (entity_id is the plan item id). */
 export const PLAN_ITEM_ENTITY = 'plan_item';
 
-/** Whether a row is a plan comment or plan review. */
-function isPlanEvent(item: Pick<ActivityItem, 'eventType'>): boolean {
-  return PLAN_EVENTS.has(item.eventType);
+/**
+ * Whether a row is an @mention in a plan item comment: event_type 'mention',
+ * entity_type 'plan_item' (entity_id the item, payload plan_id and comment_id).
+ */
+export function isPlanMention(item: Pick<ActivityItem, 'eventType' | 'entityType'>): boolean {
+  return item.eventType === MENTION_EVENT_TYPE && item.entityType === PLAN_ITEM_ENTITY;
+}
+
+/** Whether a row is a plan comment, plan review or plan mention. */
+function isPlanEvent(item: Pick<ActivityItem, 'eventType' | 'entityType'>): boolean {
+  return PLAN_EVENTS.has(item.eventType) || isPlanMention(item);
+}
+
+/** Whether a plan row points at one plan comment (a comment or a mention in one). */
+function isPlanCommentRow(item: Pick<ActivityItem, 'eventType' | 'entityType'>): boolean {
+  return item.eventType === 'plan_comment' || isPlanMention(item);
 }
 
 /** The name an actor-row line uses when the actor's name did not resolve. */
@@ -522,7 +535,9 @@ function planWithdrawalPhrase(
 /** Map a raw inbox_entries row into an ActivityItem. Pure; actorName stays null. */
 export function mapEntry(row: InboxEntryRow): ActivityItem {
   const payload: unknown = row.payload as Json;
-  const plan = PLAN_EVENTS.has(row.event_type);
+  const plan =
+    PLAN_EVENTS.has(row.event_type) ||
+    (row.event_type === MENTION_EVENT_TYPE && row.entity_type === PLAN_ITEM_ENTITY);
   const review = row.event_type === 'plan_review';
   const onBehalfOfId =
     row.event_type === 'stage_change' ? payloadStr(payload, 'on_behalf_of') : null;
@@ -628,10 +643,19 @@ function chatMentionLine(item: ActivityItem): string {
 function planEventLine(
   item: Pick<
     ActivityItem,
-    'eventType' | 'actorName' | 'reviewSide' | 'reviewStatus' | 'reviewWithdrawn' | 'reviewPrevious'
+    | 'eventType'
+    | 'entityType'
+    | 'actorName'
+    | 'reviewSide'
+    | 'reviewStatus'
+    | 'reviewWithdrawn'
+    | 'reviewPrevious'
   >,
 ): string | null {
   const who = item.actorName;
+  if (isPlanMention(item)) {
+    return who !== null ? `${who} mentioned you in a plan item` : 'New mention in a plan item';
+  }
   if (item.eventType === 'plan_comment') {
     return who !== null ? `${who} commented on a plan item` : 'New comment on a plan item';
   }
@@ -1081,7 +1105,7 @@ export function entityHref(item: ActivityItem, workspaceKey: string | null = nul
     // The standalone Plan page with the item open; a comment also scrolls to it.
     if (item.planId == null || item.entityId === null) return null;
     const base = `/plans/${item.planId}?item=${item.entityId}`;
-    return item.eventType === 'plan_comment' && item.commentId !== null
+    return isPlanCommentRow(item) && item.commentId !== null
       ? `${base}&comment=${item.commentId}`
       : base;
   }
@@ -1792,7 +1816,9 @@ export async function fetchActivityEntries(
 
   const commentIds = unique(
     items.flatMap((item) =>
-      COMMENT_EVENTS.includes(item.eventType) && item.commentId !== null ? [item.commentId] : [],
+      COMMENT_EVENTS.includes(item.eventType) && !isPlanMention(item) && item.commentId !== null
+        ? [item.commentId]
+        : [],
     ),
   );
   const postIds = unique(
@@ -1856,9 +1882,7 @@ export async function fetchActivityEntries(
       ...planAlerts.flatMap((f) => (f.planTitle === null && f.planId !== null ? [f.planId] : [])),
     ]),
     commentIds: unique(
-      planEvents.flatMap((i) =>
-        i.eventType === 'plan_comment' && i.commentId !== null ? [i.commentId] : [],
-      ),
+      planEvents.flatMap((i) => (isPlanCommentRow(i) && i.commentId !== null ? [i.commentId] : [])),
     ),
   });
   // A post item's title is its post's (and a plan alert may name its post
@@ -1987,7 +2011,7 @@ export async function fetchActivityEntries(
   const userIds = unique([
     ...items
       .flatMap((item) =>
-        COMMENT_EVENTS.includes(item.eventType) && item.commentId !== null
+        COMMENT_EVENTS.includes(item.eventType) && !isPlanMention(item) && item.commentId !== null
           ? [commentAuthors.get(item.commentId)]
           : [],
       )
@@ -2056,7 +2080,7 @@ export async function fetchActivityEntries(
               ? chatRes.messages.get(item.messageId)?.senderUserId
               : null) ?? null)
           : item.actorId;
-    } else if (COMMENT_EVENTS.includes(item.eventType)) {
+    } else if (COMMENT_EVENTS.includes(item.eventType) && !isPlanMention(item)) {
       actorUserId =
         (item.commentId !== null ? (commentAuthors.get(item.commentId) ?? null) : null) ??
         item.actorId;
@@ -2071,9 +2095,9 @@ export async function fetchActivityEntries(
       // Approve / reject / park / review and the deletes: the row's own actor.
       actorUserId = item.actorId;
     } else if (isPlanEvent(item)) {
-      // The row's own actor; a plan comment falls back to its author.
+      // The row's own actor; a plan comment (or mention) falls back to its author.
       const comment =
-        item.eventType === 'plan_comment' && item.commentId !== null
+        isPlanCommentRow(item) && item.commentId !== null
           ? planRes.comments.get(item.commentId)
           : undefined;
       actorUserId = item.actorId ?? comment?.authorId ?? null;
@@ -2120,7 +2144,7 @@ export async function fetchActivityEntries(
               : null;
       item.planTitle = item.planId != null ? (planRes.planTitles.get(item.planId) ?? null) : null;
       const comment =
-        item.eventType === 'plan_comment' && item.commentId !== null
+        isPlanCommentRow(item) && item.commentId !== null
           ? planRes.comments.get(item.commentId)
           : undefined;
       item.body = comment !== undefined ? mentionOf(comment.body) : null;

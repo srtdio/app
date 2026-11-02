@@ -280,6 +280,74 @@ function seedChatPlanNote(network: HarnessNetwork): void {
   });
 }
 
+/**
+ * The chat plan plus a conversation on its concept: two runs from a colleague
+ * (one tags ME), ME's reply, and (agency view only) a creators-only note, over
+ * two days so a day line shows.
+ */
+function seedChatPlanThread(network: HarnessNetwork, withTeamNote: boolean): void {
+  seedChatPlan(network);
+  const at = (msAgo: number): string => new Date(NOW - msAgo).toISOString();
+  const comment = (id: string, author: string, body: string, visibility: string, when: string) => ({
+    id,
+    workspace_id: WORKSPACE_ID,
+    item_id: PLAN_CONCEPT_ITEM,
+    author_user_id: author,
+    body,
+    visibility,
+    created_at: when,
+    edited_at: null,
+    deleted_at: null,
+  });
+  const rows = [
+    comment(
+      '0190d300-0000-7000-8000-00000000d401',
+      COLLEAGUE_A,
+      'Moodboard is up.',
+      'everyone',
+      at(26 * 3_600_000),
+    ),
+    comment(
+      '0190d300-0000-7000-8000-00000000d402',
+      COLLEAGUE_A,
+      `@[${ME}] can you check the hook?`,
+      'everyone',
+      at(26 * 3_600_000 - 60_000),
+    ),
+    comment(
+      '0190d300-0000-7000-8000-00000000d403',
+      ME,
+      'Looks good, keep it under 30 seconds.',
+      'everyone',
+      at(40 * 60_000),
+    ),
+  ];
+  if (withTeamNote) {
+    rows.push(
+      comment(
+        '0190d300-0000-7000-8000-00000000d404',
+        ME,
+        'Drone shots land Tuesday.',
+        'team',
+        at(38 * 60_000),
+      ),
+    );
+  }
+  (network.world.tables.plan_item_comments ??= []).push(...rows);
+}
+
+/** Open the chat plan's concept item and bring its comments into view. */
+async function openPlanItemThread(page: Page): Promise<void> {
+  await openChatPlan(page);
+  await page
+    .locator('[data-plan-page="plan"]')
+    .locator(`[data-plan-row="${PLAN_CONCEPT_ITEM}"]`)
+    .click();
+  const thread = page.locator('[data-plan-page="item"] [data-plan-thread]');
+  await waitFor([thread], 'plan item thread');
+  await thread.scrollIntoViewIfNeeded();
+}
+
 async function openChatPlanCard(page: Page): Promise<Locator> {
   await openChat(page, PEER_NAME);
   const card = page.locator(`[data-plan-card="${PLAN_ID}"]`).last();
@@ -670,6 +738,49 @@ const SCREENS: Screen[] = [
         .click();
       await waitFor([page.locator('[data-plan-page="item"]')], 'plan item');
       await waitFor([page.locator('[data-plan-file-name]')], 'plan item files');
+    },
+  },
+  {
+    name: 'plan-item-thread',
+    seed: creator,
+    extra: (network) => seedChatPlanThread(network, true),
+    url: '/chat',
+    steps: openPlanItemThread,
+  },
+  {
+    name: 'plan-item-thread-approver',
+    seed: approver,
+    extra: (network) => seedChatPlanThread(network, false),
+    url: '/chat',
+    steps: openPlanItemThread,
+  },
+  {
+    name: 'plan-item-more-menu',
+    seed: creator,
+    extra: seedChatPlan,
+    url: '/chat',
+    steps: async (page) => {
+      await openChatPlan(page);
+      await page
+        .locator('[data-plan-page="plan"]')
+        .locator(`[data-plan-row="${PLAN_CONCEPT_ITEM}"]`)
+        .click();
+      await waitFor([page.locator('[data-plan-page="item"]')], 'plan item');
+      await tap([page.locator('[data-plan-item-more]')], 'item more');
+      await waitFor([page.getByRole('menuitem', { name: /Remove from plan/ })], 'more menu');
+    },
+  },
+  {
+    name: 'plan-item-mention-picker',
+    seed: creator,
+    extra: (network) => seedChatPlanThread(network, true),
+    url: '/chat',
+    steps: async (page) => {
+      await openPlanItemThread(page);
+      const box = page.locator('[data-plan-comment-input]');
+      await box.click();
+      await box.fill('@');
+      await waitFor([page.locator('[data-mention-picker]')], 'mention picker');
     },
   },
   {
