@@ -335,7 +335,8 @@ export function isTextField(target: EventTarget | null): boolean {
  * (role dialog, aria-modal) whose focus moves in on open and returns to the
  * opener on close (useModalFocus). Laptop (md and up): a right-docked panel,
  * full height and at its final width from its first frame (PLAN_PANEL_WIDTH),
- * border-left, lit as an overlay (lit-overlay) at every width, no scrim,
+ * border-left, lit as an overlay below 1180px (it sits over the chat) and
+ * flat from 1180px (beside the list), no scrim,
  * not modal (role complementary), entering on translateX 24px to 0 with
  * opacity (reduced motion: none), a close X in the header. Opening focuses its
  * heading; closing hands focus back to what opened it. Escape: a key inside
@@ -508,7 +509,7 @@ export function PlanPage(props: {
         desktop
           ? // Laptop: the box is final on its first frame; axis: translateX only.
             cn(
-              'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] lit-overlay transition-[transform,opacity] duration-base motion-reduce:transition-none',
+              'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] max-[1179px]:lit-overlay min-[1180px]:border-border transition-[transform,opacity] duration-base motion-reduce:transition-none',
               PLAN_PANEL_WIDTH,
             )
           : 'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] transition-transform duration-slow ease-enter motion-reduce:transition-none',

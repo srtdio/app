@@ -23,7 +23,7 @@ Dark mode: raised surfaces carry a faint bottom rim, bounce light, always dimmer
 | Card    | `lit-card` / `lit-card-muted`          | lit top edge, soft shadow under                                            | post, brief, plan, asset, activity, chat list, file, link preview, settings panels; grey content panels (muted)                 |
 | Raised  | `lit-raised`                           | bright top, deep falling shadow                                            | phone tab pill, chat circle, auth / onboarding / unsubscribe cards                                                              |
 | Float   | `lit-float`                            | lifted off the page                                                        | toasts, undo strip, unread / latest pills, drag ghosts, induction label                                                         |
-| Overlay | `lit-overlay`                          | highest; long shadow, dark mode lighter gradient                           | menus, popovers, sheets, dialogs, side panels, docked plan panel                                                                |
+| Overlay | `lit-overlay`                          | highest; long shadow, dark mode lighter gradient                           | menus, popovers, sheets, dialogs, side panels, docked plan panel (below 1180px; flat beside the list from 1180px)               |
 | Bars    | `lit-header` / `lit-dock` / `lit-side` | shade falls down from headers, up from bottom bars, right from the sidebar | Topbar, section and detail headers; composer, decision bar, footers; Sidebar                                                    |
 
 ## Controls and small parts

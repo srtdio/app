@@ -198,9 +198,12 @@ describe('the docked panel', () => {
     expect(src).toContain("'translate-x-6 opacity-0 ease-exit'");
     expect(src).toContain("'translate-x-0 opacity-100 ease-enter'");
     expect(src).toContain("{ role: 'complementary' }");
-    // Lit as an overlay at every width (lit-overlay); no arbitrary box-shadow,
-    // and the old --shadow-panel-left token is gone from index.css.
-    expect(src).toContain('lit-overlay transition-[transform,opacity]');
+    // Lit as an overlay only while it sits over the chat (below 1180px); flat
+    // beside the list from 1180px. No arbitrary box-shadow, and the old
+    // --shadow-panel-left token is gone from index.css.
+    expect(src).toContain(
+      'max-[1179px]:lit-overlay min-[1180px]:border-border transition-[transform,opacity]',
+    );
     expect(src).not.toContain('[box-shadow:');
     expect(src).not.toContain('--shadow-panel-left');
     const css = readFileSync(fileURLToPath(new URL('../../../index.css', import.meta.url)), 'utf8');

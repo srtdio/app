@@ -751,12 +751,11 @@ for (const size of [
       width: size.panel,
       height: size.height,
     });
-    // Shadow on the left edge while it overlays; none from 1180px.
+    // The overlay light (lit-overlay: its long falling shadow) while it sits
+    // over the chat; none from 1180px, where it sits beside the list.
     const shadow = await panel.evaluate((el) => getComputedStyle(el).boxShadow);
     if (size.width >= 1180) expect(shadow).toBe('none');
-    else expect(shadow).toMatch(/-12px 0px 24px -12px/);
-    // Left edge only: a negative x offset and a spread that hides the other sides.
-    if (size.width < 1180) expect(shadow).not.toMatch(/ 0px 0px 0px 0px/);
+    else expect(shadow).toMatch(/0px 28px 64px -(12|8)px/);
     if (size.list === 'clear') {
       await expect(column).toBeVisible();
       const cb = await column.boundingBox();
