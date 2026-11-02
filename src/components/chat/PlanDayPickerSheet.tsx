@@ -93,17 +93,17 @@ export function PlanDayTiles(props: {
                   onClick={() => props.onPick(day)}
                   className={cn(
                     'relative flex min-h-[62px] flex-col items-center justify-center gap-px border',
-                    // A selection fill, not a button: lit-chip-selected (its own
-                    // background) on the accent line, lit-chip when idle.
+                    // A selection fill, not a button: solid accent with a pill
+                    // light (no glow), lit-chip when idle.
                     on
-                      ? 'border-accent text-accent lit-chip-selected'
+                      ? 'border-accent bg-accent text-accent-fg hover:bg-accent lit-pill'
                       : 'bg-panel text-fg lit-chip',
                   )}
                 >
                   <span
                     className={cn(
                       'text-xs font-semibold uppercase tracking-[0.06em]',
-                      on || day === props.today ? 'text-accent' : 'text-fg-3',
+                      on ? 'text-accent-fg' : day === props.today ? 'text-accent' : 'text-fg-3',
                     )}
                   >
                     {civilWeekdayShort(day)}
@@ -114,7 +114,7 @@ export function PlanDayTiles(props: {
                   <span
                     className={cn(
                       'font-mono text-xs tabular-nums',
-                      on ? 'text-accent' : 'text-fg-3',
+                      on ? 'text-accent-fg' : 'text-fg-3',
                     )}
                   >
                     {tileCaption(day, count)}

@@ -8,6 +8,11 @@ interface ChipProps extends Omit<
   label: string;
   /** An optional leading mark before the label (Pipeline's stage dot). */
   dot?: ReactNode;
+  /**
+   * An optional mark after the label (the Plan tab's Draft tag). When set, the
+   * label truncates in its own span so the mark keeps the chip's right end.
+   */
+  trailing?: ReactNode;
   /** A filter's count, shown after the label only when above 0. */
   count?: number;
   selected?: boolean;
@@ -36,6 +41,7 @@ const sizes: Record<NonNullable<ChipProps['size']>, string> = {
 export function Chip({
   label,
   dot,
+  trailing,
   count,
   selected = false,
   variant = 'default',
@@ -63,7 +69,8 @@ export function Chip({
       )}
     >
       {dot}
-      {label}
+      {trailing === undefined ? label : <span className="truncate">{label}</span>}
+      {trailing}
       {count !== undefined && count > 0 ? (
         <>
           {' '}

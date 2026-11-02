@@ -351,11 +351,9 @@ export function PlanCalendar(props: {
 // Chips
 // ---------------------------------------------------------------------------
 
-// A plan chip carries a dot and a Draft tag, so it is a Button styled as the Chip.
-const PLAN_CHIP = 'max-w-[260px] shrink-0 border';
-const PLAN_CHIP_IDLE = 'lit-chip';
-// text-accent sorts after the ghost Button's text-fg-2 / hover:text-fg, so it wins.
-const PLAN_CHIP_ON = 'lit-chip-selected border-accent-line text-accent hover:text-accent';
+// A plan chip is the shared ui/Chip with its tone dot and, for a draft plan, the
+// Draft tag after the title; gap-2 keeps the spacing it had as a Button.
+const PLAN_CHIP = 'max-w-[260px] shrink-0 gap-2';
 
 /** The legend (plan item: round dot; post in no plan: square dot), for the page's top bar. */
 export function PlanTabLegend(): ReactElement {
@@ -398,25 +396,26 @@ function ChipRow(props: {
       {plansInToneOrder(props.bundles.map((b) => b.plan)).map((plan) => {
         const on = props.selected === plan.id;
         return (
-          <Button
+          <Chip
             key={plan.id}
             type="button"
-            variant="ghost"
+            label={plan.title}
+            selected={on}
             data-plan-tab-chip={plan.id}
             aria-pressed={on}
             onClick={() => props.onSelect(plan.id)}
-            className={cn(PLAN_CHIP, on ? PLAN_CHIP_ON : PLAN_CHIP_IDLE)}
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                'h-2.5 w-2.5 shrink-0 rounded-full',
-                PLAN_TONE_CLASSES[props.tones.get(plan.id) ?? 'accent'].dot,
-              )}
-            />
-            <span className="truncate">{plan.title}</span>
-            {isDraftPlan(plan) ? <DraftTag /> : null}
-          </Button>
+            className={PLAN_CHIP}
+            dot={
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'h-2.5 w-2.5 shrink-0 rounded-full',
+                  PLAN_TONE_CLASSES[props.tones.get(plan.id) ?? 'accent'].dot,
+                )}
+              />
+            }
+            trailing={isDraftPlan(plan) ? <DraftTag /> : null}
+          />
         );
       })}
       {props.more !== null ? (

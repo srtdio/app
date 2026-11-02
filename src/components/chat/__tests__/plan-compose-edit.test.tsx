@@ -191,7 +191,7 @@ describe('day picker sheet', () => {
     expect(html.match(/data-plan-day-tile=/g)).toHaveLength(7);
     expect(html).toContain('grid-cols-4');
     expect(html).toMatch(
-      /class="[^"]*lit-chip-selected[^"]*" data-plan-day-tile="2026-10-15" aria-pressed="true"/,
+      /class="[^"]*bg-accent\b[^"]*" data-plan-day-tile="2026-10-15" aria-pressed="true"/,
     );
     expect(html).toContain('2 items');
     expect(html).toContain('text-accent">Tue');

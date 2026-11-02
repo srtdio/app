@@ -248,7 +248,7 @@ export function PipelineDateRangeCalendar({
                 className={cn(
                   'flex items-center justify-center font-sans text-base tabular-nums transition-colors',
                   isEndpoint
-                    ? 'font-semibold text-accent lit-chip-selected'
+                    ? 'bg-accent font-semibold text-accent-fg lit-pill'
                     : between
                       ? 'bg-accent-soft text-accent'
                       : 'text-fg',

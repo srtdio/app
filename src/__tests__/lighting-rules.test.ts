@@ -113,6 +113,46 @@ describe('lighting rules', () => {
     expect(CSS).toContain('--shadow-spotlight:');
   });
 
+  it('selected days keep the solid accent and take a pill light, never a glow or tint', () => {
+    const picker = src('ui/DatePicker.tsx');
+    expect(picker).toContain("'bg-accent text-accent-fg lit-pill'");
+    expect(src('pages/pipeline/PipelineDateRangeCalendar.tsx')).toContain(
+      "'bg-accent font-semibold text-accent-fg lit-pill'",
+    );
+    expect(src('chat/PlanDayPickerSheet.tsx')).toContain(
+      "'border-accent bg-accent text-accent-fg hover:bg-accent lit-pill'",
+    );
+    for (const rel of [
+      'ui/DatePicker.tsx',
+      'pages/pipeline/PipelineDateRangeCalendar.tsx',
+      'chat/PlanDayPickerSheet.tsx',
+    ]) {
+      expect(src(rel), rel).not.toContain('lit-chip-selected');
+    }
+  });
+
+  it('hover shows through the lit gradients on a hovering pointer', () => {
+    const flat = CSS.replace(/\s+/g, ' ');
+    expect(flat).toContain('@media (hover: hover) {');
+    expect(flat).toContain(
+      ".lit-btn-secondary:hover, .lit-chip:hover, :is(button, a, [role='button']).lit-card:hover, :is(button, a, [role='button']).lit-card-muted:hover { background-image: none; }",
+    );
+    // The gradients are background-image, so a call site's bg-* and hover:bg-* still apply.
+    for (const c of ['lit-card', 'lit-chip', 'lit-btn-secondary']) {
+      // The last match is the class's own rule (the edge rule lists it first).
+      const parts = flat.split(`.${c} {`);
+      const body = parts[parts.length - 1]?.split('}')[0] ?? '';
+      expect(body, c).toContain('background-image:');
+      expect(body, c).not.toMatch(/(^|[ ;])background:/);
+    }
+  });
+
+  it('plan filter chips are the shared Chip (full ink idle)', () => {
+    const cal = src('pages/plan-tab/PlanCalendar.tsx');
+    expect(cal).toContain('<Chip');
+    expect(cal).not.toMatch(/variant="ghost"[^>]*data-plan-tab-chip/);
+  });
+
   it('the shared primitives carry their lit class', () => {
     const button = src('ui/Button.tsx');
     for (const c of ['lit-btn-primary', 'lit-btn-secondary', 'lit-btn-success', 'lit-btn-danger']) {

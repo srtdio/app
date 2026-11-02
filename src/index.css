@@ -578,6 +578,16 @@
     background-image: var(--lit-bubble-other-bg);
     box-shadow: var(--lit-bubble-other);
   }
+  /* Hover shows through: on a pointer that hovers, the lit gradient steps
+     aside so the call site's hover:bg-* fill paints (light and dark). */
+  @media (hover: hover) {
+    .lit-btn-secondary:hover,
+    .lit-chip:hover,
+    :is(button, a, [role='button']).lit-card:hover,
+    :is(button, a, [role='button']).lit-card-muted:hover {
+      background-image: none;
+    }
+  }
   /* A track's fill (progress, storage, upload, scrubber) catches the light. */
   .lit-fill {
     background-image: var(--lit-shine);
