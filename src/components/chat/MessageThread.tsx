@@ -1954,9 +1954,10 @@ export function renderBodyWithMentions(
           event.stopPropagation();
           open.onOpen({ userId: id, ...(former ? { former: true } : {}) }, event.currentTarget);
         }}
-        className={cn(mentionClass(mine, tint), MENTION_HIT)}
+        className={cn(mentionClass(mine, false), MENTION_HIT)}
       >
-        {label}
+        {/* My own mention keeps its highlight on the name; the control keeps its radius. */}
+        {tint ? <span className={mentionClass(mine, true)}>{label}</span> : label}
       </PressableRow>
     );
   });
