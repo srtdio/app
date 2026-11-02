@@ -9125,6 +9125,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      _plan_item_notify_except: {
+        Args: {
+          p_event_type: string
+          p_exclude: string[]
+          p_item_id: string
+          p_payload: Json
+          p_team_only: boolean
+        }
+        Returns: undefined
+      }
       _plan_notify: {
         Args: { p_event_type: string; p_payload: Json; p_plan_id: string }
         Returns: undefined
