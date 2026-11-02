@@ -58,6 +58,7 @@ function row(key: ChatKey, i: number): ChatMessageRow {
     edited_at: null,
     deleted_at: null,
     removed_files: {},
+    private_reply: null,
   } as ChatMessageRow;
 }
 

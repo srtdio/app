@@ -58,6 +58,7 @@ function row(n: number, extra: Partial<ChatMessageRow> = {}): ChatMessageRow {
     deleted_at: null,
     thread_root_message_id: null,
     removed_files: [],
+    private_reply: null,
     ...extra,
   };
 }

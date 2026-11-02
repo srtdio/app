@@ -50,6 +50,7 @@ function row(id: string, second: number, sender: string = PEER): ChatMessageRow 
     thread_root_message_id: null,
     forwarded_from_message_id: null,
     removed_files: {},
+    private_reply: null,
     attachment_meta: null,
     agora_event_id: null,
     created_at: new Date(Date.UTC(2026, 9, 3, 9, 0, second)).toISOString(),

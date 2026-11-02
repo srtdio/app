@@ -54,6 +54,7 @@ function msg(n: number, extra: Record<string, unknown> = {}): Record<string, unk
     deleted_at: null,
     thread_root_message_id: null,
     removed_files: [],
+    private_reply: null,
     ...extra,
   };
 }
