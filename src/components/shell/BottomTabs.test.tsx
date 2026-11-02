@@ -114,7 +114,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     expect(container.querySelectorAll(`[${BOTTOM_ANCHOR_ATTR}]`)).toHaveLength(1);
   });
 
-  it('pill: 60 tall, round, panel fill, border and the card shadow token', () => {
+  it('pill: 60 tall, round, panel fill, lit border and the raised lighting', () => {
     const container = render('/pipeline');
     const pill = container.querySelector('[data-tab-pill]');
     if (pill === null) throw new Error('no pill');
@@ -123,12 +123,17 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
       'rounded-full',
       'bg-panel',
       'border',
-      'border-border',
       'p-1',
-      'shadow-[var(--shadow-card)]',
+      'lit-raised',
     ]) {
       expect(classes(pill)).toContain(c);
     }
+    expect(classes(pill)).not.toContain('border-border');
+    expect(classes(pill).some((c) => c.startsWith('shadow'))).toBe(false);
+    const chat = classes(chatLink(container));
+    expect(chat).toEqual(expect.arrayContaining(['border', 'bg-panel', 'lit-raised']));
+    expect(chat).not.toContain('border-border');
+    expect(chat.some((c) => c.startsWith('shadow'))).toBe(false);
   });
 
   it('only the active tab shows its label; the rest are icon only with an aria-label', () => {
@@ -144,13 +149,18 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     expect(links.map((a) => a.textContent)).toEqual(['', 'Briefs', '', '', '']);
     const active = links[1];
     if (active === undefined) throw new Error('no Briefs tab');
-    expect(classes(active)).toEqual(expect.arrayContaining(['bg-accent-soft', 'text-accent']));
+    expect(classes(active)).toEqual(
+      expect.arrayContaining(['bg-[var(--lit-tab-active-bg)]', 'text-accent', 'lit-active']),
+    );
+    expect(classes(active)).not.toContain('bg-accent-soft');
     const label = active.querySelector('span');
     expect(classes(label ?? active)).toEqual(
       expect.arrayContaining(['whitespace-nowrap', 'text-md', 'font-semibold']),
     );
     for (const idle of [links[0], links[2], links[3], links[4]]) {
-      expect(classes(idle ?? active)).toContain('text-fg-2');
+      expect(classes(idle ?? active)).toContain('text-fg');
+      expect(classes(idle ?? active)).not.toContain('text-fg-2');
+      expect(classes(idle ?? active)).not.toContain('lit-active');
     }
   });
 
@@ -173,14 +183,14 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     expect(chat).toEqual(expect.arrayContaining(['h-[60px]', 'w-[60px]', 'rounded-full']));
   });
 
-  it('Activity badge: the inbox unread count with the panel ring and the "Activity, N unread" name', () => {
+  it('Activity badge: the inbox unread count with the lit surface-top ring and the "Activity, N unread" name', () => {
     const container = render('/pipeline', 0, 4);
     const activity = container.querySelector('[data-activity-tab]');
     expect(activity?.getAttribute('aria-label')).toBe('Activity, 4 unread');
     const badge = activity?.querySelector('[data-count-badge]');
     expect(badge?.textContent).toBe('4');
     expect(classes(badge ?? document.body)).toEqual(
-      expect.arrayContaining(['border-2', 'border-panel']),
+      expect.arrayContaining(['border-2', 'border-[var(--lit-surface-top)]']),
     );
   });
 
@@ -193,7 +203,13 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     const badge = chat.querySelector('[data-count-badge]');
     expect(badge?.textContent).toBe('2');
     expect(classes(badge ?? chat)).toEqual(
-      expect.arrayContaining(['absolute', 'right-0', 'top-0', 'border-2', 'border-panel']),
+      expect.arrayContaining([
+        'absolute',
+        'right-0',
+        'top-0',
+        'border-2',
+        'border-[var(--lit-surface-top)]',
+      ]),
     );
     expect(container.querySelector('[data-activity-tab] [data-count-badge]')).toBeNull();
   });
@@ -224,6 +240,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
         'inset-0',
         'rounded-full',
         'bg-accent-soft',
+        'lit-active',
       ]),
     );
   });

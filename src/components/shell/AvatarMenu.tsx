@@ -105,7 +105,7 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
         <div
           ref={panelRef}
           role="menu"
-          className="fixed top-[56px] right-3 z-50 w-[244px] rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl"
+          className="fixed top-[56px] right-3 z-50 w-[244px] rounded-xl border bg-panel p-1.5 lit-overlay"
         >
           {rows}
         </div>

@@ -397,7 +397,7 @@ export function namesNeeded(
 const ROW = 'flex items-center px-2 text-base transition-colors active:bg-accent-soft';
 
 /** The keyboard-selected (or hovered) row: the accent tint, the pressed row's tint too. */
-const ACTIVE_ROW = 'bg-accent-soft text-fg';
+const ACTIVE_ROW = 'bg-accent-soft text-fg lit-active';
 
 interface PaletteBodyProps {
   query: string;
@@ -922,7 +922,7 @@ export function CommandPalette({
           // Phones: a full-screen sheet. Wider: the centred card.
           // Axis: translateY (-8px) + scale from top center, crossfaded. No X,
           // no rotate.
-          'flex flex-col w-full h-full bg-panel overflow-hidden origin-top transition-[opacity,transform] duration-base will-change-transform sm:h-auto sm:max-w-[560px] sm:rounded-xl sm:border sm:border-border-strong sm:shadow-2xl',
+          'flex flex-col w-full h-full bg-panel lit-overlay overflow-hidden origin-top transition-[opacity,transform] duration-base will-change-transform sm:h-auto sm:max-w-[560px] sm:rounded-xl sm:border',
           entered
             ? 'translate-y-0 scale-100 opacity-100 ease-enter'
             : '-translate-y-2 scale-[0.985] opacity-0 ease-exit',

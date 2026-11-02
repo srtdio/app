@@ -534,6 +534,8 @@ describe('CommandPalette', () => {
       (el) => (el.props as { className: string }).className,
     );
     expect(classes[1]).toContain('bg-accent-soft');
+    expect(classes[1]).toContain('lit-active');
+    expect(classes[0]).not.toContain('lit-active');
     expect(classes[0]).not.toMatch(/(^|\s)bg-accent-soft/);
     for (const cls of classes) expect(cls).toContain('active:bg-accent-soft');
   });

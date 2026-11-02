@@ -303,7 +303,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative flex w-full max-w-[420px] max-h-[84vh] flex-col overflow-hidden rounded-xl border border-border-strong bg-panel shadow-2xl outline-none"
+        className="relative flex w-full max-w-[420px] max-h-[84vh] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay outline-none"
       >
         <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-[15px]">
           <h2 className="text-lg font-semibold">{title}</h2>
@@ -333,7 +333,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                     aria-current={isActive}
                     className={cn(
                       'flex items-center gap-2.5 px-2.5 transition-colors',
-                      isActive ? 'bg-accent-soft text-accent' : 'text-fg-2',
+                      isActive ? 'bg-accent-soft text-accent lit-active' : 'text-fg-2',
                     )}
                   >
                     <Avatar name={ws.name} role="row" kind="group" />
@@ -412,8 +412,8 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                       className={cn(
                         'flex min-w-[44px] items-center gap-2 border px-3 text-base font-medium transition-colors',
                         selected
-                          ? 'border-accent bg-accent-soft text-accent'
-                          : 'border-border text-fg-2 hover:text-fg',
+                          ? 'border-accent text-accent lit-chip-selected'
+                          : 'text-fg lit-chip',
                       )}
                     >
                       <PlatformMark platform={value} />
