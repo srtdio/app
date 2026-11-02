@@ -396,6 +396,62 @@ describe('live toast labels for approve, reject, park and deletes', () => {
     expect(split.activity).toHaveLength(2);
     expect(split.chatMentions).toHaveLength(0);
   });
+
+  it('plan comments, OK / Not OK and plan mentions toast; plan edits stay silent', () => {
+    const base = {
+      id: 'x',
+      workspace_id: 'w1',
+      user_id: 'u1',
+      entity_id: 'i1',
+      scope: 'posts',
+      scope_key: null,
+      tier: 'urgent',
+      payload: { plan_id: 'p1', comment_id: 'c1' },
+      read_at: null,
+      snoozed_until: null,
+      actor_user_id: 'u2',
+      email_sent_at: null,
+      deleted_at: null,
+      created_at: '2026-11-02T00:00:00.000Z',
+    };
+    const rows = [
+      { ...base, id: 'a', event_type: 'plan_comment', entity_type: 'plan_item' },
+      { ...base, id: 'b', event_type: 'plan_review', entity_type: 'plan_item' },
+      { ...base, id: 'c', event_type: 'mention', entity_type: 'plan_item' },
+      { ...base, id: 'd', event_type: 'plan_updated', entity_type: 'plan' },
+      { ...base, id: 'e', event_type: 'plan_opened', entity_type: 'plan' },
+      { ...base, id: 'f', event_type: 'plan_deleted', entity_type: 'plan' },
+      { ...base, id: 'g', event_type: 'plan_date_changed', entity_type: 'plan' },
+      { ...base, id: 'h', event_type: 'task_changed', entity_type: 'chat_channel' },
+    ];
+    const split = splitNewRows(rows);
+    expect(split.activity.map((r) => r.id)).toEqual(['a', 'b', 'c']);
+    expect(split.chatMentions).toHaveLength(0);
+  });
+
+  it('a plan comment toast reuses the existing verbs', () => {
+    const one = (eventType: string, verb: string | null) =>
+      toastFromEnriched({
+        count: 1,
+        lead: {
+          eventType,
+          actorName: 'Cy',
+          actorAvatarUrl: null,
+          body: null,
+          title: null,
+          mentionNames: new Map(),
+          verb,
+        },
+      })?.title;
+    expect(one('plan_comment', eventVerb({ eventType: 'plan_comment' }))).toBe('Cy commented');
+    expect(one('mention', eventVerb({ eventType: 'mention' }))).toBe('Cy mentioned you');
+    expect(
+      one('plan_review', eventVerb({ eventType: 'plan_review', reviewStatus: 'approved' })),
+    ).toBe('Cy approved');
+    expect(
+      one('plan_review', eventVerb({ eventType: 'plan_review', reviewStatus: 'changes' })),
+    ).toBe('Cy asked changes');
+  });
 });
 
 describe('grouped toast wording', () => {

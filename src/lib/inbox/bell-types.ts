@@ -7,8 +7,10 @@
 //     plan_date_changed, plan_updated, plan_review, plan_comment) and the task
 //     alerts (task_changed, task_due).
 // The live layer still toasts them apart: a new chat mention gets its own
-// "<name> mentioned you" toast, reminders ring (ReminderRing), and the rest
-// never toast. Also here: the chat, task and plan deep links every surface
+// "<name> mentioned you" toast, reminders ring (ReminderRing), plan comments
+// and plan reviews toast as activity (LIVE_PLAN_EVENT_TYPES; rule of 2 Nov
+// 2026: a comment or an OK / Not OK alerts everyone who can see the plan), and
+// the rest never toast (plan edits never pop up). Also here: the chat, task and plan deep links every surface
 // opens, and the shared snooze labels. Pure; the query helper only adds
 // PostgREST filters.
 
@@ -58,6 +60,23 @@ export const BELL_ONLY_EVENT_TYPES = [
 
 const BELL_PLAN = new Set<string>(BELL_PLAN_EVENT_TYPES);
 
+/**
+ * The plan alerts that toast, tone and blink like a post comment: a comment and
+ * an OK / Not OK on a plan item. They stay in the Plans chip. Plan edits
+ * (plan_updated, plan_opened, plan_deleted, plan_date_changed) stay silent.
+ */
+export const LIVE_PLAN_EVENT_TYPES = [
+  'plan_comment',
+  'plan_review',
+] as const satisfies readonly BellPlanEventType[];
+
+const LIVE_PLAN = new Set<string>(LIVE_PLAN_EVENT_TYPES);
+
+/** Bell rows that get no activity toast: every bell-only type but the live plan ones. */
+const SILENT_EVENT_TYPES: readonly string[] = BELL_ONLY_EVENT_TYPES.filter(
+  (t) => !LIVE_PLAN.has(t),
+);
+
 /** Whether an event type is a plan alert. Pure. */
 export function isBellPlanEvent(eventType: string): eventType is BellPlanEventType {
   return BELL_PLAN.has(eventType);
@@ -85,7 +104,20 @@ export function isBellRow(row: { event_type: string; entity_type: string | null 
   return isBellEntry({ eventType: row.event_type, entityType: row.entity_type });
 }
 
-const BELL_ONLY_LIST = `(${BELL_ONLY_EVENT_TYPES.join(',')})`;
+/**
+ * Whether a raw row toasts as activity (toast, tone, tab blink): every row but
+ * the bell rows, plus plan comments and plan reviews. A plan mention (mention
+ * on a plan_item) is not a bell row, so it toasts too; a chat mention keeps its
+ * own toast. Pure.
+ */
+export function isLiveActivityRow(row: {
+  event_type: string;
+  entity_type: string | null;
+}): boolean {
+  return LIVE_PLAN.has(row.event_type) || !isBellRow(row);
+}
+
+const SILENT_LIST = `(${SILENT_EVENT_TYPES.join(',')})`;
 
 /**
  * The PostgREST `or` that keeps every non-mention row and every mention that is
@@ -100,9 +132,13 @@ interface BellFilterable<Q> {
   or(filters: string): Q;
 }
 
-/** Narrow an inbox_entries query to the rows the live layer toasts as activity. */
+/**
+ * Narrow an inbox_entries query to the rows the live layer toasts as activity
+ * (isLiveActivityRow): the silent bell types and chat mentions are left out;
+ * plan comments and plan reviews stay in.
+ */
 export function withoutBellEntries<Q extends BellFilterable<Q>>(query: Q): Q {
-  return query.not('event_type', 'in', BELL_ONLY_LIST).or(NOT_CHAT_MENTION_OR);
+  return query.not('event_type', 'in', SILENT_LIST).or(NOT_CHAT_MENTION_OR);
 }
 
 /**

@@ -155,8 +155,12 @@ async function gripDrag(page: Page, panel: Locator, id: string, target: () => Pr
   await page.mouse.move(x, (y0 + y1) / 2, { steps: 6 });
   await page.mouse.move(x, y1, { steps: 6 });
   await page.waitForTimeout(100);
-  await page.mouse.move(x, await target(), { steps: 2 });
-  await expect(page.locator('[data-plan-drop-slot]')).toBeVisible();
+  // The rows can shift while the card is up: re-measure the target and move
+  // again until the drop slot shows (a single move can land on a stale box).
+  await expect(async () => {
+    await page.mouse.move(x, await target(), { steps: 2 });
+    await expect(page.locator('[data-plan-drop-slot]')).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
   await page.mouse.up();
   await expect(page.locator('[data-plan-drag-card]')).toHaveCount(0);
 }
