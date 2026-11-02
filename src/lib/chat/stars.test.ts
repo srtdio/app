@@ -198,6 +198,7 @@ describe('pure rules', () => {
       edited_at: null,
       forwarded_from_message_id: null,
       removed_files: {},
+      private_reply: null,
       mentions: null,
       reply_to_message_id: null,
       shared_brief_ids: null,

@@ -102,6 +102,7 @@ function row(over: Partial<ChatMessageRow>): ChatMessageRow {
     edited_at: null,
     deleted_at: null,
     removed_files: {},
+    private_reply: null,
     ...over,
   };
 }

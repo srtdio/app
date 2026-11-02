@@ -933,6 +933,7 @@ function messageRow(value: unknown, at: string): ChatMessageRow {
     ),
     removed_files:
       o.removed_files === undefined || o.removed_files === null ? [] : asJson(o.removed_files),
+    private_reply: asJson(o.private_reply),
   };
 }
 

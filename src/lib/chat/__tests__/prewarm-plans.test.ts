@@ -56,6 +56,7 @@ function row(channelId: string, n: number, plans: string[] | null = null): ChatM
     deleted_at: null,
     thread_root_message_id: null,
     removed_files: [],
+    private_reply: null,
   };
 }
 
