@@ -15,7 +15,10 @@ const h = vi.hoisted(() => ({
   roster: [] as unknown[],
   enqueue: vi.fn(),
   reloadRoster: vi.fn(async () => null),
-  toast: vi.fn((_options: unknown) => 'toast-1'),
+  toast: vi.fn((options: unknown): string => {
+    void options;
+    return 'toast-1';
+  }),
   navigate: vi.fn(),
   startDmChannel: vi.fn(),
   hasStore: true,

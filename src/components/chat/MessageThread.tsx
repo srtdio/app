@@ -2218,6 +2218,8 @@ export function MessageBubble(props: {
   rail?: RowRail | undefined;
   /** A voice-only bubble: the voice note right below from the same sender. */
   nextVoiceId?: string | null | undefined;
+  /** The group sender card's source (PersonSourceContext, read by the row); absent: none. */
+  personSource?: ((message: ThreadMessage) => PrivateReplyDraft | null) | null | undefined;
   /** A received voice-only bubble: run tap-to-transcribe (the Transcribe link). */
   onTranscribe?: (() => void) | undefined;
   /** The quoted message when it is loaded in the thread (the quote reads its media). */
@@ -2302,7 +2304,7 @@ export function MessageBubble(props: {
   // a tap there toggles the row).
   const senderId = !selecting && !mine ? message.senderUserId : null;
   const senderAvatar = senderAvatarProps(message, profiles);
-  const personSource = useContext(PersonSourceContext);
+  const personSource = props.personSource ?? null;
   const asPerson = (
     node: ReactElement,
     display: 'inline' | 'block',
@@ -3162,6 +3164,7 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
   const onChangePriority = props.onChangePriority;
   // The in-chat search's words: matched words in this bubble draw as <mark>.
   const searchWords = useContext(SearchHighlightContext);
+  const personSource = useContext(PersonSourceContext);
   const savedFrom = useSavedFrom();
   // The viewer's star: read from the one star store, painted with the row.
   const starred = useIsStarred(props.message.id) && canStar(props.message);
@@ -3169,6 +3172,7 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
   return (
     <MessageBubble
       searchWords={searchWords}
+      personSource={personSource}
       savedFrom={savedFrom}
       message={props.message}
       profiles={props.profiles}
