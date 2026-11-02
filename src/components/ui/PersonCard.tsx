@@ -244,7 +244,12 @@ export function PersonMessageCard(props: PersonMessageCardProps): ReactElement {
           </p>
         </div>
         {props.showHeader ? (
-          <IconButton type="button" label="Close" onClick={props.onClose} className="-mr-2 shrink-0">
+          <IconButton
+            type="button"
+            label="Close"
+            onClick={props.onClose}
+            className="-mr-2 shrink-0"
+          >
             <IconX size={ICON_SIZE.control} />
           </IconButton>
         ) : null}

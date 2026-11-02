@@ -63,6 +63,9 @@ vi.mock('@/lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }))
 // The inline send: the card only hands it over (after it closed); the outbox
 // path is tested in use-person-message-send.test. Each call records whether
 // the card was already closed when it ran.
+const personCardSnapshotRef = vi.hoisted(() => ({
+  current: null as null | (() => unknown),
+}));
 const sent = vi.hoisted(() => ({
   calls: [] as { message: unknown; closedFirst: boolean }[],
   queued: true,
@@ -72,9 +75,6 @@ vi.mock('@/components/ui/use-person-message-send', () => ({
     sent.calls.push({ message, closedFirst: personCardSnapshotRef.current?.() === null });
     return sent.queued;
   },
-}));
-const personCardSnapshotRef = vi.hoisted(() => ({
-  current: null as null | (() => unknown),
 }));
 
 // "Message yourself" goes through the one open-my-DM path; the card only calls it.
@@ -226,7 +226,10 @@ afterEach(() => {
 });
 
 /** Leo's comment on a post: the card's source when opened from it. */
-function commentSource(sourceId = 'c-1', excerpt = 'Love the new cover shot, ship it today'): PrivateReplyDraft {
+function commentSource(
+  sourceId = 'c-1',
+  excerpt = 'Love the new cover shot, ship it today',
+): PrivateReplyDraft {
   return {
     kind: 'comment',
     sourceId,
@@ -512,9 +515,9 @@ describe('keyboardInset', () => {
     expect(keyboardInset({ innerHeight: 844, visualViewport: { height: 500, offsetTop: 0 } })).toBe(
       344,
     );
-    expect(keyboardInset({ innerHeight: 844, visualViewport: { height: 500, offsetTop: 40 } })).toBe(
-      304,
-    );
+    expect(
+      keyboardInset({ innerHeight: 844, visualViewport: { height: 500, offsetTop: 40 } }),
+    ).toBe(304);
     expect(keyboardInset({ innerHeight: 844, visualViewport: null })).toBe(0);
     expect(keyboardInset({ innerHeight: 844, visualViewport: { height: 900, offsetTop: 0 } })).toBe(
       0,
@@ -543,9 +546,7 @@ describe('PersonCardHost on laptop', () => {
     laptop.value = true;
     await mountHost();
     await open(ME);
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-      PERSON_CARD_COPY.hint,
-    );
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(PERSON_CARD_COPY.hint);
   });
 
   it('focus moves into the card: the input', async () => {

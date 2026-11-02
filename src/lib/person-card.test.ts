@@ -132,7 +132,10 @@ describe('personContextLine', () => {
 
   it('quotes the first words with an ellipsis only when words were cut', () => {
     expect(
-      personContextLine({ whereLabel: where, excerpt: 'Love the new cover shot, ship it today please' }),
+      personContextLine({
+        whereLabel: where,
+        excerpt: 'Love the new cover shot, ship it today please',
+      }),
     ).toBe(`${where} · "Love the new cover shot, ship…"`);
     expect(CONTEXT_WORDS).toBe(6);
   });
