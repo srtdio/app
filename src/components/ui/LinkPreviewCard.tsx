@@ -68,6 +68,13 @@ const SURFACE: Record<CardTone, string> = {
   plain: 'border-border bg-panel-2 text-fg',
 };
 
+/** A real card lifts: lit-card draws its edges, so the neutral border colour goes. */
+const CARD_SURFACE: Record<CardTone, string> = {
+  in: 'bg-panel text-fg',
+  out: 'border-overlay-line bg-overlay-surface text-inherit',
+  plain: 'bg-panel-2 text-fg',
+};
+
 const MEDIA_BG: Record<CardTone, string> = {
   in: 'bg-panel-3',
   out: 'bg-overlay-surface',
@@ -180,7 +187,7 @@ function MediaSlot(props: {
       )}
       {props.video ? (
         <span className="absolute inset-0 grid place-items-center">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-[color:var(--media-meta-bg)] pl-0.5 text-[color:var(--media-meta-fg)]">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-[color:var(--media-meta-bg)] pl-0.5 lit-media text-[color:var(--media-meta-fg)]">
             <IconPlay size={ICON_SIZE.nav} />
           </span>
         </span>
@@ -282,7 +289,7 @@ function CardLink(props: {
       data-card-type={props.type}
       draggable={false}
       className={cn(
-        'block overflow-hidden rounded-xl border no-underline',
+        'block overflow-hidden rounded-xl border no-underline lit-card',
         NO_CALLOUT,
         FOCUS,
         props.className,
@@ -309,7 +316,7 @@ function Tall(props: {
         aria-label={cardLabel(preview)}
         data-card-type="unsafe"
         className={cn(
-          'block w-full overflow-hidden rounded-xl border text-left',
+          'block w-full overflow-hidden rounded-xl border text-left lit-card',
           WARN,
           NO_CALLOUT,
           FOCUS,
@@ -335,7 +342,7 @@ function Tall(props: {
         url={props.url}
         label={cardLabel(preview)}
         type={preview.type}
-        className={SURFACE[tone]}
+        className={CARD_SURFACE[tone]}
       >
         <MediaSlot
           tone={tone}
@@ -358,7 +365,7 @@ function Tall(props: {
       url={props.url}
       label={cardLabel(preview)}
       type={preview.type}
-      className={SURFACE[tone]}
+      className={CARD_SURFACE[tone]}
     >
       <MediaSlot tone={tone} letter={preview.letter} src={null} video={false} />
       <TallBody
@@ -396,7 +403,7 @@ function Compact(props: {
         aria-label={cardLabel(preview)}
         data-card-type="unsafe"
         className={cn(
-          'flex h-16 w-full items-center gap-2.5 rounded-xl border px-2.5 text-left',
+          'flex h-16 w-full items-center gap-2.5 rounded-xl border px-2.5 text-left lit-card',
           WARN,
           NO_CALLOUT,
           FOCUS,
@@ -417,7 +424,7 @@ function Compact(props: {
       url={props.url}
       label={cardLabel(preview)}
       type={preview.type}
-      className={cn('flex h-16 items-center gap-2.5 px-2.5', SURFACE[tone])}
+      className={cn('flex h-16 items-center gap-2.5 px-2.5', CARD_SURFACE[tone])}
     >
       <LetterTile letter={preview.letter} tone={tone} className="h-10 w-10 rounded-xl text-base" />
       <span className="flex min-w-0 flex-col">

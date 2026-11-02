@@ -78,7 +78,7 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
       data-side-panel=""
       className={cn(
         // Fixed under the 56px top bar, right edge; the page pads by its width.
-        'fixed bottom-0 right-0 top-14 z-20 overflow-hidden border-l border-border bg-panel focus:outline-none',
+        'lit-overlay fixed bottom-0 right-0 top-14 z-20 overflow-hidden border-l bg-panel focus:outline-none',
         SIDE_PANEL_WIDTH_CLASS,
       )}
     >

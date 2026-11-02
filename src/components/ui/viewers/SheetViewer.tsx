@@ -285,7 +285,7 @@ export function SheetViewer(props: {
       <div
         role="tablist"
         aria-label="Sheets"
-        className="flex shrink-0 gap-1 overflow-x-auto overscroll-contain border-t border-border bg-panel px-2 pb-[max(env(safe-area-inset-bottom),4px)] pt-1"
+        className="flex shrink-0 gap-1 overflow-x-auto overscroll-contain border-t border-border bg-panel lit-well px-2 pb-[max(env(safe-area-inset-bottom),4px)] pt-1"
       >
         {book.sheets.map((s, i) => {
           const selected = s === sheet;
@@ -300,7 +300,7 @@ export function SheetViewer(props: {
               className={cn(
                 'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 text-base',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                selected ? 'bg-panel-2 font-medium text-fg' : 'text-fg-2 hover:bg-panel-2',
+                selected ? 'bg-panel-2 font-medium text-fg lit-chip' : 'text-fg-2 hover:bg-panel-2',
               )}
             >
               {s.name}

@@ -86,9 +86,8 @@ export function AssetCard({
         {...interaction}
         style={{ touchAction: 'manipulation' }}
         className={cn(
-          'group relative flex h-full flex-col overflow-hidden border bg-panel transition-colors',
-          selectMode && selected ? 'border-accent' : 'border-border',
-          'hover:border-border-strong',
+          'lit-card group relative flex h-full flex-col overflow-hidden border bg-panel transition-colors',
+          selectMode && selected && 'border-accent',
         )}
       >
         {selectMode ? (
@@ -206,7 +205,7 @@ function AssetMedia({
             {name}
           </span>
           {item.kind === 'image' ? (
-            <span className="shrink-0 rounded bg-panel-2 px-1.5 py-px text-xs font-medium text-fg-3">
+            <span className="lit-pill shrink-0 rounded bg-panel-2 px-1.5 py-px text-xs font-medium text-fg-3">
               {mimeBadge(item.mimeType)}
             </span>
           ) : null}

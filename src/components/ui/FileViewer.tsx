@@ -326,28 +326,28 @@ const TONES: Record<ViewerTone, ToneClasses> = {
     backdrop: 'bg-overlay',
     fg: 'text-overlay-fg',
     fgDim: 'text-overlay-fg-dim',
-    chip: 'bg-overlay-surface text-overlay-fg',
+    chip: 'bg-overlay-surface lit-media text-overlay-fg',
     bar:
       'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
       'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
       'focus-visible:ring-overlay-fg disabled:opacity-40',
     text:
       'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
-      'text-overlay-fg bg-overlay-surface hover:bg-overlay-line focus-visible:outline-none ' +
+      'text-overlay-fg bg-overlay-surface lit-media hover:bg-overlay-line focus-visible:outline-none ' +
       'focus-visible:ring-2 focus-visible:ring-overlay-fg',
   },
   surface: {
     backdrop: 'bg-panel-2',
     fg: 'text-fg',
     fgDim: 'text-fg-2',
-    chip: 'bg-panel text-fg border border-border',
+    chip: 'bg-panel text-fg border border-border lit-pill',
     bar:
       'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-fg ' +
       'hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 ' +
       'focus-visible:ring-accent disabled:opacity-40',
     text:
       'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
-      'text-fg bg-panel border border-border hover:bg-panel-3 focus-visible:outline-none ' +
+      'text-fg bg-panel border lit-btn-secondary hover:bg-panel-3 focus-visible:outline-none ' +
       'focus-visible:ring-2 focus-visible:ring-accent',
   },
 };

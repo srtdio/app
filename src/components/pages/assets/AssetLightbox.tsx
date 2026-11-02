@@ -60,7 +60,7 @@ function onBarClass(barClass: string): string {
 // The stage's previous / next arrows (laptop only): the shared IconButton in the
 // overlay colours. Overlay tokens sort after the IconButton's own, so they win.
 const STAGE_ARROW =
-  'absolute top-1/2 hidden -translate-y-1/2 bg-overlay-surface text-overlay-fg ' +
+  'lit-media absolute top-1/2 hidden -translate-y-1/2 bg-overlay-surface text-overlay-fg ' +
   'hover:bg-overlay-line hover:text-overlay-fg focus-visible:outline-none ' +
   'focus-visible:ring-2 focus-visible:ring-overlay-fg md:inline-flex';
 
@@ -572,7 +572,7 @@ export function AssetLightbox({
         ) : (
           <div
             data-file-card=""
-            className="m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg shadow-2xl"
+            className="lit-overlay m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg"
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-panel-2 text-base font-semibold tracking-[0.06em] text-fg-2">
               {typeLabel(kind)}
@@ -616,7 +616,7 @@ export function AssetLightbox({
           <div
             role="dialog"
             aria-label={`Details for ${name}`}
-            className="relative max-h-[80%] w-full overflow-y-auto rounded-t-2xl border-t border-border bg-panel p-4 text-fg md:mx-auto md:mb-4 md:max-w-md md:rounded-2xl md:border"
+            className="lit-overlay relative max-h-[80%] w-full overflow-y-auto rounded-t-2xl border-t bg-panel p-4 text-fg md:mx-auto md:mb-4 md:max-w-md md:rounded-2xl md:border"
           >
             <div className="flex items-center gap-2">
               <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">{name}</h2>

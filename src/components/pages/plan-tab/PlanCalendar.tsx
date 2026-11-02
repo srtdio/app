@@ -353,9 +353,9 @@ export function PlanCalendar(props: {
 
 // A plan chip carries a dot and a Draft tag, so it is a Button styled as the Chip.
 const PLAN_CHIP = 'max-w-[260px] shrink-0 border';
-const PLAN_CHIP_IDLE = 'border-border';
+const PLAN_CHIP_IDLE = 'lit-chip';
 // text-accent sorts after the ghost Button's text-fg-2 / hover:text-fg, so it wins.
-const PLAN_CHIP_ON = 'border-accent-line bg-accent-soft text-accent hover:text-accent';
+const PLAN_CHIP_ON = 'lit-chip-selected border-accent-line text-accent hover:text-accent';
 
 /** The legend (plan item: round dot; post in no plan: square dot), for the page's top bar. */
 export function PlanTabLegend(): ReactElement {
@@ -482,8 +482,8 @@ const DAY_FOCUS =
 const DAY_FOCUS_TODAY =
   'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-accent';
 const DROP = 'outline-dashed outline-2 -outline-offset-4 outline-accent';
-const TODAY_DAY = 'bg-accent-soft shadow-[inset_0_0_0_2px_var(--accent)]';
-const TODAY_PILL = 'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold';
+const TODAY_DAY = 'bg-accent-soft ring-2 ring-inset ring-accent';
+const TODAY_PILL = 'lit-pill shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold';
 
 /** The month grid's weekday header row (px), fixed so each week row's height is known. */
 const MONTH_HEAD_PX = 28;
@@ -508,7 +508,7 @@ function MonthGrid(props: {
       data-plan-tab-month=""
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border"
     >
-      <div className="grid h-7 shrink-0 grid-cols-7 border-b border-border bg-panel-2">
+      <div className="lit-header grid h-7 shrink-0 grid-cols-7 border-b bg-panel-2">
         {weeks[0]?.map((cell) => (
           <span key={cell.day} className="flex items-center px-2 text-sm font-semibold text-fg-3">
             {civilWeekdayShort(cell.day)}
@@ -549,7 +549,7 @@ function MonthGrid(props: {
                     data-plan-tab-today={isToday ? '' : undefined}
                     className={cn(
                       'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
-                      isToday ? 'bg-accent text-accent-fg' : cell.inMonth ? 'text-fg' : 'text-fg-3',
+                      isToday ? 'lit-pill bg-accent text-accent-fg' : cell.inMonth ? 'text-fg' : 'text-fg-3',
                     )}
                   >
                     {dayOfMonth(cell.day)}
@@ -652,7 +652,7 @@ function WeekGrid(props: {
       data-plan-tab-week=""
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border"
     >
-      <div className="grid shrink-0 grid-cols-7 border-b border-border bg-panel-2">
+      <div className="lit-header grid shrink-0 grid-cols-7 border-b bg-panel-2">
         {days.map((day) => {
           const isToday = day === props.today;
           return (
@@ -745,7 +745,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
       onClick={() => props.onOpen(entry)}
       {...holdAttrs(props)}
       className={cn(
-        'flex min-w-0 shrink-0 flex-col overflow-hidden border border-border bg-panel transition-colors',
+        'lit-card flex min-w-0 shrink-0 flex-col overflow-hidden border bg-panel transition-colors',
         props.holdable && NO_TOUCH_SELECT,
         props.lifted && 'opacity-40',
       )}
@@ -775,7 +775,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
           <span
             data-plan-tab-pill={pill.tone}
             className={cn(
-              'inline-flex h-5 max-w-full items-center self-start truncate rounded-full px-2 text-xs font-semibold leading-5',
+              'lit-pill inline-flex h-5 max-w-full items-center self-start truncate rounded-full px-2 text-xs font-semibold leading-5',
               PILL_TONES[pill.tone],
             )}
           >
@@ -808,7 +808,7 @@ function LiftedEntry(props: { drag: Drag }): ReactElement {
       data-plan-tab-drag-card=""
       aria-hidden="true"
       style={{ left: drag.x - drag.offX, top: drag.y - drag.offY, width: drag.width }}
-      className="pointer-events-none fixed z-50 h-[26px] overflow-hidden rounded-lg bg-panel shadow-2xl ring-1 ring-border-strong"
+      className="lit-float pointer-events-none fixed z-50 h-[26px] overflow-hidden rounded-lg bg-panel"
     >
       <span className={cn('flex h-full items-center gap-1.5 px-2 text-sm text-fg', look.soft)}>
         <span className={cn('h-2 w-2 shrink-0', look.dot)} />

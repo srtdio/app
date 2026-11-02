@@ -551,8 +551,8 @@ export function ActivityCard({
         event.stopPropagation();
       }}
       className={cn(
-        'flex overflow-hidden rounded-xl border bg-panel transition-colors motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-slow',
-        unread ? 'border-accent-line' : 'border-border',
+        'lit-card flex overflow-hidden rounded-xl border bg-panel transition-colors motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-slow',
+        unread && 'border-accent-line',
         !settled && 'motion-safe:translate-y-2',
       )}
     >
@@ -834,7 +834,7 @@ export function UpcomingCard({
     <div
       data-upcoming-row={item.kind}
       data-upcoming-id={item.id}
-      className="flex overflow-hidden rounded-xl border border-border bg-panel transition-colors"
+      className="lit-card flex overflow-hidden rounded-xl border bg-panel transition-colors"
     >
       <div aria-hidden="true" className="w-[3px] shrink-0 bg-border-strong" />
 

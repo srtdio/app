@@ -70,19 +70,22 @@ describe('Button design system', () => {
 
   it('maps each variant to its tokens', () => {
     expect(classOf({ variant: 'primary' })).toContain(
-      'bg-accent text-accent-fg hover:bg-accent-hover',
+      'lit-btn-primary bg-accent text-accent-fg hover:bg-accent-hover',
     );
     expect(classOf({ variant: 'secondary' })).toContain(
-      'bg-panel text-fg border border-border hover:bg-panel-2',
+      'lit-btn-secondary bg-panel text-fg border hover:bg-panel-2',
     );
+    expect(tokens(classOf({ variant: 'secondary' }))).not.toContain('border-border');
+    expect(classOf({ variant: 'ghost' })).not.toMatch(/\blit-/);
+    expect(classOf({ variant: 'link' })).not.toMatch(/\blit-/);
     expect(classOf({ variant: 'ghost' })).toContain('text-fg-2 hover:bg-panel-2 hover:text-fg');
     expect(classOf({ variant: 'link' })).toContain('text-accent');
     expect(classOf({ variant: 'link' })).toContain('!px-2');
     expect(classOf({ variant: 'success' })).toContain(
-      'bg-good-solid text-accent-fg hover:opacity-90',
+      'lit-btn-success bg-good-solid text-accent-fg hover:opacity-90',
     );
     expect(classOf({ variant: 'danger' })).toContain(
-      'bg-bad-solid text-accent-fg hover:opacity-90',
+      'lit-btn-danger bg-bad-solid text-accent-fg hover:opacity-90',
     );
   });
 
@@ -123,19 +126,51 @@ describe('IconButton', () => {
     expect(t).toContain('rounded-lg');
     expect(t).not.toContain('rounded-md');
   });
+
+  it('is flat (unlit) with a full-strength fg icon', () => {
+    const el = IconButton({ label: 'Close', children: null }) as ReactElement<{
+      className: string;
+    }>;
+    const t = tokens(el.props.className);
+    expect(t).toContain('text-fg');
+    expect(t).not.toContain('text-fg-2');
+    expect(t.some((c) => c.startsWith('lit-'))).toBe(false);
+  });
 });
 
 describe('Chip', () => {
-  it('both sizes are 44 tall, px-4, 8px radius, weight 400', () => {
+  it('both sizes are 44 tall, px-4, 8px radius, weight 500, lit', () => {
     for (const size of ['sm', 'tap'] as const) {
       const el = Chip({ label: 'All', size }) as ReactElement<{ className: string }>;
       const t = tokens(el.props.className);
       expect(t).toContain('min-h-[44px]');
       expect(t).toContain('px-4');
       expect(t).toContain('rounded-lg');
-      expect(t).toContain('font-normal');
+      expect(t).toContain('font-medium');
+      expect(t).toContain('lit-chip');
+      expect(t).toContain('text-fg');
+      expect(t).not.toContain('text-fg-2');
+      expect(t).not.toContain('border-border');
       expect(t).not.toContain('h-8');
     }
+  });
+
+  it('selected is lit-chip-selected with no soft fill; add stays flat', () => {
+    const sel = tokens(
+      (Chip({ label: 'All', selected: true }) as ReactElement<{ className: string }>).props
+        .className,
+    );
+    expect(sel).toContain('lit-chip-selected');
+    expect(sel).toContain('text-accent');
+    expect(sel).toContain('border-accent-line');
+    expect(sel).not.toContain('bg-accent-soft');
+    expect(sel).not.toContain('lit-chip');
+    const add = tokens(
+      (Chip({ label: 'Add', variant: 'add' }) as ReactElement<{ className: string }>).props
+        .className,
+    );
+    expect(add).toContain('border-dashed');
+    expect(add.some((c) => c.startsWith('lit-'))).toBe(false);
   });
 });
 

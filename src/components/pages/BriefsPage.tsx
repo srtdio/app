@@ -351,13 +351,13 @@ interface BriefSectionsDeps extends Omit<BriefCardListDeps, 'briefs'> {
 }
 
 // Sticky per-section header: pinned to the top of the scroll area (below the app
-// top bar) with a translucent token background + blur so cards scroll under it.
-// var(--bg) flips with the theme, so light/dark parity is automatic; z-20 sits
+// top bar) on a solid bg-bg, lit as a header (lit-header) so cards slide under
+// its shade. var(--bg) flips with the theme, so light/dark parity is automatic; z-20 sits
 // above the card grid, matching SectionHeader's sticky choice. Positioning only:
 // no transforms, no transitions.
 const SECTION_HEADER_CLASS = cn(
   'sticky top-0 z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-2 flex items-center justify-between',
-  'bg-[color-mix(in_srgb,var(--bg)_80%,transparent)] backdrop-blur',
+  'bg-bg lit-header',
 );
 
 // The day heading inside a time section: which day the briefs below it were

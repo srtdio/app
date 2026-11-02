@@ -6,7 +6,7 @@ import { cn } from '@/lib/cn';
  * translation), entering on ease-enter and leaving on ease-exit.
  */
 const POPOVER_PANEL =
-  'rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl transition-[opacity,transform] duration-fast';
+  'lit-overlay rounded-xl border bg-panel p-1.5 transition-[opacity,transform] duration-fast';
 
 /** The panel classes for the entered (shown) or exiting (hidden) phase. */
 export function popoverClass(shown: boolean): string {

@@ -32,7 +32,7 @@ export function BriefStatusPill({ status }: { status: string }): ReactElement {
   return (
     <span
       data-brief-status={closed ? BRIEF_STATUS.closed : BRIEF_STATUS.open}
-      className={cn(tagClass(closed ? 'neutral' : 'accent'), 'shrink-0 whitespace-nowrap')}
+      className={cn(tagClass(closed ? 'neutral' : 'accent'), 'lit-pill shrink-0 whitespace-nowrap')}
     >
       {closed ? 'Closed' : 'Open'}
     </span>
@@ -90,7 +90,7 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: Brie
   return (
     <div
       data-brief-card=""
-      className={`relative rounded-xl border border-border bg-panel p-4 flex gap-3 min-w-0 overflow-hidden min-h-[44px] transition-colors duration-fast hover:bg-panel-2 focus-within:ring-2 focus-within:ring-accent ${
+      className={`lit-card relative rounded-xl border bg-panel p-4 flex gap-3 min-w-0 overflow-hidden min-h-[44px] transition-colors duration-fast hover:bg-panel-2 focus-within:ring-2 focus-within:ring-accent ${
         closed ? 'opacity-70' : ''
       }`}
     >

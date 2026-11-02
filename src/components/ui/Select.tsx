@@ -142,7 +142,7 @@ export function SelectMenu({
           onListboxKeyDown(event);
         }}
         className={cn(
-          'absolute left-0 z-50 max-h-60 w-full min-w-0 overflow-y-auto rounded-xl border border-border-strong bg-panel p-1.5 shadow-2xl',
+          'absolute left-0 z-50 max-h-60 w-full min-w-0 overflow-y-auto rounded-xl border bg-panel p-1.5 lit-overlay',
           placement === 'up' ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
         )}
       >
@@ -224,7 +224,7 @@ export function Select({
         disabled={disabled}
         onClick={toggle}
         // 16px text below md so iOS Safari does not zoom on focus; 14px from md up.
-        className="flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-input md:text-base transition-colors hover:bg-panel-3 disabled:pointer-events-none disabled:opacity-50"
+        className="lit-well flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-input md:text-base transition-colors hover:bg-panel-3 disabled:pointer-events-none disabled:opacity-50"
       >
         {selected?.renderLeft !== undefined ? (
           <span className="flex shrink-0 items-center">{selected.renderLeft}</span>

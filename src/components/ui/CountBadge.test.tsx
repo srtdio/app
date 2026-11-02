@@ -26,6 +26,7 @@ describe('CountBadge', () => {
       'bg-accent',
       'text-accent-fg',
       'border-panel',
+      'lit-badge',
     ]) {
       expect(html).toContain(token);
     }

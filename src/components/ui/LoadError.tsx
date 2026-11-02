@@ -31,7 +31,7 @@ export function LoadError({
     <div
       role="alert"
       className={cn(
-        'flex flex-col items-center gap-3 rounded-xl border border-border bg-panel px-4 py-6 text-center',
+        'lit-card flex flex-col items-center gap-3 rounded-xl border bg-panel px-4 py-6 text-center',
         className,
       )}
     >

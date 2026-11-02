@@ -648,7 +648,7 @@ export function BriefDetailPage({
   );
 
   const bareHeader = (
-    <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
+    <div className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b">
       {backButton}
     </div>
   );
@@ -797,7 +797,7 @@ export function BriefDetailPage({
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
-      <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b border-border">
+      <div className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b">
         {backButton}
         {/* The status line, as the post screen's: a 7px dot and 15px semibold. */}
         <div data-brief-status-line="" className="flex min-w-0 flex-1 items-center gap-2">
@@ -943,7 +943,7 @@ export function BriefDetailPage({
           <div
             data-brief-action-bar=""
             {...bottomAnchorProps}
-            className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
+            className="lit-dock fixed inset-x-0 bottom-0 z-40 border-t bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
           >
             <Button
               variant="primary"

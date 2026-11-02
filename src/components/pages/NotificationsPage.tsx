@@ -189,7 +189,7 @@ function restoreAnchor(list: HTMLElement | null, anchor: ScrollAnchor): void {
 function LoadFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="px-4 md:px-6 mt-4">
-      <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-base text-bad">
+      <div role="alert" className="lit-card rounded-xl border border-bad bg-panel px-4 py-3 text-base text-bad">
         {ACTIVITY_LOAD_FAILED}
       </div>
       <div className="mt-3">

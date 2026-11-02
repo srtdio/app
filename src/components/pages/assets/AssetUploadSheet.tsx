@@ -644,7 +644,7 @@ export function AssetUploadSheet({
             return (
               <div
                 key={item.id}
-                className="flex items-center gap-3 rounded-xl border border-border bg-panel-2 p-2.5"
+                className="lit-card-muted flex items-center gap-3 rounded-xl border bg-panel-2 p-2.5"
               >
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3">
                   {item.previewUrl !== null ? (
@@ -719,7 +719,7 @@ function UploadStatusRow({
     const percent = fractionToPercent(status.progress);
     return (
       <div
-        className="h-1 w-full overflow-hidden rounded-full bg-panel-3"
+        className="lit-well h-1 w-full overflow-hidden rounded-full bg-panel-3"
         role="progressbar"
         aria-label="Uploading"
         aria-valuemin={0}
@@ -728,7 +728,7 @@ function UploadStatusRow({
       >
         {/* Width only (no translate): a sliver shows before the first bytes land. */}
         <div
-          className="h-full rounded-full bg-accent transition-[width] duration-base ease-enter motion-reduce:transition-none"
+          className="lit-fill h-full rounded-full bg-accent transition-[width] duration-base ease-enter motion-reduce:transition-none"
           style={{ width: `${Math.max(percent, 4)}%` }}
         />
       </div>

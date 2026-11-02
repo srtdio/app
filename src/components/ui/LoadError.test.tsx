@@ -50,7 +50,8 @@ describe('LoadError', () => {
       expect(c).not.toMatch(/^(bg|text|border)-(red|gray|slate|zinc|neutral|blue|green)-/);
       expect(c).not.toMatch(/#[0-9a-f]{3,8}/i);
     }
-    expect(alert.className).toContain('border-border');
+    expect(alert.className).toContain('lit-card');
+    expect(alert.className).not.toContain('border-border');
     expect(alert.className).toContain('bg-panel');
   });
 

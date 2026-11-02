@@ -18,7 +18,7 @@ export function EmptyState({ icon, title, description, action, compact = false }
         compact ? null : 'min-h-[320px]',
       )}
     >
-      <div className="w-[54px] h-[54px] rounded-xl bg-panel-2 border border-border flex items-center justify-center text-fg-3 mb-1.5">
+      <div className="w-[54px] h-[54px] rounded-xl bg-panel-2 border lit-card flex items-center justify-center text-fg-3 mb-1.5">
         {icon}
       </div>
       <div className="text-lg font-semibold text-fg">{title}</div>

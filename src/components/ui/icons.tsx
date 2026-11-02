@@ -117,7 +117,7 @@ function Svg({ className, size = ICON_SIZE.nav, inline = false, box, children }:
       viewBox={box !== undefined ? `0 0 ${box.width} ${box.height}` : '0 0 24 24'}
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.7}
+      strokeWidth={1.85}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -131,7 +131,7 @@ type HeroIcon = typeof ViewColumnsIcon;
 
 /**
  * A Heroicons glyph on the same contract as Svg: size (default 18), decorative,
- * and the same inline layout. 24/outline gets stroke 1.7 over Heroicons' own
+ * and the same inline layout. 24/outline gets stroke 1.85 over Heroicons' own
  * 1.5; `solid` (24/solid, filled states only) has no stroke.
  */
 function Hero({
@@ -149,7 +149,7 @@ function Hero({
       width={size}
       height={size}
       style={style}
-      strokeWidth={solid ? undefined : 1.7}
+      strokeWidth={solid ? undefined : 1.85}
       className={className}
       aria-hidden="true"
     />
@@ -564,7 +564,7 @@ export function IconMailOff(props: IconProps) {
 /**
  * The induction guide's pointing hand. Hand-drawn: Heroicons has no pointing
  * finger. The fingertip sits at (17, 1) of a 40 box; the path is drawn on 40
- * and scaled into the 24 grid, so the stroke stays 1.7 at 40px. The palm
+ * and scaled into the 24 grid, so the stroke stays 1.85 at 40px. The palm
  * fills with the panel token so it reads over any screen.
  */
 export function IconHand(props: IconProps) {
@@ -582,7 +582,7 @@ export function IconHand(props: IconProps) {
 /**
  * A task's tick box (TaskGlyph): To do is an empty rounded square in the fg-3
  * ink, Done a filled accent square with a panel-coloured tick. Drawn on a 16
- * grid, stroke 1.7. Not an Icon*: it takes a state, not the IconProps contract.
+ * grid, stroke 1.85. Not an Icon*: it takes a state, not the IconProps contract.
  */
 export function TaskBoxGlyph(props: { done: boolean; size: number }) {
   return (
@@ -592,7 +592,7 @@ export function TaskBoxGlyph(props: { done: boolean; size: number }) {
       height={props.size}
       viewBox="0 0 16 16"
       fill="none"
-      strokeWidth={1.7}
+      strokeWidth={1.85}
       strokeLinecap="round"
       strokeLinejoin="round"
       className={props.done ? 'text-accent' : 'text-fg-3'}
