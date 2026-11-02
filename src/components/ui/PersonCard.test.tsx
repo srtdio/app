@@ -7,6 +7,7 @@ import {
   PERSON_POPOVER_W,
   PersonCardBody,
   PersonCardHost,
+  keyboardInset,
   personCardData,
   personMetaLine,
   personPopoverPosition,
@@ -18,10 +19,14 @@ import {
   resetMentionNames,
 } from '@/lib/chat/mentions';
 import type { ChatProfile } from '@/lib/chat-reads';
+import { getDraft, personDraftKey, resetDrafts } from '@/lib/chat/drafts';
+import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import {
   closePersonCard,
+  messagePlaceholder,
   openPersonCard,
   personCardSnapshot,
+  personContextLine,
   type PersonCardRequest,
 } from '@/lib/person-card';
 import type { WorkspaceMemberRow, WorkspaceMembersData } from '@/lib/workspace-members';
@@ -50,7 +55,29 @@ vi.mock('@/lib/workspace-context', async (importOriginal) => ({
   useWorkspace: () => ({ workspaceId: '0190a000-0000-7000-8000-00000000a001' }),
 }));
 
-// The Message tap goes through the one open-my-DM path; the card only calls it.
+vi.mock('agora-chat', () => ({
+  default: { connection: vi.fn(), message: { create: vi.fn() } },
+}));
+vi.mock('@/lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
+
+// The inline send: the card only hands it over (after it closed); the outbox
+// path is tested in use-person-message-send.test. Each call records whether
+// the card was already closed when it ran.
+const sent = vi.hoisted(() => ({
+  calls: [] as { message: unknown; closedFirst: boolean }[],
+  queued: true,
+}));
+vi.mock('@/components/ui/use-person-message-send', () => ({
+  usePersonMessageSend: () => (message: unknown) => {
+    sent.calls.push({ message, closedFirst: personCardSnapshotRef.current?.() === null });
+    return sent.queued;
+  },
+}));
+const personCardSnapshotRef = vi.hoisted(() => ({
+  current: null as null | (() => unknown),
+}));
+
+// "Message yourself" goes through the one open-my-DM path; the card only calls it.
 const openDm = vi.hoisted(() => ({ calls: [] as string[] }));
 vi.mock('@/components/ui/use-open-person-dm', () => ({
   useOpenPersonDm: () => (userId: string) => {
@@ -183,6 +210,9 @@ async function pressEscape(): Promise<void> {
 beforeEach(() => {
   laptop.value = false;
   openDm.calls = [];
+  sent.calls = [];
+  sent.queued = true;
+  personCardSnapshotRef.current = personCardSnapshot;
   defaultMembers();
 });
 
@@ -192,33 +222,75 @@ afterEach(() => {
   root = null;
   document.body.innerHTML = '';
   resetMentionNames();
+  resetDrafts();
 });
 
+/** Leo's comment on a post: the card's source when opened from it. */
+function commentSource(sourceId = 'c-1', excerpt = 'Love the new cover shot, ship it today'): PrivateReplyDraft {
+  return {
+    kind: 'comment',
+    sourceId,
+    authorUserId: LEO,
+    authorName: 'Leo Martins',
+    excerpt,
+    whereLabel: 'Monday carousel',
+    link: { kind: 'comment', entityType: 'post', entityId: 'p-1', commentId: sourceId },
+  };
+}
+
+function messageInput(): HTMLTextAreaElement | null {
+  return document.querySelector<HTMLTextAreaElement>('[data-person-message-input]');
+}
+
+function contextLine(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[data-person-context]');
+}
+
+async function typeInto(value: string): Promise<void> {
+  const el = messageInput();
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+  await act(async () => {
+    if (el === null) return;
+    setter?.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function keyInto(key: string, shiftKey = false): Promise<void> {
+  await act(async () => {
+    messageInput()?.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true }));
+    await wait(10);
+  });
+}
+
 describe('PersonCardHost content', () => {
-  it('another member: their name, "@user · Role" and a Message button', async () => {
+  it('another member: the inline message card (name, "@user · Role", input), no Message button', async () => {
     laptop.value = true;
     await mountHost();
     await open(LEO, { name: 'Leo' });
+    expect(card()?.hasAttribute('data-person-card-message')).toBe(true);
     expect(card()?.textContent).toContain('Leo Martins');
     expect(metaLine()?.textContent).toBe('@leo · Creator');
-    const buttons = cardButtons();
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0]?.textContent).toBe(PERSON_CARD_COPY.message);
+    expect(messageInput()?.placeholder).toBe(messagePlaceholder('Leo'));
+    expect(cardButtons().some((b) => b.textContent === 'Message')).toBe(false);
+    expect('message' in PERSON_CARD_COPY).toBe(false);
   });
 
-  it('me: the button reads "Message yourself"', async () => {
+  it('me: the button reads "Message yourself" (unchanged)', async () => {
     laptop.value = true;
     await mountHost();
     await open(ME);
     expect(cardButtons().map((b) => b.textContent)).toEqual([PERSON_CARD_COPY.self]);
     expect(metaLine()?.textContent).toBe('@sam · Owner');
+    expect(messageInput()).toBeNull();
   });
 
-  it('a removed member: no button, the "No longer in this workspace" block', async () => {
+  it('a removed member: no button, no input, the "No longer in this workspace" block', async () => {
     laptop.value = true;
     await mountHost();
     await open(GONE, { name: 'Ola Gone' });
     expect(cardButtons()).toHaveLength(0);
+    expect(messageInput()).toBeNull();
     expect(card()?.textContent).toContain(PERSON_CARD_COPY.removed);
   });
 
@@ -240,36 +312,190 @@ describe('PersonCardHost content', () => {
     expect(meta).not.toBeNull();
     expect(meta?.textContent).toBe('');
     expect(meta?.className).toContain('h-5');
-    // Still a Message button: unknown is not removed.
-    expect(cardButtons().map((b) => b.textContent)).toEqual([PERSON_CARD_COPY.message]);
+    // Still the inline message: unknown is not removed.
+    expect(messageInput()).not.toBeNull();
   });
 
-  it('Message closes the card, then opens the DM for that person', async () => {
+  it('"Message yourself" closes the card, then opens my notes through the DM path', async () => {
     laptop.value = true;
     await mountHost();
-    await open(LEO);
+    await open(ME);
     await act(async () => {
       cardButtons()[0]?.click();
       await wait(10);
     });
     expect(personCardSnapshot()).toBeNull();
-    expect(openDm.calls).toEqual([LEO]);
+    expect(openDm.calls).toEqual([ME]);
     expect(card()).toBeNull();
   });
 });
 
+describe('PersonCardHost context line', () => {
+  it('shows "<where> · "<first words>…"" when opened from a comment or message', async () => {
+    laptop.value = true;
+    await mountHost();
+    const source = commentSource();
+    await open(LEO, { name: 'Leo', source });
+    expect(contextLine()?.textContent).toBe(personContextLine(source));
+    expect(contextLine()?.textContent).toBe('Monday carousel · "Love the new cover shot, ship…"');
+    expect(contextLine()?.className).toContain('truncate');
+  });
+
+  it('is absent from a plain open (Members, Pipeline, Activity, author lines)', async () => {
+    laptop.value = true;
+    await mountHost();
+    await open(LEO, { name: 'Leo' });
+    expect(contextLine()).toBeNull();
+  });
+
+  it('is absent on phone too without a source, present with one', async () => {
+    await mountHost();
+    await open(LEO);
+    expect(contextLine()).toBeNull();
+    act(() => closePersonCard());
+    await act(async () => wait(200));
+    await open(LEO, { source: commentSource() });
+    expect(contextLine()).not.toBeNull();
+  });
+});
+
+describe('PersonCardHost photo view', () => {
+  for (const isLaptop of [false, true]) {
+    it(`${isLaptop ? 'laptop' : 'phone'}: view 'photo' paints the photo viewer, never the card`, async () => {
+      laptop.value = isLaptop;
+      await mountHost();
+      await open(LEO, { view: 'photo' });
+      const viewer = document.querySelector<HTMLElement>('[data-photo-viewer]');
+      expect(viewer?.getAttribute('data-photo-viewer')).toBe(LEO);
+      expect(viewer?.textContent).toContain('Leo Martins');
+      expect(card()).toBeNull();
+      expect(messageInput()).toBeNull();
+    });
+  }
+
+  it('Esc closes the photo viewer and focus returns to the trigger', async () => {
+    await mountHost();
+    const trigger = await open(LEO, { view: 'photo' });
+    await pressEscape();
+    expect(personCardSnapshot()).toBeNull();
+    expect(document.querySelector('[data-photo-viewer]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
+describe('PersonCardHost inline send', () => {
+  it('laptop: Enter sends with person, first name, text and source; the card closed first', async () => {
+    laptop.value = true;
+    await mountHost();
+    const source = commentSource();
+    await open(LEO, { name: 'Leo', source });
+    await typeInto('see you at 3');
+    await keyInto('Enter');
+    expect(personCardSnapshot()).toBeNull();
+    expect(sent.calls).toHaveLength(1);
+    expect(sent.calls[0]?.closedFirst).toBe(true);
+    expect(sent.calls[0]?.message).toEqual({
+      userId: LEO,
+      firstName: 'Leo',
+      text: 'see you at 3',
+      source,
+    });
+  });
+
+  it('laptop: Shift+Enter does not send', async () => {
+    laptop.value = true;
+    await mountHost();
+    await open(LEO);
+    await typeInto('line one');
+    await keyInto('Enter', true);
+    expect(sent.calls).toHaveLength(0);
+    expect(personCardSnapshot()).not.toBeNull();
+  });
+
+  it('no source: the send carries source null', async () => {
+    laptop.value = true;
+    await mountHost();
+    await open(LEO);
+    await typeInto('hi');
+    await keyInto('Enter');
+    expect(sent.calls[0]?.message).toMatchObject({ userId: LEO, text: 'hi', source: null });
+  });
+
+  it('phone: a reaction tap closes the sheet at once and sends the emoji', async () => {
+    await mountHost();
+    await open(LEO, { source: commentSource() });
+    const reaction = document.querySelector<HTMLButtonElement>('[data-person-reaction]');
+    const emoji = reaction?.getAttribute('data-person-reaction');
+    await act(async () => {
+      reaction?.click();
+      await wait(10);
+    });
+    expect(personCardSnapshot()).toBeNull();
+    expect(sent.calls[0]?.closedFirst).toBe(true);
+    expect(sent.calls[0]?.message).toMatchObject({ userId: LEO, text: emoji });
+  });
+
+  it('phone: Send closes immediately and the draft is cleared', async () => {
+    await mountHost();
+    const source = commentSource();
+    await open(LEO, { source });
+    await typeInto('on it');
+    const send = document.querySelector<HTMLButtonElement>('[data-person-send]');
+    await act(async () => {
+      send?.click();
+      await wait(10);
+    });
+    expect(personCardSnapshot()).toBeNull();
+    expect(sent.calls[0]?.closedFirst).toBe(true);
+    expect(getDraft(personDraftKey(LEO, source)).text).toBe('');
+  });
+
+  it('a send that could not queue gives the text back to the draft', async () => {
+    sent.queued = false;
+    laptop.value = true;
+    await mountHost();
+    await open(LEO);
+    await typeInto('keep me');
+    await keyInto('Enter');
+    expect(getDraft(personDraftKey(LEO, null)).text).toBe('keep me');
+  });
+});
+
+describe('PersonCardHost drafts', () => {
+  it('the text survives close and reopen for the same person and source', async () => {
+    await mountHost();
+    const source = commentSource('c-1');
+    await open(LEO, { source });
+    await typeInto('half typed');
+    act(() => closePersonCard());
+    await act(async () => wait(200));
+    await open(LEO, { source });
+    expect(messageInput()?.value).toBe('half typed');
+  });
+
+  it('another source for the same person starts empty', async () => {
+    await mountHost();
+    await open(LEO, { source: commentSource('c-1') });
+    await typeInto('for c-1');
+    act(() => closePersonCard());
+    await open(LEO, { source: commentSource('c-2') });
+    expect(messageInput()?.value).toBe('');
+    expect(getDraft(personDraftKey(LEO, commentSource('c-1'))).text).toBe('for c-1');
+  });
+});
+
 describe('PersonCardHost on phone', () => {
-  it('renders a Sheet titled with the name, no hint, no name line in the body', async () => {
+  it('renders a Sheet titled with the name, no hint, the input focused', async () => {
     laptop.value = false;
     await mountHost();
     await open(LEO);
     const sheet = document.querySelector<HTMLElement>('[role="dialog"]');
     expect(sheet).not.toBeNull();
     expect(sheet?.querySelector('h2')?.textContent).toBe('Leo Martins');
-    // The Sheet's X is there (a popover has none).
+    // The Sheet's X is there.
     expect(sheet?.querySelector('[aria-label="Close"]')).not.toBeNull();
     expect(document.body.textContent).not.toContain(PERSON_CARD_COPY.hint);
-    expect(card()?.querySelector('p.text-lg')).toBeNull();
+    expect(document.activeElement).toBe(messageInput());
   });
 
   it('Escape closes the Sheet', async () => {
@@ -281,27 +507,72 @@ describe('PersonCardHost on phone', () => {
   });
 });
 
+describe('keyboardInset', () => {
+  it('is what the visual viewport leaves uncovered at the bottom; 0 without one', () => {
+    expect(keyboardInset({ innerHeight: 844, visualViewport: { height: 500, offsetTop: 0 } })).toBe(
+      344,
+    );
+    expect(keyboardInset({ innerHeight: 844, visualViewport: { height: 500, offsetTop: 40 } })).toBe(
+      304,
+    );
+    expect(keyboardInset({ innerHeight: 844, visualViewport: null })).toBe(0);
+    expect(keyboardInset({ innerHeight: 844, visualViewport: { height: 900, offsetTop: 0 } })).toBe(
+      0,
+    );
+  });
+});
+
 describe('PersonCardHost on laptop', () => {
-  it('renders a popover dialog beside the anchor with the hint and no Sheet X', async () => {
+  it('renders a ~320px popover beside the anchor with a Close X and no hint', async () => {
     laptop.value = true;
     await mountHost();
     await open(LEO);
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
     expect(dialog).not.toBeNull();
     expect(dialog?.getAttribute('aria-label')).toBe('Leo Martins');
-    expect(dialog?.querySelector('[aria-label="Close"]')).toBeNull();
-    expect(dialog?.textContent).toContain(PERSON_CARD_COPY.hint);
+    expect(dialog?.querySelector('[aria-label="Close"]')).not.toBeNull();
+    expect(dialog?.textContent).not.toContain(PERSON_CARD_COPY.hint);
+    expect(PERSON_POPOVER_W).toBe(320);
     expect(dialog?.style.width).toBe(`${PERSON_POPOVER_W}px`);
     // Right of the anchor (right 140 + 8 gap).
     expect(dialog?.style.left).toBe('148px');
     expect(dialog?.style.top).toBe('100px');
   });
 
-  it('focus moves into the card (the button)', async () => {
+  it('me and removed keep the hint on laptop', async () => {
+    laptop.value = true;
+    await mountHost();
+    await open(ME);
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      PERSON_CARD_COPY.hint,
+    );
+  });
+
+  it('focus moves into the card: the input', async () => {
     laptop.value = true;
     await mountHost();
     await open(LEO);
+    expect(document.activeElement).toBe(messageInput());
+  });
+
+  it('me: focus moves to the button', async () => {
+    laptop.value = true;
+    await mountHost();
+    await open(ME);
     expect(document.activeElement).toBe(cardButtons()[0]);
+  });
+
+  it('the X closes and focus returns to the trigger', async () => {
+    laptop.value = true;
+    await mountHost();
+    const trigger = await open(LEO);
+    const x = document.querySelector<HTMLButtonElement>('[role="dialog"] [aria-label="Close"]');
+    await act(async () => {
+      x?.click();
+      await wait(10);
+    });
+    expect(personCardSnapshot()).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 
   it('Escape closes and focus returns to the trigger', async () => {
@@ -349,7 +620,7 @@ describe('PersonCardBody', () => {
     avatarUrl: null,
     username: 'leo',
     role: 'Creator',
-    action: 'message',
+    action: 'self',
   };
 
   async function render(node: ReactElement): Promise<void> {
@@ -369,7 +640,7 @@ describe('PersonCardBody', () => {
     expect(card()?.textContent).not.toContain(PERSON_CARD_COPY.hint);
   });
 
-  it('the button runs onAction', async () => {
+  it('the "Message yourself" button runs onAction', async () => {
     const onAction = vi.fn();
     await render(<PersonCardBody data={data} showName showHint onAction={onAction} />);
     expect(card()?.querySelector('p.text-lg')?.textContent).toBe('Leo Martins');

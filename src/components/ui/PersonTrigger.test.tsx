@@ -2,7 +2,12 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PersonTrigger, openPersonCardFrom } from '@/components/ui/PersonTrigger';
+import {
+  PersonTrigger,
+  openPersonCardFrom,
+  openPersonPhotoFrom,
+} from '@/components/ui/PersonTrigger';
+import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import { closePersonCard, personCardSnapshot } from '@/lib/person-card';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -90,6 +95,7 @@ describe('PersonTrigger', () => {
       username: 'leo',
       anchor: BOX,
       trigger,
+      view: 'card',
     });
   });
 
@@ -138,6 +144,88 @@ describe('PersonTrigger', () => {
 describe('openPersonCardFrom', () => {
   it('a null element opens with no anchor and no trigger', () => {
     openPersonCardFrom(null, { userId: LEO, name: 'Leo' });
-    expect(personCardSnapshot()).toEqual({ userId: LEO, name: 'Leo', anchor: null, trigger: null });
+    expect(personCardSnapshot()).toEqual({
+      userId: LEO,
+      name: 'Leo',
+      anchor: null,
+      trigger: null,
+      view: 'card',
+    });
+  });
+
+  it('openPersonPhotoFrom opens the photo-only viewer', () => {
+    openPersonPhotoFrom(null, { userId: LEO, name: 'Leo' });
+    expect(personCardSnapshot()?.view).toBe('photo');
+    expect(personCardSnapshot()?.userId).toBe(LEO);
+  });
+});
+
+const SOURCE: PrivateReplyDraft = {
+  kind: 'comment',
+  sourceId: 'c-1',
+  authorUserId: LEO,
+  authorName: 'Leo Martins',
+  excerpt: 'Can the cover use the morning shot?',
+  whereLabel: 'Monday carousel',
+  link: { kind: 'comment', entityType: 'post', entityId: 'p-1', commentId: 'c-1' },
+};
+
+async function mountWith(
+  view: 'card' | 'photo' | undefined,
+  source?: () => PrivateReplyDraft | null,
+): Promise<HTMLElement> {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  root = createRoot(host);
+  await act(async () => {
+    root?.render(
+      <PersonTrigger
+        userId={LEO}
+        name="Leo Martins"
+        {...(view !== undefined ? { view } : {})}
+        {...(source !== undefined ? { source } : {})}
+      >
+        <span>Leo</span>
+      </PersonTrigger>,
+    );
+  });
+  const trigger = document.querySelector<HTMLElement>(`[data-person-trigger="${LEO}"]`);
+  if (trigger === null) throw new Error('no trigger');
+  return trigger;
+}
+
+describe('PersonTrigger view and source', () => {
+  it('defaults to the card and marks it on the element', async () => {
+    const trigger = await mountWith(undefined);
+    expect(trigger.getAttribute('data-person-view')).toBe('card');
+    await act(async () => trigger.click());
+    expect(personCardSnapshot()?.view).toBe('card');
+    expect(personCardSnapshot()?.source).toBeUndefined();
+  });
+
+  it('the card carries the source built at tap time', async () => {
+    const source = vi.fn(() => SOURCE);
+    const trigger = await mountWith('card', source);
+    expect(source).not.toHaveBeenCalled();
+    await act(async () => trigger.click());
+    expect(source).toHaveBeenCalledTimes(1);
+    expect(personCardSnapshot()?.source).toEqual(SOURCE);
+  });
+
+  it('a null source opens the card with none (no context line)', async () => {
+    const trigger = await mountWith('card', () => null);
+    await act(async () => trigger.click());
+    expect(personCardSnapshot()?.view).toBe('card');
+    expect(personCardSnapshot()?.source).toBeUndefined();
+  });
+
+  it("view 'photo' opens the photo viewer and never builds a source", async () => {
+    const source = vi.fn(() => SOURCE);
+    const trigger = await mountWith('photo', source);
+    expect(trigger.getAttribute('data-person-view')).toBe('photo');
+    await act(async () => trigger.click());
+    expect(personCardSnapshot()?.view).toBe('photo');
+    expect(personCardSnapshot()?.source).toBeUndefined();
+    expect(source).not.toHaveBeenCalled();
   });
 });
