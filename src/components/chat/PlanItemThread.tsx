@@ -208,6 +208,23 @@ export function blockedMentions(
   });
 }
 
+/**
+ * Which keys the open @ picker takes (chat's composer rule): Up / Down move,
+ * Enter or Tab picks (Enter never sends while it is open), Escape closes. Null
+ * for any other key and during IME composition. Pure.
+ */
+export function mentionKeyAction(
+  key: string,
+  isComposing: boolean,
+): 'up' | 'down' | 'pick' | 'close' | null {
+  if (isComposing) return null;
+  if (key === 'ArrowUp') return 'up';
+  if (key === 'ArrowDown') return 'down';
+  if (key === 'Enter' || key === 'Tab') return 'pick';
+  if (key === 'Escape') return 'close';
+  return null;
+}
+
 /** Whether a comment write was refused for its mentions. Pure. */
 export function isInvalidMention(message: string): boolean {
   return /invalid_mention/.test(message);

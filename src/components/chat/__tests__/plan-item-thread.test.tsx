@@ -89,6 +89,7 @@ import {
   blockedMentions,
   breaksPlanRun,
   isInvalidMention,
+  mentionKeyAction,
   mentionsRestricted,
   planPickerRows,
   planThreadRows,
@@ -291,6 +292,16 @@ describe('picker filtering', () => {
     expect(blockedMentions(body, MEMBERS, true)).toEqual([CLIENT]);
     expect(blockedMentions(body, MEMBERS, false)).toEqual([]);
     expect(blockedMentions(body, null, true)).toEqual([]);
+  });
+
+  it('the open picker takes Up, Down, Enter, Tab and Escape; never during composition', () => {
+    expect(mentionKeyAction('ArrowUp', false)).toBe('up');
+    expect(mentionKeyAction('ArrowDown', false)).toBe('down');
+    expect(mentionKeyAction('Enter', false)).toBe('pick');
+    expect(mentionKeyAction('Tab', false)).toBe('pick');
+    expect(mentionKeyAction('Escape', false)).toBe('close');
+    expect(mentionKeyAction('a', false)).toBeNull();
+    expect(mentionKeyAction('Enter', true)).toBeNull();
   });
 
   it('the refusal code maps to the toast', () => {
