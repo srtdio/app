@@ -114,7 +114,7 @@ describe('PostLightbox buttons', () => {
     expectShared(cancel);
     expectShared(remove);
     expect(classOf(remove)).toContain('text-bad');
-    expect(classOf(remove)).toContain('border-border');
+    expect(classOf(remove)).toContain('lit-btn-secondary');
     expect(classOf(remove)).not.toContain('bg-bad-solid');
   });
 });

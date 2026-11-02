@@ -217,7 +217,7 @@ describe('chat home tile', () => {
     // The shared Avatar at its profile role, group kind: a 72px rounded square.
     expect(t.html).toContain('data-avatar-role="profile"');
     expect(t.html).toContain('width:72px;height:72px');
-    expect(t.html).toContain('rounded-xl inline-flex');
+    expect(t.html).toContain('rounded-xl lit-avatar inline-flex');
     expect(GROUP_TILE_PHOTO).not.toContain('!');
     expect(t.html).toContain(`break-words line-clamp-2 ${GROUP_PREVIEW_TYPE}`);
     // The pill is the last thing in the row, after the text column.

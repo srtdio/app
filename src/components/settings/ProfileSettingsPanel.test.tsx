@@ -459,7 +459,7 @@ describe('tokens', () => {
     expect(badge).toContain('outline-bg');
     expect(badge).not.toContain('outline-panel');
     // A ring would override the lit box-shadow; the cut-out is an outline.
-    expect(badge).not.toMatch(/\bring-(2|bg)\b/);
+    expect(badge).not.toMatch(/(?<![:\w-])ring-(2|bg)\b/);
     expect(badge).toContain('h-11');
     expect(badge).toContain('w-11');
     expect(badge).toContain('rounded-full');

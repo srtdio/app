@@ -31,6 +31,8 @@ function hits(re: RegExp, skip: (rel: string) => boolean = () => false): string[
   for (const { rel, src } of FILES) {
     if (skip(rel)) continue;
     src.split('\n').forEach((line, i) => {
+      // Comments describe the light; only code carries classes.
+      if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
       const clean = line.split(SPOTLIGHT).join('');
       if (re.test(clean)) out.push(`${rel}:${i + 1}: ${line.trim()}`);
     });
