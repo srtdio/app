@@ -90,6 +90,7 @@ import {
   planPickerRows,
   taggableMembers,
   usePlanMentionMembers,
+  type PlanReplyPrivatelyTarget,
   type ShownComment,
 } from '@/components/chat/PlanItemThread';
 import { flattenOrder, hasTicks, moveToEnd } from '@/lib/chat/plan-drag';
@@ -556,6 +557,11 @@ export function PlanItemScreen(props: {
         ? slotSide(side, bundle.plan.audience)
         : null;
   const title = rowTitle(bundle, item);
+  // Reply privately on others' comments points at this item (held data only).
+  const replyPrivately = useMemo<PlanReplyPrivatelyTarget>(
+    () => ({ planId: bundle.plan.id, itemId: item.id, whereLabel: title }),
+    [bundle.plan.id, item.id, title],
+  );
   const description = item.kind === 'concept' ? (item.description ?? '') : '';
 
   /** One review write; true when it landed on this item. */
@@ -666,6 +672,8 @@ export function PlanItemScreen(props: {
             visibility: c.visibility,
             createdAt: c.created_at,
             pending: false,
+            authorKnown:
+              c.author_user_id !== null && read.data.names[c.author_user_id] !== undefined,
           }))
         : [];
     const ids = new Set(recorded.map((c) => c.id));
@@ -1208,6 +1216,7 @@ export function PlanItemScreen(props: {
               notes={read.status === 'ready' ? shown : []}
               workspaceId={workspaceId}
               me={me}
+              replyPrivately={replyPrivately}
             />
             {removeButton}
           </>
@@ -1334,6 +1343,7 @@ export function PlanItemScreen(props: {
                   workspaceId={workspaceId}
                   me={me}
                   highlightedId={highlighted}
+                  replyPrivately={replyPrivately}
                 />
               )}
             </section>
@@ -1538,6 +1548,7 @@ function PlanNotes(props: {
   notes: ShownComment[];
   workspaceId: string | null;
   me: string | null;
+  replyPrivately: PlanReplyPrivatelyTarget;
 }): ReactElement | null {
   if (props.notes.length === 0) return null;
   return (
@@ -1547,7 +1558,12 @@ function PlanNotes(props: {
       className="flex flex-col gap-2.5 px-4 pb-2 pt-4"
     >
       <h4 className={SECTION_LABEL}>{PLAN_NOTES_LABEL}</h4>
-      <PlanItemThread comments={props.notes} workspaceId={props.workspaceId} me={props.me} />
+      <PlanItemThread
+        comments={props.notes}
+        workspaceId={props.workspaceId}
+        me={props.me}
+        replyPrivately={props.replyPrivately}
+      />
     </section>
   );
 }

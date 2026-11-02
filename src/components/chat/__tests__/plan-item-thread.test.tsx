@@ -223,7 +223,10 @@ describe('the thread looks like chat', () => {
     const html = renderToStaticMarkup(
       <PlanItemThread comments={[shown({ id: 'o' })]} workspaceId="ws" me={ME} />,
     );
-    expect(html).toMatch(/data-plan-comment-author=""[^>]*>Asha · /);
+    // The name sits in its person-card trigger; the role follows it.
+    expect(html).toMatch(
+      /data-plan-comment-author=""[^>]*><span[^>]*data-person-trigger[^>]*>Asha<\/span> · /,
+    );
   });
 
   it('a creators-only note is warn-soft with the warn line, a lock and "Creators only"', () => {

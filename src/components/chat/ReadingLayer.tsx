@@ -16,6 +16,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { CountBadge } from '@/components/ui/CountBadge';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconArrowUp, IconChevronDown } from '@/components/ui/icons';
@@ -24,7 +25,7 @@ import { civilDay, formatTime } from '@/lib/time';
 import { dayPillLabel } from '@/components/chat/day-separators';
 import { BUBBLE_META_TYPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { RailThrough } from '@/components/chat/ThreadRail';
-import type { MentionMember } from '@/lib/chat/mentions';
+import { FORMER_MEMBER, type MentionMember } from '@/lib/chat/mentions';
 import type { ChatProfile } from '@/lib/chat-reads';
 import type { ReactorRow } from '@/lib/chat/history';
 import { unreadLabel, type ReadPosition } from '@/lib/chat/read-receipts';
@@ -274,12 +275,25 @@ export function MessageInfoSheet(props: {
         <ul>
           {props.read.map((pos) => (
             <li key={pos.userId} className="flex min-h-[52px] items-center gap-3 py-1">
-              <SheetAvatar
+              <PersonTrigger
+                userId={pos.userId}
                 name={nameOf(pos.userId)}
-                src={byId.get(pos.userId)?.avatarUrl ?? null}
-              />
+                avatarUrl={byId.get(pos.userId)?.avatarUrl ?? null}
+                display="block"
+              >
+                <SheetAvatar
+                  name={nameOf(pos.userId)}
+                  src={byId.get(pos.userId)?.avatarUrl ?? null}
+                />
+              </PersonTrigger>
               <span className="min-w-0 flex-1 truncate text-base text-fg">
-                {nameOf(pos.userId)}
+                <PersonTrigger
+                  userId={pos.userId}
+                  name={nameOf(pos.userId)}
+                  avatarUrl={byId.get(pos.userId)?.avatarUrl ?? null}
+                >
+                  {nameOf(pos.userId)}
+                </PersonTrigger>
               </span>
               {pos.readAt !== null ? (
                 <span className="font-mono text-sm tabular-nums text-fg-3">
@@ -296,8 +310,23 @@ export function MessageInfoSheet(props: {
         <ul>
           {props.unread.map((id) => (
             <li key={id} className="flex min-h-[52px] items-center gap-3 py-1">
-              <SheetAvatar name={nameOf(id)} src={byId.get(id)?.avatarUrl ?? null} dimmed />
-              <span className="min-w-0 flex-1 truncate text-base text-fg-3">{nameOf(id)}</span>
+              <PersonTrigger
+                userId={id}
+                name={nameOf(id)}
+                avatarUrl={byId.get(id)?.avatarUrl ?? null}
+                display="block"
+              >
+                <SheetAvatar name={nameOf(id)} src={byId.get(id)?.avatarUrl ?? null} dimmed />
+              </PersonTrigger>
+              <span className="min-w-0 flex-1 truncate text-base text-fg-3">
+                <PersonTrigger
+                  userId={id}
+                  name={nameOf(id)}
+                  avatarUrl={byId.get(id)?.avatarUrl ?? null}
+                >
+                  {nameOf(id)}
+                </PersonTrigger>
+              </span>
             </li>
           ))}
         </ul>
@@ -410,11 +439,29 @@ export function WhoReactedSheet(props: {
             </div>
             <ul>
               {rows.map((row, i) => {
+                // Another person's photo and name open the person card; my own
+                // row stays the one "tap to remove" button.
+                const asPerson = (node: ReactElement, display: 'inline' | 'block'): ReactElement =>
+                  row.mine ? (
+                    node
+                  ) : (
+                    <PersonTrigger
+                      userId={row.userId}
+                      name={row.name}
+                      avatarUrl={row.avatarUrl}
+                      former={row.name === FORMER_MEMBER}
+                      display={display}
+                    >
+                      {node}
+                    </PersonTrigger>
+                  );
                 const body = (
                   <>
-                    <SheetAvatar name={row.name} src={row.avatarUrl} />
+                    {asPerson(<SheetAvatar name={row.name} src={row.avatarUrl} />, 'block')}
                     <span className="flex min-w-0 flex-1 flex-col text-left">
-                      <span className="truncate text-base text-fg">{row.name}</span>
+                      <span className="truncate text-base text-fg">
+                        {asPerson(<>{row.name}</>, 'inline')}
+                      </span>
                       {row.mine ? <span className="text-sm text-fg-3">Tap to remove</span> : null}
                     </span>
                     <span aria-hidden="true" className="text-2xl leading-none">

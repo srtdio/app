@@ -65,6 +65,7 @@ import { THREAD_COUNT_ROOT_LIMIT } from '@/lib/chat/thread-rail';
 import { rowToMark, type ChatMark } from '@/lib/chat/marks';
 import { soonestFirst, type ScheduledRow } from '@/lib/chat/scheduled';
 import type { OpenBriefRow } from '@/lib/chat/use-status-counts';
+import { parsePrivateReply } from '@/lib/chat/private-reply';
 import type { OpenPostRow } from '../../../packages/posts/src/reads';
 
 /** History page size; also the "has more" probe (a full page means keep paging). */
@@ -88,7 +89,7 @@ type ThreadReplyCountRow =
   Database['public']['Functions']['chat_thread_reply_counts']['Returns'][number];
 
 const MESSAGE_COLUMNS =
-  'id, channel_id, workspace_id, sender_user_id, body, mentions, attachment_asset_ids, shared_post_ids, shared_brief_ids, shared_plan_ids, reply_to_message_id, forwarded_from_message_id, attachment_meta, agora_event_id, created_at, edited_at, deleted_at, thread_root_message_id, removed_files';
+  'id, channel_id, workspace_id, sender_user_id, body, mentions, attachment_asset_ids, shared_post_ids, shared_brief_ids, shared_plan_ids, reply_to_message_id, forwarded_from_message_id, attachment_meta, agora_event_id, created_at, edited_at, deleted_at, thread_root_message_id, removed_files, private_reply';
 
 function fail<T>(message: string): Result<T> {
   return { ok: false, error: { code: 'unknown', message } };
@@ -933,8 +934,18 @@ function messageRow(value: unknown, at: string): ChatMessageRow {
     ),
     removed_files:
       o.removed_files === undefined || o.removed_files === null ? [] : asJson(o.removed_files),
-    private_reply: asJson(o.private_reply),
+    private_reply: privateReplyJson(o.private_reply, `${at}.private_reply`),
   };
+}
+
+/** private_reply: read through the one schema (parsePrivateReply); malformed refuses the bundle. */
+function privateReplyJson(value: unknown, at: string): JsonValue {
+  try {
+    parsePrivateReply(value);
+  } catch (error) {
+    return shape(at, String(error));
+  }
+  return asJson(value);
 }
 
 function markRow(value: unknown, at: string): ChatMarkRow {

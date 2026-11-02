@@ -308,7 +308,8 @@ describe('F2 live and older-page mentions paint final', () => {
     expect(paint(messages, after.profiles, after.reads).map((m) => m.id)).toEqual(['m1', 'm2']);
     const html = bubbleHtml(live, after.profiles);
     expect(html).toContain('@Former member');
-    expect(html).not.toContain('<button');
+    // Tappable: it opens the person card's "No longer in this workspace" state.
+    expect(html).toContain(`data-person-trigger="${EX}"`);
     // Never read again: no swap later.
     expect(
       idsToRead(
@@ -874,12 +875,12 @@ describe('B1 a readable profile is not membership', () => {
     expect(paint([row], profiles, applyProfileRead(NO_NAME_READS, [ANA, EX], result))).toEqual([
       row,
     ]);
-    // Bubble: Ana is a tappable "@Ana"; the ex-member is inert "@Former member".
+    // Bubble: both open the person card ("@Former member" shows the removed state).
     const html = bubbleHtml(row, profiles);
     expect(html).toContain('@Ana');
     expect(html).toContain('@Former member');
     expect(html).not.toContain('Eve');
-    expect(html.match(/<button/g)).toHaveLength(1);
+    expect(html.match(/<button/g)).toHaveLength(2);
     // Copy, list preview, draft line.
     expect(resolveMentionText(body, profileNameOf(profiles, 'w1'))).toBe(
       'hi @Ana and @Former member',
@@ -999,7 +1000,7 @@ describe('W1 mention state is per workspace', () => {
     expect(draftLine(body, 'wb')).toBe('hi @Former member');
     const bHtml = bubbleIn(body, profilesB, 'wb');
     expect(bHtml).toContain('@Former member');
-    expect(bHtml).not.toContain('<button');
+    expect(bHtml).toContain(`data-person-trigger="${ANA}"`);
     expect(mentionGone(null, 'me', 'wb')(ANA)).toBe(true);
 
     // A: the name stays, tappable; B's former flag never drops or hides them here.

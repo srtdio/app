@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Avatar } from '@/components/ui/Avatar';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Textarea } from '@/components/ui/Textarea';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import {
@@ -1480,6 +1481,7 @@ export function PostDetailPage({
                 }
                 viewerIsClient={clientRole}
                 {...(detail !== null ? { postStage: detail.post.stage } : {})}
+                whereLabel={detail?.post.title ?? ''}
                 guideReplyCommentId={firstHighlightCommentId(
                   detail?.post.caption ?? '',
                   highlights,
@@ -1625,16 +1627,39 @@ export function PostDetailPage({
       ·
     </span>
   );
+  // The owner's photo and name open the person card (a legacy author or an
+  // unassigned post has no one to open); the rest of the meta line keeps its tap.
+  const ownerId =
+    post.owner_user_id !== null && post.owner_user_id !== '' ? post.owner_user_id : null;
+  const asOwner = (node: React.ReactElement, display: 'inline' | 'block'): React.ReactElement =>
+    ownerId !== null ? (
+      <PersonTrigger
+        userId={ownerId}
+        name={ownerInfo.name}
+        avatarUrl={ownerInfo.avatarUrl}
+        {...(ownerInfo.name === FORMER_MEMBER ? { former: true } : {})}
+        display={display}
+      >
+        {node}
+      </PersonTrigger>
+    ) : (
+      node
+    );
   const metaHead: React.ReactNode[] = [];
   if (ownerKnown) {
     metaHead.push(
       <span key="owner" data-detail="owner" className="inline-flex min-w-0 items-center gap-1.5">
-        <Avatar
-          name={ownerInfo.name}
-          role="inline"
-          {...(ownerInfo.avatarUrl !== null ? { src: ownerInfo.avatarUrl } : {})}
-        />
-        <span className="truncate font-medium text-fg">{ownerInfo.name}</span>
+        {asOwner(
+          <Avatar
+            name={ownerInfo.name}
+            role="inline"
+            {...(ownerInfo.avatarUrl !== null ? { src: ownerInfo.avatarUrl } : {})}
+          />,
+          'block',
+        )}
+        <span className="truncate font-medium text-fg">
+          {asOwner(<>{ownerInfo.name}</>, 'inline')}
+        </span>
         {approvedLocked && agencySide ? (
           <span aria-hidden data-detail-lock="" className="shrink-0 text-fg-3">
             <IconLock size={ICON_SIZE.inline} />

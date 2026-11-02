@@ -115,7 +115,10 @@ describe('MembersList type roles', () => {
 
   it('a member name is the row title: base/500', () => {
     mount();
-    expectRole(byText('Ada Agency'), ['text-base', 'font-medium', 'text-fg']);
+    // The name sits in its person-card trigger; the title span wraps it.
+    const name = byText('Ada Agency');
+    expect(name.hasAttribute('data-person-trigger')).toBe(true);
+    expectRole(name.parentElement as HTMLElement, ['text-base', 'font-medium', 'text-fg']);
   });
 
   it('the member email is sm fg-3 meta', () => {

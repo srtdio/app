@@ -16,6 +16,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { ICON_SIZE, IconLock } from '@/components/ui/icons';
 import { dayPillLabel } from '@/components/chat/day-separators';
 import {
@@ -30,6 +31,7 @@ import { TEAM_ONLY_LABEL } from '@/components/chat/plan-card';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import { startChatMembers } from '@/lib/chat/open-members';
 import {
+  ALL_MENTION,
   filterMentionMembers,
   mentionIds,
   personAvatar,
@@ -41,6 +43,9 @@ import {
 import type { CommentVisibility, PlanAudience } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
 import { civilDay, formatTime } from '@/lib/time';
+import { isFormerMember, resolvePersonMentionText } from '@/lib/chat/mentions';
+import { canReplyPrivately, planCommentPrivateReplyDraft } from '@/lib/reply-privately';
+import { ReplyPrivatelyButton } from '@/components/comments/ReplyPrivatelyButton';
 import { supabase } from '@/lib/supabase';
 import { peekWorkspaceMembers, type WorkspaceMembersData } from '@/lib/workspace-members';
 
@@ -55,6 +60,47 @@ export interface ShownComment {
   visibility: CommentVisibility;
   createdAt: string;
   pending: boolean;
+  /** authorName is the author's real name (their name read answered), not a fallback. */
+  authorKnown?: boolean;
+}
+
+/** Where a plan comment's Reply privately points: the plan, the item, its title. */
+export interface PlanReplyPrivatelyTarget {
+  planId: string;
+  itemId: string;
+  /** The plan item title the screen shows. */
+  whereLabel: string;
+}
+
+/**
+ * Whether a plan comment offers Reply privately: a recorded comment by someone
+ * else whose name is known and who is still a member (`former` when the held
+ * members or the name registry say they left). Pure.
+ */
+export function showPlanReplyPrivately(
+  comment: Pick<ShownComment, 'authorUserId' | 'authorName' | 'mine' | 'pending' | 'authorKnown'>,
+  me: string | null,
+  former: boolean,
+): boolean {
+  if (comment.mine || comment.pending || comment.authorKnown !== true) return false;
+  return canReplyPrivately({
+    authorUserId: comment.authorUserId,
+    me,
+    authorName: comment.authorName,
+    former,
+  });
+}
+
+/** Whether the held members (when held) or the name registry say this person left. */
+function authorLeft(
+  held: WorkspaceMembersData | null,
+  workspaceId: string | null,
+  userId: string | null,
+): boolean {
+  if (userId === null) return false;
+  if (isFormerMember(workspaceId, userId)) return true;
+  if (held === null) return false;
+  return !held.rows.some((r) => r.user_id === userId && r.active === true && r.removed_at === null);
 }
 
 /** Comments this close together from one author are one run. */
@@ -275,9 +321,8 @@ function bodyNodes(body: string, ownTone: boolean, workspaceId: string | null): 
     }
     const label = personMentionLabel(workspaceId, segment.userId);
     if (label === null) return null;
-    return (
+    const pill = (
       <span
-        key={i}
         data-plan-mention={segment.userId}
         className={cn(
           'whitespace-nowrap rounded-full px-1.5 font-medium',
@@ -286,6 +331,17 @@ function bodyNodes(body: string, ownTone: boolean, workspaceId: string | null): 
       >
         {label}
       </span>
+    );
+    // "@all" names no one; every person's pill opens the person card.
+    if (segment.userId.toLowerCase() === ALL_MENTION) return <Fragment key={i}>{pill}</Fragment>;
+    return (
+      <PersonTrigger
+        key={i}
+        userId={segment.userId}
+        {...(isFormerMember(workspaceId, segment.userId) ? { former: true } : {})}
+      >
+        {pill}
+      </PersonTrigger>
     );
   });
 }
@@ -320,9 +376,19 @@ function PlanBubble(props: {
   workspaceId: string | null;
   held: WorkspaceMembersData | null;
   highlighted: boolean;
+  me: string | null;
+  replyPrivately: PlanReplyPrivatelyTarget | null;
 }): ReactElement {
   const layout = useChatLayout();
   const { comment: c, head, tail } = props.row;
+  const target = props.replyPrivately;
+  const authorUserId = c.authorUserId;
+  const replyTo =
+    target !== null &&
+    authorUserId !== null &&
+    showPlanReplyPrivately(c, props.me, authorLeft(props.held, props.workspaceId, authorUserId))
+      ? { target, authorUserId }
+      : null;
   const team = c.visibility === 'team';
   const mine = c.mine;
   // White text on bubble-own; a creators-only note keeps the warn look (ink text).
@@ -333,6 +399,23 @@ function PlanBubble(props: {
       ? (props.held?.profiles.get(c.authorUserId)?.avatarUrl ??
         personAvatar(props.workspaceId, c.authorUserId))
       : null;
+  // The author's photo and name open the person card (a pending own comment
+  // and an author with no id have nothing to open).
+  const authorId = !mine && !c.pending ? authorUserId : null;
+  const asAuthor = (node: ReactElement, display: 'inline' | 'block'): ReactElement =>
+    authorId !== null ? (
+      <PersonTrigger
+        userId={authorId}
+        name={c.authorKnown === true ? c.authorName : null}
+        avatarUrl={avatarSrc}
+        former={authorLeft(props.held, props.workspaceId, authorId)}
+        display={display}
+      >
+        {node}
+      </PersonTrigger>
+    ) : (
+      node
+    );
   return (
     <li
       data-plan-comment-id={c.id}
@@ -345,13 +428,16 @@ function PlanBubble(props: {
     >
       {!mine ? (
         <span className="w-8 shrink-0">
-          {head ? (
-            <Avatar
-              name={c.authorName}
-              role="header"
-              {...(avatarSrc !== null ? { src: avatarSrc } : {})}
-            />
-          ) : null}
+          {head
+            ? asAuthor(
+                <Avatar
+                  name={c.authorName}
+                  role="header"
+                  {...(avatarSrc !== null ? { src: avatarSrc } : {})}
+                />,
+                'block',
+              )
+            : null}
         </span>
       ) : null}
       <div
@@ -363,7 +449,8 @@ function PlanBubble(props: {
       >
         {!mine && head ? (
           <span data-plan-comment-author="" className="truncate text-base font-medium text-fg-2">
-            {role !== null ? `${c.authorName} · ${role}` : c.authorName}
+            {asAuthor(<>{c.authorName}</>, 'inline')}
+            {role !== null ? ` · ${role}` : null}
           </span>
         ) : null}
         <div
@@ -405,6 +492,25 @@ function PlanBubble(props: {
             {formatTime(c.createdAt)}
           </time>
         ) : null}
+        {replyTo !== null ? (
+          <div data-plan-comment-actions="" className="-ml-2 flex items-center">
+            <ReplyPrivatelyButton
+              authorUserId={replyTo.authorUserId}
+              className="min-w-[44px] hover:bg-panel-3"
+              draft={() =>
+                planCommentPrivateReplyDraft({
+                  commentId: c.id,
+                  authorUserId: replyTo.authorUserId,
+                  authorName: c.authorName,
+                  excerpt: resolvePersonMentionText(c.body, props.workspaceId),
+                  whereLabel: replyTo.target.whereLabel,
+                  planId: replyTo.target.planId,
+                  itemId: replyTo.target.itemId,
+                })
+              }
+            />
+          </div>
+        ) : null}
       </div>
     </li>
   );
@@ -419,6 +525,8 @@ export function PlanItemThread(props: {
   workspaceId: string | null;
   me: string | null;
   highlightedId?: string | null;
+  /** Offer Reply privately on others' comments, pointing here. Absent: never. */
+  replyPrivately?: PlanReplyPrivatelyTarget | null;
 }): ReactElement {
   const held =
     props.me !== null && props.workspaceId !== null
@@ -437,6 +545,8 @@ export function PlanItemThread(props: {
             workspaceId={props.workspaceId}
             held={held}
             highlighted={props.highlightedId === row.comment.id}
+            me={props.me}
+            replyPrivately={props.replyPrivately ?? null}
           />
         ),
       )}

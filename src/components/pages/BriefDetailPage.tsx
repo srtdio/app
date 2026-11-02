@@ -1,5 +1,6 @@
 import { mark } from '@/lib/perf-marks';
 import { FORMER_MEMBER } from '@/lib/people-names';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { appPresignCache } from '@/lib/shared-presign';
 import { useSearchJump } from '@/lib/search/jump';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
@@ -715,6 +716,10 @@ export function BriefDetailPage({
     (id) => memberById.get(id) ?? null,
     membersLoaded,
   );
+  // The creator's name opens the person card (a legacy author with no user id: plain text).
+  const creatorId = brief.created_by !== null && brief.created_by !== '' ? brief.created_by : null;
+  const creatorFormer =
+    creatorId !== null && membersLoaded && (memberById.get(creatorId) ?? null) === null;
   // The details as two short lines, the same on phone (under the title) and
   // desktop (the side column): "Raised 15 Jun by Priya Raman", then "Format
   // Carousel" when a format is set. Status and due date live in the top bar.
@@ -730,7 +735,20 @@ export function BriefDetailPage({
             className="ml-1 inline-block h-4 w-28 rounded bg-panel-3 align-middle"
           />
         ) : authorLabel !== '' ? (
-          <> by {authorLabel}</>
+          <>
+            {' by '}
+            {creatorId !== null ? (
+              <PersonTrigger
+                userId={creatorId}
+                name={authorLabel}
+                {...(creatorFormer ? { former: true } : {})}
+              >
+                {authorLabel}
+              </PersonTrigger>
+            ) : (
+              authorLabel
+            )}
+          </>
         ) : null}
       </p>
       {hasFormat ? (
@@ -899,6 +917,7 @@ export function BriefDetailPage({
                 workspaceId={brief.workspace_id}
                 entityType="brief"
                 entityId={briefId}
+                whereLabel={brief.title}
                 focusCommentId={focusCommentId}
               />
             </section>

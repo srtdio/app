@@ -3300,7 +3300,7 @@ describe('@mentions in bubbles', () => {
     );
   });
 
-  it('tapping another person opens the DM via the opener; my own name is inert', () => {
+  it('a mention tap opens the person card (me and a former member too), never a DM', () => {
     const onOpen = vi.fn();
     const nodes = renderBodyWithMentions(body, false, {
       nameOf,
@@ -3310,17 +3310,26 @@ describe('@mentions in bubbles', () => {
     const els = nodes.filter(isValidElement) as ReactElement<Record<string, unknown>>[];
     const ben = els.find((el) => el.props['data-mention'] === BEN);
     const me = els.find((el) => el.props['data-mention'] === ME);
+    const gone = els.find((el) => el.props['data-mention'] === GONE);
     expect(ben?.type).toBe(PressableRow);
     expect(String(ben?.props.className)).toContain('before:h-[44px]');
-    (ben?.props.onClick as () => void)();
-    expect(onOpen).toHaveBeenCalledWith(BEN);
-    expect(me?.type).toBe('span');
-    expect(me?.props.onClick).toBeUndefined();
+    const target = {} as HTMLElement;
+    const event = { stopPropagation: vi.fn(), currentTarget: target };
+    (ben?.props.onClick as (e: typeof event) => void)(event);
+    expect(event.stopPropagation).toHaveBeenCalled();
+    expect(onOpen).toHaveBeenCalledWith({ userId: BEN }, target);
+    expect(me?.type).toBe(PressableRow);
+    (me?.props.onClick as (e: typeof event) => void)(event);
+    expect(onOpen).toHaveBeenLastCalledWith({ userId: ME }, target);
+    expect(gone?.type).toBe(PressableRow);
+    (gone?.props.onClick as (e: typeof event) => void)(event);
+    expect(onOpen).toHaveBeenLastCalledWith({ userId: GONE, former: true }, target);
   });
 
-  it("inside our DM the other person's name is inert", () => {
+  it("inside our DM the other person's name opens the card too", () => {
     const html = markup(false, vi.fn(), BEN);
-    expect(html).not.toContain('<button');
+    expect(html).toContain('<button');
+    expect(html).toContain(`data-person-trigger="${BEN}"`);
   });
 
   it('a bubble and its reply quote show names, never tokens', () => {

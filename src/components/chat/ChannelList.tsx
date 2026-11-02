@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { createPressIntent, type PressIntent } from '@/lib/chat/press-intent';
@@ -619,17 +620,35 @@ export function channelRowBody(props: {
         )}
       </span>
     );
+  const avatar = (
+    <Avatar
+      name={chatDisplayName(channel)}
+      {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
+      role="profile"
+      kind={wide ? 'group' : 'person'}
+    />
+  );
+  // A person tile's photo opens the person card; the rest of the tile still
+  // opens the chat. Never while selecting (a tap there toggles the tile).
+  const peerId =
+    channel.channelType === 'dm' && !props.selecting ? (channel.peerUserId ?? null) : null;
   const photo = (
     <span
       {...(wide ? { 'data-group-photo': '' } : { 'data-person-photo': '' })}
       className={wide ? GROUP_TILE_PHOTO : PERSON_TILE_PHOTO}
     >
-      <Avatar
-        name={chatDisplayName(channel)}
-        {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
-        role="profile"
-        kind={wide ? 'group' : 'person'}
-      />
+      {peerId !== null ? (
+        <PersonTrigger
+          userId={peerId}
+          name={chatDisplayName(channel)}
+          avatarUrl={channel.avatarUrl}
+          display="block"
+        >
+          {avatar}
+        </PersonTrigger>
+      ) : (
+        avatar
+      )}
     </span>
   );
   if (wide) {

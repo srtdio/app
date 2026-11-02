@@ -1,5 +1,13 @@
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type {
   FormEvent,
   KeyboardEvent,
@@ -96,7 +104,22 @@ import {
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
-import { clearDraft, EMPTY_DRAFT, getDraft, setDraft, type DraftFile } from '@/lib/chat/drafts';
+import {
+  clearDraft,
+  EMPTY_DRAFT,
+  getDraft,
+  setDraft,
+  setPrivateReplyDraft,
+  subscribeDrafts,
+  type DraftFile,
+} from '@/lib/chat/drafts';
+import {
+  privateReplyFromDraft,
+  privateReplyHeader,
+  privateReplyLine,
+  type PrivateReply,
+  type PrivateReplyDraft,
+} from '@/lib/chat/private-reply';
 import { deletedMessageLabel } from '@/lib/chat/thread';
 import { continueList, isListNewlineKeydown, listPickerOpen } from '@/lib/chat/list-continue';
 import {
@@ -555,6 +578,34 @@ export function ReplyBar(props: {
   );
 }
 
+/**
+ * The Reply privately quote above the input: the reply bar's grammar (accent
+ * rule, panel-3 box), "<Full name> · <where>" over one line of their words,
+ * and the reply bar's 44px X, which removes the quote (the DM stays a DM).
+ * `preview` is the excerpt's line with mentions already resolved.
+ */
+export function PrivateReplyBar(props: {
+  quote: Pick<PrivateReplyDraft, 'authorName' | 'whereLabel'>;
+  preview: string;
+  onRemove: () => void;
+}): ReactElement {
+  return (
+    <div data-private-reply-bar="">
+      <ReplyQuoteBox
+        author={privateReplyHeader(props.quote.authorName, props.quote.whereLabel)}
+        preview={props.preview}
+        oneLine
+        className={NO_TOUCH_SELECT}
+        trailing={
+          <IconButton label="Cancel reply" className="shrink-0" onClick={props.onRemove}>
+            <IconX size={ICON_SIZE.control} />
+          </IconButton>
+        }
+      />
+    </div>
+  );
+}
+
 /** The hash picker state for a text and caret: the query to search, or closed. */
 export function hashPickerQuery(input: {
   enabled: boolean;
@@ -619,6 +670,8 @@ export type ComposerSend = (
   sharedPostIds: string[],
   reply: ReplyQuote | null,
   sharedBriefIds: string[],
+  /** Reply privately: the quote this DM send carries; absent on every other send. */
+  privateReply?: PrivateReply,
 ) => void;
 
 /**
@@ -636,10 +689,23 @@ export function dispatchSend(
     sharedPostIds: string[];
     reply: ReplyQuote | null;
     sharedBriefIds: string[];
+    /** Reply privately: passed as onSend's sixth argument only when present. */
+    privateReply?: PrivateReply | null;
   },
 ): boolean {
   try {
     mark('chat:send:tap');
+    if (draft.privateReply != null) {
+      onSend(
+        draft.text,
+        draft.attachments,
+        draft.sharedPostIds,
+        draft.reply,
+        draft.sharedBriefIds,
+        draft.privateReply,
+      );
+      return true;
+    }
     onSend(draft.text, draft.attachments, draft.sharedPostIds, draft.reply, draft.sharedBriefIds);
     return true;
   } catch (error) {
@@ -816,6 +882,8 @@ export async function sendVoiceRecording(
   onSend: ComposerSend,
   upload: AttachmentUploader | undefined,
   reply: ReplyQuote | null,
+  /** Reply privately: the DM's quote rides the voice note too. */
+  privateReply: PrivateReply | null = null,
 ): Promise<'too-short' | 'sent' | 'refused'> {
   if (rec === null || rec.blob.size === 0 || rec.durationMs < MIN_VOICE_NOTE_MS) {
     return 'too-short';
@@ -832,6 +900,7 @@ export async function sendVoiceRecording(
     sharedPostIds: [],
     reply,
     sharedBriefIds: [],
+    privateReply,
   });
   return taken ? 'sent' : 'refused';
 }
@@ -868,6 +937,15 @@ export function canScheduleDraft(input: {
   canSend: boolean;
 }): boolean {
   return input.scheduling && !input.editing && input.canSend;
+}
+
+/**
+ * Whether Schedule is offered (the tray tile, the hold, the chevron): the chat
+ * has schedule wiring and no Reply privately quote is attached (a quoted
+ * reply sends now, never later). Pure.
+ */
+export function scheduleOfferedFor(input: { wired: boolean; quoteAttached: boolean }): boolean {
+  return input.wired && !input.quoteAttached;
 }
 
 /** One picked file's upload while its draft is being scheduled. */
@@ -1245,6 +1323,18 @@ export function Composer(props: ComposerProps): ReactElement {
   // Scheduling: the open chat's wiring (absent in the thread view), schedule
   // mode's send time, which surface is open and what a pick does there.
   const schedule = useChatSchedule(channelId);
+  // Reply privately: this DM's pending quote, from the draft store (Reply
+  // privately writes it before the DM opens, so the first frame holds it; no
+  // read). While it is attached, Schedule is hidden: the quote sends now.
+  const privateReply = useSyncExternalStore(
+    subscribeDrafts,
+    () => (channelId !== undefined ? getDraft(channelId).privateReply : null),
+    () => null,
+  );
+  const scheduleOffered = scheduleOfferedFor({
+    wired: schedule !== null,
+    quoteAttached: privateReply !== null,
+  });
   const [scheduleAt, setScheduleAt] = useState<Date | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState<{
     purpose: 'draft' | 'mode';
@@ -1284,11 +1374,11 @@ export function Composer(props: ComposerProps): ReactElement {
           sharedBriefCount: sharedBriefs.length,
         });
   const schedulable = canScheduleDraft({
-    scheduling: schedule !== null,
+    scheduling: scheduleOffered,
     editing: editing !== undefined,
     canSend,
   });
-  const scheduling = scheduleAt !== null && schedule !== null && editing === undefined;
+  const scheduling = scheduleAt !== null && scheduleOffered && editing === undefined;
   const schedulableRef = useRef(schedulable);
   schedulableRef.current = schedulable;
 
@@ -1589,6 +1679,7 @@ export function Composer(props: ComposerProps): ReactElement {
           sharedPostIds: draft.sharedPostIds,
           reply: props.reply?.quote ?? null,
           sharedBriefIds: draft.sharedBriefIds,
+          privateReply: privateReply !== null ? privateReplyFromDraft(privateReply) : null,
         },
         library,
       ),
@@ -1617,7 +1708,7 @@ export function Composer(props: ComposerProps): ReactElement {
 
   /** Open the Schedule sheet (phone) or menu (laptop): a draft schedules at once on a pick. */
   function openSchedule(): void {
-    if (schedule === null) return;
+    if (schedule === null || !scheduleOffered) return;
     setScheduleOpen(
       schedulableRef.current
         ? {
@@ -1850,9 +1941,11 @@ export function Composer(props: ComposerProps): ReactElement {
         props.onSend,
         props.uploadFile,
         props.reply?.quote ?? null,
+        privateReply !== null ? privateReplyFromDraft(privateReply) : null,
       );
       if (outcome === 'sent') {
         deleteVoiceDraft(channelId);
+        if (channelId !== undefined) setPrivateReplyDraft(channelId, null);
         props.onCancelReply?.();
       } else if (outcome === 'too-short') {
         deleteVoiceDraft(channelId);
@@ -1882,10 +1975,13 @@ export function Composer(props: ComposerProps): ReactElement {
         props.onSend,
         props.uploadFile,
         props.reply?.quote ?? null,
+        privateReply !== null ? privateReplyFromDraft(privateReply) : null,
       );
       if (outcome === 'too-short') toast.show({ title: VOICE_TOO_SHORT_COPY });
-      else if (outcome === 'sent') props.onCancelReply?.();
-      else toast.show({ title: "Couldn't send the voice note. Try again." });
+      else if (outcome === 'sent') {
+        if (channelId !== undefined) setPrivateReplyDraft(channelId, null);
+        props.onCancelReply?.();
+      } else toast.show({ title: "Couldn't send the voice note. Try again." });
     } catch (error) {
       logger.error('chat composer: voice note send failed', { error: String(error) });
       toast.show({ title: "Couldn't send the voice note. Try again." });
@@ -2091,6 +2187,16 @@ export function Composer(props: ComposerProps): ReactElement {
           />
         ) : null}
 
+        {!bars.editing && privateReply !== null ? (
+          <PrivateReplyBar
+            quote={privateReply}
+            preview={resolveMentionText(privateReplyLine(privateReply.excerpt), nameOf)}
+            onRemove={() => {
+              if (channelId !== undefined) setPrivateReplyDraft(channelId, null);
+            }}
+          />
+        ) : null}
+
         {editing === undefined &&
         (pending.length > 0 ||
           library.length > 0 ||
@@ -2240,7 +2346,10 @@ export function Composer(props: ComposerProps): ReactElement {
               {canAttach ? (
                 <ComposerTray
                   layout={layout}
-                  schedule={props.noSchedule !== true}
+                  schedule={scheduleOfferedFor({
+                    wired: props.noSchedule !== true,
+                    quoteAttached: privateReply !== null,
+                  })}
                   draft={draftEnabled}
                   plan={planEnabled}
                   onPick={(id) => {

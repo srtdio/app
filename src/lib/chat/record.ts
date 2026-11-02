@@ -17,6 +17,7 @@ import type { Client } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import type { ChatMessageRow } from '@/lib/chat/thread';
 import type { AttachmentMetaMap } from '@/lib/chat/attachments';
+import type { PrivateReplyKind } from '@/lib/chat/private-reply';
 
 type Functions = Database['public']['Functions'];
 
@@ -46,8 +47,46 @@ export interface SendRecordParams {
   attachmentMeta?: AttachmentMetaMap;
   /** The source message's id when this send forwards it. */
   forwardedFromMessageId?: string | null;
+  /**
+   * Reply privately: the quoted source. The send then goes through
+   * chat_private_reply_send (same id, body, mentions and files; the server
+   * snapshots the quote). Absent or null: chat_message_send.
+   */
+  privateReply?: { kind: PrivateReplyKind; sourceId: string } | null;
   /** Override for tests; defaults to SEND_TIMEOUT_MS. */
   timeoutMs?: number;
+}
+
+/**
+ * chat_private_reply_send's args for one send: the same id, trace, body,
+ * mentions, files and meta chat_message_send would get (empty ones omitted),
+ * plus the quoted source. Pure.
+ */
+export function privateReplySendArgs(
+  params: Pick<
+    SendRecordParams,
+    'id' | 'channelId' | 'traceId' | 'body' | 'attachmentAssetIds' | 'mentions' | 'attachmentMeta'
+  >,
+  source: { kind: PrivateReplyKind; sourceId: string },
+): Functions['chat_private_reply_send']['Args'] {
+  const body = params.body.trim();
+  return {
+    p_id: params.id,
+    p_channel_id: params.channelId,
+    p_trace_id: params.traceId,
+    p_source_kind: source.kind,
+    p_source_id: source.sourceId,
+    ...(body !== '' ? { p_body: body } : {}),
+    ...(params.attachmentAssetIds.length > 0
+      ? { p_attachment_asset_ids: [...params.attachmentAssetIds] }
+      : {}),
+    ...(params.mentions !== undefined && params.mentions.length > 0
+      ? { p_mentions: [...params.mentions] }
+      : {}),
+    ...(params.attachmentMeta !== undefined && Object.keys(params.attachmentMeta).length > 0
+      ? { p_attachment_meta: params.attachmentMeta }
+      : {}),
+  };
 }
 
 /**
@@ -107,10 +146,17 @@ export async function sendMessageRecord(params: SendRecordParams): Promise<SendR
       : {}),
   };
   const reason = (): 'timeout' | 'error' => (controller.signal.aborted ? 'timeout' : 'error');
+  const source = params.privateReply ?? null;
+  // Reply privately records through its own proc; the abort, the error code
+  // and the HTTP status travel the same way, so a refusal still reads as one.
+  const proc = source !== null ? 'chat_private_reply_send' : 'chat_message_send';
   try {
-    const { data, error, status } = await params.client
-      .rpc('chat_message_send', args)
-      .abortSignal(controller.signal);
+    const { data, error, status } =
+      source !== null
+        ? await params.client
+            .rpc('chat_private_reply_send', privateReplySendArgs(params, source))
+            .abortSignal(controller.signal)
+        : await params.client.rpc('chat_message_send', args).abortSignal(controller.signal);
     if (error) {
       return {
         ok: false,
@@ -121,7 +167,7 @@ export async function sendMessageRecord(params: SendRecordParams): Promise<SendR
       };
     }
     if (data === null || data === undefined) {
-      return { ok: false, reason: 'error', message: 'chat_message_send returned no row' };
+      return { ok: false, reason: 'error', message: `${proc} returned no row` };
     }
     return { ok: true, row: data as ChatMessageRow };
   } catch (error) {

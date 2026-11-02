@@ -88,6 +88,7 @@ import {
 } from '@/lib/chat/send-errors';
 import { headerHex, readHeader, recorderMimeOf } from '@/lib/chat/audio-sniff';
 import { logger } from '@/lib/logger';
+import type { PrivateReplyKind } from '@/lib/chat/private-reply';
 import {
   rowToThreadMessage,
   type LocalMessageContent,
@@ -155,6 +156,8 @@ export interface SendFlowDeps {
     attachmentMeta: AttachmentMetaMap;
     /** Save to notes: the source message (p_forwarded_from_message_id); absent on ordinary sends. */
     forwardedFromMessageId?: string;
+    /** Reply privately: the quoted source (chat_private_reply_send); absent on ordinary sends. */
+    privateReply?: { kind: PrivateReplyKind; sourceId: string };
   }) => Promise<SendRecordResult>;
   /**
    * Agora publish for live delivery, or undefined while there is no live
@@ -254,6 +257,14 @@ export async function runSend(deps: SendFlowDeps, input: SendInput): Promise<Sen
       ...(input.local.forwardedFromMessageId !== undefined
         ? { forwardedFromMessageId: input.local.forwardedFromMessageId }
         : {}),
+      ...(input.local.privateReply != null
+        ? {
+            privateReply: {
+              kind: input.local.privateReply.kind,
+              sourceId: input.local.privateReply.sourceId,
+            },
+          }
+        : {}),
     });
   // A saved copy (Save to notes) names nobody: p_mentions stays null.
   let mentions =
@@ -310,7 +321,11 @@ export async function runSend(deps: SendFlowDeps, input: SendInput): Promise<Sen
       id: input.id,
       channelId: input.channelId,
       text: input.text,
-      local: input.local,
+      // The live copy carries the record's quote snapshot (the server's excerpt and where).
+      local:
+        message.privateReply != null
+          ? { ...input.local, privateReply: message.privateReply }
+          : input.local,
     });
   } catch (error) {
     deps.onLiveWarning({ trace_id: input.traceId, message_id: input.id, error: String(error) });

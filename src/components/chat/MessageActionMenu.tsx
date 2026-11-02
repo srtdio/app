@@ -19,6 +19,7 @@ import {
   IconStarFilled,
   IconText,
   IconTrash,
+  IconUser,
   IconX,
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
@@ -41,6 +42,8 @@ import { STAR_LABEL, UNSTAR_LABEL } from '@/lib/chat/stars';
 import { REMOVE_FILE_MENU_LABEL } from '@/lib/chat/remove-files';
 import { useModalFocus } from '@/lib/modal-focus';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
+import { REPLY_PRIVATELY, replyPrivatelyTo } from '@/lib/chat/private-reply';
+import { personFirstName } from '@/lib/person-card';
 
 /** Quick-react row offered when a message's action menu is opened; "+" opens the picker after it. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '👌', '🙏'] as const;
@@ -180,6 +183,14 @@ interface MessageActionMenuProps {
   onStar?: () => void;
   onReact: (emoji: string) => void;
   onReply: () => void;
+  /**
+   * Offers "Reply privately" right under Reply (see canReplyPrivately: someone
+   * else's message in a group, from a current member).
+   */
+  canReplyPrivately?: boolean;
+  /** The sender's display name; the row's grey hint reads "to <first name>". */
+  replyPrivatelyName?: string;
+  onReplyPrivately?: () => void;
   onCopy: () => void;
   /** Types the "Mark as" submenu offers; empty hides the row. */
   markOptions?: readonly MarkType[];
@@ -262,6 +273,9 @@ type MenuItemProps = Pick<
   MessageActionMenuProps,
   | 'canCopy'
   | 'onReply'
+  | 'canReplyPrivately'
+  | 'replyPrivatelyName'
+  | 'onReplyPrivately'
   | 'onCopy'
   | 'canTranscribe'
   | 'onTranscribe'
@@ -331,8 +345,9 @@ export const SELECT_TEXT_LABEL = 'Select';
 export const MORE_LABEL = 'More';
 
 /**
- * The main view in display order: Reply, Copy, Forward, Edit, Star (or
- * Unstar), More, then Delete last (or the locked line). Everything else sits
+ * The main view in display order: Reply, Reply privately (someone else's
+ * message in a group), Copy, Forward, Edit, Star (or Unstar), More, then
+ * Delete last (or the locked line). Everything else sits
  * under More (see moreMenuItems); More shows only when it has a row. No
  * dividers. Rows that do not apply are not rendered. Pure (no hooks) so the
  * row set is unit-tested without a DOM.
@@ -351,6 +366,17 @@ export function messageMenuItems(
       run: props.onReply,
     },
   ];
+  if (props.canReplyPrivately === true) {
+    const first = personFirstName(props.replyPrivatelyName ?? '');
+    items.push({
+      kind: 'action',
+      key: 'reply-privately',
+      label: REPLY_PRIVATELY,
+      icon: <IconUser size={size} />,
+      ...(first !== '' ? { hint: replyPrivatelyTo(first) } : {}),
+      run: () => props.onReplyPrivately?.(),
+    });
+  }
   if (props.canCopy) {
     items.push({
       kind: 'action',

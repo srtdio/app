@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Avatar, avatarFillFor } from '@/components/ui/Avatar';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Button } from '@/components/ui/Button';
 import { tagClass } from '@/components/ui/Tag';
-import { splitAllMentions } from '@/lib/chat/mentions';
+import { FORMER_MEMBER, splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { type FormatGlyphToken } from '@/components/ui/format-icon';
 import { postFormatLabel } from '@/lib/post-format';
@@ -240,17 +241,46 @@ function newestEntry(group: readonly ActivityItem[]): ActivityItem | undefined {
   return newest;
 }
 
+/**
+ * An actor's photo or name wrapped in its person card trigger; the card's tap
+ * stops there, the rest of the card keeps its own tap. No actor id: as is.
+ */
+function asActor(
+  entry: Pick<ActivityItem, 'actorId' | 'actorName' | 'actorAvatarUrl'>,
+  node: ReactElement,
+  display: 'inline' | 'block',
+): ReactElement {
+  if (entry.actorId === null) return node;
+  return (
+    <PersonTrigger
+      userId={entry.actorId}
+      name={entry.actorName}
+      avatarUrl={entry.actorAvatarUrl}
+      {...(entry.actorName === FORMER_MEMBER ? { former: true } : {})}
+      display={display}
+    >
+      {node}
+    </PersonTrigger>
+  );
+}
+
 /** One expanded row's author: their photo and full name above the row's text. */
 function EntryAuthor({ entry }: { entry: ActivityItem }) {
   if (entry.actorName === null) return null;
   return (
     <div data-activity-entry-author="" className="mb-0.5 flex items-center gap-1.5">
-      <Avatar
-        name={entry.actorName}
-        {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
-        role="inline"
-      />
-      <span className="truncate text-sm font-medium text-fg-3">{entry.actorName}</span>
+      {asActor(
+        entry,
+        <Avatar
+          name={entry.actorName}
+          {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
+          role="inline"
+        />,
+        'block',
+      )}
+      <span className="truncate text-sm font-medium text-fg-3">
+        {asActor(entry, <>{entry.actorName}</>, 'inline')}
+      </span>
     </div>
   );
 }
@@ -549,13 +579,17 @@ export function ActivityCard({
         >
           <div className="min-w-0 flex-1">
             <div className="mb-1.5 flex items-center gap-[7px]">
-              {actorName !== null ? (
-                <Avatar
-                  name={actorName}
-                  {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
-                  role="inline"
-                />
-              ) : null}
+              {actorName !== null
+                ? asActor(
+                    actorEntry,
+                    <Avatar
+                      name={actorName}
+                      {...(actorAvatarUrl !== null ? { src: actorAvatarUrl } : {})}
+                      role="inline"
+                    />,
+                    'block',
+                  )
+                : null}
               <span className="truncate text-sm font-medium text-fg-3">
                 {alert !== null ? alertTopLine(lead, alert) : actorLine(actorEntry, actorName)}
               </span>

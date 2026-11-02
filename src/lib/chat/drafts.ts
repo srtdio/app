@@ -7,7 +7,7 @@
 // The map is mirrored to localStorage per user and workspace (setDraftScope),
 // so a reload brings drafts back: text, caret, reply and cards only. Picked
 // files (a File and its object URL) stay in memory: a reload drops them, the
-// rest of the draft stays. Writes are debounced and flushed on pagehide and
+// rest of the draft stays. A Reply privately quote (privateReply) persists too. Writes are debounced and flushed on pagehide and
 // when the tab hides. Without a scope the drafts are memory only. Sign-out
 // clears every draft (clearAllDrafts); drafts for chats no longer in the
 // user's roster are dropped (pruneDrafts). Every storage call is guarded: a
@@ -17,6 +17,7 @@ import type { PostCardFields } from '@srtdio/posts';
 import type { BriefCardFields } from '@/lib/chat/briefs';
 import type { ReplyQuote } from '@/lib/chat/attachments';
 import { isNotesChannelId } from '@/lib/chat/notes';
+import { parsePrivateReplyDraft, type PrivateReplyDraft } from '@/lib/chat/private-reply';
 
 /** A picked file waiting in a draft (the composer's chip). */
 export interface DraftFile {
@@ -50,6 +51,8 @@ interface ChannelDraft {
   sharedPosts: PostCardFields[];
   sharedBriefs: BriefCardFields[];
   pendingFiles: DraftFile[];
+  /** The Reply privately quote this DM's next message carries; null when none. */
+  privateReply: PrivateReplyDraft | null;
 }
 
 export const EMPTY_DRAFT: ChannelDraft = Object.freeze({
@@ -59,6 +62,7 @@ export const EMPTY_DRAFT: ChannelDraft = Object.freeze({
   sharedPosts: [],
   sharedBriefs: [],
   pendingFiles: [],
+  privateReply: null,
 }) as ChannelDraft;
 
 /** The one localStorage key every persisted draft lives under. */
@@ -160,6 +164,7 @@ function parseDraft(value: unknown): ChannelDraft | null {
     sharedPosts: sharedPosts as unknown as PostCardFields[],
     sharedBriefs: sharedBriefs as unknown as BriefCardFields[],
     pendingFiles: [],
+    privateReply: parsePrivateReplyDraft(value.privateReply),
   };
   return isEmptyDraft(draft) ? null : draft;
 }
@@ -203,8 +208,8 @@ function removeBlob(storage: DraftStorage | null): void {
 }
 
 function toPersisted(draft: ChannelDraft): PersistedDraft | null {
-  const { text, caret, reply, sharedPosts, sharedBriefs } = draft;
-  const kept: PersistedDraft = { text, caret, reply, sharedPosts, sharedBriefs };
+  const { text, caret, reply, sharedPosts, sharedBriefs, privateReply } = draft;
+  const kept: PersistedDraft = { text, caret, reply, sharedPosts, sharedBriefs, privateReply };
   // A draft holding only picked files persists as absent.
   return isEmptyDraft({ ...kept, pendingFiles: [] }) ? null : kept;
 }
@@ -311,7 +316,8 @@ export function isEmptyDraft(draft: ChannelDraft): boolean {
     draft.reply === null &&
     draft.sharedPosts.length === 0 &&
     draft.sharedBriefs.length === 0 &&
-    draft.pendingFiles.length === 0
+    draft.pendingFiles.length === 0 &&
+    draft.privateReply === null
   );
 }
 
@@ -322,7 +328,8 @@ function sameDraft(a: ChannelDraft, b: ChannelDraft): boolean {
     a.reply === b.reply &&
     a.sharedPosts === b.sharedPosts &&
     a.sharedBriefs === b.sharedBriefs &&
-    a.pendingFiles === b.pendingFiles
+    a.pendingFiles === b.pendingFiles &&
+    a.privateReply === b.privateReply
   );
 }
 
@@ -353,6 +360,16 @@ export function setDraft(channelId: string, patch: Partial<ChannelDraft>): void 
   }
   scheduleWrite();
   bump();
+}
+
+/**
+ * Attach (or with null, remove) the Reply privately quote on a DM's draft.
+ * Reply privately calls this with the DM's id right before the DM opens, so
+ * the composer paints the quote on its first frame; the rest of the draft
+ * (text, files) stays.
+ */
+export function setPrivateReplyDraft(channelId: string, draft: PrivateReplyDraft | null): void {
+  setDraft(channelId, { privateReply: draft });
 }
 
 /** Drop one channel's draft (a successful send). */

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  chatPrivateReplySend,
   dmChannelEnsure,
   groupCreate,
   groupLeave,
@@ -142,6 +143,37 @@ describe('dmChannelEnsure', () => {
   it('returns ok:false on a proc error', async () => {
     const { client } = makeClient({ data: null, error: { message: 'workspace_member_only' } });
     const result = await dmChannelEnsure(client, args);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'workspace_member_only', message: 'workspace_member_only' },
+    });
+  });
+});
+
+describe('chatPrivateReplySend', () => {
+  const args = {
+    p_id: '00000000-0000-0000-0000-000000000010',
+    p_channel_id: 'dm_abc',
+    p_trace_id: TRACE,
+    p_source_kind: 'chat',
+    p_source_id: '00000000-0000-0000-0000-000000000011',
+    p_body: 'Sure, will do',
+    p_mentions: [],
+    p_attachment_asset_ids: [],
+    p_attachment_meta: [],
+  };
+
+  it('forwards the proc name + args on success', async () => {
+    const row = { id: args.p_id, private_reply: { kind: 'chat' } };
+    const { client, rpc } = makeClient({ data: row, error: null });
+    const result = await chatPrivateReplySend(client, args);
+    expect(result).toEqual({ ok: true, data: row });
+    expect(rpc).toHaveBeenCalledWith('chat_private_reply_send', args);
+  });
+
+  it('returns ok:false on a proc error', async () => {
+    const { client } = makeClient({ data: null, error: { message: 'workspace_member_only' } });
+    const result = await chatPrivateReplySend(client, args);
     expect(result).toEqual({
       ok: false,
       error: { code: 'workspace_member_only', message: 'workspace_member_only' },

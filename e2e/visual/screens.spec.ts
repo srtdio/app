@@ -1,13 +1,16 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
+import type { Row } from '../fixtures/postgrest';
 import {
   buildWorld,
   COLLEAGUE_A,
   COLLEAGUE_B,
   DM_CHANNEL,
+  GROUP_CHANNEL,
   GROUP_NAME,
   ME,
+  PEER,
   PEER_NAME,
   PLAN_CONCEPT_ITEM,
   PLAN_ID,
@@ -1179,6 +1182,341 @@ for (const dark of [false, true]) {
     steps: (page) => openNewChatBlocked(page, false),
   });
 }
+
+// The person card and Reply privately (2 Nov 2026). The card opens from a
+// person's photo, name or @mention ([data-person-trigger]): a Sheet on phone
+// (iPhone light and dark projects), a popover beside the photo on laptop (light,
+// plus a dark shot). Its three states: another member (Message), me (Message
+// yourself) and a removed member (No longer in this workspace). Reply privately
+// shows in a group message's menu and on a post comment row; the DM it opens
+// carries the quote strip above the composer, and the sent message carries the
+// quote in its bubble.
+
+/** The group message Leo sends last (the menu's target). */
+const GROUP_PLAIN_BODY = 'Moodboard is up in the brief.';
+/** Leo's group message that tags ME (the "Message yourself" trigger). */
+const GROUP_MENTION_BODY = `@[${ME}] can you check the hook before 5pm?`;
+/** Priya's comment on Monday carousel (Reply privately on its row). */
+const PEER_COMMENT_ID = '0190f200-0000-7000-8000-0000000000d1';
+const PEER_COMMENT_BODY = 'Can the cover use the morning shot?';
+/** The quote's words in the DM strip and in the received bubble. */
+const QUOTE_EXCERPT = 'Love the new cover shot, ship it today.';
+/** Priya's DM reply that carries a quote of ME's comment. */
+const QUOTED_REPLY_BODY = 'Fair point, I will ask the team.';
+const QUOTED_REPLY_ID = '0190b000-0000-7000-8a00-0000000000e1';
+const ME_COMMENT_ID = '0190f200-0000-7000-8000-0000000000d2';
+
+/** A group chat message row in the fixture shape. */
+function groupMessage(id: string, sender: string, body: string, at: number): Row {
+  return {
+    id,
+    channel_id: GROUP_CHANNEL,
+    workspace_id: WORKSPACE_ID,
+    sender_user_id: sender,
+    body,
+    mentions: null,
+    attachment_asset_ids: null,
+    shared_post_ids: null,
+    shared_brief_ids: null,
+    reply_to_message_id: null,
+    forwarded_from_message_id: null,
+    attachment_meta: null,
+    agora_event_id: null,
+    created_at: new Date(at).toISOString(),
+    edited_at: null,
+    deleted_at: null,
+    thread_root_message_id: null,
+    private_reply: null,
+  };
+}
+
+/** Leo's two newest group messages: one tags ME, the last is plain. */
+function seedGroupPeople(network: HarnessNetwork): void {
+  (network.world.tables.chat_messages ??= []).push(
+    groupMessage(
+      '0190b000-0000-7000-8a00-0000000000c1',
+      COLLEAGUE_A,
+      GROUP_MENTION_BODY,
+      NOW - 120_000,
+    ),
+    groupMessage(
+      '0190b000-0000-7000-8a00-0000000000c2',
+      COLLEAGUE_A,
+      GROUP_PLAIN_BODY,
+      NOW - 60_000,
+    ),
+  );
+}
+
+/** Ana left the workspace (her messages stay in the group). */
+function seedRemovedColleague(network: HarnessNetwork): void {
+  for (const m of network.world.tables.workspace_members ?? []) {
+    if (m.user_id !== COLLEAGUE_B) continue;
+    m.active = false;
+    m.removed_at = new Date(NOW - 3 * 86_400_000).toISOString();
+  }
+}
+
+/** A post comment row on Monday carousel in the fixture shape. */
+function postComment(id: string, author: string, body: string, at: number): Row {
+  return {
+    id,
+    workspace_id: WORKSPACE_ID,
+    entity_type: 'post',
+    entity_id: POST,
+    author_user_id: author,
+    body,
+    parent_comment_id: null,
+    attachment_asset_ids: null,
+    mentions: null,
+    created_at: new Date(at).toISOString(),
+    edited_at: null,
+    deleted_at: null,
+    legacy_author_name: null,
+    legacy_author_email: null,
+    ledger_seq: null,
+    ledger_batch_id: null,
+    resolved_at: null,
+    resolved_by: null,
+    resolved_version_id: null,
+    resolution_note: null,
+    asked_at: null,
+    asked_by: null,
+    sent_back_at: null,
+    sent_back_by: null,
+    closed_at: null,
+    closed_by: null,
+    accepted_at: null,
+    accepted_by: null,
+    unaccepted_at: null,
+    unaccepted_by: null,
+  };
+}
+
+/** Priya's comment on Monday carousel: its row offers Reply privately. */
+function seedPeerComment(network: HarnessNetwork): void {
+  (network.world.tables.comments ??= []).push(
+    postComment(PEER_COMMENT_ID, PEER, PEER_COMMENT_BODY, NOW - 60_000),
+  );
+}
+
+/** The DM's draft holds a Reply privately quote of Priya's comment (device storage). */
+async function seedPrivateReplyDraft(_network: HarnessNetwork, page: Page): Promise<void> {
+  const blob = {
+    userId: ME,
+    byWorkspace: {
+      [WORKSPACE_ID]: {
+        [DM_CHANNEL]: {
+          text: '',
+          caret: 0,
+          reply: null,
+          sharedPosts: [],
+          sharedBriefs: [],
+          privateReply: {
+            kind: 'comment',
+            sourceId: PEER_COMMENT_ID,
+            authorUserId: PEER,
+            authorName: PEER_NAME,
+            excerpt: QUOTE_EXCERPT,
+            whereLabel: 'Monday carousel',
+            link: {
+              kind: 'comment',
+              entityType: 'post',
+              entityId: POST,
+              commentId: PEER_COMMENT_ID,
+            },
+          },
+        },
+      },
+    },
+  };
+  await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [
+    'sorted:chat:drafts:v1',
+    JSON.stringify(blob),
+  ] as const);
+}
+
+/** Priya's newest DM message quotes ME's comment on Monday carousel. */
+function seedQuotedReply(network: HarnessNetwork): void {
+  (network.world.tables.comments ??= []).push(
+    postComment(ME_COMMENT_ID, ME, QUOTE_EXCERPT, NOW - 3_600_000),
+  );
+  (network.world.tables.chat_messages ??= []).push({
+    ...groupMessage(QUOTED_REPLY_ID, PEER, QUOTED_REPLY_BODY, NOW - 10_000),
+    channel_id: DM_CHANNEL,
+    private_reply: {
+      kind: 'comment',
+      source_id: ME_COMMENT_ID,
+      author_user_id: ME,
+      excerpt: QUOTE_EXCERPT,
+      where_label: 'Monday carousel',
+      source_created_at: new Date(NOW - 3_600_000).toISOString(),
+      link: { entity_type: 'post', entity_id: POST, comment_id: ME_COMMENT_ID },
+    },
+  });
+}
+
+/** The last visible match (the newest row in a thread). */
+async function lastVisible(locator: Locator, what: string): Promise<Locator> {
+  const until = Date.now() + READY_MS;
+  while (Date.now() < until) {
+    const count = await locator.count().catch(() => 0);
+    for (let i = count - 1; i >= 0; i -= 1) {
+      const one = locator.nth(i);
+      if (await one.isVisible().catch(() => false)) return one;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error(`not reached: ${what}`);
+}
+
+/** Wait until the open thread stops moving (its newest row holds still for a few frames). */
+async function threadStill(page: Page): Promise<void> {
+  const rows = page.locator('[data-msg-id]');
+  let last = '';
+  let still = 0;
+  const until = Date.now() + READY_MS;
+  while (Date.now() < until && still < 4) {
+    const box = await rows
+      .last()
+      .boundingBox()
+      .catch(() => null);
+    const now = box === null ? '' : `${Math.round(box.y)}:${Math.round(box.height)}`;
+    still = now !== '' && now === last ? still + 1 : 0;
+    last = now;
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  }
+}
+
+/** The group thread, then a tap on one person's photo or name: the card opens. */
+async function openPersonCardFor(page: Page, userId: string): Promise<void> {
+  await openChat(page, GROUP_NAME);
+  await threadStill(page);
+  const trigger = await lastVisible(
+    page.locator(`[data-person-trigger="${userId}"]`),
+    `person trigger ${userId}`,
+  );
+  await trigger.scrollIntoViewIfNeeded();
+  await trigger.click();
+  await waitFor([page.locator('[data-person-card]')], 'person card');
+  await threadStill(page);
+}
+
+/** Long-press (phone) or right-click (laptop) Leo's last group message: its menu. */
+async function openGroupMessageMenu(page: Page): Promise<void> {
+  await openChat(page, GROUP_NAME);
+  await threadStill(page);
+  const bubble = await lastVisible(
+    page.locator('[data-bubble]', { hasText: GROUP_PLAIN_BODY }),
+    'Leo bubble',
+  );
+  const menu = page.getByRole('menu').or(page.getByRole('dialog'));
+  // A synthetic hold can be cut short by a scroll settling under it: try again.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await openMenuGesture(page, bubble);
+    if (
+      await menu
+        .first()
+        .isVisible()
+        .catch(() => false)
+    ) {
+      break;
+    }
+  }
+  await waitFor(menuRow(page, /Reply privately/), 'Reply privately in the message menu');
+}
+
+SCREENS.push(
+  {
+    name: 'person-card',
+    seed: creator,
+    extra: seedGroupPeople,
+    url: '/chat',
+    steps: (page) => openPersonCardFor(page, COLLEAGUE_A),
+  },
+  {
+    // The laptop popover in dark (the laptop project is light).
+    name: 'person-card-dark',
+    seed: creator,
+    extra: seedGroupPeople,
+    only: 'laptop',
+    dark: true,
+    url: '/chat',
+    steps: (page) => openPersonCardFor(page, COLLEAGUE_A),
+  },
+  {
+    name: 'person-card-self',
+    seed: creator,
+    extra: seedGroupPeople,
+    url: '/chat',
+    steps: async (page) => {
+      await openPersonCardFor(page, ME);
+      await waitFor([page.getByRole('button', { name: /Message yourself/ })], 'Message yourself');
+    },
+  },
+  {
+    name: 'person-card-removed',
+    seed: creator,
+    extra: seedRemovedColleague,
+    url: '/chat',
+    steps: async (page) => {
+      await openPersonCardFor(page, COLLEAGUE_B);
+      await waitFor([page.getByText('No longer in this workspace', { exact: true })], 'removed');
+    },
+  },
+  {
+    name: 'chat-message-menu-reply-privately',
+    seed: creator,
+    extra: seedGroupPeople,
+    url: '/chat',
+    steps: openGroupMessageMenu,
+  },
+  {
+    name: 'chat-dm-private-reply-strip',
+    seed: creator,
+    extra: seedPeerComment,
+    prepare: seedPrivateReplyDraft,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, PEER_NAME);
+      await waitFor(
+        [page.locator('[data-private-reply-bar]', { hasText: QUOTE_EXCERPT })],
+        'quote strip',
+      );
+    },
+  },
+  {
+    name: 'chat-dm-private-reply-bubble',
+    seed: creator,
+    extra: seedQuotedReply,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, PEER_NAME);
+      const bubble = await lastVisible(
+        page.locator('[data-bubble]', { hasText: QUOTED_REPLY_BODY }),
+        'quoted reply bubble',
+      );
+      await bubble.scrollIntoViewIfNeeded();
+      await waitFor([page.getByText(QUOTE_EXCERPT, { exact: false })], 'bubble quote');
+    },
+  },
+  {
+    name: 'post-comment-reply-privately',
+    seed: creator,
+    extra: seedPeerComment,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const text = page.getByText(PEER_COMMENT_BODY, { exact: true });
+      await text.scrollIntoViewIfNeeded();
+      const action = await lastVisible(
+        page.locator('[data-row-action="reply-privately"]'),
+        'Reply privately on the comment row',
+      );
+      await action.scrollIntoViewIfNeeded();
+    },
+  },
+);
 
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));

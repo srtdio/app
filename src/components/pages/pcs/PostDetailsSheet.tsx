@@ -14,6 +14,8 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Result } from '@srtdio/rpc';
 import { Avatar } from '@/components/ui/Avatar';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
+import { FORMER_MEMBER } from '@/lib/people-names';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -240,13 +242,30 @@ export function PostDetailsSheet({
       <span className="text-fg-3">No bucket</span>
     );
 
+  const ownerAvatar = (
+    <Avatar
+      name={ownerName}
+      role="inline"
+      {...(ownerAvatarUrl !== null ? { src: ownerAvatarUrl } : {})}
+    />
+  );
+  // The owner's photo opens the person card; the rest of the row keeps its
+  // tap (the owner picker).
   const ownerValue = (
     <>
-      <Avatar
-        name={ownerName}
-        role="inline"
-        {...(ownerAvatarUrl !== null ? { src: ownerAvatarUrl } : {})}
-      />
+      {ownerUserId !== null && ownerUserId !== '' ? (
+        <PersonTrigger
+          userId={ownerUserId}
+          name={ownerName}
+          avatarUrl={ownerAvatarUrl}
+          {...(ownerName === FORMER_MEMBER ? { former: true } : {})}
+          display="block"
+        >
+          {ownerAvatar}
+        </PersonTrigger>
+      ) : (
+        ownerAvatar
+      )}
       <span className="truncate">{ownerName}</span>
     </>
   );
