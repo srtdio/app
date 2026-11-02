@@ -9,6 +9,9 @@ import {
   EMPTY_DRAFT,
   getDraft,
   isEmptyDraft,
+  isPersonDraftKey,
+  PERSON_DRAFT_PREFIX,
+  personDraftKey,
   pruneDrafts,
   resetDrafts,
   setDraft,
@@ -485,5 +488,43 @@ describe('Reply privately quote on a draft', () => {
     expect(fresh.getDraft(B).privateReply).toBeNull();
     expect(fresh.getDraft(B).text).toBe('x');
     fresh.resetDrafts();
+  });
+});
+
+describe('person card drafts (inline message)', () => {
+  const USER = '0190A000-0000-7000-8000-000000000003';
+
+  it('personDraftKey: lowercased person, plus kind and source id when the card has a source', () => {
+    expect(personDraftKey(USER, null)).toBe(`${PERSON_DRAFT_PREFIX}${USER.toLowerCase()}`);
+    expect(personDraftKey(USER, undefined)).toBe(`person:${USER.toLowerCase()}`);
+    expect(personDraftKey(USER, { kind: 'comment', sourceId: 'c-1' })).toBe(
+      `person:${USER.toLowerCase()}:comment:c-1`,
+    );
+    expect(personDraftKey(USER, { kind: 'chat', sourceId: 'm-1' })).not.toBe(
+      personDraftKey(USER, { kind: 'plan_comment', sourceId: 'm-1' }),
+    );
+  });
+
+  it('isPersonDraftKey tells a card key from a channel id', () => {
+    expect(isPersonDraftKey(personDraftKey(USER, null))).toBe(true);
+    expect(isPersonDraftKey(personDraftKey(USER, { kind: 'chat', sourceId: 'x' }))).toBe(true);
+    expect(isPersonDraftKey(A)).toBe(false);
+    expect(isPersonDraftKey('notes__u1')).toBe(false);
+  });
+
+  it('a card draft is kept, read back and cleared like any draft', () => {
+    const key = personDraftKey(USER, { kind: 'comment', sourceId: 'c-1' });
+    setDraft(key, { text: 'see you at 3', caret: 12 });
+    expect(getDraft(key).text).toBe('see you at 3');
+    setDraft(key, { text: '', caret: 0 });
+    expect(getDraft(key)).toBe(EMPTY_DRAFT);
+  });
+
+  it('pruneDrafts never drops a person card draft (it is not a chat)', () => {
+    const key = personDraftKey(USER, null);
+    setDraft(key, { text: 'hi' });
+    setDraft(B, { text: 'gone' });
+    pruneDrafts('ws-a', new Set([A]));
+    expect(getDraft(key).text).toBe('hi');
   });
 });

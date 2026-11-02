@@ -631,8 +631,9 @@ export function channelRowBody(props: {
       kind={wide ? 'group' : 'person'}
     />
   );
-  // A person tile's photo opens the person card; the rest of the tile still
-  // opens the chat. Never while selecting (a tap there toggles the tile).
+  // A person tile's photo opens the photo-only viewer (the tile itself is the
+  // chat); the rest of the tile still opens the chat. Never while selecting
+  // (a tap there toggles the tile).
   const peerId =
     channel.channelType === 'dm' && !props.selecting ? (channel.peerUserId ?? null) : null;
   const photo = (
@@ -646,6 +647,7 @@ export function channelRowBody(props: {
           name={chatDisplayName(channel)}
           avatarUrl={channel.avatarUrl}
           display="block"
+          view="photo"
         >
           {avatar}
         </PersonTrigger>

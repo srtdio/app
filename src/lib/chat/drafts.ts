@@ -372,6 +372,27 @@ export function setPrivateReplyDraft(channelId: string, draft: PrivateReplyDraft
   setDraft(channelId, { privateReply: draft });
 }
 
+/**
+ * The person card's inline message keeps its text in this same store, keyed
+ * by person and source (never a channel id: the DM may not exist yet), so it
+ * survives closing and reopening the card, and a reload, until it is sent.
+ */
+export const PERSON_DRAFT_PREFIX = 'person:';
+
+/** The inline message draft key for one person and, when the card has one, its source. Pure. */
+export function personDraftKey(
+  userId: string,
+  source: Pick<PrivateReplyDraft, 'kind' | 'sourceId'> | null | undefined,
+): string {
+  const who = `${PERSON_DRAFT_PREFIX}${userId.toLowerCase()}`;
+  return source != null ? `${who}:${source.kind}:${source.sourceId}` : who;
+}
+
+/** Whether a draft key is a person card's (never a channel's). Pure. */
+export function isPersonDraftKey(key: string): boolean {
+  return key.startsWith(PERSON_DRAFT_PREFIX);
+}
+
 /** Drop one channel's draft (a successful send). */
 export function clearDraft(channelId: string): void {
   if (!drafts.delete(channelId)) return;
@@ -413,12 +434,13 @@ export function clearAllDrafts(): void {
 
 /**
  * Drop one workspace's drafts (memory and storage) for chats not in
- * `keepChannelIds`: the user no longer has them. The notes chat is never
- * dropped (it is never in the roster). Other workspaces are untouched.
+ * `keepChannelIds`: the user no longer has them. The notes chat and the
+ * person card's drafts (keyed by person, not by chat) are never dropped.
+ * Other workspaces are untouched.
  */
 export function pruneDrafts(workspaceId: string, keepChannelIds: ReadonlySet<string>): void {
   const dropped = (channelId: string): boolean =>
-    !keepChannelIds.has(channelId) && !isNotesChannelId(channelId);
+    !keepChannelIds.has(channelId) && !isNotesChannelId(channelId) && !isPersonDraftKey(channelId);
   let changed = false;
   for (const channelId of [...drafts.keys()]) {
     if (owners.get(channelId) !== workspaceId || !dropped(channelId)) continue;

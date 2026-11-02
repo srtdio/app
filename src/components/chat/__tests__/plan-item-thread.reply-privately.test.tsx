@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 // Reply privately on plan item comments: shown only on someone else's recorded
 // comment whose name is known and who is still a member (never mine, a pending
-// one, an unknown name or a former member); a tap writes the plan_comment quote
-// on the DM's draft in beforeOpen and opens the DM through useOpenPersonDm.
+// one, an unknown name or a former member); a tap opens the person card's
+// inline message for the author with the plan_comment quote as its source.
+// The author's photo and name carry the same source.
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -15,8 +16,6 @@ const GONE = '33333333-3333-4333-8333-333333333333';
 
 const h = vi.hoisted(() => ({
   members: null as unknown,
-  openDm: vi.fn(),
-  setPrivateReplyDraft: vi.fn(),
 }));
 
 vi.mock('agora-chat', () => ({
@@ -27,13 +26,6 @@ vi.mock('@/lib/workspace-members', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/workspace-members')>()),
   peekWorkspaceMembers: () => h.members,
 }));
-vi.mock('@/components/ui/use-open-person-dm', () => ({
-  useOpenPersonDm: () => h.openDm,
-}));
-vi.mock('@/lib/chat/drafts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/chat/drafts')>()),
-  setPrivateReplyDraft: h.setPrivateReplyDraft,
-}));
 
 import {
   PlanItemThread,
@@ -41,6 +33,7 @@ import {
   type ShownComment,
 } from '@/components/chat/PlanItemThread';
 import { REPLY_PRIVATELY } from '@/lib/chat/private-reply';
+import { closePersonCard, personCardSnapshot } from '@/lib/person-card';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -94,8 +87,7 @@ beforeEach(() => {
     profiles: new Map(),
     options: [],
   };
-  h.openDm.mockReset();
-  h.setPrivateReplyDraft.mockReset();
+  closePersonCard();
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -103,6 +95,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root?.unmount());
+  closePersonCard();
   root = null;
   document.body.innerHTML = '';
 });
@@ -152,27 +145,42 @@ describe('Reply privately in the plan thread', () => {
     expect(replyPrivately('other')).toBeNull();
   });
 
-  it('a tap opens the DM and writes the plan_comment quote in beforeOpen', () => {
+  const QUOTE = {
+    kind: 'plan_comment',
+    sourceId: 'pc-1',
+    authorUserId: ASHA,
+    authorName: 'Asha Rao',
+    excerpt: 'Swap the hero shot',
+    whereLabel: 'Reel idea',
+    link: { kind: 'plan_comment', planId: 'plan-1', itemId: 'item-1', commentId: 'pc-1' },
+  };
+
+  it('a tap opens the inline message card with the plan_comment source', () => {
     mount([shown({ id: 'pc-1' })]);
-    act(() => replyPrivately('pc-1')?.click());
+    const button = replyPrivately('pc-1');
+    act(() => button?.click());
+    const request = personCardSnapshot();
+    expect(request?.userId).toBe(ASHA);
+    expect(request?.view).toBe('card');
+    expect(request?.trigger).toBe(button);
+    expect(request?.source).toEqual(QUOTE);
+  });
 
-    expect(h.openDm).toHaveBeenCalledTimes(1);
-    const [userId, options] = h.openDm.mock.calls[0] as [
-      string,
-      { beforeOpen?: (channelId: string) => void },
-    ];
-    expect(userId).toBe(ASHA);
-    expect(h.setPrivateReplyDraft).not.toHaveBeenCalled();
+  it("the author's photo or name opens the card with the same source", () => {
+    mount([shown({ id: 'pc-1' })]);
+    const trigger = host?.querySelector<HTMLElement>(
+      `[data-plan-comment-id="pc-1"] [data-person-trigger="${ASHA}"]`,
+    );
+    expect(trigger).not.toBeNull();
+    act(() => trigger?.click());
+    expect(personCardSnapshot()?.source).toEqual(QUOTE);
+  });
 
-    options.beforeOpen?.('dm-9');
-    expect(h.setPrivateReplyDraft).toHaveBeenCalledWith('dm-9', {
-      kind: 'plan_comment',
-      sourceId: 'pc-1',
-      authorUserId: ASHA,
-      authorName: 'Asha Rao',
-      excerpt: 'Swap the hero shot',
-      whereLabel: 'Reel idea',
-      link: { kind: 'plan_comment', planId: 'plan-1', itemId: 'item-1', commentId: 'pc-1' },
-    });
+  it('a former member opens the card with no source', () => {
+    mount([shown({ id: 'gone', authorUserId: GONE, authorName: 'Gus Gone' })]);
+    const trigger = host?.querySelector<HTMLElement>(`[data-person-trigger="${GONE}"]`);
+    expect(trigger).not.toBeNull();
+    act(() => trigger?.click());
+    expect(personCardSnapshot()?.source ?? null).toBeNull();
   });
 });

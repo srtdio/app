@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { notesChannelId } from '@/lib/chat/notes';
 import {
+  CONTEXT_WORDS,
   MENTION_DM_FAILED,
+  OPEN_CHAT,
   cachedDmChannelId,
+  messagePlaceholder,
+  personContextLine,
+  sentToTitle,
   closePersonCard,
   openPersonCard,
   personCardAction,
@@ -114,5 +119,53 @@ describe('the person card store', () => {
 describe('MENTION_DM_FAILED', () => {
   it('follows the error copy rule', () => {
     expect(MENTION_DM_FAILED).toBe("Couldn't open that chat. Try again.");
+  });
+});
+
+describe('personContextLine', () => {
+  const where = 'Monday carousel';
+
+  it('is null without a source', () => {
+    expect(personContextLine(null)).toBeNull();
+    expect(personContextLine(undefined)).toBeNull();
+  });
+
+  it('quotes the first words with an ellipsis only when words were cut', () => {
+    expect(
+      personContextLine({ whereLabel: where, excerpt: 'Love the new cover shot, ship it today please' }),
+    ).toBe(`${where} · "Love the new cover shot, ship…"`);
+    expect(CONTEXT_WORDS).toBe(6);
+  });
+
+  it('a short text is quoted whole, no ellipsis; newlines fold to spaces', () => {
+    expect(personContextLine({ whereLabel: where, excerpt: 'Looks\n good' })).toBe(
+      `${where} · "Looks good"`,
+    );
+  });
+
+  it('the where half alone when there are no words; the quote alone when there is no where', () => {
+    expect(personContextLine({ whereLabel: where, excerpt: '   ' })).toBe(where);
+    expect(personContextLine({ whereLabel: '', excerpt: 'ship it' })).toBe('"ship it"');
+    expect(personContextLine({ whereLabel: ' ', excerpt: '' })).toBeNull();
+  });
+});
+
+describe('inline message copy (approved 2 Nov 2026)', () => {
+  it('reads exactly', () => {
+    expect(messagePlaceholder('Leo')).toBe('Message Leo…');
+    expect(sentToTitle('Leo')).toBe('Sent to Leo');
+    expect(OPEN_CHAT).toBe('Open chat');
+  });
+});
+
+describe('openPersonCard view', () => {
+  it('carries the view and source; a photo open marks person-photo:open', () => {
+    const marks = vi.spyOn(performance, 'mark');
+    openPersonCard({ userId: LEO, anchor: null, trigger: null, view: 'photo' });
+    expect(personCardSnapshot()?.view).toBe('photo');
+    expect(marks.mock.calls.map((c) => c[0])).toContain('person-photo:open');
+    openPersonCard({ userId: LEO, anchor: null, trigger: null });
+    expect(marks.mock.calls.map((c) => c[0])).toContain('person-card:open');
+    marks.mockRestore();
   });
 });

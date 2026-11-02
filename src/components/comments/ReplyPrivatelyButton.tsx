@@ -1,15 +1,17 @@
 // A comment row's Reply privately (post and brief comments, plan item
-// comments): a ghost Button like its row neighbours. A tap writes the quote on
-// the DM's draft (setPrivateReplyDraft) right before the DM opens, through the
-// one open-my-DM path (useOpenPersonDm: the cached DM opens with no read).
-// Outside a router (isolated renders) there is nowhere to open, so it draws
-// nothing. Callers decide visibility with canReplyPrivately (src/lib/reply-privately.ts).
+// comments): a ghost Button like its row neighbours. A tap opens the person
+// card's inline message for the author with this comment as its source (the
+// quote, built at tap time from what the row holds), anchored to the button:
+// no navigation, no read. The card's send carries the quote
+// (chat_private_reply_send). Outside a router (isolated renders) the card has
+// nowhere to open its chat, so it draws nothing. Callers decide visibility
+// with canReplyPrivately (src/lib/reply-privately.ts).
 
 import type { ReactElement } from 'react';
+import { flushSync } from 'react-dom';
 import { useInRouterContext } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { useOpenPersonDm } from '@/components/ui/use-open-person-dm';
-import { setPrivateReplyDraft } from '@/lib/chat/drafts';
+import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
 import { REPLY_PRIVATELY, type PrivateReplyDraft } from '@/lib/chat/private-reply';
 
 export interface ReplyPrivatelyButtonProps {
@@ -20,27 +22,26 @@ export interface ReplyPrivatelyButtonProps {
   className?: string;
 }
 
-function ReplyPrivatelyRouted(props: ReplyPrivatelyButtonProps): ReactElement {
-  const openDm = useOpenPersonDm();
+/** Open the inline message card for the quote's author with the quote as its source. */
+export function openReplyPrivatelyCard(el: HTMLElement | null, draft: PrivateReplyDraft): void {
+  // Painted inside the tap: the card's input focuses in the gesture (iOS keyboard).
+  flushSync(() => {
+    openPersonCardFrom(el, { userId: draft.authorUserId, name: draft.authorName, source: draft });
+  });
+}
+
+export function ReplyPrivatelyButton(props: ReplyPrivatelyButtonProps): ReactElement | null {
+  const routed = useInRouterContext();
+  if (!routed) return null;
   return (
     <Button
       type="button"
       data-row-action="reply-privately"
       variant="ghost"
       className={props.className}
-      onClick={() => {
-        const draft = props.draft();
-        openDm(props.authorUserId, {
-          beforeOpen: (channelId) => setPrivateReplyDraft(channelId, draft),
-        });
-      }}
+      onClick={(event) => openReplyPrivatelyCard(event.currentTarget, props.draft())}
     >
       {REPLY_PRIVATELY}
     </Button>
   );
-}
-
-export function ReplyPrivatelyButton(props: ReplyPrivatelyButtonProps): ReactElement | null {
-  const routed = useInRouterContext();
-  return routed ? <ReplyPrivatelyRouted {...props} /> : null;
 }

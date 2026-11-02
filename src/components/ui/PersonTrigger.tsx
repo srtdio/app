@@ -5,27 +5,50 @@
 // around it keeps its own tap everywhere else. The hit area is at least 44x44
 // (an invisible box centred on it), so an inline name or a 20px avatar stays
 // tappable without moving the layout.
+//
+// The surface decides only what a tap opens: `view` 'card' (default, the inline
+// message card) or 'photo' (the photo-only viewer: inside a DM and on the chat
+// list's People cards). `source` is the comment or group chat message the tap
+// came from, built at tap time from what the row holds. The open is flushed
+// inside the tap (flushSync) so the card's input takes focus within the
+// gesture: iOS raises the keyboard only then.
 
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import { cn } from '@/lib/cn';
-import { openPersonCard, type PersonCardHint } from '@/lib/person-card';
+import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
+import { openPersonCard, type PersonCardHint, type PersonView } from '@/lib/person-card';
 
-interface PersonTriggerProps extends PersonCardHint {
+interface PersonTriggerProps extends Omit<PersonCardHint, 'source'> {
   children: ReactNode;
   /** Layout classes for the wrapper (e.g. 'shrink-0'); never visual overrides. */
   className?: string;
   /** 'block' wraps a photo or a block of text; 'inline' sits inside a line of text. */
   display?: 'inline' | 'block';
+  /** What a tap opens: the card (default) or the photo-only viewer. */
+  view?: PersonView;
+  /** The comment or message this tap came from; called at tap time. Absent: none. */
+  source?: () => PrivateReplyDraft | null;
 }
 
-/** Open the card for `hint`, anchored to `el`. Exported for tests and the chat menu. */
-export function openPersonCardFrom(el: HTMLElement | null, hint: PersonCardHint): void {
+/** Open the card (or with view 'photo' the viewer) for `hint`, anchored to `el`. */
+export function openPersonCardFrom(
+  el: HTMLElement | null,
+  hint: PersonCardHint,
+  view: PersonView = 'card',
+): void {
   const r = el?.getBoundingClientRect();
   openPersonCard({
     ...hint,
     anchor: r !== undefined ? { top: r.top, left: r.left, right: r.right, bottom: r.bottom } : null,
     trigger: el,
+    view,
   });
+}
+
+/** The photo-only viewer for `hint` (DM rows, DM header, chat list People cards). */
+export function openPersonPhotoFrom(el: HTMLElement | null, hint: PersonCardHint): void {
+  openPersonCardFrom(el, hint, 'photo');
 }
 
 export function PersonTrigger({
@@ -37,6 +60,8 @@ export function PersonTrigger({
   avatarUrl,
   username,
   former,
+  view = 'card',
+  source,
 }: PersonTriggerProps) {
   const hint: PersonCardHint = {
     userId,
@@ -50,7 +75,12 @@ export function PersonTrigger({
   function open(event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>): void {
     event.stopPropagation();
     event.preventDefault();
-    openPersonCardFrom(event.currentTarget, hint);
+    const el = event.currentTarget;
+    const from = view === 'card' ? (source?.() ?? null) : null;
+    // Painted inside the tap: the card's input focuses in the gesture (iOS keyboard).
+    flushSync(() => {
+      openPersonCardFrom(el, from !== null ? { ...hint, source: from } : hint, view);
+    });
   }
 
   // A press here is the card's, not the row's (row press states, long-press, swipe).
@@ -64,6 +94,7 @@ export function PersonTrigger({
       tabIndex={0}
       aria-label={label}
       data-person-trigger={userId}
+      data-person-view={view}
       onClick={open}
       onPointerDown={stop}
       onKeyDown={(event) => {

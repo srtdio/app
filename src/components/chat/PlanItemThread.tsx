@@ -45,6 +45,7 @@ import { cn } from '@/lib/cn';
 import { civilDay, formatTime } from '@/lib/time';
 import { isFormerMember, resolvePersonMentionText } from '@/lib/chat/mentions';
 import { canReplyPrivately, planCommentPrivateReplyDraft } from '@/lib/reply-privately';
+import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import { ReplyPrivatelyButton } from '@/components/comments/ReplyPrivatelyButton';
 import { supabase } from '@/lib/supabase';
 import { peekWorkspaceMembers, type WorkspaceMembersData } from '@/lib/workspace-members';
@@ -402,6 +403,20 @@ function PlanBubble(props: {
   // The author's photo and name open the person card (a pending own comment
   // and an author with no id have nothing to open).
   const authorId = !mine && !c.pending ? authorUserId : null;
+  // Reply privately's quote: the card's source when the author is tapped too.
+  const quote =
+    replyTo !== null
+      ? (): PrivateReplyDraft =>
+          planCommentPrivateReplyDraft({
+            commentId: c.id,
+            authorUserId: replyTo.authorUserId,
+            authorName: c.authorName,
+            excerpt: resolvePersonMentionText(c.body, props.workspaceId),
+            whereLabel: replyTo.target.whereLabel,
+            planId: replyTo.target.planId,
+            itemId: replyTo.target.itemId,
+          })
+      : null;
   const asAuthor = (node: ReactElement, display: 'inline' | 'block'): ReactElement =>
     authorId !== null ? (
       <PersonTrigger
@@ -410,6 +425,7 @@ function PlanBubble(props: {
         avatarUrl={avatarSrc}
         former={authorLeft(props.held, props.workspaceId, authorId)}
         display={display}
+        {...(quote !== null ? { source: quote } : {})}
       >
         {node}
       </PersonTrigger>
@@ -495,21 +511,13 @@ function PlanBubble(props: {
         ) : null}
         {replyTo !== null ? (
           <div data-plan-comment-actions="" className="-ml-2 flex items-center">
-            <ReplyPrivatelyButton
-              authorUserId={replyTo.authorUserId}
-              className="min-w-[44px] hover:bg-panel-3"
-              draft={() =>
-                planCommentPrivateReplyDraft({
-                  commentId: c.id,
-                  authorUserId: replyTo.authorUserId,
-                  authorName: c.authorName,
-                  excerpt: resolvePersonMentionText(c.body, props.workspaceId),
-                  whereLabel: replyTo.target.whereLabel,
-                  planId: replyTo.target.planId,
-                  itemId: replyTo.target.itemId,
-                })
-              }
-            />
+            {quote !== null ? (
+              <ReplyPrivatelyButton
+                authorUserId={replyTo.authorUserId}
+                className="min-w-[44px] hover:bg-panel-3"
+                draft={quote}
+              />
+            ) : null}
           </div>
         ) : null}
       </div>

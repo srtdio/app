@@ -3,7 +3,8 @@
 // importing the trigger (or its openPersonCardFrom), so a refactor that drops it
 // fails here instead of silently losing the card.
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
@@ -41,9 +42,51 @@ describe('person surfaces open the shared person card', () => {
     expect(source('pages/NotificationsPage.tsx')).toContain('people={bucketActors(entries)}');
   });
 
-  it('a chat @mention tap no longer opens a DM directly', () => {
+  it('a chat @mention tap no longer opens a DM directly: photo in a DM, card elsewhere', () => {
     const chat = source('chat/ChatConnected.tsx');
-    expect(chat).toContain('onOpen: openMentionCard');
+    expect(chat).toContain(
+      "onOpen: selected.channelType === 'dm' ? openMentionPhoto : openMentionCard",
+    );
+    expect(chat).toMatch(/export function openMentionPhoto\(/);
     expect(chat).not.toMatch(/void openMentionDm\(/);
+  });
+});
+
+describe('photo-only surfaces (inside a DM, chat list People cards)', () => {
+  it('the chat list People tile photo opens the photo viewer', () => {
+    expect(source('chat/ChannelList.tsx')).toContain('view="photo"');
+  });
+
+  it('the DM header photo opens the photo viewer', () => {
+    const thread = source('chat/MessageThread.tsx');
+    const start = thread.indexOf('export function ThreadHeaderIdentity(');
+    expect(start).toBeGreaterThan(-1);
+    const end = thread.indexOf('\n}\n', start);
+    expect(thread.slice(start, end)).toContain('view="photo"');
+  });
+
+  it('Reply privately opens the card in place (no DM navigation)', () => {
+    expect(source('chat/ChatConnected.tsx')).toContain('openReplyPrivatelyCard(');
+    const button = source('comments/ReplyPrivatelyButton.tsx');
+    expect(button).not.toContain('useOpenPersonDm');
+    expect(button).not.toContain('setPrivateReplyDraft');
+  });
+
+  it('no file outside ui/ renders PhotoViewer directly', () => {
+    const root = fileURLToPath(new URL('../../', import.meta.url));
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+          const rel = relative(root, full).split(sep).join('/');
+          if (rel.startsWith('ui/')) continue;
+          if (/<PhotoViewer\b/.test(readFileSync(full, 'utf8'))) offenders.push(rel);
+        }
+      }
+    };
+    walk(root);
+    expect(offenders).toEqual([]);
   });
 });

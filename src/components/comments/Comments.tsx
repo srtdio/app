@@ -90,6 +90,7 @@ import {
 import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
 import { isFormerMember } from '@/lib/chat/mentions';
 import { canReplyPrivately, commentPrivateReplyDraft } from '@/lib/reply-privately';
+import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import { ReplyPrivatelyButton } from '@/components/comments/ReplyPrivatelyButton';
 
 /**
@@ -2148,7 +2149,13 @@ export function Comments({
   // Reply privately, between Reply and Copy: only on someone else's comment
   // whose author is a known current member (canReplyPrivately). The quote is
   // built at tap time from what the row shows; no read.
-  function replyPrivatelyControl(comment: CommentRow, authorName: string): ReactNode {
+  // The same quote is the person card's source when the author's photo or
+  // name is tapped (its context line and what its send carries); null when
+  // the comment offers no Reply privately.
+  function privateReplySource(
+    comment: CommentRow,
+    authorName: string,
+  ): (() => PrivateReplyDraft) | null {
     const authorUserId = comment.author_user_id;
     const show = canReplyPrivately({
       authorUserId,
@@ -2158,21 +2165,26 @@ export function Comments({
       former: authorName === FORMER_MEMBER || isFormerMember(workspaceId, authorUserId),
     });
     if (!show) return null;
+    return () =>
+      commentPrivateReplyDraft({
+        commentId: comment.id,
+        authorUserId,
+        authorName,
+        excerpt: commentCopyText(comment.body, handleOf),
+        whereLabel,
+        entityType,
+        entityId,
+      });
+  }
+
+  function replyPrivatelyControl(comment: CommentRow, authorName: string): ReactNode {
+    const draft = privateReplySource(comment, authorName);
+    if (draft === null) return null;
     return (
       <ReplyPrivatelyButton
-        authorUserId={authorUserId}
+        authorUserId={comment.author_user_id}
         className={ROW_ACTION_CLASS}
-        draft={() =>
-          commentPrivateReplyDraft({
-            commentId: comment.id,
-            authorUserId,
-            authorName,
-            excerpt: commentCopyText(comment.body, handleOf),
-            whereLabel,
-            entityType,
-            entityId,
-          })
-        }
+        draft={draft}
       />
     );
   }
@@ -2304,6 +2316,7 @@ export function Comments({
     // The author's photo and name open the person card (a legacy author has no
     // user id: nothing to open).
     const authorId = comment.legacy_author_name === null ? comment.author_user_id : null;
+    const authorSource = authorId !== null ? privateReplySource(comment, authorName) : null;
     const asPerson = (node: ReactNode, display: 'inline' | 'block', className?: string) =>
       authorId !== null && authorName !== '' ? (
         <PersonTrigger
@@ -2311,6 +2324,7 @@ export function Comments({
           name={authorName}
           avatarUrl={authorAvatarUrl ?? null}
           {...(authorName === FORMER_MEMBER ? { former: true } : {})}
+          {...(authorSource !== null ? { source: authorSource } : {})}
           display={display}
           {...(className !== undefined ? { className } : {})}
         >
