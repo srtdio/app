@@ -138,6 +138,22 @@ const SCHEMA = {
     'updated_at',
     'deleted_at',
   ],
+  plan_items: [
+    'id',
+    'workspace_id',
+    'plan_id',
+    'kind',
+    'title',
+    'description',
+    'target_date',
+    'position',
+    'post_id',
+    'created_by',
+    'created_at',
+    'updated_at',
+    'deleted_at',
+  ],
+  plans: ['id', 'workspace_id', 'title', 'audience', 'created_by', 'created_at', 'deleted_at'],
   inbox_entries: [
     'id',
     'user_id',
@@ -555,6 +571,8 @@ class World {
     workspace_members: [],
     posts: [],
     briefs: [],
+    plan_items: [],
+    plans: [],
     inbox_entries: [],
     chat_channels: [],
     chat_messages: [],
@@ -651,7 +669,7 @@ class World {
     userId: string,
     workspaceId: string,
     eventType: string,
-    entity: { type: 'post' | 'brief'; id: string },
+    entity: { type: 'post' | 'brief' | 'plan_item'; id: string },
     opts: {
       createdAt?: string;
       actor?: string | null;
@@ -706,6 +724,39 @@ class World {
         },
       },
     );
+  }
+
+  plan(workspaceId: string, opts: { deleted?: boolean } = {}): string {
+    const id = this.next();
+    this.tables.plans.push({
+      id,
+      workspace_id: workspaceId,
+      title: 'November plan',
+      audience: 'client',
+      created_at: BEFORE_WINDOW,
+      deleted_at: opts.deleted === true ? BEFORE_WINDOW : null,
+    });
+    return id;
+  }
+
+  planItem(
+    workspaceId: string,
+    planId: string,
+    title: string | null,
+    opts: { deleted?: boolean } = {},
+  ): string {
+    const id = this.next();
+    this.tables.plan_items.push({
+      id,
+      workspace_id: workspaceId,
+      plan_id: planId,
+      kind: 'post',
+      title,
+      position: 0,
+      created_at: BEFORE_WINDOW,
+      deleted_at: opts.deleted === true ? BEFORE_WINDOW : null,
+    });
+    return id;
   }
 
   approved(userId: string, workspaceId: string, postId: string, createdAt = IN_WINDOW): string {
@@ -1376,5 +1427,166 @@ describe('runCatchup: schedule', () => {
     expect(deliveriesFor(out, A, W1)).toHaveLength(1);
     expect(deliveriesFor(out, C, W1)).toHaveLength(1);
     expect(deliveriesFor(out, D)).toHaveLength(0);
+  });
+});
+
+describe('runCatchup: plan comments, OK / Not OK and plan mentions', () => {
+  function planWorld() {
+    const w = new World();
+    w.user(A, 'Anna Client');
+    w.user(X, 'Xavier Alphateam');
+    w.workspace(W1, 'Alphaworks Wone');
+    w.member(W1, A, 'agency');
+    w.member(W1, X, 'client');
+    const plan = w.plan(W1);
+    const item = w.planItem(W1, plan, 'Diwali reel');
+    return { w, plan, item };
+  }
+
+  it('lists a plan comment, a mention and an OK / Not OK in the comments list, with plan links', async () => {
+    const { w, plan, item } = planWorld();
+    const ref = { type: 'plan_item' as const, id: item };
+    const c1 = w.entry(A, W1, 'plan_comment', ref, {
+      actor: X,
+      payload: { comment_id: 'pc1', plan_id: plan },
+    });
+    const c2 = w.entry(A, W1, 'mention', ref, {
+      actor: X,
+      createdAt: IN_WINDOW_LATER,
+      payload: { comment_id: 'pc2', plan_id: plan },
+    });
+    const c3 = w.entry(A, W1, 'plan_review', ref, {
+      actor: X,
+      payload: { plan_id: plan, side: 'client', status: 'approved' },
+    });
+    const c4 = w.entry(A, W1, 'plan_review', ref, {
+      actor: X,
+      payload: { plan_id: plan, side: 'client', status: 'changes' },
+    });
+
+    const out = await run(w);
+    const req = only(out, A, W1);
+    const body = renderedBody(req);
+    expect(body).toContain('commented on Diwali reel');
+    expect(body).toContain('mentioned you on Diwali reel');
+    expect(body).toContain('approved Diwali reel');
+    expect(body).toContain('asked changes on Diwali reel');
+    expect(body).toContain('Xavier Alphateam');
+    const text = req.email.rendered.text;
+    const base = `${ENV.APP_BASE_URL}/plans/${plan}?w=${W1}&item=${item}`;
+    expect(text).toContain(`Xavier Alphateam commented on Diwali reel: ${base}&comment=pc1`);
+    expect(text).toContain(`Xavier Alphateam mentioned you on Diwali reel: ${base}&comment=pc2`);
+    // A review opens the item without a comment.
+    expect(text).toContain(`Xavier Alphateam approved Diwali reel: ${base}\n`);
+    expect(text).toContain(`Xavier Alphateam asked changes on Diwali reel: ${base}\n`);
+    expect([...req.entryIds].sort()).toEqual([c1, c2, c3, c4].sort());
+  });
+
+  it('reads plan item titles in one batched IN read scoped to the due workspaces', async () => {
+    const { w, plan, item } = planWorld();
+    const other = w.planItem(W1, plan, 'Launch carousel');
+    for (const id of [item, other]) {
+      w.entry(
+        A,
+        W1,
+        'plan_comment',
+        { type: 'plan_item', id },
+        {
+          actor: X,
+          payload: { comment_id: 'pc', plan_id: plan },
+        },
+      );
+    }
+    const out = await run(w);
+    const reads = selects(out, 'plan_items');
+    expect(reads).toHaveLength(1);
+    const [q] = reads;
+    if (q === undefined) throw new Error('missing read');
+    expect(hasWorkspaceFilter(q)).toBe(true);
+    expect(scopedToIds(q, 'id', new Set([item, other]))).toBe(true);
+    expect(selects(out, 'plans')).toHaveLength(1);
+  });
+
+  it('takes the plan id from the item when the payload has none', async () => {
+    const { w, plan, item } = planWorld();
+    w.entry(
+      A,
+      W1,
+      'plan_comment',
+      { type: 'plan_item', id: item },
+      {
+        actor: X,
+        payload: { comment_id: 'pc9' },
+      },
+    );
+    const out = await run(w);
+    expect(only(out, A, W1).email.rendered.text).toContain(
+      `/plans/${plan}?w=${W1}&item=${item}&comment=pc9`,
+    );
+  });
+
+  it('skips a withdrawn review, a deleted item and an item on a deleted plan', async () => {
+    const { w, plan, item } = planWorld();
+    const gonePlan = w.plan(W1, { deleted: true });
+    const onGonePlan = w.planItem(W1, gonePlan, 'Ghost plan item');
+    const goneItem = w.planItem(W1, plan, 'Ghost item', { deleted: true });
+    w.entry(
+      A,
+      W1,
+      'plan_review',
+      { type: 'plan_item', id: item },
+      {
+        actor: X,
+        payload: { plan_id: plan, status: 'waiting', withdrawn: true, previous: 'approved' },
+      },
+    );
+    w.entry(
+      A,
+      W1,
+      'plan_comment',
+      { type: 'plan_item', id: goneItem },
+      {
+        actor: X,
+        payload: { comment_id: 'pc1', plan_id: plan },
+      },
+    );
+    w.entry(
+      A,
+      W1,
+      'plan_comment',
+      { type: 'plan_item', id: onGonePlan },
+      {
+        actor: X,
+        payload: { comment_id: 'pc2', plan_id: gonePlan },
+      },
+    );
+    const out = await run(w);
+    expect(deliveriesFor(out, A)).toHaveLength(0);
+  });
+
+  it('never emails a plan row twice (email_sent_at set) or a read one', async () => {
+    const { w, plan, item } = planWorld();
+    const ref = { type: 'plan_item' as const, id: item };
+    w.entry(A, W1, 'plan_comment', ref, {
+      actor: X,
+      emailSentAt: BEFORE_WINDOW,
+      payload: { comment_id: 'pc1', plan_id: plan },
+    });
+    w.entry(A, W1, 'plan_comment', ref, {
+      actor: X,
+      readAt: IN_WINDOW_LATER,
+      payload: { comment_id: 'pc2', plan_id: plan },
+    });
+    const out = await run(w);
+    expect(deliveriesFor(out, A)).toHaveLength(0);
+  });
+
+  it('still skips plan edits (plan_updated is not a catch-up event)', () => {
+    const catchup = new Set<string>(CATCHUP_EVENT_TYPES);
+    expect(catchup.has('plan_comment')).toBe(true);
+    expect(catchup.has('plan_review')).toBe(true);
+    for (const t of ['plan_updated', 'plan_opened', 'plan_deleted', 'plan_date_changed']) {
+      expect(catchup.has(t)).toBe(false);
+    }
   });
 });

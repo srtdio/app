@@ -228,6 +228,15 @@ describe('buildCatchupUrls', () => {
     }
   });
 
+  it('a plan item link opens the plan with the item, and the comment when there is one', () => {
+    expect(urls.planItem('pl1', 'i1', 'c1')).toBe(`${BASE}/plans/pl1?w=${WS}&item=i1&comment=c1`);
+    expect(urls.planItem('pl1', 'i1')).toBe(`${BASE}/plans/pl1?w=${WS}&item=i1`);
+    const enc = encodeURIComponent('p&x=1');
+    expect(urls.planItem('p&x=1', 'p&x=1', 'p&x=1')).toBe(
+      `${BASE}/plans/${enc}?w=${WS}&item=${enc}&comment=${enc}`,
+    );
+  });
+
   it('tolerates a trailing slash on the base', () => {
     expect(buildCatchupUrls(`${BASE}/`, WS).pipeline()).toBe(`${BASE}/pipeline?w=${WS}`);
   });
@@ -583,5 +592,34 @@ describe('html design and parity', () => {
         }),
       ),
     );
+  });
+});
+
+describe('plan rows in the comments list', () => {
+  const plan = (over: Partial<CommentItem>): CommentItem => ({
+    actorName: 'Priya',
+    targetTitle: 'Diwali reel',
+    entityType: 'plan_item',
+    entityId: 'i1',
+    url: urls.planItem('pl1', 'i1'),
+    createdAt: '2026-10-16T08:00:00.000Z',
+    mention: false,
+    ...over,
+  });
+
+  it('reuses the comment wording and adds approved / asked changes for reviews', () => {
+    const items = [
+      plan({ url: urls.planItem('pl1', 'i1', 'c1') }),
+      plan({ mention: true, url: urls.planItem('pl1', 'i1', 'c2') }),
+      plan({ review: 'approved' }),
+      plan({ review: 'changes' }),
+    ];
+    const { text } = renderCatchupEmail(agencyDigest({ comments: section(items) }));
+    expect(text).toContain(`Priya commented on Diwali reel: ${urls.planItem('pl1', 'i1', 'c1')}`);
+    expect(text).toContain(
+      `Priya mentioned you on Diwali reel: ${urls.planItem('pl1', 'i1', 'c2')}`,
+    );
+    expect(text).toContain(`Priya approved Diwali reel: ${urls.planItem('pl1', 'i1')}`);
+    expect(text).toContain(`Priya asked changes on Diwali reel: ${urls.planItem('pl1', 'i1')}`);
   });
 });

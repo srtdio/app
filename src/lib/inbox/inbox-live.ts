@@ -4,7 +4,12 @@
 // every decision the live layer makes is unit-tested in isolation here.
 
 import type { Database } from '@srtdio/schemas';
-import { BELL_MENTION_EVENT, chatMessageHref, isBellRow } from '@/lib/inbox/bell-types';
+import {
+  BELL_MENTION_EVENT,
+  chatMessageHref,
+  isBellRow,
+  isLiveActivityRow,
+} from '@/lib/inbox/bell-types';
 import { resolveMentionText, splitMentions } from '@/lib/chat/mentions';
 
 /** The raw inbox_entries row, reused from the generated schema (never redefined). */
@@ -473,12 +478,14 @@ export function activityToneWanted(
 
 /**
  * Split new rows: the activity toast's own, and the chat mentions that toast
- * on their own. Reminders, scheduled outcomes and the plan and task alerts get
- * no live toast here (the ring owns reminders); they show on Notifications. Pure.
+ * on their own. Plan comments, plan reviews and plan mentions are activity:
+ * they toast, tone and blink like a post comment. Reminders, scheduled
+ * outcomes, plan edits and task alerts get no live toast here (the ring owns
+ * reminders); they show on Notifications. A row lands in at most one list. Pure.
  */
 export function splitNewRows(rows: readonly InboxRow[]): NewRowsSplit {
   return {
-    activity: rows.filter((row) => !isBellRow(row)),
+    activity: rows.filter((row) => isLiveActivityRow(row)),
     chatMentions: rows.filter((row) => isBellRow(row) && row.event_type === BELL_MENTION_EVENT),
   };
 }

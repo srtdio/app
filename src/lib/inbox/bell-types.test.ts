@@ -12,6 +12,8 @@ import {
   isBellPlanEvent,
   isBellRow,
   isBellTaskEvent,
+  isLiveActivityRow,
+  LIVE_PLAN_EVENT_TYPES,
   taskLinkToken,
   planHref,
   withoutBellEntries,
@@ -84,6 +86,29 @@ describe('isBellEntry: the rows the live layer toasts apart', () => {
     expect(isBellTaskEvent('mention')).toBe(false);
   });
 
+  it('plan comments, plan reviews and plan mentions toast as activity; plan edits stay silent', () => {
+    expect([...LIVE_PLAN_EVENT_TYPES]).toEqual(['plan_comment', 'plan_review']);
+    expect(isLiveActivityRow({ event_type: 'plan_comment', entity_type: 'plan_item' })).toBe(true);
+    expect(isLiveActivityRow({ event_type: 'plan_review', entity_type: 'plan_item' })).toBe(true);
+    expect(isLiveActivityRow({ event_type: 'mention', entity_type: 'plan_item' })).toBe(true);
+    expect(isLiveActivityRow({ event_type: 'comment', entity_type: 'post' })).toBe(true);
+    for (const eventType of [
+      'plan_updated',
+      'plan_opened',
+      'plan_deleted',
+      'plan_date_changed',
+      'reminder',
+      'scheduled_sent',
+      'scheduled_failed',
+      'task_changed',
+      'task_due',
+    ]) {
+      expect(isLiveActivityRow({ event_type: eventType, entity_type: 'plan' })).toBe(false);
+    }
+    // A chat mention keeps its own toast path.
+    expect(isLiveActivityRow({ event_type: 'mention', entity_type: 'chat_channel' })).toBe(false);
+  });
+
   it('reads raw snake_case rows the same way', () => {
     expect(isBellRow({ event_type: 'reminder', entity_type: 'chat_channel' })).toBe(true);
     expect(isBellRow({ event_type: 'comment', entity_type: 'post' })).toBe(false);
@@ -106,7 +131,7 @@ describe('query helper', () => {
     return { q, calls };
   }
 
-  it('withoutBellEntries drops the old bell types and chat mentions (null entity kept)', () => {
+  it('withoutBellEntries drops the silent bell types and chat mentions; plan comments and reviews stay', () => {
     const { q, calls } = recorder();
     withoutBellEntries(q);
     expect(calls).toEqual([
@@ -115,7 +140,7 @@ describe('query helper', () => {
         args: [
           'event_type',
           'in',
-          '(reminder,scheduled_sent,scheduled_failed,plan_opened,plan_deleted,plan_date_changed,plan_updated,plan_review,plan_comment,task_changed,task_due)',
+          '(reminder,scheduled_sent,scheduled_failed,plan_opened,plan_deleted,plan_date_changed,plan_updated,task_changed,task_due)',
         ],
       },
       { method: 'or', args: [NOT_CHAT_MENTION_OR] },

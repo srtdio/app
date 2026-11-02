@@ -7,7 +7,7 @@
 //
 // Tenant rule: the service-role client bypasses RLS, so this file enforces
 // isolation itself. Every read is scoped to the recipient's own inbox_entries
-// and to workspaces where they are an active member; post and brief titles,
+// and to workspaces where they are an active member; post, brief and plan item titles,
 // review lists and DMs come only from that workspace. Draft posts are never
 // selected (every posts query carries .neq('stage', 'draft')).
 //
@@ -56,10 +56,21 @@ import type {
 } from './catchup-contracts';
 
 // inbox_entries event types that can trigger a catch-up. Each maps to a
-// rendered section or summary count: comment and mention to Comments,
-// stage_change to Approved / the parked count, brief_created to the new briefs
-// count. Must stay a subset of INBOX_EVENT_TYPES (event-types.test.ts).
-export const CATCHUP_EVENT_TYPES = ['comment', 'mention', 'stage_change', 'brief_created'] as const;
+// rendered section or summary count: comment and mention (post, brief or plan
+// item), plan_comment and plan_review (OK / Not OK) to Comments, stage_change to
+// Approved / the parked count, brief_created to the new briefs count. Must stay
+// a subset of INBOX_EVENT_TYPES (event-types.test.ts).
+export const CATCHUP_EVENT_TYPES = [
+  'comment',
+  'mention',
+  'stage_change',
+  'brief_created',
+  'plan_comment',
+  'plan_review',
+] as const;
+
+/** The entity_type of a plan comment, review or mention row (entity_id the item). */
+const PLAN_ITEM_ENTITY = 'plan_item';
 
 /** Bounds the longest window (Fri 15:30 to Mon 10:30 is 67h, plus DST slack). */
 const LOOKBACK_MS = 80 * 60 * 60 * 1000;
@@ -130,6 +141,16 @@ interface BriefRow {
   id: string;
   workspace_id: string;
   title: string;
+}
+interface PlanItemRow {
+  id: string;
+  workspace_id: string;
+  plan_id: string;
+  title: string | null;
+}
+interface PlanRow {
+  id: string;
+  workspace_id: string;
 }
 
 interface Candidate {
@@ -219,6 +240,24 @@ function commentActorId(entry: InboxRow): string | null {
 function mentionIds(body: string | null): string[] {
   if (body === null) return [];
   return [...body.matchAll(MENTION_TOKEN)].map((m) => (m[1] ?? '').toLowerCase());
+}
+
+/** Whether a row is a plan comment, plan review or mention on a plan item. */
+function isPlanItemEntry(entry: InboxRow): boolean {
+  return (
+    entry.event_type === 'plan_comment' ||
+    entry.event_type === 'plan_review' ||
+    (entry.event_type === 'mention' && entry.entity_type === PLAN_ITEM_ENTITY)
+  );
+}
+
+/** A plan_review's OK / Not OK; undefined for a withdrawal or any other status. */
+function planReviewOutcome(payload: unknown): 'approved' | 'changes' | undefined {
+  if (payload !== null && typeof payload === 'object') {
+    if ((payload as Record<string, unknown>).withdrawn === true) return undefined;
+  }
+  const status = payloadString(payload, 'status');
+  return status === 'approved' || status === 'changes' ? status : undefined;
 }
 
 function newestFirst<T>(items: T[], at: (item: T) => string): T[] {
@@ -331,6 +370,8 @@ interface Lookups {
   names: Map<string, string>;
   posts: Map<string, PostRow>;
   briefs: Map<string, BriefRow>;
+  /** Live plan items (item and plan both not deleted), by item id. */
+  planItems: Map<string, PlanItemRow>;
   reviewByWorkspace: Map<string, PostRow[]>;
   messagesByChannel: Map<string, MessageRow[]>;
   cursors: Map<string, string | null>;
@@ -355,6 +396,10 @@ function assembleDigest(c: DueCandidate, look: Lookups, appBaseUrl: string): Ass
     const brief = id !== null ? look.briefs.get(id) : undefined;
     return brief?.workspace_id === c.workspaceId ? brief : undefined;
   };
+  const planItemIn = (id: string | null): PlanItemRow | undefined => {
+    const item = id !== null ? look.planItems.get(id) : undefined;
+    return item?.workspace_id === c.workspaceId ? item : undefined;
+  };
 
   const comments: CommentItem[] = [];
   const approved: StageItem[] = [];
@@ -363,7 +408,29 @@ function assembleDigest(c: DueCandidate, look: Lookups, appBaseUrl: string): Ass
   const entryIds: string[] = [];
 
   for (const e of c.entries) {
-    if (e.event_type === 'comment' || e.event_type === 'mention') {
+    if (isPlanItemEntry(e)) {
+      const item = planItemIn(e.entity_id);
+      const title = item?.title?.trim() ?? '';
+      // The item or its plan is gone (or has no title): skipped, like a deleted post.
+      if (item === undefined || title === '') continue;
+      const review = e.event_type === 'plan_review' ? planReviewOutcome(e.payload) : undefined;
+      // A withdrawn or unknown review outcome is not news.
+      if (e.event_type === 'plan_review' && review === undefined) continue;
+      const planId = payloadString(e.payload, 'plan_id') ?? item.plan_id;
+      const commentId =
+        e.event_type === 'plan_review' ? undefined : payloadString(e.payload, 'comment_id');
+      comments.push({
+        actorName: name(commentActorId(e)),
+        targetTitle: title,
+        entityType: PLAN_ITEM_ENTITY,
+        entityId: item.id,
+        url: urls.planItem(planId, item.id, commentId),
+        createdAt: e.created_at,
+        mention: e.event_type === 'mention',
+        ...(review !== undefined ? { review } : {}),
+      });
+      entryIds.push(e.id);
+    } else if (e.event_type === 'comment' || e.event_type === 'mention') {
       const entityType =
         e.entity_type === 'post' || e.entity_type === 'brief' ? e.entity_type : null;
       const target = entityType === 'post' ? postIn(e.entity_id) : briefIn(e.entity_id);
@@ -649,10 +716,13 @@ export async function runCatchup(deps: RunCatchupDeps): Promise<CatchupTickResul
   const dueUserIds = [...new Set(due.map((c) => c.userId))];
   const postIds = new Set<string>();
   const briefIds = new Set<string>();
+  const planItemIds = new Set<string>();
   for (const c of due) {
     for (const e of c.entries) {
       if (e.entity_id === null) continue;
-      if (e.event_type === 'stage_change' || e.entity_type === 'post') postIds.add(e.entity_id);
+      if (isPlanItemEntry(e)) planItemIds.add(e.entity_id);
+      else if (e.event_type === 'stage_change' || e.entity_type === 'post')
+        postIds.add(e.entity_id);
       else if (e.event_type === 'brief_created' || e.entity_type === 'brief')
         briefIds.add(e.entity_id);
     }
@@ -696,6 +766,42 @@ export async function runCatchup(deps: RunCatchupDeps): Promise<CatchupTickResul
     briefs.set(b.id, b);
   }
 
+  // Plan item titles: one IN read per chunk, scoped to the due workspaces, then
+  // one IN read of their plans so an item on a deleted plan is skipped too.
+  const itemRows = await readByIdPairs<PlanItemRow>(
+    'plan_items',
+    [...planItemIds],
+    dueWorkspaceIds,
+    (idChunk, wsChunk, from, to) =>
+      client
+        .from('plan_items')
+        .select('id,workspace_id,plan_id,title')
+        .in('id', idChunk)
+        .in('workspace_id', wsChunk)
+        .is('deleted_at', null)
+        .order('id')
+        .range(from, to),
+  );
+  const livePlans = new Set<string>();
+  for (const p of await readByIdPairs<PlanRow>(
+    'plans',
+    [...new Set(itemRows.map((i) => i.plan_id))],
+    dueWorkspaceIds,
+    (idChunk, wsChunk, from, to) =>
+      client
+        .from('plans')
+        .select('id,workspace_id')
+        .in('id', idChunk)
+        .in('workspace_id', wsChunk)
+        .is('deleted_at', null)
+        .order('id')
+        .range(from, to),
+  )) {
+    livePlans.add(p.id);
+  }
+  const planItems = new Map<string, PlanItemRow>();
+  for (const i of itemRows) if (livePlans.has(i.plan_id)) planItems.set(i.id, i);
+
   const reviewByWorkspace = new Map<string, PostRow[]>();
   for (const p of await readByIds<PostRow>('review posts', dueWorkspaceIds, (chunk, from, to) =>
     client
@@ -738,6 +844,7 @@ export async function runCatchup(deps: RunCatchupDeps): Promise<CatchupTickResul
     names,
     posts,
     briefs,
+    planItems,
     reviewByWorkspace,
     messagesByChannel,
     cursors,

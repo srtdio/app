@@ -10,7 +10,7 @@
 import { mark } from '@/lib/perf-marks';
 import { withTraceHeader, type Client, type Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
-import { mapEntry } from '@/components/pages/activity/data';
+import { mapEntry, PLAN_ITEM_ENTITY } from '@/components/pages/activity/data';
 import { READ_TIMEOUT_MS, readMentionProfiles } from '@/lib/chat-reads';
 import { mentionIds } from '@/lib/chat/mentions';
 import {
@@ -207,8 +207,9 @@ interface InboxSince {
 }
 
 /**
- * The caller's inbox rows created strictly after `sinceIso`. The rows the bell
- * used to own (bell-types.ts) are filtered out BEFORE the activity cap and
+ * The caller's inbox rows created strictly after `sinceIso`. The silent rows the
+ * bell used to own (bell-types.ts; plan comments and plan reviews are kept, they
+ * toast) are filtered out BEFORE the activity cap and
  * count, so the count is exact however many arrive (the cap only bounds the
  * rows read for wording): one activity read with an exact count, and one chat
  * mention read for the mention toast, in parallel. Soft-deleted rows are
@@ -276,7 +277,12 @@ export async function enrichNewRows(
   if (newest === null) return { count, lead: null };
 
   const items = newRows.map(mapEntry);
-  const commentIds = unique(items.flatMap((i) => (i.commentId !== null ? [i.commentId] : [])));
+  // Plan rows' comment ids name plan_item_comments, never comments: left out.
+  const commentIds = unique(
+    items.flatMap((i) =>
+      i.commentId !== null && i.entityType !== PLAN_ITEM_ENTITY ? [i.commentId] : [],
+    ),
+  );
   const postIds = unique(
     items.flatMap((i) => (i.entityType === 'post' && i.entityId !== null ? [i.entityId] : [])),
   );

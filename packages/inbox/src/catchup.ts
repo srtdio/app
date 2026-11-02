@@ -25,6 +25,8 @@ export interface CatchupUrlBuilders {
   post: (id: string) => string;
   brief: (id: string) => string;
   comment: (entityType: 'post' | 'brief', entityId: string, commentId: string) => string;
+  /** A plan with one item open; with a comment id it also scrolls to that comment. */
+  planItem: (planId: string, itemId: string, commentId?: string) => string;
   asset: (id: string) => string;
   chat: (channelId: string) => string;
   activity: () => string;
@@ -42,6 +44,10 @@ export function buildCatchupUrls(baseUrl: string, workspaceId: string): CatchupU
     brief: (id) => `${base}/briefs/${enc(id)}?w=${ws}`,
     comment: (entityType, entityId, commentId) =>
       `${base}/${entityType === 'post' ? 'posts' : 'briefs'}/${enc(entityId)}?w=${ws}&comment=${enc(commentId)}`,
+    planItem: (planId, itemId, commentId) =>
+      `${base}/plans/${enc(planId)}?w=${ws}&item=${enc(itemId)}${
+        commentId !== undefined ? `&comment=${enc(commentId)}` : ''
+      }`,
     asset: (id) => `${base}/assets?w=${ws}&asset=${enc(id)}`,
     chat: (channelId) => `${base}/chat?w=${ws}&channel=${enc(channelId)}`,
     activity: () => `${base}/activity?w=${ws}`,
@@ -256,7 +262,11 @@ function postRow(p: PostItem, d: RecipientDigest, withAge: boolean): RenderRow {
 }
 
 function commentRow(c: CommentItem): RenderRow {
-  const verb = c.mention ? 'mentioned you on' : 'commented on';
+  if (c.review === 'approved') {
+    return { lead: c.actorName, text: `approved ${c.targetTitle}`, url: c.url };
+  }
+  const verb =
+    c.review === 'changes' ? 'asked changes on' : c.mention ? 'mentioned you on' : 'commented on';
   return { lead: c.actorName, text: `${verb} ${c.targetTitle}`, url: c.url };
 }
 

@@ -64,16 +64,24 @@ export interface PostItem {
 export interface CommentItem {
   /** Display name of the comment author ("Someone" when unknown). */
   actorName: string;
-  /** Title of the post or brief the comment is on. */
+  /** Title of the post, brief or plan item the comment is on. */
   targetTitle: string;
-  entityType: 'post' | 'brief';
+  entityType: 'post' | 'brief' | 'plan_item';
   entityId: string;
-  /** Deep link built with buildCatchupUrls(...).comment (or .post/.brief without a comment id). */
+  /**
+   * Deep link built with buildCatchupUrls(...).comment (or .post/.brief without a
+   * comment id); a plan item's with .planItem.
+   */
   url: string;
   /** inbox_entries.created_at (ISO). */
   createdAt: string;
   /** True for a mention event, false for a plain comment. */
   mention: boolean;
+  /**
+   * plan_review only: the OK / Not OK outcome. The row then reads "approved {title}"
+   * or "asked changes on {title}" instead of "commented on {title}".
+   */
+  review?: 'approved' | 'changes';
 }
 
 export interface StageItem {

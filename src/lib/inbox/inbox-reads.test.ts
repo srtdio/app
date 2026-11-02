@@ -238,6 +238,30 @@ describe('enrichNewRows', () => {
     expect(toastFromEnriched(res)?.title).toBe('Former member withdrew slot approval');
   });
 
+  it('a plan comment names its actor without reading comments (plan ids are plan_item_comments)', async () => {
+    const tables: string[] = [];
+    const base = fakeClient({
+      users: okData([{ id: 'u-cy', display_name: 'Cy', avatar_url: null }]),
+    });
+    const client = {
+      from(table: string) {
+        tables.push(table);
+        return (base as unknown as { from(t: string): FakeBuilder }).from(table);
+      },
+    } as unknown as Parameters<typeof fetchInboxSince>[0];
+    const res = await enrichNewRows(client, [
+      row({
+        event_type: 'plan_comment',
+        entity_type: 'plan_item',
+        entity_id: 'i1',
+        actor_user_id: 'u-cy',
+        payload: { plan_id: 'pl1', comment_id: 'pc1' },
+      }),
+    ]);
+    expect(tables).not.toContain('comments');
+    expect(toastFromEnriched(res)?.title).toBe('Cy commented');
+  });
+
   it('carries a stage_change lead toStage so the toast names the outcome', async () => {
     const client = fakeClient({ posts: okData([{ id: 'p1', title: 'Q3 Launch' }]) });
     for (const [to, label] of [
