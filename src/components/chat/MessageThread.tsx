@@ -1717,6 +1717,7 @@ export function bubbleClass(
     // max-w-full: an own bubble is fit-content in an items-end column, so a
     // nowrap line (the Reply privately quote) would push its min-content past
     // the column; this caps every bubble at BUBBLE_MAX (min-w album/voice win).
+    // A 284px plan card (max-w-full) now shrinks to fit a narrow phone column.
     'group/bubble relative min-w-0 max-w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
     NO_TOUCH_SELECT,
     bubbleCorners(state),
