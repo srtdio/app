@@ -65,7 +65,7 @@ describe('lighting rules', () => {
   it('every lit-* class used is defined in src/index.css', () => {
     const used = new Set<string>();
     for (const { src: s } of FILES) {
-      for (const m of s.matchAll(/(?<![\w-])(lit-[a-z]+(?:-[a-z]+)*)(?![\w-])/g)) used.add(m[1]);
+      for (const m of s.matchAll(/(?<![\w-])(lit-[a-z]+(?:-[a-z]+)*)(?![\w-])/g)) used.add(m[0]);
     }
     expect([...used].filter((c) => !DEFINED.has(c)).sort()).toEqual([]);
   });
