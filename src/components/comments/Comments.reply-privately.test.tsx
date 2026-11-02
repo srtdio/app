@@ -194,7 +194,7 @@ afterEach(() => {
 describe('Reply privately on comments', () => {
   it("shows on another member's comment, between Reply and Copy", async () => {
     await mount();
-    expect(actionWords('c-other')).toEqual(['Reply', REPLY_PRIVATELY, 'Copy']);
+    expect(actionWords('c-other')).toEqual(['Resolve', 'Reply', REPLY_PRIVATELY, 'Copy']);
     const button = replyPrivately('c-other');
     expect(button?.className).toContain('h-11');
     expect(button?.className).toContain('min-w-[44px]');

@@ -45,6 +45,7 @@ vi.mock('@/components/shell/AvatarMenu', () => ({ AvatarMenu: nothing }));
 vi.mock('@/components/shell/WorkspaceSwitcher', () => ({ WorkspaceSwitcher: nothing }));
 vi.mock('@/components/storage/WorkspaceFullSheet', () => ({ WorkspaceFullSheet: nothing }));
 vi.mock('@/components/ui/toast', () => ({ ToastProvider: passthrough, ToastViewport: nothing }));
+vi.mock('@/components/ui/PersonCard', () => ({ PersonCardHost: nothing }));
 vi.mock('@/components/chat/ChatStoreProvider', () => ({ ChatStoreProvider: passthrough }));
 vi.mock('@/components/chat/ChatTabSignals', () => ({ ChatTabSignals: nothing }));
 vi.mock('@/components/shell/InboxStoreProvider', () => ({ InboxStoreProvider: passthrough }));

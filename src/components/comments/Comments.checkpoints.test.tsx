@@ -398,8 +398,9 @@ describe('one row template for checkpoints and comments', () => {
     expect(author).toBeTruthy();
     expect(author?.className).toContain('block');
     expect(author?.className).not.toContain('truncate');
-    // Role and time live on the line below, not beside the name.
-    const below = author?.nextElementSibling;
+    // Role and time live on the line below, not beside the name (the name
+    // sits inside its person-card trigger).
+    const below = (author?.closest('[data-person-trigger]') ?? author)?.nextElementSibling;
     expect(below?.querySelector('[data-comment-role]')).toBeTruthy();
     expect(below?.querySelector('[data-comment-time]')).toBeTruthy();
     expect(below?.className).toContain('flex-wrap');
