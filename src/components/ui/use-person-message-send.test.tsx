@@ -364,6 +364,8 @@ describe('usePersonMessageSend', () => {
     act(() => root?.render(<Probe />));
     h.startDmChannel.mockImplementation(
       async (_client: unknown, _params: unknown, onOpen: (id: string) => void) => {
+        // The rpc answers later: the send has already returned.
+        await Promise.resolve();
         onOpen('dm-new');
         return null;
       },
