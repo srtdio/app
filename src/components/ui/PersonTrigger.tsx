@@ -72,7 +72,7 @@ export function PersonTrigger({
       className={cn(
         'relative cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
         // The invisible 44x44 minimum hit box, centred on the content.
-        "after:absolute after:left-1/2 after:top-1/2 after:h-11 after:min-h-full after:w-11 after:min-w-full after:-translate-x-1/2 after:-translate-y-1/2",
+        'after:absolute after:left-1/2 after:top-1/2 after:h-11 after:min-h-full after:w-11 after:min-w-full after:-translate-x-1/2 after:-translate-y-1/2',
         display === 'block' ? 'inline-flex shrink-0' : 'inline',
         className,
       )}
