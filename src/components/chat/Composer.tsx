@@ -590,7 +590,7 @@ export function PrivateReplyBar(props: {
   onRemove: () => void;
 }): ReactElement {
   return (
-    <div data-private-reply-bar="">
+    <div data-private-reply-bar="" className="min-w-0 max-w-full">
       <ReplyQuoteBox
         author={privateReplyHeader(props.quote.authorName, props.quote.whereLabel)}
         preview={props.preview}

@@ -1714,7 +1714,10 @@ export function bubbleClass(
   },
 ): string {
   return cn(
-    'group/bubble relative min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+    // max-w-full: an own bubble is fit-content in an items-end column, so a
+    // nowrap line (the Reply privately quote) would push its min-content past
+    // the column; this caps every bubble at BUBBLE_MAX (min-w album/voice win).
+    'group/bubble relative min-w-0 max-w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
     NO_TOUCH_SELECT,
     bubbleCorners(state),
     state.album === true ? 'min-w-[240px] p-[3px]' : sized(BUBBLE_PAD, state.layout),
