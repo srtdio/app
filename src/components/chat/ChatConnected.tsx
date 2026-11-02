@@ -109,6 +109,7 @@ import {
 } from '@/lib/chat/use-history-step';
 import { hasSearchJump, readSearchJump, withoutSearchJump } from '@/lib/search/jump';
 import { startDmChannel } from '@/components/chat/chat-actions';
+import { MENTION_DM_FAILED } from '@/lib/person-card';
 import { mentionGone, useChannelMembersState } from '@/components/chat/use-channel-members';
 import { channelHasClient } from '@/components/chat/ComposerTray';
 import {
@@ -285,7 +286,7 @@ export function chatListPaneClass(planPanelOpen: boolean): string {
   );
 }
 
-export const MENTION_DM_FAILED = "Couldn't open that chat. Try again.";
+export { MENTION_DM_FAILED };
 
 /**
  * The user ids a thread's first paint needs names for: every sender, the DM

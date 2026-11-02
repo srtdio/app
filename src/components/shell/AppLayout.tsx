@@ -13,6 +13,7 @@ import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { StorageWarningBanner } from '@/components/storage/StorageWarningBanner';
 import { WorkspaceFullSheet } from '@/components/storage/WorkspaceFullSheet';
 import { ChatStoreProvider } from '@/components/chat/ChatStoreProvider';
+import { PersonCardHost } from '@/components/ui/PersonCard';
 import { ChatTabSignals } from '@/components/chat/ChatTabSignals';
 import { InboxStoreProvider } from '@/components/shell/InboxStoreProvider';
 import { OnboardingFlow } from '@/components/onboarding/OnboardingFlow';
@@ -488,6 +489,7 @@ function AppLayoutBody() {
               userId={userId}
             />
             <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
+            <PersonCardHost />
             <WorkspaceSwitcher />
             <WorkspaceFullSheet />
             <InductionGuide />
