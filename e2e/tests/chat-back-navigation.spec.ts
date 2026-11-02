@@ -242,7 +242,7 @@ test('4: Notifications -> chat mention card (marked read) -> back = Notification
   expectClean(network);
 });
 
-test('5: chat A -> @mention tap -> person card Message -> DM B; back = chat A', async ({
+test('5: chat A -> @mention tap -> card send -> toast Open chat -> DM B; back = chat A', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -294,8 +294,10 @@ test('5: chat A -> @mention tap -> person card Message -> DM B; back = chat A', 
   const mention = page.locator(`button[data-mention="${PEER}"]`).first();
   await mention.scrollIntoViewIfNeeded();
   await mention.click();
-  // The mention opens the person card; its Message button opens the DM.
-  await page.getByRole('button', { name: 'Message', exact: true }).click();
+  // The mention opens the person card; a quick reaction sends to the DM
+  // (the card closes, no navigation) and the toast's Open chat opens it.
+  await page.locator('[data-person-reaction]').first().click();
+  await page.getByRole('button', { name: 'Open chat', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(encodeURIComponent(DM_CHANNEL)));
   await expect(header(page, PEER_NAME)).toBeVisible();
   await page.goBack();
