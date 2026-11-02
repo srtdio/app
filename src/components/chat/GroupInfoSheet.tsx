@@ -12,6 +12,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Input } from '@/components/ui/Input';
 import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PhotoOptionsSheet, type PhotoOptionsSheetProps } from '@/components/ui/PhotoOptionsSheet';
 import {
@@ -829,13 +830,26 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
           <ul className="flex flex-col">
             {members.options.map((member) => (
               <li key={member.userId} className="flex items-center gap-3 px-1 min-h-[44px]">
-                <Avatar
+                <PersonTrigger
+                  userId={member.userId}
                   name={member.displayName}
-                  {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
-                  role="row"
-                />
+                  avatarUrl={member.avatarUrl}
+                  display="block"
+                >
+                  <Avatar
+                    name={member.displayName}
+                    {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
+                    role="row"
+                  />
+                </PersonTrigger>
                 <span className="min-w-0 flex-1 truncate text-base text-fg">
-                  {member.displayName}
+                  <PersonTrigger
+                    userId={member.userId}
+                    name={member.displayName}
+                    avatarUrl={member.avatarUrl}
+                  >
+                    {member.displayName}
+                  </PersonTrigger>
                   {member.userId === props.currentUserId ? (
                     <span className="ml-1 text-fg-3">(you)</span>
                   ) : null}

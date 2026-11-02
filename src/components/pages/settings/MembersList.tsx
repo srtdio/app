@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Button } from '@/components/ui/Button';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { useMenuGesture } from '@/components/ui/useLongPress';
@@ -113,14 +114,29 @@ function MemberRowItem({ member, canManage, onChangeRole, onRemove }: RowProps) 
       {...(hasMenu ? gesture.handlers : {})}
       className="flex items-center gap-3 px-4 py-3"
     >
-      <Avatar
+      <PersonTrigger
+        userId={member.userId}
         name={member.displayName}
-        {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
-        role="row"
-      />
+        avatarUrl={member.avatarUrl}
+        display="block"
+      >
+        <Avatar
+          name={member.displayName}
+          {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
+          role="row"
+        />
+      </PersonTrigger>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-base font-medium text-fg">{member.displayName}</span>
+          <span className="truncate text-base font-medium text-fg">
+            <PersonTrigger
+              userId={member.userId}
+              name={member.displayName}
+              avatarUrl={member.avatarUrl}
+            >
+              {member.displayName}
+            </PersonTrigger>
+          </span>
           {member.isSelf ? <SelfChip /> : null}
           <EmailTag member={member} canManage={canManage} />
         </div>

@@ -19,6 +19,7 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { SelectCheck } from '@/components/ui/SelectCheck';
 import { NoResults } from '@/components/ui/NoResults';
@@ -281,6 +282,22 @@ export interface StarredRowViewProps {
 export function StarredRowView(props: StarredRowViewProps): ReactElement {
   const { row, selecting } = props;
   const label = props.chat !== null ? `${props.sender} in ${props.chat}` : props.sender;
+  // Another sender's photo and name open the person card; the rest of the row
+  // opens the message. Never while selecting (a tap there toggles the row).
+  const senderId = selecting === undefined && !props.mine ? row.senderUserId : null;
+  const asSender = (node: ReactElement, display: 'inline' | 'block'): ReactElement =>
+    senderId !== null ? (
+      <PersonTrigger
+        userId={senderId}
+        name={props.sender}
+        avatarUrl={props.avatarUrl}
+        display={display}
+      >
+        {node}
+      </PersonTrigger>
+    ) : (
+      node
+    );
   return (
     <li className="min-w-0">
       <PressableRow
@@ -298,9 +315,9 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
         {selecting !== undefined ? <SelectCheck checked={selecting.checked} /> : null}
         <span className="flex min-w-0 flex-1 flex-col gap-2">
           <span className="flex min-w-0 items-center gap-2">
-            <RowAvatar name={props.sender} src={props.avatarUrl} />
+            {asSender(<RowAvatar name={props.sender} src={props.avatarUrl} />, 'block')}
             <span className="min-w-0 flex-1 truncate text-base text-fg">
-              <span className="font-semibold">{props.sender}</span>
+              {asSender(<span className="font-semibold">{props.sender}</span>, 'inline')}
               {props.chat !== null ? (
                 <span data-starred-chat="" className="text-fg-3">
                   {`  ›  ${props.chat}`}

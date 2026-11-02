@@ -611,6 +611,30 @@ export function bucketActorNames(items: readonly ActivityItem[]): string[] {
   return unique(names);
 }
 
+/** One distinct actor of a bucket, for its avatar stack's person cards. */
+export interface BucketActor {
+  name: string;
+  userId: string | null;
+  avatarUrl: string | null;
+}
+
+/**
+ * The bucket's distinct actors in bucketActorNames' order (one per name, the
+ * first entry's id and photo), so each stack avatar can open its person card. Pure.
+ */
+export function bucketActors(items: readonly ActivityItem[]): BucketActor[] {
+  const seen = new Map<string, BucketActor>();
+  for (const item of items) {
+    if (item.actorName === null || seen.has(item.actorName)) continue;
+    seen.set(item.actorName, {
+      name: item.actorName,
+      userId: item.actorId,
+      avatarUrl: item.actorAvatarUrl,
+    });
+  }
+  return [...seen.values()];
+}
+
 /** A post / brief target label that never renders "undefined"/"null". */
 function entityTarget(item: ActivityItem): string {
   if (item.title !== null) return item.title;

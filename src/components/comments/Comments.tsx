@@ -29,6 +29,7 @@ import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { LoadError } from '@/components/ui/LoadError';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import { Avatar } from '@/components/ui/Avatar';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { cn } from '@/lib/cn';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { formatDateTime, formatRelative } from '@/lib/time';
@@ -87,6 +88,9 @@ import {
   type MentionPick,
 } from '@/lib/chat/mentions';
 import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
+import { isFormerMember } from '@/lib/chat/mentions';
+import { canReplyPrivately, commentPrivateReplyDraft } from '@/lib/reply-privately';
+import { ReplyPrivatelyButton } from '@/components/comments/ReplyPrivatelyButton';
 
 /**
  * A mention as it reads in a comment: "@username", or "@Former member" for
@@ -159,6 +163,11 @@ interface CommentsProps {
    * clients (they cannot see drafts). Briefs pass nothing.
    */
   postStage?: string;
+  /**
+   * The post or brief title the page already holds: Reply privately's where
+   * label on the DM quote. Absent reads as no where label.
+   */
+  whereLabel?: string;
 }
 
 /** The toast when comment_create rejects a mention (a client on a draft post). */
@@ -498,11 +507,26 @@ export function renderCommentBody(
     const start = match.index ?? 0;
     if (start > last) pushBodyText(nodes, body.slice(last, start), `t${key}`, words, card);
     const id = (match[1] ?? '').toLowerCase();
-    const label = mentionDisplay(nameOf(id));
-    nodes.push(
+    const name = nameOf(id);
+    const label = mentionDisplay(name);
+    const span = (
       <span key={`m-${key}`} className="font-medium text-accent">
         {words.length === 0 ? label : highlightNodes(label, words)}
-      </span>,
+      </span>
+    );
+    // A resolved mention opens the person card; one not read yet renders nothing to tap.
+    nodes.push(
+      name === null ? (
+        span
+      ) : (
+        <PersonTrigger
+          key={`m-${key}`}
+          userId={id}
+          {...(name === FORMER_MEMBER ? { former: true } : {})}
+        >
+          {span}
+        </PersonTrigger>
+      ),
     );
     key += 1;
     last = start + match[0].length;
@@ -1158,6 +1182,7 @@ export function Comments({
   onCountsChange,
   sharedCheckpoints,
   postStage,
+  whereLabel = '',
 }: CommentsProps) {
   const newTrace = useNewTrace();
   // The Open / All thread filter (posts' header); All by default.
@@ -2120,6 +2145,38 @@ export function Comments({
     );
   }
 
+  // Reply privately, between Reply and Copy: only on someone else's comment
+  // whose author is a known current member (canReplyPrivately). The quote is
+  // built at tap time from what the row shows; no read.
+  function replyPrivatelyControl(comment: CommentRow, authorName: string): ReactNode {
+    const authorUserId = comment.author_user_id;
+    const show = canReplyPrivately({
+      authorUserId,
+      me: currentUserId,
+      authorName,
+      legacy: comment.legacy_author_name !== null,
+      former: authorName === FORMER_MEMBER || isFormerMember(workspaceId, authorUserId),
+    });
+    if (!show) return null;
+    return (
+      <ReplyPrivatelyButton
+        authorUserId={authorUserId}
+        className={ROW_ACTION_CLASS}
+        draft={() =>
+          commentPrivateReplyDraft({
+            commentId: comment.id,
+            authorUserId,
+            authorName,
+            excerpt: commentCopyText(comment.body, handleOf),
+            whereLabel,
+            entityType,
+            entityId,
+          })
+        }
+      />
+    );
+  }
+
   function renderEditor(commentId: string): ReactNode {
     return (
       <div className="mt-2 flex flex-col gap-2">
@@ -2233,7 +2290,7 @@ export function Comments({
         {edited !== null ? <span className="text-sm text-fg-3">{edited}</span> : null}
       </>
     );
-    const name = (
+    const nameEl = (
       <span
         data-comment-author=""
         className={cn(
@@ -2244,6 +2301,25 @@ export function Comments({
         {authorName}
       </span>
     );
+    // The author's photo and name open the person card (a legacy author has no
+    // user id: nothing to open).
+    const authorId = comment.legacy_author_name === null ? comment.author_user_id : null;
+    const asPerson = (node: ReactNode, display: 'inline' | 'block', className?: string) =>
+      authorId !== null && authorName !== '' ? (
+        <PersonTrigger
+          userId={authorId}
+          name={authorName}
+          avatarUrl={authorAvatarUrl ?? null}
+          {...(authorName === FORMER_MEMBER ? { former: true } : {})}
+          display={display}
+          {...(className !== undefined ? { className } : {})}
+        >
+          {node}
+        </PersonTrigger>
+      ) : (
+        node
+      );
+    const name = opts.reply ? asPerson(nameEl, 'block', 'max-w-full') : asPerson(nameEl, 'inline');
 
     return (
       <div
@@ -2251,13 +2327,16 @@ export function Comments({
         className="flex min-w-0 items-start gap-2.5"
       >
         <span className="flex shrink-0">
-          <Avatar
-            name={authorName}
-            role={opts.reply ? 'inline' : 'header'}
-            {...(authorAvatarUrl !== null && authorAvatarUrl !== undefined
-              ? { src: authorAvatarUrl }
-              : {})}
-          />
+          {asPerson(
+            <Avatar
+              name={authorName}
+              role={opts.reply ? 'inline' : 'header'}
+              {...(authorAvatarUrl !== null && authorAvatarUrl !== undefined
+                ? { src: authorAvatarUrl }
+                : {})}
+            />,
+            'block',
+          )}
         </span>
         <div className="min-w-0 flex-1">
           <div data-comment-header="" className="flex min-w-0 items-start gap-2">
@@ -2320,6 +2399,7 @@ export function Comments({
             <div data-comment-actions="" className="-ml-2 mt-1 flex flex-wrap items-center gap-1">
               {opts.leading}
               {opts.replyButton}
+              {opts.actions.canCopy ? replyPrivatelyControl(comment, authorName) : null}
               {opts.actions.canCopy ? copyControl(comment) : null}
             </div>
           ) : null}
