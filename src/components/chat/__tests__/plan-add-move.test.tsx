@@ -203,9 +203,10 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     // A client gets no plan rows in the post view's sheet.
     expect(item).toContain('<PostSheetPlanRowsContext.Provider value={planRows}>');
     expect(item).toMatch(/planActions \? \{ onMove: \(\) => setMoveOpen\(true\) \}/);
-    // Remove from plan is the screen's red button, not a menu row (item 10).
+    // Remove from plan: the concept's header More menu (last, red); a post
+    // item keeps its red button under the Plan notes (the post's own sheet has none).
+    expect(item).toMatch(/onRemove: \(\) => setRemoveOpen\(true\)/);
     expect(item).toContain('<RemoveFromPlanButton');
-    expect(item).not.toMatch(/onRemove: \(\) => setRemoveOpen/);
   });
 
   it('drag cleans up every listener, frame and timer; Escape and pointercancel cancel with no change', () => {

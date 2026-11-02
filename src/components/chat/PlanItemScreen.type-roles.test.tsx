@@ -176,7 +176,7 @@ describe('Plan item screen type roles', () => {
     expect(classes(description)).toEqual(expect.arrayContaining(['text-base', 'text-fg-2']));
   });
 
-  it('meta: the subtitle and the comment time are sm fg-3; the time is sans tabular', async () => {
+  it('meta: the subtitle and the comment time are sm fg-3; the time is mono tabular', async () => {
     await mount();
     const subtitle = document.querySelector('[data-plan-page-subtitle]');
     expect(subtitle).not.toBeNull();
@@ -184,8 +184,7 @@ describe('Plan item screen type roles', () => {
     const time = document.querySelector('time');
     expect(time).not.toBeNull();
     expect(classes(time as Element)).toEqual(
-      expect.arrayContaining(['text-sm', 'text-fg-3', 'font-sans', 'tabular-nums']),
+      expect.arrayContaining(['text-sm', 'text-fg-3', 'font-mono', 'tabular-nums']),
     );
-    expect(classes(time as Element)).not.toContain('font-mono');
   });
 });
