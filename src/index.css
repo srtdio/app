@@ -348,38 +348,40 @@
   --lit-muted-shine: linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
   --lit-tab-active-bg: rgba(111, 121, 227, 0.22);
   --lit-raised:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.6),
-    0 14px 34px -6px rgba(0, 0, 0, 0.85);
+    inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(0, 0, 0, 0.6), 0 14px 34px -6px rgba(0, 0, 0, 0.85);
   --lit-card:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4),
-    0 6px 16px -6px rgba(0, 0, 0, 0.7);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.4), 0 6px 16px -6px rgba(0, 0, 0, 0.7);
   --lit-float:
-    inset 0 1px 0 rgba(255, 255, 255, 0.13), 0 0 0 1px rgba(0, 0, 0, 0.65),
-    0 16px 36px -6px rgba(0, 0, 0, 0.9);
+    inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(0, 0, 0, 0.65), 0 16px 36px -6px rgba(0, 0, 0, 0.9);
   --lit-overlay:
-    inset 0 1px 0 rgba(255, 255, 255, 0.13), 0 0 0 1px rgba(0, 0, 0, 0.7),
-    0 28px 64px -8px rgba(0, 0, 0, 0.95);
+    inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(0, 0, 0, 0.7), 0 28px 64px -8px rgba(0, 0, 0, 0.95);
   --lit-header: 0 1px 0 rgba(0, 0, 0, 0.6), 0 8px 16px -10px rgba(0, 0, 0, 0.85);
   --lit-side: 1px 0 0 rgba(0, 0, 0, 0.6), 8px 0 16px -12px rgba(0, 0, 0, 0.8);
   --lit-dock:
     inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 -1px 0 rgba(0, 0, 0, 0.6),
     0 -10px 20px -12px rgba(0, 0, 0, 0.75);
   --lit-btn-primary:
-    inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 1px 2px rgba(0, 0, 0, 0.6),
-    0 3px 10px -2px rgba(111, 121, 227, 0.45);
+    inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.6), 0 3px 10px -2px rgba(111, 121, 227, 0.45);
   --lit-btn-success:
-    inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 1px 2px rgba(0, 0, 0, 0.6),
-    0 3px 10px -2px rgba(92, 194, 141, 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.6), 0 3px 10px -2px rgba(92, 194, 141, 0.35);
   --lit-btn-danger:
-    inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 1px 2px rgba(0, 0, 0, 0.6),
-    0 3px 10px -2px rgba(230, 90, 90, 0.35);
-  --lit-btn-secondary: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.5);
+    inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.6), 0 3px 10px -2px rgba(230, 90, 90, 0.35);
+  --lit-btn-secondary:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.5);
   --lit-chip:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(0, 0, 0, 0.3);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3);
   --lit-chip-selected:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(0, 0, 0, 0.3);
+    inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3);
   --lit-well: inset 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
   --lit-well-soft: inset 0 1px 2px rgba(0, 0, 0, 0.35);
   --lit-pill: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 1px rgba(0, 0, 0, 0.5);
@@ -392,11 +394,11 @@
     0 1px 2px rgba(0, 0, 0, 0.6);
   --lit-badge: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.6);
   --lit-bubble-own:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(0, 0, 0, 0.25);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.25);
   --lit-bubble-other:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(0, 0, 0, 0.25);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
 @layer base {
   html,
@@ -585,6 +587,11 @@
     .lit-chip:hover,
     :is(button, a, [role='button']).lit-card:hover,
     :is(button, a, [role='button']).lit-card-muted:hover {
+      background-image: none;
+    }
+    /* Cards that are divs but carry their own hover fill (Pipeline, Briefs). */
+    .lit-card[class*='hover:bg-']:hover,
+    .lit-card-muted[class*='hover:bg-']:hover {
       background-image: none;
     }
   }

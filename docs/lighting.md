@@ -4,6 +4,8 @@ One light, straight above the screen, in light and dark mode. Raised things have
 
 Every surface takes exactly one `lit-*` class from `src/index.css` (`@layer components`). Call sites never carry `box-shadow`, `shadow-*`, `drop-shadow` or `backdrop-blur` (only the ImageLightbox and FileViewer backdrops keep their blur). Guard: `src/__tests__/lighting-rules.test.ts`. The guide spotlight keeps `--shadow-spotlight` (a cut-out, not a light).
 
+Dark mode: raised surfaces carry a faint bottom rim, bounce light, always dimmer than the top edge.
+
 ## How the classes combine with utilities
 
 - Lit classes sit in the components layer, so utilities on the same element win. Gradients are `background-image`, so the element keeps its own `bg-*` colour underneath.

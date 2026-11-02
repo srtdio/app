@@ -153,6 +153,45 @@ describe('lighting rules', () => {
     expect(cal).not.toMatch(/variant="ghost"[^>]*data-plan-tab-chip/);
   });
 
+  it('div cards with their own hover fill drop the gradient on hover', () => {
+    const flat = CSS.replace(/\s+/g, ' ');
+    expect(flat).toContain(
+      ".lit-card[class*='hover:bg-']:hover, .lit-card-muted[class*='hover:bg-']:hover { background-image: none; }",
+    );
+  });
+
+  it('dark raised tokens carry a bottom rim dimmer than the top edge; light has none', () => {
+    const block = (sel: string): string => {
+      const start = CSS.indexOf(`${sel} {`);
+      return CSS.slice(start, CSS.indexOf('\n}', start));
+    };
+    const value = (body: string, name: string): string =>
+      (new RegExp(`--${name}:([^;]+);`).exec(body)?.[1] ?? '').replace(/\s+/g, ' ');
+    const light = block(':root');
+    const dark = block('\n.dark');
+    for (const name of [
+      'lit-raised',
+      'lit-card',
+      'lit-float',
+      'lit-overlay',
+      'lit-btn-primary',
+      'lit-btn-success',
+      'lit-btn-danger',
+      'lit-btn-secondary',
+      'lit-chip',
+      'lit-chip-selected',
+      'lit-bubble-own',
+      'lit-bubble-other',
+    ]) {
+      const d = value(dark, name);
+      expect(d, name).toContain('inset 0 -1px 0');
+      const top = Number(/inset 0 1px 0 rgba\(255, 255, 255, ([\d.]+)\)/.exec(d)?.[1]);
+      const rim = Number(/inset 0 -1px 0 rgba\(255, 255, 255, ([\d.]+)\)/.exec(d)?.[1]);
+      expect(rim, name).toBeLessThan(top);
+      expect(value(light, name), name).not.toContain('inset 0 -1px 0');
+    }
+  });
+
   it('the shared primitives carry their lit class', () => {
     const button = src('ui/Button.tsx');
     for (const c of ['lit-btn-primary', 'lit-btn-secondary', 'lit-btn-success', 'lit-btn-danger']) {

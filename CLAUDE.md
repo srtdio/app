@@ -104,7 +104,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Lighting: one light, straight above. Every surface takes exactly one lit-_ class from src/index.css; never box-shadow, shadow-_, drop-shadow or backdrop-blur on a call site (guard: lighting-rules.test.ts).
   - Heights: flat (list rows, page), card (lit-card / lit-card-muted), raised (nav, chat circle, auth/onboarding cards), float (toasts, strip, unread/latest pills, drags), overlay (menus, popovers, sheets, dialogs, side panels). Headers lit-header, bottom bars lit-dock, sidebar lit-side.
   - Controls: buttons via Button variants; chips, radios and segment thumbs lit-chip / lit-chip-selected; inputs and tracks lit-well; small parts lit-pill / lit-badge / lit-avatar / lit-media; tinted banners lit-tint.
-  - Dark mode: higher is lighter; never rely on a shadow alone.
+  - Dark mode: higher is lighter; never rely on a shadow alone; raised surfaces add a faint bottom rim dimmer than the top edge.
   - New surface: pick a height from this list, in light and dark, and add it to docs/lighting.md.
   - Labels and icons on raised controls use full ink (text-fg); icon stroke 1.85.
 - A panel beside the page is ui/SidePanel only (laptop via useIsLaptop, 380px, translateX, nothing dims, Esc closes); phone shows the same content in a Sheet (guard: cockpit/side-panel-rule.test.ts).
