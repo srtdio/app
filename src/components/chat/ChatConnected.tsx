@@ -2065,7 +2065,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     membersLoad !== null && membersLoad.ok ? membersLoad.members : null,
   );
 
-
   // The header arrow: back to where the chat was opened from (a cold open: the list).
   const onBack = useCallback((): void => {
     if (chatBackAction(window.history.state) === 'pop') navigate(-1);

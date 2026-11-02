@@ -1255,9 +1255,7 @@ export function pendingMessage(params: {
     sharedBriefIds: [...(params.local.sharedBriefIds ?? [])],
     reply: params.local.reply,
     ...pendingThreadRoot(params.local.reply),
-    ...(params.local.privateReply !== undefined
-      ? { privateReply: params.local.privateReply }
-      : {}),
+    ...(params.local.privateReply !== undefined ? { privateReply: params.local.privateReply } : {}),
     state: 'sending',
     status: 'sent',
     reactions: [],

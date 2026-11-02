@@ -156,7 +156,11 @@ export function PersonCardBody({
   const meta = personMetaLine(data);
   return (
     <div className="flex flex-col items-center gap-3 text-center" data-person-card={data.userId}>
-      <Avatar role="profile" name={data.name} {...(data.avatarUrl !== null ? { src: data.avatarUrl } : {})} />
+      <Avatar
+        role="profile"
+        name={data.name}
+        {...(data.avatarUrl !== null ? { src: data.avatarUrl } : {})}
+      />
       <div className="flex w-full min-w-0 flex-col items-center gap-0.5">
         {showName ? (
           <p className="w-full truncate text-lg font-semibold text-fg">{data.name}</p>
@@ -297,13 +301,7 @@ function PersonPopover({
         style={{ top: pos.top, left: pos.left, width: PERSON_POPOVER_W }}
         className={cn('fixed z-50 p-4 focus:outline-none', popoverClass(entered))}
       >
-        <PersonCardBody
-          data={data}
-          showName
-          showHint
-          onAction={onAction}
-          actionRef={actionRef}
-        />
+        <PersonCardBody data={data} showName showHint onAction={onAction} actionRef={actionRef} />
       </div>
     </>,
     document.body,

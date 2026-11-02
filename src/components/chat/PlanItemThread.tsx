@@ -100,9 +100,7 @@ function authorLeft(
   if (userId === null) return false;
   if (isFormerMember(workspaceId, userId)) return true;
   if (held === null) return false;
-  return !held.rows.some(
-    (r) => r.user_id === userId && r.active === true && r.removed_at === null,
-  );
+  return !held.rows.some((r) => r.user_id === userId && r.active === true && r.removed_at === null);
 }
 
 /** Comments this close together from one author are one run. */

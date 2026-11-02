@@ -146,12 +146,7 @@ async function settle(): Promise<void> {
 
 async function mount(routed = true): Promise<void> {
   const comments = (
-    <Comments
-      workspaceId="ws-1"
-      entityType="brief"
-      entityId="brief-1"
-      whereLabel="Spring launch"
-    />
+    <Comments workspaceId="ws-1" entityType="brief" entityId="brief-1" whereLabel="Spring launch" />
   );
   act(() => {
     root?.render(routed ? <MemoryRouter>{comments}</MemoryRouter> : comments);

@@ -273,9 +273,7 @@ describe('bubble model', () => {
 
   it('a row maps private_reply through the schema; null is none; malformed throws', () => {
     expect(rowToThreadMessage(row(), ME).privateReply).toEqual(SERVER_QUOTE);
-    expect(rowToThreadMessage(row({ private_reply: null }), ME)).not.toHaveProperty(
-      'privateReply',
-    );
+    expect(rowToThreadMessage(row({ private_reply: null }), ME)).not.toHaveProperty('privateReply');
     expect(() => rowToThreadMessage(row({ private_reply: { kind: 'chat' } }), ME)).toThrow();
   });
 

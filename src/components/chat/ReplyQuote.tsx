@@ -183,11 +183,7 @@ function quoteLines(
           className={cn(
             // A media line is one row whose label ellipsizes; text clamps to two
             // (one, truncated, for a Reply privately quote).
-            label
-              ? 'flex min-w-0'
-              : oneLine
-                ? 'truncate'
-                : 'line-clamp-2 [overflow-wrap:anywhere]',
+            label ? 'flex min-w-0' : oneLine ? 'truncate' : 'line-clamp-2 [overflow-wrap:anywhere]',
             inBubble !== undefined ? sized(QUOTE_TEXT_TYPE, inBubble) : 'text-sm',
             deleted ? 'italic text-fg-3' : 'text-fg-2',
           )}
