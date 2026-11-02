@@ -2435,7 +2435,10 @@ export function Composer(props: ComposerProps): ReactElement {
                     'flex shrink-0',
                     // Split send/schedule: one lit button on the shared wrapper.
                     showChevron &&
-                      cn('lit-btn-primary', scheduleBusy ? 'rounded-l-lg rounded-r-full' : 'rounded-full'),
+                      cn(
+                        'lit-btn-primary',
+                        scheduleBusy ? 'rounded-l-lg rounded-r-full' : 'rounded-full',
+                      ),
                   )}
                 >
                   <Button

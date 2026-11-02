@@ -123,7 +123,7 @@ describe('StarredRowView', () => {
 
   it('a 16px panel card: 20px inline avatar, Sender › Chat, mono date, chevron, peer bubble on panel-2', () => {
     const out = html(<ul>{StarredRowView(base)}</ul>);
-    expect(out).toContain('rounded-2xl border border-border bg-panel');
+    expect(out).toContain('rounded-2xl border bg-panel p-3 lit-card');
     expect(out).toContain('data-avatar-role="inline"');
     expect(out).toContain('Chitra');
     expect(out).toContain('›  Diwali shoot');

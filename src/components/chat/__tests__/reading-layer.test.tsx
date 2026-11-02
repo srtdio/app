@@ -178,7 +178,7 @@ describe('T8 tray and emoji button by pointer', () => {
     // The shared round secondary Button recipe: 44 tall, 44 wide, a circle.
     expect(html).toContain('h-11');
     expect(html).toContain('rounded-full w-11 px-0');
-    expect(html).toContain('bg-panel text-fg border border-border');
+    expect(html).toContain('lit-btn-secondary bg-panel text-fg border');
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('data-tray=""');
   });
@@ -199,13 +199,17 @@ describe('reading layer elements', () => {
     expect(pill).toContain('h-11');
     expect(pill).toContain('font-mono');
     expect(pill).toContain('bg-panel');
-    expect(pill).toContain('border-border');
+    // Lit as a float over the thread; no shadow utility.
+    expect(pill).toContain('lit-float');
+    expect(pill).not.toContain('shadow-2xl');
   });
 
   it('latest button is 44px, solid panel, with a count badge', () => {
     const html = renderToStaticMarkup(<LatestButton visible count={3} onTap={() => undefined} />);
     expect(html).toContain('h-11 w-11');
     expect(html).toContain('data-count-badge');
+    expect(html).toContain('lit-float');
+    expect(html).not.toContain('shadow-2xl');
     const none = renderToStaticMarkup(
       <LatestButton visible={false} count={0} onTap={() => undefined} />,
     );

@@ -129,8 +129,11 @@ describe('group info page pure helpers', () => {
     const editor = hero(true);
     expect(editor).toContain(`src="${PHOTO}"`);
     expect(editor).toContain('data-camera-badge');
-    // The badge ring matches the page background it sits on.
-    expect(editor).toContain('ring-bg');
+    // The badge cut-out (an outline, so the lit button shadow stays) matches
+    // the page background it sits on; lit by its accent fill.
+    expect(editor).toContain('outline-bg');
+    expect(editor).toContain('lit-btn-primary');
+    expect(editor).not.toContain('ring-bg');
     const member = hero(false);
     expect(member).toContain(`src="${PHOTO}"`);
     expect(member).not.toContain('data-camera-badge');

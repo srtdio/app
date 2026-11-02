@@ -195,16 +195,19 @@ describe('the docked panel', () => {
     const src = read('PlanScreen.tsx');
     expect(src).not.toContain('PLAN_PANEL_PX');
     expect(src).toContain(
-      "'fixed inset-y-0 right-0 z-40 flex flex-col border-l border-border bg-panel",
+      "'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel",
     );
     expect(src).toContain("'translate-x-6 opacity-0 ease-exit'");
     expect(src).toContain("'translate-x-0 opacity-100 ease-enter'");
     expect(src).toContain("{ role: 'complementary' }");
-    // Left-edge shadow token while it overlays; none from 1180px.
-    expect(src).toContain('[box-shadow:var(--shadow-panel-left)]');
-    expect(src).toContain('min-[1180px]:[box-shadow:none]');
+    // Lit as an overlay at every width (lit-overlay); no arbitrary box-shadow,
+    // and the old --shadow-panel-left token is gone from index.css.
+    expect(src).toContain('lit-overlay transition-[transform,opacity]');
+    expect(src).not.toContain('[box-shadow:');
+    expect(src).not.toContain('--shadow-panel-left');
     const css = readFileSync(fileURLToPath(new URL('../../../index.css', import.meta.url)), 'utf8');
-    expect(css.match(/--shadow-panel-left:/g)).toHaveLength(2);
+    expect(css).not.toContain('--shadow-panel-left');
+    expect(css).toContain('.lit-overlay');
     // One laptop switch for every laptop layout.
     expect(src).toContain('useIsLaptop()');
     expect(src).not.toContain('usePlanDesktop');

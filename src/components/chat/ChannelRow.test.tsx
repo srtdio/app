@@ -187,7 +187,9 @@ describe('chat home tile', () => {
       expect.arrayContaining(['flex-col', 'items-center', 'relative', 'px-3', 'pt-4', 'pb-[14px]']),
     );
     expect(t.cls).toContain('bg-panel');
-    expect(t.cls.split(' ')).toEqual(expect.arrayContaining(['border', 'border-border']));
+    // Lit card: the border width stays, lit-card draws the edges (no border-border).
+    expect(t.cls.split(' ')).toEqual(expect.arrayContaining(['border', 'lit-card']));
+    expect(t.cls).not.toContain('border-border');
     expect(t.cls).toContain('rounded-xl');
     expect(t.html).toContain(`data-person-photo="" class="${esc(PERSON_TILE_PHOTO)}"`);
     // The shared Avatar at its profile role: 72px circle, never resized with "!".
@@ -227,6 +229,8 @@ describe('chat home tile', () => {
   it('selected (desktop active): panel-2 fill', () => {
     const t = tile(dm, read, { selected: true });
     expect(t.cls).toContain('bg-panel-2');
+    // bg-none drops the card gradient so the panel-2 fill shows.
+    expect(t.cls.split(' ')).toEqual(expect.arrayContaining(['lit-card', 'bg-none']));
     expect(t.cls).not.toContain('bg-accent-soft');
     tokenOnly(t.cls + t.html);
   });
@@ -234,7 +238,12 @@ describe('chat home tile', () => {
   it('checked in select mode: accent tint and the on select circle', () => {
     for (const c of [dm, group]) {
       const t = tile(c, read, { selecting: true, checked: true });
-      expect(t.cls).toContain('bg-accent-soft');
+      // The selected tint is lit-chip-selected's own background (no bg-accent-soft).
+      expect(t.cls.split(' ')).toEqual(
+        expect.arrayContaining(['border-accent-line', 'lit-chip-selected']),
+      );
+      expect(t.cls).not.toContain('bg-accent-soft');
+      expect(t.cls).not.toContain('lit-card');
       expect(t.html).toContain('data-select-check="on"');
       tokenOnly(t.cls + t.html);
     }

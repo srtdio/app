@@ -49,7 +49,7 @@ describe('thread buttons', () => {
     for (const row of [threadLoadErrorRow(noop), olderLoadErrorRow(noop)]) {
       const [retry] = buttons(renderToStaticMarkup(row));
       expectOnSystem(retry ?? '');
-      expect(retry).toContain('border-border');
+      expect(retry).toContain('lit-btn-secondary');
     }
   });
 });

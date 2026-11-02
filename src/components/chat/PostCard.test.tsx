@@ -67,7 +67,9 @@ describe('NotVisibleCard', () => {
   it('has no link, button or thumbnail, and uses neutral tokens', () => {
     expect(html).not.toMatch(/<a\b|<button\b|<svg\b|<img\b/);
     expect(html).toContain('bg-panel-2');
-    expect(html).toContain('border-border');
+    // Neutral lit card: lit-card-muted draws the edges (no border-border).
+    expect(html).toContain('lit-card-muted');
+    expect(html).not.toContain('border-border bg-panel-2');
     expect(html).toContain('text-fg-2');
   });
 
@@ -76,6 +78,8 @@ describe('NotVisibleCard', () => {
     expect(html).toContain(`height:${String(cardBoxStyle(null, 'touch').height)}px`);
     expect(html).toContain('data-card-media');
     expect(SHARED_CARD).toContain('bg-panel');
+    expect(SHARED_CARD).toContain('lit-card');
+    expect(SHARED_CARD).not.toContain('border-border');
   });
 });
 
@@ -180,6 +184,8 @@ describe('SharedPostCardList', () => {
     expect(html).toContain('data-msg-link=""');
     expect(html).toContain('tabindex="0"');
     expect(POST_CARD).toContain('bg-panel');
+    expect(POST_CARD).toContain('lit-card');
+    expect(POST_CARD).not.toContain('border-border');
   });
 
   it('renders no sheet until tapped, and never reaches for the router', () => {

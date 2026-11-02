@@ -436,6 +436,7 @@
   .lit-float[data-unread-pill],
   .lit-float[data-latest-button] {
     background-image: var(--lit-surface);
+    box-shadow: var(--lit-float);
   }
   .lit-overlay {
     box-shadow: var(--lit-overlay);
@@ -472,6 +473,13 @@
   .lit-btn-danger {
     background-image: var(--lit-shine);
     box-shadow: var(--lit-btn-danger);
+  }
+  /* A split control (send / schedule) is one lit button: the halves inside
+     the shared wrapper carry no glow of their own, so there is no seam. */
+  .lit-btn-primary > .lit-btn-primary,
+  .lit-btn-primary > * > .lit-btn-primary {
+    background-image: none;
+    box-shadow: none;
   }
   .lit-btn-secondary {
     background-image: var(--lit-chip-bg);

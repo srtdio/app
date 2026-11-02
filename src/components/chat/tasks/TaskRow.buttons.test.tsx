@@ -64,7 +64,7 @@ describe('task row buttons', () => {
     for (const attr of ['data-task-keep-mine=""', 'data-task-keep-theirs=""']) {
       const t = tag(html, attr);
       expectOnSystem(t);
-      expect(t).toContain('border-border');
+      expect(t).toContain('lit-btn-secondary');
     }
   });
 

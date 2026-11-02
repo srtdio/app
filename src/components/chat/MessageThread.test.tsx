@@ -424,6 +424,11 @@ describe('bubble shell', () => {
     expect(own).toContain('bg-bubble-own text-accent-fg');
     expect(own.split(' ')).not.toContain('bg-accent');
     expect(peer).toContain('bg-panel-2 text-fg');
+    // Lit from above: one bubble light per side.
+    expect(own.split(' ')).toContain('lit-bubble-own');
+    expect(peer.split(' ')).toContain('lit-bubble-other');
+    expect(own.split(' ')).not.toContain('lit-bubble-other');
+    expect(peer.split(' ')).not.toContain('lit-bubble-own');
     for (const cls of [own, peer]) {
       expect(cls).toContain('rounded-[18px]');
       expect(cls.split(' ')).not.toContain('border');

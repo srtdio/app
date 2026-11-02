@@ -34,7 +34,7 @@ describe('plan row buttons (design system)', () => {
       expect(tag).not.toMatch(OLD);
     }
     const chip = tags.find((t) => t.includes('data-plan-row-day-chip')) ?? '';
-    expect(chip).toContain('border-border');
+    expect(chip).toContain('lit-btn-secondary');
     expect(chip).toContain('aria-label="Change day: Reel"');
     const remove = tags.find((t) => t.includes('data-plan-row-remove-edit')) ?? '';
     expect(remove).toContain('w-11');

@@ -3099,7 +3099,7 @@ function usePlanDrag(opts: {
 
 /**
  * The lifted card: fixed over the list at the row's place, moved with
- * translateY only, raised (shadow token, a slight scale that eases in over
+ * translateY only, raised (lit-float, a slight scale that eases in over
  * 120ms); on drop it eases to the slot over 180ms. Reduced motion: no scale,
  * no ease.
  */
