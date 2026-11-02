@@ -95,7 +95,9 @@ export function PlanDayTiles(props: {
                     'relative flex min-h-[62px] flex-col items-center justify-center gap-px border',
                     // A selection fill, not a button: lit-chip-selected (its own
                     // background) on the accent line, lit-chip when idle.
-                    on ? 'border-accent text-accent lit-chip-selected' : 'bg-panel text-fg lit-chip',
+                    on
+                      ? 'border-accent text-accent lit-chip-selected'
+                      : 'bg-panel text-fg lit-chip',
                   )}
                 >
                   <span

@@ -628,8 +628,7 @@ export function SharedPostCardList(
  * The shared card box: one tappable row, thumb + title over meta. No border
  * colour: the lit class draws the edges (lit-card live, lit-card-muted neutral).
  */
-const SHARED_CARD_BODY =
-  'flex items-center gap-2.5 rounded-xl border px-2.5 py-2 min-h-[44px]';
+const SHARED_CARD_BODY = 'flex items-center gap-2.5 rounded-xl border px-2.5 py-2 min-h-[44px]';
 const SHARED_CARD_BOX = `w-[240px] ${SHARED_CARD_BODY}`;
 export const SHARED_CARD = `${SHARED_CARD_BOX} bg-panel lit-card`;
 /** The same box on the neutral fill (unavailable, not visible): lit-card-muted. */

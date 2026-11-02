@@ -31,7 +31,7 @@ export function chatTabLabel(unread: number): string {
 
 /**
  * A pill tab: inactive is the icon alone in a 44x44 target; active is icon and
- * label in an accent-soft capsule (lit-tab-active-bg: accent 22% in dark).
+ * label in an accent-soft capsule (--lit-tab-active-bg: accent 22% in dark).
  * The switch is instant (no width animation).
  */
 function tabClass(active: boolean): string {

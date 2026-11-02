@@ -373,10 +373,7 @@ function Group({
   children: ReactNode;
 }) {
   return (
-    <section
-      aria-label={title}
-      className="overflow-hidden rounded-xl border bg-panel lit-card"
-    >
+    <section aria-label={title} className="overflow-hidden rounded-xl border bg-panel lit-card">
       <header className="border-b lit-header px-4 py-3">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{title}</h3>

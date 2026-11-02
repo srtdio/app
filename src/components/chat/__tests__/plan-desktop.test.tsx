@@ -194,9 +194,7 @@ describe('the docked panel', () => {
     expect(PLAN_PANEL_WIDTH).toBe('w-[360px] min-[972px]:w-[440px]');
     const src = read('PlanScreen.tsx');
     expect(src).not.toContain('PLAN_PANEL_PX');
-    expect(src).toContain(
-      "'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel",
-    );
+    expect(src).toContain("'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel");
     expect(src).toContain("'translate-x-6 opacity-0 ease-exit'");
     expect(src).toContain("'translate-x-0 opacity-100 ease-enter'");
     expect(src).toContain("{ role: 'complementary' }");

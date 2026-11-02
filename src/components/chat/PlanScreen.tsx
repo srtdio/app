@@ -592,9 +592,7 @@ export function PlanPage(props: {
         {props.children}
       </div>
       {props.footer !== undefined ? (
-        <div className="shrink-0 border-t bg-panel px-4 pb-3 pt-2.5 lit-dock">
-          {props.footer}
-        </div>
+        <div className="shrink-0 border-t bg-panel px-4 pb-3 pt-2.5 lit-dock">{props.footer}</div>
       ) : null}
     </div>,
     document.body,

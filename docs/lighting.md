@@ -14,76 +14,76 @@ Every surface takes exactly one `lit-*` class from `src/index.css` (`@layer comp
 
 ## Heights
 
-| Height | Class | Looks like | Where |
-| --- | --- | --- | --- |
-| Flat | none | sits on the page | page background, plain list rows, skeletons, IconButton, ghost and link buttons, Plan week headings, tombstones, unread divider |
-| Sunken | `lit-well` / `lit-well-soft` | shade on the top inner edge | inputs, search fields, composer, code boxes, tracks / lanes, drop zones, transcripts |
-| Card | `lit-card` / `lit-card-muted` | lit top edge, soft shadow under | post, brief, plan, asset, activity, chat list, file, link preview, settings panels; grey content panels (muted) |
-| Raised | `lit-raised` | bright top, deep falling shadow | phone tab pill, chat circle, auth / onboarding / unsubscribe cards |
-| Float | `lit-float` | lifted off the page | toasts, undo strip, unread / latest pills, drag ghosts, induction label |
-| Overlay | `lit-overlay` | highest; long shadow, dark mode lighter gradient | menus, popovers, sheets, dialogs, side panels, docked plan panel |
-| Bars | `lit-header` / `lit-dock` / `lit-side` | shade falls down from headers, up from bottom bars, right from the sidebar | Topbar, section and detail headers; composer, decision bar, footers; Sidebar |
+| Height  | Class                                  | Looks like                                                                 | Where                                                                                                                           |
+| ------- | -------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Flat    | none                                   | sits on the page                                                           | page background, plain list rows, skeletons, IconButton, ghost and link buttons, Plan week headings, tombstones, unread divider |
+| Sunken  | `lit-well` / `lit-well-soft`           | shade on the top inner edge                                                | inputs, search fields, composer, code boxes, tracks / lanes, drop zones, transcripts                                            |
+| Card    | `lit-card` / `lit-card-muted`          | lit top edge, soft shadow under                                            | post, brief, plan, asset, activity, chat list, file, link preview, settings panels; grey content panels (muted)                 |
+| Raised  | `lit-raised`                           | bright top, deep falling shadow                                            | phone tab pill, chat circle, auth / onboarding / unsubscribe cards                                                              |
+| Float   | `lit-float`                            | lifted off the page                                                        | toasts, undo strip, unread / latest pills, drag ghosts, induction label                                                         |
+| Overlay | `lit-overlay`                          | highest; long shadow, dark mode lighter gradient                           | menus, popovers, sheets, dialogs, side panels, docked plan panel                                                                |
+| Bars    | `lit-header` / `lit-dock` / `lit-side` | shade falls down from headers, up from bottom bars, right from the sidebar | Topbar, section and detail headers; composer, decision bar, footers; Sidebar                                                    |
 
 ## Controls and small parts
 
-| Class | Surface |
-| --- | --- |
-| `lit-btn-primary` / `lit-btn-success` / `lit-btn-danger` | Button variants with a solid fill (shine + coloured glow); split send/schedule wrapper; filled pseudo-buttons |
-| `lit-btn-secondary` | Button secondary/default; neutral circles (tray tiles, schedule/reminder rows, photo edit badges) |
-| `lit-chip` / `lit-chip-selected` | Chip, radio pickers, segment thumbs, calendar selected days, PlanDayPicker tiles, Plan OK/Changes idle |
-| `lit-pill` | Tag, day separators, PostRefChip, status / priority / version / format pills, checkpoint circles, day number circles, PlatformMark, shortcut hint |
-| `lit-tint` | banners on good/bad/warn/accent soft fills (ErrorNote, storage warning, approved notice, compare banner, plan banners, invite warning, sign-in warn, scheduled strip) |
-| `lit-active` | active rows on accent-soft (sidebar nav, workspace row, command palette row), active tab pill, chat tab tint, selected Plan OK/Changes |
-| `lit-badge` | CountBadge, asset picker check badge |
-| `lit-avatar` | Avatar and presence dot |
-| `lit-media` | controls over media (lightbox buttons, play circles, remove x, meta pills, gallery counters, upload ring) |
-| `lit-knob` | switch knob |
-| `lit-fill` | the fill inside a track (progress, storage, upload, scrubber) |
-| `lit-bubble-own` / `lit-bubble-other` | chat bubbles, starred, scheduled list and plan comment bubbles (tombstones flat; failed keeps border-bad) |
+| Class                                                    | Surface                                                                                                                                                               |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lit-btn-primary` / `lit-btn-success` / `lit-btn-danger` | Button variants with a solid fill (shine + coloured glow); split send/schedule wrapper; filled pseudo-buttons                                                         |
+| `lit-btn-secondary`                                      | Button secondary/default; neutral circles (tray tiles, schedule/reminder rows, photo edit badges)                                                                     |
+| `lit-chip` / `lit-chip-selected`                         | Chip, radio pickers, segment thumbs, calendar selected days, PlanDayPicker tiles, Plan OK/Changes idle                                                                |
+| `lit-pill`                                               | Tag, day separators, PostRefChip, status / priority / version / format pills, checkpoint circles, day number circles, PlatformMark, shortcut hint                     |
+| `lit-tint`                                               | banners on good/bad/warn/accent soft fills (ErrorNote, storage warning, approved notice, compare banner, plan banners, invite warning, sign-in warn, scheduled strip) |
+| `lit-active`                                             | active rows on accent-soft (sidebar nav, workspace row, command palette row), active tab pill, chat tab tint, selected Plan OK/Changes                                |
+| `lit-badge`                                              | CountBadge, asset picker check badge                                                                                                                                  |
+| `lit-avatar`                                             | Avatar and presence dot                                                                                                                                               |
+| `lit-media`                                              | controls over media (lightbox buttons, play circles, remove x, meta pills, gallery counters, upload ring)                                                             |
+| `lit-knob`                                               | switch knob                                                                                                                                                           |
+| `lit-fill`                                               | the fill inside a track (progress, storage, upload, scrubber)                                                                                                         |
+| `lit-bubble-own` / `lit-bubble-other`                    | chat bubbles, starred, scheduled list and plan comment bubbles (tombstones flat; failed keeps border-bad)                                                             |
 
 Labels and icons on raised controls use full ink (`text-fg`); icon stroke is 1.85. Chip and radio idle labels are `text-fg font-medium`; selected keeps `text-accent`.
 
 ## Tokens (light / dark)
 
-| Token | Light | Dark |
-| --- | --- | --- |
-| `--lit-hl` | `inset 0 1px 0 rgba(255, 255, 255, 0.95)` | `inset 0 1px 0 rgba(255, 255, 255, 0.1)` |
-| `--lit-edge-top` | `#eceef1` | `rgba(255, 255, 255, 0.08)` |
-| `--lit-edge-side` | `#e1e4e8` | `rgba(255, 255, 255, 0.055)` |
-| `--lit-edge-bottom` | `#d3d7dd` | `rgba(255, 255, 255, 0.035)` |
-| `--lit-surface` | `linear-gradient(#fff, #f6f7f9)` | `linear-gradient(#24262d, #1a1c21)` |
-| `--lit-surface-top` | `#fff` | `#24262d` |
-| `--lit-chip-bg` | `linear-gradient(#fff, #f8f9fa)` | `linear-gradient(#1f2126, #17191d)` |
-| `--lit-chip-selected-bg` | `linear-gradient(rgba(94, 106, 210, 0.09), rgba(94, 106, 210, 0.15)), #fff` | `linear-gradient(rgba(111, 121, 227, 0.3), rgba(111, 121, 227, 0.2)), #17191d` |
-| `--lit-overlay-bg` | `var(--panel)` | `linear-gradient(#22242a, #1c1e23)` |
-| `--lit-bubble-other-bg` | `linear-gradient(#f6f7f9, #eff1f4)` | `linear-gradient(#23252c, #1c1e23)` |
-| `--lit-shine` | `linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0))` | `linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0))` |
-| `--lit-muted-shine` | `linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0))` | `linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0))` |
-| `--lit-tab-active-bg` | `var(--accent-soft)` | `rgba(111, 121, 227, 0.22)` |
-| `--lit-raised` | `var(--lit-hl), 0 1px 1px rgba(20, 22, 30, 0.1), 0 4px 10px -2px rgba(20, 22, 30, 0.13), 0 18px 40px -8px rgba(20, 22, 30, 0.22)` | `inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.6), 0 14px 34px -6px rgba(0, 0, 0, 0.85)` |
-| `--lit-card` | `var(--lit-hl), 0 1px 2px rgba(20, 22, 30, 0.07), 0 4px 12px -4px rgba(20, 22, 30, 0.12)` | `inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4), 0 6px 16px -6px rgba(0, 0, 0, 0.7)` |
-| `--lit-float` | `var(--lit-hl), 0 2px 4px rgba(20, 22, 30, 0.12), 0 14px 32px -6px rgba(20, 22, 30, 0.32)` | `inset 0 1px 0 rgba(255, 255, 255, 0.13), 0 0 0 1px rgba(0, 0, 0, 0.65), 0 16px 36px -6px rgba(0, 0, 0, 0.9)` |
-| `--lit-overlay` | `var(--lit-hl), 0 0 0 1px rgba(20, 22, 30, 0.06), 0 4px 12px -2px rgba(20, 22, 30, 0.12), 0 28px 64px -12px rgba(20, 22, 30, 0.4)` | `inset 0 1px 0 rgba(255, 255, 255, 0.13), 0 0 0 1px rgba(0, 0, 0, 0.7), 0 28px 64px -8px rgba(0, 0, 0, 0.95)` |
-| `--lit-header` | `0 1px 0 var(--border), 0 6px 14px -10px rgba(20, 22, 30, 0.24)` | `0 1px 0 rgba(0, 0, 0, 0.6), 0 8px 16px -10px rgba(0, 0, 0, 0.85)` |
-| `--lit-side` | `1px 0 0 var(--border), 8px 0 16px -12px rgba(20, 22, 30, 0.18)` | `1px 0 0 rgba(0, 0, 0, 0.6), 8px 0 16px -12px rgba(0, 0, 0, 0.8)` |
-| `--lit-dock` | `inset 0 1px 0 #fff, 0 -1px 0 var(--border), 0 -8px 18px -12px rgba(20, 22, 30, 0.2)` | `inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 -1px 0 rgba(0, 0, 0, 0.6), 0 -10px 20px -12px rgba(0, 0, 0, 0.75)` |
-| `--lit-btn-primary` | `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(20, 22, 30, 0.24), 0 3px 9px -2px rgba(94, 106, 210, 0.45)` | `inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 1px 2px rgba(0, 0, 0, 0.6), 0 3px 10px -2px rgba(111, 121, 227, 0.45)` |
-| `--lit-btn-success` | `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(20, 22, 30, 0.24), 0 3px 9px -2px rgba(47, 138, 91, 0.45)` | `inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 1px 2px rgba(0, 0, 0, 0.6), 0 3px 10px -2px rgba(92, 194, 141, 0.35)` |
-| `--lit-btn-danger` | `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(20, 22, 30, 0.24), 0 3px 9px -2px rgba(200, 60, 60, 0.45)` | `inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 1px 2px rgba(0, 0, 0, 0.6), 0 3px 10px -2px rgba(230, 90, 90, 0.35)` |
-| `--lit-btn-secondary` | `inset 0 1px 0 #fff, 0 1px 2px rgba(20, 22, 30, 0.1)` | `inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.5)` |
-| `--lit-chip` | `inset 0 1px 0 #fff, 0 1px 2px rgba(20, 22, 30, 0.11), 0 3px 8px -2px rgba(20, 22, 30, 0.14)` | `inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3)` |
-| `--lit-chip-selected` | `inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 1px 2px rgba(94, 106, 210, 0.24), 0 3px 10px -2px rgba(94, 106, 210, 0.32)` | `inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3)` |
-| `--lit-well` | `inset 0 1px 2px rgba(20, 22, 30, 0.1), inset 0 0 0 1px rgba(20, 22, 30, 0.02)` | `inset 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.05)` |
-| `--lit-well-soft` | `inset 0 1px 2px rgba(20, 22, 30, 0.05)` | `inset 0 1px 2px rgba(0, 0, 0, 0.35)` |
-| `--lit-pill` | `inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 1px rgba(20, 22, 30, 0.08)` | `inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 1px rgba(0, 0, 0, 0.5)` |
-| `--lit-tint` | `inset 0 1px 0 rgba(255, 255, 255, 0.55)` | `inset 0 1px 0 rgba(255, 255, 255, 0.06)` |
-| `--lit-active` | `inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(94, 106, 210, 0.14)` | `inset 0 1px 0 rgba(255, 255, 255, 0.1)` |
-| `--lit-knob` | `0 1px 1px rgba(20, 22, 30, 0.18), 0 2px 6px rgba(20, 22, 30, 0.18), inset 0 1px 0 #fff` | `0 1px 2px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5)` |
-| `--lit-media` | `inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.35)` | `inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.35)` |
-| `--lit-avatar` | `inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.08), 0 1px 2px rgba(20, 22, 30, 0.16)` | `inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.6)` |
-| `--lit-badge` | `inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(20, 22, 30, 0.35)` | `inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.6)` |
-| `--lit-bubble-own` | `inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 1px rgba(20, 22, 30, 0.14), 0 3px 8px -3px rgba(94, 106, 210, 0.45)` | `inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.25)` |
-| `--lit-bubble-other` | `inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 1px rgba(20, 22, 30, 0.1), 0 3px 8px -4px rgba(20, 22, 30, 0.14)` | `inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.25)` |
+| Token                    | Light                                                                                                                              | Dark                                                                                                               |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `--lit-hl`               | `inset 0 1px 0 rgba(255, 255, 255, 0.95)`                                                                                          | `inset 0 1px 0 rgba(255, 255, 255, 0.1)`                                                                           |
+| `--lit-edge-top`         | `#eceef1`                                                                                                                          | `rgba(255, 255, 255, 0.08)`                                                                                        |
+| `--lit-edge-side`        | `#e1e4e8`                                                                                                                          | `rgba(255, 255, 255, 0.055)`                                                                                       |
+| `--lit-edge-bottom`      | `#d3d7dd`                                                                                                                          | `rgba(255, 255, 255, 0.035)`                                                                                       |
+| `--lit-surface`          | `linear-gradient(#fff, #f6f7f9)`                                                                                                   | `linear-gradient(#24262d, #1a1c21)`                                                                                |
+| `--lit-surface-top`      | `#fff`                                                                                                                             | `#24262d`                                                                                                          |
+| `--lit-chip-bg`          | `linear-gradient(#fff, #f8f9fa)`                                                                                                   | `linear-gradient(#1f2126, #17191d)`                                                                                |
+| `--lit-chip-selected-bg` | `linear-gradient(rgba(94, 106, 210, 0.09), rgba(94, 106, 210, 0.15)), #fff`                                                        | `linear-gradient(rgba(111, 121, 227, 0.3), rgba(111, 121, 227, 0.2)), #17191d`                                     |
+| `--lit-overlay-bg`       | `var(--panel)`                                                                                                                     | `linear-gradient(#22242a, #1c1e23)`                                                                                |
+| `--lit-bubble-other-bg`  | `linear-gradient(#f6f7f9, #eff1f4)`                                                                                                | `linear-gradient(#23252c, #1c1e23)`                                                                                |
+| `--lit-shine`            | `linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0))`                                                               | `linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0))`                                               |
+| `--lit-muted-shine`      | `linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0))`                                                                | `linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0))`                                               |
+| `--lit-tab-active-bg`    | `var(--accent-soft)`                                                                                                               | `rgba(111, 121, 227, 0.22)`                                                                                        |
+| `--lit-raised`           | `var(--lit-hl), 0 1px 1px rgba(20, 22, 30, 0.1), 0 4px 10px -2px rgba(20, 22, 30, 0.13), 0 18px 40px -8px rgba(20, 22, 30, 0.22)`  | `inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.6), 0 14px 34px -6px rgba(0, 0, 0, 0.85)`      |
+| `--lit-card`             | `var(--lit-hl), 0 1px 2px rgba(20, 22, 30, 0.07), 0 4px 12px -4px rgba(20, 22, 30, 0.12)`                                          | `inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.4), 0 6px 16px -6px rgba(0, 0, 0, 0.7)`        |
+| `--lit-float`            | `var(--lit-hl), 0 2px 4px rgba(20, 22, 30, 0.12), 0 14px 32px -6px rgba(20, 22, 30, 0.32)`                                         | `inset 0 1px 0 rgba(255, 255, 255, 0.13), 0 0 0 1px rgba(0, 0, 0, 0.65), 0 16px 36px -6px rgba(0, 0, 0, 0.9)`      |
+| `--lit-overlay`          | `var(--lit-hl), 0 0 0 1px rgba(20, 22, 30, 0.06), 0 4px 12px -2px rgba(20, 22, 30, 0.12), 0 28px 64px -12px rgba(20, 22, 30, 0.4)` | `inset 0 1px 0 rgba(255, 255, 255, 0.13), 0 0 0 1px rgba(0, 0, 0, 0.7), 0 28px 64px -8px rgba(0, 0, 0, 0.95)`      |
+| `--lit-header`           | `0 1px 0 var(--border), 0 6px 14px -10px rgba(20, 22, 30, 0.24)`                                                                   | `0 1px 0 rgba(0, 0, 0, 0.6), 0 8px 16px -10px rgba(0, 0, 0, 0.85)`                                                 |
+| `--lit-side`             | `1px 0 0 var(--border), 8px 0 16px -12px rgba(20, 22, 30, 0.18)`                                                                   | `1px 0 0 rgba(0, 0, 0, 0.6), 8px 0 16px -12px rgba(0, 0, 0, 0.8)`                                                  |
+| `--lit-dock`             | `inset 0 1px 0 #fff, 0 -1px 0 var(--border), 0 -8px 18px -12px rgba(20, 22, 30, 0.2)`                                              | `inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 -1px 0 rgba(0, 0, 0, 0.6), 0 -10px 20px -12px rgba(0, 0, 0, 0.75)`     |
+| `--lit-btn-primary`      | `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(20, 22, 30, 0.24), 0 3px 9px -2px rgba(94, 106, 210, 0.45)`                | `inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 1px 2px rgba(0, 0, 0, 0.6), 0 3px 10px -2px rgba(111, 121, 227, 0.45)` |
+| `--lit-btn-success`      | `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(20, 22, 30, 0.24), 0 3px 9px -2px rgba(47, 138, 91, 0.45)`                 | `inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 1px 2px rgba(0, 0, 0, 0.6), 0 3px 10px -2px rgba(92, 194, 141, 0.35)`  |
+| `--lit-btn-danger`       | `inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(20, 22, 30, 0.24), 0 3px 9px -2px rgba(200, 60, 60, 0.45)`                 | `inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 1px 2px rgba(0, 0, 0, 0.6), 0 3px 10px -2px rgba(230, 90, 90, 0.35)`   |
+| `--lit-btn-secondary`    | `inset 0 1px 0 #fff, 0 1px 2px rgba(20, 22, 30, 0.1)`                                                                              | `inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.5)`                                            |
+| `--lit-chip`             | `inset 0 1px 0 #fff, 0 1px 2px rgba(20, 22, 30, 0.11), 0 3px 8px -2px rgba(20, 22, 30, 0.14)`                                      | `inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3)`              |
+| `--lit-chip-selected`    | `inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 1px 2px rgba(94, 106, 210, 0.24), 0 3px 10px -2px rgba(94, 106, 210, 0.32)`            | `inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3)`              |
+| `--lit-well`             | `inset 0 1px 2px rgba(20, 22, 30, 0.1), inset 0 0 0 1px rgba(20, 22, 30, 0.02)`                                                    | `inset 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.05)`                                    |
+| `--lit-well-soft`        | `inset 0 1px 2px rgba(20, 22, 30, 0.05)`                                                                                           | `inset 0 1px 2px rgba(0, 0, 0, 0.35)`                                                                              |
+| `--lit-pill`             | `inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 1px rgba(20, 22, 30, 0.08)`                                                         | `inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 1px rgba(0, 0, 0, 0.5)`                                            |
+| `--lit-tint`             | `inset 0 1px 0 rgba(255, 255, 255, 0.55)`                                                                                          | `inset 0 1px 0 rgba(255, 255, 255, 0.06)`                                                                          |
+| `--lit-active`           | `inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(94, 106, 210, 0.14)`                                                  | `inset 0 1px 0 rgba(255, 255, 255, 0.1)`                                                                           |
+| `--lit-knob`             | `0 1px 1px rgba(20, 22, 30, 0.18), 0 2px 6px rgba(20, 22, 30, 0.18), inset 0 1px 0 #fff`                                           | `0 1px 2px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5)`                                             |
+| `--lit-media`            | `inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.35)`                                                            | `inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.35)`                                            |
+| `--lit-avatar`           | `inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.08), 0 1px 2px rgba(20, 22, 30, 0.16)`                    | `inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.6)`          |
+| `--lit-badge`            | `inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(20, 22, 30, 0.35)`                                                        | `inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.6)`                                            |
+| `--lit-bubble-own`       | `inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 1px rgba(20, 22, 30, 0.14), 0 3px 8px -3px rgba(94, 106, 210, 0.45)`               | `inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.25)`            |
+| `--lit-bubble-other`     | `inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 1px rgba(20, 22, 30, 0.1), 0 3px 8px -4px rgba(20, 22, 30, 0.14)`                  | `inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.25)`            |
 
 ## Adding a surface
 

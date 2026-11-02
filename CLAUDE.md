@@ -101,7 +101,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Focus: Button, IconButton and Chip carry the one focus ring (accent, 2px, offset 2). Never add a second ring on a call site except for overlay or danger colours.
 - Text fields: ui/Input or ui/Textarea only; date and time fields add font-mono. Composer bars and borderless inline edits are the only exceptions (allowlist in ui-rules.test.ts).
 - Inline errors: ui/ErrorNote only. Small labels (stage, status, role, draft): ui/Tag only.
-- Lighting: one light, straight above. Every surface takes exactly one lit-* class from src/index.css; never box-shadow, shadow-*, drop-shadow or backdrop-blur on a call site (guard: lighting-rules.test.ts).
+- Lighting: one light, straight above. Every surface takes exactly one lit-_ class from src/index.css; never box-shadow, shadow-_, drop-shadow or backdrop-blur on a call site (guard: lighting-rules.test.ts).
   - Heights: flat (list rows, page), card (lit-card / lit-card-muted), raised (nav, chat circle, auth/onboarding cards), float (toasts, strip, unread/latest pills, drags), overlay (menus, popovers, sheets, dialogs, side panels). Headers lit-header, bottom bars lit-dock, sidebar lit-side.
   - Controls: buttons via Button variants; chips, radios and segment thumbs lit-chip / lit-chip-selected; inputs and tracks lit-well; small parts lit-pill / lit-badge / lit-avatar / lit-media; tinted banners lit-tint.
   - Dark mode: higher is lighter; never rely on a shadow alone.

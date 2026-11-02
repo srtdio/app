@@ -1558,7 +1558,7 @@ describe('swipe to reply', () => {
     expect(icons).toBe(0);
   });
 
-  it('the icon is a 32px token circle with a 1.7 stroke, accent only when armed', () => {
+  it('the icon is a 32px token circle with a 1.85 stroke, accent only when armed', () => {
     const icon = SwipeReplyIcon({});
     const cls = String((icon.props as { className?: string }).className);
     expect(cls).toContain('h-8 w-8');
@@ -1568,9 +1568,9 @@ describe('swipe to reply', () => {
     expect(cls).toContain('opacity-0');
     // Per-frame scale and opacity: no class transition lagging the finger.
     expect(cls).not.toContain('transition');
-    // The shared reply icon: stroke 1.7 in currentColor.
+    // The shared reply icon: stroke 1.85 in currentColor.
     const svg = renderStrip(icon);
-    expect(svg).toContain('stroke-width="1.7"');
+    expect(svg).toContain('stroke-width="1.85"');
     expect(svg).toContain('stroke="currentColor"');
   });
 });
@@ -1639,14 +1639,22 @@ describe('header online dot', () => {
     expect(headerAvatarPresence(undefined)).toBeUndefined();
   });
 
-  it('the dot is a 10px good circle with a 2px panel ring at the bottom-right', () => {
+  it('the dot is a 10px good circle with a 2px panel outline at the bottom-right, lit', () => {
     const dots: string[] = [];
     walk(Avatar({ name: 'Alice', role: 'header', presence: 'online' }), (el) => {
       const props = el.props as Record<string, unknown>;
       if (props['data-presence'] === 'online') dots.push(String(props.className));
     });
     expect(dots).toHaveLength(1);
-    for (const token of ['h-2.5', 'w-2.5', 'rounded-full', 'bg-good', 'ring-2', 'ring-panel']) {
+    for (const token of [
+      'h-2.5',
+      'w-2.5',
+      'rounded-full',
+      'bg-good',
+      'outline-2',
+      'outline-panel',
+      'lit-avatar',
+    ]) {
       expect(dots[0]).toContain(token);
     }
     expect(dots[0]).toContain('bottom-0');

@@ -44,7 +44,9 @@ const src = (rel: string) => FILES.find((f) => f.rel === rel)?.src ?? '';
 describe('lighting rules', () => {
   it('no Tailwind shadow or drop-shadow class on a call site', () => {
     expect(
-      hits(/(^|[\s"'`:])(shadow|shadow-(sm|md|lg|xl|2xl|inner|none)|drop-shadow(-[\w[\]().-]+)?)(?=[\s"'`]|$)/),
+      hits(
+        /(^|[\s"'`:])(shadow|shadow-(sm|md|lg|xl|2xl|inner|none)|drop-shadow(-[\w[\]().-]+)?)(?=[\s"'`]|$)/,
+      ),
     ).toEqual([]);
   });
 
@@ -97,7 +99,8 @@ describe('lighting rules', () => {
       'lit-bubble-other',
     ]) {
       expect(DEFINED.has(c), c).toBe(true);
-      const token = `--${c}:`;
+      // lit-card-muted reuses the --lit-card shadow over its own panel-2 fill.
+      const token = `--${c === 'lit-card-muted' ? 'lit-muted-shine' : c}:`;
       expect(CSS.split(token).length - 1, token).toBe(2);
     }
     expect(CSS).not.toMatch(/transition[^;]*box-shadow/);

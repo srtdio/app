@@ -235,9 +235,9 @@ describe('S7: card previews', () => {
 });
 
 describe('icon and toast copy', () => {
-  it('IconCalendarClock: a calendar with a clock, stroke 1.7', () => {
+  it('IconCalendarClock: a calendar with a clock, stroke 1.85', () => {
     const html = renderToStaticMarkup(<IconCalendarClock />);
-    expect(html).toContain('stroke-width="1.7"');
+    expect(html).toContain('stroke-width="1.85"');
     expect(html).toContain('<circle');
   });
 

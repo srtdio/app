@@ -699,9 +699,7 @@ export function OnboardingFlow({
               onClick={() => setSide(tile.side)}
               className={cn(
                 'flex flex-col items-start justify-center gap-0.5 border px-3.5 py-2.5',
-                side === tile.side
-                  ? 'border-accent lit-chip-selected'
-                  : 'bg-panel lit-chip',
+                side === tile.side ? 'border-accent lit-chip-selected' : 'bg-panel lit-chip',
               )}
             >
               <span className="text-base font-medium text-fg">{tile.title}</span>
@@ -1155,9 +1153,7 @@ function WelcomeBody({
       <p className="min-h-[20px] text-base text-fg-2 [text-wrap:balance]" aria-live="polite">
         {subline}
       </p>
-      <p className="rounded-lg border bg-panel lit-card px-4 py-3 text-base text-fg">
-        {joiningAs}
-      </p>
+      <p className="rounded-lg border bg-panel lit-card px-4 py-3 text-base text-fg">{joiningAs}</p>
     </div>
   );
 }

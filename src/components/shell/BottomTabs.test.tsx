@@ -118,14 +118,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     const container = render('/pipeline');
     const pill = container.querySelector('[data-tab-pill]');
     if (pill === null) throw new Error('no pill');
-    for (const c of [
-      'h-[60px]',
-      'rounded-full',
-      'bg-panel',
-      'border',
-      'p-1',
-      'lit-raised',
-    ]) {
+    for (const c of ['h-[60px]', 'rounded-full', 'bg-panel', 'border', 'p-1', 'lit-raised']) {
       expect(classes(pill)).toContain(c);
     }
     expect(classes(pill)).not.toContain('border-border');

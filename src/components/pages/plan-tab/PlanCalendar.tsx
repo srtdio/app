@@ -549,7 +549,11 @@ function MonthGrid(props: {
                     data-plan-tab-today={isToday ? '' : undefined}
                     className={cn(
                       'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
-                      isToday ? 'lit-pill bg-accent text-accent-fg' : cell.inMonth ? 'text-fg' : 'text-fg-3',
+                      isToday
+                        ? 'lit-pill bg-accent text-accent-fg'
+                        : cell.inMonth
+                          ? 'text-fg'
+                          : 'text-fg-3',
                     )}
                   >
                     {dayOfMonth(cell.day)}
