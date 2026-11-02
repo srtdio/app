@@ -144,9 +144,12 @@ export function personContextLine(
   source: Pick<PrivateReplyDraft, 'whereLabel' | 'excerpt'> | null | undefined,
 ): string | null {
   if (source === null || source === undefined) return null;
-  const words = privateReplyLine(source.excerpt).split(' ').filter((w) => w !== '');
+  const words = privateReplyLine(source.excerpt)
+    .split(' ')
+    .filter((w) => w !== '');
   const cut = words.length > CONTEXT_WORDS;
-  const quote = words.length > 0 ? `"${words.slice(0, CONTEXT_WORDS).join(' ')}${cut ? '…' : ''}"` : '';
+  const quote =
+    words.length > 0 ? `"${words.slice(0, CONTEXT_WORDS).join(' ')}${cut ? '…' : ''}"` : '';
   const where = source.whereLabel.trim();
   if (where !== '' && quote !== '') return `${where} · ${quote}`;
   const line = where !== '' ? where : quote;

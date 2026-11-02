@@ -23,12 +23,7 @@ import { retryDelayMs } from '@/lib/chat/send-flow';
 import { chatMessageHref } from '@/lib/inbox/bell-types';
 import { logger } from '@/lib/logger';
 import { mark } from '@/lib/perf-marks';
-import {
-  MENTION_DM_FAILED,
-  OPEN_CHAT,
-  personDmRoute,
-  sentToTitle,
-} from '@/lib/person-card';
+import { MENTION_DM_FAILED, OPEN_CHAT, personDmRoute, sentToTitle } from '@/lib/person-card';
 import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
@@ -221,7 +216,10 @@ export function usePersonMessageSend(): (
               navigate(chatMessageHref(id, null)),
             ).then((failure) => {
               if (failure === null) return;
-              logger.warn('person: open chat failed', { trace_id: traceId, error: failure.message });
+              logger.warn('person: open chat failed', {
+                trace_id: traceId,
+                error: failure.message,
+              });
               toast.show({ title: MENTION_DM_FAILED });
             });
           },

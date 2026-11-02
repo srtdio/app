@@ -4405,7 +4405,8 @@ function ThreadBody(
             : null
       : null;
   const personSource = useCallback(
-    (message: ThreadMessage): PrivateReplyDraft | null => personSourceRef.current?.(message) ?? null,
+    (message: ThreadMessage): PrivateReplyDraft | null =>
+      personSourceRef.current?.(message) ?? null,
     [],
   );
   if (props.loading) return threadSkeleton();
