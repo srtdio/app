@@ -20,7 +20,12 @@ interface Mounted {
 }
 
 async function mount(
-  props: { name?: string | null; avatarUrl?: string | null; username?: string | null; former?: boolean } = {
+  props: {
+    name?: string | null;
+    avatarUrl?: string | null;
+    username?: string | null;
+    former?: boolean;
+  } = {
     name: 'Leo Martins',
     avatarUrl: 'https://x.test/leo.png',
     username: 'leo',

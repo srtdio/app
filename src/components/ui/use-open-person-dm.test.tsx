@@ -22,7 +22,10 @@ const spy = vi.hoisted(() => ({
   workspaceId: '0190a000-0000-7000-8000-00000000a001' as string | null,
   roster: [] as Array<{ channelId: string; channelType: string; peerUserId: string | null }>,
   startParams: [] as Array<{ workspaceId: string; peerUserId: string; traceId: string }>,
-  startResult: { channelId: null as string | null, failure: null as { code: string; message: string } | null },
+  startResult: {
+    channelId: null as string | null,
+    failure: null as { code: string; message: string } | null,
+  },
   toasts: [] as Array<{ title: string }>,
 }));
 

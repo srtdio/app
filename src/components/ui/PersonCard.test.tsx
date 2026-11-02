@@ -12,7 +12,11 @@ import {
   personPopoverPosition,
   type PersonCardData,
 } from '@/components/ui/PersonCard';
-import { rememberMentionNames, rememberMentionProfiles, resetMentionNames } from '@/lib/chat/mentions';
+import {
+  rememberMentionNames,
+  rememberMentionProfiles,
+  resetMentionNames,
+} from '@/lib/chat/mentions';
 import type { ChatProfile } from '@/lib/chat-reads';
 import {
   closePersonCard,
@@ -76,7 +80,11 @@ let root: Root | null = null;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function memberRow(userId: string, role: string, over: Partial<WorkspaceMemberRow> = {}): WorkspaceMemberRow {
+function memberRow(
+  userId: string,
+  role: string,
+  over: Partial<WorkspaceMemberRow> = {},
+): WorkspaceMemberRow {
   return {
     id: `row-${userId}`,
     workspace_id: WS,
@@ -104,8 +112,16 @@ function holdMembers(rows: WorkspaceMemberRow[], profiles: ChatProfile[]): void 
 
 function defaultMembers(): void {
   holdMembers(
-    [memberRow(ME, 'owner'), memberRow(LEO, 'agency'), memberRow(GONE, 'client', { active: false, removed_at: '2026-10-01T00:00:00Z' })],
-    [profile(ME, 'Sam Okafor', 'sam'), profile(LEO, 'Leo Martins', 'leo'), profile(GONE, 'Ola Gone', 'ola')],
+    [
+      memberRow(ME, 'owner'),
+      memberRow(LEO, 'agency'),
+      memberRow(GONE, 'client', { active: false, removed_at: '2026-10-01T00:00:00Z' }),
+    ],
+    [
+      profile(ME, 'Sam Okafor', 'sam'),
+      profile(LEO, 'Leo Martins', 'leo'),
+      profile(GONE, 'Ola Gone', 'ola'),
+    ],
   );
 }
 
@@ -346,7 +362,9 @@ describe('PersonCardBody', () => {
   }
 
   it('shows the name and hint only when asked', async () => {
-    await render(<PersonCardBody data={data} showName={false} showHint={false} onAction={() => {}} />);
+    await render(
+      <PersonCardBody data={data} showName={false} showHint={false} onAction={() => {}} />,
+    );
     expect(card()?.querySelector('p.text-lg')).toBeNull();
     expect(card()?.textContent).not.toContain(PERSON_CARD_COPY.hint);
   });
@@ -365,28 +383,36 @@ describe('personPopoverPosition', () => {
   const viewport = { width: 1024, height: 768 };
 
   it('sits right of the anchor when it fits', () => {
-    expect(personPopoverPosition({ top: 100, left: 100, right: 140, bottom: 140 }, viewport)).toEqual({
+    expect(
+      personPopoverPosition({ top: 100, left: 100, right: 140, bottom: 140 }, viewport),
+    ).toEqual({
       top: 100,
       left: 148,
     });
   });
 
   it('flips left of the anchor near the right edge', () => {
-    expect(personPopoverPosition({ top: 100, left: 900, right: 940, bottom: 940 }, viewport)).toEqual({
+    expect(
+      personPopoverPosition({ top: 100, left: 900, right: 940, bottom: 940 }, viewport),
+    ).toEqual({
       top: 100,
       left: 900 - 8 - PERSON_POPOVER_W,
     });
   });
 
   it('clamps to the left edge when neither side fits', () => {
-    expect(personPopoverPosition({ top: 100, left: 100, right: 1000, bottom: 140 }, viewport).left).toBe(8);
+    expect(
+      personPopoverPosition({ top: 100, left: 100, right: 1000, bottom: 140 }, viewport).left,
+    ).toBe(8);
   });
 
   it('clamps the top inside the viewport (bottom and top edges)', () => {
-    expect(personPopoverPosition({ top: 740, left: 100, right: 140, bottom: 760 }, viewport).top).toBe(
-      768 - 236 - 8,
-    );
-    expect(personPopoverPosition({ top: -40, left: 100, right: 140, bottom: 0 }, viewport).top).toBe(8);
+    expect(
+      personPopoverPosition({ top: 740, left: 100, right: 140, bottom: 760 }, viewport).top,
+    ).toBe(768 - 236 - 8);
+    expect(
+      personPopoverPosition({ top: -40, left: 100, right: 140, bottom: 0 }, viewport).top,
+    ).toBe(8);
   });
 
   it('centres when there is no anchor', () => {
@@ -398,7 +424,10 @@ describe('personPopoverPosition', () => {
 });
 
 describe('personCardData', () => {
-  function members(rows: WorkspaceMemberRow[], profiles: ChatProfile[]): Pick<WorkspaceMembersData, 'rows' | 'profiles'> {
+  function members(
+    rows: WorkspaceMemberRow[],
+    profiles: ChatProfile[],
+  ): Pick<WorkspaceMembersData, 'rows' | 'profiles'> {
     return { rows, profiles: new Map(profiles.map((p) => [p.userId, p])) };
   }
 
@@ -446,7 +475,12 @@ describe('personCardData', () => {
 
   it('falls back to the mention registry name when the hint has none', () => {
     rememberMentionNames(WS, [{ userId: LEO, displayName: 'Leo Martins', username: 'leo' }]);
-    const data = personCardData({ request: { userId: LEO }, me: ME, workspaceId: WS, members: null });
+    const data = personCardData({
+      request: { userId: LEO },
+      me: ME,
+      workspaceId: WS,
+      members: null,
+    });
     expect(data.name).toBe('Leo Martins');
     expect(data.action).toBe('message');
   });
@@ -467,7 +501,10 @@ describe('personCardData', () => {
       me: ME,
       workspaceId: WS,
       members: members(
-        [memberRow(LEO, 'agency'), memberRow(GONE, 'client', { removed_at: '2026-10-01T00:00:00Z' })],
+        [
+          memberRow(LEO, 'agency'),
+          memberRow(GONE, 'client', { removed_at: '2026-10-01T00:00:00Z' }),
+        ],
         [],
       ),
     });
@@ -477,7 +514,12 @@ describe('personCardData', () => {
 
   it('removed when no list is held and the registry marked them former; no "Former member" name', () => {
     rememberMentionProfiles(WS, [{ userId: GONE, displayName: 'Ola Gone', member: false }]);
-    const data = personCardData({ request: { userId: GONE }, me: ME, workspaceId: WS, members: null });
+    const data = personCardData({
+      request: { userId: GONE },
+      me: ME,
+      workspaceId: WS,
+      members: null,
+    });
     expect(data.action).toBe('removed');
     expect(data.name).toBe('');
   });
