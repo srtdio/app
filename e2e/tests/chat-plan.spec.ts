@@ -216,8 +216,11 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(item).toBeVisible();
   await expect(item.getByText('Concept 1 of 1')).toBeVisible();
   await expect(item.locator('[data-plan-media="files"]')).toBeVisible();
-  // Remove from plan: a red button at the bottom, not a menu row.
-  await expect(item.locator('[data-plan-remove]')).toHaveText(/Remove from plan/);
+  // Remove from plan: the header More menu's last row, never a body button.
+  await expect(item.locator('[data-plan-remove]')).toHaveCount(0);
+  await item.locator('[data-plan-item-more]').click();
+  await expect(page.getByRole('menuitem').last()).toHaveText(/Remove from plan/);
+  await page.keyboard.press('Escape');
   await item.locator('[data-plan-approve]').click();
   const confirm = page.getByRole('dialog', { name: 'Mark checked' });
   await expect(confirm).toBeVisible();
@@ -226,14 +229,15 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(confirm).toBeHidden();
   await expect(item.locator('[data-plan-status] [data-plan-pill="team"]')).toHaveText('Checked');
 
-  // An Agency only comment: tinted, with the lock label.
-  await item.locator('[data-plan-visibility="team"]').click();
+  // A creators-only comment: the chip turns it on; the bubble is tinted, with the lock label.
+  await item.locator('[data-plan-visibility-chip="everyone"]').click();
+  await expect(item.locator('[data-plan-visibility-chip="team"]')).toHaveText('Creators only');
   await item.getByRole('textbox', { name: 'Comment' }).fill('Need drone shots, checking Tuesday.');
   await item.getByRole('button', { name: 'Send comment' }).click();
   const note = item.locator('[data-plan-comment="team"]');
   await expect(note).toBeVisible();
   await expect(note.getByText('Creators only')).toBeVisible();
-  await expect(note).toHaveClass(/bg-warn-soft/);
+  await expect(note.locator('[data-plan-comment-bubble]')).toHaveClass(/bg-warn-soft/);
 
   // Back closes one layer: the item; the Draft plan shows the team OK pill.
   await page.goBack();
@@ -426,7 +430,10 @@ async function clientFlow(page: Page): Promise<void> {
   const item = page_(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByText('Can we keep it under 30 seconds?')).toBeVisible();
-  await expect(item.locator('[data-plan-visibility]')).toHaveCount(0);
+  await expect(item.locator('[data-plan-visibility-chip]')).toHaveCount(0);
+  await expect(item.locator('[data-plan-visibility-line]')).toHaveText(
+    'Everyone in this plan can see',
+  );
   await item.locator('[data-plan-approve]').click();
   const confirm = page.getByRole('dialog', { name: 'Approve' });
   await expect(confirm).toBeVisible();

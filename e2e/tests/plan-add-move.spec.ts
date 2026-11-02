@@ -327,7 +327,7 @@ test('agency: Escape mid-drag puts the row back with no write; a reorder within 
   expectClean(network);
 });
 
-test('agency: Move to another day from the item overflow; Remove from plan is the red button', async ({
+test('agency: Move to another day and Remove from plan from the item overflow', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -359,16 +359,14 @@ test('agency: Move to another day from the item overflow; Remove from plan is th
     )
     .toBe('2026-10-13');
 
-  // The overflow has no Remove row; the screen's red button does it.
+  // Remove from plan is the overflow's last row (red); the body has no button.
+  await expect(item.locator('[data-plan-remove]')).toHaveCount(0);
   await more.click();
   await expect(page.getByRole('menuitem', { name: /Edit concept/ })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: /Remove from plan/ })).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  const remove = item.locator('[data-plan-remove]');
-  await remove.scrollIntoViewIfNeeded();
-  await expect(remove).toHaveText(/Remove from plan/);
-  expectMinTouchTarget(await remove.boundingBox());
-  await remove.click();
+  const rows = page.getByRole('menuitem');
+  await expect(rows.last()).toHaveText(/Remove from plan/);
+  expectMinTouchTarget(await rows.last().boundingBox());
+  await rows.last().click();
   await page.locator('[data-plan-remove-confirm]').click();
   await expect(page.getByText('Removed from plan')).toBeVisible();
   await expect(item).toBeHidden();

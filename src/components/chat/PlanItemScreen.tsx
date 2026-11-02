@@ -13,12 +13,18 @@
 // Opened by a Plan row's Not OK (askChanges), the note box is open and
 // focused from the start, a post item included; Send writes 'changes' for
 // the viewer's PLAN side, closing writes nothing.
-// The agency side gets a red "Remove from plan" at the bottom (the Remove
-// confirm, then plan_item_remove) and Move to another day: a move that resets
+// The agency side gets "Remove from plan" (a concept: last and red in the
+// header's More menu, after Move and Edit concept; a post item: the red button
+// under its Plan notes) (the Remove confirm, then plan_item_remove) and Move to
+// another day: a move that resets
 // nothing waits behind a 4s Undo strip (useUndoableAction;
 // the write goes when the toast ends, never after Undo). Comments: the agency
-// sees all and picks Everyone or Agency only; a client sees Everyone ones
-// (RLS). A comment appends at once and keeps its text on failure. One read
+// sees all and toggles one chip under the box (Everyone can see / Creators
+// only); a client sees Everyone ones (RLS) and a plain line. The comments read
+// as a chat thread (PlanItemThread). @ tags the workspace's people (chat's
+// picker above the box; members load on focus or the first "@", from the held
+// cache), never me, and only the agency side on a creators-only note or a plan
+// not shared with the client. A comment appends at once and keeps its text on failure. One read
 // per table per open, bounded at 5s; the body paints once it settles. The
 // phone page is a modal dialog: focus moves in and returns on close
 // (PlanPage). A concept lists its Files first (each tile opens the image
@@ -28,7 +34,8 @@
 // parallel with the embedded post (never before it), and lists them under
 // "Plan notes" below the post (nothing when there are none). The comment box
 // is the shared Textarea (1 to 4 lines): Enter sends on a fine pointer,
-// Shift+Enter (and Return on touch) adds a line. Tokens only.
+// Shift+Enter (and Return on touch) adds a line; while the @ picker is open
+// Enter or Tab picks. Tokens only.
 
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
@@ -41,6 +48,7 @@ import {
   planItemReview,
 } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Textarea } from '@/components/ui/Textarea';
@@ -48,18 +56,41 @@ import { useToast } from '@/components/ui/toast';
 import type { ViewerKind } from '@/components/ui/FileViewer';
 import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
 import { DUR_SLOW_MS } from '@/lib/motion';
-import { ICON_SIZE, IconArrowUp, IconLock, IconMore, IconX } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconArrowUp,
+  IconLock,
+  IconMore,
+  IconTrash,
+  IconX,
+} from '@/components/ui/icons';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
-import { ActionMenu, ActionMenuTrigger } from '@/components/ui/ActionMenu';
+import { ActionMenu, ActionMenuTrigger, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import {
   PlanKeepApprovalSheet,
   PlanMoveSheet,
   PlanRemoveSheet,
   PostSheetPlanRowsContext,
+  REMOVE_ROW_LABEL,
   RemoveFromPlanButton,
   planConceptMenuItems,
 } from '@/components/chat/PlanMoveSheet';
+import { MentionPicker, stepActive } from '@/components/chat/MentionPicker';
+import {
+  CLIENT_VISIBILITY_LINE,
+  EVERYONE_CHIP_LABEL,
+  MENTION_TEAM_NOTE,
+  PlanItemThread,
+  TEAM_CHIP_LABEL,
+  blockedMentions,
+  isInvalidMention,
+  mentionsRestricted,
+  planPickerRows,
+  taggableMembers,
+  usePlanMentionMembers,
+  type ShownComment,
+} from '@/components/chat/PlanItemThread';
 import { flattenOrder, hasTicks, moveToEnd } from '@/lib/chat/plan-drag';
 import { dayMoveToast } from '@/lib/chat/plan-keyboard-move';
 import {
@@ -79,7 +110,6 @@ import {
   STATUS_LABELS,
   TEAM_STATUS_LABELS,
   TEAM_APPROVE_CONFIRM,
-  TEAM_ONLY_LABEL,
   clientApproveConfirm,
   clientStatus,
   dayHeaderOf,
@@ -126,7 +156,7 @@ import {
 import { classifyFileKind } from '@/lib/chat/attachments';
 import { isSendKeydown } from '@/lib/chat/send-key';
 import { useCoarsePointer, useIsLaptop } from '@/lib/use-is-laptop';
-import { formatRelative, safeTimeZone } from '@/lib/time';
+import { safeTimeZone } from '@/lib/time';
 import { civilToday } from '@/lib/plan-week';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
@@ -136,7 +166,20 @@ import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useWorkspace } from '@/lib/workspace-context';
-import { mentionIds, resolvePersonMentionText } from '@/lib/chat/mentions';
+import {
+  addPick,
+  insertMention,
+  linkTypedUsernames,
+  mentionHandle,
+  mentionIds,
+  mentionKeyAction,
+  mentionQuery,
+  rememberMentionNames,
+  serializeMentions,
+  type MentionMember,
+  type MentionPick,
+} from '@/lib/chat/mentions';
+import { useEscapeLayer } from '@/lib/escape-stack';
 import { resolvePeople } from '@/lib/people-names';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { firstExternalUrl } from '@/lib/chat/message-links';
@@ -323,14 +366,30 @@ export const COMMENT_SEND_HINT = 'Enter to send · Shift+Enter for a new line';
 /** The post item's comments block label. */
 export const PLAN_NOTES_LABEL = 'Plan notes';
 
-/** A comment shown in the list: a recorded row, or a pending own one. */
-interface ShownComment {
-  id: string;
-  authorName: string;
-  body: string;
-  visibility: CommentVisibility;
-  createdAt: string;
-  pending: boolean;
+/**
+ * The concept's header More menu (agency only): Move to another day, Edit
+ * concept, then Remove from plan, red and last. Pure.
+ */
+export function planItemMenuItems(props: {
+  onMove: () => void;
+  onEdit: () => void;
+  onRemove: () => void;
+}): ActionMenuItem[] {
+  return [
+    ...planConceptMenuItems({ onMove: props.onMove, onEdit: props.onEdit }),
+    {
+      id: 'remove',
+      label: REMOVE_ROW_LABEL,
+      icon: IconTrash,
+      tone: 'danger',
+      onSelect: props.onRemove,
+    },
+  ];
+}
+
+/** The comment box placeholder for the visibility. */
+export function commentPlaceholder(teamNote: boolean): string {
+  return teamNote ? 'Note for creators only' : 'Comment for everyone';
 }
 
 export function PlanItemScreen(props: {
@@ -405,6 +464,15 @@ export function PlanItemScreen(props: {
   const [sending, setSending] = useState(false);
   // "Ask changes" opened the composer: Send records the note, then the review.
   const [askingChanges, setAskingChanges] = useState(false);
+  // @ tags: the picked people (display "@handle" in the box, a token on send),
+  // the caret, and the picker's dismissal and active row.
+  const [picks, setPicks] = useState<MentionPick[]>([]);
+  const [caret, setCaret] = useState(0);
+  const [mentionDismissed, setMentionDismissed] = useState(false);
+  const [mentionActive, setMentionActive] = useState(0);
+  // After a send: the comment to scroll to once it is listed.
+  const [scrollToId, setScrollToId] = useState<string | null>(null);
+  const mentionPeople = usePlanMentionMembers(me, workspaceId);
   const commentRef = useRef<HTMLTextAreaElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const coarse = useCoarsePointer();
@@ -436,6 +504,7 @@ export function PlanItemScreen(props: {
     setMoreOpen(false);
     setActionError(null);
     setText('');
+    setPicks([]);
     setVisibility('everyone');
     setPending([]);
     setSendError(null);
@@ -455,6 +524,7 @@ export function PlanItemScreen(props: {
   // Another item starts clean: no draft, pending row, error or override carries over.
   useEffect(() => {
     setText('');
+    setPicks([]);
     setPending([]);
     setSendError(null);
     setAskingChanges(false);
@@ -585,6 +655,8 @@ export function PlanItemScreen(props: {
       read.status === 'ready'
         ? read.data.comments.map((c: PlanCommentRow) => ({
             id: c.id,
+            authorUserId: c.author_user_id,
+            mine: c.author_user_id !== null && c.author_user_id === me,
             authorName:
               c.author_user_id !== null && c.author_user_id === me
                 ? 'You'
@@ -611,6 +683,8 @@ export function PlanItemScreen(props: {
       ...prev,
       {
         id: localId,
+        authorUserId: me,
+        mine: true,
         authorName: 'You',
         body,
         visibility: vis,
@@ -618,6 +692,7 @@ export function PlanItemScreen(props: {
         pending: true,
       },
     ]);
+    setScrollToId(localId);
     const traceId = generateTraceId();
     const result = await planItemCommentCreate(supabase, {
       p_item_id: forItem,
@@ -637,10 +712,15 @@ export function PlanItemScreen(props: {
         error: result.error.message,
       });
       setPending((prev) => prev.filter((p) => p.id !== localId));
-      setSendError(COMMENT_FAILED);
+      // A tag the server refused (an approver on a creators-only note): one
+      // toast, the draft stays as typed.
+      if (isInvalidMention(result.error.message)) toast.show({ title: MENTION_TEAM_NOTE });
+      else setSendError(COMMENT_FAILED);
       return false;
     }
     setText('');
+    setPicks([]);
+    setScrollToId(result.data);
     // The box keeps focus after a send (it shrinks back to one line).
     commentRef.current?.focus();
     setPending((prev) =>
@@ -650,9 +730,72 @@ export function PlanItemScreen(props: {
     dispatchPlanChanged(window, bundle.plan.id);
     return true;
   };
+  // @ tags. Only the agency side can be tagged on a creators-only note or a
+  // plan not shared with the client; never me. The picker opens on an "@" run
+  // before the caret once the members are held (loaded on focus or the first
+  // "@", never on paint).
+  const restricted = side === 'agency' && mentionsRestricted(visibility, bundle.plan.audience);
+  const openMention = !mentionDismissed ? mentionQuery(text, caret) : null;
+  const picker =
+    openMention !== null && mentionPeople.members !== null
+      ? planPickerRows(mentionPeople.members, openMention.query, me, restricted)
+      : { rows: [] as MentionMember[], hiddenApprovers: false };
+  const mentionRows = picker.rows;
+  const activeRow = Math.min(mentionActive, Math.max(mentionRows.length - 1, 0));
+  // The body a send stores: picked "@handle"s become tokens, and so does a
+  // typed @username of someone who can be tagged here.
+  const commentBody = (): string =>
+    linkTypedUsernames(
+      serializeMentions(text, picks),
+      taggableMembers(mentionPeople.members ?? [], me, restricted),
+    ).trim();
+  // A creators-only note that still tags an approver: the note shows and Send waits.
+  const blocked = blockedMentions(
+    serializeMentions(text, picks),
+    mentionPeople.members,
+    restricted,
+  );
+  const trackCaret = (el: HTMLTextAreaElement): void => {
+    const next = el.selectionStart ?? el.value.length;
+    setCaret(next);
+    if (mentionQuery(el.value, next) === null) setMentionDismissed(false);
+  };
+  // A pick swaps the "@query" run for "@handle " and keeps the person in the map.
+  const pickMention = (member: MentionMember | undefined): void => {
+    if (member === undefined) return;
+    const handle = mentionHandle(member);
+    const next = insertMention(text, caret, handle);
+    rememberMentionNames(workspaceId, [member]);
+    setPicks((prev) => addPick(prev, { userId: member.userId, name: handle }));
+    setText(next.text);
+    setCaret(next.caret);
+    setMentionActive(0);
+    setSendError(null);
+    const el = commentRef.current;
+    if (el !== null) {
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(next.caret, next.caret);
+      });
+    }
+  };
+  // Escape closes the picker as the top layer (the page stays open).
+  useEscapeLayer(openMention !== null && mentionRows.length > 0, () => setMentionDismissed(true));
   // Chat's send rule: plain Enter sends on a fine pointer; Shift+Enter, IME
   // composition and every Return on touch add a line (the button sends).
+  // While the picker is open, Up / Down move and Enter or Tab picks.
   const commentKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
+    const action =
+      mentionRows.length > 0 ? mentionKeyAction(event.key, event.nativeEvent.isComposing) : null;
+    if (action === 'up' || action === 'down' || action === 'pick') {
+      event.preventDefault();
+      if (action === 'pick') pickMention(mentionRows[activeRow]);
+      else
+        setMentionActive(
+          stepActive(activeRow, mentionRows.length, action === 'up' ? 'ArrowUp' : 'ArrowDown'),
+        );
+      return;
+    }
     if (
       !isSendKeydown({
         key: event.key,
@@ -667,8 +810,8 @@ export function PlanItemScreen(props: {
   };
   const send = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
-    if (sending || busy) return;
-    const body = text.trim();
+    if (sending || busy || blocked.length > 0) return;
+    const body = commentBody();
     const steps = askChangesSteps(body, askingChanges);
     if (steps.length === 0) return;
     if (steps.includes('comment') && !(await sendComment(body))) return;
@@ -845,6 +988,17 @@ export function PlanItemScreen(props: {
     },
   });
 
+  // After a send the thread scrolls to the new comment (its pending row, then
+  // the recorded one). Opening still starts at the top.
+  useEffect(() => {
+    if (scrollToId === null) return;
+    const page = formRef.current?.closest('[data-plan-page]') ?? null;
+    const row = page?.querySelector<HTMLElement>(`[data-plan-comment-id="${scrollToId}"]`) ?? null;
+    if (row === null) return;
+    if (typeof row.scrollIntoView === 'function') row.scrollIntoView({ block: 'nearest' });
+    setScrollToId(null);
+  }, [scrollToId, shown]);
+
   const teamNote = side === 'agency' && visibility === 'team';
   return (
     <>
@@ -863,9 +1017,10 @@ export function PlanItemScreen(props: {
               action: (
                 <ActionMenu
                   title={title}
-                  items={planConceptMenuItems({
+                  items={planItemMenuItems({
                     onMove: () => setMoveOpen(true),
                     onEdit: openEdit,
+                    onRemove: () => setRemoveOpen(true),
                   })}
                   open={props.open && conceptMenuOpen}
                   onOpenChange={setConceptMenuOpen}
@@ -904,30 +1059,23 @@ export function PlanItemScreen(props: {
             <form
               ref={formRef}
               onSubmit={(e) => void send(e)}
-              className="flex flex-col gap-1.5"
+              className="relative flex flex-col gap-1.5"
               aria-label="Add a comment"
             >
-              {side === 'agency' ? (
-                <div className="flex gap-1.5" role="group" aria-label="Who sees the comment">
-                  {(['everyone', 'team'] as const).map((v) => (
-                    <Button
-                      key={v}
-                      type="button"
-                      variant="secondary"
-                      aria-pressed={visibility === v}
-                      data-plan-visibility={v}
-                      onClick={() => setVisibility(v)}
-                      className={
-                        visibility === v
-                          ? v === 'team'
-                            ? 'border-warn bg-warn-soft text-warn'
-                            : 'border-accent bg-accent-soft text-accent'
-                          : 'text-fg-2'
-                      }
+              {mentionRows.length > 0 || picker.hiddenApprovers ? (
+                <div
+                  data-mention-anchor=""
+                  className="absolute inset-x-0 bottom-full z-20 mb-2 flex flex-col gap-1"
+                >
+                  <MentionPicker members={mentionRows} active={activeRow} onPick={pickMention} />
+                  {picker.hiddenApprovers ? (
+                    <p
+                      data-plan-mention-note=""
+                      className="rounded-lg border border-border bg-panel px-3 py-2 text-sm text-fg-3"
                     >
-                      {v === 'everyone' ? 'Everyone' : TEAM_ONLY_LABEL}
-                    </Button>
-                  ))}
+                      {MENTION_TEAM_NOTE}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
               {askingChanges ? (
@@ -966,7 +1114,11 @@ export function PlanItemScreen(props: {
                   onChange={(e) => {
                     setText(e.target.value);
                     setSendError(null);
+                    trackCaret(e.target);
+                    if (e.target.value.includes('@')) mentionPeople.load();
                   }}
+                  onFocus={mentionPeople.load}
+                  onSelect={(e) => trackCaret(e.currentTarget)}
                   onKeyDown={commentKeyDown}
                   data-plan-comment-input=""
                   aria-label="Comment"
@@ -974,11 +1126,7 @@ export function PlanItemScreen(props: {
                   enterKeyHint={coarse ? 'enter' : 'send'}
                   maxLength={5000}
                   placeholder={
-                    askingChanges
-                      ? ASK_CHANGES_PLACEHOLDER
-                      : teamNote
-                        ? 'Note for creators only'
-                        : 'Comment for everyone'
+                    askingChanges ? ASK_CHANGES_PLACEHOLDER : commentPlaceholder(teamNote)
                   }
                   className={cn(
                     'min-w-0 flex-1',
@@ -992,17 +1140,43 @@ export function PlanItemScreen(props: {
                   shape="round"
                   aria-label={askingChanges ? ASK_CHANGES_SEND : 'Send comment'}
                   data-plan-comment-send={askingChanges ? 'changes' : 'comment'}
-                  disabled={(text.trim() === '' && !askingChanges) || sending || busy}
+                  disabled={
+                    (text.trim() === '' && !askingChanges) || sending || busy || blocked.length > 0
+                  }
                   className="shrink-0"
                 >
                   <IconArrowUp size={ICON_SIZE.control} />
                 </Button>
               </div>
-              {isLaptop && !coarse ? (
-                <p data-plan-comment-hint="" className="text-sm text-fg-3">
-                  {COMMENT_SEND_HINT}
+              {blocked.length > 0 ? (
+                <p data-plan-mention-blocked="" role="status" className="text-sm text-warn">
+                  {MENTION_TEAM_NOTE}
                 </p>
               ) : null}
+              <div className="flex min-h-[44px] items-center gap-2">
+                {side === 'agency' ? (
+                  <Chip
+                    label={teamNote ? TEAM_CHIP_LABEL : EVERYONE_CHIP_LABEL}
+                    {...(teamNote ? { dot: <IconLock size={ICON_SIZE.inline} /> } : {})}
+                    aria-pressed={teamNote}
+                    data-plan-visibility-chip={visibility}
+                    onClick={() => setVisibility(teamNote ? 'everyone' : 'team')}
+                    className={cn(
+                      'shrink-0',
+                      teamNote ? 'border-[color:var(--warn-line)] bg-warn-soft text-warn' : null,
+                    )}
+                  />
+                ) : (
+                  <p data-plan-visibility-line="" className="text-sm text-fg-3">
+                    {CLIENT_VISIBILITY_LINE}
+                  </p>
+                )}
+                {isLaptop && !coarse ? (
+                  <p data-plan-comment-hint="" className="ml-auto text-sm text-fg-3">
+                    {COMMENT_SEND_HINT}
+                  </p>
+                ) : null}
+              </div>
             </form>
           )
         }
@@ -1030,7 +1204,11 @@ export function PlanItemScreen(props: {
                 </Suspense>
               </PostSheetPlanRowsContext.Provider>
             ) : null}
-            <PlanNotes notes={read.status === 'ready' ? shown : []} workspaceId={workspaceId} />
+            <PlanNotes
+              notes={read.status === 'ready' ? shown : []}
+              workspaceId={workspaceId}
+              me={me}
+            />
             {removeButton}
           </>
         ) : (
@@ -1151,21 +1329,14 @@ export function PlanItemScreen(props: {
               ) : shown.length === 0 ? (
                 <p className="text-md text-fg-3">Comments show up here.</p>
               ) : (
-                shown.map((c) => (
-                  <CommentRow
-                    key={c.id}
-                    comment={c}
-                    workspaceId={workspaceId}
-                    highlighted={highlighted === c.id}
-                  />
-                ))
+                <PlanItemThread
+                  comments={shown}
+                  workspaceId={workspaceId}
+                  me={me}
+                  highlightedId={highlighted}
+                />
               )}
             </section>
-            {planActions ? (
-              <div data-plan-remove-row="" className="pt-2">
-                <RemoveFromPlanButton busy={planBusy} onClick={() => setRemoveOpen(true)} />
-              </div>
-            ) : null}
           </div>
         )}
       </PlanPage>
@@ -1366,6 +1537,7 @@ function ItemMedia(props: {
 function PlanNotes(props: {
   notes: ShownComment[];
   workspaceId: string | null;
+  me: string | null;
 }): ReactElement | null {
   if (props.notes.length === 0) return null;
   return (
@@ -1375,9 +1547,7 @@ function PlanNotes(props: {
       className="flex flex-col gap-2.5 px-4 pb-2 pt-4"
     >
       <h4 className={SECTION_LABEL}>{PLAN_NOTES_LABEL}</h4>
-      {props.notes.map((c) => (
-        <CommentRow key={c.id} comment={c} workspaceId={props.workspaceId} />
-      ))}
+      <PlanItemThread comments={props.notes} workspaceId={props.workspaceId} me={props.me} />
     </section>
   );
 }
@@ -1387,43 +1557,3 @@ const SLIDE_SETTLE_MS = DUR_SLOW_MS * 4;
 
 /** How long a deep-linked comment stays highlighted. */
 const HIGHLIGHT_MS = 2400;
-
-function CommentRow(props: {
-  comment: ShownComment;
-  workspaceId: string | null;
-  highlighted?: boolean;
-}): ReactElement {
-  const c = props.comment;
-  const team = c.visibility === 'team';
-  return (
-    <div
-      data-plan-comment-id={c.id}
-      {...(props.highlighted === true ? { 'data-plan-comment-highlight': '' } : {})}
-      data-plan-comment={c.visibility}
-      className={cn(
-        'flex flex-col gap-1 rounded-lg border px-3 py-2.5',
-        team ? 'border-warn bg-warn-soft' : 'border-border bg-panel',
-        c.pending && 'opacity-70',
-        props.highlighted === true &&
-          'ring-2 ring-accent transition-shadow duration-slow motion-reduce:transition-none',
-      )}
-    >
-      <div className="flex items-center gap-1.5">
-        <span className="text-base font-medium text-fg">{c.authorName}</span>
-        {team ? (
-          <span className="inline-flex items-center gap-1 text-sm text-warn">
-            <IconLock size={ICON_SIZE.inline} />
-            {TEAM_ONLY_LABEL}
-          </span>
-        ) : null}
-        <time className="ml-auto font-sans text-sm tabular-nums text-fg-3">
-          {formatRelative(c.createdAt)}
-        </time>
-      </div>
-      {/* No mention picker here, but a typed token reads "@username" (or "@Former member"), never raw. */}
-      <p className="whitespace-pre-wrap text-base text-fg">
-        {resolvePersonMentionText(c.body, props.workspaceId)}
-      </p>
-    </div>
-  );
-}
