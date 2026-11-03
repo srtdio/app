@@ -6,6 +6,12 @@
 // never before. A chime asked for before that gesture waits and plays on the
 // first tap after open. stop() silences it at once and cancels the repeats;
 // dispose() also closes the context and removes the unlock listeners.
+//
+// The device's alert prefs (Sound, Notifications, Pause) are asked at play()
+// and again before every tone, so a pause set mid-chime silences the repeats
+// and a chime muted at play() never waits for the first tap to sound later.
+
+import { currentSoundAllowed } from '@/lib/alert-prefs';
 
 /** The repeats of one chime and their spacing: three tones over about 5 s. */
 export const CHIME_REPEATS = 3;
@@ -72,6 +78,8 @@ interface ChimeDeps {
   target?: GestureTarget | null;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
+  /** Whether sound may play right now (default: the signed-in user's alert prefs). */
+  allowed?: () => boolean;
 }
 
 function defaultContext(): ChimeAudioContext | null {
@@ -97,6 +105,7 @@ export function createChime(deps: ChimeDeps = {}): Chime {
   const setTimer = deps.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
   const clearTimer =
     deps.clearTimer ?? ((h: unknown) => clearTimeout(h as ReturnType<typeof setTimeout>));
+  const allowed = deps.allowed ?? (() => currentSoundAllowed());
 
   let ctx: ChimeAudioContext | null = null;
   let unlocked = false;
@@ -120,7 +129,7 @@ export function createChime(deps: ChimeDeps = {}): Chime {
   }
 
   function tone(): void {
-    if (ctx === null) return;
+    if (ctx === null || !allowed()) return;
     const start = ctx.currentTime + 0.01;
     NOTES_HZ.forEach((hz, i) => {
       if (ctx === null) return;
@@ -175,7 +184,7 @@ export function createChime(deps: ChimeDeps = {}): Chime {
     removeListeners();
     if (pending) {
       pending = false;
-      start(pendingRepeats);
+      if (allowed()) start(pendingRepeats);
     }
   }
 
@@ -190,6 +199,11 @@ export function createChime(deps: ChimeDeps = {}): Chime {
   return {
     play(repeats = CHIME_REPEATS) {
       if (disposed) return () => {};
+      // Muted now: nothing plays and nothing waits for the first tap.
+      if (!allowed()) {
+        stop();
+        return stop;
+      }
       if (!unlocked || ctx === null) {
         pending = true;
         pendingRepeats = repeats;
