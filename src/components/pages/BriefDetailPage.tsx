@@ -55,6 +55,7 @@ import type { PipelinePost } from '@srtdio/posts';
 // Not on the package index (owned elsewhere); the read lives beside listPosts.
 import { listBriefLinkedPosts } from '../../../packages/posts/src/reads';
 import { briefClose } from '@srtdio/rpc';
+import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 
 // The line under a closed brief's title (and in the Close confirm).
 export const CLOSED_BRIEF_LINE = 'Closed briefs stay readable and open to comments.';
@@ -659,7 +660,7 @@ export function BriefDetailPage({
   const bareHeader = (
     <div
       ref={pageAnchorRef}
-      className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b"
+      className={`lit-header flex items-center gap-3 px-4 md:px-6 border-b ${SAFE_TOP_BAR_CLASS}`}
     >
       {backButton}
     </div>
@@ -817,7 +818,7 @@ export function BriefDetailPage({
     <SearchWordsContext.Provider value={searchJump.words}>
       <div
         ref={pageAnchorRef}
-        className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b"
+        className={`lit-header flex items-center gap-3 px-4 md:px-6 border-b ${SAFE_TOP_BAR_CLASS}`}
       >
         {backButton}
         {/* The status line, as the post screen's: a 7px dot and 15px semibold. */}

@@ -3,7 +3,14 @@ import { act, createElement } from 'react';
 import type { RefObject } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { FIT_GAP_PX, FIT_MIN_PX, fitHeight, useFitHeight } from './use-fit-height';
+import {
+  FIT_GAP_PX,
+  FIT_MIN_PX,
+  fitHeight,
+  resetStableViewportHeight,
+  useFitHeight,
+} from './use-fit-height';
+import { PAGE_SCROLL_CLASS } from './scroll-mode';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -108,6 +115,38 @@ describe('useFitHeight', () => {
   it('stays null with nothing to measure', () => {
     const { result, unmount } = mountHook({ current: null }, { current: null });
     expect(result.current).toBeNull();
+    unmount();
+  });
+});
+
+// Page mode on a phone (html.scroll-page, no laptop match): the bars shrinking
+// fire resize with a taller innerHeight; the fit must not move.
+describe('useFitHeight in page mode', () => {
+  afterEach(() => {
+    document.documentElement.classList.remove(PAGE_SCROLL_CLASS);
+    resetStableViewportHeight();
+    vi.unstubAllGlobals();
+    FakeObserver.instances = [];
+  });
+
+  it('reads a stable 100svh height and the document top, so bar shrink never jumps', () => {
+    vi.stubGlobal('ResizeObserver', FakeObserver);
+    document.documentElement.classList.add(PAGE_SCROLL_CLASS);
+    Object.defineProperty(document.documentElement, 'clientHeight', {
+      value: 700,
+      configurable: true,
+    });
+    setViewport(700);
+    const target = { current: document.createElement('div') };
+    target.current.getBoundingClientRect = () => ({ top: 200 }) as DOMRect;
+    const { result, unmount } = mountHook(target, { current: null });
+    expect(result.current).toBe(700 - 200 - FIT_GAP_PX);
+
+    act(() => {
+      setViewport(780);
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(result.current).toBe(700 - 200 - FIT_GAP_PX);
     unmount();
   });
 });

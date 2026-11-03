@@ -14,9 +14,12 @@ async function sampleFrames(page: Page, ms: number): Promise<void> {
     w.__frames = [];
     const start = performance.now();
     const tick = (): void => {
-      const main = document.querySelector('main');
+      // The shell scroller: the document in page mode on a phone
+      // (html.scroll-page, src/lib/scroll-mode.ts), else <main>.
+      const page = document.documentElement.classList.contains('scroll-page');
+      const scroller = page ? document.scrollingElement : document.querySelector('main');
       const cards = document.querySelector('[data-post-card-thumb], [data-post-card-body]');
-      w.__frames.push([main?.scrollTop ?? -1, cards !== null]);
+      w.__frames.push([scroller?.scrollTop ?? -1, cards !== null]);
       if (performance.now() - start < duration) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -32,12 +35,14 @@ test('Back to Pipeline paints at the kept scroll position on the first frame @th
   const card = page.getByRole('button', { name: 'Open post Monday carousel' });
   await expect(card).toBeVisible({ timeout: 15_000 });
 
+  // Phone width: page mode, the document scrolls (not <main>).
+  await expect(page.locator('html.scroll-page')).toHaveCount(1);
   const kept = await page.evaluate(() => {
-    const main = document.querySelector('main');
-    if (main === null) return 0;
-    main.scrollTop = main.scrollHeight;
-    main.dispatchEvent(new Event('scroll'));
-    return main.scrollTop;
+    const doc = document.scrollingElement;
+    if (doc === null) return 0;
+    doc.scrollTop = doc.scrollHeight;
+    window.dispatchEvent(new Event('scroll'));
+    return doc.scrollTop;
   });
   expect(kept).toBeGreaterThan(0);
   // The save listener runs on the scroll event; let it land.

@@ -21,6 +21,7 @@ import {
 } from 'react';
 import { mark } from '@/lib/perf-marks';
 import { peekKept, primeRead, readKey } from '@/lib/session-read';
+import { documentScroller, shellScroller } from '@/lib/scroll-mode';
 
 /** The kept-view key of one screen part for a user and workspace. */
 export function keptViewKey(userId: string, workspaceId: string, screen: string): string {
@@ -93,9 +94,17 @@ export function useUntouched(): () => boolean {
   return useCallback(() => !touched.current, []);
 }
 
-/** The shell's page scroller (AppLayout's main). */
-function shellScroller(): HTMLElement | null {
-  return document.querySelector('main');
+/**
+ * Where the scroll events of `el` arrive and what grows when its content
+ * does. The document scroller (page mode, src/lib/scroll-mode.ts) fires its
+ * scroll events on window, and its content is the shell's <main>; any other
+ * scroller is both.
+ */
+function scrollTargets(el: HTMLElement): { events: EventTarget; content: HTMLElement } {
+  if (el === documentScroller()) {
+    return { events: window, content: document.querySelector('main') ?? el };
+  }
+  return { events: el, content: el };
 }
 
 /**
@@ -114,7 +123,8 @@ export function atKeptTop(el: Pick<HTMLElement, 'scrollTop'>, top: number): bool
  * Keep the screen's scroll position for the session under `key` and put it
  * back once `ready` (the kept rows are painted). Restores once per mount, in
  * a layout effect, so the first painted frame is already at the kept position.
- * `scroller` names the element that scrolls (default: the shell's main).
+ * `scroller` names the element that scrolls (default: the shell's scroller,
+ * src/lib/scroll-mode.ts: the document in page mode on a phone, else <main>).
  *
  * When the page is not yet tall enough to hold the kept position (the browser
  * clamps the write), the target is held, not lost: every size change of the
@@ -158,8 +168,10 @@ export function useKeptScroll(
         stop();
       }
     });
+    const { content } = scrollTargets(el);
     observer.observe(el);
-    for (const child of Array.from(el.children)) observer.observe(child);
+    if (content !== el) observer.observe(content);
+    for (const child of Array.from(content.children)) observer.observe(child);
     const timer = window.setTimeout(stop, SCROLL_CATCH_UP_MS);
     for (const name of TOUCH_EVENTS) {
       window.addEventListener(name, stop, { capture: true, passive: true });
@@ -171,10 +183,11 @@ export function useKeptScroll(
     if (key === null) return;
     const el = getScroller.current();
     if (el === null) return;
+    const { events } = scrollTargets(el);
     const save = (): void => {
       if (restored.current && pending.current === null) primeRead(key, el.scrollTop);
     };
-    el.addEventListener('scroll', save, { passive: true });
-    return () => el.removeEventListener('scroll', save);
+    events.addEventListener('scroll', save, { passive: true });
+    return () => events.removeEventListener('scroll', save);
   }, [key]);
 }

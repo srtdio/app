@@ -90,8 +90,8 @@ describe('AppLayout detail route chrome', () => {
   });
 
   it('the shell derives the chrome from both the thread and the detail route', () => {
-    expect(source).toContain(
-      'shellChrome(isThreadRoute(pathname, searchParams) || isDetailRoute(pathname))',
+    expect(source).toMatch(
+      /shellChrome\(\s*isThreadRoute\(pathname, searchParams\) \|\| isDetailRoute\(pathname\),\s*scrollMode,\s*\)/,
     );
   });
 });
@@ -129,5 +129,78 @@ describe('AppLayout Cockpit gate', () => {
     for (const threadOpen of [false, true]) {
       expect(shellChrome(threadOpen).mainClassName).toContain('md:pr-[var(--side-panel-w,0px)]');
     }
+  });
+});
+
+// Page vs locked scrolling (src/lib/scroll-mode.ts). Page mode lets the
+// document scroll below md (mobile browser bars shrink); md and up and Chat
+// keep the locked shell exactly as before.
+describe('AppLayout scroll mode', () => {
+  const split = (c: string) => c.split(' ');
+
+  it('decides the mode from the URL in the same render', () => {
+    expect(source).toContain('const scrollMode = scrollModeFor(pathname);');
+    expect(source).toContain('<ShellScrollMode mode={scrollMode} />');
+    // Mutation phase: before every page's layout effect (kept scroll restore).
+    expect(source).toMatch(/useInsertionEffect\(\(\) => \{\s*applyScrollMode\(mode\);/);
+    expect(source).toContain("useInsertionEffect(() => () => applyScrollMode('locked'), []);");
+  });
+
+  it('wraps the shell from the chrome in both modes', () => {
+    expect(source).toContain('<div className={chrome.shellClassName}>');
+    expect(source).toContain('<div className={chrome.columnClassName}>');
+  });
+
+  it('locked mode (default, Chat) is the old shell, class for class', () => {
+    for (const threadOpen of [false, true]) {
+      const chrome = shellChrome(threadOpen, 'locked');
+      expect(chrome).toEqual(shellChrome(threadOpen));
+      expect(split(chrome.mainClassName)).toEqual(
+        expect.arrayContaining(['flex-1', 'overflow-y-auto', 'overflow-x-hidden']),
+      );
+      expect(chrome.shellClassName).toBe('flex h-full');
+      expect(chrome.columnClassName).toBe('flex flex-1 min-w-0 flex-col h-full');
+    }
+  });
+
+  it('page mode: main has no scroll box below md and the locked one from md', () => {
+    for (const threadOpen of [false, true]) {
+      const main = split(shellChrome(threadOpen, 'page').mainClassName);
+      expect(main).not.toContain('overflow-y-auto');
+      expect(main).not.toContain('overflow-x-hidden');
+      // clip, not hidden: hidden would make main a scroll container again.
+      expect(main).toContain('overflow-x-clip');
+      expect(main).toEqual(
+        expect.arrayContaining([
+          'flex-1',
+          'md:overflow-y-auto',
+          'md:overflow-x-hidden',
+          'md:pr-[var(--side-panel-w,0px)]',
+        ]),
+      );
+    }
+  });
+
+  it('page mode keeps the BottomTabs room and the thread/detail chrome', () => {
+    const list = shellChrome(false, 'page');
+    expect(list.mainClassName).toContain('pb-[calc(84px+env(safe-area-inset-bottom))]');
+    expect(list.mainClassName).toContain('md:pb-0');
+    expect(list.showBottomTabs).toBe(true);
+    const detail = shellChrome(true, 'page');
+    expect(split(detail.mainClassName)).toContain('pb-0');
+    expect(split(detail.topbarClassName)).toContain('hidden');
+  });
+
+  it('page mode wrappers grow from 100svh below md and are the locked h-full from md', () => {
+    const chrome = shellChrome(false, 'page');
+    expect(split(chrome.shellClassName)).toEqual(['flex', 'min-h-[100svh]', 'md:h-full']);
+    expect(split(chrome.columnClassName)).not.toContain('h-full');
+    expect(split(chrome.columnClassName)).toContain('md:h-full');
+  });
+
+  it('the storage banner stays in flow between the Topbar and main', () => {
+    expect(source).toMatch(
+      /<StorageWarningBanner \/>\s*\{\/\*[^]*?\*\/\}\s*<main className=\{chrome\.mainClassName\}>/,
+    );
   });
 });

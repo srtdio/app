@@ -161,3 +161,27 @@ describe('Notifications lives in the top bar on laptop (the phone tab bar holds 
     expect(findAll(loading, (el) => el.type === NotificationsButton)).toHaveLength(0);
   });
 });
+
+// Page mode (src/lib/scroll-mode.ts): on a phone the Topbar sticks to the
+// window and covers the status bar strip as one surface. The 56px bar is the
+// same everywhere; --shell-safe-top is unset (0px) in locked mode and on laptop.
+describe('Topbar scroll modes', () => {
+  it('is one sticky, solid, lit surface whose top padding is the safe area', () => {
+    const tree = Topbar({ ...baseProps, workspaceName: 'Acme' });
+    const classes = className(tree).split(/\s+/);
+    expect(tree.type).toBe('header');
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        'sticky',
+        'top-0',
+        'z-30',
+        'border-b',
+        'bg-panel',
+        'lit-header',
+        'h-[calc(3.5rem+var(--shell-safe-top,0px))]',
+        'pt-[var(--shell-safe-top,0px)]',
+      ]),
+    );
+    expect(classes).not.toContain('h-14');
+  });
+});
