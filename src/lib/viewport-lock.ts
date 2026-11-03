@@ -13,15 +13,15 @@
 // window is scrolled, it resets the window to 0,0. Nothing else is changed:
 // no gesture is prevented and the viewport meta is untouched.
 //
-// Page mode on a phone (src/lib/scroll-mode.ts pageScrollActive: html.scroll-page,
-// every in-shell route but Chat, AND below md): the document itself scrolls, so a scrolled window is the person's
+// Page mode on a phone or a touch tablet (src/lib/scroll-mode.ts pageScrollActive:
+// html.scroll-page, every in-shell route but Chat, AND PAGE_SCROLL_QUERY): the document itself scrolls, so a scrolled window is the person's
 // own position and is never reset. A visualViewport resize there is the
 // browser bars shrinking or growing, so it does nothing. Only the keyboard gap
 // is mended: the window position at focusin on a text field is kept, and on
 // focusout to a non-text target it is put back, and only when the root height
 // shrank while the field was focused and has not recovered. Locked mode (Chat,
-// auth, onboarding) and md and up (iPad, laptop: the class is set but the root
-// is still the locked 100svh shell) keep the reset to 0,0 above, unchanged.
+// auth, onboarding) and a laptop or an iPad with a trackpad (the class is set
+// but the root is still the locked 100svh shell) keep the reset to 0,0 above.
 //
 // main.tsx calls it once at boot (mirroring initSentry / initTheme); a second
 // call on the same window registers nothing.

@@ -432,11 +432,14 @@
     background-color: var(--bg);
   }
   /* Page mode (src/lib/scroll-mode.ts): every in-shell route except Chat, on a
-     phone. The document scrolls instead of <main>, so mobile browser bars
-     shrink on scroll and content runs under them. The root grows with its
-     content (min 100svh, 100% fallback); background-color above still paints
-     all three layers. Laptop (md and up) and locked mode keep the rules above. */
-  @media (max-width: 767.98px) {
+     phone or a touch tablet. The document scrolls instead of <main>, so mobile
+     browser bars shrink on scroll and content runs under them. The root grows
+     with its content (min 100svh, 100% fallback); background-color above still
+     paints all three layers. A laptop or desktop with a mouse or trackpad (an
+     iPad with one attached included) and locked mode keep the rules above.
+     The query is PAGE_SCROLL_QUERY verbatim (scroll-mode-css.test.ts guards
+     it): phone OR (md and up, hover none, pointer coarse). */
+  @media (max-width: 767.98px), (min-width: 768px) and (hover: none) and (pointer: coarse) {
     html.scroll-page,
     html.scroll-page body,
     html.scroll-page #root {
@@ -455,6 +458,15 @@
        Overlays unmount when closed, so this never outlives one. */
     html.scroll-page:has([aria-modal='true']) {
       overflow: hidden;
+    }
+  }
+  /* Touch tablet page mode (TOUCH_TABLET_QUERY verbatim): the Topbar stays on
+     screen over a Post or Brief detail page (only a phone drops it), so the
+     detail page's own header, inside <main>, does not cover the status bar
+     strip a second time. The Topbar and Sidebar, outside <main>, keep it. */
+  @media (min-width: 768px) and (hover: none) and (pointer: coarse) {
+    html.scroll-page main {
+      --shell-safe-top: 0px;
     }
   }
   /* No grey flash over tapped controls on touch screens (iOS / Android draw

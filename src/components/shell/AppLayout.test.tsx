@@ -91,7 +91,7 @@ describe('AppLayout detail route chrome', () => {
 
   it('the shell derives the chrome from both the thread and the detail route', () => {
     expect(source).toMatch(
-      /shellChrome\(\s*isThreadRoute\(pathname, searchParams\) \|\| isDetailRoute\(pathname\),\s*scrollMode,\s*\)/,
+      /shellChrome\(\s*isThreadRoute\(pathname, searchParams\) \|\| isDetailRoute\(pathname\),\s*scrollMode,\s*touchTablet,\s*\)/,
     );
   });
 });
@@ -196,6 +196,45 @@ describe('AppLayout scroll mode', () => {
     expect(split(chrome.shellClassName)).toEqual(['flex', 'min-h-[100svh]', 'md:h-full']);
     expect(split(chrome.columnClassName)).not.toContain('h-full');
     expect(split(chrome.columnClassName)).toContain('md:h-full');
+  });
+
+  // Touch tablets (TOUCH_TABLET_QUERY): page mode drops the md: lock so the
+  // document scrolls; a mouse or trackpad (touchTablet false) is class for
+  // class the shell from before.
+  it('touch tablet, page mode: main has no scroll box or height at md and keeps md:pr', () => {
+    for (const threadOpen of [false, true]) {
+      const chrome = shellChrome(threadOpen, 'page', true);
+      const main = split(chrome.mainClassName);
+      expect(main).not.toContain('md:overflow-y-auto');
+      expect(main).not.toContain('md:overflow-x-hidden');
+      expect(main).not.toContain('overflow-y-auto');
+      expect(main).toEqual(
+        expect.arrayContaining(['flex-1', 'overflow-x-clip', 'md:pr-[var(--side-panel-w,0px)]']),
+      );
+      expect(split(chrome.shellClassName)).toEqual(['flex', 'min-h-[100svh]']);
+      expect(split(chrome.columnClassName)).toEqual(['flex', 'flex-1', 'min-w-0', 'flex-col']);
+      // Fixed bottom bars and the tab bar room are untouched.
+      expect(chrome.showBottomTabs).toBe(!threadOpen);
+      expect(chrome.topbarClassName).toBe(shellChrome(threadOpen, 'page').topbarClassName);
+    }
+    expect(shellChrome(false, 'page', true).mainClassName).toContain('md:pb-0');
+  });
+
+  it('touch tablet never unlocks Chat', () => {
+    for (const threadOpen of [false, true]) {
+      expect(shellChrome(threadOpen, 'locked', true)).toEqual(shellChrome(threadOpen, 'locked'));
+    }
+  });
+
+  it('mouse or trackpad (laptop, iPad with a trackpad): page mode unchanged class for class', () => {
+    for (const threadOpen of [false, true]) {
+      expect(shellChrome(threadOpen, 'page', false)).toEqual(shellChrome(threadOpen, 'page'));
+    }
+  });
+
+  it('reads the device in the first render through the boot listener store', () => {
+    expect(source).toContain('const touchTablet = useTouchTablet();');
+    expect(source).not.toMatch(/matchMedia/);
   });
 
   it('the storage banner stays in flow between the Topbar and main', () => {

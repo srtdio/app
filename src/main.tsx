@@ -73,8 +73,17 @@ async function bootApp(root: HTMLElement): Promise<void> {
   // Each import is destructured where it is made so Rollup can still
   // tree-shake the modules. Sentry is not here: scheduleSentry loads it after
   // render.
-  const [, BootErrorBoundary, App, TraceProvider, initTheme, initViewportLock, logger, motion] =
-    await Promise.all([
+  const [
+    ,
+    BootErrorBoundary,
+    App,
+    TraceProvider,
+    initTheme,
+    initViewportLock,
+    logger,
+    motion,
+    watchScrollDevice,
+  ] = await Promise.all([
       import('@/index.css'),
       import('@/components/shell/BootErrorBoundary').then(
         ({ BootErrorBoundary }) => BootErrorBoundary,
@@ -92,6 +101,8 @@ async function bootApp(root: HTMLElement): Promise<void> {
           watchUAVisualTransition,
         }),
       ),
+      // Already in viewport-lock's graph: no extra request.
+      import('@/lib/scroll-mode').then(({ watchScrollDevice }) => watchScrollDevice),
     ]);
   mark('boot:app:imports');
   const { MotionRoot } = motion;
@@ -100,6 +111,8 @@ async function bootApp(root: HTMLElement): Promise<void> {
 
   initTheme();
   initViewportLock();
+  // The one device media-query listener (touch tablet <-> laptop), registered once.
+  watchScrollDevice();
 
   // Render only once the stylesheet is confirmed applied; on a stale deploy the
   // guard reloads the page instead (at most once per session).

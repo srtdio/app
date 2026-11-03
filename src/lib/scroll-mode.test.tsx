@@ -4,35 +4,50 @@
 // against the document in page mode and against <main> in locked mode.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyScrollMode,
+  onScrollDeviceChange,
   PAGE_SCROLL_CLASS,
+  PAGE_SCROLL_QUERY,
   pageModeClassOn,
+  pageScrollActive,
   scrollModeFor,
   shellScroller,
+  TOUCH_TABLET_QUERY,
+  touchTabletNow,
+  useTouchTablet,
+  watchScrollDevice,
 } from '@/lib/scroll-mode';
 import { keptViewKey, useKeptScroll } from '@/lib/kept-view';
 import { peekKept, resetSessionReads } from '@/lib/session-read';
+import {
+  LAPTOP,
+  matchMediaFor,
+  MOUSE_AT_TABLET_WIDTH,
+  PHONE,
+  TABLET_LANDSCAPE,
+  TABLET_PORTRAIT,
+  type MediaDevice,
+} from '@/lib/__tests__/media-device';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let root: Root | null = null;
+let device: MediaDevice = PHONE;
+const listeners: Array<{ media: string; fn: () => void }> = [];
 
-function setLaptop(laptop: boolean | null): void {
+function setDevice(next: MediaDevice | null): void {
+  if (next !== null) device = next;
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
     writable: true,
-    value:
-      laptop === null
-        ? undefined
-        : (q: string) => ({
-            matches: laptop && q.includes('min-width'),
-            media: q,
-            addEventListener() {},
-            removeEventListener() {},
-          }),
+    value: next === null ? undefined : matchMediaFor(() => device, listeners),
   });
+}
+
+function setLaptop(laptop: boolean | null): void {
+  setDevice(laptop === null ? null : laptop ? LAPTOP : PHONE);
 }
 
 afterEach(() => {
@@ -41,6 +56,7 @@ afterEach(() => {
   document.body.innerHTML = '';
   document.documentElement.classList.remove(PAGE_SCROLL_CLASS);
   setLaptop(null);
+  listeners.length = 0;
   resetSessionReads();
 });
 
@@ -113,6 +129,121 @@ describe('shellScroller', () => {
     setLaptop(true);
     applyScrollMode('page');
     expect(shellScroller()).toBe(main);
+  });
+});
+
+describe('device rule (one query string for CSS and JS)', () => {
+  it('page scroll is phone OR touch tablet', () => {
+    expect(TOUCH_TABLET_QUERY).toBe('(min-width: 768px) and (hover: none) and (pointer: coarse)');
+    expect(PAGE_SCROLL_QUERY).toBe(`(max-width: 767.98px), ${TOUCH_TABLET_QUERY}`);
+  });
+
+  it.each([
+    ['phone', PHONE, true, false],
+    ['touch tablet portrait', TABLET_PORTRAIT, true, true],
+    ['touch tablet landscape', TABLET_LANDSCAPE, true, true],
+    ['mouse or trackpad at the same width', MOUSE_AT_TABLET_WIDTH, false, false],
+    ['laptop', LAPTOP, false, false],
+  ] as const)('%s: page route scrolls the document = %s', (_name, d, page, tablet) => {
+    const main = document.createElement('main');
+    document.body.appendChild(main);
+    setDevice(d);
+    applyScrollMode(scrollModeFor('/pipeline'));
+    expect(pageScrollActive()).toBe(page);
+    expect(touchTabletNow()).toBe(tablet);
+    const doc = document.scrollingElement ?? document.documentElement;
+    expect(shellScroller()).toBe(page ? doc : main);
+  });
+
+  it.each([PHONE, TABLET_PORTRAIT, TABLET_LANDSCAPE, MOUSE_AT_TABLET_WIDTH, LAPTOP])(
+    'chat stays locked on every device (%o)',
+    (d) => {
+      const main = document.createElement('main');
+      document.body.appendChild(main);
+      setDevice(d);
+      applyScrollMode(scrollModeFor('/chat'));
+      expect(pageScrollActive()).toBe(false);
+      expect(shellScroller()).toBe(main);
+    },
+  );
+
+  it('without matchMedia reads as a phone (as useIsLaptop does)', () => {
+    setDevice(null);
+    applyScrollMode('page');
+    expect(pageScrollActive()).toBe(true);
+    expect(touchTabletNow()).toBe(false);
+  });
+});
+
+describe('watchScrollDevice: the one boot listener', () => {
+  function settable(el: HTMLElement): void {
+    let top = 0;
+    Object.defineProperty(el, 'scrollTop', {
+      configurable: true,
+      get: () => top,
+      set: (v: number) => {
+        top = v;
+      },
+    });
+  }
+
+  it('registers one change listener on the touch tablet query, once per window', () => {
+    setDevice(TABLET_PORTRAIT);
+    watchScrollDevice(window);
+    watchScrollDevice(window);
+    expect(listeners).toHaveLength(1);
+    expect(listeners[0]?.media).toBe(TOUCH_TABLET_QUERY);
+  });
+
+  it('a trackpad attached on a scrolled iPad switches mode and keeps the position', () => {
+    const main = document.createElement('main');
+    document.body.appendChild(main);
+    settable(main);
+    const doc = (document.scrollingElement ?? document.documentElement) as HTMLElement;
+    settable(doc);
+    setDevice(TABLET_PORTRAIT);
+    applyScrollMode('page');
+
+    const seen: boolean[] = [];
+    function Probe() {
+      seen.push(useTouchTablet());
+      return null;
+    }
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    act(() => root!.render(<Probe />));
+    expect(seen.at(-1)).toBe(true);
+    expect(shellScroller()).toBe(doc);
+
+    doc.scrollTop = 900;
+    // Trackpad attached: pointer flips to fine, the CSS goes back to the locked shell.
+    device = MOUSE_AT_TABLET_WIDTH;
+    act(() => onScrollDeviceChange());
+    expect(seen.at(-1)).toBe(false);
+    expect(shellScroller()).toBe(main);
+    // The reading position moved to the new scroller: no reset to the top.
+    expect(main.scrollTop).toBe(900);
+
+    // Detached again: back to the document at the same place.
+    doc.scrollTop = 0;
+    device = TABLET_PORTRAIT;
+    act(() => onScrollDeviceChange());
+    expect(seen.at(-1)).toBe(true);
+    expect(doc.scrollTop).toBe(900);
+  });
+
+  it('at the top nothing is written', () => {
+    const main = document.createElement('main');
+    document.body.appendChild(main);
+    settable(main);
+    const write = vi.fn();
+    Object.defineProperty(main, 'scrollTop', { configurable: true, get: () => 0, set: write });
+    setDevice(TABLET_PORTRAIT);
+    applyScrollMode('page');
+    device = MOUSE_AT_TABLET_WIDTH;
+    onScrollDeviceChange();
+    expect(write).not.toHaveBeenCalled();
   });
 });
 
