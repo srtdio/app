@@ -1909,40 +1909,56 @@ async function settle(page: Page): Promise<void> {
   );
 }
 
-for (const screen of SCREENS) {
-  test(screen.name, async ({ page }) => {
-    if (screen.only !== undefined) {
-      test.skip((screen.only === 'laptop') !== isLaptop(page), `${screen.only} only`);
-    }
-    if (screen.dark === true) await page.emulateMedia({ colorScheme: 'dark' });
-    // The page's clock is pinned (Date only; timers keep running).
-    await page.clock.setFixedTime(NOW);
-    // Vite's HMR socket answers nothing, so a file saved mid-run never
-    // reloads or patches the page under a screenshot.
-    await page.routeWebSocket(
-      (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
-      () => undefined,
-    );
-    const network = await installHarnessNetwork(
-      page,
-      screen.operator !== undefined ? { operator: true, cockpitLevel: screen.operator } : {},
-    );
-    // Rebuild the world at the fixed instant (the handlers read world.tables per request).
-    Object.assign(network.world, buildWorld(NOW));
-    if (screen.signedOut === true) await signOut(page);
-    if (screen.seed !== null) seedAudit(network, screen.seed, NOW);
-    screen.extra?.(network);
-    await screen.prepare?.(network, page, NOW);
-    await installDeletedRoutes(page, network);
-    await page.goto(screen.url);
-    await screen.steps(page);
-    await stabilise(page);
-    await settle(page);
-    await expect(page).toHaveScreenshot(`${screen.name}.png`, {
-      maxDiffPixelRatio: 0.002,
-      animations: 'disabled',
-      caret: 'hide',
-    });
-    expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+async function capture(screen: Screen, page: Page): Promise<void> {
+  if (screen.only !== undefined) {
+    test.skip((screen.only === 'laptop') !== isLaptop(page), `${screen.only} only`);
+  }
+  if (screen.dark === true) await page.emulateMedia({ colorScheme: 'dark' });
+  // The page's clock is pinned (Date only; timers keep running).
+  await page.clock.setFixedTime(NOW);
+  // Vite's HMR socket answers nothing, so a file saved mid-run never
+  // reloads or patches the page under a screenshot.
+  await page.routeWebSocket(
+    (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
+    () => undefined,
+  );
+  const network = await installHarnessNetwork(
+    page,
+    screen.operator !== undefined ? { operator: true, cockpitLevel: screen.operator } : {},
+  );
+  // Rebuild the world at the fixed instant (the handlers read world.tables per request).
+  Object.assign(network.world, buildWorld(NOW));
+  if (screen.signedOut === true) await signOut(page);
+  if (screen.seed !== null) seedAudit(network, screen.seed, NOW);
+  screen.extra?.(network);
+  await screen.prepare?.(network, page, NOW);
+  await installDeletedRoutes(page, network);
+  await page.goto(screen.url);
+  await screen.steps(page);
+  await stabilise(page);
+  await settle(page);
+  await expect(page).toHaveScreenshot(`${screen.name}.png`, {
+    maxDiffPixelRatio: 0.002,
+    animations: 'disabled',
+    caret: 'hide',
   });
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+}
+
+for (const screen of SCREENS) {
+  test(screen.name, async ({ page }) => capture(screen, page));
+}
+
+// Touch tablet page mode (src/lib/scroll-mode.ts TOUCH_TABLET_QUERY): the
+// document scrolls on these screens. Only the ipad-* projects run @tablet
+// (playwright.visual.config.ts); their baselines live in their own folders.
+const TABLET_SCREENS = new Set([
+  'pipeline',
+  'briefs-approver',
+  'assets',
+  'plan-tab',
+  'post-detail',
+]);
+for (const screen of SCREENS.filter((s) => TABLET_SCREENS.has(s.name))) {
+  test(`${screen.name} @tablet`, async ({ page }) => capture(screen, page));
 }

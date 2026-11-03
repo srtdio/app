@@ -39,41 +39,52 @@ if (window.location.pathname === '/') {
     import('@/lib/theme'),
     import('@/lib/viewport-lock'),
     import('@/lib/motion'),
-  ]).then(([{ default: App }, { TraceProvider }, { initTheme }, { initViewportLock }, motion]) => {
-    // Specs measure rest-state layout and take rest-state shots: the harness
-    // runs with motion off (the app's own ?motion=0 switch, remembered for the
-    // tab) unless a spec opens a page with ?motion=1.
-    try {
-      if (new URLSearchParams(window.location.search).get('motion') !== '1') {
-        sessionStorage.setItem('sorted.motion', '0');
+    import('@/lib/scroll-mode'),
+  ]).then(
+    ([
+      { default: App },
+      { TraceProvider },
+      { initTheme },
+      { initViewportLock },
+      motion,
+      { watchScrollDevice },
+    ]) => {
+      // Specs measure rest-state layout and take rest-state shots: the harness
+      // runs with motion off (the app's own ?motion=0 switch, remembered for the
+      // tab) unless a spec opens a page with ?motion=1.
+      try {
+        if (new URLSearchParams(window.location.search).get('motion') !== '1') {
+          sessionStorage.setItem('sorted.motion', '0');
+        }
+      } catch {
+        // Storage blocked: ?motion=0 on the URL still turns motion off.
       }
-    } catch {
-      // Storage blocked: ?motion=0 on the URL still turns motion off.
-    }
-    motion.installMotionPreference();
-    motion.watchUAVisualTransition();
-    const { MotionRoot } = motion;
-    // The app starts everyone in light and goes dark only by choice
-    // (localStorage sorted-theme). The dark project stands in for a person who
-    // chose dark, so seed that choice from the emulated colour scheme.
-    try {
-      localStorage.setItem(
-        'sorted-theme',
-        window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+      motion.installMotionPreference();
+      motion.watchUAVisualTransition();
+      const { MotionRoot } = motion;
+      // The app starts everyone in light and goes dark only by choice
+      // (localStorage sorted-theme). The dark project stands in for a person who
+      // chose dark, so seed that choice from the emulated colour scheme.
+      try {
+        localStorage.setItem(
+          'sorted-theme',
+          window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+        );
+      } catch {
+        // Storage blocked: the harness renders light.
+      }
+      initTheme();
+      initViewportLock();
+      watchScrollDevice();
+      root.render(
+        <StrictMode>
+          <TraceProvider>
+            <MotionRoot>
+              <App />
+            </MotionRoot>
+          </TraceProvider>
+        </StrictMode>,
       );
-    } catch {
-      // Storage blocked: the harness renders light.
-    }
-    initTheme();
-    initViewportLock();
-    root.render(
-      <StrictMode>
-        <TraceProvider>
-          <MotionRoot>
-            <App />
-          </MotionRoot>
-        </TraceProvider>
-      </StrictMode>,
-    );
-  });
+    },
+  );
 }

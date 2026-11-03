@@ -108,8 +108,9 @@ export function SectionHeader<S extends string = string>({
 }: SectionHeaderProps<S>) {
   const searching = search !== undefined && search.value.trim() !== '';
   // In locked mode (and on laptop) the scroll container is the shell <main>,
-  // so top 0 pins to just below the app top bar; in page mode on a phone the
-  // window scrolls and SHELL_STICKY_TOP_CLASS pins it below the sticky Topbar.
+  // so top 0 pins to just below the app top bar; in page mode on a phone or a
+  // touch tablet the window scrolls and SHELL_STICKY_TOP_CLASS pins it below
+  // the sticky Topbar.
   // z-20 sits above the grid (z-0) and below the top bar (z-30).
   const childRowClass = cn(
     'px-4 md:px-6 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',

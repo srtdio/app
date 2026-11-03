@@ -40,8 +40,8 @@ export function Topbar({
 }: TopbarProps) {
   return (
     // Sticky to <main> in locked mode (Chat, laptop) and to the window in page
-    // mode on a phone (src/lib/scroll-mode.ts), where the status bar strip
-    // above the 56px bar is part of this same solid, lit surface.
+    // mode on a phone or a touch tablet (src/lib/scroll-mode.ts), where the
+    // status bar strip above the 56px bar is part of this same solid, lit surface.
     <header
       className={cn(
         'sticky top-0 z-30 flex items-center gap-2 px-3 md:px-4 border-b bg-panel lit-header',

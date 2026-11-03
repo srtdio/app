@@ -14,6 +14,9 @@ import { defineConfig, devices } from '@playwright/test';
 // [update-visual-baselines] and Visual CI renders and commits them to the PR.
 //
 // Three projects: iPhone 13 light and dark, and a 1280x800 laptop in light.
+// Plus four touch tablet projects (iPad 820x1180 portrait and 1180x820
+// landscape, hasTouch, light and dark) that run only the @tablet shots: the
+// page-mode screens (src/lib/scroll-mode.ts TOUCH_TABLET_QUERY).
 // VISUAL_PORT picks the harness port (default 4195).
 const isCI = process.env.CI === 'true';
 const port = Number(process.env.VISUAL_PORT ?? 4195);
@@ -31,6 +34,17 @@ const laptop = {
   isMobile: false,
   hasTouch: false,
 } as const;
+const tablet = {
+  ...stable,
+  browserName: 'webkit',
+  userAgent: devices['iPad (gen 7)'].userAgent,
+  deviceScaleFactor: 2,
+  isMobile: true,
+  hasTouch: true,
+} as const;
+const portrait = { ...tablet, viewport: { width: 820, height: 1180 } } as const;
+const landscape = { ...tablet, viewport: { width: 1180, height: 820 } } as const;
+const TABLET = /@tablet/;
 
 export default defineConfig({
   testDir: '.',
@@ -40,7 +54,9 @@ export default defineConfig({
   outputDir: '../results/visual',
   forbidOnly: isCI,
   fullyParallel: true,
-  workers: isCI ? 2 : 3,
+  // 4 on CI (ubuntu-latest has 4 vCPUs): the four ipad-* projects took the
+  // run past the workflow's 15-minute compare and render steps at 2 workers.
+  workers: isCI ? 4 : 3,
   timeout: 90_000,
   expect: {
     timeout: isCI ? 10_000 : 5_000,
@@ -56,9 +72,13 @@ export default defineConfig({
     trace: 'off',
   },
   projects: [
-    { name: 'iphone-light', use: { ...phone, colorScheme: 'light' } },
-    { name: 'iphone-dark', use: { ...phone, colorScheme: 'dark' } },
-    { name: 'laptop-light', use: { ...laptop, colorScheme: 'light' } },
+    { name: 'iphone-light', use: { ...phone, colorScheme: 'light' }, grepInvert: TABLET },
+    { name: 'iphone-dark', use: { ...phone, colorScheme: 'dark' }, grepInvert: TABLET },
+    { name: 'laptop-light', use: { ...laptop, colorScheme: 'light' }, grepInvert: TABLET },
+    { name: 'ipad-portrait-light', use: { ...portrait, colorScheme: 'light' }, grep: TABLET },
+    { name: 'ipad-portrait-dark', use: { ...portrait, colorScheme: 'dark' }, grep: TABLET },
+    { name: 'ipad-landscape-light', use: { ...landscape, colorScheme: 'light' }, grep: TABLET },
+    { name: 'ipad-landscape-dark', use: { ...landscape, colorScheme: 'dark' }, grep: TABLET },
   ],
   webServer: {
     command: `pnpm exec vite --config e2e/harness/vite.config.ts --port ${port} --strictPort`,

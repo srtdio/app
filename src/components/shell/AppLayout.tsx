@@ -43,7 +43,7 @@ import { routeChunksLoaded, whenRouteChunksSettle } from '@/lib/chunk-reload';
 import { useReloadOnNavigateWhenStale } from '@/lib/app-version';
 import { LoadFailed, SessionLoading } from '@/components/auth/RouteGuards';
 import { MarksPanel } from '@/components/dev/MarksPanel';
-import { applyScrollMode, scrollModeFor, type ScrollMode } from '@/lib/scroll-mode';
+import { applyScrollMode, scrollModeFor, useTouchTablet, type ScrollMode } from '@/lib/scroll-mode';
 
 // The operator's Cockpit (dot + panel): one lazy chunk, requested only when the
 // operator flag is true. Nobody else downloads it or makes any request for it.
@@ -84,10 +84,17 @@ export function isDetailRoute(pathname: string): boolean {
  * overflow of its own (overflow-x-clip clips sideways without making main a
  * scroll container, so sticky headers pin to the window). md and up is the
  * locked shell in both modes, so laptop is unchanged.
+ *
+ * `touchTablet` (TOUCH_TABLET_QUERY, src/lib/scroll-mode.ts): md and up with a
+ * finger as the pointer. In page mode it drops the md: lock overrides, so the
+ * document scrolls there as on a phone; md:pr (side panel room) and md:pb-0
+ * stay. Without it (laptop, desktop, iPad with a trackpad) every class is the
+ * same as before.
  */
 export function shellChrome(
   threadOpen: boolean,
   mode: ScrollMode = 'locked',
+  touchTablet = false,
 ): {
   topbarClassName: string;
   showBottomTabs: boolean;
@@ -96,21 +103,30 @@ export function shellChrome(
   columnClassName: string;
 } {
   const page = mode === 'page';
+  const pageTablet = page && touchTablet;
   return {
     topbarClassName: threadOpen ? 'hidden md:contents' : 'contents',
     showBottomTabs: !threadOpen,
     mainClassName: cn(
       // --side-panel-w is set only while ui/SidePanel is on screen (laptop);
       // unset it is 0, so the page is unchanged for everyone else.
-      page
-        ? 'flex-1 overflow-x-clip md:overflow-y-auto md:overflow-x-hidden md:pr-[var(--side-panel-w,0px)]'
-        : 'flex-1 overflow-y-auto overflow-x-hidden md:pr-[var(--side-panel-w,0px)]',
+      pageTablet
+        ? 'flex-1 overflow-x-clip md:pr-[var(--side-panel-w,0px)]'
+        : page
+          ? 'flex-1 overflow-x-clip md:overflow-y-auto md:overflow-x-hidden md:pr-[var(--side-panel-w,0px)]'
+          : 'flex-1 overflow-y-auto overflow-x-hidden md:pr-[var(--side-panel-w,0px)]',
       threadOpen ? 'pb-0' : 'pb-[calc(84px+env(safe-area-inset-bottom))] md:pb-0',
     ),
-    shellClassName: page ? 'flex min-h-[100svh] md:h-full' : 'flex h-full',
-    columnClassName: page
-      ? 'flex flex-1 min-w-0 flex-col md:h-full'
-      : 'flex flex-1 min-w-0 flex-col h-full',
+    shellClassName: pageTablet
+      ? 'flex min-h-[100svh]'
+      : page
+        ? 'flex min-h-[100svh] md:h-full'
+        : 'flex h-full',
+    columnClassName: pageTablet
+      ? 'flex flex-1 min-w-0 flex-col'
+      : page
+        ? 'flex flex-1 min-w-0 flex-col md:h-full'
+        : 'flex flex-1 min-w-0 flex-col h-full',
   };
 }
 
@@ -181,9 +197,13 @@ function AppLayoutBody() {
   const { session } = useSession();
   const userId = session?.user.id ?? null;
   const scrollMode = scrollModeFor(pathname);
+  // Decided in this first render (one media-query read); the boot listener
+  // (watchScrollDevice) re-renders it when a trackpad attaches or the width flips.
+  const touchTablet = useTouchTablet();
   const chrome = shellChrome(
     isThreadRoute(pathname, searchParams) || isDetailRoute(pathname),
     scrollMode,
+    touchTablet,
   );
   const [paletteOpen, setPaletteOpen] = useState(false);
   const paletteOpenRef = useRef(false);

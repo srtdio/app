@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { focusRestoreTop, initViewportLock } from '@/lib/viewport-lock';
+import {
+  LAPTOP,
+  matchMediaFor,
+  MOUSE_AT_TABLET_WIDTH,
+  PHONE,
+  TABLET_LANDSCAPE,
+  TABLET_PORTRAIT,
+  type MediaDevice,
+} from '@/lib/__tests__/media-device';
 
 // The repo's vitest runs in the node environment, so `document` is faked with
 // a real EventTarget (Node ships global Event / EventTarget); a cancelable
@@ -236,8 +245,9 @@ describe('focusRestoreTop', () => {
 });
 
 // Regression: html.scroll-page is set on every non-chat route at every width,
-// but only a phone width scrolls the document. md and up (iPad, laptop) is
-// still the locked 100svh shell and must keep the WebKit 297779 reset to 0,0.
+// but only a phone or a touch tablet scrolls the document. A laptop, or an
+// iPad with a trackpad, is still the locked 100svh shell and must keep the
+// WebKit 297779 reset to 0,0.
 describe('initViewportLock: page class by width', () => {
   type FakeWindow = EventTarget & {
     scrollY: number;
@@ -248,12 +258,13 @@ describe('initViewportLock: page class by width', () => {
 
   const root = { clientHeight: 800 };
 
-  function stub(laptop: boolean, scrollY: number): FakeWindow {
+  function stub(laptop: boolean | MediaDevice, scrollY: number): FakeWindow {
+    const device = typeof laptop === 'boolean' ? (laptop ? LAPTOP : PHONE) : laptop;
     const win = new EventTarget() as FakeWindow;
     win.scrollY = scrollY;
     win.scrollTo = vi.fn();
     win.visualViewport = new EventTarget();
-    win.matchMedia = (q: string) => ({ matches: laptop && q.includes('min-width: 768px') });
+    win.matchMedia = matchMediaFor(() => device);
     vi.stubGlobal('window', win);
     vi.stubGlobal('document', {
       activeElement: { tagName: 'BODY' },
@@ -304,6 +315,39 @@ describe('initViewportLock: page class by width', () => {
     fire(win, 'focusin', input, null);
     fire(win, 'focusout', input, body);
     expect(win.scrollTo).not.toHaveBeenCalled();
+  });
+
+  // Touch tablets (iPad portrait and landscape, Android tablets) scroll the
+  // document in page mode as a phone does: the iPad keyboard (docked, split
+  // or floating) never resets the reading position to the top.
+  it.each([TABLET_PORTRAIT, TABLET_LANDSCAPE])(
+    'touch tablet: never resets to the top (%o)',
+    (tablet) => {
+      const win = stub(tablet, 1_200);
+      initViewportLock();
+      win.visualViewport?.dispatchEvent(new Event('resize'));
+      fire(win, 'focusin', input, null);
+      fire(win, 'focusout', input, body);
+      expect(win.scrollTo).not.toHaveBeenCalled();
+    },
+  );
+
+  it('touch tablet: a keyboard that shrank the root is mended back to the focusin position', () => {
+    const win = stub(TABLET_PORTRAIT, 1_200);
+    initViewportLock();
+    fire(win, 'focusin', input, null);
+    root.clientHeight = 500;
+    win.scrollY = 1_536;
+    fire(win, 'focusout', input, body);
+    expect(win.scrollTo).toHaveBeenCalledTimes(1);
+    expect(win.scrollTo).toHaveBeenCalledWith(0, 1_200);
+  });
+
+  it('iPad with a trackpad (mouse at tablet width): the locked reset as before', () => {
+    const win = stub(MOUSE_AT_TABLET_WIDTH, 320);
+    initViewportLock();
+    win.visualViewport?.dispatchEvent(new Event('resize'));
+    expect(win.scrollTo).toHaveBeenCalledWith(0, 0);
   });
 
   it('phone: restores the focusin position only when the root shrank', () => {

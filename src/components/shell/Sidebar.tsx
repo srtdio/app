@@ -23,7 +23,13 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
   return (
-    <aside className="hidden md:flex md:flex-col w-[244px] shrink-0 border-r bg-panel lit-side">
+    // Positioning only. Pinned while the document scrolls (page mode on a touch
+    // tablet, src/lib/scroll-mode.ts): sticky to the window at one viewport
+    // tall, the status bar strip covered by top padding on this same lit
+    // surface (--shell-safe-top, 0 everywhere else). In the locked 100svh
+    // shell (laptop, Chat) this is the same box as before: the full shell
+    // height, nothing scrolls past it, padding 0.
+    <aside className="hidden md:flex md:flex-col md:sticky md:top-0 md:h-[100svh] md:self-start pt-[var(--shell-safe-top,0px)] w-[244px] shrink-0 border-r bg-panel lit-side">
       <div className="p-2.5">
         <PressableRow
           type="button"
