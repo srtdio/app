@@ -94,7 +94,12 @@
 }
 /* Dark: higher is lighter, so the sweep is a faint lift of ink, not white. */
 .dark .mv-bone {
-  background-image: linear-gradient(100deg, transparent 30%, rgb(var(--fg-rgb) / 0.08) 50%, transparent 70%);
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgb(var(--fg-rgb) / 0.08) 50%,
+    transparent 70%
+  );
 }
 
 /* Off: Reduce Motion or ?motion=0. Everything lands on its end state at once. */

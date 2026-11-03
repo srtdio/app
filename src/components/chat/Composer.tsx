@@ -2148,7 +2148,11 @@ export function Composer(props: ComposerProps): ReactElement {
         </ComposerStrip>
 
         {hashQuery !== null && mentionRows.length === 0 ? (
-          <ComposerStrip open data-hash-picker="" className="absolute inset-x-3 bottom-full z-20 mb-2">
+          <ComposerStrip
+            open
+            data-hash-picker=""
+            className="absolute inset-x-3 bottom-full z-20 mb-2"
+          >
             <PostPicker
               inline
               open

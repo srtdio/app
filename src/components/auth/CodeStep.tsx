@@ -179,7 +179,12 @@ export function CodeStep({
   return (
     <div className="flex flex-col gap-4">
       <div className="relative">
-        <div ref={boxesRef} aria-hidden="true" data-code-boxes="" className="grid grid-cols-6 gap-2">
+        <div
+          ref={boxesRef}
+          aria-hidden="true"
+          data-code-boxes=""
+          className="grid grid-cols-6 gap-2"
+        >
           {Array.from({ length: CODE_LENGTH }, (_, i) => (
             <div
               key={i}

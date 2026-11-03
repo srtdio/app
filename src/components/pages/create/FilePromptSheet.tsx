@@ -55,7 +55,11 @@ export function FilePromptSheet({ prompt, onKeep, onRemove }: FilePromptSheetPro
       }}
     >
       {/* The dim: full scrim at rest, tracking the box per frame on phone. */}
-      <div ref={dimRef} aria-hidden="true" className="pointer-events-none absolute inset-0 bg-scrim" />
+      <div
+        ref={dimRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-scrim"
+      />
       <div
         ref={panelRef}
         role="alertdialog"

@@ -85,11 +85,13 @@ async function bootApp(root: HTMLElement): Promise<void> {
       import('@/lib/viewport-lock').then(({ initViewportLock }) => initViewportLock),
       import('@/lib/logger').then(({ logger }) => logger),
       // The motion module (src/lib/motion). Its feature bundle loads later, at idle.
-      import('@/lib/motion').then(({ MotionRoot, installMotionPreference, watchUAVisualTransition }) => ({
-        MotionRoot,
-        installMotionPreference,
-        watchUAVisualTransition,
-      })),
+      import('@/lib/motion').then(
+        ({ MotionRoot, installMotionPreference, watchUAVisualTransition }) => ({
+          MotionRoot,
+          installMotionPreference,
+          watchUAVisualTransition,
+        }),
+      ),
     ]);
   mark('boot:app:imports');
   const { MotionRoot } = motion;

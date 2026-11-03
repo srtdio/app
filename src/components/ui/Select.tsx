@@ -182,7 +182,10 @@ export function Select({
   const [placement, setPlacement] = useState<MenuPlacement>('down');
   const buttonRef = useRef<HTMLButtonElement>(null);
   // The list grows from the trigger and shrinks back to it (growFromTrigger).
-  const presence = usePresence<HTMLDivElement>(open, menuMoves(() => centreOf(buttonRef.current)));
+  const presence = usePresence<HTMLDivElement>(
+    open,
+    menuMoves(() => centreOf(buttonRef.current)),
+  );
   const listRef = presence.ref;
 
   const selected = options.find((option) => option.value === value);

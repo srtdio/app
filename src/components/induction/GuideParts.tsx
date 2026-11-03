@@ -24,12 +24,7 @@ import { Button } from '@/components/ui/Button';
 import { IconHand } from '@/components/ui/icons';
 import { DOCK_GAP, type Rect } from '@/lib/induction';
 import { MOVE_CLASS, stepX } from '@/lib/motion';
-import {
-  GUIDE_RIPPLE_REST_SCALE,
-  guideNudge,
-  handPress,
-  handRipple,
-} from '@/lib/motion/touches';
+import { GUIDE_RIPPLE_REST_SCALE, guideNudge, handPress, handRipple } from '@/lib/motion/touches';
 import { CHROME_ATTR } from './guide-dom';
 
 /** Above page content and Sheet (z-50); below toasts (z-60/70) and the lightbox (z-80). */

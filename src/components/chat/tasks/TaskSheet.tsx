@@ -205,7 +205,11 @@ function AddRow(props: {
 
 function TasksSkeleton(): ReactElement {
   return (
-    <BoxSkeleton data-task-skeleton="" label="Loading tasks" className="flex flex-col gap-3 px-4 py-4">
+    <BoxSkeleton
+      data-task-skeleton=""
+      label="Loading tasks"
+      className="flex flex-col gap-3 px-4 py-4"
+    >
       {[0, 1, 2, 3].map((k) => (
         <div key={k} className="flex items-center gap-3">
           <Bone className="h-4 w-4 shrink-0 rounded-lg" />
@@ -570,12 +574,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const side = props.side;
   const sheet = createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center">
-      <Backdrop
-        ref={dimRef}
-        aria-label="Close tasks"
-        position="absolute"
-        onClick={requestClose}
-      />
+      <Backdrop ref={dimRef} aria-label="Close tasks" position="absolute" onClick={requestClose} />
       <div
         ref={panelRef}
         role="dialog"

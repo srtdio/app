@@ -24,8 +24,17 @@ interface MenuPopoverProps {
  * (docs/motion.md, growFromTrigger): rendered at rest, it grows .90 to 1 from
  * the trigger and shrinks back on close. Scale only, never a fade.
  */
-export function MenuPopover({ open, onClose, align = 'right', origin, children }: MenuPopoverProps) {
-  const presence = usePresence<HTMLDivElement>(open, menuMoves(() => origin, align));
+export function MenuPopover({
+  open,
+  onClose,
+  align = 'right',
+  origin,
+  children,
+}: MenuPopoverProps) {
+  const presence = usePresence<HTMLDivElement>(
+    open,
+    menuMoves(() => origin, align),
+  );
   const panelRef = presence.ref;
   useDismissLayer(open, onClose, panelRef);
 

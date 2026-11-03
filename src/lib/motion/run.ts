@@ -51,9 +51,16 @@ export interface Played {
   finish: () => void;
   /** True when nothing ran (motion off, no element, no Web Animations): callers may unmount now. */
   instant: boolean;
+  /** Drop the move and its held end pose (for holds a later move replaces). */
+  cancel: () => void;
 }
 
-const DONE: Played = { done: Promise.resolve(), finish: () => undefined, instant: true };
+const DONE: Played = {
+  done: Promise.resolve(),
+  finish: () => undefined,
+  instant: true,
+  cancel: () => undefined,
+};
 const running = new Set<Animation>();
 let listening = false;
 
@@ -102,7 +109,9 @@ export function checkKeyframes(spec: MoveSpec, keyframes: Keyframe[]): void {
     for (const key of Object.keys(frame)) {
       if (key === 'opacity') throw new Error(`motion: ${spec.move} animates opacity (never fade)`);
       if (!allowed.has(key)) {
-        throw new Error(`motion: ${spec.move} animates ${key} outside its axis ${spec.axis.join('+')}`);
+        throw new Error(
+          `motion: ${spec.move} animates ${key} outside its axis ${spec.axis.join('+')}`,
+        );
       }
     }
   }
@@ -151,6 +160,13 @@ export function play(
   return {
     done,
     instant: false,
+    cancel: () => {
+      try {
+        animation.cancel();
+      } catch {
+        running.delete(animation);
+      }
+    },
     finish: () => {
       try {
         animation.finish();

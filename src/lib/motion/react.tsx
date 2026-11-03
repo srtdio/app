@@ -170,9 +170,9 @@ interface GlideItemProps extends HTMLAttributes<HTMLElement> {
  * plain element (snaps). Axis: Y (lists) or X+Y (grids).
  */
 export function GlideItem({ axis = 'y', as = 'div', children, ...rest }: GlideItemProps) {
-  const Tag = (
-    { div: MDiv, li: MLi, section: MSection, article: MArticle } as const
-  )[as] as unknown as (props: Record<string, unknown>) => ReactNode;
+  const Tag = ({ div: MDiv, li: MLi, section: MSection, article: MArticle } as const)[
+    as
+  ] as unknown as (props: Record<string, unknown>) => ReactNode;
   return createElement(
     Tag,
     {
@@ -196,7 +196,11 @@ const CARD_MEMORY_MS = 4000;
 export function rememberCard(key: string, el: Element | null): void {
   if (el === null) return;
   const r = el.getBoundingClientRect();
-  tappedCard = { key, box: { left: r.left, top: r.top, width: r.width, height: r.height }, at: Date.now() };
+  tappedCard = {
+    key,
+    box: { left: r.left, top: r.top, width: r.width, height: r.height },
+    at: Date.now(),
+  };
 }
 
 /** The remembered card for this page, once (consumed). Null when stale or absent. */
@@ -212,7 +216,11 @@ export function takeCard(key?: string): Box | null {
 export function rememberPage(key: string, el: Element | null): void {
   if (el === null) return;
   const r = el.getBoundingClientRect();
-  leftPage = { key, box: { left: r.left, top: r.top, width: r.width, height: r.height }, at: Date.now() };
+  leftPage = {
+    key,
+    box: { left: r.left, top: r.top, width: r.width, height: r.height },
+    at: Date.now(),
+  };
 }
 
 /** The page rect to grow back from, for the card with this key (consumed). */
@@ -235,7 +243,9 @@ export function watchUAVisualTransition(): void {
   window.addEventListener(
     'popstate',
     (event) => {
-      uaTransition = (event as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition === true;
+      uaTransition =
+        (event as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition ===
+        true;
       // Only the navigation it belongs to may read it.
       window.setTimeout(() => {
         uaTransition = false;
@@ -276,7 +286,15 @@ export interface DragDismissOptions {
 
 /** Pointer handlers for a drag that follows the finger on one axis. */
 export function useDragDismiss(options: DragDismissOptions) {
-  const state = useRef<{ start: number; cross: number; t: number; last: number; lastT: number; id: number; locked: boolean } | null>(null);
+  const state = useRef<{
+    start: number;
+    cross: number;
+    t: number;
+    last: number;
+    lastT: number;
+    id: number;
+    locked: boolean;
+  } | null>(null);
   const opts = useRef(options);
   opts.current = options;
 
@@ -293,7 +311,15 @@ export function useDragDismiss(options: DragDismissOptions) {
       if (o.enabled === false || event.button !== 0) return;
       if (o.edgeZone !== undefined && along(event) > o.edgeZone) return;
       const now = event.timeStamp;
-      state.current = { start: along(event), cross: across(event), t: now, last: along(event), lastT: now, id: event.pointerId, locked: false };
+      state.current = {
+        start: along(event),
+        cross: across(event),
+        t: now,
+        last: along(event),
+        lastT: now,
+        id: event.pointerId,
+        locked: false,
+      };
     },
     onPointerMove(event: ReactPointerEvent<HTMLElement>): void {
       const s = state.current;
@@ -342,7 +368,11 @@ export function useDragDismiss(options: DragDismissOptions) {
  * Backdrop dim tracks the sheet's position (decision 2): darker as it rises,
  * lighter as it is dragged down. Never a timed fade of its own. Returns a stop.
  */
-export function trackDim(panel: HTMLElement | null, dim: HTMLElement | null, played?: Played): () => void {
+export function trackDim(
+  panel: HTMLElement | null,
+  dim: HTMLElement | null,
+  played?: Played,
+): () => void {
   if (panel === null || dim === null) return () => undefined;
   let frame = 0;
   let stopped = false;
@@ -354,7 +384,8 @@ export function trackDim(panel: HTMLElement | null, dim: HTMLElement | null, pla
   const height = panel.offsetHeight || 1;
   const tick = (): void => {
     if (stopped) return;
-    const top = panel.getBoundingClientRect().top - (panel.offsetParent?.getBoundingClientRect().top ?? 0);
+    const top =
+      panel.getBoundingClientRect().top - (panel.offsetParent?.getBoundingClientRect().top ?? 0);
     const progress = 1 - Math.min(1, Math.max(0, (top - restTop) / height));
     dim.style.opacity = String(progress);
     frame = requestAnimationFrame(tick);
@@ -412,7 +443,14 @@ interface BoxSkeletonProps extends HTMLAttributes<HTMLDivElement> {
 export function BoxSkeleton({ label = 'Loading', className, children, ...rest }: BoxSkeletonProps) {
   return createElement(
     'div',
-    { ...rest, role: 'status', 'aria-busy': true, 'aria-label': label, 'data-box-skeleton': '', className },
+    {
+      ...rest,
+      role: 'status',
+      'aria-busy': true,
+      'aria-label': label,
+      'data-box-skeleton': '',
+      className,
+    },
     children,
   );
 }
@@ -421,7 +459,11 @@ export function BoxSkeleton({ label = 'Loading', className, children, ...rest }:
  * Real content landing after boxes: each of the first 5 children settles 6 px,
  * 200 ms, 40 ms stagger. Runs once, only when boxes were showing before.
  */
-export function useSettleOnLanding(ref: RefObject<HTMLElement>, landed: boolean, hadBoxes: boolean): void {
+export function useSettleOnLanding(
+  ref: RefObject<HTMLElement>,
+  landed: boolean,
+  hadBoxes: boolean,
+): void {
   const done = useRef(false);
   useLayoutEffect(() => {
     if (done.current || !landed || !hadBoxes || ref.current === null) return;

@@ -39,7 +39,16 @@ import { useThreadCardCache } from '@/components/chat/PostCard';
 import { useToast } from '@/components/ui/toast';
 import { READ_TIMEOUT_MS } from '@/lib/chat-reads';
 import { cn } from '@/lib/cn';
-import { DUR_SLOW_MS, EASE, EDGE_STRIP, play, settle, stripIn, stripOut, type Played } from '@/lib/motion';
+import {
+  DUR_SLOW_MS,
+  EASE,
+  EDGE_STRIP,
+  play,
+  settle,
+  stripIn,
+  stripOut,
+  type Played,
+} from '@/lib/motion';
 import {
   NOTHING_OPEN_LINE,
   SECTION_ROWS,
@@ -65,9 +74,7 @@ const FLICK_VELOCITY = 0.4;
 const DRAG_SLOP = 6;
 
 /** A drawer move asked by a handler, run after the commit that paints its end state. */
-type DrawerMove =
-  | { kind: 'in'; fromY: number | null }
-  | { kind: 'out'; fromY: number };
+type DrawerMove = { kind: 'in'; fromY: number | null } | { kind: 'out'; fromY: number };
 
 /**
  * The scrim dim follows the panel's position while a move plays (the visible
@@ -635,6 +642,8 @@ export function ChatStatus(props: {
   );
 
   const close = useCallback((opts?: { instant?: boolean; fromY?: number }) => {
+    // Already leaving: the move in flight carries on (an instant close cuts it).
+    if (leaving.current !== null && opts?.instant !== true) return;
     setDrag(null);
     setTarget('closed');
     if (opts?.instant === true) {

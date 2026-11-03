@@ -117,7 +117,11 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
       onContextMenu={stop}
     >
       {/* The dim: full scrim at rest, tracking the sheet per frame as it moves. */}
-      <div ref={dimRef} aria-hidden="true" className="pointer-events-none absolute inset-0 bg-scrim" />
+      <div
+        ref={dimRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-scrim"
+      />
       <div
         ref={panelRef}
         role="dialog"

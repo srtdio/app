@@ -140,7 +140,8 @@ export function Sheet({
       const panel = panelRef.current;
       if (panel === null) return;
       panel.style.transform = `translateY(${offset}px)`;
-      if (dimRef.current !== null) dimRef.current.style.opacity = dimFor(offset, panel.offsetHeight);
+      if (dimRef.current !== null)
+        dimRef.current.style.opacity = dimFor(offset, panel.offsetHeight);
     },
     onDismiss: (offset) => {
       if (busy) {

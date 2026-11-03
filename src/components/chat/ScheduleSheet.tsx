@@ -7,7 +7,7 @@
 // grows from the Send chevron and shrinks back to it (growFromTrigger, never a
 // fade).
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';

@@ -1196,9 +1196,7 @@ export function PlanItemScreen(props: {
           <>
             {item.post_id !== null ? (
               <PostSheetPlanRowsContext.Provider value={planRows}>
-                <Suspense
-                  fallback={<Bone as="div" className="m-4 h-[170px] rounded-lg" />}
-                >
+                <Suspense fallback={<Bone as="div" className="m-4 h-[170px] rounded-lg" />}>
                   <PostDetailPage
                     postId={item.post_id}
                     embedded

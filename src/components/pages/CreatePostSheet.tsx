@@ -1530,10 +1530,7 @@ export function CreatePostSheet({
             </span>
             <IconChevronDown
               size={ICON_SIZE.inline}
-              className={cn(
-                'shrink-0 text-fg-3 mv-slide',
-                moreOpen && 'rotate-180',
-              )}
+              className={cn('shrink-0 text-fg-3 mv-slide', moreOpen && 'rotate-180')}
             />
           </PressableRow>
 

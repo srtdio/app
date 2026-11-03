@@ -65,12 +65,7 @@ export function PreviewChip({
   onClick: () => void;
 }): ReactElement {
   return (
-    <Button
-      type="button"
-      variant="secondary"
-      onClick={onClick}
-      className=""
-    >
+    <Button type="button" variant="secondary" onClick={onClick} className="">
       <IconEye size={ICON_SIZE.inline} />
       {previewChipLabel(platform)}
     </Button>

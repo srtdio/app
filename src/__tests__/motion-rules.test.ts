@@ -36,7 +36,10 @@ function sources(dir: string): string[] {
 const FILES = sources(SRC)
   .map((path) => relative(SRC, path).split(sep).join('/'))
   .filter((rel) => !rel.startsWith('lib/motion/') && !rel.startsWith('server/'))
-  .filter((rel) => !/\.test\.tsx?$/.test(rel) && !rel.includes('__tests__/') && !rel.includes('__snapshots__/'))
+  .filter(
+    (rel) =>
+      !/\.test\.tsx?$/.test(rel) && !rel.includes('__tests__/') && !rel.includes('__snapshots__/'),
+  )
   .filter((rel) => !(rel in ALLOW) && !ALLOW_DIRS.some((dir) => rel.startsWith(dir)))
   .map((rel) => ({ rel, src: readFileSync(join(SRC, rel), 'utf8') }));
 
@@ -70,7 +73,10 @@ describe('motion rules', () => {
 
   it('no raw transition or animation values in code', () => {
     expect(
-      hits(/\b(transition|animation)(Property|Duration|TimingFunction|Delay|Name)?\s*:\s*['"`]/, isTs),
+      hits(
+        /\b(transition|animation)(Property|Duration|TimingFunction|Delay|Name)?\s*:\s*['"`]/,
+        isTs,
+      ),
     ).toEqual([]);
     expect(hits(/\[(transition|animation)[\w-]*:/, isTs)).toEqual([]);
   });
@@ -104,8 +110,9 @@ describe('motion rules', () => {
       .filter(({ src }) => /\srole=["']dialog["']|\saria-modal[=\s]|\bfixed inset-0\b/.test(src))
       .filter(({ src }) => {
         const usesShared =
-          /from '@\/components\/ui\/(Sheet|ConfirmDialog|ActionMenu|SidePanel|Backdrop)'/.test(src) ||
-          /from '@\/components\/shell\/MenuPopover'/.test(src);
+          /from '@\/components\/ui\/(Sheet|ConfirmDialog|ActionMenu|SidePanel|Backdrop)'/.test(
+            src,
+          ) || /from '@\/components\/shell\/MenuPopover'/.test(src);
         const usesMove = /from '@\/lib\/motion'/.test(src);
         return !usesShared && !usesMove;
       })
@@ -125,7 +132,9 @@ describe('motion rules', () => {
   });
 
   it('the player refuses opacity and properties outside the axis', () => {
-    expect(() => checkKeyframes(moves.ITEM_IN, [{ opacity: 0 }, { opacity: 1 }])).toThrow(/opacity/);
+    expect(() => checkKeyframes(moves.ITEM_IN, [{ opacity: 0 }, { opacity: 1 }])).toThrow(
+      /opacity/,
+    );
     expect(() => checkKeyframes(moves.ITEM_IN, [{ clipPath: 'inset(0)' }])).toThrow(/axis/);
     expect(() =>
       checkKeyframes(moves.ITEM_IN, [{ transform: 'translateY(8px)' }, { transform: 'none' }]),

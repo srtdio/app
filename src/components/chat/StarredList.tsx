@@ -724,11 +724,7 @@ export function StarredSheet(props: {
   }, [open, onClose]);
   if (!open) return null;
   return createPortal(
-    <ModalPanel
-      aria-label={STARRED_TITLE}
-      data-starred-sheet=""
-      className={MODAL_PAGE_CLASS}
-    >
+    <ModalPanel aria-label={STARRED_TITLE} data-starred-sheet="" className={MODAL_PAGE_CLASS}>
       <div className="flex h-14 shrink-0 items-center gap-1 border-b bg-panel px-2 md:px-4 lit-header">
         <IconButton label="Back" onClick={onClose}>
           <IconChevronLeft size={ICON_SIZE.control} />

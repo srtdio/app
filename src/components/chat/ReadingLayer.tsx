@@ -88,7 +88,7 @@ export function UnreadPill(props: {
   visible: boolean;
   onJump: () => void;
 }): ReactElement {
-  const popRef = usePopIn<HTMLDivElement>(props.visible);
+  const popRef = usePopIn<HTMLSpanElement>(props.visible);
   return (
     // Shown or hidden at once on the wrapper; the pill pops as it appears.
     <div
@@ -98,22 +98,22 @@ export function UnreadPill(props: {
       )}
     >
       <span ref={popRef} className="flex">
-      <Button
-        variant="secondary"
-        type="button"
-        data-unread-pill=""
-        aria-label={`Jump to first unread, ${unreadLabel(props.count)}`}
-        aria-hidden={!props.visible}
-        tabIndex={props.visible ? 0 : -1}
-        onClick={props.onJump}
-        onContextMenu={(e) => e.preventDefault()}
-        // Secondary is the float surface (bg-panel, border-border, text-fg).
-        className={cn('lit-float', NO_TOUCH_SELECT, props.visible && 'pointer-events-auto')}
-      >
-        <IconArrowUp size={ICON_SIZE.inline} className="text-accent" />
-        <span className="font-mono tabular-nums text-accent">{props.count}</span>
-        <span>unread</span>
-      </Button>
+        <Button
+          variant="secondary"
+          type="button"
+          data-unread-pill=""
+          aria-label={`Jump to first unread, ${unreadLabel(props.count)}`}
+          aria-hidden={!props.visible}
+          tabIndex={props.visible ? 0 : -1}
+          onClick={props.onJump}
+          onContextMenu={(e) => e.preventDefault()}
+          // Secondary is the float surface (bg-panel, border-border, text-fg).
+          className={cn('lit-float', NO_TOUCH_SELECT, props.visible && 'pointer-events-auto')}
+        >
+          <IconArrowUp size={ICON_SIZE.inline} className="text-accent" />
+          <span className="font-mono tabular-nums text-accent">{props.count}</span>
+          <span>unread</span>
+        </Button>
       </span>
     </div>
   );

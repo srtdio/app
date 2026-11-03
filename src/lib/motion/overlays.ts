@@ -60,7 +60,8 @@ export function recentRightClick(): { x: number; y: number } | null {
   return press !== null && press.right ? { x: press.x, y: press.y } : null;
 }
 
-const THUMB = 'img, video, picture, canvas, [data-thumb], [data-thumbnail], button, a, [role="button"]';
+const THUMB =
+  'img, video, picture, canvas, [data-thumb], [data-thumbnail], button, a, [role="button"]';
 
 /**
  * The box of the thumbnail (or tile) the last press landed on, viewport px,
@@ -113,7 +114,11 @@ export function useGrowFromThumb<T extends HTMLElement>(
  * it is never a timed fade of its own. Instant (motion off): the dim simply
  * rests at full. Returns `played` for chaining.
  */
-export function dimWith(panel: HTMLElement | null, dim: HTMLElement | null, played: Played): Played {
+export function dimWith(
+  panel: HTMLElement | null,
+  dim: HTMLElement | null,
+  played: Played,
+): Played {
   if (played.instant) {
     if (dim !== null) dim.style.opacity = '';
     return played;

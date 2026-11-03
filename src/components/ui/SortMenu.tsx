@@ -107,7 +107,11 @@ export function SortMenu<T extends string>({
         {presence.rendered ? (
           <>
             {open ? (
-              <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
+              <div
+                className="fixed inset-0 z-40"
+                aria-hidden="true"
+                onClick={() => setOpen(false)}
+              />
             ) : null}
             <div
               ref={panelRef}

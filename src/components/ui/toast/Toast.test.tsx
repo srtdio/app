@@ -78,7 +78,8 @@ describe('Toast', () => {
   });
 
   it('renders at rest with no CSS animation (edgeStrip runs in the motion module); leaving is marked', () => {
-    const props = (tree: ReactElement): Record<string, unknown> => tree.props as Record<string, unknown>;
+    const props = (tree: ReactElement): Record<string, unknown> =>
+      tree.props as Record<string, unknown>;
     const live = props(Toast({ toast: base, onDismiss: () => {} }));
     expect(live.style).toBeUndefined();
     expect(live['data-leaving']).toBeUndefined();

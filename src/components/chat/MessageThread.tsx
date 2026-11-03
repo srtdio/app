@@ -164,7 +164,7 @@ import {
   type SwipeReplyController,
 } from '@/lib/chat/swipe-reply';
 import type { PresignCache } from '@/lib/asset-presign';
-import { Bone, DUR_SLOW_MS, itemIn, useFreshKeys } from '@/lib/motion';
+import { Bone, DUR_SLOW_MS, itemIn, pop, useFreshKeys } from '@/lib/motion';
 import { freshTailIds } from '@/lib/chat/fresh-tail';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import {
@@ -296,6 +296,7 @@ import {
 } from '@/lib/chat/forward';
 import {
   markCounts,
+  markBadgeLabel,
   markMenuOptions,
   openPostsHeading,
   toggleSelected,
@@ -2688,7 +2689,7 @@ export function MessageBubble(props: {
             ) : null}
             {hasReactions ? (
               <ReactionBadge label={reactionBadgeLabel(message.reactions)} onClick={onBadgeClick}>
-                <span aria-hidden="true" className={REACTION_EMOJI_TYPE}>
+                <span aria-hidden="true" data-reaction-emoji="" className={REACTION_EMOJI_TYPE}>
                   {distinctEmojis}
                 </span>
                 {totalReactions > 1 ? (
@@ -3162,6 +3163,13 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
   // The viewer's star: read from the one star store, painted with the row.
   const starred = useIsStarred(props.message.id) && canStar(props.message);
   const meta = starred ? { ...props.meta, starred: true } : props.meta;
+  // Small touches (docs/motion.md, pop from .9, ease-pop): a star, a mark or
+  // a reaction that lands on a row already on screen. A row's first paint
+  // never pops.
+  const reactionCount = props.message.reactions.reduce((sum, r) => sum + r.count, 0);
+  usePopOnRise(props.message.id, '[data-meta-star]', starred ? 1 : 0);
+  usePopOnChange(props.message.id, '[data-mark-badge]', markBadgeLabel(props.mark));
+  usePopOnRise(props.message.id, '[data-reaction-emoji]', reactionCount);
   return (
     <MessageBubble
       searchWords={searchWords}
@@ -5142,6 +5150,30 @@ export interface RowAnchor {
 
 function rowSelector(id: string): string {
   return `[data-msg-id="${id.replace(/["\\]/g, '\\$&')}"]`;
+}
+
+/** Pop `part` of the message's row(s) on screen (the main list and an open thread view). */
+function popRowPart(id: string, part: string): void {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll(`${rowSelector(id)} ${part}`).forEach((el) => pop(el));
+}
+
+/** Pop a row's part when `value` grows after the row's first paint (a star, a reaction). */
+function usePopOnRise(id: string, part: string, value: number): void {
+  const prev = useRef(value);
+  useLayoutEffect(() => {
+    if (value > prev.current) popRowPart(id, part);
+    prev.current = value;
+  }, [id, part, value]);
+}
+
+/** Pop a row's part when its non-empty `value` changes after the row's first paint (a mark). */
+function usePopOnChange(id: string, part: string, value: string): void {
+  const prev = useRef(value);
+  useLayoutEffect(() => {
+    if (value !== '' && value !== prev.current) popRowPart(id, part);
+    prev.current = value;
+  }, [id, part, value]);
 }
 
 /**

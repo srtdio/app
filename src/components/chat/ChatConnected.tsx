@@ -1,10 +1,23 @@
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { ReactElement } from 'react';
+import type { PointerEvent as ReactPointerEvent, ReactElement } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { cn } from '@/lib/cn';
+import {
+  DUR_BACK_MS,
+  EASE,
+  EDGE_BACK_CLOSE_PX,
+  EDGE_BACK_ZONE_PX,
+  PUSH,
+  PUSH_BEHIND_SHIFT,
+  play,
+  pushIn,
+  pushSettle,
+  skipForUATransition,
+  useDragDismiss,
+} from '@/lib/motion';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace, workspaceDisplayName } from '@/lib/workspace-context';
 import { chatDisplayName } from '@/lib/chat/chat-name';
@@ -2212,6 +2225,66 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     clearPendingOpen();
     onBack();
   };
+  // Push (docs/motion.md; phone only, laptop pane switches are instant): a
+  // tapped chat enters from the right; back brings the list back from 25%
+  // left. A drag from the thread's left edge follows the finger and goes back
+  // past 130px or on a flick. Never on a tab return, a kept view, a workspace
+  // switch or a deep link (only a tap arms the push), and never when the
+  // browser already animated the back (iPhone swipe). Both panes paint at
+  // rest; the move is laid over them.
+  const pushNext = useRef<'in' | null>(null);
+  const listPaneRef = useRef<HTMLDivElement>(null);
+  const threadPaneRef = useRef<HTMLDivElement>(null);
+  const listWasShown = useRef(showList);
+  useLayoutEffect(() => {
+    const armed = pushNext.current;
+    pushNext.current = null;
+    const back = showList && !listWasShown.current;
+    listWasShown.current = showList;
+    if (isDesktop) return;
+    if (armed === 'in' && showThread && !showList) pushIn(threadPaneRef.current);
+    else if (back && !skipForUATransition()) {
+      play(
+        listPaneRef.current,
+        PUSH,
+        [{ transform: `translateX(${-PUSH_BEHIND_SHIFT * 100}%)` }, { transform: 'translateX(0)' }],
+        { duration: DUR_BACK_MS, easing: EASE.ios },
+      );
+    }
+  }, [showList, showThread, isDesktop]);
+  const edgeBack = useDragDismiss({
+    axis: 'x',
+    direction: 1,
+    closeAt: EDGE_BACK_CLOSE_PX,
+    edgeZone: EDGE_BACK_ZONE_PX,
+    enabled: !isDesktop && showThread,
+    onMove: (offset) => {
+      const el = threadPaneRef.current;
+      if (el !== null) el.style.transform = `translateX(${offset}px)`;
+    },
+    onDismiss: () => {
+      const el = threadPaneRef.current;
+      if (el !== null) el.style.transform = '';
+      (opening !== null ? onBackFromOpening : onBack)();
+    },
+    onCancel: (offset) => {
+      const el = threadPaneRef.current;
+      if (el === null) return;
+      el.style.transform = '';
+      pushSettle(el, offset);
+    },
+  });
+  const threadEdgeBack = isDesktop
+    ? {}
+    : {
+        ...edgeBack,
+        // A layer over the thread (the thread view, a sheet) owns its own drags.
+        onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => {
+          const target = event.target instanceof Element ? event.target : null;
+          if (target?.closest('[data-thread-view], [role="dialog"]') != null) return;
+          edgeBack.onPointerDown(event);
+        },
+      };
 
   const isGroup = selected?.channelType === 'group';
   const planPanelOpen =
@@ -2223,7 +2296,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const surface = (
     <div className="relative flex h-full min-h-0">
       {showList ? (
-        <div className={chatListPaneClass(planPanelOpen)}>
+        <div ref={listPaneRef} className={chatListPaneClass(planPanelOpen)}>
           <ChannelList
             channels={roster}
             status={loadStatus}
@@ -2233,6 +2306,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
               mark('chat:tap');
               // A plain open drops any hit's jump not taken yet.
               setSearchRequest(null);
+              // A tap pushes the chat in (phone).
+              pushNext.current = 'in';
               // Every read the open needs starts now, before the thread mounts.
               if (selected?.channelId !== channel.channelId && !isNotes(channel)) {
                 startChatOpen(currentUserId, workspaceId, channel.channelId);
@@ -2255,6 +2330,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       ) : null}
       {showThread ? (
         <div
+          ref={threadPaneRef}
+          {...threadEdgeBack}
           className={cn(
             'relative h-full min-w-0 flex-1',
             // The docked plan panel (440px) takes the right; from 1180px the

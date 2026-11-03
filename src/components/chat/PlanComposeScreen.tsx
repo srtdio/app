@@ -857,7 +857,8 @@ export function PlanSharedNotice(props: {
       {strip.rendered ? (
         <span
           ref={strip.ref}
-          className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-base font-medium text-fg lit-float">
+          className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-base font-medium text-fg lit-float"
+        >
           {props.text}
         </span>
       ) : null}

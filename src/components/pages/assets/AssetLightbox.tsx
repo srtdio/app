@@ -48,7 +48,7 @@ const SWIPE_THRESHOLD = 48;
 // Passed to the shared IconButton; overlay tokens sort after its own, so they win.
 const BAR_BUTTON =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
-  'mv-tint hover:bg-overlay-surface hover:text-overlay-fg '+
+  'mv-tint hover:bg-overlay-surface hover:text-overlay-fg ' +
   'disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg';
 
 /**

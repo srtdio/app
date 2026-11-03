@@ -299,10 +299,7 @@ export function AssetTile(props: {
         aria-label={asset.name}
         data-asset-tile={asset.assetId}
         onClick={() => props.onToggle(asset)}
-        className={cn(
-          'flex flex-col gap-1 p-1 mv-tint',
-          props.active && 'bg-accent-soft',
-        )}
+        className={cn('flex flex-col gap-1 p-1 mv-tint', props.active && 'bg-accent-soft')}
       >
         <span className="relative block overflow-hidden rounded-lg">
           <Thumbnail

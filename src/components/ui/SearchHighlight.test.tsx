@@ -116,7 +116,10 @@ describe('glowTarget (arrival tint)', () => {
       glowTarget(el);
       vi.advanceTimersByTime(GLOW_MS);
       expect(animate).toHaveBeenCalledTimes(1);
-      const [frames, options] = animate.mock.calls[0] as unknown as [Keyframe[], KeyframeAnimationOptions];
+      const [frames, options] = animate.mock.calls[0] as unknown as [
+        Keyframe[],
+        KeyframeAnimationOptions,
+      ];
       expect(frames.map((f) => f.clipPath)).toEqual(['inset(0 0 0 0%)', 'inset(0 0 0 100%)']);
       expect(frames.some((f) => 'opacity' in f)).toBe(false);
       expect(options.duration).toBe(DUR_WIPE_MS);

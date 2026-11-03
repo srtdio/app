@@ -1223,45 +1223,45 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
             })
           : null}
         <SettleLanding boxes={props.status === 'loading'} selector="[data-chat-home] li">
-        {props.status === 'loading'
-          ? channelListSkeleton()
-          : props.status === 'error'
-            ? channelListError(props.onRetry)
-            : searching
-              ? props.searchResults
-              : channelListView({
-                  channels: visibleChannels(props.channels, summaryFor, isHidden, props.search),
-                  hasChannels: hasChannels || props.search.trim() !== '',
-                  search: props.search,
-                  onClearSearch: () => props.onSearchChange(''),
-                  selectedChannelId: props.selectedChannelId,
-                  onSelect: props.onSelect,
-                  ...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {}),
-                  onNewChat: newChat,
-                  summaryFor,
-                  ...(props.draftFor !== undefined ? { draftFor: props.draftFor } : {}),
-                  ...(selecting !== undefined
-                    ? {
-                        selecting: {
-                          selectedIds: selecting.selectedIds,
-                          onToggle: selecting.onToggle,
-                        },
-                      }
-                    : {}),
-                  ...(props.onLongPress !== undefined && selecting === undefined
-                    ? {
-                        onLongPress: props.onLongPress,
-                        menuOpenId: props.menuOpenId ?? null,
-                        ...(props.onMenuClose !== undefined
-                          ? { onMenuClose: props.onMenuClose }
-                          : {}),
-                        ...(props.onHide !== undefined ? { onHide: props.onHide } : {}),
-                      }
-                    : {}),
-                  ...(props.nowMs !== undefined ? { nowMs: props.nowMs } : {}),
-                  ...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {}),
-                  ...(props.input !== undefined ? { input: props.input } : {}),
-                })}
+          {props.status === 'loading'
+            ? channelListSkeleton()
+            : props.status === 'error'
+              ? channelListError(props.onRetry)
+              : searching
+                ? props.searchResults
+                : channelListView({
+                    channels: visibleChannels(props.channels, summaryFor, isHidden, props.search),
+                    hasChannels: hasChannels || props.search.trim() !== '',
+                    search: props.search,
+                    onClearSearch: () => props.onSearchChange(''),
+                    selectedChannelId: props.selectedChannelId,
+                    onSelect: props.onSelect,
+                    ...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {}),
+                    onNewChat: newChat,
+                    summaryFor,
+                    ...(props.draftFor !== undefined ? { draftFor: props.draftFor } : {}),
+                    ...(selecting !== undefined
+                      ? {
+                          selecting: {
+                            selectedIds: selecting.selectedIds,
+                            onToggle: selecting.onToggle,
+                          },
+                        }
+                      : {}),
+                    ...(props.onLongPress !== undefined && selecting === undefined
+                      ? {
+                          onLongPress: props.onLongPress,
+                          menuOpenId: props.menuOpenId ?? null,
+                          ...(props.onMenuClose !== undefined
+                            ? { onMenuClose: props.onMenuClose }
+                            : {}),
+                          ...(props.onHide !== undefined ? { onHide: props.onHide } : {}),
+                        }
+                      : {}),
+                    ...(props.nowMs !== undefined ? { nowMs: props.nowMs } : {}),
+                    ...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {}),
+                    ...(props.input !== undefined ? { input: props.input } : {}),
+                  })}
         </SettleLanding>
       </div>
       {selecting !== undefined ? selectBar(selecting) : null}

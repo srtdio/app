@@ -15,7 +15,6 @@ import { INDUCTION_KEYS } from '@/lib/induction';
 
 const TASK_BUTTON_LABEL = 'Tasks';
 
-
 export function TaskButton(props: {
   unseen: boolean;
   /** Someone else is editing the list right now. */

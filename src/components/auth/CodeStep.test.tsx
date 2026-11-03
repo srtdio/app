@@ -190,9 +190,7 @@ describe('CodeStep', () => {
       await type('000000');
       // In flight: nothing moves yet.
       expect(animate).not.toHaveBeenCalled();
-      await act(async () =>
-        answer({ error: { message: 'x', code: 'otp_expired', status: 403 } }),
-      );
+      await act(async () => answer({ error: { message: 'x', code: 'otp_expired', status: 403 } }));
       expect(animate).toHaveBeenCalledTimes(1);
       const [frames, options] = animate.mock.calls[0] ?? [[], {}];
       const xs = (frames as Keyframe[]).map((f) => f.transform);

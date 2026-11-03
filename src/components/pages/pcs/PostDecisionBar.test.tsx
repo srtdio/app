@@ -194,7 +194,9 @@ describe('the landed mark (motion: drawn only after the save resolved)', () => {
 
   it('no landed move: no mark, no extra room', () => {
     expect(landedMark(approver('client'))).toBeNull();
-    expect(marks(PostDecisionBar({ model: approver('client'), busy: false, error: null }))).toEqual([]);
+    expect(marks(PostDecisionBar({ model: approver('client'), busy: false, error: null }))).toEqual(
+      [],
+    );
   });
 
   it('approve landed: a tick above the buttons; reject landed: a cross; park: none', () => {
@@ -203,7 +205,9 @@ describe('the landed mark (motion: drawn only after the save resolved)', () => {
     const rejected: DecisionModel = { ...base, landed: { to: 'rejected', seq: 2 } };
     const parked: DecisionModel = { ...base, landed: { to: 'parked', seq: 3 } };
     expect(marks(PostDecisionBar({ model: approved, busy: false, error: null }))).toEqual(['tick']);
-    expect(marks(PostDecisionRow({ model: rejected, busy: false, error: null }))).toEqual(['cross']);
+    expect(marks(PostDecisionRow({ model: rejected, busy: false, error: null }))).toEqual([
+      'cross',
+    ]);
     expect(marks(PostDecisionBar({ model: parked, busy: false, error: null }))).toEqual([]);
     expect(decisionBarSpace(approved, null)).toBeGreaterThan(decisionBarSpace(base, null));
   });

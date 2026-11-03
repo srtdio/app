@@ -600,7 +600,12 @@ export function TaskBoxGlyph(props: { done: boolean; size: number }) {
       {props.done ? (
         <>
           <rect x={1} y={1} width={14} height={14} rx={4} fill="currentColor" />
-          <path d="M4.6 8.2l2.3 2.3 4.5-4.8" className="stroke-panel" />
+          <path
+            d="M4.6 8.2l2.3 2.3 4.5-4.8"
+            className="stroke-panel"
+            pathLength={1}
+            strokeDasharray="1"
+          />
         </>
       ) : (
         <rect x={1.5} y={1.5} width={13} height={13} rx={3.6} stroke="currentColor" />

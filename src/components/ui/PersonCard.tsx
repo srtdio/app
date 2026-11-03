@@ -15,7 +15,14 @@
 // removed member keeps "No longer in this workspace". A trigger with view
 // 'photo' (inside a DM, the chat list's People cards) opens PhotoViewer instead.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type { ReactElement, ReactNode, Ref } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/ui/Avatar';

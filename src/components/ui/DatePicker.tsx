@@ -174,7 +174,10 @@ export function DatePicker({
   // under it; every close hands focus back to the trigger.
   // The calendar grows from the trigger and shrinks back to it (growFromTrigger).
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const presence = usePresence<HTMLDivElement>(open, menuMoves(() => centreOf(triggerRef.current)));
+  const presence = usePresence<HTMLDivElement>(
+    open,
+    menuMoves(() => centreOf(triggerRef.current)),
+  );
   const panelRef = presence.ref;
   useDismissLayer(open, () => setOpen(false), panelRef);
 

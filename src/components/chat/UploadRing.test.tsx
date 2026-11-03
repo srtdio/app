@@ -93,7 +93,7 @@ function ringClass(html: string): string {
   return /<button[^>]*class="([^"]*)"[^>]*data-upload-ring=""/.exec(html)?.[1] ?? '';
 }
 
-/** The opening tag (with classes) of the element that directly holds the ring. */
+/** The opening tag (with classes) of the box that directly holds the ring. */
 function ringParent(html: string): string {
   const at = html.lastIndexOf('<button', html.indexOf('data-upload-ring'));
   const stack: string[] = [];
@@ -103,7 +103,8 @@ function ringParent(html: string): string {
     if (tag.startsWith('</')) stack.pop();
     else if (!VOID.test(tag) && !tag.endsWith('/>')) stack.push(tag);
   }
-  return stack[stack.length - 1] ?? '';
+  // The tile ring's display: contents wrapper adds no box: look past it.
+  return [...stack].reverse().find((tag) => !tag.includes('data-tile-upload-ring')) ?? '';
 }
 
 describe('T5: UploadRing positioning and sizes', () => {

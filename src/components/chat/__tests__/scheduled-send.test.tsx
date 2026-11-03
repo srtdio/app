@@ -154,7 +154,9 @@ describe('S3: the Schedule options', () => {
     expect(html).toContain('bottom-full');
     // Popover radius role: 12px.
     expect(surface).toContain('rounded-xl');
-    expect(source('../ScheduleSheet.tsx')).toContain("menuMoves(() => centreOf(anchorRef?.current), 'right')");
+    expect(source('../ScheduleSheet.tsx')).toContain(
+      "menuMoves(() => centreOf(anchorRef?.current), 'right')",
+    );
   });
 
   it('the phone sheet has no footer Cancel; the laptop menu keeps it', () => {

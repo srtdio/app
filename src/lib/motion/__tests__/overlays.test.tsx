@@ -89,7 +89,9 @@ beforeEach(() => {
   resetPlayerForTests();
   setSearch('');
   if (typeof window.requestAnimationFrame !== 'function') {
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => setTimeout(() => cb(0), 16));
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) =>
+      setTimeout(() => cb(0), 16),
+    );
     vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
   }
 });
@@ -111,7 +113,9 @@ describe('Sheet on the motion module', () => {
     render(true);
     const el = panel();
     expect(el).not.toBeNull();
-    expect(el?.className).not.toMatch(/opacity-|transition|duration-|translate-y-full|translate-y-2/);
+    expect(el?.className).not.toMatch(
+      /opacity-|transition|duration-|translate-y-full|translate-y-2/,
+    );
     expect(el?.parentElement?.className).not.toMatch(/opacity-|transition|duration-/);
     // The dim is the scrim at full strength; nothing waits for a frame to show it.
     const dim = document.querySelector<HTMLElement>('[data-sheet-dim]');

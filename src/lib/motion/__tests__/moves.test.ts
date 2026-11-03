@@ -321,9 +321,7 @@ describe('never fade', () => {
   it('checkKeyframes refuses opacity on every move spec', () => {
     expect(specs.length).toBeGreaterThanOrEqual(9);
     for (const [name, spec] of specs) {
-      expect(() => checkKeyframes(spec, [{ opacity: 0 }, { opacity: 1 }]), name).toThrow(
-        /opacity/,
-      );
+      expect(() => checkKeyframes(spec, [{ opacity: 0 }, { opacity: 1 }]), name).toThrow(/opacity/);
     }
   });
 

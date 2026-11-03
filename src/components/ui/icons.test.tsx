@@ -190,7 +190,9 @@ describe('non-icon glyphs drawn in the icon file', () => {
     expect(tick).toContain('class="text-good"');
     // Final state first: no offset at rest, so it shows fully drawn with motion off.
     expect(tick).not.toContain('stroke-dashoffset');
-    const cross = renderToStaticMarkup(<Icons.DrawnMarkGlyph mark="cross" size={ICON_SIZE.control} />);
+    const cross = renderToStaticMarkup(
+      <Icons.DrawnMarkGlyph mark="cross" size={ICON_SIZE.control} />,
+    );
     expect(cross.match(/data-draw=""/g)).toHaveLength(2);
     expect(cross).toContain('width="20"');
   });

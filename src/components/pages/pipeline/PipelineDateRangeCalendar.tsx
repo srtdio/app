@@ -186,10 +186,7 @@ export function PipelineDateRangeCalendar({
       role="presentation"
       onClick={onClose}
     >
-      <div
-        className="absolute inset-0 bg-scrim"
-        aria-hidden="true"
-      />
+      <div className="absolute inset-0 bg-scrim" aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"

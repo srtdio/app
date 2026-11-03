@@ -57,7 +57,8 @@ export function menuMoves<T extends HTMLElement>(
       grownFrom.set(el, origin);
       return growFromTrigger(el, origin);
     },
-    exit: (el) => shrinkToTrigger(el, grownFrom.get(el) ?? menuOrigin(el, point?.() ?? null, align)),
+    exit: (el) =>
+      shrinkToTrigger(el, grownFrom.get(el) ?? menuOrigin(el, point?.() ?? null, align)),
   };
 }
 

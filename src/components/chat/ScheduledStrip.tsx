@@ -228,7 +228,10 @@ export function ScheduleModeStrip(props: { label: string; onStop: () => void }):
       <div
         ref={ref}
         data-schedule-mode=""
-        className={cn('flex min-w-0 items-center gap-2 bg-accent-soft pl-3 lit-tint', NO_TOUCH_SELECT)}
+        className={cn(
+          'flex min-w-0 items-center gap-2 bg-accent-soft pl-3 lit-tint',
+          NO_TOUCH_SELECT,
+        )}
       >
         <IconCalendarClock size={ICON_SIZE.nav} className="shrink-0 text-accent" />
         <span className="flex-1 truncate text-base font-medium text-fg">Sends {props.label}</span>

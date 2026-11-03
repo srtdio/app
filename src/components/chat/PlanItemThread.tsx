@@ -482,8 +482,7 @@ function PlanBubble(props: {
                 ? 'bg-bubble-own text-accent-fg lit-bubble-own'
                 : 'bg-panel-2 text-fg lit-bubble-other',
             c.pending && 'opacity-70',
-            props.highlighted &&
-              'ring-2 ring-accent',
+            props.highlighted && 'ring-2 ring-accent',
           )}
         >
           {team ? (

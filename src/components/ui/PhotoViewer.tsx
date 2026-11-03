@@ -47,7 +47,12 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
   useGrowFromThumb(
     contentRef,
     triggerBox !== undefined && triggerBox.width > 0
-      ? { left: triggerBox.left, top: triggerBox.top, width: triggerBox.width, height: triggerBox.height }
+      ? {
+          left: triggerBox.left,
+          top: triggerBox.top,
+          width: triggerBox.width,
+          height: triggerBox.height,
+        }
       : null,
   );
 
@@ -58,7 +63,8 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
     closeAt: SHEET_CLOSE_PX,
     onMove: (offset) => {
       dragged.current = true;
-      if (contentRef.current !== null) contentRef.current.style.transform = `translateY(${offset}px)`;
+      if (contentRef.current !== null)
+        contentRef.current.style.transform = `translateY(${offset}px)`;
     },
     onDismiss: (offset) => {
       if (closing.current) return;

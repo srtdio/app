@@ -201,9 +201,7 @@ describe('the docked panel', () => {
     // Lit as an overlay only while it sits over the chat (below 1180px); flat
     // beside the list from 1180px. No arbitrary box-shadow, and the old
     // --shadow-panel-left token is gone from index.css.
-    expect(src).toContain(
-      "max-[1179px]:lit-overlay min-[1180px]:border-border',",
-    );
+    expect(src).toContain("max-[1179px]:lit-overlay min-[1180px]:border-border',");
     expect(src).not.toContain('[box-shadow:');
     expect(src).not.toContain('--shadow-panel-left');
     const css = readFileSync(fileURLToPath(new URL('../../../index.css', import.meta.url)), 'utf8');
