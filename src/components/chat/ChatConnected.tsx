@@ -2252,7 +2252,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // to 0 before the first painted frame; leaving the list puts it back to 0
   // too, so the next page restores its own kept position from the top. One
   // synchronous write, only when not already 0; no read on the paint path
-  // beyond the scroll offset.
+  // beyond the scroll offset. A browser Back to the list still gets the
+  // browser's own history scroll restoration, as every page-mode route does.
   useLayoutEffect(() => {
     if (!listPageScroll) return;
     resetDocumentScroll();

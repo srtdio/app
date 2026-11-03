@@ -105,11 +105,17 @@ test('phone: the chat list scrolls the document under a pinned header @theme', a
   expect(thread.mainOverflowY).toBe('auto');
   expect(thread.docScrollable).toBe(false);
 
-  // Back: the list in page mode again, from its top.
+  // Back: the list in page mode again. The browser's own history scroll
+  // restoration puts the list back where it was (as on every page-mode route),
+  // and the header is pinned there below the Topbar.
   await page.goBack();
   await expect(search).toBeVisible();
   await expect.poll(async () => (await listState(page)).pageClass).toBe(true);
-  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  const back = await listState(page);
+  expect(back.mainOverflowY).toBe('visible');
+  expect(back.innerScrollers).toBe(0);
+  const searchTopBack = await search.evaluate((el) => el.getBoundingClientRect().top);
+  expect(Math.abs(searchTopBack - searchTopBefore)).toBeLessThanOrEqual(1);
   expect(network.blocked).toEqual([]);
 });
 
