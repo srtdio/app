@@ -250,7 +250,9 @@ describe.runIf(BRIEFS_SUITE)('briefs list keyset paging and counts', () => {
     // "Paging brief 1" matches ranks 1, 10..19, 100..199: 111 briefs.
     const search = await countBriefsByFilter(clientFor(memberA.id), wsA.id, ' paging BRIEF 1 ');
     expect(search.ok && search.data.all).toBe(111);
-    const literal = await countBriefsByFilter(clientFor(memberA.id), wsA.id, '%');
+    // Two characters: under 2 the search is off (server-search minimum), so a
+    // lone '%' would count every brief. Escaped, '%%' matches no title.
+    const literal = await countBriefsByFilter(clientFor(memberA.id), wsA.id, '%%');
     expect(literal).toEqual({ ok: true, data: { all: 0, open: 0, closed: 0 } });
   });
 
