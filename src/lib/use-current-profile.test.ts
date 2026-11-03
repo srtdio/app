@@ -41,6 +41,8 @@ import {
   resetProfileStore,
   setProfileEmailOptIn,
   subscribeProfile,
+  toCurrentProfile,
+  PROFILE_COLUMNS,
   type CurrentProfile,
 } from '@/lib/use-current-profile';
 import { peekKept, primeRead, resetSessionReads } from '@/lib/session-read';
@@ -50,6 +52,19 @@ function row(name: string, avatar: string | null = null): CurrentProfile {
     display_name: name,
     designation: null,
     avatar_url: avatar,
+    email_opt_in: true,
+    profile_completed_at: '2026-09-01T00:00:00Z',
+    username: null,
+    emailOptOutBy: null,
+  };
+}
+
+/** The row as the users read (or an old saved copy) has it: no emailOptOutBy. */
+function bareRow(name: string): Omit<CurrentProfile, 'emailOptOutBy'> {
+  return {
+    display_name: name,
+    designation: null,
+    avatar_url: null,
     email_opt_in: true,
     profile_completed_at: '2026-09-01T00:00:00Z',
     username: null,
@@ -358,11 +373,56 @@ describe('setProfileEmailOptIn (own write)', () => {
     off();
   });
 
+  it("the person's own tick clears a manager's emailOptOutBy, on or off", async () => {
+    void loadProfile('u-1');
+    reads[0]?.resolve({
+      data: { ...row('Asha'), email_opt_in: false, emailOptOutBy: 'u-boss' },
+      error: null,
+    });
+    await flush();
+    setProfileEmailOptIn('u-1', false);
+    expect(getProfileSnapshot().profile?.email_opt_in).toBe(false);
+    expect(getProfileSnapshot().profile?.emailOptOutBy).toBeNull();
+    expect(peekKept<CurrentProfile>(profileReadKey('u-1'))?.emailOptOutBy).toBeNull();
+  });
+
   it('leaves another user, or no row yet, alone', () => {
     void loadProfile('u-1');
     setProfileEmailOptIn('u-1', false);
     expect(getProfileSnapshot().profile).toBeNull();
     setProfileEmailOptIn('u-2', false);
     expect(getProfileSnapshot().userId).toBe('u-1');
+  });
+});
+
+describe('emailOptOutBy (who turned catch-up emails off)', () => {
+  it('the one users read selects email_opt_out_by', () => {
+    expect(PROFILE_COLUMNS.split(', ')).toContain('email_opt_out_by');
+    expect(PROFILE_COLUMNS.split(', ')).toContain('email_opt_in');
+  });
+
+  it('maps the read column onto profile.emailOptOutBy', async () => {
+    void loadProfile('u-1');
+    reads[0]?.resolve({
+      data: { ...bareRow('Asha'), email_opt_in: false, email_opt_out_by: 'u-boss' },
+      error: null,
+    });
+    await flush();
+    const profile = getProfileSnapshot().profile;
+    expect(profile?.emailOptOutBy).toBe('u-boss');
+    expect(profile && 'email_opt_out_by' in profile).toBe(false);
+  });
+
+  it('a copy saved before the field existed paints with emailOptOutBy null', () => {
+    primeRead(profileReadKey('u-1'), bareRow('Asha'));
+    void loadProfile('u-1');
+    expect(getProfileSnapshot().profile?.emailOptOutBy).toBeNull();
+  });
+
+  it('toCurrentProfile prefers the column, then the held field, else null', () => {
+    const base = bareRow('Asha');
+    expect(toCurrentProfile({ ...base, email_opt_out_by: 'u-a' }).emailOptOutBy).toBe('u-a');
+    expect(toCurrentProfile({ ...base, emailOptOutBy: 'u-b' }).emailOptOutBy).toBe('u-b');
+    expect(toCurrentProfile(base).emailOptOutBy).toBeNull();
   });
 });

@@ -195,8 +195,10 @@ describe.runIf(RPC_SUITE)('member_email_opt_in_set (authenticated role)', () => 
       .update({ email_opt_out_by: owner.id })
       .eq('id', member.id)
       .select('id');
-    // Either a privilege error or zero rows touched; never a stored value.
-    if (res.error === null) expect(res.data ?? []).toHaveLength(0);
+    // Live has no UPDATE grant (a privilege error); the local container keeps
+    // Supabase's default table grants, so the write may go through RLS. Either
+    // way the trigger keeps the old value: nothing is ever stored.
+    expect(res.error === null || res.error.code === '42501').toBe(true);
     expect(await readUser(member.id)).toEqual({ email_opt_in: true, email_opt_out_by: null });
   });
 });
