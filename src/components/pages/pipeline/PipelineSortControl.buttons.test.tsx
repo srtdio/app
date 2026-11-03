@@ -103,7 +103,9 @@ describe('Pipeline controls buttons', () => {
     for (const old of ['pl-4', '-mr-4', 'md:pl-6', 'md:-mr-6', 'mt-3', 'pb-1']) {
       expect(cls).not.toContain(old);
     }
-    expect(cls).toEqual(expect.arrayContaining(['flex', 'flex-nowrap', 'gap-2', 'overflow-x-auto']));
+    expect(cls).toEqual(
+      expect.arrayContaining(['flex', 'flex-nowrap', 'gap-2', 'overflow-x-auto']),
+    );
   });
 
   it('the filter-and-sort trigger is a bare IconButton with the sort icon, like SortMenu', () => {
