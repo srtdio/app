@@ -4,7 +4,8 @@ import { defineConfig, devices } from '@playwright/test';
 // against the committed baselines in e2e/visual/__screenshots__/<project>/.
 // A diff over 0.2% of the pixels fails. Not part of the root suite
 // (playwright.config.ts reads e2e/tests only); CI runs it in
-// .github/workflows/visual-ci.yml.
+// .github/workflows/visual-ci.yml as 4 parallel shards (--shard=N/4; with
+// fullyParallel each test lands in exactly one shard), gated by one `visual` check.
 //
 //   Check:   pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts
 //   Update:  pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --update-snapshots=all
@@ -54,9 +55,10 @@ export default defineConfig({
   outputDir: '../results/visual',
   forbidOnly: isCI,
   fullyParallel: true,
-  // 4 on CI (ubuntu-latest has 4 vCPUs): the four ipad-* projects took the
-  // run past the workflow's 15-minute compare and render steps at 2 workers.
-  workers: isCI ? 4 : 3,
+  // 2 per CI shard: ubuntu-latest has 4 vCPUs and also runs the harness Vite
+  // server, so 4 WebKit workers oversubscribed it. Speed comes from the 4
+  // parallel shards in visual-ci.yml, not from more workers per runner.
+  workers: isCI ? 2 : 3,
   timeout: 90_000,
   expect: {
     timeout: isCI ? 10_000 : 5_000,
