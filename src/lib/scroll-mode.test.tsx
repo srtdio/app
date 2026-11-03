@@ -236,7 +236,8 @@ describe('watchScrollDevice: the one boot listener', () => {
   it('at the top nothing is written', () => {
     const main = document.createElement('main');
     document.body.appendChild(main);
-    settable(main);
+    // A fresh document position (the test above left its own at 900).
+    settable((document.scrollingElement ?? document.documentElement) as HTMLElement);
     const write = vi.fn();
     Object.defineProperty(main, 'scrollTop', { configurable: true, get: () => 0, set: write });
     setDevice(TABLET_PORTRAIT);
