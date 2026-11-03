@@ -26,6 +26,7 @@ import {
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { Bone, BoxSkeleton, GlideItem } from '@/lib/motion';
+import { SettleLanding } from '@/components/chat/SettleLanding';
 import { useCoarsePointer, useHoverPointer } from '@/lib/use-is-laptop';
 import { filterChannelsByName } from '@/lib/channel-filter';
 import type { ChannelSummary } from '@/lib/chat-reads';

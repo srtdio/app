@@ -273,8 +273,8 @@ describe('(c) final state first: rendered before the motion features load', () =
   }
 
   it('glide: a GlideItem without MotionRoot is a plain element at its place', () => {
-    const host = mount(createElement(GlideItem, { 'data-probe': '' }, 'Row'));
-    const el = host.querySelector<HTMLElement>('[data-probe]');
+    const host = mount(createElement(GlideItem, { id: 'glide-probe' }, 'Row'));
+    const el = host.querySelector<HTMLElement>('#glide-probe');
     atRest(el);
     expect(el?.textContent).toBe('Row');
   });

@@ -106,7 +106,7 @@ describe('motion rules', () => {
       'components/ui/SidePanel.tsx',
       'components/ui/Backdrop.tsx',
     ]);
-    const bad = FILES.filter(({ rel, src }) => isTs(rel) && !SHARED.has(rel))
+    const bad = FILES.filter(({ rel }) => isTs(rel) && !SHARED.has(rel))
       .filter(({ src }) => /\srole=["']dialog["']|\saria-modal[=\s]|\bfixed inset-0\b/.test(src))
       .filter(({ src }) => {
         const usesShared =
