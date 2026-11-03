@@ -33,6 +33,7 @@ vi.mock('react', async (importOriginal) => {
     },
     // Effects never run in SSR; a no-op keeps the plain-function call below hook-safe.
     useEffect: () => undefined,
+    useLayoutEffect: () => undefined,
     // The card's menu gesture (useMenuGesture) keeps its controller in a ref.
     useRef: <T,>(initial: T): { current: T } => ({ current: initial }),
   };

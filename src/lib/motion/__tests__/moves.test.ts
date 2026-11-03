@@ -6,7 +6,7 @@
 // over is already rendered at its end state, before the motion features load
 // and with no Web Animations at all. And nothing ever animates opacity.
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { act, createElement, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -198,7 +198,7 @@ describe('(a) interrupt: any tap or key press finishes the move', () => {
   });
 
   it('the CSS press (move 5) is a :active scale that ignores disabled controls', () => {
-    const css = readFileSync(fileURLToPath(new URL('../motion.css', import.meta.url)), 'utf8');
+    const css = readFileSync(join(process.cwd(), 'src/lib/motion/motion.css'), 'utf8');
     expect(MOVE_CLASS.press).toBe('mv-press');
     expect(css).toMatch(
       /\.mv-press:active:not\(:disabled\):not\(\[aria-disabled='true'\]\)\s*\{\s*scale:\s*0\.97;/,
@@ -242,7 +242,7 @@ describe('(b) instant under Reduce Motion and ?motion=0', () => {
   });
 
   it('the CSS moves collapse too (html[data-motion=off] and the media query)', () => {
-    const css = readFileSync(fileURLToPath(new URL('../motion.css', import.meta.url)), 'utf8');
+    const css = readFileSync(join(process.cwd(), 'src/lib/motion/motion.css'), 'utf8');
     expect(css).toContain("html[data-motion='off'] [class*='mv-']");
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)/);
   });

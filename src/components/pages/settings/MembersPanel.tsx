@@ -33,7 +33,8 @@ import {
   sendInvite,
 } from './MembersInviteForm';
 import type { SentInvite } from './MembersInviteForm';
-import { LOADING_MEMBERS, MembersList, SettingsRowBoxes } from './MembersList';
+import { MembersList } from './MembersList';
+import { LOADING_MEMBERS, SettingsRowBoxes } from './SettingsRowBoxes';
 import type { PendingEditHandler } from './MembersList';
 import { MemberActionSheet } from './MemberActionSheet';
 import type {

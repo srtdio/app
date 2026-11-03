@@ -1,5 +1,5 @@
 // A strip above (or at the top of) the composer: the reply quote, the mention
-// and # pickers. Motion (docs/motion.md, edgeStrip above the composer): it
+// and hashtag pickers. Motion (docs/motion.md, edgeStrip above the composer): it
 // slides up 8-48 px on Y as it appears and back down the same way as it goes,
 // never a fade. One already there when the composer first paints (a kept
 // reply draft on chat open) stays still. While it leaves it shows what it

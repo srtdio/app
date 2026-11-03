@@ -5,6 +5,7 @@
 // the device (seeded at boot) or read this session, the first frame is the
 // rows and no box. Plan tab (phone): the first visit's frame is the plan-card
 // boxes; a return to the tab paints the kept read at once, with no box.
+import { ToastProvider } from '@/components/ui/toast';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
@@ -121,7 +122,11 @@ function render(path: string, page: ReactElement): void {
   document.body.appendChild(host);
   root = createRoot(host);
   act(() => {
-    root?.render(<MemoryRouter initialEntries={[path]}>{page}</MemoryRouter>);
+    root?.render(
+      <ToastProvider>
+        <MemoryRouter initialEntries={[path]}>{page}</MemoryRouter>
+      </ToastProvider>,
+    );
   });
 }
 
