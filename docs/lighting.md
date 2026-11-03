@@ -28,6 +28,10 @@ At most one soft (blurred) shadow per token; use a 1px ring for edge definition 
 | Overlay | `lit-overlay`                          | highest; long shadow, dark mode lighter gradient                           | menus, popovers, sheets, dialogs, side panels, docked plan panel (below 1180px; flat beside the list from 1180px)               |
 | Bars    | `lit-header` / `lit-dock` / `lit-side` | shade falls down from headers, up from bottom bars, right from the sidebar | Topbar, section and detail headers; composer, decision bar, footers; Sidebar                                                    |
 
+The person photo viewer (ui/PhotoViewer) is a full-screen media surface like the image lightbox: `bg-overlay`, no lit class of its own; the photo keeps `lit-avatar`.
+
+The person card's inline message sits on its sheet or popover (Overlay); its input box is Sunken (`lit-well`).
+
 ## Controls and small parts
 
 | Class                                                    | Surface                                                                                                                                                               |

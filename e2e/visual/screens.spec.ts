@@ -1612,6 +1612,116 @@ SCREENS.push(
   },
 );
 
+/** Priya's comment on the post: a tap on her name opens the inline card with its context line. */
+async function openCommentAuthorCard(page: Page): Promise<void> {
+  await postDetailReady(page);
+  const text = page.getByText(PEER_COMMENT_BODY, { exact: true });
+  await text.scrollIntoViewIfNeeded();
+  const author = await lastVisible(
+    page.locator(`[data-person-trigger="${PEER}"]`, { has: page.locator('[data-comment-author]') }),
+    'comment author',
+  );
+  await author.click();
+  await waitFor([page.locator('[data-person-card-message]')], 'inline message card');
+  await waitFor([page.locator('[data-person-context]')], 'context line');
+}
+
+/** The DM header's photo: the photo-only viewer opens. */
+async function openDmPhoto(page: Page): Promise<void> {
+  await openDm(page);
+  const photo = `[data-person-trigger="${PEER}"][data-person-view="photo"]`;
+  await tap([page.locator(`[data-contact-open] ${photo}`)], 'DM header photo');
+  await waitFor([page.locator(`[data-photo-viewer="${PEER}"]`)], 'photo viewer');
+}
+
+SCREENS.push(
+  {
+    // The inline message card from a group sender, the viewport cut to the
+    // part above an iPhone keyboard (390x500): the sheet sits on its bottom
+    // edge, input focused, reactions in the box. Phone light and dark.
+    name: 'person-card-inline',
+    seed: creator,
+    extra: seedGroupPeople,
+    only: 'phone',
+    url: '/chat',
+    steps: async (page) => {
+      await page.setViewportSize({ width: 390, height: 500 });
+      await openPersonCardFor(page, COLLEAGUE_A);
+      await waitFor([page.locator('[data-person-reactions]')], 'quick reactions');
+    },
+  },
+  {
+    // From a post comment: header, the context line ("Monday carousel ·
+    // "Can the cover use the morning shot?""), the inline composer. Phone
+    // sheet light/dark; the laptop project shows the ~320px popover.
+    name: 'person-card-inline-context',
+    seed: creator,
+    extra: seedPeerComment,
+    url: `/posts/${POST}`,
+    steps: openCommentAuthorCard,
+  },
+  {
+    // The laptop popover in dark (the laptop project is light).
+    name: 'person-card-inline-laptop',
+    seed: creator,
+    extra: seedPeerComment,
+    only: 'laptop',
+    dark: true,
+    url: `/posts/${POST}`,
+    steps: openCommentAuthorCard,
+  },
+  {
+    // Reply privately on a comment row now opens the same inline card with
+    // the comment as its source (no navigation into the DM).
+    name: 'post-comment-reply-privately-card',
+    seed: creator,
+    extra: seedPeerComment,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      await page.getByText(PEER_COMMENT_BODY, { exact: true }).scrollIntoViewIfNeeded();
+      const action = await lastVisible(
+        page.locator('[data-row-action="reply-privately"]'),
+        'Reply privately on the comment row',
+      );
+      await action.click();
+      await waitFor([page.locator('[data-person-context]')], 'context line');
+    },
+  },
+  {
+    // Inside a DM the header photo opens the photo only: dark overlay, the
+    // photo large, the full name, an X. Phone light/dark and laptop.
+    name: 'person-photo-viewer',
+    seed: creator,
+    url: '/chat',
+    steps: openDmPhoto,
+  },
+  {
+    // The laptop viewer in dark (the laptop project is light).
+    name: 'person-photo-viewer-laptop',
+    seed: creator,
+    only: 'laptop',
+    dark: true,
+    url: '/chat',
+    steps: openDmPhoto,
+  },
+  {
+    // The sent bubble with a long quote, mine and theirs, on the laptop in
+    // dark (chat-dm-private-reply-long covers phone light/dark and laptop light).
+    name: 'chat-dm-private-reply-long-sent',
+    seed: creator,
+    extra: seedLongPrivateReplies,
+    only: 'laptop',
+    dark: true,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, PEER_NAME);
+      await expectBubbleInsideColumn(page, LONG_MINE_BODY);
+      await expectBubbleInsideColumn(page, LONG_THEIRS_BODY);
+    },
+  },
+);
+
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
 

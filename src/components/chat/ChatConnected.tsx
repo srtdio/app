@@ -8,8 +8,7 @@ import { cn } from '@/lib/cn';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace, workspaceDisplayName } from '@/lib/workspace-context';
 import { chatDisplayName } from '@/lib/chat/chat-name';
-import { useOpenPersonDm } from '@/components/ui/use-open-person-dm';
-import { setPrivateReplyDraft } from '@/lib/chat/drafts';
+import { openReplyPrivatelyCard } from '@/components/comments/ReplyPrivatelyButton';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
 import {
   peekMentionProfiles,
@@ -112,7 +111,7 @@ import {
 } from '@/lib/chat/use-history-step';
 import { hasSearchJump, readSearchJump, withoutSearchJump } from '@/lib/search/jump';
 import { MENTION_DM_FAILED, type PersonCardHint } from '@/lib/person-card';
-import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
+import { openPersonCardFrom, openPersonPhotoFrom } from '@/components/ui/PersonTrigger';
 import { mentionGone, useChannelMembersState } from '@/components/chat/use-channel-members';
 import { channelHasClient } from '@/components/chat/ComposerTray';
 import {
@@ -662,11 +661,16 @@ export interface MentionDmDeps {
 }
 
 /**
- * A tapped bubble @mention opens the shared person card (its Message button
- * opens the DM through use-open-person-dm). Stable: no re-render of the rows.
+ * A tapped bubble @mention in a group (or notes) opens the shared person card
+ * (its inline message queues to the DM). Stable: no re-render of the rows.
  */
 export function openMentionCard(hint: PersonCardHint, el: HTMLElement): void {
   openPersonCardFrom(el, hint);
+}
+
+/** Inside a DM a tapped @mention opens the photo-only viewer (you are already in the chat). */
+export function openMentionPhoto(hint: PersonCardHint, el: HTMLElement): void {
+  openPersonPhotoFrom(el, hint);
 }
 
 /**
@@ -2133,17 +2137,16 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     },
     [notesChat, ensureNotes, outboxEnqueue, toast, openChannel, workspaceId],
   );
-  // Reply privately: my DM with the sender (the cached one opens with no
-  // read), its draft carrying the quote before it opens, so the composer's
-  // first frame shows it.
-  const openPersonDm = useOpenPersonDm();
-  const replyPrivately = useCallback(
-    (senderUserId: string, quote: PrivateReplyDraft) =>
-      openPersonDm(senderUserId, {
-        beforeOpen: (channelId) => setPrivateReplyDraft(channelId, quote),
-      }),
-    [openPersonDm],
-  );
+  // Reply privately: the sender's inline message card with this message as
+  // its source, anchored to the held bubble (no navigation, no read). The
+  // card's send carries the quote to my DM with them.
+  const replyPrivately = useCallback((_senderUserId: string, quote: PrivateReplyDraft) => {
+    const bubble =
+      typeof document !== 'undefined'
+        ? document.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(quote.sourceId)}"]`)
+        : null;
+    openReplyPrivatelyCard(bubble, quote);
+  }, []);
   // A forward that includes notes waits on its ensure first.
   const threadForward = thread.forward;
   const forwardWithNotes = useCallback(
@@ -2339,7 +2342,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       mentions={{
                         peerUserId:
                           selected.channelType === 'dm' ? (selected.peerUserId ?? null) : null,
-                        onOpen: openMentionCard,
+                        // Inside a DM a person opens the photo only; elsewhere the card.
+                        onOpen: selected.channelType === 'dm' ? openMentionPhoto : openMentionCard,
                       }}
                       channelHasClient={hasClient}
                       {...(!notesOpen

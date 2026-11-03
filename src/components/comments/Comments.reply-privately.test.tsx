@@ -7,8 +7,9 @@ import type { CommentRow, CommentResult } from '@srtdio/comments';
 
 // Reply privately on post and brief comments: shown only on someone else's
 // comment with a known current author (never mine, a legacy author or a former
-// member), between Reply and Copy; a tap writes the quote on the DM's draft in
-// beforeOpen and opens the DM through useOpenPersonDm.
+// member), between Reply and Copy; a tap opens the person card's inline
+// message for the author with the comment as its source (no navigation). The
+// author's photo and name carry the same source.
 
 type ListResult = CommentResult<CommentRow[]>;
 
@@ -19,8 +20,6 @@ const LEGACY = '44444444-4444-4444-8444-444444444444';
 
 const h = vi.hoisted(() => ({
   rows: [] as CommentRow[],
-  openDm: vi.fn(),
-  setPrivateReplyDraft: vi.fn(),
 }));
 
 vi.mock('@srtdio/comments', async (importOriginal) => {
@@ -81,16 +80,10 @@ vi.mock('@/lib/workspace-members', async (importOriginal) => ({
     ],
   }),
 }));
-vi.mock('@/components/ui/use-open-person-dm', () => ({
-  useOpenPersonDm: () => h.openDm,
-}));
-vi.mock('@/lib/chat/drafts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/chat/drafts')>()),
-  setPrivateReplyDraft: h.setPrivateReplyDraft,
-}));
 
 import { Comments } from '@/components/comments/Comments';
 import { REPLY_PRIVATELY } from '@/lib/chat/private-reply';
+import { closePersonCard, personCardSnapshot } from '@/lib/person-card';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -178,8 +171,7 @@ beforeEach(() => {
     row('c-gone', GONE, 'from someone who left', { created_at: '2026-01-02T00:00:00.000Z' }),
     row('c-legacy', LEGACY, 'imported', { legacy_author_name: 'Old Import' }),
   ];
-  h.openDm.mockReset();
-  h.setPrivateReplyDraft.mockReset();
+  closePersonCard();
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -187,6 +179,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root?.unmount());
+  closePersonCard();
   root = null;
   document.body.innerHTML = '';
 });
@@ -213,29 +206,49 @@ describe('Reply privately on comments', () => {
     expect(replyPrivately('c-other')).toBeNull();
   });
 
-  it('a tap opens the DM and writes the comment quote in beforeOpen', async () => {
+  const QUOTE = {
+    kind: 'comment',
+    sourceId: 'c-other',
+    authorUserId: OTHER,
+    authorName: 'Omar Other',
+    excerpt: 'Can @mia check the hook?',
+    whereLabel: 'Spring launch',
+    link: { kind: 'comment', entityType: 'brief', entityId: 'brief-1', commentId: 'c-other' },
+  };
+
+  it('a tap opens the inline message card with the comment as its source', async () => {
     await mount();
-    act(() => replyPrivately('c-other')?.click());
+    const button = replyPrivately('c-other');
+    act(() => button?.click());
+    const request = personCardSnapshot();
+    expect(request?.userId).toBe(OTHER);
+    expect(request?.view).toBe('card');
+    expect(request?.trigger).toBe(button);
+    expect(request?.source).toEqual(QUOTE);
+  });
 
-    expect(h.openDm).toHaveBeenCalledTimes(1);
-    const [userId, options] = h.openDm.mock.calls[0] as [
-      string,
-      { beforeOpen?: (channelId: string) => void },
-    ];
-    expect(userId).toBe(OTHER);
-    expect(typeof options.beforeOpen).toBe('function');
-    // Nothing is written until the DM's id is known.
-    expect(h.setPrivateReplyDraft).not.toHaveBeenCalled();
+  it("the author's name opens the card carrying the same source", async () => {
+    await mount();
+    const trigger = rowEl('c-other')?.querySelector<HTMLElement>(
+      `[data-person-trigger="${OTHER}"]`,
+    );
+    expect(trigger).not.toBeNull();
+    act(() => trigger?.click());
+    expect(personCardSnapshot()?.userId).toBe(OTHER);
+    expect(personCardSnapshot()?.source).toEqual(QUOTE);
+  });
 
-    options.beforeOpen?.('dm-1');
-    expect(h.setPrivateReplyDraft).toHaveBeenCalledWith('dm-1', {
-      kind: 'comment',
-      sourceId: 'c-other',
-      authorUserId: OTHER,
-      authorName: 'Omar Other',
-      excerpt: 'Can @mia check the hook?',
-      whereLabel: 'Spring launch',
-      link: { kind: 'comment', entityType: 'brief', entityId: 'brief-1', commentId: 'c-other' },
-    });
+  it('my own comment and a former member open the card with no source', async () => {
+    await mount();
+    for (const [id, who] of [
+      ['c-mine', ME],
+      ['c-gone', GONE],
+    ] as const) {
+      closePersonCard();
+      const trigger = rowEl(id)?.querySelector<HTMLElement>(`[data-person-trigger="${who}"]`);
+      if (trigger === null || trigger === undefined) continue;
+      act(() => trigger.click());
+      expect(personCardSnapshot()?.source ?? null).toBeNull();
+    }
   });
 });

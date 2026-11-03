@@ -1,5 +1,6 @@
 import { mark } from '@/lib/perf-marks';
 import {
+  createContext,
   Fragment,
   memo,
   useCallback,
@@ -1226,8 +1227,13 @@ export function ThreadHeaderIdentity(props: {
   notes?: boolean;
   /** A search jump's words, marked in the name (the shared highlight). */
   searchWords?: readonly string[];
+  /**
+   * A DM's other person: their photo opens the photo-only viewer (the name
+   * keeps opening Contact info). Absent in groups and notes.
+   */
+  photoUserId?: string | null;
 }): ReactElement {
-  const photo =
+  const face =
     props.notes === true ? (
       <NotesAvatar role="header" src={props.avatarUrl} surface="panel" />
     ) : props.isGroup ? (
@@ -1244,6 +1250,21 @@ export function ThreadHeaderIdentity(props: {
         {...(props.avatarUrl !== null ? { src: props.avatarUrl } : {})}
         presence={props.presence}
       />
+    );
+  const photoUserId = props.photoUserId ?? null;
+  const photo =
+    photoUserId !== null && props.notes !== true && !props.isGroup ? (
+      <PersonTrigger
+        userId={photoUserId}
+        name={props.title}
+        avatarUrl={props.avatarUrl}
+        display="block"
+        view="photo"
+      >
+        {face}
+      </PersonTrigger>
+    ) : (
+      face
     );
   const text = (
     <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
@@ -2129,6 +2150,16 @@ function withRailPhoto(
  * MessageRow wrapper and passed in via `press`, so the unit test can call this
  * directly. All colours are design tokens, so light and dark stay at parity.
  */
+/**
+ * A group bubble's sender photo and name open the inline message card with
+ * that message as its source (the card's context line and the quote its send
+ * carries). Null outside a group. Stable for the thread's life (it reads the
+ * latest props at tap time), so it never re-renders a memoised row.
+ */
+const PersonSourceContext = createContext<
+  ((message: ThreadMessage) => PrivateReplyDraft | null) | null
+>(null);
+
 export function MessageBubble(props: {
   message: ThreadMessage;
   /** Notes only: a saved copy's "Saved from" line replaces "Forwarded". */
@@ -2187,6 +2218,8 @@ export function MessageBubble(props: {
   rail?: RowRail | undefined;
   /** A voice-only bubble: the voice note right below from the same sender. */
   nextVoiceId?: string | null | undefined;
+  /** The group sender card's source (PersonSourceContext, read by the row); absent: none. */
+  personSource?: ((message: ThreadMessage) => PrivateReplyDraft | null) | null | undefined;
   /** A received voice-only bubble: run tap-to-transcribe (the Transcribe link). */
   onTranscribe?: (() => void) | undefined;
   /** The quoted message when it is loaded in the thread (the quote reads its media). */
@@ -2271,6 +2304,7 @@ export function MessageBubble(props: {
   // a tap there toggles the row).
   const senderId = !selecting && !mine ? message.senderUserId : null;
   const senderAvatar = senderAvatarProps(message, profiles);
+  const personSource = props.personSource ?? null;
   const asPerson = (
     node: ReactElement,
     display: 'inline' | 'block',
@@ -2283,6 +2317,7 @@ export function MessageBubble(props: {
         name={profiles.has(senderId) ? name : null}
         avatarUrl={profiles.get(senderId)?.avatarUrl ?? null}
         display={display}
+        {...(personSource !== null ? { source: () => personSource(message) } : {})}
       >
         {node}
       </PersonTrigger>
@@ -3129,6 +3164,7 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
   const onChangePriority = props.onChangePriority;
   // The in-chat search's words: matched words in this bubble draw as <mark>.
   const searchWords = useContext(SearchHighlightContext);
+  const personSource = useContext(PersonSourceContext);
   const savedFrom = useSavedFrom();
   // The viewer's star: read from the one star store, painted with the row.
   const starred = useIsStarred(props.message.id) && canStar(props.message);
@@ -3136,6 +3172,7 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
   return (
     <MessageBubble
       searchWords={searchWords}
+      personSource={personSource}
       savedFrom={savedFrom}
       message={props.message}
       profiles={props.profiles}
@@ -3539,6 +3576,8 @@ function ThreadBody(
     replyPrivately?: {
       open: (message: ThreadMessage) => void;
       senderGone: (userId: string) => boolean;
+      /** The quote of a message (the sender card's source); absent: none. */
+      draft?: (message: ThreadMessage) => PrivateReplyDraft | null;
     };
     /** A bubble's Reply privately quote tapped (its href); absent: the quote is static. */
     onOpenPrivateReplyHref?: (href: string) => void;
@@ -4347,6 +4386,33 @@ function ThreadBody(
     chipTap: createIdCallbacks((id) => chipsRef.current.get(id)?.onTap()),
   };
   const rowCaches = rowCachesRef.current;
+  // The group sender's card source: Reply privately's quote, when the message
+  // offers it (someone else's recorded message from a current member).
+  const personSourceRef = useRef<((message: ThreadMessage) => PrivateReplyDraft | null) | null>(
+    null,
+  );
+  const sourceProvider = props.replyPrivately;
+  personSourceRef.current =
+    sourceProvider?.draft !== undefined
+      ? (message: ThreadMessage) =>
+          canReplyPrivatelyInChat({
+            mine: message.mine,
+            senderUserId: message.senderUserId,
+            isGroup: props.isGroup,
+            notes: props.notes === true,
+            senderRemoved:
+              message.senderUserId !== null && sourceProvider.senderGone(message.senderUserId),
+            state: message.state,
+            ...(message.deleted !== undefined ? { deleted: message.deleted } : {}),
+          })
+            ? (sourceProvider.draft?.(message) ?? null)
+            : null
+      : null;
+  const personSource = useCallback(
+    (message: ThreadMessage): PrivateReplyDraft | null =>
+      personSourceRef.current?.(message) ?? null,
+    [],
+  );
   if (props.loading) return threadSkeleton();
   if (props.loadFailed === true && props.messages.length === 0) {
     return threadLoadError(props.onRetryLoad);
@@ -4446,7 +4512,7 @@ function ThreadBody(
       ? listRailPlans(listRows, unread?.kind === 'loaded' ? unread.firstId : null, threads.memberOf)
       : new Map<string, RailPlan>();
   return (
-    <>
+    <PersonSourceContext.Provider value={sourceProvider?.draft !== undefined ? personSource : null}>
       <div data-thread-viewport="" className="relative flex min-h-0 flex-1 flex-col">
         <ul
           ref={listRef}
@@ -4839,7 +4905,7 @@ function ThreadBody(
           onClose={() => setViewer(null)}
         />
       ) : null}
-    </>
+    </PersonSourceContext.Provider>
   );
 }
 
@@ -6735,24 +6801,26 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // menu, the same marks, selection, edit and delete windows and reactions.
   // Reply privately (group chats only): the quote of the held message, then my DM with its sender.
   const onReplyPrivatelyProp = props.onReplyPrivately;
+  const replyPrivatelyDraft =
+    channelId !== undefined && props.isGroup === true && !notes
+      ? (message: ThreadMessage): PrivateReplyDraft | null =>
+          message.senderUserId === null
+            ? null
+            : chatPrivateReplyDraft({
+                channelId,
+                messageId: message.id,
+                authorUserId: message.senderUserId,
+                authorName: senderName(message, props.profiles),
+                excerpt: replyPreview(message),
+                groupName: props.title,
+              })
+      : undefined;
   const replyPrivatelyOpen =
-    onReplyPrivatelyProp !== undefined &&
-    channelId !== undefined &&
-    props.isGroup === true &&
-    !notes
+    onReplyPrivatelyProp !== undefined && replyPrivatelyDraft !== undefined
       ? (message: ThreadMessage): void => {
-          if (message.senderUserId === null) return;
-          onReplyPrivatelyProp(
-            message.senderUserId,
-            chatPrivateReplyDraft({
-              channelId,
-              messageId: message.id,
-              authorUserId: message.senderUserId,
-              authorName: senderName(message, props.profiles),
-              excerpt: replyPreview(message),
-              groupName: props.title,
-            }),
-          );
+          const quote = replyPrivatelyDraft(message);
+          if (quote === null || message.senderUserId === null) return;
+          onReplyPrivatelyProp(message.senderUserId, quote);
         }
       : undefined;
   const bodyActions: Omit<
@@ -6829,6 +6897,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             open: replyPrivatelyOpen,
             senderGone: (userId: string) =>
               isFormerMember(workspaceId ?? null, userId) || props.mentionGone?.(userId) === true,
+            ...(replyPrivatelyDraft !== undefined ? { draft: replyPrivatelyDraft } : {}),
           },
         }
       : {}),
@@ -6884,6 +6953,9 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               layout={layout}
               notes={notes}
               searchWords={headerWords}
+              {...(!notes && props.isGroup !== true && (props.peerUserId ?? null) !== null
+                ? { photoUserId: props.peerUserId ?? null }
+                : {})}
               {...(canOpenContact
                 ? { onOpenContact: () => setContactOpen(true) }
                 : props.isGroup === true && props.onOpenInfo !== undefined

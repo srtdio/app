@@ -8,6 +8,7 @@
 import { mark } from '@/lib/perf-marks';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { notesChannelId } from '@/lib/chat/notes';
+import { privateReplyLine, type PrivateReplyDraft } from '@/lib/chat/private-reply';
 
 /** The DM open failure toast (the chat @mention tap's copy, reused everywhere). */
 export const MENTION_DM_FAILED = "Couldn't open that chat. Try again.";
@@ -21,13 +22,28 @@ export interface PersonCardHint {
   username?: string | null;
   /** The screen already knows this person left (a former-member row). */
   former?: boolean;
+  /**
+   * The comment or group chat message the tap came from (built at tap time
+   * from what the row holds): the card's context line, and the quote its
+   * send carries (chat_private_reply_send). Absent from Members, Pipeline,
+   * Activity and author lines.
+   */
+  source?: PrivateReplyDraft | null;
 }
+
+/**
+ * What a tap opens: the inline message card (default), or the photo-only
+ * viewer (inside a DM and on the chat list's People cards).
+ */
+export type PersonView = 'card' | 'photo';
 
 export interface PersonCardRequest extends PersonCardHint {
   /** The tapped element's box (laptop popover anchor); null when unknown. */
   anchor: { top: number; left: number; right: number; bottom: number } | null;
   /** The tapped element, focused again when the card closes. */
   trigger: HTMLElement | null;
+  /** Card or photo viewer; absent is the card. */
+  view?: PersonView;
 }
 
 let current: PersonCardRequest | null = null;
@@ -39,7 +55,7 @@ function emit(): void {
 
 /** Open the card for one person (synchronous: the host paints it this frame). */
 export function openPersonCard(request: PersonCardRequest): void {
-  mark('person-card:open');
+  mark(request.view === 'photo' ? 'person-photo:open' : 'person-card:open');
   current = request;
   emit();
 }
@@ -115,3 +131,36 @@ export function personDmRoute(input: {
 export function personFirstName(displayName: string): string {
   return displayName.trim().split(/\s+/)[0] ?? '';
 }
+
+/** How many of their words the context line quotes. */
+export const CONTEXT_WORDS = 6;
+
+/**
+ * The card's context line: "<where> · "<first words of their text>…"", the
+ * ellipsis only when words were cut; the where half alone when there are no
+ * words, the quote alone when there is no where; null without a source. Pure.
+ */
+export function personContextLine(
+  source: Pick<PrivateReplyDraft, 'whereLabel' | 'excerpt'> | null | undefined,
+): string | null {
+  if (source === null || source === undefined) return null;
+  const words = privateReplyLine(source.excerpt)
+    .split(' ')
+    .filter((w) => w !== '');
+  const cut = words.length > CONTEXT_WORDS;
+  const quote =
+    words.length > 0 ? `"${words.slice(0, CONTEXT_WORDS).join(' ')}${cut ? '…' : ''}"` : '';
+  const where = source.whereLabel.trim();
+  if (where !== '' && quote !== '') return `${where} · ${quote}`;
+  const line = where !== '' ? where : quote;
+  return line !== '' ? line : null;
+}
+
+/** Approved copy (2 Nov 2026): the inline message card. */
+export function messagePlaceholder(firstName: string): string {
+  return `Message ${firstName}…`;
+}
+export function sentToTitle(firstName: string): string {
+  return `Sent to ${firstName}`;
+}
+export const OPEN_CHAT = 'Open chat';

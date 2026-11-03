@@ -152,6 +152,7 @@ describe('detail rules: IconSend only sends a message or comment', () => {
     'chat/VoiceDraft.tsx', // the chat composer's voice-note send button
     'comments/CommentComposer.tsx', // the comment composer's send button
     'comments/SlotComposer.tsx', // the per-slide comment composer's send button
+    'ui/PersonMessageInput.tsx', // the person card's inline composer send button
   ]);
 
   it('IconSend appears only in the composer files', () => {
