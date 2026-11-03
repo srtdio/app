@@ -514,7 +514,7 @@ function PlanBubble(props: {
             {quote !== null ? (
               <ReplyPrivatelyButton
                 authorUserId={replyTo.authorUserId}
-                className="min-w-[44px] hover:bg-panel-3"
+                className="hover:bg-panel-3"
                 draft={quote}
               />
             ) : null}

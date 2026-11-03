@@ -24,7 +24,14 @@ import { parseExternalLink } from '@/lib/links';
 import { firstExternalUrl } from '@/lib/chat/message-links';
 import { highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
-import { IconCheck, IconEdit, IconMore, IconTrash, ICON_SIZE } from '@/components/ui/icons';
+import {
+  IconCheck,
+  IconCopy,
+  IconEdit,
+  IconMore,
+  IconTrash,
+  ICON_SIZE,
+} from '@/components/ui/icons';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { LoadError } from '@/components/ui/LoadError';
 import { roleLabel } from '@/components/pages/settings/members-data';
@@ -241,16 +248,32 @@ export function emptyListText(entityType: CommentEntityType, filter: CommentFilt
 }
 
 /**
- * Layout added to every row action (the checkpoint checkbox, Confirm, Resolve,
- * Reply, Copy). Each is a ghost <Button> (44 tall, 8px radius, 14 / 500); this
- * only keeps the 44px minimum width and the hover that reads on panel-2 rows.
+ * Layout added to every text row action (the checkpoint checkbox, Confirm,
+ * Resolve, Reply). Each is a ghost <Button> (44 tall, 8px radius, 14 / 500);
+ * this only keeps the 44px minimum width and the hover that reads on panel-2
+ * rows. Reply privately and Copy are 44x44 IconButtons with the same hover.
+ * The row's 12px side padding comes from COMMENT_ACTIONS_ROW_CLASS.
  */
 export const ROW_ACTION_CLASS = 'min-w-[44px] hover:bg-panel-3';
 
 /** The passive (non-interactive) checkbox: the same box, height and padding as
  *  a ghost row-action Button without the hover or focus treatment. */
 export const ROW_ACTION_STATIC_CLASS =
-  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-4 text-base font-medium';
+  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-3 text-base font-medium';
+
+/** The hover the icon-only row actions (Reply privately, Copy) share. */
+export const ROW_ICON_ACTION_CLASS = 'hover:bg-panel-3';
+
+/**
+ * The one-line comment action row: never wraps. Its direct text Buttons take
+ * 12px side padding instead of the Button's 16 (the child selector outranks the
+ * Button's px-4; cn() does not merge; the 44x44 IconButtons keep their fixed
+ * width), so a checkpoint root's Resolve + Reply +
+ * two icons fit at 375 px. -ml-2 lines the first control's content up with the
+ * body text.
+ */
+export const COMMENT_ACTIONS_ROW_CLASS =
+  '-ml-2 mt-1 flex flex-nowrap items-center gap-1 [&>button]:px-3';
 
 /** The time in every row header: 12px, regular weight, never monospace. */
 export const ROW_TIME_CLASS = 'whitespace-nowrap text-sm tabular-nums text-fg-3';
@@ -1252,7 +1275,6 @@ export function Comments({
   const [editPicks, setEditPicks] = useState<MentionPick[]>([]);
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [copyFailed, setCopyFailed] = useState(false);
   // The thread root whose reopen request is in flight; null when idle. A one-tap
   // Resolve is optimistic and never waits.
   const [resolvingId, setResolvingId] = useState<string | null>(null);
@@ -1984,7 +2006,10 @@ export function Comments({
 
   async function handleCopy(comment: CommentRow): Promise<void> {
     const ok = await copyText(commentCopyText(comment.body, handleOf));
-    setCopyFailed(!ok);
+    if (!ok) {
+      toast?.show({ title: COPY_FAILED, tone: 'error' });
+      return;
+    }
     setCopiedId(comment.id);
     window.setTimeout(() => {
       setCopiedId((current) => (current === comment.id ? null : current));
@@ -2122,24 +2147,27 @@ export function Comments({
     return role === undefined || role === '' ? null : roleLabel(role);
   }
 
-  // The visible Copy for one row, own and others' alike, with its inline
-  // "Copied" / "Couldn't copy" status beside it. Same ghost look and height as
-  // every other row action.
+  // Copy for one row, own and others' alike: an icon-only IconButton
+  // (clipboard) whose accessible name stays "Copy". After a copy the icon is a
+  // tick for 2000 ms with a visually hidden "Copied" status; a failure is an
+  // error toast (as the caption copy on the post page), never inline text.
   function copyControl(comment: CommentRow): ReactNode {
+    const copied = copiedId === comment.id;
     return (
       <>
-        <Button
+        <IconButton
           type="button"
+          label="Copy"
           data-row-action="copy"
-          variant="ghost"
-          className={ROW_ACTION_CLASS}
+          data-copied={copied ? '' : undefined}
+          className={ROW_ICON_ACTION_CLASS}
           onClick={() => void handleCopy(comment)}
         >
-          Copy
-        </Button>
-        {copiedId === comment.id ? (
-          <span role="status" className="text-sm text-fg-3">
-            {copyFailed ? COPY_FAILED : 'Copied'}
+          {copied ? <IconCheck size={ICON_SIZE.nav} /> : <IconCopy size={ICON_SIZE.nav} />}
+        </IconButton>
+        {copied ? (
+          <span role="status" className="sr-only">
+            Copied
           </span>
         ) : null}
       </>
@@ -2183,7 +2211,7 @@ export function Comments({
     return (
       <ReplyPrivatelyButton
         authorUserId={comment.author_user_id}
-        className={ROW_ACTION_CLASS}
+        className={ROW_ICON_ACTION_CLASS}
         draft={draft}
       />
     );
@@ -2407,10 +2435,9 @@ export function Comments({
             </div>
           )}
 
-          {/* One action row, left-aligned on the text column (-ml-2 lines the
-              first control's content up with the body text). */}
+          {/* One action row on one line, left-aligned on the text column. */}
           {!editing ? (
-            <div data-comment-actions="" className="-ml-2 mt-1 flex flex-wrap items-center gap-1">
+            <div data-comment-actions="" className={COMMENT_ACTIONS_ROW_CLASS}>
               {opts.leading}
               {opts.replyButton}
               {opts.actions.canCopy ? replyPrivatelyControl(comment, authorName) : null}
