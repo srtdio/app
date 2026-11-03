@@ -441,7 +441,7 @@ describe('one row template for checkpoints and comments', () => {
 });
 
 describe('the Copy icon on a comment row', () => {
-  const writeText = vi.fn(async (_text: string) => undefined);
+  const writeText = vi.fn<(text: string) => Promise<void>>(async () => undefined);
 
   beforeEach(() => {
     Object.defineProperty(navigator, 'clipboard', {
