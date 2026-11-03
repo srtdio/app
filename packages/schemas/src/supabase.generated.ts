@@ -8638,6 +8638,7 @@ export type Database = {
           designation: string | null
           display_name: string
           email_opt_in: boolean
+          email_opt_out_by: string | null
           id: string
           profile_completed_at: string | null
           timezone: string | null
@@ -8651,6 +8652,7 @@ export type Database = {
           designation?: string | null
           display_name: string
           email_opt_in?: boolean
+          email_opt_out_by?: string | null
           id: string
           profile_completed_at?: string | null
           timezone?: string | null
@@ -8664,13 +8666,22 @@ export type Database = {
           designation?: string | null
           display_name?: string
           email_opt_in?: boolean
+          email_opt_out_by?: string | null
           id?: string
           profile_completed_at?: string | null
           timezone?: string | null
           updated_at?: string
           username?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "users_email_opt_out_by_fkey"
+            columns: ["email_opt_out_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webhook_events: {
         Row: {
@@ -10154,6 +10165,10 @@ export type Database = {
       is_group_member: { Args: { p_group_id: string }; Returns: boolean }
       member_accept: {
         Args: { p_invite_id: string; p_trace_id: string }
+        Returns: string
+      }
+      member_email_opt_in_set: {
+        Args: { p_email_opt_in: boolean; p_trace_id: string; p_user_id: string }
         Returns: string
       }
       member_invite: {
