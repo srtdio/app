@@ -1,6 +1,10 @@
 -- Server search everywhere (v2). Already applied to the live database; this file
 -- reproduces it from pg_indexes.indexdef and pg_get_functiondef. No DROP, no data writes.
 
+-- The trigram indexes need pg_trgm. Live has it (1.6) in schema public but no
+-- earlier migration creates it, so a fresh local database lacked gin_trgm_ops.
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
+
 CREATE INDEX IF NOT EXISTS posts_ws_created_id_idx ON public.posts USING btree (workspace_id, created_at DESC, id DESC) WHERE (deleted_at IS NULL);
 CREATE INDEX IF NOT EXISTS comments_ledger_batch_idx ON public.comments USING btree (ledger_batch_id) WHERE (ledger_batch_id IS NOT NULL);
 CREATE INDEX IF NOT EXISTS assets_filename_trgm_idx ON public.assets USING gin (filename gin_trgm_ops) WHERE (deleted_at IS NULL);
