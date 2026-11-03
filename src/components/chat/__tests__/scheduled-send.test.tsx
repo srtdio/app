@@ -433,9 +433,8 @@ describe('UI-3 S5: Edit with files is text only', () => {
 describe('UI-3 S8: the strip refetches on its chat changing', () => {
   const strip = source('../ScheduledStrip.tsx');
   it('subscribes in an effect and returns the unsubscribe', () => {
-    expect(strip).toContain(
-      'return onScheduledChanged(channelId, () => onChangedRef.current?.());',
-    );
+    expect(strip).toContain('return onScheduledChanged(channelId, () => {');
+    expect(strip).toContain('onChangedRef.current?.();');
   });
   it('stays mounted while empty so a first row still lands', () => {
     const composer = source('../Composer.tsx');

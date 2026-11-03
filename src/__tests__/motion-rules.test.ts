@@ -90,7 +90,10 @@ describe('motion rules', () => {
   });
 
   it('no opacity in any transition, animation or keyframe (motion.css included)', () => {
-    const css = readFileSync(join(SRC, 'lib/motion/motion.css'), 'utf8');
+    const css = readFileSync(join(SRC, 'lib/motion/motion.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      '',
+    );
     for (const block of css.split('}')) {
       if (/transition|@keyframes|animation/.test(block)) expect(block).not.toMatch(/opacity/);
     }

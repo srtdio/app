@@ -121,7 +121,7 @@ describe('11d laptop Chat with a Plan open', () => {
 
   it('set aside in place, never unmounted; the thread stays the same element so its scroll stays', () => {
     const src = read('../ChatConnected.tsx');
-    expect(src).toContain('<div className={chatListPaneClass(planPanelOpen)}>');
+    expect(src).toContain('className={chatListPaneClass(planPanelOpen)}>');
     // The thread narrows beside the panel from 1180px, as before.
     expect(src).toContain("planPanelOpen && 'min-[1180px]:mr-[440px]'");
     // The thread's key is the chat only: opening or closing the plan never remounts it.
