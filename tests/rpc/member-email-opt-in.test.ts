@@ -114,7 +114,10 @@ describe.runIf(RPC_SUITE)('member_email_opt_in_set (authenticated role)', () => 
     const res = await setOptIn(adminUser, member.id, false, traceId);
     expect(res.error).toBeNull();
     expect(res.data).toBe(traceId);
-    expect(await readUser(member.id)).toEqual({ email_opt_in: false, email_opt_out_by: adminUser.id });
+    expect(await readUser(member.id)).toEqual({
+      email_opt_in: false,
+      email_opt_out_by: adminUser.id,
+    });
     const rows = await auditRows(traceId);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({

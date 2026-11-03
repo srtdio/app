@@ -9,7 +9,9 @@ import { Switch } from '@/components/ui/Switch';
 function mount(checked: boolean, onChange = vi.fn()): HTMLElement {
   const host = document.createElement('div');
   document.body.appendChild(host);
-  act(() => createRoot(host).render(<Switch checked={checked} onChange={onChange} label="Sound" />));
+  act(() =>
+    createRoot(host).render(<Switch checked={checked} onChange={onChange} label="Sound" />),
+  );
   return host.querySelector<HTMLElement>('[role="switch"]')!;
 }
 
