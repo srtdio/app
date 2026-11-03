@@ -112,3 +112,8 @@ Only `src/lib/motion/` moves. Everything else calls one of the nine moves below.
 | induction/InductionGuide, GuideParts, EntryHand           | stepX (Back reverses)                                                    |
 | onboarding/OnboardingFlow                                 | stepX                                                                    |
 | Pipeline, Briefs, Plan, Activity, chat cards, search      | growFromCard into the detail page                                        |
+
+## Tests
+
+- Unit tests (jsdom) have no Web Animations, so every move is instant there; tests stub `HTMLElement.prototype.animate` to see a move run.
+- The e2e harness (`e2e/harness/main.tsx`) runs with motion off (`?motion=0`, remembered for the tab) so specs measure and shoot the rest state; a spec that needs motion opens its page with `?motion=1`.
