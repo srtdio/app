@@ -98,12 +98,12 @@ describe('Pipeline controls buttons', () => {
     );
     const row = /<div[^>]*data-chip-row=""[^>]*>/.exec(html)?.[0] ?? '';
     const cls = classOf(row);
-    for (const old of ['pl-4', '-mr-4', 'md:pl-6', 'md:-mr-6']) {
+    // mt-3 and pb-1 are gone too: SectionHeader's child row owns the gap, so
+    // Pipeline's chips sit where Briefs, Assets and Activity put theirs.
+    for (const old of ['pl-4', '-mr-4', 'md:pl-6', 'md:-mr-6', 'mt-3', 'pb-1']) {
       expect(cls).not.toContain(old);
     }
-    expect(cls).toEqual(
-      expect.arrayContaining(['flex', 'flex-nowrap', 'gap-2', 'overflow-x-auto', 'pb-1']),
-    );
+    expect(cls).toEqual(expect.arrayContaining(['flex', 'flex-nowrap', 'gap-2', 'overflow-x-auto']));
   });
 
   it('the filter-and-sort trigger is a bare IconButton with the sort icon, like SortMenu', () => {
