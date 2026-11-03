@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Type roles on Notifications (design rules, 24 Oct 2026): the page head is the
-// screen header (lg/600), a day bucket heading is the section label (sm/600
+// Type roles on Notifications (design rules, 24 Oct 2026): the page has no visible
+// title (sr-only h1), a day bucket heading is the section label (sm/600
 // uppercase tracking-[0.06em] fg-2), a card title is base/500 and the card time
 // and bucket count are sm fg-3 meta. Rendered for real in jsdom with the reads
 // mocked; the item fixture mirrors activity/ActivityCard.test.tsx.
@@ -161,13 +161,14 @@ afterEach(() => {
 });
 
 describe('Notifications type roles', () => {
-  it('the page head is the screen header (lg/600)', async () => {
+  it('has no visible title bar: the h1 is screen-reader only', async () => {
     await mount();
     const head = [...document.querySelectorAll('h1')].find(
       (el) => el.textContent?.trim() === 'Activity',
     );
     expect(head).toBeDefined();
-    expectRole(head as HTMLElement, ['text-lg', 'font-semibold']);
+    expectRole(head as HTMLElement, ['sr-only']);
+    expect(document.querySelector('.lit-header.h-14')).toBeNull();
   });
 
   it('the day bucket heading is the section label', async () => {

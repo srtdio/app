@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { Sheet } from '@/components/ui/Sheet';
-import { PageHead } from '@/components/shell/PageHead';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import {
@@ -1099,7 +1098,9 @@ export function NotificationsPage() {
 
   return (
     <>
-      <PageHead title={ACTIVITY_TITLE} />
+      {/* No visible title (as Pipeline, Briefs, Assets and Plan): the page starts with the
+          search row. The h1 stays for screen readers and e2e. */}
+      <h1 className="sr-only">{ACTIVITY_TITLE}</h1>
 
       {/* The shared list header: search left, sort right. */}
       <SectionHeader<ActivityDirection>

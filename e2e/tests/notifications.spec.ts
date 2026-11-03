@@ -151,7 +151,7 @@ test(
 
     await button.click();
     await expect(page).toHaveURL(/\/notifications$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Activity' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Activity' })).toBeAttached();
     await expect(button).toHaveAttribute('aria-current', 'page');
 
     // All: the chat mention, the plan alert and the failed send, as cards.
@@ -556,7 +556,7 @@ test('Notifications: every button is 44 tall with an 8px radius or round', async
   const network = await installHarnessNetwork(page);
   seedAlerts(network.world);
   await page.goto('/notifications');
-  await expect(page.getByRole('heading', { level: 1, name: 'Activity' })).toBeVisible({
+  await expect(page.getByRole('heading', { level: 1, name: 'Activity' })).toBeAttached({
     timeout: 15_000,
   });
   await expect(card(page, 'scheduled_failed')).toBeVisible();
@@ -564,12 +564,12 @@ test('Notifications: every button is 44 tall with an 8px radius or round', async
   expectClean(network);
 });
 
-// Type roles on Notifications (design rules, locked 24 Oct 2026): the PageHead
-// title is a screen header (15px/600, no 28px page title here), a day bucket
+// Type roles on Notifications (design rules, locked 24 Oct 2026): no visible
+// title bar (the h1 is sr-only, as Pipeline, Briefs, Assets and Plan show none), a day bucket
 // label is a section label (12px/600, uppercase), a card's preview line is
 // body text at 14px and its time is meta at 12px.
 test(
-  'Notifications type roles: header 15px, section label 12px uppercase, body 14px, meta 12px',
+  'Notifications type roles: no visible title, section label 12px uppercase, body 14px, meta 12px',
   { tag: '@theme' },
   async ({ page }) => {
     const network = await installHarnessNetwork(page);
@@ -582,10 +582,9 @@ test(
       });
 
     const header = page.getByRole('heading', { level: 1, name: 'Activity' });
-    await expect(header).toBeVisible({ timeout: 15_000 });
-    const headerType = await typeOf(header);
-    expect(headerType.size).toBe('15px');
-    expect(headerType.weight).toBe('600');
+    await expect(header).toBeAttached({ timeout: 15_000 });
+    const headerBox = await header.boundingBox();
+    expect(headerBox === null || headerBox.height <= 1).toBe(true);
 
     const mention = card(page, 'mention');
     await expect(mention).toContainText(MENTION_PREVIEW);

@@ -194,12 +194,22 @@ describe('the page', () => {
       'utf8',
     );
     expect(src).toContain("export const ACTIVITY_TITLE = 'Activity';");
-    expect(src).toContain('title={ACTIVITY_TITLE}');
+    expect(src).toContain('<h1 className="sr-only">{ACTIVITY_TITLE}</h1>');
     expect(src).not.toContain('NOTIFICATIONS_TITLE');
     expect(src).toMatch(
       /state === 'plans' \? \(\s*<EmptyState icon=\{<IconPlan size=\{ICON_SIZE\.status\} \/>\} title=\{EMPTY_LINES\.plans\} \/>/,
     );
     expect(EMPTY_LINES.plans).toBe('Plan updates show up here.');
+  });
+
+  it('has no visible title bar: no PageHead, it starts with the search row', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).not.toContain('PageHead');
+    expect(src).not.toContain('@/components/shell/PageHead');
+    expect(src.indexOf('<h1 className="sr-only">')).toBeLessThan(src.indexOf('<SectionHeader'));
   });
 });
 
