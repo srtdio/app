@@ -181,7 +181,11 @@ describe('canSetMemberEmail', () => {
 
 describe('MemberActionSheet catch-up emails', () => {
   it('on: a ticked box with the helper, no "Turned off by"', () => {
-    mount(entry({ emailOptIn: true, emailOptOutBy: null }), true, vi.fn(async () => null));
+    mount(
+      entry({ emailOptIn: true, emailOptOutBy: null }),
+      true,
+      vi.fn(async () => null),
+    );
     expect(emailRow()?.getAttribute('data-member-email')).toBe('on');
     expect(emailBox()?.checked).toBe(true);
     expect(document.body.textContent).toContain('Catch-up emails');
@@ -191,7 +195,11 @@ describe('MemberActionSheet catch-up emails', () => {
   });
 
   it('off by a manager: an unticked box, the helper and the manager through PersonTrigger', () => {
-    mount(entry({ emailOptIn: false, emailOptOutBy: 'u-boss' }), true, vi.fn(async () => null));
+    mount(
+      entry({ emailOptIn: false, emailOptOutBy: 'u-boss' }),
+      true,
+      vi.fn(async () => null),
+    );
     expect(emailRow()?.getAttribute('data-member-email')).toBe('off-by-manager');
     expect(emailBox()?.checked).toBe(false);
     expect(document.body.textContent).toContain(HELPER);
@@ -202,7 +210,11 @@ describe('MemberActionSheet catch-up emails', () => {
   });
 
   it('off by the person: no tick box, only the line saying only they can turn it on', () => {
-    mount(entry({ emailOptIn: false, emailOptOutBy: null }), true, vi.fn(async () => null));
+    mount(
+      entry({ emailOptIn: false, emailOptOutBy: null }),
+      true,
+      vi.fn(async () => null),
+    );
     expect(emailRow()?.getAttribute('data-member-email')).toBe('off-by-member');
     expect(emailBox()).toBeNull();
     expect(document.body.textContent).toContain(OFF_BY_MEMBER);
@@ -211,7 +223,12 @@ describe('MemberActionSheet catch-up emails', () => {
 
   it('untick calls the handler with false and paints at once, naming the viewer', async () => {
     const { handler, answer } = heldHandler();
-    mount(entry({ emailOptIn: true, emailOptOutBy: null }), true, vi.fn(async () => null), handler);
+    mount(
+      entry({ emailOptIn: true, emailOptOutBy: null }),
+      true,
+      vi.fn(async () => null),
+      handler,
+    );
     act(() => emailBox()!.click());
     expect(handler).toHaveBeenCalledWith(expect.objectContaining({ id: 'm-1' }), false);
     expect(emailBox()!.checked).toBe(false);
@@ -223,7 +240,12 @@ describe('MemberActionSheet catch-up emails', () => {
 
   it('tick on a manager-off row calls the handler with true', async () => {
     const { handler, answer } = heldHandler();
-    mount(entry({ emailOptIn: false, emailOptOutBy: 'u-boss' }), true, vi.fn(async () => null), handler);
+    mount(
+      entry({ emailOptIn: false, emailOptOutBy: 'u-boss' }),
+      true,
+      vi.fn(async () => null),
+      handler,
+    );
     act(() => emailBox()!.click());
     expect(handler).toHaveBeenCalledWith(expect.objectContaining({ id: 'm-1' }), true);
     expect(emailBox()!.checked).toBe(true);
@@ -234,7 +256,12 @@ describe('MemberActionSheet catch-up emails', () => {
 
   it('a failure reverts the box and shows the inline error', async () => {
     const { handler, answer } = heldHandler();
-    mount(entry({ emailOptIn: true, emailOptOutBy: null }), true, vi.fn(async () => null), handler);
+    mount(
+      entry({ emailOptIn: true, emailOptOutBy: null }),
+      true,
+      vi.fn(async () => null),
+      handler,
+    );
     act(() => emailBox()!.click());
     expect(emailBox()!.checked).toBe(false);
     await act(async () => answer('failed'));
@@ -244,7 +271,12 @@ describe('MemberActionSheet catch-up emails', () => {
 
   it('turned_off_by_member lands the off-by-the-person state with no error', async () => {
     const { handler, answer } = heldHandler();
-    mount(entry({ emailOptIn: false, emailOptOutBy: 'u-boss' }), true, vi.fn(async () => null), handler);
+    mount(
+      entry({ emailOptIn: false, emailOptOutBy: 'u-boss' }),
+      true,
+      vi.fn(async () => null),
+      handler,
+    );
     act(() => emailBox()!.click());
     await act(async () => answer('turned_off_by_member'));
     expect(emailRow()?.getAttribute('data-member-email')).toBe('off-by-member');
@@ -257,7 +289,11 @@ describe('MemberActionSheet catch-up emails', () => {
     ['a client viewer', entry({ emailOptIn: true, emailOptOutBy: null }), false],
     ['the viewer own row', entry({ isSelf: true, emailOptIn: true, emailOptOutBy: null }), true],
   ])('is hidden for %s', (_label, member, canManage) => {
-    mount(member, canManage, vi.fn(async () => null));
+    mount(
+      member,
+      canManage,
+      vi.fn(async () => null),
+    );
     expect(emailRow()).toBeNull();
     expect(document.body.textContent).not.toContain('Catch-up emails');
   });

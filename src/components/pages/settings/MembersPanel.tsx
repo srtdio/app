@@ -134,10 +134,7 @@ export function MembersPanel() {
   const [emailPatches, setEmailPatches] = useState<ReadonlyMap<string, EmailPatch>>(new Map());
   const derived = useMemo(
     () =>
-      withEmailPatches(
-        deriveMembers({ rows, profiles, currentUserId, selfEmail }),
-        emailPatches,
-      ),
+      withEmailPatches(deriveMembers({ rows, profiles, currentUserId, selfEmail }), emailPatches),
     [rows, profiles, currentUserId, selfEmail, emailPatches],
   );
   const canManage = useMemo(() => canManageMembers(rows, currentUserId), [rows, currentUserId]);
@@ -157,9 +154,7 @@ export function MembersPanel() {
 
   // A manager named as "Turned off by" who is not on this list (rare): one
   // batched read after paint, once per id for the panel's life.
-  const [offByProfiles, setOffByProfiles] = useState<ReadonlyMap<string, ChatProfile>>(
-    new Map(),
-  );
+  const [offByProfiles, setOffByProfiles] = useState<ReadonlyMap<string, ChatProfile>>(new Map());
   const requestedOffBy = useRef(new Set<string>());
   useEffect(() => {
     if (!canManage) return;

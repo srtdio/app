@@ -168,7 +168,9 @@ beforeEach(() => {
   h.openSheet = null;
   h.sheet = null;
   h.rpc.mockReset();
-  h.listMembers.mockReset().mockResolvedValue({ ok: true, data: [row('u1', 'owner'), row('u2', 'client')] });
+  h.listMembers
+    .mockReset()
+    .mockResolvedValue({ ok: true, data: [row('u1', 'owner'), row('u2', 'client')] });
   h.readProfiles.mockReset().mockResolvedValue({ ok: true, data: PROFILES });
 });
 

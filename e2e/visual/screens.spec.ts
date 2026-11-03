@@ -229,11 +229,7 @@ async function seedPaletteRecents(
 }
 
 /** Alerts on this device paused for 3 hours from the pinned clock, for ME on this device. */
-async function seedAlertsPaused(
-  _network: HarnessNetwork,
-  page: Page,
-  now: number,
-): Promise<void> {
+async function seedAlertsPaused(_network: HarnessNetwork, page: Page, now: number): Promise<void> {
   const prefs = {
     sound: true,
     notifications: true,

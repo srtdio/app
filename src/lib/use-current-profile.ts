@@ -112,11 +112,7 @@ function publish(next: ProfileSnapshot): void {
 function readProfile(userId: string): Promise<{ data: CurrentProfile | null; failed: boolean }> {
   mark('profile:start');
   return Promise.resolve(
-    supabase
-      .from('users')
-      .select(PROFILE_COLUMNS)
-      .eq('id', userId)
-      .maybeSingle(),
+    supabase.from('users').select(PROFILE_COLUMNS).eq('id', userId).maybeSingle(),
   ).then(
     ({ data, error: queryError }) => {
       mark('profile:end');

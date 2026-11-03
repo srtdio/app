@@ -287,11 +287,23 @@ describe('catch-up email state (member sheet)', () => {
     const profiles = new Map<string, ChatProfile>([
       [
         'u-mgr',
-        { userId: 'u-mgr', displayName: 'M', avatarUrl: null, emailOptIn: false, emailOptOutBy: 'u-boss' },
+        {
+          userId: 'u-mgr',
+          displayName: 'M',
+          avatarUrl: null,
+          emailOptIn: false,
+          emailOptOutBy: 'u-boss',
+        },
       ],
       [
         'u-self',
-        { userId: 'u-self', displayName: 'S', avatarUrl: null, emailOptIn: false, emailOptOutBy: null },
+        {
+          userId: 'u-self',
+          displayName: 'S',
+          avatarUrl: null,
+          emailOptIn: false,
+          emailOptOutBy: null,
+        },
       ],
       ['u-old', { userId: 'u-old', displayName: 'O', avatarUrl: null, emailOptIn: false }],
     ]);
@@ -323,7 +335,10 @@ describe('catch-up email state (member sheet)', () => {
       emailOptIn: false,
       emailOptOutBy: 'u-me',
     });
-    expect(emailPatchAfterManagerSet(true, 'u-me')).toEqual({ emailOptIn: true, emailOptOutBy: null });
+    expect(emailPatchAfterManagerSet(true, 'u-me')).toEqual({
+      emailOptIn: true,
+      emailOptOutBy: null,
+    });
   });
 
   it('maps the proc error codes', () => {

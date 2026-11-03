@@ -140,6 +140,7 @@ const NEW_PROFILE: CurrentProfile = {
   email_opt_in: true,
   profile_completed_at: null,
   username: null,
+  emailOptOutBy: null,
 };
 
 let root: Root | null = null;

@@ -94,7 +94,12 @@ describe('Alerts on this device', () => {
   });
 
   it('paused: banner with Paused until and Resume; Pause for stays; the active chip is selected', () => {
-    seed({ sound: true, notifications: true, pausedUntilMs: Date.now() + 2 * HOUR_MS, pausedHours: 2 });
+    seed({
+      sound: true,
+      notifications: true,
+      pausedUntilMs: Date.now() + 2 * HOUR_MS,
+      pausedHours: 2,
+    });
     const el = mount();
     const banner = el.querySelector<HTMLElement>('[data-alerts-paused]');
     expect(banner).not.toBeNull();
