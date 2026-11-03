@@ -77,6 +77,7 @@ import {
   APP_TYPING_PAUSE_MS,
 } from './guide-hooks';
 import { useBottomInset } from '@/lib/bottom-inset';
+import { centredTop, scrollParent } from '@/lib/focus-target';
 import { useLiveTick } from './useLiveTick';
 
 type StepResolution = Extract<Resolution, { kind: 'step' }>;
@@ -596,7 +597,35 @@ function useBringIntoView(stepId: string, el: HTMLElement | undefined): void {
     if (performance.now() - since.current.at > BRING_WINDOW_MS) return;
     const r = el.getBoundingClientRect();
     if (r.top >= 0 && r.bottom <= viewportSize().height && !coveredByPage(el, r)) return;
+    bringIntoView(el, r);
+  });
+}
+
+/**
+ * Centre the control in its own scroller (the shell's main), never by moving
+ * the window. scrollIntoView also scrolls the document when the scroller cannot
+ * centre a control near the end of its content (the sample checkpoint's Reply),
+ * and the viewport lock (src/lib/viewport-lock.ts) snaps the window back to 0
+ * on the next focus change: the press on the control then slid 68px under the
+ * finger and the tap never landed. Only a control with no scrolling ancestor
+ * falls back to scrollIntoView.
+ */
+function bringIntoView(el: HTMLElement, r: DOMRect): void {
+  const scroller = scrollParent(el);
+  if (scroller === null) {
     el.scrollIntoView?.({ block: 'center' });
+    return;
+  }
+  const style = getComputedStyle(el);
+  const view = scroller.getBoundingClientRect();
+  scroller.scrollTop = centredTop({
+    scrollTop: scroller.scrollTop,
+    viewTop: view.top,
+    viewHeight: view.height,
+    elTop: r.top,
+    elHeight: r.height,
+    marginTop: parseFloat(style.scrollMarginTop) || 0,
+    marginBottom: parseFloat(style.scrollMarginBottom) || 0,
   });
 }
 
