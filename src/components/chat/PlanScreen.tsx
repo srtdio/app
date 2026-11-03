@@ -331,6 +331,9 @@ export const OTHER_ESCAPE_OWNERS =
  * embedded post's image viewer): the panel hands them the key on window only,
  * so it still never reaches the chat's document listeners.
  */
+/** Open layers that take Escape before a plan panel does. */
+export const PANEL_ESCAPE_YIELD = '[aria-modal="true"], [role="menu"]';
+
 export const IN_PANEL_ESCAPE_OWNERS = '[aria-label="Image viewer"]';
 
 /** Whether a keydown target is a text field (Escape there leaves the field). Pure. */
@@ -451,7 +454,9 @@ export function PlanPage(props: {
       onBackRef.current();
     };
     const inside = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || document.querySelector('[aria-modal="true"]') !== null) return;
+      // An open modal or menu (a popover from inside the panel) takes Escape
+      // first (escape-stack); the panel only closes on the next one.
+      if (event.key !== 'Escape' || document.querySelector(PANEL_ESCAPE_YIELD) !== null) return;
       event.stopPropagation();
       event.preventDefault();
       if (el.querySelector(IN_PANEL_ESCAPE_OWNERS) !== null) {
