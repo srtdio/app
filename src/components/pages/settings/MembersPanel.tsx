@@ -358,14 +358,14 @@ export function MembersPanel() {
     // Args as a variable: p_trace_id is the proc's real trace parameter. The
     // caller is never sent; the proc reads it from the session.
     const args = { p_user_id: member.userId, p_email_opt_in: emailOptIn, p_trace_id: traceId };
-    const { error: setError } = await supabase.rpc('member_email_opt_in_set', args);
-    const outcome = memberEmailOptInOutcome(setError);
+    const { error: optInError } = await supabase.rpc('member_email_opt_in_set', args);
+    const outcome = memberEmailOptInOutcome(optInError);
     if (outcome === 'turned_off_by_member') {
       // They turned it off themselves since the read: only they can turn it on.
       patchEmail(member.userId, { emailOptIn: false, emailOptOutBy: null });
     } else if (outcome === 'failed') {
       patchEmail(member.userId, before);
-      logger.warn('member email opt-in set failed', { error: setError?.message ?? '' });
+      logger.warn('member email opt-in set failed', { error: optInError?.message ?? '' });
     }
     return outcome;
   };
