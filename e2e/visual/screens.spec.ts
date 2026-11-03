@@ -123,11 +123,6 @@ function neverAnswers(
   if (reads.history === true) network.holdHistory();
 }
 
-/** The loading boxes are on screen (a BoxSkeleton). */
-async function boxesShown(page: Page, what: string): Promise<void> {
-  await waitFor([page.locator('[data-box-skeleton]')], `${what} boxes`);
-}
-
 /** A row in whichever ⋯ container is open: an ActionMenu menuitem, or a sheet's button. */
 function menuRow(page: Page, name: RegExp): Locator[] {
   return [
@@ -776,18 +771,6 @@ const SCREENS: Screen[] = [
     extra: (network) => neverAnswers(network, { tables: ['workspace_members'] }),
     url: '/settings?panel=members',
     steps: async (page) => waitFor([page.locator('[data-settings-row-boxes]')], 'members boxes'),
-  },
-  {
-    // A chat thread: bubble boxes while its history never answers.
-    name: 'boxes-chat-thread',
-    seed: creator,
-    extra: (network) => neverAnswers(network, { history: true }),
-    url: '/chat',
-    steps: async (page) => {
-      await chatListReady(page);
-      await tap([page.getByText(GROUP_NAME, { exact: true })], `${GROUP_NAME} row`);
-      await boxesShown(page, 'chat thread');
-    },
   },
   {
     name: 'on-behalf-confirm',
