@@ -82,7 +82,7 @@ export function ActivityFilterBar({
     <div
       ref={rowRef}
       data-activity-chips=""
-      className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 pl-4 md:pl-6"
+      className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pl-4 md:pl-6"
       style={{ WebkitMaskImage: mask, maskImage: mask }}
     >
       {STATE_CHIPS.map((item) => (

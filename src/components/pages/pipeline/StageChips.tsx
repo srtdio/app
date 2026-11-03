@@ -73,7 +73,7 @@ export function StageChips({ items, active, onChange }: StageChipsProps): ReactE
     <div
       ref={rowRef}
       data-chip-row=""
-      className="mt-3 flex flex-nowrap items-center gap-2 overflow-x-auto pb-1"
+      className="flex flex-nowrap items-center gap-2 overflow-x-auto"
       style={{ paddingRight: 0, WebkitMaskImage: mask, maskImage: mask }}
     >
       {items.map((item) => {

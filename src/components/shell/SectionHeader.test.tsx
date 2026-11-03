@@ -124,3 +124,23 @@ describe('SectionHeader', () => {
     expect(findAll(render(), (el) => el.type === SortMenu)).toHaveLength(0);
   });
 });
+
+describe('SectionHeader fixed row height', () => {
+  function rowClass(tree: ReactNode): string {
+    const row = findAll(tree, (el) => {
+      const cls = (el.props as { className?: string }).className ?? '';
+      return el.type === 'div' && cls.includes('px-4 md:px-6 mt-3 flex');
+    })[0];
+    return (row?.props as { className?: string } | undefined)?.className ?? '';
+  }
+
+  it('pins the search row to 44px so every list tab starts at the same height', () => {
+    const tree = SectionHeader({ search: { value: '', onChange: () => {} } });
+    expect(rowClass(tree).split(' ')).toContain('h-11');
+  });
+
+  it('lets the stacked chat-list pane grow at md', () => {
+    const tree = SectionHeader({ search: { value: '', onChange: () => {} }, stackSearchMd: true });
+    expect(rowClass(tree).split(' ')).toContain('md:h-auto');
+  });
+});
