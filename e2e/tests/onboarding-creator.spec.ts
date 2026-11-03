@@ -258,7 +258,45 @@ test('creator: workspace, first post, approver invite, then the look-around', as
   await tapControl(page, step('c_highlight_tap'));
   await expectGuideId(page, 'c_reply_button');
   await check('c_reply_button');
+  // TEMP DIAG (PR 770): where does the Reply click go? Removed in the fix commit.
+  page.on('console', (m) => {
+    if (m.text().startsWith('DIAG')) process.stdout.write(`${m.text()}\n`);
+  });
+  await page.evaluate(() => {
+    const d = (el: EventTarget | null): string =>
+      el instanceof Element ? el.outerHTML.slice(0, 90) : String(el);
+    const reply = document.querySelector('[data-induction="post-comment-reply"]');
+    for (const t of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+      window.addEventListener(
+        t,
+        (e) => {
+          const me = e as MouseEvent;
+          const at = document.elementFromPoint(me.clientX, me.clientY);
+          console.warn(
+            `DIAG win ${t} xy=${me.clientX},${me.clientY} target=${d(e.target)} atPoint=${d(at)} scrollY=${window.scrollY} main=${document.querySelector('main')?.scrollTop}`,
+          );
+        },
+        true,
+      );
+      reply?.addEventListener(t, () => console.warn(`DIAG reached-reply ${t}`));
+      document
+        .getElementById('root')
+        ?.addEventListener(t, (e) =>
+          console.warn(`DIAG root-bubble ${t} prevented=${e.defaultPrevented}`),
+        );
+    }
+    const r = reply?.getBoundingClientRect();
+    console.warn(
+      `DIAG reply rect=${r?.left},${r?.top},${r?.width},${r?.height} scrollY=${window.scrollY} vv=${window.visualViewport?.offsetTop},${window.visualViewport?.pageTop} inner=${window.innerHeight}`,
+    );
+  });
   await tapControl(page, step('c_reply_button'));
+  await page.waitForTimeout(300);
+  await page.evaluate(() =>
+    console.warn(
+      `DIAG after reply text=${document.querySelector('[data-induction="post-comment-reply"]')?.textContent} step=${document.querySelector('[data-induction-step]')?.getAttribute('data-induction-step')} boxed=${document.querySelector('[data-induction-box]') !== null} dim=${document.querySelector('[data-induction-dim]') !== null}`,
+    ),
+  );
   await expectGuideId(page, 'c_reply_post');
   await page.keyboard.type('On it.');
   await check('c_reply_post');
