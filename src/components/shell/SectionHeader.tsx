@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import { IconPlus, IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { SHELL_STICKY_TOP_CLASS } from '@/lib/scroll-mode';
 
 interface SectionHeaderSearch {
   value: string;
@@ -106,11 +107,15 @@ export function SectionHeader<S extends string = string>({
   stackSearchMd = false,
 }: SectionHeaderProps<S>) {
   const searching = search !== undefined && search.value.trim() !== '';
-  // The scroll container is the shell <main>, so top-0 pins to just below the
-  // app top bar. z-20 sits above the grid (z-0) and below the top bar (z-30).
+  // In locked mode (and on laptop) the scroll container is the shell <main>,
+  // so top 0 pins to just below the app top bar; in page mode on a phone the
+  // window scrolls and SHELL_STICKY_TOP_CLASS pins it below the sticky Topbar.
+  // z-20 sits above the grid (z-0) and below the top bar (z-30).
   const childRowClass = cn(
     'px-4 md:px-6 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-    stickyChildren ? 'sticky top-0 z-20 border-b bg-bg py-3 lit-header' : 'mt-3',
+    stickyChildren
+      ? cn('sticky z-20 border-b bg-bg py-3 lit-header', SHELL_STICKY_TOP_CLASS)
+      : 'mt-3',
   );
   return (
     <>

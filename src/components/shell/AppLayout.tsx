@@ -1,5 +1,13 @@
 import { mark } from '@/lib/perf-marks';
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useInsertionEffect,
+  useRef,
+  useState,
+} from 'react';
 import { flushSync } from 'react-dom';
 import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Sidebar } from '@/components/shell/Sidebar';
@@ -35,6 +43,7 @@ import { routeChunksLoaded, whenRouteChunksSettle } from '@/lib/chunk-reload';
 import { useReloadOnNavigateWhenStale } from '@/lib/app-version';
 import { LoadFailed, SessionLoading } from '@/components/auth/RouteGuards';
 import { MarksPanel } from '@/components/dev/MarksPanel';
+import { applyScrollMode, scrollModeFor, type ScrollMode } from '@/lib/scroll-mode';
 
 // The operator's Cockpit (dot + panel): one lazy chunk, requested only when the
 // operator flag is true. Nobody else downloads it or makes any request for it.
@@ -68,22 +77,57 @@ export function isDetailRoute(pathname: string): boolean {
  * is hidden, BottomTabs are not rendered and main drops its tab-bar padding;
  * md and up is unchanged (BottomTabs are md:hidden anyway). Derived from the URL
  * in the same render, so the first paint is already correct.
+ *
+ * `mode` (src/lib/scroll-mode.ts): 'locked' (Chat) keeps the 100svh shell
+ * with main as the scroller. 'page' (every other route) lets the document
+ * scroll below md: the wrappers grow from a 100svh minimum and main has no
+ * overflow of its own (overflow-x-clip clips sideways without making main a
+ * scroll container, so sticky headers pin to the window). md and up is the
+ * locked shell in both modes, so laptop is unchanged.
  */
-export function shellChrome(threadOpen: boolean): {
+export function shellChrome(
+  threadOpen: boolean,
+  mode: ScrollMode = 'locked',
+): {
   topbarClassName: string;
   showBottomTabs: boolean;
   mainClassName: string;
+  shellClassName: string;
+  columnClassName: string;
 } {
+  const page = mode === 'page';
   return {
     topbarClassName: threadOpen ? 'hidden md:contents' : 'contents',
     showBottomTabs: !threadOpen,
     mainClassName: cn(
       // --side-panel-w is set only while ui/SidePanel is on screen (laptop);
       // unset it is 0, so the page is unchanged for everyone else.
-      'flex-1 overflow-y-auto overflow-x-hidden md:pr-[var(--side-panel-w,0px)]',
+      page
+        ? 'flex-1 overflow-x-clip md:overflow-y-auto md:overflow-x-hidden md:pr-[var(--side-panel-w,0px)]'
+        : 'flex-1 overflow-y-auto overflow-x-hidden md:pr-[var(--side-panel-w,0px)]',
       threadOpen ? 'pb-0' : 'pb-[calc(84px+env(safe-area-inset-bottom))] md:pb-0',
     ),
+    shellClassName: page ? 'flex min-h-[100svh] md:h-full' : 'flex h-full',
+    columnClassName: page
+      ? 'flex flex-1 min-w-0 flex-col md:h-full'
+      : 'flex flex-1 min-w-0 flex-col h-full',
   };
+}
+
+/**
+ * Puts the shell's scroll mode on <html> (html.scroll-page). An insertion
+ * effect runs in the commit's mutation phase, before every layout effect, so
+ * a page restoring its kept scroll (useKeptScroll) already scrolls the right
+ * element, and the first painted frame is in the right mode: no flash, no
+ * jump when moving between Chat and the other routes. Leaving the shell (gate,
+ * onboarding, signout) puts the root back to locked.
+ */
+function ShellScrollMode({ mode }: { mode: ScrollMode }): null {
+  useInsertionEffect(() => {
+    applyScrollMode(mode);
+  }, [mode]);
+  useInsertionEffect(() => () => applyScrollMode('locked'), []);
+  return null;
 }
 
 // The first shell paint of this page load; still loading there means it
@@ -136,7 +180,11 @@ function AppLayoutBody() {
   useReloadOnNavigateWhenStale();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
-  const chrome = shellChrome(isThreadRoute(pathname, searchParams) || isDetailRoute(pathname));
+  const scrollMode = scrollModeFor(pathname);
+  const chrome = shellChrome(
+    isThreadRoute(pathname, searchParams) || isDetailRoute(pathname),
+    scrollMode,
+  );
   const [paletteOpen, setPaletteOpen] = useState(false);
   const paletteOpenRef = useRef(false);
   paletteOpenRef.current = paletteOpen;
@@ -399,7 +447,8 @@ function AppLayoutBody() {
               onOpenAvatar={() => setAvatarOpen(true)}
               onCreateWorkspace={() => dispatchSorted('sorted:switch-workspace')}
             />
-            <main className={chrome.mainClassName} />
+            {/* No workspace yet: the locked shell as before (no scroll mode set). */}
+            <main className={shellChrome(!chrome.showBottomTabs).mainClassName} />
           </div>
           <ToastViewport />
           <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
@@ -441,9 +490,10 @@ function AppLayoutBody() {
       <ChatStoreProvider>
         <ChatTabSignals />
         <InboxStoreProvider>
-          <div className="flex h-full">
+          <ShellScrollMode mode={scrollMode} />
+          <div className={chrome.shellClassName}>
             <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
-            <div className="flex flex-1 min-w-0 flex-col h-full">
+            <div className={chrome.columnClassName}>
               <div className={chrome.topbarClassName}>
                 <Topbar
                   workspaceName={workspaceDisplayName}

@@ -13,8 +13,20 @@
 // window is scrolled, it resets the window to 0,0. Nothing else is changed:
 // no gesture is prevented and the viewport meta is untouched.
 //
+// Page mode on a phone (src/lib/scroll-mode.ts pageScrollActive: html.scroll-page,
+// every in-shell route but Chat, AND below md): the document itself scrolls, so a scrolled window is the person's
+// own position and is never reset. A visualViewport resize there is the
+// browser bars shrinking or growing, so it does nothing. Only the keyboard gap
+// is mended: the window position at focusin on a text field is kept, and on
+// focusout to a non-text target it is put back, and only when the root height
+// shrank while the field was focused and has not recovered. Locked mode (Chat,
+// auth, onboarding) and md and up (iPad, laptop: the class is set but the root
+// is still the locked 100svh shell) keep the reset to 0,0 above, unchanged.
+//
 // main.tsx calls it once at boot (mirroring initSentry / initTheme); a second
 // call on the same window registers nothing.
+
+import { pageScrollActive } from '@/lib/scroll-mode';
 
 const registered = new WeakSet<object>();
 
@@ -47,7 +59,34 @@ export function isTextField(el: unknown): boolean {
 
 function resetIfUnfocused(focused: unknown): void {
   if (isTextField(focused)) return;
+  if (pageScrollActive()) return;
   if (window.scrollY !== 0) window.scrollTo(0, 0);
+}
+
+/** The window position and root height when a text field took focus (page mode). */
+export interface FocusSnapshot {
+  top: number;
+  rootHeight: number;
+}
+
+/**
+ * Pure: the window position to put back when focus leaves text fields in page
+ * mode, else null. Only when the root height shrank (the keyboard gap) and has
+ * not recovered, and the window is not already there.
+ */
+export function focusRestoreTop(
+  saved: FocusSnapshot | null,
+  now: { top: number; rootHeight: number },
+): number | null {
+  if (saved === null) return null;
+  if (now.rootHeight >= saved.rootHeight) return null;
+  if (Math.abs(now.top - saved.top) <= 1) return null;
+  return saved.top;
+}
+
+function rootHeight(): number {
+  if (typeof document === 'undefined') return 0;
+  return document.documentElement?.clientHeight ?? 0;
 }
 
 export function initViewportLock(): void {
@@ -55,10 +94,27 @@ export function initViewportLock(): void {
   if (registered.has(window)) return;
   registered.add(window);
 
+  // Page mode only: the position before the keyboard, kept from the first
+  // text field's focusin until focus leaves text fields.
+  let saved: FocusSnapshot | null = null;
+  window.addEventListener('focusin', (event) => {
+    if (!pageScrollActive() || !isTextField(event.target)) return;
+    if (saved === null) saved = { top: window.scrollY, rootHeight: rootHeight() };
+  });
+
   // During focusout, activeElement is unreliable (still the leaving field in
   // some engines); relatedTarget is the element receiving focus, or null.
   window.addEventListener('focusout', (event) => {
-    resetIfUnfocused((event as FocusEvent).relatedTarget);
+    const next = (event as FocusEvent).relatedTarget;
+    if (pageScrollActive()) {
+      if (isTextField(next)) return;
+      const top = focusRestoreTop(saved, { top: window.scrollY, rootHeight: rootHeight() });
+      saved = null;
+      if (top !== null) window.scrollTo(0, top);
+      return;
+    }
+    saved = null;
+    resetIfUnfocused(next);
   });
 
   const vv = window.visualViewport;

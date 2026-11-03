@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { initViewportLock } from '@/lib/viewport-lock';
+import { focusRestoreTop, initViewportLock } from '@/lib/viewport-lock';
 
 // The repo's vitest runs in the node environment, so `document` is faked with
 // a real EventTarget (Node ships global Event / EventTarget); a cancelable
@@ -128,5 +128,192 @@ describe('initViewportLock keyboard gap reset', () => {
     focusout(win, null);
 
     expect(win.scrollTo).toHaveBeenCalledWith(0, 0);
+  });
+});
+
+// Page mode (html.scroll-page, src/lib/scroll-mode.ts): the document is the
+// scroller, so the window's position is the person's own and is never reset
+// to 0; only the keyboard gap is mended, back to where the field took focus.
+describe('initViewportLock in page mode', () => {
+  type FakeWindow = EventTarget & {
+    scrollY: number;
+    scrollTo: ReturnType<typeof vi.fn>;
+    visualViewport: EventTarget | null;
+  };
+
+  function stubWindow(scrollY: number): FakeWindow {
+    const win = new EventTarget() as FakeWindow;
+    win.scrollY = scrollY;
+    win.scrollTo = vi.fn();
+    win.visualViewport = new EventTarget();
+    vi.stubGlobal('window', win);
+    return win;
+  }
+
+  const root = { clientHeight: 800 };
+  function stubPageDocument(activeElement: unknown): void {
+    vi.stubGlobal('document', {
+      activeElement,
+      documentElement: {
+        classList: { contains: (name: string) => name === 'scroll-page' },
+        get clientHeight() {
+          return root.clientHeight;
+        },
+      },
+    });
+  }
+
+  function focusEvent(win: FakeWindow, type: string, target: unknown, related: unknown): void {
+    const event = new Event(type);
+    Object.defineProperty(event, 'target', { value: target });
+    Object.defineProperty(event, 'relatedTarget', { value: related });
+    win.dispatchEvent(event);
+  }
+
+  const body = { tagName: 'BODY' };
+  const input = { tagName: 'INPUT', type: 'text' };
+
+  beforeEach(() => {
+    root.clientHeight = 800;
+  });
+
+  it('never scrolls to 0,0 on a visualViewport resize (the bars shrinking)', () => {
+    const win = stubWindow(1_200);
+    stubPageDocument(body);
+    initViewportLock();
+    win.visualViewport?.dispatchEvent(new Event('resize'));
+    win.visualViewport?.dispatchEvent(new Event('resize'));
+    expect(win.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('never resets on focusout when the root height did not shrink', () => {
+    const win = stubWindow(1_200);
+    stubPageDocument(body);
+    initViewportLock();
+    focusEvent(win, 'focusin', input, null);
+    win.scrollY = 1_500;
+    focusEvent(win, 'focusout', input, null);
+    expect(win.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('puts back the focusin position when the root shrank and did not recover', () => {
+    const win = stubWindow(1_200);
+    stubPageDocument(body);
+    initViewportLock();
+    focusEvent(win, 'focusin', input, null);
+    root.clientHeight = 500;
+    win.scrollY = 1_536;
+    focusEvent(win, 'focusout', input, body);
+    expect(win.scrollTo).toHaveBeenCalledTimes(1);
+    expect(win.scrollTo).toHaveBeenCalledWith(0, 1_200);
+  });
+
+  it('keeps the first position while focus moves between text fields', () => {
+    const win = stubWindow(1_200);
+    stubPageDocument(body);
+    initViewportLock();
+    focusEvent(win, 'focusin', input, null);
+    win.scrollY = 1_400;
+    focusEvent(win, 'focusout', input, { tagName: 'TEXTAREA' });
+    focusEvent(win, 'focusin', { tagName: 'TEXTAREA' }, input);
+    expect(win.scrollTo).not.toHaveBeenCalled();
+    root.clientHeight = 500;
+    focusEvent(win, 'focusout', { tagName: 'TEXTAREA' }, null);
+    expect(win.scrollTo).toHaveBeenCalledWith(0, 1_200);
+  });
+});
+
+describe('focusRestoreTop', () => {
+  it('is null without a snapshot, when the root recovered, or when already there', () => {
+    expect(focusRestoreTop(null, { top: 10, rootHeight: 100 })).toBeNull();
+    expect(focusRestoreTop({ top: 10, rootHeight: 800 }, { top: 300, rootHeight: 800 })).toBeNull();
+    expect(focusRestoreTop({ top: 10, rootHeight: 800 }, { top: 10, rootHeight: 500 })).toBeNull();
+  });
+
+  it('is the focusin position when the root shrank', () => {
+    expect(focusRestoreTop({ top: 10, rootHeight: 800 }, { top: 336, rootHeight: 500 })).toBe(10);
+  });
+});
+
+// Regression: html.scroll-page is set on every non-chat route at every width,
+// but only a phone width scrolls the document. md and up (iPad, laptop) is
+// still the locked 100svh shell and must keep the WebKit 297779 reset to 0,0.
+describe('initViewportLock: page class by width', () => {
+  type FakeWindow = EventTarget & {
+    scrollY: number;
+    scrollTo: ReturnType<typeof vi.fn>;
+    visualViewport: EventTarget | null;
+    matchMedia: (q: string) => { matches: boolean };
+  };
+
+  const root = { clientHeight: 800 };
+
+  function stub(laptop: boolean, scrollY: number): FakeWindow {
+    const win = new EventTarget() as FakeWindow;
+    win.scrollY = scrollY;
+    win.scrollTo = vi.fn();
+    win.visualViewport = new EventTarget();
+    win.matchMedia = (q: string) => ({ matches: laptop && q.includes('min-width: 768px') });
+    vi.stubGlobal('window', win);
+    vi.stubGlobal('document', {
+      activeElement: { tagName: 'BODY' },
+      documentElement: {
+        classList: { contains: (name: string) => name === 'scroll-page' },
+        get clientHeight() {
+          return root.clientHeight;
+        },
+      },
+    });
+    return win;
+  }
+
+  function fire(win: FakeWindow, type: string, target: unknown, related: unknown): void {
+    const event = new Event(type);
+    Object.defineProperty(event, 'target', { value: target });
+    Object.defineProperty(event, 'relatedTarget', { value: related });
+    win.dispatchEvent(event);
+  }
+
+  const body = { tagName: 'BODY' };
+  const input = { tagName: 'INPUT', type: 'text' };
+
+  beforeEach(() => {
+    root.clientHeight = 800;
+  });
+
+  it('md and up: focusout to a non-text target resets a scrolled window to 0,0', () => {
+    const win = stub(true, 320);
+    initViewportLock();
+    fire(win, 'focusin', input, null);
+    fire(win, 'focusout', input, body);
+    expect(win.scrollTo).toHaveBeenCalledTimes(1);
+    expect(win.scrollTo).toHaveBeenCalledWith(0, 0);
+  });
+
+  it('md and up: a visualViewport resize resets a scrolled window to 0,0', () => {
+    const win = stub(true, 320);
+    initViewportLock();
+    win.visualViewport?.dispatchEvent(new Event('resize'));
+    expect(win.scrollTo).toHaveBeenCalledWith(0, 0);
+  });
+
+  it('phone: never resets; focusout without a root shrink leaves the window', () => {
+    const win = stub(false, 1_200);
+    initViewportLock();
+    win.visualViewport?.dispatchEvent(new Event('resize'));
+    fire(win, 'focusin', input, null);
+    fire(win, 'focusout', input, body);
+    expect(win.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('phone: restores the focusin position only when the root shrank', () => {
+    const win = stub(false, 1_200);
+    initViewportLock();
+    fire(win, 'focusin', input, null);
+    root.clientHeight = 500;
+    win.scrollY = 1_536;
+    fire(win, 'focusout', input, body);
+    expect(win.scrollTo).toHaveBeenCalledTimes(1);
+    expect(win.scrollTo).toHaveBeenCalledWith(0, 1_200);
   });
 });

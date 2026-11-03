@@ -162,6 +162,7 @@ export function fromBriefLabel(briefTitle: string): string {
 import { postStatusLine } from '@/lib/post-detail-presentation';
 import { postFormatLabel } from '@/lib/post-format';
 import { isPostPlatform, platformLabel as postPlatformLabel } from '@srtdio/posts';
+import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 
 // The platform's display name from the single source (@srtdio/posts); a raw
 // value outside it renders as-is rather than throwing on the page.
@@ -1533,7 +1534,7 @@ export function PostDetailPage({
         {embedded ? null : (
           <div
             ref={pageAnchorRef}
-            className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+            className={`flex items-center gap-3 px-4 md:px-6 border-b lit-header ${SAFE_TOP_BAR_CLASS}`}
           >
             {backButton}
             <div aria-hidden className="flex min-w-0 flex-1 items-center gap-2">
@@ -1581,7 +1582,7 @@ export function PostDetailPage({
         {embedded ? null : (
           <div
             ref={pageAnchorRef}
-            className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+            className={`flex items-center gap-3 px-4 md:px-6 border-b lit-header ${SAFE_TOP_BAR_CLASS}`}
           >
             {backButton}
           </div>
@@ -1599,7 +1600,7 @@ export function PostDetailPage({
         {embedded ? null : (
           <div
             ref={pageAnchorRef}
-            className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+            className={`flex items-center gap-3 px-4 md:px-6 border-b lit-header ${SAFE_TOP_BAR_CLASS}`}
           >
             {backButton}
           </div>
@@ -1869,7 +1870,7 @@ export function PostDetailPage({
       {embedded ? null : (
         <div
           ref={pageAnchorRef}
-          className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+          className={`flex items-center gap-3 px-4 md:px-6 border-b lit-header ${SAFE_TOP_BAR_CLASS}`}
         >
           {backButton}
           <div className="flex min-w-0 flex-1 items-center gap-2">

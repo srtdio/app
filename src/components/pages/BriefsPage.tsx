@@ -58,6 +58,7 @@ import {
 } from '@/lib/brief-list-shared';
 import { getPrefetchContext } from '@/lib/prefetch-context';
 import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
+import { SHELL_STICKY_TOP_CLASS } from '@/lib/scroll-mode';
 import { logger } from '@/lib/logger';
 import { READ_TIMEOUT_MS } from '@/lib/chat-reads';
 import {
@@ -365,8 +366,11 @@ interface BriefSectionsDeps extends Omit<BriefCardListDeps, 'briefs'> {
 // its shade. var(--bg) flips with the theme, so light/dark parity is automatic; z-20 sits
 // above the card grid, matching SectionHeader's sticky choice. Positioning only:
 // no transforms, no transitions.
+// In page mode on a phone the window scrolls, so it pins below the sticky
+// Topbar instead (SHELL_STICKY_TOP_CLASS; 0 in <main> and on laptop).
 const SECTION_HEADER_CLASS = cn(
-  'sticky top-0 z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-2 flex items-center justify-between',
+  'sticky z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-2 flex items-center justify-between',
+  SHELL_STICKY_TOP_CLASS,
   'bg-bg lit-header',
 );
 

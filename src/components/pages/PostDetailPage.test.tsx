@@ -239,14 +239,16 @@ describe('PostDetailPage embedded', () => {
   it('embedded renders no page header and no Back button', () => {
     const html = paint(true);
     expect(html).toContain('Loading post');
-    expect(html).not.toContain('h-14');
+    expect(html).not.toContain('--shell-safe-top');
     expect(html).not.toContain('aria-label="Back"');
   });
 
-  it('non-embedded keeps the h-14 header with Back', () => {
+  it('non-embedded keeps the 56px header (plus the page-mode safe area) with Back', () => {
     const html = paint(false);
     expect(html).toContain('Loading post');
-    expect(html).toContain('flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header');
+    expect(html).toContain(
+      'flex items-center gap-3 px-4 md:px-6 border-b lit-header h-[calc(3.5rem+var(--shell-safe-top,0px))] pt-[var(--shell-safe-top,0px)]',
+    );
     expect(html).toContain('aria-label="Back"');
   });
 

@@ -9,6 +9,8 @@ import { IconChevronDown, IconPlus, IconSearch, ICON_SIZE } from '@/components/u
 import { dispatchSorted } from '@/lib/events';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { Bone } from '@/lib/motion';
+import { cn } from '@/lib/cn';
+import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 
 interface TopbarProps {
   /** The active workspace's display name ("<Brand> - <Platform>"). */
@@ -37,7 +39,15 @@ export function Topbar({
   cockpitSlot,
 }: TopbarProps) {
   return (
-    <header className="sticky top-0 z-30 flex items-center gap-2 h-14 px-3 md:px-4 border-b bg-panel lit-header">
+    // Sticky to <main> in locked mode (Chat, laptop) and to the window in page
+    // mode on a phone (src/lib/scroll-mode.ts), where the status bar strip
+    // above the 56px bar is part of this same solid, lit surface.
+    <header
+      className={cn(
+        'sticky top-0 z-30 flex items-center gap-2 px-3 md:px-4 border-b bg-panel lit-header',
+        SAFE_TOP_BAR_CLASS,
+      )}
+    >
       {workspaceName === null && onCreateWorkspace !== undefined ? (
         <Button
           type="button"

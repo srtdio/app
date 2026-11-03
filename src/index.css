@@ -431,6 +431,32 @@
        in both light and dark. */
     background-color: var(--bg);
   }
+  /* Page mode (src/lib/scroll-mode.ts): every in-shell route except Chat, on a
+     phone. The document scrolls instead of <main>, so mobile browser bars
+     shrink on scroll and content runs under them. The root grows with its
+     content (min 100svh, 100% fallback); background-color above still paints
+     all three layers. Laptop (md and up) and locked mode keep the rules above. */
+  @media (max-width: 767.98px) {
+    html.scroll-page,
+    html.scroll-page body,
+    html.scroll-page #root {
+      height: auto;
+      min-height: 100%;
+      min-height: 100svh;
+    }
+    html.scroll-page {
+      /* The status bar strip the sticky Topbar (and a detail page's own
+         header) covers, and the top a sticky section header pins to. */
+      --shell-safe-top: env(safe-area-inset-top, 0px);
+      --shell-sticky-top: calc(3.5rem + env(safe-area-inset-top, 0px));
+    }
+    /* An open modal overlay (Sheet, dialog, palette, viewer) holds the page
+       still underneath; the scroll position is kept, so closing never jumps.
+       Overlays unmount when closed, so this never outlives one. */
+    html.scroll-page:has([aria-modal='true']) {
+      overflow: hidden;
+    }
+  }
   /* No grey flash over tapped controls on touch screens (iOS / Android draw
      one on anything with a click handler); pressed and focus styles are the
      app's own. Inherited, so this one rule covers every element. */
