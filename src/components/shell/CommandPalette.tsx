@@ -951,7 +951,7 @@ export function CommandPalette({
         aria-label="Command palette"
         // Phones: a full-screen sheet. Wider: the centred card. Rendered at
         // rest; dropIn (Y, 8 px) is laid over it.
-        className="flex flex-col w-full h-full bg-panel lit-overlay overflow-hidden will-change-transform sm:h-auto sm:max-w-[560px] sm:rounded-xl sm:border"
+        className="flex flex-col w-full h-full scale-100 bg-panel lit-overlay overflow-hidden will-change-transform sm:h-auto sm:max-w-[560px] sm:rounded-xl sm:border"
       >
         <div className="flex shrink-0 items-center gap-2.5 px-4 border-b border-border pt-[env(safe-area-inset-top)] sm:pt-0">
           <IconSearch size={ICON_SIZE.nav} className="text-fg-3" />

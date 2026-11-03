@@ -51,8 +51,14 @@ export const GLOW_MS = 2000;
  * Returns the cleanup, which clears the timer, the wipe and the tint.
  */
 export function tintTarget(el: HTMLElement): () => void {
-  const prev = { position: el.style.position, isolation: el.style.isolation };
+  const prev = {
+    position: el.style.position,
+    isolation: el.style.isolation,
+    transition: el.style.transition,
+  };
   el.setAttribute('data-jump-glow', '');
+  // The row itself never animates: only the tint layer below moves (wipe).
+  el.style.transition = 'none';
   if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
   el.style.isolation = 'isolate';
   const layer = document.createElement('span');
@@ -76,6 +82,7 @@ export function tintTarget(el: HTMLElement): () => void {
     layer.remove();
     el.style.position = prev.position;
     el.style.isolation = prev.isolation;
+    el.style.transition = prev.transition;
   };
   const holdTimer = window.setTimeout(() => {
     if (!layer.isConnected) {
