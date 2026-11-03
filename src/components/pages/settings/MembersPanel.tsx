@@ -5,10 +5,12 @@
 // successful send. A return to the panel paints the list this session last
 // read while the shared cache loads again (no "Loading members"); the new list
 // lands while the person has not touched the screen, else the kept one stays
-// (src/lib/kept-view.ts). The panel's own changes always land.
+// (src/lib/kept-view.ts). The panel's own changes always land. A manager's
+// Catch-up emails tick patches the held member entry at once (the list's mail
+// tags and the sheet repaint in the same frame), then reverts on failure.
 
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { memberRemove } from '@srtdio/rpc';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LoadError } from '@/components/ui/LoadError';
@@ -16,6 +18,8 @@ import { useToast } from '@/components/ui/toast';
 import { FORMER_MEMBER } from '@/lib/people-names';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
+import { readProfiles } from '@/lib/chat-reads';
+import type { ChatProfile } from '@/lib/chat-reads';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useNewTrace } from '@/lib/trace-context';
@@ -32,7 +36,11 @@ import type { SentInvite } from './MembersInviteForm';
 import { MembersList } from './MembersList';
 import type { PendingEditHandler } from './MembersList';
 import { MemberActionSheet } from './MemberActionSheet';
-import type { MemberRoleChangeHandler } from './MemberActionSheet';
+import type {
+  MemberEmailOptInHandler,
+  MemberRoleChangeHandler,
+  SheetPerson,
+} from './MemberActionSheet';
 import {
   activeMemberRole,
   canInviteMembers,
@@ -40,12 +48,44 @@ import {
   clientDomainLabel,
   clientDomainMismatchMessage,
   deriveMembers,
+  emailPatchAfterManagerSet,
+  memberEmailOptInOutcome,
   memberRemoveErrorMessage,
 } from './members-data';
-import type { MemberEntry } from './members-data';
+import type { DerivedMembers, MemberEntry } from './members-data';
 import { keptWorkspaceMembers, useWorkspaceMembers } from '@/lib/workspace-members';
 import type { WorkspaceMembersData } from '@/lib/workspace-members';
 import { useInviteDelivery } from './useInviteDelivery';
+
+/** A held member's catch-up email fields, as this panel last wrote or learned them. */
+export type EmailPatch = { emailOptIn: boolean; emailOptOutBy: string | null };
+
+/** The derived lists with the panel's own email patches laid over (by user id). Pure. */
+export function withEmailPatches(
+  derived: DerivedMembers,
+  patches: ReadonlyMap<string, EmailPatch>,
+): DerivedMembers {
+  if (patches.size === 0) return derived;
+  const patch = (member: MemberEntry): MemberEntry => {
+    const next = patches.get(member.userId);
+    return next === undefined ? member : { ...member, ...next };
+  };
+  return {
+    agency: derived.agency.map(patch),
+    client: derived.client.map(patch),
+    pending: derived.pending,
+  };
+}
+
+/** Managers named on a held entry (email_opt_out_by) who are not in the held list. Pure. */
+export function missingOffByIds(derived: DerivedMembers): string[] {
+  const active = [...derived.agency, ...derived.client];
+  const held = new Set(active.map((m) => m.userId));
+  const ids = active
+    .map((m) => m.emailOptOutBy)
+    .filter((id): id is string => typeof id === 'string' && !held.has(id));
+  return [...new Set(ids)];
+}
 
 export function MembersPanel() {
   const { workspaceId, workspaceName, workspaceDisplayName } = useWorkspace();
@@ -90,15 +130,68 @@ export function MembersPanel() {
 
   const selfEmail = session?.user.email ?? null;
 
+  // The panel's own Catch-up email writes, by user id, laid over every read.
+  const [emailPatches, setEmailPatches] = useState<ReadonlyMap<string, EmailPatch>>(new Map());
   const derived = useMemo(
-    () => deriveMembers({ rows, profiles, currentUserId, selfEmail }),
-    [rows, profiles, currentUserId, selfEmail],
+    () =>
+      withEmailPatches(
+        deriveMembers({ rows, profiles, currentUserId, selfEmail }),
+        emailPatches,
+      ),
+    [rows, profiles, currentUserId, selfEmail, emailPatches],
   );
   const canManage = useMemo(() => canManageMembers(rows, currentUserId), [rows, currentUserId]);
   const callerRole = useMemo(() => activeMemberRole(rows, currentUserId), [rows, currentUserId]);
   const canInvite = useMemo(() => canInviteMembers(rows, currentUserId), [rows, currentUserId]);
 
   const [actionsFor, setActionsFor] = useState<MemberEntry | null>(null);
+  // The open sheet follows the held entry, so a patch repaints it with the list.
+  const sheetMember = useMemo(
+    () =>
+      actionsFor === null
+        ? null
+        : ([...derived.agency, ...derived.client].find((m) => m.id === actionsFor.id) ??
+          actionsFor),
+    [actionsFor, derived],
+  );
+
+  // A manager named as "Turned off by" who is not on this list (rare): one
+  // batched read after paint, once per id for the panel's life.
+  const [offByProfiles, setOffByProfiles] = useState<ReadonlyMap<string, ChatProfile>>(
+    new Map(),
+  );
+  const requestedOffBy = useRef(new Set<string>());
+  useEffect(() => {
+    if (!canManage) return;
+    const ids = missingOffByIds(derived).filter((id) => !requestedOffBy.current.has(id));
+    if (ids.length === 0) return;
+    for (const id of ids) requestedOffBy.current.add(id);
+    void readProfiles(supabase, ids).then((res) => {
+      if (!res.ok) {
+        logger.warn('member email off-by read failed', { error: res.error.message });
+        return;
+      }
+      setOffByProfiles((current) => {
+        const next = new Map(current);
+        for (const profile of res.data) next.set(profile.userId, profile);
+        return next;
+      });
+    });
+  }, [canManage, derived]);
+
+  const personFor = useCallback(
+    (userId: string): SheetPerson | null => {
+      const held = [...derived.agency, ...derived.client].find((m) => m.userId === userId);
+      if (held !== undefined) {
+        return { userId, name: held.displayName, avatarUrl: held.avatarUrl };
+      }
+      const read = offByProfiles.get(userId);
+      return read !== undefined
+        ? { userId, name: read.displayName, avatarUrl: read.avatarUrl }
+        : null;
+    },
+    [derived, offByProfiles],
+  );
   const [confirmFor, setConfirmFor] = useState<MemberEntry | null>(null);
   const [removing, setRemoving] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -248,6 +341,35 @@ export function MembersPanel() {
     return memberRemoveErrorMessage('unknown');
   };
 
+  function patchEmail(userId: string, next: EmailPatch | undefined): void {
+    setEmailPatches((current) => {
+      const map = new Map(current);
+      if (next === undefined) map.delete(userId);
+      else map.set(userId, next);
+      return map;
+    });
+  }
+
+  const performEmailOptInSet: MemberEmailOptInHandler = async (member, emailOptIn) => {
+    const traceId = newTrace();
+    const before = emailPatches.get(member.userId);
+    // Painted before the call: the list's tag and the sheet change in this frame.
+    patchEmail(member.userId, emailPatchAfterManagerSet(emailOptIn, currentUserId));
+    // Args as a variable: p_trace_id is the proc's real trace parameter. The
+    // caller is never sent; the proc reads it from the session.
+    const args = { p_user_id: member.userId, p_email_opt_in: emailOptIn, p_trace_id: traceId };
+    const { error: setError } = await supabase.rpc('member_email_opt_in_set', args);
+    const outcome = memberEmailOptInOutcome(setError);
+    if (outcome === 'turned_off_by_member') {
+      // They turned it off themselves since the read: only they can turn it on.
+      patchEmail(member.userId, { emailOptIn: false, emailOptOutBy: null });
+    } else if (outcome === 'failed') {
+      patchEmail(member.userId, before);
+      logger.warn('member email opt-in set failed', { error: setError?.message ?? '' });
+    }
+    return outcome;
+  };
+
   return (
     <div className="flex flex-col gap-6">
       {canInvite ? (
@@ -282,11 +404,14 @@ export function MembersPanel() {
       )}
 
       <MemberActionSheet
-        member={actionsFor}
+        member={sheetMember}
         open={actionsFor !== null}
         canManage={canManage}
+        viewerId={currentUserId}
         onClose={() => setActionsFor(null)}
         onChangeRole={performRoleChange}
+        onSetEmailOptIn={performEmailOptInSet}
+        personFor={personFor}
       />
 
       {confirmFor !== null ? (
