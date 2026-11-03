@@ -23,10 +23,12 @@ describe('Switch', () => {
 
   it('reports the flipped value on tap', () => {
     const onChange = vi.fn();
-    act(() => mount(false, onChange).click());
+    const off = mount(false, onChange);
+    act(() => off.click());
     expect(onChange).toHaveBeenCalledWith(true);
     const onOff = vi.fn();
-    act(() => mount(true, onOff).click());
+    const on = mount(true, onOff);
+    act(() => on.click());
     expect(onOff).toHaveBeenCalledWith(false);
   });
 
