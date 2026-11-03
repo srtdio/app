@@ -28,6 +28,16 @@ At most one soft (blurred) shadow per token; use a 1px ring for edge definition 
 | Overlay | `lit-overlay`                          | highest; long shadow, dark mode lighter gradient                           | menus, popovers, sheets, dialogs, side panels, docked plan panel (below 1180px; flat beside the list from 1180px)               |
 | Bars    | `lit-header` / `lit-dock` / `lit-side` | shade falls down from headers, up from bottom bars, right from the sidebar | Topbar, section and detail headers; composer, decision bar, footers; Sidebar                                                    |
 
+## Light while moving (docs/motion.md)
+
+Light stays put while things move: one point straight above. A moving surface keeps its `lit-*` class through every move (push, grow, rise, glide, strips). No new heights for motion:
+
+- Loading boxes (`Bone`, `mv-bone`) are **Flat**: a `panel-3` fill with a top-lit sweep band (`--panel` tint in light, a faint ink lift in dark: higher is lighter). No shadow.
+- A dragged board card lifts **one** height: Card to Float (`lit-card` to `lit-float`) and scales to 1.02 (`mv-lift`).
+- A pressed control sinks (scale .97, `mv-press`); its `lit-*` class does not change.
+- A pushed screen's incoming edge is a 1px ring (no shadow).
+- The sheet backdrop dim (`bg-scrim`) tracks the sheet's position; it is not a surface.
+
 The person photo viewer (ui/PhotoViewer) is a full-screen media surface like the image lightbox: `bg-overlay`, no lit class of its own; the photo keeps `lit-avatar`.
 
 The person card's inline message sits on its sheet or popover (Overlay); its input box is Sunken (`lit-well`).
