@@ -139,7 +139,13 @@ describe('AppLayout scroll mode', () => {
   const split = (c: string) => c.split(' ');
 
   it('decides the mode from the URL in the same render', () => {
-    expect(source).toContain('const scrollMode = scrollModeFor(pathname);');
+    expect(source).toContain(
+      'const scrollMode = scrollModeFor(pathname, searchParams, touchTablet);',
+    );
+    // The device is read before the mode (a touch tablet keeps Chat locked).
+    expect(source.indexOf('const touchTablet = useTouchTablet();')).toBeLessThan(
+      source.indexOf('const scrollMode = scrollModeFor('),
+    );
     expect(source).toContain('<ShellScrollMode mode={scrollMode} />');
     // Mutation phase: before every page's layout effect (kept scroll restore).
     expect(source).toMatch(/useInsertionEffect\(\(\) => \{\s*applyScrollMode\(mode\);/);

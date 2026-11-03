@@ -87,3 +87,36 @@ test('keyboard opening does not pin #root to the visual viewport', async ({ page
   expect(after.position).not.toBe('fixed');
   await expect(textarea).toBeFocused();
 });
+
+// The chat list scrolls the document on a phone (page mode), but a thread
+// keeps the locked shell its keyboard handling is proven against: opening one
+// from the list drops html.scroll-page in the same render, the document never
+// scrolls, and the composer sits at the bottom of the screen.
+test('a thread opened from the page-mode list is the locked shell', async ({ page }) => {
+  await installHarnessNetwork(page);
+  await page.goto('/chat');
+  const pageModeOn = (): Promise<boolean> =>
+    page.evaluate(() => document.documentElement.classList.contains('scroll-page'));
+  const phone = (page.viewportSize()?.width ?? 0) < 768;
+  await page.getByText(PEER_NAME, { exact: true }).first().waitFor({ state: 'visible' });
+  if (phone) expect(await pageModeOn()).toBe(true);
+  await page.getByText(PEER_NAME, { exact: true }).first().click();
+  const textarea = page.locator('form textarea').first();
+  await textarea.waitFor({ state: 'visible' });
+  await expect.poll(pageModeOn).toBe(false);
+  const state = await page.evaluate(() => {
+    const doc = document.scrollingElement ?? document.documentElement;
+    const form = document.querySelector('form:has(textarea)');
+    return {
+      docScrollable: doc.scrollHeight > doc.clientHeight + 1,
+      scrollY: window.scrollY,
+      formBottom: form === null ? Number.NaN : form.getBoundingClientRect().bottom,
+      innerHeight: window.innerHeight,
+    };
+  });
+  expect(state.docScrollable).toBe(false);
+  expect(state.scrollY).toBe(0);
+  // The composer's bottom edge is on screen, at the bottom of the thread.
+  expect(state.formBottom).toBeLessThanOrEqual(state.innerHeight + 1);
+  expect(state.formBottom).toBeGreaterThan(state.innerHeight - 200);
+});

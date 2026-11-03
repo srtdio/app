@@ -78,8 +78,9 @@ export function isDetailRoute(pathname: string): boolean {
  * md and up is unchanged (BottomTabs are md:hidden anyway). Derived from the URL
  * in the same render, so the first paint is already correct.
  *
- * `mode` (src/lib/scroll-mode.ts): 'locked' (Chat) keeps the 100svh shell
- * with main as the scroller. 'page' (every other route) lets the document
+ * `mode` (src/lib/scroll-mode.ts): 'locked' (a chat thread, and Chat on a
+ * touch tablet) keeps the 100svh shell with main as the scroller. 'page'
+ * (every other route, the chat list on a phone included) lets the document
  * scroll below md: the wrappers grow from a 100svh minimum and main has no
  * overflow of its own (overflow-x-clip clips sideways without making main a
  * scroll container, so sticky headers pin to the window). md and up is the
@@ -196,10 +197,12 @@ function AppLayoutBody() {
   useReloadOnNavigateWhenStale();
   const { session } = useSession();
   const userId = session?.user.id ?? null;
-  const scrollMode = scrollModeFor(pathname);
   // Decided in this first render (one media-query read); the boot listener
   // (watchScrollDevice) re-renders it when a trackpad attaches or the width flips.
   const touchTablet = useTouchTablet();
+  // The chat list scrolls the page on a phone; a chat thread (?channel=) and
+  // Chat on a touch tablet stay locked (src/lib/scroll-mode.ts).
+  const scrollMode = scrollModeFor(pathname, searchParams, touchTablet);
   const chrome = shellChrome(
     isThreadRoute(pathname, searchParams) || isDetailRoute(pathname),
     scrollMode,

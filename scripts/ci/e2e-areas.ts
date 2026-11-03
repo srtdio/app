@@ -62,6 +62,10 @@ const CHAT_SPECS = [
   'chat-tray',
   'chat-username-mentions',
   'chat-voice-playback',
+  // The chat list scrolls the document on a phone (page mode); a thread stays locked.
+  'chat-list-document-scroll',
+  'document-scroll',
+  'tablet-scroll',
   // The search screen (command palette), opened over the chat home.
   'command-palette',
   // Start on /chat and open plans, files or the onboarding over it.

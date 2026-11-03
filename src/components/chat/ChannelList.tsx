@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
+import { SHELL_STICKY_TOP_CLASS } from '@/lib/scroll-mode';
 import { Bone, BoxSkeleton, GlideItem } from '@/lib/motion';
 import { SettleLanding } from '@/components/chat/SettleLanding';
 import { useCoarsePointer, useHoverPointer } from '@/lib/use-is-laptop';
@@ -123,6 +124,14 @@ export interface ChannelSelectMode {
 
 interface ChannelListProps {
   channels: readonly ChannelSummary[];
+  /**
+   * The document scrolls the list (a phone, page mode, src/lib/scroll-mode.ts):
+   * the list grows with its rows instead of scrolling inside a full-height
+   * column, the header row pins below the sticky Topbar and the select bar to
+   * the bottom above the tab bar. Absent or false: the full-height pane with
+   * its own scroller, exactly as before (laptop, touch tablet).
+   */
+  pageScroll?: boolean;
   /**
    * The store's load status. Rows (and the empty state) render only when
    * 'ready'; 'loading' shows skeleton rows and 'error' the Retry state.
@@ -1119,10 +1128,44 @@ export function visibleChannels(
   return filterChannelsByName(ordered, search);
 }
 
+/**
+ * The list's layout classes. Locked (default): a full-height column whose body
+ * scrolls itself. Page scroll (phone): the column and body grow with the rows
+ * and the document scrolls them; the header row (search or select header)
+ * pins below the sticky Topbar on the page background it already sits on, and
+ * the select bar pins above the floating tab bar (the same 84px + home
+ * indicator room <main> keeps for it, AppLayout shellChrome). Only position
+ * changes: colours, borders, spacing and lighting are the same in both. Pure.
+ */
+export function channelListClasses(pageScroll: boolean): {
+  column: string;
+  header: string;
+  body: string;
+  selectBar: string;
+} {
+  return pageScroll
+    ? {
+        column: 'flex flex-col',
+        // A flex item, so the header row's top margin stays inside the
+        // pinned box: no rows show through a gap above it while it is stuck.
+        header: cn('sticky z-20 bg-bg', SHELL_STICKY_TOP_CLASS),
+        body: 'flex-1',
+        selectBar: 'sticky bottom-[calc(84px+env(safe-area-inset-bottom))] z-20',
+      }
+    : {
+        column: 'flex h-full flex-col',
+        header: '',
+        body: 'min-h-0 flex-1 overflow-y-auto',
+        selectBar: '',
+      };
+}
+
 /** Header in select mode: the checked count and Cancel. */
-function selectHeader(select: ChannelSelectMode): ReactElement {
+function selectHeader(select: ChannelSelectMode, className = ''): ReactElement {
   return (
-    <div className="flex items-center gap-2 border-b border-border px-4 py-3 md:px-6">
+    <div
+      className={cn('flex items-center gap-2 border-b border-border px-4 py-3 md:px-6', className)}
+    >
       <span className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
         {`${select.selectedIds.size} selected`}
       </span>
@@ -1134,9 +1177,9 @@ function selectHeader(select: ChannelSelectMode): ReactElement {
 }
 
 /** Bottom bar in select mode (SelectionBar styling): one Hide, disabled at 0. */
-function selectBar(select: ChannelSelectMode): ReactElement {
+function selectBar(select: ChannelSelectMode, className = ''): ReactElement {
   return (
-    <div className="flex items-center gap-2 border-t bg-panel px-4 py-3 lit-dock">
+    <div className={cn('flex items-center gap-2 border-t bg-panel px-4 py-3 lit-dock', className)}>
       <Button
         variant="primary"
         className="ml-auto"
@@ -1170,14 +1213,20 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
   const kind = props.kind ?? null;
   const searching = props.searchResults !== undefined && showSearchResults(props.search, kind);
   const onKindChange = props.onKindChange;
+  const layout = channelListClasses(props.pageScroll === true);
   return (
-    <div className="flex h-full flex-col">
+    <div className={layout.column}>
       {selecting !== undefined ? (
-        selectHeader(selecting)
+        selectHeader(selecting, layout.header)
       ) : (
         // The app's own Clear (X) is the only one: the browser's native
         // search cancel button is hidden.
-        <div className="border-b border-border pb-3 [&_input::-webkit-search-cancel-button]:hidden">
+        <div
+          className={cn(
+            'border-b border-border pb-3 [&_input::-webkit-search-cancel-button]:hidden',
+            layout.header,
+          )}
+        >
           <SectionHeader
             stackSearchMd
             search={{
@@ -1210,7 +1259,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
           </SectionHeader>
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className={layout.body}>
         {props.lead !== undefined && !searching ? props.lead : null}
         {props.notes !== undefined && !searching
           ? notesTile({
@@ -1265,7 +1314,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                   })}
         </SettleLanding>
       </div>
-      {selecting !== undefined ? selectBar(selecting) : null}
+      {selecting !== undefined ? selectBar(selecting, layout.selectBar) : null}
     </div>
   );
 }

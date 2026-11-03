@@ -81,8 +81,35 @@ describe('scrollModeFor', () => {
     expect(scrollModeFor(path)).toBe('page');
   });
 
-  it.each(['/chat', '/chat/'])('%s (chat list and thread) stays locked', (path) => {
-    expect(scrollModeFor(path)).toBe('locked');
+  it('the chat list (/chat, no channel) scrolls the page on a phone', () => {
+    expect(scrollModeFor('/chat')).toBe('page');
+    expect(scrollModeFor('/chat', '')).toBe('page');
+    expect(scrollModeFor('/chat', '?channel=')).toBe('page');
+    expect(scrollModeFor('/chat', new URLSearchParams('q=x'))).toBe('page');
+    expect(scrollModeFor('/chat', '', false)).toBe('page');
+  });
+
+  it.each(['?channel=dm-1', 'channel=dm-1&message=m-9', '?message=m&channel=g'])(
+    'a chat thread (/chat%s) stays locked on every device',
+    (search) => {
+      expect(scrollModeFor('/chat', search)).toBe('locked');
+      expect(scrollModeFor('/chat', new URLSearchParams(search))).toBe('locked');
+      expect(scrollModeFor('/chat', search, true)).toBe('locked');
+    },
+  );
+
+  it('the chat list on a touch tablet (two panes beside the thread) stays locked', () => {
+    expect(scrollModeFor('/chat', '', true)).toBe('locked');
+  });
+
+  it('a /chat/ sub-path stays locked', () => {
+    expect(scrollModeFor('/chat/')).toBe('locked');
+    expect(scrollModeFor('/chat/x', '', false)).toBe('locked');
+  });
+
+  it('the device and query never change any other route', () => {
+    expect(scrollModeFor('/pipeline', '?channel=x', true)).toBe('page');
+    expect(scrollModeFor('/activity', '', true)).toBe('page');
   });
 
   it('a path that only starts with "chat" is not chat', () => {
@@ -156,16 +183,32 @@ describe('device rule (one query string for CSS and JS)', () => {
   });
 
   it.each([PHONE, TABLET_PORTRAIT, TABLET_LANDSCAPE, MOUSE_AT_TABLET_WIDTH, LAPTOP])(
-    'chat stays locked on every device (%o)',
+    'a chat thread stays locked on every device (%o)',
     (d) => {
       const main = document.createElement('main');
       document.body.appendChild(main);
       setDevice(d);
-      applyScrollMode(scrollModeFor('/chat'));
+      applyScrollMode(scrollModeFor('/chat', '?channel=dm-1', touchTabletNow()));
       expect(pageScrollActive()).toBe(false);
       expect(shellScroller()).toBe(main);
     },
   );
+
+  it.each([
+    ['phone', PHONE, true],
+    ['touch tablet portrait', TABLET_PORTRAIT, false],
+    ['touch tablet landscape', TABLET_LANDSCAPE, false],
+    ['mouse or trackpad at the same width', MOUSE_AT_TABLET_WIDTH, false],
+    ['laptop', LAPTOP, false],
+  ] as const)('%s: the chat list scrolls the document = %s', (_name, d, page) => {
+    const main = document.createElement('main');
+    document.body.appendChild(main);
+    setDevice(d);
+    applyScrollMode(scrollModeFor('/chat', '', touchTabletNow()));
+    expect(pageScrollActive()).toBe(page);
+    const doc = document.scrollingElement ?? document.documentElement;
+    expect(shellScroller()).toBe(page ? doc : main);
+  });
 
   it('without matchMedia reads as a phone (as useIsLaptop does)', () => {
     setDevice(null);

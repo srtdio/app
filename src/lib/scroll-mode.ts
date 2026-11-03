@@ -1,7 +1,8 @@
 // Where the shell scrolls. Two modes, decided from the URL in the shell's own
 // render (AppLayout), so the first paint is already right:
 //
-// - 'page': every in-shell route except Chat. On a phone or a touch tablet
+// - 'page': every in-shell route except a chat thread (and Chat on a touch
+//   tablet, below). On a phone or a touch tablet
 //   (PAGE_SCROLL_QUERY) the document itself scrolls, so mobile browsers (iOS
 //   and iPadOS Safari and every iOS browser or in-app browser, Android Chrome,
 //   Samsung Internet, Firefox Android) shrink their bars on scroll and the
@@ -9,8 +10,14 @@
 //   under html.scroll-page inside @media PAGE_SCROLL_QUERY only; a laptop or
 //   desktop with a mouse or trackpad (an iPad with one attached included)
 //   keeps the scrolling <main> exactly as before.
-// - 'locked': Chat list and thread. The 100svh root with <main> as the
-//   scroller, unchanged.
+//   The chat list (/chat with no ?channel=) is page mode on a phone: the list
+//   grows and the document scrolls it, its header pinned below the Topbar.
+// - 'locked': a chat thread (/chat?channel=...), and all of Chat on a touch
+//   tablet, where the list and the thread share the screen (two panes). The
+//   100svh root with <main> as the scroller, unchanged. The thread owns its
+//   own scroller (stick-to-bottom, windowing, load older, jumps) and the
+//   keyboard rule (e2e chat-keyboard-gap: never pinned to the visual viewport)
+//   is proven against it, so it stays exactly as it was.
 //
 // The class is set in an insertion effect (ShellScrollMode in AppLayout): that
 // runs in the commit's mutation phase, before any page's layout effect, so a
@@ -52,9 +59,26 @@ function mediaMatches(media: string, fallback: boolean): boolean {
 /** The <html> class that turns on document scrolling (phone and touch tablet, index.css). */
 export const PAGE_SCROLL_CLASS = 'scroll-page';
 
-/** Pure: the scroll mode for an in-shell path. Chat (list and thread) stays locked. */
-export function scrollModeFor(pathname: string): ScrollMode {
-  return pathname === '/chat' || pathname.startsWith('/chat/') ? 'locked' : 'page';
+/**
+ * Pure: the scroll mode for an in-shell path. `search` is the URL query (with
+ * or without the leading '?'), `touchTablet` the device (useTouchTablet).
+ * - Chat list (/chat, no ?channel=): 'page' (the document scrolls it on a
+ *   phone; a laptop keeps the locked shell, the CSS is phone/tablet only), but
+ *   'locked' on a touch tablet, where the list sits beside the thread pane.
+ * - Chat thread (/chat?channel=..., and any /chat/...): 'locked'.
+ * - Every other route: 'page'.
+ */
+export function scrollModeFor(
+  pathname: string,
+  search: string | URLSearchParams = '',
+  touchTablet = false,
+): ScrollMode {
+  if (pathname.startsWith('/chat/')) return 'locked';
+  if (pathname !== '/chat') return 'page';
+  const params = typeof search === 'string' ? new URLSearchParams(search) : search;
+  const channel = params.get('channel');
+  if (channel !== null && channel !== '') return 'locked';
+  return touchTablet ? 'locked' : 'page';
 }
 
 /** Put `mode` on the root element (idempotent). */

@@ -19,6 +19,7 @@ import {
   useDragDismiss,
 } from '@/lib/motion';
 import { useIsLaptop } from '@/lib/use-is-laptop';
+import { documentScroller, pageScrollActive } from '@/lib/scroll-mode';
 import { useWorkspace, workspaceDisplayName } from '@/lib/workspace-context';
 import { chatDisplayName } from '@/lib/chat/chat-name';
 import { openReplyPrivatelyCard } from '@/components/comments/ReplyPrivatelyButton';
@@ -291,9 +292,11 @@ const NO_SAVED: SavedState = { key: '', sources: new Map(), failed: new Set() };
  * - 1180 to 1439px: the thread takes the list's place beside the panel.
  * From 1440px all three panes show; 892 to 1179px the panel overlays.
  */
-export function chatListPaneClass(planPanelOpen: boolean): string {
+export function chatListPaneClass(planPanelOpen: boolean, pageScroll = false): string {
   return cn(
-    'h-full w-full border-border md:w-72 md:border-r xl:w-[352px]',
+    // pageScroll (phone list, page mode): the pane grows with the list and the
+    // document scrolls it (src/lib/scroll-mode.ts); otherwise full height.
+    pageScroll ? 'w-full' : 'h-full w-full border-border md:w-72 md:border-r xl:w-[352px]',
     planPanelOpen &&
       'max-[891px]:pointer-events-none max-[891px]:invisible max-[891px]:absolute max-[891px]:inset-y-0 max-[891px]:left-0',
     planPanelOpen &&
@@ -302,6 +305,26 @@ export function chatListPaneClass(planPanelOpen: boolean): string {
 }
 
 export { MENTION_DM_FAILED };
+
+/**
+ * Pure: the chat list scrolls the document (phone, page mode): below md (not
+ * isDesktop) the list is shown alone, no thread beside or over it. A touch
+ * tablet and a laptop are isDesktop (two panes, the locked shell).
+ */
+export function chatListPageScroll(
+  isDesktop: boolean,
+  showList: boolean,
+  showThread: boolean,
+): boolean {
+  return !isDesktop && showList && !showThread;
+}
+
+/** The document back at its top, only while it is the page's scroller. */
+function resetDocumentScroll(): void {
+  if (!pageScrollActive()) return;
+  const doc = documentScroller();
+  if (doc !== null && doc.scrollTop !== 0) doc.scrollTop = 0;
+}
 
 /**
  * The user ids a thread's first paint needs names for: every sender, the DM
@@ -2220,6 +2243,21 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   });
   const showList = isDesktop || (selected === null && opening === null);
   const showThread = isDesktop || selected !== null || opening !== null;
+  // The phone list alone on screen: the shell is in page mode there
+  // (scrollModeFor: /chat with no ?channel=), so the document scrolls the list.
+  const listPageScroll = chatListPageScroll(isDesktop, showList, showThread);
+  // The list opens at its top, as when <main> scrolled it (the list was never
+  // kept across a chat or a tab). The document may still hold the previous
+  // page's position (Pipeline scrolled, then the Chat tab), so it is put back
+  // to 0 before the first painted frame; leaving the list puts it back to 0
+  // too, so the next page restores its own kept position from the top. One
+  // synchronous write, only when not already 0; no read on the paint path
+  // beyond the scroll offset.
+  useLayoutEffect(() => {
+    if (!listPageScroll) return;
+    resetDocumentScroll();
+    return resetDocumentScroll;
+  }, [listPageScroll]);
   // Back out of a chat still opening: drop the link and any pending open.
   const onBackFromOpening = (): void => {
     clearPendingOpen();
@@ -2296,8 +2334,9 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const surface = (
     <div className="relative flex h-full min-h-0">
       {showList ? (
-        <div ref={listPaneRef} className={chatListPaneClass(planPanelOpen)}>
+        <div ref={listPaneRef} className={chatListPaneClass(planPanelOpen, listPageScroll)}>
           <ChannelList
+            pageScroll={listPageScroll}
             channels={roster}
             status={loadStatus}
             onRetry={retryLoad}
