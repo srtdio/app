@@ -54,7 +54,9 @@ export default defineConfig({
   outputDir: '../results/visual',
   forbidOnly: isCI,
   fullyParallel: true,
-  workers: isCI ? 2 : 3,
+  // 4 on CI (ubuntu-latest has 4 vCPUs): the four ipad-* projects took the
+  // run past the workflow's 15-minute compare and render steps at 2 workers.
+  workers: isCI ? 4 : 3,
   timeout: 90_000,
   expect: {
     timeout: isCI ? 10_000 : 5_000,
