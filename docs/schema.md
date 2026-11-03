@@ -40,10 +40,13 @@ App-level profile. id mirrors auth.users.id (FK).
 | timezone | text | nullable, IANA tz; null falls back to workspaces.timezone for catch-up scheduling |
 | profile_completed_at | timestamptz | nullable, onboarding gate; stamped once an avatar exists |
 | email_opt_in | boolean | not null, default true; catch-up email opt-out |
+| email_opt_out_by | uuid | nullable, FK users.id ON DELETE SET NULL; who turned catch-up emails off when it was not the person. NULL when on or self-off. Set only by trigger users_email_opt_out_by_trg (BEFORE UPDATE) from the transaction-local setting sorted.email_opt_out_by; any other write is overwritten by the trigger. authenticated has column SELECT, no UPDATE |
 | username | text | nullable, ^[a-z0-9._]{1,20}$ (minimum was 3 until 18 Oct 2026), unique across Sorted (users_username_unique, partial where not null); used for @mentions. Existing users backfilled from display_name on 14 Oct 2026 |
 | created_at / updated_at | timestamptz | default now() |
 
 user_profile_update(p_display_name, p_designation, p_avatar_url, p_email_opt_in, p_trace_id) SECURITY DEFINER (search_path='', EXECUTE to authenticated only): the only write path to a user's own profile. Acts on auth.uid(); a null or blank display_name raises invalid_payload. designation / avatar_url / email_opt_in are coalesced (null leaves the existing value). profile_completed_at is stamped now() the first time an avatar exists and never overwritten. Writes a success audit row.
+
+member_email_opt_in_set(p_user_id, p_email_opt_in, p_trace_id) SECURITY DEFINER (search_path=public, EXECUTE to authenticated only), returns p_trace_id: an owner/admin of any live workspace the target is active in switches the target's catch-up emails off/on (every workspace). Never self (use_own_settings). Switch on only if a manager turned it off (email_opt_out_by not null), else turned_off_by_member. Not a manager in a shared live workspace raises forbidden. No-op when the value already matches (no audit row); otherwise sets sorted.email_opt_out_by to the caller for the update and writes a success audit row (action member_email_opt_in_set).
 
 user_onboarding_save(p_payload jsonb, p_trace_id) SECURITY DEFINER (EXECUTE to authenticated only): the onboarding write path. Payload keys display_name (required), username (required, format above, reserved names admin/support/sorted/srtd/help/team/everyone rejected), designation, avatar_url (optional, photo no longer required), email_opt_in, age_range, heard_from. Stamps profile_completed_at once. Duplicate username raises username_taken. Upserts user_private.
 

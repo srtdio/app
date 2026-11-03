@@ -34,7 +34,9 @@
 // othersRows drops them before any toast or tone.
 //
 // TONE: new Activity rows from someone else play the chat's notification tone
-// (shared throttle, notify-sound.ts), except while Notifications is open.
+// (shared throttle, notify-sound.ts), except while Notifications is open. The
+// tone, chime and tab alert obey the signed-in user's device alert prefs
+// (alert-prefs.ts); this provider tells that module who is signed in.
 //
 // PUSH: one private broadcast channel per signed-in user (inbox-push.ts). A
 // nudge for the active workspace runs the same tick as the poll, at most one
@@ -78,6 +80,7 @@ import { listenForNameSignout, resetMentionNames } from '@/lib/chat/mentions';
 import { ReminderRing } from '@/components/chat/ReminderRing';
 import { playToneShared } from '@/lib/chat/notify-sound';
 import { pushTabAlert } from '@/lib/tab-alert';
+import { setAlertPrefsUser } from '@/lib/alert-prefs';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
 import {
   POLL_MS,
@@ -330,6 +333,12 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     if (namesUserRef.current !== null) resetMentionNames();
     namesUserRef.current = userId;
   }
+
+  // The device alert prefs the tones, chime and tab alert obey are this user's
+  // (keyed by user id); signed out reads the defaults, so an account switch
+  // never carries one person's mute or pause to the next. Set during render
+  // (a module variable, idempotent) so it is in place before any arrival.
+  setAlertPrefsUser(userId);
 
   // Mount + workspace/user switch: re-seed the high-water mark from the server
   // (the backlog must not toast), forget the toasted ids and seed the count. A

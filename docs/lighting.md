@@ -45,7 +45,7 @@ The person card's inline message sits on its sheet or popover (Overlay); its inp
 | `lit-badge`                                              | CountBadge, asset picker check badge                                                                                                                                  |
 | `lit-avatar`                                             | Avatar and presence dot                                                                                                                                               |
 | `lit-media`                                              | controls over media (lightbox buttons, play circles, remove x, meta pills, gallery counters, upload ring)                                                             |
-| `lit-knob`                                               | switch knob                                                                                                                                                           |
+| `lit-knob`                                               | switch knob (ui/Switch; its track is `lit-well`)                                                                                                                      |
 | `lit-fill`                                               | the fill inside a track (progress, storage, upload, scrubber)                                                                                                         |
 | `lit-bubble-own` / `lit-bubble-other`                    | chat bubbles, starred, scheduled list and plan comment bubbles (tombstones flat; failed keeps border-bad)                                                             |
 

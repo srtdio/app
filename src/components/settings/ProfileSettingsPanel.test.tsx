@@ -138,6 +138,7 @@ const SAVED: CurrentProfile = {
   email_opt_in: false,
   profile_completed_at: '2026-09-01T00:00:00Z',
   username: 'asha.rao',
+  emailOptOutBy: null,
 };
 
 function saveMock(result: Result<string> = { ok: true, data: 'u-me' }) {

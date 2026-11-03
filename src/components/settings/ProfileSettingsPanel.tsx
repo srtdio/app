@@ -19,6 +19,13 @@
 // After a save that replaced or cleared a saved photo succeeds, the old object
 // is handed to the avatar-upload worker's cleanup route (fire and forget).
 //
+// When someone else turned the emails off (emailOptOutBy), one line under the
+// helper names them through PersonTrigger; the viewer's own tick turns them on.
+//
+// Alerts on this device (AlertsBlock) sit under the tick box: Sound and
+// Notifications switches and Pause for chips, saved on tap to this device only
+// (src/lib/alert-prefs.ts), never through Save profile.
+//
 // Network goes through the same tested helpers as onboarding (uploadAvatarFile +
 // the @srtdio/rpc userProfileUpdate wrapper); colors are tokens only so light/dark
 // parity is automatic.
@@ -29,13 +36,27 @@ import { userProfileUpdate } from '@srtdio/rpc';
 import { AvatarCropper, type AvatarCropperHandle } from '@/components/onboarding/AvatarCropper';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { UsernameField } from '@/components/settings/UsernameField';
 import { Field } from '@/components/ui/Field';
-import { IconCamera, ICON_SIZE } from '@/components/ui/icons';
+import { IconCamera, IconPause, ICON_SIZE } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
+import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { PhotoOptionsSheet } from '@/components/ui/PhotoOptionsSheet';
+import { Switch } from '@/components/ui/Switch';
 import { useOptionalToast } from '@/components/ui/toast';
+import {
+  PAUSE_HOURS,
+  isPaused,
+  pauseFor,
+  resumeAlerts,
+  useAlertPrefs,
+  type PauseHours,
+} from '@/lib/alert-prefs';
 import { env } from '@/lib/env';
+import { personName, resolvePeople } from '@/lib/people-names';
+import { formatTime } from '@/lib/time';
+import { useWorkspace } from '@/lib/workspace-context';
 import { fetchWithTrace } from '@/lib/fetch';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
@@ -381,6 +402,22 @@ export function ProfileSettingsPanel(): React.ReactElement {
   const toast = useOptionalToast();
   // Only the newest tick may revert, so a late failure never undoes a later tick.
   const emailSeqRef = useRef(0);
+  const { workspaceId } = useWorkspace();
+  // Who turned Catch-up emails off, when it was someone else. Their name comes
+  // from the shared people registry; an unknown id resolves in one batched read
+  // after paint (never awaited before it), and the tick re-renders once it lands.
+  const optOutBy = optedOutByOther(profile, userId);
+  const [, setNamesTick] = useState(0);
+  useEffect(() => {
+    if (optOutBy === null || personName(workspaceId, optOutBy) !== undefined) return;
+    let active = true;
+    void resolvePeople(supabase, workspaceId, [optOutBy]).then(() => {
+      if (active) setNamesTick((n) => n + 1);
+    });
+    return () => {
+      active = false;
+    };
+  }, [optOutBy, workspaceId]);
 
   useEffect(
     () => () => {
@@ -677,7 +714,13 @@ export function ProfileSettingsPanel(): React.ReactElement {
         />
       </Field>
 
-      <EmailOptInRow checked={profile.email_opt_in} onChange={handleEmailOptIn} />
+      <EmailOptInRow
+        checked={profile.email_opt_in}
+        onChange={handleEmailOptIn}
+        optedOutBy={optedOutByPerson(optOutBy, workspaceId)}
+      />
+
+      <AlertsBlock userId={userId} />
 
       {formError !== null ? <p className="text-base text-bad">{formError}</p> : null}
 
@@ -730,7 +773,10 @@ export function CameraBadge(props: { disabled: boolean; onPress: () => void }): 
 export function EmailOptInRow(props: {
   checked: boolean;
   onChange: (next: boolean) => void;
+  /** Someone else turned the emails off; shown only while they stay off. */
+  optedOutBy?: OptedOutBy | null;
 }): React.ReactElement {
+  const by = props.checked ? null : (props.optedOutBy ?? null);
   return (
     <label
       htmlFor="settings-email-opt-in"
@@ -751,8 +797,143 @@ export function EmailOptInRow(props: {
         <span id="settings-email-opt-in-help" className="text-sm text-fg-2">
           Unread updates by email, weekdays. Sign-in codes and invites always arrive.
         </span>
+        {by !== null ? (
+          <span data-email-opt-out-by="" className="text-sm text-fg-2">
+            {'Turned off by '}
+            <PersonTrigger userId={by.userId} name={by.name}>
+              {by.name}
+            </PersonTrigger>
+          </span>
+        ) : null}
       </span>
     </label>
+  );
+}
+
+/** The person who turned Catch-up emails off, named for the row. */
+export interface OptedOutBy {
+  userId: string;
+  name: string;
+}
+
+/**
+ * The id of whoever turned the viewer's Catch-up emails off, only when the
+ * emails are off and it was someone other than the viewer. Pure.
+ */
+export function optedOutByOther(
+  profile: (Pick<CurrentProfile, 'email_opt_in'> & { emailOptOutBy?: string | null }) | null,
+  viewerId: string | null,
+): string | null {
+  if (profile === null || profile.email_opt_in) return null;
+  const by = profile.emailOptOutBy ?? null;
+  if (by === null || by === '') return null;
+  if (viewerId !== null && by.toLowerCase() === viewerId.toLowerCase()) return null;
+  return by;
+}
+
+/** The row's person once their name is known; null until the read lands. */
+function optedOutByPerson(userId: string | null, workspaceId: string | null): OptedOutBy | null {
+  if (userId === null) return null;
+  const name = personName(workspaceId, userId);
+  return name !== undefined ? { userId, name } : null;
+}
+
+/** "1 hour", "2 hours" ... for the Pause for chips. */
+export function pauseLabel(hours: PauseHours): string {
+  return hours === 1 ? '1 hour' : `${hours} hours`;
+}
+
+/**
+ * Alerts on this device: Sound and Notifications switches, the paused banner
+ * (only while paused) and the Pause for chips. Each tap saves at once through
+ * the device prefs (localStorage), never through Save profile. The hook reads
+ * the device on the first frame, so the block paints in its final height; it
+ * changes height only when the banner appears or goes. No motion.
+ */
+export function AlertsBlock(props: { userId: string | null }): React.ReactElement {
+  const [prefs, setPrefs] = useAlertPrefs(props.userId);
+  const now = Date.now();
+  const paused = isPaused(prefs, now);
+  const activeHours = paused ? prefs.pausedHours : null;
+  return (
+    <section data-alerts-block="" aria-labelledby="settings-alerts-label">
+      <h3
+        id="settings-alerts-label"
+        className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
+      >
+        Alerts on this device
+      </h3>
+      <div className="mt-2 flex flex-col">
+        <AlertSwitchRow
+          label="Sound"
+          checked={prefs.sound}
+          onChange={(sound) => setPrefs({ ...prefs, sound })}
+        />
+        <AlertSwitchRow
+          label="Notifications"
+          checked={prefs.notifications}
+          onChange={(notifications) => setPrefs({ ...prefs, notifications })}
+        />
+      </div>
+      {paused && prefs.pausedUntilMs !== null ? (
+        <div
+          data-alerts-paused=""
+          role="status"
+          className="mt-4 flex items-center justify-between gap-3 rounded-lg bg-accent-soft py-2 pr-2 pl-3 lit-tint"
+        >
+          <span className="flex min-w-0 items-center gap-2 text-base text-accent">
+            <IconPause size={ICON_SIZE.inline} className="shrink-0" />
+            <span className="min-w-0">
+              {'Paused until '}
+              <span className="font-mono tabular-nums">{formatTime(prefs.pausedUntilMs)}</span>
+            </span>
+          </span>
+          <Button
+            type="button"
+            variant="secondary"
+            className="shrink-0"
+            onClick={() => setPrefs(resumeAlerts(prefs))}
+          >
+            Resume
+          </Button>
+        </div>
+      ) : null}
+      <p id="settings-pause-for-label" className="mt-4 mb-2 text-base font-medium text-fg">
+        Pause for
+      </p>
+      <div
+        role="group"
+        aria-labelledby="settings-pause-for-label"
+        className="grid grid-cols-3 gap-2"
+      >
+        {PAUSE_HOURS.map((hours) => (
+          <Chip
+            key={hours}
+            size="tap"
+            label={pauseLabel(hours)}
+            selected={activeHours === hours}
+            aria-pressed={activeHours === hours}
+            data-pause-hours={hours}
+            className="w-full"
+            onClick={() => setPrefs(pauseFor(prefs, hours, Date.now()))}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** One 44px row: the label left (body), the switch right. */
+function AlertSwitchRow(props: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}): React.ReactElement {
+  return (
+    <div className="flex min-h-11 items-center justify-between gap-3">
+      <span className="text-base text-fg">{props.label}</span>
+      <Switch checked={props.checked} onChange={props.onChange} label={props.label} />
+    </div>
   );
 }
 

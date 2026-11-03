@@ -6,6 +6,8 @@
 // "(N) " for the total unread across the user's chats, gone at 0. The rules are
 // pure and unit-tested; the hook (ChatTabSignals) only wires them.
 
+import { currentSoundAllowed } from '@/lib/alert-prefs';
+
 /** At most one tone per this window. */
 export const TONE_THROTTLE_MS = 2_000;
 
@@ -133,11 +135,17 @@ let lastSharedToneMs: number | null = null;
  * Play the tone unless any source played it within TONE_THROTTLE_MS. Chat and
  * Activity both call this, so a chat message and an Activity row arriving
  * together sound once. Returns whether it played.
+ *
+ * The device's alert prefs (Sound, Notifications, Pause) are read here, at the
+ * moment of play, so every caller obeys them and a pause set a moment ago or in
+ * another tab holds. The pause runs on the device clock, never nowMs (which a
+ * caller may pass as server time). A muted tone does not consume the throttle.
  */
 export function playToneShared(
   nowMs: number = Date.now(),
   ctx: ToneContext | null = audioContext(),
 ): boolean {
+  if (!currentSoundAllowed()) return false;
   if (lastSharedToneMs !== null && nowMs - lastSharedToneMs < TONE_THROTTLE_MS) return false;
   if (!playNotifyTone(ctx)) return false;
   lastSharedToneMs = nowMs;

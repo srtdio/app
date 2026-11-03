@@ -40,6 +40,29 @@ export interface CurrentProfile {
   email_opt_in: boolean;
   profile_completed_at: string | null;
   username: string | null;
+  /**
+   * users.email_opt_out_by: who turned catch-up emails off when it was not this
+   * person (a workspace manager); null when on or turned off by the person.
+   */
+  emailOptOutBy: string | null;
+}
+
+/** The users columns the profile read selects (one query). */
+export const PROFILE_COLUMNS =
+  'display_name, designation, avatar_url, email_opt_in, profile_completed_at, username, email_opt_out_by';
+
+/**
+ * The read row (email_opt_out_by) or a held/saved profile (emailOptOutBy, absent
+ * on a copy saved before the field existed), as the profile. Pure.
+ */
+type ProfileRow = Omit<CurrentProfile, 'emailOptOutBy'> & {
+  email_opt_out_by?: string | null;
+  emailOptOutBy?: string | null;
+};
+
+export function toCurrentProfile(row: ProfileRow): CurrentProfile {
+  const { email_opt_out_by: column, emailOptOutBy: held, ...rest } = row;
+  return { ...rest, emailOptOutBy: column ?? held ?? null };
 }
 
 interface UseCurrentProfile {
@@ -77,7 +100,8 @@ export function profileReadKey(userId: string): string {
 function firstSnapshot(userId: string): ProfileSnapshot {
   const saved = peekKept<CurrentProfile>(profileReadKey(userId));
   if (saved === undefined) return { ...EMPTY, userId };
-  return { userId, profile: saved, loading: false, error: false };
+  // A copy saved before email_opt_out_by was read carries no field: null.
+  return { userId, profile: toCurrentProfile(saved), loading: false, error: false };
 }
 
 function publish(next: ProfileSnapshot): void {
@@ -88,11 +112,7 @@ function publish(next: ProfileSnapshot): void {
 function readProfile(userId: string): Promise<{ data: CurrentProfile | null; failed: boolean }> {
   mark('profile:start');
   return Promise.resolve(
-    supabase
-      .from('users')
-      .select('display_name, designation, avatar_url, email_opt_in, profile_completed_at, username')
-      .eq('id', userId)
-      .maybeSingle(),
+    supabase.from('users').select(PROFILE_COLUMNS).eq('id', userId).maybeSingle(),
   ).then(
     ({ data, error: queryError }) => {
       mark('profile:end');
@@ -100,7 +120,7 @@ function readProfile(userId: string): Promise<{ data: CurrentProfile | null; fai
         logger.error('useCurrentProfile load failed', { error: queryError.message });
       }
       if (queryError || data === null) return { data: null, failed: true };
-      return { data: data as CurrentProfile, failed: false };
+      return { data: toCurrentProfile(data as ProfileRow), failed: false };
     },
     (thrown: unknown) => {
       mark('profile:end');
@@ -170,13 +190,16 @@ export function loadProfile(userId: string, force = false): Promise<void> {
 
 /**
  * Own write: set email_opt_in on the held row (and the saved device copy) for
- * `userId` without a read, so every consumer paints the new value at once. A
+ * `userId` without a read, so every consumer paints the new value at once. The
+ * person's own tick also clears emailOptOutBy (theirs now, either way). A
  * snapshot for another user, or no row yet, is left alone. Synchronous.
  */
 export function setProfileEmailOptIn(userId: string, emailOptIn: boolean): void {
   if (snapshot.userId !== userId || snapshot.profile === null) return;
-  if (snapshot.profile.email_opt_in === emailOptIn) return;
-  const profile = { ...snapshot.profile, email_opt_in: emailOptIn };
+  if (snapshot.profile.email_opt_in === emailOptIn && snapshot.profile.emailOptOutBy === null) {
+    return;
+  }
+  const profile = { ...snapshot.profile, email_opt_in: emailOptIn, emailOptOutBy: null };
   primeRead(profileReadKey(userId), profile);
   publish({ ...snapshot, profile });
 }

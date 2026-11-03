@@ -344,7 +344,9 @@ describe('readProfiles', () => {
       Promise.resolve({ data: [], error: null }).then(resolve);
     const from = vi.fn(() => b);
     await readProfiles({ from } as unknown as Client, [PEER1]);
-    expect(READ_USERS_COLUMNS).toBe('id, display_name, avatar_url, username, email_opt_in');
+    expect(READ_USERS_COLUMNS).toBe(
+      'id, display_name, avatar_url, username, email_opt_in, email_opt_out_by',
+    );
     expect(from).toHaveBeenCalledOnce();
     expect(selects).toEqual([[READ_USERS_COLUMNS]]);
   });

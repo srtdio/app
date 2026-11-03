@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { Switch } from '@/components/ui/Switch';
 import {
   computeMenuPlacement,
   Select,
@@ -1887,30 +1888,7 @@ function ShareToggle({
   return (
     <div className="flex min-h-[44px] items-center justify-between gap-3 text-base">
       <span className="[text-wrap:pretty]">{label}</span>
-      <PressableRow
-        inline
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        onClick={() => onChange(!checked)}
-        className="inline-flex shrink-0 items-center"
-      >
-        {/* The track keeps the pill shape; the row stays the plain primitive. */}
-        <span
-          aria-hidden
-          className={cn(
-            'relative inline-flex h-11 w-[60px] items-center rounded-full px-1 lit-well transition-colors motion-reduce:transition-none',
-            checked ? 'bg-accent' : 'bg-panel-3',
-          )}
-        >
-          <span
-            className={cn(
-              'h-7 w-7 rounded-full bg-panel lit-knob transition-transform motion-reduce:transition-none',
-              checked ? 'translate-x-[24px]' : 'translate-x-0',
-            )}
-          />
-        </span>
-      </PressableRow>
+      <Switch checked={checked} onChange={onChange} label={label} />
     </div>
   );
 }

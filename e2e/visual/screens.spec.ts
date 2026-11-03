@@ -228,6 +228,20 @@ async function seedPaletteRecents(
   ] as const);
 }
 
+/** Alerts on this device paused for 3 hours from the pinned clock, for ME on this device. */
+async function seedAlertsPaused(_network: HarnessNetwork, page: Page, now: number): Promise<void> {
+  const prefs = {
+    sound: true,
+    notifications: true,
+    pausedUntilMs: now + 3 * 3_600_000,
+    pausedHours: 3,
+  };
+  await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [
+    `sorted:alert-prefs:v1:${ME}`,
+    JSON.stringify(prefs),
+  ] as const);
+}
+
 /** A client plan (one concept with a library photo, one post) carded into the DM by ME. */
 function seedChatPlan(network: HarnessNetwork): void {
   (network.world.tables.assets ??= []).push({
@@ -416,6 +430,28 @@ async function contactSelect(page: Page, label: string): Promise<void> {
 
 const creator: AuditSeedOptions = { role: 'creator' };
 const approver: AuditSeedOptions = { role: 'approver' };
+
+/** Ana (an agency member) has catch-up emails off, turned off by the owner (ME). */
+function seedMemberEmailOffByOwner(network: HarnessNetwork): void {
+  for (const u of network.world.tables.users ?? []) {
+    u.email_opt_out_by = null;
+    if (u.id === COLLEAGUE_B) {
+      u.email_opt_in = false;
+      u.email_opt_out_by = ME;
+    }
+  }
+}
+
+/** Members panel, Ana's row ⋯, Change role: the member sheet. */
+async function openMemberSheet(page: Page): Promise<void> {
+  await waitFor([page.getByText('Emails off', { exact: true }).first()], 'settings members');
+  await tap(
+    [page.getByRole('button', { name: 'Actions for Ana Silva', exact: true })],
+    'member actions',
+  );
+  await tap(menuRow(page, /^Change role$/), 'change role');
+  await waitFor([page.getByText('Turned off by', { exact: false })], 'member sheet email row');
+}
 
 const SCREENS: Screen[] = [
   {
@@ -889,12 +925,46 @@ const SCREENS: Screen[] = [
       waitFor([page.getByText('Emails off', { exact: true }).first()], 'settings members'),
   },
   {
+    // Owner viewer: Ana's member sheet (row ⋯, Change role) with the Catch-up
+    // emails row under Role. The owner turned Ana's emails off, so the row is
+    // the unticked box with "Turned off by" the owner.
+    name: 'member-sheet',
+    seed: creator,
+    extra: seedMemberEmailOffByOwner,
+    url: '/settings?panel=members',
+    steps: openMemberSheet,
+  },
+  {
+    // The laptop sheet in dark (the laptop project is light).
+    name: 'member-sheet-dark',
+    seed: creator,
+    extra: seedMemberEmailOffByOwner,
+    only: 'laptop',
+    dark: true,
+    url: '/settings?panel=members',
+    steps: openMemberSheet,
+  },
+  {
     // Settings > Profile: the Catch-up emails tick box under the fields.
     name: 'settings-profile',
     seed: creator,
     url: '/settings?panel=profile',
     steps: async (page) =>
       waitFor([page.getByText('Catch-up emails', { exact: true })], 'settings profile'),
+  },
+  {
+    // Settings > Profile: Alerts on this device while paused for 3 hours (the
+    // banner with Resume above Pause for, the 3 hours chip selected). The
+    // pause is seeded on the device before load, so the first frame has it.
+    name: 'settings-profile-paused',
+    seed: creator,
+    prepare: seedAlertsPaused,
+    url: '/settings?panel=profile',
+    steps: async (page) => {
+      const banner = page.locator('[data-alerts-paused]');
+      await waitFor([banner], 'settings profile paused');
+      await page.locator('[data-alerts-block]').scrollIntoViewIfNeeded();
+    },
   },
   {
     name: 'composer-tray',

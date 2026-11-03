@@ -9,10 +9,13 @@ import {
   deliveryByMember,
   deriveMembers,
   domainBrandWord,
+  emailPatchAfterManagerSet,
   formatJoined,
   isActiveMember,
   isUndelivered,
   isPendingInvite,
+  memberEmailOptInOutcome,
+  memberEmailState,
   memberEmailTag,
   memberRemoveErrorMessage,
   roleLabel,
@@ -276,5 +279,75 @@ describe('catch-up email tag', () => {
 
   it('a missing field (older device cache) shows no tag', () => {
     expect(memberEmailTag(base, true)).toBeNull();
+  });
+});
+
+describe('catch-up email state (member sheet)', () => {
+  it('deriveMembers carries emailOptOutBy from the profile; a missing field stays absent', () => {
+    const profiles = new Map<string, ChatProfile>([
+      [
+        'u-mgr',
+        {
+          userId: 'u-mgr',
+          displayName: 'M',
+          avatarUrl: null,
+          emailOptIn: false,
+          emailOptOutBy: 'u-boss',
+        },
+      ],
+      [
+        'u-self',
+        {
+          userId: 'u-self',
+          displayName: 'S',
+          avatarUrl: null,
+          emailOptIn: false,
+          emailOptOutBy: null,
+        },
+      ],
+      ['u-old', { userId: 'u-old', displayName: 'O', avatarUrl: null, emailOptIn: false }],
+    ]);
+    const out = deriveMembers({
+      rows: [
+        row({ id: 'a', user_id: 'u-mgr' }),
+        row({ id: 'b', user_id: 'u-self' }),
+        row({ id: 'c', user_id: 'u-old' }),
+      ],
+      profiles,
+      currentUserId: null,
+    });
+    expect(out.agency.map((m) => m.emailOptOutBy)).toEqual(['u-boss', null, undefined]);
+    expect('emailOptOutBy' in out.agency[1]!).toBe(true);
+    expect('emailOptOutBy' in out.agency[2]!).toBe(false);
+  });
+
+  it('reads on, off by a manager, off by the person; unknown when not read', () => {
+    expect(memberEmailState({ emailOptIn: true, emailOptOutBy: null })).toBe('on');
+    expect(memberEmailState({ emailOptIn: true })).toBe('on');
+    expect(memberEmailState({ emailOptIn: false, emailOptOutBy: 'u-boss' })).toBe('off-by-manager');
+    expect(memberEmailState({ emailOptIn: false, emailOptOutBy: null })).toBe('off-by-member');
+    expect(memberEmailState({ emailOptIn: false })).toBeNull();
+    expect(memberEmailState({})).toBeNull();
+  });
+
+  it('a manager switch-off records the viewer; switch-on clears it', () => {
+    expect(emailPatchAfterManagerSet(false, 'u-me')).toEqual({
+      emailOptIn: false,
+      emailOptOutBy: 'u-me',
+    });
+    expect(emailPatchAfterManagerSet(true, 'u-me')).toEqual({
+      emailOptIn: true,
+      emailOptOutBy: null,
+    });
+  });
+
+  it('maps the proc error codes', () => {
+    expect(memberEmailOptInOutcome(null)).toBe('saved');
+    expect(memberEmailOptInOutcome({ message: 'turned_off_by_member' })).toBe(
+      'turned_off_by_member',
+    );
+    for (const code of ['forbidden', 'use_own_settings', 'not_found', 'invalid_input', 'x']) {
+      expect(memberEmailOptInOutcome({ message: code })).toBe('failed');
+    }
   });
 });

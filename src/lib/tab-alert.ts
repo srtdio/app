@@ -11,7 +11,14 @@
 //
 // The rules (titleFor, dotColor) are unit-tested; the controller below only
 // wires them to document.title, a canvas-drawn favicon and visibilitychange.
+//
+// The device's alert prefs gate the flash and the dot (Notifications off or a
+// Pause running: neither starts). They are asked at every push, every step and
+// before the dot is drawn, and a change while a flash runs (this tab or
+// another) stops it at once. The chat's plain "(N) " unread prefix (tabTitle,
+// set by ChatTabSignals) is not an alert and is never gated.
 
+import { currentTabAlertAllowed, subscribeAlertPrefs } from '@/lib/alert-prefs';
 import { tabTitle } from '@/lib/chat/notify-sound';
 
 export type TabAlertKind = 'activity' | 'chat';
@@ -127,7 +134,7 @@ function removeDotIcon(): void {
 function drawDotIcon(color: string): void {
   void loadIcon()
     .then((img) => {
-      if (queue.length === 0) return;
+      if (queue.length === 0 || !currentTabAlertAllowed()) return;
       const canvas = document.createElement('canvas');
       canvas.width = ICON_SIZE;
       canvas.height = ICON_SIZE;
@@ -177,11 +184,16 @@ function listen(): void {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) clearTabAlert();
   });
+  // Notifications off or a Pause set while flashing: stop now, not next step.
+  subscribeAlertPrefs(() => {
+    if ((timer !== null || queue.length > 0) && !currentTabAlertAllowed()) clearTabAlert();
+  });
 }
 
 /** Alert for one new event, only while the tab is in the background. */
 export function pushTabAlert(alert: TabAlert): void {
   if (typeof document === 'undefined' || !document.hidden) return;
+  if (!currentTabAlertAllowed()) return;
   listen();
   queue = [...queue, alert];
   step = 1;
@@ -190,7 +202,7 @@ export function pushTabAlert(alert: TabAlert): void {
   if (color !== null) drawDotIcon(color);
   if (timer === null) {
     timer = window.setInterval(() => {
-      if (!document.hidden) {
+      if (!document.hidden || !currentTabAlertAllowed()) {
         clearTabAlert();
         return;
       }
