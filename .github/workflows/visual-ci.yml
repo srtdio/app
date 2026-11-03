@@ -21,8 +21,9 @@ jobs:
   visual:
     runs-on: ubuntu-latest
     # Room for a slow apt mirror (see e2e-webkit.yml): the system-deps install
-    # alone has taken 14 minutes on some runners.
-    timeout-minutes: 30
+    # alone has taken 14 minutes on some runners. The screen step itself now
+    # takes about 15 minutes with the ipad-* projects, so it gets 25.
+    timeout-minutes: 45
     outputs:
       update: ${{ steps.mode.outputs.update }}
     steps:
@@ -103,12 +104,12 @@ jobs:
 
       - name: Compare screens with the baselines
         if: steps.mode.outputs.update != 'true'
-        timeout-minutes: 15
+        timeout-minutes: 25
         run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts
 
       - name: Render new baselines
         if: steps.mode.outputs.update == 'true'
-        timeout-minutes: 15
+        timeout-minutes: 25
         run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --update-snapshots=all
 
       - name: Upload new baselines
