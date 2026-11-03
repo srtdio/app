@@ -34,6 +34,11 @@ export interface ChatProfile {
    * (an older device-cache entry); the Members tag shows only when present.
    */
   emailOptIn?: boolean;
+  /**
+   * users.email_opt_out_by: the manager who turned catch-up emails off; null
+   * when on or turned off by the person. Absent for a profile read without it.
+   */
+  emailOptOutBy?: string | null;
 }
 
 /** One conversation in the channel list, with display info already resolved. */
@@ -348,12 +353,14 @@ export async function readProfiles(
     data: res.data.map((u) => {
       // Typed NOT NULL, but a row read without the column carries none.
       const optIn: unknown = u.email_opt_in;
+      const optOutBy: unknown = u.email_opt_out_by;
       return {
         userId: u.id,
         displayName: u.display_name,
         avatarUrl: u.avatar_url,
         username: u.username ?? null,
         ...(typeof optIn === 'boolean' ? { emailOptIn: optIn } : {}),
+        ...(optOutBy === null || typeof optOutBy === 'string' ? { emailOptOutBy: optOutBy } : {}),
       };
     }),
   };
@@ -597,8 +604,12 @@ async function readGroups(
   return { ok: true, data: (res.data ?? []) as GroupRow[] };
 }
 
-/** The users columns readUsers selects: one query, the profile slice plus email_opt_in. */
-export const READ_USERS_COLUMNS = 'id, display_name, avatar_url, username, email_opt_in';
+/**
+ * The users columns readUsers selects: one query, the profile slice plus the
+ * catch-up email state (email_opt_in, email_opt_out_by).
+ */
+export const READ_USERS_COLUMNS =
+  'id, display_name, avatar_url, username, email_opt_in, email_opt_out_by';
 
 async function readUsers(
   client: Client,

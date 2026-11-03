@@ -53,6 +53,11 @@ export interface MemberEntry {
   isSelf: boolean;
   /** users.email_opt_in; absent when the profile was read without it (older cache). */
   emailOptIn?: boolean;
+  /**
+   * users.email_opt_out_by: the manager who turned catch-up emails off; null
+   * when on or turned off by the person; absent when read without it.
+   */
+  emailOptOutBy?: string | null;
 }
 
 export interface DerivedMembers {
@@ -90,6 +95,7 @@ export function deriveMembers(params: {
       isOwner: row.role === 'owner',
       isSelf,
       ...(profile?.emailOptIn !== undefined ? { emailOptIn: profile.emailOptIn } : {}),
+      ...(profile?.emailOptOutBy !== undefined ? { emailOptOutBy: profile.emailOptOutBy } : {}),
     };
   };
 
@@ -129,6 +135,44 @@ export function activeMemberRole(
 export function memberEmailTag(member: MemberEntry, viewerCanManage: boolean): 'on' | 'off' | null {
   if (!viewerCanManage || member.emailOptIn === undefined) return null;
   return member.emailOptIn ? 'on' : 'off';
+}
+
+/**
+ * The member sheet's catch-up email state: on, off by a manager (who may turn it
+ * back on), or off by the person (only they can). Null when the state was not
+ * read (an older cache): the row hides rather than guess. Pure.
+ */
+export type MemberEmailState = 'on' | 'off-by-manager' | 'off-by-member';
+
+export function memberEmailState(
+  member: Pick<MemberEntry, 'emailOptIn' | 'emailOptOutBy'>,
+): MemberEmailState | null {
+  if (member.emailOptIn === undefined) return null;
+  if (member.emailOptIn) return 'on';
+  if (member.emailOptOutBy === undefined) return null;
+  return member.emailOptOutBy === null ? 'off-by-member' : 'off-by-manager';
+}
+
+/** The email fields after a manager's tick: off records the manager, on clears it. Pure. */
+export function emailPatchAfterManagerSet(
+  emailOptIn: boolean,
+  viewerId: string | null,
+): { emailOptIn: boolean; emailOptOutBy: string | null } {
+  return { emailOptIn, emailOptOutBy: emailOptIn ? null : viewerId };
+}
+
+/** What member_email_opt_in_set came back with, as the sheet acts on it. */
+export type MemberEmailOptInOutcome = 'saved' | 'failed' | 'turned_off_by_member';
+
+/**
+ * The proc's error (message is the code) as an outcome: turned_off_by_member
+ * means the person turned it off themselves since the list was read. Pure.
+ */
+export function memberEmailOptInOutcome(
+  error: { message: string } | null,
+): MemberEmailOptInOutcome {
+  if (error === null) return 'saved';
+  return error.message === 'turned_off_by_member' ? 'turned_off_by_member' : 'failed';
 }
 
 /** Clients can invite clients, but cannot manage or remove workspace members. */

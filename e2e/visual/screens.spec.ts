@@ -228,6 +228,24 @@ async function seedPaletteRecents(
   ] as const);
 }
 
+/** Alerts on this device paused for 3 hours from the pinned clock, for ME on this device. */
+async function seedAlertsPaused(
+  _network: HarnessNetwork,
+  page: Page,
+  now: number,
+): Promise<void> {
+  const prefs = {
+    sound: true,
+    notifications: true,
+    pausedUntilMs: now + 3 * 3_600_000,
+    pausedHours: 3,
+  };
+  await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [
+    `sorted:alert-prefs:v1:${ME}`,
+    JSON.stringify(prefs),
+  ] as const);
+}
+
 /** A client plan (one concept with a library photo, one post) carded into the DM by ME. */
 function seedChatPlan(network: HarnessNetwork): void {
   (network.world.tables.assets ??= []).push({
@@ -895,6 +913,20 @@ const SCREENS: Screen[] = [
     url: '/settings?panel=profile',
     steps: async (page) =>
       waitFor([page.getByText('Catch-up emails', { exact: true })], 'settings profile'),
+  },
+  {
+    // Settings > Profile: Alerts on this device while paused for 3 hours (the
+    // banner with Resume above Pause for, the 3 hours chip selected). The
+    // pause is seeded on the device before load, so the first frame has it.
+    name: 'settings-profile-paused',
+    seed: creator,
+    prepare: seedAlertsPaused,
+    url: '/settings?panel=profile',
+    steps: async (page) => {
+      const banner = page.locator('[data-alerts-paused]');
+      await waitFor([banner], 'settings profile paused');
+      await page.locator('[data-alerts-block]').scrollIntoViewIfNeeded();
+    },
   },
   {
     name: 'composer-tray',
