@@ -13,19 +13,20 @@
 // window is scrolled, it resets the window to 0,0. Nothing else is changed:
 // no gesture is prevented and the viewport meta is untouched.
 //
-// Page mode (src/lib/scroll-mode.ts, html.scroll-page: every in-shell route
-// but Chat): the document itself scrolls, so a scrolled window is the person's
+// Page mode on a phone (src/lib/scroll-mode.ts pageScrollActive: html.scroll-page,
+// every in-shell route but Chat, AND below md): the document itself scrolls, so a scrolled window is the person's
 // own position and is never reset. A visualViewport resize there is the
 // browser bars shrinking or growing, so it does nothing. Only the keyboard gap
 // is mended: the window position at focusin on a text field is kept, and on
 // focusout to a non-text target it is put back, and only when the root height
 // shrank while the field was focused and has not recovered. Locked mode (Chat,
-// auth, onboarding) keeps the reset to 0,0 above, unchanged.
+// auth, onboarding) and md and up (iPad, laptop: the class is set but the root
+// is still the locked 100svh shell) keep the reset to 0,0 above, unchanged.
 //
 // main.tsx calls it once at boot (mirroring initSentry / initTheme); a second
 // call on the same window registers nothing.
 
-import { pageModeClassOn } from '@/lib/scroll-mode';
+import { pageScrollActive } from '@/lib/scroll-mode';
 
 const registered = new WeakSet<object>();
 
@@ -58,7 +59,7 @@ export function isTextField(el: unknown): boolean {
 
 function resetIfUnfocused(focused: unknown): void {
   if (isTextField(focused)) return;
-  if (pageModeClassOn()) return;
+  if (pageScrollActive()) return;
   if (window.scrollY !== 0) window.scrollTo(0, 0);
 }
 
@@ -97,7 +98,7 @@ export function initViewportLock(): void {
   // text field's focusin until focus leaves text fields.
   let saved: FocusSnapshot | null = null;
   window.addEventListener('focusin', (event) => {
-    if (!pageModeClassOn() || !isTextField(event.target)) return;
+    if (!pageScrollActive() || !isTextField(event.target)) return;
     if (saved === null) saved = { top: window.scrollY, rootHeight: rootHeight() };
   });
 
@@ -105,7 +106,7 @@ export function initViewportLock(): void {
   // some engines); relatedTarget is the element receiving focus, or null.
   window.addEventListener('focusout', (event) => {
     const next = (event as FocusEvent).relatedTarget;
-    if (pageModeClassOn()) {
+    if (pageScrollActive()) {
       if (isTextField(next)) return;
       const top = focusRestoreTop(saved, { top: window.scrollY, rootHeight: rootHeight() });
       saved = null;
