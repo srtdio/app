@@ -34,7 +34,9 @@
 // othersRows drops them before any toast or tone.
 //
 // TONE: new Activity rows from someone else play the chat's notification tone
-// (shared throttle, notify-sound.ts), except while Notifications is open.
+// (shared throttle, notify-sound.ts), except while Notifications is open. The
+// tone, chime and tab alert obey the signed-in user's device alert prefs
+// (alert-prefs.ts); this provider tells that module who is signed in.
 //
 // PUSH: one private broadcast channel per signed-in user (inbox-push.ts). A
 // nudge for the active workspace runs the same tick as the poll, at most one

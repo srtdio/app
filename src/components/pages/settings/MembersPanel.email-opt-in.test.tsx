@@ -185,9 +185,9 @@ describe('Members panel: catch-up emails from the member sheet', () => {
     await openAshaSheet();
     expect(tag('u2')).toBe('on');
     const answer = heldRpc();
-    let outcome: Promise<string> | null = null;
+    const call: { outcome?: Promise<string> } = {};
     act(() => {
-      outcome = h.sheet!.onSetEmailOptIn(h.sheet!.member!, false);
+      call.outcome = h.sheet!.onSetEmailOptIn(h.sheet!.member!, false);
     });
     // Same frame: no wait on the call.
     expect(tag('u2')).toBe('off');
@@ -199,20 +199,20 @@ describe('Members panel: catch-up emails from the member sheet', () => {
       p_trace_id: 'trace-1',
     });
     await act(async () => answer(null));
-    await expect(outcome!).resolves.toBe('saved');
+    await expect(call.outcome).resolves.toBe('saved');
     expect(tag('u2')).toBe('off');
   });
 
   it('a failure puts the held value back', async () => {
     await openAshaSheet();
     const answer = heldRpc();
-    let outcome: Promise<string> | null = null;
+    const call: { outcome?: Promise<string> } = {};
     act(() => {
-      outcome = h.sheet!.onSetEmailOptIn(h.sheet!.member!, false);
+      call.outcome = h.sheet!.onSetEmailOptIn(h.sheet!.member!, false);
     });
     expect(tag('u2')).toBe('off');
     await act(async () => answer({ message: 'forbidden' }));
-    await expect(outcome!).resolves.toBe('failed');
+    await expect(call.outcome).resolves.toBe('failed');
     expect(tag('u2')).toBe('on');
     expect(h.sheet!.member).toMatchObject({ emailOptIn: true, emailOptOutBy: null });
   });
@@ -220,12 +220,12 @@ describe('Members panel: catch-up emails from the member sheet', () => {
   it('turned_off_by_member lands the off-by-the-person state', async () => {
     await openAshaSheet();
     const answer = heldRpc();
-    let outcome: Promise<string> | null = null;
+    const call: { outcome?: Promise<string> } = {};
     act(() => {
-      outcome = h.sheet!.onSetEmailOptIn(h.sheet!.member!, true);
+      call.outcome = h.sheet!.onSetEmailOptIn(h.sheet!.member!, true);
     });
     await act(async () => answer({ message: 'turned_off_by_member' }));
-    await expect(outcome!).resolves.toBe('turned_off_by_member');
+    await expect(call.outcome).resolves.toBe('turned_off_by_member');
     expect(tag('u2')).toBe('off');
     expect(h.sheet!.member).toMatchObject({ emailOptIn: false, emailOptOutBy: null });
   });
