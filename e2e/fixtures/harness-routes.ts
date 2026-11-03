@@ -1035,7 +1035,8 @@ function attachmentVersion(tables: Tables, link: Row): Row | undefined {
 
 /**
  * public.posts_list over the fixture tables: the live posts of a workspace
- * (optional stage and `before` cursor), ordered stage then newest first, capped
+ * (optional stage and `before` cursor), ordered newest first (created_at desc,
+ * id desc), capped
  * at 500, each with its first image (thumbnail) and first photo or video (cover)
  * in attachment display order. RLS is not emulated.
  */
@@ -1054,8 +1055,8 @@ const POSTS_RPC: Record<string, RpcHandler> = {
       )
       .sort(
         (a, b) =>
-          String(a.stage).localeCompare(String(b.stage)) ||
-          String(b.created_at).localeCompare(String(a.created_at)),
+          String(b.created_at).localeCompare(String(a.created_at)) ||
+          String(b.id).localeCompare(String(a.id)),
       )
       .slice(0, limit);
     return posts.map((post) => {
