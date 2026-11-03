@@ -337,10 +337,12 @@ describe('replies inside a checkpoint', () => {
 describe('one row template for checkpoints and comments', () => {
   function actionWords(rowId: string): string[] {
     const actions = rowEl(rowId)?.querySelector('[data-comment-actions]');
-    return Array.from(actions?.children ?? [])
-      .filter((el) => el.tagName === 'BUTTON' || el.hasAttribute('data-checkpoint-box'))
-      // Icon-only actions (Reply privately, Copy) read by their accessible name.
-      .map((el) => el.textContent?.trim() || (el.getAttribute('aria-label') ?? ''));
+    return (
+      Array.from(actions?.children ?? [])
+        .filter((el) => el.tagName === 'BUTTON' || el.hasAttribute('data-checkpoint-box'))
+        // Icon-only actions (Reply privately, Copy) read by their accessible name.
+        .map((el) => el.textContent?.trim() || (el.getAttribute('aria-label') ?? ''))
+    );
   }
 
   it('a checkpoint and a plain comment share the header, body and action row', async () => {
