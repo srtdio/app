@@ -147,6 +147,7 @@ export const AREAS: Area[] = [
       'onboarding-creator',
       'onboarding-invited',
       'onboarding-approver',
+      'document-scroll',
       'pipeline-back-scroll',
       'plan-desktop',
       'post-open-media-cover',
