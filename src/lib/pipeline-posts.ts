@@ -14,8 +14,17 @@
 // board's own writes replace them (primePipelinePosts). Sign-out deletes them.
 
 import { mark } from '@/lib/perf-marks';
-import { listPosts, type Client, type PipelinePost } from '@srtdio/posts';
-import type { Result } from '@srtdio/rpc';
+import {
+  listPosts,
+  pipelinePostFromRow,
+  type Client,
+  type PipelinePost,
+  type PostsListRow,
+} from '@srtdio/posts';
+import type { Database } from '@srtdio/schemas';
+import { withTraceHeader, type Result } from '@srtdio/rpc';
+import { abortable } from '@/lib/chat-reads';
+import { serverSearchQuery } from '@/lib/search/server-search';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
 import { PLAN_CHANGED_EVENT } from '@/lib/chat/plans';
 import { readSharedMemberRole } from '@/lib/member-role';
@@ -65,6 +74,56 @@ export function readPipelinePosts(
       }),
     { isOk: (result) => result.ok },
   );
+}
+
+type PostsSearchArgs = Database['public']['Functions']['posts_search']['Args'];
+
+/**
+ * posts_search's named args: the query normalized (the proc escapes LIKE
+ * itself), the stage when one is given, and the board's own page size. Pure.
+ */
+export function postsSearchArgs(input: {
+  workspaceId: string;
+  query: string;
+  traceId: string;
+  stage?: string;
+  before?: string;
+}): PostsSearchArgs {
+  return {
+    p_trace_id: input.traceId,
+    p_workspace_id: input.workspaceId,
+    p_query: serverSearchQuery(input.query),
+    p_limit: PIPELINE_POSTS_LIMIT,
+    ...(input.stage !== undefined ? { p_stage: input.stage } : {}),
+    ...(input.before !== undefined ? { p_before: input.before } : {}),
+  };
+}
+
+/**
+ * The board's search (2+ characters): ONE posts_search call, the same row
+ * shape as posts_list (mapped by the same pipelinePostFromRow), never kept in
+ * the session (a search is never painted on a return). A fresh uuid_v7 per call
+ * as p_trace_id. Aborted by `signal` (a newer query). Never throws.
+ */
+export async function searchPipelinePosts(
+  client: Client,
+  input: { workspaceId: string; query: string; stage?: string },
+  signal?: AbortSignal,
+): Promise<Result<PipelinePost[]>> {
+  if (serverSearchQuery(input.query) === '') return { ok: true, data: [] };
+  const args = postsSearchArgs({ ...input, traceId: generateTraceId() });
+  try {
+    const { data, error } = await abortable(
+      withTraceHeader(client.rpc('posts_search', args), args.p_trace_id),
+      signal,
+    );
+    if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
+    // As posts_list: the generated Returns marks every column non-null.
+    const rows: PostsListRow[] = data ?? [];
+    return { ok: true, data: rows.map(pipelinePostFromRow) };
+  } catch (error) {
+    return { ok: false, error: { code: 'unknown', message: String(error) } };
+  }
 }
 
 /**

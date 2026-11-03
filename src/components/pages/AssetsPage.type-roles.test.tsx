@@ -37,12 +37,17 @@ vi.mock('@/lib/assets', async (importOriginal) => {
     listAssets: (...args: unknown[]) => listAssets(...args),
     // The page reads keyset pages; a mocked plain list is one (last) page, and a
     // mocked { items, next } page passes through as is.
+    // A search (the fourth arg) stands in for the server's filename match.
     listAssetsPage: async (...args: unknown[]) => {
       const result = (await listAssets(...args)) as
         | { ok: true; data: unknown }
         | { ok: false; error: unknown };
       if (!result.ok || !Array.isArray(result.data)) return result;
-      return { ok: true, data: { items: result.data, next: { done: true } } };
+      const search = typeof args[3] === 'string' ? args[3].toLowerCase() : '';
+      const items = (result.data as { filename: string }[]).filter((row) =>
+        row.filename.toLowerCase().includes(search),
+      );
+      return { ok: true, data: { items, next: { done: true } } };
     },
     fetchMemberRole: async () => 'owner',
     findAssetsInUse: vi.fn(),
@@ -156,6 +161,8 @@ describe('Assets page type roles', () => {
   it('a search with no match reads as an empty state', async () => {
     await mount();
     await typeSearch('zzz');
+    // The search goes to the server after the 250ms debounce.
+    await act(async () => new Promise((r) => setTimeout(r, 300)));
     expectRole(byText('Try another word for "zzz".'), ['text-lg', 'font-semibold', 'text-fg']);
     expect(byText('Clear search')).toBeTruthy();
   });

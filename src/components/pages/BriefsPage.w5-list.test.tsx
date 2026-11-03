@@ -47,7 +47,9 @@ vi.mock('@/lib/brief-list', async (importOriginal) => {
       return { ok: true, data: { items: result.data, next: { done: true } } };
     },
     // The first page paints before its thumbnails; here the mocked rows carry
-    // their thumbnails already, so the thumbnails read finds nothing more.
+    // their thumbnails already, so the thumbnails read finds nothing more. A
+    // search (the third arg) stands in for the server's title-or-objective
+    // match over the mocked rows.
     listBriefsFirstPage: async (...args: unknown[]) => {
       const result = (await listBriefs(...args)) as
         | { ok: true; data: unknown }
@@ -55,7 +57,15 @@ vi.mock('@/lib/brief-list', async (importOriginal) => {
       if (!result.ok) return result;
       const page = Array.isArray(result.data)
         ? { items: result.data, next: { done: true } }
-        : (result.data as { items: unknown[]; next: unknown });
+        : { ...(result.data as { items: unknown[]; next: unknown }) };
+      const search = typeof args[2] === 'string' ? args[2].toLowerCase() : '';
+      if (search !== '') {
+        page.items = (page.items as { title: string; objective: string }[]).filter(
+          (row) =>
+            row.title.toLowerCase().includes(search) ||
+            row.objective.toLowerCase().includes(search),
+        );
+      }
       const thumbs = Promise.resolve({ ok: true, data: new Map() });
       return { ok: true, data: { ...page, thumbs } };
     },
@@ -139,6 +149,8 @@ async function mount(path = '/briefs') {
     );
   });
   await act(async () => new Promise((r) => setTimeout(r, 0)));
+  // A ?q= search goes to the server after the 250ms debounce.
+  if (path.includes('q=')) await act(async () => new Promise((r) => setTimeout(r, 300)));
 }
 
 const text = () => document.body.textContent ?? '';
@@ -447,16 +459,47 @@ describe('Briefs chip counts', () => {
     expect(countBriefs).toHaveBeenCalledTimes(2);
   });
 
-  it('re-reads the counts for a typed search once typing pauses, not per keystroke', async () => {
-    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { title: 'Launch reel' })] });
+  it('searches on the server once typing pauses: the page and the counts, not per keystroke', async () => {
+    listBriefs.mockResolvedValue({
+      ok: true,
+      data: [brief('b1', { title: 'Launch reel' }), brief('b2', { title: 'Recap' })],
+    });
     await mount();
     expect(countBriefs).toHaveBeenCalledTimes(1);
+    expect(listBriefs).toHaveBeenCalledTimes(1);
     await typeSearch('la');
     await typeSearch('lau');
     await act(async () => new Promise((r) => setTimeout(r, 400)));
+    // One search for the settled query: the first page and the counts.
+    expect(listBriefs).toHaveBeenCalledTimes(2);
+    expect(listBriefs.mock.calls[1]?.[2]).toBe('lau');
     expect(countBriefs).toHaveBeenCalledTimes(2);
     expect(countBriefs.mock.calls[1]?.[2]).toBe('lau');
-    // The list itself is not re-read for a search.
+    expect(text()).toContain('Launch reel');
+    expect(text()).not.toContain('Recap');
+  });
+
+  it('one character is the normal list: nothing is sent', async () => {
+    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { title: 'Launch reel' })] });
+    await mount();
+    await typeSearch('l');
+    await act(async () => new Promise((r) => setTimeout(r, 400)));
     expect(listBriefs).toHaveBeenCalledTimes(1);
+    expect(countBriefs).toHaveBeenCalledTimes(1);
+    expect(text()).toContain('Launch reel');
+  });
+
+  it('a newer query aborts the search in flight', async () => {
+    listBriefs.mockResolvedValueOnce({ ok: true, data: [brief('b1')] });
+    await mount();
+    // The first search never answers: it is still in flight when the query changes.
+    listBriefs.mockReturnValueOnce(new Promise(() => {}));
+    await typeSearch('la');
+    await act(async () => new Promise((r) => setTimeout(r, 300)));
+    const first = listBriefs.mock.calls[1]?.[3] as AbortSignal | undefined;
+    expect(first?.aborted).toBe(false);
+    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1')] });
+    await typeSearch('lau');
+    expect(first?.aborted).toBe(true);
   });
 });

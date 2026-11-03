@@ -56,7 +56,13 @@ vi.mock('@/components/media/Thumbnail', () => ({ Thumbnail: () => null }));
 import { PlanCalendar } from '@/components/pages/plan-tab/PlanCalendar';
 import { PlanTabLoadMore } from '@/components/pages/plan-tab/PlanTabList';
 import { ToastProvider } from '@/components/ui/toast';
-import { PlanTabPage, entryRoute } from '@/components/pages/PlanTabPage';
+import {
+  PlanSearchResults,
+  PlanTabPage,
+  entryRoute,
+  itemRoute,
+  matchedItemTitle,
+} from '@/components/pages/PlanTabPage';
 import { civilToday } from '@/lib/plan-week';
 
 const TODAY = civilToday(new Date(), 'UTC');
@@ -362,5 +368,49 @@ describe('PlanTabPage', () => {
         post: { id: 'p1', title: '', stage: 'review', target_date: null },
       }),
     ).toBe('/posts/p1');
+  });
+});
+
+describe('Plan search results', () => {
+  function results(query: string, matched: Record<string, string[]>, bundles = DATA.bundles) {
+    return renderToStaticMarkup(
+      <MemoryRouter>
+        <PlanSearchResults
+          bundles={bundles}
+          thumbs={DATA.thumbs}
+          matchedItems={matched}
+          query={query}
+          onOpenPlan={() => {}}
+          onOpenItem={() => {}}
+          onClear={() => {}}
+        />
+      </MemoryRouter>,
+    );
+  }
+
+  it('lists each plan as its card, with its matched items, the searched words marked', () => {
+    const html = results('open', { shared: ['i2'] });
+    expect(html).toContain('data-plan-tab-results');
+    expect(html).toContain('data-plan-tab-card="draft"');
+    expect(html).toContain('data-plan-tab-card="shared"');
+    expect(html).toContain('data-plan-tab-match="i2"');
+    expect(html).not.toContain('data-plan-tab-match="i1"');
+    expect(html).toMatch(/<mark[^>]*data-search-mark=""[^>]*>Open<\/mark>/);
+    // A matched item row is a full-height (44px) tappable row.
+    expect(html).toMatch(
+      /<button[^>]*min-h-\[44px\][^>]*data-plan-tab-match="i2"|data-plan-tab-match="i2"[^>]*min-h-\[44px\]/,
+    );
+  });
+
+  it('zero matches: the shared NoResults line, never an "empty" state', () => {
+    const html = results('zz', {}, []);
+    expect(html).toContain('Try another word for &quot;zz&quot;.');
+    expect(html).not.toMatch(/empty|No matches|Nothing/i);
+  });
+
+  it('an item opens in its plan, as the calendar does', () => {
+    expect(itemRoute('shared', 'i2')).toBe('/plan/shared?item=i2');
+    expect(matchedItemTitle(DATA.bundles[1] as PlanBundle, 'i2')).toBe('Open idea');
+    expect(matchedItemTitle(DATA.bundles[1] as PlanBundle, 'gone')).toBeNull();
   });
 });

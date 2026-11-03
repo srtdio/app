@@ -69,9 +69,11 @@ import {
   keptPipelinePosts,
   primePipelinePosts,
   readPipelinePosts,
+  searchPipelinePosts,
   stalePipelinePosts,
   PIPELINE_POSTS_LIMIT,
 } from '@/lib/pipeline-posts';
+import { useServerSearch } from '@/lib/search/server-search';
 import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
 import {
   ROLE_READ_ERROR,
@@ -83,7 +85,6 @@ import {
   DATE_WINDOW_DEFAULT,
   POST_SORT_DEFAULT,
   POST_SORT_OPTIONS,
-  filterByFields,
   filterByWindow,
   isUndated,
   sortPosts,
@@ -1100,18 +1101,33 @@ export function PipelinePage() {
     setParams(next, { replace: true });
   }, [params, setParams]);
 
-  // Search + sort are pure, derived over the in-memory list (listPosts loads the
-  // whole board), so no refetch and no N+1: filter by title + caption, then the
-  // date window (undated posts kept once "Show them" is tapped for this window),
-  // then order, then group into columns. groupByStage is generic over the
-  // element type, so it preserves PipelinePost (thumbnailAssetVersionId and
-  // all) with no assertion.
+  // Search runs on the server (posts_search, src/lib/search/server-search.ts):
+  // from 2 characters, 250ms after the last keystroke, a newer query aborting
+  // the one in flight; under 2 characters the board is the normal list. The
+  // search covers every stage, so each chip's count is its matches and the
+  // chip still filters them; the date window and the sort below apply as
+  // before. A result also on the board shows the board's copy, so an
+  // optimistic move lands in the right column. Sort is pure, derived in
+  // memory: the date window (undated posts kept once "Show them" is tapped for
+  // this window), then order, then group into columns. groupByStage is generic
+  // over the element type, so it preserves PipelinePost with no assertion.
+  const postSearch = useServerSearch<PipelinePost[]>(
+    search,
+    (q, signal) =>
+      workspaceId === null
+        ? Promise.resolve({ ok: true as const, data: [] })
+        : searchPipelinePosts(supabase, { workspaceId, query: q }, signal),
+    workspaceId ?? '',
+  );
+  const searchActive = postSearch.active;
+  const searchPending = searchActive && postSearch.data === null && postSearch.status !== 'error';
   const dateKey = `${dateWindow}:${customRange?.start ?? ''}:${customRange?.end ?? ''}`;
   const includeUndated = undatedShownFor === dateKey;
-  const searched = useMemo(
-    () => filterByFields(shownPosts, search, postSearchFields),
-    [shownPosts, search],
-  );
+  const searched = useMemo(() => {
+    if (!searchActive) return shownPosts;
+    const onBoard = new Map(shownPosts.map((post) => [post.id, post]));
+    return (postSearch.data ?? []).map((post) => onBoard.get(post.id) ?? post);
+  }, [shownPosts, searchActive, postSearch.data]);
   const sorted = useMemo(
     () =>
       sortPosts(
@@ -1138,9 +1154,9 @@ export function PipelinePage() {
 
   // Counts live on the chips. Only while a search or date filter narrows the
   // view does a line say "{shown} of {total} posts" (total: this chip's posts).
-  const narrowed = filtersActive(query);
+  const narrowed = searchActive || dateFilterActive(query);
   const countLabel = headerCountLabel(visibleCount, inStage(shownPosts).length, true);
-  const showFilteredEmpty = narrowed && visibleCount === 0;
+  const showFilteredEmpty = narrowed && visibleCount === 0 && !searchPending;
   // Undated posts the date window hides on this chip (after the search).
   const hiddenUndated =
     dateFilterActive(query) && !includeUndated ? inStage(searched).filter(isUndated).length : 0;
@@ -1254,7 +1270,10 @@ export function PipelinePage() {
         );
 
   const boardLoading =
-    workspaceId === null || !live || (postsLoading && posts.length === 0 && !postsFailed);
+    workspaceId === null ||
+    !live ||
+    (postsLoading && posts.length === 0 && !postsFailed) ||
+    searchPending;
   // No posts at all (not a filter hiding them) once a read has succeeded.
   const pipelineEmpty = !boardLoading && !postsFailed && !postsLoading && shownPosts.length === 0;
   // Back on the board, the scroll lands where it was once the posts painted.
@@ -1293,38 +1312,44 @@ export function PipelinePage() {
       ) : null}
 
       {/* The chips and filters above stay usable through a failed read. */}
-      {live && postsFailed
-        ? postsLoadError(() => void loadPosts(), postsLoading)
-        : boardLoading
-          ? postsSkeleton(isDesktop, {
-              kanban: stage === ALL_KEY,
-              ratio: skeletonRatio(activeWorkspace?.platform),
-              columns: boardStages(stage, role).length,
-            })
-          : pipelineEmpty
-            ? emptyPipeline()
-            : showFilteredEmpty
-              ? filteredEmpty(query.search, dateFilterActive(query), clearFilters)
-              : pipelineSurface({
-                  stage,
-                  isDesktop,
-                  sorted,
-                  grouped,
-                  cache,
-                  presignEnabled,
-                  workspaceKey,
-                  onViewAll: setStage,
-                  onMovePost: requestBoardMove,
-                  onLongPressPost: openMove,
-                  role,
-                  roleReady: roleStatus === 'ready',
-                  onBlockedMove,
-                  shownKey,
-                  timeZone,
-                  viewer,
-                  covers,
-                  approvers: people.approvers,
-                })}
+      {live && searchActive && postSearch.status === 'error' && postSearch.data === null
+        ? postsLoadError(() => postSearch.refresh(), false)
+        : live && postsFailed
+          ? postsLoadError(() => void loadPosts(), postsLoading)
+          : boardLoading
+            ? postsSkeleton(isDesktop, {
+                kanban: stage === ALL_KEY,
+                ratio: skeletonRatio(activeWorkspace?.platform),
+                columns: boardStages(stage, role).length,
+              })
+            : pipelineEmpty
+              ? emptyPipeline()
+              : showFilteredEmpty
+                ? filteredEmpty(
+                    searchActive ? query.search : '',
+                    dateFilterActive(query),
+                    clearFilters,
+                  )
+                : pipelineSurface({
+                    stage,
+                    isDesktop,
+                    sorted,
+                    grouped,
+                    cache,
+                    presignEnabled,
+                    workspaceKey,
+                    onViewAll: setStage,
+                    onMovePost: requestBoardMove,
+                    onLongPressPost: openMove,
+                    role,
+                    roleReady: roleStatus === 'ready',
+                    onBlockedMove,
+                    shownKey,
+                    timeZone,
+                    viewer,
+                    covers,
+                    approvers: people.approvers,
+                  })}
 
       <MoveSheet
         open={movePostTarget !== null}

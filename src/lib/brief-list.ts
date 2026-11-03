@@ -5,6 +5,8 @@
 
 import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
 import type { Client, Result } from '@srtdio/rpc';
+// Relative, not `@/`: the briefs DB suite loads this module without the alias.
+import { andOrFilters, ilikeAnyFilter, serverSearchQuery, withAbort } from './search/server-search';
 
 // The same status type BriefCard's BriefStatus is built from. Read off the
 // package here (type only) so this module imports nothing from components and
@@ -53,10 +55,38 @@ export const BRIEF_NOTE_PARAM = 'note';
 /** Briefs per list page. */
 export const BRIEF_LIST_PAGE_SIZE = 100;
 
-/** Where the next briefs page starts: the last loaded row's (created_at, id). */
+/**
+ * Where the next briefs page starts: the last loaded row's (created_at, id),
+ * and the search that page answered (absent for the plain list), so a Load
+ * more always continues the same search and a cursor of another search is
+ * never applied to this one.
+ */
 export interface BriefCursor {
   createdAt: string;
   id: string;
+  query?: string;
+}
+
+/** The columns the Briefs search matches (ILIKE, either one). The chip counts use the same. */
+export const BRIEF_SEARCH_COLUMNS = ['title', 'objective'] as const;
+
+/**
+ * The search's or() list: title or objective ILIKE the escaped, quoted
+ * pattern; '' under 2 characters (no filter). Pure.
+ */
+export function briefSearchFilter(search: string): string {
+  return ilikeAnyFilter(BRIEF_SEARCH_COLUMNS, search);
+}
+
+/**
+ * The ONE or() argument of a page read: the keyset cursor AND the search
+ * (and=(or(cursor),or(search)) when both are set); '' when neither. Pure.
+ */
+export function briefPageFilter(cursor: BriefCursor | undefined, search: string): string {
+  return andOrFilters(
+    cursor !== undefined ? briefKeysetFilter(cursor) : '',
+    briefSearchFilter(search),
+  );
 }
 
 /** Whether another page follows, and where it starts. Never null. */
@@ -142,22 +172,34 @@ interface BriefRowsPage {
   next: BriefPageNext;
 }
 
-/** One keyset page of brief rows (one request): the briefs read of {@link listBriefsPage}. */
+/**
+ * One keyset page of brief rows (one request): the briefs read of
+ * {@link listBriefsPage}. A search (2+ characters) adds title or objective
+ * ILIKE on the server, ANDed with the cursor in one or(); the page size is the
+ * same. `signal` aborts it (a newer search).
+ */
 async function listBriefRows(
   client: Client,
   workspaceId: string,
   cursor?: BriefCursor,
+  search = '',
+  signal?: AbortSignal,
 ): Promise<Result<BriefRowsPage>> {
+  const searched = serverSearchQuery(search);
   let query = client
     .from('briefs')
     .select('*')
     .is('deleted_at', null)
     .eq('workspace_id', workspaceId);
-  if (cursor !== undefined) query = query.or(briefKeysetFilter(cursor));
-  const { data, error } = await query
-    .order('created_at', { ascending: false })
-    .order('id', { ascending: false })
-    .limit(BRIEF_LIST_PAGE_SIZE + 1);
+  const filter = briefPageFilter(cursor, searched);
+  if (filter !== '') query = query.or(filter);
+  const { data, error } = await withAbort(
+    query
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(BRIEF_LIST_PAGE_SIZE + 1),
+    signal,
+  );
   if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
 
   const fetched: Brief[] = data ?? [];
@@ -165,7 +207,14 @@ async function listBriefRows(
   const last = rows[rows.length - 1];
   const next: BriefPageNext =
     fetched.length > BRIEF_LIST_PAGE_SIZE && last !== undefined
-      ? { done: false, cursor: { createdAt: last.created_at, id: last.id } }
+      ? {
+          done: false,
+          cursor: {
+            createdAt: last.created_at,
+            id: last.id,
+            ...(searched !== '' ? { query: searched } : {}),
+          },
+        }
       : { done: true };
   return { ok: true, data: { rows, next } };
 }
@@ -193,8 +242,10 @@ export async function listBriefsPage(
   client: Client,
   workspaceId: string,
   cursor?: BriefCursor,
+  search: string = cursor?.query ?? '',
+  signal?: AbortSignal,
 ): Promise<Result<BriefPage>> {
-  const page = await listBriefRows(client, workspaceId, cursor);
+  const page = await listBriefRows(client, workspaceId, cursor, search, signal);
   if (!page.ok) return page;
   const { rows, next } = page.data;
   const thumbnails = await firstImageByBrief(
@@ -247,12 +298,17 @@ function thumbsThrew(thrown: unknown): Result<Map<string, string>> {
   return { ok: false, error: { code: 'unknown', message } };
 }
 
-/** The first page's rows (one request), with the thumbnails read started on them. */
+/**
+ * The first page's rows (one request), with the thumbnails read started on
+ * them. `search` (2+ characters) narrows them on the server (the search path).
+ */
 export async function listBriefsFirstPage(
   client: Client,
   workspaceId: string,
+  search = '',
+  signal?: AbortSignal,
 ): Promise<Result<BriefsFirstPage>> {
-  const page = await listBriefRows(client, workspaceId);
+  const page = await listBriefRows(client, workspaceId, undefined, search, signal);
   if (!page.ok) return page;
   const { rows, next } = page.data;
   const ids = rows.map((brief) => brief.id);

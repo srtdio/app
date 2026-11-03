@@ -887,6 +887,29 @@ describe('notifications fixes: page and provider wiring', () => {
     'utf8',
   );
 
+  it('server search: the shared header, ?q= in the URL, chips hidden, newest first only', () => {
+    // Search left, sort right, through the shared SectionHeader + SortMenu.
+    expect(page).toContain('<SectionHeader<ActivityDirection>');
+    expect(page).toContain("placeholder: 'Search activity'");
+    expect(page).toContain('options={activitySortOptions(searching)}');
+    expect(page).toContain("{ value: 'newest', label: 'Newest first' }");
+    expect(page).toContain("{ value: 'oldest', label: 'Oldest first' }");
+    expect(page).not.toMatch(/label: 'Newest'|label: 'Oldest'/);
+    // The query lives in the URL; the search is the shared debounced runner.
+    expect(page).toContain("const SEARCH_PARAM = 'q';");
+    expect(page).toContain('useServerSearch<ActivityItem[]>(');
+    expect(page).toContain('searchActivityEntries(supabase, workspaceId, { query }, signal)');
+    // Oldest first is never faked by reversing pages: searching reads newest first.
+    expect(page).toContain("const sort: ActivityDirection = searching ? 'newest' : storedSort;");
+    // The chips (and their Mark all read) hide while searching; results ignore the chip.
+    expect(page).toMatch(/\{searching \? null : \(\s*<ActivityFilterBar/);
+    expect(page).toContain('? groupDigest(items, sort, { nowMs, tz })');
+    // Load more while searching pages the search, keyset on (created_at, id).
+    expect(page).toContain('await searchActivityEntries(supabase, workspaceId, { query, cursor })');
+    // The live poll never merges into search results.
+    expect(page).toContain("if (!searchingRef.current) void loadActivity('merge');");
+  });
+
   it('fix 9: opening a group marks every unread entry in it, not only the lead', () => {
     expect(page).toContain(
       'const unread = group.filter((e) => e.readAt === null && openAction(e, workspaceKey).markRead);',

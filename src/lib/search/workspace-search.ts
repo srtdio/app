@@ -43,8 +43,10 @@ export const WORKSPACE_KINDS = [
   'file',
   'plan',
   'plan_item',
+  'plan_item_comment',
   'task',
   'chat_group',
+  'activity',
 ] as const;
 export type WorkspaceKind = (typeof WORKSPACE_KINDS)[number];
 
@@ -53,7 +55,13 @@ function isKind(value: string): value is WorkspaceKind {
   return KINDS.has(value);
 }
 
-/** One workspace hit. A comment's parent is its post or brief; a plan item's its plan. */
+/**
+ * One workspace hit. A comment's parent is its post or brief; a plan item's
+ * (and a plan item comment's, whose id is its item) its plan. An activity
+ * hit's entityType is its subject's type and its parent the subject (the plan,
+ * for a plan item's event); a chat event carries the chat in channelId; its
+ * snippet is the event type (the palette words it as the feed does).
+ */
 export interface WorkspaceHit {
   kind: WorkspaceKind;
   id: string;
@@ -218,11 +226,38 @@ function entityPath(type: string, id: string, n: number | null, key: string | nu
 }
 
 /**
+ * Where an activity hit opens: its subject through the existing routes (a post
+ * or brief its page, a plan or plan item its plan, a chat its chat), or, for an
+ * event with no subject to open, the Activity page. Pure.
+ */
+export function activityHitPath(hit: WorkspaceHit, workspaceKey: string | null): string {
+  const subject = hit.parentId;
+  switch (hit.entityType) {
+    case 'post':
+    case 'brief':
+      if (subject !== null) return entityPath(hit.entityType, subject, hit.number, workspaceKey);
+      break;
+    case 'plan':
+    case 'plan_item':
+      if (subject !== null) return planHref(subject, null);
+      break;
+    case 'chat_channel':
+      if (hit.channelId !== null) return chatMessageHref(hit.channelId, null);
+      break;
+  }
+  return ACTIVITY_PATH;
+}
+
+/** The Activity page's path (the /activity alias redirects here). */
+export const ACTIVITY_PATH = '/notifications';
+
+/**
  * Where a hit opens, through the existing routes, carrying the searched words
  * (withSearchJump, the one jump mechanism): a post or brief its page; a
  * comment its parent at the comment (?comment=); a file the viewer (?asset=);
- * a plan its page; a plan item its plan, scrolled to the item (at=); a task its
- * chat's task sheet; a group its chat; a person their DM (no words). Pure.
+ * a plan its page; a plan item, and a plan item comment, its plan scrolled to
+ * the item (at=); a task its chat's task sheet; a group its chat; an activity
+ * event its subject (activityHitPath); a person their DM (no words). Pure.
  */
 export function workspaceHitTarget(
   hit: WorkspaceHit,
@@ -245,7 +280,10 @@ export function workspaceHitTarget(
     case 'plan':
       return jump(planHref(hit.id, null));
     case 'plan_item':
+    case 'plan_item_comment':
       return jump(planHref(hit.parentId ?? '', null), hit.id);
+    case 'activity':
+      return jump(activityHitPath(hit, workspaceKey));
     case 'task':
       return jump(chatTaskHref(hit.channelId ?? '', hit.id));
     case 'chat_group':

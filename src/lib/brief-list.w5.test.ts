@@ -5,6 +5,9 @@ import {
   BRIEF_LIST_PAGE_SIZE,
   briefKeysetFilter,
   briefListParams,
+  briefPageFilter,
+  briefSearchFilter,
+  listBriefsFirstPage,
   listBriefsPage,
   mergeBriefPages,
   parseBriefFilter,
@@ -198,6 +201,71 @@ describe('listBriefsPage keyset paging', () => {
       ok: false,
       error: { code: 'unknown', message: 'boom' },
     });
+  });
+});
+
+describe('listBriefsPage server search (title or objective ILIKE)', () => {
+  const cursor = { createdAt: '2026-09-30T23:58:20.123456+00:00', id: 'b09900' };
+  const SEARCH = 'title.ilike."%reel%",objective.ilike."%reel%"';
+  const briefsOr = (calls: Call[]) =>
+    calls.filter((c) => c.table === 'briefs' && c.method === 'or').map((c) => c.args[0]);
+
+  it('a search alone is one or(): title or objective, quoted', async () => {
+    const { client, calls } = recordingClient({ briefs: [{ data: [], error: null }] });
+    await listBriefsPage(client, 'w1', undefined, ' reel ');
+    expect(briefsOr(calls)).toEqual([SEARCH]);
+  });
+
+  it('cursor AND search: ONE or() param holding and(or(cursor),or(search)), never two', async () => {
+    const { client, calls } = recordingClient({ briefs: [{ data: [], error: null }] });
+    await listBriefsPage(client, 'w1', cursor, 'reel');
+    expect(briefsOr(calls)).toEqual([`and(or(${briefKeysetFilter(cursor)}),or(${SEARCH}))`]);
+    expect(briefsOr(calls)).toEqual([briefPageFilter(cursor, 'reel')]);
+  });
+
+  it('escapes LIKE metacharacters and PostgREST quoting in the value', () => {
+    expect(briefSearchFilter('50%_"a"\\b')).toBe(
+      'title.ilike."%50\\\\%\\\\_\\"a\\"\\\\\\\\b%",' +
+        'objective.ilike."%50\\\\%\\\\_\\"a\\"\\\\\\\\b%"',
+    );
+  });
+
+  it('under 2 characters is the plain list: no search filter', async () => {
+    const { client, calls } = recordingClient({ briefs: [{ data: [], error: null }] });
+    await listBriefsFirstPage(client, 'w1', 'r');
+    expect(briefsOr(calls)).toEqual([]);
+  });
+
+  it("a search page's cursor carries its query, and Load more continues that search", async () => {
+    const first = recordingClient({
+      briefs: [{ data: briefRows(0, BRIEF_LIST_PAGE_SIZE + 1), error: null }],
+    });
+    const page = await listBriefsFirstPage(first.client, 'w1', 'reel');
+    expect(page.ok).toBe(true);
+    if (!page.ok || page.data.next.done) throw new Error('expected a next page');
+    const next = page.data.next.cursor;
+    expect(next.query).toBe('reel');
+    const second = recordingClient({ briefs: [{ data: [], error: null }] });
+    // No search argument: the cursor's own query is the search.
+    await listBriefsPage(second.client, 'w1', next);
+    expect(briefsOr(second.calls)).toEqual([briefPageFilter(next, 'reel')]);
+    expect(briefsOr(second.calls)[0]).toContain(SEARCH);
+  });
+
+  it('passes the abort signal to the read', async () => {
+    const signals: AbortSignal[] = [];
+    const b: Record<string, unknown> = {};
+    for (const method of ['select', 'eq', 'is', 'order', 'or', 'limit']) b[method] = () => b;
+    b.abortSignal = (signal: AbortSignal) => {
+      signals.push(signal);
+      return b;
+    };
+    b.then = (resolve: (v: unknown) => unknown) =>
+      Promise.resolve({ data: [], error: null }).then(resolve);
+    const client = { from: () => b } as unknown as Client;
+    const controller = new AbortController();
+    await listBriefsFirstPage(client, 'w1', 'reel', controller.signal);
+    expect(signals).toEqual([controller.signal]);
   });
 });
 

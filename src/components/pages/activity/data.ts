@@ -12,7 +12,7 @@
 
 import { mark } from '@/lib/perf-marks';
 import type { Client, Result } from '@srtdio/rpc';
-import { inboxMarkAllRead, inboxMarkRead, inboxSnooze } from '@srtdio/rpc';
+import { inboxMarkAllRead, inboxMarkRead, inboxSnooze, withTraceHeader } from '@srtdio/rpc';
 import type { Database, InboxEventTypeValue, Json } from '@srtdio/schemas';
 import { INBOX_EVENT_TYPES } from '@srtdio/schemas';
 import { parseMentions } from '@srtdio/comments';
@@ -99,6 +99,7 @@ import {
   sharedRead,
 } from '@/lib/session-read';
 import { generateTraceId } from '@/lib/trace';
+import { serverSearchQuery, withAbort } from '@/lib/search/server-search';
 import type { PrefetchContext } from '@/lib/prefetch-context';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
@@ -873,6 +874,47 @@ export function activityLine(item: ActivityItem): string {
     default:
       return target;
   }
+}
+
+/**
+ * An Activity search hit's line (the command palette's Activity rows): the
+ * feed's own words for the event, from its type, its subject and the subject's
+ * title, through the same mapEntry + activityLine the feed cards use (never a
+ * second label map). `actorName` is the actor when the palette knows them.
+ * Pure.
+ */
+export function activityHitLine(hit: {
+  id: string;
+  workspaceId: string;
+  eventType: string;
+  entityType: string | null;
+  title: string;
+  actorName: string | null;
+}): string {
+  const item = mapEntry({
+    id: hit.id,
+    workspace_id: hit.workspaceId,
+    user_id: '',
+    event_type: hit.eventType,
+    entity_type: hit.entityType,
+    entity_id: null,
+    scope: '',
+    scope_key: null,
+    tier: '',
+    created_at: '',
+    read_at: null,
+    snoozed_until: null,
+    deleted_at: null,
+    email_sent_at: null,
+    payload: {},
+    actor_user_id: null,
+  });
+  return activityLine({
+    ...item,
+    title: hit.title !== '' ? hit.title : null,
+    planTitle: hit.title !== '' ? hit.title : null,
+    actorName: hit.actorName,
+  });
 }
 
 /**
@@ -1832,8 +1874,76 @@ export async function fetchActivityEntries(
   };
   const read = await readInboxPage(client, workspaceId, { ascending, cursor, readWindow });
   if (!read.ok) return { ok: false, error: read.error.message };
+  return enrichInboxRows(client, workspaceId, read.data);
+}
 
-  const rows = read.data;
+type ActivitySearchFn = Database['public']['Functions']['activity_search'];
+
+/** One Activity search page: the cap is the feed's page size. */
+export const ACTIVITY_SEARCH_LIMIT = ACTIVITY_PAGE_SIZE;
+
+/**
+ * activity_search's named args: the query trimmed, the trace explicit, the
+ * keyset cursor (created_at, id) for a next page, the page size. Pure.
+ */
+export function activitySearchArgs(input: {
+  workspaceId: string;
+  query: string;
+  traceId: string;
+  cursor?: ActivityCursor;
+}): ActivitySearchFn['Args'] {
+  return {
+    p_workspace_id: input.workspaceId,
+    p_query: serverSearchQuery(input.query),
+    p_trace_id: input.traceId,
+    p_limit: ACTIVITY_SEARCH_LIMIT,
+    ...(input.cursor !== undefined
+      ? { p_before_created_at: input.cursor.createdAt, p_before_id: input.cursor.id }
+      : {}),
+  };
+}
+
+/**
+ * One page of the Activity search (2+ characters): ONE activity_search call,
+ * newest first, keyset on (created_at, id) (pass cursorAfter of the loaded
+ * rows for the next page), across every chip. The rows go through the SAME
+ * mapping and batched joins as the feed (enrichInboxRows), so a result renders
+ * exactly like its feed card. A fresh uuid_v7 per call as p_trace_id; `signal`
+ * aborts it (a newer query).
+ */
+export async function searchActivityEntries(
+  client: Client,
+  workspaceId: string,
+  input: { query: string; cursor?: ActivityCursor },
+  signal?: AbortSignal,
+): Promise<LoadResult> {
+  if (serverSearchQuery(input.query) === '') return { ok: true, data: [] };
+  try {
+    const args = activitySearchArgs({ workspaceId, ...input, traceId: generateTraceId() });
+    mark('activity:search:start');
+    const res = await withAbort(
+      withTraceHeader(client.rpc('activity_search', args), args.p_trace_id),
+      signal,
+    );
+    mark('activity:search:end');
+    if (res.error !== null) return { ok: false, error: res.error.message };
+    if (signal?.aborted === true) return { ok: false, error: 'aborted' };
+    return await enrichInboxRows(client, workspaceId, res.data ?? []);
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+
+/**
+ * The feed's one mapping path: map inbox rows (mapEntry) and resolve what the
+ * minimal payloads omit (actor names, titles, previews, thumbnails) in batched
+ * waves, never one read per row. Shared by the feed page and the search.
+ */
+async function enrichInboxRows(
+  client: Client,
+  workspaceId: string,
+  rows: readonly InboxEntryRow[],
+): Promise<LoadResult> {
   const items = rows.map(mapEntry);
   // Loudly surface any event_type the app does not know (never blank-renders it).
   for (const et of unique(items.map((item) => item.eventType))) warnUnknownEventType(et);
