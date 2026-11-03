@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cn } from '@/lib/cn';
+import { MOVE_CLASS } from '@/lib/motion';
 
 interface PressableRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** Ref to the rendered <button>; a plain prop so PressableRow stays a callable function. */
@@ -24,9 +25,10 @@ interface PressableRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // left aligned, a panel-2 hover, a focus-visible ring and a disabled fade. No
 // other visual classes: callers add layout (flex, gap, padding) and colour
 // through className, and change width, radius, alignment or height only through
-// the props above.
+// the props above. Press (motion move 5): MOVE_CLASS.press sinks the row to .97
+// while held (120 ms) and eases the hover colour.
 const PRESSABLE_ROW_LOOK =
-  'hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none';
+  `${MOVE_CLASS.press} hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none`;
 export const PRESSABLE_ROW_BASE = `min-h-[44px] ${PRESSABLE_ROW_LOOK}`;
 const PRESSABLE_ROW_DENSE = `min-h-[22px] ${PRESSABLE_ROW_LOOK}`;
 

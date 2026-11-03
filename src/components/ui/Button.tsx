@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cn } from '@/lib/cn';
+import { MOVE_CLASS } from '@/lib/motion';
 
 export type ButtonVariant =
   | 'primary'
@@ -29,8 +30,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // the shape classes (never both rounded-lg and rounded-full on one element).
 // Callers never override a base property with the ! modifier (no-raw-button
 // test): pick another variant or primitive instead.
+// Press (motion move 5): MOVE_CLASS.press sinks to .97 while held, 120 ms, and
+// eases colours; it ignores disabled and aria-disabled buttons.
 const BUTTON_BASE =
-  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-base font-medium select-none transition-[color,background-color,border-color,transform] duration-fast active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg';
+  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 text-base font-medium select-none disabled:opacity-50 disabled:pointer-events-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg';
 
 const secondary = 'lit-btn-secondary bg-panel text-fg border hover:bg-panel-2';
 
@@ -55,7 +58,7 @@ export function buttonClass(
   shape: 'default' | 'round' = 'default',
   className?: string,
 ): string {
-  return cn(BUTTON_BASE, BUTTON_SHAPES[shape], BUTTON_VARIANTS[variant], className);
+  return cn(BUTTON_BASE, MOVE_CLASS.press, BUTTON_SHAPES[shape], BUTTON_VARIANTS[variant], className);
 }
 
 export function Button({

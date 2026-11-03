@@ -35,10 +35,9 @@ describe('Backdrop', () => {
     }
   });
 
-  it('fades with a transition that reduced motion turns off', () => {
+  it('renders at its full dim at once: no timed fade, no opacity class', () => {
     const html = markup();
-    expect(html).toContain('transition-opacity');
-    expect(html).toContain('motion-reduce:transition-none');
+    expect(html).not.toMatch(/transition|opacity-|duration-|animate-/);
   });
 
   it('calls onClick when tapped', () => {
