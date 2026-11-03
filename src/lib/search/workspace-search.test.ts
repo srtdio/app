@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 import {
+  ACTIVITY_PATH,
+  activityHitPath,
   chatHitPath,
   countsArgs,
   createPaletteSearchRunner,
@@ -206,6 +208,64 @@ describe('workspaceHitTarget', () => {
       workspaceHitTarget(hit({ kind: 'chat_group', id: 'g', channelId: 'group__w__g' }), 'GBL'),
     ).toEqual({ path: '/chat?channel=group__w__g' });
     expect(workspaceHitTarget(hit({ kind: 'person', id: U }), 'GBL')).toEqual({ person: U });
+  });
+
+  it('a plan item comment routes exactly like a plan item: the item (id) in its plan (parent)', () => {
+    const item = hit({ kind: 'plan_item', id: 'i1', parentId: 'pl1' });
+    const comment = hit({ kind: 'plan_item_comment', id: 'i1', parentId: 'pl1' });
+    expect(workspaceHitTarget(comment, 'GBL')).toEqual(workspaceHitTarget(item, 'GBL'));
+    expect(workspaceHitTarget(comment, 'GBL', 'reel')).toEqual({ path: '/plans/pl1?q=reel&at=i1' });
+  });
+
+  it('an activity hit opens its subject through the existing routes', () => {
+    const event = (extra: Partial<WorkspaceHit>): WorkspaceHit =>
+      hit({ kind: 'activity', id: 'e1', parentId: null, channelId: null, number: null, ...extra });
+    expect(
+      workspaceHitTarget(event({ entityType: 'post', parentId: 'p9', number: 4 }), 'GBL'),
+    ).toEqual({ path: '/p/gbl-4' });
+    expect(workspaceHitTarget(event({ entityType: 'post', parentId: 'p9' }), 'GBL')).toEqual({
+      path: '/posts/p9',
+    });
+    expect(
+      workspaceHitTarget(event({ entityType: 'brief', parentId: 'b9', number: 2 }), 'GBL', 'x1'),
+    ).toEqual({ path: '/b/gbl-2?q=x1' });
+    expect(workspaceHitTarget(event({ entityType: 'plan', parentId: 'pl1' }), 'GBL')).toEqual({
+      path: '/plans/pl1',
+    });
+    // A plan item's event: parent_id is its plan.
+    expect(workspaceHitTarget(event({ entityType: 'plan_item', parentId: 'pl1' }), 'GBL')).toEqual({
+      path: '/plans/pl1',
+    });
+    expect(
+      workspaceHitTarget(event({ entityType: 'chat_channel', channelId: 'group__w__g' }), 'GBL'),
+    ).toEqual({ path: '/chat?channel=group__w__g' });
+    // No subject to open: the Activity page, searching the same words.
+    expect(workspaceHitTarget(event({ entityType: 'workspace' }), 'GBL', 'invite')).toEqual({
+      path: `${ACTIVITY_PATH}?q=invite`,
+    });
+    expect(activityHitPath(event({ entityType: 'post' }), 'GBL')).toBe(ACTIVITY_PATH);
+    expect(ACTIVITY_PATH).toBe('/notifications');
+  });
+
+  it('maps the new kinds from server rows', () => {
+    expect(mapWorkspaceRow({ ...row, kind: 'plan_item_comment', parent_id: 'pl1' })).toMatchObject({
+      kind: 'plan_item_comment',
+      parentId: 'pl1',
+    });
+    expect(
+      mapWorkspaceRow({
+        ...row,
+        kind: 'activity',
+        entity_type: 'chat_channel',
+        channel_id: 'c1',
+        snippet: 'mention',
+      }),
+    ).toMatchObject({
+      kind: 'activity',
+      entityType: 'chat_channel',
+      channelId: 'c1',
+      snippet: 'mention',
+    });
   });
 
   it('chat hits open the chat at the message', () => {

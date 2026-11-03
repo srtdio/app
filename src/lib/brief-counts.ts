@@ -5,7 +5,8 @@
 // chip's status and the typed title search. Never derived from loaded rows.
 
 import type { Client, Result } from '@srtdio/rpc';
-import type { BriefFilter } from '@/lib/brief-list';
+// Relative, not `@/`: the briefs DB suite loads this module without the alias.
+import { briefSearchFilter, type BriefFilter } from './brief-list';
 
 /** The chips that carry a count, in the order the header renders them. */
 export const BRIEF_COUNT_FILTERS: readonly BriefFilter[] = ['all', 'open', 'closed'];
@@ -36,8 +37,9 @@ export function briefTitlePattern(search: string): string | null {
  * How many live briefs of the workspace sit under one chip (after the search):
  * one HEAD request, `select('id', { count: 'exact', head: true })`, so no row
  * is transferred. Same filters as listBriefsPage (deleted_at is null and the
- * workspace), plus status for Open / Closed and ILIKE on the title when a
- * search is typed.
+ * workspace), plus status for Open / Closed and, from 2 characters, the list's
+ * own search match (title or objective ILIKE, briefSearchFilter), so the chips
+ * and the list always agree.
  */
 export async function countBriefs(
   client: Client,
@@ -52,8 +54,8 @@ export async function countBriefs(
       .is('deleted_at', null)
       .eq('workspace_id', workspaceId);
     if (filter !== 'all') query = query.eq('status', filter);
-    const pattern = briefTitlePattern(search);
-    if (pattern !== null) query = query.ilike('title', pattern);
+    const match = briefSearchFilter(search);
+    if (match !== '') query = query.or(match);
     const { count, error } = await query;
     if (error) return { ok: false, error: { code: 'unknown', message: error.message } };
     return { ok: true, data: count ?? 0 };

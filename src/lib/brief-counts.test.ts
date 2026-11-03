@@ -26,7 +26,7 @@ function makeClient(reply: (calls: Call[]) => CountReply = () => ({ count: 0, er
     const calls: Call[] = [{ method: 'from', args: [table] }];
     queries.push(calls);
     const builder: Record<string, unknown> = {};
-    for (const method of ['select', 'is', 'eq', 'ilike']) {
+    for (const method of ['select', 'is', 'eq', 'ilike', 'or']) {
       builder[method] = (...args: unknown[]) => {
         calls.push({ method, args });
         return builder;
@@ -69,15 +69,27 @@ describe('countBriefs', () => {
     expect(calls).toContainEqual({ method: 'is', args: ['deleted_at', null] });
     expect(calls).toContainEqual({ method: 'eq', args: ['workspace_id', 'w1'] });
     expect(statusOf(calls)).toBeUndefined();
-    expect(calls.some((c) => c.method === 'ilike')).toBe(false);
+    expect(calls.some((c) => c.method === 'ilike' || c.method === 'or')).toBe(false);
   });
 
-  it('adds the chip status and the escaped title search', async () => {
+  it('adds the chip status and the list search: title OR objective, escaped and quoted', async () => {
     const { client, queries } = makeClient();
     await countBriefs(client, 'w1', 'closed', ' 100%_ ');
     const calls = queries[0] ?? [];
     expect(statusOf(calls)).toBe('closed');
-    expect(calls).toContainEqual({ method: 'ilike', args: ['title', '%100\\%\\_%'] });
+    // LIKE escapes (\% \_), then the PostgREST quoting doubles each backslash.
+    const value = '"%100\\\\%\\\\_%"';
+    expect(calls).toContainEqual({
+      method: 'or',
+      args: [`title.ilike.${value},objective.ilike.${value}`],
+    });
+    expect(calls.some((c) => c.method === 'ilike')).toBe(false);
+  });
+
+  it('under 2 characters counts the plain list (no search filter)', async () => {
+    const { client, queries } = makeClient();
+    await countBriefs(client, 'w1', 'all', ' r ');
+    expect((queries[0] ?? []).some((c) => c.method === 'or')).toBe(false);
   });
 
   it('reads a null count as 0', async () => {
@@ -106,7 +118,10 @@ describe('countBriefsByFilter', () => {
     for (const calls of queries) {
       expect(calls).toContainEqual({ method: 'is', args: ['deleted_at', null] });
       expect(calls).toContainEqual({ method: 'eq', args: ['workspace_id', 'w1'] });
-      expect(calls).toContainEqual({ method: 'ilike', args: ['title', '%reel%'] });
+      expect(calls).toContainEqual({
+        method: 'or',
+        args: ['title.ilike."%reel%",objective.ilike."%reel%"'],
+      });
     }
     expect(queries.map(statusOf)).toEqual([undefined, 'open', 'closed']);
   });
@@ -130,7 +145,7 @@ describe('countBriefsByFilter', () => {
     const from = () => {
       started += 1;
       const builder: Record<string, unknown> = {};
-      for (const method of ['select', 'is', 'eq', 'ilike']) builder[method] = () => builder;
+      for (const method of ['select', 'is', 'eq', 'ilike', 'or']) builder[method] = () => builder;
       builder.then = (resolve: (value: CountReply) => unknown) =>
         gate.then(() => resolve({ count: 1, error: null }));
       return builder;

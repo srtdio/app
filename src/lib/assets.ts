@@ -14,6 +14,12 @@ import type { PurgeRequest, PurgeResponse } from '@/server/workers/asset-upload-
 import type { PrefetchContext } from '@/lib/prefetch-context';
 import { invalidateReads, peekKept, primeRead, readKey, sharedRead } from '@/lib/session-read';
 import { readSharedMemberRole } from '@/lib/member-role';
+import {
+  andOrFilters,
+  ilikeAnyFilter,
+  serverSearchQuery,
+  withAbort,
+} from '@/lib/search/server-search';
 
 /**
  * The version kinds the server records (asset_versions.kind CHECK, live). A
@@ -230,6 +236,8 @@ export const ASSETS_PAGE_SIZE = 100;
 export interface AssetCursor {
   uploadedAt: string;
   id: string;
+  /** The search the page answered (absent for the plain list): Load more continues it. */
+  query?: string;
 }
 
 /** Whether another page follows, and where it starts. Never null. */
@@ -251,6 +259,22 @@ export function assetKeysetFilter(cursor: AssetCursor): string {
   const at = `"${cursor.uploadedAt}"`;
   const id = `"${cursor.id}"`;
   return `uploaded_at.lt.${at},and(uploaded_at.eq.${at},id.lt.${id})`;
+}
+
+/** The columns the Assets search matches (ILIKE, either one). */
+export const ASSET_SEARCH_COLUMNS = ['filename', 'display_name'] as const;
+
+/**
+ * The ONE or() argument of a page read: the keyset cursor AND the search
+ * (filename or display_name ILIKE the escaped, quoted pattern; from 2
+ * characters), as and(or(cursor),or(search)) when both are set; '' when
+ * neither. Pure.
+ */
+export function assetPageFilter(cursor: AssetCursor | undefined, search: string): string {
+  return andOrFilters(
+    cursor !== undefined ? assetKeysetFilter(cursor) : '',
+    ilikeAnyFilter(ASSET_SEARCH_COLUMNS, search),
+  );
 }
 
 /**
@@ -285,7 +309,10 @@ export async function listAssetsPage(
   client: Client,
   workspaceId: string,
   cursor?: AssetCursor,
+  search: string = cursor?.query ?? '',
+  signal?: AbortSignal,
 ): Promise<Result<AssetPage>> {
+  const searched = serverSearchQuery(search);
   let query = client
     .from('assets')
     .select(ASSET_LIST_SELECT)
@@ -293,11 +320,15 @@ export async function listAssetsPage(
     .is('deleted_at', null)
     .eq('asset_attachments.workspace_id', workspaceId)
     .is('asset_attachments.deleted_at', null);
-  if (cursor !== undefined) query = query.or(assetKeysetFilter(cursor));
-  const assetsResult = await query
-    .order('uploaded_at', { ascending: false })
-    .order('id', { ascending: false })
-    .limit(ASSETS_PAGE_SIZE + 1);
+  const filter = assetPageFilter(cursor, searched);
+  if (filter !== '') query = query.or(filter);
+  const assetsResult = await withAbort(
+    query
+      .order('uploaded_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(ASSETS_PAGE_SIZE + 1),
+    signal,
+  );
   if (assetsResult.error) {
     return { ok: false, error: { code: 'unknown', message: assetsResult.error.message } };
   }
@@ -307,7 +338,14 @@ export async function listAssetsPage(
   const last = rows[rows.length - 1];
   const next: AssetPageNext =
     fetched.length > ASSETS_PAGE_SIZE && last !== undefined
-      ? { done: false, cursor: { uploadedAt: last.uploaded_at, id: last.id } }
+      ? {
+          done: false,
+          cursor: {
+            uploadedAt: last.uploaded_at,
+            id: last.id,
+            ...(searched !== '' ? { query: searched } : {}),
+          },
+        }
       : { done: true };
   return { ok: true, data: { items: shapeAssets(rows, embeddedAttachmentCounts(rows)), next } };
 }

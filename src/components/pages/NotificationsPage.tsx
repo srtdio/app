@@ -1,11 +1,13 @@
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { NoResults } from '@/components/ui/NoResults';
 import { Sheet } from '@/components/ui/Sheet';
 import { PageHead } from '@/components/shell/PageHead';
+import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import {
   ICON_SIZE,
@@ -62,6 +64,7 @@ import {
   cursorAfter,
   createUpcomingScheduledWrites,
   fetchActivityEntries,
+  searchActivityEntries,
   fetchUpcoming,
   filterByState,
   groupDigest,
@@ -99,6 +102,7 @@ import { onSessionReadsHydrated } from '@/lib/session-read';
 import { useCurrentProfile } from '@/lib/use-current-profile';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useSort } from '@/lib/use-sort';
+import { useServerSearch } from '@/lib/search/server-search';
 import { env } from '@/lib/env';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
@@ -111,10 +115,22 @@ const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
 /** The page title: the surface is Activity. */
 export const ACTIVITY_TITLE = 'Activity';
 
-const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
-  { value: 'newest', label: 'Newest' },
-  { value: 'oldest', label: 'Oldest' },
+export const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
 ];
+
+/**
+ * The sort while a search is on: activity_search pages newest first only, so
+ * Oldest first is taken off the menu (never faked by reversing loaded pages)
+ * and the results read newest first. Pure.
+ */
+export function activitySortOptions(searching: boolean): SortOption<ActivityDirection>[] {
+  return searching ? SORT_OPTIONS.filter((option) => option.value === 'newest') : SORT_OPTIONS;
+}
+
+/** The list search's URL param (?q=), as on every list screen. */
+const SEARCH_PARAM = 'q';
 
 /** Optimistic snoozed_until for a kind; the proc returns the authoritative value
  * (workspace timezone), this only flips the row's local state until it lands. */
@@ -225,8 +241,47 @@ export function NotificationsPage() {
       ? keptViewKey(userId, workspaceId, `activity:${what}`)
       : null;
   const [state, setState] = useKeptState<ActivityState>(keptKey('chip'), 'all');
-  const { value: sort, setValue: setSort } = useSort<ActivityDirection>('activity', 'newest');
+  const { value: storedSort, setValue: setSort } = useSort<ActivityDirection>('activity', 'newest');
   const untouched = useUntouched();
+
+  // The search box lives in the URL (?q=), so Back lands on the same results.
+  // From 2 characters (src/lib/search/server-search.ts), 250ms after the last
+  // keystroke, page one of activity_search replaces the feed (a newer query
+  // aborts the one in flight): every chip's rows, newest first, through the
+  // same mapping and batched joins as the feed. The chips hide while it is on.
+  const [params, setParams] = useSearchParams();
+  const search = params.get(SEARCH_PARAM) ?? '';
+  const setSearch = useCallback(
+    (value: string): void => {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value === '') next.delete(SEARCH_PARAM);
+          else next.set(SEARCH_PARAM, value);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
+  );
+  const activitySearch = useServerSearch<ActivityItem[]>(
+    search,
+    (query, signal) =>
+      workspaceId === null
+        ? Promise.resolve({ ok: true as const, data: [] })
+        : searchActivityEntries(supabase, workspaceId, { query }, signal),
+    workspaceId ?? '',
+  );
+  const searching = activitySearch.active;
+  const searchingRef = useRef(searching);
+  searchingRef.current = searching;
+  // Whether a search ran on this mount: the feed's reload after it is no
+  // longer the arrival's quiet refresh.
+  const searchedRef = useRef(false);
+  if (searching) searchedRef.current = true;
+  // Oldest first is not offered while searching: the results read newest first.
+  const sort: ActivityDirection = searching ? 'newest' : storedSort;
 
   // The chip's page one as the bell press or an earlier visit this session
   // read it: the first frame is the list, refreshed quietly behind it. Else
@@ -378,19 +433,25 @@ export function NotificationsPage() {
     const seq = activitySeqRef.current;
     const chip = state;
     const direction = sort;
+    // While searching: the search's next page (keyset on created_at, id).
+    const query = searching ? activitySearch.query : null;
     loadingMoreRef.current = true;
     setLoadingMore(true);
-    const result = await fetchActivityEntries(supabase, workspaceId, {
-      state: chip,
-      direction,
-      cursor,
-    });
+    const result =
+      query !== null
+        ? await searchActivityEntries(supabase, workspaceId, { query, cursor })
+        : await fetchActivityEntries(supabase, workspaceId, {
+            state: chip,
+            direction,
+            cursor,
+          });
     loadingMoreRef.current = false;
     setLoadingMore(false);
     if (
       seq !== activitySeqRef.current ||
       stateRef.current !== chip ||
-      sortRef.current !== direction
+      sortRef.current !== direction ||
+      (query !== null) !== searchingRef.current
     ) {
       return;
     }
@@ -400,7 +461,36 @@ export function NotificationsPage() {
     }
     setItems((prev) => appendUnique(prev, result.data));
     setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
-  }, [workspaceId, state, sort, push]);
+  }, [workspaceId, state, sort, push, searching, activitySearch.query]);
+
+  // The search's page one replaces the feed on screen (the same items state,
+  // so mark read, snooze and the rest work on the results as on the feed). An
+  // older feed load or Load more is dropped. Leaving the search reloads the
+  // feed (the arrival effect below).
+  useEffect(() => {
+    if (!searching) return;
+    activitySeqRef.current += 1;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+    setEntering(new Set());
+    if (activitySearch.data !== null) {
+      setItems(activitySearch.data);
+      setHasMore(activitySearch.data.length === ACTIVITY_PAGE_SIZE);
+      setNowMs(Date.now());
+      setLoading(false);
+      setError(false);
+    } else if (activitySearch.status === 'error') {
+      setItems([]);
+      setHasMore(false);
+      setLoading(false);
+      setError(true);
+    } else {
+      setItems([]);
+      setHasMore(false);
+      setLoading(true);
+      setError(false);
+    }
+  }, [searching, activitySearch.data, activitySearch.status]);
 
   // The unread-mention count for the Mentions chip. Independent of the active
   // view, so it is not affected by the chips. It rides the shared activity
@@ -493,11 +583,13 @@ export function NotificationsPage() {
   const arrivalLoadRef = useRef<typeof loadActivity | null>(null);
   useEffect(() => {
     mark('activity:mount');
+    // A search shows its own results; the feed loads when it ends.
+    if (searching) return;
     arrivalLoadRef.current ??= loadActivity;
-    const arrival = arrivalLoadRef.current === loadActivity;
+    const arrival = arrivalLoadRef.current === loadActivity && !searchedRef.current;
     if (state === 'upcoming') void loadUpcoming(arrival);
     else void loadActivity('reset', arrival);
-  }, [state, loadActivity, loadUpcoming]);
+  }, [state, loadActivity, loadUpcoming, searching]);
 
   // A cold open can mount this page before the device's saved screens are
   // seeded (hydrateSessionReads runs beside the boot; nothing waits on it).
@@ -521,6 +613,7 @@ export function NotificationsPage() {
         mark('activity:kept-paint');
         return;
       }
+      if (searchingRef.current) return;
       if (!loadingRef.current || itemsRef.current.length > 0) return;
       const key = activityPageKey(userId, workspaceId, stateRef.current, sortRef.current);
       const kept = peekActivityPage(key);
@@ -542,7 +635,8 @@ export function NotificationsPage() {
     if (state === 'upcoming') return;
     const onChanged = (event: Event): void => {
       if (!(event instanceof CustomEvent) || event.detail !== POLL_CHANGE_SOURCE) return;
-      void loadActivity('merge');
+      // A search's results are never merged into; the feed folds them in on return.
+      if (!searchingRef.current) void loadActivity('merge');
       // The tick already read the badge: join it.
       void loadMentionCount(true);
     };
@@ -596,14 +690,20 @@ export function NotificationsPage() {
     void loadMentionCount(true);
   }, [loadMentionCount]);
   useWorkspaceDataChanged(() => {
-    if (state === 'upcoming') void loadUpcoming();
+    if (searchingRef.current) activitySearch.refresh();
+    else if (state === 'upcoming') void loadUpcoming();
     else void loadActivity();
     void loadMentionCount();
   });
 
+  // While searching the results cover every chip (no chip filter, snoozed rows
+  // included), newest first.
   const buckets = useMemo(
-    () => groupDigest(filterByState(items, state, nowMs), sort, { nowMs, tz }),
-    [items, state, sort, nowMs, tz],
+    () =>
+      searching
+        ? groupDigest(items, sort, { nowMs, tz })
+        : groupDigest(filterByState(items, state, nowMs), sort, { nowMs, tz }),
+    [items, state, sort, nowMs, tz, searching],
   );
 
   const totalUnread = useMemo(() => unreadCount(items, nowMs), [items, nowMs]);
@@ -796,9 +896,10 @@ export function NotificationsPage() {
     revertRead,
   ]);
 
+  // Mark all read belongs to the chips: none while a search hides them.
   const chipUnread = useMemo(
-    () => markAllTargets(items, state, nowMs).length,
-    [items, state, nowMs],
+    () => (searching ? 0 : markAllTargets(items, state, nowMs).length),
+    [items, state, nowMs, searching],
   );
 
   // Optimistic snooze: flip the row's snoozed_until locally first, then call the
@@ -993,24 +1094,35 @@ export function NotificationsPage() {
 
   return (
     <>
-      <PageHead
-        title={ACTIVITY_TITLE}
-        actions={
-          <SortMenu<ActivityDirection>
-            options={SORT_OPTIONS}
-            value={sort}
-            onChange={setSort}
-            label="Sort activity"
-          />
-        }
+      <PageHead title={ACTIVITY_TITLE} />
+
+      {/* The shared list header: search left, sort right. */}
+      <SectionHeader<ActivityDirection>
+        search={{
+          value: search,
+          onChange: setSearch,
+          placeholder: 'Search activity',
+        }}
+        sort={{
+          node: (
+            <SortMenu<ActivityDirection>
+              options={activitySortOptions(searching)}
+              value={sort}
+              onChange={setSort}
+              label="Sort activity"
+            />
+          ),
+        }}
       />
 
-      <ActivityFilterBar
-        state={state}
-        onStateChange={setState}
-        totalUnread={totalUnread}
-        mentionCount={mentionCount}
-      />
+      {searching ? null : (
+        <ActivityFilterBar
+          state={state}
+          onStateChange={setState}
+          totalUnread={totalUnread}
+          mentionCount={mentionCount}
+        />
+      )}
 
       {/* The toolbar keeps one IconButton (Sort): Mark all read sits right-aligned above the
           list. The Unread chip already shows the count. */}
@@ -1022,7 +1134,7 @@ export function NotificationsPage() {
         </div>
       ) : null}
 
-      {state === 'upcoming' ? (
+      {state === 'upcoming' && !searching ? (
         upcomingError ? (
           <LoadFailed onRetry={() => void loadUpcoming()} />
         ) : workspaceId === null || !upcomingLoaded ? (
@@ -1044,11 +1156,17 @@ export function NotificationsPage() {
           </div>
         )
       ) : error && items.length === 0 ? (
-        <LoadFailed onRetry={() => void loadActivity()} />
+        <LoadFailed onRetry={() => (searching ? activitySearch.refresh() : void loadActivity())} />
       ) : listLoading ? (
         <div className="px-4 md:px-6 py-10 text-base text-fg-3">{LOADING_NOTIFICATIONS}</div>
       ) : buckets.length === 0 ? (
-        state === 'mentions' ? (
+        searching ? (
+          <NoResults
+            query={activitySearch.query}
+            filtersActive={false}
+            onClear={() => setSearch('')}
+          />
+        ) : state === 'mentions' ? (
           <EmptyState icon={<IconAt size={ICON_SIZE.status} />} title={EMPTY_LINES.mentions} />
         ) : state === 'briefs' ? (
           <EmptyState icon={<IconBriefs size={ICON_SIZE.status} />} title={EMPTY_LINES.briefs} />

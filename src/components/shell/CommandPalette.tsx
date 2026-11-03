@@ -44,6 +44,7 @@ import {
   type SearchHit,
 } from '@/lib/chat/search';
 import { chatMessageHref } from '@/lib/inbox/bell-types';
+import { activityHitLine } from '@/components/pages/activity/data';
 import {
   deviceStorage,
   hasCachedTitle,
@@ -108,9 +109,11 @@ export type ResultGroup =
   | 'Files'
   | 'Plans'
   | 'Plan items'
+  | 'Plan comments'
   | 'Tasks'
   | 'Groups'
-  | 'Chat';
+  | 'Chat'
+  | 'Activity';
 
 /** Result groups, in the order they show. */
 const RESULT_GROUPS: readonly ResultGroup[] = [
@@ -121,9 +124,11 @@ const RESULT_GROUPS: readonly ResultGroup[] = [
   'Files',
   'Plans',
   'Plan items',
+  'Plan comments',
   'Tasks',
   'Groups',
   'Chat',
+  'Activity',
 ];
 
 /** The workspace group each kind lands in. */
@@ -135,8 +140,10 @@ const KIND_GROUP: Record<WorkspaceKind, ResultGroup> = {
   file: 'Files',
   plan: 'Plans',
   plan_item: 'Plan items',
+  plan_item_comment: 'Plan comments',
   task: 'Tasks',
   chat_group: 'Groups',
+  activity: 'Activity',
 };
 
 const GROUP_KIND = new Map<ResultGroup, WorkspaceKind>(
@@ -241,6 +248,11 @@ function lineOf(body: string, words: readonly string[], workspaceId: string | nu
   );
 }
 
+/** A comment hit (post, brief or plan item) whose author the row names. Pure. */
+function hasCommentActor(hit: WorkspaceHit): boolean {
+  return (hit.kind === 'comment' || hit.kind === 'plan_item_comment') && hit.actorUserId !== null;
+}
+
 /** A workspace hit as a row. Pure over the name registry. */
 function workspaceRow(
   hit: WorkspaceHit,
@@ -253,22 +265,41 @@ function workspaceRow(
   time: string,
 ): PaletteItem {
   let snippet = '';
+  let title = hit.title;
   if (hit.kind === 'person') {
     snippet = hit.snippet !== '' ? `@${hit.snippet}` : '';
   } else if (hit.kind === 'file') {
     snippet = hit.snippet;
+  } else if (hit.kind === 'activity') {
+    // The snippet is the event type: worded as the Activity feed words it.
+    const actor =
+      hit.actorUserId !== null
+        ? searchActorName(ctx.workspaceId, hit.actorUserId, hit.actorIsMember)
+        : undefined;
+    snippet = activityHitLine({
+      id: hit.id,
+      workspaceId: ctx.workspaceId ?? '',
+      eventType: hit.snippet,
+      entityType: hit.entityType !== '' ? hit.entityType : null,
+      title: hit.title,
+      actorName: actor ?? null,
+    });
+    if (title === '') {
+      title = snippet;
+      snippet = '';
+    }
   } else if (hit.snippet !== '') {
     snippet = lineOf(hit.snippet, ctx.words, ctx.workspaceId);
   }
-  if (hit.kind === 'comment' && hit.actorUserId !== null) {
-    const actor = searchActorName(ctx.workspaceId, hit.actorUserId, hit.actorIsMember);
+  if (hasCommentActor(hit)) {
+    const actor = searchActorName(ctx.workspaceId, hit.actorUserId ?? '', hit.actorIsMember);
     if (actor !== undefined) snippet = `${actor}: ${snippet}`;
   }
   return {
     id: `${hit.kind}-${hit.id}`,
     type: 'result',
     group: KIND_GROUP[hit.kind],
-    title: hit.title,
+    title,
     snippet,
     time: hit.kind === 'person' ? '' : time,
     target: workspaceHitTarget(hit, ctx.workspaceKey, ctx.query),
@@ -289,7 +320,7 @@ function chatSenderTitle(hit: SearchHit, workspaceId: string | null): string {
  * "Show all (N)" beyond them unless expanded; none (the zero line) when there
  * are no recents. From 2 characters, once
  * results are in: People, Posts, Briefs, Comments, Files, Plans, Plan items,
- * Tasks, Groups, Chat; empty groups hidden; each capped at 5 with "Show all
+ * Plan comments, Tasks, Groups, Chat, Activity; empty groups hidden; each capped at 5 with "Show all
  * (N)" (N the server's total) unless expanded. Pure.
  */
 export function paletteSections(input: {
@@ -383,7 +414,11 @@ export function namesNeeded(
   const ids: string[] = [];
   for (const hit of workspace) {
     ids.push(...mentionIds(hit.snippet));
-    if (hit.kind === 'comment' && hit.actorUserId !== null && hit.actorIsMember) {
+    if (
+      (hasCommentActor(hit) || hit.kind === 'activity') &&
+      hit.actorUserId !== null &&
+      hit.actorIsMember
+    ) {
       ids.push(hit.actorUserId);
     }
   }
@@ -509,7 +544,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
             if (item.type === 'more') {
               return (
                 <PressableRow
-                  key={item.id}
+                  key={`${section.label}:${item.id}`}
                   {...common}
                   className={cn(ROW, 'font-medium', isActive ? ACTIVE_ROW : 'text-accent')}
                 >
@@ -521,7 +556,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
               const onRemove = props.onRemoveRecent;
               // A button cannot hold a button: the row and its X sit side by side.
               return (
-                <div key={item.id} className="flex items-center">
+                <div key={`${section.label}:${item.id}`} className="flex items-center">
                   <PressableRow
                     {...common}
                     className={cn(
@@ -550,7 +585,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
             }
             return (
               <PressableRow
-                key={item.id}
+                key={`${section.label}:${item.id}`}
                 {...common}
                 className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1.5', tone)}
               >

@@ -24,6 +24,9 @@ const h = vi.hoisted(() => ({
   reads: [] as PendingRead[],
   /** The post ids the board was handed, one entry per board render. */
   boards: [] as string[][],
+  /** posts_search calls (the query sent) and what each answers. */
+  searches: [] as string[],
+  searchAnswer: [] as PipelinePost[],
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -61,6 +64,14 @@ vi.mock('@srtdio/posts', async (orig) => ({
       h.reads.push({ workspaceId: input.workspaceId, resolve });
     }),
 }));
+// The search is a server read (posts_search): stand in for it.
+vi.mock('@/lib/pipeline-posts', async (orig) => ({
+  ...(await orig<typeof import('@/lib/pipeline-posts')>()),
+  searchPipelinePosts: async (_client: unknown, input: { query: string }) => {
+    h.searches.push(input.query);
+    return { ok: true, data: h.searchAnswer };
+  },
+}));
 vi.mock('@/components/pages/pipeline/PipelineBoard', () => ({
   PipelineBoard: (props: { grouped: Record<string, PipelinePost[]> }) => {
     h.boards.push(
@@ -95,6 +106,8 @@ beforeEach(() => {
   h.workspaceId = 'ws-1';
   h.reads = [];
   h.boards = [];
+  h.searches = [];
+  h.searchAnswer = [];
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -179,11 +192,30 @@ describe('post flow C: the narrowing count line (page)', () => {
     expect(host!.querySelector('[data-undated-hint]')).toBeNull();
   });
 
-  it('fix 7: a search shows "{shown} of {total} posts"', async () => {
+  it('fix 7: a search shows "{shown} of {total} posts" (the server answers the search)', async () => {
     h.params = new URLSearchParams('q=launch');
+    h.searchAnswer = [POSTS[0]!];
     await render();
     await land('ws-1', POSTS);
+    // The search fires after the 250ms debounce.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(h.searches).toEqual(['launch']);
     expect(countLine()).toBe('1 of 2 posts');
+    expect(h.boards.at(-1)).toEqual(['a']);
+  });
+
+  it('one character is the normal list: no search is sent', async () => {
+    h.params = new URLSearchParams('q=l');
+    await render();
+    await land('ws-1', POSTS);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(h.searches).toEqual([]);
+    expect(h.boards.at(-1)).toEqual(['a', 'b']);
+    expect(countLine()).toBeNull();
   });
 
   it('fix 7: a date filter names the undated posts it hides, and Show them adds them back', async () => {

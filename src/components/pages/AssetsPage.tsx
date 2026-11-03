@@ -90,12 +90,20 @@ import {
   TAB_EMPTY,
   withKeptTail,
   type AssetListItem,
+  type AssetPage,
   type AssetPageNext,
   type AssetSort,
   type AssetTab,
 } from '@/lib/assets';
+import { useServerSearch } from '@/lib/search/server-search';
 
 const SKELETON_COUNT = 12;
+
+/** The list search's URL param (?q=), as on every list screen. */
+const SEARCH_PARAM = 'q';
+
+/** A stable empty list while a search's first answer is pending. */
+const NO_ITEMS: AssetListItem[] = [];
 
 /** The Load more failure toast: "Couldn't {action}. {reason}". */
 export const LOAD_MORE_FAILED = "Couldn't load more files. Try again.";
@@ -161,10 +169,29 @@ export function AssetsPage() {
   );
   const countGeneration = useRef(0);
 
-  const [search, setSearch] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  // The search lives in the URL (?q=), so Back lands on the same results. A
+  // palette jump (?asset= with its words in ?q=) is not a search: useSearchJump
+  // takes those words and strips them, so the box stays empty for it.
+  const jumpLanding = searchParams.has(ASSET_PARAM);
+  const search = jumpLanding ? '' : (searchParams.get(SEARCH_PARAM) ?? '');
+  const setSearch = useCallback(
+    (value: string): void => {
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (value === '') params.delete(SEARCH_PARAM);
+          else params.set(SEARCH_PARAM, value);
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   // A search jump's words: the viewer's file name keeps them coloured until this page unmounts.
-  const searchJump = useSearchJump();
+  const searchJump = useSearchJump(jumpLanding);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [selectMode, setSelectMode] = useState(false);
@@ -196,7 +223,6 @@ export function AssetsPage() {
     [showToast],
   );
   const { run: runUndoable } = useUndoableAction();
-  const [searchParams, setSearchParams] = useSearchParams();
   const openedAssetParam = useRef<string | null>(null);
   // A ?asset= id beyond the loaded pages is looked up once on its own (one
   // row, same read and RLS as the list); the tick re-runs the deep-link effect.
@@ -269,6 +295,21 @@ export function AssetsPage() {
   // The list the page shows after Load more or its own write (a delete, a
   // rename) is kept for the next visit, for this workspace's list only.
   // primeAssetsPage is idempotent, so the updater stays safe to run twice.
+  // The search (src/lib/search/server-search.ts): from 2 characters, 250ms
+  // after the last keystroke, the first page of matches (filename or
+  // display_name ILIKE on the server, the same page size); a newer query
+  // aborts the read in flight. Under 2 characters the list is the normal one
+  // and nothing is sent. The tab totals stay the library's.
+  const assetSearch = useServerSearch<AssetPage>(
+    search,
+    (q, signal) =>
+      workspaceId === null
+        ? Promise.resolve({ ok: true as const, data: { items: [], next: { done: true as const } } })
+        : listAssetsPage(supabase, workspaceId, undefined, q, signal),
+    workspaceId ?? '',
+  );
+  const searching = assetSearch.active;
+  const searchUpdate = assetSearch.update;
   const setItemsAndKeep = useCallback(
     (update: (prev: AssetListItem[]) => AssetListItem[], page?: AssetPageNext): void => {
       setItems((prev) => {
@@ -278,8 +319,11 @@ export function AssetsPage() {
         }
         return list;
       });
+      // An own write (a delete, a rename) lands on the search's rows too. A
+      // Load more of the plain list (it passes `page`) is not theirs.
+      if (page === undefined) searchUpdate((data) => ({ ...data, items: update(data.items) }));
     },
-    [userId, workspaceId],
+    [userId, workspaceId, searchUpdate],
   );
 
   // The first page. Every reload (upload, link, data change, Retry) starts over
@@ -409,17 +453,24 @@ export function AssetsPage() {
 
   const canRename = canRenameAssets(role);
 
-  const searching = search.trim() !== '';
-
   // Every list reads the live rows: files inside an Undo window are hidden.
+  // While searching the rows are the server's matches, so no device filter
+  // runs on them; the tab still narrows them.
+  const sourceItems = useMemo(
+    () => (searching ? (assetSearch.data?.items ?? NO_ITEMS) : items),
+    [searching, assetSearch.data, items],
+  );
   const liveItems = useMemo(
-    () => (pendingDelete.size === 0 ? items : items.filter((item) => !pendingDelete.has(item.id))),
-    [items, pendingDelete],
+    () =>
+      pendingDelete.size === 0
+        ? sourceItems
+        : sourceItems.filter((item) => !pendingDelete.has(item.id)),
+    [sourceItems, pendingDelete],
   );
 
   const visible = useMemo(
-    () => sortAssets(filterAssets(liveItems, tab, search), sort),
-    [liveItems, tab, search, sort],
+    () => sortAssets(filterAssets(liveItems, tab, ''), sort),
+    [liveItems, tab, sort],
   );
 
   // The viewer iterates the currently visible list with links excluded; links
@@ -442,8 +493,8 @@ export function AssetsPage() {
   }, []);
 
   // Select all = every file in the current tab, loaded or not: its ids are read
-  // from the server (keyset pages of 1000). Search filters the loaded pages on
-  // the device, so while searching Select all takes the shown matches only.
+  // from the server (keyset pages of 1000). While searching, Select all takes
+  // the shown matches only (the search's loaded pages).
   const selectAll = useCallback(async (): Promise<void> => {
     if (searching) {
       setSelected(new Set(visible.map((item) => item.id)));
@@ -805,8 +856,38 @@ export function AssetsPage() {
     [presignEnabled, requestDownloadUrl, canRename, openAsset, deleteItems, push],
   );
 
-  const listLoading = workspaceId === null || (loading && items.length === 0);
-  if (!listLoading && !assetsFailed) mark('assets:paint');
+  const searchFailed = searching && assetSearch.status === 'error' && assetSearch.data === null;
+  const listLoading = searching
+    ? workspaceId === null || (assetSearch.data === null && !searchFailed)
+    : workspaceId === null || (loading && items.length === 0);
+  if (!listLoading && !assetsFailed && !searching) mark('assets:paint');
+  // Load more while searching: the next page of the same search (its cursor
+  // carries the query, so a page of another search is never appended).
+  const searchNext: AssetPageNext = assetSearch.data?.next ?? { done: true };
+  const shownNext = searching ? searchNext : next;
+  const loadMoreShown = (): void => {
+    if (!searching) {
+      void loadMore();
+      return;
+    }
+    if (workspaceId === null || searchNext.done || loadingMore) return;
+    const cursor = searchNext.cursor;
+    if ((cursor.query ?? '') !== assetSearch.query) return;
+    setLoadingMore(true);
+    void listAssetsPage(supabase, workspaceId, cursor).then((result) => {
+      setLoadingMore(false);
+      if (!result.ok) {
+        logger.warn('assets: next search page read failed', { error: result.error.message });
+        showToast?.({ title: LOAD_MORE_FAILED, tone: 'error' });
+        return;
+      }
+      searchUpdate((data) =>
+        data.next.done || data.next.cursor !== cursor
+          ? data
+          : { items: mergeAssetPages(data.items, result.data.items), next: result.data.next },
+      );
+    });
+  };
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
   // Back on Assets, the scroll lands where it was once the files painted.
   useKeptScroll(viewKey('assets:scroll'), !listLoading && !assetsFailed);
@@ -887,7 +968,15 @@ export function AssetsPage() {
         id={ASSET_TABPANEL_ID}
         aria-labelledby={selectMode ? undefined : assetTabId(tab)}
       >
-        {assetsFailed ? (
+        {searchFailed ? (
+          <div className="px-4 md:px-6 mt-4">
+            <LoadError
+              title="your files"
+              onRetry={() => assetSearch.refresh()}
+              retrying={assetSearch.status === 'loading'}
+            />
+          </div>
+        ) : assetsFailed ? (
           <div className="px-4 md:px-6 mt-4">
             <LoadError title="your files" onRetry={() => void retryLoad()} retrying={retrying} />
           </div>
@@ -903,7 +992,7 @@ export function AssetsPage() {
               </div>
             ))}
           </div>
-        ) : tab === 'all' && liveItems.length === 0 ? (
+        ) : !searching && tab === 'all' && liveItems.length === 0 ? (
           // One line; the header's New asset is the only create button.
           <EmptyState icon={<IconAssets size={ICON_SIZE.status} />} title="Files show up here." />
         ) : visible.length === 0 ? (
@@ -938,7 +1027,7 @@ export function AssetsPage() {
         )}
         {/* Older files load a page at a time; search, tabs and sort work over
             what is loaded. Shown only while another page exists. */}
-        {!assetsFailed && !listLoading && !next.done ? (
+        {!assetsFailed && !searchFailed && !listLoading && !shownNext.done ? (
           <div className="px-4 md:px-6 pb-4 flex justify-center">
             <Button
               variant="secondary"
@@ -946,7 +1035,7 @@ export function AssetsPage() {
               data-assets-load-more=""
               disabled={loadingMore}
               aria-busy={loadingMore}
-              onClick={() => void loadMore()}
+              onClick={loadMoreShown}
             >
               Load more
             </Button>

@@ -45,6 +45,7 @@ import {
   type BriefPageNext,
 } from '@/lib/brief-list';
 import { countBriefsByFilter } from '@/lib/brief-counts';
+import { serverSearchQuery, useServerSearch } from '@/lib/search/server-search';
 import {
   briefsPaintNeedsThumbs,
   keptBriefCounts,
@@ -240,8 +241,16 @@ export function deriveSortedBriefs(
 const LIST_CLASS = 'px-4 md:px-6 py-4 flex flex-col gap-6';
 const GRID_CLASS = 'pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3';
 
-/** How long the search must sit still before the chip counts are re-read. */
-export const BRIEF_COUNTS_SEARCH_DELAY_MS = 250;
+/**
+ * One search answer (2+ characters): the first page of matches (title or
+ * objective, on the server) with their thumbnails, where the next page starts
+ * (its cursor carries the query), and the chips' counts for the same match.
+ */
+interface BriefSearchPage {
+  items: BriefWithThumbnail[];
+  next: BriefPageNext;
+  counts: Partial<Record<BriefFilter, number>>;
+}
 
 /** The longest the first paint waits for the chip counts once the rows are in. */
 export const BRIEF_COUNTS_PAINT_WAIT_MS = 5_000;
@@ -489,11 +498,12 @@ export function BriefsPage() {
     [setSearchParams, setKeptFilter],
   );
 
-  // A return to Briefs with no search paints the list (every page loaded) and
-  // the chip counts this session kept, at any age, then the mount refreshes
-  // them quietly. A search reads as on a first visit.
+  // A return to Briefs paints the list (every page loaded) and the chip counts
+  // this session kept, at any age, then the mount refreshes them quietly. A
+  // search (2+ characters) is its own server read (briefSearch below) and is
+  // never kept.
   const [kept] = useState(() =>
-    viewUserId !== null && workspaceId !== null && search === ''
+    viewUserId !== null && workspaceId !== null
       ? {
           list: keptBriefsList(viewUserId, workspaceId),
           counts: keptBriefCounts(viewUserId, workspaceId),
@@ -530,11 +540,40 @@ export function BriefsPage() {
     () => kept?.counts ?? {},
   );
   const countsGeneration = useRef(0);
-  // The search the counts were last read for, so the search effect only
-  // re-reads when the search really moved (a reload reads them itself).
-  const countedSearch = useRef<string | null>(null);
-  const searchRef = useRef(search);
-  searchRef.current = search;
+
+  // The search (src/lib/search/server-search.ts): from 2 characters, 250ms
+  // after the last keystroke, the first page of matches (title or objective
+  // ILIKE on the server) and the chips' counts for the same match, together;
+  // a newer query aborts the page read in flight. Under 2 characters the
+  // list is the normal one and nothing is sent.
+  const briefSearch = useServerSearch<BriefSearchPage>(
+    search,
+    async (q, signal) => {
+      if (workspaceId === null) {
+        return {
+          ok: true as const,
+          data: { items: [], next: { done: true as const }, counts: {} },
+        };
+      }
+      const [page, counts] = await Promise.all([
+        listBriefsFirstPage(supabase, workspaceId, q, signal),
+        countBriefsByFilter(supabase, workspaceId, q),
+      ]);
+      if (!page.ok) return page;
+      const thumbs = await page.data.thumbs;
+      return {
+        ok: true as const,
+        data: {
+          items: thumbs.ok ? withBriefThumbnails(page.data.items, thumbs.data) : page.data.items,
+          next: page.data.next,
+          counts: counts.ok ? counts.data : {},
+        },
+      };
+    },
+    workspaceId ?? '',
+  );
+  const searchActive = briefSearch.active;
+  const searchQuery = serverSearchQuery(search);
 
   // One presign cache + presignEnabled for the WHOLE list (the wiring fix: the page
   // previously built none, so image thumbnails could never resolve). Built exactly as
@@ -552,7 +591,6 @@ export function BriefsPage() {
       if (workspaceId === null) return;
       countsGeneration.current += 1;
       const generation = countsGeneration.current;
-      countedSearch.current = forSearch;
       const userId = join ? sharedUserId() : null;
       const result =
         userId === null
@@ -606,7 +644,8 @@ export function BriefsPage() {
       if (userId !== null && !join) staleBriefsReads(userId, workspaceId);
       const quiet = join && shownFor.current === workspaceId;
       // The counts reload on every event the list reloads on, alongside it.
-      const counted = loadCounts(searchRef.current, true, quiet);
+      // They are the plain list's; a search reads its own with its matches.
+      const counted = loadCounts('', true, quiet);
       loadGeneration.current += 1;
       const generation = loadGeneration.current;
       if (!quiet) {
@@ -727,15 +766,35 @@ export function BriefsPage() {
     mark('briefs:mount');
     void loadBriefs(true);
   }, [loadBriefs]);
-  useWorkspaceDataChanged(() => void loadBriefs());
+  useWorkspaceDataChanged(() => {
+    void loadBriefs();
+    briefSearch.refresh();
+  });
 
-  // The search is applied to the loaded rows in memory, but the counts are
-  // server reads, so a changed search re-reads them once typing pauses.
-  useEffect(() => {
-    if (workspaceId === null || countedSearch.current === search) return;
-    const timer = window.setTimeout(() => void loadCounts(search), BRIEF_COUNTS_SEARCH_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [workspaceId, search, loadCounts]);
+  // Load more while searching: the next page of the same search (its cursor
+  // carries the query, so a page of another search is never appended).
+  const searchNext: BriefPageNext = briefSearch.data?.next ?? { done: true };
+  const loadMoreSearch = useCallback(async () => {
+    if (workspaceId === null || searchNext.done || loadingMore) return;
+    const cursor = searchNext.cursor;
+    if ((cursor.query ?? '') !== briefSearch.query) return;
+    setLoadingMore(true);
+    const result = await listBriefsPage(supabase, workspaceId, cursor);
+    setLoadingMore(false);
+    if (!result.ok) {
+      showToast?.({ title: BRIEFS_LOAD_MORE_FAILED, tone: 'error' });
+      return;
+    }
+    briefSearch.update((data) =>
+      data.next.done || data.next.cursor !== cursor
+        ? data
+        : {
+            ...data,
+            items: mergeBriefPages(data.items, result.data.items),
+            next: result.data.next,
+          },
+    );
+  }, [workspaceId, searchNext, loadingMore, briefSearch, showToast]);
 
   // The New brief button and the command palette dispatch this event; the sheet
   // lives here so the list can re-fetch on success.
@@ -756,18 +815,22 @@ export function BriefsPage() {
     [briefs, workspaceId],
   );
 
-  // Search + grouping are pure, derived over the loaded list (no refetch, no
-  // N+1): status chip, then title search, then time grouping. Section counts
-  // therefore reflect the active chip + search.
+  // The rows shown: the search's matches while searching (already matched on
+  // the server, so no device filter runs on them), else the loaded list.
+  // Grouping is pure, derived over them (no refetch, no N+1): status chip,
+  // then time grouping. Section counts therefore reflect the chip + search.
+  const shownBriefs = useMemo(
+    () => (searchActive ? (briefSearch.data?.items ?? []) : workspaceBriefs),
+    [searchActive, briefSearch.data, workspaceBriefs],
+  );
   const groups = useMemo(
-    () =>
-      deriveBriefGroups(workspaceBriefs, filter, search, new Date(), { timeZone, weekStartDay }),
-    [workspaceBriefs, filter, search, timeZone, weekStartDay],
+    () => deriveBriefGroups(shownBriefs, filter, '', new Date(), { timeZone, weekStartDay }),
+    [shownBriefs, filter, timeZone, weekStartDay],
   );
 
   const sortedBriefs = useMemo(
-    () => (showSort ? deriveSortedBriefs(workspaceBriefs, filter, search, sort) : []),
-    [showSort, workspaceBriefs, filter, search, sort],
+    () => (showSort ? deriveSortedBriefs(shownBriefs, filter, '', sort) : []),
+    [showSort, shownBriefs, filter, sort],
   );
 
   const shownCount = showSort
@@ -787,11 +850,16 @@ export function BriefsPage() {
   function onCreated(created: BriefCreated): void {
     setCreateOpen(false);
     void loadBriefs();
+    briefSearch.refresh();
     toast?.show(createdToast(created, navigate));
   }
 
-  const listLoading = workspaceId === null || (loading && briefs.length === 0);
-  if (!listLoading && !loadFailed) mark('briefs:paint');
+  const searchFailed = searchActive && briefSearch.status === 'error' && briefSearch.data === null;
+  const listLoading = searchActive
+    ? workspaceId === null || (briefSearch.data === null && !searchFailed)
+    : workspaceId === null || (loading && briefs.length === 0);
+  const listFailed = searchActive ? searchFailed : loadFailed;
+  if (!listLoading && !listFailed && !searchActive) mark('briefs:paint');
   // Back on Briefs, the scroll lands where it was once the cards painted.
   useKeptScroll(viewKey('briefs:scroll'), !listLoading && !loadFailed);
 
@@ -818,20 +886,24 @@ export function BriefsPage() {
         onSearchChange: (value) => setListState(filter, value),
         filter,
         onFilterChange: (value) => setListState(value, search),
-        counts: chipCounts,
+        counts: searchActive ? (briefSearch.data?.counts ?? {}) : chipCounts,
         canCreate: canCreateBrief,
         ...(showSort ? { sort: { value: sort, onChange: setSort } } : {}),
       })}
 
-      {loadFailed ? (
+      {listFailed ? (
         <div className="px-4 md:px-6 mt-4">
-          <LoadError title="briefs" onRetry={() => void loadBriefs()} retrying={loading} />
+          <LoadError
+            title="briefs"
+            onRetry={() => (searchActive ? briefSearch.refresh() : void loadBriefs())}
+            retrying={searchActive ? briefSearch.status === 'loading' : loading}
+          />
         </div>
       ) : listLoading ? (
         <BriefsListSkeleton />
       ) : shownCount === 0 ? (
         briefsEmptyView(
-          briefsEmptyState(filter, search, workspaceBriefs.length, canCreateBrief),
+          briefsEmptyState(filter, searchQuery, workspaceBriefs.length, canCreateBrief),
           () => setListState(filter, ''),
         )
       ) : showSort ? (
@@ -848,8 +920,10 @@ export function BriefsPage() {
 
       {/* Older briefs load a page at a time; chips, search and sort narrow
           what is loaded, while the chip counts are server totals. */}
-      {!loadFailed && !listLoading
-        ? briefsLoadMore(next, loadingMore, () => void loadMore())
+      {!listFailed && !listLoading
+        ? searchActive
+          ? briefsLoadMore(searchNext, loadingMore, () => void loadMoreSearch())
+          : briefsLoadMore(next, loadingMore, () => void loadMore())
         : null}
 
       <CreateBriefSheet

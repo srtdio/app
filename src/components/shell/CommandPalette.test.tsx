@@ -319,6 +319,94 @@ describe('CommandPalette', () => {
     expect(sections('diwali', only).map((x) => x.label)).toEqual(['Posts']);
   });
 
+  it('plan item comments and activity get their own groups, last of their neighbours', () => {
+    const search = ready(
+      'diwali',
+      [
+        wsHit('activity', 10, {
+          snippet: 'comment',
+          entityType: 'post',
+          parentId: 'p10',
+          actorUserId: null,
+          title: 'Launch reel',
+        }),
+        wsHit('plan_item_comment', 7, {
+          id: 'plan_item7',
+          parentId: 'plan1',
+          entityType: 'plan_item',
+        }),
+        wsHit('plan_item', 7),
+        wsHit('task', 8),
+      ],
+      [chatHit],
+    );
+    expect(sections('diwali', search).map((x) => x.label)).toEqual([
+      'Plan items',
+      'Plan comments',
+      'Tasks',
+      'Chat',
+      'Activity',
+    ]);
+  });
+
+  it('a plan item and its comment hit share an id but never a row id or key', () => {
+    const search = ready(
+      'diwali',
+      [
+        wsHit('plan_item', 7),
+        wsHit('plan_item_comment', 7, {
+          id: 'plan_item7',
+          parentId: 'plan1',
+          entityType: 'plan_item',
+        }),
+      ],
+      [],
+    );
+    const ids = sections('diwali', search).flatMap((x) => x.items.map((item) => item.id));
+    expect(ids).toEqual(['plan_item-plan_item7', 'plan_item_comment-plan_item7']);
+    expect(new Set(ids).size).toBe(ids.length);
+    // Every rendered row is keyed by its section and its kind-prefixed id.
+    const src = readFileSync(
+      fileURLToPath(new URL('./CommandPalette.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src.match(/key=\{`\$\{section\.label\}:\$\{item\.id\}`\}/g)).toHaveLength(3);
+    expect(src).not.toMatch(/key=\{item\.id\}/);
+    // Both open the item in its plan.
+    const targets = sections('diwali', search).flatMap((x) =>
+      x.items.flatMap((item) => (item.type === 'result' ? [item.target] : [])),
+    );
+    expect(targets).toEqual([
+      { path: '/plans/plan1?q=diwali&at=plan_item7' },
+      { path: '/plans/plan1?q=diwali&at=plan_item7' },
+    ]);
+  });
+
+  it("an activity row reads the feed's own line for its event type and opens its subject", () => {
+    const search = ready(
+      'launch',
+      [
+        wsHit('activity', 10, {
+          snippet: 'comment',
+          entityType: 'post',
+          parentId: 'p10',
+          number: 4,
+          actorUserId: null,
+          title: 'Launch reel',
+        }),
+      ],
+      [],
+    );
+    const row = sections('launch', search)[0]?.items[0];
+    expect(row).toMatchObject({
+      type: 'result',
+      group: 'Activity',
+      title: 'Launch reel',
+      snippet: 'New comment on Launch reel',
+      target: { path: '/p/gbl-4?q=launch' },
+    });
+  });
+
   it('caps each type at 5 with "Show all (N)", N the server total', () => {
     const five = Array.from({ length: 5 }, (_, i) => wsHit('post', i + 1));
     const search = ready('diwali', five, [], { post: 37 });
