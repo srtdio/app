@@ -1,9 +1,11 @@
 name: Visual CI
 
-# visual: renders every screen in e2e/visual/screens.spec.ts (iPhone 13 light and dark, 1280x800 light; WebKit, harness, no DB, no secrets) and compares each with its committed baseline in e2e/visual/__screenshots__/. Any screen over 0.2% different fails; the diff, actual and expected images upload as the visual-diffs artifact.
+# visual-shard: renders every screen in e2e/visual/screens.spec.ts (iPhone 13 light and dark, 1280x800 light, four ipad-* tablet projects; WebKit, harness, no DB, no secrets) and compares each with its committed baseline in e2e/visual/__screenshots__/.
+#   The suite is split into 4 parallel shards (playwright --shard=N/4, fullyParallel, so each test runs in exactly one shard). Any screen over 0.2% different fails; that shard's diff, actual and expected images upload as the visual-diffs-<N> artifact.
+# visual: the one required check. It needs every shard and fails unless all four succeeded.
 #   Runs on every pull request and every push to main (no paths filter, so the check always reports).
-# Baseline refresh: on a pull request from this repo whose head commit message contains [update-visual-baselines], visual re-renders every screen (--update-snapshots=all) on this CI WebKit image and uploads the visual-baselines artifact,
-#   then commit-baselines commits them to the PR's head branch. That push is made with GITHUB_TOKEN, so it starts no new run: push any later commit (without the tag) to get the visual check on it.
+# Baseline refresh: on a pull request from this repo whose head commit message contains [update-visual-baselines], each shard clears the baselines and re-renders its own screens (--update-snapshots=all) on this CI WebKit image and uploads them as visual-baselines-<N>,
+#   then commit-baselines merges all four artifacts into one full set and commits it to the PR's head branch. That push is made with GITHUB_TOKEN, so it starts no new run: push any later commit (without the tag) to get the visual check on it.
 # Locally: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts (add --update-snapshots=all to refresh; local baselines differ from CI's, commit only CI-rendered ones).
 on:
   pull_request:
@@ -18,12 +20,17 @@ permissions:
   contents: read
 
 jobs:
-  visual:
+  visual-shard:
+    name: visual-shard (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     # Room for a slow apt mirror (see e2e-webkit.yml): the system-deps install
-    # alone has taken 14 minutes on some runners. The screen step itself now
-    # takes about 15 minutes with the ipad-* projects, so it gets 25.
-    timeout-minutes: 45
+    # alone has taken 14 minutes on some runners. The screen step renders a
+    # quarter of the suite, so it gets 10.
+    timeout-minutes: 30
     outputs:
       update: ${{ steps.mode.outputs.update }}
     steps:
@@ -104,19 +111,26 @@ jobs:
 
       - name: Compare screens with the baselines
         if: steps.mode.outputs.update != 'true'
-        timeout-minutes: 25
-        run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts
+        timeout-minutes: 10
+        run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard=${{ matrix.shard }}/4
+
+      # Each shard uploads only the screens it rendered, so the checked-out
+      # baselines go first (the .gitkeep stays); the four artifacts then merge
+      # into one full set with no stale or duplicate files.
+      - name: Clear the checked-out baselines
+        if: steps.mode.outputs.update == 'true'
+        run: find e2e/visual/__screenshots__ -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 
       - name: Render new baselines
         if: steps.mode.outputs.update == 'true'
-        timeout-minutes: 25
-        run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --update-snapshots=all
+        timeout-minutes: 10
+        run: pnpm exec playwright test --config e2e/visual/playwright.visual.config.ts --shard=${{ matrix.shard }}/4 --update-snapshots=all
 
       - name: Upload new baselines
         if: steps.mode.outputs.update == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: visual-baselines
+          name: visual-baselines-${{ matrix.shard }}
           path: e2e/visual/__screenshots__
           if-no-files-found: error
           retention-days: 7
@@ -125,17 +139,32 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: visual-diffs
+          name: visual-diffs-${{ matrix.shard }}
           path: |
             e2e/results/visual
             e2e/results/visual-report
           if-no-files-found: warn
           retention-days: 7
 
+  # The required check: one name however many shards run. Fails unless every
+  # shard succeeded (a failed, cancelled or skipped shard fails it).
+  visual:
+    needs: visual-shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check every shard passed
+        env:
+          SHARDS: ${{ needs.visual-shard.result }}
+        run: |
+          echo "visual shards: $SHARDS"
+          [ "$SHARDS" = "success" ]
+
   # Runs no PR code: it only copies the rendered images onto the head branch.
   commit-baselines:
-    needs: visual
-    if: needs.visual.outputs.update == 'true'
+    needs: visual-shard
+    if: needs.visual-shard.result == 'success' && needs.visual-shard.outputs.update == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -150,7 +179,8 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: visual-baselines
+          pattern: visual-baselines-*
+          merge-multiple: true
           path: e2e/visual/__screenshots__
 
       - name: Commit the baselines to the PR branch
