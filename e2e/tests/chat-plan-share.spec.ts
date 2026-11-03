@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import {
   DM_CHANNEL,
@@ -54,6 +54,27 @@ async function openPicker(page: Page): Promise<ReturnType<Page['getByRole']>> {
   const picker = page.getByRole('dialog', { name: 'Plans' });
   await expect(picker).toBeVisible();
   return picker;
+}
+
+/**
+ * A locator's box once it has stopped moving (two reads 100ms apart agree), so a
+ * page still sliding in is never measured mid-transition.
+ */
+async function settledBox(locator: Locator): Promise<Awaited<ReturnType<Locator['boundingBox']>>> {
+  let last = await locator.boundingBox();
+  await expect
+    .poll(
+      async () => {
+        await locator.page().waitForTimeout(100);
+        const next = await locator.boundingBox();
+        const still = next !== null && last !== null && next.y === last.y && next.x === last.x;
+        last = next;
+        return still;
+      },
+      { timeout: 5_000 },
+    )
+    .toBe(true);
+  return last;
 }
 
 function sharedPlans(network: HarnessNetwork, channelId: string): unknown[] {
@@ -272,7 +293,8 @@ test('agency: Send in {chat} reads Sending, then Sent; again does nothing; an ed
   const primary = plan.locator('[data-plan-primary]');
   await expect(primary).toHaveText(`Send in ${PEER_NAME}`);
   await expect(primary).toHaveAttribute('data-plan-send-state', 'idle');
-  const idleBox = await primary.boundingBox();
+  // The plan page slides in: measure the idle button only once it has come to rest.
+  const idleBox = await settledBox(primary);
 
   // Tap: "Sending in {chat}…", disabled; a double tap sends once.
   await primary.dblclick();
