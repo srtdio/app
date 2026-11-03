@@ -73,6 +73,10 @@ Only `src/lib/motion/` moves. Everything else calls one of the nine moves below.
 - `motion` (MIT), pinned exact. Boot carries `LazyMotion` + `m` only (about 5 KB gzip) plus the module (WAAPI, no library).
 - `MotionRoot` (main.tsx) loads `domMax` (layout, layoutId, drag) with a dynamic import after first paint at idle. Before it loads every `m.*` element renders at its final state and layout moves snap.
 
+## Push hold
+
+`pushIn` holds the screen behind at its shifted pose until `pushBack` (or the next `pushIn`) on that screen releases it.
+
 ## Marks (?paintlog=1)
 
 `motion:start:push|growFromCard|rise` and `motion:end:...` on every push, grow and rise.
