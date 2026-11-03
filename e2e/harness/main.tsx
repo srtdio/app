@@ -38,7 +38,21 @@ if (window.location.pathname === '/') {
     import('@/lib/trace-context'),
     import('@/lib/theme'),
     import('@/lib/viewport-lock'),
-  ]).then(([{ default: App }, { TraceProvider }, { initTheme }, { initViewportLock }]) => {
+    import('@/lib/motion'),
+  ]).then(([{ default: App }, { TraceProvider }, { initTheme }, { initViewportLock }, motion]) => {
+    // Specs measure rest-state layout and take rest-state shots: the harness
+    // runs with motion off (the app's own ?motion=0 switch, remembered for the
+    // tab) unless a spec opens a page with ?motion=1.
+    try {
+      if (new URLSearchParams(window.location.search).get('motion') !== '1') {
+        sessionStorage.setItem('sorted.motion', '0');
+      }
+    } catch {
+      // Storage blocked: ?motion=0 on the URL still turns motion off.
+    }
+    motion.installMotionPreference();
+    motion.watchUAVisualTransition();
+    const { MotionRoot } = motion;
     // The app starts everyone in light and goes dark only by choice
     // (localStorage sorted-theme). The dark project stands in for a person who
     // chose dark, so seed that choice from the emulated colour scheme.
@@ -55,7 +69,9 @@ if (window.location.pathname === '/') {
     root.render(
       <StrictMode>
         <TraceProvider>
-          <App />
+          <MotionRoot>
+            <App />
+          </MotionRoot>
         </TraceProvider>
       </StrictMode>,
     );

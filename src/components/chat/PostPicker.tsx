@@ -298,7 +298,7 @@ interface SearchState {
  * Full-width row: hairline divider, no rounded card. PressableRow provides the
  * width, 44px minimum, left alignment and panel-2 hover; flat squares the corners.
  */
-const ROW_BASE = 'flex gap-3 border-b border-border px-4 py-3 transition-colors';
+const ROW_BASE = 'flex gap-3 border-b border-border px-4 py-3 mv-tint';
 
 function rowClass(active: boolean): string {
   return cn(ROW_BASE, 'items-start', active && 'bg-accent-soft');
@@ -898,7 +898,7 @@ export function SearchResultsView(
             onClick={props.onLoadMore}
             disabled={props.loadingMore}
             flat
-            className="flex items-center justify-between gap-3 px-4 py-3 text-base font-medium text-accent transition-colors disabled:text-fg-3"
+            className="flex items-center justify-between gap-3 px-4 py-3 text-base font-medium text-accent mv-tint disabled:text-fg-3"
           >
             <span>{`Load ${PICKER_PAGE_SIZE} more`}</span>
             <span className="text-sm font-normal tabular-nums text-fg-3">

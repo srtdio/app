@@ -24,11 +24,13 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { stepX } from '@/lib/motion';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LABELS, isPostPlatform } from '@srtdio/posts';
 import { userOnboardingSave } from '@srtdio/rpc';
@@ -256,6 +258,17 @@ export function OnboardingFlow({
     return at < 0 ? 0 : at;
   });
   const step: OnboardingStep = changingSide ? 'side' : (steps[index] ?? 'waiting');
+  // Motion: a new screen pushes the card on X (stepX); Back reverses (-1).
+  // The card renders the new screen at once; the slide is laid over it.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const stepDirection = useRef<1 | -1>(1);
+  const shownStep = useRef(step);
+  useLayoutEffect(() => {
+    if (shownStep.current === step) return;
+    shownStep.current = step;
+    stepX(cardRef.current, stepDirection.current);
+    stepDirection.current = 1;
+  }, [step]);
 
   // Profile answers
   // A new account's display_name is the email's local part (signup trigger), not
@@ -415,12 +428,14 @@ export function OnboardingFlow({
   const progressAt = changingSide ? -1 : progress.indexOf(step);
 
   function next(): void {
+    stepDirection.current = 1;
     setError(null);
     if (index < steps.length - 1) setIndex(index + 1);
     else finish(SHELL_HOME);
   }
 
   function back(): void {
+    stepDirection.current = -1;
     setError(null);
     if (changingSide) {
       // Changed their mind about changing: still the approver they saved as.
@@ -903,7 +918,13 @@ export function OnboardingFlow({
           {busy ? 'Sending' : 'Ask them to join'}
         </Primary>
         {!invitee ? (
-          <TextAction disabled={busy} onClick={() => setChangingSide(true)}>
+          <TextAction
+            disabled={busy}
+            onClick={() => {
+              stepDirection.current = -1;
+              setChangingSide(true);
+            }}
+          >
             {ONBOARDING_COPY.changeRole}
           </TextAction>
         ) : null}
@@ -973,7 +994,11 @@ export function OnboardingFlow({
             <StepLabel.Provider
               value={progressAt >= 0 ? setupCounter(progressAt + 1, progress.length) : null}
             >
-              <div className="flex flex-col gap-5 rounded-2xl border bg-panel p-6 lit-raised">
+              <div
+                ref={cardRef}
+                data-onboarding-card=""
+                className="flex flex-col gap-5 rounded-2xl border bg-panel p-6 lit-raised"
+              >
                 {body}
                 {photoNotice !== null && (step === 'brand' || readyForShell) ? (
                   <p role="status" className="text-base text-fg-2 [text-wrap:pretty]">

@@ -27,6 +27,8 @@ import { flashNode } from '@/components/comments/flash-node';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useSearchJump } from '@/lib/search/jump';
 import { cn } from '@/lib/cn';
+import { Bone, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
+import { leaveIntoCard, useGrowFromCard } from '@/lib/motion/pages';
 import { prefersReducedMotion, useIsLaptop } from '@/lib/use-is-laptop';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
@@ -301,6 +303,11 @@ export function PostDetailPage({
   // address bar can stay on the pretty URL without a redirect.
   const postId = postIdProp ?? params.postId;
   const navigate = useNavigate();
+  // growFromCard (kept on laptop): opened from a card tap, the page grows out
+  // of that card on its first frame (layout effect, no wait). Back grows it
+  // back into the card. Never embedded, never on a kept-view tab return.
+  const pageAnchorRef = useRef<HTMLDivElement>(null);
+  useGrowFromCard(postId, pageAnchorRef, !embedded);
   const newTrace = useNewTrace();
   const { workspaceId, workspaceKey, workspaces, workspaceName } = useWorkspace();
 
@@ -845,6 +852,11 @@ export function PostDetailPage({
       !(galleryLoaded && roleLoaded && !membersLoading && briefLoaded));
   const sheetMountable =
     !firstPaintPending && !notFound && !loadError && detail !== null && !readOnly;
+  // The page settles once (6 px, 40 ms stagger) when it lands after the boxes;
+  // a post the session already held paints at once and never settles.
+  const hadBoxes = useHadBoxes(firstPaintPending);
+  const landedRef = useRef<HTMLDivElement>(null);
+  useSettleOnLanding(landedRef, !firstPaintPending && detail !== null, hadBoxes);
   useEffect(() => {
     if (actionsOpenProp === true && !sheetMountable) onActionsOpenChange?.(false);
   }, [actionsOpenProp, sheetMountable, onActionsOpenChange]);
@@ -1145,8 +1157,10 @@ export function PostDetailPage({
       onNavigateAway();
       return;
     }
-    if (hasInAppHistory(window.history.state)) navigate(-1);
-    else goPipeline();
+    if (hasInAppHistory(window.history.state)) {
+      leaveIntoCard(postId, pageAnchorRef.current);
+      navigate(-1);
+    } else goPipeline();
   }
 
   // The explicit "Back to pipeline" (not found), and leave()'s fallback: the
@@ -1457,7 +1471,7 @@ export function PostDetailPage({
         {...(pending ? { 'aria-hidden': true } : { 'data-post-side': '' })}
         className={grid.side}
       >
-        {pending ? <div className="h-24 animate-pulse rounded-xl bg-panel-2" /> : null}
+        {pending ? <Bone as="div" className="h-24 rounded-xl" /> : null}
         <section
           id={COMMENTS_SECTION_ID}
           hidden={pending}
@@ -1517,10 +1531,13 @@ export function PostDetailPage({
     return (
       <SearchWordsContext.Provider value={searchJump.words}>
         {embedded ? null : (
-          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
+          <div
+            ref={pageAnchorRef}
+            className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+          >
             {backButton}
             <div aria-hidden className="flex min-w-0 flex-1 items-center gap-2">
-              <div className="h-4 w-32 animate-pulse rounded bg-panel-3" />
+              <Bone as="div" className="h-4 w-32 rounded" />
             </div>
             <div aria-hidden className="h-11 w-11 shrink-0" />
           </div>
@@ -1532,22 +1549,22 @@ export function PostDetailPage({
             label. Flow B 25: it stays until every first-paint read settles. */}
         <div aria-busy="true" data-post-skeleton="" className={grid.page}>
           <div aria-hidden className={cn(grid.head, 'flex flex-col gap-3')}>
-            <div className="h-8 w-3/4 animate-pulse rounded bg-panel-3" />
+            <Bone as="div" className="h-8 w-3/4 rounded" />
             <div className="flex min-h-[44px] items-center gap-2">
-              <div className="h-5 w-5 animate-pulse rounded-full bg-panel-3" />
-              <div className="h-3 w-24 animate-pulse rounded bg-panel-3" />
-              <div className="h-3 w-16 animate-pulse rounded bg-panel-3" />
-              <div className="h-3 w-20 animate-pulse rounded bg-panel-3" />
+              <Bone as="div" className="h-5 w-5 rounded-full" />
+              <Bone as="div" className="h-3 w-24 rounded" />
+              <Bone as="div" className="h-3 w-16 rounded" />
+              <Bone as="div" className="h-3 w-20 rounded" />
             </div>
           </div>
           <div aria-hidden className={grid.media}>
-            <div className="aspect-[4/5] w-full animate-pulse rounded-xl bg-panel-3" />
+            <Bone as="div" className="aspect-[4/5] w-full rounded-xl" />
           </div>
           <div aria-hidden className={cn(grid.body, 'flex flex-col gap-6')}>
             <div className="rounded-xl border bg-panel-2 p-4 lit-card-muted">
-              <div className="h-3 w-full animate-pulse rounded bg-panel-3" />
-              <div className="mt-2 h-3 w-5/6 animate-pulse rounded bg-panel-3" />
-              <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-panel-3" />
+              <Bone as="div" className="h-3 w-full rounded" />
+              <Bone as="div" className="mt-2 h-3 w-5/6 rounded" />
+              <Bone as="div" className="mt-2 h-3 w-2/3 rounded" />
             </div>
           </div>
           {sidePanel(true)}
@@ -1562,7 +1579,10 @@ export function PostDetailPage({
     return (
       <>
         {embedded ? null : (
-          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
+          <div
+            ref={pageAnchorRef}
+            className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+          >
             {backButton}
           </div>
         )}
@@ -1577,7 +1597,10 @@ export function PostDetailPage({
     return (
       <>
         {embedded ? null : (
-          <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
+          <div
+            ref={pageAnchorRef}
+            className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+          >
             {backButton}
           </div>
         )}
@@ -1700,7 +1723,7 @@ export function PostDetailPage({
               type="button"
               data-post-details-edit=""
               onClick={() => setShowDetails(true)}
-              className={cn(metaHeadClass, '-mx-1 px-1 transition-colors')}
+              className={cn(metaHeadClass, '-mx-1 px-1 mv-tint')}
             >
               {metaHead}
             </PressableRow>
@@ -1844,7 +1867,10 @@ export function PostDetailPage({
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
       {embedded ? null : (
-        <div className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
+        <div
+          ref={pageAnchorRef}
+          className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+        >
           {backButton}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <span
@@ -1899,7 +1925,7 @@ export function PostDetailPage({
           onBack={() => setViewingVersionId(null)}
         />
       ) : (
-        <div className={grid.page}>
+        <div ref={landedRef} className={grid.page}>
           <div className={cn(grid.head, 'flex flex-col gap-3')}>
             {canEditContent ? (
               editingTitle ? (
@@ -1960,7 +1986,7 @@ export function PostDetailPage({
                     type="button"
                     data-title-edit=""
                     onClick={openTitleEditor}
-                    className="-mx-2 block px-2 py-1 font-semibold tracking-tight transition-colors"
+                    className="-mx-2 block px-2 py-1 font-semibold tracking-tight mv-tint"
                   >
                     <Highlight text={post.title} />
                   </PressableRow>

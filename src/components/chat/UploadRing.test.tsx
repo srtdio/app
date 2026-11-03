@@ -93,7 +93,7 @@ function ringClass(html: string): string {
   return /<button[^>]*class="([^"]*)"[^>]*data-upload-ring=""/.exec(html)?.[1] ?? '';
 }
 
-/** The opening tag (with classes) of the element that directly holds the ring. */
+/** The opening tag (with classes) of the box that directly holds the ring. */
 function ringParent(html: string): string {
   const at = html.lastIndexOf('<button', html.indexOf('data-upload-ring'));
   const stack: string[] = [];
@@ -103,7 +103,8 @@ function ringParent(html: string): string {
     if (tag.startsWith('</')) stack.pop();
     else if (!VOID.test(tag) && !tag.endsWith('/>')) stack.push(tag);
   }
-  return stack[stack.length - 1] ?? '';
+  // The tile ring's display: contents wrapper adds no box: look past it.
+  return [...stack].reverse().find((tag) => !tag.includes('data-tile-upload-ring')) ?? '';
 }
 
 describe('T5: UploadRing positioning and sizes', () => {
@@ -140,16 +141,28 @@ describe('T5: UploadRing positioning and sizes', () => {
     const html = renderToStaticMarkup(<UploadRing progress={0.5} variant="image" />);
     expect(html).toContain('bg-overlay opacity-60');
     expect(html).toContain('class="text-overlay-dot"');
-    expect(html).toMatch(/data-upload-arc=""[^>]*class="text-overlay-fg/);
+    expect(html).toMatch(/data-upload-arc=""[^>]*class="[^"]*text-overlay-fg/);
     expect(html).not.toMatch(
       new RegExp(['white', 'black', `${String.fromCharCode(35)}[0-9a-f]{3,6}`].join('|'), 'i'),
     );
   });
 
-  it('motion is opacity and stroke only: no spin; the pulse stops with reduced motion', () => {
+  it('motion: the arc fills (mv-fill), an unknown arc turns (mv-spin), never a pulse or fade', () => {
     const html = renderToStaticMarkup(<UploadRing progress={null} variant="voice" />);
     expect(html).not.toContain('animate-spin');
-    expect(html).toContain('animate-pulse motion-reduce:animate-none');
+    expect(html).not.toContain('animate-pulse');
+    expect(html).toContain('mv-spin');
+    expect(html).toMatch(/data-upload-arc=""[^>]*class="[^"]*mv-fill/);
+    expect(html).not.toMatch(/transition-|duration-/);
+    const known = renderToStaticMarkup(<UploadRing progress={0.5} variant="voice" />);
+    expect(known).not.toContain('mv-spin');
+  });
+
+  it('done: the ring scales to 0 in place (mv-ring-out), not focusable', () => {
+    const html = renderToStaticMarkup(<UploadRing progress={1} variant="voice" hidden />);
+    expect(ringClass(html)).toContain('pointer-events-none mv-ring-out');
+    expect(html).toContain('tabindex="-1"');
+    expect(ringClass(html)).not.toMatch(/opacity-0|invisible/);
   });
 
   it('voice: the ring sits absolutely centred inside the relative 44px play slot', () => {

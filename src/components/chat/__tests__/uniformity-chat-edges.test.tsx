@@ -121,7 +121,7 @@ describe('11d laptop Chat with a Plan open', () => {
 
   it('set aside in place, never unmounted; the thread stays the same element so its scroll stays', () => {
     const src = read('../ChatConnected.tsx');
-    expect(src).toContain('<div className={chatListPaneClass(planPanelOpen)}>');
+    expect(src).toContain('className={chatListPaneClass(planPanelOpen)}>');
     // The thread narrows beside the panel from 1180px, as before.
     expect(src).toContain("planPanelOpen && 'min-[1180px]:mr-[440px]'");
     // The thread's key is the chat only: opening or closing the plan never remounts it.
@@ -190,7 +190,7 @@ describe('11i tile time clear of the ⋯', () => {
 });
 
 describe('8 motion tokens in the thread', () => {
-  it('the swipe spring uses DUR_SLOW_MS and the enter curve; hover fades use duration-fast', () => {
+  it('the swipe spring uses DUR_SLOW_MS and the enter curve; hover controls never fade', () => {
     const src = read('../MessageThread.tsx');
     expect(src).toContain('`${DUR_SLOW_MS}ms var(--ease-enter)`');
     expect(src).not.toContain('SWIPE_SPRING_MS');

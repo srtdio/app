@@ -108,6 +108,21 @@ async function tap(candidates: Locator[], what: string): Promise<void> {
   await target.click();
 }
 
+/**
+ * Never-resolving mode: the named reads are held for the whole test (the hold
+ * is never released), so a screen with nothing on the device or in the session
+ * shows its loading boxes (sweepBoxes, docs/motion.md). The sweep is an
+ * infinite animation: stabilise() skips it and the capture freezes it.
+ */
+function neverAnswers(
+  network: HarnessNetwork,
+  reads: { tables?: string[]; rpcs?: string[]; history?: boolean },
+): void {
+  for (const table of reads.tables ?? []) network.holdTable(table);
+  for (const rpc of reads.rpcs ?? []) network.holdRpc(rpc);
+  if (reads.history === true) network.holdHistory();
+}
+
 /** A row in whichever ⋯ container is open: an ActionMenu menuitem, or a sheet's button. */
 function menuRow(page: Page, name: RegExp): Locator[] {
   return [
@@ -727,6 +742,35 @@ const SCREENS: Screen[] = [
     seed: creator,
     url: '/activity',
     steps: async (page) => waitFor([page.getByText('Priya Raman mentioned you')], 'activity'),
+  },
+  // Loading boxes (sweepBoxes): each read below never answers, and a fresh
+  // browser holds nothing for the screen, so its boxes are what paints.
+  {
+    // Activity: card-shaped boxes in ActivityCard's layout ("Loading activity").
+    name: 'boxes-activity',
+    seed: creator,
+    extra: (network) => neverAnswers(network, { tables: ['inbox_entries'] }),
+    url: '/activity',
+    steps: async (page) => waitFor([page.locator('[data-activity-boxes]')], 'activity boxes'),
+  },
+  {
+    // Plan tab: plan-card boxes on the phone, the month grid's entry boxes on laptop.
+    name: 'boxes-plan-tab',
+    seed: creator,
+    extra: (network) => {
+      seedTab(network);
+      neverAnswers(network, { rpcs: ['plan_bundle_read', 'plan_search'] });
+    },
+    url: '/plan',
+    steps: async (page) => waitFor([page.locator('[data-plan-tab-loading]')], 'plan tab boxes'),
+  },
+  {
+    // Settings > Members: row-shaped boxes (a 40px avatar circle and two lines).
+    name: 'boxes-members',
+    seed: creator,
+    extra: (network) => neverAnswers(network, { tables: ['workspace_members'] }),
+    url: '/settings?panel=members',
+    steps: async (page) => waitFor([page.locator('[data-settings-row-boxes]')], 'members boxes'),
   },
   {
     name: 'on-behalf-confirm',

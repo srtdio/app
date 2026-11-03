@@ -323,7 +323,7 @@ describe('per-file progress while files go up in parallel', () => {
     // The bar animates its width only.
     const fill = bars()[2]?.firstElementChild as HTMLElement | null;
     expect(fill?.style.width).toBe('60%');
-    expect(fill?.className).toContain('transition-[width]');
+    expect(fill?.className).toContain('mv-fill');
     expect(fill?.className).not.toMatch(/translate|transform/);
 
     // A late, smaller value never moves a bar back.

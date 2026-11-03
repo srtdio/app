@@ -10,6 +10,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { navPrefetchProps } from '@/lib/route-prefetch';
 import { INDUCTION_KEYS } from '@/lib/induction';
+import { Bone } from '@/lib/motion';
 
 interface SidebarProps {
   /** The active workspace's display name ("<Brand> - <Platform>"). */
@@ -28,7 +29,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
           type="button"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={() => dispatchSorted('sorted:switch-workspace')}
-          className="flex items-center gap-2.5 px-2 transition-colors"
+          className="flex items-center gap-2.5 px-2 mv-tint"
         >
           {workspaceName !== null ? (
             <Avatar name={clientName ?? workspaceName} role="header" kind="group" />
@@ -36,7 +37,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             <Avatar role="header" kind="group" />
           )}
           {workspaceName === null ? (
-            <span className="flex-1 h-4 rounded bg-panel-3 animate-pulse" aria-hidden />
+            <Bone className="flex-1 h-4 rounded" />
           ) : (
             // "<Brand> - <Platform>": wrap (up to three lines) rather than clip the platform.
             <span className="flex-1 min-w-0 font-semibold text-base leading-tight line-clamp-3 break-words">
@@ -55,7 +56,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-base font-medium transition-colors',
+                'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-base font-medium mv-tint',
                 isActive
                   ? 'bg-accent-soft text-accent lit-active'
                   : 'text-fg-2 hover:bg-panel-2 hover:text-fg',

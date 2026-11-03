@@ -2,11 +2,12 @@
 // matching rule (case-insensitive word prefix, any script), the same rule the
 // search itself uses; Highlight draws its hit runs with the annotation fill and
 // --fg ink, readable in light and dark. The palette and every jump destination
-// render through here. glowTarget is the arrival tint a jumped-to row gets.
+// render through here. glowTarget is the arrival tint a jumped-to row gets; it
+// wipes away left to right (wipeAway), never fades.
 
 import { createContext, useContext, type ReactElement, type ReactNode } from 'react';
 import { matchRuns } from '@/lib/chat/search';
-import { DUR_SLOW_MS } from '@/lib/motion';
+import { wipeAway, type Played } from '@/lib/motion';
 import { prefersReducedMotion } from '@/lib/use-is-laptop';
 
 /** A searched word: the search-mark fill and its dark ink, readable on every surface in both themes. */
@@ -38,38 +39,63 @@ export function Highlight(props: { text: string; words?: readonly string[] }): R
 /** When a jump's smooth scroll should have landed; a target still off screen then is snapped in. */
 export const JUMP_SETTLE_MS = 700;
 
-/** How long an arrived-at target keeps its tint before it fades. */
+/** How long an arrived-at target keeps its tint before it wipes away. */
 export const GLOW_MS = 2000;
 
 /**
- * Tint an arrived-at row for 2s, then fade the tint out (reduced motion: no
- * fade, the tint just clears at 2s). Returns the cleanup, which clears the
- * timers and the tint. Inline styles, so no row class is ever touched.
+ * Tint an arrived-at row for 2s, then wipe the tint away left to right
+ * (wipeAway, clip axis, DUR_WIPE_MS; never a fade). Motion off: the tint just
+ * clears at 2s. The tint is its own layer laid behind the row's content
+ * (z-index -1 inside an isolated row), so the row's own classes and inline
+ * background are never touched and the clip never cuts the row's content.
+ * Returns the cleanup, which clears the timer, the wipe and the tint.
  */
 export function tintTarget(el: HTMLElement): () => void {
-  const reduced = prefersReducedMotion();
-  const prev = { background: el.style.backgroundColor, transition: el.style.transition };
+  const prev = {
+    position: el.style.position,
+    isolation: el.style.isolation,
+    transition: el.style.transition,
+  };
   el.setAttribute('data-jump-glow', '');
+  // The row itself never animates: only the tint layer below moves (wipe).
   el.style.transition = 'none';
-  el.style.backgroundColor = 'var(--accent-soft)';
-  let fadeTimer: number | null = null;
+  if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+  el.style.isolation = 'isolate';
+  const layer = document.createElement('span');
+  layer.setAttribute('data-jump-glow-layer', '');
+  layer.setAttribute('aria-hidden', 'true');
+  Object.assign(layer.style, {
+    position: 'absolute',
+    inset: '0',
+    zIndex: '-1',
+    pointerEvents: 'none',
+    borderRadius: 'inherit',
+    backgroundColor: 'var(--accent-soft)',
+  });
+  el.appendChild(layer);
+  let wipe: Played | null = null;
+  let restored = false;
   const restore = (): void => {
+    if (restored) return;
+    restored = true;
     el.removeAttribute('data-jump-glow');
-    el.style.backgroundColor = prev.background;
+    layer.remove();
+    el.style.position = prev.position;
+    el.style.isolation = prev.isolation;
     el.style.transition = prev.transition;
   };
   const holdTimer = window.setTimeout(() => {
-    if (reduced) {
+    if (!layer.isConnected) {
       restore();
       return;
     }
-    el.style.transition = `background-color ${DUR_SLOW_MS}ms var(--ease-exit)`;
-    el.style.backgroundColor = prev.background;
-    fadeTimer = window.setTimeout(restore, DUR_SLOW_MS);
+    wipe = wipeAway(layer);
+    if (wipe.instant) restore();
+    else void wipe.done.then(restore);
   }, GLOW_MS);
   return () => {
     window.clearTimeout(holdTimer);
-    if (fadeTimer !== null) window.clearTimeout(fadeTimer);
+    wipe?.finish();
     restore();
   };
 }

@@ -22,4 +22,24 @@ describe('motion tokens', () => {
     expect(theme.transitionTimingFunction.enter).toBe('var(--ease-enter)');
     expect(theme.transitionTimingFunction.exit).toBe('var(--ease-exit)');
   });
+
+  it('the nine-move durations and curves resolve to their tokens', () => {
+    for (const name of [
+      'push',
+      'back',
+      'grow',
+      'grow-back',
+      'sheet-in',
+      'sheet-out',
+      'menu',
+      'toast',
+      'wipe',
+      'sweep',
+    ]) {
+      expect(theme.transitionDuration[name], name).toBe(`var(--dur-${name})`);
+    }
+    for (const name of ['ios', 'move', 'pop']) {
+      expect(theme.transitionTimingFunction[name], name).toBe(`var(--ease-${name})`);
+    }
+  });
 });

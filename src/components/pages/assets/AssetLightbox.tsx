@@ -34,6 +34,9 @@ import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
+import { SHEET_CLOSE_PX, dialogIn, riseIn, riseOut } from '@/lib/motion';
+import { useGrowFromThumb } from '@/lib/motion/overlays';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 
 /** Layout effect in the browser; a plain effect where there is no DOM (server render, tests). */
 const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -45,7 +48,7 @@ const SWIPE_THRESHOLD = 48;
 // Passed to the shared IconButton; overlay tokens sort after its own, so they win.
 const BAR_BUTTON =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
-  'transition-colors duration-fast hover:bg-overlay-surface hover:text-overlay-fg ' +
+  'mv-tint hover:bg-overlay-surface hover:text-overlay-fg ' +
   'disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg';
 
 /**
@@ -205,7 +208,7 @@ function Field({ label, value }: { label: string; value: string }) {
 
 function Spinner() {
   return (
-    <div className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
+    <div className="h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
   );
 }
 
@@ -215,7 +218,10 @@ function Spinner() {
  * FileViewer (the one tapped opens straight away, the rest from Open). Navigation
  * (arrows, swipe, ArrowLeft/Right) wraps around the navigable list; Esc and a tap
  * on the scrim close. Only the viewed asset (and its immediate neighbours) is
- * presigned, never the whole list.
+ * presigned, never the whole list. Motion (docs/motion.md): the media grows
+ * out of the tapped tile (growFromCard); a pull down follows the finger and,
+ * past the line, rises out and closes, else springs back. The Info sheet
+ * rises (phone) or grows 95% to 100% (laptop). Never a fade.
  */
 export function AssetLightbox({
   items,
@@ -243,6 +249,20 @@ export function AssetLightbox({
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  // The media stage: grows from the tile on open, follows a pull down.
+  const stageRef = useRef<HTMLDivElement>(null);
+  const pullY = useRef(0);
+  const closingRef = useRef(false);
+  useGrowFromThumb(stageRef, undefined, (root) => root.querySelector('img, video'));
+  // The Info sheet rises on phone and grows on laptop, on its first frame.
+  const isLaptop = useIsLaptop();
+  const infoRef = useRef<HTMLDivElement>(null);
+  useBrowserLayoutEffect(() => {
+    if (!infoOpen) return;
+    if (isLaptop) dialogIn(infoRef.current);
+    else riseIn(infoRef.current);
+    // On open only (isLaptop is read at that moment).
+  }, [infoOpen]);
   // The file open in the FileViewer. Reached from the long-press sheet's Info,
   // the lightbox opens on the details instead.
   // Opened right after this lightbox has locked the page (see below), never in
@@ -487,10 +507,43 @@ export function AssetLightbox({
       return;
     }
     touchStart.current = { x: touch.clientX, y: touch.clientY };
+    pullY.current = 0;
+  };
+  // A pull down (mostly vertical, downward) follows the finger on Y only.
+  const onTouchMove = (event: React.TouchEvent): void => {
+    const start = touchStart.current;
+    const touch = event.touches[0];
+    if (start === null || touch === undefined || event.touches.length !== 1) return;
+    const dy = touch.clientY - start.y;
+    const dx = touch.clientX - start.x;
+    if (pullY.current === 0 && !(dy > 8 && dy > Math.abs(dx) * 1.5)) return;
+    pullY.current = Math.max(0, dy);
+    if (stageRef.current !== null) {
+      stageRef.current.style.transform = `translateY(${pullY.current}px)`;
+    }
   };
   const onTouchEnd = (event: React.TouchEvent): void => {
     const start = touchStart.current;
     touchStart.current = null;
+    const pulled = pullY.current;
+    pullY.current = 0;
+    if (pulled > 0) {
+      const el = stageRef.current;
+      if (pulled >= SHEET_CLOSE_PX) {
+        // Past the line: rises out from where the finger let go, then closes.
+        if (closingRef.current) return;
+        closingRef.current = true;
+        const played = riseOut(el, pulled);
+        if (el !== null) el.style.transform = '';
+        if (played.instant) onClose();
+        else void played.done.then(onClose);
+        return;
+      }
+      // Short: spring back from where the finger left it.
+      if (el !== null) el.style.transform = '';
+      riseIn(el, pulled);
+      return;
+    }
     if (start === null) return;
     const end = event.changedTouches[0];
     if (end === undefined) return;
@@ -535,11 +588,13 @@ export function AssetLightbox({
 
       {/* Media stage. A tap on the empty scrim (not the media) closes. */}
       <div
+        ref={stageRef}
         className="relative flex flex-1 items-center justify-center overflow-hidden p-4"
         onClick={(event) => {
           if (event.target === event.currentTarget) onClose();
         }}
         onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
         {items.length > 1 ? (
@@ -614,6 +669,7 @@ export function AssetLightbox({
             position="absolute"
           />
           <div
+            ref={infoRef}
             role="dialog"
             aria-label={`Details for ${name}`}
             className="lit-overlay relative max-h-[80%] w-full overflow-y-auto rounded-t-2xl border-t bg-panel p-4 text-fg md:mx-auto md:mb-4 md:max-w-md md:rounded-2xl md:border"

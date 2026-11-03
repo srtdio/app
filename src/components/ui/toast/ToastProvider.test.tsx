@@ -1,4 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Motion on by default (this suite runs without a window, where the module
+// reads motion as off); one case below turns it off.
+const motion = vi.hoisted(() => ({ off: false }));
+vi.mock('@/lib/motion', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/motion')>()),
+  motionOff: () => motion.off,
+}));
 import {
   createToastStore,
   DEFAULT_DURATION_MS,
@@ -12,6 +20,16 @@ describe('createToastStore', () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+    motion.off = false;
+  });
+
+  it('with motion off a dismissed card goes at once (no exit to wait for)', () => {
+    motion.off = true;
+    const store = createToastStore();
+    const id = store.show({ title: 'Plan saved' });
+    store.dismiss(id);
+    expect(store.getSnapshot()).toEqual([]);
+    store.dispose();
   });
 
   it('show() renders a toast and returns its id', () => {

@@ -21,7 +21,8 @@
 // the phone list and the search results, never the laptop calendar.
 
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
@@ -73,6 +74,7 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { PlanCalendar, PlanTabLegend } from './plan-tab/PlanCalendar';
 import { PlanTabAdd, type AddTarget } from './plan-tab/PlanTabAdd';
 import {
+  PlanTabBoxes,
   PlanTabCard,
   PlanTabList,
   PlanTabLoadMore,
@@ -314,13 +316,24 @@ export function PlanTabPage(): ReactElement {
   );
 
   if (data !== null && !zero && !searching) mark('plan-tab:paint');
+  // Boxes only while nothing is held for the tab (a kept or session value
+  // paints at once); the cards settle once when they land after them.
+  const searchBoxes =
+    searching &&
+    !(planSearch.status === 'error' && planSearch.data === null) &&
+    (results === null || planSearch.data === null);
+  const listBoxes = !searching && load.status !== 'failed' && !desktop && data === null;
+  const hadBoxes = useHadBoxes(searchBoxes || listBoxes);
+  const landedRef = useRef<HTMLDivElement>(null);
+  const landed = searching ? results !== null && results.length > 0 : data !== null && !zero;
+  useSettleOnLanding(landedRef, landed && !searchBoxes && !listBoxes, hadBoxes);
   let body: ReactElement;
   if (searching) {
     body =
       planSearch.status === 'error' && planSearch.data === null ? (
         <ScreenFailed onRetry={planSearch.refresh} />
       ) : results === null || planSearch.data === null ? (
-        <div data-plan-tab-loading="" className="min-h-[320px]" />
+        <PlanTabBoxes />
       ) : (
         <PlanSearchResults
           bundles={results}
@@ -367,7 +380,7 @@ export function PlanTabPage(): ReactElement {
       />
     );
   } else if (data === null) {
-    body = <div data-plan-tab-loading="" className="min-h-[320px]" />;
+    body = <PlanTabBoxes />;
   } else if (sort === PLAN_SORT_DEFAULT) {
     body = (
       <PlanTabList
@@ -392,7 +405,9 @@ export function PlanTabPage(): ReactElement {
   return (
     <>
       {head}
-      {body}
+      <div ref={landedRef} className="contents">
+        {body}
+      </div>
       {creator && workspaceId !== null ? (
         <>
           <PlanComposeScreen
@@ -437,7 +452,7 @@ function ViewSwitch(props: {
           aria-pressed={props.view === o.view}
           onClick={() => props.onView(o.view)}
           className={cn(
-            'min-w-[64px] px-3 text-base font-medium transition-colors duration-fast focus-visible:ring-inset',
+            'min-w-[64px] px-3 text-base font-medium mv-tint focus-visible:ring-inset',
             props.view === o.view ? 'lit-chip text-accent' : 'text-fg-2 hover:text-fg',
           )}
         >

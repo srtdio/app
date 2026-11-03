@@ -180,8 +180,11 @@ describe('8 / 9 / 10. reason sheet dirty, Back, delete', () => {
       PAGE.indexOf('function leave(): void'),
       PAGE.indexOf('function goPipeline'),
     );
-    expect(body).toContain('if (hasInAppHistory(window.history.state)) navigate(-1);');
-    expect(body).toContain('else goPipeline();');
+    expect(body).toContain('if (hasInAppHistory(window.history.state)) {');
+    // growFromCard: Back remembers the page so the card grows back into place.
+    expect(body).toContain('leaveIntoCard(postId, pageAnchorRef.current);');
+    expect(body).toContain('navigate(-1);');
+    expect(body).toContain('} else goPipeline();');
     expect(PAGE).toContain('onClick={goPipeline}');
     // The one hard navigation to the pipeline, still gated by onNavigateAway.
     expect(PAGE.match(/navigate\('\/pipeline'\)/g)).toHaveLength(1);
@@ -222,7 +225,8 @@ describe('13 / 14. skeleton and load error', () => {
     );
     expect(paint).toContain('aria-busy="true"');
     expect(paint).toContain('<span className="sr-only">Loading post</span>');
-    expect(paint).toContain('animate-pulse');
+    expect(paint).toContain('<Bone as="div"');
+    expect(paint).not.toContain('animate-pulse');
   });
 
   it('FT3: a failed load is ui/LoadError ("Couldn\'t load this post.") with Retry; the raw message is only logged', () => {

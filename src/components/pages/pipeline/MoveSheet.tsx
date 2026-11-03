@@ -248,7 +248,7 @@ export function MoveSheetView({
                     disabled={busy}
                     data-move-action={action.to}
                     onClick={() => gate.request(post.id, action.to)}
-                    className="flex items-center px-3 py-2 transition-colors"
+                    className="flex items-center px-3 py-2 mv-tint"
                   >
                     <span
                       className={cn(

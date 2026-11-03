@@ -195,15 +195,13 @@ describe('the docked panel', () => {
     const src = read('PlanScreen.tsx');
     expect(src).not.toContain('PLAN_PANEL_PX');
     expect(src).toContain("'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel");
-    expect(src).toContain("'translate-x-6 opacity-0 ease-exit'");
-    expect(src).toContain("'translate-x-0 opacity-100 ease-enter'");
+    // Laptop pane switches are instant (docs/motion.md): no slide, no fade.
+    expect(src).not.toContain('translate-x-6 opacity-0');
     expect(src).toContain("{ role: 'complementary' }");
     // Lit as an overlay only while it sits over the chat (below 1180px); flat
     // beside the list from 1180px. No arbitrary box-shadow, and the old
     // --shadow-panel-left token is gone from index.css.
-    expect(src).toContain(
-      'max-[1179px]:lit-overlay min-[1180px]:border-border transition-[transform,opacity]',
-    );
+    expect(src).toContain("max-[1179px]:lit-overlay min-[1180px]:border-border',");
     expect(src).not.toContain('[box-shadow:');
     expect(src).not.toContain('--shadow-panel-left');
     const css = readFileSync(fileURLToPath(new URL('../../../index.css', import.meta.url)), 'utf8');
@@ -212,10 +210,11 @@ describe('the docked panel', () => {
     // One laptop switch for every laptop layout.
     expect(src).toContain('useIsLaptop()');
     expect(src).not.toContain('usePlanDesktop');
-    // The phone page is unchanged.
+    // The phone page pushes in from the right (pushIn), its edge a 1px ring.
     expect(src).toContain(
-      "'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] transition-transform duration-slow ease-enter motion-reduce:transition-none'",
+      "'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] ring-1 ring-border'",
     );
+    expect(src).toContain('pushIn(el)');
   });
 
   it('the chat thread narrows by 440px from 1180px; the list steps aside at 768 to 891px', () => {

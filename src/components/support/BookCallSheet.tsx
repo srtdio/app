@@ -82,7 +82,7 @@ function ChoiceRow(props: { label: string; selected: boolean; onSelect: () => vo
       aria-checked={props.selected}
       onClick={props.onSelect}
       className={cn(
-        'flex items-center gap-3 border px-3 text-base font-medium transition-colors',
+        'flex items-center gap-3 border px-3 text-base font-medium mv-tint',
         props.selected
           ? 'border-accent text-accent lit-chip-selected'
           : 'bg-panel text-fg lit-chip',

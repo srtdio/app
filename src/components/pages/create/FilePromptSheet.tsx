@@ -1,7 +1,9 @@
 // The soft file prompt: a small bottom sheet over the create sheet asking
 // whether to keep a file the format does not usually carry. Never blocks: Yes
 // keeps it, No removes it, Esc or a tap outside keeps it. Esc is caught in the
-// capture phase so it never also closes the create sheet underneath.
+// capture phase so it never also closes the create sheet underneath. Motion
+// (docs/motion.md, rise): rendered at rest, it rises on phone with the dim
+// tracking it, and grows 95% to 100% on laptop. Never a fade.
 
 import { useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
@@ -9,6 +11,9 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import type { FilePrompt } from '@/components/pages/create/file-kind';
 import { useModalFocus } from '@/lib/modal-focus';
+import { dialogIn, riseIn, useMoveOnMount } from '@/lib/motion';
+import { dimWith } from '@/lib/motion/overlays';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 
 interface FilePromptSheetProps {
   prompt: FilePrompt;
@@ -18,6 +23,12 @@ interface FilePromptSheetProps {
 
 export function FilePromptSheet({ prompt, onKeep, onRemove }: FilePromptSheetProps): ReactElement {
   const panelRef = useRef<HTMLDivElement>(null);
+  const dimRef = useRef<HTMLDivElement>(null);
+  const isLaptop = useIsLaptop();
+  useMoveOnMount(panelRef, (el) => {
+    if (isLaptop) return dialogIn(el);
+    return dimWith(el, dimRef.current, riseIn(el));
+  });
   const keepRef = useRef<HTMLDivElement>(null);
   const onKeepRef = useRef(onKeep);
   onKeepRef.current = onKeep;
@@ -38,18 +49,24 @@ export function FilePromptSheet({ prompt, onKeep, onRemove }: FilePromptSheetPro
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-scrim p-4 sm:items-center"
+      className="fixed inset-0 z-[60] flex items-end justify-center p-4 sm:items-center"
       onClick={(event) => {
         if (event.target === event.currentTarget) onKeep();
       }}
     >
+      {/* The dim: full scrim at rest, tracking the box per frame on phone. */}
+      <div
+        ref={dimRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-scrim"
+      />
       <div
         ref={panelRef}
         role="alertdialog"
         aria-modal="true"
         aria-label="Check the file"
         tabIndex={-1}
-        className="w-full max-w-sm rounded-2xl border bg-panel p-5 lit-overlay outline-none"
+        className="relative w-full max-w-sm rounded-2xl border bg-panel p-5 lit-overlay outline-none will-change-transform"
       >
         <p className="text-base text-fg">{prompt.question}</p>
         <div className="mt-5 flex justify-end gap-2">

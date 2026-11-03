@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { MOVE_CLASS } from '@/lib/motion';
 
 /**
  * The reaction badge: under a chat bubble's bottom-left, overlapping its bottom
@@ -36,6 +37,7 @@ export function ReactionBadge({ label, onClick, children }: ReactionBadgeProps) 
       className={cn(
         REACTION_BADGE_CLASS,
         REACTION_BADGE_HIT,
+        MOVE_CLASS.press,
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}
     >

@@ -16,6 +16,7 @@
 // paint, at the skeleton's exact height, so it paints once and the footer never
 // flips. Tokens only (light and dark parity).
 
+import { Bone } from '@/lib/motion';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -128,7 +129,9 @@ export function SharedPlanCards(props: { planIds: string[]; senderName: string }
         onPointerDown={() => ctx?.tapPlans(props.planIds)}
       >
         {props.planIds.map((id) => (
-          <div key={id} data-plan-skeleton="" className={`${PLAN_CARD_SKELETON} animate-pulse`} />
+          <div key={id} data-plan-skeleton="">
+            <Bone as="div" className={PLAN_CARD_SKELETON} />
+          </div>
         ))}
       </div>
     );
@@ -485,7 +488,7 @@ function forwardList(
             type="button"
             data-plan-forward-target={channel.channelId}
             onClick={() => onPick(channel)}
-            className="flex items-center gap-3 px-3 py-2 text-fg transition-colors"
+            className="flex items-center gap-3 px-3 py-2 text-fg mv-tint"
           >
             <span className="flex shrink-0 items-center justify-center text-fg-2">
               <IconChat size={ICON_SIZE.nav} />

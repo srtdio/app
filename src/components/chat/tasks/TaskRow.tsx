@@ -11,7 +11,9 @@
 // The chip's menu (P0 Urgent, P1 High, P2 Normal, current ticked) renders in a
 // portal layer above the sheet, never clipped by the scrolling list: below the
 // chip, flipped above when space below is short, clamped on screen. A scroll
-// of the list, a tap outside or Esc closes it. Motion: fade only.
+// of the list, a tap outside or Esc closes it. Motion (docs/motion.md): the
+// menu grows from its chip; the row glides when rows above it come or go;
+// Mark checked draws the tick (drawTick). Never a fade.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
@@ -26,6 +28,8 @@ import { Highlight } from '@/components/ui/SearchHighlight';
 import { cn } from '@/lib/cn';
 import { useDismissLayer } from '@/lib/modal-focus';
 import { viewportSize } from '@/lib/use-is-laptop';
+import { centreOf, menuOrigin } from '@/components/ui/popover-classes';
+import { drawTick, GlideItem, growFromTrigger } from '@/lib/motion';
 import {
   PRIORITY_LABEL,
   TASK_PRIORITIES,
@@ -133,7 +137,6 @@ function PriorityMenu(props: {
   const { anchor, onClose } = props;
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  const [shown, setShown] = useState(false);
   useLayoutEffect(() => {
     const el = anchor.current;
     if (el === null) return;
@@ -141,10 +144,13 @@ function PriorityMenu(props: {
     const viewport = viewportSize();
     setPos(placeMenu(r, viewport.width, viewport.height));
   }, [anchor]);
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  // Placed: grow from the chip on the first painted frame (never a fade).
+  const placed = pos !== null;
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!placed || menu === null) return;
+    growFromTrigger(menu, menuOrigin(menu, centreOf(anchor.current)));
+  }, [placed, anchor]);
   // Escape closes it (top layer only) and focus goes back to the chip that opened it.
   useDismissLayer(true, onClose, menuRef);
   // A scroll anywhere under the sheet (the list) or a resize closes it; a tap outside too.
@@ -181,10 +187,7 @@ function PriorityMenu(props: {
       role="menu"
       data-task-menu=""
       style={{ top: pos.top, left: pos.left, width: MENU_W }}
-      className={cn(
-        'fixed z-[60] rounded-xl border bg-panel p-1 lit-overlay transition-opacity duration-fast motion-reduce:transition-none',
-        shown ? 'opacity-100' : 'opacity-0',
-      )}
+      className="fixed z-[60] rounded-xl border bg-panel p-1 lit-overlay"
     >
       {TASK_PRIORITIES.map((p) => (
         <PressableRow
@@ -356,8 +359,20 @@ function MarkLine(props: { mark: TaskMark }): ReactElement {
 
 export function TaskRow(props: TaskRowProps): ReactElement {
   const priorityMarked = props.marks.some((m) => m.kind === 'priority');
+  // Mark checked: the tick draws (220 ms) when the box turns done, never on a
+  // row that paints done.
+  const tickRef = useRef<HTMLButtonElement>(null);
+  const wasDone = useRef(props.done);
+  useLayoutEffect(() => {
+    if (props.done && !wasDone.current) {
+      drawTick(tickRef.current?.querySelector('[data-task-glyph="done"] path') ?? null);
+    }
+    wasDone.current = props.done;
+  }, [props.done]);
   return (
-    <li
+    // Glide: rows move to their new place when rows above come or go (Y only).
+    <GlideItem
+      as="li"
       data-task-row-id={props.id}
       data-task-number={props.number ?? ''}
       {...(props.dot ? { 'data-task-marked': '' } : {})}
@@ -366,6 +381,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
     >
       <div className="flex min-h-[44px] items-start gap-1 pl-1 pr-1">
         <IconButton
+          buttonRef={tickRef}
           type="button"
           role="checkbox"
           aria-checked={props.done}
@@ -462,6 +478,6 @@ export function TaskRow(props: TaskRowProps): ReactElement {
         </div>
       ) : null}
       {props.failed}
-    </li>
+    </GlideItem>
   );
 }

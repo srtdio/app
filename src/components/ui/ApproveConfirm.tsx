@@ -4,8 +4,10 @@
 // sheet's question and consequence line (the pipeline's move and drop
 // confirms, copy from the chat sheet's confirmCopy so the two never drift).
 // The summary never names the post title. Hookless and presentational, tokens
-// only, so light and dark match. No motion of its own: it rides its host
-// Sheet's translateY axis.
+// only, so light and dark match. No motion of its own: nothing moves on
+// Approve or while the save is in flight (no optimistic approve). Once the save
+// resolves the host Sheet leaves (rise) and the decision row draws the tick
+// (PostDecisionBar, drawTick).
 
 import type { ReactElement } from 'react';
 import { confirmCopy, postSubject } from '@/components/chat/post-sheet';

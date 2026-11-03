@@ -1,8 +1,10 @@
 // The laptop composer's emoji button (768px and up, iPad included; never on a phone) and
 // its popover: an 8-column grid of 36px cells from the curated static list
 // (emoji-list.ts), the 16 recents first. Glyphs are text, no images, no search.
-// A pick inserts at the caret; Escape or a click outside closes it. Tokens
-// only, so light and dark stay at parity.
+// A pick inserts at the caret; Escape or a click outside closes it. Motion
+// (docs/motion.md): it grows from the emoji button and shrinks back to it
+// (laptop only, so the laptop form of rise), never a fade. Tokens only, so
+// light and dark stay at parity.
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
@@ -10,7 +12,8 @@ import { ICON_SIZE, IconSmile } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { EMOJI_LIST, readRecents, rememberRecent } from '@/lib/chat/emoji-list';
 import { IconButton } from '@/components/ui/IconButton';
-import { popoverClass } from '@/components/ui/popover-classes';
+import { centreOf, menuMoves, popoverClass } from '@/components/ui/popover-classes';
+import { usePresence } from '@/lib/motion';
 import type { ChatLayout } from '@/components/chat/chat-type';
 
 /** The emoji button is a laptop (768px and up) control only; never on a phone. Pure. */
@@ -23,18 +26,17 @@ const RECENTS_HEADING = 'Recent';
 
 export function ComposerEmoji(props: { onPick: (emoji: string) => void }): ReactElement {
   const [open, setOpen] = useState(false);
-  const [shown, setShown] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const popover = usePresence<HTMLDivElement>(
+    open,
+    menuMoves(() => centreOf(buttonRef.current), 'right'),
+  );
 
   useEffect(() => {
-    if (!open) {
-      setShown(false);
-      return;
-    }
+    if (!open) return;
     setRecents(readRecents());
-    const raf = requestAnimationFrame(() => setShown(true));
     function onPointer(event: Event): void {
       const root = rootRef.current;
       if (root !== null && !root.contains(event.target as Node)) setOpen(false);
@@ -48,7 +50,6 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
     document.addEventListener('mousedown', onPointer);
     document.addEventListener('keydown', onKey);
     return () => {
-      cancelAnimationFrame(raf);
       document.removeEventListener('mousedown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
@@ -82,15 +83,16 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
       >
         <IconSmile size={ICON_SIZE.control} />
       </IconButton>
-      {open ? (
+      {popover.rendered ? (
         <div
+          ref={popover.ref}
           role="dialog"
           aria-label="Emoji"
           data-emoji-popover=""
           className={cn(
             // 8 columns of 44px cells plus the 8px padding each side (desktop only).
             'absolute bottom-full right-0 z-20 mb-2 max-h-[320px] w-[368px] origin-bottom-right overflow-y-auto p-2',
-            popoverClass(shown),
+            popoverClass(),
           )}
         >
           {groups.map((group) => (

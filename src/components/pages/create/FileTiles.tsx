@@ -5,7 +5,8 @@
 // axis only, inside the row, with no rotation, and the others shift with
 // transform. Tapping a tile shows it in the frame.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { itemIn, uploadSettle, useFreshKeys } from '@/lib/motion';
 import type { PointerEvent as ReactPointerEvent, ReactElement } from 'react';
 import type { AttachmentItem } from '@/components/pages/create/AttachmentsField';
 import { RemoveButton } from '@/components/pages/create/RemoveButton';
@@ -85,6 +86,21 @@ export function FileTiles({
   const justDragged = useRef(false);
   const rowRef = useRef<HTMLUListElement>(null);
   const count = items.length;
+  // A new upload tile rises into place (itemIn); a finished upload's tile
+  // settles (ease-pop). The first paint never moves. Laid over final states.
+  const freshPending = useFreshKeys(pending.map((tile) => tile.id));
+  const freshItems = useFreshKeys(items.map((item) => item.versionId));
+  const tileEls = useRef(new Map<string, HTMLLIElement>());
+  useLayoutEffect(() => {
+    for (const id of freshPending) itemIn(tileEls.current.get(id) ?? null);
+    for (const id of freshItems) uploadSettle(tileEls.current.get(id) ?? null);
+  });
+  const tileRef =
+    (id: string) =>
+    (el: HTMLLIElement | null): void => {
+      if (el === null) tileEls.current.delete(id);
+      else tileEls.current.set(id, el);
+    };
 
   // Once a held tile lifts, the finger drags it instead of scrolling the page.
   useEffect(() => {
@@ -198,6 +214,7 @@ export function FileTiles({
         return (
           <li
             key={item.versionId}
+            ref={tileRef(item.versionId)}
             data-tile-index={index}
             onPointerDown={(event) => onPointerDown(event, index)}
             onPointerMove={onPointerMove}
@@ -207,9 +224,7 @@ export function FileTiles({
             style={dx !== 0 ? { transform: `translateX(${dx}px)` } : undefined}
             className={cn(
               'relative h-16 w-16 shrink-0 touch-pan-x select-none [-webkit-touch-callout:none]',
-              dragging
-                ? 'z-20 cursor-grabbing lit-float'
-                : 'transition-transform duration-fast motion-reduce:transition-none',
+              dragging ? 'z-20 cursor-grabbing lit-float' : 'mv-slide',
               count > 1 && !dragging && 'cursor-grab',
             )}
           >
@@ -232,6 +247,7 @@ export function FileTiles({
       {pending.map((tile) => (
         <li
           key={tile.id}
+          ref={tileRef(tile.id)}
           data-pending-tile=""
           {...(tile.failed ? { 'data-failed': '' } : {})}
           aria-label={tile.failed ? `${tile.name} didn't upload` : `Uploading ${tile.name}`}
@@ -260,7 +276,7 @@ export function FileTiles({
               className="absolute inset-x-1.5 bottom-1.5 h-1 overflow-hidden rounded-full bg-panel"
             >
               <span
-                className="block h-full rounded-full bg-accent transition-[width] duration-fast ease-enter motion-reduce:transition-none"
+                className="block h-full rounded-full bg-accent mv-fill"
                 style={{ width: `${Math.max(tile.progress, 0.04) * 100}%` }}
               />
             </span>

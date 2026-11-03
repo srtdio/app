@@ -478,7 +478,7 @@ export function ComposerMediaFrame({
                 <span
                   key={`${item.versionId}-${index}`}
                   className={cn(
-                    'h-1.5 w-1.5 rounded-full transition-colors motion-reduce:transition-none',
+                    'h-1.5 w-1.5 rounded-full mv-tint',
                     slide === navIndex ? 'bg-overlay-fg' : 'bg-overlay-fg/50',
                   )}
                 />

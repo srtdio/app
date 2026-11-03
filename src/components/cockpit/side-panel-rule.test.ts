@@ -39,9 +39,8 @@ describe('ui rules: one side panel', () => {
     }
   });
 
-  it('SidePanel moves on the X axis only', () => {
+  it('SidePanel is a laptop pane: it opens instantly (docs/motion.md)', () => {
     const src = FILES.find((f) => f.rel === 'ui/SidePanel.tsx')?.src ?? '';
-    expect(src).toContain('translate-x-full');
-    expect(src).not.toMatch(/\btranslate-y-|\brotate-|\bscale-/);
+    expect(src).not.toMatch(/\btranslate-y-|\brotate-|\bscale-|\btransition\b|mv-slide/);
   });
 });

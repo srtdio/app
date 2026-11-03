@@ -8,7 +8,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { cn } from '@/lib/cn';
+import { centreOf, menuMoves } from '@/components/ui/popover-classes';
 import { useEscapeLayer } from '@/lib/escape-stack';
+import { usePresence } from '@/lib/motion';
 import { viewportSize } from '@/lib/use-is-laptop';
 import { IconCheck, IconChevronDown, ICON_SIZE } from '@/components/ui/icons';
 
@@ -56,7 +58,7 @@ export function selectOptionRows(
         aria-selected={selected}
         onClick={() => onPick(option.value)}
         className={cn(
-          'flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-3 text-left text-base transition-colors',
+          'flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-3 text-left text-base mv-tint',
           selected ? 'text-fg' : 'text-fg-2 hover:bg-panel-2',
         )}
       >
@@ -179,7 +181,12 @@ export function Select({
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<MenuPlacement>('down');
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  // The list grows from the trigger and shrinks back to it (growFromTrigger).
+  const presence = usePresence<HTMLDivElement>(
+    open,
+    menuMoves(() => centreOf(buttonRef.current)),
+  );
+  const listRef = presence.ref;
 
   const selected = options.find((option) => option.value === value);
 
@@ -224,7 +231,7 @@ export function Select({
         disabled={disabled}
         onClick={toggle}
         // 16px text below md so iOS Safari does not zoom on focus; 14px from md up.
-        className="lit-well flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-input md:text-base transition-colors hover:bg-panel-3 disabled:pointer-events-none disabled:opacity-50"
+        className="lit-well flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-input md:text-base mv-tint hover:bg-panel-3 disabled:pointer-events-none disabled:opacity-50"
       >
         {selected?.renderLeft !== undefined ? (
           <span className="flex shrink-0 items-center">{selected.renderLeft}</span>
@@ -239,7 +246,7 @@ export function Select({
         </span>
         <IconChevronDown size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
       </button>
-      {open ? (
+      {presence.rendered ? (
         <SelectMenu
           options={options}
           value={value}

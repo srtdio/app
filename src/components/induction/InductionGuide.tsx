@@ -9,6 +9,9 @@
 // The control is found by its data-induction key and its rect is read live in
 // every render; useLiveTick re-renders whenever it could have moved. A new step
 // opens its screen, and leaving a gate's screen brings the person back to it.
+//
+// Motion: the bar slides on X when the step changes (stepX in GuideBar: Next
+// +1, Back -1); the hand presses and nudges (GuideParts). Nothing fades.
 
 import {
   useEffect,
@@ -52,7 +55,6 @@ import {
   GuideCard,
   GuideHand,
   GuideLabel,
-  GuideStyle,
   type BarCopy,
   type DockAt,
 } from './GuideParts';
@@ -112,7 +114,6 @@ function ActiveGuide({
   if (resolution.kind === 'off') return null;
   return createPortal(
     <div {...{ [LAYER_ATTR]: '' }} data-induction-step={stepIdOf(resolution)}>
-      <GuideStyle />
       <div
         ref={safeTop}
         aria-hidden="true"
@@ -521,6 +522,7 @@ function StepLayer({
           progress={progressOf(script, resolution)}
           dock={dock}
           actions={barActions}
+          stepIndex={index}
         />
       ) : null}
     </>

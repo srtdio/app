@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { UsernameField } from '@/components/settings/UsernameField';
 import { Field } from '@/components/ui/Field';
+import { Bone, BoxSkeleton } from '@/lib/motion';
 import { IconCamera, IconPause, ICON_SIZE } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
@@ -624,7 +625,21 @@ export function ProfileSettingsPanel(): React.ReactElement {
 
   const mode = panelMode(loading, profile);
   if (mode === 'loading') {
-    return <div className="max-w-[520px] text-base text-fg-3">Loading</div>;
+    // Boxes in the panel's own shape (the 72px photo, then the fields), only
+    // while nothing is held for the profile; a kept profile paints at once.
+    return (
+      <BoxSkeleton label="Loading profile" className="max-w-[520px] flex flex-col gap-4">
+        <Bone className="h-[72px] w-[72px] rounded-full" />
+        {[0, 1].map((key) => (
+          <div key={key}>
+            <div className="mb-1.5 flex h-5 items-center">
+              <Bone className="h-3.5 w-28 rounded" />
+            </div>
+            <Bone className="h-11 w-full rounded-lg" />
+          </div>
+        ))}
+      </BoxSkeleton>
+    );
   }
 
   if (mode === 'error' || profile === null) {

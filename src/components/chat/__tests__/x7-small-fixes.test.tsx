@@ -131,7 +131,9 @@ describe('X7 FN22-FN24: copy, inputs and skeletons', () => {
     const out = renderToStaticMarkup(listSkeleton('Loading members'));
     expect(out).toContain('aria-busy="true"');
     expect(out).toContain('aria-label="Loading members"');
-    expect(out).toContain('animate-pulse');
+    // Boxes sweep (motion Bone); never a pulse.
+    expect(out).toContain('mv-bone');
+    expect(out).not.toContain('animate-pulse');
     expect(out).toContain('min-h-[44px]');
     expect(source('../MemberPicker.tsx')).not.toContain('>Loading members<');
     expect(source('../PostPicker.tsx')).not.toContain('>Loading briefs<');

@@ -15,7 +15,14 @@
 // removed member keeps "No longer in this workspace". A trigger with view
 // 'photo' (inside a DM, the chat list's People cards) opens PhotoViewer instead.
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type { ReactElement, ReactNode, Ref } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/ui/Avatar';
@@ -33,7 +40,8 @@ import { roleLabel } from '@/components/pages/settings/members-data';
 import { cn } from '@/lib/cn';
 import { isFormerMember, personAvatar, personName } from '@/lib/chat/mentions';
 import { useDismissLayer } from '@/lib/modal-focus';
-import { popoverClass } from '@/components/ui/popover-classes';
+import { menuOrigin, popoverClass } from '@/components/ui/popover-classes';
+import { growFromTrigger } from '@/lib/motion';
 import {
   closePersonCard,
   personCardAction,
@@ -436,11 +444,19 @@ function PersonPopover({
   children: ReactNode;
 }): ReactElement {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [entered, setEntered] = useState(false);
   useDismissLayer(true, onClose, panelRef);
 
+  // Rendered in place; on the first frame the card grows from the tapped
+  // name or photo (growFromTrigger, scale only, never a fade).
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (panel === null) return;
+    const a = request.anchor;
+    const point = a !== null ? { x: (a.left + a.right) / 2, y: (a.top + a.bottom) / 2 } : null;
+    growFromTrigger(panel, menuOrigin(panel, point));
+  }, [request]);
+
   useEffect(() => {
-    const raf = requestAnimationFrame(() => setEntered(true));
     const panel = panelRef.current;
     // Focus moves into the card unless something in it already took it (the input).
     if (panel !== null && !panel.contains(document.activeElement)) {
@@ -449,7 +465,6 @@ function PersonPopover({
     }
     const trigger = request.trigger;
     return () => {
-      cancelAnimationFrame(raf);
       // Hand focus back to the trigger when the card still held it.
       const activeEl = document.activeElement;
       const held =
@@ -476,7 +491,7 @@ function PersonPopover({
         aria-label={data.name}
         tabIndex={-1}
         style={{ top: pos.top, left: pos.left, width: PERSON_POPOVER_W }}
-        className={cn('fixed z-50 p-4 focus:outline-none', popoverClass(entered))}
+        className={cn('fixed z-50 p-4 focus:outline-none', popoverClass())}
       >
         {children}
       </div>

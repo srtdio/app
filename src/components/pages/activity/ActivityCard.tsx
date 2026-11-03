@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { itemIn, rememberCard, useMoveOnMount } from '@/lib/motion';
+import { useGrowBackIntoCard } from '@/lib/motion/pages';
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Avatar, avatarFillFor } from '@/components/ui/Avatar';
@@ -480,13 +482,16 @@ export function ActivityCard({
   entering = false,
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
-  // A live-added card starts 8px low and slides up on the next frame (motion-safe only).
-  const [settled, setSettled] = useState(!entering);
-  useEffect(() => {
-    if (settled) return;
-    const frame = window.requestAnimationFrame(() => setSettled(true));
-    return () => window.cancelAnimationFrame(frame);
-  }, [settled]);
+  // itemIn (docs/motion.md): a live-added card renders in place and rises
+  // 8 px over its final state on its first frame. Y only, never a fade.
+  // growFromCard: a tap remembers this card so the page grows out of it, and
+  // Back grows the page back into it.
+  const growKey = group[0]?.entityId ?? '';
+  const cardRef = useGrowBackIntoCard<HTMLDivElement>(growKey);
+  useMoveOnMount(cardRef, (el) => itemIn(el), entering);
+  const rememberThisCard = (): void => {
+    if (growKey !== '') rememberCard(growKey, cardRef.current);
+  };
   // Long-press on touch and right-click on laptop open the row's ⋯ menu.
   const [menuOpen, setMenuOpen] = useState(false);
   const gesture = useMenuGesture(() => setMenuOpen(true));
@@ -534,12 +539,14 @@ export function ActivityCard({
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
+      rememberThisCard();
       onOpenGroup(group, openEntry);
     }
   }
 
   return (
     <div
+      ref={cardRef}
       data-activity-event={lead.eventType}
       data-activity-id={lead.id}
       {...(entering ? { 'data-activity-entering': '' } : {})}
@@ -551,9 +558,8 @@ export function ActivityCard({
         event.stopPropagation();
       }}
       className={cn(
-        'lit-card flex overflow-hidden rounded-xl border bg-panel transition-colors motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-slow',
+        'lit-card flex overflow-hidden rounded-xl border bg-panel mv-tint',
         unread && 'border-accent-line',
-        !settled && 'motion-safe:translate-y-2',
       )}
     >
       <div
@@ -567,14 +573,17 @@ export function ActivityCard({
             ? {
                 role: 'button',
                 tabIndex: 0,
-                onClick: () => onOpenGroup(group, openEntry),
+                onClick: () => {
+                  rememberThisCard();
+                  onOpenGroup(group, openEntry);
+                },
                 onKeyDown,
               }
             : {})}
           data-activity-lead=""
           className={cn(
             'flex items-start gap-3 p-[14px]',
-            leadTappable && 'cursor-pointer transition-colors hover:bg-panel-2',
+            leadTappable && 'cursor-pointer mv-tint hover:bg-panel-2',
           )}
         >
           <div className="min-w-0 flex-1">
@@ -762,7 +771,7 @@ export function ActivityCard({
                     })}
                 className={cn(
                   'flex min-h-[44px] items-center gap-2 py-2 pl-[14px] pr-3',
-                  !opensNothing(entry) && 'cursor-pointer transition-colors hover:bg-panel-2',
+                  !opensNothing(entry) && 'cursor-pointer mv-tint hover:bg-panel-2',
                 )}
               >
                 <div className="min-w-0 flex-1">
@@ -834,7 +843,7 @@ export function UpcomingCard({
     <div
       data-upcoming-row={item.kind}
       data-upcoming-id={item.id}
-      className="lit-card flex overflow-hidden rounded-xl border bg-panel transition-colors"
+      className="lit-card flex overflow-hidden rounded-xl border bg-panel mv-tint"
     >
       <div aria-hidden="true" className="w-[3px] shrink-0 bg-border-strong" />
 
@@ -845,7 +854,7 @@ export function UpcomingCard({
           onClick={() => onOpen(item)}
           onKeyDown={onKeyDown}
           data-upcoming-open=""
-          className="flex cursor-pointer items-start gap-3 p-[14px] transition-colors hover:bg-panel-2"
+          className="flex cursor-pointer items-start gap-3 p-[14px] mv-tint hover:bg-panel-2"
         >
           <div className="min-w-0 flex-1">
             <div className="mb-1.5 flex items-center gap-[7px]">

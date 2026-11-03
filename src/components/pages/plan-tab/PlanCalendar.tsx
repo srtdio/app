@@ -25,7 +25,8 @@
 // the day picker (its plan days and No date): a pick moves it the way a drop
 // does. A tap still opens it; approvers see no change. Tokens only.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Bone, MOVE_CLASS, slideX } from '@/lib/motion';
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
@@ -183,6 +184,21 @@ export function PlanCalendar(props: {
   const rootRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<HTMLDivElement>(null);
   const fit = useFitHeight(fitRef, rootRef);
+  // Week/month change (docs/motion.md): the new grid renders at once and
+  // slides in on X from the arrow's side (Next from the right), 240 ms. A
+  // Month/Week switch is a pane switch: instant.
+  const loading = props.data === null;
+  const slideDir = useRef<1 | -1 | 0>(0);
+  useLayoutEffect(() => {
+    const dir = slideDir.current;
+    slideDir.current = 0;
+    if (dir !== 0) slideX(fitRef.current?.firstElementChild ?? null, dir);
+  }, [anchor]);
+  const goTo = (next: string, dir: 1 | -1): void => {
+    if (next === anchor) return;
+    slideDir.current = dir;
+    props.onAnchor(next);
+  };
 
   const openEntry = (entry: CalendarEntry): void => {
     if (drag.consumeClick() || longPress.consumeClick()) return;
@@ -228,7 +244,8 @@ export function PlanCalendar(props: {
     <div
       ref={rootRef}
       data-plan-tab="desktop"
-      data-plan-tab-loading={props.data === null ? '' : undefined}
+      data-plan-tab-loading={loading ? '' : undefined}
+      aria-busy={loading ? true : undefined}
       className={cn('flex flex-col', drag.state !== null && 'select-none')}
     >
       <div data-plan-tab-toolbar="" className="flex items-center gap-2 px-6 py-2">
@@ -242,7 +259,7 @@ export function PlanCalendar(props: {
           label={view === 'month' ? 'Last month' : 'Last week'}
           data-plan-tab-prev=""
           className="shrink-0"
-          onClick={() => props.onAnchor(shiftAnchor(view, anchor, -1))}
+          onClick={() => goTo(shiftAnchor(view, anchor, -1), -1)}
         >
           <IconChevronLeft size={ICON_SIZE.control} />
         </IconButton>
@@ -250,14 +267,14 @@ export function PlanCalendar(props: {
           label={view === 'month' ? 'Next month' : 'Next week'}
           data-plan-tab-next=""
           className="shrink-0"
-          onClick={() => props.onAnchor(shiftAnchor(view, anchor, 1))}
+          onClick={() => goTo(shiftAnchor(view, anchor, 1), 1)}
         >
           <IconChevronRight size={ICON_SIZE.control} />
         </IconButton>
         <Button
           data-plan-tab-go-today=""
           className="shrink-0"
-          onClick={() => props.onAnchor(today)}
+          onClick={() => goTo(today, today > anchor ? 1 : -1)}
         >
           {TODAY_LABEL}
         </Button>
@@ -273,11 +290,12 @@ export function PlanCalendar(props: {
         ref={fitRef}
         data-plan-tab-fit=""
         style={fit !== null ? { height: fit } : undefined}
-        className="flex min-h-0 flex-col px-6"
+        className="flex min-h-0 flex-col overflow-x-clip px-6"
       >
         {view === 'month' ? (
           <MonthGrid
             anchor={anchor}
+            loading={loading}
             height={fit}
             entries={entries}
             cellProps={cellProps}
@@ -288,6 +306,7 @@ export function PlanCalendar(props: {
         ) : (
           <WeekGrid
             anchor={anchor}
+            loading={loading}
             today={today}
             entries={entries}
             thumbs={data.thumbs}
@@ -489,6 +508,8 @@ const MONTH_HEAD_PX = 28;
 
 function MonthGrid(props: {
   anchor: string;
+  /** Nothing held for the range yet: entry-line boxes in some days (sweep, never a pulse). */
+  loading: boolean;
   /** The fitted grid height (px); null before the first measure. */
   height: number | null;
   entries: ReadonlyMap<string, CalendarEntry[]>;
@@ -514,13 +535,13 @@ function MonthGrid(props: {
           </span>
         ))}
       </div>
-      {weeks.map((week) => (
+      {weeks.map((week, weekIndex) => (
         <div
           key={week[0]?.day}
           data-plan-tab-week-row=""
           className="grid min-h-0 flex-1 grid-cols-7 grid-rows-1"
         >
-          {week.map((cell) => {
+          {week.map((cell, cellIndex) => {
             const cp = props.cellProps(cell.day);
             const all = props.entries.get(cell.day) ?? [];
             const { shown, more } = capEntries(
@@ -566,6 +587,11 @@ function MonthGrid(props: {
                     </span>
                   ) : null}
                 </span>
+                {props.loading && cell.inMonth && (weekIndex * 7 + cellIndex) % 3 === 1 ? (
+                  <Bone
+                    className={cn('w-4/5 shrink-0 rounded-lg', props.coarse ? 'h-11' : 'h-[22px]')}
+                  />
+                ) : null}
                 {shown.map((entry) => (
                   <MonthEntry key={entry.key} {...props.entryProps(entry)} />
                 ))}
@@ -643,6 +669,8 @@ function MonthEntry(props: EntryProps): ReactElement {
 
 function WeekGrid(props: {
   anchor: string;
+  /** Nothing held for the range yet: card-shaped boxes in some days. */
+  loading: boolean;
   today: string;
   entries: ReadonlyMap<string, CalendarEntry[]>;
   thumbs: PlanThumbs;
@@ -687,7 +715,7 @@ function WeekGrid(props: {
         })}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-1">
-        {days.map((day) => {
+        {days.map((day, dayIndex) => {
           const cp = props.cellProps(day);
           const isToday = day === props.today;
           return (
@@ -702,6 +730,9 @@ function WeekGrid(props: {
                 cp.over && DROP,
               )}
             >
+              {props.loading && dayIndex % 2 === 0 ? (
+                <Bone className="h-24 w-full shrink-0 rounded-xl" />
+              ) : null}
               {(props.entries.get(day) ?? []).map((entry) => (
                 <WeekCard key={entry.key} {...props.entryProps(entry)} thumbs={props.thumbs} />
               ))}
@@ -748,7 +779,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
       onClick={() => props.onOpen(entry)}
       {...holdAttrs(props)}
       className={cn(
-        'lit-card flex min-w-0 shrink-0 flex-col overflow-hidden border bg-panel transition-colors',
+        'lit-card flex min-w-0 shrink-0 flex-col overflow-hidden border bg-panel mv-tint',
         props.holdable && NO_TOUCH_SELECT,
         props.lifted && 'opacity-40',
       )}
@@ -811,7 +842,10 @@ function LiftedEntry(props: { drag: Drag }): ReactElement {
       data-plan-tab-drag-card=""
       aria-hidden="true"
       style={{ left: drag.x - drag.offX, top: drag.y - drag.offY, width: drag.width }}
-      className="lit-float pointer-events-none fixed z-50 h-[26px] overflow-hidden rounded-lg bg-panel"
+      className={cn(
+        'lit-float pointer-events-none fixed z-50 h-[26px] overflow-hidden rounded-lg bg-panel',
+        MOVE_CLASS.lift,
+      )}
     >
       <span className={cn('flex h-full items-center gap-1.5 px-2 text-sm text-fg', look.soft)}>
         <span className={cn('h-2 w-2 shrink-0', look.dot)} />

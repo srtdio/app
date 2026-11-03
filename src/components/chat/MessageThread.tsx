@@ -164,7 +164,8 @@ import {
   type SwipeReplyController,
 } from '@/lib/chat/swipe-reply';
 import type { PresignCache } from '@/lib/asset-presign';
-import { DUR_SLOW_MS } from '@/lib/motion';
+import { Bone, DUR_SLOW_MS, itemIn, pop, useFreshKeys } from '@/lib/motion';
+import { freshTailIds } from '@/lib/chat/fresh-tail';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import {
   Composer,
@@ -295,6 +296,7 @@ import {
 } from '@/lib/chat/forward';
 import {
   markCounts,
+  markBadgeLabel,
   markMenuOptions,
   openPostsHeading,
   toggleSelected,
@@ -1183,9 +1185,8 @@ function typingLabel(ids: string[], profiles: Map<string, ChatProfile>): string 
 
 /**
  * Slim, non-scrolling typing row shown just above the composer. The three dots
- * animate opacity-only via `animate-pulse` with staggered arbitrary delays (no
- * translate/rotate, no custom keyframes), and all colours are design tokens so
- * light and dark are at parity.
+ * are still (motion never fades or pulses, docs/motion.md); all colours are
+ * design tokens so light and dark are at parity.
  */
 function TypingIndicator(props: {
   ids: string[];
@@ -1199,9 +1200,9 @@ function TypingIndicator(props: {
       className={cn('flex shrink-0 items-center gap-2 px-4 py-1.5 text-fg-3', TYPING_ROW_TYPE)}
     >
       <span className="flex items-center gap-1" aria-hidden="true">
-        <span className="h-1.5 w-1.5 rounded-full bg-fg-3 animate-pulse [animation-delay:0ms]" />
-        <span className="h-1.5 w-1.5 rounded-full bg-fg-3 animate-pulse [animation-delay:150ms]" />
-        <span className="h-1.5 w-1.5 rounded-full bg-fg-3 animate-pulse [animation-delay:300ms]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-fg-3" />
+        <span className="h-1.5 w-1.5 rounded-full bg-fg-3" />
+        <span className="h-1.5 w-1.5 rounded-full bg-fg-3" />
       </span>
       <span>{label}</span>
     </div>
@@ -2051,9 +2052,6 @@ export const REACTION_ROW_SPACE = 'mb-5';
 export const FAILED_RETRY_CLASS =
   'absolute right-full top-1/2 mr-1 flex h-11 min-w-[44px] -translate-y-1/2 items-center justify-center text-bad';
 
-/** Hover-only controls fade in on opacity alone, 120ms, and not at all under reduced motion. */
-const HOVER_FADE = 'transition-opacity duration-fast motion-reduce:transition-none';
-
 /**
  * A row's piece of the rail (none for a left root card no member follows yet,
  * which still sits shifted) and its geometry; absent off threads and while
@@ -2673,7 +2671,6 @@ export function MessageBubble(props: {
                 }}
                 className={cn(
                   'pointer-events-none absolute right-0 top-0 z-10 flex h-11 min-w-[44px] items-start justify-end rounded-tr-[inherit] opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100',
-                  HOVER_FADE,
                 )}
               >
                 <span
@@ -2692,7 +2689,7 @@ export function MessageBubble(props: {
             ) : null}
             {hasReactions ? (
               <ReactionBadge label={reactionBadgeLabel(message.reactions)} onClick={onBadgeClick}>
-                <span aria-hidden="true" className={REACTION_EMOJI_TYPE}>
+                <span aria-hidden="true" data-reaction-emoji="" className={REACTION_EMOJI_TYPE}>
                   {distinctEmojis}
                 </span>
                 {totalReactions > 1 ? (
@@ -2729,7 +2726,6 @@ export function MessageBubble(props: {
             'shrink-0 self-center text-fg-3 opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
             // An own row's tick passes under the smiley; the page fill keeps the glyph clear.
             rail?.role != null && mine && 'bg-bg',
-            HOVER_FADE,
           )}
         >
           <SmileyGlyph />
@@ -2972,11 +2968,9 @@ export function threadListItems(
       // FN24: a skeleton bubble, not a plain line; the words stay for screen readers.
       <li key="loading-older" aria-busy="true" className="flex flex-col gap-2 px-4 py-2">
         <span className="sr-only">Loading earlier messages</span>
-        <span aria-hidden="true" className="h-9 w-48 animate-pulse rounded-2xl bg-panel-2" />
-        <span
-          aria-hidden="true"
-          className="h-9 w-36 self-end animate-pulse rounded-2xl bg-panel-2"
-        />
+        {/* Two bubble-shaped boxes (other, then own side); a sweep, never a pulse. */}
+        <Bone className="h-9 w-48 rounded-2xl" />
+        <Bone className="h-9 w-36 self-end rounded-2xl" />
       </li>,
     );
   }
@@ -3169,6 +3163,13 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
   // The viewer's star: read from the one star store, painted with the row.
   const starred = useIsStarred(props.message.id) && canStar(props.message);
   const meta = starred ? { ...props.meta, starred: true } : props.meta;
+  // Small touches (docs/motion.md, pop from .9, ease-pop): a star, a mark or
+  // a reaction that lands on a row already on screen. A row's first paint
+  // never pops.
+  const reactionCount = props.message.reactions.reduce((sum, r) => sum + r.count, 0);
+  usePopOnRise(props.message.id, '[data-meta-star]', starred ? 1 : 0);
+  usePopOnChange(props.message.id, '[data-mark-badge]', markBadgeLabel(props.mark));
+  usePopOnRise(props.message.id, '[data-reaction-emoji]', reactionCount);
   return (
     <MessageBubble
       searchWords={searchWords}
@@ -3661,6 +3662,20 @@ function ThreadBody(
   // The open menu's star reads the one star store.
   const menuStarred = useIsStarred(menu?.message.id ?? '');
   const listRef = useRef<HTMLUListElement>(null);
+  // itemIn (docs/motion.md): a message that arrives after first paint (sent
+  // or received) rises 8px into place at the tail. The first paint, a kept or
+  // cached thread, an older page and a chat switch never move.
+  const freshIds = useFreshKeys(ids);
+  const prevIdsRef = useRef<readonly string[] | null>(null);
+  useLayoutEffect(() => {
+    const prev = prevIdsRef.current;
+    prevIdsRef.current = ids;
+    const list = listRef.current;
+    if (list === null) return;
+    for (const id of freshTailIds(prev, ids, freshIds)) {
+      itemIn(list.querySelector(rowSelector(id)));
+    }
+  }, [ids, freshIds]);
   // FT41: the last older page failed; Retry keeps the reader where they were.
   const olderFailed = useOlderPageFailed(props.olderKey ?? null);
   const retryOlder = (): void => {
@@ -5013,8 +5028,8 @@ export function threadOpeningSkeleton(
             <IconChevronLeft size={ICON_SIZE.control} />
           </IconButton>
         ) : null}
-        <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-panel-2" />
-        <div className="h-3.5 w-32 animate-pulse rounded bg-panel-2" />
+        <Bone as="div" className="h-9 w-9 shrink-0 rounded-full" />
+        <Bone as="div" className="h-3.5 w-32 rounded" />
       </div>
       {threadSkeleton()}
     </div>
@@ -5045,7 +5060,11 @@ const NO_PLAN_IDS: string[] = [];
 /** Placeholder bubble widths for the loading thread, alternating sides. */
 export const THREAD_SKELETON_WIDTHS = ['w-[55%]', 'w-[40%]', 'w-[70%]', 'w-[45%]', 'w-[60%]'];
 
-/** The loading thread: five alternating pulse bubbles, no text, never the empty state. */
+/**
+ * The loading thread: five bubble-shaped boxes alternating other / own side
+ * (a top-lit sweep, never a pulse), no text, never the empty state. Only when
+ * nothing is held for the chat; a kept or cached thread paints its rows.
+ */
 export function threadSkeleton(): ReactElement {
   return (
     <ul
@@ -5056,13 +5075,11 @@ export function threadSkeleton(): ReactElement {
       {THREAD_SKELETON_WIDTHS.map((width, i) => (
         <li
           key={width}
-          data-skeleton-bubble=""
-          className={cn(
-            'h-10 animate-pulse rounded-xl bg-panel-2',
-            width,
-            i % 2 === 1 && 'self-end',
-          )}
-        />
+          data-skeleton-bubble={i % 2 === 1 ? 'own' : 'other'}
+          className={cn('flex', i % 2 === 1 && 'justify-end')}
+        >
+          <Bone className={cn('h-10 rounded-xl', width)} />
+        </li>
       ))}
     </ul>
   );
@@ -5133,6 +5150,30 @@ export interface RowAnchor {
 
 function rowSelector(id: string): string {
   return `[data-msg-id="${id.replace(/["\\]/g, '\\$&')}"]`;
+}
+
+/** Pop `part` of the message's row(s) on screen (the main list and an open thread view). */
+function popRowPart(id: string, part: string): void {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll(`${rowSelector(id)} ${part}`).forEach((el) => pop(el));
+}
+
+/** Pop a row's part when `value` grows after the row's first paint (a star, a reaction). */
+function usePopOnRise(id: string, part: string, value: number): void {
+  const prev = useRef(value);
+  useLayoutEffect(() => {
+    if (value > prev.current) popRowPart(id, part);
+    prev.current = value;
+  }, [id, part, value]);
+}
+
+/** Pop a row's part when its non-empty `value` changes after the row's first paint (a mark). */
+function usePopOnChange(id: string, part: string, value: string): void {
+  const prev = useRef(value);
+  useLayoutEffect(() => {
+    if (value !== '' && value !== prev.current) popRowPart(id, part);
+    prev.current = value;
+  }, [id, part, value]);
 }
 
 /**

@@ -11,7 +11,10 @@
 //
 // Gesture axes (each gesture owns exactly one transform, nothing else animates):
 //  - paging: X axis only (dominantAxisSwipe on release), inert while zoomed;
-//  - dismiss: Y axis only (swipe down at 1x, translateY + backdrop fade);
+//  - dismiss: Y axis only (swipe down at 1x follows the finger; the backdrop
+//    dim tracks the image's position; released past the line it rises out,
+//    else springs back; docs/motion.md, rise);
+//  - open: the image grows out of the thumbnail that opened it (growFromCard).
 //  - zoom: scale plus pan (translate) on the current image only, pinch 1..4x
 //    and double-tap 1x <-> 2.5x. The pane itself never moves while zoomed.
 
@@ -29,6 +32,8 @@ import {
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
+import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
+import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
 import { viewportSize } from '@/lib/use-is-laptop';
 import type { PresignCache } from '@/lib/asset-presign';
 import { VIEWER_ERROR } from '@/components/ui/FileViewer';
@@ -350,7 +355,7 @@ function LightboxMedia({
   }
   if (url === null) {
     return (
-      <div className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
+      <div className="h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
     );
   }
   return (
@@ -428,6 +433,8 @@ export interface ImageLightboxProps {
   onClose: () => void;
   /** Chat: sender + time, the bin (onRemove) and Download in a bottom bar. Comments omit it. */
   details?: LightboxDetails;
+  /** The thumbnail's rect to grow from; default: the thumbnail the opening tap hit. */
+  from?: Box | null;
 }
 
 /**
@@ -446,16 +453,20 @@ export function ImageLightbox({
   onIndexChange,
   onClose,
   details,
+  from,
 }: ImageLightboxProps): ReactElement | null {
   const dialogRef = useRef<HTMLDivElement>(null);
+  // The Y-moving wrapper (dismiss) and the dim behind it.
+  const yRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const closing = useRef(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   // Bumped by Try again; part of the media key so a retry remounts and re-resolves.
   const [attempt, setAttempt] = useState(0);
   // Zoom: scale plus pan on the current image only.
   const [zoom, setZoom] = useState<ZoomState>(ZOOM_RESET);
-  // Dismiss: Y-only offset while dragging down at 1x; `settling` springs it back.
+  // Dismiss: Y-only offset while dragging down at 1x.
   const [dragY, setDragY] = useState(0);
-  const [settling, setSettling] = useState(false);
 
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchStart = useRef<{ d: number; zoom: ZoomState } | null>(null);
@@ -481,6 +492,30 @@ export function ImageLightbox({
   // Focus lands on Close, Tab cycles inside the dialog, and the opener gets
   // focus back on close (the shared modal focus; only the top layer traps).
   useModalFocus(dialogRef, true, { initial: () => closeRef.current });
+
+  // Open: rendered in place, the image grows out of its thumbnail on the first
+  // frame (growFromCard). No thumbnail known: it simply shows.
+  useGrowFromThumb(
+    dialogRef,
+    from,
+    (root) =>
+      root.querySelector('[data-lightbox-pane] img') ??
+      root.querySelector('[data-motion-axis="zoom"]'),
+  );
+
+  // The dim follows a move of the image (spring back or rise out), then rests.
+  const followDim = useCallback((played: Played): void => {
+    dimWith(yRef.current, backdropRef.current, played);
+  }, []);
+
+  // Swipe released short: spring back from where the finger left it.
+  const springBack = useCallback(
+    (fromY: number): void => {
+      setDragY(0);
+      if (fromY > 0) followDim(riseIn(yRef.current, fromY));
+    },
+    [followDim],
+  );
 
   // A new image resets the retry counter and the zoom so its state is fresh.
   useEffect(() => {
@@ -562,7 +597,6 @@ export function ImageLightbox({
       event.currentTarget.setPointerCapture?.(event.pointerId);
     } else if (pts.length === 1) {
       dragStart.current = { x: event.clientX, y: event.clientY, t: Date.now(), axis: null };
-      setSettling(false);
     }
   };
 
@@ -621,12 +655,20 @@ export function ImageLightbox({
       const dy = Math.max(event.clientY - drag.y, 0);
       const velocity = dy / Math.max(Date.now() - drag.t, 1);
       if (shouldDismiss(dy, velocity)) {
-        // Instant close: no exit animation.
-        onClose();
+        // Rises out from where the finger let go, then closes (instant when
+        // motion is off).
+        if (closing.current) return;
+        closing.current = true;
+        const played = riseOut(yRef.current, dy);
+        if (played.instant) {
+          onClose();
+          return;
+        }
+        followDim(played);
+        void played.done.then(onClose);
         return;
       }
-      setSettling(true);
-      setDragY(0);
+      springBack(dy);
       return;
     }
     if (drag !== null && drag.axis === 'x') {
@@ -656,8 +698,7 @@ export function ImageLightbox({
 
   const onPointerCancel = (): void => {
     resetGesture();
-    setSettling(true);
-    setDragY(0);
+    springBack(dragY);
   };
 
   // Zoom: scale plus pan on the image only. Dismiss: translateY only.
@@ -679,8 +720,9 @@ export function ImageLightbox({
       data-motion-axis="x"
       className="fixed inset-0 z-[80] flex flex-col overflow-hidden"
     >
-      {/* The backdrop fades while a swipe down is in progress. */}
+      {/* The dim tracks the image while a swipe down is in progress (never a timed fade). */}
       <div
+        ref={backdropRef}
         aria-hidden="true"
         className="absolute inset-0 bg-overlay backdrop-blur-xl"
         style={dragY > 0 ? { opacity: dismissOpacity(dragY) } : undefined}
@@ -732,14 +774,10 @@ export function ImageLightbox({
         ) : null}
 
         <div
+          ref={yRef}
           data-motion-axis="y"
-          className={cn(
-            'flex h-full w-full items-center justify-center',
-            settling &&
-              'transition-transform duration-slow ease-enter motion-reduce:transition-none',
-          )}
+          className="flex h-full w-full items-center justify-center"
           style={dismissStyle}
-          onTransitionEnd={() => setSettling(false)}
         >
           <div
             data-motion-axis="zoom"

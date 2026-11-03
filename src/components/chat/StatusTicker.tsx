@@ -13,7 +13,10 @@
 // succeeded with nothing open, never as a button. The drawer opens by a tap on the bar (top of the list), a tap on an
 // item (scrolled to its section before paint) or a drag down; it closes by
 // the scrim, a drag up on its handle, or another tap on the bar. It moves on
-// translateY only, snapping at 40% of its height or a flick over 0.4 px/ms.
+// translateY only (docs/motion.md, edgeStrip: it drops from the ticker and
+// leaves the same way, its rows settle, the scrim dim tracks its position and
+// never fades on a timer), snapping at 40% of its height or a flick over
+// 0.4 px/ms. Instant under Reduce Motion.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type {
@@ -36,7 +39,16 @@ import { useThreadCardCache } from '@/components/chat/PostCard';
 import { useToast } from '@/components/ui/toast';
 import { READ_TIMEOUT_MS } from '@/lib/chat-reads';
 import { cn } from '@/lib/cn';
-import { prefersReducedMotion } from '@/lib/use-is-laptop';
+import {
+  DUR_SLOW_MS,
+  EASE,
+  EDGE_STRIP,
+  play,
+  settle,
+  stripIn,
+  stripOut,
+  type Played,
+} from '@/lib/motion';
 import {
   NOTHING_OPEN_LINE,
   SECTION_ROWS,
@@ -60,8 +72,34 @@ const SNAP_SHARE = 0.4;
 const FLICK_VELOCITY = 0.4;
 /** Movement before a press becomes a drag (px). */
 const DRAG_SLOP = 6;
-/** The open and close motion (ms); the panel unmounts after it. */
-const DRAWER_MS = 220;
+
+/** A drawer move asked by a handler, run after the commit that paints its end state. */
+type DrawerMove = { kind: 'in'; fromY: number | null } | { kind: 'out'; fromY: number };
+
+/**
+ * The scrim dim follows the panel's position while a move plays (the visible
+ * share of the panel), never a timed fade of its own. Returns a stop.
+ */
+function trackDropDim(panel: HTMLElement, dim: HTMLElement | null, played: Played): void {
+  if (dim === null || played.instant) return;
+  const host = panel.parentElement;
+  let frame = 0;
+  let live = true;
+  const tick = (): void => {
+    if (!live) return;
+    const r = panel.getBoundingClientRect();
+    const top = host?.getBoundingClientRect().top ?? 0;
+    const share = r.height > 0 ? (r.bottom - top) / r.height : 1;
+    dim.style.opacity = String(Math.min(1, Math.max(0, share)));
+    frame = requestAnimationFrame(tick);
+  };
+  tick();
+  void played.done.then(() => {
+    live = false;
+    cancelAnimationFrame(frame);
+    dim.style.opacity = '';
+  });
+}
 
 const NUMBER_TONE: Record<StatusTone, string> = {
   default: 'text-fg',
@@ -358,7 +396,8 @@ export function StatusTickerBar(props: {
       >
         <span
           data-status-chevron-icon={open ? 'up' : 'down'}
-          className="flex transition-transform duration-slow motion-reduce:transition-none"
+          // The chevron flips 180deg (mv-turn), never a fade.
+          className="flex mv-turn"
           style={open ? { transform: 'rotate(180deg)' } : undefined}
         >
           <IconChevronDown size={ICON_SIZE.inline} />
@@ -552,9 +591,9 @@ export function ChatStatus(props: {
   const interactive = bar !== null && bar.kind === 'items';
   const [shown, setShown] = useState(false);
   const [target, setTarget] = useState<'open' | 'closed'>('closed');
-  const [entered, setEntered] = useState(false);
   const [drag, setDrag] = useState<number | null>(null);
-  const [animate, setAnimate] = useState(true);
+  // Bumped per open: a reopen while the panel leaves mounts a fresh panel.
+  const [openSeq, setOpenSeq] = useState(0);
   const [top, setTop] = useState(0);
   const [postsExpanded, setPostsExpanded] = useState(false);
   const [postSheet, setPostSheet] = useState<{ id: string; open: boolean } | null>(null);
@@ -571,7 +610,12 @@ export function ChatStatus(props: {
   const listRef = useRef<HTMLDivElement | null>(null);
   const gesture = useRef<Gesture | null>(null);
   const suppressClick = useRef(false);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The move the next commit runs (open, settle open, close), and whether the
+  // open still has its scroll to put in place before that first frame.
+  const pendingMove = useRef<DrawerMove | null>(null);
+  const placeScroll = useRef(false);
+  // The panel's leave in flight (null when none): a reopen drops it.
+  const leaving = useRef<Played | null>(null);
 
   const measureTop = (): void => {
     const el = barEl.current;
@@ -581,72 +625,92 @@ export function ChatStatus(props: {
 
   const openAt = useCallback(
     (section: StatusKey | null, opts?: { instant?: boolean; scrollTop?: number }) => {
-      if (closeTimer.current !== null) clearTimeout(closeTimer.current);
-      closeTimer.current = null;
+      if (leaving.current !== null) {
+        // Reopened while leaving: a fresh panel replaces the one going.
+        leaving.current = null;
+        setOpenSeq((n) => n + 1);
+      }
       scrollTo.current = { section, scrollTop: opts?.scrollTop ?? null };
+      placeScroll.current = true;
+      pendingMove.current = opts?.instant === true ? null : { kind: 'in', fromY: null };
       measureTop();
-      setAnimate(opts?.instant !== true && !prefersReducedMotion());
       setDrag(null);
       setShown(true);
       setTarget('open');
-      setEntered(opts?.instant === true);
     },
     [],
   );
 
-  const close = useCallback((opts?: { instant?: boolean }) => {
-    const instant = opts?.instant === true || prefersReducedMotion();
-    setAnimate(!instant);
+  const close = useCallback((opts?: { instant?: boolean; fromY?: number }) => {
+    // Already leaving: the move in flight carries on (an instant close cuts it).
+    if (leaving.current !== null && opts?.instant !== true) return;
     setDrag(null);
     setTarget('closed');
-    setEntered(false);
-    if (closeTimer.current !== null) clearTimeout(closeTimer.current);
-    if (instant) {
+    if (opts?.instant === true) {
+      pendingMove.current = null;
+      leaving.current = null;
       setShown(false);
-      closeTimer.current = null;
       return;
     }
-    closeTimer.current = setTimeout(() => {
-      closeTimer.current = null;
-      setShown(false);
-    }, DRAWER_MS + 40);
+    pendingMove.current = { kind: 'out', fromY: opts?.fromY ?? 0 };
   }, []);
 
-  useEffect(
-    () => () => {
-      if (closeTimer.current !== null) clearTimeout(closeTimer.current);
-    },
-    [],
-  );
-
-  // Before paint: scroll to the asked section (or a remembered spot), then
-  // let the panel slide in from there, so no scroll is ever seen.
+  // After each commit, before paint: put the scroll in place for a new open
+  // (the asked section or a remembered spot, so no scroll is ever seen), then
+  // lay the asked move over the panel's painted end state.
   useLayoutEffect(() => {
-    if (!shown || target !== 'open' || entered || drag !== null) return;
-    const list = listRef.current;
-    if (list !== null) {
-      const { section, scrollTop } = scrollTo.current;
-      if (scrollTop !== null) list.scrollTop = scrollTop;
-      else if (section !== null) {
-        const el = list.querySelector<HTMLElement>(`[data-status-section="${section}"]`);
-        list.scrollTop = el !== null ? el.offsetTop - list.offsetTop : 0;
-      } else list.scrollTop = 0;
+    const panel = panelRef.current;
+    if (placeScroll.current && shown && target === 'open' && drag === null) {
+      placeScroll.current = false;
+      const list = listRef.current;
+      if (list !== null) {
+        const { section, scrollTop } = scrollTo.current;
+        if (scrollTop !== null) list.scrollTop = scrollTop;
+        else if (section !== null) {
+          const el = list.querySelector<HTMLElement>(`[data-status-section="${section}"]`);
+          list.scrollTop = el !== null ? el.offsetTop - list.offsetTop : 0;
+        } else list.scrollTop = 0;
+        scrollTo.current = { section: null, scrollTop: null };
+      }
     }
-    // Commit the closed position first so the move to open transitions.
-    panelRef.current?.getBoundingClientRect();
-    setEntered(true);
-  }, [shown, target, entered, drag]);
-
-  // An instant (restored) open still needs its scroll put back.
-  useLayoutEffect(() => {
-    if (!shown || !entered || animate) return;
-    const list = listRef.current;
-    const remembered = scrollTo.current.scrollTop;
-    if (list !== null && remembered !== null) {
-      list.scrollTop = remembered;
-      scrollTo.current = { section: null, scrollTop: null };
+    const move = pendingMove.current;
+    if (move === null) return;
+    pendingMove.current = null;
+    const dim = panel?.parentElement?.querySelector<HTMLElement>('[data-status-scrim]') ?? null;
+    if (move.kind === 'in') {
+      if (panel === null) return;
+      // Drops from the ticker (or from where a drag let go), rows settle.
+      const played =
+        move.fromY === null
+          ? stripIn(panel, 'top')
+          : play(
+              panel,
+              EDGE_STRIP,
+              [{ transform: `translateY(${move.fromY}px)` }, { transform: 'translateY(0)' }],
+              { duration: DUR_SLOW_MS, easing: EASE.ios },
+            );
+      trackDropDim(panel, dim, played);
+      if (move.fromY === null) {
+        const list = listRef.current;
+        if (list !== null) settle(list.querySelectorAll('[data-status-section]'));
+      }
+      return;
     }
-  }, [shown, entered, animate]);
+    // Leaves the same way it came, then unmounts.
+    const played = stripOut(panel, 'top', undefined, move.fromY);
+    if (played.instant) {
+      leaving.current = null;
+      setShown(false);
+      return;
+    }
+    leaving.current = played;
+    trackDropDim(panel as HTMLElement, dim, played);
+    void played.done.then(() => {
+      if (leaving.current !== played) return;
+      leaving.current = null;
+      setShown(false);
+    });
+  });
 
   // The last open thing closed while the drawer was open: the bar reads the
   // empty line and the drawer closes.
@@ -775,10 +839,14 @@ export function ChatStatus(props: {
       } catch {
         // A synthetic or already released pointer: the drag still follows moves here.
       }
-      if (closeTimer.current !== null) clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-      if (!shown) {
+      if (leaving.current !== null) {
+        // Caught while leaving: a fresh panel follows the finger.
+        leaving.current = null;
+        setOpenSeq((n) => n + 1);
+      }
+      if (!shown || target !== 'open') {
         scrollTo.current = { section: null, scrollTop: null };
+        placeScroll.current = true;
         measureTop();
         setShown(true);
       }
@@ -790,7 +858,6 @@ export function ChatStatus(props: {
     const height = panelHeight();
     const raw = g.base + dy;
     g.offset = Math.max(0, height > 0 ? Math.min(height, raw) : raw);
-    setAnimate(false);
     setDrag(g.offset);
   };
 
@@ -809,12 +876,13 @@ export function ChatStatus(props: {
     const stayOpen = fromOpen
       ? !snapShut({ offset: g.offset, height, velocity: g.velocity })
       : snapOpen({ offset: g.offset, height, velocity: g.velocity });
+    // From where the finger let go: the panel's offset from rest (px, <= 0).
+    const fromY = g.offset - height;
     if (stayOpen) {
-      setAnimate(!prefersReducedMotion());
+      pendingMove.current = { kind: 'in', fromY };
       setDrag(null);
       setTarget('open');
-      setEntered(true);
-    } else close();
+    } else close({ fromY });
   };
 
   const cancel = (e: ReactPointerEvent<HTMLDivElement>): void => {
@@ -822,22 +890,19 @@ export function ChatStatus(props: {
     if (g === null || e.pointerId !== g.pointerId) return;
     gesture.current = null;
     if (!g.moved) return;
+    const fromY = g.offset - panelHeight();
     if (g.base > 0) {
-      setAnimate(!prefersReducedMotion());
+      pendingMove.current = { kind: 'in', fromY };
       setDrag(null);
       setTarget('open');
-      setEntered(true);
-    } else close();
+    } else close({ fromY });
   };
 
   const height = panelHeight();
-  const transform =
-    drag !== null
-      ? `translateY(calc(-100% + ${drag}px))`
-      : entered
-        ? 'translateY(0px)'
-        : 'translateY(-100%)';
-  const scrim = drag !== null ? (height > 0 ? Math.min(1, drag / height) : 0) : entered ? 1 : 0;
+  // The end state is always what renders (open at rest, or under the finger);
+  // the moves are laid over it.
+  const transform = drag !== null ? `translateY(calc(-100% + ${drag}px))` : 'translateY(0px)';
+  const scrim = drag !== null ? (height > 0 ? Math.min(1, drag / height) : 0) : 1;
   const open = target === 'open' || drag !== null;
 
   return (
@@ -856,10 +921,10 @@ export function ChatStatus(props: {
       />
       {shown && interactive ? (
         <StatusDrawerPanel
+          key={openSeq}
           top={top}
           transform={transform}
           scrim={scrim}
-          animate={animate}
           open={open}
           panelRef={panelRef}
           listRef={listRef}

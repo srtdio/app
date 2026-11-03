@@ -1,5 +1,6 @@
 import { mark } from '@/lib/perf-marks';
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { itemIn, useFreshKeys } from '@/lib/motion';
 import type { ClipboardEvent, FormEvent, KeyboardEvent } from 'react';
 import { z } from 'zod';
 import { run as suggestEmail } from '@zootools/email-spell-checker';
@@ -392,7 +393,7 @@ export function RolePicker({
   return (
     <label
       className={cn(
-        'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel lit-well px-2.5 py-1 text-base transition-colors duration-fast focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft',
+        'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel lit-well px-2.5 py-1 text-base mv-tint focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft',
         invalid ? 'border-bad bg-bad-soft' : 'border-border',
         current === undefined ? 'text-fg-3' : 'text-fg',
         fill ? 'min-w-0 flex-1' : 'max-w-[45%] shrink-0',
@@ -462,11 +463,6 @@ interface InviteRow {
   error: string | null;
 }
 
-// Axis: translateY only (no X, no rotate); motion-safe on the row collapses it
-// under prefers-reduced-motion.
-const ROW_KEYFRAMES =
-  '@keyframes sorted-invite-row-in{from{opacity:0;transform:translateY(0.5rem)}to{opacity:1;transform:translateY(0)}}';
-
 /** Keys that turn the typed address into a row. */
 const SEPARATOR_KEYS = new Set(['Enter', ',', ' ', ';']);
 
@@ -499,6 +495,13 @@ export function MembersInviteForm({
   const nextKey = useRef(0);
   const [draft, setDraft] = useState('');
   const [rows, setRows] = useState<InviteRow[]>([]);
+  // itemIn (docs/motion.md): a new invite row rises 8 px into place over its
+  // final state (Y only, never a fade).
+  const freshRows = useFreshKeys(rows.map((row) => String(row.key)));
+  const rowEls = useRef(new Map<string, HTMLLIElement>());
+  useLayoutEffect(() => {
+    for (const key of freshRows) itemIn(rowEls.current.get(key) ?? null);
+  });
   const [duplicate, setDuplicate] = useState(false);
   const [setAllRole, setSetAllRole] = useState<RoleChoice>('');
   const [roleMissing, setRoleMissing] = useState(false);
@@ -662,7 +665,6 @@ export function MembersInviteForm({
 
   return (
     <section aria-labelledby="invite-people-title" className="flex max-w-[520px] flex-col gap-4">
-      <style>{ROW_KEYFRAMES}</style>
       <div>
         <h3
           id="invite-people-title"
@@ -741,7 +743,11 @@ export function MembersInviteForm({
               return (
                 <li
                   key={row.key}
-                  className="flex flex-col rounded-lg border bg-panel-2 lit-card-muted py-1 pl-3 pr-1 motion-safe:[animation:sorted-invite-row-in_var(--dur-base)_var(--ease-enter)_both]"
+                  ref={(el) => {
+                    if (el === null) rowEls.current.delete(String(row.key));
+                    else rowEls.current.set(String(row.key), el);
+                  }}
+                  className="flex flex-col rounded-lg border bg-panel-2 lit-card-muted py-1 pl-3 pr-1"
                 >
                   <div className="flex items-center gap-2">
                     <input
@@ -754,7 +760,7 @@ export function MembersInviteForm({
                       onChange={(event) =>
                         updateRow(row.key, { email: event.target.value, error: null })
                       }
-                      className="h-11 min-w-0 flex-1 border-0 border-b border-transparent bg-transparent px-0 text-input text-fg outline-none transition-colors duration-fast hover:border-dashed hover:border-border-strong focus:border-solid focus:border-accent md:text-base"
+                      className="h-11 min-w-0 flex-1 border-0 border-b border-transparent bg-transparent px-0 text-input text-fg outline-none mv-tint hover:border-dashed hover:border-border-strong focus:border-solid focus:border-accent md:text-base"
                     />
                     <RolePicker
                       label={`Role for ${row.email}`}

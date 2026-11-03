@@ -35,6 +35,8 @@ import { cn } from '@/lib/cn';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { rememberCard } from '@/lib/motion';
+import { useGrowBackIntoCard } from '@/lib/motion/pages';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import { useOptionalToast } from '@/components/ui/toast';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
@@ -320,10 +322,13 @@ export function PostCard({
   // A press starts the page chunk and its first reads (src/lib/post-prefetch.ts);
   // only the click that follows lets the page join them.
   const pressPrefetch = (): void => prefetchPostOpen(post.id);
+  // growFromCard: the page grows out of this card; Back grows it back in.
+  const cardRef = useGrowBackIntoCard<HTMLDivElement>(post.id);
   const open = (): void => {
     mark('post:open:tap');
     mark('post:click');
     confirmPostOpen(post.id);
+    rememberCard(post.id, cardRef.current);
     navigate(href, openState === undefined ? undefined : { state: openState });
   };
   const caption = captionPreview(post);
@@ -351,6 +356,7 @@ export function PostCard({
 
   return (
     <div
+      ref={cardRef}
       data-induction={INDUCTION_KEYS.pipelinePostRow}
       data-induction-post={post.id}
       {...(hasMenu
@@ -371,7 +377,7 @@ export function PostCard({
             },
           }
         : {})}
-      className="relative flex h-full min-w-0 flex-col rounded-xl border bg-panel lit-card transition-colors hover:bg-panel-2"
+      className="relative flex h-full min-w-0 flex-col rounded-xl border bg-panel lit-card mv-tint hover:bg-panel-2"
     >
       <PressableRow
         type="button"
@@ -508,8 +514,10 @@ export function PostCard({
                 onOpenChange={setMenuOpen}
                 items={cardMenuItems({
                   // Opens with the id (no ref lookup) but reads afresh: no press to join.
-                  onOpen: () =>
-                    navigate(href, openState === undefined ? undefined : { state: openState }),
+                  onOpen: () => {
+                    rememberCard(post.id, cardRef.current);
+                    navigate(href, openState === undefined ? undefined : { state: openState });
+                  },
                   onCopyLink: copyLink,
                   ...(canMove && directMoves.length > 0
                     ? {

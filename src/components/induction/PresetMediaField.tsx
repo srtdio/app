@@ -361,7 +361,7 @@ function UploadBar({ percent }: { percent: number }): ReactElement {
       className="h-2 w-full overflow-hidden rounded-full bg-panel-3 lit-well"
     >
       <div
-        className="h-full rounded-full bg-accent lit-fill transition-[width] duration-slow ease-enter motion-reduce:transition-none"
+        className="h-full rounded-full bg-accent lit-fill mv-fill"
         style={{ width: `${percent}%` }}
       />
     </div>

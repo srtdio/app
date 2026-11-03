@@ -154,9 +154,9 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
     expect(both).toMatch(/<button(?=[^>]*data-plan-menu-delete="")(?=[^>]*class="[^"]*text-bad)/);
     expect(both).toContain('Delete plan');
     expect(both.match(/min-h-\[44px\]/g)).toHaveLength(2);
-    // translateY only, tokens only.
-    expect(both).toMatch(/translate-y/);
-    expect(both).not.toMatch(/translate-x|rotate/);
+    // The menu grows from its trigger (growFromTrigger, a JS move): no CSS
+    // transition, translate or rotate on the markup.
+    expect(both).not.toMatch(/translate-x|rotate|transition/);
     const renameOnly = renderToStaticMarkup(
       <PlanHeaderMenu open canDelete={false} onRename={noop} onDelete={noop} onClose={noop} />,
     );

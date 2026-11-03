@@ -5,11 +5,13 @@
 // The floating surfaces (jump pill, scroll-to-latest) are the solid panel with a
 // hairline: no backdrop-filter, which WebKit fails to paint over the thread's
 // scroll container on iPhone (the message area stayed unpainted). Counts and
-// times are JetBrains Mono. Motion: pill and button opacity only; the sheets
-// slide on translateY (the shared Sheet). Tokens only, light and dark at parity.
+// times are JetBrains Mono. Motion (docs/motion.md): the pill and the button
+// show at once and pop from .9 (ease-pop) as they appear, never a fade; the
+// sheets rise (the shared Sheet). Tokens only, light and dark at parity.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ReactElement } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ReactElement, RefObject } from 'react';
+import { pop } from '@/lib/motion';
 import type { Result } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { Sheet } from '@/components/ui/Sheet';
@@ -51,8 +53,16 @@ const SHEET_LOAD_FAILED = "Couldn't load";
  */
 const FLOAT_SURFACE_CLASS = 'border border-border bg-panel';
 
-/** Opacity-only fade for the pill and the latest button. */
-const FADE = 'transition-opacity duration-base motion-reduce:transition-none';
+/** Pop the element in (from .9, ease-pop) when `visible` turns true after mount. */
+function usePopIn<T extends HTMLElement>(visible: boolean): RefObject<T> {
+  const ref = useRef<T>(null);
+  const was = useRef(visible);
+  useLayoutEffect(() => {
+    if (visible && !was.current) pop(ref.current);
+    was.current = visible;
+  }, [visible]);
+  return ref;
+}
 
 /** The unread divider row above the first unread message: hairline + "N unread". */
 export function UnreadDivider({ count }: { count: number }): ReactElement {
@@ -78,31 +88,33 @@ export function UnreadPill(props: {
   visible: boolean;
   onJump: () => void;
 }): ReactElement {
+  const popRef = usePopIn<HTMLSpanElement>(props.visible);
   return (
-    // The fade sits on the wrapper: Button's own transition would replace it.
+    // Shown or hidden at once on the wrapper; the pill pops as it appears.
     <div
       className={cn(
         'pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center',
-        FADE,
         props.visible ? 'opacity-100' : 'opacity-0',
       )}
     >
-      <Button
-        variant="secondary"
-        type="button"
-        data-unread-pill=""
-        aria-label={`Jump to first unread, ${unreadLabel(props.count)}`}
-        aria-hidden={!props.visible}
-        tabIndex={props.visible ? 0 : -1}
-        onClick={props.onJump}
-        onContextMenu={(e) => e.preventDefault()}
-        // Secondary is the float surface (bg-panel, border-border, text-fg).
-        className={cn('lit-float', NO_TOUCH_SELECT, props.visible && 'pointer-events-auto')}
-      >
-        <IconArrowUp size={ICON_SIZE.inline} className="text-accent" />
-        <span className="font-mono tabular-nums text-accent">{props.count}</span>
-        <span>unread</span>
-      </Button>
+      <span ref={popRef} className="flex">
+        <Button
+          variant="secondary"
+          type="button"
+          data-unread-pill=""
+          aria-label={`Jump to first unread, ${unreadLabel(props.count)}`}
+          aria-hidden={!props.visible}
+          tabIndex={props.visible ? 0 : -1}
+          onClick={props.onJump}
+          onContextMenu={(e) => e.preventDefault()}
+          // Secondary is the float surface (bg-panel, border-border, text-fg).
+          className={cn('lit-float', NO_TOUCH_SELECT, props.visible && 'pointer-events-auto')}
+        >
+          <IconArrowUp size={ICON_SIZE.inline} className="text-accent" />
+          <span className="font-mono tabular-nums text-accent">{props.count}</span>
+          <span>unread</span>
+        </Button>
+      </span>
     </div>
   );
 }
@@ -113,13 +125,13 @@ export function LatestButton(props: {
   count: number;
   onTap: () => void;
 }): ReactElement {
+  const popRef = usePopIn<HTMLSpanElement>(props.visible);
   return (
-    // Position and fade sit on the wrapper: IconButton's own transition would
-    // replace the opacity fade.
+    // Position and visibility sit on the wrapper (shown at once); it pops as it appears.
     <span
+      ref={popRef}
       className={cn(
         'absolute bottom-3 right-3 z-10 flex',
-        FADE,
         props.visible ? 'opacity-100' : 'pointer-events-none opacity-0',
       )}
     >

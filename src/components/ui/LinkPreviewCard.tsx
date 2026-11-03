@@ -29,6 +29,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { IconAlertTriangle, IconPlay, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { UnsafeLinkSheet } from '@/components/ui/UnsafeLinkSheet';
 import { cn } from '@/lib/cn';
+import { Bone } from '@/lib/motion';
 import { useInView } from '@/lib/use-in-view';
 import {
   PREVIEW_ROOT_MARGIN,
@@ -220,10 +221,9 @@ function TallBody(props: {
   );
 }
 
+// Loading bars are the shared Bone (a top-lit sweep, never a pulse).
 function SkeletonBar(props: { className: string }): ReactElement {
-  return (
-    <span className={cn('block rounded bg-panel-3 motion-safe:animate-pulse', props.className)} />
-  );
+  return <Bone className={cn('rounded', props.className)} />;
 }
 
 function TallSkeleton(props: { tone: CardTone }): ReactElement {
@@ -233,13 +233,7 @@ function TallSkeleton(props: { tone: CardTone }): ReactElement {
       aria-hidden="true"
       className={cn('rounded-xl border', SURFACE[props.tone])}
     >
-      <div
-        className={cn(
-          'aspect-[1.91/1] w-full rounded-t-xl',
-          MEDIA_BG[props.tone],
-          'motion-safe:animate-pulse',
-        )}
-      />
+      <Bone as="div" className="aspect-[1.91/1] w-full rounded-t-xl" />
       <div className="flex flex-col gap-0.5 px-2.5 pb-[9px] pt-2">
         <div className="flex h-4 items-center">
           <SkeletonBar className="h-2.5 w-24" />

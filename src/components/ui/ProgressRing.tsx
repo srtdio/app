@@ -2,11 +2,13 @@
 // progress, drawn from the top (rotated -90deg) in currentColor strokes. The
 // caller sets the drawn box (sizeClass) and the inks (trackClass, arcClass,
 // token classes only, so light and dark stay at parity). Progress null draws
-// a partial arc of `arc` (the caller pulses it). Only the arc's stroke offset
-// ever changes. Used by chat/UploadRing.
+// a partial arc of `arc`. Only the arc's stroke offset ever changes, and it
+// eases to each real progress value (MOVE_CLASS.fill, the fill axis; never runs
+// ahead of the upload). Used by chat/UploadRing.
 
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
+import { MOVE_CLASS } from '@/lib/motion';
 
 /** The ring's circumference for a box of `size` px and a stroke of `stroke` px. Pure. */
 export function ringCircumference(size: number, stroke: number): number {
@@ -37,7 +39,7 @@ export function ProgressRing(props: {
   className?: string | undefined;
   /** The track circle's ink. */
   trackClass: string;
-  /** The arc's ink and motion. */
+  /** The arc's ink. The fill ease (MOVE_CLASS.fill) is the ring's own. */
   arcClass: string;
 }): ReactElement {
   const { size, stroke } = props;
@@ -68,7 +70,7 @@ export function ProgressRing(props: {
         strokeLinecap="round"
         strokeDasharray={ringCircumference(size, stroke)}
         strokeDashoffset={ringDashOffset(props.progress, size, stroke, props.arc)}
-        className={props.arcClass}
+        className={cn(MOVE_CLASS.fill, props.arcClass)}
       />
     </svg>
   );

@@ -54,6 +54,8 @@ vi.mock('@/components/ui/toast', () => {
   return { useToast: () => api };
 });
 vi.mock('@/lib/chat/chime', () => ({
+  CHIME_REPEATS: 3,
+  CHIME_GAP_MS: 2_000,
   createChime: () => ({ play: () => {}, stop: () => {}, dispose: () => {} }),
 }));
 

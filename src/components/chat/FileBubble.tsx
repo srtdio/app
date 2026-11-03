@@ -144,8 +144,9 @@ interface FileBubbleCardProps {
 
 /**
  * The thumbnail image over the placeholder. It stays transparent until it has
- * loaded, then fades in, so the placeholder (or the last loaded image) shows
- * until then: no blink when a thumbnail lands or its URL changes. The box
+ * loaded, then shows at once (never a fade), so the placeholder (or the last
+ * loaded image) shows until then: no blink when a thumbnail lands or its URL
+ * changes. The box
  * around it is sized by the card, never by the image.
  */
 export function ThumbImage(props: {
@@ -187,7 +188,7 @@ export function ThumbImage(props: {
         onLoad={() => markLoaded(src)}
         onError={props.onError}
         className={cn(
-          'absolute inset-0 h-full w-full transition-opacity duration-fast ease-enter',
+          'absolute inset-0 h-full w-full',
           fit,
           shown ? (props.dimmed ? 'opacity-80' : 'opacity-100') : 'opacity-0',
         )}
@@ -279,7 +280,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
           className="absolute inset-x-0 bottom-0 h-[3px] bg-panel-3 lit-well"
         >
           <span
-            className="block h-full origin-left bg-accent lit-fill transition-transform duration-base"
+            className="block h-full origin-left bg-accent lit-fill mv-fill"
             style={{ transform: `scaleX(${uploading ? progress : 0})` }}
           />
         </span>

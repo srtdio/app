@@ -64,7 +64,7 @@ interface VersionHistorySheetModel extends VersionHistorySheetProps {
 }
 
 // Layout only: PressableRow brings the width, 44px height, radius, hover and focus ring.
-const ROW_BASE = 'flex min-w-0 items-center gap-3 px-3 py-2 transition-colors';
+const ROW_BASE = 'flex min-w-0 items-center gap-3 px-3 py-2 mv-tint';
 
 /** Thumbs per row before the "+n" count. */
 export const VERSION_THUMBS_MAX = 2;

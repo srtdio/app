@@ -2,6 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import type { Toast as ToastModel } from '@/components/ui/toast/types';
 import { BOTTOM_ANCHOR_ATTR, measureBottomInset } from '@/lib/bottom-inset';
+import { cn } from '@/lib/cn';
+import { riseIn, stripIn, stripOut, useMotionOff } from '@/lib/motion';
 import { isLaptopNow } from '@/lib/use-is-laptop';
 
 /** Gap between the strip and the surface it sits on (tab bar or composer). */
@@ -10,18 +12,6 @@ export const STRIP_ANCHOR_GAP_PX = 8;
 export const STRIP_SWIPE_ACCEPT_RATIO = 0.4;
 /** Marks a bottom surface the strip floats above on phone: the shared bottom-bar anchor. */
 export const UNDO_ANCHOR_ATTR = BOTTOM_ANCHOR_ATTR;
-
-/**
- * Strip keyframes. translateY only; the exit starts from the drag offset
- * (--strip-drag) so a swipe hands straight into the slide down. Reduced
- * motion: fade only.
- */
-export const UNDO_STRIP_KEYFRAMES =
-  '@keyframes sorted-strip-in{from{opacity:0;transform:translateY(100%)}to{opacity:1;transform:translateY(0)}}' +
-  '@keyframes sorted-strip-out{from{opacity:1;transform:translateY(var(--strip-drag,0px))}to{opacity:0;transform:translateY(calc(var(--strip-drag,0px) + 100%))}}' +
-  '@keyframes sorted-strip-fade-in{from{opacity:0}to{opacity:1}}' +
-  '@keyframes sorted-strip-fade-out{from{opacity:1}to{opacity:0}}' +
-  '@media (prefers-reduced-motion: reduce){[data-undo-strip]{animation-name:sorted-strip-fade-in !important}[data-undo-strip][data-leaving]{animation-name:sorted-strip-fade-out !important}}';
 
 /**
  * Distance in px from the viewport's bottom edge to the strip's bottom edge on
@@ -56,8 +46,11 @@ interface UndoStripProps {
  * The bottom Undo strip (Instagram style). Phone: 16px side margins, 8px above
  * the bottom tab bar or the chat composer, else 16px above the safe-area inset.
  * Laptop (md+): bottom centre, 480px wide, 24px up. Label left, "Undo" right;
- * no X, no countdown, no icon. Swipe down follows the finger (translateY only)
- * and accepts past 40% of its height, else snaps back.
+ * no X, no countdown, no icon. Motion (docs/motion.md, edgeStrip): rendered at
+ * rest, it rises from the bottom edge on the first frame and leaves the same
+ * way (from wherever a swipe left it). Swipe down follows the finger
+ * (translateY only) and accepts past 40% of its height, else springs back.
+ * Never a fade; with motion off it simply goes.
  */
 export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoStripProps) {
   const { id, title, action } = toast;
@@ -66,6 +59,20 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
   const [drag, setDrag] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [bottom, setBottom] = useState<number | null>(null);
+  const off = useMotionOff();
+  // The last drag offset, so the exit starts where the finger let go.
+  const dragRef = useRef(0);
+  dragRef.current = drag;
+
+  // Enter: rises from the bottom edge on the first frame (already painted at rest).
+  useLayoutEffect(() => {
+    stripIn(ref.current, 'bottom');
+  }, []);
+
+  // Leave: back down the same way, from the drag offset. The store unmounts it.
+  useLayoutEffect(() => {
+    if (leaving) stripOut(ref.current, 'bottom', undefined, dragRef.current);
+  }, [leaving]);
 
   const place = useCallback((): void => {
     if (isLaptopNow()) {
@@ -116,23 +123,15 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
       onAccept(id);
       return;
     }
+    // Short: spring back to rest from where the finger left it.
     setDrag(0);
+    if (drag > 0) riseIn(ref.current, drag);
   }
 
-  const animation = leaving
-    ? 'sorted-strip-out var(--dur-base) var(--ease-exit) forwards'
-    : 'sorted-strip-in var(--dur-slow) var(--ease-enter)';
-
   const style = {
-    animation,
-    '--strip-drag': `${drag}px`,
     ...(bottom !== null ? { '--strip-bottom': `${bottom}px` } : {}),
-    ...(leaving
-      ? {}
-      : {
-          transform: `translateY(${drag}px)`,
-          transition: dragging ? 'none' : 'transform var(--dur-base) var(--ease-enter)',
-        }),
+    // Follows the finger while dragging (and holds there until the exit takes over).
+    ...((dragging || leaving) && drag > 0 ? { transform: `translateY(${drag}px)` } : {}),
   } as CSSProperties;
 
   return (
@@ -147,7 +146,11 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
-      className="pointer-events-auto fixed inset-x-4 bottom-[var(--strip-bottom,calc(env(safe-area-inset-bottom)_+_16px))] z-[70] flex min-h-[50px] touch-none select-none items-center gap-3 rounded-xl border border-[var(--strip-border)] bg-[var(--strip-bg)] py-0 pl-[18px] pr-[5px] lit-float md:inset-x-0 md:bottom-6 md:mx-auto md:w-[480px]"
+      className={cn(
+        'pointer-events-auto fixed inset-x-4 bottom-[var(--strip-bottom,calc(env(safe-area-inset-bottom)_+_16px))] z-[70] flex min-h-[50px] touch-none select-none items-center gap-3 rounded-xl border border-[var(--strip-border)] bg-[var(--strip-bg)] py-0 pl-[18px] pr-[5px] lit-float md:inset-x-0 md:bottom-6 md:mx-auto md:w-[480px]',
+        // Motion off: a leaving strip goes at once (no exit to wait for).
+        leaving && off && 'invisible',
+      )}
     >
       <span className="min-w-0 flex-1 truncate text-lg font-medium text-[var(--strip-fg)]">
         {title}

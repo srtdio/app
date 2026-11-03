@@ -3,14 +3,16 @@
 // plans whose dates hold that day (dot in the plan's colour, title on up to
 // two lines, mono date range, Draft tag), a divider and "+ New plan". Escape
 // or a click outside closes it and focus goes back to the cell; it opens with
-// focus on its first row. Tokens only.
+// focus on its first row and grows from the cell (growFromTrigger, scale only).
+// Tokens only.
 
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { planRangeLabel } from '@/components/chat/plan-card';
-import { popoverClass } from '@/components/ui/popover-classes';
+import { centreOf, menuOrigin, popoverClass } from '@/components/ui/popover-classes';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
+import { growFromTrigger } from '@/lib/motion';
 import { viewportSize } from '@/lib/use-is-laptop';
 import { PressableRow } from '@/components/ui/PressableRow';
 import type { PlanBundle } from '@/lib/chat/plans';
@@ -66,6 +68,15 @@ export function PlanDayMenu(props: {
     el.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true });
   }, [anchor]);
 
+  // Once placed (still before paint), the menu grows from the clicked cell.
+  const grown = useRef(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (pos === null || el === null || grown.current) return;
+    grown.current = true;
+    growFromTrigger(el, menuOrigin(el, centreOf(anchor)));
+  }, [pos, anchor]);
+
   const close = (): void => {
     onClose();
     anchor.focus({ preventScroll: true });
@@ -84,7 +95,7 @@ export function PlanDayMenu(props: {
         style={pos !== null ? { left: pos.left, top: pos.top } : { left: 0, top: 0 }}
         className={cn(
           'fixed z-50 w-[300px] max-w-[calc(100vw-16px)]',
-          popoverClass(pos !== null),
+          popoverClass(),
           pos === null && 'invisible',
         )}
       >
@@ -98,7 +109,7 @@ export function PlanDayMenu(props: {
             role="menuitem"
             data-plan-tab-menu-plan={bundle.plan.id}
             onClick={() => props.onPick(bundle)}
-            className="flex items-center gap-2.5 px-2.5 py-1.5 transition-colors focus-visible:bg-panel-2"
+            className="flex items-center gap-2.5 px-2.5 py-1.5 mv-tint focus-visible:bg-panel-2"
           >
             <span
               aria-hidden="true"
@@ -127,7 +138,7 @@ export function PlanDayMenu(props: {
           role="menuitem"
           data-plan-tab-menu-new=""
           onClick={props.onNewPlan}
-          className="flex items-center px-2.5 text-base font-medium text-accent transition-colors focus-visible:bg-panel-2"
+          className="flex items-center px-2.5 text-base font-medium text-accent mv-tint focus-visible:bg-panel-2"
         >
           {NEW_PLAN_ROW_LABEL}
         </PressableRow>

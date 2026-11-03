@@ -271,7 +271,7 @@ export function AssetGrid(props: {
           type="button"
           onClick={props.onLoadMore}
           disabled={props.loadingMore}
-          className="flex items-center justify-between gap-3 px-3 py-2 text-base font-medium text-accent transition-colors disabled:text-fg-3"
+          className="flex items-center justify-between gap-3 px-3 py-2 text-base font-medium text-accent mv-tint disabled:text-fg-3"
         >
           <span>{`Load ${ASSET_PAGE_SIZE} more`}</span>
           <span className="text-sm font-normal tabular-nums text-fg-3">
@@ -299,10 +299,7 @@ export function AssetTile(props: {
         aria-label={asset.name}
         data-asset-tile={asset.assetId}
         onClick={() => props.onToggle(asset)}
-        className={cn(
-          'flex flex-col gap-1 p-1 transition-colors',
-          props.active && 'bg-accent-soft',
-        )}
+        className={cn('flex flex-col gap-1 p-1 mv-tint', props.active && 'bg-accent-soft')}
       >
         <span className="relative block overflow-hidden rounded-lg">
           <Thumbnail

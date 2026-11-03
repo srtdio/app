@@ -182,7 +182,7 @@ export function HelpPage() {
               <NavLink
                 key={link.to}
                 to={link.to}
-                className="inline-flex min-h-[44px] items-center rounded-full border bg-panel lit-chip px-4 text-base font-medium text-fg transition-colors hover:bg-panel-3"
+                className="inline-flex min-h-[44px] items-center rounded-full border bg-panel lit-chip px-4 text-base font-medium text-fg mv-tint hover:bg-panel-3"
               >
                 {link.label}
               </NavLink>
@@ -230,7 +230,7 @@ export function HelpPage() {
                     <span>{article.title}</span>
                     <IconChevronDown
                       size={ICON_SIZE.nav}
-                      className="shrink-0 text-fg-3 transition-transform group-open:rotate-180"
+                      className="shrink-0 text-fg-3 mv-slide group-open:rotate-180"
                     />
                   </summary>
                   <p className="max-w-3xl pb-4 pr-8 text-base leading-6 text-fg-2">
@@ -255,7 +255,7 @@ export function HelpPage() {
         For any queries or support, please contact our team at{' '}
         <a
           href="mailto:support@srtd.io"
-          className="text-accent underline underline-offset-2 transition-colors hover:text-accent/80"
+          className="text-accent underline underline-offset-2 mv-tint hover:text-accent/80"
         >
           support@srtd.io
         </a>

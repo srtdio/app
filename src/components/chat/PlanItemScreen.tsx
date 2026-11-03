@@ -55,7 +55,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/toast';
 import type { ViewerKind } from '@/components/ui/FileViewer';
 import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
-import { DUR_SLOW_MS } from '@/lib/motion';
+import { Bone, DUR_SLOW_MS } from '@/lib/motion';
 import {
   ICON_SIZE,
   IconArrowUp,
@@ -955,7 +955,7 @@ export function PlanItemScreen(props: {
   const highlightId = props.highlightCommentId ?? null;
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const commentsRef = useRef<HTMLElement>(null);
-  // The phone page slides in (duration-slow): the link lands once it is at
+  // The phone page pushes in (pushIn, 280 ms): the link lands once it is at
   // rest, read off its transform each frame (never transitionend, which can be
   // missed). Ceiling SLIDE_SETTLE_MS: past it the link lands anyway. The only
   // hold on this path.
@@ -1196,9 +1196,7 @@ export function PlanItemScreen(props: {
           <>
             {item.post_id !== null ? (
               <PostSheetPlanRowsContext.Provider value={planRows}>
-                <Suspense
-                  fallback={<div className="m-4 h-[170px] animate-pulse rounded-lg bg-panel-2" />}
-                >
+                <Suspense fallback={<Bone as="div" className="m-4 h-[170px] rounded-lg" />}>
                   <PostDetailPage
                     postId={item.post_id}
                     embedded
@@ -1335,7 +1333,7 @@ export function PlanItemScreen(props: {
             <section ref={commentsRef} className="flex flex-col gap-2.5" aria-label="Comments">
               <h4 className={SECTION_LABEL}>Comments</h4>
               {read.status === 'loading' ? (
-                <div className="h-[72px] animate-pulse rounded-lg bg-panel-2" />
+                <Bone as="div" className="h-[72px] rounded-lg" />
               ) : read.status === 'error' ? (
                 <ScreenFailed onRetry={reload} />
               ) : shown.length === 0 ? (
@@ -1459,7 +1457,9 @@ function ItemMedia(props: {
   }
   if (read.status !== 'ready') {
     return (
-      <div data-plan-media="loading" className="h-[170px] animate-pulse rounded-lg bg-panel-2" />
+      <div data-plan-media="loading">
+        <Bone as="div" className="h-[170px] rounded-lg" />
+      </div>
     );
   }
   if (files.length === 0) {

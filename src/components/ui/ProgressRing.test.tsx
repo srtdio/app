@@ -29,7 +29,7 @@ describe('ProgressRing', () => {
     expect(html).toContain('r="26.5"');
     expect(html).toContain('class="text-overlay-dot"');
     expect(html).toMatch(
-      /data-upload-arc=""[^>]*stroke-linecap="round"[^>]*class="text-overlay-fg"/,
+      /data-upload-arc=""[^>]*stroke-linecap="round"[^>]*class="mv-fill text-overlay-fg"/,
     );
     expect(html).toContain(`stroke-dashoffset="${String(ringDashOffset(0.6, 56, 3, 0.25))}"`);
   });

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
 import { cn } from '@/lib/cn';
-import { prefersReducedMotion } from '@/lib/use-is-laptop';
-import { DUR_BASE_MS } from '@/lib/motion';
+import { Bone } from '@/lib/motion';
+import { SettleLanding } from '@/components/chat/SettleLanding';
 import { supabase } from '@/lib/supabase';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { chatDisplayName } from '@/lib/chat/chat-name';
@@ -69,35 +69,6 @@ export function useMessageSearch(params: {
     };
   }, [workspaceId, channelId, fetchPage]);
   return { state, runner };
-}
-
-/**
- * The --ease-enter token's curve, read at runtime: Element.animate() rejects a
- * var() easing, so the value is resolved first. The fallback is the token's
- * own curve, used only when the variable reads empty.
- */
-function enterEasing(): string {
-  const root = getComputedStyle(document.documentElement);
-  const value = root.getPropertyValue('--ease-enter').trim();
-  return value !== '' ? value : 'cubic-bezier(0.16, 1, 0.3, 1)';
-}
-
-/**
- * Fade an element in on mount: opacity only (no movement, no scale). Runs
- * before paint, so the first frame is already the final layout.
- */
-export function useFadeIn(ref: RefObject<HTMLElement>): void {
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (el === null || typeof el.animate !== 'function') return;
-    // Users who asked for less motion get no fade.
-    if (prefersReducedMotion()) return;
-    const animation = el.animate([{ opacity: 0 }, { opacity: 1 }], {
-      duration: DUR_BASE_MS,
-      easing: enterEasing(),
-    });
-    return () => animation.cancel();
-  }, [ref]);
 }
 
 /** Section label, matching the chat home's Groups / People labels. */
@@ -250,95 +221,105 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
       <h3 data-section-label="messages" className={RESULT_LABEL}>
         Messages
       </h3>
-      <ul data-section="messages" className="flex flex-col">
-        {loading ? (
-          Array.from({ length: LOADING_ROWS }, (_, i) => (
-            <li key={i} data-search-skeleton="" className="flex items-center gap-3 px-2 py-2">
-              <div className="h-12 w-12 shrink-0 animate-pulse rounded-full bg-panel-2" />
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div className="h-3.5 w-1/3 animate-pulse rounded bg-panel-2" />
-                <div className="h-3 w-3/4 animate-pulse rounded bg-panel-2" />
-              </div>
-            </li>
-          ))
-        ) : failed ? (
-          retryRow
-        ) : rows.length === 0 ? (
-          props.onClear !== undefined ? (
-            <li data-search-empty="">
-              <NoResults query={query} filtersActive={kind !== null} onClear={props.onClear} />
-            </li>
+      <SettleLanding boxes={loading} selector="[data-section='messages'] > li">
+        <ul data-section="messages" className="flex flex-col">
+          {loading ? (
+            Array.from({ length: LOADING_ROWS }, (_, i) => (
+              <li key={i} data-search-skeleton="" className="flex items-center gap-3 px-2 py-2">
+                <Bone as="div" className="h-12 w-12 shrink-0 rounded-full" />
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <Bone as="div" className="h-3.5 w-1/3 rounded" />
+                  <Bone as="div" className="h-3 w-3/4 rounded" />
+                </div>
+              </li>
+            ))
+          ) : failed ? (
+            retryRow
+          ) : rows.length === 0 ? (
+            props.onClear !== undefined ? (
+              <li data-search-empty="">
+                <NoResults query={query} filtersActive={kind !== null} onClear={props.onClear} />
+              </li>
+            ) : (
+              <li data-search-empty="" className="px-2 py-6 text-center text-base text-fg-2">
+                {noResultsCopy(query, kind !== null).title}
+              </li>
+            )
           ) : (
-            <li data-search-empty="" className="px-2 py-6 text-center text-base text-fg-2">
-              {noResultsCopy(query, kind !== null).title}
-            </li>
-          )
-        ) : (
-          rows.map(({ hit, channel }) => {
-            // Notes are all mine: no "You:" before the line.
-            const prefix =
-              channel.channelType === 'notes'
-                ? ''
-                : searchSenderPrefix({
-                    senderUserId: hit.senderUserId,
-                    currentUserId: props.currentUserId,
-                    isGroup: channel.channelType === 'group',
-                    nameOf: props.nameOf,
-                  });
-            return (
-              <li key={hit.id} className="min-w-0">
-                <PressableRow
-                  type="button"
-                  data-search-hit={hit.id}
-                  aria-label={`Open message in ${chatDisplayName(channel)}`}
-                  onClick={() => props.onOpenHit(channel, hit, query)}
-                  onContextMenu={noCallout}
-                  className={RESULT_ROW}
-                >
-                  {resultAvatar(channel)}
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="flex min-w-0 items-baseline gap-2">
-                      <span className="min-w-0 flex-1 truncate text-lg font-semibold leading-5 text-fg">
-                        {chatDisplayName(channel)}
+            rows.map(({ hit, channel }) => {
+              // Notes are all mine: no "You:" before the line.
+              const prefix =
+                channel.channelType === 'notes'
+                  ? ''
+                  : searchSenderPrefix({
+                      senderUserId: hit.senderUserId,
+                      currentUserId: props.currentUserId,
+                      isGroup: channel.channelType === 'group',
+                      nameOf: props.nameOf,
+                    });
+              return (
+                <li key={hit.id} className="min-w-0">
+                  <PressableRow
+                    type="button"
+                    data-search-hit={hit.id}
+                    aria-label={`Open message in ${chatDisplayName(channel)}`}
+                    onClick={() => props.onOpenHit(channel, hit, query)}
+                    onContextMenu={noCallout}
+                    className={RESULT_ROW}
+                  >
+                    {resultAvatar(channel)}
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="flex min-w-0 items-baseline gap-2">
+                        <span className="min-w-0 flex-1 truncate text-lg font-semibold leading-5 text-fg">
+                          {chatDisplayName(channel)}
+                        </span>
+                        <span
+                          data-search-date=""
+                          className="shrink-0 font-mono text-sm tabular-nums text-fg-2"
+                        >
+                          {searchDateLabel(hit.createdAt, props.nowMs, props.timeZone)}
+                        </span>
                       </span>
                       <span
-                        data-search-date=""
-                        className="shrink-0 font-mono text-sm tabular-nums text-fg-2"
+                        data-search-snippet=""
+                        className="line-clamp-2 break-words text-base text-fg-2"
                       >
-                        {searchDateLabel(hit.createdAt, props.nowMs, props.timeZone)}
+                        {prefix !== '' ? <span>{prefix}</span> : null}
+                        {hit.body.trim() === '' &&
+                        hit.mediaLine !== undefined &&
+                        hit.mediaLine !== ''
+                          ? hit.mediaLine
+                          : boldMatches(snippetText(hit.body, words, props.nameOf), words)}
                       </span>
                     </span>
-                    <span
-                      data-search-snippet=""
-                      className="line-clamp-2 break-words text-base text-fg-2"
-                    >
-                      {prefix !== '' ? <span>{prefix}</span> : null}
-                      {hit.body.trim() === '' && hit.mediaLine !== undefined && hit.mediaLine !== ''
-                        ? hit.mediaLine
-                        : boldMatches(snippetText(hit.body, words, props.nameOf), words)}
-                    </span>
-                  </span>
-                </PressableRow>
-              </li>
-            );
-          })
-        )}
-        {!loading && !failed && props.state.loadingMore ? (
-          <li data-search-more="" className="px-2 py-3">
-            <div className="mx-auto h-3 w-1/3 animate-pulse rounded bg-panel-2" />
-          </li>
-        ) : null}
-        {!loading && !failed && props.state.moreFailed ? retryRow : null}
-        {!loading && !failed && props.state.hasMore ? (
-          <li ref={props.sentinelRef} data-search-sentinel="" aria-hidden="true" className="h-px" />
-        ) : null}
-      </ul>
+                  </PressableRow>
+                </li>
+              );
+            })
+          )}
+          {!loading && !failed && props.state.loadingMore ? (
+            <li data-search-more="" className="px-2 py-3">
+              <Bone as="div" className="mx-auto h-3 w-1/3 rounded" />
+            </li>
+          ) : null}
+          {!loading && !failed && props.state.moreFailed ? retryRow : null}
+          {!loading && !failed && props.state.hasMore ? (
+            <li
+              ref={props.sentinelRef}
+              data-search-sentinel=""
+              aria-hidden="true"
+              className="h-px"
+            />
+          ) : null}
+        </ul>
+      </SettleLanding>
     </div>
   );
 }
 
 /**
- * The chat home's search results: the view, faded in (opacity only), with
+ * The chat home's search results: the view, at once (never a fade); rows that
+ * replace the loading boxes settle (sweepBoxes landing). With
  * an observer on the end marker that loads the next page as it scrolls in.
  */
 export function SearchResults(
@@ -347,7 +328,6 @@ export function SearchResults(
   const { runner } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLLIElement>(null);
-  useFadeIn(rootRef);
   const hasMore = props.state.hasMore;
   const loadingMore = props.state.loadingMore;
   const moreFailed = props.state.moreFailed;

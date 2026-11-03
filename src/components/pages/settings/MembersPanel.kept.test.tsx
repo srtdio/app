@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The Members panel kept view: the first open shows "Loading members"; a
+// The Members panel kept view: the first open shows the members boxes; a
 // return later in the session (past the cache's window) paints the list read
 // last, with no loading line, and the re-read lands while the person has not
 // touched the screen; one landing after a touch is held (the next return
@@ -68,6 +68,9 @@ import type { WorkspaceMemberRow } from '@/lib/workspace-members';
 import { resetSessionReads } from '@/lib/session-read';
 
 const LOADING_LINE = 'Loading members';
+// The members boxes (sweepBoxes), labelled for screen readers with the loading copy.
+const boxes = (): Element | null =>
+  document.querySelector(`[data-box-skeleton][aria-label="${LOADING_LINE}"]`);
 
 function row(userId: string, role: string): WorkspaceMemberRow {
   return {
@@ -132,7 +135,7 @@ function heldMembers(): () => void {
 /** The first open (Asha), then leave and come back past the cache's window. */
 async function openThenReturnLater(): Promise<void> {
   render();
-  expect(text()).toContain(LOADING_LINE);
+  expect(boxes()).not.toBeNull();
   await settle();
   expect(text()).toContain('Asha');
   unmount();
@@ -163,12 +166,12 @@ describe('Members panel: a return paints the kept list', () => {
     await openThenReturnLater();
     const answer = heldMembers();
     render();
-    expect(text()).not.toContain(LOADING_LINE);
+    expect(boxes()).toBeNull();
     expect(text()).toContain('Asha');
     expect(h.listMembers).toHaveBeenCalledTimes(2);
     await act(async () => answer());
     await settle();
-    expect(text()).not.toContain(LOADING_LINE);
+    expect(boxes()).toBeNull();
     expect(text()).toContain('Bea');
   });
 
@@ -185,7 +188,7 @@ describe('Members panel: a return paints the kept list', () => {
     expect(text()).not.toContain('Bea');
     unmount();
     render();
-    expect(text()).not.toContain(LOADING_LINE);
+    expect(boxes()).toBeNull();
     expect(text()).toContain('Bea');
   });
 
@@ -205,7 +208,7 @@ describe('Members panel: a return paints the kept list', () => {
     vi.setSystemTime(new Date(Date.now() + MEMBERS_STALE_MS + 1));
     heldMembers();
     render();
-    expect(text()).not.toContain(LOADING_LINE);
+    expect(boxes()).toBeNull();
     expect(text()).toContain('Cara');
   });
 });

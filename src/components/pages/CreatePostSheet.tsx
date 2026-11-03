@@ -1317,7 +1317,7 @@ export function CreatePostSheet({
           <>
             <span
               aria-hidden="true"
-              className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent motion-reduce:animate-none"
+              className="h-4 w-4 mv-spin rounded-full border-2 border-current border-r-transparent"
             />
             {uploadingLabel(pendingUploads)}
           </>
@@ -1522,7 +1522,7 @@ export function CreatePostSheet({
             aria-expanded={moreOpen}
             aria-controls="post-more-options"
             onClick={() => setMoreOpen((prev) => !prev)}
-            className="flex items-center gap-3 border border-border px-3 py-2 transition-colors"
+            className="flex items-center gap-3 border border-border px-3 py-2 mv-tint"
           >
             <span className="min-w-0 flex-1">
               <span className="block text-base font-medium text-fg">{MORE_OPTIONS_LABEL}</span>
@@ -1530,10 +1530,7 @@ export function CreatePostSheet({
             </span>
             <IconChevronDown
               size={ICON_SIZE.inline}
-              className={cn(
-                'shrink-0 text-fg-3 transition-transform motion-reduce:transition-none',
-                moreOpen && 'rotate-180',
-              )}
+              className={cn('shrink-0 text-fg-3 mv-slide', moreOpen && 'rotate-180')}
             />
           </PressableRow>
 

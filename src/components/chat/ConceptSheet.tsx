@@ -12,6 +12,7 @@
 // guard, and the footer's own Cancel through the same confirm (FN25). Tokens
 // only; the Sheet's translateY motion only.
 
+import { Bone } from '@/lib/motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { Result } from '@srtdio/rpc';
@@ -408,11 +409,9 @@ export function ConceptSheet(props: {
             />
           ) : null}
           {filesState === 'loading' ? (
-            <div
-              data-plan-concept-files-loading=""
-              aria-label="Loading files"
-              className="h-[72px] animate-pulse rounded-lg bg-panel-2"
-            />
+            <div data-plan-concept-files-loading="" aria-label="Loading files">
+              <Bone as="div" className="h-[72px] rounded-lg" />
+            </div>
           ) : filesState === 'failed' ? (
             <div
               data-plan-concept-files-failed=""

@@ -11,7 +11,8 @@
 // centred on it (56px): one ring over a whole album (progress across every
 // attachment's bytes), one in a voice note's play spot (40px). The ring never
 // positions itself; each spot here does. When the upload finishes the X is
-// gone; only opacity and the ring's stroke animate, and nothing changes size.
+// gone: the ring scales to 0 and the tile settles (ease-pop); nothing fades
+// and nothing changes size.
 //
 // Every other file (PDF, video, Office, anything else) is a FileBubble: a
 // fixed-width card with its thumbnail, that sends with a thin progress bar and
@@ -26,6 +27,7 @@
 // arriving never shifts layout. Every tile is a real button that opens the
 // lightbox at its index; non-image attachments render below the album as before.
 
+import { Bone } from '@/lib/motion';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { useCallback, useEffect, useState } from 'react';
@@ -34,7 +36,7 @@ import { ICON_SIZE, IconBan, IconDownload, IconFile, IconImage } from '@/compone
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { downloadFile, remoteFileSource } from '@/components/ui/FileViewer';
 import { VoiceNote, type VoiceUrlError, type VoiceUrlResult } from '@/components/chat/VoiceNote';
-import { UploadRing } from '@/components/chat/UploadRing';
+import { TileUploadRing } from '@/components/chat/UploadRing';
 import { BUBBLE_FILL, FileBubble } from '@/components/chat/FileBubble';
 import {
   BUBBLE_BODY_TYPE,
@@ -311,18 +313,11 @@ function AttachmentItem({
               view.progress !== null && 'brightness-75',
             )}
           />
-          {ring !== null ? (
-            <UploadRing
-              progress={ring.progress}
-              onCancel={onCancelUpload}
-              variant="image"
-              className={RING_CENTRE}
-            />
-          ) : null}
+          <TileUploadRing ring={ring} onCancel={onCancelUpload} className={RING_CENTRE} />
         </div>
       );
     case 'image-pending':
-      return <div className="h-32 w-44 animate-pulse rounded-lg border border-border bg-panel-2" />;
+      return <Bone as="div" className="h-32 w-44 rounded-lg border border-border" />;
     case 'audio':
       // One wrapper in both states; the ring sits in the play spot, so the
       // bubble keeps its size when the upload completes (X becomes play).
@@ -522,14 +517,7 @@ export function AlbumGrid({
           </PressableRow>
         );
       })}
-      {ring !== null ? (
-        <UploadRing
-          progress={ring.progress}
-          onCancel={onCancelUpload}
-          variant="image"
-          className={RING_CENTRE}
-        />
-      ) : null}
+      <TileUploadRing ring={ring} onCancel={onCancelUpload} className={RING_CENTRE} />
     </div>
   );
 }

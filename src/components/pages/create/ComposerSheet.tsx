@@ -8,7 +8,8 @@ import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
-import { DUR_BASE_MS } from '@/lib/motion';
+import { dialogIn, dialogOut, riseIn, riseOut, trackDim, usePresence } from '@/lib/motion';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 
 /** The question every close path asks while the New post sheet holds a change. */
 export const COMPOSER_DISCARD_TITLE = 'Discard changes?';
@@ -33,8 +34,6 @@ interface ComposerSheetProps {
   wide?: boolean;
 }
 
-const EXIT_MS = DUR_BASE_MS;
-
 /**
  * The full New post sheet's frame (New brief uses it too, narrow): the shared Sheet's panel, motion, focus,
  * Escape and Back handling, with its own header (the title left, then the
@@ -54,22 +53,32 @@ export function ComposerSheet({
   discard,
   wide = true,
 }: ComposerSheetProps) {
-  const [rendered, setRendered] = useState(open);
-  const [entered, setEntered] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setRendered(true);
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
-    }
-    setEntered(false);
-    const timer = setTimeout(() => setRendered(false), EXIT_MS);
-    return () => clearTimeout(timer);
-  }, [open]);
+  // Motion (docs/motion.md, rise), as the shared Sheet: the panel renders at
+  // its resting place from the first frame and the move is laid over it.
+  // Phone: rises from 100% and leaves to 100%; the dim tracks the panel.
+  // Laptop: the centre box grows 95% to 100%. Never a fade.
+  const isLaptop = useIsLaptop();
+  const laptopRef = useRef(isLaptop);
+  laptopRef.current = isLaptop;
+  const dimRef = useRef<HTMLDivElement>(null);
+  const presence = usePresence<HTMLDivElement>(open, {
+    enter: (el) => {
+      if (laptopRef.current) return dialogIn(el);
+      const played = riseIn(el);
+      trackDim(el, dimRef.current, played);
+      return played;
+    },
+    exit: (el) => {
+      if (laptopRef.current) return dialogOut(el);
+      const played = riseOut(el);
+      trackDim(el, dimRef.current, played);
+      return played;
+    },
+  });
+  const rendered = presence.rendered;
+  const panelRef = presence.ref;
 
   const [confirming, setConfirming] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) setConfirming(false);
@@ -118,12 +127,16 @@ export function ComposerSheet({
 
   return createPortal(
     <div
-      className={cn(
-        'fixed inset-0 z-50 flex items-end bg-scrim transition-opacity duration-base sm:items-center sm:justify-center',
-        entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
-      )}
+      className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center"
       onClick={onOverlayClick}
     >
+      {/* The dim: its own layer (so it never dims the panel), tracking the
+          panel's position; a tap on it falls through to the overlay's close. */}
+      <div
+        ref={dimRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-scrim"
+      />
       <div
         ref={panelRef}
         role="dialog"
@@ -132,12 +145,9 @@ export function ComposerSheet({
         aria-label={title}
         data-composer-sheet=""
         className={cn(
-          // Axis: translateY only, as the shared Sheet.
-          'flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border bg-panel lit-overlay transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
+          // Axis: rise (translateY) on phone, scale on laptop, as the shared Sheet.
+          'relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border bg-panel lit-overlay will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
           wide && 'lg:w-[960px]',
-          entered
-            ? 'translate-y-0 opacity-100 duration-slow ease-enter sm:duration-base'
-            : 'translate-y-full opacity-100 duration-base ease-exit sm:translate-y-2 sm:opacity-0',
         )}
       >
         <div

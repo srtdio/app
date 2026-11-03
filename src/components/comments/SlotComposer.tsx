@@ -11,7 +11,8 @@
 // composer owns no trace and no write wrapper: it hands the points back
 // through onSubmit and the panel mints one trace per batch.
 
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { itemIn, useFreshKeys } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
@@ -133,9 +134,6 @@ function newSlot(): Slot {
 
 export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerProps): ReactElement {
   const [slots, setSlots] = useState<Slot[]>(() => [newSlot()]);
-  // Entrance motion (opacity/translateY only): a freshly appended slot renders
-  // one frame at opacity-0/translate-y-1, then transitions to rest.
-  const [entered, setEntered] = useState<Set<string>>(() => new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,18 +143,13 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
   // Each slot's textarea, so its emoji button inserts at that slot's caret.
   const textareas = useRef(new Map<string, HTMLTextAreaElement>());
 
-  useEffect(() => {
-    const missing = slots.filter((slot) => !entered.has(slot.id));
-    if (missing.length === 0) return;
-    const raf = requestAnimationFrame(() => {
-      setEntered((prev) => {
-        const next = new Set(prev);
-        for (const slot of missing) next.add(slot.id);
-        return next;
-      });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [slots, entered]);
+  // itemIn (docs/motion.md): a slot added after the first paint rises 8 px
+  // into place, laid over its final state. The first slot never moves.
+  const freshSlots = useFreshKeys(slots.map((slot) => slot.id));
+  const slotEls = useRef(new Map<string, HTMLLIElement>());
+  useLayoutEffect(() => {
+    for (const id of freshSlots) itemIn(slotEls.current.get(id) ?? null);
+  });
 
   const attachEnabled = canAttach && uploadFile !== undefined;
   const uploading = slots.some((slot) =>
@@ -292,7 +285,6 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
         }
       }
       setSlots([newSlot()]);
-      setEntered(new Set());
       setSubmitting(false);
       return;
     }
@@ -310,10 +302,11 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
           return (
             <li
               key={slot.id}
-              className={cn(
-                'flex flex-col gap-1.5 transition-[opacity,transform] duration-slow ease-enter',
-                entered.has(slot.id) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1',
-              )}
+              ref={(el) => {
+                if (el === null) slotEls.current.delete(slot.id);
+                else slotEls.current.set(slot.id, el);
+              }}
+              className="flex flex-col gap-1.5"
             >
               <div className="flex items-start gap-2">
                 {numbered ? (

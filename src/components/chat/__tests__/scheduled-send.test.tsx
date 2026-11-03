@@ -143,20 +143,20 @@ describe('S3: the Schedule options', () => {
     expect(SCHEDULE_HELPER).toBe('Any time from 1 minute to 1 year ahead.');
   });
 
-  it('the laptop menu fades only (no translate)', () => {
+  it('the laptop menu grows from the chevron (never a fade, no class motion)', () => {
     const html = renderToStaticMarkup(
       <ScheduleMenu open onClose={() => undefined} preview={null} onPick={() => undefined} />,
     );
     expect(html).toContain('data-schedule-menu');
     const surface = /data-schedule-menu="" class="([^"]*)"/.exec(html)?.[1] ?? '';
-    expect(surface).toContain('transition-opacity');
-    expect(surface).not.toMatch(/translate-|rotate-|scale-/);
+    expect(surface).not.toMatch(/transition|opacity|duration-|translate-|rotate-|scale-/);
     expect(html).toContain('right-3');
     expect(html).toContain('bottom-full');
     // Popover radius role: 12px.
     expect(surface).toContain('rounded-xl');
-    expect(surface).toContain('duration-base');
-    expect(surface).not.toMatch(/duration-\[|ease-out/);
+    expect(source('../ScheduleSheet.tsx')).toContain(
+      "menuMoves(() => centreOf(anchorRef?.current), 'right')",
+    );
   });
 
   it('the phone sheet has no footer Cancel; the laptop menu keeps it', () => {
@@ -185,9 +185,11 @@ describe('S4 / S6: strips', () => {
     expect(html).toContain('h-11 w-11');
     expect(html).toContain('bg-accent-soft');
     const surface = /data-schedule-mode="" class="([^"]*)"/.exec(html)?.[1] ?? '';
-    expect(surface).toContain('translate-y-full');
-    expect(surface).toContain('transition-transform');
-    expect(surface).not.toMatch(/translate-x|rotate-|scale-|opacity/);
+    // Painted at rest; the slide (stripIn, Y only) is laid over it on mount.
+    expect(surface).not.toMatch(/translate-|transition|rotate-|scale-|opacity/);
+    expect(source('../ScheduledStrip.tsx')).toContain(
+      "stripIn(el, 'above-composer', SCHEDULE_MODE_SLIDE_PX)",
+    );
   });
 
   it('scheduled strip: 48px button, count, next time in mono, nothing when empty', () => {
@@ -431,9 +433,8 @@ describe('UI-3 S5: Edit with files is text only', () => {
 describe('UI-3 S8: the strip refetches on its chat changing', () => {
   const strip = source('../ScheduledStrip.tsx');
   it('subscribes in an effect and returns the unsubscribe', () => {
-    expect(strip).toContain(
-      'return onScheduledChanged(channelId, () => onChangedRef.current?.());',
-    );
+    expect(strip).toContain('return onScheduledChanged(channelId, () => {');
+    expect(strip).toContain('onChangedRef.current?.();');
   });
   it('stays mounted while empty so a first row still lands', () => {
     const composer = source('../Composer.tsx');

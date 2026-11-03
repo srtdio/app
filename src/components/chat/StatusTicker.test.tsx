@@ -524,7 +524,8 @@ describe('post rows never fail silently', () => {
     expect(idle).toContain('aria-busy="false"');
     expect(busy).toContain('aria-busy="true"');
     expect(busy).toContain('bg-panel-2');
-    expect(busy).toContain('animate-pulse');
+    // No pulse: the busy row keeps its tint and aria-busy (motion never fades).
+    expect(busy).not.toContain('animate-pulse');
     expect(busy.match(/min-h-\[44px\]/g)?.length).toBe(idle.match(/min-h-\[44px\]/g)?.length);
   });
 

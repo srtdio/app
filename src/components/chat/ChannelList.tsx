@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
+import { Bone, BoxSkeleton, GlideItem } from '@/lib/motion';
+import { SettleLanding } from '@/components/chat/SettleLanding';
 import { useCoarsePointer, useHoverPointer } from '@/lib/use-is-laptop';
 import { filterChannelsByName } from '@/lib/channel-filter';
 import type { ChannelSummary } from '@/lib/chat-reads';
@@ -250,7 +252,15 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
     'data-induction-channel': channel.channelId,
   });
   const renderCard = (channel: ChannelSummary, anchored: boolean): ReactElement => (
-    <li key={channel.channelId} className="min-w-0" {...(anchored ? groupAnchor(channel) : {})}>
+    // Glide: a reorder (new message lifts a chat) moves rows to their new
+    // place; groups list on Y, the people grid on X+Y.
+    <GlideItem
+      as="li"
+      axis={anchored ? 'y' : 'xy'}
+      key={channel.channelId}
+      className="min-w-0"
+      {...(anchored ? groupAnchor(channel) : {})}
+    >
       <ChannelCard
         channel={channel}
         selected={channel.channelId === props.selectedChannelId}
@@ -279,7 +289,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
             }
           : {})}
       />
-    </li>
+    </GlideItem>
   );
   const card = (channel: ChannelSummary): ReactElement => renderCard(channel, false);
   const { groups, people } = splitSections(props.channels);
@@ -320,7 +330,7 @@ const SKELETON_PEOPLE = SKELETON_ROWS - SKELETON_GROUPS;
 function skeletonLabel(first: boolean): ReactElement {
   return (
     <div className={first ? 'pt-1' : 'pt-3'}>
-      <div className="h-4 w-16 rounded bg-panel-2" />
+      <Bone as="div" className="h-4 w-16 rounded" />
     </div>
   );
 }
@@ -328,24 +338,25 @@ function skeletonLabel(first: boolean): ReactElement {
 /**
  * The loading body: the real sections' shapes (label, wide 100px tiles with a
  * 72px rounded-square photo, label, a 2-column grid of 168px square tiles with
- * a 72px disc), so swapping in the list shifts nothing. Reuses the repo's
- * animate-pulse + bg-panel-2 skeleton pattern; no spinner.
+ * a 72px disc), so swapping in the list shifts nothing. Each box is a motion
+ * Bone (top-lit sweep, never a pulse); no spinner. Shown only when the device
+ * holds no list (the store paints a saved list at once).
  */
 export function channelListSkeleton(): ReactElement {
   return (
-    <div className={CHAT_HOME_STACK} aria-busy="true" aria-label="Loading conversations">
+    <BoxSkeleton className={CHAT_HOME_STACK} label="Loading conversations">
       {skeletonLabel(true)}
       <ul className={GROUP_TILE_LIST}>
         {Array.from({ length: SKELETON_GROUPS }, (_, i) => (
           <li key={i} className="min-w-0">
             <div
               data-skeleton-row="wide"
-              className={cn(tileBoxClass('wide'), 'border-border bg-panel animate-pulse')}
+              className={cn(tileBoxClass('wide'), 'border-border bg-panel')}
             >
-              <div className="h-[72px] w-[72px] shrink-0 rounded-xl bg-panel-2" />
+              <Bone as="div" className="h-[72px] w-[72px] shrink-0 rounded-xl" />
               <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div className="h-4 w-1/2 rounded bg-panel-2" />
-                <div className="h-3 w-3/4 rounded bg-panel-2" />
+                <Bone as="div" className="h-4 w-1/2 rounded" />
+                <Bone as="div" className="h-3 w-3/4 rounded" />
               </div>
             </div>
           </li>
@@ -357,16 +368,16 @@ export function channelListSkeleton(): ReactElement {
           <li key={i} className="min-w-0">
             <div
               data-skeleton-row="square"
-              className={cn(tileBoxClass('square'), 'border-border bg-panel animate-pulse')}
+              className={cn(tileBoxClass('square'), 'border-border bg-panel')}
             >
-              <div className="h-[72px] w-[72px] shrink-0 rounded-full bg-panel-2" />
-              <div className="mt-2 h-3.5 w-2/3 rounded bg-panel-2" />
-              <div className="mt-2 h-3 w-full rounded bg-panel-2" />
+              <Bone as="div" className="h-[72px] w-[72px] shrink-0 rounded-full" />
+              <Bone as="div" className="mt-2 h-3.5 w-2/3 rounded" />
+              <Bone as="div" className="mt-2 h-3 w-full rounded" />
             </div>
           </li>
         ))}
       </ul>
-    </div>
+    </BoxSkeleton>
   );
 }
 
@@ -554,7 +565,7 @@ export function chatRowContextMenu(
 
 /** The tile button's behaviour: no text selection, no iOS callout, focus ring. */
 export const CHANNEL_ROW_BUTTON = cn(
-  'min-w-0 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  'min-w-0 text-left mv-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
   NO_TOUCH_SELECT,
 );
 
@@ -701,7 +712,7 @@ export function channelRowBody(props: {
  * itself is ROW_MORE_BUTTON. Tokens only.
  */
 export const ROW_MORE_BUTTON =
-  'flex h-11 w-11 items-center justify-center rounded-lg text-fg-3 transition-colors duration-fast hover:bg-panel-3 hover:text-fg';
+  'flex h-11 w-11 items-center justify-center rounded-lg text-fg-3 mv-tint hover:bg-panel-3 hover:text-fg';
 
 export function rowMoreClass(kind: TileKind): string {
   return cn('absolute right-1 flex', kind === 'wide' ? 'top-1/2 -translate-y-1/2' : 'bottom-1');
@@ -1212,45 +1223,47 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
               onSelect: props.onSelect,
             })
           : null}
-        {props.status === 'loading'
-          ? channelListSkeleton()
-          : props.status === 'error'
-            ? channelListError(props.onRetry)
-            : searching
-              ? props.searchResults
-              : channelListView({
-                  channels: visibleChannels(props.channels, summaryFor, isHidden, props.search),
-                  hasChannels: hasChannels || props.search.trim() !== '',
-                  search: props.search,
-                  onClearSearch: () => props.onSearchChange(''),
-                  selectedChannelId: props.selectedChannelId,
-                  onSelect: props.onSelect,
-                  ...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {}),
-                  onNewChat: newChat,
-                  summaryFor,
-                  ...(props.draftFor !== undefined ? { draftFor: props.draftFor } : {}),
-                  ...(selecting !== undefined
-                    ? {
-                        selecting: {
-                          selectedIds: selecting.selectedIds,
-                          onToggle: selecting.onToggle,
-                        },
-                      }
-                    : {}),
-                  ...(props.onLongPress !== undefined && selecting === undefined
-                    ? {
-                        onLongPress: props.onLongPress,
-                        menuOpenId: props.menuOpenId ?? null,
-                        ...(props.onMenuClose !== undefined
-                          ? { onMenuClose: props.onMenuClose }
-                          : {}),
-                        ...(props.onHide !== undefined ? { onHide: props.onHide } : {}),
-                      }
-                    : {}),
-                  ...(props.nowMs !== undefined ? { nowMs: props.nowMs } : {}),
-                  ...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {}),
-                  ...(props.input !== undefined ? { input: props.input } : {}),
-                })}
+        <SettleLanding boxes={props.status === 'loading'} selector="[data-chat-home] li">
+          {props.status === 'loading'
+            ? channelListSkeleton()
+            : props.status === 'error'
+              ? channelListError(props.onRetry)
+              : searching
+                ? props.searchResults
+                : channelListView({
+                    channels: visibleChannels(props.channels, summaryFor, isHidden, props.search),
+                    hasChannels: hasChannels || props.search.trim() !== '',
+                    search: props.search,
+                    onClearSearch: () => props.onSearchChange(''),
+                    selectedChannelId: props.selectedChannelId,
+                    onSelect: props.onSelect,
+                    ...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {}),
+                    onNewChat: newChat,
+                    summaryFor,
+                    ...(props.draftFor !== undefined ? { draftFor: props.draftFor } : {}),
+                    ...(selecting !== undefined
+                      ? {
+                          selecting: {
+                            selectedIds: selecting.selectedIds,
+                            onToggle: selecting.onToggle,
+                          },
+                        }
+                      : {}),
+                    ...(props.onLongPress !== undefined && selecting === undefined
+                      ? {
+                          onLongPress: props.onLongPress,
+                          menuOpenId: props.menuOpenId ?? null,
+                          ...(props.onMenuClose !== undefined
+                            ? { onMenuClose: props.onMenuClose }
+                            : {}),
+                          ...(props.onHide !== undefined ? { onHide: props.onHide } : {}),
+                        }
+                      : {}),
+                    ...(props.nowMs !== undefined ? { nowMs: props.nowMs } : {}),
+                    ...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {}),
+                    ...(props.input !== undefined ? { input: props.input } : {}),
+                  })}
+        </SettleLanding>
       </div>
       {selecting !== undefined ? selectBar(selecting) : null}
     </div>

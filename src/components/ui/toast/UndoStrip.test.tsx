@@ -10,7 +10,6 @@ import {
   STRIP_ANCHOR_GAP_PX,
   STRIP_SWIPE_ACCEPT_RATIO,
   UNDO_ANCHOR_ATTR,
-  UNDO_STRIP_KEYFRAMES,
   UndoStrip,
   stripBottomPx,
   swipeAccepts,
@@ -249,12 +248,15 @@ describe('swipeAccepts', () => {
   });
 });
 
-describe('UNDO_STRIP_KEYFRAMES', () => {
-  it('moves on translateY only and fades only under reduced motion', () => {
-    expect(UNDO_STRIP_KEYFRAMES).toContain('@keyframes sorted-strip-in');
-    expect(UNDO_STRIP_KEYFRAMES).toContain('@keyframes sorted-strip-out');
-    expect(UNDO_STRIP_KEYFRAMES).not.toMatch(/translateX|scale|rotate/);
-    expect(UNDO_STRIP_KEYFRAMES).toContain('prefers-reduced-motion: reduce');
+describe('UndoStrip motion', () => {
+  it('carries no CSS animation, transition or opacity of its own (edgeStrip runs in the motion module)', () => {
+    render(<UndoStrip toast={undoToast} onAccept={() => {}} onAction={() => {}} />);
+    const el = strip();
+    expect(el.style.animation).toBe('');
+    expect(el.style.transition).toBe('');
+    expect(el.style.opacity).toBe('');
+    expect(el.className).not.toMatch(/animate-|transition|opacity-|duration-/);
+    expect(document.querySelector('style')).toBeNull();
   });
 });
 

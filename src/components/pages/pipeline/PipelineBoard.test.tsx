@@ -562,7 +562,10 @@ describe('W4 board fixes', () => {
         (el.props as { 'data-post-id'?: string })['data-post-id'] === 'p1' &&
         'onDragStart' in el.props,
     )[0]!;
+    // The lifted card (motion: lift one lit height) toggles classes on its own node.
+    const node = { classList: { add: () => {}, remove: () => {} } };
     (card.props as { onDragStart: (e: unknown) => void }).onDragStart({
+      currentTarget: node,
       dataTransfer: { setData: () => {} },
     });
     const prevent = vi.fn();
@@ -575,7 +578,7 @@ describe('W4 board fixes', () => {
     });
     expect(prevent).toHaveBeenCalled();
     expect(add).not.toHaveBeenCalled();
-    (card.props as { onDragEnd: () => void }).onDragEnd();
+    (card.props as { onDragEnd: (e: unknown) => void }).onDragEnd({ currentTarget: node });
   });
 
   it('fix 1 and 5: every board card gets the Move button handler and never repeats its column stage', () => {

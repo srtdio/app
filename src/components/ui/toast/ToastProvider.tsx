@@ -1,30 +1,39 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 import { Toast } from '@/components/ui/toast/Toast';
-import { UNDO_STRIP_KEYFRAMES, UndoStrip } from '@/components/ui/toast/UndoStrip';
+import { UndoStrip } from '@/components/ui/toast/UndoStrip';
 import type { Toast as ToastModel, ToastApi, ToastOptions } from '@/components/ui/toast/types';
-import { DUR_BASE_MS } from '@/lib/motion';
+import { cn } from '@/lib/cn';
+import {
+  DUR_SHEET_OUT_MS,
+  motionOff,
+  TOAST_DISMISS_PX,
+  riseIn,
+  stripIn,
+  stripOut,
+  useDragDismiss,
+  useMotionOff,
+} from '@/lib/motion';
 
 /** Default auto-dismiss delay when `durationMs` is omitted. */
 export const DEFAULT_DURATION_MS = 4000;
 /** Newest-first cap on top cards; older cards beyond this are dropped on show(). */
 export const MAX_VISIBLE = 3;
 /**
- * Exit-animation length; mirrors --dur-base. A dismissed toast is marked
- * `leaving` and removed this long afterwards so the fade-down can play. The
- * timer fires even under prefers-reduced-motion (CSS collapses the visual to
- * 1ms), so unmount always happens.
+ * Exit length; mirrors the edgeStrip exit (stripOut, --dur-sheet-out). A
+ * dismissed toast is marked `leaving` and removed this long afterwards so it
+ * can leave the way it came. The timer fires with motion off too (the card is
+ * hidden at once then), so unmount always happens.
  */
-export const EXIT_MS = DUR_BASE_MS;
-
-/**
- * Enter/exit keyframes, scoped to this surface (no color, no hex). Durations and
- * easings are applied on the card via motion tokens, not here. Axis: translateY
- * only. Enter glides up from 16px; exit drops to 8px.
- */
-const TOAST_KEYFRAMES =
-  '@keyframes sorted-toast-in{from{opacity:0;transform:translateY(1rem)}to{opacity:1;transform:translateY(0)}}' +
-  '@keyframes sorted-toast-out{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(0.5rem)}}';
+export const EXIT_MS = DUR_SHEET_OUT_MS;
 
 /** A toast plus its closing-phase flag. Kept local so ToastModel stays minimal. */
 interface ManagedToast extends ToastModel {
@@ -86,6 +95,12 @@ export function createToastStore(): ToastStore {
     const current = toasts.find((toast) => toast.id === id);
     if (current === undefined || current.leaving) return;
     clearTimer(id);
+    // Motion off (Reduce Motion, ?motion=0): there is no exit move to play,
+    // so the card goes now rather than sitting hidden for EXIT_MS.
+    if (motionOff()) {
+      remove(id);
+      return;
+    }
     toasts = toasts.map((toast) => (toast.id === id ? { ...toast, leaving: true } : toast));
     emit();
     timers.set(
@@ -239,9 +254,76 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 /**
+ * One top card with its motion (docs/motion.md, edgeStrip): rendered at rest,
+ * it drops from the top edge on the first frame (320 ms); a swipe up follows
+ * the finger and dismisses past TOAST_DISMISS_PX (or a flick), else springs
+ * back; leaving, it goes back up the same way. Never a fade; with motion off
+ * a leaving card is hidden at once.
+ */
+function ToastSlot({
+  toast,
+  onDismiss,
+  onAction,
+}: {
+  toast: ManagedToast;
+  onDismiss: (id: string) => void;
+  onAction: (id: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const off = useMotionOff();
+  // Where a swipe left the card: the exit starts there.
+  const fromY = useRef(0);
+
+  useLayoutEffect(() => {
+    stripIn(ref.current, 'top');
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!toast.leaving || el === null) return;
+    stripOut(el, 'top', undefined, fromY.current);
+    el.style.transform = '';
+  }, [toast.leaving]);
+
+  const drag = useDragDismiss({
+    axis: 'y',
+    direction: -1,
+    closeAt: TOAST_DISMISS_PX,
+    enabled: !toast.leaving,
+    onMove: (offset) => {
+      if (ref.current !== null) ref.current.style.transform = `translateY(${offset}px)`;
+    },
+    onDismiss: (offset) => {
+      fromY.current = offset;
+      onDismiss(toast.id);
+    },
+    onCancel: (offset) => {
+      const el = ref.current;
+      if (el === null) return;
+      el.style.transform = '';
+      if (offset !== 0) riseIn(el, offset);
+    },
+  });
+
+  return (
+    <div
+      ref={ref}
+      data-toast-slot=""
+      className={cn(
+        'pointer-events-auto flex w-full max-w-sm touch-none justify-center',
+        toast.leaving && off && 'invisible',
+      )}
+      {...drag}
+    >
+      <Toast toast={toast} leaving={toast.leaving} onDismiss={onDismiss} onAction={onAction} />
+    </div>
+  );
+}
+
+/**
  * Fixed toast containers. Cards: mobile top, below the safe-area; desktop
- * (md+) top-right; newest on top (the store keeps newest first); they glide up
- * on enter and fade down on exit via the keyframes below. Undo strips: the
+ * (md+) top-right; newest on top (the store keeps newest first); each drops
+ * from the top edge and leaves the same way (ToastSlot). Undo strips: the
  * bottom strip (UndoStrip), one live at a time.
  */
 export function ToastViewport() {
@@ -256,15 +338,8 @@ export function ToastViewport() {
         aria-live="polite"
         className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex flex-col items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:inset-x-auto md:right-4 md:items-end"
       >
-        <style>{TOAST_KEYFRAMES + UNDO_STRIP_KEYFRAMES}</style>
         {cards.map((toast) => (
-          <Toast
-            key={toast.id}
-            toast={toast}
-            leaving={toast.leaving}
-            onDismiss={ctx.expire}
-            onAction={ctx.act}
-          />
+          <ToastSlot key={toast.id} toast={toast} onDismiss={ctx.expire} onAction={ctx.act} />
         ))}
       </div>
       {strips.map((toast) => (

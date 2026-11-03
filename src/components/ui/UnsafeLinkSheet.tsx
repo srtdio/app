@@ -4,7 +4,9 @@
 // link in a new tab with noopener noreferrer.
 //
 // Closes on Esc, a tap on the scrim, the header's close X, "Don't open", or a
-// downward swipe on the sheet. Motion is translateY only (no rotate); focus is trapped
+// downward swipe on the sheet. Motion (docs/motion.md, rise): rendered at rest,
+// it rises from the bottom edge and leaves the same way, the dim tracking it;
+// translateY only, never a fade. Focus is trapped
 // inside while open and handed back to the card on close. Colours are tokens
 // only, so light and dark parity comes from the theme.
 
@@ -16,7 +18,8 @@ import { IconButton } from '@/components/ui/IconButton';
 import { IconAlertTriangle, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
-import { DUR_BASE_MS } from '@/lib/motion';
+import { dimFor, riseIn, riseOut, usePresence } from '@/lib/motion';
+import { dimWith } from '@/lib/motion/overlays';
 
 interface UnsafeLinkSheetProps {
   open: boolean;
@@ -30,23 +33,26 @@ export const SWIPE_CLOSE_PX = 80;
 
 export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | null {
   const { open, url, reasons, onClose } = props;
-  const [rendered, setRendered] = useState(open);
-  const [entered, setEntered] = useState(false);
   const [drag, setDrag] = useState(0);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const dimRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const dragStart = useRef<number | null>(null);
+  // The drag offset the sheet closed from: the exit starts there.
+  const dragRef = useRef(0);
+  dragRef.current = drag;
+  const presence = usePresence<HTMLDivElement>(open, {
+    enter: (el) => {
+      return dimWith(el, dimRef.current, riseIn(el));
+    },
+    exit: (el) => {
+      return dimWith(el, dimRef.current, riseOut(el, dragRef.current));
+    },
+  });
+  const rendered = presence.rendered;
+  const panelRef = presence.ref;
 
   useEffect(() => {
-    if (open) {
-      setRendered(true);
-      setDrag(0);
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
-    }
-    setEntered(false);
-    const timer = setTimeout(() => setRendered(false), DUR_BASE_MS);
-    return () => clearTimeout(timer);
+    if (open) setDrag(0);
   }, [open]);
 
   // "Don't open" takes focus as soon as the sheet is on screen; Tab stays
@@ -72,23 +78,32 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>): void {
     if (dragStart.current === null) return;
-    setDrag(Math.max(0, event.clientY - dragStart.current));
+    const next = Math.max(0, event.clientY - dragStart.current);
+    setDrag(next);
+    // The dim follows the sheet's position, never a timed fade.
+    const panel = panelRef.current;
+    if (dimRef.current !== null && panel !== null) {
+      dimRef.current.style.opacity = dimFor(next, panel.offsetHeight);
+    }
   }
 
   function onPointerEnd(): void {
     if (dragStart.current === null) return;
     dragStart.current = null;
-    if (drag > SWIPE_CLOSE_PX) onClose();
-    else setDrag(0);
+    if (drag > SWIPE_CLOSE_PX) {
+      onClose();
+      return;
+    }
+    // Short: spring back from where the finger left it.
+    setDrag(0);
+    if (drag > 0) dimWith(panelRef.current, dimRef.current, riseIn(panelRef.current, drag));
+    else if (dimRef.current !== null) dimRef.current.style.opacity = '';
   }
 
   return createPortal(
     <div
       data-unsafe-sheet=""
-      className={cn(
-        'fixed inset-0 z-50 flex items-end justify-center bg-scrim transition-opacity duration-base',
-        entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
-      )}
+      className="fixed inset-0 z-50 flex items-end justify-center"
       onClick={(event) => {
         // React events from a portal still bubble through the card's parents
         // (a chat bubble's long-press, a clickable brief card): stop them here.
@@ -101,19 +116,20 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
       onPointerMove={stop}
       onContextMenu={stop}
     >
+      {/* The dim: full scrim at rest, tracking the sheet per frame as it moves. */}
+      <div
+        ref={dimRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-scrim"
+      />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="unsafe-link-title"
+        // Follows the finger while dragged (and holds there until the exit takes over).
         style={drag > 0 ? { transform: `translateY(${drag}px)` } : undefined}
-        className={cn(
-          'flex max-h-[90vh] w-full max-w-[480px] touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg lit-overlay will-change-transform',
-          drag > 0 ? 'transition-none' : 'transition-transform',
-          entered
-            ? 'translate-y-0 duration-slow ease-enter'
-            : 'translate-y-full duration-base ease-exit',
-        )}
+        className="relative flex max-h-[90vh] w-full max-w-[480px] touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg lit-overlay will-change-transform"
       >
         {/* The swipe-down handle: grabber, then the title left and the close X
             right (every sheet header). The rest of the sheet scrolls normally

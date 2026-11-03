@@ -4,6 +4,8 @@
 @import '@fontsource/inter/700.css';
 @import '@fontsource/jetbrains-mono/400.css';
 @import '@fontsource/jetbrains-mono/500.css';
+/* Every transition and keyframe lives here (guard: motion-rules.test.ts). */
+@import './lib/motion/motion.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -137,8 +139,23 @@
   --dur-fast: 120ms;
   --dur-base: 160ms;
   --dur-slow: 200ms;
+  /* The nine moves (src/lib/motion, docs/motion.md). Mirrored in
+     src/lib/motion/tokens.ts; src/lib/motion.test.ts keeps both in sync. */
+  --dur-push: 280ms;
+  --dur-back: 240ms;
+  --dur-grow: 300ms;
+  --dur-grow-back: 260ms;
+  --dur-sheet-in: 320ms;
+  --dur-sheet-out: 240ms;
+  --dur-menu: 160ms;
+  --dur-toast: 320ms;
+  --dur-wipe: 1200ms;
+  --dur-sweep: 1100ms;
   --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
   /* The bottom Undo strip: a dark bar in both themes, accent Undo. */
   --strip-bg: #1b1c20;
   --strip-fg: #ffffff;
@@ -597,16 +614,5 @@
   /* A track's fill (progress, storage, upload, scrubber) catches the light. */
   .lit-fill {
     background-image: var(--lit-shine);
-  }
-}
-/* Accessibility: collapse motion for users who ask for it. Durations drop to
-   1ms (not 0) so transitionend/animationend still fire and JS timers that gate
-   unmount keep working, while the motion itself is imperceptible. */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    transition-duration: 1ms !important;
-    animation-duration: 1ms !important;
   }
 }

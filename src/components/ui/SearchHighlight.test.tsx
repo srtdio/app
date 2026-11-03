@@ -12,7 +12,7 @@ import {
   SEARCH_MARK_CLASS,
   SearchWordsContext,
 } from '@/components/ui/SearchHighlight';
-import { DUR_SLOW_MS } from '@/lib/motion';
+import { DUR_WIPE_MS, resetMotionPreferenceForTests, resetPlayerForTests } from '@/lib/motion';
 
 // The person's reduced-motion setting, flipped per case.
 const motion = vi.hoisted(() => ({ reduced: false }));
@@ -71,6 +71,8 @@ describe('glowTarget (arrival tint)', () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     document.body.innerHTML = '';
+    resetMotionPreferenceForTests();
+    resetPlayerForTests();
   });
 
   function row(): HTMLElement {
@@ -81,30 +83,65 @@ describe('glowTarget (arrival tint)', () => {
     return el;
   }
 
-  it('centres the target, tints it for 2s, then fades the tint out', () => {
+  const layer = (el: HTMLElement): HTMLElement | null =>
+    el.querySelector<HTMLElement>('[data-jump-glow-layer]');
+
+  it('centres the target and tints it for 2s on a layer behind its content', () => {
     const el = row();
     glowTarget(el);
     expect(el.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
-    expect(el.style.backgroundColor).toBe('var(--accent-soft)');
     expect(el.hasAttribute('data-jump-glow')).toBe(true);
-    vi.advanceTimersByTime(GLOW_MS - 1);
-    expect(el.style.backgroundColor).toBe('var(--accent-soft)');
-    vi.advanceTimersByTime(1);
-    // Fading: a transition back to the row's own background.
-    expect(el.style.transition).toContain('background-color');
+    expect(layer(el)?.style.backgroundColor).toBe('var(--accent-soft)');
+    expect(layer(el)?.style.zIndex).toBe('-1');
+    expect(el.style.isolation).toBe('isolate');
+    // The row's own background is never touched.
     expect(el.style.backgroundColor).toBe('');
-    vi.advanceTimersByTime(DUR_SLOW_MS);
-    expect(el.hasAttribute('data-jump-glow')).toBe(false);
-    expect(el.style.transition).toBe('');
+    vi.advanceTimersByTime(GLOW_MS - 1);
+    expect(layer(el)).not.toBeNull();
   });
 
-  it('reduced motion: no smooth scroll, no fade; the tint just clears at 2s', () => {
+  it('after 2s the tint wipes away left to right (clip), never a fade, then the layer goes', () => {
+    const listeners: Record<string, () => void> = {};
+    const fake = {
+      finish: vi.fn(() => listeners.finish?.()),
+      addEventListener: (type: string, fn: () => void) => {
+        listeners[type] = fn;
+      },
+    };
+    const animate = vi.fn(() => fake as unknown as Animation);
+    const original = HTMLElement.prototype.animate;
+    HTMLElement.prototype.animate = animate as unknown as HTMLElement['animate'];
+    try {
+      const el = row();
+      glowTarget(el);
+      vi.advanceTimersByTime(GLOW_MS);
+      expect(animate).toHaveBeenCalledTimes(1);
+      const [frames, options] = animate.mock.calls[0] as unknown as [
+        Keyframe[],
+        KeyframeAnimationOptions,
+      ];
+      expect(frames.map((f) => f.clipPath)).toEqual(['inset(0 0 0 0%)', 'inset(0 0 0 100%)']);
+      expect(frames.some((f) => 'opacity' in f)).toBe(false);
+      expect(options.duration).toBe(DUR_WIPE_MS);
+      expect(layer(el)).not.toBeNull();
+      listeners.finish?.();
+      return Promise.resolve().then(() => {
+        expect(layer(el)).toBeNull();
+        expect(el.hasAttribute('data-jump-glow')).toBe(false);
+        expect(el.style.isolation).toBe('');
+      });
+    } finally {
+      HTMLElement.prototype.animate = original;
+    }
+  });
+
+  it('motion off (no Web Animations or Reduce Motion): no smooth scroll, the tint just clears at 2s', () => {
     motion.reduced = true;
     const el = row();
     glowTarget(el);
     expect(el.scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'center' });
     vi.advanceTimersByTime(GLOW_MS);
-    expect(el.style.backgroundColor).toBe('');
+    expect(layer(el)).toBeNull();
     expect(el.style.transition).toBe('');
     expect(el.hasAttribute('data-jump-glow')).toBe(false);
   });
@@ -131,7 +168,7 @@ describe('glowTarget (arrival tint)', () => {
     const clear = glowTarget(el);
     clear();
     expect(el.hasAttribute('data-jump-glow')).toBe(false);
-    expect(el.style.backgroundColor).toBe('');
+    expect(layer(el)).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
   });
 });

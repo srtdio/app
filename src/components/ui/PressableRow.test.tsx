@@ -59,3 +59,13 @@ describe('PressableRow', () => {
     }
   });
 });
+
+describe('PressableRow press (motion move 5)', () => {
+  it('sinks through the shared mv-press class in every shape, dense included', () => {
+    for (const props of [{}, { dense: true }, { card: true }, { flat: true }, { inline: true }]) {
+      const t = tokens(render(props));
+      expect(t).toContain('mv-press');
+      expect(t.filter((c) => /^(transition|duration-|active:scale)/.test(c))).toEqual([]);
+    }
+  });
+});

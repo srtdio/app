@@ -4,11 +4,27 @@
 // intro and closing cards.
 // None of the overlay pieces takes a pointer; the guard in InductionGuide
 // decides which taps reach the app. Colours are tokens only (light and dark).
+//
+// Motion (docs/motion.md): everything renders at its rest pose first. The hand
+// presses twice and its ring grows out and settles (handPress, handRipple:
+// finite, scale only, never a fade); a tap away nudges the hand and label on X
+// (guideNudge); the bar and the closing cards slide on X between steps
+// (stepX: Next +1, Back -1). All instant under Reduce Motion or ?motion=0, and
+// any tap finishes them. The spotlight keeps its token (no move).
 
-import { forwardRef, type ReactElement } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  type ForwardedRef,
+  type ReactElement,
+} from 'react';
 import { Button } from '@/components/ui/Button';
 import { IconHand } from '@/components/ui/icons';
 import { DOCK_GAP, type Rect } from '@/lib/induction';
+import { MOVE_CLASS, stepX } from '@/lib/motion';
+import { GUIDE_RIPPLE_REST_SCALE, guideNudge, handPress, handRipple } from '@/lib/motion/touches';
 import { CHROME_ATTR } from './guide-dom';
 
 /** Above page content and Sheet (z-50); below toasts (z-60/70) and the lightbox (z-80). */
@@ -24,42 +40,6 @@ const AMBER_INK = 'text-[var(--guide-ink)]';
 const AMBER_DEEP_BG = 'bg-[var(--guide-deep)]';
 const AMBER_LIGHT_BG = 'bg-[var(--guide-light)]';
 const LABEL_EDGE = 'border border-[rgb(var(--guide-ink-rgb)/0.12)]';
-
-/**
- * Keyframes for the hand, its ripple and the nudge; reduced motion holds them
- * still. Timings come from the motion tokens: one press cycle is 6.5 slow beats
- * (1.3s), the nudge 1.5 (300ms), eased with --ease-enter.
- */
-const GUIDE_STYLE = `
-@keyframes sorted-guide-press {
-  0%, 40%, 100% { transform: translate(0, 0) scale(1); }
-  10%, 30% { transform: translate(1px, 2px) scale(0.9); }
-  20% { transform: translate(0, 0) scale(1); }
-}
-@keyframes sorted-guide-ripple {
-  0% { transform: scale(0.3); opacity: 0; }
-  10% { transform: scale(0.4); opacity: 0.9; }
-  45% { transform: scale(1.5); opacity: 0; }
-  100% { transform: scale(1.5); opacity: 0; }
-}
-@keyframes sorted-guide-nudge {
-  0%, 100% { translate: 0 0; }
-  25% { translate: -5px 0; }
-  75% { translate: 5px 0; }
-}
-[data-guide-hand-svg] { transform-origin: 17px 1px; animation: sorted-guide-press calc(var(--dur-slow) * 6.5) var(--ease-enter) infinite; }
-[data-guide-ripple] { animation: sorted-guide-ripple calc(var(--dur-slow) * 6.5) var(--ease-enter) infinite; }
-[data-guide-nudge="on"] { animation: sorted-guide-nudge calc(var(--dur-slow) * 1.5) var(--ease-enter); }
-@media (prefers-reduced-motion: reduce) {
-  [data-guide-hand-svg] { animation: none; }
-  [data-guide-ripple] { animation: none; transform: scale(0.8); opacity: 0.9; }
-  [data-guide-nudge="on"] { animation: none; }
-}
-`;
-
-export function GuideStyle(): ReactElement {
-  return <style>{GUIDE_STYLE}</style>;
-}
 
 /**
  * The hairline, placed in page coordinates (absolute, the live rect plus the
@@ -111,9 +91,30 @@ export function GuideHand({
   tip: { x: number; y: number };
   nudge: number;
 }): ReactElement {
+  // A new nudge remounts the hand (key), so it nudges and presses again.
+  return <GuideHandAt key={nudge} tip={tip} nudge={nudge} />;
+}
+
+function GuideHandAt({
+  tip,
+  nudge,
+}: {
+  tip: { x: number; y: number };
+  nudge: number;
+}): ReactElement {
+  const hand = useRef<HTMLDivElement>(null);
+  const ripple = useRef<HTMLSpanElement>(null);
+  const svg = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    if (nudge > 0) guideNudge(hand.current);
+    handPress(svg.current, `${HAND_TIP.x}px ${HAND_TIP.y}px`);
+    handRipple(ripple.current);
+    // Mount only: a new nudge is a new mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <div
-      key={nudge}
+      ref={hand}
       data-induction-hand=""
       data-guide-nudge={nudge > 0 ? 'on' : 'off'}
       aria-hidden="true"
@@ -126,6 +127,7 @@ export function GuideHand({
       }}
     >
       <span
+        ref={ripple}
         data-guide-ripple=""
         className="absolute rounded-full border-2 border-overlay-fg"
         style={{
@@ -133,24 +135,41 @@ export function GuideHand({
           height: RIPPLE,
           top: HAND_TIP.y - RIPPLE / 2,
           left: HAND_TIP.x - RIPPLE / 2,
+          transform: `scale(${GUIDE_RIPPLE_REST_SCALE})`,
         }}
       />
-      <span data-guide-hand-svg="" className="relative block text-fg">
+      <span ref={svg} data-guide-hand-svg="" className="relative block text-fg">
         <IconHand size={HAND_SIZE} />
       </span>
     </div>
   );
 }
 
-/** The amber label pill beside the control. */
+/** Sets both a local ref and a forwarded one. */
+function useBothRefs<T>(local: { current: T | null }, forwarded: ForwardedRef<T>) {
+  return useCallback(
+    (node: T | null) => {
+      local.current = node;
+      if (typeof forwarded === 'function') forwarded(node);
+      else if (forwarded !== null) forwarded.current = node;
+    },
+    [local, forwarded],
+  );
+}
+
+/** The amber label pill beside the control. A new nudge wiggles it on X. */
 export const GuideLabel = forwardRef<
   HTMLDivElement,
   { text: string; at: { top: number; left: number }; nudge: number }
 >(function GuideLabel({ text, at, nudge }, ref) {
+  const local = useRef<HTMLDivElement | null>(null);
+  const setRef = useBothRefs(local, ref);
+  useLayoutEffect(() => {
+    if (nudge > 0) guideNudge(local.current);
+  }, [nudge]);
   return (
     <div
-      ref={ref}
-      key={nudge}
+      ref={setRef}
       data-induction-label=""
       data-guide-nudge={nudge > 0 ? 'on' : 'off'}
       className={`pointer-events-none fixed ${GUIDE_Z} max-w-[min(280px,calc(100vw-32px))] rounded-full px-3 py-1.5 text-base font-semibold leading-tight ${LABEL_EDGE} lit-float ${AMBER_BG} ${AMBER_INK}`}
@@ -208,12 +227,28 @@ const GUIDE_ACTION = 'min-w-[44px] shrink-0';
 
 export const GuideBar = forwardRef<
   HTMLElement,
-  { copy: BarCopy; actions: BarActions; progress: number; dock: DockAt }
->(function GuideBar({ copy, actions, progress, dock }, ref) {
+  {
+    copy: BarCopy;
+    actions: BarActions;
+    progress: number;
+    dock: DockAt;
+    /** The step's place in the tour; a change slides the bar on X (Next +1, Back -1). */
+    stepIndex?: number;
+  }
+>(function GuideBar({ copy, actions, progress, dock, stepIndex }, ref) {
   const placed = dockStyle(dock);
+  const local = useRef<HTMLElement | null>(null);
+  const setRef = useBothRefs(local, ref);
+  const shownStep = useRef(stepIndex);
+  useLayoutEffect(() => {
+    const before = shownStep.current;
+    shownStep.current = stepIndex;
+    if (before === undefined || stepIndex === undefined || before === stepIndex) return;
+    stepX(local.current, stepIndex > before ? 1 : -1);
+  }, [stepIndex]);
   return (
     <section
-      ref={ref}
+      ref={setRef}
       {...{ [CHROME_ATTR]: '' }}
       data-induction-bar={dock.side}
       aria-label={copy.aria.bar}
@@ -231,7 +266,7 @@ export const GuideBar = forwardRef<
       >
         <div
           data-induction-progress=""
-          className={`h-full ${AMBER_DEEP_BG} lit-fill`}
+          className={`h-full ${AMBER_DEEP_BG} lit-fill ${MOVE_CLASS.fill}`}
           style={{ width: `${Math.round(progress * 1000) / 10}%` }}
         />
       </div>
@@ -350,8 +385,15 @@ export function GuideCard({
   // The intro is the step card's role (sheet/dialog: 16, lit-overlay); the
   // closing and clear cards keep the popover radius.
   const shape = kind === 'intro' ? 'rounded-2xl' : 'rounded-xl';
+  // The closing and clear cards come after the last step: they slide in on X
+  // like a Next. The intro is the tour's first paint and does not move.
+  const card = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    if (kind !== 'intro') stepX(card.current, 1);
+  }, [kind]);
   return (
     <section
+      ref={card}
       {...{ [CHROME_ATTR]: '' }}
       data-induction-card={kind}
       aria-label={copy.title}

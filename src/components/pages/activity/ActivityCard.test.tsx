@@ -33,6 +33,7 @@ vi.mock('react', async (importOriginal) => {
     },
     // Effects never run in SSR; a no-op keeps the plain-function call below hook-safe.
     useEffect: () => undefined,
+    useLayoutEffect: () => undefined,
     // The card's menu gesture (useMenuGesture) keeps its controller in a ref.
     useRef: <T,>(initial: T): { current: T } => ({ current: initial }),
   };
@@ -793,16 +794,15 @@ describe('ActivityCard: notifications fixes', () => {
     expect(html).toMatch(/<p class="mt-\[3px\][^"]*\[overflow-wrap:anywhere\]">https:\/\/example/);
   });
 
-  it('fix 15: a live-added card slides up only (motion-safe translate-y), never sideways', () => {
+  it('fix 15: a live-added card renders at its final place (itemIn lays a Y rise over it), never a class fade or slide', () => {
     const entering = renderCard([item({ id: 'new' })], { entering: true });
     expect(entering).toContain('data-activity-entering=""');
     expect(entering).toContain('data-activity-id="new"');
     const root = /^<div[^>]*data-activity-entering=""[^>]*class="([^"]*)"/.exec(entering)?.[1];
-    expect(root?.split(' ')).toContain('motion-safe:translate-y-2');
-    expect(root).not.toMatch(/translate-x|rotate/);
+    expect(root).not.toMatch(/translate-|rotate|opacity|transition|duration-|motion-safe/);
     const settled = renderCard([item({ id: 'old' })]);
     expect(settled).not.toContain('data-activity-entering');
-    expect(settled).not.toContain('motion-safe:translate-y-2');
+    expect(settled).not.toMatch(/translate-y-2|motion-safe/);
   });
 
   describe('fix 30: deleted files', () => {

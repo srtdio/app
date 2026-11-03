@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
+import { MOVE_CLASS } from '@/lib/motion';
 
 interface ChipProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -58,7 +59,8 @@ export function Chip({
       ref={buttonRef}
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg border text-base font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+        'inline-flex items-center gap-1.5 rounded-lg border text-base font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+        MOVE_CLASS.press,
         sizes[size],
         variant === 'add'
           ? 'border-dashed border-border text-fg-3 hover:bg-panel-2'

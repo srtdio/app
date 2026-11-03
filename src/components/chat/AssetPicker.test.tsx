@@ -78,8 +78,10 @@ describe('AssetPicker grid', () => {
     const pdfHtml = renderToStaticMarkup(
       <AssetTile asset={pdf} active={false} onToggle={() => undefined} />,
     );
-    expect(imageHtml).toContain('animate-pulse');
-    expect(pdfHtml).not.toContain('animate-pulse');
+    // Loading: the shared Bone sweep (never a pulse) until the thumbnail resolves.
+    expect(imageHtml).toContain('mv-bone');
+    expect(imageHtml).not.toContain('animate-pulse');
+    expect(pdfHtml).not.toContain('mv-bone');
     expect(pdfHtml).toContain('PDF');
     expect(pdfHtml).toContain('deck.pdf');
   });

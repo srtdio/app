@@ -17,7 +17,8 @@ import {
   type SearchRunner,
   type SearchState,
 } from '@/lib/chat/search';
-import { useFadeIn, useMessageSearch } from '@/components/chat/SearchResults';
+import { useMessageSearch } from '@/components/chat/SearchResults';
+import { stripIn, useMoveOnMount } from '@/lib/motion';
 
 /**
  * The words the open chat's search bar is on: every bubble draws a matched
@@ -92,7 +93,8 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
     ...(props.fetchPage !== undefined ? { fetchPage: props.fetchPage } : {}),
   });
   const rootRef = useRef<HTMLDivElement>(null);
-  useFadeIn(rootRef);
+  // The bar slides in on Y (edgeStrip, 8 px), never a fade.
+  useMoveOnMount(rootRef, (el) => stripIn(el, 'above-composer', 8));
   // The anchor (a home hit) applies to the query the bar opened on, once.
   const anchorRef = useRef<{ id: string; query: string } | null>(
     props.anchorMessageId !== null

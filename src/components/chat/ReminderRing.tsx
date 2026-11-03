@@ -18,13 +18,14 @@
 //   before (iPhone plays on the first tap after open).
 // Every timer, listener and the AudioContext are released on unmount.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactElement } from 'react';
+import { bellSwing } from '@/lib/motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { readProfiles } from '@/lib/chat-reads';
 import { mentionIds } from '@/lib/chat/mentions';
-import { createChime, type Chime } from '@/lib/chat/chime';
+import { CHIME_GAP_MS, CHIME_REPEATS, createChime, type Chime } from '@/lib/chat/chime';
 import { messagePreview, readChatMessages, type ChatMessagePreview } from '@/lib/inbox/alerts';
 import {
   REMINDERS_CHANGED_EVENT,
@@ -49,6 +50,30 @@ import { ICON_SIZE, IconAlarmClock } from '@/components/ui/icons';
 const RING_TOAST_ACTION = 'Open';
 /** How long a reminder toast stays (the chime runs about 5 s inside it). */
 const RING_TOAST_MS = 8_000;
+
+/**
+ * The reminder toast's clock: it swings (bellSwing, 3 swings over 700 ms) with
+ * each chime, `times` swings CHIME_GAP_MS apart from the toast's first frame
+ * (the chime's own spacing). Instant under Reduce Motion; a tap finishes the
+ * swing in flight.
+ */
+export function RingingClock(props: { times: number }): ReactElement {
+  const ref = useRef<HTMLSpanElement>(null);
+  const { times } = props;
+  useEffect(() => {
+    bellSwing(ref.current);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (let i = 1; i < times; i += 1) {
+      timers.push(setTimeout(() => bellSwing(ref.current), i * CHIME_GAP_MS));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [times]);
+  return (
+    <span ref={ref} data-reminder-bell="" className="inline-flex">
+      <IconAlarmClock size={ICON_SIZE.nav} className="text-accent" />
+    </span>
+  );
+}
 
 /** "Reminder: <preview>". Pure. */
 export function ringTitle(preview: string): string {
@@ -134,7 +159,8 @@ export function ReminderRing(props: { workspaceId: string; userId: string }): nu
       toastRef.current.show({
         title,
         description: RING_TOAST_ACTION,
-        icon: <IconAlarmClock size={ICON_SIZE.nav} className="text-accent" />,
+        // The clock swings with each of the chime's tones.
+        icon: <RingingClock times={CHIME_REPEATS} />,
         durationMs: RING_TOAST_MS,
         onPress: () => {
           chime.stop();
@@ -202,7 +228,7 @@ export function ReminderRing(props: { workspaceId: string; userId: string }): nu
       toastRef.current.show({
         title,
         description: RING_TOAST_ACTION,
-        icon: <IconAlarmClock size={ICON_SIZE.nav} className="text-accent" />,
+        icon: <RingingClock times={1} />,
         durationMs: RING_TOAST_MS,
         onPress: () => {
           chime.stop();

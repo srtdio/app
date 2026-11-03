@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { CHECK_EMAIL_COPY } from '@/lib/induction-copy';
 import { cn } from '@/lib/cn';
+import { shake } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 
 /** Digits in an email code; matches supabase/config.toml otp_length. */
@@ -113,6 +114,7 @@ export function CodeStep({
   onSignedIn,
 }: CodeStepProps): ReactElement {
   const inputRef = useRef<HTMLInputElement>(null);
+  const boxesRef = useRef<HTMLDivElement>(null);
   const sentAt = useRef(Date.now());
   const inFlight = useRef(false);
   const [code, setCode] = useState('');
@@ -141,6 +143,9 @@ export function CodeStep({
     setVerifying(false);
     setCode('');
     setError({ kind: result.kind });
+    // The server said wrong: the boxes shake on X (320 ms, plus or minus 10 px).
+    // Only after the answer; instant under Reduce Motion or ?motion=0.
+    if (result.kind === 'wrong') shake(boxesRef.current);
     inputRef.current?.focus();
   }
 
@@ -174,13 +179,18 @@ export function CodeStep({
   return (
     <div className="flex flex-col gap-4">
       <div className="relative">
-        <div aria-hidden="true" className="grid grid-cols-6 gap-2">
+        <div
+          ref={boxesRef}
+          aria-hidden="true"
+          data-code-boxes=""
+          className="grid grid-cols-6 gap-2"
+        >
           {Array.from({ length: CODE_LENGTH }, (_, i) => (
             <div
               key={i}
               data-code-box=""
               className={cn(
-                'flex h-14 items-center justify-center rounded-lg border bg-panel-2 lit-well font-mono text-2xl font-medium tabular-nums text-fg transition-colors duration-fast ease-enter',
+                'flex h-14 items-center justify-center rounded-lg border bg-panel-2 lit-well font-mono text-2xl font-medium tabular-nums text-fg mv-tint',
                 invalid ? 'border-bad' : i === active ? 'border-accent' : 'border-border',
               )}
             >

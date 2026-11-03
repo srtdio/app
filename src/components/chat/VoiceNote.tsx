@@ -30,10 +30,11 @@
 //
 // While an own note uploads, the play spot holds the UploadRing (tap X cancels
 // the send) and the wave is a plain flat line of the same length; when the
-// upload finishes, X becomes play and the line becomes the waveform in a 150ms
-// opacity crossfade (nothing moves or resizes).
+// upload finishes, the ring scales to 0 (mv-ring-out) and play and the
+// waveform show in its place at once (never a fade; nothing moves or resizes).
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { itemIn } from '@/lib/motion';
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
@@ -802,9 +803,9 @@ function transcribeLink(props: {
 
 /**
  * The transcript panel: a rounded tinted box with the selectable text. It
- * reveals on height only (grid rows 0fr to 1fr), the slow motion token with the enter ease, Y only;
- * reduced motion shows it at once. It mounts in its current state, so a stored
- * transcript paints open on first paint with no transition. The width never
+ * opens at its full height at once and its box rises 8px into place (itemIn,
+ * Y only; instant under Reduce Motion). It mounts in its current state, so a
+ * stored transcript paints open on first paint with no move. The width never
  * changes.
  */
 function TranscriptDrop(props: {
@@ -814,17 +815,20 @@ function TranscriptDrop(props: {
   ink: string;
 }): ReactElement {
   const { text, open } = props;
+  const boxRef = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(open);
+  useLayoutEffect(() => {
+    if (open && !wasOpen.current) itemIn(boxRef.current);
+    wasOpen.current = open;
+  }, [open]);
   return (
     <div
       data-voice-transcript={open ? 'open' : 'closed'}
       aria-hidden={open ? undefined : true}
-      className={cn(
-        'grid transition-[grid-template-rows] duration-slow ease-enter motion-reduce:transition-none',
-        open ? 'visible grid-rows-[1fr]' : 'invisible grid-rows-[0fr]',
-      )}
+      className={cn('grid', open ? 'visible grid-rows-[1fr]' : 'invisible grid-rows-[0fr]')}
     >
       <div className="min-h-0 overflow-hidden">
-        <div className="pl-1.5 pt-1">
+        <div ref={boxRef} className="pl-1.5 pt-1">
           <p
             dir="auto"
             className={cn(
@@ -1263,14 +1267,11 @@ export function VoiceNote({
           ? playFailed
             ? 'opacity-[.45]'
             : null
-          : cn(
-              'transition-[opacity,visibility] duration-base motion-reduce:transition-none',
-              uploading
-                ? 'invisible opacity-0'
-                : url === null || playFailed
-                  ? 'opacity-[.45]'
-                  : 'opacity-100',
-            ),
+          : uploading
+            ? 'invisible opacity-0'
+            : url === null || playFailed
+              ? 'opacity-[.45]'
+              : 'opacity-100',
       )}
     >
       {active ? <IconPauseFill size={ICON_SIZE.control} /> : <IconPlay size={ICON_SIZE.control} />}
@@ -1386,8 +1387,6 @@ export function VoiceNote({
             data-voice-bars={peaks !== undefined && peaks.length > 0 ? 'peaks' : 'fallback'}
             className={cn(
               'flex h-7 w-full items-center justify-between',
-              upload !== undefined &&
-                'transition-[opacity,visibility] duration-base motion-reduce:transition-none',
               uploading && 'invisible opacity-0',
             )}
             aria-hidden="true"
@@ -1412,7 +1411,6 @@ export function VoiceNote({
               className={cn(
                 'pointer-events-none absolute inset-x-0 top-1/2 -mt-px h-0.5 rounded-full',
                 tone.unplayed,
-                'transition-opacity duration-base motion-reduce:transition-none',
                 uploading ? 'opacity-100' : 'opacity-0',
               )}
             />
@@ -1423,8 +1421,6 @@ export function VoiceNote({
             className={cn(
               'pointer-events-none absolute top-1/2 -ml-[5px] -mt-[5px] h-2.5 w-2.5 rounded-full',
               tone.played,
-              upload !== undefined &&
-                'transition-opacity duration-base motion-reduce:transition-none',
               uploading && 'opacity-0',
             )}
             style={{ left: `${progress}%` }}

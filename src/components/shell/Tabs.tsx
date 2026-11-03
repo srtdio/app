@@ -26,7 +26,7 @@ export function Tabs({ items, active, onChange }: TabsProps) {
             onClick={() => onChange(tab.key)}
             aria-current={isActive ? 'page' : undefined}
             className={cn(
-              'relative flex items-center justify-center px-3 text-base whitespace-nowrap transition-colors',
+              'relative flex items-center justify-center px-3 text-base whitespace-nowrap mv-tint',
               isActive ? 'text-fg' : 'text-fg-2 hover:text-fg',
             )}
           >

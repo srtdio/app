@@ -180,6 +180,23 @@ describe('non-icon glyphs drawn in the icon file', () => {
     expect(done).toContain('class="stroke-panel"');
   });
 
+  it('DrawnMarkGlyph: the approve tick and reject cross as drawable strokes (pathLength 1, dash 1), drawn at rest', () => {
+    const tick = renderToStaticMarkup(<Icons.DrawnMarkGlyph mark="tick" className="text-good" />);
+    expect(tick).toContain('d="m4.5 12.75 6 6 9-13.5"');
+    expect(tick).toContain('pathLength="1"');
+    expect(tick).toContain('stroke-dasharray="1"');
+    expect(tick).toContain('stroke-width="1.85"');
+    expect(tick).toContain('width="16"');
+    expect(tick).toContain('class="text-good"');
+    // Final state first: no offset at rest, so it shows fully drawn with motion off.
+    expect(tick).not.toContain('stroke-dashoffset');
+    const cross = renderToStaticMarkup(
+      <Icons.DrawnMarkGlyph mark="cross" size={ICON_SIZE.control} />,
+    );
+    expect(cross.match(/data-draw=""/g)).toHaveLength(2);
+    expect(cross).toContain('width="20"');
+  });
+
   it('RailCurveGlyph: a 13px quarter curve, 2px stroke in the stronger border token', () => {
     const tick = renderToStaticMarkup(
       <Icons.RailCurveGlyph turn="tick" className="bottom-0 left-0" />,

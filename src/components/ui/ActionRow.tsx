@@ -39,10 +39,7 @@ export function ActionRow({
     <PressableRow
       type="button"
       onClick={onClick}
-      className={cn(
-        'flex items-center gap-3 px-3 py-2 transition-colors',
-        danger ? 'text-bad' : 'text-fg',
-      )}
+      className={cn('flex items-center gap-3 px-3 py-2 mv-tint', danger ? 'text-bad' : 'text-fg')}
     >
       <span
         className={cn(

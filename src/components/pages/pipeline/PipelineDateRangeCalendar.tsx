@@ -1,21 +1,24 @@
 // An iOS-style month calendar presented as a floating, centered MODAL. It sits
 // ON TOP of the sort sheet/popover (higher z-index) and never pushes page
 // content down: it portals to <body>, paints a fixed-inset scrim, and centres a
-// card that fades + scales in (modal idiom, not a bottom-sheet slide). Range
+// card that grows from the row that opened it (growFromTrigger, scale only,
+// never a fade; modal idiom, not a bottom-sheet slide). Range
 // selection is two taps (start then end); a day before the current start swaps
 // them; a single tap is a one-day range; tapping again when both are set
 // restarts. Self-contained date math with native Date, ISO 'YYYY-MM-DD' only.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
+import { centreOf, menuOrigin } from '@/components/ui/popover-classes';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
+import { growFromTrigger } from '@/lib/motion';
 import { formatSpokenDate } from '@/lib/time';
 
 interface DateRange {
@@ -122,22 +125,14 @@ export function PipelineDateRangeCalendar({
     year: seed.year,
     monthIndex: seed.monthIndex,
   });
-  // Mount flag drives the fade + scale: it flips on the tick after open so the
-  // card transitions from its hidden state to its shown state.
-  const [shown, setShown] = useState(false);
-
   // Re-seed the selection and the visible month each time the modal opens, so a
   // re-open lands on the saved range rather than stale local state.
   useEffect(() => {
-    if (!open) {
-      setShown(false);
-      return;
-    }
+    if (!open) return;
     setStart(initialRange?.start ?? null);
     setEnd(initialRange?.end ?? null);
     const parsed = parseISO(initialRange?.start ?? '');
     if (parsed !== null) setView({ year: parsed.year, monthIndex: parsed.monthIndex });
-    setShown(true);
   }, [open, initialRange?.start, initialRange?.end]);
 
   // Escape through the shared stack: the calendar is the top layer over the
@@ -147,6 +142,17 @@ export function PipelineDateRangeCalendar({
   // on close.
   const panelRef = useRef<HTMLDivElement>(null);
   useModalFocus(panelRef, open);
+
+  // Rendered at rest; on the first frame the card grows from the control that
+  // opened it (still focused here: focus moves in after this layout effect),
+  // else from the screen centre. Parent unmount closes it at once.
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!open || panel === null) return;
+    const opener = document.activeElement;
+    const point = opener !== null && opener !== document.body ? centreOf(opener) : null;
+    growFromTrigger(panel, menuOrigin(panel, point));
+  }, [open]);
 
   if (!open) return null;
 
@@ -180,23 +186,14 @@ export function PipelineDateRangeCalendar({
       role="presentation"
       onClick={onClose}
     >
-      <div
-        className={cn(
-          'absolute inset-0 bg-scrim transition-opacity duration-base ease-enter',
-          shown ? 'opacity-100' : 'opacity-0',
-        )}
-        aria-hidden="true"
-      />
+      <div className="absolute inset-0 bg-scrim" aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Select a date range"
         onClick={(event) => event.stopPropagation()}
-        className={cn(
-          'relative w-[320px] max-w-full rounded-2xl border bg-panel p-3 lit-overlay transition-all duration-base ease-enter',
-          shown ? 'scale-100 opacity-100' : 'scale-95 opacity-0',
-        )}
+        className="relative w-[320px] max-w-full rounded-2xl border bg-panel p-3 lit-overlay will-change-transform"
       >
         <div className="mb-2 flex items-center justify-between">
           <IconButton
@@ -246,7 +243,7 @@ export function PipelineDateRangeCalendar({
                 aria-pressed={isEndpoint || single}
                 onClick={() => pick(iso)}
                 className={cn(
-                  'flex items-center justify-center font-sans text-base tabular-nums transition-colors',
+                  'flex items-center justify-center font-sans text-base tabular-nums mv-tint',
                   isEndpoint
                     ? 'bg-accent font-semibold text-accent-fg lit-pill'
                     : between

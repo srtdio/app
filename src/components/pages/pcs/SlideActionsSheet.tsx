@@ -48,7 +48,7 @@ function SlideRow({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'flex items-center gap-3 px-3 py-2 text-base font-medium transition-colors',
+        'flex items-center gap-3 px-3 py-2 text-base font-medium mv-tint',
         danger ? 'text-bad' : 'text-fg',
       )}
     >

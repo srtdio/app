@@ -96,7 +96,7 @@ const NEW = asset('a3', 'new.png', '2026-10-03T00:00:00Z');
 let root: Root | null = null;
 const flush = () => act(async () => new Promise((r) => setTimeout(r, 0)));
 const text = () => document.body.textContent ?? '';
-const skeleton = () => document.querySelector('.animate-pulse');
+const skeleton = () => document.querySelector('[data-box-skeleton]');
 const button = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find(
     (b) => b.textContent?.trim() === label,

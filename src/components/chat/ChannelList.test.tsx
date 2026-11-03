@@ -23,6 +23,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { IconPlus } from '@/components/ui/icons';
 import type { ChannelSummary } from '@/lib/chat-reads';
+import { Bone } from '@/lib/motion';
 
 function summary(over: Partial<ChannelSummary>): ChannelSummary {
   return {
@@ -397,9 +398,12 @@ describe('load status', () => {
     expect(kinds).toEqual(['wide', 'wide', 'square', 'square', 'square', 'square']);
     for (const tile of tiles) {
       const cls = (tile.props as { className: string }).className;
-      for (const token of ['rounded-xl', 'border', 'border-border', 'animate-pulse']) {
+      for (const token of ['rounded-xl', 'border', 'border-border']) {
         expect(cls).toContain(token);
       }
+      // Boxes sweep (motion Bone); never a pulse or fade.
+      expect(cls).not.toContain('animate-pulse');
+      expect(findAll(tile, (el) => el.type === Bone).length).toBeGreaterThan(0);
       const wide = (tile.props as Record<string, unknown>)['data-skeleton-row'] === 'wide';
       expect(cls).toContain(wide ? 'h-[100px]' : 'h-[168px]');
       const [photo] = findAll(
@@ -412,7 +416,7 @@ describe('load status', () => {
     }
     expect(
       findAll(withStatus('loading'), (el) =>
-        /animate-spin/.test((el.props as { className?: string }).className ?? ''),
+        /animate-spin|mv-spin/.test((el.props as { className?: string }).className ?? ''),
       ),
     ).toHaveLength(0);
   });

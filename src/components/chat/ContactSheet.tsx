@@ -29,7 +29,7 @@ export {
   type ContactTab,
   type Feed,
 } from '@/components/chat/ChatInfoTabs';
-import { ModalPanel } from '@/components/chat/ModalPanel';
+import { MODAL_PAGE_CLASS, ModalPanel } from '@/components/chat/ModalPanel';
 
 /** The page title when no `heading` is given. */
 const CONTACT_HEADING = 'Contact info';
@@ -65,11 +65,7 @@ function contactPage(props: {
 }): ReactElement {
   const select = props.select;
   return (
-    <ModalPanel
-      aria-label={props.heading}
-      data-contact-page=""
-      className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
-    >
+    <ModalPanel aria-label={props.heading} data-contact-page="" className={MODAL_PAGE_CLASS}>
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header">
         {select?.selecting === true ? (
           select.header

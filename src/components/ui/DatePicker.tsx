@@ -12,7 +12,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
+import { centreOf, menuMoves } from '@/components/ui/popover-classes';
 import { useDismissLayer } from '@/lib/modal-focus';
+import { usePresence } from '@/lib/motion';
 import { viewportSize } from '@/lib/use-is-laptop';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
@@ -116,7 +118,7 @@ export function dayCells(
           if (!past) onPick(iso);
         }}
         className={cn(
-          'flex h-11 w-11 items-center justify-center rounded-lg text-base tabular-nums transition-colors',
+          'flex h-11 w-11 items-center justify-center rounded-lg text-base tabular-nums mv-tint',
           past
             ? 'cursor-default text-fg-3 opacity-50'
             : selected
@@ -170,7 +172,13 @@ export function DatePicker({
 
   // Escape closes only this popover while it is the top layer, never the sheet
   // under it; every close hands focus back to the trigger.
-  const panelRef = useRef<HTMLDivElement>(null);
+  // The calendar grows from the trigger and shrinks back to it (growFromTrigger).
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const presence = usePresence<HTMLDivElement>(
+    open,
+    menuMoves(() => centreOf(triggerRef.current)),
+  );
+  const panelRef = presence.ref;
   useDismissLayer(open, () => setOpen(false), panelRef);
 
   function pick(iso: string): void {
@@ -179,7 +187,6 @@ export function DatePicker({
   }
 
   // Re-place the open popover when the page scrolls or resizes under it.
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!open) return;
@@ -201,7 +208,7 @@ export function DatePicker({
         aria-expanded={open}
         {...(label !== undefined ? { 'aria-label': label } : {})}
         onClick={() => setOpen((prev) => !prev)}
-        className="lit-well flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-base transition-colors hover:bg-panel-3"
+        className="lit-well flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-base mv-tint hover:bg-panel-3"
       >
         <IconCalendar size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
         <span
@@ -214,14 +221,16 @@ export function DatePicker({
         </span>
       </button>
 
-      {open && triggerRef.current !== null
+      {presence.rendered && triggerRef.current !== null
         ? createPortal(
             <>
-              <div
-                className="fixed inset-0 z-[56]"
-                aria-hidden="true"
-                onClick={() => setOpen(false)}
-              />
+              {open ? (
+                <div
+                  className="fixed inset-0 z-[56]"
+                  aria-hidden="true"
+                  onClick={() => setOpen(false)}
+                />
+              ) : null}
               <div
                 ref={panelRef}
                 role="dialog"

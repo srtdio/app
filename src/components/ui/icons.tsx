@@ -600,12 +600,40 @@ export function TaskBoxGlyph(props: { done: boolean; size: number }) {
       {props.done ? (
         <>
           <rect x={1} y={1} width={14} height={14} rx={4} fill="currentColor" />
-          <path d="M4.6 8.2l2.3 2.3 4.5-4.8" className="stroke-panel" />
+          <path
+            d="M4.6 8.2l2.3 2.3 4.5-4.8"
+            className="stroke-panel"
+            pathLength={1}
+            strokeDasharray="1"
+          />
         </>
       ) : (
         <rect x={1.5} y={1.5} width={13} height={13} rx={3.6} stroke="currentColor" />
       )}
     </svg>
+  );
+}
+
+/**
+ * The approve tick or reject cross as a drawable glyph: the same drawings as
+ * IconCheck and IconX (Heroicons paths), each stroke with pathLength 1 and a
+ * dash of 1, so drawTick (src/lib/motion) can draw it by stroke-dashoffset.
+ * Its final state (offset 0) is fully drawn: with motion off it simply shows.
+ * Not a separate concept: the decision mark after a landed approve or reject.
+ */
+export function DrawnMarkGlyph(props: {
+  mark: 'tick' | 'cross';
+  size?: number;
+  className?: string;
+}) {
+  const paths = props.mark === 'tick' ? ['m4.5 12.75 6 6 9-13.5'] : ['M6 18 18 6', 'M6 6l12 12'];
+  const extra = props.className !== undefined ? { className: props.className } : {};
+  return (
+    <Svg size={props.size ?? ICON_SIZE.inline} {...extra}>
+      {paths.map((d) => (
+        <path key={d} d={d} pathLength={1} strokeDasharray="1" data-draw="" />
+      ))}
+    </Svg>
   );
 }
 

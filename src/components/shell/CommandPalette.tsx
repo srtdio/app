@@ -18,7 +18,7 @@ import { useToast } from '@/components/ui/toast';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
-import { DUR_BASE_MS } from '@/lib/motion';
+import { dropIn } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/trace';
@@ -429,7 +429,7 @@ export function namesNeeded(
   return ids;
 }
 
-const ROW = 'flex items-center px-2 text-base transition-colors active:bg-accent-soft';
+const ROW = 'flex items-center px-2 text-base mv-tint active:bg-accent-soft';
 
 /** The keyboard-selected (or hovered) row: the accent tint, the pressed row's tint too. */
 const ACTIVE_ROW = 'bg-accent-soft text-fg lit-active';
@@ -629,11 +629,6 @@ export async function resolvePaletteNames(
   rememberMentionRead(workspaceId, need, res.data);
 }
 
-// Exit transition length; mirrors --dur-base so the palette stays mounted for
-// the fade/scale-out, then unmounts. Fires even under prefers-reduced-motion
-// (CSS collapses to 1ms), so the closing phase always completes.
-const EXIT_MS = DUR_BASE_MS;
-
 export function CommandPalette({
   open,
   onClose,
@@ -646,7 +641,17 @@ export function CommandPalette({
   const ownInputRef = useRef<HTMLInputElement>(null);
   const inputRef = givenInputRef ?? ownInputRef;
   const listRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  // Motion (docs/motion.md): rendered at rest, the palette drops 8 px from the
+  // top on the frame it mounts (dropIn, run from a stable callback ref during
+  // commit, before paint). Closing is instant. Never a fade.
+  const attachPanel = useRef<((el: HTMLDivElement | null) => void) | null>(null);
+  if (attachPanel.current === null) {
+    attachPanel.current = (el) => {
+      panelRef.current = el;
+      if (el !== null) dropIn(el);
+    };
+  }
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [expanded, setExpanded] = useState<ReadonlySet<ResultGroup>>(new Set());
@@ -660,21 +665,8 @@ export function CommandPalette({
   >(new Map());
   const [recentsExpanded, setRecentsExpanded] = useState(false);
   const runnerRef = useRef<PaletteSearchRunner | null>(null);
-  // `rendered` keeps the palette mounted through its exit; `entered` drives the
-  // enter/exit transition.
-  const [rendered, setRendered] = useState(open);
-  const [entered, setEntered] = useState(false);
-
   useEffect(() => {
-    if (open) {
-      mark('palette:open');
-      setRendered(true);
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
-    }
-    setEntered(false);
-    const timer = setTimeout(() => setRendered(false), EXIT_MS);
-    return () => clearTimeout(timer);
+    if (open) mark('palette:open');
   }, [open]);
 
   // One runner per open palette and workspace: every search stays inside the
@@ -836,7 +828,7 @@ export function CommandPalette({
 
   // Open renders at once (not after an effect), so the opener's synchronous
   // focus() finds the field in the same tap.
-  if (!open && !rendered) {
+  if (!open) {
     return null;
   }
 
@@ -949,26 +941,17 @@ export function CommandPalette({
   return (
     <div
       data-palette-overlay=""
-      className={cn(
-        'fixed inset-0 z-50 bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12vh] sm:px-4 transition-opacity duration-fast',
-        entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
-      )}
+      className="fixed inset-0 z-50 bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12vh] sm:px-4"
       onClick={onOverlayClick}
     >
       <div
-        ref={panelRef}
+        ref={attachPanel.current}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className={cn(
-          // Phones: a full-screen sheet. Wider: the centred card.
-          // Axis: translateY (-8px) + scale from top center, crossfaded. No X,
-          // no rotate.
-          'flex flex-col w-full h-full bg-panel lit-overlay overflow-hidden origin-top transition-[opacity,transform] duration-base will-change-transform sm:h-auto sm:max-w-[560px] sm:rounded-xl sm:border',
-          entered
-            ? 'translate-y-0 scale-100 opacity-100 ease-enter'
-            : '-translate-y-2 scale-[0.985] opacity-0 ease-exit',
-        )}
+        // Phones: a full-screen sheet. Wider: the centred card. Rendered at
+        // rest; dropIn (Y, 8 px) is laid over it.
+        className="flex flex-col w-full h-full scale-100 bg-panel lit-overlay overflow-hidden will-change-transform sm:h-auto sm:max-w-[560px] sm:rounded-xl sm:border"
       >
         <div className="flex shrink-0 items-center gap-2.5 px-4 border-b border-border pt-[env(safe-area-inset-top)] sm:pt-0">
           <IconSearch size={ICON_SIZE.nav} className="text-fg-3" />

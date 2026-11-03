@@ -142,10 +142,10 @@ describe('New plan create: one call, never half built', () => {
     expect(create).not.toContain('planCreateWithItems');
     expect(src).toContain('role="alert"');
     expect(src).toContain("scrollIntoView({ block: 'center' })");
-    expect(src).toContain('!prefersReducedMotion()');
-    const shake = src.slice(src.indexOf('row.animate('), src.indexOf('const create = async'));
-    expect(shake).toContain('translateX(-4px)');
-    expect(shake).not.toMatch(/translateY|rotate|scale\(/);
+    // The shake is the motion module's (X only; instant under Reduce Motion
+    // or ?motion=0 inside play()), never a hand-built animation.
+    expect(src).toContain('shake(row)');
+    expect(src).not.toContain('row.animate(');
   });
 
   it('From / To live in the dates sheet: shrinkable, WebKit reset, 44px+', () => {

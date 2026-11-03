@@ -8,6 +8,7 @@ import { imageTileState } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
 import { useThumbnail } from './use-thumbnail';
 import { useNearViewport, useStoredThumbnail } from '@/components/ui/FileTile';
+import { Bone } from '@/lib/motion';
 
 /**
  * What the non-image tile should be. Unifies AssetCard's link/file Fallback with
@@ -66,7 +67,7 @@ const BODY_CLASS: Record<NonNullable<ThumbnailProps['bodyLines']>, string> = {
 };
 
 // Versions whose original has shown this session: a remount (a tab return)
-// paints it at once, with no fade. Cleared on signout.
+// names it as the shown image at once. Cleared on signout.
 const shownOriginals = new Set<string>();
 
 if (typeof window !== 'undefined') {
@@ -129,7 +130,7 @@ function FallbackTile({
 
 /**
  * The one authoritative thumbnail tile for Assets, Pipeline and Briefs. Renders a
- * shimmer while presigning, a full-bleed <img object-cover> when resolved, and the
+ * loading box (the shared Bone sweep, never a pulse) while presigning, a full-bleed <img object-cover> when resolved, and the
  * caller's fallback otherwise. The tile background switches by state only
  * (image=bg-panel-2, fallback=bg-panel-3) on a SINGLE tile, never per-fallback. It
  * adds no inner rounding or outer padding: the caller's card supplies overflow-hidden
@@ -182,11 +183,11 @@ export function Thumbnail({
   const [sharp, setSharp] = useState<string | null>(null);
   const loading =
     state === 'shimmer' || (state === 'image' && painted !== smallUrl && painted !== originalUrl);
-  // The version this mount faded in itself: it keeps its fade to the end.
-  const [fadedIn, setFadedIn] = useState<string | null>(null);
-  const instant = shownOriginals.has(versionId) && fadedIn !== versionId;
+  // The original renders at once (never a fade): until it loads it draws
+  // nothing and the small copy underneath shows; once loaded it covers it.
   const originalShown =
-    originalUrl !== null && (instant || smallUrl === null || sharp === originalUrl);
+    originalUrl !== null &&
+    (shownOriginals.has(versionId) || smallUrl === null || sharp === originalUrl);
 
   return (
     <div
@@ -205,7 +206,7 @@ export function Thumbnail({
         className="pointer-events-none absolute inset-0"
       />
       {state === 'shimmer' ? (
-        <div className="h-full w-full animate-pulse bg-panel-2" />
+        <Bone as="div" className="h-full w-full" />
       ) : state === 'image' ? (
         <>
           {smallUrl !== null ? (
@@ -227,19 +228,12 @@ export function Thumbnail({
               decoding="async"
               onLoad={() => {
                 mark('thumb:painted');
-                if (!shownOriginals.has(versionId)) {
-                  shownOriginals.add(versionId);
-                  setFadedIn(versionId);
-                }
+                shownOriginals.add(versionId);
                 setSharp(originalUrl);
                 setPainted(originalUrl);
               }}
               onError={original.onError}
-              className={cn(
-                'absolute inset-0 h-full w-full object-cover',
-                instant ? null : 'transition-opacity duration-base motion-reduce:transition-none',
-                originalShown ? 'opacity-100' : 'opacity-0',
-              )}
+              className="absolute inset-0 h-full w-full object-cover"
             />
           ) : null}
         </>

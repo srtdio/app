@@ -419,7 +419,8 @@ describe('instant send tile (local preview + upload progress)', () => {
       />,
     );
     expect(html).toContain('data-upload-progress="unknown"');
-    expect(html).toContain('animate-pulse motion-reduce:animate-none');
+    expect(html).toContain('mv-spin');
+    expect(html).not.toContain('animate-pulse');
   });
 
   it('T6: a sending file is a FileBubble with a thin bar and no ring (no cancel)', () => {

@@ -7,6 +7,8 @@ import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { ReactElement } from 'react';
+import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
+import { leaveIntoCard, useGrowFromCard } from '@/lib/motion/pages';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { Comments } from '@/components/comments/Comments';
@@ -78,39 +80,39 @@ export function focusCommentBox(root: HTMLElement | null): boolean {
 /**
  * The loading state: a static skeleton in the loaded page's shape (title,
  * the two details lines, Objective lines; the Details column on desktop), in the same
- * containers, so nothing jumps when the brief arrives. Token fills, no motion.
+ * containers, so nothing jumps when the brief arrives. Shared Bone boxes (sweep, never a pulse).
  */
 export function BriefDetailSkeleton(): ReactElement {
   const row = (key: number) => (
     <div key={key} className="flex flex-col gap-1">
-      <div className="h-4 w-16 rounded bg-panel-2" />
-      <div className="h-4 w-20 rounded bg-panel-2" />
+      <Bone as="div" className="h-4 w-16 rounded" />
+      <Bone as="div" className="h-4 w-20 rounded" />
     </div>
   );
   return (
-    <div
+    <BoxSkeleton
+      label="Loading brief"
       data-testid="brief-detail-skeleton"
-      aria-busy="true"
       className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6"
     >
       <div className="md:col-span-2 flex flex-col gap-6">
-        <div className="h-8 w-3/4 rounded bg-panel-2" />
+        <Bone as="div" className="h-8 w-3/4 rounded" />
         <div className="flex flex-col gap-1.5 md:hidden">
-          <div className="h-4 w-52 rounded bg-panel-2" />
-          <div className="h-4 w-28 rounded bg-panel-2" />
+          <Bone as="div" className="h-4 w-52 rounded" />
+          <Bone as="div" className="h-4 w-28 rounded" />
         </div>
         <div className="flex flex-col gap-2">
-          <div className="mb-1 h-3 w-20 rounded bg-panel-2" />
-          <div className="h-4 w-full rounded bg-panel-2" />
-          <div className="h-4 w-11/12 rounded bg-panel-2" />
-          <div className="h-4 w-2/3 rounded bg-panel-2" />
+          <Bone as="div" className="mb-1 h-3 w-20 rounded" />
+          <Bone as="div" className="h-4 w-full rounded" />
+          <Bone as="div" className="h-4 w-11/12 rounded" />
+          <Bone as="div" className="h-4 w-2/3 rounded" />
         </div>
       </div>
       <aside className="hidden md:flex flex-col gap-3">
-        <div className="mb-2 h-3 w-14 rounded bg-panel-2" />
+        <Bone as="div" className="mb-2 h-3 w-14 rounded" />
         {[0, 1, 2, 3, 4].map(row)}
       </aside>
-    </div>
+    </BoxSkeleton>
   );
 }
 
@@ -370,6 +372,11 @@ export function BriefDetailPage({
   // address bar can stay on the pretty URL without a redirect.
   const briefId = briefIdProp ?? params.briefId;
   const navigate = useNavigate();
+  // growFromCard (kept on laptop): opened from a card tap, the page grows out
+  // of that card on its first frame (layout effect, no wait); Back grows it
+  // back into the card. Never on a kept-view tab return.
+  const pageAnchorRef = useRef<HTMLDivElement>(null);
+  useGrowFromCard(briefId, pageAnchorRef);
   const newTrace = useNewTrace();
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const toast = useOptionalToast();
@@ -636,8 +643,10 @@ export function BriefDetailPage({
 
   function goBack(): void {
     const target = briefBackTarget(window.history.state);
-    if (target === 'pop') navigate(-1);
-    else navigate(target);
+    if (target === 'pop') {
+      leaveIntoCard(briefId, pageAnchorRef.current);
+      navigate(-1);
+    } else navigate(target);
   }
 
   // The same chevron as Post detail.
@@ -648,12 +657,21 @@ export function BriefDetailPage({
   );
 
   const bareHeader = (
-    <div className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b">
+    <div
+      ref={pageAnchorRef}
+      className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b"
+    >
       {backButton}
     </div>
   );
 
-  if (loading || (linkedPending && !loadFailed && !notFound)) {
+  // The page settles once when it lands after the boxes (never on a kept read).
+  const showingBoxes = loading || (linkedPending && !loadFailed && !notFound);
+  const hadBoxes = useHadBoxes(showingBoxes);
+  const landedRef = useRef<HTMLDivElement>(null);
+  useSettleOnLanding(landedRef, !showingBoxes && detail !== null, hadBoxes);
+
+  if (showingBoxes) {
     return (
       <>
         {bareHeader}
@@ -772,7 +790,7 @@ export function BriefDetailPage({
                 <Link
                   to={`/posts/${post.id}`}
                   data-linked-post=""
-                  className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-lg px-2 text-base text-fg transition-colors duration-fast hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-lg px-2 text-base text-fg mv-tint hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   <span
                     aria-hidden="true"
@@ -787,7 +805,7 @@ export function BriefDetailPage({
           <Link
             to="/pipeline"
             data-linked-posts-count=""
-            className="-mx-2 inline-flex min-h-[44px] min-w-[44px] items-center rounded-lg px-2 text-base tabular-nums text-accent transition-colors duration-fast hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="-mx-2 inline-flex min-h-[44px] min-w-[44px] items-center rounded-lg px-2 text-base tabular-nums text-accent mv-tint hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {linkedCount}
           </Link>
@@ -797,7 +815,10 @@ export function BriefDetailPage({
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
-      <div className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b">
+      <div
+        ref={pageAnchorRef}
+        className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b"
+      >
         {backButton}
         {/* The status line, as the post screen's: a 7px dot and 15px semibold. */}
         <div data-brief-status-line="" className="flex min-w-0 flex-1 items-center gap-2">
@@ -848,7 +869,7 @@ export function BriefDetailPage({
         </div>
       </div>
 
-      <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div ref={landedRef} className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* One order on phone and desktop: title (details lines under it on
             phone), Objective, Brand requirements, Attachments, Reference links,
             Comments. Desktop's side column holds the details and linked posts. */}

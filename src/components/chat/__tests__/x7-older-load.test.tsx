@@ -68,7 +68,9 @@ describe('X7 FT41: failed older page', () => {
     );
     expect(loading).not.toContain('data-older-load-error');
     expect(loading).toContain('Loading earlier messages');
-    expect(loading).toContain('animate-pulse');
+    // Two bubble-shaped boxes (motion Bone), never a pulse.
+    expect(loading.match(/data-bone/g)).toHaveLength(2);
+    expect(loading).not.toContain('animate-pulse');
     const normal = html(threadListItems([], false, () => <li />, vi.fn()));
     expect(normal).toContain('data-load-older');
   });

@@ -220,7 +220,9 @@ describe('PostSheetMedia', () => {
     const html = media({ status: 'loading' }, 3);
     expect(html).toContain('data-strip-skeleton');
     expect(html).toContain('data-frame-ratio="0.8"');
-    expect(html).toContain('animate-pulse');
+    // A motion Bone (sweep), never a pulse.
+    expect(html).toContain('mv-bone');
+    expect(html).not.toContain('animate-pulse');
   });
 
   it('the strip takes the platform frame from the first slide; text keeps the 4:5 rail', () => {

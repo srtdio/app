@@ -27,13 +27,13 @@ export function Switch({ checked, onChange, label }: SwitchProps): ReactElement 
       <span
         aria-hidden
         className={cn(
-          'relative inline-flex h-11 w-[60px] items-center rounded-full px-1 lit-well transition-colors motion-reduce:transition-none',
+          'relative inline-flex h-11 w-[60px] items-center rounded-full px-1 lit-well mv-tint',
           checked ? 'bg-accent' : 'bg-panel-3',
         )}
       >
         <span
           className={cn(
-            'h-7 w-7 rounded-full bg-panel lit-knob transition-transform motion-reduce:transition-none',
+            'h-7 w-7 rounded-full bg-panel lit-knob mv-slide',
             checked ? 'translate-x-[24px]' : 'translate-x-0',
           )}
         />

@@ -12,6 +12,10 @@
 //     UNDO_MS Undo strip and commit when it ends; "Send for review again" with
 //     open comments asks "{n} comments are still open. Send anyway?" and never
 //     blocks.
+// Motion: nothing moves on a tap or while a save is in flight (no optimistic
+// approve). Only once the server confirms a move does `landed` get set, and
+// the decision row draws the tick (approve) or cross (reject) through
+// PostDecisionBar (drawTick); the confirm sheet has already left.
 // Role rules come only from stage-actions (visibleStageActions, which mirrors
 // the stage_transition proc), so a button the server would refuse never shows;
 // a move a person cannot make is hidden, never disabled.
@@ -44,6 +48,7 @@ import { useWorkspaceApprovers } from '@/components/pages/pcs/use-approvers';
 import {
   decisionBarOrder,
   SEND_AGAIN_LABEL,
+  type DecisionLanded,
   type DecisionModel,
 } from '@/components/pages/pcs/PostDecisionBar';
 import type { PostMoveRow } from '@/components/pages/pcs/PostActionSheet';
@@ -269,11 +274,18 @@ function decisionModelFor(args: {
   sending: boolean;
   onPick: (to: Stage) => void;
   onSendAgain: () => void;
+  /** The last server-confirmed move, shown only while it is still the stage. */
+  landed?: DecisionLanded | null;
 }): DecisionModel | null {
   const actions = visibleStageActions(args.stage, args.role);
+  const landed =
+    args.landed !== undefined && args.landed !== null && args.landed.to === args.stage
+      ? { landed: args.landed }
+      : {};
+  const marks = 'landed' in landed && (args.stage === 'approved' || args.stage === 'rejected');
   if (isClient(args.role)) {
-    return actions.length > 0 || args.stage === 'review'
-      ? { kind: 'approver', actions, onPick: args.onPick }
+    return actions.length > 0 || args.stage === 'review' || marks
+      ? { kind: 'approver', actions, onPick: args.onPick, ...landed }
       : null;
   }
   if (!isAgencySide(args.role)) return null;
@@ -284,18 +296,23 @@ function decisionModelFor(args: {
       disabled: args.sending,
       helper: null,
       onPress: args.onSendAgain,
+      ...landed,
     };
   }
   const review = actions.find((action) => action.to === 'review') ?? null;
-  return review !== null
-    ? {
-        kind: 'creator',
-        label: review.label,
-        disabled: false,
-        helper: null,
-        onPress: () => args.onPick('review'),
-      }
-    : null;
+  if (review !== null) {
+    return {
+      kind: 'creator',
+      label: review.label,
+      disabled: false,
+      helper: null,
+      onPress: () => args.onPick('review'),
+      ...landed,
+    };
+  }
+  // An agency approve on their behalf lands on a stage with no main button:
+  // the row still shows the landed mark (an approver row with no buttons).
+  return marks ? { kind: 'approver', actions: [], onPick: args.onPick, ...landed } : null;
 }
 
 /**
@@ -468,6 +485,14 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
   const [reasonTarget, setReasonTarget] = useState<Stage | null>(null);
   const [reasonDraft, setReasonDraft] = useState('');
   const [optimisticStage, setOptimisticStage] = useState<Stage | null>(null);
+  // The last move the server confirmed (never set before the save resolves):
+  // the decision row draws its tick or cross once per landed move.
+  const [landed, setLanded] = useState<DecisionLanded | null>(null);
+  const landedSeq = useRef(0);
+  const markLanded = useCallback((to: Stage): void => {
+    landedSeq.current += 1;
+    setLanded({ to, seq: landedSeq.current });
+  }, []);
   // True while mounted. Declared BEFORE useUndoableAction so this cleanup runs
   // before the hook's unmount flush: a commit that starts during unmount sees
   // the surface as gone (no state writes from a leaving page).
@@ -499,6 +524,7 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     flushUndoable();
     setOptimisticStage(null);
     setReasonTarget(null);
+    setLanded(null);
   }, [postId, flushUndoable]);
 
   // A new server stage (the page's reload, the chat card's refetch) replaces
@@ -574,6 +600,7 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     mark('decision:optimistic');
     setOptimisticStage(to);
     setTransitioning(false);
+    markLanded(to);
     refreshInBackground();
     return true;
   }
@@ -629,6 +656,7 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     setOptimisticStage('approved');
     setOnBehalfBusy(false);
     setOnBehalfOpen(false);
+    markLanded('approved');
     refreshInBackground();
   }
 
@@ -678,6 +706,8 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
           setInlineError: setActionError,
           friendlyError: postActionErrorCopy,
           afterSuccess: async () => {
+            // Saved: the cross (reject) draws now, never during the Undo window.
+            if (stillHere(id)) markLanded(to);
             await inputRef.current.reload();
             if (reason !== null) inputRef.current.onCommentsChanged?.();
             dispatchInductionRefresh();
@@ -753,6 +783,7 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     mark(`decision:tap:${to}`);
     setActionError(null);
     setApproveError(null);
+    setLanded(null);
     if (stageReasonConfirm(to) !== null) {
       setReasonDraft('');
       setReasonTarget(to);
@@ -778,6 +809,7 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
         sending: notifying,
         onPick: pick,
         onSendAgain: requestSendForReviewAgain,
+        landed,
       })
     : null;
   const moveRows = live

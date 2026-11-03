@@ -57,14 +57,8 @@ export function MarkBadge(props: {
 }
 
 /**
- * The circle's entrance: it fades in on opacity alone (120ms, none under
- * reduced motion); nothing around it moves.
- */
-const SELECT_CHECK_FADE =
-  'transition-opacity duration-fast motion-reduce:transition-none [@starting-style]:opacity-0';
-
-/**
- * A 44x44 selection check circle for one message row. In the thread the row
+ * A 44x44 selection check circle for one message row. It appears at once
+ * (motion never fades); nothing around it moves. In the thread the row
  * itself takes the tap (anywhere on it toggles), so this is the visible state
  * and the keyboard stop; `className` places it (the row's left column).
  */
@@ -84,7 +78,6 @@ export function SelectCheckbox(props: {
       onClick={props.onToggle}
       className={cn(
         'flex h-11 w-11 shrink-0 items-center justify-center',
-        SELECT_CHECK_FADE,
         props.className ?? 'self-center',
       )}
     >

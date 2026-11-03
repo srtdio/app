@@ -728,7 +728,7 @@ function UploadStatusRow({
       >
         {/* Width only (no translate): a sliver shows before the first bytes land. */}
         <div
-          className="lit-fill h-full rounded-full bg-accent transition-[width] duration-base ease-enter motion-reduce:transition-none"
+          className="lit-fill h-full rounded-full bg-accent mv-fill"
           style={{ width: `${Math.max(percent, 4)}%` }}
         />
       </div>

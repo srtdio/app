@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BACKDROP_FADE_CAP_MS, PlanBackdrop } from '@/components/auth/PlanBackdrop';
+import { PlanBackdrop } from '@/components/auth/PlanBackdrop';
 import { backdropMonthLabel, backdropWeekdays } from '@/components/auth/plan-backdrop-data';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -71,45 +71,14 @@ describe('PlanBackdrop', () => {
     expect(text).toMatch(/^\d*$/);
   });
 
-  it('fades in once every image has loaded or errored', () => {
+  it('renders its final state at once and never fades, loaded or not (motion: final state first)', () => {
     render();
-    expect(layer().className).toContain('opacity-0');
-    expect(layer().className).toContain('transition-opacity');
-    expect(layer().className).toContain('motion-reduce:transition-none');
-    const images = [...document.querySelectorAll('img')];
+    const cls = layer().className;
+    expect(cls).not.toMatch(/opacity|transition|duration-|animate-/);
+    // Images still loading change nothing: no hold, no reveal.
     act(() => {
-      images.slice(1).forEach((img) => img.dispatchEvent(new Event('load')));
+      document.querySelectorAll('img').forEach((img) => img.dispatchEvent(new Event('load')));
     });
-    expect(layer().className).toContain('opacity-0');
-    act(() => {
-      images[0]?.dispatchEvent(new Event('error'));
-    });
-    expect(layer().className).toContain('opacity-100');
-  });
-
-  it('fades in after the cap even when images are still loading', () => {
-    render();
-    act(() => {
-      vi.advanceTimersByTime(BACKDROP_FADE_CAP_MS - 1);
-    });
-    expect(layer().className).toContain('opacity-0');
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(layer().className).toContain('opacity-100');
-  });
-
-  it('clears its timer on unmount', () => {
-    const set = vi.spyOn(window, 'setTimeout');
-    const clear = vi.spyOn(window, 'clearTimeout');
-    render();
-    const index = set.mock.calls.findIndex((call) => call[1] === BACKDROP_FADE_CAP_MS);
-    expect(index).toBeGreaterThanOrEqual(0);
-    const timer = set.mock.results[index]?.value as number;
-    act(() => root?.unmount());
-    root = null;
-    expect(clear).toHaveBeenCalledWith(timer);
-    set.mockRestore();
-    clear.mockRestore();
+    expect(layer().className).toBe(cls);
   });
 });

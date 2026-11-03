@@ -1,5 +1,5 @@
 // Regression: the tray opener is a plus, never the paperclip. Closed it shows
-// IconPlus (the open state keeps IconX); the accessible label is unchanged.
+// IconPlus (open, the same plus turned 45deg into an X); the label is unchanged.
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -25,11 +25,12 @@ describe('ComposerTray opener icon', () => {
     expect(html).toContain('aria-label="Add attachment"');
   });
 
-  it('the source no longer imports IconPaperclip and the tray uses motion tokens', () => {
+  it('the source no longer imports IconPaperclip and the tray uses the motion module', () => {
     const src = readFileSync(fileURLToPath(new URL('./ComposerTray.tsx', import.meta.url)), 'utf8');
     expect(src).not.toContain('IconPaperclip');
-    expect(src).toContain('<IconX size={ICON_SIZE.control} />');
-    expect(src).toContain('duration-slow ease-enter');
-    expect(src).not.toMatch(/duration-\[\d+ms\]|\bease-out\b/);
+    // The plus turns 45deg into the X (mv-turn); the tray slides above the composer.
+    expect(src).toContain("cn('flex', MOVE_CLASS.turn, open && 'rotate-45')");
+    expect(src).toContain("stripIn(el, 'above-composer', TRAY_SLIDE_PX)");
+    expect(src).not.toMatch(/duration-|transition-|\bease-out\b/);
   });
 });

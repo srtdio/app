@@ -7,7 +7,7 @@ import { INDUCTION_KEYS } from '@/lib/induction';
 
 /** A menu row: the shared pressable row, full width, text from the left. */
 const MENU_ITEM =
-  'flex items-center gap-3 px-4 text-base font-medium text-fg-2 transition-colors duration-fast hover:text-fg';
+  'flex items-center gap-3 px-4 text-base font-medium text-fg-2 mv-tint hover:text-fg';
 
 interface AssetAddMenuProps {
   /** Open the upload sheet (the "Upload files" option). */

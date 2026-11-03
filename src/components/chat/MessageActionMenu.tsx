@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
+import { growFromTrigger, riseIn, trackDim } from '@/lib/motion';
+import { menuOrigin } from '@/components/ui/popover-classes';
 import { createPortal } from 'react-dom';
 import {
   ICON_SIZE,
@@ -647,7 +649,7 @@ export function MenuRow(props: {
       onClick={() => props.onRun(item)}
       className={cn(
         MENU_ROW,
-        'text-base transition-colors focus-visible:bg-panel-2',
+        'text-base mv-tint focus-visible:bg-panel-2',
         item.danger === true ? 'text-bad' : 'text-fg',
       )}
     >
@@ -931,9 +933,10 @@ export function EmojiPickerLoadFailed(props: { onRetry: () => void }): ReactElem
 }
 
 /**
- * The emoji picker's shell. Touch: a bottom sheet over a dim, translateY
- * only, the safe-area inset kept clear. Laptop: a modal popover anchored to
- * `anchor`, opacity only. Both are drawn at their final size at once; the body
+ * The emoji picker's shell. Touch: a bottom sheet over a dim that rises
+ * (riseIn, Y only, the dim tracking its position), the safe-area inset kept
+ * clear. Laptop: a modal popover anchored to `anchor` that grows from it
+ * (growFromTrigger). Never a fade. Both are drawn at their final size at once; the body
  * (EmojiPicker.tsx, a separate chunk) fills in when it arrives, so a "+" that
  * beats the chunk never jumps. Focus is trapped inside, lands on the search
  * field (laptop) or the sheet (touch), and returns to "+" on close. It closes
@@ -953,8 +956,8 @@ export function EmojiPickerShell(props: {
   const [module, setModule] = useState<EmojiPickerModule | null>(loadedEmojiPicker);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [shown, setShown] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const dimRef = useRef<HTMLButtonElement>(null);
   const ready = module !== null;
 
   // The chunk normally arrived while the menu was open; if not, wait for it
@@ -978,15 +981,22 @@ export function EmojiPickerShell(props: {
   }, [open, module, attempt]);
   const retryLoad = (): void => setAttempt((n) => n + 1);
 
-  // Entrance: flip after mount so the one transition runs.
-  useEffect(() => {
-    if (!open) {
-      setShown(false);
+  // Entrance on the first painted frame (drawn at rest; the move laid over it).
+  const anchorRef = useRef(props.anchor);
+  anchorRef.current = props.anchor;
+  useLayoutEffect(() => {
+    const el = dialogRef.current;
+    if (!open || el === null) return;
+    if (layout === 'laptop') {
+      const a = anchorRef.current;
+      growFromTrigger(
+        el,
+        menuOrigin(el, a !== null ? { x: a.left + a.width / 2, y: a.top + a.height / 2 } : null),
+      );
       return;
     }
-    const id = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(id);
-  }, [open]);
+    trackDim(el, dimRef.current, riseIn(el));
+  }, [open, layout]);
 
   useEffect(() => {
     if (!open) return;
@@ -1078,10 +1088,7 @@ export function EmojiPickerShell(props: {
         <div
           {...dialogProps}
           data-emoji-picker="laptop"
-          className={cn(
-            'fixed z-[60] flex h-[400px] w-[352px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay transition-opacity duration-fast focus:outline-none motion-reduce:transition-none',
-            shown ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
-          )}
+          className="fixed z-[60] flex h-[400px] w-[352px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay focus:outline-none"
           style={{ top: position?.top ?? 8, left: position?.left ?? 8 }}
         >
           {body}
@@ -1092,15 +1099,17 @@ export function EmojiPickerShell(props: {
   }
   return createPortal(
     <div data-emoji-dismiss="" className="fixed inset-0 z-[60]">
-      <Backdrop aria-label="Close emoji picker" onClick={onClose} position="absolute" />
+      <Backdrop
+        ref={dimRef}
+        aria-label="Close emoji picker"
+        onClick={onClose}
+        position="absolute"
+      />
       <div
         {...dialogProps}
         data-emoji-picker="touch"
         onClick={(e) => e.stopPropagation()}
-        className={cn(
-          'absolute inset-x-0 bottom-0 flex h-[70vh] flex-col overflow-hidden rounded-t-2xl border-t bg-panel pb-[env(safe-area-inset-bottom)] lit-overlay transition-transform duration-base focus:outline-none motion-reduce:transition-none',
-          shown ? 'translate-y-0 ease-enter' : 'translate-y-full ease-exit',
-        )}
+        className="absolute inset-x-0 bottom-0 flex h-[70vh] flex-col overflow-hidden rounded-t-2xl border-t bg-panel pb-[env(safe-area-inset-bottom)] lit-overlay focus:outline-none"
       >
         {body}
       </div>

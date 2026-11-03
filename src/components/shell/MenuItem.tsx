@@ -15,7 +15,7 @@ export function MenuItem({ label, onClick, icon }: MenuItemProps) {
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="flex items-center gap-3 px-3 text-base text-fg-2 hover:text-fg transition-colors"
+      className="flex items-center gap-3 px-3 text-base text-fg-2 hover:text-fg mv-tint"
     >
       {icon !== undefined ? <span className="text-fg-3 shrink-0">{trayIcon(icon)}</span> : null}
       <span>{label}</span>

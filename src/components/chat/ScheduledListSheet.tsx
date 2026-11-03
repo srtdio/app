@@ -246,7 +246,7 @@ function CardAction(props: {
       disabled={props.disabled}
       onClick={props.onClick}
       className={cn(
-        'inline-flex h-11 min-w-0 items-center justify-center whitespace-nowrap px-1 text-md font-medium transition-colors duration-fast',
+        'inline-flex h-11 min-w-0 items-center justify-center whitespace-nowrap px-1 text-md font-medium mv-tint',
         CARD_ACTION_TONE[props.tone ?? 'plain'],
       )}
     >

@@ -1,7 +1,7 @@
 // The one way a link that points at a comment lands on it (Activity, toast,
 // email, search): wait for the row to be in the DOM, centre it in its own
 // scroller (scroll-margin on the row keeps it clear of sticky bars), tint it
-// with the search glow, and re-centre once if the layout shifts while images
+// with the search glow (it wipes away left to right, wipeAway; never fades), and re-centre once if the layout shifts while images
 // settle. A target that never shows up calls onMissing once.
 //
 // Keyed by the target id: every new id runs again, the same id twice in one
@@ -32,7 +32,7 @@ export interface FocusTargetOptions {
   absent?: boolean;
   /** Called once per id when the row never renders (or is absent). */
   onMissing: (id: string) => void;
-  /** The arrival tint; returns its cleanup. Default: the search glow. */
+  /** The arrival tint; returns its cleanup. Default: the search glow (tintTarget, wipeAway). */
   highlight?: (el: HTMLElement) => () => void;
 }
 

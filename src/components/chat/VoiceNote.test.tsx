@@ -815,11 +815,9 @@ describe('first paint', () => {
     );
   });
 
-  it('opens on height only, slow token with the enter ease, none under reduced motion', () => {
+  it('opens at once (its box rises on Y via itemIn), no transition class, never a fade', () => {
     const html = render('fp-motion');
-    expect(html).toContain(
-      'transition-[grid-template-rows] duration-slow ease-enter motion-reduce:transition-none',
-    );
+    expect(html).not.toMatch(/data-voice-transcript[^>]*(transition|duration-)/);
     expect(html).not.toMatch(/data-voice-transcript[^>]*(translate|scale|rotate|opacity)/);
   });
 

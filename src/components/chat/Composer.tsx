@@ -64,6 +64,7 @@ import { ComposerEmoji, showsEmojiButton } from '@/components/chat/ComposerEmoji
 import { insertAtCaret } from '@/lib/chat/emoji-list';
 import { PostPicker, warmPostPicker } from '@/components/chat/PostPicker';
 import { MentionPicker, stepActive } from '@/components/chat/MentionPicker';
+import { ComposerStrip } from '@/components/chat/ComposerStrip';
 import { PendingChip } from '@/components/chat/PendingChip';
 import { PostRefThumb, type PostRefPost } from '@/components/chat/PostRefChip';
 import {
@@ -2137,14 +2138,21 @@ export function Composer(props: ComposerProps): ReactElement {
         {...bottomAnchorProps}
         className="relative flex flex-col gap-2 border-t bg-panel px-3 py-2.5 lit-dock"
       >
-        {mentionRows.length > 0 ? (
-          <div data-mention-anchor="" className="absolute inset-x-3 bottom-full z-20 mb-2">
-            <MentionPicker members={mentionRows} active={activeRow} onPick={pickMention} />
-          </div>
-        ) : null}
+        {/* The pickers slide up above the composer (edgeStrip), never a fade. */}
+        <ComposerStrip
+          open={mentionRows.length > 0}
+          data-mention-anchor=""
+          className="absolute inset-x-3 bottom-full z-20 mb-2"
+        >
+          <MentionPicker members={mentionRows} active={activeRow} onPick={pickMention} />
+        </ComposerStrip>
 
         {hashQuery !== null && mentionRows.length === 0 ? (
-          <div data-hash-picker="" className="absolute inset-x-3 bottom-full z-20 mb-2">
+          <ComposerStrip
+            open
+            data-hash-picker=""
+            className="absolute inset-x-3 bottom-full z-20 mb-2"
+          >
             <PostPicker
               inline
               open
@@ -2157,7 +2165,7 @@ export function Composer(props: ComposerProps): ReactElement {
               sharedPostIds={props.sharedPostIds}
               channelHasClient={props.channelHasClient ?? null}
             />
-          </div>
+          </ComposerStrip>
         ) : null}
 
         {bars.editing && editing !== undefined ? (
@@ -2171,21 +2179,24 @@ export function Composer(props: ComposerProps): ReactElement {
           <AboutBar post={props.about} onCancel={() => props.onCancelAbout?.()} />
         ) : null}
 
-        {bars.reply && props.reply != null ? (
-          <ReplyBar
-            reply={{
-              ...props.reply,
-              quote: {
-                ...props.reply.quote,
-                preview: resolveMentionText(props.reply.quote.preview, nameOf),
-              },
-            }}
-            viewerUserId={props.viewerUserId}
-            onCancel={() => props.onCancelReply?.()}
-            media={props.replyMedia}
-            thumbSource={props.replyThumbSource}
-          />
-        ) : null}
+        {/* The reply quote slides up as it is set and back down as it goes. */}
+        <ComposerStrip open={bars.reply && props.reply != null} data-reply-strip="">
+          {props.reply != null ? (
+            <ReplyBar
+              reply={{
+                ...props.reply,
+                quote: {
+                  ...props.reply.quote,
+                  preview: resolveMentionText(props.reply.quote.preview, nameOf),
+                },
+              }}
+              viewerUserId={props.viewerUserId}
+              onCancel={() => props.onCancelReply?.()}
+              media={props.replyMedia}
+              thumbSource={props.replyThumbSource}
+            />
+          ) : null}
+        </ComposerStrip>
 
         {!bars.editing && privateReply !== null ? (
           <PrivateReplyBar
@@ -2313,10 +2324,8 @@ export function Composer(props: ComposerProps): ReactElement {
                 <IconTrash size={ICON_SIZE.control} />
               </IconButton>
               <div className="flex h-11 flex-1 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 lit-well">
-                <span
-                  aria-hidden="true"
-                  className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-bad"
-                />
+                {/* The recording dot is still (motion never pulses or fades). */}
+                <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-bad" />
                 <span className="text-base text-fg-2">Recording</span>
                 <span className="ml-auto font-mono text-sm tabular-nums text-fg-2">
                   {formatMmSs(recorder.seconds)}
@@ -2337,7 +2346,7 @@ export function Composer(props: ComposerProps): ReactElement {
             <div className="flex h-11 flex-1 items-center gap-2 px-1">
               <span
                 aria-hidden="true"
-                className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-border border-t-accent"
+                className="h-4 w-4 shrink-0 mv-spin rounded-full border-2 border-border border-t-accent"
               />
               <span className="text-base text-fg-2">Sending voice note…</span>
             </div>
@@ -2477,7 +2486,7 @@ export function Composer(props: ComposerProps): ReactElement {
                       <span
                         aria-hidden="true"
                         data-edit-spinner=""
-                        className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                        className="h-4 w-4 mv-spin rounded-full border-2 border-current border-t-transparent"
                       />
                     ) : scheduleBusy ? (
                       <span data-scheduling="" className="text-base font-medium">

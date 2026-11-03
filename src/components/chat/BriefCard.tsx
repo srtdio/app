@@ -115,7 +115,7 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
       card
       aria-label={`Open brief ${view.title}`}
       onClick={() => navigate(briefRoute(view.briefId))}
-      className={`${SHARED_CARD} ${BRIEF_CARD_HEIGHT} transition-colors`}
+      className={`${SHARED_CARD} ${BRIEF_CARD_HEIGHT} mv-tint`}
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
         <IconBriefs size={ICON_SIZE.nav} />

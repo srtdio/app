@@ -141,7 +141,7 @@ function PrivacyPolicyContent() {
           If you have questions or concerns about this Privacy Policy, please contact us at{' '}
           <a
             href="mailto:support@srtd.io"
-            className="text-accent underline underline-offset-2 transition-colors hover:text-accent/80"
+            className="text-accent underline underline-offset-2 mv-tint hover:text-accent/80"
           >
             support@srtd.io
           </a>
@@ -235,7 +235,7 @@ function TermsAndConditionsContent() {
           For questions regarding these terms, contact us at{' '}
           <a
             href="mailto:support@srtd.io"
-            className="text-accent underline underline-offset-2 transition-colors hover:text-accent/80"
+            className="text-accent underline underline-offset-2 mv-tint hover:text-accent/80"
           >
             support@srtd.io
           </a>

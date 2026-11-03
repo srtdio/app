@@ -77,13 +77,15 @@ describe('Toast', () => {
     expect(ariaLabel(buttons[0]!)).toBe('Dismiss notification');
   });
 
-  it('plays the enter animation by default and the exit animation while leaving', () => {
-    const animationOf = (tree: ReactElement): string =>
-      (tree.props as { style: { animation: string } }).style.animation;
-    expect(animationOf(Toast({ toast: base, onDismiss: () => {} }))).toContain('sorted-toast-in');
-    expect(animationOf(Toast({ toast: base, leaving: true, onDismiss: () => {} }))).toContain(
-      'sorted-toast-out',
-    );
+  it('renders at rest with no CSS animation (edgeStrip runs in the motion module); leaving is marked', () => {
+    const props = (tree: ReactElement): Record<string, unknown> =>
+      tree.props as Record<string, unknown>;
+    const live = props(Toast({ toast: base, onDismiss: () => {} }));
+    expect(live.style).toBeUndefined();
+    expect(live['data-leaving']).toBeUndefined();
+    const leaving = props(Toast({ toast: base, leaving: true, onDismiss: () => {} }));
+    expect(leaving.style).toBeUndefined();
+    expect(leaving['data-leaving']).toBe('');
   });
 
   it('renders an optional 44px action that runs and then dismisses the toast', () => {

@@ -157,7 +157,7 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
                     setSelected((prev) => toggleForwardTarget(prev, channel.channelId))
                   }
                   className={cn(
-                    'group/notes-row flex items-center gap-3 px-2 py-1 transition-colors',
+                    'group/notes-row flex items-center gap-3 px-2 py-1 mv-tint',
                     isSelected ? 'bg-accent-soft text-accent' : 'text-fg-2',
                   )}
                 >

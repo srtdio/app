@@ -210,3 +210,35 @@ describe('focus ring lives on the primitives', () => {
     }
   });
 });
+
+describe('press (motion move 5): the shared mv-press class, never a call-site transition', () => {
+  const RETIRED = /^(transition|duration-|active:scale|ease-|motion-(reduce|safe):)/;
+  const chipClass = (): string =>
+    (Chip({ label: 'All' }) as ReactElement<{ className: string }>).props.className;
+  const iconClass = (): string =>
+    (IconButton({ label: 'Close', children: null }) as ReactElement<{ className: string }>).props
+      .className;
+
+  it('Button (every variant and shape), IconButton and Chip carry mv-press', () => {
+    for (const variant of VARIANTS) {
+      expect(tokens(classOf({ variant }))).toContain('mv-press');
+      expect(tokens(classOf({ variant, shape: 'round' }))).toContain('mv-press');
+    }
+    expect(tokens(iconClass())).toContain('mv-press');
+    expect(tokens(chipClass())).toContain('mv-press');
+  });
+
+  it('none keeps its own transition, duration or active scale', () => {
+    for (const cls of [classOf(), classOf({ variant: 'primary' }), iconClass(), chipClass()]) {
+      expect(tokens(cls).filter((c) => RETIRED.test(c))).toEqual([]);
+    }
+  });
+
+  it('keeps the 44px target and the one focus ring', () => {
+    for (const cls of [classOf(), iconClass()]) {
+      expect(tokens(cls)).toContain('min-h-[44px]');
+      expect(tokens(cls)).toContain('focus-visible:ring-2');
+    }
+    expect(tokens(chipClass())).toContain('focus-visible:ring-2');
+  });
+});

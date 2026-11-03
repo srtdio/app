@@ -4,6 +4,7 @@ import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 import { AssetCard } from '@/components/pages/assets/AssetCard';
+import { GlideItem } from '@/lib/motion';
 
 /** Cards drawn first, and added each time the reader nears the end. */
 export const ASSET_GRID_PAGE = 60;
@@ -79,19 +80,21 @@ export function AssetGrid({
   return (
     <>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
+        {/* Grid reflow (a delete, a new file, a column change) glides on X and Y. */}
         {shown.map((item) => (
-          <AssetCard
-            key={item.id}
-            item={item}
-            presignEnabled={presignEnabled}
-            cache={cache}
-            onOpen={() => onOpen(item)}
-            menuItems={menuItemsFor?.(item) ?? []}
-            selectMode={selectMode}
-            selected={selectedIds?.has(item.id) ?? false}
-            onToggleSelect={() => onToggleSelect?.(item)}
-            onStartSelect={onStartSelect === undefined ? undefined : () => onStartSelect(item)}
-          />
+          <GlideItem key={item.id} axis="xy" className="min-w-0">
+            <AssetCard
+              item={item}
+              presignEnabled={presignEnabled}
+              cache={cache}
+              onOpen={() => onOpen(item)}
+              menuItems={menuItemsFor?.(item) ?? []}
+              selectMode={selectMode}
+              selected={selectedIds?.has(item.id) ?? false}
+              onToggleSelect={() => onToggleSelect?.(item)}
+              onStartSelect={onStartSelect === undefined ? undefined : () => onStartSelect(item)}
+            />
+          </GlideItem>
         ))}
       </div>
       {shown.length < items.length ? (

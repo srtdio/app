@@ -16,6 +16,7 @@
 // ends the hold is swallowed, so the sheet does not open. No card shows a
 // KEY-N code.
 
+import { rememberCard } from '@/lib/motion';
 import {
   createContext,
   useCallback,
@@ -878,13 +879,18 @@ function PostCardItem(
   // A touch hold also fires contextmenu (Android): the hold is the card's, so
   // the bubble's action menu stays shut. A mouse right-click still reaches it.
   const touchPress = useRef(false);
+  // growFromCard: the tapped card is remembered (by post id) so the post page,
+  // opened from its sheet, grows out of it (docs/motion.md).
+  const cardRef = useRef<HTMLDivElement>(null);
   const tap = cardTapHandlers(() => {
+    rememberCard(post.id, cardRef.current);
     setSheetMounted(true);
     setSheetOpen(true);
   }, hold.consumeClickSuppression);
   return (
     <>
       <div
+        ref={cardRef}
         role="button"
         tabIndex={0}
         data-msg-link=""
@@ -936,7 +942,7 @@ function PostCardItem(
         onClick={tap.onClick}
         onKeyDown={tap.onKeyDown}
         style={cardBoxStyle(platform, layout)}
-        className={cn(POST_CARD, 'cursor-pointer transition-colors hover:bg-panel-2')}
+        className={cn(POST_CARD, 'cursor-pointer mv-tint hover:bg-panel-2')}
       >
         {textOnly ? (
           <CardText platform={platform} text={cardText(post)} />
