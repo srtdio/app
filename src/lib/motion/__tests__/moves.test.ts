@@ -123,6 +123,7 @@ function fakeAnimation(): FakeAnimation {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const animate = vi.fn((_frames: Keyframe[], _options?: KeyframeAnimationOptions) =>
   fakeAnimation(),
 );

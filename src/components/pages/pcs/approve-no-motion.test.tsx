@@ -98,6 +98,7 @@ function Harness(props: { role: string }): ReactElement {
 
 // Web Animations stand-in: jsdom has none, so play() would be instant. Every
 // element (paths included) gets a recording animate().
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const animate = vi.fn((_frames: Keyframe[], _options: KeyframeAnimationOptions) => ({
   finish: vi.fn(),
   addEventListener: vi.fn(),

@@ -11,6 +11,7 @@ import { resetMotionPreferenceForTests, resetPlayerForTests } from '@/lib/motion
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const animate = vi.fn((_frames: Keyframe[], _options?: KeyframeAnimationOptions) => ({
   finish: vi.fn(),
   addEventListener: vi.fn(),

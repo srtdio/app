@@ -179,6 +179,7 @@ describe('CodeStep', () => {
     let answer: (v: { error: { message: string; code: string; status: number } }) => void = () =>
       undefined;
     verifyOtp.mockReturnValue(new Promise((r) => (answer = r)));
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const animate = vi.fn((_frames: Keyframe[], _options: KeyframeAnimationOptions) => ({
       finish: vi.fn(),
       addEventListener: vi.fn(),
