@@ -36,7 +36,7 @@ export function TaskButton(props: {
       <span
         className={cn(
           'inline-flex',
-          props.editing === true && 'animate-pulse motion-reduce:animate-none',
+          props.editing === true && 'animate-pulse',
         )}
       >
         <IconTaskSquare size={ICON_SIZE.control} />

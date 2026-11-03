@@ -209,7 +209,7 @@ export function FileTiles({
               'relative h-16 w-16 shrink-0 touch-pan-x select-none [-webkit-touch-callout:none]',
               dragging
                 ? 'z-20 cursor-grabbing lit-float'
-                : 'transition-transform duration-fast motion-reduce:transition-none',
+                : 'mv-slide',
               count > 1 && !dragging && 'cursor-grab',
             )}
           >
@@ -260,7 +260,7 @@ export function FileTiles({
               className="absolute inset-x-1.5 bottom-1.5 h-1 overflow-hidden rounded-full bg-panel"
             >
               <span
-                className="block h-full rounded-full bg-accent transition-[width] duration-fast ease-enter motion-reduce:transition-none"
+                className="block h-full rounded-full bg-accent mv-fill"
                 style={{ width: `${Math.max(tile.progress, 0.04) * 100}%` }}
               />
             </span>

@@ -144,7 +144,7 @@ export interface StatusDrawerActions {
 
 // Layout and colour only: PressableRow provides width, 44px height, radius,
 // left alignment, hover and the focus ring.
-const ROW = 'flex items-center gap-3 py-1 transition-colors active:bg-panel-2';
+const ROW = 'flex items-center gap-3 py-1 mv-tint active:bg-panel-2';
 const DATE_COL = 'w-12 shrink-0 font-mono text-sm leading-4 tabular-nums text-fg-3';
 const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base leading-5 text-fg';
 const ROW_SUB = 'block truncate text-sm leading-4 text-fg-3';
@@ -694,7 +694,7 @@ export function StatusDrawerPanel(props: {
   children: ReactNode;
 }): ReactElement {
   const transition = props.animate
-    ? cn('duration-slow motion-reduce:transition-none', props.open ? 'ease-enter' : 'ease-exit')
+    ? cn('', props.open ? '' : '')
     : 'transition-none';
   return (
     <div
@@ -721,7 +721,7 @@ export function StatusDrawerPanel(props: {
         role="dialog"
         aria-label="Open in this chat"
         className={cn(
-          'absolute inset-x-0 top-0 flex max-h-[calc(100%-48px)] flex-col rounded-b-2xl border-b bg-panel lit-overlay transition-transform',
+          'absolute inset-x-0 top-0 flex max-h-[calc(100%-48px)] flex-col rounded-b-2xl border-b bg-panel lit-overlay mv-slide',
           transition,
         )}
         style={{ transform: props.transform }}

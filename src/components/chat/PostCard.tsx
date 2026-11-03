@@ -936,7 +936,7 @@ function PostCardItem(
         onClick={tap.onClick}
         onKeyDown={tap.onKeyDown}
         style={cardBoxStyle(platform, layout)}
-        className={cn(POST_CARD, 'cursor-pointer transition-colors hover:bg-panel-2')}
+        className={cn(POST_CARD, 'cursor-pointer mv-tint hover:bg-panel-2')}
       >
         {textOnly ? (
           <CardText platform={platform} text={cardText(post)} />

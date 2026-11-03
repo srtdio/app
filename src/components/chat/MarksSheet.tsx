@@ -294,7 +294,7 @@ export function MarkSheetRow(props: {
         <PressableRow
           type="button"
           onClick={props.onJump}
-          className="flex min-w-0 flex-1 flex-col gap-1 px-2 py-2 transition-colors"
+          className="flex min-w-0 flex-1 flex-col gap-1 px-2 py-2 mv-tint"
         >
           <span className="flex min-w-0 items-center gap-2 text-sm text-fg-3">
             <Tag label={TYPE_LABEL[mark.type]} tone={MARK_TONE[mark.type]} className="shrink-0" />

@@ -97,7 +97,7 @@ function DetailRow({
       <PressableRow
         type="button"
         onClick={onTap}
-        className="flex items-center gap-3 px-2 py-2 transition-colors"
+        className="flex items-center gap-3 px-2 py-2 mv-tint"
       >
         <span className="w-24 shrink-0 text-sm text-fg-3">{label}</span>
         <span className="flex min-w-0 flex-1 items-center gap-2 text-base text-fg">{value}</span>
@@ -358,7 +358,7 @@ export function PostDetailsSheet({
                 resetNewBucket();
                 setPicker(null);
               }}
-              className="flex items-center gap-3 px-3 py-2 text-base text-fg transition-colors"
+              className="flex items-center gap-3 px-3 py-2 text-base text-fg mv-tint"
             >
               <BucketDot colorHex={bucket.colorHex} />
               <span className="truncate">{bucket.name}</span>
@@ -376,7 +376,7 @@ export function PostDetailsSheet({
                 setNewBucketName('');
                 setNewBucketError(null);
               }}
-              className="flex items-center gap-3 px-3 py-2 text-base font-medium text-accent transition-colors"
+              className="flex items-center gap-3 px-3 py-2 text-base font-medium text-accent mv-tint"
             >
               {NEW_BUCKET_LABEL}
             </PressableRow>
@@ -447,7 +447,7 @@ export function PostDetailsSheet({
                   onChangeOwner(member.userId);
                   setPicker(null);
                 }}
-                className="flex items-center gap-3 px-3 py-2 text-base text-fg transition-colors"
+                className="flex items-center gap-3 px-3 py-2 text-base text-fg mv-tint"
               >
                 <Avatar
                   name={member.displayName}

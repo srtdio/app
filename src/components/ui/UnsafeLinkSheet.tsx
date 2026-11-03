@@ -87,7 +87,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
       data-unsafe-sheet=""
       className={cn(
         'fixed inset-0 z-50 flex items-end justify-center bg-scrim transition-opacity duration-base',
-        entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
+        entered ? 'opacity-100' : 'opacity-0',
       )}
       onClick={(event) => {
         // React events from a portal still bubble through the card's parents
@@ -109,10 +109,10 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         style={drag > 0 ? { transform: `translateY(${drag}px)` } : undefined}
         className={cn(
           'flex max-h-[90vh] w-full max-w-[480px] touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg lit-overlay will-change-transform',
-          drag > 0 ? 'transition-none' : 'transition-transform',
+          drag > 0 ? 'transition-none' : 'mv-slide',
           entered
-            ? 'translate-y-0 duration-slow ease-enter'
-            : 'translate-y-full duration-base ease-exit',
+            ? 'translate-y-0'
+            : 'translate-y-full',
         )}
       >
         {/* The swipe-down handle: grabber, then the title left and the close X

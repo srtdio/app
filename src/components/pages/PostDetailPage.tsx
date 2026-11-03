@@ -1700,7 +1700,7 @@ export function PostDetailPage({
               type="button"
               data-post-details-edit=""
               onClick={() => setShowDetails(true)}
-              className={cn(metaHeadClass, '-mx-1 px-1 transition-colors')}
+              className={cn(metaHeadClass, '-mx-1 px-1 mv-tint')}
             >
               {metaHead}
             </PressableRow>
@@ -1960,7 +1960,7 @@ export function PostDetailPage({
                     type="button"
                     data-title-edit=""
                     onClick={openTitleEditor}
-                    className="-mx-2 block px-2 py-1 font-semibold tracking-tight transition-colors"
+                    className="-mx-2 block px-2 py-1 font-semibold tracking-tight mv-tint"
                   >
                     <Highlight text={post.title} />
                   </PressableRow>

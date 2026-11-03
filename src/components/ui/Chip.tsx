@@ -58,7 +58,7 @@ export function Chip({
       ref={buttonRef}
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg border text-base font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+        'inline-flex items-center gap-1.5 rounded-lg border text-base font-medium mv-tint focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
         sizes[size],
         variant === 'add'
           ? 'border-dashed border-border text-fg-3 hover:bg-panel-2'

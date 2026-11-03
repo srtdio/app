@@ -371,7 +371,7 @@ export function PostCard({
             },
           }
         : {})}
-      className="relative flex h-full min-w-0 flex-col rounded-xl border bg-panel lit-card transition-colors hover:bg-panel-2"
+      className="relative flex h-full min-w-0 flex-col rounded-xl border bg-panel lit-card mv-tint hover:bg-panel-2"
     >
       <PressableRow
         type="button"

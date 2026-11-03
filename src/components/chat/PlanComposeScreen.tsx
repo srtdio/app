@@ -868,7 +868,7 @@ export function PlanSharedNotice(props: {
       data-plan-shared-notice={shown ? 'shown' : 'hidden'}
       style={{ bottom: bottom ?? 96 }}
       className={cn(
-        'pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3 transition-opacity duration-base motion-reduce:transition-none',
+        'pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3 transition-opacity duration-base',
         shown ? 'opacity-100' : 'opacity-0',
       )}
     >

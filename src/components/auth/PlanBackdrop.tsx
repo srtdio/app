@@ -66,7 +66,7 @@ export function PlanBackdrop(): ReactElement {
         ref={layerRef}
         data-plan-backdrop-layer=""
         className={cn(
-          'absolute -inset-8 scale-[1.03] [filter:blur(6px)] md:[filter:blur(8px)] transition-opacity duration-slow ease-enter motion-reduce:transition-none',
+          'absolute -inset-8 scale-[1.03] [filter:blur(6px)] md:[filter:blur(8px)] transition-opacity duration-slow ease-enter',
           ready ? 'opacity-100' : 'opacity-0',
         )}
       >

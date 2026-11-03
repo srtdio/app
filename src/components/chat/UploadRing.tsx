@@ -100,7 +100,7 @@ export function UploadRing({
         // the ring keeps its overlay ink and its opacity/visibility fade.
         'grid shrink-0 place-items-center text-overlay-fg',
         HIT_CLASS[variant],
-        'transition-[opacity,visibility] duration-base motion-reduce:transition-none',
+        'transition-[opacity,visibility] duration-base',
         hidden ? 'pointer-events-none invisible opacity-0' : 'visible opacity-100',
         className,
       )}
@@ -118,8 +118,8 @@ export function UploadRing({
         className={cn(LAYER, RING_CLASS[variant])}
         trackClass="text-overlay-dot"
         arcClass={cn(
-          'text-overlay-fg transition-[stroke-dashoffset] duration-base motion-reduce:transition-none',
-          indeterminate && 'animate-pulse motion-reduce:animate-none',
+          'text-overlay-fg mv-fill',
+          indeterminate && 'animate-pulse',
         )}
       />
       <IconX size={UPLOAD_RING_X} className={LAYER} />

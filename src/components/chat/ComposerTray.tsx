@@ -209,7 +209,7 @@ export function ComposerTray(props: {
           data-tray=""
           data-induction={INDUCTION_KEYS.chatAttachTray}
           className={cn(
-            'absolute inset-x-0 bottom-full z-20 border-t bg-panel lit-dock px-3 pb-2 pt-3 transition-[opacity,transform] duration-slow ease-enter motion-reduce:transition-none',
+            'absolute inset-x-0 bottom-full z-20 border-t bg-panel lit-dock px-3 pb-2 pt-3 transition-[opacity,transform] duration-slow ease-enter',
             shown ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
           )}
         >

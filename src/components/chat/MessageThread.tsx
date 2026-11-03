@@ -2052,7 +2052,7 @@ export const FAILED_RETRY_CLASS =
   'absolute right-full top-1/2 mr-1 flex h-11 min-w-[44px] -translate-y-1/2 items-center justify-center text-bad';
 
 /** Hover-only controls fade in on opacity alone, 120ms, and not at all under reduced motion. */
-const HOVER_FADE = 'transition-opacity duration-fast motion-reduce:transition-none';
+const HOVER_FADE = 'transition-opacity duration-fast ';
 
 /**
  * A row's piece of the rail (none for a left root card no member follows yet,

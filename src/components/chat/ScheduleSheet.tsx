@@ -277,8 +277,8 @@ export function ScheduleMenu(props: {
       aria-label={SCHEDULE_SHEET_TITLE}
       data-schedule-menu=""
       className={cn(
-        'absolute bottom-full right-3 z-30 mb-2 flex w-[340px] max-w-[calc(100%-24px)] flex-col rounded-xl border bg-panel lit-overlay transition-opacity duration-base motion-reduce:transition-none',
-        shown ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
+        'absolute bottom-full right-3 z-30 mb-2 flex w-[340px] max-w-[calc(100%-24px)] flex-col rounded-xl border bg-panel lit-overlay transition-opacity duration-base',
+        shown ? 'opacity-100' : 'opacity-0',
       )}
     >
       <h2 className="px-4 pb-1 pt-3 text-lg font-semibold text-fg">{SCHEDULE_SHEET_TITLE}</h2>

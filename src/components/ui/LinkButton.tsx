@@ -44,7 +44,7 @@ export function LinkButton({ url, className }: LinkButtonProps) {
         <IconLink size={ICON_SIZE.inline} />
       </span>
       <span className="min-w-0 truncate">{link.domain}</span>
-      <span className="shrink-0 text-fg-3 transition-colors group-hover:text-accent">
+      <span className="shrink-0 text-fg-3 mv-tint group-hover:text-accent">
         <IconArrowUpRight size={ICON_SIZE.inline} />
       </span>
     </a>

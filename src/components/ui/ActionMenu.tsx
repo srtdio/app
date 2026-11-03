@@ -206,7 +206,7 @@ export function ActionMenu({
                           role="menuitem"
                           onClick={() => select(item)}
                           className={cn(
-                            'flex items-center gap-3 px-3 text-base transition-colors',
+                            'flex items-center gap-3 px-3 text-base mv-tint',
                             item.tone === 'danger' ? 'text-bad' : 'text-fg',
                           )}
                         >
@@ -246,7 +246,7 @@ export function ActionMenu({
                 role="menuitem"
                 onClick={() => select(item)}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2 transition-colors',
+                  'flex items-center gap-3 px-3 py-2 mv-tint',
                   item.tone === 'danger' ? 'text-bad' : 'text-fg',
                 )}
               >

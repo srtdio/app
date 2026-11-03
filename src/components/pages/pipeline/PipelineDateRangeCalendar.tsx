@@ -246,7 +246,7 @@ export function PipelineDateRangeCalendar({
                 aria-pressed={isEndpoint || single}
                 onClick={() => pick(iso)}
                 className={cn(
-                  'flex items-center justify-center font-sans text-base tabular-nums transition-colors',
+                  'flex items-center justify-center font-sans text-base tabular-nums mv-tint',
                   isEndpoint
                     ? 'bg-accent font-semibold text-accent-fg lit-pill'
                     : between

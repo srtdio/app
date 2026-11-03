@@ -395,7 +395,7 @@ function Spinner(): ReactElement {
     <div
       role="status"
       aria-label="Loading"
-      className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg"
+      className="h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg"
     />
   );
 }
@@ -1239,7 +1239,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
         data-viewer-sheet=""
         className={cn(
           'relative flex min-h-0 flex-1 flex-col',
-          settling && 'transition-transform duration-base ease-exit',
+          settling && 'mv-slide',
         )}
         style={{ transform: `translateY(${dragY}px)` }}
         onTransitionEnd={() => setSettling(false)}

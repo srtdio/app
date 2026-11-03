@@ -647,7 +647,7 @@ export function MenuRow(props: {
       onClick={() => props.onRun(item)}
       className={cn(
         MENU_ROW,
-        'text-base transition-colors focus-visible:bg-panel-2',
+        'text-base mv-tint focus-visible:bg-panel-2',
         item.danger === true ? 'text-bad' : 'text-fg',
       )}
     >
@@ -1079,8 +1079,8 @@ export function EmojiPickerShell(props: {
           {...dialogProps}
           data-emoji-picker="laptop"
           className={cn(
-            'fixed z-[60] flex h-[400px] w-[352px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay transition-opacity duration-fast focus:outline-none motion-reduce:transition-none',
-            shown ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
+            'fixed z-[60] flex h-[400px] w-[352px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay transition-opacity duration-fast focus:outline-none',
+            shown ? 'opacity-100' : 'opacity-0',
           )}
           style={{ top: position?.top ?? 8, left: position?.left ?? 8 }}
         >
@@ -1098,8 +1098,8 @@ export function EmojiPickerShell(props: {
         data-emoji-picker="touch"
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          'absolute inset-x-0 bottom-0 flex h-[70vh] flex-col overflow-hidden rounded-t-2xl border-t bg-panel pb-[env(safe-area-inset-bottom)] lit-overlay transition-transform duration-base focus:outline-none motion-reduce:transition-none',
-          shown ? 'translate-y-0 ease-enter' : 'translate-y-full ease-exit',
+          'absolute inset-x-0 bottom-0 flex h-[70vh] flex-col overflow-hidden rounded-t-2xl border-t bg-panel pb-[env(safe-area-inset-bottom)] lit-overlay mv-slide focus:outline-none',
+          shown ? 'translate-y-0' : 'translate-y-full',
         )}
       >
         {body}

@@ -332,7 +332,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                     onClick={() => selectWorkspace(ws.id)}
                     aria-current={isActive}
                     className={cn(
-                      'flex items-center gap-2.5 px-2.5 transition-colors',
+                      'flex items-center gap-2.5 px-2.5 mv-tint',
                       isActive ? 'bg-accent-soft text-accent lit-active' : 'text-fg-2',
                     )}
                   >
@@ -358,7 +358,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                 setPlatform(null);
                 setMode('create');
               }}
-              className="flex items-center gap-3 px-3 text-base font-medium text-fg-2 transition-colors hover:text-fg disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-fg-2"
+              className="flex items-center gap-3 px-3 text-base font-medium text-fg-2 mv-tint hover:text-fg disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-fg-2"
             >
               <IconPlus size={ICON_SIZE.nav} className="shrink-0 text-fg-3" />
               <span>Create workspace</span>
@@ -410,7 +410,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                       aria-checked={selected}
                       onClick={() => setPlatform(value)}
                       className={cn(
-                        'flex min-w-[44px] items-center gap-2 border px-3 text-base font-medium transition-colors',
+                        'flex min-w-[44px] items-center gap-2 border px-3 text-base font-medium mv-tint',
                         selected
                           ? 'border-accent text-accent lit-chip-selected'
                           : 'text-fg lit-chip',

@@ -16,7 +16,7 @@ interface BackdropProps {
 // fade in on mount that reduced motion turns off. Full-screen media viewers
 // use bg-overlay and are not backdrops.
 const BACKDROP_BASE =
-  'inset-0 bg-scrim cursor-default transition-opacity duration-fast motion-reduce:transition-none focus:outline-none';
+  'inset-0 bg-scrim cursor-default transition-opacity duration-fast focus:outline-none';
 
 export function Backdrop({
   'aria-label': ariaLabel,

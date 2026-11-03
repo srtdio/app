@@ -97,7 +97,7 @@ export function ThreadViewFrame(props: {
       data-thread-view=""
       onKeyDown={onKeyDown}
       className={cn(
-        'absolute inset-0 z-30 flex flex-col bg-bg transition-opacity duration-base motion-reduce:transition-none',
+        'absolute inset-0 z-30 flex flex-col bg-bg transition-opacity duration-base',
         shown && !closing ? 'opacity-100' : 'opacity-0',
       )}
     >

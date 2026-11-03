@@ -2337,7 +2337,7 @@ export function Composer(props: ComposerProps): ReactElement {
             <div className="flex h-11 flex-1 items-center gap-2 px-1">
               <span
                 aria-hidden="true"
-                className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-border border-t-accent"
+                className="h-4 w-4 shrink-0 mv-spin rounded-full border-2 border-border border-t-accent"
               />
               <span className="text-base text-fg-2">Sending voice note…</span>
             </div>
@@ -2477,7 +2477,7 @@ export function Composer(props: ComposerProps): ReactElement {
                       <span
                         aria-hidden="true"
                         data-edit-spinner=""
-                        className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                        className="h-4 w-4 mv-spin rounded-full border-2 border-current border-t-transparent"
                       />
                     ) : scheduleBusy ? (
                       <span data-scheduling="" className="text-base font-medium">

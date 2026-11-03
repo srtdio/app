@@ -133,7 +133,7 @@ export function Sheet({
     <div
       className={cn(
         'fixed inset-0 z-50 flex items-end bg-scrim transition-opacity duration-base sm:items-center sm:justify-center',
-        entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
+        entered ? 'opacity-100' : 'opacity-0',
       )}
       onClick={onOverlayClick}
     >
@@ -152,8 +152,8 @@ export function Sheet({
           fixedHeight === true && 'sm:h-[min(640px,84vh)]',
           wide === true && 'lg:w-[960px]',
           entered
-            ? 'translate-y-0 opacity-100 duration-slow ease-enter sm:duration-base'
-            : 'translate-y-full opacity-100 duration-base ease-exit sm:translate-y-2 sm:opacity-0',
+            ? 'translate-y-0 opacity-100'
+            : 'translate-y-full opacity-100 sm:translate-y-2 sm:opacity-0',
         )}
       >
         <div className="flex items-center gap-2.5 px-[18px] py-[15px] border-b border-border">

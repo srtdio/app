@@ -509,15 +509,15 @@ export function PlanPage(props: {
         desktop
           ? // Laptop: the box is final on its first frame; axis: translateX only.
             cn(
-              'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] max-[1179px]:lit-overlay min-[1180px]:border-border transition-[transform,opacity] duration-base motion-reduce:transition-none',
+              'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] max-[1179px]:lit-overlay min-[1180px]:border-border transition-[transform,opacity] duration-base',
               PLAN_PANEL_WIDTH,
             )
-          : 'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] transition-transform duration-slow ease-enter motion-reduce:transition-none',
+          : 'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] mv-slide',
         'focus:outline-none',
         desktop
           ? entered
-            ? 'translate-x-0 opacity-100 ease-enter'
-            : 'translate-x-6 opacity-0 ease-exit'
+            ? 'translate-x-0 opacity-100'
+            : 'translate-x-6 opacity-0'
           : entered
             ? 'translate-y-0'
             : 'translate-y-full',
@@ -2771,7 +2771,7 @@ export function PlanHeaderMenu(props: {
       data-plan-header-menu=""
       onKeyDown={onKeyDown}
       className={cn(
-        'absolute left-12 top-full z-20 mt-1 flex w-56 flex-col overflow-hidden rounded-xl border bg-panel py-1 lit-overlay transition-transform duration-fast ease-enter motion-reduce:transition-none',
+        'absolute left-12 top-full z-20 mt-1 flex w-56 flex-col overflow-hidden rounded-xl border bg-panel py-1 lit-overlay mv-slide',
         entered ? 'translate-y-0' : '-translate-y-1',
         NO_TOUCH_SELECT,
       )}
@@ -3126,7 +3126,7 @@ function DragCard(props: {
       className={cn(
         'pointer-events-none fixed z-[60]',
         NO_TOUCH_SELECT,
-        state.snapTop !== null && 'transition-transform ease-exit motion-reduce:transition-none',
+        state.snapTop !== null && 'mv-slide',
       )}
       style={{
         left: state.left,
@@ -3139,7 +3139,7 @@ function DragCard(props: {
       {props.desktop === true ? <style>{'*{cursor:grabbing !important}'}</style> : null}
       <div
         className={cn(
-          'flex items-start gap-3 rounded-lg border border-border bg-panel p-2 lit-float transition-transform ease-enter motion-reduce:scale-100 motion-reduce:transition-none',
+          'flex items-start gap-3 rounded-lg border border-border bg-panel p-2 lit-float mv-slide motion-reduce:scale-100',
           lifted && props.desktop !== true ? 'scale-[1.02]' : 'scale-100',
         )}
         style={{ transitionDuration: `${DRAG_LIFT_MS}ms` }}

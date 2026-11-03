@@ -861,7 +861,7 @@ export function reorderView(model: ReorderModel): ReactElement {
                     : { aspectRatio: `${ratio}` }
                 }
                 className={cn(
-                  'relative flex h-24 min-w-[44px] touch-none cursor-grab items-center justify-center overflow-hidden border-2 bg-panel-2 motion-safe:transition-colors',
+                  'relative flex h-24 min-w-[44px] touch-none cursor-grab items-center justify-center overflow-hidden border-2 bg-panel-2 mv-tint',
                   SLIDE_PRESS_CLASS,
                   selected ? 'border-accent' : 'border-border',
                   dragging && 'z-10 cursor-grabbing lit-float',
@@ -1084,7 +1084,7 @@ export function galleryView({
                 if (consumeClickSuppression !== undefined && consumeClickSuppression()) return;
                 onOpen(index);
               }}
-              className={`group relative ${aspectClass(aspect)} overflow-hidden border border-border bg-panel-2 transition-colors hover:border-border-strong`}
+              className={`group relative ${aspectClass(aspect)} overflow-hidden border border-border bg-panel-2 mv-tint hover:border-border-strong`}
             >
               <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
               {showIndex ? (
@@ -1125,7 +1125,7 @@ export function galleryView({
             }}
           >
             <span
-              className={`h-2 w-2 rounded-full transition-colors ${
+              className={`h-2 w-2 rounded-full mv-tint ${
                 index === active ? 'bg-accent' : 'bg-border-strong'
               }`}
             />
@@ -1179,7 +1179,7 @@ export function galleryView({
                     onOpen(index);
                   }}
                   className={cn(
-                    'group absolute inset-0 flex items-center justify-center border border-border bg-panel-2 transition-colors hover:border-border-strong focus-visible:ring-inset',
+                    'group absolute inset-0 flex items-center justify-center border border-border bg-panel-2 mv-tint hover:border-border-strong focus-visible:ring-inset',
                     SLIDE_PRESS_CLASS,
                     pinArmedIndex === index && 'cursor-crosshair',
                   )}

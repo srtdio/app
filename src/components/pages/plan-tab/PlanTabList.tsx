@@ -130,7 +130,7 @@ export function PlanTabList(props: {
                 key={id}
                 data-plan-tab-appended=""
                 className={cn(
-                  'flex flex-col transition-transform duration-base ease-enter motion-reduce:transition-none',
+                  'flex flex-col mv-slide',
                   entered.has(id) ? 'translate-y-0' : 'translate-y-1',
                 )}
               >
@@ -157,7 +157,7 @@ export function PlanTabCard(props: {
       type="button"
       data-plan-tab-card={props.bundle.plan.id}
       onClick={props.onOpen}
-      className="lit-card flex flex-col gap-2 border bg-panel px-3.5 pb-3 pt-3 transition-colors"
+      className="lit-card flex flex-col gap-2 border bg-panel px-3.5 pb-3 pt-3 mv-tint"
     >
       <PlanCardTop plan={props.bundle.plan} wrapTitle />
       {props.covers.length > 0 ? (

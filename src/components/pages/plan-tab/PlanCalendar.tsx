@@ -748,7 +748,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
       onClick={() => props.onOpen(entry)}
       {...holdAttrs(props)}
       className={cn(
-        'lit-card flex min-w-0 shrink-0 flex-col overflow-hidden border bg-panel transition-colors',
+        'lit-card flex min-w-0 shrink-0 flex-col overflow-hidden border bg-panel mv-tint',
         props.holdable && NO_TOUCH_SELECT,
         props.lifted && 'opacity-40',
       )}

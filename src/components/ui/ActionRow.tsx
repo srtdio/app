@@ -40,7 +40,7 @@ export function ActionRow({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-3 px-3 py-2 transition-colors',
+        'flex items-center gap-3 px-3 py-2 mv-tint',
         danger ? 'text-bad' : 'text-fg',
       )}
     >

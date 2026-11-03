@@ -79,7 +79,7 @@ export function ConfirmDialog({
       className={cn(
         // The bottom padding clears the iPhone home bar where the box sits low.
         'fixed inset-0 z-50 flex items-end justify-center bg-scrim px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] transition-opacity duration-base sm:items-center',
-        entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
+        entered ? 'opacity-100' : 'opacity-0',
       )}
     >
       <div
@@ -91,7 +91,7 @@ export function ConfirmDialog({
         className={cn(
           // Axis: translateY only (8px rise) with a crossfade. No X, no rotate.
           'lit-overlay w-full max-w-sm rounded-2xl border bg-panel p-5 outline-none transition-[opacity,transform] duration-base will-change-transform',
-          entered ? 'translate-y-0 opacity-100 ease-enter' : 'translate-y-2 opacity-0 ease-exit',
+          entered ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
         )}
       >
         <h2 className="text-lg font-semibold text-fg">{title}</h2>

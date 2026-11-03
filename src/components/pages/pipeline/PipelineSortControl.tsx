@@ -106,7 +106,7 @@ function radioRow(
       aria-checked={selected}
       onClick={onClick}
       className={cn(
-        'flex h-11 items-center gap-2.5 px-3 text-base transition-colors',
+        'flex h-11 items-center gap-2.5 px-3 text-base mv-tint',
         selected ? 'text-fg' : 'text-fg-2',
       )}
     >

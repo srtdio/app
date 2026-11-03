@@ -85,10 +85,10 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
       <div
         className={cn(
           // Axis: translateX only. No fade, no rotate.
-          'flex h-full flex-col transition-transform will-change-transform',
+          'flex h-full flex-col mv-slide will-change-transform',
           entered
-            ? 'translate-x-0 duration-slow ease-enter'
-            : 'translate-x-full duration-base ease-exit',
+            ? 'translate-x-0'
+            : 'translate-x-full',
         )}
       >
         <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-1.5">

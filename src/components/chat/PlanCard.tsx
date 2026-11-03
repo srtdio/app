@@ -485,7 +485,7 @@ function forwardList(
             type="button"
             data-plan-forward-target={channel.channelId}
             onClick={() => onPick(channel)}
-            className="flex items-center gap-3 px-3 py-2 text-fg transition-colors"
+            className="flex items-center gap-3 px-3 py-2 text-fg mv-tint"
           >
             <span className="flex shrink-0 items-center justify-center text-fg-2">
               <IconChat size={ICON_SIZE.nav} />

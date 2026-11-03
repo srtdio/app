@@ -554,7 +554,7 @@ export function chatRowContextMenu(
 
 /** The tile button's behaviour: no text selection, no iOS callout, focus ring. */
 export const CHANNEL_ROW_BUTTON = cn(
-  'min-w-0 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  'min-w-0 text-left mv-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
   NO_TOUCH_SELECT,
 );
 
@@ -701,7 +701,7 @@ export function channelRowBody(props: {
  * itself is ROW_MORE_BUTTON. Tokens only.
  */
 export const ROW_MORE_BUTTON =
-  'flex h-11 w-11 items-center justify-center rounded-lg text-fg-3 transition-colors duration-fast hover:bg-panel-3 hover:text-fg';
+  'flex h-11 w-11 items-center justify-center rounded-lg text-fg-3 mv-tint hover:bg-panel-3 hover:text-fg';
 
 export function rowMoreClass(kind: TileKind): string {
   return cn('absolute right-1 flex', kind === 'wide' ? 'top-1/2 -translate-y-1/2' : 'bottom-1');

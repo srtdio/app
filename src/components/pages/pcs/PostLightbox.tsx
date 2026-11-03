@@ -372,7 +372,7 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
           onOpen={() => props.onOpenFile?.(item)}
         />
       ) : isInlineRenderable(item) && !failed ? (
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
+        <div className="h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
       ) : (
         <GracefulPanel
           message="This image could not be loaded."
@@ -425,7 +425,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
       aria-label="Image viewer"
       className={cn(
         'relative w-full overflow-hidden bg-overlay',
-        dragY > 0 ? undefined : 'transition-transform duration-base',
+        dragY > 0 ? undefined : 'mv-slide',
       )}
       style={dragY > 0 ? { transform: `translateY(${dragY}px)` } : undefined}
     >

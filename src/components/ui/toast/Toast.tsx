@@ -82,7 +82,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
         <button
           type="button"
           onClick={onPress}
-          className={`flex min-h-[44px] min-w-0 flex-1 items-center gap-3 rounded-l-lg px-3 py-2 text-left transition-colors ${error ? 'hover:opacity-90' : 'hover:bg-panel-2'}`}
+          className={`flex min-h-[44px] min-w-0 flex-1 items-center gap-3 rounded-l-lg px-3 py-2 text-left mv-tint ${error ? 'hover:opacity-90' : 'hover:bg-panel-2'}`}
         >
           {body}
         </button>
@@ -93,7 +93,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
         type="button"
         aria-label="Dismiss notification"
         onClick={() => onDismiss(id)}
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors ${
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg mv-tint ${
           error ? 'text-accent-fg hover:opacity-90' : 'text-fg-2 hover:bg-panel-2 hover:text-fg'
         }`}
       >
@@ -111,7 +111,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
             action.onPress();
             onDismiss(id);
           }}
-          className={`flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-base font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
+          className={`flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-base font-medium mv-tint focus-visible:outline-none focus-visible:ring-2 ${
             error
               ? 'text-accent-fg underline hover:opacity-90 focus-visible:ring-accent-fg'
               : 'text-accent hover:bg-panel-2 focus-visible:ring-accent'

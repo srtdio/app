@@ -12,6 +12,6 @@ const POPOVER_PANEL =
 export function popoverClass(shown: boolean): string {
   return cn(
     POPOVER_PANEL,
-    shown ? 'scale-100 opacity-100 ease-enter' : 'scale-[0.96] opacity-0 ease-exit',
+    shown ? 'scale-100 opacity-100' : 'scale-[0.96] opacity-0',
   );
 }

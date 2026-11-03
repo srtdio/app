@@ -204,7 +204,7 @@ export function ScheduleModeStrip(props: { label: string; onStop: () => void }):
       <div
         data-schedule-mode=""
         className={cn(
-          'flex min-w-0 items-center gap-2 bg-accent-soft pl-3 lit-tint transition-transform duration-slow ease-enter motion-reduce:transition-none',
+          'flex min-w-0 items-center gap-2 bg-accent-soft pl-3 lit-tint mv-slide',
           entered ? 'translate-y-0' : 'translate-y-full',
           NO_TOUCH_SELECT,
         )}

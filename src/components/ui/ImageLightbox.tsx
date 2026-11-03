@@ -350,7 +350,7 @@ function LightboxMedia({
   }
   if (url === null) {
     return (
-      <div className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
+      <div className="h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
     );
   }
   return (
@@ -736,7 +736,7 @@ export function ImageLightbox({
           className={cn(
             'flex h-full w-full items-center justify-center',
             settling &&
-              'transition-transform duration-slow ease-enter motion-reduce:transition-none',
+              'mv-slide',
           )}
           style={dismissStyle}
           onTransitionEnd={() => setSettling(false)}

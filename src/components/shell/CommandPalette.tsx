@@ -429,7 +429,7 @@ export function namesNeeded(
   return ids;
 }
 
-const ROW = 'flex items-center px-2 text-base transition-colors active:bg-accent-soft';
+const ROW = 'flex items-center px-2 text-base mv-tint active:bg-accent-soft';
 
 /** The keyboard-selected (or hovered) row: the accent tint, the pressed row's tint too. */
 const ACTIVE_ROW = 'bg-accent-soft text-fg lit-active';
@@ -951,7 +951,7 @@ export function CommandPalette({
       data-palette-overlay=""
       className={cn(
         'fixed inset-0 z-50 bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12vh] sm:px-4 transition-opacity duration-fast',
-        entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
+        entered ? 'opacity-100' : 'opacity-0',
       )}
       onClick={onOverlayClick}
     >
@@ -966,8 +966,8 @@ export function CommandPalette({
           // no rotate.
           'flex flex-col w-full h-full bg-panel lit-overlay overflow-hidden origin-top transition-[opacity,transform] duration-base will-change-transform sm:h-auto sm:max-w-[560px] sm:rounded-xl sm:border',
           entered
-            ? 'translate-y-0 scale-100 opacity-100 ease-enter'
-            : '-translate-y-2 scale-[0.985] opacity-0 ease-exit',
+            ? 'translate-y-0 scale-100 opacity-100'
+            : '-translate-y-2 scale-[0.985] opacity-0',
         )}
       >
         <div className="flex shrink-0 items-center gap-2.5 px-4 border-b border-border pt-[env(safe-area-inset-top)] sm:pt-0">

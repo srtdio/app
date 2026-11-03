@@ -279,7 +279,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
           className="absolute inset-x-0 bottom-0 h-[3px] bg-panel-3 lit-well"
         >
           <span
-            className="block h-full origin-left bg-accent lit-fill transition-transform duration-base"
+            className="block h-full origin-left bg-accent lit-fill mv-slide"
             style={{ transform: `scaleX(${uploading ? progress : 0})` }}
           />
         </span>

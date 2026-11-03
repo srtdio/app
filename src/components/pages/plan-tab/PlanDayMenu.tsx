@@ -98,7 +98,7 @@ export function PlanDayMenu(props: {
             role="menuitem"
             data-plan-tab-menu-plan={bundle.plan.id}
             onClick={() => props.onPick(bundle)}
-            className="flex items-center gap-2.5 px-2.5 py-1.5 transition-colors focus-visible:bg-panel-2"
+            className="flex items-center gap-2.5 px-2.5 py-1.5 mv-tint focus-visible:bg-panel-2"
           >
             <span
               aria-hidden="true"
@@ -127,7 +127,7 @@ export function PlanDayMenu(props: {
           role="menuitem"
           data-plan-tab-menu-new=""
           onClick={props.onNewPlan}
-          className="flex items-center px-2.5 text-base font-medium text-accent transition-colors focus-visible:bg-panel-2"
+          className="flex items-center px-2.5 text-base font-medium text-accent mv-tint focus-visible:bg-panel-2"
         >
           {NEW_PLAN_ROW_LABEL}
         </PressableRow>

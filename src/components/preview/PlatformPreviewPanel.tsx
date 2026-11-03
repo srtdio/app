@@ -67,7 +67,7 @@ export function PreviewChip({
       type="button"
       variant="secondary"
       onClick={onClick}
-      className="motion-reduce:transition-none"
+      className=""
     >
       <IconEye size={ICON_SIZE.inline} />
       {previewChipLabel(platform)}
@@ -133,8 +133,8 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
   return createPortal(
     <div
       className={cn(
-        'fixed inset-0 z-50 transition-opacity duration-base motion-reduce:transition-none',
-        entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
+        'fixed inset-0 z-50 transition-opacity duration-base',
+        entered ? 'opacity-100' : 'opacity-0',
       )}
     >
       <Backdrop position="absolute" aria-label="Close preview" onClick={onClose} />
@@ -145,8 +145,8 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
         aria-label={title}
         onKeyDown={onKeyDown}
         className={cn(
-          'absolute inset-y-0 right-0 flex w-full max-w-[460px] flex-col border-l bg-panel lit-overlay transition-transform duration-base motion-reduce:transition-none',
-          entered ? 'translate-x-0 ease-enter' : 'translate-x-full ease-exit',
+          'absolute inset-y-0 right-0 flex w-full max-w-[460px] flex-col border-l bg-panel lit-overlay mv-slide',
+          entered ? 'translate-x-0' : 'translate-x-full',
         )}
       >
         <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-2">
@@ -361,7 +361,7 @@ function SizePicker({
             aria-checked={selected}
             onClick={() => onChange(size.label)}
             className={cn(
-              'flex flex-col items-start justify-center border px-3 py-1.5 transition-colors motion-reduce:transition-none',
+              'flex flex-col items-start justify-center border px-3 py-1.5 mv-tint',
               selected
                 ? 'border-accent-line text-fg lit-chip-selected'
                 : 'font-medium text-fg lit-chip',

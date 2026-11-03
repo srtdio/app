@@ -392,7 +392,7 @@ export function RolePicker({
   return (
     <label
       className={cn(
-        'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel lit-well px-2.5 py-1 text-base transition-colors duration-fast focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft',
+        'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel lit-well px-2.5 py-1 text-base mv-tint focus-within:border-accent-line focus-within:ring-2 focus-within:ring-accent-soft',
         invalid ? 'border-bad bg-bad-soft' : 'border-border',
         current === undefined ? 'text-fg-3' : 'text-fg',
         fill ? 'min-w-0 flex-1' : 'max-w-[45%] shrink-0',
@@ -754,7 +754,7 @@ export function MembersInviteForm({
                       onChange={(event) =>
                         updateRow(row.key, { email: event.target.value, error: null })
                       }
-                      className="h-11 min-w-0 flex-1 border-0 border-b border-transparent bg-transparent px-0 text-input text-fg outline-none transition-colors duration-fast hover:border-dashed hover:border-border-strong focus:border-solid focus:border-accent md:text-base"
+                      className="h-11 min-w-0 flex-1 border-0 border-b border-transparent bg-transparent px-0 text-input text-fg outline-none mv-tint hover:border-dashed hover:border-border-strong focus:border-solid focus:border-accent md:text-base"
                     />
                     <RolePicker
                       label={`Role for ${row.email}`}

@@ -45,7 +45,7 @@ const SWIPE_THRESHOLD = 48;
 // Passed to the shared IconButton; overlay tokens sort after its own, so they win.
 const BAR_BUTTON =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
-  'transition-colors duration-fast hover:bg-overlay-surface hover:text-overlay-fg ' +
+  'mv-tint hover:bg-overlay-surface hover:text-overlay-fg '+
   'disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg';
 
 /**
@@ -205,7 +205,7 @@ function Field({ label, value }: { label: string; value: string }) {
 
 function Spinner() {
   return (
-    <div className="h-10 w-10 animate-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
+    <div className="h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
   );
 }
 

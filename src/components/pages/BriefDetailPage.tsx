@@ -772,7 +772,7 @@ export function BriefDetailPage({
                 <Link
                   to={`/posts/${post.id}`}
                   data-linked-post=""
-                  className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-lg px-2 text-base text-fg transition-colors duration-fast hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-lg px-2 text-base text-fg mv-tint hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   <span
                     aria-hidden="true"
@@ -787,7 +787,7 @@ export function BriefDetailPage({
           <Link
             to="/pipeline"
             data-linked-posts-count=""
-            className="-mx-2 inline-flex min-h-[44px] min-w-[44px] items-center rounded-lg px-2 text-base tabular-nums text-accent transition-colors duration-fast hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="-mx-2 inline-flex min-h-[44px] min-w-[44px] items-center rounded-lg px-2 text-base tabular-nums text-accent mv-tint hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {linkedCount}
           </Link>

@@ -28,7 +28,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
           type="button"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={() => dispatchSorted('sorted:switch-workspace')}
-          className="flex items-center gap-2.5 px-2 transition-colors"
+          className="flex items-center gap-2.5 px-2 mv-tint"
         >
           {workspaceName !== null ? (
             <Avatar name={clientName ?? workspaceName} role="header" kind="group" />
@@ -55,7 +55,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-base font-medium transition-colors',
+                'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-base font-medium mv-tint',
                 isActive
                   ? 'bg-accent-soft text-accent lit-active'
                   : 'text-fg-2 hover:bg-panel-2 hover:text-fg',

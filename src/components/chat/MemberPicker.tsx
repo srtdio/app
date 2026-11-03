@@ -50,7 +50,7 @@ export function MemberPicker(props: MemberPickerProps): ReactElement {
               aria-pressed={isSelected}
               onClick={() => props.onToggle(option.userId)}
               className={cn(
-                'flex items-center gap-3 px-2 transition-colors',
+                'flex items-center gap-3 px-2 mv-tint',
                 isSelected ? 'bg-accent-soft text-accent lit-active' : 'text-fg-2',
               )}
             >

@@ -86,7 +86,7 @@ export function AssetCard({
         {...interaction}
         style={{ touchAction: 'manipulation' }}
         className={cn(
-          'lit-card group relative flex h-full flex-col overflow-hidden border bg-panel transition-colors',
+          'lit-card group relative flex h-full flex-col overflow-hidden border bg-panel mv-tint',
           selectMode && selected && 'border-accent',
         )}
       >

@@ -531,7 +531,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
     <div
       className={cn(
         'fixed inset-0 z-50 flex items-end transition-opacity duration-base sm:items-center sm:justify-center',
-        entered ? 'opacity-100 ease-enter' : 'opacity-0 ease-exit',
+        entered ? 'opacity-100' : 'opacity-0',
       )}
     >
       <Backdrop aria-label="Close tasks" position="absolute" onClick={requestClose} />
@@ -544,8 +544,8 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         className={cn(
           'relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border bg-panel lit-overlay transition-[opacity,transform] will-change-transform focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
           entered
-            ? 'translate-y-0 opacity-100 duration-slow ease-enter sm:duration-base'
-            : 'translate-y-full opacity-100 duration-base ease-exit sm:translate-y-2 sm:opacity-0',
+            ? 'translate-y-0 opacity-100'
+            : 'translate-y-full opacity-100 sm:translate-y-2 sm:opacity-0',
         )}
       >
         <div className="flex items-center gap-1 border-b border-border py-1.5 pl-4 pr-1.5">

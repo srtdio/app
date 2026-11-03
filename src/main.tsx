@@ -73,7 +73,7 @@ async function bootApp(root: HTMLElement): Promise<void> {
   // Each import is destructured where it is made so Rollup can still
   // tree-shake the modules. Sentry is not here: scheduleSentry loads it after
   // render.
-  const [, BootErrorBoundary, App, TraceProvider, initTheme, initViewportLock, logger] =
+  const [, BootErrorBoundary, App, TraceProvider, initTheme, initViewportLock, logger, motion] =
     await Promise.all([
       import('@/index.css'),
       import('@/components/shell/BootErrorBoundary').then(
@@ -84,8 +84,17 @@ async function bootApp(root: HTMLElement): Promise<void> {
       import('@/lib/theme').then(({ initTheme }) => initTheme),
       import('@/lib/viewport-lock').then(({ initViewportLock }) => initViewportLock),
       import('@/lib/logger').then(({ logger }) => logger),
+      // The motion module (src/lib/motion). Its feature bundle loads later, at idle.
+      import('@/lib/motion').then(({ MotionRoot, installMotionPreference, watchUAVisualTransition }) => ({
+        MotionRoot,
+        installMotionPreference,
+        watchUAVisualTransition,
+      })),
     ]);
   mark('boot:app:imports');
+  const { MotionRoot } = motion;
+  motion.installMotionPreference();
+  motion.watchUAVisualTransition();
 
   initTheme();
   initViewportLock();
@@ -103,7 +112,9 @@ async function bootApp(root: HTMLElement): Promise<void> {
     <StrictMode>
       <BootErrorBoundary>
         <TraceProvider>
-          <App />
+          <MotionRoot>
+            <App />
+          </MotionRoot>
         </TraceProvider>
       </BootErrorBoundary>
     </StrictMode>,

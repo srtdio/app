@@ -18,7 +18,7 @@ const MIN_HEIGHT: Record<NonNullable<DropZoneProps['minHeight']>, string> = {
 // through) with a strong dashed border on panel-2, a centred column of
 // content, a focus-visible ring and a disabled fade.
 const DROP_ZONE_BASE =
-  'flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 lit-well-soft p-4 text-center text-fg-2 transition-colors hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none';
+  'flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 lit-well-soft p-4 text-center text-fg-2 mv-tint hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none';
 
 export function DropZone({
   minHeight = 'touch',

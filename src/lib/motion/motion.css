@@ -1,0 +1,114 @@
+/* The CSS half of the motion module (src/lib/motion, docs/motion.md). Every
+   transition and @keyframes in the app lives in this file; call sites use the
+   mv-* classes below and never their own transition-*, animate-* or duration-
+   values (guard: src/__tests__/motion-rules.test.ts). Nothing here animates
+   opacity. Each class names its axis. Under Reduce Motion or ?motion=0
+   (html[data-motion='off']) every class is instant. */
+
+/* 5. press. Axis: scale. Buttons, IconButtons, Chips, PressableRows, tiles sink
+   to .97 while held, 120 ms. `scale` (not transform) so a caller's own
+   transform is never overwritten. Colours ease alongside (no opacity). */
+.mv-press {
+  transition-property: scale, color, background-color, border-color;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-enter);
+}
+.mv-press:active:not(:disabled):not([aria-disabled='true']) {
+  scale: 0.97;
+}
+
+/* Hover and state colour change. Axis: none (colour only, no movement). */
+.mv-tint {
+  transition-property: color, background-color, border-color, fill, stroke;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-enter);
+}
+
+/* Toggle knob, segment thumb, drawer chevron. Axis: X (translate) or rotate,
+   declared by the caller's transform; 160 ms. */
+.mv-slide {
+  transition-property: transform, translate, color, background-color, border-color;
+  transition-duration: var(--dur-base);
+  transition-timing-function: var(--ease-enter);
+}
+
+/* Composer plus to X (45deg), drawer chevron flip (180deg). Axis: rotate. 200 ms. */
+.mv-turn {
+  transition-property: rotate, transform;
+  transition-duration: var(--dur-slow);
+  transition-timing-function: var(--ease-enter);
+}
+
+/* Progress fills (upload ring, storage bar, guide progress). Axis: fill. Tracks
+   real progress; never runs ahead of it. */
+.mv-fill {
+  transition-property: width, stroke-dashoffset, transform;
+  transition-duration: var(--dur-slow);
+  transition-timing-function: var(--ease-enter);
+}
+
+/* Upload ring finish: scales to 0. Axis: scale. */
+.mv-ring-out {
+  transition-property: scale;
+  transition-duration: var(--dur-slow);
+  transition-timing-function: var(--ease-exit);
+  scale: 0;
+}
+
+/* Board drag: the lifted card scales to 1.02 (it also takes one lit height up). Axis: scale. */
+.mv-lift {
+  scale: 1.02;
+}
+
+/* Busy spinner. Axis: rotate. Linear, looping. */
+@keyframes mv-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+.mv-spin {
+  animation: mv-spin 800ms linear infinite;
+}
+
+/* 9. sweepBoxes. Axis: fill (background-position). A top-lit band sweeps across
+   each box, 1100 ms linear, looping. The box itself never fades or pulses. */
+@keyframes mv-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+.mv-bone {
+  background-color: rgb(var(--panel-3-rgb));
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgb(var(--panel-rgb) / 0.55) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: mv-sweep var(--dur-sweep) linear infinite;
+}
+/* Dark: higher is lighter, so the sweep is a faint lift of ink, not white. */
+.dark .mv-bone {
+  background-image: linear-gradient(100deg, transparent 30%, rgb(var(--fg-rgb) / 0.08) 50%, transparent 70%);
+}
+
+/* Off: Reduce Motion or ?motion=0. Everything lands on its end state at once. */
+html[data-motion='off'] [class*='mv-'],
+html[data-motion='off'] [class*='mv-']::before,
+html[data-motion='off'] [class*='mv-']::after {
+  transition: none !important;
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*='mv-'],
+  [class*='mv-']::before,
+  [class*='mv-']::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

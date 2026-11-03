@@ -551,7 +551,7 @@ export function ActivityCard({
         event.stopPropagation();
       }}
       className={cn(
-        'lit-card flex overflow-hidden rounded-xl border bg-panel transition-colors motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-slow',
+        'lit-card flex overflow-hidden rounded-xl border bg-panel mv-tint motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-slow',
         unread && 'border-accent-line',
         !settled && 'motion-safe:translate-y-2',
       )}
@@ -574,7 +574,7 @@ export function ActivityCard({
           data-activity-lead=""
           className={cn(
             'flex items-start gap-3 p-[14px]',
-            leadTappable && 'cursor-pointer transition-colors hover:bg-panel-2',
+            leadTappable && 'cursor-pointer mv-tint hover:bg-panel-2',
           )}
         >
           <div className="min-w-0 flex-1">
@@ -762,7 +762,7 @@ export function ActivityCard({
                     })}
                 className={cn(
                   'flex min-h-[44px] items-center gap-2 py-2 pl-[14px] pr-3',
-                  !opensNothing(entry) && 'cursor-pointer transition-colors hover:bg-panel-2',
+                  !opensNothing(entry) && 'cursor-pointer mv-tint hover:bg-panel-2',
                 )}
               >
                 <div className="min-w-0 flex-1">
@@ -834,7 +834,7 @@ export function UpcomingCard({
     <div
       data-upcoming-row={item.kind}
       data-upcoming-id={item.id}
-      className="lit-card flex overflow-hidden rounded-xl border bg-panel transition-colors"
+      className="lit-card flex overflow-hidden rounded-xl border bg-panel mv-tint"
     >
       <div aria-hidden="true" className="w-[3px] shrink-0 bg-border-strong" />
 
@@ -845,7 +845,7 @@ export function UpcomingCard({
           onClick={() => onOpen(item)}
           onKeyDown={onKeyDown}
           data-upcoming-open=""
-          className="flex cursor-pointer items-start gap-3 p-[14px] transition-colors hover:bg-panel-2"
+          className="flex cursor-pointer items-start gap-3 p-[14px] mv-tint hover:bg-panel-2"
         >
           <div className="min-w-0 flex-1">
             <div className="mb-1.5 flex items-center gap-[7px]">
