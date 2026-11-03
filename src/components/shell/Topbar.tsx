@@ -8,6 +8,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { IconChevronDown, IconPlus, IconSearch, ICON_SIZE } from '@/components/ui/icons';
 import { dispatchSorted } from '@/lib/events';
 import { INDUCTION_KEYS } from '@/lib/induction';
+import { Bone } from '@/lib/motion';
 
 interface TopbarProps {
   /** The active workspace's display name ("<Brand> - <Platform>"). */
@@ -50,7 +51,7 @@ export function Topbar({
           <span className="truncate">Create your workspace</span>
         </Button>
       ) : workspaceName === null ? (
-        <span className="md:hidden h-4 w-24 rounded bg-panel-3 animate-pulse" aria-hidden />
+        <Bone className="md:hidden h-4 w-24 rounded" />
       ) : (
         <Button
           type="button"

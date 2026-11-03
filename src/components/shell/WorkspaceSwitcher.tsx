@@ -1,5 +1,6 @@
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { dialogIn } from '@/lib/motion';
 import type { FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { workspaceCreate } from '@srtdio/rpc';
@@ -128,6 +129,12 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
   const [askingSwitch, setAskingSwitch] = useState(false);
   const [switching, setSwitching] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  // A centre dialog: rendered at rest, it grows 95% to 100% on the first frame
+  // (dialogIn, never a fade). Closing, and the workspace switch itself, are a
+  // clean cut: no motion.
+  useLayoutEffect(() => {
+    if (open) dialogIn(panelRef.current);
+  }, [open]);
   const hasDeleted = deletedWorkspace !== null;
 
   const close = useCallback(() => {

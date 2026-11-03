@@ -54,7 +54,6 @@ import {
   sharedMentionCount,
   upcomingKey,
   type LoadResult,
-  LOADING_NOTIFICATIONS,
   REFRESH_FAILED,
   SNOOZE_FAILED,
   appendUnique,
@@ -107,6 +106,8 @@ import { INDUCTION_KEYS } from '@/lib/induction';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { useOptionalToast } from '@/components/ui/toast';
 import { undoFailureTitle } from '@/lib/use-undoable-action';
+import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
+import { ActivityBoxes, UpcomingBoxes } from '@/components/pages/activity/ActivityBoxes';
 
 /** Fixed failure copy for Mark all read: "Couldn't mark as read. Try again." */
 const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
@@ -1095,6 +1096,10 @@ export function NotificationsPage() {
     if (firstPaintRef.current !== null) mark(firstPaintRef.current);
   }, []);
   useKeptScroll(keptKey('scroll'), state === 'upcoming' ? upcomingLoaded : !listLoading);
+  // Boxes only while nothing is held for the list; the cards settle once when
+  // they land after them (a kept or device-saved page paints at once).
+  const hadBoxes = useHadBoxes(state !== 'upcoming' && listLoading && !(error && items.length === 0));
+  useSettleOnLanding(listRef, !listLoading, hadBoxes);
 
   return (
     <>
@@ -1144,7 +1149,7 @@ export function NotificationsPage() {
         upcomingError ? (
           <LoadFailed onRetry={() => void loadUpcoming()} />
         ) : workspaceId === null || !upcomingLoaded ? (
-          <div className="px-4 md:px-6 py-10 text-base text-fg-3">{LOADING_NOTIFICATIONS}</div>
+          <UpcomingBoxes />
         ) : visibleUpcoming.length === 0 ? (
           <EmptyState icon={<IconCalendarClock size={ICON_SIZE.status} />} title={UPCOMING_EMPTY} />
         ) : (
@@ -1164,7 +1169,7 @@ export function NotificationsPage() {
       ) : error && items.length === 0 ? (
         <LoadFailed onRetry={() => (searching ? activitySearch.refresh() : void loadActivity())} />
       ) : listLoading ? (
-        <div className="px-4 md:px-6 py-10 text-base text-fg-3">{LOADING_NOTIFICATIONS}</div>
+        <ActivityBoxes />
       ) : buckets.length === 0 ? (
         searching ? (
           <NoResults

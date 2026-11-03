@@ -206,7 +206,7 @@ afterEach(() => {
 });
 
 describe('Activity: first paint', () => {
-  it('shows the loading line while page one loads, never a zero state', async () => {
+  it('shows the loading boxes while page one loads, never a zero state', async () => {
     let answer: (value: LoadResult) => void = () => undefined;
     h.fetchActivityEntries.mockReturnValue(
       new Promise<LoadResult>((resolve) => {
@@ -215,7 +215,10 @@ describe('Activity: first paint', () => {
     );
     render();
     const text = document.body.textContent ?? '';
-    expect(text).toContain(LOADING_NOTIFICATIONS);
+    // The loading boxes, labelled with the loading copy (never a line of text).
+    expect(
+      document.querySelector(`[data-box-skeleton][aria-label="${LOADING_NOTIFICATIONS}"]`),
+    ).not.toBeNull();
     expect(text).not.toContain('shows up here');
     expect(text).not.toContain(EMPTY_LINES.mentions);
     await act(async () => answer({ ok: true, data: [item({ id: 'e1', title: 'Q3 Launch' })] }));

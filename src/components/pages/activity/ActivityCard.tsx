@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { itemIn, rememberCard, useMoveOnMount } from '@/lib/motion';
+import { useGrowBackIntoCard } from '@/lib/motion/pages';
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Avatar, avatarFillFor } from '@/components/ui/Avatar';
@@ -480,13 +482,16 @@ export function ActivityCard({
   entering = false,
 }: ActivityCardProps) {
   const [expanded, setExpanded] = useState(false);
-  // A live-added card starts 8px low and slides up on the next frame (motion-safe only).
-  const [settled, setSettled] = useState(!entering);
-  useEffect(() => {
-    if (settled) return;
-    const frame = window.requestAnimationFrame(() => setSettled(true));
-    return () => window.cancelAnimationFrame(frame);
-  }, [settled]);
+  // itemIn (docs/motion.md): a live-added card renders in place and rises
+  // 8 px over its final state on its first frame. Y only, never a fade.
+  // growFromCard: a tap remembers this card so the page grows out of it, and
+  // Back grows the page back into it.
+  const growKey = group[0]?.entityId ?? '';
+  const cardRef = useGrowBackIntoCard<HTMLDivElement>(growKey);
+  useMoveOnMount(cardRef, (el) => itemIn(el), entering);
+  const rememberThisCard = (): void => {
+    if (growKey !== '') rememberCard(growKey, cardRef.current);
+  };
   // Long-press on touch and right-click on laptop open the row's ⋯ menu.
   const [menuOpen, setMenuOpen] = useState(false);
   const gesture = useMenuGesture(() => setMenuOpen(true));
@@ -534,12 +539,14 @@ export function ActivityCard({
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
+      rememberThisCard();
       onOpenGroup(group, openEntry);
     }
   }
 
   return (
     <div
+      ref={cardRef}
       data-activity-event={lead.eventType}
       data-activity-id={lead.id}
       {...(entering ? { 'data-activity-entering': '' } : {})}
@@ -551,9 +558,8 @@ export function ActivityCard({
         event.stopPropagation();
       }}
       className={cn(
-        'lit-card flex overflow-hidden rounded-xl border bg-panel mv-tint motion-safe:transition-[color,background-color,border-color,transform] motion-safe:duration-slow',
+        'lit-card flex overflow-hidden rounded-xl border bg-panel mv-tint',
         unread && 'border-accent-line',
-        !settled && 'motion-safe:translate-y-2',
       )}
     >
       <div
@@ -567,7 +573,10 @@ export function ActivityCard({
             ? {
                 role: 'button',
                 tabIndex: 0,
-                onClick: () => onOpenGroup(group, openEntry),
+                onClick: () => {
+                  rememberThisCard();
+                  onOpenGroup(group, openEntry);
+                },
                 onKeyDown,
               }
             : {})}

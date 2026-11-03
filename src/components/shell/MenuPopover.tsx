@@ -1,63 +1,48 @@
-import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { useDismissLayer } from '@/lib/modal-focus';
-import { DUR_FAST_MS } from '@/lib/motion';
+import { menuMoves } from '@/components/ui/popover-classes';
+import { usePresence } from '@/lib/motion';
 
 interface MenuPopoverProps {
   open: boolean;
   onClose: () => void;
   align?: 'left' | 'right';
+  /**
+   * Viewport point the menu grows from (the trigger centre or a right-click
+   * cursor point). Default: the centre of the menu's wrapper, which holds the
+   * trigger.
+   */
+  origin?: { x: number; y: number } | null;
   children: ReactNode;
 }
-
-// Exit transition length; mirrors --dur-fast so the menu stays mounted for its
-// fade/scale-out, then unmounts. Fires under prefers-reduced-motion too (CSS
-// collapses to 1ms), so the closing phase always completes.
-const EXIT_MS = DUR_FAST_MS;
 
 /**
  * A lightweight anchored dropdown. Render it inside a `relative` wrapper next to
  * its trigger. Closes on outside click (transparent backdrop) and Escape (the
- * top layer only), and hands focus back to its trigger on close. Enter
- * and exit fade and scale from the trigger corner (transform-origin); no
- * translation.
+ * top layer only), and hands focus back to its trigger on close. Motion
+ * (docs/motion.md, growFromTrigger): rendered at rest, it grows .90 to 1 from
+ * the trigger and shrinks back on close. Scale only, never a fade.
  */
-export function MenuPopover({ open, onClose, align = 'right', children }: MenuPopoverProps) {
-  // `rendered` keeps the menu mounted through its exit; `entered` drives the
-  // enter/exit transition.
-  const [rendered, setRendered] = useState(open);
-  const [entered, setEntered] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setRendered(true);
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
-    }
-    setEntered(false);
-    const timer = setTimeout(() => setRendered(false), EXIT_MS);
-    return () => clearTimeout(timer);
-  }, [open]);
-
-  const panelRef = useRef<HTMLDivElement>(null);
+export function MenuPopover({ open, onClose, align = 'right', origin, children }: MenuPopoverProps) {
+  const presence = usePresence<HTMLDivElement>(open, menuMoves(() => origin, align));
+  const panelRef = presence.ref;
   useDismissLayer(open, onClose, panelRef);
 
-  if (!rendered) {
+  if (!presence.rendered) {
     return null;
   }
 
   return (
     <>
-      <div className="fixed inset-0 z-40" aria-hidden="true" onClick={onClose} />
+      {open ? <div className="fixed inset-0 z-40" aria-hidden="true" onClick={onClose} /> : null}
       <div
         ref={panelRef}
         role="menu"
         className={cn(
-          // Axis: scale only, anchored to the trigger corner. No translation.
-          'absolute z-50 mt-2 min-w-[220px] rounded-xl border bg-panel p-1.5 lit-overlay transition-[opacity,transform] duration-fast will-change-transform',
-          align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
-          entered ? 'scale-100 opacity-100' : 'scale-[0.96] opacity-0',
+          // Rendered at rest; the grow from the trigger is laid over it.
+          'absolute z-50 mt-2 min-w-[220px] rounded-xl border bg-panel p-1.5 lit-overlay will-change-transform',
+          align === 'right' ? 'right-0' : 'left-0',
         )}
       >
         {children}

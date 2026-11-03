@@ -241,13 +241,13 @@ describe('Thumbnail', () => {
   });
 });
 
-describe('Thumbnail original fade, once per session', () => {
-  const FADE =
-    'absolute inset-0 h-full w-full object-cover transition-opacity duration-base motion-reduce:transition-none opacity-0';
+describe('Thumbnail original, never a fade', () => {
+  const IMG = 'absolute inset-0 h-full w-full object-cover';
 
   // A known small copy whose stored lookup comes back missing: the original
-  // loads over the small copy, the one path that fades in.
-  function fadeCache(): PresignCache {
+  // loads over the small copy. It renders at once (no opacity, no transition)
+  // and simply covers the small copy when it loads.
+  function overCache(): PresignCache {
     const expiresAt = Date.now() + 3_600_000;
     return {
       peek: vi.fn(() => null),
@@ -257,7 +257,7 @@ describe('Thumbnail original fade, once per session', () => {
     } as unknown as PresignCache;
   }
 
-  async function mountOriginal(): Promise<{ img: HTMLImageElement; unmount: () => void }> {
+  async function mountOriginal(): Promise<{ host: HTMLElement; img: HTMLImageElement; unmount: () => void }> {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -266,8 +266,8 @@ describe('Thumbnail original fade, once per session', () => {
       root.render(
         <Thumbnail
           alt="alt text"
-          assetVersionId="av-fade"
-          cache={fadeCache()}
+          assetVersionId="av-over"
+          cache={overCache()}
           presignEnabled={true}
           fallback={{ kind: 'glyph' }}
         />,
@@ -280,6 +280,7 @@ describe('Thumbnail original fade, once per session', () => {
     const img = find();
     if (img === null) throw new Error('original not rendered');
     return {
+      host,
       img,
       unmount: () => {
         act(() => root.unmount());
@@ -288,27 +289,43 @@ describe('Thumbnail original fade, once per session', () => {
     };
   }
 
-  it('fades the first show in; a remount of the same image paints at once with no transition', async () => {
+  it('renders the original at its final state before and after load, with no opacity or transition', async () => {
     dispatchSorted('sorted:signout');
     const first = await mountOriginal();
-    expect(first.img.className).toBe(FADE);
+    expect(first.img.className).toBe(IMG);
+    expect(first.img.getAttribute('alt')).toBe('');
     await act(async () => {
       first.img.dispatchEvent(new Event('load'));
     });
-    expect(first.img.className).toContain('transition-opacity duration-base');
-    expect(first.img.className).toContain('opacity-100');
+    expect(first.img.className).toBe(IMG);
+    expect(first.img.getAttribute('alt')).toBe('alt text');
     first.unmount();
 
+    // A remount (tab return) names the original as the shown image at once.
     const second = await mountOriginal();
-    expect(second.img.className).toContain('opacity-100');
-    expect(second.img.className).not.toContain('opacity-0');
-    expect(second.img.className).not.toContain('transition');
-    expect(second.img.className).not.toContain('duration-');
+    expect(second.img.className).toBe(IMG);
+    expect(second.img.getAttribute('alt')).toBe('alt text');
+    expect(second.host.innerHTML).not.toMatch(/opacity|transition|duration-|animate-/);
     second.unmount();
+  });
 
-    dispatchSorted('sorted:signout');
-    const afterSignout = await mountOriginal();
-    expect(afterSignout.img.className).toBe(FADE);
-    afterSignout.unmount();
+  it('shows the shared loading box (sweep, never a pulse) while presigning', () => {
+    const cache = {
+      peek: vi.fn(() => null),
+      resolve: vi.fn(() => new Promise(() => undefined)),
+      peekThumbnail: vi.fn(() => null),
+      thumbnail: vi.fn(() => new Promise(() => undefined)),
+    } as unknown as PresignCache;
+    const out = renderToStaticMarkup(
+      <Thumbnail
+        alt="alt text"
+        assetVersionId="av-wait"
+        cache={cache}
+        presignEnabled={true}
+        fallback={{ kind: 'glyph' }}
+      />,
+    );
+    expect(out).not.toContain('animate-pulse');
+    if (out.includes('data-bone')) expect(out).toContain('mv-bone');
   });
 });

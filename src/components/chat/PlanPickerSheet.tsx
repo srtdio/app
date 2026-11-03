@@ -8,6 +8,7 @@
 // one fixed height in every state: a skeleton until the read settles, so the
 // list never reorders or shortens. Tokens only; translateY motion only.
 
+import { Bone, BoxSkeleton } from '@/lib/motion';
 import { useMemo } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -95,11 +96,11 @@ export function PlanPickerSheet(props: {
         </p>
         <div className={BODY_BOX}>
           {read.status === 'loading' ? (
-            <div role="status" aria-busy="true" aria-label="Loading plans" className="px-[18px]">
+            <BoxSkeleton label="Loading plans" className="px-[18px]">
               {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
                 <PickerSkeletonRow key={i} />
               ))}
-            </div>
+            </BoxSkeleton>
           ) : read.status === 'error' ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-[18px] text-center">
               <p className="text-base text-fg-2">Couldn&apos;t load. Try again.</p>
@@ -189,11 +190,11 @@ function PickerSkeletonRow(): ReactElement {
       data-plan-pick-skeleton=""
       className="flex min-h-[72px] w-full items-center gap-3 border-b border-border py-3"
     >
-      <span className="h-10 w-10 shrink-0 animate-pulse rounded-lg bg-panel-2" />
+      <Bone className="h-10 w-10 shrink-0 rounded-lg" />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="h-5 w-40 animate-pulse rounded bg-panel-2" />
-        <span className="h-4 w-24 animate-pulse rounded bg-panel-2" />
-        <span className="h-5 w-32 animate-pulse rounded bg-panel-2" />
+        <Bone className="h-5 w-40 rounded" />
+        <Bone className="h-4 w-24 rounded" />
+        <Bone className="h-5 w-32 rounded" />
       </span>
     </div>
   );

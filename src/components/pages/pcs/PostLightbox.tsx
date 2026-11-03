@@ -32,6 +32,8 @@ import {
 import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { useOptionalToast } from '@/components/ui/toast';
 import { useEscapeLayer } from '@/lib/escape-stack';
+import { riseIn, riseOut } from '@/lib/motion';
+import { useGrowFromThumb } from '@/lib/motion/overlays';
 import { fileKindLabel } from '@/lib/files/display-name';
 import type { GalleryItem } from '@srtdio/posts';
 
@@ -287,6 +289,8 @@ export interface LightboxViewProps {
   onImageLoad: (item: GalleryItem, event: SyntheticEvent<HTMLImageElement>) => void;
   stageGestures: StageGestures;
   trackRef?: Ref<HTMLDivElement> | undefined;
+  /** The viewer's root (it grows from the tile and rises out on a swipe down). */
+  rootRef?: Ref<HTMLDivElement> | undefined;
   /** Agency-only manage bar; absent for clients (their bar shows download only). */
   manage?: LightboxManage | undefined;
   /** Whether the delete confirm row has replaced the bottom-bar controls. */
@@ -408,25 +412,20 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   const ratioStyle: CSSProperties = {
     aspectRatio: dims !== null ? `${dims.width} / ${dims.height}` : '4 / 5',
   };
-  // Opacity only: no translate or rotate is introduced anywhere on this surface.
+  // Shown or hidden at once: never a fade (docs/motion.md), no translate or rotate.
   const chromeMotion = (visible: boolean): string =>
-    cn(
-      'transition-opacity duration-base',
-      visible ? 'opacity-100' : 'pointer-events-none opacity-0',
-    );
+    visible ? 'opacity-100' : 'pointer-events-none opacity-0';
 
   return (
     // In-flow, full-width block (no longer a modal): the viewer replaces the
     // ribbon in normal page flow, the post content continues below it. It carries
     // its own dark backdrop and stays dark in both app themes.
     // A swipe down moves the whole viewer on Y only; it springs back when released
-    // short of the dismiss distance.
+    // short of the dismiss distance, and rises out past it (motion module).
     <div
+      ref={props.rootRef}
       aria-label="Image viewer"
-      className={cn(
-        'relative w-full overflow-hidden bg-overlay',
-        dragY > 0 ? undefined : 'mv-slide',
-      )}
+      className="relative w-full overflow-hidden bg-overlay"
       style={dragY > 0 ? { transform: `translateY(${dragY}px)` } : undefined}
     >
       {/* Image region: the native scroll-snap carousel, one slide per width, in a
@@ -767,8 +766,36 @@ export function PostLightbox({
   }, [viewing, index]);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  // Motion (docs/motion.md): the viewer grows out of the tapped tile on its
+  // first frame; a swipe down follows the finger, and on release springs back
+  // from there, or (past the line) rises out from there, then closes.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useGrowFromThumb(rootRef);
+  const lastDy = useRef(0);
+  const releasedFrom = useRef(0);
+  const closingRef = useRef(false);
   const dismiss = useMemo(
-    () => createSwipeDismiss({ onDrag: setDragY, onClose: () => onCloseRef.current() }),
+    () =>
+      createSwipeDismiss({
+        onDrag: (dy) => {
+          const from = lastDy.current;
+          lastDy.current = dy;
+          setDragY(dy);
+          if (dy !== 0 || from <= 0) return;
+          // Released: up() calls onClose right after this when it dismisses.
+          releasedFrom.current = from;
+          queueMicrotask(() => {
+            if (!closingRef.current) riseIn(rootRef.current, from);
+          });
+        },
+        onClose: () => {
+          if (closingRef.current) return;
+          closingRef.current = true;
+          const played = riseOut(rootRef.current, releasedFrom.current);
+          if (played.instant) onCloseRef.current();
+          else void played.done.then(() => onCloseRef.current());
+        },
+      }),
     [],
   );
 
@@ -1109,6 +1136,7 @@ export function PostLightbox({
     },
     stageGestures,
     trackRef,
+    rootRef,
     manage: manageView,
     removeConfirming: confirmingRemove,
     saving,

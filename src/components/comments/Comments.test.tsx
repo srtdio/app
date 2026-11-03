@@ -460,7 +460,12 @@ describe('checkpoint state + feed controls', () => {
     expect(tick(true, false)).toBe('hollow');
     expect(tick(true, true)).toBe('filled');
     expect(cls(false, false)).toContain('border-border-strong');
-    expect(cls(false, false)).toContain('opacity-0');
+    // Unchecked, the tick keeps its space hidden; it shows at once (never a fade).
+    expect(cls(false, false)).toContain('invisible');
+    expect(cls(true, true)).not.toContain('invisible');
+    for (const all of [cls(false, false), cls(true, false), cls(true, true)]) {
+      expect(all).not.toMatch(/opacity|transition|duration-/);
+    }
     expect(cls(true, true)).toContain('bg-[var(--good-solid)]');
     expect(cls(true, false)).toContain('border-good');
     for (const all of [cls(false, false), cls(true, false), cls(true, true)]) {

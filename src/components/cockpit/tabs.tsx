@@ -24,16 +24,17 @@ import type {
   UsersData,
 } from '@/lib/cockpit/types';
 import { formatRelative } from '@/lib/time';
+import { Bone, BoxSkeleton } from '@/lib/motion';
 
 export const AGORA_CONSOLE_URL = 'https://console.agora.io';
 
 /** A tab whose source has not answered yet this session paints this until it does. */
 function Pending() {
   return (
-    <div aria-hidden="true" className="flex flex-col gap-2">
-      <span className="h-16 rounded-xl bg-panel-3 animate-pulse" />
-      <span className="h-16 rounded-xl bg-panel-3 animate-pulse" />
-    </div>
+    <BoxSkeleton label="Loading" className="flex flex-col gap-2">
+      <Bone className="h-16 rounded-xl" />
+      <Bone className="h-16 rounded-xl" />
+    </BoxSkeleton>
   );
 }
 

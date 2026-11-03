@@ -14,6 +14,7 @@
 // paint. A landed move announces sorted:post-changed so every live card
 // refetches. Colours are design tokens only, so light and dark match.
 
+import { Bone } from '@/lib/motion';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement, ReactNode, UIEvent } from 'react';
 import { createPortal } from 'react-dom';
@@ -249,13 +250,14 @@ export function PostSheetMedia(props: {
           maxHeight={CHAT_SHEET_FRAME_MAX_HEIGHT}
           bordered={false}
           empty
-          className="animate-pulse"
         >
-          {null}
+          <Bone as="div" className="absolute inset-0" />
         </PlatformFrame>
       </div>
     ) : (
-      <div data-strip-skeleton="" className={cn(STRIP_BOX, 'animate-pulse')} />
+      <div data-strip-skeleton="" className={STRIP_BOX}>
+        <Bone as="div" className="absolute inset-0" />
+      </div>
     );
   }
   const items = gallery.items;

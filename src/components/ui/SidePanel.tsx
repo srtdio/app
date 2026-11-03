@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
-import { DUR_BASE_MS } from '@/lib/motion';
 
 interface SidePanelProps {
   open: boolean;
@@ -19,19 +18,17 @@ interface SidePanelProps {
 export const SIDE_PANEL_WIDTH_CLASS = 'w-[380px]';
 const SIDE_PANEL_WIDTH_PX = '380px';
 
-// Exit length; mirrors --dur-base so the panel stays mounted through its slide out.
-const EXIT_MS = DUR_BASE_MS;
-
 /**
  * A laptop right side panel: 380px wide, fixed under the top bar to the
  * bottom of the screen; while it is on screen it sets --side-panel-w, which
  * the page pads by, so the page beside it shrinks and stays usable. Nothing dims and focus is not trapped (it is not
  * a dialog). Title left, X right; Esc closes and returns focus to whatever
- * had it when the panel opened. Motion: translateX only. Phone uses Sheet.
+ * had it when the panel opened. Motion: none. A laptop pane opens and closes
+ * at once (docs/motion.md, laptop: pane switches are instant); it renders at
+ * its final place from the first frame. Phone uses Sheet (rise).
  */
 export function SidePanel({ open, onClose, title, headerExtra, children }: SidePanelProps) {
-  const [rendered, setRendered] = useState(open);
-  const [entered, setEntered] = useState(false);
+  const rendered = open;
   const panelRef = useRef<HTMLElement>(null);
   const returnRef = useRef<HTMLElement | null>(null);
 
@@ -39,16 +36,11 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
     if (open) {
       const was = document.activeElement;
       returnRef.current = was instanceof HTMLElement && was !== document.body ? was : null;
-      setRendered(true);
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
+      return;
     }
-    setEntered(false);
     const back = returnRef.current;
     returnRef.current = null;
     if (back !== null && back.isConnected) back.focus({ preventScroll: true });
-    const timer = setTimeout(() => setRendered(false), EXIT_MS);
-    return () => clearTimeout(timer);
   }, [open]);
 
   // While on screen the page makes room: main pads by --side-panel-w (AppLayout).
@@ -82,15 +74,7 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
         SIDE_PANEL_WIDTH_CLASS,
       )}
     >
-      <div
-        className={cn(
-          // Axis: translateX only. No fade, no rotate.
-          'flex h-full flex-col mv-slide will-change-transform',
-          entered
-            ? 'translate-x-0'
-            : 'translate-x-full',
-        )}
-      >
+      <div className="flex h-full flex-col">
         <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-1.5">
           <h2 className="min-w-0 truncate text-lg font-semibold">{title}</h2>
           {headerExtra}

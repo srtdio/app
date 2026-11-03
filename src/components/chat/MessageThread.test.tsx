@@ -954,8 +954,8 @@ describe('MessageBubble keyboard and hover actions', () => {
     expect(cls).toContain('absolute right-0 top-0');
     expect(cls).toContain('group-hover/bubble:opacity-100');
     expect(cls).toContain('focus-visible:opacity-100');
-    // Opacity only, duration-fast (120ms), none under reduced motion.
-    expect(cls).toContain('transition-opacity duration-fast motion-reduce:transition-none');
+    // Shown at once on hover or focus: no fade (docs/motion.md).
+    expect(cls).not.toMatch(/transition|duration-/);
     const [glyph] = withAttr(root, 'data-more-glyph');
     expect(String(glyph?.props.className)).toContain('bg-gradient-to-l');
     const stop = vi.fn();
@@ -2894,12 +2894,12 @@ describe('D8: WhatsApp multi-select', () => {
     expect(pruned).toMatchObject({ role: 'selectable', checked: false });
   });
 
-  it('the check circle fades on opacity only; no layout animation on the row', () => {
+  it('the check circle appears at once (no fade); no layout animation on the row', () => {
     const root = row(makeMessage({}), selectable(noop));
     const circle = nodes(root).find((el) => el.type === SelectCheckbox);
     const html = renderStrip(circle as ReactElement);
-    expect(html).toContain('transition-opacity');
-    expect(html).toContain('[@starting-style]:opacity-0');
+    expect(html).not.toContain('transition-opacity');
+    expect(html).not.toContain('opacity-0');
     expect(String(root.props.className)).not.toMatch(/transition|translate-x|animate/);
   });
 });

@@ -46,6 +46,7 @@ import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/ke
 import { logger } from '@/lib/logger';
 import { bottomAnchorProps, useBottomInset } from '@/lib/bottom-inset';
 import { cn } from '@/lib/cn';
+import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import {
   addAssetLink,
   canRenameAssets,
@@ -891,6 +892,11 @@ export function AssetsPage() {
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
   // Back on Assets, the scroll lands where it was once the files painted.
   useKeptScroll(viewKey('assets:scroll'), !listLoading && !assetsFailed);
+  // Boxes show only while nothing is held; the grid settles once when it lands
+  // after them (a kept view paints at once and never settles).
+  const hadBoxes = useHadBoxes(listLoading && !assetsFailed && !searchFailed);
+  const gridRef = useRef<HTMLDivElement>(null);
+  useSettleOnLanding(gridRef, !listLoading && visible.length > 0, hadBoxes);
 
   const exitSelectMode = (): void => {
     selectAllGeneration.current += 1;
@@ -981,17 +987,23 @@ export function AssetsPage() {
             <LoadError title="your files" onRetry={() => void retryLoad()} retrying={retrying} />
           </div>
         ) : listLoading ? (
-          <div className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
+          <BoxSkeleton
+            label="Loading files"
+            className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]"
+          >
             {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
               <div
                 key={i}
-                className="rounded-xl border border-border bg-panel overflow-hidden animate-pulse"
+                data-skeleton-tile=""
+                className="rounded-xl border border-border bg-panel overflow-hidden"
               >
-                <div className="aspect-[4/3] w-full bg-panel-2" />
-                <div className="h-9 border-t border-border" />
+                <Bone as="div" className="aspect-[4/3] w-full" />
+                <div className="flex h-9 items-center border-t border-border px-3">
+                  <Bone className="h-3 w-2/3 rounded" />
+                </div>
               </div>
             ))}
-          </div>
+          </BoxSkeleton>
         ) : !searching && tab === 'all' && liveItems.length === 0 ? (
           // One line; the header's New asset is the only create button.
           <EmptyState icon={<IconAssets size={ICON_SIZE.status} />} title="Files show up here." />
@@ -1011,7 +1023,7 @@ export function AssetsPage() {
             </div>
           ) : null
         ) : (
-          <div className="px-4 md:px-6 py-4">
+          <div ref={gridRef} className="px-4 md:px-6 py-4">
             <AssetGrid
               items={visible}
               presignEnabled={presignEnabled}

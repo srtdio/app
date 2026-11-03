@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
 import { cn } from '@/lib/cn';
-import { prefersReducedMotion } from '@/lib/use-is-laptop';
-import { DUR_BASE_MS } from '@/lib/motion';
+import { Bone } from '@/lib/motion';
+import { SettleLanding } from '@/components/chat/SettleLanding';
 import { supabase } from '@/lib/supabase';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { chatDisplayName } from '@/lib/chat/chat-name';
@@ -69,35 +69,6 @@ export function useMessageSearch(params: {
     };
   }, [workspaceId, channelId, fetchPage]);
   return { state, runner };
-}
-
-/**
- * The --ease-enter token's curve, read at runtime: Element.animate() rejects a
- * var() easing, so the value is resolved first. The fallback is the token's
- * own curve, used only when the variable reads empty.
- */
-function enterEasing(): string {
-  const root = getComputedStyle(document.documentElement);
-  const value = root.getPropertyValue('--ease-enter').trim();
-  return value !== '' ? value : 'cubic-bezier(0.16, 1, 0.3, 1)';
-}
-
-/**
- * Fade an element in on mount: opacity only (no movement, no scale). Runs
- * before paint, so the first frame is already the final layout.
- */
-export function useFadeIn(ref: RefObject<HTMLElement>): void {
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (el === null || typeof el.animate !== 'function') return;
-    // Users who asked for less motion get no fade.
-    if (prefersReducedMotion()) return;
-    const animation = el.animate([{ opacity: 0 }, { opacity: 1 }], {
-      duration: DUR_BASE_MS,
-      easing: enterEasing(),
-    });
-    return () => animation.cancel();
-  }, [ref]);
 }
 
 /** Section label, matching the chat home's Groups / People labels. */
@@ -250,14 +221,15 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
       <h3 data-section-label="messages" className={RESULT_LABEL}>
         Messages
       </h3>
+      <SettleLanding boxes={loading} selector="[data-section='messages'] > li">
       <ul data-section="messages" className="flex flex-col">
         {loading ? (
           Array.from({ length: LOADING_ROWS }, (_, i) => (
             <li key={i} data-search-skeleton="" className="flex items-center gap-3 px-2 py-2">
-              <div className="h-12 w-12 shrink-0 animate-pulse rounded-full bg-panel-2" />
+              <Bone as="div" className="h-12 w-12 shrink-0 rounded-full" />
               <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div className="h-3.5 w-1/3 animate-pulse rounded bg-panel-2" />
-                <div className="h-3 w-3/4 animate-pulse rounded bg-panel-2" />
+                <Bone as="div" className="h-3.5 w-1/3 rounded" />
+                <Bone as="div" className="h-3 w-3/4 rounded" />
               </div>
             </li>
           ))
@@ -325,7 +297,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
         )}
         {!loading && !failed && props.state.loadingMore ? (
           <li data-search-more="" className="px-2 py-3">
-            <div className="mx-auto h-3 w-1/3 animate-pulse rounded bg-panel-2" />
+            <Bone as="div" className="mx-auto h-3 w-1/3 rounded" />
           </li>
         ) : null}
         {!loading && !failed && props.state.moreFailed ? retryRow : null}
@@ -333,12 +305,14 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
           <li ref={props.sentinelRef} data-search-sentinel="" aria-hidden="true" className="h-px" />
         ) : null}
       </ul>
+      </SettleLanding>
     </div>
   );
 }
 
 /**
- * The chat home's search results: the view, faded in (opacity only), with
+ * The chat home's search results: the view, at once (never a fade); rows that
+ * replace the loading boxes settle (sweepBoxes landing). With
  * an observer on the end marker that loads the next page as it scrolls in.
  */
 export function SearchResults(
@@ -347,7 +321,6 @@ export function SearchResults(
   const { runner } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLLIElement>(null);
-  useFadeIn(rootRef);
   const hasMore = props.state.hasMore;
   const loadingMore = props.state.loadingMore;
   const moreFailed = props.state.moreFailed;

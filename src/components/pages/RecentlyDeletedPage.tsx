@@ -1,5 +1,6 @@
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -75,6 +76,11 @@ export function RecentlyDeletedView({
   onDeleteNow,
   onEmpty,
 }: RecentlyDeletedViewProps) {
+  // Boxes only while nothing is held; real rows settle once when they land.
+  const showBoxes = !failed && loading && items.length === 0;
+  const hadBoxes = useHadBoxes(showBoxes);
+  const listRef = useRef<HTMLUListElement>(null);
+  useSettleOnLanding(listRef, items.length > 0, hadBoxes);
   return (
     <div className="px-4 md:px-6 py-4">
       <p className="text-base text-fg-2">
@@ -91,18 +97,15 @@ export function RecentlyDeletedView({
             <Button onClick={onRetry}>Retry</Button>
           </div>
         </div>
-      ) : loading && items.length === 0 ? (
-        <div className="mt-4 flex flex-col gap-2" aria-hidden="true">
+      ) : showBoxes ? (
+        <BoxSkeleton label="Loading deleted files" className="mt-4 flex flex-col gap-2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-[104px] rounded-xl border border-border bg-panel animate-pulse"
-            />
+            <Bone key={i} as="div" className="h-[104px] rounded-xl" />
           ))}
-        </div>
+        </BoxSkeleton>
       ) : items.length > 0 ? (
         <>
-          <ul className="mt-4 divide-y divide-border rounded-xl border bg-panel lit-card">
+          <ul ref={listRef} className="mt-4 divide-y divide-border rounded-xl border bg-panel lit-card">
             {items.map((item) => (
               <li key={item.id} className="px-4 py-3">
                 <p className="text-base font-medium text-fg [overflow-wrap:anywhere]">

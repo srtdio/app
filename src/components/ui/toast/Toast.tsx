@@ -18,8 +18,8 @@ interface ToastProps {
  * is always a separate 44x44 button so the two never nest. An optional action
  * (e.g. Undo) is its own 44px button at the card's right end, after the dismiss; pressing it runs the
  * action and dismisses the toast. Undo toasts never render here (UndoStrip).
- * Enter glides up and
- * fades in (--dur-slow); exit fades down (--dur-base); axis is translateY only.
+ * It always renders at rest: the viewport lays the edgeStrip move over it
+ * (drops from the top, swipe up dismisses, leaves the same way). Never a fade.
  */
 export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProps) {
   const { id, title, description, icon, onPress, action, tone } = toast;
@@ -28,12 +28,6 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
   // never reads as the success style. accent-fg (white) on bad-solid is 4.5:1 or more in
   // both themes (index.css keeps the light value in dark).
   const error = tone === 'error';
-
-  // Motion via keyframes (defined once in the viewport) so the card stays
-  // hookless. Durations/easings read from the motion tokens, never hardcoded.
-  const animation = leaving
-    ? 'sorted-toast-out var(--dur-base) var(--ease-exit) forwards'
-    : 'sorted-toast-in var(--dur-slow) var(--ease-enter)';
 
   const body = (
     <>
@@ -67,7 +61,7 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
 
   return (
     <div
-      style={{ animation }}
+      {...(leaving ? { 'data-leaving': '' } : {})}
       {...(success ? { 'data-toast-tone': 'success' } : {})}
       {...(error ? { 'data-toast-tone': 'error', role: 'alert' } : {})}
       className={`pointer-events-auto flex w-full max-w-sm items-center gap-2 rounded-lg border pr-1 lit-float ${

@@ -86,8 +86,10 @@ describe('UnsafeLinkSheet', () => {
 
   it('a downward swipe past the threshold closes; motion is translateY only', async () => {
     const { dialog, onClose } = await open();
-    expect(dialog.className).toContain('translate-y-0');
-    expect(dialog.className).not.toMatch(/rotate|translate-x|scale-/);
+    // Rendered at rest: no hidden start pose, no opacity or transition classes
+    // (the rise is a Web Animation from the motion module).
+    expect(dialog.className).not.toMatch(/rotate|translate-|scale-|opacity-|transition|duration-/);
+    expect(dialog.parentElement?.className).not.toMatch(/opacity-|transition/);
     const handle = dialog.querySelector('[data-sheet-drag]');
     if (handle === null) throw new Error('no handle');
     expect(dialog.className).toContain('touch-pan-y');

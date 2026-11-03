@@ -12,10 +12,17 @@
 // shows its plain-words error here, once. Hookless, so the tree is unit tested
 // by walking it. The page reserves room under its content so the bar never
 // covers the comment composer.
+//
+// Motion: nothing moves on the tap. Only once the save is confirmed (the hook
+// sets model.landed after the stage RPC resolves; no optimistic approve) does
+// the row show the landed mark, and the tick (approve) or cross (reject) draws
+// once (drawTick, stroke-dashoffset, 220 ms). Park draws nothing.
 
-import type { ReactElement, ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactElement, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
+import { DrawnMarkGlyph } from '@/components/ui/icons';
+import { drawTick } from '@/lib/motion';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { bottomAnchorProps } from '@/lib/bottom-inset';
 import type { StageAction } from '@/components/pages/pcs/stage-actions';
@@ -37,12 +44,23 @@ export function decisionBarOrder(actions: readonly StageAction[]): StageAction[]
   return [...actions].sort((a, b) => rank(a) - rank(b));
 }
 
+/**
+ * A stage move the server has confirmed (set only after the save resolves).
+ * `seq` grows with every landed move, so the same stage landing twice draws again.
+ */
+export interface DecisionLanded {
+  to: Stage;
+  seq: number;
+}
+
 /** What the decision row shows: the approver's choices, or the creator's one main button. */
 export type DecisionModel =
   | {
       kind: 'approver';
       actions: readonly StageAction[];
       onPick: (to: Stage) => void;
+      /** The last confirmed move on the shown stage; its mark draws once. */
+      landed?: DecisionLanded;
     }
   | {
       kind: 'creator';
@@ -54,13 +72,27 @@ export type DecisionModel =
        */
       helper: string | null;
       onPress: () => void;
+      /** The last confirmed move on the shown stage; its mark draws once. */
+      landed?: DecisionLanded;
     };
+
+/** The mark a landed move draws: a tick for approve, a cross for reject, else none. Pure. */
+export function landedMark(model: DecisionModel | null): 'tick' | 'cross' | null {
+  const to = model?.landed?.to;
+  if (to === 'approved') return 'tick';
+  if (to === 'rejected') return 'cross';
+  return null;
+}
+
+/** Room the landed line takes above the buttons (px). */
+const LANDED_SPACE_PX = 28;
 
 /** Room the phone bar needs under the page for this model and error (px, before the safe area). */
 export function decisionBarSpace(model: DecisionModel | null, error: string | null): number {
   let space = DECISION_BAR_SPACE_PX;
   if (model?.kind === 'creator' && model.helper !== null) space += 24;
   if (error !== null) space += 52;
+  if (landedMark(model) !== null) space += LANDED_SPACE_PX;
   return space;
 }
 
@@ -116,14 +148,44 @@ function creatorButton(
   );
 }
 
+/**
+ * The landed line: the drawn mark and the stage word. Rendered at its final
+ * state (fully drawn); the draw is laid over it once per landed move, on the
+ * first frame after the save resolved.
+ */
+function LandedLine(props: { mark: 'tick' | 'cross'; seq: number }): ReactElement {
+  const ref = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => {
+    ref.current?.querySelectorAll('[data-draw]').forEach((path) => {
+      drawTick(path);
+    });
+  }, [props.seq, props.mark]);
+  const tick = props.mark === 'tick';
+  return (
+    <p
+      ref={ref}
+      role="status"
+      data-decision-landed={tick ? 'approved' : 'rejected'}
+      className="mb-2 flex items-center gap-1.5 text-base font-medium text-fg"
+    >
+      <DrawnMarkGlyph mark={props.mark} className={tick ? 'text-good' : 'text-bad'} />
+      {tick ? 'Approved' : 'Rejected'}
+    </p>
+  );
+}
+
 /** The row's content: the error (once, plain words) above the buttons. */
 function decisionContent(
   model: DecisionModel | null,
   busy: boolean,
   error: string | null,
 ): ReactNode {
+  const mark = landedMark(model);
   return (
     <>
+      {mark !== null && model?.landed !== undefined ? (
+        <LandedLine mark={mark} seq={model.landed.seq} />
+      ) : null}
       {error !== null ? (
         // The data hook sits on a wrapper: ErrorNote takes no extra props.
         <div data-decision-error="" className="mb-2">
@@ -143,6 +205,7 @@ function decisionContent(
 export function hasDecisionContent(model: DecisionModel | null, error: string | null): boolean {
   if (error !== null) return true;
   if (model === null) return false;
+  if (landedMark(model) !== null) return true;
   return model.kind === 'creator' || model.actions.length > 0;
 }
 

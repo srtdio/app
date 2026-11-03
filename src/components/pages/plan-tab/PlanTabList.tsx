@@ -6,10 +6,11 @@
 // Plan screens themselves are not touched. Tokens only. While more plans
 // remain (the read's next cursor), PlanTabPage hands the list its Load more
 // (from usePlanTabData) and the list ends with it (PlanTabLoadMore, which the
-// laptop calendar ends with too); the cards it appends enter with a
-// translateY only (duration-base, ease-enter).
+// laptop calendar ends with too); the cards it appends rise into place
+// (itemIn, Y only, laid over their final state; never a fade).
 
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useLayoutEffect, useRef, type ReactElement } from 'react';
+import { Bone, BoxSkeleton, itemIn, rememberCard, useFreshKeys } from '@/lib/motion';
 import { PlanCardBar, PlanCardTop } from '@/components/chat/PlanCard';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { PLAN_DRAFT_LABEL } from '@/components/chat/plan-card';
@@ -68,30 +69,20 @@ export function planCovers(bundle: PlanBundle, thumbs: PlanThumbs): string[] {
 }
 
 /**
- * Cards appended after the first paint (a Load more page): each renders one
- * frame lowered, then moves to rest. Cards of the first paint never move.
- * Returns the appended ids and the ones that have entered.
+ * Cards appended after the first paint (a Load more page) rise into place
+ * (itemIn) over their final state. Cards of the first paint never move.
+ * Returns the ref callback for each card's wrapper.
  */
-function useAppended(ids: readonly string[]): { appended: Set<string>; entered: Set<string> } {
-  const first = useRef<Set<string> | null>(null);
-  if (first.current === null) first.current = new Set(ids);
-  const initial = first.current;
-  const appended = new Set(ids.filter((id) => !initial.has(id)));
-  const [entered, setEntered] = useState<Set<string>>(() => new Set());
-  const waiting = [...appended].filter((id) => !entered.has(id));
-  const key = waiting.join(',');
-  useEffect(() => {
-    if (key === '') return;
-    const raf = requestAnimationFrame(() => {
-      setEntered((prev) => {
-        const next = new Set(prev);
-        for (const id of key.split(',')) next.add(id);
-        return next;
-      });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [key]);
-  return { appended, entered };
+function useAppendedRise(ids: readonly string[]): (id: string) => (el: HTMLElement | null) => void {
+  const fresh = useFreshKeys(ids);
+  const els = useRef(new Map<string, HTMLElement>());
+  useLayoutEffect(() => {
+    for (const id of fresh) itemIn(els.current.get(id) ?? null);
+  });
+  return (id) => (el) => {
+    if (el === null) els.current.delete(id);
+    else els.current.set(id, el);
+  };
 }
 
 export function PlanTabList(props: {
@@ -102,7 +93,7 @@ export function PlanTabList(props: {
   /** Load more while more plans remain; null when every plan is in. */
   more: PlanTabMore | null;
 }): ReactElement {
-  const { appended, entered } = useAppended(props.bundles.map((b) => b.plan.id));
+  const rise = useAppendedRise(props.bundles.map((b) => b.plan.id));
   return (
     <div data-plan-tab-list="" className="flex flex-col gap-5 px-4 pb-8 pt-4">
       {planSections(props.bundles, props.today).map((section) => (
@@ -116,25 +107,13 @@ export function PlanTabList(props: {
           </h2>
           {section.bundles.map((bundle) => {
             const id = bundle.plan.id;
-            const card = (
-              <PlanTabCard
-                key={id}
-                bundle={bundle}
-                covers={planCovers(bundle, props.thumbs)}
-                onOpen={() => props.onOpen(id)}
-              />
-            );
-            if (!appended.has(id)) return card;
             return (
-              <div
-                key={id}
-                data-plan-tab-appended=""
-                className={cn(
-                  'flex flex-col mv-slide',
-                  entered.has(id) ? 'translate-y-0' : 'translate-y-1',
-                )}
-              >
-                {card}
+              <div key={id} ref={rise(id)} className="flex flex-col">
+                <PlanTabCard
+                  bundle={bundle}
+                  covers={planCovers(bundle, props.thumbs)}
+                  onOpen={() => props.onOpen(id)}
+                />
               </div>
             );
           })}
@@ -156,7 +135,11 @@ export function PlanTabCard(props: {
     <PressableRow
       type="button"
       data-plan-tab-card={props.bundle.plan.id}
-      onClick={props.onOpen}
+      onClick={(event) => {
+        // growFromCard: the plan's page grows out of this card.
+        rememberCard(props.bundle.plan.id, event.currentTarget);
+        props.onOpen();
+      }}
       className="lit-card flex flex-col gap-2 border bg-panel px-3.5 pb-3 pt-3 mv-tint"
     >
       <PlanCardTop plan={props.bundle.plan} wrapTitle />
@@ -210,5 +193,51 @@ export function DraftTag(): ReactElement {
     <span data-plan-tab-draft="" className={cn(tagClass('warn'), 'shrink-0')}>
       {PLAN_DRAFT_LABEL}
     </span>
+  );
+}
+
+/**
+ * The phone Plan tab's loading boxes (sweepBoxes): a section label, then
+ * plan-card-shaped Bones in PlanTabCard's own layout (eyebrow, title, mono
+ * range, covers, the progress line). Only when nothing is held for the tab.
+ */
+export function PlanTabBoxes(): ReactElement {
+  return (
+    <BoxSkeleton
+      label="Loading plans"
+      data-plan-tab-loading=""
+      className="flex flex-col gap-5 px-4 pb-8 pt-4"
+    >
+      <section className="flex flex-col gap-2">
+        <div className="flex h-4 items-center">
+          <Bone className="h-3 w-20 rounded" />
+        </div>
+        {[0, 1, 2].map((key) => (
+          <div
+            key={key}
+            data-plan-tab-box=""
+            className="lit-card flex flex-col gap-2 rounded-lg border bg-panel px-3.5 pb-3 pt-3"
+          >
+            <div className="flex h-4 items-center">
+              <Bone className="h-3 w-12 rounded" />
+            </div>
+            <div className="flex h-7 items-center">
+              <Bone className="h-5 w-2/3 rounded" />
+            </div>
+            <div className="flex h-5 items-center">
+              <Bone className="h-3.5 w-32 rounded" />
+            </div>
+            <div className="flex h-10 gap-1.5">
+              <Bone className="h-10 w-10 shrink-0 rounded-lg" />
+              <Bone className="h-10 w-10 shrink-0 rounded-lg" />
+              <Bone className="h-10 w-10 shrink-0 rounded-lg" />
+            </div>
+            <div className="flex h-4 items-center">
+              <Bone className="h-3 w-1/3 rounded" />
+            </div>
+          </div>
+        ))}
+      </section>
+    </BoxSkeleton>
   );
 }

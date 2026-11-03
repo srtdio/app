@@ -10,6 +10,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { navPrefetchProps } from '@/lib/route-prefetch';
 import { INDUCTION_KEYS } from '@/lib/induction';
+import { Bone } from '@/lib/motion';
 
 interface SidebarProps {
   /** The active workspace's display name ("<Brand> - <Platform>"). */
@@ -36,7 +37,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             <Avatar role="header" kind="group" />
           )}
           {workspaceName === null ? (
-            <span className="flex-1 h-4 rounded bg-panel-3 animate-pulse" aria-hidden />
+            <Bone className="flex-1 h-4 rounded" />
           ) : (
             // "<Brand> - <Platform>": wrap (up to three lines) rather than clip the platform.
             <span className="flex-1 min-w-0 font-semibold text-base leading-tight line-clamp-3 break-words">

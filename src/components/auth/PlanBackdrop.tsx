@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useMemo, type ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import {
@@ -9,14 +9,12 @@ import {
   type BackdropCell,
 } from '@/components/auth/plan-backdrop-data';
 
-/** The backdrop shows anyway once this long has passed, loaded or not. */
-export const BACKDROP_FADE_CAP_MS = 2500;
-
 /**
  * Decorative, blurred Plan month behind the auth card. It carries no copy
- * beyond the month label, weekday labels and day numbers, is hidden from
- * screen readers, and fades in as one layer once its images settle so the
- * card is the first paint.
+ * beyond the month label, weekday labels and day numbers, and is hidden from
+ * screen readers. It renders its final state at once and never fades (motion
+ * law: final state first, nothing held hidden waiting for images); the
+ * low-priority thumbnails simply land in place behind the blur.
  */
 export function PlanBackdrop(): ReactElement {
   const isLaptop = useIsLaptop();
@@ -24,37 +22,6 @@ export function PlanBackdrop(): ReactElement {
   const weeks = useMemo(() => backdropMonth(today), [today]);
   const weekdays = useMemo(() => backdropWeekdays(), []);
   const monthLabel = useMemo(() => backdropMonthLabel(today), [today]);
-  const layerRef = useRef<HTMLDivElement>(null);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (ready) return;
-    const layer = layerRef.current;
-    if (layer === null) return;
-    const images = [...layer.querySelectorAll('img')];
-    let pending = images.filter((img) => !img.complete).length;
-    if (pending === 0) {
-      setReady(true);
-      return;
-    }
-    function settle(): void {
-      pending -= 1;
-      if (pending === 0) setReady(true);
-    }
-    const timer = window.setTimeout(() => setReady(true), BACKDROP_FADE_CAP_MS);
-    const waiting = images.filter((img) => !img.complete);
-    for (const img of waiting) {
-      img.addEventListener('load', settle, { once: true });
-      img.addEventListener('error', settle, { once: true });
-    }
-    return () => {
-      window.clearTimeout(timer);
-      for (const img of waiting) {
-        img.removeEventListener('load', settle);
-        img.removeEventListener('error', settle);
-      }
-    };
-  }, [ready, isLaptop]);
 
   return (
     <div
@@ -63,12 +30,8 @@ export function PlanBackdrop(): ReactElement {
       className="pointer-events-none absolute inset-0 overflow-hidden"
     >
       <div
-        ref={layerRef}
         data-plan-backdrop-layer=""
-        className={cn(
-          'absolute -inset-8 scale-[1.03] [filter:blur(6px)] md:[filter:blur(8px)] transition-opacity duration-slow ease-enter',
-          ready ? 'opacity-100' : 'opacity-0',
-        )}
+        className="absolute -inset-8 scale-[1.03] [filter:blur(6px)] md:[filter:blur(8px)]"
       >
         {isLaptop ? (
           <LaptopPlan weeks={weeks} weekdays={weekdays} monthLabel={monthLabel} />

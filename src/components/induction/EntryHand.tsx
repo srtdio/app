@@ -8,7 +8,7 @@ import { type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { boxRect, clampToViewport, guideRadius, handPoint } from '@/lib/induction';
 import type { InductionKey } from '@/lib/induction-keys';
-import { GuideBox, GuideHand, GuideStyle } from './GuideParts';
+import { GuideBox, GuideHand } from './GuideParts';
 import { findVisible, isUnavailable, LAYER_ATTR, radiusOf, rectOf } from './guide-dom';
 import { useTypingNow } from './guide-hooks';
 import { useLiveTick } from './useLiveTick';
@@ -26,7 +26,6 @@ export function EntryHand({ target }: { target: InductionKey | null }): ReactEle
   const viewport = viewportSize();
   return createPortal(
     <div {...{ [LAYER_ATTR]: '' }} data-induction-entry={target}>
-      <GuideStyle />
       <GuideBox
         rect={clampToViewport(boxRect(control), viewport)}
         radius={guideRadius(radiusOf(el))}

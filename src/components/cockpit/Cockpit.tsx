@@ -40,6 +40,7 @@ import {
   type TabDataMap,
 } from '@/lib/cockpit/types';
 import { mark } from '@/lib/perf-marks';
+import { Bone } from '@/lib/motion';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 
 let poller: CockpitPoller | null = null;
@@ -133,7 +134,7 @@ function Tiles({ state, onPick }: { state: CockpitState; onPick: (tab: CockpitTa
               <span className="truncate text-sm text-fg-2">{label}</span>
             </span>
             {tile === undefined ? (
-              <span aria-hidden="true" className="h-7 w-10 rounded bg-panel-3 animate-pulse" />
+              <Bone className="h-7 w-10 rounded" />
             ) : tile.state === 'ok' ? (
               <span className="font-mono text-2xl font-semibold tabular-nums text-fg">
                 {countText(tile.value)}

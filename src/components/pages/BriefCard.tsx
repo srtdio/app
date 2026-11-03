@@ -1,3 +1,5 @@
+import { rememberCard } from '@/lib/motion';
+import { useGrowBackIntoCard } from '@/lib/motion/pages';
 import { Link } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
@@ -86,9 +88,12 @@ interface BriefCardProps {
 export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: BriefCardProps) {
   const closed = isBriefClosed(brief);
   const link = briefCardLink(brief);
+  // growFromCard: the brief's page grows out of this card; Back grows it back.
+  const cardRef = useGrowBackIntoCard<HTMLDivElement>(brief.id);
 
   return (
     <div
+      ref={cardRef}
       data-brief-card=""
       className={`lit-card relative rounded-xl border bg-panel p-4 flex gap-3 min-w-0 overflow-hidden min-h-[44px] mv-tint hover:bg-panel-2 focus-within:ring-2 focus-within:ring-accent ${
         closed ? 'opacity-70' : ''
@@ -97,6 +102,7 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: Brie
       <Link
         to={href}
         aria-label={brief.title}
+        onClick={() => rememberCard(brief.id, cardRef.current)}
         data-brief-card-link=""
         className="absolute inset-0 rounded-xl focus:outline-none"
       />

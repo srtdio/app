@@ -277,7 +277,19 @@ import { cn } from '@/lib/cn';
 import { prefersReducedMotion, useIsLaptop } from '@/lib/use-is-laptop';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { logger } from '@/lib/logger';
-import { DUR_SLOW_MS } from '@/lib/motion';
+import {
+  EDGE_BACK_CLOSE_PX,
+  Bone,
+  BoxSkeleton,
+  EDGE_BACK_ZONE_PX,
+  growFromTrigger,
+  pushBack,
+  pushIn,
+  pushSettle,
+  skipForUATransition,
+  useDragDismiss,
+  usePresence,
+} from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -330,15 +342,18 @@ export function isTextField(target: EventTarget | null): boolean {
 }
 
 /**
- * A plan surface. Phone (below md): a full page over the chat that slides up
- * on translateY, header with a 44px back (or close) button; a modal dialog
+ * A plan surface. Phone (below md): a full page over the chat that pushes in
+ * from the right (docs/motion.md, push: 280 ms in, 240 ms back, a drag from
+ * the left 28 px follows the finger and closes past 130 px or on a flick,
+ * skipped when the browser already animated the back; the incoming edge is a
+ * 1px ring), header with a 44px back (or close) button; a modal dialog
  * (role dialog, aria-modal) whose focus moves in on open and returns to the
  * opener on close (useModalFocus). Laptop (md and up): a right-docked panel,
  * full height and at its final width from its first frame (PLAN_PANEL_WIDTH),
  * border-left, lit as an overlay below 1180px (it sits over the chat) and
  * flat from 1180px (beside the list), no scrim,
- * not modal (role complementary), entering on translateX 24px to 0 with
- * opacity (reduced motion: none), a close X in the header. Opening focuses its
+ * not modal (role complementary), at once (laptop pane switches are
+ * instant), a close X in the header. Opening focuses its
  * heading; closing hands focus back to what opened it. Escape: a key inside
  * the panel is the panel's alone (it never reaches the chat): an in-flow
  * viewer inside it first (handed the key on window only), then the screen's
@@ -381,10 +396,45 @@ export function PlanPage(props: {
   children: ReactNode;
   testId: string;
 }): ReactElement | null {
-  const [rendered, setRendered] = useState(props.open);
-  const [entered, setEntered] = useState(false);
   const desktop = useIsLaptop();
-  const pageRef = useRef<HTMLDivElement>(null);
+  // Where an edge drag let go (px), so the back push starts under the finger.
+  const dragXRef = useRef(0);
+  // Push (phone only; laptop instant): the page renders at rest on its first
+  // frame and the move is laid over it. Back is skipped when the browser
+  // already animated it (iPhone swipe).
+  const { rendered, ref: pageRef } = usePresence<HTMLDivElement>(props.open, {
+    enter: (el) => {
+      dragXRef.current = 0;
+      if (!desktop) pushIn(el);
+    },
+    exit: (el) => {
+      const fromX = dragXRef.current;
+      dragXRef.current = 0;
+      el.style.transform = '';
+      return pushBack(desktop || skipForUATransition() ? null : el, null, fromX);
+    },
+  });
+  const edgeBack = useDragDismiss({
+    axis: 'x',
+    direction: 1,
+    closeAt: EDGE_BACK_CLOSE_PX,
+    edgeZone: EDGE_BACK_ZONE_PX,
+    enabled: !desktop && props.open,
+    onMove: (offset) => {
+      dragXRef.current = offset;
+      const el = pageRef.current;
+      if (el !== null) el.style.transform = `translateX(${offset}px)`;
+    },
+    // The screen's own back path; the exit push starts where the finger let go.
+    onDismiss: () => onBackRef.current(),
+    onCancel: (offset) => {
+      dragXRef.current = 0;
+      const el = pageRef.current;
+      if (el === null) return;
+      el.style.transform = '';
+      pushSettle(el, offset);
+    },
+  });
   const onBackRef = useRef(props.onBack);
   onBackRef.current = props.onBack;
   const onEscapeRef = useRef(props.onEscape);
@@ -450,16 +500,6 @@ export function PlanPage(props: {
   // Phone: a modal layer. Focus moves in on open (never a text field on a
   // touch device), Tab stays inside, and the opener gets it back on close.
   useModalFocus(pageRef, !desktop && props.open && rendered);
-  useEffect(() => {
-    if (props.open) {
-      setRendered(true);
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
-    }
-    setEntered(false);
-    const timer = setTimeout(() => setRendered(false), DUR_SLOW_MS);
-    return () => clearTimeout(timer);
-  }, [props.open]);
   if (!rendered) return null;
   const showBack = !desktop || props.desktopBack === true;
   const backButton = showBack ? (
@@ -505,22 +545,17 @@ export function PlanPage(props: {
       data-plan-page={props.testId}
       {...(desktop ? { 'data-plan-desktop': '' } : {})}
       {...(desktop && props.open ? { 'data-plan-panel': '' } : {})}
+      {...(desktop ? {} : edgeBack)}
       className={cn(
         desktop
-          ? // Laptop: the box is final on its first frame; axis: translateX only.
+          ? // Laptop: the box is final on its first frame and appears at once.
             cn(
-              'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] max-[1179px]:lit-overlay min-[1180px]:border-border transition-[transform,opacity] duration-base',
+              'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] max-[1179px]:lit-overlay min-[1180px]:border-border',
               PLAN_PANEL_WIDTH,
             )
-          : 'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] mv-slide',
+          : // Phone: the push's incoming edge is a 1px ring, no shadow.
+            'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] ring-1 ring-border',
         'focus:outline-none',
-        desktop
-          ? entered
-            ? 'translate-x-0 opacity-100'
-            : 'translate-x-6 opacity-0'
-          : entered
-            ? 'translate-y-0'
-            : 'translate-y-full',
       )}
     >
       {props.twoLine !== undefined ? (
@@ -828,18 +863,13 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }
 /** The loading body: fixed rows so the list lands without a shift. */
 function ScreenSkeleton(): ReactElement {
   return (
-    <div
-      role="status"
-      aria-busy="true"
-      aria-label="Loading plan"
-      className="flex flex-col gap-2 p-4"
-    >
-      <span className="h-1.5 w-full animate-pulse rounded-full bg-panel-2" />
-      <span className="h-10 w-48 animate-pulse rounded-full bg-panel-2" />
+    <BoxSkeleton label="Loading plan" className="flex flex-col gap-2 p-4">
+      <Bone className="h-1.5 w-full rounded-full" />
+      <Bone className="h-10 w-48 rounded-full" />
       {[0, 1, 2].map((i) => (
-        <span key={i} className="h-[104px] w-full animate-pulse rounded-lg bg-panel-2" />
+        <Bone key={i} className="h-[104px] w-full rounded-lg" />
       ))}
-    </div>
+    </BoxSkeleton>
   );
 }
 
@@ -2718,15 +2748,10 @@ export function PlanHeaderMenu(props: {
   const ref = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(props.onClose);
   onCloseRef.current = props.onClose;
-  // Slides in on translateY (no X, no rotate); reduced motion skips it.
-  const [entered, setEntered] = useState(false);
-  useEffect(() => {
-    if (!props.open) {
-      setEntered(false);
-      return;
-    }
-    const raf = requestAnimationFrame(() => setEntered(true));
-    return () => cancelAnimationFrame(raf);
+  // Grows from its trigger (the title button, top left), on the first frame
+  // of an already painted menu (docs/motion.md, growFromTrigger).
+  useLayoutEffect(() => {
+    if (props.open) growFromTrigger(ref.current, 'top left');
   }, [props.open]);
   // One listener set per open (never per render, so a focused row stays focused).
   useEffect(() => {
@@ -2771,8 +2796,7 @@ export function PlanHeaderMenu(props: {
       data-plan-header-menu=""
       onKeyDown={onKeyDown}
       className={cn(
-        'absolute left-12 top-full z-20 mt-1 flex w-56 flex-col overflow-hidden rounded-xl border bg-panel py-1 lit-overlay mv-slide',
-        entered ? 'translate-y-0' : '-translate-y-1',
+        'absolute left-12 top-full z-20 mt-1 flex w-56 flex-col overflow-hidden rounded-xl border bg-panel py-1 lit-overlay',
         NO_TOUCH_SELECT,
       )}
     >
@@ -2927,8 +2951,7 @@ export function PlanFooter(props: {
 // Drag (edit mode): the grip lifts a row, the pointer moves it, a drop queues a move
 // ---------------------------------------------------------------------------
 
-/** Lift and drop timings (ms); reduced motion skips the scale and the snap. */
-export const DRAG_LIFT_MS = 120;
+/** The drop's settle (ms): the card eases to the slot (mv-slide, 160 ms), then commits. */
 export const DRAG_SNAP_MS = 180;
 /** Auto-scroll: the edge band (px) and the step per frame (px). */
 const EDGE_PX = 56;
@@ -3098,9 +3121,8 @@ function usePlanDrag(opts: {
 
 /**
  * The lifted card: fixed over the list at the row's place, moved with
- * translateY only, raised (lit-float, a slight scale that eases in over
- * 120ms); on drop it eases to the slot over 180ms. Reduced motion: no scale,
- * no ease.
+ * translateY only, raised one lit height (lit-float) at 1.02 (mv-lift); on
+ * drop it eases to the slot (mv-slide). Reduced motion: the snap is skipped.
  */
 function DragCard(props: {
   bundle: PlanBundle;
@@ -3111,11 +3133,6 @@ function DragCard(props: {
   desktop?: boolean;
 }): ReactElement | null {
   const { state } = props;
-  const [lifted, setLifted] = useState(false);
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setLifted(true));
-    return () => cancelAnimationFrame(raf);
-  }, []);
   const item = props.bundle.items.find((i) => i.id === state.itemId);
   if (item === undefined) return null;
   const dy = state.snapTop !== null ? state.snapTop - state.top : state.y - state.startY;
@@ -3133,16 +3150,14 @@ function DragCard(props: {
         top: state.top,
         width: state.width,
         transform: `translateY(${dy}px)`,
-        ...(state.snapTop !== null ? { transitionDuration: `${DRAG_SNAP_MS}ms` } : {}),
       }}
     >
       {props.desktop === true ? <style>{'*{cursor:grabbing !important}'}</style> : null}
       <div
         className={cn(
-          'flex items-start gap-3 rounded-lg border border-border bg-panel p-2 lit-float mv-slide motion-reduce:scale-100',
-          lifted && props.desktop !== true ? 'scale-[1.02]' : 'scale-100',
+          'flex items-start gap-3 rounded-lg border border-border bg-panel p-2 lit-float',
+          props.desktop !== true && 'mv-lift',
         )}
-        style={{ transitionDuration: `${DRAG_LIFT_MS}ms` }}
       >
         <RowTile
           item={item}

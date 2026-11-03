@@ -94,6 +94,7 @@ import {
 import { groupByStage, stageColumns } from '@/lib/post-board';
 import { frameFor } from '@/lib/platform-specs';
 import { cn } from '@/lib/cn';
+import { Bone, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import { listPosts, STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, PipelinePost, Stage } from '@srtdio/posts';
 import { errorCopy, errorText, type ErrorCopy } from '@/lib/error-copy';
@@ -397,24 +398,27 @@ export function skeletonRatio(platform: string | null | undefined): number | nul
 
 /** One skeleton card in the real card's shape: picture, two title lines, the meta row. */
 function skeletonCard(index: number, ratio: number | null): ReactElement {
+  // The card frame stays put; its parts are the shared Bone (a top-lit sweep,
+  // never a pulse), each the size of the part that lands there.
   return (
     <div
       key={index}
       aria-hidden="true"
       data-skeleton-card=""
-      className="flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel motion-safe:animate-pulse"
+      className="flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel"
     >
-      <div
-        className={cn('bg-panel-2', ratio === null && 'aspect-square')}
+      <Bone
+        as="div"
+        className={cn(ratio === null && 'aspect-square')}
         {...(ratio !== null ? { style: { aspectRatio: String(ratio) } } : {})}
       />
       <div className="flex flex-col gap-1.5 p-3">
         <div className="flex min-h-[2.75em] flex-col justify-center gap-1.5 text-base leading-snug">
-          <div className="h-3.5 w-3/4 rounded bg-panel-3" />
-          <div className="h-3.5 w-1/2 rounded bg-panel-3" />
+          <Bone as="div" className="h-3.5 w-3/4 rounded" />
+          <Bone as="div" className="h-3.5 w-1/2 rounded" />
         </div>
         <div className="flex h-5 items-center">
-          <div className="h-3 w-1/3 rounded bg-panel-3" />
+          <Bone as="div" className="h-3 w-1/3 rounded" />
         </div>
       </div>
     </div>
@@ -448,7 +452,7 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
             className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2 lit-well-soft"
           >
             <div className="flex h-11 items-center gap-2 border-b px-3 lit-header">
-              <div className="h-3 w-1/3 rounded bg-panel-3" />
+              <Bone as="div" className="h-3 w-1/3 rounded" />
             </div>
             <div className="flex flex-col gap-2 p-2">
               {Array.from({ length: SKELETON_COLUMN_CARDS }, (_card, index) =>
@@ -1278,6 +1282,11 @@ export function PipelinePage() {
   const pipelineEmpty = !boardLoading && !postsFailed && !postsLoading && shownPosts.length === 0;
   // Back on the board, the scroll lands where it was once the posts painted.
   useKeptScroll(viewKey('pipeline:scroll'), !boardLoading && !postsFailed);
+  // Boxes show only while nothing is held; the board settles once when it lands
+  // after them (never on a kept-view return, which paints the board at once).
+  const hadBoxes = useHadBoxes(boardLoading);
+  const landRef = useRef<HTMLDivElement>(null);
+  useSettleOnLanding(landRef, !boardLoading && !postsFailed, hadBoxes);
 
   return (
     <>
@@ -1330,7 +1339,9 @@ export function PipelinePage() {
                     dateFilterActive(query),
                     clearFilters,
                   )
-                : pipelineSurface({
+                : (
+                  <div ref={landRef} className="contents">
+                    {pipelineSurface({
                     stage,
                     isDesktop,
                     sorted,
@@ -1349,7 +1360,9 @@ export function PipelinePage() {
                     viewer,
                     covers,
                     approvers: people.approvers,
-                  })}
+                    })}
+                  </div>
+                )}
 
       <MoveSheet
         open={movePostTarget !== null}

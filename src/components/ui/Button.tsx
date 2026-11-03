@@ -58,7 +58,13 @@ export function buttonClass(
   shape: 'default' | 'round' = 'default',
   className?: string,
 ): string {
-  return cn(BUTTON_BASE, MOVE_CLASS.press, BUTTON_SHAPES[shape], BUTTON_VARIANTS[variant], className);
+  return cn(
+    BUTTON_BASE,
+    MOVE_CLASS.press,
+    BUTTON_SHAPES[shape],
+    BUTTON_VARIANTS[variant],
+    className,
+  );
 }
 
 export function Button({

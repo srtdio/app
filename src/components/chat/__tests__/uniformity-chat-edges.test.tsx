@@ -190,7 +190,7 @@ describe('11i tile time clear of the ⋯', () => {
 });
 
 describe('8 motion tokens in the thread', () => {
-  it('the swipe spring uses DUR_SLOW_MS and the enter curve; hover fades use duration-fast', () => {
+  it('the swipe spring uses DUR_SLOW_MS and the enter curve; hover controls never fade', () => {
     const src = read('../MessageThread.tsx');
     expect(src).toContain('`${DUR_SLOW_MS}ms var(--ease-enter)`');
     expect(src).not.toContain('SWIPE_SPRING_MS');

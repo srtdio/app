@@ -1222,6 +1222,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
               onSelect: props.onSelect,
             })
           : null}
+        <SettleLanding boxes={props.status === 'loading'} selector="[data-chat-home] li">
         {props.status === 'loading'
           ? channelListSkeleton()
           : props.status === 'error'
@@ -1261,6 +1262,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                   ...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {}),
                   ...(props.input !== undefined ? { input: props.input } : {}),
                 })}
+        </SettleLanding>
       </div>
       {selecting !== undefined ? selectBar(selecting) : null}
     </div>

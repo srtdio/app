@@ -92,6 +92,10 @@ import {
   type CacheRecord,
 } from '@/lib/device-cache';
 
+// The Activity boxes (sweepBoxes), labelled for screen readers with the loading copy.
+const activityBoxes = (): Element | null =>
+  document.querySelector(`[data-box-skeleton][aria-label="${LOADING_NOTIFICATIONS}"]`);
+
 function item(over: Partial<ActivityItem>): ActivityItem {
   return {
     id: 'e1',
@@ -236,7 +240,7 @@ describe('Activity first frame: a saved page paints at once', () => {
     const answer = heldPage();
     render();
     expect(text()).toContain('Q3 Launch');
-    expect(text()).not.toContain(LOADING_NOTIFICATIONS);
+    expect(activityBoxes()).toBeNull();
     expect(text()).not.toContain('shows up here');
     // The quiet refresh behind it still reads, and lands while untouched.
     expect(h.fetchActivityEntries).toHaveBeenCalledTimes(1);
@@ -256,17 +260,17 @@ describe('Activity first frame: a saved page paints at once', () => {
     expect(document.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it('with nothing saved the first frame is the loading line, never a zero state', async () => {
+  it('with nothing saved the first frame is the loading boxes, never a zero state', async () => {
     await seed();
     const answer = heldPage();
     render();
-    expect(text()).toContain(LOADING_NOTIFICATIONS);
+    expect(activityBoxes()).not.toBeNull();
     expect(text()).not.toContain('shows up here');
     expect(text()).not.toContain(EMPTY_LINES.mentions);
     await act(async () => answer({ ok: true, data: [item({ id: 'e1', title: 'Q3 Launch' })] }));
     await settle();
     expect(text()).toContain('Q3 Launch');
-    expect(text()).not.toContain(LOADING_NOTIFICATIONS);
+    expect(activityBoxes()).toBeNull();
   });
 });
 
@@ -275,10 +279,10 @@ describe('Activity first frame: the saved screens seed after the mount', () => {
     saveOnDevice(ALL_KEY, [item({ id: 'e1', title: 'Q3 Launch' })]);
     const answer = heldPage();
     render();
-    expect(text()).toContain(LOADING_NOTIFICATIONS);
+    expect(activityBoxes()).not.toBeNull();
     await seed();
     expect(text()).toContain('Q3 Launch');
-    expect(text()).not.toContain(LOADING_NOTIFICATIONS);
+    expect(activityBoxes()).toBeNull();
     expect(text()).not.toContain('shows up here');
     // No second read: the seed only paints.
     expect(h.fetchActivityEntries).toHaveBeenCalledTimes(1);
@@ -301,12 +305,12 @@ describe('Activity first frame: the saved screens seed after the mount', () => {
     expect(text()).not.toContain('Fresh one');
   });
 
-  it('a seed with nothing saved for the chip keeps the loading line, never a zero state', async () => {
+  it('a seed with nothing saved for the chip keeps the loading boxes, never a zero state', async () => {
     saveOnDevice(MENTIONS_KEY, [item({ id: 'm1', title: 'Mention one' })]);
     heldPage();
     render();
     await seed();
-    expect(text()).toContain(LOADING_NOTIFICATIONS);
+    expect(activityBoxes()).not.toBeNull();
     expect(text()).not.toContain('shows up here');
   });
 });

@@ -53,7 +53,7 @@ import {
   type StarTarget,
   type StarWriteResult,
 } from '@/lib/chat/stars';
-import { ModalPanel } from '@/components/chat/ModalPanel';
+import { MODAL_PAGE_CLASS, ModalPanel } from '@/components/chat/ModalPanel';
 
 /** Typing settles this long before a narrowed list is read. */
 const STARRED_DEBOUNCE_MS = 250;
@@ -727,7 +727,7 @@ export function StarredSheet(props: {
     <ModalPanel
       aria-label={STARRED_TITLE}
       data-starred-sheet=""
-      className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
+      className={MODAL_PAGE_CLASS}
     >
       <div className="flex h-14 shrink-0 items-center gap-1 border-b bg-panel px-2 md:px-4 lit-header">
         <IconButton label="Back" onClick={onClose}>

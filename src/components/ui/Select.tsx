@@ -8,7 +8,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { cn } from '@/lib/cn';
+import { centreOf, menuMoves } from '@/components/ui/popover-classes';
 import { useEscapeLayer } from '@/lib/escape-stack';
+import { usePresence } from '@/lib/motion';
 import { viewportSize } from '@/lib/use-is-laptop';
 import { IconCheck, IconChevronDown, ICON_SIZE } from '@/components/ui/icons';
 
@@ -179,7 +181,9 @@ export function Select({
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<MenuPlacement>('down');
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
+  // The list grows from the trigger and shrinks back to it (growFromTrigger).
+  const presence = usePresence<HTMLDivElement>(open, menuMoves(() => centreOf(buttonRef.current)));
+  const listRef = presence.ref;
 
   const selected = options.find((option) => option.value === value);
 
@@ -239,7 +243,7 @@ export function Select({
         </span>
         <IconChevronDown size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
       </button>
-      {open ? (
+      {presence.rendered ? (
         <SelectMenu
           options={options}
           value={value}

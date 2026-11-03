@@ -175,6 +175,37 @@ describe('CodeStep', () => {
     expect(onSignedIn).not.toHaveBeenCalled();
   });
 
+  it('a wrong code shakes the boxes on X only after the server answers (never a fade)', async () => {
+    let answer: (v: { error: { message: string; code: string; status: number } }) => void = () =>
+      undefined;
+    verifyOtp.mockReturnValue(new Promise((r) => (answer = r)));
+    const animate = vi.fn((_frames: Keyframe[], _options: KeyframeAnimationOptions) => ({
+      finish: vi.fn(),
+      addEventListener: vi.fn(),
+    }));
+    const original = (HTMLElement.prototype as { animate?: unknown }).animate;
+    (HTMLElement.prototype as { animate?: unknown }).animate = animate;
+    try {
+      await render();
+      await type('000000');
+      // In flight: nothing moves yet.
+      expect(animate).not.toHaveBeenCalled();
+      await act(async () =>
+        answer({ error: { message: 'x', code: 'otp_expired', status: 403 } }),
+      );
+      expect(animate).toHaveBeenCalledTimes(1);
+      const [frames, options] = animate.mock.calls[0] ?? [[], {}];
+      const xs = (frames as Keyframe[]).map((f) => f.transform);
+      expect(xs).toContain('translateX(-10px)');
+      expect(xs).toContain('translateX(10px)');
+      expect((frames as Keyframe[]).some((f) => 'opacity' in f)).toBe(false);
+      expect((options as KeyframeAnimationOptions).duration).toBe(320);
+      expect(animate.mock.contexts[0]).toBe(document.querySelector('[data-code-boxes]'));
+    } finally {
+      (HTMLElement.prototype as { animate?: unknown }).animate = original;
+    }
+  });
+
   it('an expired code shows the error with a Resend code action', async () => {
     vi.useFakeTimers();
     await render();

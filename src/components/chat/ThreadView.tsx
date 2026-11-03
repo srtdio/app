@@ -2,21 +2,31 @@
 // token (no blur, no translucency), a 56px header with "Close" on the left and
 // the thread's post title centred on one line, then the thread's list and its
 // composer (the caller's). Close and Escape (while the view has focus) close
-// it. Motion: opacity only, 150ms in and out, instant under
-// prefers-reduced-motion; nothing translates, scales or rotates. The header
-// carries the rows' long-press guard. Tokens only; light and dark at parity.
+// it. Motion (docs/motion.md, push): on a phone the view enters from the
+// right (280 ms) and goes back the same way (240 ms); a drag from the left
+// 28 px follows the finger and closes past 130 px or on a flick, else springs
+// back. Back skips the move when the browser already animated it (iPhone
+// swipe, hasUAVisualTransition). Laptop: instant. Never a fade. The incoming
+// edge is a 1px ring, no shadow. The header carries the rows' long-press
+// guard. Tokens only; light and dark at parity.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
-import { useCoarsePointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
+import { useCoarsePointer, useIsLaptop } from '@/lib/use-is-laptop';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { useModalFocus } from '@/lib/modal-focus';
 import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
 import { IconButton } from '@/components/ui/IconButton';
-
-/** The view's fade, in and out (opacity only). */
-const THREAD_VIEW_FADE_MS = 150;
+import {
+  EDGE_BACK_CLOSE_PX,
+  EDGE_BACK_ZONE_PX,
+  pushBack,
+  pushIn,
+  pushSettle,
+  skipForUATransition,
+  useDragDismiss,
+} from '@/lib/motion';
 
 /**
  * Whether a keydown in the view closes it: Escape, not already handled, while
@@ -37,15 +47,13 @@ export function escapeCloses(input: {
 export function ThreadViewFrame(props: {
   title: string;
   selecting: boolean;
-  /** The close finished (after the fade): unmount the view. */
+  /** The close finished (after the push back): unmount the view. */
   onClosed: () => void;
   /** The thread's list, then its composer (or the selection bar). */
   children: ReactNode;
 }): ReactElement {
-  // Users who asked for less motion: the view appears and goes at once.
-  const reduced = usePrefersReducedMotion();
+  const laptop = useIsLaptop();
   const coarse = useCoarsePointer();
-  const [shown, setShown] = useState(reduced);
   const [closing, setClosing] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -55,25 +63,54 @@ export function ThreadViewFrame(props: {
   useModalFocus(rootRef, true, { initial: () => closeRef.current });
   const onClosedRef = useRef(props.onClosed);
   onClosedRef.current = props.onClosed;
-  // Fade in from the first frame; focus lands on Close so Escape reaches the view.
-  useEffect(() => {
-    closeRef.current?.focus({ preventScroll: true });
-    if (reduced) return;
-    const frame = window.requestAnimationFrame(() => setShown(true));
-    return () => window.cancelAnimationFrame(frame);
-    // Mount only: the fade runs once.
+  // Push in from the first frame (the view is already painted at rest; the
+  // move is laid over it). Laptop: instant.
+  useLayoutEffect(() => {
+    if (!laptop) pushIn(rootRef.current);
+    // Mount only: the push runs once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Focus lands on Close so Escape reaches the view.
   useEffect(() => {
-    if (!closing) return;
-    if (reduced) {
+    closeRef.current?.focus({ preventScroll: true });
+  }, []);
+  /**
+   * Leave from `fromX` px (0, or where an edge drag let go): push back, then
+   * unmount. Instant on a laptop, under Reduce Motion, or when the browser
+   * already animated this back (iPhone swipe).
+   */
+  const close = (fromX = 0): void => {
+    if (closing) return;
+    setClosing(true);
+    const el = rootRef.current;
+    if (el !== null) el.style.transform = '';
+    if (laptop || skipForUATransition()) {
       onClosedRef.current();
       return;
     }
-    const timer = window.setTimeout(() => onClosedRef.current(), THREAD_VIEW_FADE_MS);
-    return () => window.clearTimeout(timer);
-  }, [closing, reduced]);
-  const close = (): void => setClosing(true);
+    const played = pushBack(el, null, fromX);
+    if (played.instant) onClosedRef.current();
+    else void played.done.then(() => onClosedRef.current());
+  };
+  // Edge back: a drag from the left edge follows the finger.
+  const edgeBack = useDragDismiss({
+    axis: 'x',
+    direction: 1,
+    closeAt: EDGE_BACK_CLOSE_PX,
+    edgeZone: EDGE_BACK_ZONE_PX,
+    enabled: !laptop && !closing,
+    onMove: (offset) => {
+      const el = rootRef.current;
+      if (el !== null) el.style.transform = `translateX(${offset}px)`;
+    },
+    onDismiss: (offset) => close(offset),
+    onCancel: (offset) => {
+      const el = rootRef.current;
+      if (el === null) return;
+      el.style.transform = '';
+      pushSettle(el, offset);
+    },
+  });
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     const overlayOpen = document.querySelector('[aria-modal="true"], [role="menu"]') !== null;
     if (
@@ -96,10 +133,9 @@ export function ThreadViewFrame(props: {
       aria-label={props.title}
       data-thread-view=""
       onKeyDown={onKeyDown}
-      className={cn(
-        'absolute inset-0 z-30 flex flex-col bg-bg transition-opacity duration-base',
-        shown && !closing ? 'opacity-100' : 'opacity-0',
-      )}
+      {...edgeBack}
+      // The incoming edge: a 1px ring, no shadow.
+      className="absolute inset-0 z-30 flex flex-col bg-bg ring-1 ring-border"
     >
       <div
         data-thread-view-header=""
@@ -116,7 +152,7 @@ export function ThreadViewFrame(props: {
           type="button"
           data-thread-view-close=""
           label="Close thread"
-          onClick={close}
+          onClick={() => close()}
           className={cn(
             // FN23: the dismiss is a chevron, like every other chat layer's back.
             'ml-1 justify-self-start',

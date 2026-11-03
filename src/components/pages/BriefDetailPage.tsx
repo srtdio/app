@@ -7,6 +7,7 @@ import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { ReactElement } from 'react';
+import { Bone, BoxSkeleton } from '@/lib/motion';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { Comments } from '@/components/comments/Comments';
@@ -78,39 +79,39 @@ export function focusCommentBox(root: HTMLElement | null): boolean {
 /**
  * The loading state: a static skeleton in the loaded page's shape (title,
  * the two details lines, Objective lines; the Details column on desktop), in the same
- * containers, so nothing jumps when the brief arrives. Token fills, no motion.
+ * containers, so nothing jumps when the brief arrives. Shared Bone boxes (sweep, never a pulse).
  */
 export function BriefDetailSkeleton(): ReactElement {
   const row = (key: number) => (
     <div key={key} className="flex flex-col gap-1">
-      <div className="h-4 w-16 rounded bg-panel-2" />
-      <div className="h-4 w-20 rounded bg-panel-2" />
+      <Bone as="div" className="h-4 w-16 rounded" />
+      <Bone as="div" className="h-4 w-20 rounded" />
     </div>
   );
   return (
-    <div
+    <BoxSkeleton
+      label="Loading brief"
       data-testid="brief-detail-skeleton"
-      aria-busy="true"
       className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6"
     >
       <div className="md:col-span-2 flex flex-col gap-6">
-        <div className="h-8 w-3/4 rounded bg-panel-2" />
+        <Bone as="div" className="h-8 w-3/4 rounded" />
         <div className="flex flex-col gap-1.5 md:hidden">
-          <div className="h-4 w-52 rounded bg-panel-2" />
-          <div className="h-4 w-28 rounded bg-panel-2" />
+          <Bone as="div" className="h-4 w-52 rounded" />
+          <Bone as="div" className="h-4 w-28 rounded" />
         </div>
         <div className="flex flex-col gap-2">
-          <div className="mb-1 h-3 w-20 rounded bg-panel-2" />
-          <div className="h-4 w-full rounded bg-panel-2" />
-          <div className="h-4 w-11/12 rounded bg-panel-2" />
-          <div className="h-4 w-2/3 rounded bg-panel-2" />
+          <Bone as="div" className="mb-1 h-3 w-20 rounded" />
+          <Bone as="div" className="h-4 w-full rounded" />
+          <Bone as="div" className="h-4 w-11/12 rounded" />
+          <Bone as="div" className="h-4 w-2/3 rounded" />
         </div>
       </div>
       <aside className="hidden md:flex flex-col gap-3">
-        <div className="mb-2 h-3 w-14 rounded bg-panel-2" />
+        <Bone as="div" className="mb-2 h-3 w-14 rounded" />
         {[0, 1, 2, 3, 4].map(row)}
       </aside>
-    </div>
+    </BoxSkeleton>
   );
 }
 

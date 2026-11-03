@@ -21,9 +21,12 @@
 // changed since comes back with conflicts: everything else is saved, and each
 // conflicting row asks the same (a deleted one: "<Name> deleted this" with
 // Restore mine / OK). Marks clear when the sheet closes (the caller writes the
-// seen time then). Motion: the panel moves on translateY only. Tokens only.
+// seen time then). Motion (docs/motion.md, rise): on a phone the panel rises
+// 100% to 0 (320 ms) and drops back (240 ms), the scrim's dim tracking its
+// position; laptop: the dialog grows 95% to 100%. Never a fade. Boxes (Bone)
+// while the list loads. Tokens only.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { Backdrop } from '@/components/ui/Backdrop';
@@ -41,7 +44,19 @@ import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
-import { DUR_BASE_MS } from '@/lib/motion';
+import {
+  Bone,
+  BoxSkeleton,
+  dialogIn,
+  dialogOut,
+  itemIn,
+  riseIn,
+  riseOut,
+  trackDim,
+  useFreshKeys,
+  usePresence,
+} from '@/lib/motion';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import {
   DEFAULT_PRIORITY,
   EMPTY_DRAFT,
@@ -190,15 +205,15 @@ function AddRow(props: {
 
 function TasksSkeleton(): ReactElement {
   return (
-    <div data-task-skeleton="" aria-hidden="true" className="flex flex-col gap-3 px-4 py-4">
+    <BoxSkeleton data-task-skeleton="" label="Loading tasks" className="flex flex-col gap-3 px-4 py-4">
       {[0, 1, 2, 3].map((k) => (
         <div key={k} className="flex items-center gap-3">
-          <span className="h-4 w-4 shrink-0 animate-pulse rounded-lg bg-panel-3" />
-          <span className="h-4 flex-1 animate-pulse rounded-lg bg-panel-3" />
-          <span className="h-4 w-8 shrink-0 animate-pulse rounded-lg bg-panel-3" />
+          <Bone className="h-4 w-4 shrink-0 rounded-lg" />
+          <Bone className="h-4 flex-1 rounded-lg" />
+          <Bone className="h-4 w-8 shrink-0 rounded-lg" />
         </div>
       ))}
-    </div>
+    </BoxSkeleton>
   );
 }
 
@@ -226,12 +241,27 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const [saveFailed, setSaveFailed] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [rendered, setRendered] = useState(props.open);
-  const [entered, setEntered] = useState(false);
   // What the marks are measured from (frozen at open) and the latest other Save then.
   const [openedSeen, setOpenedSeen] = useState<number | null>(props.seenMs);
   const [openedAt, setOpenedAt] = useState<number>(() => Date.now());
-  const panelRef = useRef<HTMLDivElement>(null);
+  const laptop = useIsLaptop();
+  const dimRef = useRef<HTMLButtonElement>(null);
+  // Rise (phone) / grow (laptop): the panel is painted at rest on its first
+  // frame and the move is laid over it; the scrim's dim follows the panel.
+  const { rendered, ref: panelRef } = usePresence<HTMLDivElement>(props.open, {
+    enter: (el) => {
+      if (laptop) return dialogIn(el);
+      const played = riseIn(el);
+      trackDim(el, dimRef.current, played);
+      return played;
+    },
+    exit: (el) => {
+      if (laptop) return dialogOut(el);
+      const played = riseOut(el);
+      trackDim(el, dimRef.current, played);
+      return played;
+    },
+  });
   const bodyRef = useRef<HTMLDivElement>(null);
   const taskShare = useTaskShare(props.share ?? null);
   const resetShare = taskShare.reset;
@@ -239,23 +269,18 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const byId = useMemo(() => new Map(tasks.tasks.map((t) => [t.id, t] as const)), [tasks.tasks]);
   const dirty = isDraftDirty(draft, byId) || notices.size > 0;
 
-  // Enter / exit (translateY only); each open starts fresh.
+  // Each open starts fresh; a close drops the share picker.
   useEffect(() => {
     if (props.open) {
-      setRendered(true);
       setDraft(EMPTY_DRAFT);
       setNotices(new Map());
       setSaveFailed(false);
       setConfirming(false);
       setOpenedSeen(props.seenMs);
       setOpenedAt(Date.now());
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
+      return;
     }
-    setEntered(false);
     setShareOpen(false);
-    const timer = setTimeout(() => setRendered(false), DUR_BASE_MS);
-    return () => clearTimeout(timer);
     // Only an open resets the sheet, never a data change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.open]);
@@ -387,7 +412,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const focusTaskId = props.focusTaskId === TASKS_SHEET_ONLY ? null : props.focusTaskId;
   const focusShown = focusTaskId !== null && byId.has(focusTaskId);
   useEffect(() => {
-    if (!props.open || !entered || focusTaskId === null || !focusShown) return;
+    if (!props.open || !rendered || focusTaskId === null || !focusShown) return;
     let clear: (() => void) | null = null;
     const raf = requestAnimationFrame(() => {
       const row = bodyRef.current?.querySelector<HTMLElement>(
@@ -399,8 +424,24 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
       cancelAnimationFrame(raf);
       clear?.();
     };
-  }, [props.open, entered, focusTaskId, focusShown]);
+  }, [props.open, rendered, focusTaskId, focusShown]);
 
+  // itemIn: a task that arrives while the list is on screen (added here, or
+  // saved by someone else) rises 8px into place; the list's first paint, a
+  // load and a reopen never move.
+  const rowKeys = [...tasks.tasks.map((t) => t.id), ...draft.creates.map((c) => c.key)];
+  const freshRows = useFreshKeys(rowKeys);
+  const listShown = rendered && props.open && tasks.loadState === 'ready';
+  const wasListShown = useRef(false);
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (wasListShown.current && body !== null) {
+      for (const key of freshRows) {
+        itemIn(body.querySelector(`[data-task-row-id="${key}"]`));
+      }
+    }
+    wasListShown.current = listShown;
+  });
   if (!rendered) return null;
 
   const edit = (task: ChatTask, change: Parameters<typeof editField>[2]): void => {
@@ -528,25 +569,20 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
 
   const side = props.side;
   const sheet = createPortal(
-    <div
-      className={cn(
-        'fixed inset-0 z-50 flex items-end transition-opacity duration-base sm:items-center sm:justify-center',
-        entered ? 'opacity-100' : 'opacity-0',
-      )}
-    >
-      <Backdrop aria-label="Close tasks" position="absolute" onClick={requestClose} />
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center">
+      <Backdrop
+        ref={dimRef}
+        aria-label="Close tasks"
+        position="absolute"
+        onClick={requestClose}
+      />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
         aria-label={TASK_SHEET_TITLE}
-        className={cn(
-          'relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border bg-panel lit-overlay transition-[opacity,transform] will-change-transform focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
-          entered
-            ? 'translate-y-0 opacity-100'
-            : 'translate-y-full opacity-100 sm:translate-y-2 sm:opacity-0',
-        )}
+        className="relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border bg-panel lit-overlay focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl"
       >
         <div className="flex items-center gap-1 border-b border-border py-1.5 pl-4 pr-1.5">
           <div className="flex min-w-0 flex-1 flex-col">

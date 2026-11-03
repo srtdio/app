@@ -1,7 +1,10 @@
 // The in-app file viewer: a full-screen sheet chat files open in, so a file
 // never leaves for another tab or window. It portals to document.body above
 // the thread, locks body scroll, traps and restores focus, closes on X, Esc or
-// a swipe down (translateY only), and renders by kind through a renderer slot:
+// a swipe down (translateY only), and renders by kind through a renderer slot.
+// Motion (docs/motion.md): it grows out of the file tile that opened it
+// (growFromCard); a swipe down follows the finger, the dim tracking it, and
+// past the line rises out, else springs back. Never a fade.
 //
 //  - pdf: pdf.js canvases (eval, XFA and scripting off, no annotation layer,
 //    so links are inert). Pages render only near the viewport and far ones are
@@ -39,6 +42,8 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { IconDownload, IconFile, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
+import { riseIn, riseOut, trackDim, type Box, type Played } from '@/lib/motion';
+import { useGrowFromThumb } from '@/lib/motion/overlays';
 import { humanizeSize } from '@/lib/assets';
 import { PresignError, type PresignCache } from '@/lib/asset-presign';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
@@ -1010,6 +1015,8 @@ export interface FileViewerProps {
   actions?: ((barClass: string) => ReactNode) | undefined;
   /** A line under the name in the top bar, used when `actions` is set and there is no page count. */
   subtitle?: string | undefined;
+  /** The tile's rect to grow from; default: the tile the opening tap hit. */
+  from?: Box | null | undefined;
 }
 
 /** The top bar's line under the name with caller actions: "Page 3 of 12" for a PDF. Pure. */
@@ -1102,7 +1109,8 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [pages, setPages] = useState<{ page: number; total: number } | null>(null);
   const [dragY, setDragY] = useState(0);
-  const [settling, setSettling] = useState(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
   const [downloadFailed, setDownloadFailed] = useState(false);
   const zoomRef = useRef(1);
 
@@ -1119,6 +1127,19 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
   // on close. The shared modal-focus stack, so a layer opened over the viewer
   // traps for itself and the layer under it never fights the viewer for Tab.
   useModalFocus(dialogRef, true, { initial: () => closeRef.current });
+
+  // Open: rendered in place, the sheet grows out of the file tile on the first
+  // frame (growFromCard). No tile known: it simply shows.
+  useGrowFromThumb(sheetRef, props.from);
+
+  // The dim follows a move of the sheet (spring back or rise out), then rests.
+  const followDim = useCallback((played: Played): void => {
+    if (played.instant) {
+      if (backdropRef.current !== null) backdropRef.current.style.opacity = '';
+      return;
+    }
+    trackDim(sheetRef.current, backdropRef.current, played);
+  }, []);
 
   // Esc closes (laptop).
   useEffect(() => {
@@ -1173,7 +1194,6 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
       if (!dragging) {
         if (dy > 8 && dy > Math.abs(dx) * 1.5) {
           dragging = true;
-          setSettling(false);
         } else if (Math.abs(dx) > 8 || dy < -8) {
           start = null;
           return;
@@ -1185,13 +1205,25 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
       lastDy = Math.max(dy, 0);
       setDragY(lastDy);
     };
+    let closing = false;
     const onEnd = (): void => {
       if (start !== null && dragging) {
         if (shouldDismiss(lastDy, Date.now() - start.t)) {
-          onClose();
+          // Rises out from where the finger let go, then closes.
+          if (!closing) {
+            closing = true;
+            const played = riseOut(sheetRef.current, lastDy);
+            if (played.instant) onClose();
+            else {
+              followDim(played);
+              void played.done.then(onClose);
+            }
+          }
         } else {
-          setSettling(true);
+          // Short: spring back from where the finger left it.
+          const from = lastDy;
           setDragY(0);
+          if (from > 0) followDim(riseIn(sheetRef.current, from));
         }
       }
       start = null;
@@ -1207,7 +1239,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
       root.removeEventListener('touchend', onEnd);
       root.removeEventListener('touchcancel', onEnd);
     };
-  }, [onClose]);
+  }, [onClose, followDim]);
 
   const onPages = useCallback((page: number, total: number) => setPages({ page, total }), []);
   const onZoom = useCallback((zoom: number) => {
@@ -1231,18 +1263,16 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
     >
       <div
         aria-hidden="true"
+        ref={backdropRef}
         data-viewer-backdrop=""
         className={cn('absolute inset-0 backdrop-blur-xl', tone.backdrop)}
         style={{ opacity: backdrop }}
       />
       <div
+        ref={sheetRef}
         data-viewer-sheet=""
-        className={cn(
-          'relative flex min-h-0 flex-1 flex-col',
-          settling && 'mv-slide',
-        )}
+        className="relative flex min-h-0 flex-1 flex-col"
         style={{ transform: `translateY(${dragY}px)` }}
-        onTransitionEnd={() => setSettling(false)}
       >
         <TopBar
           name={name}

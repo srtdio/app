@@ -943,7 +943,9 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(page).toContain('label="Sort activity"');
     expect(page).not.toContain('Sort notifications');
     expect(page).not.toContain('Loading notifications');
-    expect(count(page, '{LOADING_NOTIFICATIONS}')).toBe(2);
+    // Loading is the card-shaped boxes (ActivityBoxes), labelled "Loading activity".
+    expect(page).toContain('<ActivityBoxes />');
+    expect(page).toContain('<UpcomingBoxes />');
     expect(page).toContain('{updatesLabel(entries.length)}');
   });
 

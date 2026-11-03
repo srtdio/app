@@ -18,7 +18,8 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconEye, IconFile, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
-import { DUR_BASE_MS } from '@/lib/motion';
+import { riseIn, riseOut, trackDim, usePresence } from '@/lib/motion';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { PlatformSize } from '@/lib/platform-specs';
 import type { GalleryItem } from '@srtdio/posts';
@@ -97,21 +98,30 @@ interface PlatformPreviewPanelProps extends PreviewBodyProps {
 
 export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactElement | null {
   const { open, onClose } = props;
-  const [rendered, setRendered] = useState(open);
-  const [entered, setEntered] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (open) {
-      setRendered(true);
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
-    }
-    setEntered(false);
-    const timer = setTimeout(() => setRendered(false), DUR_BASE_MS);
-    return () => clearTimeout(timer);
-  }, [open]);
+  const dimRef = useRef<HTMLButtonElement>(null);
+  // Motion (docs/motion.md): rendered at rest. Phone: the panel rises from the
+  // bottom edge and leaves the same way, the dim tracking it. Laptop: a side
+  // panel, instant. Never a fade.
+  const isLaptop = useIsLaptop();
+  const laptopRef = useRef(isLaptop);
+  laptopRef.current = isLaptop;
+  const presence = usePresence<HTMLDivElement>(open, {
+    enter: (el) => {
+      if (laptopRef.current) return;
+      const played = riseIn(el);
+      trackDim(el, dimRef.current, played);
+      return played;
+    },
+    exit: (el) => {
+      if (laptopRef.current) return riseOut(null);
+      const played = riseOut(el);
+      trackDim(el, dimRef.current, played);
+      return played;
+    },
+  });
+  const rendered = presence.rendered;
+  const panelRef = presence.ref;
 
   // Focus lands on Close once the panel is in the DOM, Tab stays inside, and
   // the chip that opened it gets focus back on close (shared modal focus).
@@ -131,23 +141,15 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
   const title = isPostPlatform(props.platform) ? previewChipLabel(props.platform) : 'Preview';
 
   return createPortal(
-    <div
-      className={cn(
-        'fixed inset-0 z-50 transition-opacity duration-base',
-        entered ? 'opacity-100' : 'opacity-0',
-      )}
-    >
-      <Backdrop position="absolute" aria-label="Close preview" onClick={onClose} />
+    <div className="fixed inset-0 z-50">
+      <Backdrop ref={dimRef} position="absolute" aria-label="Close preview" onClick={onClose} />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         onKeyDown={onKeyDown}
-        className={cn(
-          'absolute inset-y-0 right-0 flex w-full max-w-[460px] flex-col border-l bg-panel lit-overlay mv-slide',
-          entered ? 'translate-x-0' : 'translate-x-full',
-        )}
+        className="absolute inset-y-0 right-0 flex w-full max-w-[460px] flex-col border-l bg-panel lit-overlay will-change-transform"
       >
         <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-2">
           <h2 className="text-lg font-semibold">{title}</h2>

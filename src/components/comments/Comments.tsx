@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -38,6 +39,7 @@ import { roleLabel } from '@/components/pages/settings/members-data';
 import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { cn } from '@/lib/cn';
+import { Bone, GlideItem, itemIn, itemOut } from '@/lib/motion';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { formatDateTime, formatRelative } from '@/lib/time';
 import { useUndoableAction } from '@/lib/use-undoable-action';
@@ -739,7 +741,7 @@ export function showCheckpointConfirm(
  * hit area). Unticked: an empty box on the panel. Ticked: the shared resolved
  * treatment, filled once the approver has confirmed, hollow (good outline and
  * tick, no fill) while it waits for the Confirm. Tokens only, so light and dark
- * parity is automatic. The tick enters on opacity + translateY only.
+ * parity is automatic. The tick shows at once (never a fade).
  */
 export function checkpointBox(checked: boolean, confirmed: boolean): ReactElement {
   return (
@@ -755,13 +757,9 @@ export function checkpointBox(checked: boolean, confirmed: boolean): ReactElemen
           : 'border-border-strong bg-panel text-good',
       )}
     >
-      <span
-        className={cn(
-          // axis: opacity + translateY only (no translateX, rotate, scale)
-          'transition-[opacity,transform] duration-fast ease-enter',
-          checked ? 'translate-y-0 opacity-100' : 'translate-y-0.5 opacity-0',
-        )}
-      >
+      {/* The tick shows at once when checked (never a fade); unchecked it
+          keeps its space, hidden. */}
+      <span className={checked ? undefined : 'invisible'}>
         <IconCheck size={ICON_SIZE.inline} />
       </span>
     </span>
@@ -1905,9 +1903,23 @@ export function Comments({
     const prior = comment.resolved_at;
     const optimistic = new Date().toISOString();
     setRowError(null);
-    patchResolvedAt(comment.id, optimistic);
     const sent = sendResolve(comment, true).catch(() => false);
     let undone = false;
+    // itemOut (docs/motion.md): under the Open filter the resolved thread
+    // leaves the list, so it closes upward first and its siblings glide up
+    // (GlideItem). The write above is already on its way; the row's flip lands
+    // when the move ends (at once when motion is off or a tap finishes it).
+    const leavingRow =
+      filter === 'open'
+        ? (rootRef.current?.querySelector<HTMLElement>(`[id="${commentDomId(comment.id)}"]`) ?? null)
+        : null;
+    const out = itemOut(leavingRow);
+    if (out.instant) patchResolvedAt(comment.id, optimistic);
+    else
+      void out.done.then(() => {
+        if (!mounted.current || undone) return;
+        patchResolvedAt(comment.id, optimistic);
+      });
     const stripId =
       toast?.show({
         title: 'Resolved',
@@ -1915,6 +1927,8 @@ export function Comments({
           label: 'Undo',
           onPress: () => {
             undone = true;
+            // A row still closing (never flipped) comes back whole.
+            for (const move of leavingRow?.getAnimations() ?? []) move.cancel();
             patchResolvedAt(comment.id, prior);
             void sent.then(async (landed) => {
               if (!landed) return;
@@ -2128,6 +2142,28 @@ export function Comments({
   const resolvedCount = resolvedThreadCount(threads);
   const groups = groupThreads(filterThreads(threads, filter));
   const isClient = viewerIsClient === true;
+
+  // itemIn (docs/motion.md): a comment or reply that arrives after the list
+  // first painted (posted here, or live) rises 8 px into place, laid over its
+  // final state. The first paint, a kept list and the Open/All filter never
+  // move: ids are tracked over every thread, whatever the filter.
+  const seenIds = useRef<Set<string> | null>(null);
+  const shownIds = threads
+    .flatMap((thread) => [thread.comment.id, ...thread.replies.map((reply) => reply.id)])
+    .join(' ');
+  useLayoutEffect(() => {
+    if (loading || loadError) return;
+    const ids = shownIds === '' ? [] : shownIds.split(' ');
+    if (seenIds.current === null) {
+      seenIds.current = new Set(ids);
+      return;
+    }
+    for (const id of ids) {
+      if (seenIds.current.has(id)) continue;
+      seenIds.current.add(id);
+      itemIn(rootRef.current?.querySelector<HTMLElement>(`[id="${commentDomId(id)}"]`) ?? null);
+    }
+  }, [shownIds, loading, loadError]);
 
   // The same live rows feed the checkpoint strip (rendered in belowHeader), so a
   // Resolve, Reopen, Confirm or Undo repaints its chip in this very render.
@@ -2539,7 +2575,8 @@ export function Comments({
     const isResolved = comment.resolved_at !== null;
     const isResolving = resolvingId === comment.id;
     return (
-      <li
+      <GlideItem
+        as="li"
         key={comment.id}
         id={commentDomId(comment.id)}
         className={cn(
@@ -2572,7 +2609,7 @@ export function Comments({
               replyButton: rootReplyButton(comment),
               below: renderThreadBelow(comment, replies, false, false),
             })}
-      </li>
+      </GlideItem>
     );
   }
 
@@ -2597,8 +2634,8 @@ export function Comments({
             aria-label={`Resolve checkpoint ${seq}`}
             data-checkpoint-box=""
             onClick={() => handleOneTapResolve(comment)}
-            // axis: background-color on hover only; the tick motion (opacity +
-            // translateY) lives inside checkpointBox.
+            // axis: background-color on hover only; the tick inside
+            // checkpointBox shows at once.
             variant="ghost"
             className={ROW_ACTION_CLASS}
           >
@@ -2645,7 +2682,8 @@ export function Comments({
     const first = group.threads[0]?.comment;
     if (first === undefined) return null;
     return (
-      <li
+      <GlideItem
+        as="li"
         key={`batch-${group.authorId}-${first.id}`}
         className="rounded-xl border bg-panel-2 px-4 py-3 lit-card-muted"
       >
@@ -2677,7 +2715,7 @@ export function Comments({
             </li>
           ))}
         </ol>
-      </li>
+      </GlideItem>
     );
   }
 
@@ -2733,11 +2771,11 @@ export function Comments({
               className="rounded-xl border border-border bg-panel-2 px-4 py-3"
             >
               <div className="flex items-center gap-2">
-                <div className="h-8 w-8 animate-pulse rounded-full bg-panel-3" />
-                <div className="h-3 w-24 animate-pulse rounded bg-panel-3" />
+                <Bone as="div" className="h-8 w-8 shrink-0 rounded-full" />
+                <Bone as="div" className="h-3 w-24 rounded" />
               </div>
-              <div className="mt-3 h-3 w-full animate-pulse rounded bg-panel-3" />
-              <div className="mt-2 h-3 w-2/3 animate-pulse rounded bg-panel-3" />
+              <Bone as="div" className="mt-3 h-3 w-full rounded" />
+              <Bone as="div" className="mt-2 h-3 w-2/3 rounded" />
             </div>
           ))}
         </div>

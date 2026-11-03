@@ -26,6 +26,7 @@ import { isAgencySide } from '@/components/pages/pcs/roles';
 import { canRoleMove } from '@/components/pages/pcs/stage-actions';
 import { useWorkspaceApprovers } from '@/components/pages/pcs/use-approvers';
 import type { PipelinePost, Stage } from '@srtdio/posts';
+import { GlideItem, MOVE_CLASS } from '@/lib/motion';
 
 export interface PipelineBoardProps {
   /** Columns to render, in the locked STAGE order (all stages, or one per-stage view). */
@@ -79,16 +80,21 @@ export interface PipelineBoardProps {
 let draggingFrom: Stage | null = null;
 
 const DROP_OK = ['ring-2', 'ring-accent', 'ring-inset'];
+// Board drag (docs/motion.md): the held card lifts one lit height (float) at
+// 1.02 while it is dragged; on drop its column's cards glide (GlideItem).
+const LIFTED = [MOVE_CLASS.lift, 'lit-float'];
 
 function onCardDragStart(event: DragEvent<HTMLDivElement>, post: PipelinePost): void {
   // posts.stage is a DB text column (typed string); it is one of the Stage values.
   draggingFrom = post.stage as Stage;
+  event.currentTarget.classList.add(...LIFTED);
   event.dataTransfer.effectAllowed = 'move';
   event.dataTransfer.setData('text/plain', `${post.stage}:${post.id}`);
 }
 
-function onCardDragEnd(): void {
+function onCardDragEnd(event: DragEvent<HTMLDivElement>): void {
   draggingFrom = null;
+  event.currentTarget.classList.remove(...LIFTED);
 }
 
 function onColumnDragOver(
@@ -319,8 +325,8 @@ export function PipelineBoardView({
                   // role cannot move anywhere.
                   const draggable = roleReady && hasAllowedMove(role, post.stage as Stage);
                   return (
+                    <GlideItem key={post.id}>
                     <div
-                      key={post.id}
                       data-drag-item
                       data-post-id={post.id}
                       draggable={draggable}
@@ -340,6 +346,7 @@ export function PipelineBoardView({
                         {...(covers !== undefined ? { cover: covers(post.id) } : {})}
                       />
                     </div>
+                    </GlideItem>
                   );
                 })}
               </div>

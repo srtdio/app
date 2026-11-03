@@ -327,7 +327,9 @@ describe('the sheet (U1, U2, U5)', () => {
   it('loading: the skeleton row, no Add or Upload', () => {
     const html = sheet({ filesState: 'loading', files: 0 });
     expect(html).toContain('data-plan-concept-files-loading=""');
-    expect(html).toContain('animate-pulse');
+    // A motion Bone (sweep), never a pulse.
+    expect(html).toContain('mv-bone');
+    expect(html).not.toContain('animate-pulse');
     expect(html).not.toContain('data-plan-concept-files=""');
     expect(html).not.toContain('data-plan-concept-upload-pick');
   });

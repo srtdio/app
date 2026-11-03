@@ -3,9 +3,10 @@
 // and moved here verbatim from the former FeedbackLedger so the source lives with
 // the controls, not with any one surface that draws them.
 
-import type { ReactElement } from 'react';
-import { ICON_SIZE, IconCheck } from '@/components/ui/icons';
+import { useLayoutEffect, useRef, type ReactElement } from 'react';
+import { DrawnMarkGlyph, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { drawTick } from '@/lib/motion';
 import type { CommentResolveArgs, DomainError } from '@srtdio/rpc';
 import { errorText } from '@/lib/error-copy';
 
@@ -61,8 +62,31 @@ export const RESOLVED_FILL_CLASS = 'border-good bg-[var(--good-solid)] text-acce
  *  approver's Confirm. Tokens only; shared with the strip chips. */
 export const RESOLVED_HOLLOW_CLASS = 'border-good bg-transparent text-good';
 
-/** The tick circle. The check enters/leaves via opacity/translateY only, per the
- *  motion tokens; the fill flips instantly (colour is state, not motion). An
+/**
+ * The check inside the tick circle. Rendered fully drawn (final state first);
+ * when a point turns resolved or confirmed while on screen (Mark checked), the
+ * tick draws once (drawTick, stroke-dashoffset, 220 ms). Never on first paint.
+ */
+function TickGlyph(props: { marked: boolean }): ReactElement {
+  const ref = useRef<HTMLSpanElement>(null);
+  const was = useRef(props.marked);
+  useLayoutEffect(() => {
+    const before = was.current;
+    was.current = props.marked;
+    if (!props.marked || before) return;
+    ref.current?.querySelectorAll('[data-draw]').forEach((path) => {
+      drawTick(path);
+    });
+  }, [props.marked]);
+  return (
+    <span ref={ref} className="flex">
+      <DrawnMarkGlyph mark="tick" size={ICON_SIZE.inline} />
+    </span>
+  );
+}
+
+/** The tick circle. The check draws in (drawTick) when the point is marked; it
+ *  never fades or moves; the fill flips instantly (colour is state, not motion). An
  *  unconfirmed circle reads in the good family already: a green outline over a
  *  soft green fill, with the check kept visible at reduced emphasis (never
  *  transparent, so it survives the dark panel). When `live` (the actor's turn) a
@@ -85,14 +109,9 @@ export function tickCircle(done: boolean, live = false, hollow = false): ReactEl
         live && !done && !isHollow ? 'ring-2 ring-good-soft' : '',
       )}
     >
-      <span
-        className={cn(
-          // axis: opacity + translateY only (no translateX, rotate, scale)
-          'transition-[opacity,transform] duration-fast ease-enter',
-          done || isHollow ? 'translate-y-0 opacity-100' : 'translate-y-0.5 opacity-60',
-        )}
-      >
-        <IconCheck size={ICON_SIZE.inline} />
+      {/* Emphasis is a static state (never animated): full when marked, reduced while open. */}
+      <span className={done || isHollow ? 'opacity-100' : 'opacity-60'}>
+        <TickGlyph marked={done || isHollow} />
       </span>
     </span>
   );

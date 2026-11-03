@@ -9,3 +9,4 @@ export * from './preference';
 export * from './run';
 export * from './moves';
 export * from './react';
+export * from './touches';

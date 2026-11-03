@@ -8,7 +8,9 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconMore } from '@/components/ui/icons';
 import type { IconProps } from '@/components/ui/icons';
+import { centreOf } from '@/components/ui/popover-classes';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
+import { recentRightClick } from '@/lib/motion/overlays';
 import { cn } from '@/lib/cn';
 import { useIsLaptop, viewportSize } from '@/lib/use-is-laptop';
 
@@ -89,6 +91,8 @@ const EDGE_PX = 8;
 interface Anchor {
   style: CSSProperties;
   align: 'left' | 'right';
+  /** Where the menu grows from: the right-click cursor, else the trigger centre. */
+  origin?: { x: number; y: number } | null;
 }
 
 /**
@@ -121,7 +125,9 @@ function popoverAnchor(
  * icon, optional one-line description). Laptop (useIsLaptop): a MenuPopover
  * anchored to the trigger with the same rows (tray-size icon), no
  * descriptions. Both close on Escape and hand focus back to the opener. A row
- * closes the menu, then runs its onSelect.
+ * closes the menu, then runs its onSelect. Motion (docs/motion.md): the phone
+ * sheet rises (Sheet); the laptop popover grows from the trigger centre, or
+ * from the cursor when a right-click opened it, and shrinks back on close.
  */
 export function ActionMenu({
   title,
@@ -151,13 +157,16 @@ export function ActionMenu({
   // a scrolling or overflow-hidden parent (a board column, a list) never clips
   // it. Scroll or resize closes it rather than leaving it behind.
   useEffect(() => {
-    // Closing keeps the last anchor so MenuPopover plays its exit fade.
+    // Closing keeps the last anchor so MenuPopover plays its shrink back.
     if (!isLaptop) setAnchor(null);
     if (!isLaptop || !open) return;
     const el = wrapRef.current;
     if (el === null) return;
     const r = el.getBoundingClientRect();
-    setAnchor(popoverAnchor(r, rows.length, viewportSize(), align));
+    setAnchor({
+      ...popoverAnchor(r, rows.length, viewportSize(), align),
+      origin: recentRightClick() ?? centreOf(el),
+    });
     function close(): void {
       setOpen(false);
     }
@@ -189,7 +198,12 @@ export function ActionMenu({
         {anchor !== null
           ? createPortal(
               <div className="z-50" style={anchor.style}>
-                <MenuPopover open={open} onClose={() => setOpen(false)} align={anchor.align}>
+                <MenuPopover
+                  open={open}
+                  onClose={() => setOpen(false)}
+                  align={anchor.align}
+                  origin={anchor.origin ?? null}
+                >
                   <div
                     aria-label={title}
                     onKeyDown={(event) => {

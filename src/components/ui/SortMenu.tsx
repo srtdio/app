@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconCheck, IconSort, ICON_SIZE } from '@/components/ui/icons';
+import { menuMoves } from '@/components/ui/popover-classes';
 import { useDismissLayer } from '@/lib/modal-focus';
+import { usePresence } from '@/lib/motion';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 
 export interface SortOption<T extends string = string> {
@@ -57,8 +59,9 @@ interface SortMenuProps<T extends string> {
 // Canonical sort control: one IconButton (sort icon, label, no chevron), the
 // list-toolbar rule. Generic over the option value so every page
 // (Assets first, then Pipeline/Briefs/Activity) reuses it without hardcoding.
-// Desktop = popover anchored under the trigger; mobile = bottom Sheet. The
-// active option carries a checkmark and aria-checked.
+// Desktop = popover anchored under the trigger, growing from it (growFromTrigger);
+// mobile = bottom Sheet (rise). The active option carries a checkmark and
+// aria-checked.
 export function SortMenu<T extends string>({
   options,
   value,
@@ -69,7 +72,8 @@ export function SortMenu<T extends string>({
   const isDesktop = useIsLaptop();
   // Desktop popover: Escape closes it and focus goes back to the trigger (the
   // phone Sheet does both itself).
-  const panelRef = useRef<HTMLDivElement>(null);
+  const presence = usePresence<HTMLDivElement>(open && isDesktop, menuMoves(undefined, 'right'));
+  const panelRef = presence.ref;
   useDismissLayer(open && isDesktop, () => setOpen(false), panelRef);
 
   function choose(next: T): void {
@@ -100,9 +104,11 @@ export function SortMenu<T extends string>({
     return (
       <div className="relative">
         {trigger}
-        {open ? (
+        {presence.rendered ? (
           <>
-            <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
+            {open ? (
+              <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setOpen(false)} />
+            ) : null}
             <div
               ref={panelRef}
               className="absolute right-0 top-full z-50 mt-1.5 w-44 rounded-xl border bg-panel p-1.5 lit-overlay"

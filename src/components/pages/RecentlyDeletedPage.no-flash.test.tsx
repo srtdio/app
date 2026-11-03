@@ -29,6 +29,8 @@ describe('Recently deleted first paint', () => {
   it('starts as the skeleton, not the zero state', () => {
     const out = renderToStaticMarkup(<RecentlyDeletedPage />);
     expect(out).not.toContain(RECENTLY_DELETED_EMPTY);
-    expect(out).toContain('animate-pulse');
+    expect(out).toContain('data-box-skeleton');
+    expect(out).toContain('mv-bone');
+    expect(out).not.toContain('animate-pulse');
   });
 });

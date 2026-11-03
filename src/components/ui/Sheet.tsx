@@ -9,8 +9,19 @@ import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
-import { DUR_BASE_MS } from '@/lib/motion';
+import {
+  SHEET_CLOSE_PX,
+  dialogIn,
+  dialogOut,
+  dimFor,
+  riseIn,
+  riseOut,
+  trackDim,
+  useDragDismiss,
+  usePresence,
+} from '@/lib/motion';
 import { bottomAnchorProps } from '@/lib/bottom-inset';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 
 interface SheetProps {
   open: boolean;
@@ -27,9 +38,9 @@ interface SheetProps {
   /** At lg+ the box widens to 960px so a side column fits beside the form. */
   wide?: boolean;
   /**
-   * Unsaved input. While true, every close path (X, backdrop tap, Escape)
-   * opens a discard confirm instead of closing. The caller's own actions (the
-   * primary button) are never blocked.
+   * Unsaved input. While true, every close path (X, backdrop tap, Escape,
+   * drag down) opens a discard confirm instead of closing. The caller's own
+   * actions (the primary button) are never blocked.
    */
   dirty?: boolean;
   /** Discard confirm copy, passed by the caller, e.g. "Discard this post?". */
@@ -41,12 +52,6 @@ interface SheetProps {
 }
 
 const DEFAULT_DISCARD = { title: 'Discard changes?', message: 'Your changes will be lost.' };
-
-// Exit transition length; mirrors --dur-base so the closing phase stays mounted
-// exactly as long as the fade/slide-out takes, then unmounts. Under
-// prefers-reduced-motion the CSS collapses to 1ms but this timer still fires,
-// so unmount always happens.
-const EXIT_MS = DUR_BASE_MS;
 
 export function Sheet({
   open,
@@ -61,25 +66,46 @@ export function Sheet({
   busy = false,
   busyLabel = 'Saving…',
 }: SheetProps) {
-  // `rendered` keeps the panel mounted through its exit; `entered` drives the
-  // enter/exit transition (false = offscreen/faded, true = resting).
-  const [rendered, setRendered] = useState(open);
-  const [entered, setEntered] = useState(false);
+  // Motion (docs/motion.md, rise): the panel renders at its resting place from
+  // the first frame and the move is laid over it. Phone: rises from 100%
+  // (320 ms), leaves to 100% (240 ms); the dim tracks the panel's position.
+  // Laptop (useIsLaptop): the centre box grows 95% to 100%. Never a fade.
+  const isLaptop = useIsLaptop();
+  const laptopRef = useRef(isLaptop);
+  laptopRef.current = isLaptop;
+  const dimRef = useRef<HTMLDivElement>(null);
+  // Where a drag down left the panel when it closed: the exit starts there.
+  const dragOffset = useRef(0);
+  const presence = usePresence<HTMLDivElement>(open, {
+    enter: (el) => {
+      dragOffset.current = 0;
+      el.style.transform = '';
+      if (laptopRef.current) return dialogIn(el);
+      const played = riseIn(el);
+      trackDim(el, dimRef.current, played);
+      return played;
+    },
+    exit: (el) => {
+      if (laptopRef.current) return dialogOut(el);
+      const played = riseOut(el, dragOffset.current);
+      // The exit move now holds the panel; drop the drag's inline offset.
+      el.style.transform = '';
+      trackDim(el, dimRef.current, played);
+      return played;
+    },
+  });
+  const rendered = presence.rendered;
+  const panelRef = presence.ref;
 
   useEffect(() => {
-    if (open) {
-      mark('sheet:open');
-      setRendered(true);
-      const raf = requestAnimationFrame(() => setEntered(true));
-      return () => cancelAnimationFrame(raf);
-    }
-    setEntered(false);
-    const timer = setTimeout(() => setRendered(false), EXIT_MS);
-    return () => clearTimeout(timer);
+    if (open) mark('sheet:open');
   }, [open]);
 
+  const openRef = useRef(open);
+  openRef.current = open;
+  const wasOpen = useRef(open);
+
   const [confirming, setConfirming] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
 
   // Drop a pending discard confirm when the caller closes the sheet itself.
   useEffect(() => {
@@ -96,6 +122,56 @@ export function Sheet({
     }
     onClose();
   }
+
+  // Released short of the close line (or blocked by busy or dirty): the panel
+  // springs back from where the finger left it and the dim follows.
+  function springBack(offset: number): void {
+    const panel = panelRef.current;
+    if (panel === null) return;
+    panel.style.transform = '';
+    const played = riseIn(panel, offset);
+    if (played.instant) {
+      if (dimRef.current !== null) dimRef.current.style.opacity = '';
+      return;
+    }
+    trackDim(panel, dimRef.current, played);
+  }
+
+  // Phone: drag down from the top edge (the header) follows the finger and
+  // closes past SHEET_CLOSE_PX or on a flick. Laptop has no drag.
+  const drag = useDragDismiss({
+    axis: 'y',
+    direction: 1,
+    closeAt: SHEET_CLOSE_PX,
+    enabled: !isLaptop && open,
+    onMove: (offset) => {
+      const panel = panelRef.current;
+      if (panel === null) return;
+      panel.style.transform = `translateY(${offset}px)`;
+      if (dimRef.current !== null) dimRef.current.style.opacity = dimFor(offset, panel.offsetHeight);
+    },
+    onDismiss: (offset) => {
+      if (busy) {
+        springBack(offset);
+        return;
+      }
+      if (dirty) {
+        springBack(offset);
+        setConfirming(true);
+        return;
+      }
+      dragOffset.current = offset;
+      onClose();
+      // A caller that keeps the sheet open (its own guard) gets it back at rest.
+      requestAnimationFrame(() => {
+        if (openRef.current) {
+          dragOffset.current = 0;
+          springBack(offset);
+        }
+      });
+    },
+    onCancel: (offset) => springBack(offset),
+  });
 
   // Escape reaches the sheet only while it is the top layer, so Escape in a
   // Select or DatePicker inside it closes just that.
@@ -118,7 +194,8 @@ export function Sheet({
   });
 
   if (open && !rendered) mark(`sheet:open:${title}`);
-  if (!open && entered) mark(`sheet:close:${title}`);
+  if (wasOpen.current && !open) mark(`sheet:close:${title}`);
+  wasOpen.current = open;
   if (!rendered) {
     return null;
   }
@@ -131,12 +208,18 @@ export function Sheet({
 
   return createPortal(
     <div
-      className={cn(
-        'fixed inset-0 z-50 flex items-end bg-scrim transition-opacity duration-base sm:items-center sm:justify-center',
-        entered ? 'opacity-100' : 'opacity-0',
-      )}
+      className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center"
       onClick={onOverlayClick}
     >
+      {/* The dim. Full scrim at rest; on phone its opacity is set per frame
+          from the panel's position (trackDim, dimFor), never a timed fade.
+          Taps pass through to the overlay, which closes. */}
+      <div
+        ref={dimRef}
+        aria-hidden="true"
+        data-sheet-dim=""
+        className="pointer-events-none absolute inset-0 bg-scrim"
+      />
       <div
         ref={panelRef}
         role="dialog"
@@ -144,19 +227,20 @@ export function Sheet({
         tabIndex={-1}
         aria-label={title}
         className={cn(
-          // Axis: translateY only. Mobile slides from 100%; desktop rises 8px
-          // and crossfades. No X, no rotate.
+          // Rendered at rest; the rise (phone, Y) or grow (laptop, scale) is
+          // laid over it by the motion module.
           // Phone height caps at 90dvh (the visible viewport under Safari's
           // bars); 90vh stays as the fallback where dvh is unknown.
-          'flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border bg-panel lit-overlay transition-[opacity,transform] will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
+          'relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border bg-panel lit-overlay will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
           fixedHeight === true && 'sm:h-[min(640px,84vh)]',
           wide === true && 'lg:w-[960px]',
-          entered
-            ? 'translate-y-0 opacity-100'
-            : 'translate-y-full opacity-100 sm:translate-y-2 sm:opacity-0',
         )}
       >
-        <div className="flex items-center gap-2.5 px-[18px] py-[15px] border-b border-border">
+        <div
+          data-sheet-grab=""
+          className="flex items-center gap-2.5 px-[18px] py-[15px] border-b border-border touch-none md:touch-auto"
+          {...drag}
+        >
           <h2 className="line-clamp-2 min-w-0 font-semibold text-lg [overflow-wrap:anywhere]">
             {title}
           </h2>

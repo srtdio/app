@@ -6,7 +6,8 @@
 // an item row). Posts in review open the same
 // PostSheet a PostCard tap opens. Briefs navigate to the brief. Marks jump to
 // the message and keep their stamp (Delivered / Closed / Completed) with the
-// existing inline confirm. The panel only moves on the Y axis; colours are
+// existing inline confirm. The panel only moves on the Y axis (edgeStrip, run
+// by StatusTicker through the motion module); colours are
 // design tokens only, so light and dark match.
 
 import { useEffect, useMemo, useState } from 'react';
@@ -584,7 +585,7 @@ export function StatusDrawerList(
                     data-status-post={post.id}
                     aria-busy={busy}
                     onClick={() => props.onOpenPost(post.id)}
-                    // Waiting on its read: pressed tint and a pulsing chevron, same box.
+                    // Waiting on its read: pressed tint, same box (aria-busy; never a pulse).
                     className={cn(ROW, busy && 'bg-panel-2')}
                   >
                     <span className={DATE_COL}>
@@ -595,7 +596,7 @@ export function StatusDrawerList(
                       <span className={ROW_TITLE}>{lines.title}</span>
                       <span className={ROW_SUB}>{formatLabel(post.format)}</span>
                     </span>
-                    <span className={cn('flex shrink-0', busy && 'animate-pulse')}>
+                    <span className="flex shrink-0">
                       <Chevron />
                     </span>
                   </PressableRow>
@@ -678,8 +679,8 @@ export function StatusDrawerPanel(props: {
   top: number;
   /** The panel's transform (translateY only). */
   transform: string;
+  /** The scrim's dim (the panel's visible share); moves track it frame by frame. */
   scrim: number;
-  animate: boolean;
   /** Open or opening (taking taps); false while it closes. */
   open: boolean;
   panelRef: Ref<HTMLDivElement>;
@@ -693,9 +694,6 @@ export function StatusDrawerPanel(props: {
   };
   children: ReactNode;
 }): ReactElement {
-  const transition = props.animate
-    ? cn('', props.open ? '' : '')
-    : 'transition-none';
   return (
     <div
       data-status-drawer={props.open ? 'open' : 'moving'}
@@ -706,12 +704,8 @@ export function StatusDrawerPanel(props: {
       )}
       style={{ top: props.top }}
     >
-      {/* The one scrim (Backdrop); this wrapper carries the drag-linked opacity. */}
-      <div
-        data-status-scrim=""
-        className={cn('absolute inset-0 transition-opacity', transition)}
-        style={{ opacity: props.scrim }}
-      >
+      {/* The one scrim (Backdrop); this wrapper carries the position-linked dim (never a timed fade). */}
+      <div data-status-scrim="" className="absolute inset-0" style={{ opacity: props.scrim }}>
         <Backdrop aria-label="Close open items" position="absolute" onClick={props.onScrim} />
       </div>
       <div
@@ -720,10 +714,7 @@ export function StatusDrawerPanel(props: {
         data-status-panel=""
         role="dialog"
         aria-label="Open in this chat"
-        className={cn(
-          'absolute inset-x-0 top-0 flex max-h-[calc(100%-48px)] flex-col rounded-b-2xl border-b bg-panel lit-overlay mv-slide',
-          transition,
-        )}
+        className="absolute inset-x-0 top-0 flex max-h-[calc(100%-48px)] flex-col rounded-b-2xl border-b bg-panel lit-overlay"
         style={{ transform: props.transform }}
       >
         <div

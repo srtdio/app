@@ -87,24 +87,13 @@ import {
 } from '@/lib/chat/plans';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import { cn } from '@/lib/cn';
-import { prefersReducedMotion } from '@/lib/use-is-laptop';
-import { DUR_SLOW_MS } from '@/lib/motion';
+import { shake, stripIn, stripOut, usePresence } from '@/lib/motion';
 import { logger } from '@/lib/logger';
 import { civilDaysBetween, civilToday, formatCivilDayHeader } from '@/lib/plan-week';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 
 export { DATE_FIELD, DATE_FIT } from '@/components/chat/PlanDayPickerSheet';
-
-/**
- * The missing-day shake's timing: the slow motion token and the enter curve.
- * Web Animations cannot read var() in `easing`, so the curve is read from the
- * --ease-enter token at run time (linear if it is ever missing).
- */
-export function shakeTiming(): KeyframeAnimationOptions {
-  const easing = getComputedStyle(document.documentElement).getPropertyValue('--ease-enter').trim();
-  return easing !== '' ? { duration: DUR_SLOW_MS, easing } : { duration: DUR_SLOW_MS };
-}
 
 /** Every new plan is a Draft (audience team); plan_create_with_items makes it so. */
 export const NEW_PLAN_AUDIENCE = 'team';
@@ -307,17 +296,8 @@ export function PlanComposeScreen(props: {
     const row = rowRefs.current.get(key);
     if (row === undefined) return;
     row.scrollIntoView({ block: 'center' });
-    if (!prefersReducedMotion() && typeof row.animate === 'function') {
-      row.animate(
-        [
-          { transform: 'translateX(0)' },
-          { transform: 'translateX(-4px)' },
-          { transform: 'translateX(4px)' },
-          { transform: 'translateX(0)' },
-        ],
-        shakeTiming(),
-      );
-    }
+    // The missing day shakes on X (motion module; instant under Reduce Motion).
+    shake(row);
   };
 
   const create = async (): Promise<void> => {
@@ -835,7 +815,8 @@ export const PLAN_SHARED_NOTICE_MS = 4_000;
 /**
  * The "Plan shared" notice, drawn inside the chat just above its composer (so
  * it never covers a plan page header, which sits above the chat). From its own
- * ref it measures the composer form in its chat surface; opacity motion only; the timer
+ * ref it measures the composer form in its chat surface; it slides up above the
+ * composer and back down (stripIn / stripOut, Y only, never a fade); the timer
  * and frame are cleared on unmount and on a new notice.
  */
 export function PlanSharedNotice(props: {
@@ -860,6 +841,10 @@ export function PlanSharedNotice(props: {
     return () => clearTimeout(timer);
   }, [count]);
   const shown = noticeShown(count, expired);
+  const strip = usePresence<HTMLSpanElement>(shown, {
+    enter: (el) => stripIn(el, 'above-composer', 16),
+    exit: (el) => stripOut(el, 'above-composer', 16),
+  });
   return (
     <div
       ref={ref}
@@ -867,13 +852,12 @@ export function PlanSharedNotice(props: {
       aria-live="polite"
       data-plan-shared-notice={shown ? 'shown' : 'hidden'}
       style={{ bottom: bottom ?? 96 }}
-      className={cn(
-        'pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3 transition-opacity duration-base',
-        shown ? 'opacity-100' : 'opacity-0',
-      )}
+      className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3"
     >
-      {shown ? (
-        <span className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-base font-medium text-fg lit-float">
+      {strip.rendered ? (
+        <span
+          ref={strip.ref}
+          className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-base font-medium text-fg lit-float">
           {props.text}
         </span>
       ) : null}

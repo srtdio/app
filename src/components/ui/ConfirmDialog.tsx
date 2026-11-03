@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import type { MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
-import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
-import { DUR_BASE_MS } from '@/lib/motion';
+import { dialogIn, dialogOut, riseIn, riseOut, trackDim, useMoveOnMount } from '@/lib/motion';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 
 interface ConfirmDialogProps {
   title: string;
@@ -23,16 +23,12 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-// Exit transition length; mirrors --dur-base so the dialog stays mounted for the
-// full fade-out before its parent unmounts it. Timer still fires under
-// prefers-reduced-motion (CSS collapses to 1ms), so onCancel always runs.
-const EXIT_MS = DUR_BASE_MS;
-
 // A small, reusable confirm modal. The repo has no dialog primitive (only Sheet,
 // which is a side panel), so this is the shared confirm surface. Colours come
 // entirely from theme tokens (panel / border / fg / bad), giving light+dark
 // parity for free; both actions are 44px tall (Button size lg) for touch. Enter
-// and exit match the desktop Sheet: fade + 8px rise, translateY only. Focus
+// and exit match the Sheet (docs/motion.md, rise): phone rises from the bottom
+// edge with the dim tracking it; laptop grows 95% to 100%. Never a fade. Focus
 // lands on the dismiss action, Tab stays inside, and the opener gets focus back
 // when the dialog goes. It does not guard Back: the layer under it does.
 export function ConfirmDialog({
@@ -47,21 +43,34 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   // The dialog is mount-controlled by its parent, so it owns a closing phase:
-  // a dismiss plays the exit, then calls onCancel (which unmounts it).
-  const [entered, setEntered] = useState(false);
+  // a dismiss plays the exit, then calls onCancel (which unmounts it). With
+  // motion off (or no Web Animations) onCancel runs at once.
   const closingRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const dimRef = useRef<HTMLDivElement>(null);
+  const isLaptop = useIsLaptop();
+  const laptopRef = useRef(isLaptop);
+  laptopRef.current = isLaptop;
 
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setEntered(true));
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  // Rendered at rest; the move starts on the first frame.
+  useMoveOnMount(panelRef, (el) => {
+    if (laptopRef.current) return dialogIn(el);
+    const played = riseIn(el);
+    trackDim(el, dimRef.current, played);
+    return played;
+  });
 
   function requestClose(): void {
     if (busy || closingRef.current) return;
     closingRef.current = true;
-    setEntered(false);
-    setTimeout(onCancel, EXIT_MS);
+    const el = panelRef.current;
+    const played = laptopRef.current ? dialogOut(el) : riseOut(el);
+    if (played.instant) {
+      onCancel();
+      return;
+    }
+    if (!laptopRef.current) trackDim(el, dimRef.current, played);
+    void played.done.then(onCancel);
   }
 
   // Escape reaches this dialog only while it is the top layer (escape-stack).
@@ -76,23 +85,23 @@ export function ConfirmDialog({
   return createPortal(
     <div
       onClick={onOverlayClick}
-      className={cn(
-        // The bottom padding clears the iPhone home bar where the box sits low.
-        'fixed inset-0 z-50 flex items-end justify-center bg-scrim px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] transition-opacity duration-base sm:items-center',
-        entered ? 'opacity-100' : 'opacity-0',
-      )}
+      // The bottom padding clears the iPhone home bar where the box sits low.
+      className="fixed inset-0 z-50 flex items-end justify-center px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:items-center"
     >
+      {/* The dim: full scrim at rest, tracking the box per frame on phone. */}
+      <div
+        ref={dimRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-scrim"
+      />
       <div
         ref={panelRef}
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={cn(
-          // Axis: translateY only (8px rise) with a crossfade. No X, no rotate.
-          'lit-overlay w-full max-w-sm rounded-2xl border bg-panel p-5 outline-none transition-[opacity,transform] duration-base will-change-transform',
-          entered ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
-        )}
+        // Rendered at rest; rise (phone, Y) or grow (laptop, scale) is laid over it.
+        className="relative lit-overlay w-full max-w-sm rounded-2xl border bg-panel p-5 outline-none will-change-transform"
       >
         <h2 className="text-lg font-semibold text-fg">{title}</h2>
         {message !== undefined && message !== '' ? (

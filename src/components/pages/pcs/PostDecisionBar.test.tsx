@@ -4,6 +4,8 @@ import {
   DECISION_BAR_SPACE_PX,
   decisionBarOrder,
   decisionBarSpace,
+  hasDecisionContent,
+  landedMark,
   PostDecisionBar,
   PostDecisionRow,
   SEND_AGAIN_LABEL,
@@ -181,5 +183,39 @@ describe('41. a failed tap shows once, inside the row that was tapped', () => {
     expect(decisionBarSpace(approver('client'), 'x')).toBeGreaterThan(
       decisionBarSpace(approver('client'), null),
     );
+  });
+});
+
+describe('the landed mark (motion: drawn only after the save resolved)', () => {
+  const marks = (tree: ReactNode): unknown[] =>
+    all(tree)
+      .filter((el) => typeof el.type === 'function' && 'mark' in el.props && 'seq' in el.props)
+      .map((el) => el.props.mark);
+
+  it('no landed move: no mark, no extra room', () => {
+    expect(landedMark(approver('client'))).toBeNull();
+    expect(marks(PostDecisionBar({ model: approver('client'), busy: false, error: null }))).toEqual([]);
+  });
+
+  it('approve landed: a tick above the buttons; reject landed: a cross; park: none', () => {
+    const base = approver('client');
+    const approved: DecisionModel = { ...base, landed: { to: 'approved', seq: 1 } };
+    const rejected: DecisionModel = { ...base, landed: { to: 'rejected', seq: 2 } };
+    const parked: DecisionModel = { ...base, landed: { to: 'parked', seq: 3 } };
+    expect(marks(PostDecisionBar({ model: approved, busy: false, error: null }))).toEqual(['tick']);
+    expect(marks(PostDecisionRow({ model: rejected, busy: false, error: null }))).toEqual(['cross']);
+    expect(marks(PostDecisionBar({ model: parked, busy: false, error: null }))).toEqual([]);
+    expect(decisionBarSpace(approved, null)).toBeGreaterThan(decisionBarSpace(base, null));
+  });
+
+  it('a landed mark shows even with no buttons left', () => {
+    const empty: DecisionModel = {
+      kind: 'approver',
+      actions: [],
+      onPick: vi.fn(),
+      landed: { to: 'rejected', seq: 1 },
+    };
+    expect(hasDecisionContent(empty, null)).toBe(true);
+    expect(PostDecisionBar({ model: empty, busy: false, error: null })).not.toBeNull();
   });
 });

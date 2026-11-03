@@ -16,9 +16,10 @@ const MIN_HEIGHT: Record<NonNullable<DropZoneProps['minHeight']>, string> = {
 
 // The dashed upload target: a tappable surface (drag and drop handlers pass
 // through) with a strong dashed border on panel-2, a centred column of
-// content, a focus-visible ring and a disabled fade.
+// content, a focus-visible ring and a disabled fade. Press (motion move 5):
+// mv-press (MOVE_CLASS.press) sinks it to .97 while held and eases colours.
 const DROP_ZONE_BASE =
-  'flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 lit-well-soft p-4 text-center text-fg-2 mv-tint hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none';
+  'flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 lit-well-soft p-4 text-center text-fg-2 mv-press hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none';
 
 export function DropZone({
   minHeight = 'touch',

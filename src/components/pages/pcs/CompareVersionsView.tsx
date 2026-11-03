@@ -6,10 +6,9 @@
 // On the guard path (captions too large to align) it falls back to a plain
 // side-by-side with the stats still shown but no per-word marks.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
-import { cn } from '@/lib/cn';
 import { formatDateTime } from '@/lib/time';
 import { diffSegments, type DiffKind, type DiffResult, type DiffSegment } from '@/lib/text-diff';
 
@@ -223,13 +222,7 @@ export function compareVersionsView({
 
 export function CompareVersionsView(props: CompareVersionsViewProps) {
   const [mode, setMode] = useState<CompareViewMode>('auto');
-  // Enter is an opacity fade only (no translation on any axis): mounts at 0 and
-  // flips to 1 on the next frame so the transition runs.
-  const [entered, setEntered] = useState(false);
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setEntered(true));
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  // Renders at its final state on the first frame (never a fade).
 
   const diff = useMemo(
     () => diffSegments(props.fromCaption ?? '', props.toCaption ?? ''),
@@ -237,12 +230,7 @@ export function CompareVersionsView(props: CompareVersionsViewProps) {
   );
 
   return (
-    <div
-      className={cn(
-        'transition-opacity duration-base ease-enter',
-        entered ? 'opacity-100' : 'opacity-0',
-      )}
-    >
+    <div>
       {compareVersionsView({ ...props, diff, mode, onModeChange: setMode })}
     </div>
   );
