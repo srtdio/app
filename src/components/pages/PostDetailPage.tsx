@@ -1531,7 +1531,10 @@ export function PostDetailPage({
     return (
       <SearchWordsContext.Provider value={searchJump.words}>
         {embedded ? null : (
-          <div ref={pageAnchorRef} className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
+          <div
+            ref={pageAnchorRef}
+            className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+          >
             {backButton}
             <div aria-hidden className="flex min-w-0 flex-1 items-center gap-2">
               <Bone as="div" className="h-4 w-32 rounded" />
@@ -1576,7 +1579,10 @@ export function PostDetailPage({
     return (
       <>
         {embedded ? null : (
-          <div ref={pageAnchorRef} className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
+          <div
+            ref={pageAnchorRef}
+            className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+          >
             {backButton}
           </div>
         )}
@@ -1591,7 +1597,10 @@ export function PostDetailPage({
     return (
       <>
         {embedded ? null : (
-          <div ref={pageAnchorRef} className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
+          <div
+            ref={pageAnchorRef}
+            className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+          >
             {backButton}
           </div>
         )}
@@ -1858,7 +1867,10 @@ export function PostDetailPage({
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
       {embedded ? null : (
-        <div ref={pageAnchorRef} className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header">
+        <div
+          ref={pageAnchorRef}
+          className="flex items-center gap-3 h-14 px-4 md:px-6 border-b lit-header"
+        >
           {backButton}
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <span

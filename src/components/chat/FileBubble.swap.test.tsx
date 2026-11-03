@@ -61,7 +61,7 @@ describe('FileBubbleCard: the late thumbnail fills the same box without a blink'
     expect(box().className).toBe(before.className);
   });
 
-  it('shows the placeholder until the image has loaded, then fades the image in', () => {
+  it('shows the placeholder until the image has loaded, then shows the image at once', () => {
     render(null);
     const boxEl = box();
     render('https://signed/thumb');
@@ -70,8 +70,8 @@ describe('FileBubbleCard: the late thumbnail fills the same box without a blink'
     const [img] = images();
     expect(img?.getAttribute('data-loaded')).toBe('false');
     expect(img?.className).toContain('opacity-0');
-    expect(img?.className).toContain('duration-fast');
-    expect(img?.className).toContain('ease-enter');
+    // Never a fade (docs/motion.md): no transition on the swap.
+    expect(img?.className).not.toMatch(/transition|duration-/);
     expect(placeholder()).not.toBeNull();
 
     act(() => {

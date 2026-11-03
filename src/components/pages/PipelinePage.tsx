@@ -1321,48 +1321,44 @@ export function PipelinePage() {
       ) : null}
 
       {/* The chips and filters above stay usable through a failed read. */}
-      {live && searchActive && postSearch.status === 'error' && postSearch.data === null
-        ? postsLoadError(() => postSearch.refresh(), false)
-        : live && postsFailed
-          ? postsLoadError(() => void loadPosts(), postsLoading)
-          : boardLoading
-            ? postsSkeleton(isDesktop, {
-                kanban: stage === ALL_KEY,
-                ratio: skeletonRatio(activeWorkspace?.platform),
-                columns: boardStages(stage, role).length,
-              })
-            : pipelineEmpty
-              ? emptyPipeline()
-              : showFilteredEmpty
-                ? filteredEmpty(
-                    searchActive ? query.search : '',
-                    dateFilterActive(query),
-                    clearFilters,
-                  )
-                : (
-                  <div ref={landRef} className="contents">
-                    {pipelineSurface({
-                    stage,
-                    isDesktop,
-                    sorted,
-                    grouped,
-                    cache,
-                    presignEnabled,
-                    workspaceKey,
-                    onViewAll: setStage,
-                    onMovePost: requestBoardMove,
-                    onLongPressPost: openMove,
-                    role,
-                    roleReady: roleStatus === 'ready',
-                    onBlockedMove,
-                    shownKey,
-                    timeZone,
-                    viewer,
-                    covers,
-                    approvers: people.approvers,
-                    })}
-                  </div>
-                )}
+      {live && searchActive && postSearch.status === 'error' && postSearch.data === null ? (
+        postsLoadError(() => postSearch.refresh(), false)
+      ) : live && postsFailed ? (
+        postsLoadError(() => void loadPosts(), postsLoading)
+      ) : boardLoading ? (
+        postsSkeleton(isDesktop, {
+          kanban: stage === ALL_KEY,
+          ratio: skeletonRatio(activeWorkspace?.platform),
+          columns: boardStages(stage, role).length,
+        })
+      ) : pipelineEmpty ? (
+        emptyPipeline()
+      ) : showFilteredEmpty ? (
+        filteredEmpty(searchActive ? query.search : '', dateFilterActive(query), clearFilters)
+      ) : (
+        <div ref={landRef} className="contents">
+          {pipelineSurface({
+            stage,
+            isDesktop,
+            sorted,
+            grouped,
+            cache,
+            presignEnabled,
+            workspaceKey,
+            onViewAll: setStage,
+            onMovePost: requestBoardMove,
+            onLongPressPost: openMove,
+            role,
+            roleReady: roleStatus === 'ready',
+            onBlockedMove,
+            shownKey,
+            timeZone,
+            viewer,
+            covers,
+            approvers: people.approvers,
+          })}
+        </div>
+      )}
 
       <MoveSheet
         open={movePostTarget !== null}

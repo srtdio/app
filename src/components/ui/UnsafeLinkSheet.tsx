@@ -18,7 +18,8 @@ import { IconButton } from '@/components/ui/IconButton';
 import { IconAlertTriangle, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
-import { dimFor, riseIn, riseOut, trackDim, usePresence } from '@/lib/motion';
+import { dimFor, riseIn, riseOut, usePresence } from '@/lib/motion';
+import { dimWith } from '@/lib/motion/overlays';
 
 interface UnsafeLinkSheetProps {
   open: boolean;
@@ -41,14 +42,10 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
   dragRef.current = drag;
   const presence = usePresence<HTMLDivElement>(open, {
     enter: (el) => {
-      const played = riseIn(el);
-      trackDim(el, dimRef.current, played);
-      return played;
+      return dimWith(el, dimRef.current, riseIn(el));
     },
     exit: (el) => {
-      const played = riseOut(el, dragRef.current);
-      trackDim(el, dimRef.current, played);
-      return played;
+      return dimWith(el, dimRef.current, riseOut(el, dragRef.current));
     },
   });
   const rendered = presence.rendered;
@@ -99,8 +96,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
     }
     // Short: spring back from where the finger left it.
     setDrag(0);
-    const back = drag > 0 ? riseIn(panelRef.current, drag) : null;
-    if (back !== null && !back.instant) trackDim(panelRef.current, dimRef.current, back);
+    if (drag > 0) dimWith(panelRef.current, dimRef.current, riseIn(panelRef.current, drag));
     else if (dimRef.current !== null) dimRef.current.style.opacity = '';
   }
 

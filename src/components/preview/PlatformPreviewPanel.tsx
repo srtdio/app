@@ -18,7 +18,8 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconEye, IconFile, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
-import { riseIn, riseOut, trackDim, usePresence } from '@/lib/motion';
+import { riseIn, riseOut, usePresence } from '@/lib/motion';
+import { dimWith } from '@/lib/motion/overlays';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { PlatformSize } from '@/lib/platform-specs';
@@ -109,15 +110,11 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
   const presence = usePresence<HTMLDivElement>(open, {
     enter: (el) => {
       if (laptopRef.current) return;
-      const played = riseIn(el);
-      trackDim(el, dimRef.current, played);
-      return played;
+      return dimWith(el, dimRef.current, riseIn(el));
     },
     exit: (el) => {
       if (laptopRef.current) return riseOut(null);
-      const played = riseOut(el);
-      trackDim(el, dimRef.current, played);
-      return played;
+      return dimWith(el, dimRef.current, riseOut(el));
     },
   });
   const rendered = presence.rendered;

@@ -10,7 +10,8 @@
 
 import { mark } from '@/lib/perf-marks';
 import { linkTypedUsernames } from '@/lib/chat/mentions';
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { itemIn, useFreshKeys } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
@@ -116,6 +117,16 @@ export function CommentComposer({
   // after a successful submit remounts it via this incrementing key.
   const [composerKey, setComposerKey] = useState(0);
   const [pending, setPending] = useState<Pending[]>([]);
+  // A new attach chip rises into place (itemIn) over its final state; chips
+  // render in `pending` order, so the list's children line up with it.
+  const freshChips = useFreshKeys(pending.map((item) => item.id));
+  const chipsRef = useRef<HTMLUListElement>(null);
+  useLayoutEffect(() => {
+    if (freshChips.size === 0) return;
+    pending.forEach((item, index) => {
+      if (freshChips.has(item.id)) itemIn(chipsRef.current?.children[index] ?? null);
+    });
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -241,7 +252,7 @@ export function CommentComposer({
       ) : null}
 
       {pending.length > 0 ? (
-        <ul className="flex flex-wrap gap-2">
+        <ul ref={chipsRef} className="flex flex-wrap gap-2">
           {pending.map((item) => (
             <PendingChip
               key={item.id}

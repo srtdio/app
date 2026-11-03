@@ -18,7 +18,7 @@ import { useToast } from '@/components/ui/toast';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
-import { dropIn, usePresence } from '@/lib/motion';
+import { dropIn } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/trace';
@@ -641,11 +641,17 @@ export function CommandPalette({
   const ownInputRef = useRef<HTMLInputElement>(null);
   const inputRef = givenInputRef ?? ownInputRef;
   const listRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   // Motion (docs/motion.md): rendered at rest, the palette drops 8 px from the
-  // top on the first frame (dropIn). Closing is instant. Never a fade.
-  const presence = usePresence<HTMLDivElement>(open, { enter: (el) => dropIn(el) });
-  const rendered = presence.rendered;
-  const panelRef = presence.ref;
+  // top on the frame it mounts (dropIn, run from a stable callback ref during
+  // commit, before paint). Closing is instant. Never a fade.
+  const attachPanel = useRef<((el: HTMLDivElement | null) => void) | null>(null);
+  if (attachPanel.current === null) {
+    attachPanel.current = (el) => {
+      panelRef.current = el;
+      if (el !== null) dropIn(el);
+    };
+  }
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [expanded, setExpanded] = useState<ReadonlySet<ResultGroup>>(new Set());
@@ -822,7 +828,7 @@ export function CommandPalette({
 
   // Open renders at once (not after an effect), so the opener's synchronous
   // focus() finds the field in the same tap.
-  if (!open && !rendered) {
+  if (!open) {
     return null;
   }
 
@@ -939,7 +945,7 @@ export function CommandPalette({
       onClick={onOverlayClick}
     >
       <div
-        ref={panelRef}
+        ref={attachPanel.current}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"

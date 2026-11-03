@@ -12,10 +12,7 @@ export const ACTIVITY_BOX_CARDS = 4;
 
 function ActivityBoxCard(): ReactElement {
   return (
-    <div
-      data-activity-box=""
-      className="lit-card flex overflow-hidden rounded-xl border bg-panel"
-    >
+    <div data-activity-box="" className="lit-card flex overflow-hidden rounded-xl border bg-panel">
       <div aria-hidden="true" className="w-[3px] shrink-0 bg-border-strong" />
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-3 p-[14px]">

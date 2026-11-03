@@ -1098,7 +1098,9 @@ export function NotificationsPage() {
   useKeptScroll(keptKey('scroll'), state === 'upcoming' ? upcomingLoaded : !listLoading);
   // Boxes only while nothing is held for the list; the cards settle once when
   // they land after them (a kept or device-saved page paints at once).
-  const hadBoxes = useHadBoxes(state !== 'upcoming' && listLoading && !(error && items.length === 0));
+  const hadBoxes = useHadBoxes(
+    state !== 'upcoming' && listLoading && !(error && items.length === 0),
+  );
   useSettleOnLanding(listRef, !listLoading, hadBoxes);
 
   return (

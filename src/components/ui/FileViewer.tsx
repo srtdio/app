@@ -42,8 +42,8 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { IconDownload, IconFile, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
-import { riseIn, riseOut, trackDim, type Box, type Played } from '@/lib/motion';
-import { useGrowFromThumb } from '@/lib/motion/overlays';
+import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
+import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
 import { humanizeSize } from '@/lib/assets';
 import { PresignError, type PresignCache } from '@/lib/asset-presign';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
@@ -1134,11 +1134,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
 
   // The dim follows a move of the sheet (spring back or rise out), then rests.
   const followDim = useCallback((played: Played): void => {
-    if (played.instant) {
-      if (backdropRef.current !== null) backdropRef.current.style.opacity = '';
-      return;
-    }
-    trackDim(sheetRef.current, backdropRef.current, played);
+    dimWith(sheetRef.current, backdropRef.current, played);
   }, []);
 
   // Esc closes (laptop).

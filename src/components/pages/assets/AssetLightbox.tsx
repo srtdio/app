@@ -261,8 +261,7 @@ export function AssetLightbox({
     if (!infoOpen) return;
     if (isLaptop) dialogIn(infoRef.current);
     else riseIn(infoRef.current);
-    // On open only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // On open only (isLaptop is read at that moment).
   }, [infoOpen]);
   // The file open in the FileViewer. Reached from the long-press sheet's Info,
   // the lightbox opens on the details instead.

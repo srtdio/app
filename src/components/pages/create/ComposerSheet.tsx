@@ -132,7 +132,11 @@ export function ComposerSheet({
     >
       {/* The dim: its own layer (so it never dims the panel), tracking the
           panel's position; a tap on it falls through to the overlay's close. */}
-      <div ref={dimRef} aria-hidden="true" className="pointer-events-none absolute inset-0 bg-scrim" />
+      <div
+        ref={dimRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-scrim"
+      />
       <div
         ref={panelRef}
         role="dialog"

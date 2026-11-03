@@ -2,7 +2,9 @@
 // menu at the pointer: the "Move to" list (each plan day and No date with its
 // item count, the row's day marked) plus "Remove from plan" in the danger
 // colour. A pick or Remove only queues an op (Save changes writes). Placed
-// before paint (no jump), clamped inside the viewport, fixed width; no motion.
+// before paint (no jump), clamped inside the viewport, fixed width; once
+// placed it grows from the pointer or its button (growFromTrigger, .90 to 1,
+// ease-pop), never a fade.
 // It follows its row on list scroll and window resize, and closes once the row
 // leaves the list's view. Escape (kept from the chat), Tab or a press outside
 // closes it; Up/Down move between its items.
@@ -16,6 +18,7 @@ import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { MOVE_TO_HEADING, REMOVE_LABEL } from '@/lib/chat/plan-keyboard-move';
 import { cn } from '@/lib/cn';
 import { viewportSize } from '@/lib/use-is-laptop';
+import { growFromTrigger, originFrom } from '@/lib/motion';
 
 /** Where the popover opens, as placed: under a button (right-aligned to it) or at a point. */
 type PopoverPlace =
@@ -160,6 +163,24 @@ export function PlanDayPopover(props: {
       document.removeEventListener('pointerdown', onDown, true);
     };
   }, []);
+  // Placed (before paint): grow from the right-click point or the button's centre, once.
+  const placed = pos !== null;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!placed || el === null) return;
+    const at = placeOf(anchor);
+    const point =
+      at.kind === 'point'
+        ? { x: at.x, y: at.y }
+        : { x: (at.left + at.right) / 2, y: (at.top + at.bottom) / 2 };
+    const box = el.getBoundingClientRect();
+    growFromTrigger(
+      el,
+      originFrom(point, { left: box.left, top: box.top, width: box.width, height: box.height }),
+    );
+    // Once per open: later re-placements (scroll, resize) never replay it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placed]);
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
     if (event.key === 'Tab') {
       props.onClose();

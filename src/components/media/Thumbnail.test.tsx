@@ -257,7 +257,11 @@ describe('Thumbnail original, never a fade', () => {
     } as unknown as PresignCache;
   }
 
-  async function mountOriginal(): Promise<{ host: HTMLElement; img: HTMLImageElement; unmount: () => void }> {
+  async function mountOriginal(): Promise<{
+    host: HTMLElement;
+    img: HTMLImageElement;
+    unmount: () => void;
+  }> {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const host = document.createElement('div');
     document.body.appendChild(host);

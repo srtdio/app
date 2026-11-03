@@ -326,26 +326,26 @@ export function PipelineBoardView({
                   const draggable = roleReady && hasAllowedMove(role, post.stage as Stage);
                   return (
                     <GlideItem key={post.id}>
-                    <div
-                      data-drag-item
-                      data-post-id={post.id}
-                      draggable={draggable}
-                      onDragStart={(event) => onCardDragStart(event, post)}
-                      onDragEnd={onCardDragEnd}
-                      className="rounded-lg"
-                    >
-                      <PostCard
-                        post={post}
-                        cache={cache}
-                        presignEnabled={presignEnabled}
-                        workspaceKey={workspaceKey}
-                        inColumn
-                        timeZone={timeZone}
-                        {...(onOpenMove !== undefined ? { onMove: onOpenMove } : {})}
-                        {...(viewer !== undefined ? { viewer } : {})}
-                        {...(covers !== undefined ? { cover: covers(post.id) } : {})}
-                      />
-                    </div>
+                      <div
+                        data-drag-item
+                        data-post-id={post.id}
+                        draggable={draggable}
+                        onDragStart={(event) => onCardDragStart(event, post)}
+                        onDragEnd={onCardDragEnd}
+                        className="rounded-lg"
+                      >
+                        <PostCard
+                          post={post}
+                          cache={cache}
+                          presignEnabled={presignEnabled}
+                          workspaceKey={workspaceKey}
+                          inColumn
+                          timeZone={timeZone}
+                          {...(onOpenMove !== undefined ? { onMove: onOpenMove } : {})}
+                          {...(viewer !== undefined ? { viewer } : {})}
+                          {...(covers !== undefined ? { cover: covers(post.id) } : {})}
+                        />
+                      </div>
                     </GlideItem>
                   );
                 })}

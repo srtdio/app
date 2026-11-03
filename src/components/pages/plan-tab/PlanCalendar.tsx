@@ -589,10 +589,7 @@ function MonthGrid(props: {
                 </span>
                 {props.loading && cell.inMonth && (weekIndex * 7 + cellIndex) % 3 === 1 ? (
                   <Bone
-                    className={cn(
-                      'w-4/5 shrink-0 rounded-lg',
-                      props.coarse ? 'h-11' : 'h-[22px]',
-                    )}
+                    className={cn('w-4/5 shrink-0 rounded-lg', props.coarse ? 'h-11' : 'h-[22px]')}
                   />
                 ) : null}
                 {shown.map((entry) => (

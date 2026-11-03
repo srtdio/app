@@ -3,8 +3,9 @@
 // "Tomorrow" and "Monday" at 9:00 AM local, and "Custom time" with native date
 // and time inputs. Every time is the device's local zone, named in the footer
 // from Intl (never hardcoded). Tokens only, so light and dark stay at parity;
-// rows are at least 56px with 44px targets. Motion: the Sheet moves on
-// translateY only; the menu fades (opacity only).
+// rows are at least 56px with 44px targets. Motion: the Sheet rises; the menu
+// grows from the Send chevron and shrinks back to it (growFromTrigger, never a
+// fade).
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
@@ -28,7 +29,8 @@ import {
 } from '@/lib/chat/scheduled';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
-import { DUR_BASE_MS } from '@/lib/motion';
+import { usePresence } from '@/lib/motion';
+import { centreOf, menuMoves } from '@/components/ui/popover-classes';
 
 const SCHEDULE_SHEET_TITLE = 'Schedule message';
 export const SCHEDULE_HELPER = 'Any time from 1 minute to 1 year ahead.';
@@ -223,7 +225,7 @@ export function ScheduleSheet(props: {
   );
 }
 
-/** The laptop menu above the Send chevron, anchored right; opacity only. */
+/** The laptop menu above the Send chevron, anchored right; grows from the chevron. */
 export function ScheduleMenu(props: {
   open: boolean;
   onClose: () => void;
@@ -232,20 +234,11 @@ export function ScheduleMenu(props: {
   /** The chevron: a press on it toggles, so it never counts as outside. */
   anchorRef?: RefObject<HTMLElement>;
 }): ReactElement | null {
-  const [rendered, setRendered] = useState(props.open);
-  const rootRef = useRef<HTMLDivElement>(null);
   const anchorRef = props.anchorRef;
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    if (props.open) {
-      setRendered(true);
-      const raf = requestAnimationFrame(() => setShown(true));
-      return () => cancelAnimationFrame(raf);
-    }
-    setShown(false);
-    const timer = setTimeout(() => setRendered(false), DUR_BASE_MS);
-    return () => clearTimeout(timer);
-  }, [props.open]);
+  const { rendered, ref: rootRef } = usePresence<HTMLDivElement>(
+    props.open,
+    menuMoves(() => centreOf(anchorRef?.current), 'right'),
+  );
   const onClose = props.onClose;
   useEffect(() => {
     if (!props.open) return;
@@ -276,10 +269,7 @@ export function ScheduleMenu(props: {
       role="dialog"
       aria-label={SCHEDULE_SHEET_TITLE}
       data-schedule-menu=""
-      className={cn(
-        'absolute bottom-full right-3 z-30 mb-2 flex w-[340px] max-w-[calc(100%-24px)] flex-col rounded-xl border bg-panel lit-overlay transition-opacity duration-base',
-        shown ? 'opacity-100' : 'opacity-0',
-      )}
+      className="absolute bottom-full right-3 z-30 mb-2 flex w-[340px] max-w-[calc(100%-24px)] flex-col rounded-xl border bg-panel lit-overlay"
     >
       <h2 className="px-4 pb-1 pt-3 text-lg font-semibold text-fg">{SCHEDULE_SHEET_TITLE}</h2>
       <div className="px-2 pb-2">

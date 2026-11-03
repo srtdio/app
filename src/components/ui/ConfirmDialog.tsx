@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
-import { dialogIn, dialogOut, riseIn, riseOut, trackDim, useMoveOnMount } from '@/lib/motion';
+import { dialogIn, dialogOut, riseIn, riseOut, useMoveOnMount } from '@/lib/motion';
+import { dimWith } from '@/lib/motion/overlays';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 
 interface ConfirmDialogProps {
@@ -55,9 +56,7 @@ export function ConfirmDialog({
   // Rendered at rest; the move starts on the first frame.
   useMoveOnMount(panelRef, (el) => {
     if (laptopRef.current) return dialogIn(el);
-    const played = riseIn(el);
-    trackDim(el, dimRef.current, played);
-    return played;
+    return dimWith(el, dimRef.current, riseIn(el));
   });
 
   function requestClose(): void {
@@ -69,7 +68,7 @@ export function ConfirmDialog({
       onCancel();
       return;
     }
-    if (!laptopRef.current) trackDim(el, dimRef.current, played);
+    if (!laptopRef.current) dimWith(el, dimRef.current, played);
     void played.done.then(onCancel);
   }
 

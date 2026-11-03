@@ -32,8 +32,8 @@ import {
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
-import { riseIn, riseOut, trackDim, type Box, type Played } from '@/lib/motion';
-import { useGrowFromThumb } from '@/lib/motion/overlays';
+import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
+import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
 import { viewportSize } from '@/lib/use-is-laptop';
 import type { PresignCache } from '@/lib/asset-presign';
 import { VIEWER_ERROR } from '@/components/ui/FileViewer';
@@ -505,11 +505,7 @@ export function ImageLightbox({
 
   // The dim follows a move of the image (spring back or rise out), then rests.
   const followDim = useCallback((played: Played): void => {
-    if (played.instant) {
-      if (backdropRef.current !== null) backdropRef.current.style.opacity = '';
-      return;
-    }
-    trackDim(yRef.current, backdropRef.current, played);
+    dimWith(yRef.current, backdropRef.current, played);
   }, []);
 
   // Swipe released short: spring back from where the finger left it.

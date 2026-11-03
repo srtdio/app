@@ -16,10 +16,10 @@ import {
   dimFor,
   riseIn,
   riseOut,
-  trackDim,
   useDragDismiss,
   usePresence,
 } from '@/lib/motion';
+import { dimWith } from '@/lib/motion/overlays';
 import { bottomAnchorProps } from '@/lib/bottom-inset';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 
@@ -81,17 +81,14 @@ export function Sheet({
       dragOffset.current = 0;
       el.style.transform = '';
       if (laptopRef.current) return dialogIn(el);
-      const played = riseIn(el);
-      trackDim(el, dimRef.current, played);
-      return played;
+      return dimWith(el, dimRef.current, riseIn(el));
     },
     exit: (el) => {
       if (laptopRef.current) return dialogOut(el);
       const played = riseOut(el, dragOffset.current);
       // The exit move now holds the panel; drop the drag's inline offset.
       el.style.transform = '';
-      trackDim(el, dimRef.current, played);
-      return played;
+      return dimWith(el, dimRef.current, played);
     },
   });
   const rendered = presence.rendered;
@@ -129,12 +126,7 @@ export function Sheet({
     const panel = panelRef.current;
     if (panel === null) return;
     panel.style.transform = '';
-    const played = riseIn(panel, offset);
-    if (played.instant) {
-      if (dimRef.current !== null) dimRef.current.style.opacity = '';
-      return;
-    }
-    trackDim(panel, dimRef.current, played);
+    dimWith(panel, dimRef.current, riseIn(panel, offset));
   }
 
   // Phone: drag down from the top edge (the header) follows the finger and

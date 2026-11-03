@@ -7,7 +7,8 @@ import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { ReactElement } from 'react';
-import { Bone, BoxSkeleton } from '@/lib/motion';
+import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
+import { leaveIntoCard, useGrowFromCard } from '@/lib/motion/pages';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { Comments } from '@/components/comments/Comments';
@@ -371,6 +372,11 @@ export function BriefDetailPage({
   // address bar can stay on the pretty URL without a redirect.
   const briefId = briefIdProp ?? params.briefId;
   const navigate = useNavigate();
+  // growFromCard (kept on laptop): opened from a card tap, the page grows out
+  // of that card on its first frame (layout effect, no wait); Back grows it
+  // back into the card. Never on a kept-view tab return.
+  const pageAnchorRef = useRef<HTMLDivElement>(null);
+  useGrowFromCard(briefId, pageAnchorRef);
   const newTrace = useNewTrace();
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
   const toast = useOptionalToast();
@@ -637,8 +643,10 @@ export function BriefDetailPage({
 
   function goBack(): void {
     const target = briefBackTarget(window.history.state);
-    if (target === 'pop') navigate(-1);
-    else navigate(target);
+    if (target === 'pop') {
+      leaveIntoCard(briefId, pageAnchorRef.current);
+      navigate(-1);
+    } else navigate(target);
   }
 
   // The same chevron as Post detail.
@@ -649,12 +657,21 @@ export function BriefDetailPage({
   );
 
   const bareHeader = (
-    <div className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b">
+    <div
+      ref={pageAnchorRef}
+      className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b"
+    >
       {backButton}
     </div>
   );
 
-  if (loading || (linkedPending && !loadFailed && !notFound)) {
+  // The page settles once when it lands after the boxes (never on a kept read).
+  const showingBoxes = loading || (linkedPending && !loadFailed && !notFound);
+  const hadBoxes = useHadBoxes(showingBoxes);
+  const landedRef = useRef<HTMLDivElement>(null);
+  useSettleOnLanding(landedRef, !showingBoxes && detail !== null, hadBoxes);
+
+  if (showingBoxes) {
     return (
       <>
         {bareHeader}
@@ -798,7 +815,10 @@ export function BriefDetailPage({
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
-      <div className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b">
+      <div
+        ref={pageAnchorRef}
+        className="lit-header flex items-center gap-3 h-14 px-4 md:px-6 border-b"
+      >
         {backButton}
         {/* The status line, as the post screen's: a 7px dot and 15px semibold. */}
         <div data-brief-status-line="" className="flex min-w-0 flex-1 items-center gap-2">
@@ -849,7 +869,7 @@ export function BriefDetailPage({
         </div>
       </div>
 
-      <div className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div ref={landedRef} className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* One order on phone and desktop: title (details lines under it on
             phone), Objective, Brand requirements, Attachments, Reference links,
             Comments. Desktop's side column holds the details and linked posts. */}

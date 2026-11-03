@@ -11,7 +11,8 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import type { FilePrompt } from '@/components/pages/create/file-kind';
 import { useModalFocus } from '@/lib/modal-focus';
-import { dialogIn, riseIn, trackDim, useMoveOnMount } from '@/lib/motion';
+import { dialogIn, riseIn, useMoveOnMount } from '@/lib/motion';
+import { dimWith } from '@/lib/motion/overlays';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 
 interface FilePromptSheetProps {
@@ -26,9 +27,7 @@ export function FilePromptSheet({ prompt, onKeep, onRemove }: FilePromptSheetPro
   const isLaptop = useIsLaptop();
   useMoveOnMount(panelRef, (el) => {
     if (isLaptop) return dialogIn(el);
-    const played = riseIn(el);
-    trackDim(el, dimRef.current, played);
-    return played;
+    return dimWith(el, dimRef.current, riseIn(el));
   });
   const keepRef = useRef<HTMLDivElement>(null);
   const onKeepRef = useRef(onKeep);

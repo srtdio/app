@@ -1,8 +1,10 @@
 // The scheduled strip above the composer: shown only while the viewer has 1+
 // scheduled messages in this chat. One 48px button on accent-soft with a top
 // border: the calendar-clock in accent, "N scheduled message(s)", the next
-// send time in mono, a chevron. It paints with the thread's first frame (no
-// animation) and opens "Scheduled in this chat". Tokens only.
+// send time in mono, a chevron. A strip already there when the chat opens
+// paints with the thread's first frame (no motion); one that appears because
+// a message was just scheduled here slides up above the composer (stripIn,
+// Y only). It opens "Scheduled in this chat". Tokens only.
 //
 // When the next message carries photos or files, their small thumbnails sit
 // before the time (ScheduledAttachments, shared with the cards).
@@ -13,9 +15,10 @@
 // so the first one still lands.
 //
 // Also the composer's schedule-mode strip ("Sends tomorrow 9:00 AM" with a
-// 44px x), which slides on translateY only.
+// 44px x), which slides up on translateY only (stripIn above the composer).
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+import { stripIn, useMoveOnMount } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import {
   ICON_SIZE,
@@ -148,6 +151,11 @@ export function ScheduledAttachments(props: {
   );
 }
 
+/** The scheduled strip slides its own 48px height above the composer when created. */
+const SCHEDULED_STRIP_SLIDE_PX = 48;
+/** The schedule-mode strip slides its own 44px height. */
+const SCHEDULE_MODE_SLIDE_PX = 44;
+
 export function ScheduledStrip(props: {
   rows: readonly ScheduledRow[];
   onOpen: () => void;
@@ -161,14 +169,32 @@ export function ScheduledStrip(props: {
   const onChangedRef = useRef(props.onChanged);
   onChangedRef.current = props.onChanged;
   const channelId = props.channelId;
+  // Armed by a schedule change in this chat: the strip that then appears was
+  // just created, so it slides in. Never on a chat open (nothing armed).
+  const created = useRef(false);
   useEffect(() => {
+    created.current = false;
     if (channelId === undefined) return;
-    return onScheduledChanged(channelId, () => onChangedRef.current?.());
+    return onScheduledChanged(channelId, () => {
+      created.current = true;
+      onChangedRef.current?.();
+    });
   }, [channelId]);
+  const stripRef = useRef<HTMLButtonElement>(null);
   const next = props.rows[0];
+  const shown = next !== undefined;
+  const wasShown = useRef(shown);
+  useLayoutEffect(() => {
+    if (shown && !wasShown.current && created.current) {
+      stripIn(stripRef.current, 'above-composer', SCHEDULED_STRIP_SLIDE_PX);
+    }
+    if (shown) created.current = false;
+    wasShown.current = shown;
+  }, [shown]);
   if (next === undefined) return null;
   return (
     <PressableRow
+      buttonRef={stripRef}
       type="button"
       flat
       data-scheduled-strip=""
@@ -194,20 +220,15 @@ export function ScheduledStrip(props: {
 
 /** The composer in schedule mode: "Sends <label>" and an x that leaves it. */
 export function ScheduleModeStrip(props: { label: string; onStop: () => void }): ReactElement {
-  const [entered, setEntered] = useState(false);
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setEntered(true));
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  // Painted at rest; it slides up its own 44px height on the first frame.
+  const ref = useRef<HTMLDivElement>(null);
+  useMoveOnMount(ref, (el) => stripIn(el, 'above-composer', SCHEDULE_MODE_SLIDE_PX));
   return (
     <div className="overflow-hidden rounded-lg">
       <div
+        ref={ref}
         data-schedule-mode=""
-        className={cn(
-          'flex min-w-0 items-center gap-2 bg-accent-soft pl-3 lit-tint mv-slide',
-          entered ? 'translate-y-0' : 'translate-y-full',
-          NO_TOUCH_SELECT,
-        )}
+        className={cn('flex min-w-0 items-center gap-2 bg-accent-soft pl-3 lit-tint', NO_TOUCH_SELECT)}
       >
         <IconCalendarClock size={ICON_SIZE.nav} className="shrink-0 text-accent" />
         <span className="flex-1 truncate text-base font-medium text-fg">Sends {props.label}</span>

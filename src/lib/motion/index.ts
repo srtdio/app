@@ -10,3 +10,4 @@ export * from './run';
 export * from './moves';
 export * from './react';
 export * from './touches';
+export * from './pages';

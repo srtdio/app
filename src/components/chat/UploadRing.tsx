@@ -2,8 +2,8 @@
 // note: a 16px X on a dark translucent disc, with a ring around it that fills
 // with the upload's progress (a light arc on a translucent track). Tapping it
 // cancels the send (no confirm). While progress is unknown (queued, waiting,
-// backoff, offline) the ring is a partial arc that pulses; with reduced motion
-// it stays still.
+// backoff, offline) the ring is a partial arc that turns (mv-spin); with
+// reduced motion it stays still.
 //
 // It never positions itself: the caller does (absolutely centred in the voice
 // play slot or over an image, in flow in the file icon spot). Its layers stack
@@ -15,9 +15,12 @@
 // light and dark), so it reads the same over a photo, on the own bubble's fill
 // and on a peer bubble, in both themes. The button carries data-upload-ring so
 // the own-bubble restyle (MessageThread OWN_BUBBLE_CONTENT) leaves it alone.
-// Only opacity and the ring's stroke ever change.
+// Motion (docs/motion.md, upload ring): the arc fills at the real progress
+// (mv-fill); on finish the ring scales to 0 (mv-ring-out) and the tile it sits
+// on settles with ease-pop (uploadSettle). Never a fade.
 
-import type { ReactElement } from 'react';
+import { useRef, type ReactElement } from 'react';
+import { uploadSettle, usePresence } from '@/lib/motion';
 import { ICON_SIZE, IconX } from '@/components/ui/icons';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ProgressRing } from '@/components/ui/ProgressRing';
@@ -73,7 +76,7 @@ export function UploadRing({
   className?: string | undefined;
   /** Which prototype size: voice 40, image (photo, album) 56, file 44. */
   variant: UploadRingVariant;
-  /** Faded out (upload done): kept in place for the crossfade, not focusable. */
+  /** Upload done: scaled to 0 in place (mv-ring-out), not focusable. */
   hidden?: boolean;
 }): ReactElement {
   const indeterminate = progress === null;
@@ -96,12 +99,10 @@ export function UploadRing({
       }}
       className={cn(
         // PressableRow (not IconButton): no text-fg-2 for the own bubble's
-        // [&_.text-fg-2]:opacity-80 to dim, and no transition of its own, so
-        // the ring keeps its overlay ink and its opacity/visibility fade.
+        // [&_.text-fg-2]:opacity-80 to dim, so the ring keeps its overlay ink.
         'grid shrink-0 place-items-center text-overlay-fg',
         HIT_CLASS[variant],
-        'transition-[opacity,visibility] duration-base',
-        hidden ? 'pointer-events-none invisible opacity-0' : 'visible opacity-100',
+        hidden && 'pointer-events-none mv-ring-out',
         className,
       )}
     >
@@ -115,14 +116,41 @@ export function UploadRing({
         size={size}
         stroke={STROKE}
         arc={ARC}
-        className={cn(LAYER, RING_CLASS[variant])}
+        className={cn(LAYER, RING_CLASS[variant], indeterminate && 'mv-spin')}
         trackClass="text-overlay-dot"
-        arcClass={cn(
-          'text-overlay-fg mv-fill',
-          indeterminate && 'animate-pulse',
-        )}
+        arcClass="text-overlay-fg"
       />
       <IconX size={UPLOAD_RING_X} className={LAYER} />
     </PressableRow>
+  );
+}
+
+/**
+ * An UploadRing over a tile (photo, album) for as long as `ring` is set; when
+ * the upload finishes the ring stays a moment to scale to 0 (mv-ring-out)
+ * while the tile under it settles with ease-pop (uploadSettle), then goes.
+ * The wrapper is display: contents, so the ring keeps the caller's place.
+ */
+export function TileUploadRing(props: {
+  ring: { progress: number | null } | null;
+  onCancel?: (() => void) | undefined;
+  className?: string | undefined;
+}): ReactElement | null {
+  const last = useRef<number | null>(props.ring?.progress ?? null);
+  if (props.ring !== null) last.current = props.ring.progress;
+  const { rendered, ref, leaving } = usePresence<HTMLSpanElement>(props.ring !== null, {
+    exit: (el) => uploadSettle(el.parentElement),
+  });
+  if (!rendered) return null;
+  return (
+    <span ref={ref} data-tile-upload-ring="" className="contents">
+      <UploadRing
+        progress={leaving ? 1 : last.current}
+        onCancel={props.onCancel}
+        variant="image"
+        className={props.className}
+        hidden={leaving}
+      />
+    </span>
   );
 }

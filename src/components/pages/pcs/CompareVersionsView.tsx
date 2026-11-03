@@ -229,9 +229,5 @@ export function CompareVersionsView(props: CompareVersionsViewProps) {
     [props.fromCaption, props.toCaption],
   );
 
-  return (
-    <div>
-      {compareVersionsView({ ...props, diff, mode, onModeChange: setMode })}
-    </div>
-  );
+  return <div>{compareVersionsView({ ...props, diff, mode, onModeChange: setMode })}</div>;
 }

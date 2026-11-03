@@ -1,10 +1,10 @@
 // The composer's attach button and its tray. The button is a 44x44 circle on
 // the panel showing a plus (the tray opener); while the tray is open it turns
-// accent and shows an X. The tray sits above the composer: a 4-column grid of
-// tiles (Photos, File, Assets, Brief, Post, Draft, Plan, Schedule on touch and
-// laptop alike) that slides on translateY and fades, duration-slow
-// (DUR_SLOW_MS), no X and no scale. A tap outside, Escape, or picking a tile
-// closes it.
+// accent and the plus turns 45deg into an X (mv-turn). The tray sits above the
+// composer: a 4-column grid of tiles (Photos, File, Assets, Brief, Post,
+// Draft, Plan, Schedule on touch and laptop alike) that slides up on Y from
+// the composer and back down (edgeStrip above the composer, never a fade, no
+// X and no scale). A tap outside, Escape, or picking a tile closes it.
 // Photos / File run the composer's attach paths (the Photos picker still offers
 // Take Photo on phones); Assets opens the library picker; Brief, Post and Draft
 // open the share picker in that mode; Plan opens the New plan screen; Schedule
@@ -26,7 +26,6 @@ import {
   IconPipeline,
   IconPlan,
   IconPlus,
-  IconX,
 } from '@/components/ui/icons';
 import { isClient } from '@/components/pages/pcs/roles';
 import { cn } from '@/lib/cn';
@@ -35,10 +34,11 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { NO_TOUCH_SELECT, type ChatLayout } from '@/components/chat/chat-type';
 import { INDUCTION_KEYS } from '@/lib/induction';
-import { DUR_SLOW_MS } from '@/lib/motion';
+import { MOVE_CLASS, stripIn, stripOut, usePresence } from '@/lib/motion';
 
 /** The tray and the plus icon move for this long. */
-const TRAY_MOTION_MS = DUR_SLOW_MS;
+/** How far the tray slides on Y from the composer (px, the 8-48 band). */
+const TRAY_SLIDE_PX = 8;
 
 type TileIcon = ComponentType<{ size?: number; className?: string }>;
 
@@ -138,22 +138,16 @@ export function ComposerTray(props: {
   plan?: boolean;
 }): ReactElement {
   const [open, setOpen] = useState(false);
-  // Kept mounted through the exit; `shown` drives the transition.
-  const [rendered, setRendered] = useState(false);
-  const [shown, setShown] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  // Kept mounted through the exit: painted at rest, the slide laid over it.
+  const tray = usePresence<HTMLDivElement>(open, {
+    enter: (el) => stripIn(el, 'above-composer', TRAY_SLIDE_PX),
+    exit: (el) => stripOut(el, 'above-composer', TRAY_SLIDE_PX),
+  });
 
   useEffect(() => {
-    if (open) {
-      mark('chat:tray:open');
-      setRendered(true);
-      const raf = requestAnimationFrame(() => setShown(true));
-      return () => cancelAnimationFrame(raf);
-    }
-    setShown(false);
-    const timer = setTimeout(() => setRendered(false), TRAY_MOTION_MS);
-    return () => clearTimeout(timer);
+    if (open) mark('chat:tray:open');
   }, [open]);
 
   useEffect(() => {
@@ -197,21 +191,24 @@ export function ComposerTray(props: {
         // Round secondary, primary while the tray is open; buttonRef returns
         // focus on Escape.
       >
-        <span aria-hidden="true" data-plus-icon="" className="flex">
-          {open ? <IconX size={ICON_SIZE.control} /> : <IconPlus size={ICON_SIZE.control} />}
+        {/* The plus turns 45deg into the X while the tray is open. */}
+        <span
+          aria-hidden="true"
+          data-plus-icon=""
+          className={cn('flex', MOVE_CLASS.turn, open && 'rotate-45')}
+        >
+          <IconPlus size={ICON_SIZE.control} />
         </span>
       </Button>
-      {rendered ? (
+      {tray.rendered ? (
         <div
+          ref={tray.ref}
           id="composer-tray"
           role="group"
           aria-label="Attach"
           data-tray=""
           data-induction={INDUCTION_KEYS.chatAttachTray}
-          className={cn(
-            'absolute inset-x-0 bottom-full z-20 border-t bg-panel lit-dock px-3 pb-2 pt-3 transition-[opacity,transform] duration-slow ease-enter',
-            shown ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
-          )}
+          className="absolute inset-x-0 bottom-full z-20 border-t bg-panel lit-dock px-3 pb-2 pt-3"
         >
           <TrayGrid
             tiles={tiles}

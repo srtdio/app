@@ -1911,7 +1911,8 @@ export function Comments({
     // when the move ends (at once when motion is off or a tap finishes it).
     const leavingRow =
       filter === 'open'
-        ? (rootRef.current?.querySelector<HTMLElement>(`[id="${commentDomId(comment.id)}"]`) ?? null)
+        ? (rootRef.current?.querySelector<HTMLElement>(`[id="${commentDomId(comment.id)}"]`) ??
+          null)
         : null;
     const out = itemOut(leavingRow);
     if (out.instant) patchResolvedAt(comment.id, optimistic);

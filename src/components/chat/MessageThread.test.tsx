@@ -3778,12 +3778,13 @@ describe('T12: the ring in light and dark, on own and peer bubbles and over a ph
     expect(OWN_BUBBLE_CONTENT).not.toContain('[&_button:hover]');
   });
 
-  it('the tap target is at least 44x44 and reduced motion stops the pulse', () => {
+  it('the tap target is at least 44x44 and the unknown arc turns (never a pulse)', () => {
     const html = ring(
       paint([{ ...pdf, local: { ...pdf.local!, uploading: false } }], false, 'light'),
     );
     expect(html).toContain('h-11 w-11');
-    expect(html).toContain('animate-pulse motion-reduce:animate-none');
+    expect(html).toContain('mv-spin');
+    expect(html).not.toContain('animate-pulse');
     expect(html).not.toContain('animate-spin');
   });
 });

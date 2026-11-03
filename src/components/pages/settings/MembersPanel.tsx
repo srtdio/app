@@ -33,7 +33,7 @@ import {
   sendInvite,
 } from './MembersInviteForm';
 import type { SentInvite } from './MembersInviteForm';
-import { MembersList } from './MembersList';
+import { LOADING_MEMBERS, MembersList, SettingsRowBoxes } from './MembersList';
 import type { PendingEditHandler } from './MembersList';
 import { MemberActionSheet } from './MemberActionSheet';
 import type {
@@ -377,7 +377,7 @@ export function MembersPanel() {
       ) : null}
 
       {loading ? (
-        <p className="text-base text-fg-3">Loading members</p>
+        <SettingsRowBoxes label={LOADING_MEMBERS} />
       ) : error !== null ? (
         // A failed or timed-out read: Retry re-reads the shared list in place
         // (its generation guard drops a late answer from the failed read).

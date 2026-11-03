@@ -4,8 +4,10 @@
 // cursor and a lightbox can grow from the thumbnail that opened it, without
 // any caller passing a rect. One passive capture listener, no reads on a paint
 // or tap path beyond one getBoundingClientRect at open.
-import { useLayoutEffect, useRef, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import { growFromCard, type Box } from './moves';
+import { trackDim } from './react';
+import type { Played } from './run';
 
 /** A press older than this is not the one that opened the overlay. */
 const PRESS_MEMORY_MS = 800;
@@ -78,6 +80,9 @@ export function resetPressesForTests(): void {
   lastPress = null;
 }
 
+/** Layout effect in the browser; a plain effect where there is no DOM (server render, node tests). */
+const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
 /**
  * growFromCard for a media viewer: on the first frame after mount (the viewer
  * already painted at its final place), the target grows out of `from` (the
@@ -92,14 +97,27 @@ export function useGrowFromThumb<T extends HTMLElement>(
 ): void {
   const args = useRef({ from, target });
   args.current = { from, target };
-  useLayoutEffect(() => {
+  useBrowserLayoutEffect(() => {
     const root = ref.current;
     if (root === null) return;
     const box = args.current.from ?? recentPressBox();
     if (box === null) return;
     const el = args.current.target?.(root) ?? root;
     growFromCard(el, box);
-    // Mount only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Mount only: the ref and args are read at that moment.
   }, []);
+}
+
+/**
+ * The backdrop dim follows `panel` for as long as `played` runs (trackDim), so
+ * it is never a timed fade of its own. Instant (motion off): the dim simply
+ * rests at full. Returns `played` for chaining.
+ */
+export function dimWith(panel: HTMLElement | null, dim: HTMLElement | null, played: Played): Played {
+  if (played.instant) {
+    if (dim !== null) dim.style.opacity = '';
+    return played;
+  }
+  trackDim(panel, dim, played);
+  return played;
 }
