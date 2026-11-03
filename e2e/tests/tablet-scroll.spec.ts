@@ -46,8 +46,9 @@ async function openPipeline(page: Page): Promise<void> {
 }
 
 for (const size of [
-  { name: 'portrait', width: 820, height: 1180 },
-  // Short enough that Pipeline overflows in landscape too.
+  // Heights short enough that the harness Pipeline (a few cards) overflows:
+  // at a full 1180px it fits on one screen and the document has nothing to scroll.
+  { name: 'portrait', width: 820, height: 600 },
   { name: 'landscape', width: 1180, height: 560 },
 ]) {
   test(`iPad ${size.name}: Pipeline scrolls the document; Topbar and Sidebar stay put`, async ({
