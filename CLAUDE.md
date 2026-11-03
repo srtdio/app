@@ -132,7 +132,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Avatars: ui/Avatar roles only (inline 20, header 32, row 40, profile 72). People circle, groups and notes rounded square.
 - People: any person photo, name or @mention renders through PersonTrigger and opens PersonCard; never a per-screen card.
 - Counts and unread badges: ui/CountBadge only. Filter chip counts are plain text.
-- Icon meanings: Send = send a message only; Forward/Send to chat = IconForward; Reject X, Approve check, Park pause; chat tray opener = plus; attach a file = paper clip. Photos = gallery grid; Assets = picture; Copy link = link. Decision bar buttons have no icons.
+- Icon meanings: Send = send a message only; Forward/Send to chat = IconForward; Reject X, Approve check, Park pause; chat tray opener = plus; attach a file = paper clip. Photos = gallery grid; Assets = picture; Copy link = link. Decision bar buttons have no icons. Copy = clipboard (IconCopy), icon-only outside ⋯/long-press menus; Reply privately = person (IconUser), icon-only in comment rows.
 - Long-press on touch and right-click on laptop open the same ActionMenu. Esc closes every overlay and returns focus to its trigger.
 - Exception: plan edit rows open their menu on right-click only; long-press there is drag.
 - Exception: laptop Plan month item lines use PressableRow dense (22px); mouse-only surface, decided 28 Oct 2026. dense is allowed nowhere else.

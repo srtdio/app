@@ -27,10 +27,10 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ClipboardDocumentIcon,
   ClockIcon,
   Cog6ToothIcon,
   DocumentIcon,
-  DocumentDuplicateIcon,
   DocumentTextIcon,
   EllipsisVerticalIcon,
   ExclamationTriangleIcon,
@@ -274,7 +274,7 @@ export function IconDownload(props: IconProps) {
 }
 
 export function IconCopy(props: IconProps) {
-  return <Hero icon={DocumentDuplicateIcon} {...props} />;
+  return <Hero icon={ClipboardDocumentIcon} {...props} />;
 }
 
 export function IconChevronRight(props: IconProps) {

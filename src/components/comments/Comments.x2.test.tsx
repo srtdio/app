@@ -194,7 +194,10 @@ describe('action row and composer (items 3, 4)', () => {
   it('Resolve/Reopen, Reply and Copy are visible on every thread; the kebab holds only Edit / Delete', () => {
     expect(SRC).toContain('{opts.actions.canCopy ? copyControl(comment) : null}');
     expect(SRC).toContain("{isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}");
-    expect(SRC).toContain("{copyFailed ? COPY_FAILED : 'Copied'}");
+    // Copy is icon-only: clipboard, a tick for 2000 ms after a copy, failure as a toast.
+    expect(SRC).toContain('<IconCopy size={ICON_SIZE.nav} />');
+    expect(SRC).toContain("toast?.show({ title: COPY_FAILED, tone: 'error' })");
+    expect(SRC).not.toContain("{copyFailed ? COPY_FAILED : 'Copied'}");
     expect(SRC).not.toContain("'Comment copied'");
     // No Copy row inside the popover any more.
     expect(SRC).not.toContain('                    Copy text\n                  </button>');

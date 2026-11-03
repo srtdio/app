@@ -153,8 +153,9 @@ function rowEl(id: string): HTMLElement | null {
 
 function actionWords(id: string): string[] {
   const actions = rowEl(id)?.querySelector('[data-comment-actions]');
+  // Icon-only actions (Reply privately, Copy) read by their accessible name.
   return Array.from(actions?.querySelectorAll('button') ?? []).map(
-    (b) => b.textContent?.trim() ?? '',
+    (b) => b.textContent?.trim() || (b.getAttribute('aria-label') ?? ''),
   );
 }
 

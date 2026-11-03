@@ -132,8 +132,12 @@ describe('Reply privately in the plan thread', () => {
       shown({ id: 'unnamed', authorKnown: false, authorName: 'Member' }),
     ]);
     const button = replyPrivately('other');
-    expect(button?.textContent).toBe(REPLY_PRIVATELY);
+    // Icon-only (person), accessible name "Reply privately", 44x44.
+    expect(button?.getAttribute('aria-label')).toBe(REPLY_PRIVATELY);
+    expect(button?.textContent).toBe('');
+    expect(button?.querySelector('svg')).toBeTruthy();
     expect(button?.className).toContain('h-11');
+    expect(button?.className).toContain('w-11');
     expect(button?.className).toContain('min-w-[44px]');
     expect(replyPrivately('mine')).toBeNull();
     expect(replyPrivately('gone')).toBeNull();

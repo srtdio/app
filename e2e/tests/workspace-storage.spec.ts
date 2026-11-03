@@ -87,7 +87,7 @@ test('owner at the free-plan limit gets Contact us and Book a call @theme', asyn
     'href',
     /^mailto:support@srtd\.io\?subject=Another%20workspace%20for%20/,
   );
-  for (const name of ['Copy', 'Close']) {
+  for (const name of ['Copy email', 'Close']) {
     expectMinTouchTarget(
       await contact.getByRole('button', { name, exact: true }).last().boundingBox(),
     );

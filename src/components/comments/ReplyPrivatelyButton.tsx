@@ -1,7 +1,8 @@
 // A comment row's Reply privately (post and brief comments, plan item
-// comments): a ghost Button like its row neighbours. A tap opens the person
+// comments): an icon-only IconButton (person, IconUser) whose accessible name
+// is "Reply privately". A tap opens the person
 // card's inline message for the author with this comment as its source (the
-// quote, built at tap time from what the row holds), anchored to the button:
+// quote, built at tap time from what the row holds), anchored to the icon:
 // no navigation, no read. The card's send carries the quote
 // (chat_private_reply_send). Outside a router (isolated renders) the card has
 // nowhere to open its chat, so it draws nothing. Callers decide visibility
@@ -10,7 +11,8 @@
 import type { ReactElement } from 'react';
 import { flushSync } from 'react-dom';
 import { useInRouterContext } from 'react-router-dom';
-import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
+import { IconUser, ICON_SIZE } from '@/components/ui/icons';
 import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
 import { REPLY_PRIVATELY, type PrivateReplyDraft } from '@/lib/chat/private-reply';
 
@@ -34,14 +36,14 @@ export function ReplyPrivatelyButton(props: ReplyPrivatelyButtonProps): ReactEle
   const routed = useInRouterContext();
   if (!routed) return null;
   return (
-    <Button
+    <IconButton
       type="button"
+      label={REPLY_PRIVATELY}
       data-row-action="reply-privately"
-      variant="ghost"
       className={props.className}
       onClick={(event) => openReplyPrivatelyCard(event.currentTarget, props.draft())}
     >
-      {REPLY_PRIVATELY}
-    </Button>
+      <IconUser size={ICON_SIZE.nav} />
+    </IconButton>
   );
 }

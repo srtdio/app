@@ -337,9 +337,12 @@ describe('replies inside a checkpoint', () => {
 describe('one row template for checkpoints and comments', () => {
   function actionWords(rowId: string): string[] {
     const actions = rowEl(rowId)?.querySelector('[data-comment-actions]');
-    return Array.from(actions?.children ?? [])
-      .filter((el) => el.tagName === 'BUTTON' || el.hasAttribute('data-checkpoint-box'))
-      .map((el) => el.textContent?.trim() ?? '');
+    return (
+      Array.from(actions?.children ?? [])
+        .filter((el) => el.tagName === 'BUTTON' || el.hasAttribute('data-checkpoint-box'))
+        // Icon-only actions (Reply privately, Copy) read by their accessible name.
+        .map((el) => el.textContent?.trim() || (el.getAttribute('aria-label') ?? ''))
+    );
   }
 
   it('a checkpoint and a plain comment share the header, body and action row', async () => {
@@ -373,7 +376,16 @@ describe('one row template for checkpoints and comments', () => {
     expect(seq?.className).toContain('text-fg-3');
     expect(rowEl('c-1')?.querySelector('[data-checkpoint-seq]')).toBeNull();
 
-    // One left-aligned action row: checkbox + "Resolved" first, then Reply, then Copy.
+    // One left-aligned action row on one line: checkbox + "Resolved" first, then
+    // Reply, then the Copy icon.
+    for (const id of ['p-1', 'c-1']) {
+      const actions = rowEl(id)?.querySelector('[data-comment-actions]');
+      expect(actions?.className).toContain('flex-nowrap');
+      expect(actions?.className).not.toContain('flex-wrap ');
+      const copy = actions?.querySelector('[data-row-action="copy"]');
+      expect(copy?.textContent).toBe('');
+      expect(copy?.querySelector('svg')).toBeTruthy();
+    }
     expect(actionWords('p-1')).toEqual(['Resolved', 'Reply', 'Copy']);
     expect(actionWords('c-1')).toEqual(['Resolve', 'Reply', 'Copy']);
     // No icon-only Copy floating at the right any more.
@@ -425,5 +437,78 @@ describe('one row template for checkpoints and comments', () => {
     expect(host?.querySelector('[data-comments-empty]')?.textContent).toBe(
       'Checkpoints show up here.',
     );
+  });
+});
+
+describe('the Copy icon on a comment row', () => {
+  const writeText = vi.fn<(text: string) => Promise<void>>(async () => undefined);
+
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+    writeText.mockReset();
+    writeText.mockImplementation(async () => undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function copyButton(id: string): HTMLButtonElement | null {
+    return rowEl(id)?.querySelector<HTMLButtonElement>('[data-row-action="copy"]') ?? null;
+  }
+
+  it('tapping Copy shows the tick, then reverts to the clipboard after 2000 ms', async () => {
+    pageRows.current = [row('c-1', 'plain note')];
+    await mount(false);
+    const before = copyButton('c-1');
+    expect(before?.getAttribute('aria-label')).toBe('Copy');
+    expect(before?.hasAttribute('data-copied')).toBe(false);
+    const clipboardIcon = before?.innerHTML ?? '';
+
+    vi.useFakeTimers();
+    await act(async () => {
+      copyButton('c-1')?.click();
+    });
+    await settle();
+    expect(writeText).toHaveBeenCalledWith('plain note');
+    expect(copyButton('c-1')?.hasAttribute('data-copied')).toBe(true);
+    expect(copyButton('c-1')?.innerHTML).not.toBe(clipboardIcon);
+    // The status is visually hidden: no visible "Copied" text in the row.
+    const status = rowEl('c-1')?.querySelector('[role="status"]');
+    expect(status?.textContent).toBe('Copied');
+    expect(status?.className).toContain('sr-only');
+    expect(copyButton('c-1')?.getAttribute('aria-label')).toBe('Copy');
+
+    act(() => {
+      vi.advanceTimersByTime(1999);
+    });
+    expect(copyButton('c-1')?.hasAttribute('data-copied')).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(copyButton('c-1')?.hasAttribute('data-copied')).toBe(false);
+    expect(copyButton('c-1')?.innerHTML).toBe(clipboardIcon);
+    expect(rowEl('c-1')?.querySelector('[role="status"]')).toBeNull();
+  });
+
+  it('a failed copy shows the error toast and no tick or inline text', async () => {
+    writeText.mockImplementation(async () => {
+      throw new Error('denied');
+    });
+    pageRows.current = [row('c-1', 'plain note')];
+    await mount(false);
+    const before = toasts.length;
+    await act(async () => {
+      copyButton('c-1')?.click();
+    });
+    await settle();
+    expect(toasts.slice(before)).toContainEqual(
+      expect.objectContaining({ title: "Couldn't copy", tone: 'error' }),
+    );
+    expect(copyButton('c-1')?.hasAttribute('data-copied')).toBe(false);
+    expect(rowEl('c-1')?.querySelector('[role="status"]')).toBeNull();
   });
 });

@@ -1183,6 +1183,25 @@ for (const dark of [false, true]) {
   });
 }
 
+// The support contact sheet (Contact us): the address with its icon-only Copy
+// (clipboard), opened from the owner's group-limit support rows.
+for (const dark of [false, true]) {
+  const suffix = dark ? '-dark' : '';
+  const laptopDark = dark ? { only: 'laptop' as const, dark } : {};
+  SCREENS.push({
+    name: `support-contact-sheet${suffix}`,
+    seed: creator,
+    extra: fillGroupAllowance,
+    ...laptopDark,
+    url: '/chat',
+    steps: async (page) => {
+      await openNewChatBlocked(page, true);
+      await tap([page.getByRole('button', { name: /Contact us/ })], 'Contact us');
+      await waitFor([page.getByRole('button', { name: 'Copy email', exact: true })], 'Copy email');
+    },
+  });
+}
+
 // The person card and Reply privately (2 Nov 2026). The card opens from a
 // person's photo, name or @mention ([data-person-trigger]): a Sheet on phone
 // (iPhone light and dark projects), a popover beside the photo on laptop (light,

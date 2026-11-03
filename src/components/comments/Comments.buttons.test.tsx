@@ -8,7 +8,11 @@ vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 
-import { ROW_ACTION_CLASS, ROW_ACTION_STATIC_CLASS } from '@/components/comments/Comments';
+import {
+  COMMENT_ACTIONS_ROW_CLASS,
+  ROW_ACTION_CLASS,
+  ROW_ACTION_STATIC_CLASS,
+} from '@/components/comments/Comments';
 import { buttonClass } from '@/components/ui/Button';
 
 // Button system regression: every comment row action (Copy, Reply, Resolve,
@@ -46,9 +50,17 @@ describe('Comments row actions', () => {
 
   it('the passive checkbox matches the button box', () => {
     const t = tokens(ROW_ACTION_STATIC_CLASS);
-    for (const want of ['h-11', 'min-h-[44px]', 'px-4', 'text-base', 'font-medium']) {
+    for (const want of ['h-11', 'min-h-[44px]', 'px-3', 'text-base', 'font-medium']) {
       expect(t).toContain(want);
     }
+  });
+
+  it('the action row is one line and gives its text actions 12px side padding', () => {
+    const t = tokens(COMMENT_ACTIONS_ROW_CLASS);
+    for (const want of ['flex', 'flex-nowrap', 'items-center', 'gap-1', '[&>button]:px-3']) {
+      expect(t).toContain(want);
+    }
+    expect(t).not.toContain('flex-wrap');
   });
 
   it('row actions and filters are Buttons, not raw buttons with their own recipe', () => {
