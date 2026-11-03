@@ -84,26 +84,26 @@ async function bootApp(root: HTMLElement): Promise<void> {
     motion,
     watchScrollDevice,
   ] = await Promise.all([
-      import('@/index.css'),
-      import('@/components/shell/BootErrorBoundary').then(
-        ({ BootErrorBoundary }) => BootErrorBoundary,
-      ),
-      import('@/App').then(({ default: App }) => App),
-      import('@/lib/trace-context').then(({ TraceProvider }) => TraceProvider),
-      import('@/lib/theme').then(({ initTheme }) => initTheme),
-      import('@/lib/viewport-lock').then(({ initViewportLock }) => initViewportLock),
-      import('@/lib/logger').then(({ logger }) => logger),
-      // The motion module (src/lib/motion). Its feature bundle loads later, at idle.
-      import('@/lib/motion').then(
-        ({ MotionRoot, installMotionPreference, watchUAVisualTransition }) => ({
-          MotionRoot,
-          installMotionPreference,
-          watchUAVisualTransition,
-        }),
-      ),
-      // Already in viewport-lock's graph: no extra request.
-      import('@/lib/scroll-mode').then(({ watchScrollDevice }) => watchScrollDevice),
-    ]);
+    import('@/index.css'),
+    import('@/components/shell/BootErrorBoundary').then(
+      ({ BootErrorBoundary }) => BootErrorBoundary,
+    ),
+    import('@/App').then(({ default: App }) => App),
+    import('@/lib/trace-context').then(({ TraceProvider }) => TraceProvider),
+    import('@/lib/theme').then(({ initTheme }) => initTheme),
+    import('@/lib/viewport-lock').then(({ initViewportLock }) => initViewportLock),
+    import('@/lib/logger').then(({ logger }) => logger),
+    // The motion module (src/lib/motion). Its feature bundle loads later, at idle.
+    import('@/lib/motion').then(
+      ({ MotionRoot, installMotionPreference, watchUAVisualTransition }) => ({
+        MotionRoot,
+        installMotionPreference,
+        watchUAVisualTransition,
+      }),
+    ),
+    // Already in viewport-lock's graph: no extra request.
+    import('@/lib/scroll-mode').then(({ watchScrollDevice }) => watchScrollDevice),
+  ]);
   mark('boot:app:imports');
   const { MotionRoot } = motion;
   motion.installMotionPreference();
