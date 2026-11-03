@@ -59,9 +59,12 @@ test('Back to Pipeline paints at the kept scroll position on the first frame @th
     timeout: 15_000,
   });
 
-  await sampleFrames(page, 1_500);
+  // Sample long enough that a slow CI runner still records the board after
+  // Back (the click's actionability wait and the route swap both count
+  // against the window); every board frame must sit at the kept position.
+  await sampleFrames(page, 4_000);
   await page.getByRole('button', { name: 'Back', exact: true }).first().click();
-  await page.waitForTimeout(1_600);
+  await page.waitForTimeout(4_100);
 
   const frames = await page.evaluate(
     () => (window as unknown as { __frames: Array<[number, boolean]> }).__frames,

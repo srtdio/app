@@ -1,11 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import { installHarnessNetwork } from '../fixtures/harness-routes';
+import { DM_CHANNEL, PEER_NAME } from '../fixtures/chat-data';
 
 // Whole-page scrolling (src/lib/scroll-mode.ts). On a phone every in-shell
-// route but Chat scrolls the document, so mobile browser bars shrink on scroll
-// and content runs under them; Chat stays the locked 100svh shell with <main>
-// as its scroller. Laptop is the locked shell on every route. Tagged @theme
-// for light and dark.
+// route but a chat thread scrolls the document (the chat list included), so
+// mobile browser bars shrink on scroll and content runs under them; a chat
+// thread (/chat?channel=) stays the locked 100svh shell with <main> as its
+// scroller. Laptop is the locked shell on every route. Tagged @theme for
+// light and dark.
 
 const phone = (page: Page): boolean => (page.viewportSize()?.width ?? 0) < 768;
 
@@ -61,7 +63,7 @@ test('Pipeline scrolls the document on a phone and <main> on laptop @theme', asy
   expect(network.blocked).toEqual([]);
 });
 
-test('Chat stays locked and Pipeline keeps its position across the trip @theme', async ({
+test('Chat list scrolls the page, a thread stays locked, Pipeline keeps its position @theme', async ({
   page,
 }) => {
   test.skip(!phone(page), 'phone only');
@@ -80,16 +82,34 @@ test('Chat stays locked and Pipeline keeps its position across the trip @theme',
   });
   expect(kept).toBeGreaterThan(0);
 
+  // The chat list: page mode, and it opens at its top (never at Pipeline's offset).
   await page.evaluate(() => {
     window.history.pushState({}, '', '/chat');
     window.dispatchEvent(new PopStateEvent('popstate'));
   });
+  await expect(page.getByText(PEER_NAME, { exact: true }).first()).toBeVisible({ timeout: 15_000 });
+  const list = await scrollState(page);
+  expect(list.pageClass).toBe(true);
+  expect(list.mainOverflowY).toBe('visible');
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+  // A chat thread: locked, <main> scrolls, the document never does.
+  await page.evaluate((channel) => {
+    window.history.pushState({}, '', `/chat?channel=${encodeURIComponent(channel)}`);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, DM_CHANNEL);
+  await page.locator('form textarea').first().waitFor({ state: 'visible', timeout: 15_000 });
   await expect.poll(async () => (await scrollState(page)).pageClass).toBe(false);
-  const chat = await scrollState(page);
-  expect(chat.mainOverflowY).toBe('auto');
-  expect(chat.docScrollable).toBe(false);
+  const thread = await scrollState(page);
+  expect(thread.mainOverflowY).toBe('auto');
+  expect(thread.docScrollable).toBe(false);
 
   await page.goBack();
+  await expect.poll(async () => (await scrollState(page)).pageClass).toBe(true);
+  await page.goBack();
+  await expect(page.getByRole('button', { name: 'Open post Monday carousel' })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect.poll(async () => (await scrollState(page)).pageClass).toBe(true);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(kept);
   expect(network.blocked).toEqual([]);

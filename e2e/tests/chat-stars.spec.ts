@@ -323,14 +323,18 @@ test(
     expect(pageOverflow).toBeLessThanOrEqual(0);
 
     // The card's last word is on screen once the list scrolls to the end (the
-    // list scrolls as a whole; the bubble never scrolls on its own).
+    // list scrolls as a whole; the bubble never scrolls on its own). The list's
+    // scroller is its own box on laptop and the document on a phone (page
+    // mode, src/lib/scroll-mode.ts), where the visible area is the viewport.
     const lastWord = await bubble.evaluate((el, word) => {
       let list: HTMLElement | null = el.parentElement;
       while (list !== null && !/(auto|scroll)/.test(getComputedStyle(list).overflowY)) {
         list = list.parentElement;
       }
-      if (list === null) return null;
-      list.scrollTop = list.scrollHeight;
+      const doc = document.scrollingElement as HTMLElement | null;
+      const scroller = list ?? doc;
+      if (scroller === null) return null;
+      scroller.scrollTop = scroller.scrollHeight;
       const node = [...el.childNodes].find((n) => n.textContent?.includes(word));
       if (node === undefined) return null;
       const range = document.createRange();
@@ -338,7 +342,8 @@ test(
       range.setStart(node, at);
       range.setEnd(node, at + word.length);
       const r = range.getBoundingClientRect();
-      const view = list.getBoundingClientRect();
+      const view =
+        list !== null ? list.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
       return {
         inList: r.top >= view.top && r.bottom <= view.bottom,
         inScreen: r.top >= 0 && r.bottom <= window.innerHeight && r.right <= window.innerWidth,

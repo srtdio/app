@@ -431,8 +431,8 @@
        in both light and dark. */
     background-color: var(--bg);
   }
-  /* Page mode (src/lib/scroll-mode.ts): every in-shell route except Chat, on a
-     phone or a touch tablet. The document scrolls instead of <main>, so mobile
+  /* Page mode (src/lib/scroll-mode.ts): every in-shell route except a chat
+     thread (the chat list included on a phone), on a phone or a touch tablet. The document scrolls instead of <main>, so mobile
      browser bars shrink on scroll and content runs under them. The root grows
      with its content (min 100svh, 100% fallback); background-color above still
      paints all three layers. A laptop or desktop with a mouse or trackpad (an
