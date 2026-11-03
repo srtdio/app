@@ -14,6 +14,7 @@ import type { Toast as ToastModel, ToastApi, ToastOptions } from '@/components/u
 import { cn } from '@/lib/cn';
 import {
   DUR_SHEET_OUT_MS,
+  motionOff,
   TOAST_DISMISS_PX,
   riseIn,
   stripIn,
@@ -94,6 +95,12 @@ export function createToastStore(): ToastStore {
     const current = toasts.find((toast) => toast.id === id);
     if (current === undefined || current.leaving) return;
     clearTimer(id);
+    // Motion off (Reduce Motion, ?motion=0): there is no exit move to play,
+    // so the card goes now rather than sitting hidden for EXIT_MS.
+    if (motionOff()) {
+      remove(id);
+      return;
+    }
     toasts = toasts.map((toast) => (toast.id === id ? { ...toast, leaving: true } : toast));
     emit();
     timers.set(
