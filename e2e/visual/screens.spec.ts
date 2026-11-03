@@ -435,6 +435,28 @@ async function contactSelect(page: Page, label: string): Promise<void> {
 const creator: AuditSeedOptions = { role: 'creator' };
 const approver: AuditSeedOptions = { role: 'approver' };
 
+/** Ana (an agency member) has catch-up emails off, turned off by the owner (ME). */
+function seedMemberEmailOffByOwner(network: HarnessNetwork): void {
+  for (const u of network.world.tables.users ?? []) {
+    u.email_opt_out_by = null;
+    if (u.id === COLLEAGUE_B) {
+      u.email_opt_in = false;
+      u.email_opt_out_by = ME;
+    }
+  }
+}
+
+/** Members panel, Ana's row ⋯, Change role: the member sheet. */
+async function openMemberSheet(page: Page): Promise<void> {
+  await waitFor([page.getByText('Emails off', { exact: true }).first()], 'settings members');
+  await tap(
+    [page.getByRole('button', { name: 'Actions for Ana Silva', exact: true })],
+    'member actions',
+  );
+  await tap(menuRow(page, /^Change role$/), 'change role');
+  await waitFor([page.getByText('Turned off by', { exact: false })], 'member sheet email row');
+}
+
 const SCREENS: Screen[] = [
   {
     name: 'approve-confirm-approver',
@@ -905,6 +927,26 @@ const SCREENS: Screen[] = [
     url: '/settings?panel=members',
     steps: async (page) =>
       waitFor([page.getByText('Emails off', { exact: true }).first()], 'settings members'),
+  },
+  {
+    // Owner viewer: Ana's member sheet (row ⋯, Change role) with the Catch-up
+    // emails row under Role. The owner turned Ana's emails off, so the row is
+    // the unticked box with "Turned off by" the owner.
+    name: 'member-sheet',
+    seed: creator,
+    extra: seedMemberEmailOffByOwner,
+    url: '/settings?panel=members',
+    steps: openMemberSheet,
+  },
+  {
+    // The laptop sheet in dark (the laptop project is light).
+    name: 'member-sheet-dark',
+    seed: creator,
+    extra: seedMemberEmailOffByOwner,
+    only: 'laptop',
+    dark: true,
+    url: '/settings?panel=members',
+    steps: openMemberSheet,
   },
   {
     // Settings > Profile: the Catch-up emails tick box under the fields.
