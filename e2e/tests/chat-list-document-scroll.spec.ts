@@ -81,14 +81,14 @@ test('phone: the chat list scrolls the document under a pinned header @theme', a
   expect(Math.abs(searchTopAfter - searchTopBefore)).toBeLessThanOrEqual(1);
   // The pinned header box starts right at the Topbar's bottom edge.
   const headerTop = await search.evaluate((el) => {
-    let node: HTMLElement | null = el;
+    let node: Element | null = el;
     while (node !== null && getComputedStyle(node).position !== 'sticky') node = node.parentElement;
     return node === null ? Number.NaN : node.getBoundingClientRect().top;
   });
   expect(Math.abs(headerTop - topbarBottom)).toBeLessThanOrEqual(1);
   // Light and dark: the pinned header paints the page canvas (no new surface).
   const colors = await search.evaluate((el) => {
-    let node: HTMLElement | null = el;
+    let node: Element | null = el;
     while (node !== null && getComputedStyle(node).position !== 'sticky') node = node.parentElement;
     return {
       header: node === null ? '' : getComputedStyle(node).backgroundColor,
