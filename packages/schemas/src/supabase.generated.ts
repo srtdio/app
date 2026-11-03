@@ -9260,6 +9260,67 @@ export type Database = {
           unread: number
         }[]
       }
+      activity_search: {
+        Args: {
+          p_before_created_at?: string
+          p_before_id?: string
+          p_limit?: number
+          p_query: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          actor_user_id: string | null
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "inbox_entries"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      activity_search_matches: {
+        Args: { p_query: string; p_workspace_id: string }
+        Returns: {
+          actor_user_id: string | null
+          created_at: string
+          deleted_at: string | null
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          payload: Json
+          read_at: string | null
+          scope: string
+          scope_key: string | null
+          snoozed_until: string | null
+          tier: string
+          user_id: string
+          workspace_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "inbox_entries"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       annotation_create: {
         Args: {
           p_asset_attachment_id: string
@@ -10258,6 +10319,23 @@ export type Database = {
         Args: { p_ops: Json; p_plan_id: string; p_trace_id: string }
         Returns: undefined
       }
+      plan_search: {
+        Args: {
+          p_limit?: number
+          p_query: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          ends_on: string
+          item_id: string
+          item_target_date: string
+          matched: string[]
+          plan_id: string
+          post_target_at: string
+          starts_on: string
+        }[]
+      }
       plan_share_with_client: {
         Args: { p_plan_id: string; p_trace_id: string }
         Returns: undefined
@@ -10300,6 +10378,46 @@ export type Database = {
         Args: {
           p_before?: string
           p_limit?: number
+          p_stage?: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: {
+          approved_at: string
+          approved_by: string
+          approved_on_behalf_of: string
+          brief_id: string
+          bucket_id: string
+          caption: string
+          created_at: string
+          created_by: string
+          deleted_at: string
+          first_media_asset_version_id: string
+          first_media_height: number
+          first_media_kind: string
+          first_media_width: number
+          format: string
+          id: string
+          legacy_author_name: string
+          number: number
+          origin: string
+          owner_user_id: string
+          platform: string
+          row_version: number
+          stage: string
+          stage_entered_at: string
+          target_date: string
+          thumbnail_asset_version_id: string
+          title: string
+          updated_at: string
+          workspace_id: string
+        }[]
+      }
+      posts_search: {
+        Args: {
+          p_before?: string
+          p_limit?: number
+          p_query?: string
           p_stage?: string
           p_trace_id: string
           p_workspace_id: string

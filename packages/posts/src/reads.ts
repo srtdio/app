@@ -601,8 +601,9 @@ export function pipelinePostFromRow(row: PostsListRow): PipelinePost {
 /**
  * List live posts in a workspace, newest first, in ONE public.posts_list call.
  * The proc applies the same filters and order as the old posts read (workspace,
- * live rows, optional stage and `before` cursor, ordered by the composite index
- * (workspace_id, stage, created_at desc), page size capped at 500) and returns
+ * live rows, optional stage and `before` cursor, newest first by created_at desc,
+ * id desc on the (workspace_id, created_at desc, id desc) index, page size capped
+ * at 500; callers re-sort on the client) and returns
  * each row's first image (the card thumbnail) and cover (first photo or video
  * with its stored size) beside the posts columns, so no attachments read
  * follows. The caller can seed a cover store from `firstMedia`. The trace id is
