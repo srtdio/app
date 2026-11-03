@@ -276,6 +276,9 @@ export function NotificationsPage() {
   const searching = activitySearch.active;
   const searchingRef = useRef(searching);
   searchingRef.current = searching;
+  // The query the search results on screen answer ('' while not searching).
+  const searchQueryRef = useRef(activitySearch.query);
+  searchQueryRef.current = searching ? activitySearch.query : '';
   // Whether a search ran on this mount: the feed's reload after it is no
   // longer the arrival's quiet refresh.
   const searchedRef = useRef(false);
@@ -388,6 +391,8 @@ export function NotificationsPage() {
       const result = key !== null ? await sharedActivityPage(key, read) : await read();
       mark('activity:page1:end');
       if (seq !== activitySeqRef.current) return;
+      // A feed load that lands while a search is on screen is dropped.
+      if (searchingRef.current) return;
       setNowMs(Date.now());
       if (mode !== 'merge') setLoading(false);
       // A kept page is on screen: painted by this reset, or seeded late from the device.
@@ -451,7 +456,7 @@ export function NotificationsPage() {
       seq !== activitySeqRef.current ||
       stateRef.current !== chip ||
       sortRef.current !== direction ||
-      (query !== null) !== searchingRef.current
+      (query ?? '') !== searchQueryRef.current
     ) {
       return;
     }
@@ -464,12 +469,12 @@ export function NotificationsPage() {
   }, [workspaceId, state, sort, push, searching, activitySearch.query]);
 
   // The search's page one replaces the feed on screen (the same items state,
-  // so mark read, snooze and the rest work on the results as on the feed). An
-  // older feed load or Load more is dropped. Leaving the search reloads the
-  // feed (the arrival effect below).
+  // so mark read, snooze and the rest work on the results as on the feed). A
+  // feed load that lands meanwhile is dropped (loadActivity checks
+  // searchingRef), and a Load more for another query (searchQueryRef).
+  // Leaving the search reloads the feed (the arrival effect below).
   useEffect(() => {
     if (!searching) return;
-    activitySeqRef.current += 1;
     loadingMoreRef.current = false;
     setLoadingMore(false);
     setEntering(new Set());
