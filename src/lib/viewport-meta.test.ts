@@ -25,16 +25,23 @@ describe('index.html viewport (pinch zoom works)', () => {
 });
 
 describe('index.html theme-color (FT7)', () => {
-  it('has one meta per colour scheme, each the --bg value the stylesheet paints', () => {
+  it('has one meta per colour scheme, each the --panel value the stylesheet paints', () => {
     const tags = metas('theme-color');
     expect(tags).toHaveLength(2);
     const light = tags.find((t) => t.includes('media="(prefers-color-scheme: light)"'));
     const dark = tags.find((t) => t.includes('media="(prefers-color-scheme: dark)"'));
-    expect(light).toContain('content="#f7f8f9"');
-    expect(dark).toContain('content="#0c0d10"');
+    expect(light).toContain('content="#ffffff"');
+    expect(dark).toContain('content="#141519"');
   });
 
-  it('the values match the pre-CSS canvas colours in the same file', () => {
+  it('the values are the --panel tokens in src/index.css', () => {
+    const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/:root \{[^}]*--panel: #ffffff;/);
+    expect(css).toMatch(/\.dark \{[^}]*--panel: #141519;/);
+    expect(html).toContain('--panel value src/index.css paints');
+  });
+
+  it('the pre-CSS canvas colours are unchanged', () => {
     expect(html).toContain('background-color: #f7f8f9; /* --bg light');
     expect(html).toContain('background-color: #0c0d10; /* --bg dark');
   });

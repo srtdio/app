@@ -105,14 +105,15 @@
     <!-- Pinch zoom stays available (no maximum-scale, no user-scalable=no);
          iOS zoom-on-focus is prevented by 16px text fields instead. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <!-- Tint the Safari toolbar to match the canvas so a collapsing toolbar never
-         exposes a mismatched band: one meta per colour scheme, each the --bg value
-         src/index.css paints (light :root, dark .dark). Everyone starts light; a
-         dark choice (localStorage sorted-theme) overrides both via
-         src/lib/theme.ts, which copies the painted canvas colour onto every
-         theme-color meta. -->
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f8f9" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0c0d10" />
+    <!-- Browser bar tint (Android Chrome, Samsung Internet, installed app): one
+         meta per colour scheme, each the --panel value src/index.css paints
+         (light :root, dark .dark), the solid Topbar on top of most screens.
+         Everyone starts light; src/lib/theme.ts then writes the current
+         screen's top surface (src/lib/bar-tint.ts) onto every theme-color
+         meta on theme and route change. iOS Safari ignores these and samples
+         the top of the page. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#141519" />
     <title>Sorted</title>
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
