@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useInsertionEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -44,6 +45,9 @@ import { useReloadOnNavigateWhenStale } from '@/lib/app-version';
 import { LoadFailed, SessionLoading } from '@/components/auth/RouteGuards';
 import { MarksPanel } from '@/components/dev/MarksPanel';
 import { applyScrollMode, scrollModeFor, useTouchTablet, type ScrollMode } from '@/lib/scroll-mode';
+import { barTintFor, type BarTint } from '@/lib/bar-tint';
+import { syncThemeColorMeta } from '@/lib/theme';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 
 // The operator's Cockpit (dot + panel): one lazy chunk, requested only when the
 // operator flag is true. Nobody else downloads it or makes any request for it.
@@ -147,6 +151,21 @@ function ShellScrollMode({ mode }: { mode: ScrollMode }): null {
   return null;
 }
 
+/**
+ * Points the browser bar (theme-color: Android Chrome, Samsung Internet,
+ * installed app) at the current screen's top surface (src/lib/bar-tint.ts).
+ * One layout effect on the shell's own route render: writes the theme-color
+ * metas only when the tint changes, one getComputedStyle, no listeners, no
+ * network. Leaving the shell hands the canvas tint back.
+ */
+function BarTintSync({ tint }: { tint: BarTint }): null {
+  useLayoutEffect(() => {
+    syncThemeColorMeta(tint);
+  }, [tint]);
+  useLayoutEffect(() => () => syncThemeColorMeta('bg'), []);
+  return null;
+}
+
 // The first shell paint of this page load; still loading there means it
 // painted from the device cache.
 let firstShellPainted = false;
@@ -208,6 +227,13 @@ function AppLayoutBody() {
     scrollMode,
     touchTablet,
   );
+  const isLaptop = useIsLaptop();
+  const barTint = barTintFor({
+    pathname,
+    search: searchParams,
+    isLaptop,
+    threadOpen: isThreadRoute(pathname, searchParams),
+  });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const paletteOpenRef = useRef(false);
   paletteOpenRef.current = paletteOpen;
@@ -514,6 +540,7 @@ function AppLayoutBody() {
         <ChatTabSignals />
         <InboxStoreProvider>
           <ShellScrollMode mode={scrollMode} />
+          <BarTintSync tint={barTint} />
           <div className={chrome.shellClassName}>
             <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
             <div className={chrome.columnClassName}>

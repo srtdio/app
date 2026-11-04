@@ -249,3 +249,39 @@ describe('AppLayout scroll mode', () => {
     );
   });
 });
+
+describe('AppLayout browser bar tint (src/lib/bar-tint.ts)', () => {
+  it('one layout effect syncs theme-color with the route tint; no listeners, no network', () => {
+    const body = source.slice(
+      source.indexOf('function BarTintSync'),
+      source.indexOf('// The first shell paint'),
+    );
+    expect(body).toMatch(
+      /useLayoutEffect\(\(\) => \{\s*syncThemeColorMeta\(tint\);\s*\}, \[tint\]\);/,
+    );
+    expect(body).not.toMatch(/addEventListener|fetch|await|setTimeout/);
+  });
+
+  it('the tint comes from barTintFor on the shell route render, rendered beside the scroll mode', () => {
+    expect(source).toMatch(/const barTint = barTintFor\(\{/);
+    expect(source).toMatch(
+      /<ShellScrollMode mode=\{scrollMode\} \/>\s*<BarTintSync tint=\{barTint\} \/>/,
+    );
+  });
+
+  it('isDetailRoute and the bar-tint detail rule agree', async () => {
+    const { barTintFor } = await import('@/lib/bar-tint');
+    for (const path of [
+      '/posts/1',
+      '/p/x',
+      '/briefs/2',
+      '/b/y',
+      '/posts',
+      '/pipeline',
+      '/posts/1/x',
+    ])
+      expect(barTintFor({ pathname: path, search: '', isLaptop: false, threadOpen: false })).toBe(
+        isDetailRoute(path) ? 'bg' : 'panel',
+      );
+  });
+});

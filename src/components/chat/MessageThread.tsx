@@ -5007,6 +5007,27 @@ export function olderLoadErrorRow(onRetry: () => void): ReactElement {
 }
 
 /**
+ * iOS Safari 26 (and every WebKit iOS or in-app browser) tints its own top bar
+ * from a solid fixed element at the top edge, else the canvas (--bg). A phone
+ * chat thread is locked (src/lib/scroll-mode.ts): the Topbar is hidden and the
+ * header sits inside <main>, so this strip, the status bar inset tall, in the
+ * header's own fill and just under it (the header is z-1, lit-header), gives
+ * Safari --panel to sample. Same surface as the header: no lit-* of its own,
+ * no blur, no opacity. 0px tall where there is no inset (laptop, Playwright).
+ * Phone only (src/lib/bar-tint.ts).
+ */
+export function ThreadTopStrip({ layout }: { layout: ChatLayout }): ReactElement | null {
+  if (layout === 'laptop') return null;
+  return (
+    <div
+      aria-hidden="true"
+      data-thread-top-strip=""
+      className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[env(safe-area-inset-top,0px)] bg-panel"
+    />
+  );
+}
+
+/**
  * A chat being opened before its row is known (a deep link, an Activity tap,
  * a reload inside the thread): the thread's own header and message
  * placeholders from the first frame, never another screen first.
@@ -5017,6 +5038,7 @@ export function threadOpeningSkeleton(
 ): ReactElement {
   return (
     <div data-thread-opening="" aria-busy="true" className="flex h-full min-h-0 flex-col bg-bg">
+      <ThreadTopStrip layout={layout} />
       <div
         className={cn(
           'flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel lit-header',
@@ -6952,6 +6974,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   };
   return (
     <div ref={rootRef} className="relative flex h-full flex-col bg-bg">
+      <ThreadTopStrip layout={layout} />
       <div
         className={cn(
           'flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel lit-header',

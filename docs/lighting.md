@@ -13,6 +13,7 @@ At most one soft (blurred) shadow per token; use a 1px ring for edge definition 
 - Lit classes sit in the components layer, so utilities on the same element win. Gradients are `background-image`, so the element keeps its own `bg-*` colour underneath.
 - Edge classes (`lit-raised`, `lit-card`, `lit-card-muted`, `lit-overlay`, `lit-btn-secondary`, `lit-chip`) set the border colour (top light, sides mid, bottom dark): drop the neutral `border-border` utility, keep the width and any state colour (`border-accent`, `border-accent-line`, `border-bad`).
 - `lit-header`, `lit-side`, `lit-dock` turn their border transparent and draw it as part of the shadow. A non-sticky header lifts to `position: relative; z-index: 1` so its shade paints over the next sibling; sticky headers keep their own position and z-index.
+- Browser bar strips (no new height): the phone chat thread strip (`ThreadTopStrip`, MessageThread.tsx) and the homepage strip (`.home::before`, home.css) fill only the status bar inset, solid `bg-panel` / `--panel`, so iOS Safari samples a solid top edge. Each is part of the surface below it (the thread header, `lit-header`; the homepage `.top`), takes no `lit-*` of its own and adds no rim, blur or opacity. 0px tall without an inset.
 - `lit-chip-selected` sets the whole background; drop the selected-state fill utility.
 - Never transition `box-shadow`, `filter` or `backdrop-filter`.
 

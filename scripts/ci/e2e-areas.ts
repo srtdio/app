@@ -65,6 +65,8 @@ const CHAT_SPECS = [
   // The chat list scrolls the document on a phone (page mode); a thread stays locked.
   'chat-list-document-scroll',
   'document-scroll',
+  // Browser bar tint (theme-color, the thread's Safari strip), src/lib/bar-tint.ts.
+  'browser-bar-tint',
   'tablet-scroll',
   // The search screen (command palette), opened over the chat home.
   'command-palette',
@@ -152,6 +154,7 @@ export const AREAS: Area[] = [
       'onboarding-invited',
       'onboarding-approver',
       'document-scroll',
+      'browser-bar-tint',
       'tablet-scroll',
       'pipeline-back-scroll',
       'plan-desktop',

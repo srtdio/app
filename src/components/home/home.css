@@ -230,6 +230,24 @@ html:has(.home) body {
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid transparent;
 }
+/* Browser bar tint: iOS Safari 26 and every WebKit iOS or in-app browser
+   sample a solid fixed element at the top edge and skip one with
+   backdrop-filter, so the frosted .top above is never read. This solid strip
+   fills the status bar inset above .top (which pins at that inset) in the
+   colour the frosted bar reads as (--panel, white; the homepage is light only),
+   so the bar matches. No blur, no opacity; 0px tall where there is no inset,
+   so the page itself looks exactly the same. */
+.home::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 50;
+  background: var(--panel);
+  pointer-events: none;
+}
 .home .top.on {
   border-bottom-color: var(--border);
 }
