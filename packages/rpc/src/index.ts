@@ -566,6 +566,23 @@ export function planItemReview(
   return callProc(client, 'plan_item_review', args);
 }
 
+/**
+ * plan_concept_link_post: link a post to a concept (p_post_id), or unlink
+ * (p_post_id null). The generated Args type p_post_id as a string; the proc
+ * takes null to unlink, so this is the one cast that lets null through.
+ */
+export interface PlanConceptLinkPostArgs {
+  p_item_id: string;
+  p_post_id: string | null;
+  p_trace_id: string;
+}
+export function planConceptLinkPost(
+  client: Client,
+  args: PlanConceptLinkPostArgs,
+): Promise<Result<ProcReturns<'plan_concept_link_post'>>> {
+  return callProc(client, 'plan_concept_link_post', args as ProcArgs<'plan_concept_link_post'>);
+}
+
 export type PlanItemCommentCreateArgs = ProcArgs<'plan_item_comment_create'>;
 export function planItemCommentCreate(
   client: Client,

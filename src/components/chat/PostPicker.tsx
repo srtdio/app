@@ -59,6 +59,7 @@ import {
 import type { Client } from '@srtdio/rpc';
 import type { PostCardFields } from '@srtdio/posts';
 import {
+  POST_PICKER_PAGE_COLUMNS,
   countPostsForPicker,
   listPostsForPickerPage,
   type PostPickerCursor,
@@ -76,10 +77,14 @@ import {
   type BriefFilter,
   type BriefPickerRow,
 } from '@/lib/chat/briefs';
-import { formatDate, formatDueDate } from '@/lib/time';
+import { civilDay, formatDate, formatDueDate } from '@/lib/time';
+import { formatCivilDayHeader } from '@/lib/plan-week';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import {
   PICKER_PAGE_SIZE,
+  buildLinkSections,
   buildPickerSections,
+  linkSelection,
   cursorAfter,
   hasMoreResults,
   isPostSelected,
@@ -133,6 +138,17 @@ interface PostPickerProps {
   channelHasClient?: boolean | null | undefined;
   /** Post ids not to list at all (a plan's posts, when adding to that plan). */
   excludePostIds?: ReadonlySet<string> | undefined;
+  /**
+   * Link mode (mode 'link', a concept's "Link a post"): the concept's plan day
+   * ("YYYY-MM-DD"; posts due that day list first); null or absent for none.
+   */
+  linkDay?: string | null | undefined;
+  /** Link mode: the picked post id (single select, controlled); null for none. */
+  linkSelectedId?: string | null | undefined;
+  /** Link mode: a row tap picks that post (the one selection). */
+  onLinkSelect?: ((post: PostCardFields) => void) | undefined;
+  /** Link mode: "Link this post" with a post picked. */
+  onLinkConfirm?: (() => void) | undefined;
 }
 
 /** The sheet title per mode. */
@@ -140,7 +156,12 @@ const PICKER_TITLES: Record<Exclude<PickerMode, 'inline'>, string> = {
   posts: 'Share a post',
   drafts: 'Share a draft',
   briefs: 'Share a brief',
+  link: 'Link a post',
 };
+
+/** Link mode's full-width confirm and its nothing-picked hint. */
+export const LINK_CONFIRM = 'Link this post';
+export const LINK_PICK_FIRST_HINT = 'Pick a post first.';
 
 /** The default view's data: the sections plus the older-approved count. */
 interface PickerSectionsData {
@@ -183,9 +204,19 @@ export async function loadPickerSections(
     now: Date;
     mode: PostListMode;
     allowDrafts: boolean;
+    /** Link mode: the concept's plan day and the workspace zone its posts' days read on. */
+    linkDay?: string | null;
+    timeZone?: string | null;
   },
 ): Promise<{ ok: true; data: PickerSectionsData } | { ok: false; message: string }> {
   const { workspaceId, role, mode, allowDrafts } = params;
+  if (mode === 'link') {
+    return loadLinkSections(client, {
+      workspaceId,
+      day: params.linkDay ?? null,
+      timeZone: params.timeZone ?? null,
+    });
+  }
   const page = (stage: 'review' | 'parked' | 'rejected' | 'draft') =>
     listPostsForPickerPage(client, { workspaceId, stage, limit: PICKER_PAGE_SIZE });
   if (mode === 'drafts') {
@@ -248,6 +279,64 @@ export async function loadPickerSections(
       olderApprovedCount: older.data,
     },
   };
+}
+
+/**
+ * Link mode's default view, two reads in parallel (never one per row): the
+ * posts due on the concept's day (a day wider each side, then kept to that
+ * civil day in the workspace zone), and the newest page of every post, any
+ * stage (RLS shows drafts to the agency side only). Same day first, then other
+ * dates newest first; no day reads only the newest page.
+ */
+export async function loadLinkSections(
+  client: Client,
+  params: { workspaceId: string; day: string | null; timeZone: string | null },
+): Promise<{ ok: true; data: PickerSectionsData } | { ok: false; message: string }> {
+  const { workspaceId, day } = params;
+  const zone = params.timeZone ?? undefined;
+  const sameDayRead =
+    day !== null
+      ? client
+          .from('posts')
+          .select(POST_PICKER_PAGE_COLUMNS)
+          .eq('workspace_id', workspaceId)
+          .is('deleted_at', null)
+          .gte('target_date', `${shiftDay(day, -1)}T00:00:00Z`)
+          .lt('target_date', `${shiftDay(day, 2)}T00:00:00Z`)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .limit(PICKER_PAGE_SIZE)
+      : null;
+  const [newest, sameDay] = await Promise.all([
+    listPostsForPickerPage(client, { workspaceId, limit: PICKER_PAGE_SIZE }),
+    sameDayRead,
+  ]);
+  if (!newest.ok || (sameDay !== null && sameDay.error !== null)) {
+    logger.warn('post picker: link sections load failed', {
+      error: !newest.ok ? newest.error.message : (sameDay?.error?.message ?? ''),
+    });
+    return { ok: false, message: POSTS_LOAD_FAILED };
+  }
+  const onDay = (row: PostPickerPageRow): boolean =>
+    day !== null && row.target_date !== null && civilDay(row.target_date, zone) === day;
+  const dayRows = ((sameDay?.data ?? []) as PostPickerPageRow[]).filter(onDay);
+  return {
+    ok: true,
+    data: {
+      sections: buildLinkSections({
+        dayLabel: day !== null ? formatCivilDayHeader(day) : null,
+        sameDay: dayRows,
+        others: newest.data.rows.filter((r) => !onDay(r)),
+      }),
+      olderApprovedCount: 0,
+    },
+  };
+}
+
+/** "YYYY-MM-DD" shifted by whole days (calendar maths, no zone). Pure. */
+function shiftDay(day: string, by: number): string {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, (d ?? 1) + by)).toISOString().slice(0, 10);
 }
 
 /**
@@ -460,6 +549,10 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   const briefRequestKey = [workspaceId, briefFilter, query].join('|');
   const trimmed = query.trim();
 
+  // Link mode: "Link this post" tapped with nothing picked.
+  const [linkHint, setLinkHint] = useState(false);
+  const linkDay = props.linkDay ?? null;
+
   // Reset to the default view and empty search each time the picker opens.
   useEffect(() => {
     if (props.open) {
@@ -469,6 +562,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       setSections(null);
       setSearch(null);
       setPostError(null);
+      setLinkHint(false);
     }
   }, [props.open, mode]);
 
@@ -504,17 +598,19 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       now: new Date(),
       mode: listMode,
       allowDrafts,
+      ...(listMode === 'link' ? { linkDay, timeZone: workspaceZone } : {}),
     }).then((result) => {
       if (cancelled) return;
       if (result.ok) {
-        rememberSections(memoKey, result.data);
+        // Link mode's list is per concept day: never kept for another open.
+        if (listMode !== 'link') rememberSections(memoKey, result.data);
         setSections(result.data);
       } else setPostError(result.message);
     });
     return () => {
       cancelled = true;
     };
-  }, [props.open, listMode, workspaceId, role, roleLoaded, allowDrafts]);
+  }, [props.open, listMode, workspaceId, role, roleLoaded, allowDrafts, linkDay, workspaceZone]);
 
   // Search first page: one read (with count) per settled search text.
   useEffect(() => {
@@ -610,7 +706,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   // read above replaces it when it lands.
   const baseSections =
     sections ??
-    (props.open && listMode !== null && workspaceId !== null && roleLoaded
+    (props.open && listMode !== null && listMode !== 'link' && workspaceId !== null && roleLoaded
       ? freshSections(sectionsMemoKey({ workspaceId, mode: listMode, allowDrafts, role }))
       : null);
 
@@ -645,7 +741,30 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     [trimmed, shownSections, searchRows],
   );
   const covers = usePostCovers(coverIds);
-  const listProps: PostRowContext = { ...rowProps, cover: covers };
+  // Link mode: one selection, by id, over the rows on screen; a tap picks.
+  const linkMode = mode === 'link';
+  const linkId = props.linkSelectedId ?? null;
+  const shownRows: readonly PostPickerPageRow[] =
+    trimmed === '' ? (shownSections?.sections.flatMap((sec) => sec.rows) ?? []) : searchRows;
+  const onLinkSelect = props.onLinkSelect;
+  const listProps: PostRowContext = linkMode
+    ? {
+        ...rowProps,
+        selected: linkSelection(shownRows, linkId),
+        onToggle: (post) => {
+          setLinkHint(false);
+          onLinkSelect?.(post);
+        },
+        cover: covers,
+      }
+    : { ...rowProps, cover: covers };
+  const confirmLink = (): void => {
+    if (linkId === null) {
+      setLinkHint(true);
+      return;
+    }
+    props.onLinkConfirm?.();
+  };
 
   let postBody: ReactElement;
   if (postError !== null) {
@@ -686,9 +805,23 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       // and filters all fill it, so the sheet never grows or shrinks.
       fixedHeight
       footer={
-        <Button variant="primary" className="ml-auto" onClick={props.onDone ?? props.onClose}>
-          {count > 0 ? `Done (${count})` : 'Done'}
-        </Button>
+        linkMode ? (
+          <div className="flex w-full flex-col gap-2">
+            {linkHint ? <ErrorNote>{LINK_PICK_FIRST_HINT}</ErrorNote> : null}
+            <Button
+              variant="primary"
+              data-picker-link-confirm=""
+              className="w-full"
+              onClick={confirmLink}
+            >
+              {LINK_CONFIRM}
+            </Button>
+          </div>
+        ) : (
+          <Button variant="primary" className="ml-auto" onClick={props.onDone ?? props.onClose}>
+            {count > 0 ? `Done (${count})` : 'Done'}
+          </Button>
+        )
       }
     >
       <div className="flex flex-col gap-3 sm:min-h-0 sm:flex-1" data-picker-mode={sheetMode}>
@@ -812,9 +945,15 @@ function PickerError({ message }: { message: string }): ReactElement {
   );
 }
 
-function SectionHeading({ label }: { label: string }): ReactElement {
+function SectionHeading({ label, mono }: { label: string; mono?: boolean }): ReactElement {
   return (
-    <li className="border-b border-border bg-panel-2 px-4 py-2 text-sm font-medium text-fg-2">
+    <li
+      className={cn(
+        'border-b border-border bg-panel-2 px-4 py-2 text-sm font-medium text-fg-2',
+        // A date heading (link mode's day section): font-mono like every date.
+        mono === true && 'font-mono tabular-nums',
+      )}
+    >
       {label}
     </li>
   );
@@ -834,7 +973,7 @@ export function PostSectionsView(
       {props.data.sections.map((section) => (
         <li key={section.key} data-section={section.key}>
           <ul>
-            <SectionHeading label={section.label} />
+            <SectionHeading label={section.label} mono={section.key === 'day'} />
             {section.rows.map((post) => (
               <PostRow key={post.id} post={post} {...props} />
             ))}

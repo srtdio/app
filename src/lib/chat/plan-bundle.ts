@@ -141,6 +141,9 @@ function parseItem(row: Obj): PlanItemRow | null {
   };
   const updatedAt = str(row.updated_at);
   if (updatedAt !== null) item.updated_at = updatedAt;
+  // A concept's linked post; a post item never carries one.
+  const linked = kind === 'concept' ? str(row.linked_post_id) : null;
+  if (linked !== null) item.linked_post_id = linked;
   return item;
 }
 
@@ -185,6 +188,7 @@ function parsePost(row: Obj): PlanPostRow | null {
     title: str(row.title),
     format: str(row.format),
     target_date: str(row.target_date),
+    ...(row.deleted === true ? { deleted: true } : {}),
   };
 }
 

@@ -278,9 +278,11 @@ function planBundleRead(args: Record<string, unknown>, tables: Tables): Record<s
     (i) => ids.includes(String(i.plan_id)) && liveRow(i),
   );
   const itemIds = items.map((i) => String(i.id));
-  const postIds = items.flatMap((i) =>
-    i.post_id !== null && i.post_id !== undefined ? [String(i.post_id)] : [],
-  );
+  // Post items' posts and concepts' linked posts (20261104140000_plan_concept_link_post).
+  const postIds = items.flatMap((i) => {
+    const id = i.post_id ?? i.linked_post_id ?? null;
+    return id !== null ? [String(id)] : [];
+  });
   const conceptIds = items.filter((i) => i.kind === 'concept').map((i) => String(i.id));
   const draftRows =
     ids.length > 0 ? (PLAN_RPC.plan_draft_rows?.({ p_plan_ids: ids }, tables) as unknown[]) : [];
@@ -386,6 +388,7 @@ function planBundleRead(args: Record<string, unknown>, tables: Tables): Record<s
         'created_at',
         'updated_at',
         'target_date',
+        'linked_post_id',
       ]),
     ),
     draft_rows: draftRows,
@@ -395,7 +398,10 @@ function planBundleRead(args: Record<string, unknown>, tables: Tables): Record<s
       .map((r) => pick(r, ['item_id', 'side', 'status', 'reviewed_by', 'reviewed_at'])),
     posts: (tables.posts ?? [])
       .filter((p) => postIds.includes(String(p.id)))
-      .map((p) => pick(p, ['id', 'stage', 'title', 'format', 'target_date'])),
+      .map((p) => ({
+        ...pick(p, ['id', 'stage', 'title', 'format', 'target_date']),
+        deleted: !liveRow(p),
+      })),
     comment_counts: counts,
     thumbs: { posts: postThumbs, concepts: conceptThumbs },
     also_in: alsoIn,
@@ -761,6 +767,35 @@ const PLAN_RPC: Record<string, RpcHandler> = {
   // agency roles; client side for a client on a client plan, a draft post
   // refused (post_not_ready). Never touches posts.stage. approved/changes add
   // plan_review inbox rows; waiting after approved/changes adds a withdrawal row.
+  // A concept's linked post (live proc 20261104140000): agency side only;
+  // linking needs an approved review and a live post in the workspace; one
+  // concept per post per plan; null unlinks; the same value is a no-op.
+  plan_concept_link_post: (args, tables) => {
+    const item = (tables.plan_items ?? []).find((i) => i.id === args.p_item_id && liveRow(i));
+    if (item === undefined || item.kind !== 'concept') throw new HarnessRpcError('invalid_payload');
+    if (!AGENCY_ROLES.includes(roleOf(tables, ME))) throw new HarnessRpcError('forbidden_role');
+    const postId = typeof args.p_post_id === 'string' ? args.p_post_id : null;
+    if (postId !== null) {
+      const approved = (tables.plan_item_reviews ?? []).some(
+        (r) => r.item_id === item.id && r.status === 'approved',
+      );
+      if (!approved) throw new HarnessRpcError('concept_not_approved');
+      const post = (tables.posts ?? []).find(
+        (p) => p.id === postId && p.workspace_id === item.workspace_id && liveRow(p),
+      );
+      if (post === undefined) throw new HarnessRpcError('invalid_payload');
+    }
+    if ((item.linked_post_id ?? null) === postId) return null;
+    if (
+      postId !== null &&
+      planItemsOf(tables, item.plan_id).some((i) => i.id !== item.id && i.linked_post_id === postId)
+    ) {
+      throw new HarnessRpcError('post_already_linked');
+    }
+    item.linked_post_id = postId;
+    item.updated_at = new Date().toISOString();
+    return null;
+  },
   plan_item_review: (args, tables) => {
     const item = [...(tables.plan_items ?? []), ...(tables.hidden_plan_items ?? [])].find(
       (i) => i.id === args.p_item_id && i.deleted_at === null,

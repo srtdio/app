@@ -10,7 +10,14 @@
 import { mark } from '@/lib/perf-marks';
 import type { PlanBundle, PlanItemRow, PlanRow } from '@/lib/chat/plans';
 import { planItemDayInZone } from '@/lib/chat/plans';
-import { planProgress, reviewStatus, shownReviewSide } from '@/components/chat/plan-card';
+import {
+  linkedPost,
+  planProgress,
+  reviewStatus,
+  shownReviewSide,
+  withoutPairedPosts,
+} from '@/components/chat/plan-card';
+import type { LinkBundle } from '@/components/chat/plan-card';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { addCivilDays } from '@/lib/list-sort';
 import { civilMondayOf, formatCivilDayHeader, PLAN_WEEK_DAYS } from '@/lib/plan-week';
@@ -273,8 +280,10 @@ export function calendarEntries(input: {
   const byId = new Map(input.bundles.map((b) => [b.plan.id, b]));
   for (const plan of plans) {
     if (input.filter !== null && plan.id !== input.filter) continue;
-    const bundle = byId.get(plan.id);
-    if (bundle === undefined) continue;
+    const full = byId.get(plan.id);
+    if (full === undefined) continue;
+    // One chip per pair: the concept's (its post line reads the linked post).
+    const bundle = withoutPairedPosts(full);
     for (const item of bundle.items) {
       const key = `item:${item.id}`;
       const day = moved[key] ?? planItemDayInZone(item, bundle.postInfo, input.timeZone);
@@ -434,7 +443,11 @@ export function planPill(
  * "Post: Draft") for a post item (a draft row reads "Draft"), "No post yet"
  * for a concept or an unreadable post. Pure.
  */
-export function postStageLine(bundle: Pick<PlanBundle, 'postStages'>, item: PlanItemRow): string {
+export function postStageLine(bundle: LinkBundle, item: PlanItemRow): string {
+  // A concept with a linked post reads that post's stage (agency side: the
+  // calendar only shows what the viewer's read returned).
+  const link = linkedPost(bundle, item, 'agency');
+  if (link.kind === 'linked') return `Post: ${stageStatusWord(link.stage)}`;
   if (item.kind !== 'post') return NO_POST_YET;
   if (item.draft_row === true) return 'Post: Draft';
   const stage = item.post_id !== null ? bundle.postStages[item.post_id] : undefined;
@@ -515,7 +528,8 @@ export function planCardMeta(
 ):
   | { kind: 'shared'; label: string; ok: number; total: number; percent: number }
   | { kind: 'draft'; label: string } {
-  const total = bundle.items.length;
+  // A pair counts once (its concept).
+  const total = withoutPairedPosts(bundle).items.length;
   if (isDraftPlan(bundle.plan)) {
     return {
       kind: 'draft',

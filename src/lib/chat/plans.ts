@@ -108,6 +108,11 @@ export interface PlanItemRow {
   draft_row?: true;
   /** The post's number, on a draft row. */
   post_number?: number;
+  /**
+   * A concept's linked post (plan_concept_link_post): the post made for it.
+   * Null or absent when none; always null on a post item.
+   */
+  linked_post_id?: string | null;
 }
 
 /** One row of plan_draft_rows: a draft post item the caller may see by name. */
@@ -148,8 +153,13 @@ export interface PlanBundle {
   reviews: PlanReviewRow[];
   /** Post stage by post id, for the post items. */
   postStages: Record<string, string>;
-  /** Post title and target date by post id, for the post rows. */
+  /** Post title and target date by post id, for the post rows and linked posts. */
   postInfo: Record<string, PlanPostInfo>;
+  /**
+   * Linked post ids the read returned as soft-deleted (posts.deleted): such a
+   * link reads as no link. Absent when none.
+   */
+  deletedPosts?: Record<string, true>;
   /**
    * Visible comments per item id, when the read that built the bundle carried
    * them (plan_bundle_read: the Plan tab calendar's counts). Absent otherwise.
@@ -169,7 +179,7 @@ export interface PlanPostInfo {
 export const PLAN_COLUMNS =
   'id, workspace_id, title, starts_on, ends_on, audience, created_by, updated_at';
 const ITEM_COLUMNS =
-  'id, plan_id, kind, position, title, description, post_id, created_at, updated_at, target_date';
+  'id, plan_id, kind, position, title, description, post_id, created_at, updated_at, target_date, linked_post_id';
 const REVIEW_COLUMNS = 'item_id, side, status, reviewed_by, reviewed_at';
 const COMMENT_COLUMNS = 'id, item_id, author_user_id, body, visibility, created_at';
 
@@ -455,7 +465,7 @@ async function readItemsWithReviews<T>(
     signal,
   );
   if (!items.ok) return items;
-  const postIds = items.data.flatMap((i) => (i.post_id !== null ? [i.post_id] : []));
+  const postIds = planPostIds(items.data);
   const [reviews, stages, side] = await Promise.all([
     selectIn<PlanReviewRow>(
       client,
@@ -576,6 +586,20 @@ export interface PlanPostRow {
   format?: string | null;
   /** posts.target_date (timestamptz): the slot's day in the workspace zone. */
   target_date?: string | null;
+  /** plan_bundle_read: the post is soft-deleted (a linked post reads as no link). */
+  deleted?: boolean;
+}
+
+/** Every post id the items point at: post items' posts and concepts' linked posts. Pure. */
+export function planPostIds(items: readonly PlanItemRow[]): string[] {
+  const ids = new Set<string>();
+  for (const item of items) {
+    if (item.post_id !== null) ids.add(item.post_id);
+    if (item.linked_post_id !== undefined && item.linked_post_id !== null) {
+      ids.add(item.linked_post_id);
+    }
+  }
+  return [...ids];
 }
 
 /** Group the four reads into bundles by plan id. Pure. */
@@ -594,6 +618,7 @@ export function assembleBundles(
     const ids = new Set(own.map((i) => i.id));
     const postStages: Record<string, string> = {};
     const postInfo: Record<string, PlanPostInfo> = {};
+    const deletedPosts: Record<string, true> = {};
     for (const item of own) {
       const post = item.post_id !== null ? byId.get(item.post_id) : undefined;
       if (item.post_id !== null && post !== undefined) {
@@ -604,6 +629,22 @@ export function assembleBundles(
           target_date: post.target_date ?? null,
         };
       }
+      // A concept's linked post: its stage and info when live; a soft-deleted
+      // one is remembered so the link reads as none (never a post row).
+      const linkedId = item.kind === 'concept' ? (item.linked_post_id ?? null) : null;
+      const linked = linkedId !== null ? byId.get(linkedId) : undefined;
+      if (linkedId !== null && linked !== undefined) {
+        if (linked.deleted === true) {
+          deletedPosts[linkedId] = true;
+        } else {
+          postStages[linkedId] = linked.stage;
+          postInfo[linkedId] = {
+            title: linked.title ?? '',
+            format: linked.format ?? null,
+            target_date: linked.target_date ?? null,
+          };
+        }
+      }
     }
     out.set(plan.id, {
       plan,
@@ -612,6 +653,7 @@ export function assembleBundles(
       reviews: reviews.filter((r) => ids.has(r.item_id)),
       postStages,
       postInfo,
+      ...(Object.keys(deletedPosts).length > 0 ? { deletedPosts } : {}),
     });
   }
   return out;

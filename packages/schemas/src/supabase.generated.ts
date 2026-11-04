@@ -8104,6 +8104,7 @@ export type Database = {
           description: string | null
           id: string
           kind: string
+          linked_post_id: string | null
           plan_id: string
           position: number
           post_id: string | null
@@ -8119,6 +8120,7 @@ export type Database = {
           description?: string | null
           id?: string
           kind: string
+          linked_post_id?: string | null
           plan_id: string
           position?: number
           post_id?: string | null
@@ -8134,6 +8136,7 @@ export type Database = {
           description?: string | null
           id?: string
           kind?: string
+          linked_post_id?: string | null
           plan_id?: string
           position?: number
           post_id?: string | null
@@ -8148,6 +8151,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_linked_post_id_fkey"
+            columns: ["linked_post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
             referencedColumns: ["id"]
           },
           {
@@ -10235,6 +10245,10 @@ export type Database = {
           p_title: string
           p_trace_id: string
         }
+        Returns: undefined
+      }
+      plan_concept_link_post: {
+        Args: { p_item_id: string; p_post_id: string; p_trace_id: string }
         Returns: undefined
       }
       plan_create: {

@@ -9,6 +9,7 @@ import type {
   PlanAudience,
   PlanBundle,
   PlanItemRow,
+  PlanPostInfo,
   PlanReviewRow,
   ReviewSide,
   ReviewStatus,
@@ -123,7 +124,9 @@ export interface PlanProgress {
 }
 
 /** Team and client approval across the plan's items, one pass. Pure. */
-export function planProgress(bundle: PlanBundle): PlanProgress {
+export function planProgress(full: PlanBundle): PlanProgress {
+  // A pair counts once (its concept): the post item it stands in for is left out.
+  const bundle = withoutPairedPosts(full);
   let approved = 0;
   let teamApproved = 0;
   let changes = 0;
@@ -520,17 +523,137 @@ const POST_LINE_LABELS: Record<Exclude<PostLineTone, 'none'>, string> = {
 
 /**
  * A row's POST line: the post's stage name as is ("Review", "Approved"), or
- * "Not made yet" for a concept or a slot with no post. Pure.
+ * "Not made yet" for a concept or a slot with no post. A concept with a linked
+ * post reads that post's stage; one whose post the viewer cannot read (a
+ * client, RLS hides drafts) reads "Not ready to view yet". Pure.
  */
 export function postLine(
-  bundle: Pick<PlanBundle, 'postStages'>,
+  bundle: LinkBundle,
   item: PlanItemRow,
+  side: ViewerSide = 'agency',
 ): { label: string; tone: PostLineTone } {
+  const link = linkedPost(bundle, item, side);
+  if (link.kind === 'hidden') return { label: DRAFT_NOT_READY, tone: 'none' };
   const stage =
-    item.kind === 'post' && item.post_id !== null ? bundle.postStages[item.post_id] : undefined;
+    link.kind === 'linked'
+      ? link.stage
+      : item.kind === 'post' && item.post_id !== null
+        ? bundle.postStages[item.post_id]
+        : undefined;
   const tone = POST_LINE_TONES.find((t) => t === stage);
   if (tone !== undefined) return { label: POST_LINE_LABELS[tone], tone };
   return { label: POST_NOT_MADE_LABEL, tone: 'none' };
+}
+
+// ---------------------------------------------------------------------------
+// A concept's linked post (plan_concept_link_post)
+// ---------------------------------------------------------------------------
+
+/** The concept screen's link copy and the Plan list's pair label. */
+export const LINK_POST_LABEL = 'Link a post';
+export const CHANGE_LINKED_POST_LABEL = 'Change linked post';
+export const UNLINK_POST_LABEL = 'Unlink post';
+export const LINK_CONFIRM_LABEL = 'Link this post';
+export const LINK_PICK_FIRST = 'Pick a post first.';
+export const PAIR_POST_LABEL = 'Post for this concept';
+/** The status box row that names the linked post. */
+export const STATUS_POST_ROW = 'Post';
+/** plan_concept_link_post refusals, as toasts. */
+export const LINK_NOT_APPROVED = 'OK the concept first.';
+export const LINK_ALREADY_LINKED = 'That post is linked to another concept in this plan.';
+
+/** What a link read needs from a bundle. */
+export type LinkBundle = Pick<PlanBundle, 'postStages'> &
+  Partial<Pick<PlanBundle, 'postInfo' | 'deletedPosts'>>;
+
+/**
+ * A concept's linked post: none (no link, a post item, a soft-deleted post, or
+ * an agency viewer the post did not come back for); hidden (a viewer off the
+ * agency side whose read left the post out: RLS hides drafts, so it shows as
+ * not ready and never opens); linked, with the post's stage and info. Pure.
+ */
+export type LinkedPost =
+  | { kind: 'none' }
+  | { kind: 'hidden'; postId: string }
+  | { kind: 'linked'; postId: string; stage: string; info: PlanPostInfo };
+
+export function linkedPost(bundle: LinkBundle, item: PlanItemRow, side: ViewerSide): LinkedPost {
+  if (item.kind !== 'concept') return { kind: 'none' };
+  const id = item.linked_post_id ?? null;
+  if (id === null || bundle.deletedPosts?.[id] === true) return { kind: 'none' };
+  const stage = bundle.postStages[id];
+  if (stage !== undefined) {
+    return { kind: 'linked', postId: id, stage, info: bundle.postInfo?.[id] ?? { title: '' } };
+  }
+  return side === 'agency' ? { kind: 'none' } : { kind: 'hidden', postId: id };
+}
+
+/**
+ * The post items a pair stands in for: a post item whose post is the live,
+ * readable linked post of a concept in the same bundle. Pure.
+ */
+export function pairedPostItemIds(bundle: PlanBundle): Set<string> {
+  const linked = new Set<string>();
+  for (const item of bundle.items) {
+    const link = linkedPost(bundle, item, 'agency');
+    if (link.kind === 'linked') linked.add(link.postId);
+  }
+  const out = new Set<string>();
+  if (linked.size === 0) return out;
+  for (const item of bundle.items) {
+    if (item.kind === 'post' && item.post_id !== null && linked.has(item.post_id)) out.add(item.id);
+  }
+  return out;
+}
+
+/**
+ * The bundle as the Plan list, counts and calendar show it: the post items a
+ * pair stands in for left out (their data untouched, so an unlink brings
+ * them back with their own PLAN status). The same bundle when nothing pairs. Pure.
+ */
+export function withoutPairedPosts(bundle: PlanBundle): PlanBundle {
+  const hidden = pairedPostItemIds(bundle);
+  if (hidden.size === 0) return bundle;
+  return {
+    ...bundle,
+    items: bundle.items.filter((i) => !hidden.has(i.id)),
+    reviews: bundle.reviews.filter((r) => !hidden.has(r.item_id)),
+  };
+}
+
+/** The live post item of a post in the plan, when there is one (a pair's post opens as it). Pure. */
+export function postItemOf(bundle: PlanBundle, postId: string): PlanItemRow | null {
+  return bundle.items.find((i) => i.kind === 'post' && i.post_id === postId) ?? null;
+}
+
+/**
+ * Whether the viewer may link on this concept: the agency, on a concept with an
+ * approved review on either side (plan_concept_link_post's own check).
+ * `overrides` are this screen's own review writes, ahead of the re-read. Pure.
+ */
+export function canLinkPost(
+  bundle: PlanBundle,
+  item: PlanItemRow,
+  side: ViewerSide,
+  overrides: Partial<Record<ReviewSide, ReviewStatus>> = {},
+): boolean {
+  if (side !== 'agency' || item.kind !== 'concept') return false;
+  return (['team', 'client'] as const).some(
+    (s) => (overrides[s] ?? reviewStatus(bundle, item.id, s)) === 'approved',
+  );
+}
+
+/** A post stage's POST line name ("Review", never "In review"), as postLine reads it. Pure. */
+export function postLineLabel(stage: string): string {
+  const tone = POST_LINE_TONES.find((t) => t === stage);
+  return tone !== undefined ? POST_LINE_LABELS[tone] : stageLabel(stage);
+}
+
+/** A failed link or unlink's toast: the two refusals by name, else the fallback. Pure. */
+export function linkErrorCopy(message: string, fallback: string): string {
+  if (message.includes('concept_not_approved')) return LINK_NOT_APPROVED;
+  if (message.includes('post_already_linked')) return LINK_ALREADY_LINKED;
+  return planWriteErrorCopy(message, fallback);
 }
 
 /**
@@ -539,17 +662,29 @@ export function postLine(
  * posts over the post items. Pure.
  */
 export function planHeaderCounts(
-  bundle: PlanBundle,
+  full: PlanBundle,
   side: ViewerSide,
 ): { plan: { ok: number; n: number }; post: { approved: number; n: number } } {
+  // A pair counts once: its concept on PLAN and its linked post on POST.
+  const bundle = withoutPairedPosts(full);
   const reviewSide: ReviewSide = bundle.plan.audience === 'team' ? 'team' : 'client';
   const reviewed = bundle.items.filter((i) => !draftLocked(bundle, i, side));
   const ok = reviewed.filter((i) => reviewStatus(bundle, i.id, reviewSide) === 'approved').length;
-  const posts = bundle.items.filter((i) => i.kind === 'post');
-  const approved = posts.filter(
-    (i) => i.post_id !== null && bundle.postStages[i.post_id] === 'approved',
-  ).length;
-  return { plan: { ok, n: reviewed.length }, post: { approved, n: posts.length } };
+  let n = 0;
+  let approved = 0;
+  for (const item of bundle.items) {
+    const link = linkedPost(bundle, item, side);
+    if (item.kind !== 'post' && link.kind === 'none') continue;
+    n += 1;
+    const stage =
+      link.kind === 'linked'
+        ? link.stage
+        : item.post_id !== null
+          ? bundle.postStages[item.post_id]
+          : undefined;
+    if (stage === 'approved') approved += 1;
+  }
+  return { plan: { ok, n: reviewed.length }, post: { approved, n } };
 }
 
 /** "3/5 OK" and "2/4 approved". Pure. */

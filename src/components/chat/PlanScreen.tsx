@@ -96,6 +96,7 @@ import {
   IconChevronLeft,
   IconEdit,
   IconFile,
+  IconLink,
   IconPlan,
   IconPlus,
   IconTrash,
@@ -170,7 +171,13 @@ import {
   PLAN_NOT_OK_LABEL,
   PLAN_OK_LABEL,
   POST_LINE_LABEL,
+  PAIR_POST_LABEL,
+  linkedPost,
+  postItemOf,
   postLine,
+  shortDay,
+  withoutPairedPosts,
+  type LinkedPost,
   slotApprovedToast,
   slotErrorCopy,
   slotSide,
@@ -180,7 +187,7 @@ import {
   type SendButtonState,
   type StatusPill,
 } from '@/components/chat/plan-card';
-import { PlanItemScreen } from '@/components/chat/PlanItemScreen';
+import { LinkedPostPage, PlanItemScreen } from '@/components/chat/PlanItemScreen';
 import { PlanAddSheet } from '@/components/chat/PlanAddSheet';
 import { PlanKeepApprovalSheet, type MoveDay } from '@/components/chat/PlanMoveSheet';
 import {
@@ -1086,6 +1093,8 @@ export function PlanScreen(props: {
       }),
   );
   const [itemId, setItemId] = useState<string | null>(props.initialItemId ?? null);
+  // A pair's linked post that is not a post item in this plan, opened alone.
+  const [linkedOpenId, setLinkedOpenId] = useState<string | null>(null);
   // The Item screen was opened by a row's Not OK: its note box opens focused.
   const [askChanges, setAskChanges] = useState(false);
   const entryItemId = props.initialItemId ?? null;
@@ -1147,11 +1156,18 @@ export function PlanScreen(props: {
     HISTORY_STEP_KEYS.planItem,
     () => setItemId(null),
   );
+  // The linked post opens on the item layer's step (one item layer at a time).
+  useHistoryStep(
+    linkedOpenId !== null && itemId === null && props.open,
+    HISTORY_STEP_KEYS.planItem,
+    () => setLinkedOpenId(null),
+  );
 
   // A closed screen forgets its item, sheets, edits and local state.
   useEffect(() => {
     if (props.open) return;
     setItemId(null);
+    setLinkedOpenId(null);
     setSlotOverrides({});
     setAddFor(null);
     setConceptFor(null);
@@ -1266,9 +1282,15 @@ export function PlanScreen(props: {
       clear?.();
     };
   }, [props.open, jumpItemId, hasJumpRow]);
+  // View mode shows a linked concept and its post as one pair: the post item
+  // the pair stands in for is left out of the list (its data untouched). Edit
+  // mode keeps every row, so a save's order always names every live item.
   const groups = useMemo(
-    () => (bundle !== null ? planListGroups(bundle, timeZone, side) : []),
-    [bundle, timeZone, side],
+    () =>
+      bundle !== null
+        ? planListGroups(editMode ? bundle : withoutPairedPosts(bundle), timeZone, side)
+        : [],
+    [bundle, timeZone, side, editMode],
   );
   const names = read.status === 'ready' ? (read.data.names ?? {}) : {};
   const nameOf = (userId: string | null): string =>
@@ -1746,6 +1768,19 @@ export function PlanScreen(props: {
     mark('plan:item:open');
     setAskChanges(false);
     setItemId(id);
+  };
+  // A pair's post (or a concept's Post row) opens as a post item opens: the
+  // plan's own post item when the post is one, else the post alone.
+  const openLinkedPost = (postId: string): void => {
+    if (editMode || bundle === null) return;
+    const postItem = postItemOf(bundle, postId);
+    if (postItem !== null && !draftLocked(bundle, postItem, side)) {
+      openItem(postItem.id);
+      return;
+    }
+    mark('plan:item:open');
+    setItemId(null);
+    setLinkedOpenId(postId);
   };
 
   // Laptop (agency, edit mode): the right-click day menu with Remove, the
@@ -2379,6 +2414,7 @@ export function PlanScreen(props: {
               alsoIn={read.status === 'ready' ? (read.data.alsoIn ?? {}) : {}}
               drag={drag.state}
               onOpenItem={openItem}
+              onOpenLinkedPost={openLinkedPost}
               onPlanOk={planOk}
               onPlanNotOk={planNotOk}
               {...(editing
@@ -2475,6 +2511,16 @@ export function PlanScreen(props: {
           onClose={() => (itemId === entryItemId ? props.onClose() : setItemId(null))}
           onDismiss={props.onClose}
           onRemoved={() => setItemId(null)}
+          onOpenLinkedPost={openLinkedPost}
+        />
+      ) : null}
+      {bundle !== null && linkedOpenId !== null ? (
+        <LinkedPostPage
+          open={props.open && itemId === null}
+          postId={linkedOpenId}
+          subtitle={bundle.plan.title}
+          onClose={() => setLinkedOpenId(null)}
+          onDismiss={props.onClose}
         />
       ) : null}
       <PlanKeepApprovalSheet
@@ -3261,6 +3307,8 @@ export function PlanBody(props: {
   /** The drag in progress, or null. */
   drag: DragState | null;
   onOpenItem: (id: string) => void;
+  /** View mode: a pair's post row opens its post. */
+  onOpenLinkedPost?: (postId: string) => void;
   /** PLAN: OK on a row (behind the Undo toast). */
   onPlanOk: (item: PlanItemRow) => void;
   /** PLAN: Not OK on a row (the Item screen with the note box open). */
@@ -3364,6 +3412,14 @@ export function PlanBody(props: {
                             item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null
                           }
                           conceptThumb={props.conceptThumbs?.[item.id] ?? null}
+                          pairThumb={
+                            item.linked_post_id != null
+                              ? (props.thumbs[item.linked_post_id] ?? null)
+                              : null
+                          }
+                          {...(props.onOpenLinkedPost !== undefined
+                            ? { onOpenLinkedPost: props.onOpenLinkedPost }
+                            : {})}
                           commentCount={props.commentCounts?.[item.id] ?? 0}
                           dimmed={lifted}
                           tile={index === 0 ? tile : null}
@@ -3643,7 +3699,7 @@ function PlanStatusLines(props: {
   const decided = control.kind === 'pill' ? control.status : null;
   // A new answer (a write, an Undo, a re-read) closes the reopened switch.
   useEffect(() => setChanging(false), [decided]);
-  const post = postLine(props.bundle, props.item);
+  const post = postLine(props.bundle, props.item, props.side);
   let plan: ReactNode = null;
   if (control.kind === 'text' || (props.readOnly && control.kind !== 'none')) {
     const status =
@@ -3698,18 +3754,132 @@ function PlanStatusLines(props: {
           {plan}
         </div>
       ) : null}
-      <div data-plan-line="post" className="flex min-h-[24px] items-center gap-3">
-        <span className={LINE_LABEL}>{POST_LINE_LABEL}</span>
-        <span
-          data-plan-post-status={post.tone}
+      <PostStatusLine post={post} />
+    </div>
+  );
+}
+
+/** The POST line: an 8px dot and the stage, same colour (a row and a pair's post row). */
+function PostStatusLine(props: { post: { label: string; tone: PostLineTone } }): ReactElement {
+  const { post } = props;
+  return (
+    <div data-plan-line="post" className="flex min-h-[24px] items-center gap-3">
+      <span className={LINE_LABEL}>{POST_LINE_LABEL}</span>
+      <span
+        data-plan-post-status={post.tone}
+        className={cn(
+          'flex min-w-0 items-center gap-2 text-md font-medium',
+          POST_LINE_TONES[post.tone],
+        )}
+      >
+        <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-current" />
+        <span className="truncate">{post.label}</span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * A linked concept's post, joined under the concept row: indented behind a
+ * 2px accent line, "Post for this concept" with the link icon, the post's
+ * title, format (and its own day, mono, when it is not the concept's), its
+ * tile and its POST line. No PLAN line: the pair is approved through its
+ * concept. Opens as a post item opens. A post the viewer cannot read (a client;
+ * RLS hides drafts) reads "Not ready to view yet" and never opens.
+ */
+function PairedPostRow(props: {
+  bundle: PlanBundle;
+  concept: PlanItemRow;
+  link: Exclude<LinkedPost, { kind: 'none' }>;
+  thumb: string | null;
+  timeZone: string;
+  onOpen?: (postId: string) => void;
+}): ReactElement {
+  const { link } = props;
+  // The tile reads as a post's (its first image, or "Aa").
+  const tileItem: PlanItemRow = {
+    ...props.concept,
+    kind: 'post',
+    post_id: link.postId,
+    linked_post_id: null,
+  };
+  const label = (
+    <span className="inline-flex items-center gap-1 text-sm font-medium text-accent">
+      <IconLink size={ICON_SIZE.inline} />
+      {PAIR_POST_LABEL}
+    </span>
+  );
+  if (link.kind === 'hidden') {
+    return (
+      <div
+        data-plan-pair={link.postId}
+        className="mt-2 flex flex-col border-l-2 border-accent pl-3"
+      >
+        <div
+          role="button"
+          aria-disabled="true"
+          data-plan-pair-row="locked"
+          onContextMenu={(event) => event.preventDefault()}
           className={cn(
-            'flex min-w-0 items-center gap-2 text-md font-medium',
-            POST_LINE_TONES[post.tone],
+            'flex min-h-[44px] min-w-0 cursor-default items-start gap-3',
+            NO_TOUCH_SELECT,
           )}
         >
-          <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-current" />
-          <span className="truncate">{post.label}</span>
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            {label}
+            <span className="truncate text-sm text-fg-3">{DRAFT_NOT_READY}</span>
+          </span>
+          <TileColumn count={0}>
+            <RowTile item={tileItem} thumb={null} muted />
+          </TileColumn>
+        </div>
+      </div>
+    );
+  }
+  const conceptDay = planItemDayInZone(props.concept, props.bundle.postInfo, props.timeZone);
+  const postDay = civilDayOf(link.info.target_date ?? null, props.timeZone);
+  const format =
+    link.info.format !== null && link.info.format !== undefined && link.info.format !== ''
+      ? formatLabel(link.info.format)
+      : '';
+  const onOpen = props.onOpen;
+  return (
+    <div data-plan-pair={link.postId} className="mt-2 flex flex-col border-l-2 border-accent pl-3">
+      <PressableRow
+        type="button"
+        data-plan-pair-row={link.postId}
+        onContextMenu={(event) => event.preventDefault()}
+        onClick={() => onOpen?.(link.postId)}
+        className={cn('flex min-w-0 items-start gap-3', NO_TOUCH_SELECT)}
+      >
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          {label}
+          <span
+            data-plan-pair-title=""
+            className="line-clamp-2 break-words text-base font-medium text-fg"
+          >
+            {link.info.title !== '' ? link.info.title : PAIR_POST_LABEL}
+          </span>
+          {format !== '' || (postDay !== null && postDay !== conceptDay) ? (
+            <span className="truncate text-sm text-fg-3">
+              {format}
+              {postDay !== null && postDay !== conceptDay ? (
+                <>
+                  {format !== '' ? ' · ' : ''}
+                  <span data-plan-pair-date="" className="font-mono tabular-nums">
+                    {shortDay(postDay)}
+                  </span>
+                </>
+              ) : null}
+            </span>
+          ) : null}
         </span>
+        <TileColumn count={0}>
+          <RowTile item={tileItem} thumb={props.thumb} muted={false} />
+        </TileColumn>
+      </PressableRow>
+      <div className="mt-1">
+        <PostStatusLine post={postLine(props.bundle, props.concept, 'agency')} />
       </div>
     </div>
   );
@@ -3838,6 +4008,10 @@ function PlanRow(props: {
   side: ViewerSide;
   thumb: string | null;
   conceptThumb?: ConceptThumb | null;
+  /** A linked concept's post: its first image (the pair's tile); null for none. */
+  pairThumb?: string | null;
+  /** View mode: the pair's post row opens its post. */
+  onOpenLinkedPost?: (postId: string) => void;
   /** Visible comments on the item; 0 shows nothing. */
   commentCount?: number;
   dimmed: boolean;
@@ -4022,7 +4196,9 @@ function PlanRow(props: {
       </div>
     );
   }
-  // View mode: date tile | title block | thumbnail, then PLAN and POST.
+  // View mode: date tile | title block | thumbnail, then PLAN and POST; a
+  // linked concept's post row joins under it as one pair.
+  const link = linkedPost(props.bundle, props.item, props.side);
   return (
     <div
       ref={wrapRef}
@@ -4034,6 +4210,16 @@ function PlanRow(props: {
       <div className={cn('flex min-w-0 flex-1 flex-col', dim)}>
         {rowButton}
         {lines}
+        {link.kind !== 'none' ? (
+          <PairedPostRow
+            bundle={props.bundle}
+            concept={props.item}
+            link={link}
+            thumb={props.pairThumb ?? null}
+            timeZone={zone}
+            {...(props.onOpenLinkedPost !== undefined ? { onOpen: props.onOpenLinkedPost } : {})}
+          />
+        ) : null}
       </div>
     </div>
   );
