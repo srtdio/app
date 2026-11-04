@@ -47,12 +47,24 @@ import { leaveSelectionThen } from '@/lib/chat/forward';
 import { summaryIconOfLine } from '@/lib/chat/thread';
 import { SummaryGlyph } from '@/components/chat/ReplyQuote';
 import { SearchResults, useMessageSearch } from '@/components/chat/SearchResults';
+import { MediaResults } from '@/components/chat/MediaResults';
+import {
+  flattenHits,
+  isMediaCacheValue,
+  mediaCacheWhat,
+  type MediaCacheValue,
+} from '@/lib/chat/media-items';
+import { isFileRemoved, removedFilesStore } from '@/lib/chat/remove-files';
+import { APP_ENTITY_ROUTES, currentOrigin } from '@/lib/chat/message-links';
+import { peekKept, primeRead, readKey } from '@/lib/session-read';
+import { mark } from '@/lib/perf-marks';
 import { StarredList } from '@/components/chat/StarredList';
 import { STARRED_TITLE } from '@/lib/chat/stars';
 import {
   normalizeQuery,
   SEARCH_CHIPS,
   SEARCH_MIN_CHARS,
+  SEARCH_PAGE_SIZE,
   type SearchHit,
   type SearchKind,
 } from '@/lib/chat/search';
@@ -1023,8 +1035,8 @@ export function searchKindOf(chip: HomeChip | null): SearchKind | null {
 }
 
 /**
- * The chips under the search box: Starred, then Photos, Links, Files, Voice
- * notes. One at a time (tap again to clear). Each is ui/Chip with its
+ * The chips under the search box: Starred, then Photos, Videos, Links, Files,
+ * Voice notes (WhatsApp's order). One at a time (tap again to clear). Each is ui/Chip with its
  * selected style, as on the other list pages (no counts: these filter
  * messages, nothing is tallied); the row scrolls on X when it overflows (no
  * scrollbar), chips never wrap or shrink. Tokens only, no motion. Hook-free.
@@ -1423,6 +1435,38 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     if (kind === 'starred') searchRunner?.setQuery('', null);
     else searchRunner?.setQuery(search, searchKindOf(kind));
   }, [searchRunner, search, kind]);
+  // Media chips (WhatsApp): the items themselves. The chip's first page is
+  // kept on the device (`chat:media:{kind}`), so a tap paints from it before
+  // any read; the network page swaps in under the same keys (no blink).
+  const mediaKind = searchKindOf(kind);
+  const mediaKey =
+    mediaKind !== null && currentUserId !== null && listWorkspaceId !== null
+      ? readKey(currentUserId, listWorkspaceId, mediaCacheWhat(mediaKind))
+      : null;
+  const mediaRaw = mediaKey !== null ? peekKept<unknown>(mediaKey) : undefined;
+  const mediaCached: MediaCacheValue | undefined =
+    mediaKind !== null && isMediaCacheValue(mediaRaw, mediaKind) ? mediaRaw : undefined;
+  const savedMedia = useRef('');
+  useEffect(() => {
+    if (mediaKey === null || mediaKind === null) return;
+    const s = searchState;
+    if (s.status !== 'ready' || s.kind !== mediaKind || s.query !== '') return;
+    const first = s.hits.slice(0, SEARCH_PAGE_SIZE);
+    const signature = `${mediaKey}|${first.map((h) => h.id).join(',')}`;
+    if (savedMedia.current === signature) return;
+    savedMedia.current = signature;
+    const items = flattenHits(first, mediaKind, {
+      appOrigin: currentOrigin(),
+      routes: APP_ENTITY_ROUTES,
+      isRemoved: (channelId, messageId, versionId) =>
+        isFileRemoved(removedFilesStore.get(channelId), messageId, versionId),
+    });
+    primeRead<MediaCacheValue>(mediaKey, { kind: mediaKind, items });
+  }, [mediaKey, mediaKind, searchState]);
+  const onKindChange = useCallback((next: HomeChip | null) => {
+    if (next !== null && next !== 'starred') mark('chat:chip:tap');
+    setKind(next);
+  }, []);
   // Hits in notes carry its name ("Personal notes") and notebook.
   const notes = props.notes;
   const channelsById = useMemo(() => {
@@ -1475,6 +1519,32 @@ export function ChannelList(props: ChannelListProps): ReactElement {
           }}
         />
       </div>
+    ) : mediaKind !== null ? (
+      <MediaResults
+        kind={mediaKind}
+        query={search}
+        state={searchState}
+        runner={searchRunner}
+        cached={mediaCached}
+        channelsById={channelsById}
+        currentUserId={currentUserId}
+        nameOf={nameOf}
+        nowMs={nowMs}
+        {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
+        onClear={() => {
+          setSearch('');
+          setKind(null);
+        }}
+        onShowInChat={(channelId, messageId) => {
+          const channel = channelsById.get(channelId);
+          if (channel === undefined) return;
+          leaveSelectionThen(() =>
+            onOpenStarred !== undefined
+              ? onOpenStarred(channel, messageId)
+              : props.onSelect(channel),
+          );
+        }}
+      />
     ) : showSearchResults(search, kind) ? (
       <SearchResults
         query={search}
@@ -1503,7 +1573,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
         search,
         onSearchChange: setSearch,
         kind,
-        onKindChange: setKind,
+        onKindChange,
         ...(searchResults !== undefined ? { searchResults } : {}),
         summaryFor,
         isHidden,
