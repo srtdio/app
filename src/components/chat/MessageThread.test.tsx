@@ -3460,11 +3460,9 @@ describe('F5 mentions are bold and the peer ink clears 4.5:1 in both themes', ()
     const darkRatio = ratio(at(dark, 'accent-hover'), at(dark, 'panel-2'));
     expect(lightRatio).toBeGreaterThanOrEqual(4.5);
     expect(darkRatio).toBeGreaterThanOrEqual(4.5);
-    expect(lightRatio.toFixed(2)).toBe('5.32');
-    expect(darkRatio.toFixed(2)).toBe('5.58');
-    // The accent the peer mention used before fails (4.23 light, 4.48 dark).
-    expect(ratio(at(light, 'accent'), at(light, 'panel-2'))).toBeLessThan(4.5);
-    expect(ratio(at(dark, 'accent'), at(dark, 'panel-2'))).toBeLessThan(4.5);
+    // Black and white palette: #26282c on panel-2 (light), #ffffff on panel-2 (dark).
+    expect(lightRatio.toFixed(2)).toBe('13.30');
+    expect(darkRatio.toFixed(2)).toBe('17.92');
     // A mention of me also sits on accent-soft: the ink still clears 4.5:1 there.
     const selfLight = ratio(
       at(light, 'accent-hover'),

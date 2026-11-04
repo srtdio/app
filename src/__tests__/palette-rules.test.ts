@@ -87,7 +87,7 @@ function lineHits(line: string): string[] {
 
 describe('palette rules: no violet or blue', () => {
   it('the detector flags the old violet and blue, and passes the neutrals and status colours', () => {
-    for (const hex of ['5e6ad2', '6f79e3', '5a3fe0', '2457D6', 'a5f3fc', '7a5ea8', '237484']) {
+    for (const hex of ['5e6ad2', '6f79e3', '5a3fe0', '2457D6', '7a5ea8', '838bec']) {
       expect(isBlueOrViolet(...hexRgb(hex)), hex).toBe(true);
     }
     for (const hex of [

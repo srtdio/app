@@ -284,8 +284,8 @@ describe('bubble meta', () => {
     }).toMatchInlineSnapshot(`
       {
         "dark": {
-          "meta": "hex ffffff",
-          "peer": "hex 848a92",
+          "meta": "hex 08090a",
+          "peer": "hex 81868f",
         },
         "light": {
           "meta": "hex ffffff",
