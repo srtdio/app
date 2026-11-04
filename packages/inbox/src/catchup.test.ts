@@ -563,11 +563,11 @@ describe('html design and parity', () => {
     const dark = email.html.slice(m?.index ?? 0).toLowerCase();
     expect(dark).toContain('#0b0b0f');
     expect(dark).toContain('#16161d');
-    expect(dark).toContain('#6f79e3');
+    expect(dark).toContain('#e5e5e6');
   });
 
   it('uses the accent, a 600px max width and Inter', () => {
-    expect(email.html.toLowerCase()).toContain('#5e6ad2');
+    expect(email.html.toLowerCase()).toContain('#08090a');
     expect(email.html).toMatch(/max-width:\s*600px/i);
     expect(email.html).toMatch(/font-family:[^;"]*Inter/);
   });

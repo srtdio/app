@@ -25,38 +25,38 @@
   --border-rgb: 230 232 235;
   --border-strong: #d7dade;
   --border-strong-rgb: 215 218 222;
-  --fg: #1b1c20;
-  --fg-rgb: 27 28 32;
+  --fg: #08090a;
+  --fg-rgb: 8 9 10;
   --fg-2: #62666d;
   --fg-2-rgb: 98 102 109;
   /* fg-3 is meta ink: 4.96:1 on bg, 5.27:1 on panel, 4.51:1 on panel-3. */
   --fg-3: #686c73;
   --fg-3-rgb: 104 108 115;
-  --accent: #5e6ad2;
-  --accent-rgb: 94 106 210;
-  /* Accent split by use: accent-text is ink (4.97:1 on bg), accent-fill sits
-     under white accent-fg ink (4.70:1). accent stays for borders and rings. */
-  --accent-text: #5560d0;
-  --accent-text-rgb: 85 96 208;
-  --accent-fill: #5e6ad2;
-  --accent-fill-rgb: 94 106 210;
-  --accent-hover: #4f5ac0;
-  --accent-hover-rgb: 79 90 192;
+  --accent: #08090a;
+  --accent-rgb: 8 9 10;
+  /* Accent split by use: accent-text is ink (18.7:1 on bg), accent-fill sits
+     under accent-fg ink (19.9:1). accent stays for borders and rings. */
+  --accent-text: #08090a;
+  --accent-text-rgb: 8 9 10;
+  --accent-fill: #08090a;
+  --accent-fill-rgb: 8 9 10;
+  --accent-hover: #26282c;
+  --accent-hover-rgb: 38 40 44;
   --accent-fg: #ffffff;
   --accent-fg-rgb: 255 255 255;
-  --accent-soft: rgba(94, 106, 210, 0.1);
-  --accent-line: rgba(94, 106, 210, 0.3);
-  /* Own chat bubble fill. Light matches the accent; dark goes deeper than the
-     accent so accent-fg ink clears 4.5:1 (#5560d0 on #ffffff is 5.3:1). */
-  --bubble-own: #5e6ad2;
-  --bubble-own-rgb: 94 106 210;
+  --accent-soft: rgba(8, 9, 10, 0.06);
+  --accent-line: rgba(8, 9, 10, 0.28);
+  /* Own chat bubble fill: black in light, off-white in dark (matches the
+     accent fill), so its meta ink clears 4.5:1 in both themes. */
+  --bubble-own: #08090a;
+  --bubble-own-rgb: 8 9 10;
   /* Chat bubble meta (time, edited, ticks). Peer meta on panel-2 is 5.2:1;
-     own meta on bubble-own is white, 4.7:1 (the read tick, a glyph, 3.8:1).
+     own meta on bubble-own is white, 19.9:1 (the green read tick, a glyph, 8.0:1).
      The media pill is a translucent black under white ink: 4.7:1 even over a
      white image. */
   --bubble-meta: #62666d;
   --bubble-meta-own: #ffffff;
-  --tick-read: #a5f3fc;
+  --tick-read: #4cb782;
   --media-meta-bg: rgba(0, 0, 0, 0.55);
   --media-meta-fg: #ffffff;
   /* The dim behind a modal surface (the command palette). */
@@ -91,13 +91,14 @@
   --annotation-line: #d9a93c;
   --annotation-line-rgb: 217 169 60;
   /* Search match fill and ink: amber with dark ink in both themes, so a match
-     stands out on the indigo own bubble too. */
+     stands out on the own bubble too. */
   --search-mark-bg: #ffe9b8;
   --search-mark-bg-rgb: 255 233 184;
   --search-mark-fg: #1b1c20;
-  /* Stage inks clear 4.5:1 on bg, panel, panel-2 and panel-3. */
-  --stage-review: #ae5009;
-  --stage-review-rgb: 174 80 9;
+  /* Stage inks clear 4.5:1 on bg, panel, panel-2 and panel-3. Review is the
+     status amber: 4.54:1 on panel-3 here, 10.5:1 on dark panel-3. */
+  --stage-review: #8f6300;
+  --stage-review-rgb: 143 99 0;
   --stage-approved: #147c3b;
   --stage-approved-rgb: 20 124 59;
   --stage-rejected: #b91c1c;
@@ -120,19 +121,19 @@
   --overlay-badge: rgba(0, 0, 0, 0.5);
   --overlay-badge-hover: rgba(0, 0, 0, 0.6);
   /* Initials avatar fills under white ink: every tone is 4.5:1 or more against
-     white (4.7, 4.9, 5.0, 5.4, 5.3, 5.4). */
-  --avatar-1: #5e6ad2;
-  --avatar-1-rgb: 94 106 210;
+     white (10.9, 4.9, 5.0, 5.4, 6.3, 7.1). */
+  --avatar-1: #3b3d42;
+  --avatar-1-rgb: 59 61 66;
   --avatar-2: #3e7d54;
   --avatar-2-rgb: 62 125 84;
   --avatar-3: #9a6420;
   --avatar-3-rgb: 154 100 32;
   --avatar-4: #c2392b;
   --avatar-4-rgb: 194 57 43;
-  --avatar-5: #7a5ea8;
-  --avatar-5-rgb: 122 94 168;
-  --avatar-6: #237484;
-  --avatar-6-rgb: 35 116 132;
+  --avatar-5: #6b5d52;
+  --avatar-5-rgb: 107 93 82;
+  --avatar-6: #55585e;
+  --avatar-6-rgb: 85 88 94;
   /* Motion token scale. Theme-invariant, so it lives only on :root and both
      light and dark inherit it (parity for free). Durations pair with the two
      easing curves below: ease-enter for entrances, ease-exit for every exit. */
@@ -156,10 +157,10 @@
   --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-move: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
-  /* The bottom Undo strip: a dark bar in both themes, accent Undo. */
+  /* The bottom Undo strip: a dark bar in both themes, off-white Undo. */
   --strip-bg: #1b1c20;
   --strip-fg: #ffffff;
-  --strip-action: #838bec;
+  --strip-action: #f7f8f8;
   --strip-border: transparent;
   /* The induction guide's amber: the hairline, the label pill (dark ink on
      amber, 8:1) and the progress fill. Triplets feed rgb(var(--guide-rgb)). */
@@ -171,7 +172,7 @@
   --guide-ink-rgb: 31 20 0;
   /* The guide's dim layer, and the spotlight: a huge spread of the same dim
      around a cut-out (the guide box, the preview's shown window). */
-  --guide-dim: rgba(14, 16, 30, 0.3);
+  --guide-dim: rgba(8, 9, 10, 0.3);
   --shadow-spotlight: 0 0 0 200vmax var(--guide-dim);
   /* Lighting: one light straight above (docs/lighting.md). Raw colours live
      only here; components take a lit-* class, never a shadow. */
@@ -182,12 +183,12 @@
   --lit-surface: linear-gradient(#fff, #f6f7f9);
   --lit-surface-top: #fff;
   --lit-chip-bg: linear-gradient(#fff, #f8f9fa);
-  --lit-chip-selected-bg: linear-gradient(rgba(94, 106, 210, 0.09), rgba(94, 106, 210, 0.15)), #fff;
+  --lit-chip-selected-bg: linear-gradient(#fff, #f6f7f9);
   --lit-overlay-bg: var(--panel);
   --lit-bubble-other-bg: linear-gradient(#f6f7f9, #eff1f4);
   --lit-shine: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
   --lit-muted-shine: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
-  --lit-tab-active-bg: var(--accent-soft);
+  --lit-tab-active-bg: rgba(8, 9, 10, 0.06);
   --lit-raised:
     inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.04),
     0 10px 28px -6px rgba(20, 22, 30, 0.24);
@@ -204,8 +205,8 @@
   --lit-side: 1px 0 0 var(--border), 8px 0 16px -12px rgba(20, 22, 30, 0.18);
   --lit-dock: inset 0 1px 0 #fff, 0 -1px 0 var(--border), 0 -8px 18px -12px rgba(20, 22, 30, 0.2);
   --lit-btn-primary:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(20, 22, 30, 0.06),
-    0 3px 9px -2px rgba(94, 106, 210, 0.5);
+    inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.55),
+    0 3px 9px -2px rgba(0, 0, 0, 0.35);
   --lit-btn-success:
     inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(20, 22, 30, 0.06),
     0 3px 9px -2px rgba(47, 138, 91, 0.5);
@@ -216,84 +217,83 @@
   --lit-chip:
     inset 0 1px 0 #fff, 0 0 0 1px rgba(20, 22, 30, 0.03), 0 3px 8px -2px rgba(20, 22, 30, 0.16);
   --lit-chip-selected:
-    inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 0 0 1px rgba(94, 106, 210, 0.06),
-    0 3px 10px -2px rgba(94, 106, 210, 0.36);
+    inset 0 1px 0 #fff, 0 0 0 1px rgba(20, 22, 30, 0.03), 0 3px 8px -2px rgba(20, 22, 30, 0.16);
   --lit-well: inset 0 1px 2px rgba(20, 22, 30, 0.1), inset 0 0 0 1px rgba(20, 22, 30, 0.02);
   --lit-well-soft: inset 0 1px 2px rgba(20, 22, 30, 0.05);
   --lit-pill: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 1px rgba(20, 22, 30, 0.08);
   --lit-tint: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-  --lit-active: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(94, 106, 210, 0.14);
+  --lit-active: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(8, 9, 10, 0.08);
   --lit-knob: 0 2px 6px rgba(20, 22, 30, 0.18), inset 0 1px 0 #fff;
   --lit-media: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.35);
   --lit-avatar:
     inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.08),
     0 1px 2px rgba(20, 22, 30, 0.16);
   --lit-badge: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(20, 22, 30, 0.35);
-  --lit-bubble-own: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 3px 8px -3px rgba(94, 106, 210, 0.5);
+  --lit-bubble-own: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 3px 8px -3px rgba(0, 0, 0, 0.4);
   --lit-bubble-other:
     inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.03),
     0 3px 8px -4px rgba(20, 22, 30, 0.18);
 }
 .dark {
-  --bg: #0c0d10;
-  --bg-rgb: 12 13 16;
+  --bg: #08090a;
+  --bg-rgb: 8 9 10;
   --strip-bg: #212329;
   --strip-fg: #f4f5f6;
-  --strip-action: #838bec;
+  --strip-action: #f7f8f8;
   --strip-border: #2f333b;
-  --panel: #141519;
-  --panel-rgb: 20 21 25;
-  --panel-2: #1a1c21;
-  --panel-2-rgb: 26 28 33;
-  --panel-3: #212329;
-  --panel-3-rgb: 33 35 41;
-  --border: #23262c;
-  --border-rgb: 35 38 44;
-  --border-strong: #2f333b;
-  --border-strong-rgb: 47 51 59;
-  --fg: #f4f5f6;
-  --fg-rgb: 244 245 246;
-  --fg-2: #9aa0a8;
-  --fg-2-rgb: 154 160 168;
-  /* fg-3 meta ink: 5.58:1 on bg, 5.24:1 on panel. */
-  --fg-3: #848a92;
-  --fg-3-rgb: 132 138 146;
-  --accent: #6f79e3;
-  --accent-rgb: 111 121 227;
-  /* accent-text 5.60:1 on bg, 4.53:1 on panel-3; accent-fill keeps white ink
-     at 4.70:1 (the brighter #6f79e3 would give only 3.80:1). */
-  --accent-text: #7781e5;
-  --accent-text-rgb: 119 129 229;
-  --accent-fill: #5e6ad2;
-  --accent-fill-rgb: 94 106 210;
-  --accent-hover: #838bec;
-  --accent-hover-rgb: 131 139 236;
-  --accent-fg: #ffffff;
-  --accent-fg-rgb: 255 255 255;
-  --accent-soft: rgba(111, 121, 227, 0.16);
-  --accent-line: rgba(111, 121, 227, 0.34);
-  --bubble-own: #5560d0;
-  --bubble-own-rgb: 85 96 208;
-  /* Peer meta on panel-2 6.5:1; own meta on bubble-own 5.3:1 (read tick 4.2:1). */
+  --panel: #0f1011;
+  --panel-rgb: 15 16 17;
+  --panel-2: #16171a;
+  --panel-2-rgb: 22 23 26;
+  --panel-3: #1d1e21;
+  --panel-3-rgb: 29 30 33;
+  --border: #1c1d1e;
+  --border-rgb: 28 29 30;
+  --border-strong: #2a2b2f;
+  --border-strong-rgb: 42 43 47;
+  --fg: #f7f8f8;
+  --fg-rgb: 247 248 248;
+  --fg-2: #8a8f98;
+  --fg-2-rgb: 138 143 152;
+  /* fg-3 meta ink: 5.45:1 on bg, 4.56:1 on panel-3. */
+  --fg-3: #81868f;
+  --fg-3-rgb: 129 134 143;
+  --accent: #f7f8f8;
+  --accent-rgb: 247 248 248;
+  /* accent-text 18.7:1 on bg; accent-fill keeps near-black accent-fg ink at
+     15.8:1. */
+  --accent-text: #f7f8f8;
+  --accent-text-rgb: 247 248 248;
+  --accent-fill: #e5e5e6;
+  --accent-fill-rgb: 229 229 230;
+  --accent-hover: #ffffff;
+  --accent-hover-rgb: 255 255 255;
+  --accent-fg: #08090a;
+  --accent-fg-rgb: 8 9 10;
+  --accent-soft: rgba(255, 255, 255, 0.08);
+  --accent-line: rgba(255, 255, 255, 0.32);
+  --bubble-own: #e5e5e6;
+  --bubble-own-rgb: 229 229 230;
+  /* Own meta on bubble-own 15.8:1 (the green read tick, a glyph, 4.0:1). */
   --bubble-meta: #9aa0a8;
-  --bubble-meta-own: #ffffff;
-  --tick-read: #a5f3fc;
+  --bubble-meta-own: #08090a;
+  --tick-read: #2f7d55;
   --media-meta-bg: rgba(0, 0, 0, 0.55);
   --media-meta-fg: #ffffff;
   /* Darker in dark mode so the panel still lifts off the page. */
   --scrim: rgba(0, 0, 0, 0.6);
-  --good: #5fb07d;
-  --good-rgb: 95 176 125;
-  --warn: #d59a4a;
-  --warn-rgb: 213 154 74;
-  --bad: #e0685a;
-  --bad-rgb: 224 104 90;
+  --good: #4cb782;
+  --good-rgb: 76 183 130;
+  --warn: #f2c94c;
+  --warn-rgb: 242 201 76;
+  --bad: #eb5757;
+  --bad-rgb: 235 87 87;
   --good-solid: #3e7d54;
   --good-solid-rgb: 62 125 84;
   --bad-solid: #c2392b;
   --bad-solid-rgb: 194 57 43;
-  --good-soft: rgba(95, 176, 125, 0.16);
-  --bad-soft: rgba(224, 104, 90, 0.14);
+  --good-soft: rgba(76, 183, 130, 0.16);
+  --bad-soft: rgba(235, 87, 87, 0.14);
   --warn-soft: #2e2610;
   --warn-soft-rgb: 46 38 16;
   --warn-ink: #f0a35c;
@@ -305,8 +305,8 @@
   --search-mark-bg: #e8b84a;
   --search-mark-bg-rgb: 232 184 74;
   --search-mark-fg: #16171b;
-  --stage-review: #e0954a;
-  --stage-review-rgb: 224 149 74;
+  --stage-review: #f2c94c;
+  --stage-review-rgb: 242 201 76;
   --stage-approved: #46b47a;
   --stage-approved-rgb: 70 180 122;
   --stage-rejected: #e0685a;
@@ -325,19 +325,19 @@
   --overlay-badge: rgba(0, 0, 0, 0.5);
   --overlay-badge-hover: rgba(0, 0, 0, 0.6);
   /* Avatar fills keep white initials at 4.5:1 or more on dark panels too, so
-     the light values hold (4.7, 4.9, 5.0, 5.4, 5.3, 5.4). */
-  --avatar-1: #5e6ad2;
-  --avatar-1-rgb: 94 106 210;
+     the light values hold (10.9, 4.9, 5.0, 5.4, 6.3, 7.1). */
+  --avatar-1: #3b3d42;
+  --avatar-1-rgb: 59 61 66;
   --avatar-2: #3e7d54;
   --avatar-2-rgb: 62 125 84;
   --avatar-3: #9a6420;
   --avatar-3-rgb: 154 100 32;
   --avatar-4: #c2392b;
   --avatar-4-rgb: 194 57 43;
-  --avatar-5: #7a5ea8;
-  --avatar-5-rgb: 122 94 168;
-  --avatar-6: #237484;
-  --avatar-6-rgb: 35 116 132;
+  --avatar-5: #6b5d52;
+  --avatar-5-rgb: 107 93 82;
+  --avatar-6: #55585e;
+  --avatar-6-rgb: 85 88 94;
   /* Brighter amber so the hairline reads on dark panels; the pill keeps its
      dark ink (10:1). */
   --guide: #fbb53c;
@@ -353,16 +353,15 @@
   --lit-edge-top: rgba(255, 255, 255, 0.08);
   --lit-edge-side: rgba(255, 255, 255, 0.055);
   --lit-edge-bottom: rgba(255, 255, 255, 0.035);
-  --lit-surface: linear-gradient(#24262d, #1a1c21);
+  --lit-surface: linear-gradient(#17181b, #111214);
   --lit-surface-top: #24262d;
-  --lit-chip-bg: linear-gradient(#1f2126, #17191d);
-  --lit-chip-selected-bg:
-    linear-gradient(rgba(111, 121, 227, 0.3), rgba(111, 121, 227, 0.2)), #17191d;
-  --lit-overlay-bg: linear-gradient(#22242a, #1c1e23);
-  --lit-bubble-other-bg: linear-gradient(#23252c, #1c1e23);
+  --lit-chip-bg: linear-gradient(#17181b, #121315);
+  --lit-chip-selected-bg: linear-gradient(#2a2c33, #1f2126);
+  --lit-overlay-bg: linear-gradient(#18191c, #131416);
+  --lit-bubble-other-bg: linear-gradient(#1a1b1e, #141518);
   --lit-shine: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
   --lit-muted-shine: linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
-  --lit-tab-active-bg: rgba(111, 121, 227, 0.22);
+  --lit-tab-active-bg: rgba(255, 255, 255, 0.1);
   --lit-raised:
     inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
     0 0 0 1px rgba(0, 0, 0, 0.6), 0 14px 34px -6px rgba(0, 0, 0, 0.85);
@@ -381,8 +380,8 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 -1px 0 rgba(0, 0, 0, 0.6),
     0 -10px 20px -12px rgba(0, 0, 0, 0.75);
   --lit-btn-primary:
-    inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-    0 3px 10px -2px rgba(111, 121, 227, 0.45);
+    inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 3px 10px -2px rgba(0, 0, 0, 0.7);
   --lit-btn-success:
     inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08),
     0 3px 10px -2px rgba(92, 194, 141, 0.35);
@@ -410,8 +409,7 @@
     0 1px 2px rgba(0, 0, 0, 0.6);
   --lit-badge: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.6);
   --lit-bubble-own:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.25);
+    inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.55);
   --lit-bubble-other:
     inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
     0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.25);

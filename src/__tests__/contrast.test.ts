@@ -67,7 +67,39 @@ describe.each([':root', '.dark'])('contrast: %s', (selector) => {
     }
   }
 
-  it('white accent-fg on accent-fill is at least 4.5:1', () => {
+  it('accent-fg on accent-fill is at least 4.5:1', () => {
     expect(ratio(token(t, 'accent-fg'), token(t, 'accent-fill'))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // Meta ink on the canvases (in TEXT x SURFACES above too; named here so the
+  // black and white palette keeps them visible in both themes).
+  for (const text of ['fg-2', 'fg-3']) {
+    for (const surface of ['bg', 'panel', 'panel-2']) {
+      it(`meta: ${text} on ${surface} is at least 4.5:1`, () => {
+        expect(ratio(token(t, text), token(t, surface))).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+
+  it('accent-text on panel is at least 4.5:1', () => {
+    expect(ratio(token(t, 'accent-text'), token(t, 'panel'))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe('contrast: theme parity', () => {
+  it('every colour token in :root also has a .dark value', () => {
+    const block = (selector: string): string => {
+      const escaped = selector.replace('.', '\\.');
+      return new RegExp(`^${escaped} \\{([\\s\\S]*?)^\\}`, 'm').exec(css)?.[1] ?? '';
+    };
+    const colourNames = (body: string): string[] =>
+      [...body.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)]
+        .filter(([, , value]) => /^(#|rgba?\()/.test((value ?? '').trim()))
+        .map(([, name]) => name ?? '');
+    const dark = new Set(
+      [...block('.dark').matchAll(/--([a-z0-9-]+):/g)].map(([, name]) => name ?? ''),
+    );
+    const missing = colourNames(block(':root')).filter((name) => !dark.has(name));
+    expect(missing).toEqual([]);
   });
 });

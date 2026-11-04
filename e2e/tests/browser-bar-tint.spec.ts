@@ -56,7 +56,7 @@ async function seedMetas(page: Page): Promise<void> {
     const seed = (): void => {
       if (document.querySelector('meta[name="theme-color"]') !== null) return;
       add('(prefers-color-scheme: light)', '#ffffff');
-      add('(prefers-color-scheme: dark)', '#141519');
+      add('(prefers-color-scheme: dark)', '#0f1011');
     };
     if (document.documentElement !== null) seed();
     else document.addEventListener('DOMContentLoaded', seed);

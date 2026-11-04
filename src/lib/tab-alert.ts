@@ -2,7 +2,7 @@
 // chat message makes the tab speak. The title alternates every ALERT_STEP_MS
 // between "(N) <base title>" and each new event's own words in turn ("Chitra
 // commented on Diwali reel", "Chat · Aditya sent a message"), and the tab icon
-// gains a dot: amber for Activity, blue for chat (the newest event's kind). It
+// gains a dot: amber for Activity, green for chat (the newest event's kind). It
 // stops the moment the tab is visible again, restoring the title and icon.
 //
 // Browsers draw tab text in their own font and colour, so only the words and
@@ -33,19 +33,19 @@ export interface TabAlert {
 const ALERT_STEP_MS = 1_400;
 
 /**
- * Icon dot colours: amber for Activity, blue for chat. Read at runtime from
- * the theme's --warn and --accent tokens (so the dot follows the palette);
+ * Icon dot colours: amber for Activity, green for chat (unread). Read at
+ * runtime from the theme's --warn and --good tokens (so the dot follows the palette);
  * these prototype values are the fallback only when a token reads empty.
  */
 export const ALERT_DOT: Readonly<Record<TabAlertKind, string>> = {
   activity: '#C26A00',
-  chat: '#2457D6',
+  chat: '#2f7d55',
 };
 
 /** The CSS variable each dot colour comes from. */
 export const ALERT_DOT_VAR: Readonly<Record<TabAlertKind, string>> = {
   activity: '--warn',
-  chat: '--accent',
+  chat: '--good',
 };
 
 /** Reads one custom property off the document root; '' outside a browser. */

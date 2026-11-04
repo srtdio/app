@@ -33,15 +33,15 @@ html:has(.home) {
   --panel-rgb: 255 255 255;
   --panel-2: #f2f3f5;
   --border: #e6e8eb;
-  --fg: #1b1c20;
+  --fg: #08090a;
   --fg-2: #62666d;
   --fg-3: #6b6f76;
-  --accent: #5e6ad2;
-  --accent-text: #5560d0;
-  --accent-fill: #5e6ad2;
-  --accent-hover: #4f5ac0;
+  --accent: #08090a;
+  --accent-text: #08090a;
+  --accent-fill: #08090a;
+  --accent-hover: #26282c;
   --accent-fg: #ffffff;
-  --accent-soft: rgba(94, 106, 210, 0.1);
+  --accent-soft: rgba(8, 9, 10, 0.06);
   --scrim: rgba(20, 22, 30, 0.45);
   --bad: #c2392b;
   --shadow-card: 0 1px 2px rgba(20, 22, 30, 0.04), 0 8px 24px rgba(20, 22, 30, 0.08);
@@ -57,27 +57,27 @@ html:has(.home) body {
 }
 
 .home {
-  /* Feature tints: one pastel fill and its ink per story colour. No app token
-     covers these; each ink is 7:1 or more on its fill. */
-  --t1: #eceefb;
-  --t1-ink: #2f378f;
-  --t2: #f5eee2;
-  --t2-ink: #6d4a12;
-  --t3: #e7f1ea;
-  --t3-ink: #1f5a3a;
-  --t4: #e6eef7;
-  --t4-ink: #1d4b78;
-  --t5: #e0f2f0;
-  --t5-ink: #155e57;
+  /* Feature tints: one neutral grey fill and ink for every story. No app token
+     covers these; the ink is 13:1 on the fill. */
+  --t1: #f1f2f4;
+  --t1-ink: #26282c;
+  --t2: #f1f2f4;
+  --t2-ink: #26282c;
+  --t3: #f1f2f4;
+  --t3-ink: #26282c;
+  --t4: #f1f2f4;
+  --t4-ink: #26282c;
+  --t5: #f1f2f4;
+  --t5-ink: #26282c;
   /* The signup band's own dark surface. */
-  --band: #16161d;
-  --band-2: #1f1f29;
-  --band-line: #3a3a48;
-  --band-muted: #a9a9b8;
+  --band: #08090a;
+  --band-2: #121315;
+  --band-line: #26272b;
+  --band-muted: #8a8f98;
   --band-fg: #ffffff;
   --shadow: var(--shadow-card);
   /* Phone frame shadow under the mock screenshots and clips. */
-  --shadow-frame: 0 16px 40px rgba(22, 22, 40, 0.14), 0 2px 6px rgba(22, 22, 40, 0.06);
+  --shadow-frame: 0 16px 40px rgba(8, 9, 10, 0.14), 0 2px 6px rgba(8, 9, 10, 0.06);
   --display: 'Bricolage Grotesque Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -134,13 +134,13 @@ html:has(.home) body {
 
 .home .d {
   font-family: var(--display);
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-weight: 600;
+  letter-spacing: -0.022em;
   font-variation-settings: 'opsz' 96;
 }
 
 /* buttons: the app's Button (src/components/ui/Button.tsx). Primary is the
-   accent fill, .line is secondary. 44 tall, 8px radius, 14/500 Inter. */
+   accent fill, .line is secondary. 44 tall, pill radius, 14/500 Inter. */
 .home .btn {
   display: inline-flex;
   align-items: center;
@@ -149,7 +149,7 @@ html:has(.home) body {
   height: 44px;
   min-width: 168px;
   padding: 0 20px;
-  border-radius: 8px;
+  border-radius: 9999px;
   font: 500 14px var(--sans);
   text-decoration: none;
   cursor: pointer;
@@ -476,7 +476,7 @@ html:has(.home) body {
 .home .hero h1 em,
 .home .close h2 em {
   font-style: normal;
-  color: var(--accent-text);
+  color: #8a8f98;
 }
 .home .hero p {
   font-size: 20px;
@@ -809,13 +809,13 @@ html:has(.home) body {
   color: var(--band-muted);
 }
 .home .band .btn {
-  background: var(--accent-fill);
-  color: var(--accent-fg);
+  background: #e5e5e6;
+  color: #08090a;
   border: 1px solid transparent;
   height: 44px;
 }
 .home .band .btn:hover {
-  background: var(--accent-hover);
+  background: #ffffff;
 }
 .home .band .btn.line {
   background: var(--panel);
