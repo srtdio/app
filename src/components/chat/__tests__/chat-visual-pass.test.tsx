@@ -67,7 +67,7 @@ describe('chat visual pass', () => {
     const list = read('../ChannelList.tsx');
     expect(list).toContain("placeholder: 'Search chats',");
     expect(list).toContain("label: 'Search chats',");
-    expect(read('../../shell/SectionHeader.tsx')).toContain("'aria-label': search.label");
+    expect(read('../../shell/SectionHeader.tsx')).toContain('aria-label={search.label}');
   });
 
   it('the hold tip names right-click on laptop and waits for a first message', () => {

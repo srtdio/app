@@ -917,7 +917,8 @@ export function imageTileState(args: {
 
 // The byte formatter lives in the leaf src/lib/file-size.ts; re-exported here
 // for existing callers.
-export { humanizeSize } from '@/lib/file-size';
+import { humanizeSize } from '@/lib/file-size';
+export { humanizeSize };
 
 /** Uppercase file extension from a filename, or empty when there is none. */
 export function fileExtension(filename: string): string {

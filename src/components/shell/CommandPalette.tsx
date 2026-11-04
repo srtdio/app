@@ -1,5 +1,5 @@
 import { mark } from '@/lib/perf-marks';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
@@ -668,7 +668,8 @@ export function CommandPalette({
   }
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
-  const listId = useId();
+  // One palette at a time, so a fixed id is unique (and keeps the tree callable in tests).
+  const listId = 'command-palette-list';
   const [expanded, setExpanded] = useState<ReadonlySet<ResultGroup>>(new Set());
   const [search, setSearch] = useState<PaletteSearchState>(IDLE_PALETTE_SEARCH);
   const toast = useToast();
