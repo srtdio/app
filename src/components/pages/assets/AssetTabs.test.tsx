@@ -21,8 +21,8 @@ describe('AssetTabs', () => {
     ]);
     expect(html.match(/role="tab"/g)).toHaveLength(6);
     const slot = '<span data-asset-tab-count="" class="min-w-[2ch] tabular-nums">';
-    expect(html).toContain(`>All</span>${slot}3</span>`);
-    expect(html).toContain(`>Media</span>${slot}3</span>`);
+    expect(html).toContain(`>All</span> ${slot}3</span>`);
+    expect(html).toContain(`>Media</span> ${slot}3</span>`);
     // Zero: the slot is reserved (no shift when counts land) but empty.
     for (const label of ['PDF', 'Docs', 'Sheets', 'Links']) {
       expect(html).toContain(`>${label}</span>${slot}</span></button>`);
