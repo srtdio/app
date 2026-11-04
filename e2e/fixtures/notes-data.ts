@@ -10,6 +10,8 @@ import { DM_CHANNEL, ME, WORKSPACE_ID, type ChatWorld } from './chat-data';
 export const NOTES_CHANNEL = `notes__${WORKSPACE_ID}__${ME}`;
 export const NOTES_TITLE = 'Personal notes';
 export const NOTE_PHOTO_BODY = 'Moodboard for the spring shoot';
+/** The photo note's asset version id. */
+const NOTE_PHOTO_ASSET = '0190c9d0-0000-7000-8000-000000000001';
 const HOUR = 3_600_000;
 
 const NOTES = [
@@ -26,6 +28,9 @@ const NOTES = [
 function noteId(n: number): string {
   return `0190c900-0000-7000-8000-${String(n).padStart(12, '0')}`;
 }
+
+/** The photo note's tile in the Photos chip grid (`messageId:versionId`). */
+export const NOTE_PHOTO_TILE = `${noteId(18)}:${NOTE_PHOTO_ASSET}`;
 
 /** The notes channel row, as notes_channel_ensure inserts it. */
 export function notesChannelRow(): Row {
@@ -91,7 +96,7 @@ export function seedNotes(world: ChatWorld, now: number = Date.now()): { savedSo
   rows.push(saved);
   // A photo note (the Photos chip lists it).
   const photo = noteRow(18, new Date(now - 40 * 60_000).toISOString(), NOTE_PHOTO_BODY);
-  const asset = '0190c9d0-0000-7000-8000-000000000001';
+  const asset = NOTE_PHOTO_ASSET;
   photo.attachment_asset_ids = [asset];
   photo.attachment_meta = { [asset]: { mime: 'image/png', name: 'moodboard.png', size: 52_000 } };
   rows.push(photo);

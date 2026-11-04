@@ -3,7 +3,7 @@ import { installHarnessNetwork } from '../fixtures/harness-routes';
 import { PEER_NAME } from '../fixtures/chat-data';
 import {
   NOTES_TITLE,
-  NOTE_PHOTO_BODY,
+  NOTE_PHOTO_TILE,
   OWN_PHOTO_URL,
   seedNotes,
   setOwnAvatar,
@@ -162,18 +162,17 @@ test('personal notes: phone', async ({ page }) => {
   await page.getByRole('button', { name: 'Back to conversations' }).click();
   await expect(page.locator('[data-contact-open]', { hasText: PEER_NAME })).toBeVisible();
   await page.getByRole('button', { name: 'Back to conversations' }).click();
-  // The Photos chip alone lists photo messages (empty query, p_kind photo).
+  // The Photos chip alone lists the photos themselves (empty query, p_kind
+  // photo): the note's photo is a grid tile, notes included.
   await page.locator('[data-search-chip="photo"]').click();
   await expect(page.locator('[data-search-chip="photo"]')).toHaveAttribute('aria-pressed', 'true');
-  const hits = page.locator('[data-search-hit]');
-  await expect(hits.first()).toBeVisible();
-  await expect(page.getByText(NOTE_PHOTO_BODY)).toBeVisible();
+  await expect(page.locator(`[data-media-tile="${NOTE_PHOTO_TILE}"]`)).toBeVisible();
   const chipCall = searches[searches.length - 1] ?? {};
   expect(chipCall.p_kind).toBe('photo');
   expect(chipCall.p_query).toBe('');
   // Tap again: the chip clears and the list is back.
   await page.locator('[data-search-chip="photo"]').click();
-  await expect(page.locator('[data-search-results]')).toHaveCount(0);
+  await expect(page.locator('[data-media-results]')).toHaveCount(0);
 
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
