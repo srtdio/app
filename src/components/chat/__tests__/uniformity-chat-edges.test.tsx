@@ -76,19 +76,25 @@ describe('11c own-bubble post card', () => {
 
   it('"Waiting on approvers" and the Review chip reach 4.5:1 on the darkened card, both themes', () => {
     const css = read('../../../index.css');
-    const fills = [...css.matchAll(/--bubble-own-rgb:\s*(\d+)\s+(\d+)\s+(\d+);/g)].map((m) =>
-      [m[1], m[2], m[3]].map(Number),
+    // Each theme block pairs its own bubble fill with its own accent-fg ink
+    // (white on the black light bubble, near-black on the off-white dark one).
+    const triplet = (block: string, name: string): number[] => {
+      const m = new RegExp(`--${name}-rgb:\\s*(\\d+)\\s+(\\d+)\\s+(\\d+);`).exec(block);
+      return m === null ? [] : [m[1], m[2], m[3]].map(Number);
+    };
+    const blocks = [/^:root \{([\s\S]*?)^\}/m, /^\.dark \{([\s\S]*?)^\}/m].map(
+      (re) => re.exec(css)?.[1] ?? '',
     );
-    // Light and dark at least.
-    expect(fills.length).toBeGreaterThanOrEqual(2);
-    const white = [255, 255, 255];
+    const pairs = blocks.map((b) => [triplet(b, 'bubble-own'), triplet(b, 'accent-fg')] as const);
+    // Light and dark.
+    expect(pairs.map(([fill, ink]) => fill.length + ink.length)).toEqual([6, 6]);
     const black = [0, 0, 0];
-    for (const fill of fills) {
+    for (const [fill, ink] of pairs) {
       const card = over(black, 0.12, fill);
       // Secondary ink (fg-2 / fg-3 -> accent-fg at opacity-90) on the card.
-      expect(contrast(over(white, 0.9, card), card)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(over(ink, 0.9, card), card)).toBeGreaterThanOrEqual(4.5);
       // Primary ink (fg -> accent-fg) on the card.
-      expect(contrast(white, card)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(ink, card)).toBeGreaterThanOrEqual(4.5);
     }
   });
 });

@@ -377,7 +377,7 @@ const LIGHT = {
   fg: '#1b1c20',
   fg2: '#4f535a',
   fg3: '#6b7078',
-  accent: '#5e6ad2',
+  accent: '#08090a',
   onAccent: '#ffffff',
 } as const;
 
@@ -403,8 +403,8 @@ const DARK_RULES = [
   '.fg { color:#f4f5f6 !important; }',
   '.fg2 { color:#b4b8bf !important; }',
   '.fg3 { color:#9095a0 !important; }',
-  '.accent { color:#6f79e3 !important; }',
-  '.btn { background:#6f79e3 !important; color:#ffffff !important; }',
+  '.accent { color:#e5e5e6 !important; }',
+  '.btn { background:#e5e5e6 !important; color:#08090a !important; }',
 ];
 
 const STYLE =

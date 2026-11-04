@@ -183,7 +183,7 @@ export function buildSrcdoc(options: SrcdocOptions): string {
     `padding:${pct(top)} ${pct(right)} ${pct(bottom)} ${pct(left)};box-sizing:border-box;`,
     'font:15px/1.55 Georgia,"Times New Roman",serif;overflow-wrap:anywhere}',
     '.page:after{content:"";display:block;clear:both}',
-    'h1,h2,h3,h4,h5,h6{font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;color:#2b3a67;line-height:1.3;margin:0.9em 0 0.35em}',
+    'h1,h2,h3,h4,h5,h6{font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;color:#26282c;line-height:1.3;margin:0.9em 0 0.35em}',
     'h1{font-size:1.45em}h2{font-size:1.25em}h3{font-size:1.1em}h4,h5,h6{font-size:1em}',
     'h1.title{font-size:1.7em;margin-top:0}',
     'p{margin:0 0 0.6em;min-height:1em}',

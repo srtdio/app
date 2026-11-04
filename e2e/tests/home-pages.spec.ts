@@ -489,7 +489,7 @@ test.describe('desktop: one thing per screen @desktop', () => {
 // Under node_modules/.cache so lint, format and git all skip it.
 const BUILT = resolve('node_modules/.cache/srtd-first-paint-dist');
 const ORIGIN = 'http://srtd.test';
-const DARK = 'rgb(12, 13, 16)';
+const DARK = 'rgb(8, 9, 10)';
 const LIGHT = 'rgb(247, 248, 249)';
 const WHITE_CANVAS = 'rgb(255, 255, 255)';
 const MIME: Record<string, string> = {

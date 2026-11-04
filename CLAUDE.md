@@ -96,6 +96,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Buttons: only Button / IconButton / Chip from src/components/ui. 44 tall. Variants primary secondary ghost link success danger; shape round for the composer.
 - Icons: only src/components/ui/icons.tsx, stroke 1.85, sizes 16 beside text, 18 sidebar, 20 alone or tab bar, 22 tray/menu. One icon per concept. No inline <svg> outside ui/.
 - Colour: token classes only; /opacity allowed. No hex, no dark:. text-accent is for text, bg-accent for fills. good/warn/bad for state; stage-\* only on stage chips and dots. No text-white or bg-white; on solid fills use text-accent-fg.
+- Colour: black, white and greys only (Linear neutrals), light and dark in the app, light-only homepage. Amber = Review, green = Approved/read/unread, red = errors and Reject only. No violet or blue anywhere (guard: palette-rules.test.ts).
 - Contrast: every text token passes 4.5:1 on bg and panel in both themes.
 - Radius roles: badges (ui/Tag) 6, controls and fields 8, cards/popovers/menus 12, sheets/dialogs 16, pills full. rounded-sm only for highlights, dots and grabbers. Chat bubble radii live only in chat/chat-type.ts.
 - Focus: Button, IconButton and Chip carry the one focus ring (accent, 2px, offset 2). Never add a second ring on a call site except for overlay or danger colours.

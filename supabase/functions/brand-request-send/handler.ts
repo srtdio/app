@@ -115,25 +115,25 @@ export function brandRequestEmailBody(input: {
   const html =
     `<!DOCTYPE html>` +
     `<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>` +
-    `<body style="margin:0;padding:0;background-color:#1e1b2e;-webkit-text-size-adjust:100%;">` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#1e1b2e;"><tr><td align="center" style="padding:32px 16px;">` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background-color:#ffffff;border-radius:16px;border:1px solid #e7e5ef;overflow:hidden;">` +
+    `<body style="margin:0;padding:0;background-color:#f4f5f6;-webkit-text-size-adjust:100%;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f6;"><tr><td align="center" style="padding:32px 16px;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background-color:#ffffff;border-radius:16px;border:1px solid #e4e5e8;overflow:hidden;">` +
     `<tr><td align="left" style="padding:40px 40px 0 40px;">` +
     `<table role="presentation" cellpadding="0" cellspacing="0"><tr>` +
-    `<td style="vertical-align:middle;"><span style="display:inline-block;width:30px;height:30px;border-radius:8px;background-color:#5a3fe0;">&nbsp;</span></td>` +
-    `<td style="vertical-align:middle;padding-left:12px;"><span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;letter-spacing:-0.3px;color:#1e1b2e;">Sorted</span></td>` +
+    `<td style="vertical-align:middle;"><span style="display:inline-block;width:30px;height:30px;border-radius:8px;background-color:#08090a;">&nbsp;</span></td>` +
+    `<td style="vertical-align:middle;padding-left:12px;"><span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:20px;font-weight:700;letter-spacing:-0.3px;color:#08090a;">Sorted</span></td>` +
     `</tr></table></td></tr>` +
-    `<tr><td align="left" style="padding:28px 40px 0 40px;"><span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#5a3fe0;">You're asked to make posts</span></td></tr>` +
-    `<tr><td align="left" style="padding:8px 40px 0 40px;"><h1 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-0.4px;color:#1e1b2e;">${safeHeading}</h1></td></tr>` +
-    `<tr><td align="left" style="padding:16px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#4a4660;">${safeDetail}</p></td></tr>` +
+    `<tr><td align="left" style="padding:28px 40px 0 40px;"><span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:#08090a;">You're asked to make posts</span></td></tr>` +
+    `<tr><td align="left" style="padding:8px 40px 0 40px;"><h1 style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:26px;line-height:1.25;font-weight:700;letter-spacing:-0.4px;color:#08090a;">${safeHeading}</h1></td></tr>` +
+    `<tr><td align="left" style="padding:16px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;color:#3b3d42;">${safeDetail}</p></td></tr>` +
     `<tr><td style="padding:24px 40px 8px 40px;">` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>` +
-    `<td height="52" align="center" valign="middle" style="height:52px;border-radius:10px;background-color:#5a3fe0;box-shadow:0 4px 10px rgba(30,27,46,0.20);">` +
-    `<a href="${safeUrl}" style="display:block;height:52px;line-height:52px;padding:0 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;text-align:center;">Sign up</a>` +
+    `<td height="52" align="center" valign="middle" style="height:52px;border-radius:8px;background-color:#08090a;">` +
+    `<a href="${safeUrl}" style="display:block;height:52px;line-height:52px;padding:0 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;text-align:center;">Sign up</a>` +
     `</td></tr></table></td></tr>` +
-    `<tr><td align="left" style="padding:10px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#8b8799;">${escapeHtml(ignoreNote)}</p></td></tr>` +
-    `<tr><td style="padding:26px 40px 0 40px;"><div style="height:1px;background-color:#eeecf4;line-height:1px;font-size:1px;">&nbsp;</div></td></tr>` +
-    `<tr><td align="left" style="padding:20px 40px 36px 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#a8a4b5;">Sent by <strong style="color:#5a3fe0;font-weight:600;">Sorted</strong> on behalf of ${safeName}.</p></td></tr>` +
+    `<tr><td align="left" style="padding:10px 40px 0 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#62666d;">${escapeHtml(ignoreNote)}</p></td></tr>` +
+    `<tr><td style="padding:26px 40px 0 40px;"><div style="height:1px;background-color:#e4e5e8;line-height:1px;font-size:1px;">&nbsp;</div></td></tr>` +
+    `<tr><td align="left" style="padding:20px 40px 36px 40px;"><p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#62666d;">Sent by <strong style="color:#08090a;font-weight:600;">Sorted</strong> on behalf of ${safeName}.</p></td></tr>` +
     `</table></td></tr></table></body></html>`;
   return { html, text };
 }

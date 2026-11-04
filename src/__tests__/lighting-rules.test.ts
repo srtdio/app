@@ -185,8 +185,15 @@ describe('lighting rules', () => {
     ]) {
       const d = value(dark, name);
       expect(d, name).toContain('inset 0 -1px 0');
-      const top = Number(/inset 0 1px 0 rgba\(255, 255, 255, ([\d.]+)\)/.exec(d)?.[1]);
-      const rim = Number(/inset 0 -1px 0 rgba\(255, 255, 255, ([\d.]+)\)/.exec(d)?.[1]);
+      // Top edge: a white highlight (#fff / #ffffff is full strength).
+      const topHit = /inset 0 1px 0 (?:rgba\(255, 255, 255, ([\d.]+)\)|#fff(?:fff)?\b)/.exec(d);
+      const top = topHit === null ? Number.NaN : Number(topHit[1] ?? 1);
+      // Bottom rim: a fainter white, or a dark rim under a white fill (the
+      // off-white primary button and own bubble), which is dimmer by definition.
+      const darkRim = /inset 0 -1px 0 rgba\(0, 0, 0, [\d.]+\)/.test(d);
+      const rim = darkRim
+        ? 0
+        : Number(/inset 0 -1px 0 rgba\(255, 255, 255, ([\d.]+)\)/.exec(d)?.[1]);
       expect(rim, name).toBeLessThan(top);
       expect(value(light, name), name).not.toContain('inset 0 -1px 0');
     }

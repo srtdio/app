@@ -31,18 +31,18 @@ describe('index.html theme-color (FT7)', () => {
     const light = tags.find((t) => t.includes('media="(prefers-color-scheme: light)"'));
     const dark = tags.find((t) => t.includes('media="(prefers-color-scheme: dark)"'));
     expect(light).toContain('content="#ffffff"');
-    expect(dark).toContain('content="#141519"');
+    expect(dark).toContain('content="#0f1011"');
   });
 
   it('the values are the --panel tokens in src/index.css', () => {
     const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
     expect(css).toMatch(/:root \{[^}]*--panel: #ffffff;/);
-    expect(css).toMatch(/\.dark \{[^}]*--panel: #141519;/);
+    expect(css).toMatch(/\.dark \{[^}]*--panel: #0f1011;/);
     expect(html).toContain('--panel value src/index.css paints');
   });
 
   it('the pre-CSS canvas colours are unchanged', () => {
     expect(html).toContain('background-color: #f7f8f9; /* --bg light');
-    expect(html).toContain('background-color: #0c0d10; /* --bg dark');
+    expect(html).toContain('background-color: #08090a; /* --bg dark');
   });
 });
