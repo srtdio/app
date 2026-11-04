@@ -50,8 +50,7 @@ function hits(re: RegExp, skip: (rel: string) => boolean = () => false): string[
 
 // A class token, with or without variants (hover:, focus-visible:, group-*:)
 // and an /opacity suffix.
-const token = (names: string): RegExp =>
-  new RegExp(`(^|[\\s"'\`:])(${names})(?=[\\s"'\`/]|$)`);
+const token = (names: string): RegExp => new RegExp(`(^|[\\s"'\`:])(${names})(?=[\\s"'\`/]|$)`);
 
 describe('outline rules', () => {
   it('no accent outline or retired selected class on a call site', () => {
@@ -64,9 +63,7 @@ describe('outline rules', () => {
   });
 
   it('focus is lit-focus (an outline); only media overlay controls keep a ring', () => {
-    expect(hits(/(^|[\s"'`])(group-)?focus(-visible|-within)?:ring-/, isMediaOverlay)).toEqual(
-      [],
-    );
+    expect(hits(/(^|[\s"'`])(group-)?focus(-visible|-within)?:ring-/, isMediaOverlay)).toEqual([]);
   });
 
   it('the shared controls carry the one focus line', () => {
