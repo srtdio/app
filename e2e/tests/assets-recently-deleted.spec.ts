@@ -124,9 +124,8 @@ test('a delete refused with asset_in_use opens Used in a post with Open post @th
   await expectTranslateYOnly(sheet);
   // The viewer closed; the file is back in the grid (rolled back).
   await expect(page.getByLabel(`Viewing ${IN_USE_NAME}`)).toHaveCount(0);
-  await expect(
-    page.getByRole('button', { name: `View ${IN_USE_NAME}`, exact: true }),
-  ).toBeVisible();
+  // The page behind the open sheet is aria-hidden, so find the card by its label.
+  await expect(page.locator(`button[aria-label="View ${IN_USE_NAME}"]`)).toBeVisible();
   expect(s.calls.rpc).toEqual([
     { name: 'asset_delete', args: { p_asset_id: IN_USE_ID, p_trace_id: expect.any(String) } },
   ]);
