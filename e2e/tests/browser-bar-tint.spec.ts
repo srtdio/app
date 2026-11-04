@@ -125,6 +125,8 @@ test('theme-color follows the top surface: Pipeline, chat list, thread, post det
 test('theme-color is --panel on every route on laptop; no thread strip there @desktop', async ({
   page,
 }) => {
+  // Every spec runs on the phone projects too; this one is the laptop width only.
+  test.skip((page.viewportSize()?.width ?? 0) < 768, 'laptop only');
   await seedMetas(page);
   const network = await installHarnessNetwork(page);
   await page.goto(`/posts/${POST}`);
