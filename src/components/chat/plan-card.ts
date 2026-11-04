@@ -937,8 +937,7 @@ export const OPEN_FOR_CLIENT_FAILED = errorText('open for approvers', null);
 export const SEND_NEEDS_OPEN = 'Open the plan for approvers to send it here.';
 export const SEND_FAILED = errorText('send', null);
 /** Send to approvers: the plan opened but chat_plan_share failed; Retry only reposts. */
-export const SEND_AFTER_OPEN_FAILED =
-  `${errorText('post the card', null)} The plan is open for approvers.`;
+export const SEND_AFTER_OPEN_FAILED = `${errorText('post the card', null)} The plan is open for approvers.`;
 export const RETRY_LABEL = 'Retry';
 export const GO_TO_CARD_LABEL = 'Go to card';
 

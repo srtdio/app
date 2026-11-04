@@ -63,11 +63,7 @@ import { Thumbnail } from '@/components/media';
 import { ComposerEmoji, showsEmojiButton } from '@/components/chat/ComposerEmoji';
 import { insertAtCaret } from '@/lib/chat/emoji-list';
 import { PostPicker, warmPostPicker } from '@/components/chat/PostPicker';
-import {
-  MentionPicker,
-  mentionComboboxProps,
-  stepActive,
-} from '@/components/chat/MentionPicker';
+import { MentionPicker, mentionComboboxProps, stepActive } from '@/components/chat/MentionPicker';
 import { ComposerStrip } from '@/components/chat/ComposerStrip';
 import { PendingChip } from '@/components/chat/PendingChip';
 import { PostRefThumb, type PostRefPost } from '@/components/chat/PostRefChip';

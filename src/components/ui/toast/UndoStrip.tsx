@@ -60,13 +60,7 @@ interface UndoStripProps {
  * (translateY only) and accepts past 40% of its height, else springs back.
  * Never a fade; with motion off it simply goes.
  */
-export function UndoStrip({
-  toast,
-  leaving = false,
-  onAccept,
-  onAction,
-  onHold,
-}: UndoStripProps) {
+export function UndoStrip({ toast, leaving = false, onAccept, onAction, onHold }: UndoStripProps) {
   const { id, title, action } = toast;
   const holds = holdHandlers((reason, held) => onHold?.(id, reason, held));
   const ref = useRef<HTMLDivElement | null>(null);

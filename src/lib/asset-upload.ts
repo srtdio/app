@@ -1049,8 +1049,7 @@ export const RESUMABLE_PART_SIZE = 8 * 1024 * 1024;
 export const PART_RETRIES = 3;
 
 /** Shown when a resumable upload runs out of retries. No connection wording. */
-export const RESUME_FAILED_MESSAGE =
-  `Couldn't finish uploading this file. It stopped partway too many times. ${REASON_COPY.unknown}`;
+export const RESUME_FAILED_MESSAGE = `Couldn't finish uploading this file. It stopped partway too many times. ${REASON_COPY.unknown}`;
 
 /** A worker reply as the resumable path reads it. */
 type Reply = { ok: boolean; status: number; body: unknown };

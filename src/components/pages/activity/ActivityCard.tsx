@@ -606,11 +606,7 @@ export function ActivityCard({
               {unread ? (
                 // A plain label, not a live region: the dot is part of the
                 // card's name ("Unread"), never announced on its own.
-                <span
-                  className={cn('ml-auto', UNREAD_DOT_CLASS)}
-                  role="img"
-                  aria-label="Unread"
-                />
+                <span className={cn('ml-auto', UNREAD_DOT_CLASS)} role="img" aria-label="Unread" />
               ) : null}
             </div>
 

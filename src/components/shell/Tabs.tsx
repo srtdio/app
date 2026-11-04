@@ -39,7 +39,11 @@ export function tabKeyTarget(keys: readonly string[], active: string, key: strin
 export function Tabs({ items, active, onChange, label }: TabsProps) {
   const refs = useRef(new Map<string, HTMLButtonElement>());
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    const next = tabKeyTarget(items.map((tab) => tab.key), active, event.key);
+    const next = tabKeyTarget(
+      items.map((tab) => tab.key),
+      active,
+      event.key,
+    );
     if (next === null) return;
     event.preventDefault();
     onChange(next);

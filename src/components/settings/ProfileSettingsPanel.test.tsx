@@ -593,11 +593,18 @@ describe('Catch-up emails tick', () => {
 
 describe('textFieldsDirty (the Back guard on name and designation)', () => {
   const saved = { display_name: 'Riya Menon', designation: 'Brand Manager' };
-  const fields = { name: 'Riya Menon', designation: 'Brand Manager', nameEdited: false, designationEdited: false };
+  const fields = {
+    name: 'Riya Menon',
+    designation: 'Brand Manager',
+    nameEdited: false,
+    designationEdited: false,
+  };
 
   it('is clean while nothing was edited, or an edit matches the saved value', () => {
     expect(textFieldsDirty(fields, saved)).toBe(false);
-    expect(textFieldsDirty({ ...fields, name: ' Riya Menon ', nameEdited: true }, saved)).toBe(false);
+    expect(textFieldsDirty({ ...fields, name: ' Riya Menon ', nameEdited: true }, saved)).toBe(
+      false,
+    );
     expect(textFieldsDirty(fields, null)).toBe(false);
   });
 
@@ -619,6 +626,8 @@ describe('Save profile is never disabled for "not valid yet"', () => {
     expect(src).not.toContain('disabled={!canSave}');
     expect(src).toContain('busy={submitting}');
     expect(src).toContain('<span id="settings-display-name-error">');
-    expect(src).toContain("aria-describedby={nameError !== null ? 'settings-display-name-error' : undefined}");
+    expect(src).toContain(
+      "aria-describedby={nameError !== null ? 'settings-display-name-error' : undefined}",
+    );
   });
 });

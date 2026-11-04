@@ -137,15 +137,15 @@ describe('a11y rules', () => {
     expect(unnamedFields('x.tsx', '<Input value={v} />')).toEqual(['x.tsx:1 Input']);
     expect(unnamedFields('x.tsx', '<Input aria-label="Search" />')).toEqual([]);
     expect(unnamedFields('x.tsx', '<Select label="Format" value={v} />')).toEqual([]);
-    expect(
-      unnamedFields('x.tsx', '<Field label="A">{(id) => <Input id={id} />}</Field>'),
-    ).toEqual([]);
+    expect(unnamedFields('x.tsx', '<Field label="A">{(id) => <Input id={id} />}</Field>')).toEqual(
+      [],
+    );
     expect(unnamedFields('x.tsx', '<label htmlFor="a">A</label><Input id="a" />')).toEqual([]);
     expect(unnamedFields('x.tsx', '<Input id="b" />')).toEqual(['x.tsx:1 Input']);
     expect(unnamedFields('x.tsx', '<label>A <Input /></label>')).toEqual([]);
     expect(unnamedMenus('x.tsx', '<div role="menu">')).toEqual(['x.tsx:1']);
     expect(unnamedMenus('x.tsx', '<div role="menu" aria-label="Sort">')).toEqual([]);
-    expect(unnamedMenus('x.tsx', "const s = '[role=\"menu\"]';")).toEqual([]);
+    expect(unnamedMenus('x.tsx', 'const s = \'[role="menu"]\';')).toEqual([]);
     expect(unnamedMenus('x.tsx', "{...{ role: 'menu', 'aria-label': label }}")).toEqual([]);
   });
 });

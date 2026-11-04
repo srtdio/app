@@ -82,11 +82,7 @@ import {
   RemoveFromPlanButton,
   planConceptMenuItems,
 } from '@/components/chat/PlanMoveSheet';
-import {
-  MentionPicker,
-  mentionComboboxProps,
-  stepActive,
-} from '@/components/chat/MentionPicker';
+import { MentionPicker, mentionComboboxProps, stepActive } from '@/components/chat/MentionPicker';
 import {
   CLIENT_VISIBILITY_LINE,
   EVERYONE_CHIP_LABEL,

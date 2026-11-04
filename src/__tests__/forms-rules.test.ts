@@ -165,7 +165,11 @@ describe('forms: submit buttons are never disabled for "not valid yet"', () => {
   });
 
   it('email inputs on the sign-in, sign-up and onboarding forms skip spellcheck and capitals', () => {
-    for (const rel of ['auth/SignInPage.tsx', 'auth/SignUpPage.tsx', 'onboarding/OnboardingFlow.tsx']) {
+    for (const rel of [
+      'auth/SignInPage.tsx',
+      'auth/SignUpPage.tsx',
+      'onboarding/OnboardingFlow.tsx',
+    ]) {
       const src = FILES.find((f) => f.rel === rel)!.src;
       for (const m of src.matchAll(/<Input\b/g)) {
         const tag = openingTag(src, m.index);

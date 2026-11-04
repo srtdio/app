@@ -9,11 +9,7 @@
 import { useEffect, type KeyboardEvent, type RefObject } from 'react';
 import { nextMenuIndex } from '@/lib/chat/menu-keys';
 
-const ITEM_SELECTOR = [
-  '[role="menuitem"]',
-  '[role="menuitemradio"]',
-  '[role="menuitemcheckbox"]',
-]
+const ITEM_SELECTOR = ['[role="menuitem"]', '[role="menuitemradio"]', '[role="menuitemcheckbox"]']
   .map((role) => `${role}:not([disabled]):not([aria-disabled="true"])`)
   .join(', ');
 

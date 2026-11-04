@@ -27,10 +27,13 @@ export function useDelayedBusy(busy: boolean, { delay, minVisible }: DelayedBusy
   useEffect(() => {
     if (busy) {
       if (shown) return undefined;
-      const timer = setTimeout(() => {
-        shownAt.current = Date.now();
-        setShown(true);
-      }, Math.max(0, delay));
+      const timer = setTimeout(
+        () => {
+          shownAt.current = Date.now();
+          setShown(true);
+        },
+        Math.max(0, delay),
+      );
       return () => clearTimeout(timer);
     }
     if (!shown) return undefined;

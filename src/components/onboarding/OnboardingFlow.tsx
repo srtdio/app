@@ -57,12 +57,7 @@ import { errorText } from '@/lib/error-copy';
 import { SIGNOUT_EVENT, dispatchSorted } from '@/lib/events';
 import { fetchWithTrace } from '@/lib/fetch';
 import { generateTraceId } from '@/lib/trace';
-import {
-  CHECK_EMAIL_COPY,
-  ONBOARDING_COPY,
-  WELCOME_COPY,
-  fillCopy,
-} from '@/lib/induction-copy';
+import { CHECK_EMAIL_COPY, ONBOARDING_COPY, WELCOME_COPY, fillCopy } from '@/lib/induction-copy';
 import {
   APPROVER_BRAND_STEP,
   APPROVER_WAITING_STEP,
@@ -907,11 +902,7 @@ export function OnboardingFlow({
       // A check that got no answer does not block: the save refuses a taken name.
       (nameCheck === 'free' || nameCheck === 'error');
     primary = (
-      <Primary
-        busy={busy}
-        onClick={submitName}
-        anchor={INDUCTION_KEYS.onboardingNameContinue}
-      >
+      <Primary busy={busy} onClick={submitName} anchor={INDUCTION_KEYS.onboardingNameContinue}>
         Continue
       </Primary>
     );
