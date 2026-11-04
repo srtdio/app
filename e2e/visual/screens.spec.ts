@@ -77,6 +77,10 @@ interface Screen {
   only?: 'laptop' | 'phone';
   /** Force the dark scheme (the laptop project is light; these add its dark shots). */
   dark?: boolean;
+  /** Light projects only (the homepage is light-only): skipped in every *-dark project. */
+  lightOnly?: true;
+  /** Parts painted over in the shot (moving media: the homepage's clips and photos). */
+  mask?: (page: Page) => Locator[];
   url: string;
   /** Waits for the page, then walks to the state to capture. */
   steps: (page: Page) => Promise<void>;
@@ -259,8 +263,8 @@ async function seedAlertsPaused(_network: HarnessNetwork, page: Page, now: numbe
   ] as const);
 }
 
-/** A client plan (one concept with a library photo, one post) carded into the DM by ME. */
-function seedChatPlan(network: HarnessNetwork): void {
+/** One library photo (origin library: the composer's Add from Assets lists it). */
+function seedLibraryImage(network: HarnessNetwork): void {
   (network.world.tables.assets ??= []).push({
     id: LIB_IMAGE,
     workspace_id: WORKSPACE_ID,
@@ -282,6 +286,11 @@ function seedChatPlan(network: HarnessNetwork): void {
       duration_ms: null,
     },
   });
+}
+
+/** A client plan (one concept with a library photo, one post) carded into the DM by ME. */
+function seedChatPlan(network: HarnessNetwork): void {
+  seedLibraryImage(network);
   // 30s after the audit's post card, so the plan card is the thread's newest.
   seedClientPlan(network.world, {
     channelId: DM_CHANNEL,
@@ -419,6 +428,41 @@ async function openChatPlan(page: Page): Promise<void> {
   const card = await openChatPlanCard(page);
   await card.locator('[data-plan-open]').click();
   await waitFor([page.locator('[data-plan-page="plan"]')], 'plan screen');
+}
+
+/** Long-press (phone) or right-click (laptop) a DM message: its action menu. */
+async function openDmMessageMenu(page: Page): Promise<void> {
+  await openDm(page);
+  const bubble = page.locator('[data-bubble]', { hasText: 'Done, it reads well now.' }).last();
+  const menu = page.getByRole('menu').or(page.getByRole('dialog'));
+  // A synthetic hold can be cut short by a scroll settling under it: try again.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await openMenuGesture(page, bubble);
+    if (
+      await menu
+        .first()
+        .isVisible()
+        .catch(() => false)
+    ) {
+      break;
+    }
+  }
+  await waitFor([menu], 'message menu');
+}
+
+/** The DM's composer tray open, then one tile picked (the tray closes on the pick). */
+async function pickTrayTile(page: Page, tile: string): Promise<void> {
+  await tap([page.getByRole('button', { name: 'Add attachment', exact: true })], 'attach');
+  await waitFor([page.locator('[data-tray]')], 'composer tray');
+  await tap([page.locator(`[data-tray-tile="${tile}"]:not([disabled])`)], `${tile} tile`);
+}
+
+/** A tray picker sheet by its title, painted past its loading rows. */
+async function pickerSheet(page: Page, title: string, ready: string[]): Promise<void> {
+  const sheet = page.getByRole('dialog', { name: title });
+  await waitFor([sheet], `${title} sheet`);
+  await waitFor(ready.map((selector) => sheet.locator(selector)), `${title} rows`);
+  await expect(sheet.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: READY_MS });
 }
 
 /** The DM's contact info on one tab (Media, Files, ...). */
@@ -710,24 +754,7 @@ const SCREENS: Screen[] = [
     name: 'message-action-menu',
     seed: creator,
     url: '/chat',
-    steps: async (page) => {
-      await openDm(page);
-      const bubble = page.locator('[data-bubble]', { hasText: 'Done, it reads well now.' }).last();
-      const menu = page.getByRole('menu').or(page.getByRole('dialog'));
-      // A synthetic hold can be cut short by a scroll settling under it: try again.
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        await openMenuGesture(page, bubble);
-        if (
-          await menu
-            .first()
-            .isVisible()
-            .catch(() => false)
-        ) {
-          break;
-        }
-      }
-      await waitFor([menu], 'message menu');
-    },
+    steps: openDmMessageMenu,
   },
   {
     name: 'new-chat-sheet',
@@ -1922,6 +1949,139 @@ SCREENS.push(
   },
 );
 
+// The composer's pickers and sheets in the DM (creator: Plan is live), the
+// Forward and Remind me sheets from a message's menu, an own message carrying
+// a post card, and the guest homepage. Phone light/dark and laptop light.
+
+/** The draft the Schedule sheet previews ("To Priya Raman: ..."). */
+const SCHEDULE_DRAFT = 'Can we move the shoot to Monday?';
+
+/** Serve the homepage fixture for "/" (the harness keeps "/" as its smoke page); clips 404. */
+async function serveHomepage(_network: HarnessNetwork, page: Page): Promise<void> {
+  await page.route('**/site-media/**', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.route(
+    (url) => url.pathname === '/',
+    async (route) => {
+      const fixture = new URL('/home.html', route.request().url()).toString();
+      const response = await route.fetch({ url: fixture });
+      await route.fulfill({ response });
+    },
+  );
+}
+
+SCREENS.push(
+  {
+    name: 'post-picker',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickTrayTile(page, 'post');
+      await pickerSheet(page, 'Share a post', ['li[data-section]', 'text=/show up here/']);
+    },
+  },
+  {
+    name: 'brief-picker',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickTrayTile(page, 'brief');
+      await pickerSheet(page, 'Share a brief', ['text=Autumn range launch', 'text=/show up here/']);
+    },
+  },
+  {
+    // A library photo so the grid has a tile (the audit's files are not library).
+    name: 'asset-picker',
+    seed: creator,
+    extra: seedLibraryImage,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickTrayTile(page, 'assets');
+      await pickerSheet(page, 'Add from Assets', [`[data-asset-tile="${LIB_IMAGE}"]`]);
+    },
+  },
+  {
+    // The Plan tile's picker: upcoming plans (the Plan tab seed) and New plan.
+    name: 'plan-picker',
+    seed: creator,
+    extra: seedTab,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickTrayTile(page, 'plan');
+      await pickerSheet(page, 'Plans', ['[data-plan-pick]', '[data-plan-picker-empty]']);
+    },
+  },
+  {
+    // A message's menu, Forward: the chat list with checkmarks.
+    name: 'forward-picker',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDmMessageMenu(page);
+      await tap([page.locator('[data-menu-item="forward"]')], 'Forward');
+      const sheet = page.getByRole('dialog', { name: 'Forward to' });
+      await waitFor([sheet.getByText(GROUP_NAME, { exact: true })], 'forward picker rows');
+    },
+  },
+  {
+    // A message's menu, More, Remind me: the presets under the preview.
+    name: 'reminder-sheet',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDmMessageMenu(page);
+      await tap([page.locator('[data-menu-item="more"]')], 'More');
+      await tap([page.locator('[data-menu-item="remind"]')], 'Remind me');
+      const sheet = page.getByRole('dialog', { name: 'Remind me' });
+      await waitFor([sheet.locator('[data-reminder-row="1h"]')], 'reminder presets');
+    },
+  },
+  {
+    // A typed draft, then the tray's Schedule tile: the sheet on phone, the
+    // menu under the Send chevron on laptop (both "Schedule message").
+    name: 'schedule-sheet',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      const draft = page.locator('form:has(textarea)').first().locator('textarea');
+      await draft.fill(SCHEDULE_DRAFT);
+      await pickTrayTile(page, 'schedule');
+      const sheet = page.getByRole('dialog', { name: 'Schedule message' });
+      await waitFor([sheet.locator('[data-schedule-options]')], 'schedule options');
+      await waitFor([sheet.locator('[data-schedule-preview]')], 'schedule preview');
+    },
+  },
+  {
+    // ME's own DM message (the audit's "Ready for your look") with its post card in view.
+    name: 'chat-own-post-card',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      const own = page.locator('[data-msg-id]', { hasText: 'Ready for your look' }).last();
+      const card = own.getByRole('button', { name: 'Open post Monday carousel' });
+      await waitFor([card], 'own post card');
+      await card.scrollIntoViewIfNeeded();
+      await threadStill(page);
+    },
+  },
+  {
+    // The guest homepage (light only; its clips and photos masked).
+    name: 'homepage',
+    seed: null,
+    signedOut: true,
+    lightOnly: true,
+    prepare: serveHomepage,
+    mask: (page) => [page.locator('video, img')],
+    url: '/',
+    steps: async (page) => waitFor([page.locator('.home h1')], 'homepage'),
+  },
+);
+
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
 
@@ -1980,6 +2140,9 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   if (screen.only !== undefined) {
     test.skip((screen.only === 'laptop') !== isLaptop(page), `${screen.only} only`);
   }
+  if (screen.lightOnly === true) {
+    test.skip(test.info().project.name.includes('dark'), 'light only');
+  }
   if (screen.dark === true) await page.emulateMedia({ colorScheme: 'dark' });
   // The page's clock is pinned (Date only; timers keep running).
   await page.clock.setFixedTime(NOW);
@@ -2008,12 +2171,30 @@ async function capture(screen: Screen, page: Page): Promise<void> {
     maxDiffPixelRatio: 0.002,
     animations: 'disabled',
     caret: 'hide',
+    ...(screen.mask !== undefined ? { mask: screen.mask(page) } : {}),
   });
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 }
 
+// Laptop dark: these screens also run in the laptop-dark project
+// (playwright.visual.config.ts greps @laptop-dark there). The tag rides on the
+// screen's one test title, so the iPhone and laptop-light projects still run
+// it; the snapshot name stays the screen name (laptop-dark/<name>.png).
+const LAPTOP_DARK_SCREENS = new Set([
+  'pipeline',
+  'plan-tab',
+  'plan-screen-today',
+  'chat-thread',
+  'post-detail',
+  'briefs-approver',
+  'assets',
+  'settings-profile',
+  'post-picker',
+]);
+
 for (const screen of SCREENS) {
-  test(screen.name, async ({ page }) => capture(screen, page));
+  const tag = LAPTOP_DARK_SCREENS.has(screen.name) ? ' @laptop-dark' : '';
+  test(`${screen.name}${tag}`, async ({ page }) => capture(screen, page));
 }
 
 // Touch tablet page mode (src/lib/scroll-mode.ts TOUCH_TABLET_QUERY): the

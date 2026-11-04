@@ -14,7 +14,8 @@ import { defineConfig, devices } from '@playwright/test';
 // differ between machines): push a commit whose message contains
 // [update-visual-baselines] and Visual CI renders and commits them to the PR.
 //
-// Three projects: iPhone 13 light and dark, and a 1280x800 laptop in light.
+// Three projects: iPhone 13 light and dark, and a 1280x800 laptop in light,
+// plus laptop-dark running only the @laptop-dark shots (screens.spec.ts).
 // Plus four touch tablet projects (iPad 820x1180 portrait and 1180x820
 // landscape, hasTouch, light and dark) that run only the @tablet shots: the
 // page-mode screens (src/lib/scroll-mode.ts TOUCH_TABLET_QUERY).
@@ -77,6 +78,12 @@ export default defineConfig({
     { name: 'iphone-light', use: { ...phone, colorScheme: 'light' }, grepInvert: TABLET },
     { name: 'iphone-dark', use: { ...phone, colorScheme: 'dark' }, grepInvert: TABLET },
     { name: 'laptop-light', use: { ...laptop, colorScheme: 'light' }, grepInvert: TABLET },
+    {
+      name: 'laptop-dark',
+      use: { ...laptop, colorScheme: 'dark' },
+      grep: /@laptop-dark/,
+      grepInvert: TABLET,
+    },
     { name: 'ipad-portrait-light', use: { ...portrait, colorScheme: 'light' }, grep: TABLET },
     { name: 'ipad-portrait-dark', use: { ...portrait, colorScheme: 'dark' }, grep: TABLET },
     { name: 'ipad-landscape-light', use: { ...landscape, colorScheme: 'light' }, grep: TABLET },
