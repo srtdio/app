@@ -16,6 +16,17 @@ import {
   type Slot,
   type StageItem,
 } from './catchup-contracts';
+import {
+  EMAIL_CARD_EDGES,
+  EMAIL_LIGHT,
+  EMAIL_MONO,
+  EMAIL_SANS,
+  EMAIL_TABLE,
+  emailButton,
+  emailEscape,
+  emailDocument,
+  emailLink,
+} from './email-shell';
 
 // --- deep-link URL emitters ---------------------------------------------------
 // The base is always passed in, never hardcoded. G2 builds each row.url with
@@ -192,7 +203,7 @@ function headline(d: RecipientDigest): string {
     if (clauses.length === 0 && c.newBriefs > 0)
       clauses.push(`${spell(c.newBriefs)} new ${plural(c.newBriefs, 'brief', 'briefs')}`);
   }
-  return clauses.length === 0 ? 'Nothing new since your last catch-up.' : sentence(clauses);
+  return clauses.length === 0 ? "You're all caught up." : sentence(clauses);
 }
 
 interface StatTile {
@@ -367,57 +378,18 @@ function buildSections(d: RecipientDigest): { sections: RenderSection[]; summary
 
 // --- HTML -----------------------------------------------------------------------
 
-const SANS = "Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif";
+const SANS = EMAIL_SANS;
+const MONO = EMAIL_MONO;
+const TABLE = EMAIL_TABLE;
+const LIGHT = { ...EMAIL_LIGHT, accent: EMAIL_LIGHT.fg, border: EMAIL_LIGHT.rule } as const;
 
-const LIGHT = {
-  bg: '#f4f5f6',
-  panel: '#ffffff',
-  border: '#e4e5e8',
-  fg: '#08090a',
-  fg2: '#62666d',
-  fg3: '#62666d',
-  accent: '#08090a',
-  onAccent: '#ffffff',
-  btnTop: 'rgba(255,255,255,0.3)',
-  btnBottom: '#000000',
-} as const;
-
-// Lit edges drawn with borders (mail clients drop shadows): one light from above,
-// a lighter top edge and a 2px darker bottom rim. Every card takes this.
-const CARD_EDGES = `border:1px solid ${LIGHT.border};border-top-color:#eceef1;border-bottom:2px solid #c9ced5`;
+// Lit edges drawn with borders (mail clients drop shadows): the shell's card edges.
+const CARD_EDGES = EMAIL_CARD_EDGES;
 
 const FOOTER_NOTE =
   "You get Sorted catch-ups at 10:30 am and 3:30 pm your time, Mon to Fri, only for things you haven't seen in Sorted. Nothing new, no email.";
 
-function esc(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-// Class-based dark overrides (prefers-color-scheme) plus [data-ogsc] mirrors for
-// Outlook. Inline styles win on specificity, so each override is !important.
-const DARK_RULES = [
-  '.bg { background:#08090a !important; }',
-  '.panel { background:#1a1c21 !important; border-color:#26282e !important; border-top-color:rgba(255,255,255,0.10) !important; border-bottom-color:#000000 !important; }',
-  '.rowlink { border-color:#26282e !important; }',
-  '.fg { color:#f7f8f8 !important; }',
-  '.fg2 { color:#b4b8bf !important; }',
-  '.fg3 { color:#9095a0 !important; }',
-  '.accent { color:#e5e5e6 !important; }',
-  '.btn { background:#e5e5e6 !important; color:#08090a !important; border-bottom-color:#c9ccd1 !important; }',
-];
-
-const STYLE =
-  `:root { color-scheme: light dark; supported-color-schemes: light dark; }` +
-  `a { text-decoration:none; }` +
-  `@media (prefers-color-scheme: dark) { ${DARK_RULES.join(' ')} }` +
-  DARK_RULES.map((r) => `[data-ogsc] ${r}`).join(' ');
-
-const TABLE = 'role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"';
+const esc = emailEscape;
 
 // The first row in a panel has no top rule; later rows and the more link do.
 function rule(first: boolean): string {
@@ -477,7 +449,7 @@ function tilesHtml(tiles: StatTile[]): string {
     .map(
       (t) =>
         `<td width="33%" align="center" valign="top" class="panel" style="width:33%;background:${LIGHT.panel};${CARD_EDGES};border-radius:12px;padding:14px 6px">` +
-        `<div class="fg" style="font-family:${SANS};font-size:24px;font-weight:600;line-height:28px;color:${LIGHT.fg}">${t.count}</div>` +
+        `<div class="fg" style="font-family:${MONO};font-size:24px;font-weight:600;line-height:28px;font-variant-numeric:tabular-nums;color:${LIGHT.fg}">${t.count}</div>` +
         `<div class="fg3" style="font-family:${SANS};font-size:12px;line-height:16px;color:${LIGHT.fg3};padding-top:4px">${esc(t.label)}</div>` +
         `</td>`,
     )
@@ -493,21 +465,7 @@ function renderHtml(
   summary: SummaryLine[],
   activityUrl: string,
 ): string {
-  return (
-    `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
-    `<meta name="viewport" content="width=device-width,initial-scale=1">` +
-    `<meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark">` +
-    `<title>${esc(buildCatchupSubject(d.workspaceName, d.slot))}</title>` +
-    `<style>${STYLE}</style></head>` +
-    `<body class="bg" style="margin:0;padding:0;background:${LIGHT.bg}">` +
-    `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(head)}</div>` +
-    `<table ${TABLE} class="bg" style="background:${LIGHT.bg}"><tr><td align="center" style="padding:24px 12px">` +
-    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">` +
-    // header: wordmark + workspace/date
-    `<tr><td style="padding:0 4px 16px"><table ${TABLE}><tr>` +
-    `<td class="accent" style="font-family:${SANS};font-size:18px;font-weight:700;letter-spacing:-0.02em;line-height:24px;color:${LIGHT.accent}">Sorted</td>` +
-    `<td class="fg3" align="right" style="font-family:${SANS};font-size:13px;line-height:24px;color:${LIGHT.fg3}">${esc(dateLine(d))}</td>` +
-    `</tr></table></td></tr>` +
+  const content =
     // masthead
     `<tr><td class="panel" style="background:${LIGHT.panel};${CARD_EDGES};border-radius:12px;padding:24px 20px">` +
     `<div class="accent" style="font-family:${SANS};font-size:13px;font-weight:600;line-height:16px;color:${LIGHT.accent};padding-bottom:10px">${esc(eyebrow(d.slot))}</div>` +
@@ -515,17 +473,19 @@ function renderHtml(
     `<div class="fg3" style="font-family:${SANS};font-size:13px;line-height:18px;color:${LIGHT.fg3};padding-top:8px">${esc(sinceLine(d))}</div>` +
     `</td></tr>` +
     tilesHtml(tiles) +
-    // button
-    `<tr><td style="padding-top:20px"><a href="${esc(activityUrl)}" class="btn" style="display:inline-block;min-height:20px;padding:12px 24px;line-height:20px;border-radius:8px;border-top:1px solid ${LIGHT.btnTop};border-bottom:2px solid ${LIGHT.btnBottom};background:${LIGHT.accent};color:${LIGHT.onAccent};font-family:${SANS};font-size:15px;font-weight:600;text-decoration:none">Open Sorted</a></td></tr>` +
+    `<tr><td style="padding-top:20px">${emailButton(activityUrl, 'Open Sorted')}</td></tr>` +
     sections.map(sectionHtml).join('') +
-    summary.map(summaryHtml).join('') +
-    // footer
-    `<tr><td style="padding:32px 4px 0;border-top:0">` +
-    `<div class="fg3" style="font-family:${SANS};font-size:12px;line-height:18px;color:${LIGHT.fg3}">${esc(FOOTER_NOTE)}</div>` +
-    `<a href="${esc(d.unsubscribeUrl)}" class="fg3" style="display:inline-block;min-height:20px;padding:12px 0;line-height:20px;font-family:${SANS};font-size:12px;color:${LIGHT.fg3};text-decoration:underline">Unsubscribe</a>` +
-    `</td></tr>` +
-    `</table></td></tr></table></body></html>`
-  );
+    summary.map(summaryHtml).join('');
+  const footer =
+    `<div>${esc(FOOTER_NOTE)}</div>` +
+    `<div style="padding:12px 0">${emailLink(d.unsubscribeUrl, 'Unsubscribe')}</div>`;
+  return emailDocument({
+    title: buildCatchupSubject(d.workspaceName, d.slot),
+    preheader: head,
+    aside: esc(dateLine(d)),
+    content,
+    footer,
+  });
 }
 
 // --- plain text -----------------------------------------------------------------

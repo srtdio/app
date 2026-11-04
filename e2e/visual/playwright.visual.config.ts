@@ -50,7 +50,7 @@ const TABLET = /@tablet/;
 
 export default defineConfig({
   testDir: '.',
-  testMatch: 'screens.spec.ts',
+  testMatch: ['screens.spec.ts', 'emails.spec.ts'],
   snapshotPathTemplate: '{testDir}/__screenshots__/{projectName}/{arg}{ext}',
   // e2e/results is gitignored; the html report sits beside, never inside, outputDir.
   outputDir: '../results/visual',
