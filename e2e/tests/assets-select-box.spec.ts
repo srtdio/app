@@ -6,7 +6,7 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 // Assets multi-select starts from the round box at each card's top left: one
 // tap selects that file. While selecting, the header shows Cancel, the count
 // and Select all; on a phone Delete sits in a bar at the bottom (there is no
-// Move: Assets has no folders). The "New asset" menu offers no Select. Tagged
+// Move: Assets has no folders). The "New file" menu offers no Select. Tagged
 // @theme for light and dark.
 
 const AT = Date.parse('2026-10-01T09:00:00Z');
@@ -57,8 +57,8 @@ test('one tap on a card box selects it; Cancel, Select all and Delete @theme', a
   await page.goto('/assets');
   await expect(boxes(page)).toHaveCount(3, { timeout: 15_000 });
 
-  // The "New asset" menu offers upload and link, and no Select.
-  await page.getByRole('button', { name: 'New asset' }).click();
+  // The "New file" menu offers upload and link, and no Select.
+  await page.getByRole('button', { name: 'New file' }).click();
   await expect(page.getByRole('menuitem', { name: 'Upload files' })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Add link' })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Select' })).toHaveCount(0);

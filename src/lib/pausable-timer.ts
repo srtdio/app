@@ -83,6 +83,14 @@ interface HoldFocusEvent {
   relatedTarget: EventTarget | null;
 }
 
+// Hover holds only on a device that can hover (laptop mouse). A phone's
+// synthesized mouse events would otherwise hold a toast with no pointerleave
+// ever coming, so it would never go. Without matchMedia (tests), assume hover.
+function canHover(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+  return window.matchMedia('(hover: hover)').matches;
+}
+
 /**
  * Event props that hold a countdown while a surface is hovered (mouse),
  * focused (focus anywhere inside), or touched (pointerdown until the pointer
@@ -98,7 +106,7 @@ export function holdHandlers(onHold: (reason: HoldReason, held: boolean) => void
 } {
   return {
     onPointerEnter(event) {
-      if (event.pointerType === 'mouse') onHold('hover', true);
+      if (event.pointerType === 'mouse' && canHover()) onHold('hover', true);
     },
     onPointerLeave(event) {
       if (event.pointerType === 'mouse') onHold('hover', false);
