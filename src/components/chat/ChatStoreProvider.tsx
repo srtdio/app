@@ -49,6 +49,7 @@ import type { AgoraChat } from 'agora-chat';
 import type { Result } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
+import { isExpectedNetworkFailure } from '@/lib/expected-failure';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useToast } from '@/components/ui/toast';
@@ -698,16 +699,28 @@ export type LoadTransition = (prev: ChatStoreState) => ChatStoreState;
  * only timed out keeps running (withLateRead): once every read has data, the
  * 'ready' transition is handed to `onLate` and the list replaces the error.
  * `cancel` (Retry, switch, unmount) aborts them all and delivers nothing.
- * Logging: a load that failed only by timeouts is a warning (the late data may
- * still win); it is an error when a read failed otherwise, or when a timed-out
- * read gives up (grace end or late failure) before the list was delivered.
+ * Each read's requests get the full LATE_READ_GRACE_MS as their fetch ceiling
+ * (not the global 10s), and a read that fails by timeout or network failure
+ * is retried once after a jittered 1-2s, inside the same grace (never on a
+ * 4xx/5xx or malformed answer). The first paint and the 5s error state are
+ * unchanged: the retry and the longer ceiling only run after a read failed.
+ * Logging: a load that failed only by reads still running (timed out, or a
+ * retry pending) is a warning (the late data may still win). Once a read ends
+ * with no data, the load is reported once with each read's final reason (a
+ * late failure overwrites 'read timed out'): a warning when every cause is an
+ * expected network failure (isExpectedNetworkFailure), else an error.
  */
 export async function loadChatList(
   readers: ChatListReaders,
   scope: string,
   currentUserId: string,
   nameOf?: store.PreviewNameOf,
-  opts: { onLate?: (transition: LoadTransition) => void; cancel?: AbortSignal } = {},
+  opts: {
+    onLate?: (transition: LoadTransition) => void;
+    cancel?: AbortSignal;
+    /** Called once, just before the failed ('error') transition is returned. */
+    onFailed?: () => void;
+  } = {},
 ): Promise<LoadTransition> {
   const names = readers.names ?? ((p: ConversationPreview[]) => Promise.resolve(p));
   const slots: {
@@ -716,21 +729,44 @@ export async function loadChatList(
     previews?: ConversationPreview[];
     counts?: UnreadCount[];
   } = {};
+  type ReadKey = 'roster' | 'clears' | 'previews' | 'counts';
   let failedFirst = false;
   let delivered = false;
   // A read ended with no data (withLateRead onGiveUp): the list cannot complete.
   let gaveUp = false;
   let reported = false;
-  let failContext: Record<string, string> = {};
+  // Each read's outcome at the first answer, then its final reason once known.
+  let firstReasons: Record<ReadKey, string> = {
+    roster: 'ok',
+    clears: 'ok',
+    previews: 'ok',
+    counts: 'ok',
+  };
+  const finalReasons: Partial<Record<ReadKey, string>> = {};
+  const failContext = (): Record<ReadKey, string> => ({
+    roster: finalReasons.roster ?? firstReasons.roster,
+    clears: finalReasons.clears ?? firstReasons.clears,
+    previews: finalReasons.previews ?? firstReasons.previews,
+    counts: finalReasons.counts ?? firstReasons.counts,
+  });
   const reportFailed = (): void => {
     if (reported || delivered) return;
     reported = true;
-    logger.error('chat store: initial load failed', failContext);
+    const context = failContext();
+    const causes = Object.values(context).filter((reason) => reason !== 'ok');
+    if (causes.length > 0 && causes.every((reason) => isExpectedNetworkFailure(reason))) {
+      logger.warn('chat store: initial load failed', context);
+    } else {
+      logger.error('chat store: initial load failed', context);
+    }
   };
-  const giveUp = (): void => {
-    gaveUp = true;
-    if (failedFirst && opts.cancel?.aborted !== true) reportFailed();
-  };
+  const giveUp =
+    (key: ReadKey) =>
+    (reason: string): void => {
+      finalReasons[key] = reason;
+      gaveUp = true;
+      if (failedFirst && opts.cancel?.aborted !== true) reportFailed();
+    };
   const ready = (): LoadTransition | null => {
     const { roster, clears, previews, counts } = slots;
     if (roster === undefined || clears === undefined || previews === undefined) return null;
@@ -752,40 +788,49 @@ export async function loadChatList(
     delivered = true;
     opts.onLate?.(transition);
   };
-  const lateOpts = <T,>(fill: (data: T) => void) => ({
+  // Shared by all four reads: the grace as the request ceiling, one retry on a
+  // timeout or network failure (judged on the failure alone, not device state).
+  const readOpts = {
+    requestTimeoutMs: LATE_READ_GRACE_MS,
+    retryIf: (reason: string) => isExpectedNetworkFailure(reason, {}),
+    ...(opts.cancel !== undefined ? { cancel: opts.cancel } : {}),
+  };
+  const lateOpts = <T,>(key: ReadKey, fill: (data: T) => void) => ({
+    ...readOpts,
     onLate: (data: T) => {
+      finalReasons[key] = 'ok';
       fill(data);
       late();
     },
-    onGiveUp: giveUp,
-    ...(opts.cancel !== undefined ? { cancel: opts.cancel } : {}),
+    onGiveUp: giveUp(key),
   });
   const [roster, clears, previews, counts] = await Promise.all([
     // The roster reader has its own 5s like the others; a roster that lands
     // later (its registry trip runs to the grace) still wins.
     withLateRead(
       readers.roster,
-      lateOpts<ChannelSummary[]>((d) => (slots.roster = d)),
+      lateOpts<ChannelSummary[]>('roster', (d) => (slots.roster = d)),
     ),
     withLateRead(
       readers.clears,
-      lateOpts<ChannelClear[]>((d) => (slots.clears = d)),
+      lateOpts<ChannelClear[]>('clears', (d) => (slots.clears = d)),
     ),
     withLateRead(readers.previews, {
+      ...readOpts,
       onLate: (data: ConversationPreview[]) =>
         void names(data).then((named) => {
+          finalReasons.previews = 'ok';
           slots.previews = named;
           late();
         }),
-      onGiveUp: giveUp,
-      ...(opts.cancel !== undefined ? { cancel: opts.cancel } : {}),
+      onGiveUp: giveUp('previews'),
     }).then(
       async (r): Promise<Result<ConversationPreview[]>> =>
         r.ok ? { ok: true, data: await names(r.data) } : r,
     ),
     withLateRead(
       readers.counts,
-      lateOpts<UnreadCount[]>((d) => (slots.counts = d)),
+      lateOpts<UnreadCount[]>('counts', (d) => (slots.counts = d)),
     ),
   ]);
   if (roster.ok) slots.roster = roster.data;
@@ -801,21 +846,20 @@ export async function loadChatList(
   }
   if (!roster.ok || !clears.ok || !previews.ok || !counts.ok) {
     failedFirst = true;
-    failContext = {
+    firstReasons = {
       roster: roster.ok ? 'ok' : roster.error.message,
       clears: clears.ok ? 'ok' : clears.error.message,
       previews: previews.ok ? 'ok' : previews.error.message,
       counts: counts.ok ? 'ok' : counts.error.message,
     };
-    const timedOutOnly = [roster, clears, previews, counts].every(
-      (r) => r.ok || r.error.message === 'read timed out',
-    );
-    // Only timeouts: the reads keep running and a late list still wins, so
-    // this is a warning; giveUp reports the error if the list never lands.
-    if (timedOutOnly && !gaveUp) logger.warn('chat store: initial load timed out', failContext);
+    // Every failed read is still running (timed out, or its retry pending):
+    // a late list still wins, so this is a warning; giveUp reports the load
+    // if the list never lands. A read that already ended is reported now.
+    if (!gaveUp) logger.warn('chat store: initial load timed out', failContext());
     else reportFailed();
   }
   mark('chat:list:error');
+  opts.onFailed?.();
   return (prev) => store.loadFailed(prev, scope);
 }
 
@@ -1237,6 +1281,30 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
           : prev,
       );
     });
+    // A seeded list whose load failed re-runs it once, on the next tab return
+    // or online event (listeners only: no timer, no poll).
+    let refreshArmed = false;
+    const refresh = { now: (): void => {} };
+    const onRefreshVisible = (): void => {
+      if (document.visibilityState === 'visible') refresh.now();
+    };
+    const onRefreshOnline = (): void => refresh.now();
+    const disarmRefresh = (): void => {
+      if (!refreshArmed) return;
+      refreshArmed = false;
+      document.removeEventListener('visibilitychange', onRefreshVisible);
+      window.removeEventListener('online', onRefreshOnline);
+    };
+    refresh.now = () => {
+      disarmRefresh();
+      if (!cancelled) setLoadAttempt((n) => n + 1);
+    };
+    const armRefresh = (): void => {
+      if (refreshArmed || cancelled) return;
+      refreshArmed = true;
+      document.addEventListener('visibilitychange', onRefreshVisible);
+      window.addEventListener('online', onRefreshOnline);
+    };
     void loadChatList(
       {
         // The registry trip runs up to the late grace (the load's own abort
@@ -1266,9 +1334,15 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       {
         // A read that only timed out and lands later: its data wins, the error clears.
         onLate: (transition) => {
+          disarmRefresh();
           if (!cancelled) setState((prev) => overSeeded(prev, transition, seeded));
         },
         cancel: abort.signal,
+        // A seeded list keeps what it paints on a failure (overSeeded): refresh
+        // it once on the next return to the tab or the network.
+        onFailed: () => {
+          if (seeded) armRefresh();
+        },
       },
     ).then((transition) => {
       if (!cancelled) setState((prev) => overSeeded(prev, transition, seeded));
@@ -1277,6 +1351,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       cancelled = true;
       abort.abort();
       offHydrated();
+      disarmRefresh();
     };
   }, [scope, workspaceId, currentUserId, loadAttempt, unreadReadsFor]);
 

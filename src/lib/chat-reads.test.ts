@@ -1,6 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { Client } from '@srtdio/rpc';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Client, Result } from '@srtdio/rpc';
+import { requestTimeoutOf } from '@/lib/fetch';
 import {
+  LATE_READ_GRACE_MS,
+  READ_TIMEOUT_MS,
+  RETRY_DELAY_MS,
+  RETRY_JITTER_MS,
+  withLateRead,
   dmPeerId,
   listChannelSummaries,
   READ_USERS_COLUMNS,
@@ -380,5 +386,111 @@ describe('readProfiles', () => {
     const result = await readProfiles(client, []);
     expect(from).not.toHaveBeenCalled();
     expect(result.ok && result.data).toEqual([]);
+  });
+});
+
+describe('withLateRead retry and request ceiling (FRONTEND-A, FRONTEND-P)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const failed = (message: string): Result<number> => ({
+    ok: false,
+    error: { code: 'unknown', message },
+  });
+  const isNetwork = (reason: string): boolean => /Failed to fetch|timed out/.test(reason);
+
+  it('retries a network failure once after the jittered delay; the retry lands via onLate', async () => {
+    vi.useFakeTimers();
+    const run = vi
+      .fn<(signal: AbortSignal) => Promise<Result<number>>>()
+      .mockResolvedValueOnce(failed('x: TypeError: Failed to fetch'))
+      .mockResolvedValueOnce({ ok: true, data: 7 });
+    const onLate = vi.fn();
+    const onGiveUp = vi.fn();
+    const first = await withLateRead(run, { onLate, onGiveUp, retryIf: isNetwork });
+    // The on-time failure still settles the caller at once (error state not delayed).
+    expect(first.ok).toBe(false);
+    expect(run).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS - 1);
+    expect(run).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(RETRY_JITTER_MS + 1);
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(onLate).toHaveBeenCalledWith(7);
+    expect(onGiveUp).not.toHaveBeenCalled();
+  });
+
+  it('retries only once: a second failure gives up with its own reason', async () => {
+    vi.useFakeTimers();
+    const run = vi
+      .fn<(signal: AbortSignal) => Promise<Result<number>>>()
+      .mockResolvedValueOnce(failed('read timed out'))
+      .mockResolvedValue(failed('x: TypeError: Failed to fetch'));
+    const onGiveUp = vi.fn();
+    await withLateRead(run, { onLate: vi.fn(), onGiveUp, retryIf: isNetwork });
+    await vi.advanceTimersByTimeAsync(RETRY_DELAY_MS + RETRY_JITTER_MS);
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(onGiveUp).toHaveBeenCalledTimes(1);
+    expect(onGiveUp).toHaveBeenCalledWith('x: TypeError: Failed to fetch');
+    await vi.advanceTimersByTimeAsync(LATE_READ_GRACE_MS);
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(onGiveUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('never retries a failure retryIf refuses (4xx auth, permission)', async () => {
+    vi.useFakeTimers();
+    const run = vi.fn(async () => failed('x: permission denied for table chat_channels'));
+    const onGiveUp = vi.fn();
+    await withLateRead(run, { onLate: vi.fn(), onGiveUp, retryIf: isNetwork });
+    await vi.advanceTimersByTimeAsync(LATE_READ_GRACE_MS);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(onGiveUp).toHaveBeenCalledWith('x: permission denied for table chat_channels');
+  });
+
+  it('a late failure after the deadline overwrites "read timed out" as the give-up reason', async () => {
+    vi.useFakeTimers();
+    let answer: (r: Result<number>) => void = () => {};
+    const run = vi.fn(() => new Promise<Result<number>>((resolve) => (answer = resolve)));
+    const onGiveUp = vi.fn();
+    const first = await (async () => {
+      const p = withLateRead(run, { onLate: vi.fn(), onGiveUp });
+      await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS);
+      return p;
+    })();
+    expect(first).toEqual(failed('read timed out'));
+    answer(failed('x: upstream 503'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onGiveUp).toHaveBeenCalledWith('x: upstream 503');
+  });
+
+  it('the grace end with no answer gives up with "read timed out"', async () => {
+    vi.useFakeTimers();
+    const onGiveUp = vi.fn();
+    void withLateRead(() => new Promise<Result<number>>(() => {}), { onLate: vi.fn(), onGiveUp });
+    await vi.advanceTimersByTimeAsync(LATE_READ_GRACE_MS - 1);
+    expect(onGiveUp).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(onGiveUp).toHaveBeenCalledWith('read timed out');
+  });
+
+  it('requestTimeoutMs marks the read signal with that fetch ceiling', async () => {
+    let seen: AbortSignal | undefined;
+    await withLateRead(
+      async (signal) => {
+        seen = signal;
+        return { ok: true, data: 1 };
+      },
+      { onLate: vi.fn(), requestTimeoutMs: LATE_READ_GRACE_MS },
+    );
+    expect(requestTimeoutOf(seen)).toBe(LATE_READ_GRACE_MS);
+  });
+
+  it('a thrown plain object fails with readable text, never "[object Object]"', async () => {
+    const result = await withLateRead(
+      () => Promise.reject({ type: 510, message: 'websocket disconnected' }),
+      { onLate: vi.fn() },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.message).toBe('Object: websocket disconnected');
   });
 });

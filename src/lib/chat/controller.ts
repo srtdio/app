@@ -24,6 +24,7 @@
 import { mark } from '@/lib/perf-marks';
 import type { AgoraChat } from 'agora-chat';
 import { logger } from '@/lib/logger';
+import { describeError, isExpectedNetworkFailure } from '@/lib/expected-failure';
 import {
   CHAT_EVENT_HANDLER_ID,
   type ChatConnection,
@@ -259,7 +260,11 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
     setStatus('kicked');
   };
 
+  // Renewal only on an open socket: the SDK rejects renewToken with
+  // { status: false } when it is not open, and onTokenExpired already reopens
+  // with a fresh token (FRONTEND-5).
   const renew = async (conn: ChatConnection): Promise<void> => {
+    if (cancelled || connection !== conn || !live) return;
     const next = await fetchToken();
     if (cancelled || connection !== conn) return;
     if (!next.ok) {
@@ -268,10 +273,16 @@ export function runChatConnection(params: RunChatConnectionParams): ChatConnecti
       return;
     }
     cachedToken = next;
+    if (!live) return;
     try {
       await conn.renewToken(next.token);
     } catch (error) {
-      logger.error('chat: renewToken failed', { error: String(error) });
+      const context = { error: describeError(error) };
+      if (isExpectedNetworkFailure(error)) {
+        logger.warn('chat: renewToken failed', context);
+      } else {
+        logger.error('chat: renewToken failed', context);
+      }
     }
   };
 

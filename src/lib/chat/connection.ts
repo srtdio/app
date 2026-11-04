@@ -42,6 +42,5 @@ export function agoraSdk(): AgoraSdk {
 export const createAgoraConnection: CreateConnection = (appKey): ChatConnection =>
   new (agoraSdk().connection)({
     appKey,
-    delivery: true,
     autoReconnectNumMax: AUTO_RECONNECT_NUM_MAX,
   });

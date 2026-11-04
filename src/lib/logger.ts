@@ -1,4 +1,13 @@
 import { captureException, setSentryTraceId } from '@/lib/sentry';
+import { describeError, isPlainObject } from '@/lib/expected-failure';
+
+export {
+  describeError,
+  describeErrorText,
+  isExpectedNetworkFailure,
+  type ErrorDescription,
+  type FailureEnv,
+} from '@/lib/expected-failure';
 
 /**
  * Structured JSON logging for first-party frontend code.
@@ -60,6 +69,23 @@ function redact(value: unknown, depth: number): unknown {
   return out;
 }
 
+/**
+ * Context values that are an Error or any other non-plain object (DOMException,
+ * MediaError, an SDK class instance) become describeError's small plain object,
+ * so they never serialise to {} or "[object Object]". Plain objects, arrays and
+ * primitives pass as they are. Pure.
+ */
+export function describeContext(context: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(context)) {
+    const describe =
+      val instanceof Error ||
+      (typeof val === 'object' && val !== null && !Array.isArray(val) && !isPlainObject(val));
+    out[key] = describe ? describeError(val) : val;
+  }
+  return out;
+}
+
 function byteSize(text: string): number {
   return new TextEncoder().encode(text).length;
 }
@@ -67,7 +93,9 @@ function byteSize(text: string): number {
 function emit(level: LogLevel, message: string, context?: Record<string, unknown>): void {
   const env: 'development' | 'production' = import.meta.env.PROD ? 'production' : 'development';
   const redacted =
-    context === undefined ? undefined : (redact(context, 1) as Record<string, unknown>);
+    context === undefined
+      ? undefined
+      : (redact(describeContext(context), 1) as Record<string, unknown>);
 
   const line: LogLine = {
     ts: new Date().toISOString(),

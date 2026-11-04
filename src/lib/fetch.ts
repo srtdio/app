@@ -46,6 +46,28 @@ export const NO_LIMIT_FUNCTIONS: ReadonlySet<string> = new Set([
   'invite-send',
 ]);
 
+// Per-signal ceilings: a caller whose request goes through a client it does
+// not control (the Supabase builders pass `init.signal` through unchanged)
+// sets its ceiling on the signal instead of via FetchOptions.
+const signalTimeouts = new WeakMap<AbortSignal, number | null>();
+
+/**
+ * Every request made with `signal` gets `ms` as its ceiling (null: none)
+ * instead of defaultTimeoutFor. Used only by the chat list's first-load reads,
+ * whose late answer may land up to LATE_READ_GRACE_MS. Returns the signal.
+ */
+export function setRequestTimeout(signal: AbortSignal, ms: number | null): AbortSignal {
+  signalTimeouts.set(signal, ms);
+  return signal;
+}
+
+/** The ceiling set on `signal` with setRequestTimeout, or undefined when none was. */
+export function requestTimeoutOf(
+  signal: AbortSignal | null | undefined,
+): number | null | undefined {
+  return signal ? signalTimeouts.get(signal) : undefined;
+}
+
 function requestPath(input: RequestInfo | URL): string {
   const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   try {
@@ -115,8 +137,9 @@ function limitSignal(
  * All API calls must go through this wrapper, never native fetch directly.
  * ESLint forbids the global `fetch` outside this file.
  *
- * Each request gets defaultTimeoutFor(input) unless `options.timeoutMs` says
- * otherwise. No retries here: retry is the user's Try again or the caller's.
+ * Each request gets defaultTimeoutFor(input) unless `options.timeoutMs` (or
+ * setRequestTimeout on its signal) says otherwise. No retries here: retry is
+ * the user's Try again or the caller's.
  */
 export async function fetchWithTrace(
   input: RequestInfo | URL,
@@ -137,7 +160,13 @@ export async function fetchWithTrace(
     logger.debug(`${method} ${url}`, { trace_id: trace });
   }
 
-  const timeoutMs = options?.timeoutMs === undefined ? defaultTimeoutFor(input) : options.timeoutMs;
+  const fromSignal = requestTimeoutOf(init?.signal);
+  const timeoutMs =
+    options?.timeoutMs !== undefined
+      ? options.timeoutMs
+      : fromSignal !== undefined
+        ? fromSignal
+        : defaultTimeoutFor(input);
   if (timeoutMs === null) return fetch(input, { ...init, headers });
   const limit = limitSignal(init?.signal, timeoutMs);
   try {
