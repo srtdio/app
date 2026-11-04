@@ -17,9 +17,15 @@ describe('createAgoraConnection', () => {
     createAgoraConnection('org#app');
     expect(websdk.connection).toHaveBeenCalledWith({
       appKey: 'org#app',
-      delivery: true,
       autoReconnectNumMax: 10,
     });
+  });
+
+  it('leaves delivery acks off (FRONTEND-3: nothing reads them; their SDK send rejected unhandled)', async () => {
+    await loadAgoraSdk();
+    createAgoraConnection('org#app');
+    const options = vi.mocked(websdk.connection).mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(options).not.toHaveProperty('delivery');
   });
 });
 
