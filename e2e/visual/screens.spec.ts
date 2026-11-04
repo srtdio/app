@@ -2111,28 +2111,39 @@ SCREENS.push(
 // "Visible and lit" (PR 1): the states the lighting pass changed, each in the
 // projects of the visual-coverage guard (src/__tests__/visual-coverage.test.ts).
 
-/** The stages a creator may move a card out of into Review (canRoleMove). */
-const TO_REVIEW_FROM = ':is([data-stage="draft"], [data-stage="parked"], [data-stage="rejected"])';
-
 /**
- * Lifts a card and holds it over the Review column: a native dragstart on the
- * card (it lifts one height, lit-float) and a dragover on the column (lit-drop),
- * never a drop, so nothing moves in the world.
+ * Lifts a draggable card and holds it over the first other column its role may
+ * drop it in: a native dragstart on the card (it lifts one height, lit-float)
+ * and a dragover on the column (lit-drop), never a drop, so nothing moves in
+ * the world. The target is found by trying each other column (canRoleMove
+ * decides which one lights), so the screen does not depend on the seed's stages.
  */
 async function liftOverReview(page: Page): Promise<void> {
   await pipelineReady(page);
   const card = await firstVisible(
-    [page.locator(`[data-drag-container]${TO_REVIEW_FROM} [data-drag-item][draggable="true"]`)],
-    'a card that may move to Review',
+    [page.locator('[data-drag-container] [data-drag-item][draggable="true"]')],
+    'a draggable card',
   );
-  const review = page.locator('[data-drag-container][data-stage="review"]').first();
-  await review.scrollIntoViewIfNeeded();
+  const from = await card.evaluate(
+    (el) => el.closest('[data-drag-container]')?.getAttribute('data-stage') ?? '',
+  );
   const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
   await card.dispatchEvent('dragstart', { dataTransfer });
-  await review.dispatchEvent('dragenter', { dataTransfer });
-  await review.dispatchEvent('dragover', { dataTransfer });
-  await expect(card).toHaveClass(/(^|\s)lit-float(\s|$)/);
-  await expect(review).toHaveClass(/(^|\s)lit-drop(\s|$)/);
+  const columns = page.locator('[data-drag-container]');
+  const count = await columns.count();
+  for (let i = 0; i < count; i += 1) {
+    const column = columns.nth(i);
+    if ((await column.getAttribute('data-stage')) === from) continue;
+    await column.scrollIntoViewIfNeeded();
+    await column.dispatchEvent('dragenter', { dataTransfer });
+    await column.dispatchEvent('dragover', { dataTransfer });
+    if (/(^|\s)lit-drop(\s|$)/.test((await column.getAttribute('class')) ?? '')) {
+      await expect(card).toHaveClass(/(^|\s)lit-float(\s|$)/);
+      return;
+    }
+    await column.dispatchEvent('dragleave', { dataTransfer });
+  }
+  throw new Error('not reached: a column that takes the lifted card');
 }
 
 /** The Profile panel's alerts block in view (Sound, Notifications, Pause for). */
@@ -2144,7 +2155,7 @@ async function alertsBlock(page: Page): Promise<void> {
 
 SCREENS.push(
   {
-    // Laptop board: a card lifted (lit-float) over the Review column (lit-drop,
+    // Laptop board: a card lifted (lit-float) over a column it may drop in (lit-drop,
     // the 1px dashed line plus its inset ring).
     name: 'pipeline-drag-drop',
     seed: creator,
