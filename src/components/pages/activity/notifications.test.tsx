@@ -210,7 +210,9 @@ describe('the page', () => {
     );
     expect(src).not.toContain('PageHead');
     expect(src).not.toContain('@/components/shell/PageHead');
-    expect(src.indexOf('<h1 tabIndex={-1} className="sr-only">')).toBeLessThan(src.indexOf('<SectionHeader'));
+    expect(src.indexOf('<h1 tabIndex={-1} className="sr-only">')).toBeLessThan(
+      src.indexOf('<SectionHeader'),
+    );
   });
 });
 
