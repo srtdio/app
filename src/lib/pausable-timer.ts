@@ -8,6 +8,8 @@
  * still holds. Framework-free and fake-timer friendly (setTimeout + Date.now).
  */
 
+import { LAPTOP_MIN_WIDTH_PX } from '@/lib/use-is-laptop';
+
 /** Why a countdown is held. */
 export type HoldReason = 'hover' | 'focus' | 'press';
 
@@ -83,12 +85,14 @@ interface HoldFocusEvent {
   relatedTarget: EventTarget | null;
 }
 
-// Hover holds only on a device that can hover (laptop mouse). A phone's
-// synthesized mouse events would otherwise hold a toast with no pointerleave
-// ever coming, so it would never go. Without matchMedia (tests), assume hover.
+// Hover holds only on a laptop with a mouse (the same media as useIsLaptop and
+// useHoverPointer). A phone's synthesized mouse events would otherwise hold a
+// toast with no pointerleave ever coming, so it would never go. Without
+// matchMedia (unit tests), assume a laptop.
+const HOVER_LAPTOP = `(hover: hover) and (pointer: fine) and (min-width: ${LAPTOP_MIN_WIDTH_PX}px)`;
 function canHover(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
-  return window.matchMedia('(hover: hover)').matches;
+  return window.matchMedia(HOVER_LAPTOP).matches;
 }
 
 /**
