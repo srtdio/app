@@ -89,14 +89,17 @@ export function PlanPickerSheet(props: {
     <Sheet open={props.open} onClose={props.onClose} title={PICKER_TITLE} fixedHeight>
       <div
         data-plan-picker=""
-        className={cn('-mx-[18px] -my-4 sm:flex sm:min-h-0 sm:flex-1 sm:flex-col', NO_TOUCH_SELECT)}
+        className={cn(
+          '-mx-[18px] -my-4 bg-bg sm:flex sm:min-h-0 sm:flex-1 sm:flex-col',
+          NO_TOUCH_SELECT,
+        )}
       >
         <p className="px-[18px] pb-1 pt-3 text-sm leading-4 text-fg-3">
           Upcoming plans in {props.workspaceName}
         </p>
         <div className={BODY_BOX}>
           {read.status === 'loading' ? (
-            <BoxSkeleton label="Loading plans" className="px-[18px]">
+            <BoxSkeleton label="Loading plans" className="flex flex-col gap-2 px-[18px]">
               {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
                 <PickerSkeletonRow key={i} />
               ))}
@@ -109,7 +112,7 @@ export function PlanPickerSheet(props: {
               </Button>
             </div>
           ) : (
-            <div className="flex flex-col px-[18px] pb-4">
+            <div className="flex flex-col gap-2 px-[18px] pb-4">
               {read.data.length === 0 ? (
                 <div data-plan-picker-empty="" className="pb-4 pt-6 text-center">
                   <p className="text-base leading-5 text-fg-2">{PICKER_EMPTY}</p>
@@ -118,16 +121,16 @@ export function PlanPickerSheet(props: {
                 pickerRows(read.data, inChat).map(({ bundle, chips }) => (
                   <PressableRow
                     key={bundle.plan.id}
-                    flat
+                    card
                     type="button"
                     data-plan-pick={bundle.plan.id}
                     onClick={() => {
                       props.onClose();
                       props.onOpenPlan(bundle.plan.id);
                     }}
-                    className="flex min-h-[72px] items-center gap-3 border-b border-border py-3"
+                    className="flex min-h-[72px] items-center gap-3 border bg-panel p-2.5 lit-card"
                   >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent lit-pill">
                       <IconPlan size={ICON_SIZE.control} />
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -160,14 +163,15 @@ export function PlanPickerSheet(props: {
               )}
               <PressableRow
                 type="button"
+                card
                 data-plan-pick-new=""
                 onClick={() => {
                   props.onClose();
                   props.onNewPlan();
                 }}
-                className="flex min-h-[48px] items-center gap-3 py-2 text-lg font-semibold text-accent"
+                className="flex min-h-[48px] items-center gap-3 border bg-panel p-2.5 text-lg font-semibold text-accent lit-card"
               >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-2">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-2 lit-pill">
                   <IconPlus size={ICON_SIZE.control} />
                 </span>
                 <span className="flex-1">{NEW_PLAN_LABEL}</span>
@@ -188,7 +192,7 @@ function PickerSkeletonRow(): ReactElement {
   return (
     <div
       data-plan-pick-skeleton=""
-      className="flex min-h-[72px] w-full items-center gap-3 border-b border-border py-3"
+      className="flex min-h-[72px] w-full items-center gap-3 rounded-xl border bg-panel p-2.5 lit-card"
     >
       <Bone className="h-10 w-10 shrink-0 rounded-lg" />
       <span className="flex min-w-0 flex-1 flex-col gap-1">

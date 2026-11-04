@@ -249,7 +249,7 @@ export function PipelineDateRangeCalendar({
                     : between
                       ? 'bg-accent-soft text-accent'
                       : 'text-fg',
-                  !isEndpoint && !between && isToday ? 'ring-1 ring-inset ring-accent-line' : '',
+                  !isEndpoint && !between && isToday ? 'lit-today' : '',
                 )}
               >
                 {day}

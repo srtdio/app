@@ -124,7 +124,7 @@ export function dayCells(
             : selected
               ? 'bg-accent text-accent-fg lit-pill'
               : 'text-fg hover:bg-panel-2',
-          !selected && !past && isToday ? 'border border-accent-line' : '',
+          !selected && !past && isToday ? 'lit-today' : '',
         )}
       >
         {day}

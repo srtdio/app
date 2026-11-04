@@ -451,11 +451,11 @@ test('laptop: today in Month and Week, the accent cell, header and "Today" pill 
   seedPlanTab(network.world, { sender: ME });
   await openTab(page);
 
-  // Month: today's cell on accent-soft in the accent ring, the number circle and the pill.
+  // Month: today's cell in the inset selected edge, the number circle and the pill.
   await expect(page.locator('[data-plan-tab-month]')).toBeVisible();
   const cell = day(page, TODAY);
   await expect(cell).toHaveAttribute('data-plan-tab-today-cell', '');
-  await expect(cell).toHaveClass(/\bbg-accent-soft\b/);
+  await expect(cell).toHaveClass(/\blit-today\b/);
   await expect(page.locator('[data-plan-tab-today-cell]')).toHaveCount(1);
   await expect(cell.locator('[data-plan-tab-today]')).toBeVisible();
   const pill = cell.locator('[data-plan-tab-today-pill]');
@@ -486,7 +486,7 @@ test('laptop: today in Month and Week, the accent cell, header and "Today" pill 
   await expect(page.locator('[data-plan-tab-today-pill]')).toHaveCount(1);
   const column = day(page, TODAY);
   await expect(column).toHaveAttribute('data-plan-tab-today-cell', '');
-  await expect(column).toHaveClass(/\bbg-accent-soft\b/);
+  await expect(column).toHaveClass(/\blit-today\b/);
   await expect(page.locator('[data-plan-tab-today-cell]')).toHaveCount(1);
   await expect(column).toContainText(TAB_OK_ITEM_TITLE);
   // The header's today cell sits over today's column.

@@ -73,11 +73,7 @@ export function ContactSheet({ open, onClose, workspaceName, request }: ContactS
           </Button>
           <a
             href={ask.mailto}
-            className={buttonClass(
-              'primary',
-              'default',
-              'no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-            )}
+            className={buttonClass('primary', 'default', 'no-underline focus-visible:lit-focus')}
           >
             Open email
           </a>

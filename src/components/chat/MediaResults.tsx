@@ -192,7 +192,7 @@ function PhotoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement
       onClick={props.onOpen}
       onContextMenu={noCallout}
       className={cn(
-        'relative block aspect-square overflow-hidden bg-panel-3 focus-visible:ring-inset',
+        'relative block aspect-square overflow-hidden bg-panel-3 focus-visible:-outline-offset-2',
         NO_TOUCH_SELECT,
       )}
     >
@@ -235,7 +235,7 @@ function VideoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement
       onClick={props.onOpen}
       onContextMenu={noCallout}
       className={cn(
-        'relative block aspect-square overflow-hidden bg-panel-3 focus-visible:ring-inset',
+        'relative block aspect-square overflow-hidden bg-panel-3 focus-visible:-outline-offset-2',
         NO_TOUCH_SELECT,
       )}
     >

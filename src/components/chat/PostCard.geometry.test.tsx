@@ -180,9 +180,9 @@ describe('chat post card: one fixed shape, loaded or not', () => {
     expect(outerHeight(failed)).toBe(expected);
   });
 
-  it('the loading box has a neutral fill and no pulse', () => {
+  it('the loading box takes the card fill and light, and no pulse', () => {
     const html = skeleton('instagram');
-    expect(html).toContain('bg-panel-2');
+    expect(html).toContain('bg-panel lit-card');
     expect(html).not.toContain('animate-pulse');
   });
 

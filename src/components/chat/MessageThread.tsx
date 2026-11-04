@@ -1740,7 +1740,7 @@ export function bubbleClass(
     // nowrap line (the Reply privately quote) would push its min-content past
     // the column; this caps every bubble at BUBBLE_MAX (min-w album/voice win).
     // A 284px plan card (max-w-full) now shrinks to fit a narrow phone column.
-    'group/bubble relative min-w-0 max-w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg',
+    'group/bubble relative min-w-0 max-w-full focus-visible:lit-focus',
     NO_TOUCH_SELECT,
     bubbleCorners(state),
     state.album === true ? 'min-w-[240px] p-[3px]' : sized(BUBBLE_PAD, state.layout),
@@ -1748,7 +1748,7 @@ export function bubbleClass(
     state.mine
       ? 'bg-bubble-own text-accent-fg lit-bubble-own'
       : 'bg-panel-2 text-fg lit-bubble-other',
-    state.failed && 'border border-bad',
+    state.failed && 'border border-bad lit-bad',
   );
 }
 
@@ -4324,7 +4324,7 @@ function ThreadBody(
     sourceRef.current = 'program';
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     const flash = el.querySelector('[data-bubble]') ?? el;
-    const ring = ['ring-2', 'ring-accent', 'ring-inset'];
+    const ring = ['lit-today'];
     flash.classList.add(...ring);
     window.setTimeout(() => flash.classList.remove(...ring), 1200);
   };

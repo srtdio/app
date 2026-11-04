@@ -79,7 +79,7 @@ export interface PipelineBoardProps {
 // move never relies on this module variable for correctness.
 let draggingFrom: Stage | null = null;
 
-const DROP_OK = ['ring-2', 'ring-accent', 'ring-inset'];
+const DROP_OK = ['lit-drop'];
 // Board drag (docs/motion.md): the held card lifts one lit height (float) at
 // 1.02 while it is dragged; on drop its column's cards glide (GlideItem).
 const LIFTED = [MOVE_CLASS.lift, 'lit-float'];

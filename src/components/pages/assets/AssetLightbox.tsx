@@ -49,7 +49,7 @@ const SWIPE_THRESHOLD = 48;
 const BAR_BUTTON =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
   'mv-tint hover:bg-overlay-surface hover:text-overlay-fg ' +
-  'disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg';
+  'disabled:opacity-40 focus-visible:lit-focus focus-visible:outline-overlay-fg';
 
 /**
  * A bar class handed in (the lightbox's or the FileViewer's tone) on the shared
@@ -64,8 +64,8 @@ function onBarClass(barClass: string): string {
 // overlay colours. Overlay tokens sort after the IconButton's own, so they win.
 const STAGE_ARROW =
   'lit-media absolute top-1/2 hidden -translate-y-1/2 bg-overlay-surface text-overlay-fg ' +
-  'hover:bg-overlay-line hover:text-overlay-fg focus-visible:outline-none ' +
-  'focus-visible:ring-2 focus-visible:ring-overlay-fg md:inline-flex';
+  'hover:bg-overlay-line hover:text-overlay-fg focus-visible:lit-focus ' +
+  'focus-visible:outline-overlay-fg md:inline-flex';
 
 /**
  * Delete keeps the bar button's shape in the bad colour: the bar's own ink is

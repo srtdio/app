@@ -9,7 +9,7 @@ interface SelectCheckProps {
 export function selectCheckClass(checked: boolean): string {
   return cn(
     'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 mv-tint',
-    checked ? 'border-accent bg-accent text-accent-fg' : 'border-border-strong bg-panel',
+    checked ? 'border-transparent bg-accent text-accent-fg' : 'border-border-strong bg-panel',
   );
 }
 

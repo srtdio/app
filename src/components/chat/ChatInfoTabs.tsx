@@ -408,7 +408,7 @@ function MediaTile(props: {
       {...(tick !== null ? { 'aria-pressed': tick.checked, 'data-info-tick': '' } : {})}
       flat
       className={cn(
-        'relative block aspect-square overflow-hidden bg-panel-3 focus-visible:ring-inset',
+        'relative block aspect-square overflow-hidden bg-panel-3 focus-visible:-outline-offset-2',
         !props.selecting && 'cursor-zoom-in',
       )}
     >

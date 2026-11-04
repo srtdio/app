@@ -238,10 +238,8 @@ describe('chat home tile', () => {
   it('checked in select mode: accent tint and the on select circle', () => {
     for (const c of [dm, group]) {
       const t = tile(c, read, { selecting: true, checked: true });
-      // The selected tint is lit-chip-selected's own background (no bg-accent-soft).
-      expect(t.cls.split(' ')).toEqual(
-        expect.arrayContaining(['border-accent-line', 'lit-chip-selected']),
-      );
+      // The selected look is lit-selected's own background (no bg-accent-soft).
+      expect(t.cls.split(' ')).toEqual(expect.arrayContaining(['lit-selected']));
       expect(t.cls).not.toContain('bg-accent-soft');
       expect(t.cls).not.toContain('lit-card');
       expect(t.html).toContain('data-select-check="on"');

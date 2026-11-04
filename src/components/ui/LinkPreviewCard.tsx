@@ -93,7 +93,7 @@ const WARN = 'border-[color:var(--warn-line)] bg-warn-soft text-[color:var(--war
 /** Shared guard: no iOS text selection or callout on long-press over a card. */
 const NO_CALLOUT = 'select-none [-webkit-touch-callout:none]';
 
-const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+const FOCUS = 'focus-visible:lit-focus';
 
 /** The site row's text: "bit.ly → canva.com" for shorteners, else the domain. */
 function siteText(p: { domain: string; finalDomain: string | null; viaShortener: string | null }) {
@@ -512,7 +512,7 @@ function Draft(props: {
       data-card-size="draft"
       className={cn(
         'flex h-16 items-center gap-2 rounded-xl border py-1.5 pl-2 pr-0',
-        warn ? WARN : 'border-border bg-panel-2 text-fg',
+        warn ? `${WARN} lit-tint` : 'bg-panel-2 text-fg lit-card-muted',
         NO_CALLOUT,
       )}
     >

@@ -754,7 +754,7 @@ export function checkpointBox(checked: boolean, confirmed: boolean): ReactElemen
           ? confirmed
             ? RESOLVED_FILL_CLASS
             : RESOLVED_HOLLOW_CLASS
-          : 'border-border-strong bg-panel text-good',
+          : 'border-border-strong bg-panel text-good lit-well',
       )}
     >
       {/* The tick shows at once when checked (never a fade); unchecked it
@@ -2769,7 +2769,7 @@ export function Comments({
             <div
               key={row}
               aria-hidden
-              className="rounded-xl border border-border bg-panel-2 px-4 py-3"
+              className="rounded-xl border bg-panel-2 px-4 py-3 lit-card-muted"
             >
               <div className="flex items-center gap-2">
                 <Bone as="div" className="h-8 w-8 shrink-0 rounded-full" />

@@ -384,18 +384,19 @@ interface SearchState {
 }
 
 /**
- * Full-width row: hairline divider, no rounded card. PressableRow provides the
- * width, 44px minimum, left alignment and panel-2 hover; flat squares the corners.
+ * A row card on the bg body, 8px apart (the list's gap). PressableRow provides
+ * the width, 44px minimum, left alignment and press; card gives the 12px corners.
+ * Picked: lit-selected replaces lit-card.
  */
-const ROW_BASE = 'flex gap-3 border-b border-border px-4 py-3 mv-tint';
+const ROW_BASE = 'flex gap-3 border bg-panel p-2.5 mv-tint';
 
 function rowClass(active: boolean): string {
-  return cn(ROW_BASE, 'items-start', active && 'bg-accent-soft');
+  return cn(ROW_BASE, 'items-start', active ? 'lit-selected' : 'lit-card');
 }
 
 /** A post row: the 48px cover sets the height, so the text centres beside it. */
 function postRowClass(active: boolean): string {
-  return cn(ROW_BASE, 'items-center', active && 'bg-accent-soft');
+  return cn(ROW_BASE, 'items-center', active ? 'lit-selected' : 'lit-card');
 }
 
 // ---------------------------------------------------------------------------
@@ -911,7 +912,7 @@ export interface PostRowContext {
 }
 
 const LIST_CLASS =
-  '-mx-[18px] flex max-h-[50vh] flex-col overflow-y-auto border-t border-border sm:max-h-none sm:min-h-0 sm:flex-1';
+  '-mx-[18px] flex max-h-[50vh] flex-col gap-2 overflow-y-auto bg-bg px-[18px] py-2 sm:max-h-none sm:min-h-0 sm:flex-1';
 
 /** Loading state: three static placeholder rows (no motion). */
 export function PickerSkeleton(): ReactElement {
@@ -921,7 +922,7 @@ export function PickerSkeleton(): ReactElement {
         <li
           key={i}
           data-skeleton-row=""
-          className="flex min-h-[44px] items-center gap-3 border-b border-border px-4 py-3"
+          className="flex min-h-[44px] items-center gap-3 rounded-xl border bg-panel p-2.5 lit-card"
         >
           <span className="h-12 w-12 shrink-0 rounded-lg bg-panel-3" />
           <span className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -938,7 +939,7 @@ function PickerError({ message }: { message: string }): ReactElement {
   return (
     <div
       role="alert"
-      className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad"
+      className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad lit-tint"
     >
       {message}
     </div>
@@ -949,7 +950,7 @@ function SectionHeading({ label, mono }: { label: string; mono?: boolean }): Rea
   return (
     <li
       className={cn(
-        'border-b border-border bg-panel-2 px-4 py-2 text-sm font-medium text-fg-2',
+        'px-1 pt-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2',
         // A date heading (link mode's day section): font-mono like every date.
         mono === true && 'font-mono tabular-nums',
       )}
@@ -972,7 +973,7 @@ export function PostSectionsView(
     <ul className={LIST_CLASS}>
       {props.data.sections.map((section) => (
         <li key={section.key} data-section={section.key}>
-          <ul>
+          <ul className="flex flex-col gap-2">
             <SectionHeading label={section.label} mono={section.key === 'day'} />
             {section.rows.map((post) => (
               <PostRow key={post.id} post={post} {...props} />
@@ -1067,6 +1068,7 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
       <PressableRow
         type="button"
         aria-pressed={active}
+        card
         onClick={() => props.onToggle(post)}
         className={postRowClass(active)}
       >
@@ -1118,7 +1120,7 @@ export function BriefPickerList(props: {
     return (
       <div
         role="alert"
-        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad"
+        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad lit-tint"
       >
         {props.error}
       </div>
@@ -1148,6 +1150,7 @@ export function BriefPickerList(props: {
             <PressableRow
               type="button"
               aria-pressed={active}
+              card
               onClick={() => props.onToggle(brief)}
               className={rowClass(active)}
             >

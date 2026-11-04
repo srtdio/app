@@ -228,7 +228,7 @@ describe('UpcomingCard: the Notifications card, with Edit and Cancel', () => {
     if (reminder === undefined) throw new Error('no reminder');
     const { html } = wired(reminder);
     expect(html).not.toContain('aria-label="Unread"');
-    expect(html).not.toContain('border-accent-line');
+    expect(html).not.toContain('lit-selected');
     expect(html).toContain('h-11');
     expect(html).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(html).not.toMatch(/\bdark:/);

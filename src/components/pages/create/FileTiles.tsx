@@ -235,7 +235,7 @@ export function FileTiles({
               onClick={() => tap(index)}
               className={cn(
                 'block h-full overflow-hidden border bg-panel-3',
-                index === activeIndex ? 'border-accent ring-2 ring-accent-soft' : 'border-border',
+                index === activeIndex ? 'lit-selected' : 'border-border',
               )}
             >
               <TilePicture src={item.previewUrl} video={item.mime?.startsWith('video/') === true} />
@@ -253,7 +253,7 @@ export function FileTiles({
           aria-label={tile.failed ? `${tile.name} didn't upload` : `Uploading ${tile.name}`}
           className={cn(
             'relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-panel-3',
-            tile.failed ? 'border-bad' : 'border-border',
+            tile.failed ? 'border-bad lit-bad' : 'border-border',
           )}
         >
           <span className={cn('block h-full w-full', tile.failed ? 'opacity-40' : 'opacity-70')}>

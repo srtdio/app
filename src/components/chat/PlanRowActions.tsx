@@ -155,7 +155,7 @@ export function PlanDropHere(props: { over: boolean }): ReactElement {
       {...(props.over ? { 'data-plan-drop-slot': '' } : {})}
       className={cn(
         'flex min-h-[44px] items-center justify-center rounded-lg border-[1.5px] border-dashed text-md',
-        props.over ? 'border-accent text-accent' : 'border-border-strong text-fg-3',
+        props.over ? 'lit-drop text-fg' : 'border-border-strong text-fg-3',
       )}
     >
       {DROP_HERE}

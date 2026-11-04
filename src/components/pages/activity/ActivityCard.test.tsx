@@ -159,7 +159,7 @@ describe('ActivityCard', () => {
   it('shows the unread dot and an accent-line border for an unread lead, hidden once read', () => {
     const unread = renderCard([item({ id: 'a', readAt: null })]);
     expect(unread).toContain('aria-label="Unread"');
-    expect(unread).toContain('border-accent-line');
+    expect(unread).toContain('lit-selected');
     const read = renderCard([item({ id: 'a', readAt: '2026-06-14T00:30:00.000Z' })]);
     expect(read).not.toContain('aria-label="Unread"');
   });

@@ -151,7 +151,7 @@ export function AssetPicker(props: {
     body = (
       <div
         role="alert"
-        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad"
+        className="rounded-xl border border-bad bg-bad-soft px-4 py-3 text-base text-bad lit-tint"
       >
         {error}
       </div>
@@ -217,7 +217,11 @@ export function AssetGridSkeleton(): ReactElement {
   return (
     <ul aria-busy="true" aria-label="Loading files" className={GRID_CLASS}>
       {[0, 1, 2, 3, 4, 5].map((i) => (
-        <li key={i} data-skeleton-tile="" className="aspect-square rounded-lg bg-panel-3" />
+        <li
+          key={i}
+          data-skeleton-tile=""
+          className="aspect-square rounded-xl border bg-panel lit-card"
+        />
       ))}
     </ul>
   );
@@ -298,10 +302,14 @@ export function AssetTile(props: {
         aria-pressed={props.active}
         aria-label={asset.name}
         data-asset-tile={asset.assetId}
+        card
         onClick={() => props.onToggle(asset)}
-        className={cn('flex flex-col gap-1 p-1 mv-tint', props.active && 'bg-accent-soft')}
+        className={cn(
+          'flex flex-col gap-1 border bg-panel p-1 mv-tint',
+          props.active ? 'lit-selected' : 'lit-card',
+        )}
       >
-        <span className="relative block overflow-hidden rounded-lg">
+        <span className="relative block overflow-hidden rounded-lg lit-pill">
           <Thumbnail
             assetVersionId={image ? asset.versionId : null}
             cache={sharedCardPresignCache()}

@@ -152,7 +152,7 @@ export function compareVersionsView({
 
   return (
     <div className="flex flex-col gap-6 px-4 py-6 md:px-6">
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-accent-line bg-accent-soft px-4 py-3 text-accent lit-tint">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-accent-soft px-4 py-3 text-accent lit-tint">
         <div className="flex min-w-0 flex-col">
           <span className="text-base font-medium">
             Comparing v{fromVersionNumber} → v{toVersionNumber}

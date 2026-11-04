@@ -87,7 +87,7 @@ export function PriorityChip(props: {
       className={cn(
         'inline-flex h-[22px] items-center gap-0.5 rounded-lg px-1.5 font-mono text-sm lit-pill',
         P_TAG[props.priority],
-        props.ringed === true && 'ring-2 ring-accent ring-offset-1 ring-offset-panel',
+        props.ringed === true && 'lit-today',
       )}
     >
       P{props.priority}
@@ -199,7 +199,7 @@ function PriorityMenu(props: {
           onClick={() => props.onPick(p)}
           onContextMenu={(e) => e.preventDefault()}
           className={cn(
-            'flex h-11 items-center gap-2 px-2.5 text-base text-fg focus-visible:ring-inset',
+            'flex h-11 items-center gap-2 px-2.5 text-base text-fg focus-visible:-outline-offset-2',
             NO_TOUCH_SELECT,
           )}
         >
@@ -296,7 +296,7 @@ function TitleCell(props: {
       onClick={begin}
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
-        'min-w-0 flex-1 py-3 text-base font-medium focus-visible:ring-inset',
+        'min-w-0 flex-1 py-3 text-base font-medium focus-visible:-outline-offset-2',
         props.done ? 'text-fg-3 line-through' : 'text-fg',
       )}
     >

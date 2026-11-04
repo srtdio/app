@@ -39,7 +39,7 @@ export function requestEmailBody(input: { heading: string; rows: MailRow[] }): {
   const html =
     `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>` +
     `<body style="margin:0;padding:24px;background-color:#f4f5f6;">` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#ffffff;border-radius:12px;border:1px solid #e4e5e8;">` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#ffffff;border-radius:12px;border:1px solid #e4e5e8;border-top-color:#eceef1;border-bottom:2px solid #c9ced5;">` +
     `<tr><td style="padding:24px 28px 8px 28px;"><h1 style="margin:0;font-family:${font};font-size:20px;font-weight:700;color:#08090a;">${escapeHtml(input.heading)}</h1></td></tr>` +
     `<tr><td style="padding:8px 28px 24px 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table></td></tr>` +
     `</table></body></html>`;

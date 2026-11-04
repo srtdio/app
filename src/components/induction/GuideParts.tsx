@@ -407,7 +407,10 @@ export function GuideCard({
       {copy.stats !== undefined && copy.stats.length > 0 ? (
         <div className="mt-3 flex gap-3">
           {copy.stats.map((stat) => (
-            <div key={stat.label} className="flex-1 rounded-lg bg-panel-2 px-3 py-2.5">
+            <div
+              key={stat.label}
+              className="flex-1 rounded-lg border bg-panel-2 px-3 py-2.5 lit-card-muted"
+            >
               <p className="text-2xl font-semibold tabular-nums text-accent">{stat.value}</p>
               <p className="text-sm text-fg-2">{stat.label}</p>
             </div>

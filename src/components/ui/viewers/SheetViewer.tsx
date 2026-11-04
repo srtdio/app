@@ -299,7 +299,7 @@ export function SheetViewer(props: {
               onClick={() => setActive(i)}
               className={cn(
                 'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 text-base',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                'focus-visible:lit-focus',
                 selected ? 'bg-panel-2 font-medium text-fg lit-chip' : 'text-fg-2 hover:bg-panel-2',
               )}
             >

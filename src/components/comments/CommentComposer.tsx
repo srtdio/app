@@ -323,7 +323,7 @@ export function PendingChip({
     <li
       className={
         error
-          ? 'flex items-center gap-2 rounded-lg border border-bad bg-panel-2 py-1 pl-1 pr-1 lit-card-muted'
+          ? 'flex items-center gap-2 rounded-lg border border-bad lit-bad bg-panel-2 py-1 pl-1 pr-1 lit-card-muted'
           : 'flex items-center gap-2 rounded-lg border bg-panel-2 py-1 pl-1 pr-1 lit-card-muted'
       }
     >

@@ -635,7 +635,7 @@ export function PlanPage(props: {
       )}
       <div
         ref={props.bodyRef}
-        className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-bg"
       >
         {props.children}
       </div>
@@ -2269,7 +2269,7 @@ export function PlanScreen(props: {
       >
         <span
           data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-lg border border-transparent px-3 text-base font-semibold leading-5 text-accent lit-chip-selected group-hover:brightness-95 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+          className="flex h-[34px] items-center gap-1.5 rounded-lg border px-3 text-base font-semibold leading-5 text-accent lit-selected group-hover:brightness-95 group-focus-visible:lit-focus"
         >
           <IconPlus size={ICON_SIZE.inline} />
           Add
@@ -2284,7 +2284,7 @@ export function PlanScreen(props: {
       >
         <span
           data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-lg border bg-panel px-3 text-base font-semibold leading-5 text-fg lit-btn-secondary group-hover:bg-panel-2 group-focus-visible:ring-2 group-focus-visible:ring-accent"
+          className="flex h-[34px] items-center gap-1.5 rounded-lg border bg-panel px-3 text-base font-semibold leading-5 text-fg lit-btn-secondary group-hover:bg-panel-2 group-focus-visible:lit-focus"
         >
           <IconEdit size={ICON_SIZE.inline} />
           {EDIT_LABEL}
@@ -2938,8 +2938,8 @@ export function RenameField(props: {
  * width: "Send to approvers in {chat}" / "Send in {chat}" / "Open for
  * approvers" (planPrimaryAction). An error line sits above it; while an
  * error is shown the button reads "Retry". From a chat a send in flight reads
- * "Sending in {chat}…"; a sent "Send in {chat}" reads "Sent" in the soft
- * accent (same box, disabled, no icon). Hidden in edit mode.
+ * "Sending in {chat}…"; a sent "Send in {chat}" reads "Sent" in the primary
+ * button's disabled state (same box, no icon). Hidden in edit mode.
  */
 export function PlanFooter(props: {
   action: PrimaryAction;
@@ -2965,11 +2965,11 @@ export function PlanFooter(props: {
       <div data-plan-footer="" className="flex flex-col gap-1.5">
         <Button
           type="button"
-          variant="secondary"
+          variant="primary"
           data-plan-primary={action.kind}
           data-plan-send-state="sent"
           disabled
-          className="w-full min-w-0 cursor-default border-accent-line text-accent lit-chip-selected disabled:opacity-100"
+          className="w-full min-w-0"
         >
           <span className="truncate">{label}</span>
         </Button>
@@ -3334,19 +3334,19 @@ export function PlanBody(props: {
       <div
         data-plan-list={weeks ? 'weeks' : 'days'}
         {...(edit !== undefined ? { 'data-plan-list-mode': 'edit' } : {})}
-        className="flex flex-col pb-4 pt-3"
+        className="flex flex-col gap-2.5 pb-4 pt-3"
         {...keyHandlers}
       >
         {props.groups.map((week, w) => (
           <section
             key={week.label ?? `days-${w}`}
             {...(week.label !== null ? { 'data-plan-week': week.label } : {})}
-            className="flex flex-col"
+            className="flex flex-col gap-2.5"
           >
             {week.label !== null ? (
               <h3
                 data-plan-week-header=""
-                className="sticky top-0 z-10 border-b border-border bg-bg px-4 py-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2 md:bg-panel"
+                className="sticky top-0 z-10 bg-bg px-4 py-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
               >
                 {week.label}
               </h3>
@@ -3392,9 +3392,9 @@ export function PlanBody(props: {
                   {...(hovered ? { 'data-plan-drop-over': '' } : {})}
                   {...(day.day === today ? { 'data-plan-day-today': '' } : {})}
                   className={cn(
-                    'flex flex-col gap-4 border-t border-border py-4 pr-4',
-                    // Today's band: 4px accent rule + 12px keeps the text column on 16px.
-                    day.day === today ? 'border-l-4 border-l-accent bg-accent-soft pl-3' : 'pl-4',
+                    // One card per day (12px in, 10px apart); today takes the selected edge.
+                    'mx-4 flex flex-col gap-4 rounded-xl border bg-panel p-3',
+                    day.day === today ? 'lit-selected' : 'lit-card',
                   )}
                 >
                   {items.map((item, index) => {
@@ -3524,7 +3524,7 @@ export function DayColumn(props: {
       className={cn(
         'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border lit-card',
         // Today keeps its solid accent fill: bg-none drops lit-card's gradient.
-        isToday ? 'border-accent bg-accent bg-none' : 'bg-panel',
+        isToday ? 'border-transparent bg-accent bg-none' : 'bg-panel',
       )}
     >
       <span
@@ -3813,7 +3813,7 @@ function PairedPostRow(props: {
     return (
       <div
         data-plan-pair={link.postId}
-        className="mt-2 flex flex-col border-l-2 border-accent pl-3"
+        className="mt-2 flex flex-col border-l-2 border-border-strong pl-3"
       >
         <div
           role="button"
@@ -3844,7 +3844,10 @@ function PairedPostRow(props: {
       : '';
   const onOpen = props.onOpen;
   return (
-    <div data-plan-pair={link.postId} className="mt-2 flex flex-col border-l-2 border-accent pl-3">
+    <div
+      data-plan-pair={link.postId}
+      className="mt-2 flex flex-col border-l-2 border-border-strong pl-3"
+    >
       <PressableRow
         type="button"
         data-plan-pair-row={link.postId}
@@ -3909,7 +3912,7 @@ function RowTile(props: {
       return (
         <span
           data-plan-row-tile="concept-image"
-          className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-panel-2"
+          className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-panel-2 lit-pill"
         >
           <Thumbnail
             assetVersionId={concept.versionId}
@@ -3925,7 +3928,7 @@ function RowTile(props: {
       return (
         <span
           data-plan-row-tile="concept-file"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3 lit-pill"
         >
           <IconFile size={ICON_SIZE.tray} />
         </span>
@@ -3942,7 +3945,7 @@ function RowTile(props: {
     return (
       <span
         data-plan-row-tile="image"
-        className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-panel-2"
+        className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-panel-2 lit-pill"
       >
         <Thumbnail
           assetVersionId={props.thumb}
@@ -3958,7 +3961,7 @@ function RowTile(props: {
     <span
       data-plan-row-tile="text"
       className={cn(
-        'flex h-14 w-14 shrink-0 items-center justify-center rounded-lg text-xl font-semibold',
+        'flex h-14 w-14 shrink-0 items-center justify-center rounded-lg text-xl font-semibold lit-pill',
         props.muted ? 'bg-panel-2 text-fg-3' : 'bg-accent-soft text-accent',
       )}
     >
@@ -4045,6 +4048,8 @@ function PlanRow(props: {
   const dim = props.dimmed && 'opacity-25';
   // The tile column stays 56px wide on every row, so titles align.
   const tileCol = props.tile ?? <span aria-hidden="true" className="w-14 shrink-0" />;
+  // Rows under a day's first sit on a hairline, centred in the 16px gap.
+  const rowLine = props.tile === null && '-mt-2 border-t border-border pt-2';
   const dateLine = (
     <span
       data-plan-row-date={date.dated ? 'dated' : 'none'}
@@ -4067,7 +4072,7 @@ function PlanRow(props: {
   if (draftLocked(props.bundle, props.item, props.side)) {
     // Name only: no PLAN control, no open, no hover.
     return (
-      <div data-plan-row-wrap={id} className="flex w-full min-w-0 items-start gap-3">
+      <div data-plan-row-wrap={id} className={cn('flex w-full min-w-0 items-start gap-3', rowLine)}>
         {tileCol}
         <div
           role="button"
@@ -4104,7 +4109,7 @@ function PlanRow(props: {
       {...(picked ? { 'data-plan-row-picked': '' } : {})}
       className={cn(
         'flex min-w-0 items-start gap-3',
-        picked && 'ring-2 ring-accent ring-offset-2 ring-offset-panel',
+        picked && 'rounded-lg lit-focus',
         edit !== undefined && 'cursor-default',
         NO_TOUCH_SELECT,
       )}
@@ -4168,7 +4173,7 @@ function PlanRow(props: {
           if (edit.onMenu === undefined || edit.dragging || wrapRef.current === null) return;
           edit.onMenu(id, wrapRef.current, event.clientX, event.clientY);
         }}
-        className={cn('group flex w-full min-w-0 items-start', NO_TOUCH_SELECT)}
+        className={cn('group flex w-full min-w-0 items-start', rowLine, NO_TOUCH_SELECT)}
       >
         <span className={cn('mr-1 shrink-0', dim)}>
           {onDragStart !== undefined ? (
@@ -4204,7 +4209,7 @@ function PlanRow(props: {
       ref={wrapRef}
       data-plan-row-wrap={id}
       {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
-      className="flex w-full min-w-0 items-start gap-3"
+      className={cn('flex w-full min-w-0 items-start gap-3', rowLine)}
     >
       {tileCol}
       <div className={cn('flex min-w-0 flex-1 flex-col', dim)}>

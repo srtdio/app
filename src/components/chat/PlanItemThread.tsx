@@ -326,7 +326,7 @@ function bodyNodes(body: string, ownTone: boolean, workspaceId: string | null): 
       <span
         data-plan-mention={segment.userId}
         className={cn(
-          'whitespace-nowrap rounded-full px-1.5 font-medium',
+          'whitespace-nowrap rounded-full px-1.5 font-medium lit-tint',
           ownTone ? 'bg-accent-fg/[0.22] text-accent-fg' : 'bg-accent-soft text-accent',
         )}
       >
@@ -482,7 +482,7 @@ function PlanBubble(props: {
                 ? 'bg-bubble-own text-accent-fg lit-bubble-own'
                 : 'bg-panel-2 text-fg lit-bubble-other',
             c.pending && 'opacity-70',
-            props.highlighted && 'ring-2 ring-accent',
+            props.highlighted && 'lit-today',
           )}
         >
           {team ? (

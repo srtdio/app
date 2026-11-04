@@ -8,7 +8,7 @@
 // as its measured height holds (monthCellCap), then "+N more" (that day's
 // week). The week shows each entry as a card: tile, title, plan, the Plan pill
 // and the post line; a busy day scrolls inside its own column. Today: the
-// month cell and the week column on accent-soft inside a 2px accent ring, with
+// month cell and the week column carry the inset selected edge (lit-today), with
 // a "Today" pill. A chip filters both views. Creators drag an entry to
 // another day (a 4px pointer travel lifts it: a lifted card follows the
 // pointer, the day under it shows a dashed drop outline when the move is
@@ -493,14 +493,12 @@ function dayAttrs(props: CellProps): {
   };
 }
 
-const DAY_FOCUS =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent';
-// Today's day keeps its 2px accent ring inside the cell, so its keyboard focus
-// ring is 4px wide to read on top of it. The drop outline sits 4px in, past both.
-const DAY_FOCUS_TODAY =
-  'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-accent';
-const DROP = 'outline-dashed outline-2 -outline-offset-4 outline-accent';
-const TODAY_DAY = 'bg-accent-soft ring-2 ring-inset ring-accent';
+// The focus outline sits inside the cell (the frame clips past its edge).
+const DAY_FOCUS = 'focus-visible:lit-focus focus-visible:-outline-offset-2';
+// Today's inset edge is 1px, so the inset focus outline reads on top of it.
+const DAY_FOCUS_TODAY = DAY_FOCUS;
+const DROP = 'lit-today';
+const TODAY_DAY = 'lit-today';
 const TODAY_PILL = 'lit-pill shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold';
 
 /** The month grid's weekday header row (px), fixed so each week row's height is known. */
@@ -526,7 +524,7 @@ function MonthGrid(props: {
   return (
     <div
       data-plan-tab-month=""
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border lit-card"
     >
       <div className="lit-header grid h-7 shrink-0 grid-cols-7 border-b bg-panel-2">
         {weeks[0]?.map((cell) => (
@@ -559,7 +557,8 @@ function MonthGrid(props: {
                 data-plan-tab-today-cell={isToday ? '' : undefined}
                 className={cn(
                   'flex h-full min-h-0 min-w-0 flex-col gap-0.5 overflow-hidden border-b border-r border-border p-1.5 last:border-r-0',
-                  isToday ? TODAY_DAY : cell.inMonth ? 'bg-panel' : 'bg-panel-2',
+                  cell.inMonth ? 'bg-bg' : 'bg-panel-2',
+                  isToday && TODAY_DAY,
                   isToday ? DAY_FOCUS_TODAY : DAY_FOCUS,
                   cp.over && DROP,
                 )}
@@ -681,7 +680,7 @@ function WeekGrid(props: {
   return (
     <div
       data-plan-tab-week=""
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border lit-card"
     >
       <div className="lit-header grid shrink-0 grid-cols-7 border-b bg-panel-2">
         {days.map((day) => {
@@ -725,7 +724,8 @@ function WeekGrid(props: {
               data-plan-tab-today-cell={isToday ? '' : undefined}
               className={cn(
                 'flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto border-r border-border p-2 last:border-r-0',
-                isToday ? TODAY_DAY : 'bg-panel',
+                'bg-bg',
+                isToday && TODAY_DAY,
                 isToday ? DAY_FOCUS_TODAY : DAY_FOCUS,
                 cp.over && DROP,
               )}

@@ -323,7 +323,7 @@ function PendingEditFields({
             setEmail(event.target.value);
             setError(null);
           }}
-          className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 lit-well px-3 text-input text-fg outline-none placeholder:text-fg-3 focus:border-accent-line focus:ring-2 focus:ring-accent-soft md:text-base"
+          className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 lit-well px-3 text-input text-fg outline-none placeholder:text-fg-3 focus:lit-focus md:text-base"
         />
         <RolePicker
           label={`Role for ${trimmed}`}

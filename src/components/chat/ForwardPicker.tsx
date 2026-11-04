@@ -145,7 +145,7 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
           <p className="px-1 py-3 text-base text-fg-3">Chats show up here.</p>
         )
       ) : (
-        <ul className="mt-3 flex flex-col">
+        <ul className="mt-3 flex flex-col gap-2">
           {listed.map((channel) => {
             const isSelected = selected.has(channel.channelId);
             return (
@@ -153,12 +153,13 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
                 <PressableRow
                   type="button"
                   aria-pressed={isSelected}
+                  card
                   onClick={() =>
                     setSelected((prev) => toggleForwardTarget(prev, channel.channelId))
                   }
                   className={cn(
-                    'group/notes-row flex items-center gap-3 px-2 py-1 mv-tint',
-                    isSelected ? 'bg-accent-soft text-accent' : 'text-fg-2',
+                    'group/notes-row flex items-center gap-3 border bg-panel p-2.5 mv-tint',
+                    isSelected ? 'lit-selected' : 'lit-card text-fg-2',
                   )}
                 >
                   {forwardRowAvatar(channel, isSelected)}

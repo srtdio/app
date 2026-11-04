@@ -418,9 +418,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                       onClick={() => setPlatform(value)}
                       className={cn(
                         'flex min-w-[44px] items-center gap-2 border px-3 text-base font-medium mv-tint',
-                        selected
-                          ? 'border-accent text-accent lit-chip-selected'
-                          : 'text-fg lit-chip',
+                        selected ? 'lit-selected' : 'text-fg lit-chip',
                       )}
                     >
                       <PlatformMark platform={value} />

@@ -734,7 +734,7 @@ function sideTone(mine: boolean): {
         played: 'bg-accent-fg',
         unplayed: 'bg-white/[.45]',
         ink: 'text-accent-fg',
-        focus: 'focus-visible:ring-accent-fg',
+        focus: 'focus-visible:lit-focus focus-visible:outline-accent-fg',
         ring: 'ring-bubble-own',
         panel: 'bg-white/[.16]',
         panelInk: 'text-accent-fg',
@@ -745,7 +745,7 @@ function sideTone(mine: boolean): {
         played: 'bg-accent',
         unplayed: 'bg-fg-3',
         ink: 'text-fg-2',
-        focus: 'focus-visible:ring-accent',
+        focus: 'focus-visible:lit-focus',
         ring: 'ring-panel-2',
         panel: 'bg-panel-3',
         panelInk: 'text-fg',
@@ -1241,11 +1241,11 @@ export function VoiceNote({
     else onTranscribe?.();
   };
   const canOpenTranscript = view.kind === 'shown' || onTranscribe !== undefined;
-  // The controls are PressableRows: their accent focus ring is the base; an
-  // own note adds an accent-fg offset so the ring reads on the solid bubble.
+  // The controls are PressableRows: their lit-focus outline is the base; an
+  // own note recolours it accent-fg so the line reads on the solid bubble.
   const controlFocus = cn(
     'cursor-pointer select-none [-webkit-touch-callout:none]',
-    mine && 'focus-visible:ring-offset-2 focus-visible:ring-offset-accent-fg',
+    mine && 'focus-visible:outline-accent-fg',
   );
   const link =
     messageId !== undefined
@@ -1393,7 +1393,7 @@ export function VoiceNote({
           aria-valuetext={label}
           {...wave}
           className={cn(
-            'relative flex h-11 min-w-0 flex-1 cursor-pointer touch-none select-none items-center rounded-sm [-webkit-touch-callout:none] focus-visible:outline-none focus-visible:ring-2',
+            'relative flex h-11 min-w-0 flex-1 cursor-pointer touch-none select-none items-center rounded-sm [-webkit-touch-callout:none]',
             tone.focus,
           )}
         >

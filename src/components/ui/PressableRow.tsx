@@ -27,7 +27,7 @@ interface PressableRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // through className, and change width, radius, alignment or height only through
 // the props above. Press (motion move 5): MOVE_CLASS.press sinks the row to .97
 // while held (120 ms) and eases the hover colour.
-const PRESSABLE_ROW_LOOK = `${MOVE_CLASS.press} hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 disabled:pointer-events-none`;
+const PRESSABLE_ROW_LOOK = `${MOVE_CLASS.press} hover:bg-panel-2 focus-visible:lit-focus disabled:opacity-50 disabled:pointer-events-none`;
 export const PRESSABLE_ROW_BASE = `min-h-[44px] ${PRESSABLE_ROW_LOOK}`;
 const PRESSABLE_ROW_DENSE = `min-h-[22px] ${PRESSABLE_ROW_LOOK}`;
 

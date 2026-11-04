@@ -185,7 +185,7 @@ describe('X6 Recently deleted link', () => {
     expect(cls).toContain('h-11');
     expect(cls).not.toContain('text-fg-2');
     // No duplicate call-site focus ring; the primitive carries it.
-    expect(cls.filter((c) => c === 'focus-visible:ring-2')).toHaveLength(1);
+    expect(cls.filter((c) => c === 'focus-visible:lit-focus')).toHaveLength(1);
     // The row's left gutter is the page's (16 / 24) less the link's 8px padding.
     const row = (link?.parentElement?.getAttribute('class') ?? '').split(/\s+/);
     expect(row).toEqual(expect.arrayContaining(['pl-2', 'md:pl-4', 'pr-4', 'md:pr-6']));

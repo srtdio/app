@@ -220,13 +220,13 @@ export function fitFrameStyle(width: number, height: number): CSSProperties {
 // translucent chip keeps them legible over any photo, dark in both app themes.
 const OVERLAY_SKIN =
   'bg-overlay-surface text-overlay-fg lit-media hover:bg-overlay-line hover:text-overlay-fg ' +
-  'disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
+  'disabled:opacity-40 focus-visible:lit-focus focus-visible:outline-overlay-fg/70';
 
 // Icon buttons in the action bar below the image, which sits on the viewer's own
 // dark backdrop, so they need no chip of their own.
 const TOOLBAR_SKIN =
-  'text-overlay-fg hover:bg-overlay-surface disabled:opacity-40 focus-visible:outline-none ' +
-  'focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
+  'text-overlay-fg hover:bg-overlay-surface disabled:opacity-40 focus-visible:lit-focus ' +
+  'focus-visible:outline-overlay-fg/70';
 
 /**
  * The remove-image confirm copy, shared by this viewer's inline confirm and the
@@ -530,7 +530,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               type="button"
               variant="ghost"
               onClick={props.onCancelRemove}
-              className="text-overlay-fg-dim hover:bg-overlay-surface hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70"
+              className="text-overlay-fg-dim hover:bg-overlay-surface hover:text-overlay-fg focus-visible:lit-focus focus-visible:outline-overlay-fg/70"
             >
               Cancel
             </Button>
@@ -539,7 +539,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               variant="secondary"
               disabled={saving || undefined}
               onClick={props.onConfirmRemove}
-              className="text-bad focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bad"
+              className="text-bad focus-visible:lit-focus focus-visible:outline-bad"
             >
               Remove
             </Button>
@@ -610,7 +610,7 @@ function FileSlideCard({
           event.stopPropagation();
           onOpen();
         }}
-        className="bg-overlay-surface text-overlay-fg lit-media hover:bg-overlay-line hover:text-overlay-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg"
+        className="bg-overlay-surface text-overlay-fg lit-media hover:bg-overlay-line hover:text-overlay-fg focus-visible:lit-focus focus-visible:outline-overlay-fg"
       >
         Open
       </Button>

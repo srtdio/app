@@ -24,7 +24,7 @@ describe('ChannelList buttons (design system)', () => {
       expect(tag).not.toMatch(/\bh-8\b|\bh-9\b|\bh-12\b|rounded-md|font-semibold/);
     }
     const on = tags.find((t) => t.includes('data-search-chip="photo"')) ?? '';
-    expect(on).toContain('lit-chip-selected');
+    expect(on).toContain('lit-selected');
     expect(on).toContain('aria-pressed="true"');
   });
 

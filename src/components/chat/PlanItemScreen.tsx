@@ -1228,7 +1228,7 @@ export function PlanItemScreen(props: {
                   }
                   className={cn(
                     'min-w-0 flex-1',
-                    teamNote ? 'border-warn' : askingChanges ? 'border-accent' : null,
+                    teamNote ? 'border-warn' : askingChanges ? 'border-border-strong' : null,
                   )}
                   style={{ maxHeight: COMMENT_BOX_MAX_PX }}
                 />
@@ -1757,7 +1757,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="empty"
-        className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel text-md text-fg-3"
+        className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel-2 text-md text-fg-3 lit-well"
       >
         No files
       </div>

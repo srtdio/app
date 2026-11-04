@@ -425,7 +425,7 @@ function DeletedFilesTile({
       {extra > 0 ? (
         <span
           data-activity-files-badge=""
-          className="absolute bottom-1.5 right-1.5 inline-flex h-5 items-center rounded-lg bg-panel px-1.5 text-xs font-medium tabular-nums text-fg-2"
+          className="absolute bottom-1.5 right-1.5 inline-flex h-5 items-center rounded-lg bg-panel px-1.5 text-xs font-medium tabular-nums text-fg-2 lit-pill"
         >
           +{extra}
         </span>
@@ -558,8 +558,8 @@ export function ActivityCard({
         event.stopPropagation();
       }}
       className={cn(
-        'lit-card flex overflow-hidden rounded-xl border bg-panel mv-tint',
-        unread && 'border-accent-line',
+        'flex overflow-hidden rounded-xl border bg-panel mv-tint',
+        unread ? 'lit-selected' : 'lit-card',
       )}
     >
       <div

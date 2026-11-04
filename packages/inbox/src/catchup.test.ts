@@ -561,8 +561,8 @@ describe('html design and parity', () => {
     const m = /prefers-color-scheme:\s*dark/i.exec(email.html);
     expect(m).not.toBeNull();
     const dark = email.html.slice(m?.index ?? 0).toLowerCase();
-    expect(dark).toContain('#0b0b0f');
-    expect(dark).toContain('#16161d');
+    expect(dark).toContain('#08090a');
+    expect(dark).toContain('#1a1c21');
     expect(dark).toContain('#e5e5e6');
   });
 

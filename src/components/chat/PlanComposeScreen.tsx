@@ -696,8 +696,8 @@ export function ComposeItemRow(props: {
         className={cn(
           'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-base font-semibold',
           item.kind === 'concept' && 'border-[1.5px] border-dashed border-border-strong text-fg-3',
-          item.kind === 'post' && 'bg-accent-soft text-accent',
-          item.kind === 'draft' && 'bg-panel-2 text-fg-3',
+          item.kind === 'post' && 'bg-accent-soft text-accent lit-pill',
+          item.kind === 'draft' && 'bg-panel-2 text-fg-3 lit-pill',
         )}
       >
         {item.kind === 'concept' ? 'C' : item.title.charAt(0).toUpperCase()}

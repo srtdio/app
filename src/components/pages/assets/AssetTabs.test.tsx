@@ -28,9 +28,7 @@ describe('AssetTabs', () => {
     expect(html).not.toContain('<span class="tabular-nums">0</span>');
     expect(html).toContain('min-h-[44px]');
     // The shared Chip selected style on the selected tab.
-    expect(html).toMatch(
-      /aria-selected="true"[^>]*class="[^"]*lit-chip-selected text-accent border-accent-line/,
-    );
+    expect(html).toMatch(/aria-selected="true"[^>]*class="[^"]*lit-selected/);
     // Tokens only, no hex, no dark: literals: light and dark are the same markup.
     expect(html).not.toMatch(/#[0-9a-fA-F]{3,8}\b|dark:/);
   });

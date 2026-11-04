@@ -523,7 +523,7 @@ export function framePins(
             onClick={() => onPinClick?.(pin.commentId)}
             style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%` }}
             className={cn(
-              'pointer-events-auto absolute focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-annotation-line',
+              'pointer-events-auto absolute focus-visible:lit-focus focus-visible:outline-annotation-line',
               at.edge === null ? '-translate-x-1/2 -translate-y-1/2' : EDGE_SHIFT[at.edge],
             )}
           >
@@ -863,7 +863,7 @@ export function reorderView(model: ReorderModel): ReactElement {
                 className={cn(
                   'relative flex h-24 min-w-[44px] touch-none cursor-grab items-center justify-center overflow-hidden border-2 bg-panel-2 mv-tint',
                   SLIDE_PRESS_CLASS,
-                  selected ? 'border-accent' : 'border-border',
+                  selected ? 'lit-selected' : 'border-border',
                   dragging && 'z-10 cursor-grabbing lit-float',
                 )}
               >
@@ -968,7 +968,7 @@ export function SnapshotThumbs({
           key={item.assetAttachmentId}
           style={{ aspectRatio: `${ratio}` }}
           className={cn(
-            'shrink-0 overflow-hidden border border-border bg-panel-2',
+            'shrink-0 overflow-hidden border border-border bg-panel-2 lit-pill',
             size === 'xs' ? 'h-8 rounded' : size === 'sm' ? 'h-10 rounded' : 'h-40 rounded-lg',
           )}
         >
@@ -1179,7 +1179,7 @@ export function galleryView({
                     onOpen(index);
                   }}
                   className={cn(
-                    'group absolute inset-0 flex items-center justify-center border border-border bg-panel-2 mv-tint hover:border-border-strong focus-visible:ring-inset',
+                    'group absolute inset-0 flex items-center justify-center border border-border bg-panel-2 mv-tint hover:border-border-strong focus-visible:-outline-offset-2',
                     SLIDE_PRESS_CLASS,
                     pinArmedIndex === index && 'cursor-crosshair',
                   )}

@@ -105,10 +105,10 @@ export function Toast({ toast, leaving = false, onDismiss, onAction }: ToastProp
             action.onPress();
             onDismiss(id);
           }}
-          className={`flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-base font-medium mv-tint focus-visible:outline-none focus-visible:ring-2 ${
+          className={`flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-base font-medium mv-tint ${
             error
-              ? 'text-accent-fg underline hover:opacity-90 focus-visible:ring-accent-fg'
-              : 'text-accent hover:bg-panel-2 focus-visible:ring-accent'
+              ? 'text-accent-fg underline hover:opacity-90 focus-visible:lit-focus focus-visible:outline-accent-fg'
+              : 'text-accent hover:bg-panel-2 focus-visible:lit-focus'
           }`}
         >
           {action.label}

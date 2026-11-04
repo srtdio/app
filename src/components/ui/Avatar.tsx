@@ -123,7 +123,7 @@ function AvatarFace({ name, src, role, kind = 'person' }: Omit<AvatarProps, 'pre
     <div
       style={style}
       data-avatar-role={role}
-      className={cn(box, 'bg-accent-soft border border-accent-line text-accent')}
+      className={cn(box, 'bg-accent-soft border border-border text-accent')}
     >
       <IconUser size={Math.round(px * 0.6)} />
     </div>

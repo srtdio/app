@@ -99,15 +99,20 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Colour: black, white and greys only (Linear neutrals), light and dark in the app, light-only homepage. Amber = Review, green = Approved/read/unread, red = errors and Reject only. No violet or blue anywhere (guard: palette-rules.test.ts).
 - Contrast: every text token passes 4.5:1 on bg and panel in both themes.
 - Radius roles: badges (ui/Tag) 6, controls and fields 8, cards/popovers/menus 12, sheets/dialogs 16, pills full. rounded-sm only for highlights, dots and grabbers. Chat bubble radii live only in chat/chat-type.ts.
-- Focus: Button, IconButton and Chip carry the one focus ring (accent, 2px, offset 2). Never add a second ring on a call site except for overlay or danger colours.
+- Focus: Button, IconButton and Chip carry the one focus line (focus-visible:lit-focus, an outline, never a box-shadow). Never add a second one on a call site; overlay controls on media (lightbox, file viewer, photo viewer) keep their own white ring.
 - Text fields: ui/Input or ui/Textarea only; date and time fields add font-mono. Composer bars and borderless inline edits are the only exceptions (allowlist in ui-rules.test.ts).
 - Inline errors: ui/ErrorNote only. Small labels (stage, status, role, draft): ui/Tag only.
 - Lighting: one light, straight above. Every surface takes exactly one lit-\* class from src/index.css; never box-shadow, shadow-\*, drop-shadow or backdrop-blur on a call site (guard: lighting-rules.test.ts).
   - Heights: flat (list rows, page), card (lit-card / lit-card-muted), raised (nav, chat circle, auth/onboarding cards), float (toasts, strip, unread/latest pills, drags), overlay (menus, popovers, sheets, dialogs, side panels). Headers lit-header, bottom bars lit-dock, sidebar lit-side.
-  - Controls: buttons via Button variants; chips, radios and segment thumbs lit-chip / lit-chip-selected; inputs and tracks lit-well; small parts lit-pill / lit-badge / lit-avatar / lit-media; tinted banners lit-tint.
+  - Controls: buttons via Button variants; chips, radios and segment thumbs lit-chip / lit-selected; inputs and tracks lit-well; small parts lit-pill / lit-badge / lit-avatar / lit-media; tinted banners lit-tint.
   - Dark mode: higher is lighter; never rely on a shadow alone; raised surfaces add a faint bottom rim dimmer than the top edge.
   - At most one soft (blurred) shadow per token; use a 1px ring for edge definition (speed).
   - New surface: pick a height from this list, in light and dark, and add it to docs/lighting.md.
+- Lighting covers every screen, sheet, picker, loading box and email: anything with a fill plus border or radius takes a lit-\* height (guard: lit-coverage.test.ts). Pages are grey (bg-bg) with lit cards; never a white page of flat bands.
+- Loading shells use the same lit-\* class as the card that replaces them.
+- Outlines: only lit-selected (picked/active), lit-focus (focus), lit-bad (error), lit-drop (drop), lit-today (today). White line in dark, ink line in light, no tint or glow (guard: outline-rules.test.ts).
+- Emails: one look, lit edges drawn with borders, no shadows (guard: email-look.test.ts).
+- Every page, sheet and picker has screenshots in the visual suite (guard: visual-coverage.test.ts).
   - Labels and icons on raised controls use full ink (text-fg); icon stroke 1.85.
 - A panel beside the page is ui/SidePanel only (laptop via useIsLaptop, 380px, translateX, nothing dims, Esc closes); phone shows the same content in a Sheet (guard: cockpit/side-panel-rule.test.ts).
 - Phone nav: floating pill (Pipeline, Briefs, Assets, Plan, Activity) plus separate Chat circle, 12px from sides and bottom; only the active tab shows its label.

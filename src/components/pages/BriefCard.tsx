@@ -95,7 +95,7 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: Brie
     <div
       ref={cardRef}
       data-brief-card=""
-      className={`lit-card relative rounded-xl border bg-panel p-4 flex gap-3 min-w-0 overflow-hidden min-h-[44px] mv-tint hover:bg-panel-2 focus-within:ring-2 focus-within:ring-accent ${
+      className={`lit-card relative rounded-xl border bg-panel p-4 flex gap-3 min-w-0 overflow-hidden min-h-[44px] mv-tint hover:bg-panel-2 focus-within:lit-focus ${
         closed ? 'opacity-70' : ''
       }`}
     >

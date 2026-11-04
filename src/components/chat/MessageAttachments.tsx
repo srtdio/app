@@ -501,7 +501,7 @@ export function AlbumGrid({
             onClick={() => onOpen(tile.index)}
             className={cn(
               'relative block cursor-zoom-in overflow-hidden bg-panel-3 [-webkit-touch-callout:none]',
-              'focus-visible:ring-inset',
+              'focus-visible:-outline-offset-2',
               tile.className,
             )}
           >

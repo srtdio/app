@@ -177,13 +177,15 @@
   /* Lighting: one light straight above (docs/lighting.md). Raw colours live
      only here; components take a lit-* class, never a shadow. */
   --lit-hl: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  /* Outline family (lit-selected, lit-focus, lit-drop, lit-today): one crisp
+     line, ink in light, white in dark. No tint, no glow. */
+  --sel-edge: #08090a;
   --lit-edge-top: #eceef1;
   --lit-edge-side: #e1e4e8;
   --lit-edge-bottom: #d3d7dd;
   --lit-surface: linear-gradient(#fff, #f6f7f9);
   --lit-surface-top: #fff;
   --lit-chip-bg: linear-gradient(#fff, #f8f9fa);
-  --lit-chip-selected-bg: linear-gradient(#fff, #f6f7f9);
   --lit-overlay-bg: var(--panel);
   --lit-bubble-other-bg: linear-gradient(#f6f7f9, #eff1f4);
   --lit-shine: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
@@ -215,8 +217,6 @@
     0 3px 9px -2px rgba(200, 60, 60, 0.5);
   --lit-btn-secondary: inset 0 1px 0 #fff, 0 1px 2px rgba(20, 22, 30, 0.1);
   --lit-chip:
-    inset 0 1px 0 #fff, 0 0 0 1px rgba(20, 22, 30, 0.03), 0 3px 8px -2px rgba(20, 22, 30, 0.16);
-  --lit-chip-selected:
     inset 0 1px 0 #fff, 0 0 0 1px rgba(20, 22, 30, 0.03), 0 3px 8px -2px rgba(20, 22, 30, 0.16);
   --lit-well: inset 0 1px 2px rgba(20, 22, 30, 0.1), inset 0 0 0 1px rgba(20, 22, 30, 0.02);
   --lit-well-soft: inset 0 1px 2px rgba(20, 22, 30, 0.05);
@@ -350,13 +350,13 @@
   --shadow-spotlight: 0 0 0 200vmax var(--guide-dim);
   /* Lighting, dark: higher is lighter, plus a dark outline ring. */
   --lit-hl: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --sel-edge: rgba(255, 255, 255, 0.92);
   --lit-edge-top: rgba(255, 255, 255, 0.08);
   --lit-edge-side: rgba(255, 255, 255, 0.055);
   --lit-edge-bottom: rgba(255, 255, 255, 0.035);
   --lit-surface: linear-gradient(#17181b, #111214);
   --lit-surface-top: #24262d;
   --lit-chip-bg: linear-gradient(#17181b, #121315);
-  --lit-chip-selected-bg: linear-gradient(#2a2c33, #1f2126);
   --lit-overlay-bg: linear-gradient(#18191c, #131416);
   --lit-bubble-other-bg: linear-gradient(#1a1b1e, #141518);
   --lit-shine: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
@@ -393,9 +393,6 @@
     0 1px 2px rgba(0, 0, 0, 0.5);
   --lit-chip:
     inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3);
-  --lit-chip-selected:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
     0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3);
   --lit-well: inset 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
   --lit-well-soft: inset 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -592,10 +589,6 @@
     background-image: var(--lit-chip-bg);
     box-shadow: var(--lit-chip);
   }
-  .lit-chip-selected {
-    background: var(--lit-chip-selected-bg);
-    box-shadow: var(--lit-chip-selected);
-  }
   .lit-well {
     box-shadow: var(--lit-well);
   }
@@ -650,5 +643,31 @@
   /* A track's fill (progress, storage, upload, scrubber) catches the light. */
   .lit-fill {
     background-image: var(--lit-shine);
+  }
+  /* Outlines: one family, a crisp line from --sel-edge (ink in light, white in
+     dark). No accent tint, no glow. Defined after the edge classes so the
+     line wins over lit-card / lit-chip edges on the same element. */
+  .lit-selected {
+    border-color: var(--sel-edge);
+    background-image: var(--lit-chip-bg);
+    box-shadow: var(--lit-chip);
+    color: var(--fg);
+  }
+  /* Focus draws an outline, never a box-shadow, so it never wipes a
+     surface's light and never fights a moving shadow. Never animated. */
+  .lit-focus {
+    outline: 1.5px solid var(--sel-edge);
+    outline-offset: 2px;
+  }
+  /* Errors and Not sent: the element keeps its own lit class. */
+  .lit-bad {
+    border-color: var(--bad);
+  }
+  .lit-drop {
+    border: 1.5px dashed var(--sel-edge);
+    background-color: var(--panel);
+  }
+  .lit-today {
+    box-shadow: inset 0 0 0 1px var(--sel-edge);
   }
 }

@@ -370,16 +370,21 @@ function buildSections(d: RecipientDigest): { sections: RenderSection[]; summary
 const SANS = "Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif";
 
 const LIGHT = {
-  bg: '#f7f8f9',
+  bg: '#f4f5f6',
   panel: '#ffffff',
-  panel2: '#f2f3f5',
-  border: '#e6e8eb',
-  fg: '#1b1c20',
-  fg2: '#4f535a',
-  fg3: '#6b7078',
+  border: '#e4e5e8',
+  fg: '#08090a',
+  fg2: '#62666d',
+  fg3: '#62666d',
   accent: '#08090a',
   onAccent: '#ffffff',
+  btnTop: 'rgba(255,255,255,0.3)',
+  btnBottom: '#000000',
 } as const;
+
+// Lit edges drawn with borders (mail clients drop shadows): one light from above,
+// a lighter top edge and a 2px darker bottom rim. Every card takes this.
+const CARD_EDGES = `border:1px solid ${LIGHT.border};border-top-color:#eceef1;border-bottom:2px solid #c9ced5`;
 
 const FOOTER_NOTE =
   "You get Sorted catch-ups at 10:30 am and 3:30 pm your time, Mon to Fri, only for things you haven't seen in Sorted. Nothing new, no email.";
@@ -396,15 +401,14 @@ function esc(s: string): string {
 // Class-based dark overrides (prefers-color-scheme) plus [data-ogsc] mirrors for
 // Outlook. Inline styles win on specificity, so each override is !important.
 const DARK_RULES = [
-  '.bg { background:#0b0b0f !important; }',
-  '.panel { background:#16161d !important; border-color:#272733 !important; }',
-  '.panel2 { background:#1d1d26 !important; border-color:#272733 !important; }',
-  '.rowlink { border-color:#272733 !important; }',
-  '.fg { color:#f4f5f6 !important; }',
+  '.bg { background:#08090a !important; }',
+  '.panel { background:#1a1c21 !important; border-color:#26282e !important; border-top-color:rgba(255,255,255,0.10) !important; border-bottom-color:#000000 !important; }',
+  '.rowlink { border-color:#26282e !important; }',
+  '.fg { color:#f7f8f8 !important; }',
   '.fg2 { color:#b4b8bf !important; }',
   '.fg3 { color:#9095a0 !important; }',
   '.accent { color:#e5e5e6 !important; }',
-  '.btn { background:#e5e5e6 !important; color:#08090a !important; }',
+  '.btn { background:#e5e5e6 !important; color:#08090a !important; border-bottom-color:#c9ccd1 !important; }',
 ];
 
 const STYLE =
@@ -455,7 +459,7 @@ function sectionHtml(s: RenderSection): string {
   return (
     `<tr><td style="padding-top:24px">` +
     `<div class="fg2" style="font-family:${SANS};font-size:13px;font-weight:600;line-height:18px;color:${LIGHT.fg2};padding:0 4px 8px">${esc(s.title)}</div>` +
-    `<table ${TABLE} class="panel" style="background:${LIGHT.panel};border:1px solid ${LIGHT.border};border-radius:10px;border-collapse:separate;overflow:hidden">${rows}</table>` +
+    `<table ${TABLE} class="panel" style="background:${LIGHT.panel};${CARD_EDGES};border-radius:12px;border-collapse:separate;overflow:hidden">${rows}</table>` +
     `</td></tr>`
   );
 }
@@ -472,7 +476,7 @@ function tilesHtml(tiles: StatTile[]): string {
   const tds = tiles
     .map(
       (t) =>
-        `<td width="33%" align="center" valign="top" class="panel2" style="width:33%;background:${LIGHT.panel2};border:1px solid ${LIGHT.border};border-radius:8px;padding:14px 6px">` +
+        `<td width="33%" align="center" valign="top" class="panel" style="width:33%;background:${LIGHT.panel};${CARD_EDGES};border-radius:12px;padding:14px 6px">` +
         `<div class="fg" style="font-family:${SANS};font-size:24px;font-weight:600;line-height:28px;color:${LIGHT.fg}">${t.count}</div>` +
         `<div class="fg3" style="font-family:${SANS};font-size:12px;line-height:16px;color:${LIGHT.fg3};padding-top:4px">${esc(t.label)}</div>` +
         `</td>`,
@@ -505,14 +509,14 @@ function renderHtml(
     `<td class="fg3" align="right" style="font-family:${SANS};font-size:13px;line-height:24px;color:${LIGHT.fg3}">${esc(dateLine(d))}</td>` +
     `</tr></table></td></tr>` +
     // masthead
-    `<tr><td class="panel" style="background:${LIGHT.panel};border:1px solid ${LIGHT.border};border-radius:12px;padding:24px 20px">` +
+    `<tr><td class="panel" style="background:${LIGHT.panel};${CARD_EDGES};border-radius:12px;padding:24px 20px">` +
     `<div class="accent" style="font-family:${SANS};font-size:13px;font-weight:600;line-height:16px;color:${LIGHT.accent};padding-bottom:10px">${esc(eyebrow(d.slot))}</div>` +
     `<div class="fg" style="font-family:${SANS};font-size:22px;font-weight:600;line-height:30px;letter-spacing:-0.01em;color:${LIGHT.fg}">${esc(head)}</div>` +
     `<div class="fg3" style="font-family:${SANS};font-size:13px;line-height:18px;color:${LIGHT.fg3};padding-top:8px">${esc(sinceLine(d))}</div>` +
     `</td></tr>` +
     tilesHtml(tiles) +
     // button
-    `<tr><td style="padding-top:20px"><a href="${esc(activityUrl)}" class="btn" style="display:inline-block;min-height:20px;padding:12px 24px;line-height:20px;border-radius:8px;background:${LIGHT.accent};color:${LIGHT.onAccent};font-family:${SANS};font-size:15px;font-weight:600;text-decoration:none">Open Sorted</a></td></tr>` +
+    `<tr><td style="padding-top:20px"><a href="${esc(activityUrl)}" class="btn" style="display:inline-block;min-height:20px;padding:12px 24px;line-height:20px;border-radius:8px;border-top:1px solid ${LIGHT.btnTop};border-bottom:2px solid ${LIGHT.btnBottom};background:${LIGHT.accent};color:${LIGHT.onAccent};font-family:${SANS};font-size:15px;font-weight:600;text-decoration:none">Open Sorted</a></td></tr>` +
     sections.map(sectionHtml).join('') +
     summary.map(summaryHtml).join('') +
     // footer

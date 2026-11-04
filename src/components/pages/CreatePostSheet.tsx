@@ -1441,7 +1441,7 @@ export function CreatePostSheet({
                 : {})}
               onChange={(event) => patchField('title', { title: event.target.value })}
               placeholder={TITLE_PLACEHOLDER}
-              className="aria-[invalid=true]:border-bad"
+              className="aria-[invalid=true]:border-bad aria-[invalid=true]:lit-bad"
             />
             {titleCounterVisible(form.title) ? (
               <p
@@ -1490,7 +1490,7 @@ export function CreatePostSheet({
                 aria-describedby="post-caption-count"
                 onChange={(event) => patchField('caption', { caption: event.target.value })}
                 placeholder="Write the caption"
-                className="pb-7 aria-[invalid=true]:border-bad"
+                className="pb-7 aria-[invalid=true]:border-bad aria-[invalid=true]:lit-bad"
               />
               <span
                 id="post-caption-count"

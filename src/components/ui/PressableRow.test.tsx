@@ -24,8 +24,7 @@ describe('PressableRow', () => {
 
   it('carries a focus-visible ring', () => {
     const t = tokens(render());
-    expect(t).toContain('focus-visible:ring-2');
-    expect(t).toContain('focus-visible:ring-accent');
+    expect(t).toContain('focus-visible:lit-focus');
   });
 
   it('fades and ignores taps when disabled', () => {

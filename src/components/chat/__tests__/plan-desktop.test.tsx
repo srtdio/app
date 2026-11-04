@@ -160,7 +160,7 @@ describe('edit mode rows (agency, laptop and phone alike)', () => {
     const html = paint('agency', edit({ pickedId: 'c1' }));
     // PressableRow renders class before the spread data attributes.
     expect(html).toMatch(
-      /class="[^"]*ring-2 ring-accent ring-offset-2[^"]*" data-plan-row="c1"[^>]*data-plan-row-picked=""/,
+      /class="[^"]*rounded-lg lit-focus[^"]*" data-plan-row="c1"[^>]*data-plan-row-picked=""/,
     );
   });
 

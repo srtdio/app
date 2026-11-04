@@ -153,7 +153,7 @@ export function attachmentItemList(
       return (
         <li
           key={`${item.versionId}-${index}`}
-          className="relative aspect-square h-20 shrink-0 overflow-hidden rounded-lg border border-border bg-panel-3"
+          className="relative aspect-square h-20 shrink-0 overflow-hidden rounded-lg border border-border bg-panel-3 lit-pill"
         >
           {item.previewUrl === undefined ? (
             <span className="flex h-full w-full items-center justify-center text-fg-3">
@@ -439,7 +439,7 @@ export function ComposerMediaFrame({
                 },
               }
             : {})}
-          className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain rounded-xl focus-visible:lit-focus"
         >
           {media.map(({ item, index }, slide) => (
             <li
@@ -1138,6 +1138,6 @@ export function firstMedia(
 
 function cnPending(error: string | null): string {
   return error !== null
-    ? 'flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-bad bg-panel-2 px-3 py-2 lit-card-muted'
+    ? 'flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-bad lit-bad bg-panel-2 px-3 py-2 lit-card-muted'
     : 'flex min-h-[44px] w-full items-center gap-2 rounded-lg border bg-panel-2 px-3 py-2 lit-card-muted';
 }

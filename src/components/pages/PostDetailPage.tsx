@@ -1705,7 +1705,7 @@ export function PostDetailPage({
       <Link
         data-detail="brief"
         to={briefRoute(post.brief_id)}
-        className="inline-flex min-h-[44px] min-w-0 items-center rounded-lg font-medium text-accent hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="inline-flex min-h-[44px] min-w-0 items-center rounded-lg font-medium text-accent hover:underline focus-visible:lit-focus"
       >
         <span className="min-w-0 truncate">{fromBriefLabel(briefName)}</span>
       </Link>
@@ -1943,7 +1943,7 @@ export function PostDetailPage({
                     // 44px floor as the tappable title, with no border (the
                     // ring draws outside the box), so entering edit never
                     // shifts the page.
-                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-lg border-0 bg-panel-2 px-2 py-1 text-3xl font-semibold tracking-tight text-fg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
+                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-lg border-0 bg-panel-2 px-2 py-1 text-3xl font-semibold tracking-tight text-fg lit-well outline-none ring-1 ring-border focus:lit-focus"
                   />
                   {isTouchDevice() ? (
                     // FN9: a phone has no Enter / Escape to hand; Save and Cancel are
