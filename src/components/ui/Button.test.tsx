@@ -76,8 +76,9 @@ describe('Button design system', () => {
       'lit-btn-secondary bg-panel text-fg border hover:bg-panel-2',
     );
     expect(tokens(classOf({ variant: 'secondary' }))).not.toContain('border-border');
-    expect(classOf({ variant: 'ghost' })).not.toMatch(/\blit-/);
-    expect(classOf({ variant: 'link' })).not.toMatch(/\blit-/);
+    // Flat: no lit height. The focus line (focus-visible:lit-focus) is not a height.
+    expect(classOf({ variant: 'ghost' })).not.toMatch(/(^|\s)lit-/);
+    expect(classOf({ variant: 'link' })).not.toMatch(/(^|\s)lit-/);
     expect(classOf({ variant: 'ghost' })).toContain('text-fg-2 hover:bg-panel-2 hover:text-fg');
     expect(classOf({ variant: 'link' })).toContain('text-accent');
     expect(classOf({ variant: 'link' })).toContain('!px-2');

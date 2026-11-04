@@ -654,7 +654,7 @@
     color: var(--fg);
   }
   /* Focus draws an outline, never a box-shadow, so it never wipes a
-     surface's light and never fights a moving shadow. Not transitioned. */
+     surface's light and never fights a moving shadow. Never animated. */
   .lit-focus {
     outline: 1.5px solid var(--sel-edge);
     outline-offset: 2px;

@@ -90,6 +90,6 @@ describe('outline rules', () => {
       expect(body(c), c).not.toMatch(/accent/);
     }
     expect(CSS).not.toMatch(/\.lit-chip-selected|--lit-chip-selected/);
-    expect(CSS).not.toMatch(/transition[^;]*outline/);
+    expect(CSS).not.toMatch(/transition(-property)?:[^;]*outline/);
   });
 });

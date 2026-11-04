@@ -158,7 +158,10 @@ describe('cards use the 12px card radius', () => {
         selfName={null}
       />,
     );
-    expect(html).toMatch(/class="lit-card flex overflow-hidden rounded-xl border/);
+    // Unread: the picked line (lit-selected); read: lit-card. Same 12px radius.
+    expect(html).toMatch(
+      /class="flex overflow-hidden rounded-xl border bg-panel[^"]*lit-(card|selected)/,
+    );
   });
 
   it('chat brief card, tappable and unavailable', () => {

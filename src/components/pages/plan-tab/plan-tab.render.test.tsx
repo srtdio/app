@@ -294,7 +294,8 @@ describe('PlanTabPage', () => {
     const cell = between(html, 'data-plan-tab-today-cell', 'data-plan-tab-day=');
     expect(cell).toContain(`data-plan-tab-day="${TODAY}"`);
     expect(cell).toContain('lit-today');
-    expect(cell).not.toContain('bg-accent-soft');
+    // No tint on the cell itself (item rows inside keep their own fills).
+    expect(cell).not.toMatch(/data-plan-tab-today-cell="" class="[^"]*bg-accent-soft/);
     // The keyboard outline sits inside the cell, over the today edge.
     expect(cell).toContain('focus-visible:lit-focus');
     expect(cell).toMatch(/data-plan-tab-today=""[^>]*class="[^"]*bg-accent text-accent-fg/);

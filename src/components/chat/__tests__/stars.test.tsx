@@ -589,9 +589,7 @@ describe('Contact sheet and Group info: Starred tab', () => {
     expect({ light: resolve(':root'), ['dark']: resolve('.dark') }).toMatchInlineSnapshot(`
       {
         "dark": {
-          "accent": "hex f7f8f8",
           "accent-fg": "hex 08090a",
-          "accent-line": "rgba(255, 255, 255, 0.32)",
           "avatar-4": "hex c2392b",
           "fg": "hex f7f8f8",
           "fg-3": "hex 81868f",
@@ -599,9 +597,7 @@ describe('Contact sheet and Group info: Starred tab', () => {
           "panel-2": "hex 16171a",
         },
         "light": {
-          "accent": "hex 08090a",
           "accent-fg": "hex ffffff",
-          "accent-line": "rgba(8, 9, 10, 0.28)",
           "avatar-4": "hex c2392b",
           "fg": "hex 08090a",
           "fg-3": "hex 686c73",

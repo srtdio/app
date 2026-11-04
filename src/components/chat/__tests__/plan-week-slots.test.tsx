@@ -418,8 +418,8 @@ describe('week list layout (L1-L4)', () => {
     expect(html).toMatch(
       /data-plan-day-empty="" class="flex min-h-\[44px\] items-center text-md text-fg-3">Planned posts show up here\./,
     );
-    // Day block: 16px all round, a 1px line between days, rows 16px apart.
-    expect(html).toContain('flex flex-col gap-4 border-t border-border py-4 pr-4 pl-4');
+    // Day block: a lit card, 12px padding, rows 16px apart.
+    expect(html).toContain('mx-4 flex flex-col gap-4 rounded-xl border bg-panel p-3');
     expect(html).toContain('flex min-w-0 flex-1 flex-col gap-0.5');
     // A client sees no Add, no drag.
     expect(html).not.toContain('data-plan-add=');
