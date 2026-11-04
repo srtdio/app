@@ -185,8 +185,9 @@ describe('PlanTabPage', () => {
     expect(html).toContain('data-plan-tab-addable');
     expect(html).toContain('Month');
     expect(html).toContain('Plan item, in its plan&#x27;s colour');
-    // No page title: the tab's top bar is the shared SectionHeader.
-    expect(html).not.toContain('<h1');
+    // No visible page title: the tab's top bar is the shared SectionHeader; the
+    // only h1 is the sr-only one screen readers and route focus land on.
+    expect(html).not.toMatch(/<h1(?![^>]*class="sr-only")/);
   });
 
   it('approvers on a phone: shared plans only, no New plan', () => {
