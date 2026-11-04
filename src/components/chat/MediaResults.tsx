@@ -361,6 +361,7 @@ function LinkRowItem(props: {
   const preview = useLinkTitle(item.url, inView);
   const [menuOpen, setMenuOpen] = useState(false);
   const [unsafeOpen, setUnsafeOpen] = useState(false);
+  const externalRef = useRef<HTMLAnchorElement>(null);
   const target = classify(item.url, currentOrigin(), APP_ENTITY_ROUTES);
   const verdict = target.kind === 'external' ? checkLink(item.url) : null;
   const unsafe = verdict !== null && verdict.verdict === 'unsafe';
@@ -377,7 +378,8 @@ function LinkRowItem(props: {
     // An unsafe link opens the check sheet, never the site.
     if (unsafe) setUnsafeOpen(true);
     else if (target.kind !== 'external') navigate(target.path);
-    else window.open(item.url, '_blank', 'noopener,noreferrer');
+    // External pages open like message-text links: a real anchor, new tab.
+    else externalRef.current?.click();
   };
   const gesture = useMenuGesture(() => setMenuOpen(true));
   const items: ActionMenuItem[] = [
@@ -426,6 +428,17 @@ function LinkRowItem(props: {
         </span>
         <span className={ROW_DATE}>{props.date}</span>
       </PressableRow>
+      {target.kind === 'external' && !unsafe ? (
+        <a
+          ref={externalRef}
+          href={item.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          tabIndex={-1}
+          aria-hidden="true"
+          className="hidden"
+        />
+      ) : null}
       <ActionMenu
         title={domain}
         items={items}
