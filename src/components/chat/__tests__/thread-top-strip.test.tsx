@@ -75,7 +75,10 @@ describe('homepage strip (home.css)', () => {
     expect(block).not.toMatch(/backdrop-filter|opacity|blur|rgb\(/);
   });
 
-  it('the frosted .top keeps its blur', () => {
-    expect(css).toMatch(/\.home \.top \{[^}]*backdrop-filter: blur\(14px\);/);
+  it('the .top is solid panel with the lit-header shade, no blur', () => {
+    const top = /\.home \.top \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(top).toContain('background: rgb(var(--panel-rgb));');
+    expect(top).toContain('box-shadow:');
+    expect(top).not.toContain('backdrop-filter');
   });
 });
