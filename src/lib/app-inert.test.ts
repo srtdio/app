@@ -22,9 +22,9 @@ afterEach(() => {
 describe('holdAppInert', () => {
   it('marks #root inert while held and wakes it on release', () => {
     const release = holdAppInert(panel);
-    expect(root.hasAttribute('inert')).toBe(true);
+    expect(root.getAttribute('aria-hidden') === 'true').toBe(true);
     release();
-    expect(root.hasAttribute('inert')).toBe(false);
+    expect(root.getAttribute('aria-hidden') === 'true').toBe(false);
     expect(appInertHolds()).toBe(0);
   });
 
@@ -32,9 +32,9 @@ describe('holdAppInert', () => {
     const sheet = holdAppInert(panel);
     const confirm = holdAppInert(panel);
     sheet();
-    expect(root.hasAttribute('inert')).toBe(true);
+    expect(root.getAttribute('aria-hidden') === 'true').toBe(true);
     confirm();
-    expect(root.hasAttribute('inert')).toBe(false);
+    expect(root.getAttribute('aria-hidden') === 'true').toBe(false);
   });
 
   it('a release called twice counts once', () => {
@@ -42,16 +42,16 @@ describe('holdAppInert', () => {
     const b = holdAppInert(panel);
     a();
     a();
-    expect(root.hasAttribute('inert')).toBe(true);
+    expect(root.getAttribute('aria-hidden') === 'true').toBe(true);
     b();
-    expect(root.hasAttribute('inert')).toBe(false);
+    expect(root.getAttribute('aria-hidden') === 'true').toBe(false);
   });
 
   it('a modal rendered inside #root never freezes itself', () => {
     const inside = document.createElement('div');
     root.appendChild(inside);
     const release = holdAppInert(inside);
-    expect(root.hasAttribute('inert')).toBe(false);
+    expect(root.getAttribute('aria-hidden') === 'true').toBe(false);
     expect(appInertHolds()).toBe(0);
     release();
   });
