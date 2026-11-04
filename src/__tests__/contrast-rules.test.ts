@@ -162,6 +162,15 @@ describe.each([':root', '.dark'])('contrast rules: %s', (selector) => {
   it('on-bubble on bubble-own is at least 4.5:1', () => {
     expect(ratio(pick(t, 'on-bubble'), pick(t, 'bubble-own'))).toBeGreaterThanOrEqual(4.5);
   });
+
+  // Avatar initials: avatar-ink (white in both themes) on every avatar fill.
+  // accent-fg flips to near-black in dark (1.83:1 on avatar-1), so it is never
+  // the initials ink.
+  for (const fill of ['avatar-1', 'avatar-2', 'avatar-3', 'avatar-4', 'avatar-5', 'avatar-6']) {
+    it(`avatar-ink on ${fill} is at least 4.5:1`, () => {
+      expect(ratio(pick(t, 'avatar-ink'), pick(t, fill))).toBeGreaterThanOrEqual(4.5);
+    });
+  }
 });
 
 describe('contrast rules: dark lighting', () => {
@@ -196,6 +205,7 @@ describe('contrast rules: the parser reads every token it is asked for', () => {
       'on-bubble',
       'bubble-own',
       'knob',
+      'avatar-ink',
     ];
     expect(names.filter((n) => t[n] === undefined)).toEqual([]);
   });

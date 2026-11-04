@@ -56,6 +56,7 @@ export default {
         'overlay-dot': 'var(--overlay-dot)',
         'overlay-badge': 'var(--overlay-badge)',
         'overlay-badge-hover': 'var(--overlay-badge-hover)',
+        'avatar-ink': 'rgb(var(--avatar-ink-rgb) / <alpha-value>)',
         'avatar-1': 'rgb(var(--avatar-1-rgb) / <alpha-value>)',
         'avatar-2': 'rgb(var(--avatar-2-rgb) / <alpha-value>)',
         'avatar-3': 'rgb(var(--avatar-3-rgb) / <alpha-value>)',
@@ -89,6 +90,10 @@ export default {
       // A solid success tint for floating surfaces (good-soft over panel).
       backgroundImage: {
         'good-tint': 'linear-gradient(var(--good-soft), var(--good-soft))',
+        // Hover inside the own bubble: the resting on-bubble/12 fill with an
+        // on-bubble/10 overlay stacked on top (same pattern as --hover-fill).
+        'on-bubble-hover':
+          'linear-gradient(rgb(var(--on-bubble-rgb) / 0.1), rgb(var(--on-bubble-rgb) / 0.1)), linear-gradient(rgb(var(--on-bubble-rgb) / 0.12), rgb(var(--on-bubble-rgb) / 0.12))',
       },
       // Type scale (Design rules in CLAUDE.md). Overrides Tailwind's defaults on
       // purpose. legacy-* freeze the old Tailwind sizes until the type

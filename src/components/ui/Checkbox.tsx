@@ -13,7 +13,7 @@ export function Checkbox(props: CheckboxProps): ReactElement {
       <input
         {...props}
         type="checkbox"
-        className="peer m-0 h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-lg border border-field bg-panel-2 lit-well mv-tint checked:border-transparent checked:bg-accent focus-visible:lit-focus disabled:cursor-default"
+        className="peer m-0 h-[18px] w-[18px] shrink-0 cursor-pointer appearance-none rounded-sm border border-field bg-panel-2 lit-well mv-tint checked:border-transparent checked:bg-accent focus-visible:lit-focus disabled:cursor-default"
       />
       <span
         aria-hidden="true"

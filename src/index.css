@@ -137,6 +137,9 @@
   --overlay-badge-hover: rgba(0, 0, 0, 0.6);
   /* Initials avatar fills under white ink: every tone is 4.5:1 or more against
      white (10.9, 4.9, 5.0, 5.4, 6.3, 7.1). */
+  /* Initials ink on every avatar fill: white in both themes. */
+  --avatar-ink: #ffffff;
+  --avatar-ink-rgb: 255 255 255;
   --avatar-1: #3b3d42;
   --avatar-1-rgb: 59 61 66;
   --avatar-2: #3e7d54;
@@ -349,6 +352,9 @@
   --overlay-badge-hover: rgba(0, 0, 0, 0.6);
   /* Avatar fills keep white initials at 4.5:1 or more on dark panels too, so
      the light values hold (10.9, 4.9, 5.0, 5.4, 6.3, 7.1). */
+  /* Initials ink on every avatar fill: white in both themes. */
+  --avatar-ink: #ffffff;
+  --avatar-ink-rgb: 255 255 255;
   --avatar-1: #3b3d42;
   --avatar-1-rgb: 59 61 66;
   --avatar-2: #3e7d54;

@@ -1813,7 +1813,7 @@ export const OWN_BUBBLE_CONTENT = cn(
   // over the on-bubble/12 overlay) and take the same on-bubble/16 edge.
   '[&_.lit-card]:bg-none [&_.lit-card-muted]:bg-none [&_.lit-chip]:bg-none [&_.lit-btn-secondary]:bg-none',
   '[&_.lit-card]:border-on-bubble/[.16] [&_.lit-card-muted]:border-on-bubble/[.16] [&_.lit-chip]:border-on-bubble/[.16]',
-  '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-on-bubble/10 [&_a:hover>span]:bg-on-bubble/10',
+  '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-transparent [&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-on-bubble-hover [&_a:hover>span]:bg-transparent [&_a:hover>span]:bg-on-bubble-hover',
   '[&_.bg-accent]:bg-on-bubble/70 [&_.bg-accent.text-accent-fg]:bg-on-bubble/[.16] [&_.bg-fg-3]:bg-on-bubble/40',
   '[&_.text-fg]:text-accent-fg [&_.text-accent]:text-accent-fg',
   '[&_.text-fg-2]:text-accent-fg',
