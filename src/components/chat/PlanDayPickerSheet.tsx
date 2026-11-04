@@ -96,7 +96,7 @@ export function PlanDayTiles(props: {
                     // A selection fill, not a button: solid accent with a pill
                     // light (no glow), lit-chip when idle.
                     on
-                      ? 'border-accent bg-accent text-accent-fg hover:bg-accent lit-pill'
+                      ? 'border-transparent bg-accent text-accent-fg hover:bg-accent lit-pill'
                       : 'bg-panel text-fg lit-chip',
                   )}
                 >

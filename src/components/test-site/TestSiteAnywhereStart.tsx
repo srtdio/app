@@ -64,7 +64,7 @@ export function TestSiteAnywhereStart({
           : 'fixed left-1/2 top-[calc(env(safe-area-inset-top)+2px)] z-[2147483000] -translate-x-1/2 px-2',
       )}
     >
-      <span className="whitespace-nowrap rounded-full border border-dashed border-accent bg-panel px-3 py-1 text-[11px] font-medium text-accent">
+      <span className="whitespace-nowrap rounded-full border border-dashed border-border-strong bg-panel px-3 py-1 text-[11px] font-medium text-accent">
         {busy ? 'Starting' : 'Start fresh'}
       </span>
     </button>

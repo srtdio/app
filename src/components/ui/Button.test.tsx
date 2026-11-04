@@ -155,14 +155,14 @@ describe('Chip', () => {
     }
   });
 
-  it('selected is lit-chip-selected with no soft fill; add stays flat', () => {
+  it('selected is lit-selected with no soft fill; add stays flat', () => {
     const sel = tokens(
       (Chip({ label: 'All', selected: true }) as ReactElement<{ className: string }>).props
         .className,
     );
-    expect(sel).toContain('lit-chip-selected');
-    expect(sel).toContain('text-accent');
-    expect(sel).toContain('border-accent-line');
+    expect(sel).toContain('lit-selected');
+    expect(sel).not.toContain('text-accent');
+    expect(sel).not.toContain('border-accent-line');
     expect(sel).not.toContain('bg-accent-soft');
     expect(sel).not.toContain('lit-chip');
     const add = tokens(
@@ -175,14 +175,8 @@ describe('Chip', () => {
 });
 
 describe('focus ring lives on the primitives', () => {
-  const RING = [
-    'focus:outline-none',
-    'focus-visible:ring-2',
-    'focus-visible:ring-accent',
-    // Without the offset the ring vanishes on the accent primary fill.
-    'focus-visible:ring-offset-2',
-    'focus-visible:ring-offset-bg',
-  ];
+  // lit-focus is an offset outline (2px), so it reads on the accent primary fill.
+  const RING = ['focus-visible:lit-focus'];
   function iconClass(): string {
     const el = IconButton({ label: 'Close', children: 'x' }) as ReactElement<{
       className: string;
@@ -194,11 +188,12 @@ describe('focus ring lives on the primitives', () => {
     return el.props.className;
   }
 
-  it('Button (every variant), IconButton and Chip carry the offset accent ring', () => {
+  it('Button (every variant), IconButton and Chip carry the lit-focus outline', () => {
     const classes = [...VARIANTS.map((variant) => classOf({ variant })), iconClass(), chipClass()];
     for (const cls of classes) {
       const t = tokens(cls);
       for (const ring of RING) expect(t).toContain(ring);
+      expect(t).not.toContain('focus:outline-none');
     }
   });
 
@@ -237,8 +232,8 @@ describe('press (motion move 5): the shared mv-press class, never a call-site tr
   it('keeps the 44px target and the one focus ring', () => {
     for (const cls of [classOf(), iconClass()]) {
       expect(tokens(cls)).toContain('min-h-[44px]');
-      expect(tokens(cls)).toContain('focus-visible:ring-2');
+      expect(tokens(cls)).toContain('focus-visible:lit-focus');
     }
-    expect(tokens(chipClass())).toContain('focus-visible:ring-2');
+    expect(tokens(chipClass())).toContain('focus-visible:lit-focus');
   });
 });

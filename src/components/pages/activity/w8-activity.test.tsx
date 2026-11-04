@@ -101,14 +101,14 @@ describe('W8 fix 4: a card is highlighted when any entry is unread', () => {
     const group = [item({ id: 'a', readAt: READ }), item({ id: 'b', readAt: null })];
     expect(groupHasUnread(group)).toBe(true);
     const html = renderCard(group);
-    expect(html).toContain('border-accent-line');
+    expect(html).toContain('lit-selected');
     expect(html).toContain('aria-label="Unread"');
   });
 
   it('is plain once every entry is read', () => {
     const group = [item({ id: 'a', readAt: READ }), item({ id: 'b', readAt: READ })];
     expect(groupHasUnread(group)).toBe(false);
-    expect(renderCard(group)).not.toContain('border-accent-line');
+    expect(renderCard(group)).not.toContain('lit-selected');
   });
 });
 

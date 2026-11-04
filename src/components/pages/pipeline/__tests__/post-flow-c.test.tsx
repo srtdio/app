@@ -442,10 +442,10 @@ describe('post flow C: header, count and filters', () => {
     expect(on).toContain('aria-label="Due date: This week"');
     expect(on).toContain('h-11');
     expect(on).toContain('<span class="hidden md:inline">This week</span>');
-    expect(on).toContain('border-accent-line');
+    expect(on).toContain('lit-selected');
     const off = dateTrigger('any');
     expect(off).toContain('aria-label="Due date: Any time"');
-    expect(off).not.toContain('border-accent-line');
+    expect(off).not.toContain('lit-selected');
   });
 
   it('fix 9: the page still opens on the Review chip', () => {

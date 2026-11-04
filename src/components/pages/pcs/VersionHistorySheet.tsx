@@ -208,8 +208,8 @@ export function versionHistorySheet({
             <li
               key={version.id}
               className={cn(
-                'flex min-w-0 items-center gap-1 rounded-lg border border-transparent',
-                selected && 'border-accent-line bg-accent-soft lit-active',
+                'flex min-w-0 items-center gap-1 rounded-lg border',
+                selected ? 'bg-panel lit-selected' : 'border-transparent',
               )}
             >
               <IconButton
@@ -223,7 +223,7 @@ export function versionHistorySheet({
                   className={cn(
                     'flex h-[18px] w-[18px] items-center justify-center rounded-full border',
                     selected
-                      ? 'border-accent bg-accent text-accent-fg'
+                      ? 'border-transparent bg-accent text-accent-fg'
                       : 'border-border-strong text-transparent',
                   )}
                 >

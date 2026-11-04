@@ -497,7 +497,7 @@ function dayAttrs(props: CellProps): {
 const DAY_FOCUS = 'focus-visible:lit-focus focus-visible:-outline-offset-2';
 // Today's inset edge is 1px, so the inset focus outline reads on top of it.
 const DAY_FOCUS_TODAY = DAY_FOCUS;
-const DROP = 'outline-dashed outline-2 -outline-offset-4 outline-accent';
+const DROP = 'lit-today';
 const TODAY_DAY = 'lit-today';
 const TODAY_PILL = 'lit-pill shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold';
 

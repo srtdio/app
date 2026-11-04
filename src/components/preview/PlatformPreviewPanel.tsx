@@ -357,7 +357,7 @@ function SizePicker({
             className={cn(
               'flex flex-col items-start justify-center border px-3 py-1.5 mv-tint',
               selected
-                ? 'border-accent-line text-fg lit-chip-selected'
+                ? 'lit-selected'
                 : 'font-medium text-fg lit-chip',
             )}
           >

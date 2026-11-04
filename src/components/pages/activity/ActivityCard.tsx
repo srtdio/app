@@ -558,8 +558,8 @@ export function ActivityCard({
         event.stopPropagation();
       }}
       className={cn(
-        'lit-card flex overflow-hidden rounded-xl border bg-panel mv-tint',
-        unread && 'border-accent-line',
+        'flex overflow-hidden rounded-xl border bg-panel mv-tint',
+        unread ? 'lit-selected' : 'lit-card',
       )}
     >
       <div

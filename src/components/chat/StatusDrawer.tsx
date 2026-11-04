@@ -154,7 +154,7 @@ const PILL =
 
 const SEGMENT_CLASS: Record<PlanSegment, string> = {
   client: 'bg-accent',
-  team: 'bg-accent-soft ring-1 ring-inset ring-accent-line',
+  team: 'bg-accent-soft ring-1 ring-inset ring-border-strong',
   changes: 'bg-warn',
   waiting: 'bg-panel-2',
 };

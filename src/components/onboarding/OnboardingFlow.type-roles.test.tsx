@@ -233,8 +233,8 @@ describe('OnboardingFlow type roles', () => {
     for (const radio of radios) {
       const classes = radio.className.split(/\s+/);
       if (radio.getAttribute('aria-checked') === 'true') {
-        expect(classes).toContain('lit-chip-selected');
-        expect(classes).toContain('border-accent');
+        expect(classes).toContain('lit-selected');
+        expect(classes).not.toContain('border-accent');
         expect(classes).not.toContain('bg-accent-soft');
       } else {
         expect(classes).toContain('lit-chip');

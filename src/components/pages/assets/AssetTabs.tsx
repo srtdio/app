@@ -69,7 +69,7 @@ export function AssetTabs({ value, counts, onChange }: AssetTabsProps) {
             tabIndex={selected ? 0 : -1}
             data-asset-tab={tab}
             onClick={() => onChange(tab)}
-            className="shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+            className="shrink-0 whitespace-nowrap focus-visible:-outline-offset-2"
           />
         );
       })}

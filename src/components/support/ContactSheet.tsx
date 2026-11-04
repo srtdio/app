@@ -76,7 +76,7 @@ export function ContactSheet({ open, onClose, workspaceName, request }: ContactS
             className={buttonClass(
               'primary',
               'default',
-              'no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              'no-underline focus-visible:lit-focus',
             )}
           >
             Open email

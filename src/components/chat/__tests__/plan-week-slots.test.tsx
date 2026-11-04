@@ -278,7 +278,7 @@ describe('week list layout (L1-L4)', () => {
     );
     // Today keeps its solid accent: bg-none drops lit-card's gradient.
     expect(today).toMatch(
-      /data-plan-day-col="" data-plan-today=""[^>]*border-accent bg-accent bg-none"/,
+      /data-plan-day-col="" data-plan-today=""[^>]*border-transparent bg-accent bg-none"/,
     );
     expect(today).toMatch(/data-plan-day-weekday=""[^>]*bg-accent text-accent-fg">Wed</);
     expect(today).toMatch(
@@ -325,7 +325,7 @@ describe('week list layout (L1-L4)', () => {
       expect.arrayContaining(['whitespace-nowrap', 'text-xs', 'font-semibold', 'text-fg-2']),
     );
     expect(none).not.toContain('data-plan-today');
-    expect(none).not.toContain('border-accent');
+    expect(none).not.toContain('border-transparent bg-accent');
     expect(none).toContain('lit-card');
   });
 

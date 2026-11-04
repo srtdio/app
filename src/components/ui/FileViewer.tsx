@@ -350,12 +350,10 @@ const TONES: Record<ViewerTone, ToneClasses> = {
     chip: 'bg-panel text-fg border border-border lit-pill',
     bar:
       'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-fg ' +
-      'hover:bg-panel-3 focus-visible:outline-none focus-visible:ring-2 ' +
-      'focus-visible:ring-accent disabled:opacity-40',
+      'hover:bg-panel-3 focus-visible:lit-focus disabled:opacity-40',
     text:
       'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
-      'text-fg bg-panel border lit-btn-secondary hover:bg-panel-3 focus-visible:outline-none ' +
-      'focus-visible:ring-2 focus-visible:ring-accent',
+      'text-fg bg-panel border lit-btn-secondary hover:bg-panel-3 focus-visible:lit-focus',
   },
 };
 
@@ -715,7 +713,7 @@ function PdfPage(props: {
           onClick={() => setAttempt((n) => n + 1)}
           className={cn(
             'absolute inset-0 flex min-h-[44px] items-center justify-center bg-panel text-base text-fg',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+            'focus-visible:lit-focus focus-visible:-outline-offset-2',
             NO_SELECT,
           )}
         >

@@ -136,7 +136,7 @@ export function PlatformFrameUpload({
         type="button"
         disabled={disabled}
         onClick={onPick}
-        className="absolute inset-0 text-base focus-visible:ring-inset"
+        className="absolute inset-0 text-base focus-visible:-outline-offset-2"
       >
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-panel-3 text-accent">
           <IconImagePlus size={ICON_SIZE.tray} />

@@ -201,7 +201,7 @@ export function ScheduledStrip(props: {
       onClick={props.onOpen}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        'flex h-12 shrink-0 items-center gap-3 border-t bg-accent-soft px-4 lit-dock hover:bg-accent-soft focus-visible:ring-inset',
+        'flex h-12 shrink-0 items-center gap-3 border-t bg-accent-soft px-4 lit-dock hover:bg-accent-soft focus-visible:-outline-offset-2',
         NO_TOUCH_SELECT,
       )}
     >

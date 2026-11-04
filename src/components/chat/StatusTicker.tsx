@@ -392,7 +392,7 @@ export function StatusTickerBar(props: {
         data-status-chevron=""
         aria-label={open ? 'Hide open items' : 'Show open items'}
         aria-expanded={open}
-        className="relative -my-1 flex h-11 w-4 shrink-0 items-center justify-center text-fg-3 before:absolute before:-inset-x-3.5 before:-inset-y-1 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="relative -my-1 flex h-11 w-4 shrink-0 items-center justify-center text-fg-3 before:absolute before:-inset-x-3.5 before:-inset-y-1 before:content-[''] focus-visible:lit-focus"
       >
         <span
           data-status-chevron-icon={open ? 'up' : 'down'}

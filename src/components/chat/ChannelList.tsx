@@ -557,7 +557,7 @@ export interface ChannelRowState {
 /**
  * The tile's tap target classes: the whole tile is one button, a lit card
  * (lit-card draws the edges); a checked tile takes the selected tint
- * (lit-chip-selected, accent line), the open chat on desktop takes panel-2
+ * (lit-selected, ink line), the open chat on desktop takes panel-2
  * (bg-none drops the card gradient so the fill shows). Token classes only, so
  * light and dark stay at parity.
  */
@@ -568,7 +568,7 @@ export function channelRowClass(state: ChannelRowState): string {
     tileBoxClass(state.kind, state.more === true),
     CHANNEL_ROW_BUTTON,
     checked
-      ? 'border-accent-line lit-chip-selected'
+      ? 'lit-selected bg-panel'
       : cn('lit-card', open ? 'bg-panel-2 bg-none' : 'bg-panel hover:bg-panel-2'),
   );
 }
@@ -586,7 +586,7 @@ export function chatRowContextMenu(
 
 /** The tile button's behaviour: no text selection, no iOS callout, focus ring. */
 export const CHANNEL_ROW_BUTTON = cn(
-  'min-w-0 text-left mv-tint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+  'min-w-0 text-left mv-tint focus-visible:lit-focus',
   NO_TOUCH_SELECT,
 );
 

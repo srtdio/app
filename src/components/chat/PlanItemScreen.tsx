@@ -1228,7 +1228,7 @@ export function PlanItemScreen(props: {
                   }
                   className={cn(
                     'min-w-0 flex-1',
-                    teamNote ? 'border-warn' : askingChanges ? 'border-accent' : null,
+                    teamNote ? 'border-warn' : askingChanges ? 'border-border-strong' : null,
                   )}
                   style={{ maxHeight: COMMENT_BOX_MAX_PX }}
                 />

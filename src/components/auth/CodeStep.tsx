@@ -191,7 +191,7 @@ export function CodeStep({
               data-code-box=""
               className={cn(
                 'flex h-14 items-center justify-center rounded-lg border bg-panel-2 lit-well font-mono text-2xl font-medium tabular-nums text-fg mv-tint',
-                invalid ? 'border-bad' : i === active ? 'border-accent' : 'border-border',
+                invalid ? 'border-bad lit-bad' : i === active ? 'border-border lit-focus' : 'border-border',
               )}
             >
               {code[i] ?? ''}

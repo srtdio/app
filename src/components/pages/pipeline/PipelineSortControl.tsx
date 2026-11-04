@@ -285,7 +285,7 @@ export function PipelineDateControl({
       onClick={() => setOpen((prev) => !prev)}
       className={cn(
         TRIGGER,
-        active ? 'border-accent-line text-accent lit-chip-selected' : 'text-fg-2',
+        active ? 'lit-selected' : 'text-fg-2',
       )}
     >
       <IconCalendar size={ICON_SIZE.inline} />

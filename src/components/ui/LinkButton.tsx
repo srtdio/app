@@ -35,7 +35,7 @@ export function LinkButton({ url, className }: LinkButtonProps) {
         'secondary',
         'default',
         cn(
-          'group max-w-full !justify-start no-underline hover:border-accent-line focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+          'group max-w-full !justify-start no-underline hover:border-border-strong focus-visible:lit-focus',
           className,
         ),
       )}

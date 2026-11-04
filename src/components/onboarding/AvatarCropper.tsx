@@ -310,10 +310,10 @@ function AvatarCropperImpl(
           height={FRAME}
           style={{ width: FRAME, height: FRAME }}
         />
-        {/* Circular crop guide: a ring using the accent-line token. */}
+        {/* Circular crop guide: the lit-today inset line (sel-edge). */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-full border-2 border-accent-line"
+          className="pointer-events-none absolute inset-0 rounded-full lit-today"
         />
         {!hasPhoto ? (
           <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center text-base text-fg">

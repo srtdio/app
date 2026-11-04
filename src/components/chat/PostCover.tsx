@@ -22,7 +22,7 @@ type PostCoverState = CardFirstMedia | null | undefined;
 
 /** The 48px rounded box every chat post list row uses for its picture. */
 export const POST_COVER_BOX =
-  'relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3';
+  'relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3 lit-pill';
 
 /** The boxed cover for a list row. */
 export function PostCover(props: { cover: PostCoverState; fallback?: ReactNode }): ReactElement {

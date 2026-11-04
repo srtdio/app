@@ -158,7 +158,7 @@ describe('AssetCard select mode', () => {
     expect(out).toContain('aria-pressed="true"');
     expect(out).not.toContain('View report.pdf');
     // Selected outline + filled tick (white check on the accent circle).
-    expect(out).toContain('border-accent');
+    expect(out).toContain('lit-selected');
     expect(out).toContain('bg-accent');
     expect(out).toContain('<svg');
   });

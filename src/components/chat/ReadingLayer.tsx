@@ -440,7 +440,7 @@ export function WhoReactedSheet(props: {
                   className={cn(
                     'flex items-center gap-1.5 border px-4 text-base font-medium',
                     tab === t.key
-                      ? 'border-accent-line text-accent lit-chip-selected'
+                      ? 'lit-selected'
                       : 'text-fg lit-chip',
                   )}
                 >

@@ -35,7 +35,7 @@ describe('CountBadge', () => {
 
 describe('SelectCheck', () => {
   it('toggles the on and off classes', () => {
-    expect(selectCheckClass(true)).toContain('border-accent bg-accent text-accent-fg');
+    expect(selectCheckClass(true)).toContain('border-transparent bg-accent text-accent-fg');
     expect(selectCheckClass(false)).toContain('border-border-strong bg-panel');
     expect(selectCheckClass(false)).not.toContain('bg-accent');
     const on = renderToStaticMarkup(<SelectCheck checked />);

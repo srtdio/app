@@ -208,7 +208,7 @@ describe('open at today', () => {
       expect(other).not.toContain('bg-accent-soft');
       expect(html.match(/data-plan-day-today=""/g)).toHaveLength(1);
       expect(html.match(/data-plan-today=""/g)).toHaveLength(1);
-      expect(html).toMatch(/data-plan-today=""[^>]*border-accent bg-accent bg-none"/);
+      expect(html).toMatch(/data-plan-today=""[^>]*border-transparent bg-accent bg-none"/);
       expect(html.match(/data-plan-today-pill=""[^>]*>Today</g)).toHaveLength(1);
       // The pill sits in today's group.
       const band = html.slice(html.indexOf(today), html.indexOf('data-plan-day="2026-10-14"'));

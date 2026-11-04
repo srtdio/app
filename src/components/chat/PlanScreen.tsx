@@ -3524,7 +3524,7 @@ export function DayColumn(props: {
       className={cn(
         'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border lit-card',
         // Today keeps its solid accent fill: bg-none drops lit-card's gradient.
-        isToday ? 'border-accent bg-accent bg-none' : 'bg-panel',
+        isToday ? 'border-transparent bg-accent bg-none' : 'bg-panel',
       )}
     >
       <span
@@ -3813,7 +3813,7 @@ function PairedPostRow(props: {
     return (
       <div
         data-plan-pair={link.postId}
-        className="mt-2 flex flex-col border-l-2 border-accent pl-3"
+        className="mt-2 flex flex-col border-l-2 border-border-strong pl-3"
       >
         <div
           role="button"
@@ -3844,7 +3844,7 @@ function PairedPostRow(props: {
       : '';
   const onOpen = props.onOpen;
   return (
-    <div data-plan-pair={link.postId} className="mt-2 flex flex-col border-l-2 border-accent pl-3">
+    <div data-plan-pair={link.postId} className="mt-2 flex flex-col border-l-2 border-border-strong pl-3">
       <PressableRow
         type="button"
         data-plan-pair-row={link.postId}

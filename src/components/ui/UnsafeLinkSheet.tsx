@@ -184,7 +184,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
             className={buttonClass(
               'primary',
               'default',
-              'w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-fg focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
+              'w-full',
             )}
           >
             {"Don't open"}
@@ -198,7 +198,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
             className={buttonClass(
               'secondary',
               'default',
-              'w-full data-[unsafe-open-anyway]:text-[color:var(--warn-ink)] no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-fg focus-visible:ring-offset-2 focus-visible:ring-offset-panel',
+              'w-full data-[unsafe-open-anyway]:text-[color:var(--warn-ink)] no-underline',
             )}
           >
             Open anyway
@@ -271,7 +271,7 @@ export function UnsafeLinkButton(props: {
       url={props.url}
       reasons={props.reasons}
       className={cn(
-        'inline-flex h-11 min-h-[44px] max-w-full items-center gap-2 rounded-lg border border-[color:var(--warn-line)] bg-warn-soft px-4 text-base font-medium text-[color:var(--warn-ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'inline-flex h-11 min-h-[44px] max-w-full items-center gap-2 rounded-lg border border-[color:var(--warn-line)] bg-warn-soft px-4 text-base font-medium text-[color:var(--warn-ink)] focus-visible:lit-focus',
         props.className,
       )}
     >

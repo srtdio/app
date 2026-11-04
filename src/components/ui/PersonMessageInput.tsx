@@ -104,7 +104,7 @@ export function PersonMessageInput(props: PersonMessageInputProps): ReactElement
     >
       <div
         className={cn(
-          'lit-well flex min-h-[44px] min-w-0 flex-1 items-end rounded-lg border border-border bg-panel-2 pl-4 mv-tint focus-within:border-accent-line',
+          'lit-well flex min-h-[44px] min-w-0 flex-1 items-end rounded-lg border border-border bg-panel-2 pl-4 mv-tint focus-within:lit-focus',
           controls.reactions ? 'pr-0' : 'pr-4',
         )}
       >

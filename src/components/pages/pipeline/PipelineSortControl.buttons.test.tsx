@@ -64,7 +64,7 @@ describe('Pipeline controls buttons', () => {
       expectShared(tag);
       expect(classOf(tag)).toContain('min-w-11');
     }
-    expect(classOf(due)).toContain('border-accent-line');
+    expect(classOf(due)).toContain('lit-selected');
   });
 
   it('stage chips are the shared ui/Chip: 44px, 8px radius, count only above 0', () => {
@@ -86,7 +86,7 @@ describe('Pipeline controls buttons', () => {
       expect(classOf(tag)).toContain('rounded-lg');
     }
     const active = tags.find((tag) => tag.includes('aria-current="true"'));
-    expect(classOf(active ?? '')).toContain('lit-chip-selected');
+    expect(classOf(active ?? '')).toContain('lit-selected');
     expect(html).toContain('<span class="tabular-nums">3</span>');
     expect(html).toContain('<span class="tabular-nums">1</span>');
     expect(html).not.toContain('<span class="tabular-nums">0</span>');

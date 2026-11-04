@@ -38,7 +38,7 @@ export function ReactionBadge({ label, onClick, children }: ReactionBadgeProps) 
         REACTION_BADGE_CLASS,
         REACTION_BADGE_HIT,
         MOVE_CLASS.press,
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'focus-visible:lit-focus',
       )}
     >
       {children}

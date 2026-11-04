@@ -599,7 +599,7 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
     const html = card([reminder()]);
     expect(html).toContain('data-activity-event="reminder"');
     expect(html).toContain('data-activity-menu');
-    expect(html).toContain('border-accent-line');
+    expect(html).toContain('lit-selected');
     expect(html).toContain('data-activity-alert-icon="reminder"');
     expect(html).toContain('>Reminder<');
     expect(html).not.toContain('data-activity-action');

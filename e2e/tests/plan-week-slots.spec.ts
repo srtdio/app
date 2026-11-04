@@ -377,7 +377,7 @@ test('client: a long plan shows week headers, 44px empty days, and a draft with 
     await expect(today).toHaveClass(/\bbg-accent\b/);
     await expect(today).toHaveClass(/\btext-accent-fg\b/);
     const tile = plan.locator('[data-plan-today]');
-    await expect(tile).toHaveClass(/\bborder-accent\b/);
+    await expect(tile).toHaveClass(/\bborder-transparent\b/);
     await expect(tile).toHaveClass(/\bbg-accent\b/);
     await expect(tile.locator('[data-plan-day-number]')).toHaveClass(/\btext-accent-fg\b/);
     await tile.scrollIntoViewIfNeeded();

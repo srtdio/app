@@ -552,7 +552,7 @@ describe('A3. the title is the edit target', () => {
     expect(h1?.querySelector('svg')).toBeNull();
     const title = h1?.querySelector<HTMLButtonElement>('[data-title-edit]');
     expect(title?.className).toContain('min-h-[44px]');
-    expect(title?.className).toContain('focus-visible:ring-2');
+    expect(title?.className).toContain('focus-visible:lit-focus');
     expect(title?.className).toContain('tracking-tight');
     expect(title?.className).not.toContain('leading-');
     await click(title ?? null);
