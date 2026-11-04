@@ -962,7 +962,7 @@ export function notesTile(props: {
           tileBoxClass('wide'),
           CHANNEL_ROW_BUTTON,
           'group/notes-row disabled:cursor-default bg-panel',
-          // Open is the one selected look; hover is PressableRow's lit-hover overlay.
+          // Open is the one selected look; hover is the PressableRow lit-hover overlay.
           props.selected && !props.selecting ? 'lit-selected' : 'lit-card',
         )}
       >

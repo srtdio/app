@@ -412,7 +412,7 @@ describe('VoiceNote playback', () => {
 
   it('the own-bubble hover tint skips every voice control and still tints other buttons', async () => {
     // The tint's selector, as the arbitrary variant writes it (minus :hover).
-    const variant = /\[&_(button\S*?):hover\]:bg-on-bubble\/10/.exec(OWN_BUBBLE_CONTENT)?.[1];
+    const variant = /\[&_(button\S*?):hover\]:bg-on-bubble-hover/.exec(OWN_BUBBLE_CONTENT)?.[1];
     expect(variant).toBe('button:not([data-upload-ring]):not([data-voice-control])');
     const selector = variant!;
     voiceStore.update('pb-1', { transcript: 'hello there', collapsed: true });
