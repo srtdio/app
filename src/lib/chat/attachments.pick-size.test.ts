@@ -221,9 +221,7 @@ describe('video length on new chat video sends', () => {
   it('a video with no readable length writes no duration_ms', async () => {
     local.next = Promise.resolve({ ok: true, blob: new Blob(['j']), width: 580, height: 326 });
     await uploadChatAttachment(params(clip(), 'v-nolen'));
-    const meta = buildAttachmentMeta([
-      { assetId: 'v-nolen', name: 'clip.mp4', mime: 'video/mp4' },
-    ]);
+    const meta = buildAttachmentMeta([{ assetId: 'v-nolen', name: 'clip.mp4', mime: 'video/mp4' }]);
     expect(meta['v-nolen']?.duration_ms).toBe(undefined);
     expect(attachmentMetaVideoDurationMs(meta, 'v-nolen')).toBe(undefined);
   });

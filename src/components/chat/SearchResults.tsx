@@ -72,8 +72,7 @@ export function useMessageSearch(params: {
 }
 
 /** Section label, matching the chat home's Groups / People labels. */
-export const RESULT_LABEL =
-  'px-1 pt-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+export const RESULT_LABEL = 'px-1 pt-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /** A result row: one 64px tap target, no text selection and no iOS callout on hold. */
 const RESULT_ROW = cn(

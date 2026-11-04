@@ -61,7 +61,14 @@ describe('flattenMedia', () => {
     const h = hit('m6', {
       attachmentAssetIds: ['v'],
       attachmentMeta: {
-        v: { mime: 'video/mp4', name: 'v.mp4', size: 2, duration_ms: 9000, thumb_w: 580, thumb_h: 326 },
+        v: {
+          mime: 'video/mp4',
+          name: 'v.mp4',
+          size: 2,
+          duration_ms: 9000,
+          thumb_w: 580,
+          thumb_h: 326,
+        },
       },
     });
     expect(flattenMedia([h], 'video')[0]?.durationMs).toBe(9000);
@@ -71,7 +78,14 @@ describe('flattenMedia', () => {
     const h = hit('m3', {
       attachmentAssetIds: ['d', 'n'],
       attachmentMeta: {
-        d: { mime: 'application/pdf', name: 'd.pdf', size: 9, page_count: 4, thumb_w: 580, thumb_h: 820 },
+        d: {
+          mime: 'application/pdf',
+          name: 'd.pdf',
+          size: 9,
+          page_count: 4,
+          thumb_w: 580,
+          thumb_h: 820,
+        },
         n: { mime: 'audio/webm', name: 'n.webm', size: 3, duration_ms: 5000 },
       },
     });
@@ -102,7 +116,9 @@ describe('flattenLinks', () => {
       ['m5:0', 'https://a.example/x'],
       ['m5:1', 'https://b.example/y'],
     ]);
-    expect(flattenHits([h], 'link', { appOrigin: null, routes: APP_ENTITY_ROUTES })).toHaveLength(2);
+    expect(flattenHits([h], 'link', { appOrigin: null, routes: APP_ENTITY_ROUTES })).toHaveLength(
+      2,
+    );
   });
 });
 
@@ -124,7 +140,10 @@ describe('groupByMonth', () => {
   });
 
   it('keys a month by YYYY-MM', () => {
-    expect(monthGroupOf('2026-03-15T10:00:00Z', NOW, UTC)).toEqual({ key: '2026-03', label: 'March' });
+    expect(monthGroupOf('2026-03-15T10:00:00Z', NOW, UTC)).toEqual({
+      key: '2026-03',
+      label: 'March',
+    });
   });
 });
 

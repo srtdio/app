@@ -71,7 +71,10 @@ function positive(raw: unknown): number | null {
 }
 
 /** The width/height a photo's meta may carry (older rows carry none). */
-function metaSize(meta: unknown, versionId: string): { width: number | null; height: number | null } {
+function metaSize(
+  meta: unknown,
+  versionId: string,
+): { width: number | null; height: number | null } {
   if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) {
     return { width: null, height: null };
   }
@@ -115,7 +118,9 @@ export function flattenMedia(
           // A video's length is read apart: parseAttachmentMeta keeps durationMs for voice notes.
           durationMs:
             a.durationMs ??
-            (kind === 'video' ? attachmentMetaVideoDurationMs(hit.attachmentMeta, a.assetId) : undefined) ??
+            (kind === 'video'
+              ? attachmentMetaVideoDurationMs(hit.attachmentMeta, a.assetId)
+              : undefined) ??
             null,
           pageCount: a.pageCount ?? null,
         },
