@@ -103,6 +103,9 @@ describe('syncThemeColorMeta', () => {
 
   it('one computed-style read per call, no write when the value already matches', async () => {
     const { syncThemeColorMeta } = await load();
+    syncThemeColorMeta('panel');
+    reads = 0;
+    // Both metas now hold --panel light; a second sync for the same tint writes nothing.
     const metas = [...document.querySelectorAll('meta[name="theme-color"]')];
     const spies = metas.map((m) => vi.spyOn(m, 'setAttribute'));
     syncThemeColorMeta('panel');
