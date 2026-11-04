@@ -453,9 +453,7 @@ function ViewSwitch(props: {
           onClick={() => props.onView(o.view)}
           className={cn(
             'min-w-[64px] border px-3 text-base font-medium mv-tint focus-visible:-outline-offset-2',
-            props.view === o.view
-              ? 'lit-selected'
-              : 'border-transparent text-fg-2 hover:text-fg',
+            props.view === o.view ? 'lit-selected' : 'border-transparent text-fg-2 hover:text-fg',
           )}
         >
           {o.label}

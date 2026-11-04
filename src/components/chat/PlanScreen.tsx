@@ -3844,7 +3844,10 @@ function PairedPostRow(props: {
       : '';
   const onOpen = props.onOpen;
   return (
-    <div data-plan-pair={link.postId} className="mt-2 flex flex-col border-l-2 border-border-strong pl-3">
+    <div
+      data-plan-pair={link.postId}
+      className="mt-2 flex flex-col border-l-2 border-border-strong pl-3"
+    >
       <PressableRow
         type="button"
         data-plan-pair-row={link.postId}
@@ -4069,10 +4072,7 @@ function PlanRow(props: {
   if (draftLocked(props.bundle, props.item, props.side)) {
     // Name only: no PLAN control, no open, no hover.
     return (
-      <div
-        data-plan-row-wrap={id}
-        className={cn('flex w-full min-w-0 items-start gap-3', rowLine)}
-      >
+      <div data-plan-row-wrap={id} className={cn('flex w-full min-w-0 items-start gap-3', rowLine)}>
         {tileCol}
         <div
           role="button"

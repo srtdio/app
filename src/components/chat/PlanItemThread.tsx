@@ -326,7 +326,7 @@ function bodyNodes(body: string, ownTone: boolean, workspaceId: string | null): 
       <span
         data-plan-mention={segment.userId}
         className={cn(
-          'whitespace-nowrap rounded-full px-1.5 font-medium',
+          'whitespace-nowrap rounded-full px-1.5 font-medium lit-tint',
           ownTone ? 'bg-accent-fg/[0.22] text-accent-fg' : 'bg-accent-soft text-accent',
         )}
       >

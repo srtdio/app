@@ -186,7 +186,6 @@
   --lit-surface: linear-gradient(#fff, #f6f7f9);
   --lit-surface-top: #fff;
   --lit-chip-bg: linear-gradient(#fff, #f8f9fa);
-  --lit-chip-selected-bg: linear-gradient(#fff, #f6f7f9);
   --lit-overlay-bg: var(--panel);
   --lit-bubble-other-bg: linear-gradient(#f6f7f9, #eff1f4);
   --lit-shine: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
@@ -218,8 +217,6 @@
     0 3px 9px -2px rgba(200, 60, 60, 0.5);
   --lit-btn-secondary: inset 0 1px 0 #fff, 0 1px 2px rgba(20, 22, 30, 0.1);
   --lit-chip:
-    inset 0 1px 0 #fff, 0 0 0 1px rgba(20, 22, 30, 0.03), 0 3px 8px -2px rgba(20, 22, 30, 0.16);
-  --lit-chip-selected:
     inset 0 1px 0 #fff, 0 0 0 1px rgba(20, 22, 30, 0.03), 0 3px 8px -2px rgba(20, 22, 30, 0.16);
   --lit-well: inset 0 1px 2px rgba(20, 22, 30, 0.1), inset 0 0 0 1px rgba(20, 22, 30, 0.02);
   --lit-well-soft: inset 0 1px 2px rgba(20, 22, 30, 0.05);
@@ -360,7 +357,6 @@
   --lit-surface: linear-gradient(#17181b, #111214);
   --lit-surface-top: #24262d;
   --lit-chip-bg: linear-gradient(#17181b, #121315);
-  --lit-chip-selected-bg: linear-gradient(#2a2c33, #1f2126);
   --lit-overlay-bg: linear-gradient(#18191c, #131416);
   --lit-bubble-other-bg: linear-gradient(#1a1b1e, #141518);
   --lit-shine: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
@@ -397,9 +393,6 @@
     0 1px 2px rgba(0, 0, 0, 0.5);
   --lit-chip:
     inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3);
-  --lit-chip-selected:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
     0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3);
   --lit-well: inset 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
   --lit-well-soft: inset 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -595,10 +588,6 @@
   .lit-chip {
     background-image: var(--lit-chip-bg);
     box-shadow: var(--lit-chip);
-  }
-  .lit-chip-selected {
-    background: var(--lit-chip-selected-bg);
-    box-shadow: var(--lit-chip-selected);
   }
   .lit-well {
     box-shadow: var(--lit-well);

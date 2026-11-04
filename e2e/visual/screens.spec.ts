@@ -461,7 +461,10 @@ async function pickTrayTile(page: Page, tile: string): Promise<void> {
 async function pickerSheet(page: Page, title: string, ready: string[]): Promise<void> {
   const sheet = page.getByRole('dialog', { name: title });
   await waitFor([sheet], `${title} sheet`);
-  await waitFor(ready.map((selector) => sheet.locator(selector)), `${title} rows`);
+  await waitFor(
+    ready.map((selector) => sheet.locator(selector)),
+    `${title} rows`,
+  );
   await expect(sheet.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: READY_MS });
 }
 

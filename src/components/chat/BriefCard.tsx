@@ -68,7 +68,7 @@ export function SharedBriefCards({ briefIds }: { briefIds: string[] }): ReactEle
     // A read that failed keeps this skeleton and retries (tab visible, online,
     // connected, or scrolled into view); "Brief unavailable" is only for RLS.
     return (
-      <div ref={retryInView} className="mt-1.5 flex flex-col items-start gap-1.5">
+      <div ref={retryInView} className="mt-1.5 flex flex-col items-start gap-1.5 text-fg">
         {briefIds.map((id) => (
           <div
             key={id}
@@ -80,7 +80,7 @@ export function SharedBriefCards({ briefIds }: { briefIds: string[] }): ReactEle
     );
   }
   return (
-    <div className="mt-1.5 flex flex-col items-start gap-1.5">
+    <div className="mt-1.5 flex flex-col items-start gap-1.5 text-fg">
       {views.map((view) =>
         failed.includes(view.briefId) ? (
           <CouldntLoadCard

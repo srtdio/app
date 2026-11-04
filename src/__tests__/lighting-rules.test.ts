@@ -87,7 +87,6 @@ describe('lighting rules', () => {
       'lit-btn-danger',
       'lit-btn-secondary',
       'lit-chip',
-      'lit-chip-selected',
       'lit-well',
       'lit-well-soft',
       'lit-pill',
@@ -120,7 +119,7 @@ describe('lighting rules', () => {
       "'bg-accent font-semibold text-accent-fg lit-pill'",
     );
     expect(src('chat/PlanDayPickerSheet.tsx')).toContain(
-      "'border-accent bg-accent text-accent-fg hover:bg-accent lit-pill'",
+      "'border-transparent bg-accent text-accent-fg hover:bg-accent lit-pill'",
     );
     for (const rel of [
       'ui/DatePicker.tsx',
@@ -179,7 +178,6 @@ describe('lighting rules', () => {
       'lit-btn-danger',
       'lit-btn-secondary',
       'lit-chip',
-      'lit-chip-selected',
       'lit-bubble-own',
       'lit-bubble-other',
     ]) {
@@ -248,7 +246,7 @@ describe('lighting rules', () => {
       expect(button, c).toContain(c);
     }
     expect(src('ui/Chip.tsx')).toContain('lit-chip');
-    expect(src('ui/Chip.tsx')).toContain('lit-chip-selected');
+    expect(src('ui/Chip.tsx')).toContain('lit-selected');
     expect(src('ui/Input.tsx')).toContain('lit-well');
     expect(src('ui/Sheet.tsx')).toContain('lit-overlay');
     expect(src('ui/popover-classes.ts')).toContain('lit-overlay');

@@ -283,10 +283,7 @@ export function PipelineDateControl({
       aria-label={`Due date: ${label}`}
       data-date-filter=""
       onClick={() => setOpen((prev) => !prev)}
-      className={cn(
-        TRIGGER,
-        active ? 'lit-selected' : 'text-fg-2',
-      )}
+      className={cn(TRIGGER, active ? 'lit-selected' : 'text-fg-2')}
     >
       <IconCalendar size={ICON_SIZE.inline} />
       <span className="hidden md:inline">{label}</span>

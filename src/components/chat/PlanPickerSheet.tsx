@@ -89,7 +89,10 @@ export function PlanPickerSheet(props: {
     <Sheet open={props.open} onClose={props.onClose} title={PICKER_TITLE} fixedHeight>
       <div
         data-plan-picker=""
-        className={cn('-mx-[18px] -my-4 bg-bg sm:flex sm:min-h-0 sm:flex-1 sm:flex-col', NO_TOUCH_SELECT)}
+        className={cn(
+          '-mx-[18px] -my-4 bg-bg sm:flex sm:min-h-0 sm:flex-1 sm:flex-col',
+          NO_TOUCH_SELECT,
+        )}
       >
         <p className="px-[18px] pb-1 pt-3 text-sm leading-4 text-fg-3">
           Upcoming plans in {props.workspaceName}

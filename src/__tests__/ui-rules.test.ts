@@ -402,14 +402,13 @@ describe('ui rules: 44px touch targets', () => {
   });
 });
 
-describe('ui rules: one focus ring', () => {
+describe('ui rules: one focus line', () => {
   it.each(['ui/Button.tsx', 'ui/IconButton.tsx', 'ui/Chip.tsx'])(
-    '%s carries the offset accent ring',
+    '%s carries the one focus line (lit-focus outline)',
     (rel) => {
       const src = bySrc(rel);
-      expect(src).toContain('focus-visible:ring-2 focus-visible:ring-accent');
-      expect(src).toContain('focus-visible:ring-offset-2');
-      expect(src).toContain('focus-visible:ring-offset-bg');
+      expect(src).toContain('focus-visible:lit-focus');
+      expect(src).not.toContain('focus-visible:ring-');
     },
   );
 });

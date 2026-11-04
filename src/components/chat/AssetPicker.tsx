@@ -217,7 +217,11 @@ export function AssetGridSkeleton(): ReactElement {
   return (
     <ul aria-busy="true" aria-label="Loading files" className={GRID_CLASS}>
       {[0, 1, 2, 3, 4, 5].map((i) => (
-        <li key={i} data-skeleton-tile="" className="aspect-square rounded-xl border bg-panel lit-card" />
+        <li
+          key={i}
+          data-skeleton-tile=""
+          className="aspect-square rounded-xl border bg-panel lit-card"
+        />
       ))}
     </ul>
   );

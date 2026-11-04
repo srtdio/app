@@ -754,7 +754,7 @@ export function checkpointBox(checked: boolean, confirmed: boolean): ReactElemen
           ? confirmed
             ? RESOLVED_FILL_CLASS
             : RESOLVED_HOLLOW_CLASS
-          : 'border-border-strong bg-panel text-good',
+          : 'border-border-strong bg-panel text-good lit-well',
       )}
     >
       {/* The tick shows at once when checked (never a fade); unchecked it

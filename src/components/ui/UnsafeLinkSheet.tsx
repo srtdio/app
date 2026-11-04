@@ -181,11 +181,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
             type="button"
             data-unsafe-dont-open=""
             onClick={onClose}
-            className={buttonClass(
-              'primary',
-              'default',
-              'w-full',
-            )}
+            className={buttonClass('primary', 'default', 'w-full')}
           >
             {"Don't open"}
           </button>

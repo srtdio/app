@@ -512,7 +512,7 @@ function Draft(props: {
       data-card-size="draft"
       className={cn(
         'flex h-16 items-center gap-2 rounded-xl border py-1.5 pl-2 pr-0',
-        warn ? WARN : 'border-border bg-panel-2 text-fg',
+        warn ? `${WARN} lit-tint` : 'bg-panel-2 text-fg lit-card-muted',
         NO_CALLOUT,
       )}
     >

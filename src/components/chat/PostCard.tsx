@@ -521,7 +521,7 @@ export function SharedPostCards({
   if (postIds.length === 0) return null;
   if (loading || !ready) {
     return (
-      <div ref={retryInView} className="mt-1.5 flex flex-col items-start gap-1.5">
+      <div ref={retryInView} className="mt-1.5 flex flex-col items-start gap-1.5 text-fg">
         {postIds.map((id) => (
           <PostCardSkeleton key={id} platform={platform} />
         ))}
@@ -600,7 +600,7 @@ export function SharedPostCardList(
   return (
     <div
       data-induction={INDUCTION_KEYS.chatPostCard}
-      className="mt-1.5 flex flex-col items-start gap-1.5"
+      className="mt-1.5 flex flex-col items-start gap-1.5 text-fg"
     >
       {views.map((view) =>
         failedIds.has(view.postId) ? (
@@ -645,9 +645,9 @@ export const POST_CARD =
 export const POST_CARD_MUTED =
   'flex w-[240px] flex-col overflow-hidden rounded-xl border bg-panel-2 text-left lit-card-muted';
 
-/** A loading card's frame: POST_CARD's box on a neutral fill, no pulse. */
+/** A loading card's frame: POST_CARD's box and light, so nothing changes light when the card lands. */
 export const CARD_SKELETON =
-  'flex w-[240px] flex-col overflow-hidden rounded-xl border border-border bg-panel-2';
+  'flex w-[240px] flex-col overflow-hidden rounded-xl border bg-panel lit-card';
 
 /** The card body: two-line title area over the fixed meta row. */
 const CARD_BODY = 'flex shrink-0 flex-col gap-1.5 px-3 py-2.5';

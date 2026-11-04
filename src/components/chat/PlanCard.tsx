@@ -125,7 +125,7 @@ export function SharedPlanCards(props: { planIds: string[]; senderName: string }
     // waits for the chat bundle starts this card's read now (plan-fire.ts).
     return (
       <div
-        className="mt-1.5 flex flex-col items-start gap-1.5"
+        className="mt-1.5 flex flex-col items-start gap-1.5 text-fg"
         onPointerDown={() => ctx?.tapPlans(props.planIds)}
       >
         {props.planIds.map((id) => (
@@ -137,7 +137,7 @@ export function SharedPlanCards(props: { planIds: string[]; senderName: string }
     );
   }
   return (
-    <div className="mt-1.5 flex flex-col items-start gap-1.5">
+    <div className="mt-1.5 flex flex-col items-start gap-1.5 text-fg">
       {props.planIds.map((id) => {
         if (snapshot.failed.includes(id)) {
           return <CouldntLoadCard key={id} onRetry={() => cache?.retry([id])} />;

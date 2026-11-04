@@ -439,9 +439,7 @@ export function WhoReactedSheet(props: {
                   onClick={() => setTab(t.key)}
                   className={cn(
                     'flex items-center gap-1.5 border px-4 text-base font-medium',
-                    tab === t.key
-                      ? 'lit-selected'
-                      : 'text-fg lit-chip',
+                    tab === t.key ? 'lit-selected' : 'text-fg lit-chip',
                   )}
                 >
                   <span>{t.emoji ?? 'All'}</span>

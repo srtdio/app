@@ -968,7 +968,7 @@ export function SnapshotThumbs({
           key={item.assetAttachmentId}
           style={{ aspectRatio: `${ratio}` }}
           className={cn(
-            'shrink-0 overflow-hidden border border-border bg-panel-2',
+            'shrink-0 overflow-hidden border border-border bg-panel-2 lit-pill',
             size === 'xs' ? 'h-8 rounded' : size === 'sm' ? 'h-10 rounded' : 'h-40 rounded-lg',
           )}
         >
