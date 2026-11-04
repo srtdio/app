@@ -301,13 +301,16 @@ describe('(c) final state first: rendered before the motion features load', () =
   });
 
   it('sweepBoxes: a BoxSkeleton renders its lit class, none when flat', () => {
+    // BoxSkeletonProps requires children, so they go in the props object.
     const lit = mount(
-      createElement(BoxSkeleton, { lit: 'lit-card-muted', className: 'p-4' }, 'x'),
+      // eslint-disable-next-line react/no-children-prop
+      createElement(BoxSkeleton, { lit: 'lit-card-muted', className: 'p-4', children: 'x' }),
     ).querySelector<HTMLElement>('[data-box-skeleton]');
     expect(lit?.className).toBe('lit-card-muted p-4');
-    const flat = mount(createElement(BoxSkeleton, { lit: 'flat' }, 'x')).querySelector<HTMLElement>(
-      '[data-box-skeleton]',
-    );
+    const flat = mount(
+      // eslint-disable-next-line react/no-children-prop
+      createElement(BoxSkeleton, { lit: 'flat', children: 'x' }),
+    ).querySelector<HTMLElement>('[data-box-skeleton]');
     expect(flat?.getAttribute('class')).toBeNull();
     expect(flat?.getAttribute('data-lit')).toBe('flat');
   });
