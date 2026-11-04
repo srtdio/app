@@ -10,6 +10,8 @@ export const PlanItemSchema = z.object({
   description: z.string().max(5000).nullable(),
   post_id: z.string().uuid().nullable(),
   target_date: z.string().nullable(),
+  /** A concept's linked post (plan_concept_link_post); null on every post item. */
+  linked_post_id: z.string().uuid().nullable(),
   created_by: z.string().uuid().nullable(),
   created_at: z.string(),
   updated_at: z.string(),

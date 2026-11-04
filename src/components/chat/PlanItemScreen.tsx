@@ -42,6 +42,7 @@ import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactElement } fro
 import { useNavigate } from 'react-router-dom';
 import {
   planConceptEdit,
+  planConceptLinkPost,
   planItemCommentCreate,
   planItemMove,
   planItemRemove,
@@ -59,11 +60,16 @@ import { Bone, DUR_SLOW_MS } from '@/lib/motion';
 import {
   ICON_SIZE,
   IconArrowUp,
+  IconChevronRight,
+  IconLink,
   IconLock,
   IconMore,
   IconTrash,
   IconX,
 } from '@/components/ui/icons';
+import { Tag, isTagDot } from '@/components/ui/Tag';
+import { PostPicker } from '@/components/chat/PostPicker';
+import type { PostCardFields } from '@srtdio/posts';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { ActionMenu, ActionMenuTrigger, type ActionMenuItem } from '@/components/ui/ActionMenu';
@@ -105,8 +111,20 @@ import {
 import { renderMessageBody } from '@/components/chat/message-body';
 import { postRoute } from '@/components/chat/post-card';
 import {
+  CHANGE_LINKED_POST_LABEL,
   COMMENT_FAILED,
+  DRAFT_NOT_READY,
+  LINK_POST_LABEL,
   MOVE_FAILED,
+  PAIR_POST_LABEL,
+  POST_NOT_MADE_LABEL,
+  STATUS_POST_ROW,
+  UNLINK_POST_LABEL,
+  canLinkPost,
+  linkErrorCopy,
+  linkedPost,
+  postLineLabel,
+  type LinkedPost,
   REMOVED_TOAST,
   REMOVE_FAILED,
   STATUS_LABELS,
@@ -411,6 +429,11 @@ export function PlanItemScreen(props: {
   approverName?: string;
   /** Opened by a row's Not OK: the note box opens focused; Send writes 'changes'. */
   askChanges?: boolean;
+  /**
+   * A concept's Post row: open its linked post as a post item opens (the
+   * Plan screen's item, or the post alone). Absent: the pipeline route.
+   */
+  onOpenLinkedPost?: (postId: string) => void;
 }): ReactElement | null {
   const { bundle, item, side } = props;
   const { workspaces, workspaceId } = useWorkspace();
@@ -485,6 +508,14 @@ export function PlanItemScreen(props: {
   // The concept's files when the sheet opened; null when not read yet.
   const [editFiles, setEditFiles] = useState<PlanItemFile[] | null>(null);
   const [editBusy, setEditBusy] = useState(false);
+  // Link a post (a concept, agency side): the picker, its single pick (by id;
+  // the row when picked here), and the screen's own link ahead of the re-read
+  // (undefined: none held; null: unlinked; a post: linked to it).
+  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
+  const [linkPickId, setLinkPickId] = useState<string | null>(null);
+  const [linkPickRow, setLinkPickRow] = useState<PostCardFields | null>(null);
+  const [linkOverride, setLinkOverride] = useState<PostCardFields | null | undefined>(undefined);
+  const [linkBusy, setLinkBusy] = useState(false);
   // Uploads go as comments' do (library origin).
   const { canAttach, uploadFile } = useCommentAttachments();
   // Files not read when the sheet opened: the sheet reads them (5s cap).
@@ -498,7 +529,10 @@ export function PlanItemScreen(props: {
   );
 
   // A new item (or a fresh bundle) drops the local overrides and drafts.
-  useEffect(() => setOverrides({}), [bundle]);
+  useEffect(() => {
+    setOverrides({});
+    setLinkOverride(undefined);
+  }, [bundle]);
   useEffect(() => {
     if (props.open) return;
     setConfirmOpen(false);
@@ -515,6 +549,7 @@ export function PlanItemScreen(props: {
     setMoveOpen(false);
     setRemoveOpen(false);
     setKeepFor(null);
+    setLinkPickerOpen(false);
   }, [props.open, item.id]);
 
   // A write that lands after the viewer moved on (another item, or closed)
@@ -654,6 +689,61 @@ export function PlanItemScreen(props: {
     toast.show({ title: CONCEPT_UPDATED });
     reload();
     dispatchPlanChanged(window, bundle.plan.id);
+  };
+
+  // The concept's linked post: the screen's own write first, else the read.
+  const link: LinkedPost = linkViewOf(linkedPost(bundle, item, side), linkOverride);
+  const linkedId = link.kind === 'linked' ? link.postId : null;
+  const mayLink = canLinkPost(bundle, item, side, overrides);
+  const openLinkPicker = (): void => {
+    setLinkPickId(linkedId);
+    setLinkPickRow(null);
+    setLinkPickerOpen(true);
+  };
+  /** One plan_concept_link_post: a post links it, null unlinks. Shown at once; a refusal puts it back. */
+  const writeLink = async (post: PostCardFields | null): Promise<void> => {
+    if (linkBusy) return;
+    const forItem = item.id;
+    const before = linkOverride;
+    setLinkBusy(true);
+    setLinkOverride(post);
+    const traceId = generateTraceId();
+    const result = await planConceptLinkPost(supabase, {
+      p_item_id: forItem,
+      p_post_id: post?.id ?? null,
+      p_trace_id: traceId,
+    });
+    setLinkBusy(false);
+    if (!stillOn(forItem)) {
+      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
+      return;
+    }
+    if (!result.ok) {
+      logger.warn('chat: plan concept link failed', {
+        trace_id: traceId,
+        item_id: forItem,
+        error: result.error.message,
+      });
+      setLinkOverride(before);
+      toast.show({
+        title: linkErrorCopy(result.error.message, CONCEPT_SAVE_FAILED),
+        tone: 'error',
+      });
+      return;
+    }
+    // The re-read brings the Plan list's pair (and drops this screen's own link).
+    dispatchPlanChanged(window, bundle.plan.id);
+  };
+  // "Link this post": the pick, unless it is the post already linked (a no-op).
+  const confirmLink = (): void => {
+    const pick = linkPickRow;
+    setLinkPickerOpen(false);
+    if (pick === null || pick.id === linkedId) return;
+    void writeLink(pick);
+  };
+  const openLinked = (postId: string): void => {
+    if (props.onOpenLinkedPost !== undefined) props.onOpenLinkedPost(postId);
+    else navigate(postRoute(postId));
   };
 
   const shown = useMemo<ShownComment[]>(() => {
@@ -1299,7 +1389,17 @@ export function PlanItemScreen(props: {
                   />
                 </div>
               ))}
+              <PostStatusRow link={link} onOpen={openLinked} />
             </div>
+            {side === 'agency' ? (
+              <LinkActions
+                linked={link.kind === 'linked'}
+                mayLink={mayLink}
+                busy={linkBusy}
+                onLink={openLinkPicker}
+                onUnlink={() => void writeLink(null)}
+              />
+            ) : null}
             {actions.kind === 'review' ? (
               <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-2 gap-2">
@@ -1395,6 +1495,24 @@ export function PlanItemScreen(props: {
           />
         </>
       ) : null}
+      {side === 'agency' && item.kind === 'concept' ? (
+        <PostPicker
+          open={props.open && linkPickerOpen}
+          mode="link"
+          onClose={() => setLinkPickerOpen(false)}
+          selected={NO_POSTS}
+          onToggle={ignorePick}
+          selectedBriefs={NO_BRIEFS}
+          onToggleBrief={ignorePick}
+          linkDay={item.target_date?.slice(0, 10) ?? null}
+          linkSelectedId={linkPickId}
+          onLinkSelect={(post) => {
+            setLinkPickId(post.id);
+            setLinkPickRow(post);
+          }}
+          onLinkConfirm={confirmLink}
+        />
+      ) : null}
       {editable ? (
         <ConceptSheet
           open={props.open && editOpen}
@@ -1417,6 +1535,179 @@ export function PlanItemScreen(props: {
         />
       ) : null}
     </>
+  );
+}
+
+/** The link picker's unused multi-select props (link mode selects by id). */
+const NO_POSTS: readonly PostCardFields[] = [];
+const NO_BRIEFS: readonly [] = [];
+function ignorePick(): void {}
+
+/**
+ * The concept's link as shown: the screen's own write (a post, or null for
+ * unlinked) over the read, so a tap shows at once and the re-read settles it. Pure.
+ */
+export function linkViewOf(read: LinkedPost, own: PostCardFields | null | undefined): LinkedPost {
+  if (own === undefined) return read;
+  if (own === null) return { kind: 'none' };
+  return {
+    kind: 'linked',
+    postId: own.id,
+    stage: own.stage,
+    info: { title: own.title ?? '', format: own.format ?? null },
+  };
+}
+
+/**
+ * The status box's Post row: "Not made yet"; "Not ready to view yet" for a
+ * post the viewer cannot read (inert); else the post's title and its stage
+ * (the POST line's name), tappable to open the post.
+ */
+export function PostStatusRow(props: {
+  link: LinkedPost;
+  onOpen: (postId: string) => void;
+}): ReactElement {
+  const { link } = props;
+  if (link.kind !== 'linked') {
+    return (
+      <div
+        data-plan-status-post={link.kind}
+        className="flex min-h-[28px] items-center justify-between gap-2"
+      >
+        <span className="text-base text-fg-3">{STATUS_POST_ROW}</span>
+        <span className="text-md text-fg-3">
+          {link.kind === 'hidden' ? DRAFT_NOT_READY : POST_NOT_MADE_LABEL}
+        </span>
+      </div>
+    );
+  }
+  const title = link.info.title !== '' ? link.info.title : PAIR_POST_LABEL;
+  return (
+    <PressableRow
+      type="button"
+      data-plan-status-post="linked"
+      aria-label={`Open ${title}`}
+      onClick={() => props.onOpen(link.postId)}
+      className="-mx-2 flex items-center justify-between gap-2 px-2"
+    >
+      <span className="shrink-0 text-base text-fg-3">{STATUS_POST_ROW}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <span data-plan-status-post-title="" className="min-w-0 truncate text-md text-fg">
+          {title}
+        </span>
+        <Tag
+          label={postLineLabel(link.stage)}
+          {...(isTagDot(link.stage) ? { dot: link.stage } : {})}
+          className="shrink-0"
+        />
+        <span aria-hidden="true" className="shrink-0 text-fg-3">
+          <IconChevronRight size={ICON_SIZE.inline} />
+        </span>
+      </span>
+    </PressableRow>
+  );
+}
+
+/**
+ * The agency's link buttons under the status box: "Link a post" on an
+ * approved concept with no link; with a link, "Change linked post" (approved
+ * only: linking needs it) and "Unlink post". Nothing else ever shows.
+ */
+export function LinkActions(props: {
+  linked: boolean;
+  mayLink: boolean;
+  busy: boolean;
+  onLink: () => void;
+  onUnlink: () => void;
+}): ReactElement | null {
+  if (!props.linked) {
+    if (!props.mayLink) return null;
+    return (
+      <Button
+        variant="secondary"
+        data-plan-link-post=""
+        disabled={props.busy}
+        onClick={props.onLink}
+        className="w-full"
+      >
+        <IconLink size={ICON_SIZE.inline} />
+        {LINK_POST_LABEL}
+      </Button>
+    );
+  }
+  return (
+    <div className={cn('grid gap-2', props.mayLink ? 'grid-cols-2' : 'grid-cols-1')}>
+      {props.mayLink ? (
+        <Button
+          variant="secondary"
+          data-plan-change-link=""
+          disabled={props.busy}
+          onClick={props.onLink}
+        >
+          {CHANGE_LINKED_POST_LABEL}
+        </Button>
+      ) : null}
+      <Button
+        variant="secondary"
+        data-plan-unlink-post=""
+        disabled={props.busy}
+        onClick={props.onUnlink}
+      >
+        {UNLINK_POST_LABEL}
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * A linked post that is not a post item in the plan, opened from its pair or
+ * the concept's Post row: the post view embedded as a post item shows it (its
+ * own ⋯ actions, Open in pipeline), headed "Post for this concept".
+ */
+export function LinkedPostPage(props: {
+  open: boolean;
+  postId: string;
+  subtitle: string;
+  onClose: () => void;
+  onDismiss?: () => void;
+}): ReactElement | null {
+  const navigate = useNavigate();
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => {
+    if (!props.open) setMoreOpen(false);
+  }, [props.open]);
+  return (
+    <PlanPage
+      open={props.open}
+      testId="linked-post"
+      title={PAIR_POST_LABEL}
+      subtitle={props.subtitle}
+      backLabel="Back to plan"
+      onBack={props.onClose}
+      desktopBack
+      closeLabel="Close plan"
+      {...(props.onDismiss !== undefined ? { onDismiss: props.onDismiss } : {})}
+      action={
+        <ActionMenuTrigger
+          type="button"
+          data-plan-more=""
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen(true)}
+          className="shrink-0 text-fg"
+        />
+      }
+    >
+      <Suspense fallback={<Bone as="div" className="m-4 h-[170px] rounded-lg" />}>
+        <PostDetailPage
+          postId={props.postId}
+          embedded
+          onNavigateAway={props.onClose}
+          actionsOpen={props.open && moreOpen}
+          onActionsOpenChange={setMoreOpen}
+          onOpenInPipeline={() => navigate(postRoute(props.postId))}
+        />
+      </Suspense>
+    </PlanPage>
   );
 }
 

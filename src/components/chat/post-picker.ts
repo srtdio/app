@@ -59,8 +59,11 @@ export function parsePickerQuery(raw: string, workspaceKey: string | null): Pick
  * rejected; never a draft). 'drafts': the Draft tile (drafts only). 'briefs':
  * the Brief tile (briefs only, no post read). 'inline': the composer's hash
  * picker (review, approved, and drafts only where drafts are allowed).
+ * 'link': a plan concept's "Link a post" (single select; every stage, drafts
+ * included, which RLS shows to the agency side only; posts due on the
+ * concept's day first, then other dates newest first).
  */
-export type PickerMode = 'posts' | 'drafts' | 'briefs' | 'inline';
+export type PickerMode = 'posts' | 'drafts' | 'briefs' | 'inline' | 'link';
 
 /**
  * Which kinds a picker mode reads: brief mode reads briefs and never a post;
@@ -88,6 +91,7 @@ export function searchStageFilter(
   allowDrafts: boolean,
 ): { stage: Stage } | { excludeStage: Stage } | Record<string, never> {
   if (mode === 'drafts') return { stage: 'draft' };
+  if (mode === 'link') return {};
   if (mode === 'inline' && allowDrafts) return {};
   return { excludeStage: 'draft' };
 }
@@ -97,7 +101,14 @@ function waitingLabel(role: string | null): string {
   return isClient(role) ? 'Waiting on you' : 'Waiting on approvers';
 }
 
-export type PickerSectionKey = 'review' | 'approved' | 'parked' | 'rejected' | 'draft';
+export type PickerSectionKey =
+  | 'review'
+  | 'approved'
+  | 'parked'
+  | 'rejected'
+  | 'draft'
+  | 'day'
+  | 'other';
 
 export interface PickerSection<Row> {
   key: PickerSectionKey;
@@ -112,7 +123,7 @@ export interface PickerSection<Row> {
  * when they were read (null means not allowed, so no section).
  */
 export function buildPickerSections<Row>(input: {
-  mode: Exclude<PickerMode, 'briefs'>;
+  mode: Exclude<PickerMode, 'briefs' | 'link'>;
   role: string | null;
   review: Row[];
   approved: Row[];
@@ -142,6 +153,41 @@ export function buildPickerSections<Row>(input: {
     sections.push({ key: 'draft', label: 'Drafts', rows: input.drafts });
   }
   return sections.filter((section) => section.rows.length > 0);
+}
+
+/** Link mode's "Other dates" section label. */
+export const LINK_OTHER_DATES_LABEL = 'Other dates';
+
+/**
+ * Link mode's sections, empty ones dropped: the posts due on the concept's day
+ * (labelled with that day, "Fri 6 Nov"), then every other post in the order
+ * given (newest first). A post in the day read is never listed twice. No day
+ * (an undated concept): one "Other dates" section. Pure.
+ */
+export function buildLinkSections<Row extends { id: string }>(input: {
+  dayLabel: string | null;
+  sameDay: readonly Row[];
+  others: readonly Row[];
+}): Array<PickerSection<Row>> {
+  const sameIds = new Set(input.sameDay.map((r) => r.id));
+  const sections: Array<PickerSection<Row>> = [];
+  if (input.dayLabel !== null && input.sameDay.length > 0) {
+    sections.push({ key: 'day', label: input.dayLabel, rows: [...input.sameDay] });
+  }
+  const others = input.others.filter((r) => !sameIds.has(r.id));
+  if (others.length > 0)
+    sections.push({ key: 'other', label: LINK_OTHER_DATES_LABEL, rows: others });
+  return sections;
+}
+
+/** Link mode's selection as the row list needs it: the picked row, if listed. Pure. */
+export function linkSelection<Row extends { id: string }>(
+  rows: readonly Row[],
+  pickedId: string | null,
+): Row[] {
+  if (pickedId === null) return [];
+  const row = rows.find((r) => r.id === pickedId);
+  return row !== undefined ? [row] : [];
 }
 
 /** The footer under the sections, or null when there are no older approved posts. */

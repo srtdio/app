@@ -207,6 +207,26 @@ describe('parsePlanBundle', () => {
     expect(parsePlanBundle([]).ok).toBe(false);
     expect(parsePlanBundle({ plans: [] }).ok).toBe(false);
   });
+  it("reads a concept's linked_post_id and a post's deleted flag", () => {
+    const res = parsePlanBundle({
+      timezone: 'UTC',
+      items: [
+        { id: 'c1', plan_id: 'p', kind: 'concept', position: 0, linked_post_id: 'pA' },
+        { id: 'c2', plan_id: 'p', kind: 'concept', position: 1, linked_post_id: null },
+        // A post item never carries a link, whatever the row says.
+        { id: 'i1', plan_id: 'p', kind: 'post', position: 2, post_id: 'pB', linked_post_id: 'pA' },
+      ],
+      posts: [
+        { id: 'pA', stage: 'review', deleted: false },
+        { id: 'pB', stage: 'approved', deleted: true },
+      ],
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.items.map((i) => i.linked_post_id ?? null)).toEqual(['pA', null, null]);
+    expect(res.data.posts.find((p) => p.id === 'pA')?.deleted).toBeUndefined();
+    expect(res.data.posts.find((p) => p.id === 'pB')?.deleted).toBe(true);
+  });
 });
 
 describe('planBundleArgs', () => {
