@@ -2198,17 +2198,19 @@ SCREENS.push(
     },
   },
   {
-    // The create-post sheet's Format select open: the option list (lit-overlay)
+    // The create-brief sheet's Format select open: the option list (lit-overlay)
     // with the picked option ticked.
     name: 'select-open',
-    seed: creator,
+    seed: approver,
     hold: true,
-    url: '/pipeline',
+    url: '/briefs',
     steps: async (page) => {
-      await pipelineReady(page);
-      await tap([page.getByRole('button', { name: 'New post', exact: true })], 'New post');
+      await briefsReady(page);
+      await tap([page.getByRole('button', { name: 'New brief', exact: true })], 'New brief');
       const sheet = page.getByRole('dialog');
-      await waitFor([sheet], 'create post sheet');
+      await waitFor([sheet], 'create brief sheet');
+      // The brief sheet always shows its Format select (the post sheet only
+      // with a platform preset).
       await tap(
         [sheet.getByRole('button', { name: 'Format', exact: true })],
         'Format select trigger',
