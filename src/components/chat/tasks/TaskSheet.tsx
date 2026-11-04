@@ -582,7 +582,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         aria-modal="true"
         tabIndex={-1}
         aria-label={TASK_SHEET_TITLE}
-        className="relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border bg-panel lit-overlay focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl"
+        className="relative flex w-full max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border bg-panel lit-overlay focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84svh] sm:rounded-xl"
       >
         <div className="flex items-center gap-1 border-b border-border py-1.5 pl-4 pr-1.5">
           <div className="flex min-w-0 flex-1 flex-col">

@@ -104,7 +104,7 @@ describe('chipState (fix 32: only Open and Resolved are visible)', () => {
 describe('chipCircleClass (token treatment per visible state)', () => {
   it('resolved fills with the success fill and the on-colour ink token, never text-white', () => {
     const cls = chipCircleClass('resolved');
-    expect(cls).toContain('bg-[var(--good-solid)]');
+    expect(cls).toContain('bg-good-solid');
     expect(cls).toContain('text-accent-fg');
     expect(cls).not.toContain('text-white');
   });
@@ -183,7 +183,7 @@ describe('checkpointChips', () => {
     expect(circleClass(chips[1]!)).toContain('bg-transparent');
     expect(circleClass(chips[1]!)).toContain('border-good');
     expect(circleClass(chips[1]!)).toContain('text-good');
-    expect(circleClass(chips[2]!)).toContain('bg-[var(--good-solid)]');
+    expect(circleClass(chips[2]!)).toContain('bg-good-solid');
     expect(chipCircleClass('resolved', false)).not.toContain('good-solid');
   });
 
@@ -200,7 +200,7 @@ describe('checkpointChips', () => {
       return (inner?.props as { className?: string }).className ?? '';
     };
     expect(circleClass(chips[0]!)).toContain('bg-panel-2');
-    expect(circleClass(chips[1]!)).toContain('bg-[var(--good-solid)]');
+    expect(circleClass(chips[1]!)).toContain('bg-good-solid');
     expect(circleClass(chips[2]!)).toBe(circleClass(chips[1]!));
   });
 
