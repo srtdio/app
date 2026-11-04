@@ -141,17 +141,65 @@ describe('dropNoise (beforeSend)', () => {
     expect(dropNoise(e)).toBe(e);
   });
 
-  it('keeps a plain-object Agora rejection with no stacktrace (FRONTEND-3/7 stay visible)', async () => {
-    const { dropNoise } = await freshSentry();
-    const e = event({
+  const rejection = (keys: string): Event =>
+    event({
       type: 'UnhandledRejection',
-      value: 'Object captured as promise rejection with keys: data, message, type',
+      value: `Object captured as promise rejection with keys: ${keys}`,
       mechanism: { type: 'onunhandledrejection', handled: false },
     });
-    (e as unknown as { extra: unknown }).extra = {
-      __serialized__: { type: 510, message: 'websocket disconnected', data: {} },
-    };
+  const withSerialized = (e: Event, reason: unknown): Event => {
+    (e as unknown as { extra: unknown }).extra = { __serialized__: reason };
+    return e;
+  };
+
+  it('drops the agora-chat 510 websocket disconnected rejection (FRONTEND-3)', async () => {
+    const { dropNoise } = await freshSentry();
+    const reason = { type: 510, message: 'websocket disconnected', data: {} };
+    expect(dropNoise(rejection('data, message, type'), { originalException: reason })).toBeNull();
+    // Without a hint, Sentry's serialised copy of the object is read instead.
+    expect(dropNoise(withSerialized(rejection('data, message, type'), reason))).toBeNull();
+  });
+
+  it('drops the agora-chat { status: false } rejection (socket not open)', async () => {
+    const { dropNoise } = await freshSentry();
+    expect(dropNoise(rejection('status'), { originalException: { status: false } })).toBeNull();
+  });
+
+  it('keeps every other no-stack plain-object rejection', async () => {
+    const { dropNoise } = await freshSentry();
+    for (const reason of [
+      { type: 510, message: 'something else', data: {} },
+      { type: 206, message: 'user login another device' },
+      { type: 39, message: 'websocket disconnected' },
+      { status: true },
+      { message: 'boom' },
+    ]) {
+      const e = rejection(Object.keys(reason).join(', '));
+      expect(dropNoise(e, { originalException: reason })).toBe(e);
+    }
+    const e = withSerialized(rejection('data, message, type'), { type: 1, message: 'x' });
     expect(dropNoise(e)).toBe(e);
+  });
+
+  it('keeps an Error rejection even with the disconnect message', async () => {
+    const { dropNoise } = await freshSentry();
+    const err = Object.assign(new Error('websocket disconnected'), { type: 510 });
+    const e = event({
+      type: 'Error',
+      value: 'websocket disconnected',
+      mechanism: { type: 'onunhandledrejection', handled: false },
+    });
+    expect(dropNoise(e, { originalException: err })).toBe(e);
+  });
+
+  it('keeps the disconnect shape when it is not an unhandled rejection', async () => {
+    const { dropNoise } = await freshSentry();
+    const e = event({
+      type: 'Error',
+      value: 'captured',
+      mechanism: { type: 'generic', handled: true },
+    });
+    expect(dropNoise(e, { originalException: { status: false } })).toBe(e);
   });
 
   it('keeps an AbortError for any other reason', async () => {

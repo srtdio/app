@@ -12,6 +12,8 @@
 // one IN-clause read for every DM peer profile, never one read per channel.
 
 import { mark } from '@/lib/perf-marks';
+import { describeErrorText } from '@/lib/expected-failure';
+import { requestTimeoutOf, setRequestTimeout } from '@/lib/fetch';
 import type { Client, Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 
@@ -95,7 +97,7 @@ export async function withReadTimeout<T>(
     return await Promise.race([
       Promise.resolve()
         .then(() => run(controller.signal))
-        .catch((error: unknown) => fail<T>(String(error))),
+        .catch((error: unknown) => fail<T>(describeErrorText(error))),
       timedOut,
     ]);
   } finally {
@@ -117,6 +119,14 @@ export function abortable<Q>(query: Q, signal: AbortSignal | undefined): Q {
 /** How long a read that missed its 5s deadline may still land before it is aborted. */
 export const LATE_READ_GRACE_MS = 30_000;
 
+/** A late read's one automatic retry waits this long, plus up to RETRY_JITTER_MS. */
+export const RETRY_DELAY_MS = 1_000;
+export const RETRY_JITTER_MS = 1_000;
+
+function retryDelay(): number {
+  return RETRY_DELAY_MS + Math.random() * RETRY_JITTER_MS;
+}
+
 /**
  * A read whose answer after the deadline still counts: it resolves to a failure
  * at `timeoutMs` (the caller shows its error state), but the request keeps
@@ -125,29 +135,46 @@ export const LATE_READ_GRACE_MS = 30_000;
  * `cancel` fires (unmount, channel or workspace switch, Retry), after which
  * nothing is delivered. A thrown rejection is a failure. Never throws.
  * `onGiveUp` (optional) fires once when the read ends with no data and was not
- * cancelled: a failure (on time or late), or the grace end. It adds no timer.
+ * cancelled: a failure (on time or late), or the grace end, with the final
+ * reason (the last failure's message, else 'read timed out').
+ * `retryIf` (optional): a failure it accepts is run ONCE more after a jittered
+ * RETRY_DELAY_MS..+RETRY_JITTER_MS, inside the same grace; an on-time failure
+ * still resolves the caller at once (its error state is not delayed), and the
+ * retry's success is handed to `onLate`.
+ * `requestTimeoutMs` (optional): the per-request fetch ceiling for every
+ * request made with this read's signal (setRequestTimeout), instead of the
+ * global REQUEST_TIMEOUT_MS.
  */
 export function withLateRead<T>(
   run: (signal: AbortSignal) => Promise<Result<T>>,
   opts: {
     onLate: (data: T) => void;
-    onGiveUp?: () => void;
+    onGiveUp?: (reason: string) => void;
     cancel?: AbortSignal;
     timeoutMs?: number;
     graceMs?: number;
+    retryIf?: (reason: string) => boolean;
+    requestTimeoutMs?: number;
   },
 ): Promise<Result<T>> {
   const controller = new AbortController();
+  if (opts.requestTimeoutMs !== undefined) {
+    setRequestTimeout(controller.signal, opts.requestTimeoutMs);
+  }
   const timeoutMs = opts.timeoutMs ?? READ_TIMEOUT_MS;
   const graceMs = opts.graceMs ?? LATE_READ_GRACE_MS;
   let late = false;
   let settled = false;
+  let retried = false;
+  let lastReason: string | null = null;
   let deadline: ReturnType<typeof setTimeout> | undefined;
   let grace: ReturnType<typeof setTimeout> | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let resolveFirst: (result: Result<T>) => void = () => {};
   const stop = (): void => {
     if (deadline !== undefined) clearTimeout(deadline);
     if (grace !== undefined) clearTimeout(grace);
+    if (retryTimer !== undefined) clearTimeout(retryTimer);
     opts.cancel?.removeEventListener('abort', onCancel);
   };
   function onCancel(): void {
@@ -159,36 +186,55 @@ export function withLateRead<T>(
   }
   if (opts.cancel?.aborted === true) return Promise.resolve(fail('read cancelled'));
   opts.cancel?.addEventListener('abort', onCancel);
+  const attempt = (): Promise<Result<T>> =>
+    Promise.resolve()
+      .then(() => run(controller.signal))
+      .catch((error: unknown) => fail<T>(describeErrorText(error)));
   return new Promise<Result<T>>((resolve) => {
     resolveFirst = resolve;
     deadline = setTimeout(() => {
+      deadline = undefined;
       late = true;
       resolve(fail('read timed out'));
-      grace = setTimeout(
-        () => {
-          settled = true;
-          stop();
-          controller.abort();
-          opts.onGiveUp?.();
-        },
-        Math.max(0, graceMs - timeoutMs),
-      );
     }, timeoutMs);
-    void Promise.resolve()
-      .then(() => run(controller.signal))
-      .catch((error: unknown) => fail<T>(String(error)))
-      .then((result) => {
-        if (settled) return;
+    // The grace end, counted from the start (the deadline plus the rest of the grace).
+    grace = setTimeout(
+      () => {
         settled = true;
         stop();
+        controller.abort();
+        opts.onGiveUp?.(lastReason ?? 'read timed out');
+      },
+      Math.max(timeoutMs, graceMs),
+    );
+    const handle = (result: Result<T>): void => {
+      if (settled) return;
+      if (!result.ok && !retried && opts.retryIf?.(result.error.message) === true) {
+        retried = true;
+        lastReason = result.error.message;
         if (!late) {
+          late = true;
+          if (deadline !== undefined) clearTimeout(deadline);
+          deadline = undefined;
           resolve(result);
-          if (!result.ok) opts.onGiveUp?.();
-          return;
         }
-        if (result.ok) opts.onLate(result.data);
-        else opts.onGiveUp?.();
-      });
+        retryTimer = setTimeout(() => {
+          retryTimer = undefined;
+          if (!settled) void attempt().then(handle);
+        }, retryDelay());
+        return;
+      }
+      settled = true;
+      stop();
+      if (!late) {
+        resolve(result);
+        if (!result.ok) opts.onGiveUp?.(result.error.message);
+        return;
+      }
+      if (result.ok) opts.onLate(result.data);
+      else opts.onGiveUp?.(result.error.message);
+    };
+    void attempt().then(handle);
   });
 }
 
@@ -578,6 +624,9 @@ export async function withLinkedSignal<T>(
 ): Promise<T> {
   if (b === undefined) return run(a);
   const both = new AbortController();
+  // A request ceiling set on either signal (a chat-list late read) carries over.
+  const ceiling = requestTimeoutOf(b) ?? requestTimeoutOf(a);
+  if (ceiling !== undefined) setRequestTimeout(both.signal, ceiling);
   const fire = (): void => both.abort();
   if (a.aborted || b.aborted) both.abort();
   a.addEventListener('abort', fire);

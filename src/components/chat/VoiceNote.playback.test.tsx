@@ -3,9 +3,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { logError } = vi.hoisted(() => ({ logError: vi.fn() }));
+const { logError, logWarn } = vi.hoisted(() => ({ logError: vi.fn(), logWarn: vi.fn() }));
 vi.mock('@/lib/logger', () => ({
-  logger: { error: logError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+  logger: { error: logError, warn: logWarn, info: vi.fn(), debug: vi.fn() },
 }));
 // MessageThread (for OWN_BUBBLE_CONTENT) pulls the agora-chat browser SDK.
 vi.mock('agora-chat', () => ({
@@ -30,6 +30,7 @@ const play = vi.fn<() => Promise<void>>();
 beforeEach(() => {
   play.mockReset();
   logError.mockReset();
+  logWarn.mockReset();
   Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: play });
   Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
     configurable: true,
@@ -125,8 +126,10 @@ describe('VoiceNote playback', () => {
     await flush();
     expect(refreshUrl).toHaveBeenCalledWith(true);
     expect(document.querySelector('[data-voice-error]')).not.toBeNull();
-    expect(logError).toHaveBeenCalledTimes(1);
-    expect(logError).toHaveBeenCalledWith('chat: voice note play failed', {
+    // A fetch TypeError behind the re-link is the network: a warning (FRONTEND-J).
+    expect(logError).not.toHaveBeenCalled();
+    expect(logWarn).toHaveBeenCalledTimes(1);
+    expect(logWarn).toHaveBeenCalledWith('chat: voice note play failed', {
       name: 'PresignError',
       code: null,
       mime: 'audio/webm',
@@ -143,7 +146,56 @@ describe('VoiceNote playback', () => {
       visibility: expect.any(String),
       refresh_ms: expect.any(Number),
     });
-    expect(JSON.stringify(logError.mock.calls)).not.toContain('https://');
+    expect(JSON.stringify(logWarn.mock.calls)).not.toContain('https://');
+  });
+
+  it('a network MediaError (code 2) twice logs a warning, not an error (FRONTEND-J)', async () => {
+    play.mockResolvedValue(undefined);
+    const refreshUrl = vi.fn(async (): Promise<VoiceUrlResult> => ok('https://r2/fresh'));
+    const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl });
+    act(() => playButton().click());
+    await flush();
+    Object.defineProperty(audio, 'error', { configurable: true, value: { code: 2 } });
+    act(() => {
+      audio.dispatchEvent(new Event('error'));
+    });
+    await flush();
+    act(() => {
+      audio.dispatchEvent(new Event('error'));
+    });
+    await flush();
+    expect(document.querySelector('[data-voice-error]')?.textContent).toContain("Can't play here.");
+    expect(logError).not.toHaveBeenCalled();
+    expect(logWarn).toHaveBeenCalledWith(
+      'chat: voice note play failed',
+      expect.objectContaining({ name: 'MediaError', code: 2, retried: 'yes' }),
+    );
+  });
+
+  it('any final failure while offline logs a warning with the same fields (FRONTEND-J)', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      play.mockResolvedValue(undefined);
+      const refreshUrl = vi.fn(async (): Promise<VoiceUrlResult> => ok('https://r2/fresh'));
+      const audio = mount({ peekUrl: () => 'https://r2/a', refreshUrl });
+      act(() => playButton().click());
+      await flush();
+      fireError(audio);
+      await flush();
+      fireError(audio);
+      await flush();
+      expect(document.querySelector('[data-voice-error]')).not.toBeNull();
+      expect(logError).not.toHaveBeenCalled();
+      expect(logWarn).toHaveBeenCalledWith('chat: voice note play failed', {
+        name: 'MediaError',
+        code: 4,
+        mime: 'audio/webm',
+        retried: 'yes',
+        reason: 'error',
+      });
+    } finally {
+      online.mockRestore();
+    }
   });
 
   it('sets the url on the element and plays on tap', async () => {
@@ -191,6 +243,7 @@ describe('VoiceNote playback', () => {
       mime: 'audio/webm',
       retried: 'yes',
       reason: 'error',
+      error: { name: 'MediaError', message: '', code: 4 },
     });
     expect(JSON.stringify(logError.mock.calls)).not.toContain('https://');
     const read = document.querySelector<HTMLButtonElement>('[data-voice-read]');
@@ -286,6 +339,7 @@ describe('VoiceNote playback', () => {
       mime: 'audio/webm',
       retried: 'yes',
       reason: 'stall',
+      error: { name: 'NoProgress', message: '' },
     });
   });
 

@@ -61,6 +61,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { logger } from '@/lib/logger';
+import { describeError, isExpectedNetworkFailure } from '@/lib/expected-failure';
 import type { Result } from '@srtdio/rpc';
 import { resamplePeaks } from '@/lib/chat/waveform-peaks';
 import {
@@ -982,14 +983,27 @@ export function VoiceNote({
         audioRef.current?.pause();
         setPlaying(false);
         setPlayFailed(true);
-        logger.error('chat: voice note play failed', {
+        const fields = {
           name: failure.name,
           code: failure.code,
           mime: latest.current.mime ?? 'unknown',
           retried: failure.retried ? 'yes' : 'no',
           reason: failure.reason,
           ...(failure.relink === undefined ? {} : relinkFields(failure.relink)),
-        });
+        };
+        // Offline, a hidden tab, or a network/timeout failure (the note's own,
+        // or the re-link behind it) is the device, not a bug: a warning.
+        const expected =
+          isExpectedNetworkFailure(failure) ||
+          (failure.relink !== undefined && isExpectedNetworkFailure(failure.relink.error));
+        if (expected) {
+          logger.warn('chat: voice note play failed', fields);
+        } else {
+          logger.error('chat: voice note play failed', {
+            ...fields,
+            error: describeError(failure.relink?.error ?? failure),
+          });
+        }
       },
       wanted: setWanted,
     });

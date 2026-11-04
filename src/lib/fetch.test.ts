@@ -10,8 +10,15 @@ import {
   NO_LIMIT_FUNCTIONS,
   NO_LIMIT_RPCS,
   REQUEST_TIMEOUT_MS,
+  requestTimeoutOf,
+  setRequestTimeout,
 } from '@/lib/fetch';
-import { READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
+import {
+  LATE_READ_GRACE_MS,
+  READ_TIMEOUT_MS,
+  withLinkedSignal,
+  withReadTimeout,
+} from '@/lib/chat-reads';
 
 // A fetch that never answers on its own: it rejects with the signal's reason
 // once the (real) AbortSignal it was handed aborts, as the browser's does.
@@ -173,6 +180,42 @@ describe('per-call timeout option', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(out.state).toBe('rejected');
     expect((out.reason as Error).name).toBe('TimeoutError');
+  });
+});
+
+describe('per-signal ceiling (setRequestTimeout, chat list late reads)', () => {
+  it('a signal marked with the late grace keeps its request alive past 10 s, to the grace', async () => {
+    const caller = setRequestTimeout(new AbortController().signal, LATE_READ_GRACE_MS);
+    const out = track(fetchWithTrace(URL_RPC, { signal: caller }));
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    expect(out.state).toBe('pending');
+    await vi.advanceTimersByTimeAsync(LATE_READ_GRACE_MS - REQUEST_TIMEOUT_MS);
+    expect(out.state).toBe('rejected');
+    expect((out.reason as Error).name).toBe('TimeoutError');
+  });
+
+  it('an unmarked signal keeps the 10 s default (every other caller)', async () => {
+    const out = track(fetchWithTrace(URL_RPC, { signal: new AbortController().signal }));
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    expect(out.state).toBe('rejected');
+  });
+
+  it('the explicit timeoutMs option still wins over the signal mark', async () => {
+    const caller = setRequestTimeout(new AbortController().signal, LATE_READ_GRACE_MS);
+    const out = track(fetchWithTrace(URL_RPC, { signal: caller }, undefined, { timeoutMs: 2_000 }));
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(out.state).toBe('rejected');
+  });
+
+  it('withLinkedSignal carries the mark onto the signal it hands down', async () => {
+    const marked = setRequestTimeout(new AbortController().signal, LATE_READ_GRACE_MS);
+    let handed: AbortSignal | undefined;
+    await withLinkedSignal(new AbortController().signal, marked, async (signal) => {
+      handed = signal;
+    });
+    expect(handed).not.toBe(marked);
+    expect(requestTimeoutOf(handed)).toBe(LATE_READ_GRACE_MS);
+    expect(requestTimeoutOf(new AbortController().signal)).toBeUndefined();
   });
 });
 

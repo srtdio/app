@@ -9,6 +9,7 @@ import {
   type RunChatConnectionParams,
 } from '@/lib/chat/controller';
 import type { ChatConnection, ChatStatus, ChatTokenResult } from '@/lib/chat/types';
+import { logger } from '@/lib/logger';
 
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -442,6 +443,65 @@ describe('runChatConnection tokens', () => {
 
     expect(fetchToken).toHaveBeenCalledTimes(2);
     expect(h.latest().renewToken).toHaveBeenCalledWith('renewed-token');
+  });
+
+  it('skips renewal while the socket is not open: no token fetch, no renewToken (FRONTEND-5)', async () => {
+    vi.mocked(logger.error).mockClear();
+    const fetchToken = vi.fn(() => Promise.resolve(token));
+    const h = harness(fetchToken);
+
+    runChatConnection(h.params);
+    await flush();
+    const conn = h.latest();
+    conn.handler()?.onReconnecting?.();
+    conn.handler()?.onTokenWillExpire?.();
+    await flush();
+
+    expect(fetchToken).toHaveBeenCalledTimes(1);
+    expect(conn.renewToken).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('a { status: false } renewToken rejection is a warning with readable fields, never "[object Object]"', async () => {
+    vi.mocked(logger.error).mockClear();
+    vi.mocked(logger.warn).mockClear();
+    const conn = fakeConnection();
+    vi.mocked(conn.renewToken).mockRejectedValue({ status: false });
+    const h = harness(
+      () => Promise.resolve(token),
+      () => conn,
+    );
+
+    runChatConnection(h.params);
+    await flush();
+    conn.handler()?.onTokenWillExpire?.();
+    await flush();
+
+    expect(conn.renewToken).toHaveBeenCalledTimes(1);
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith('chat: renewToken failed', {
+      error: expect.objectContaining({ status: false }),
+    });
+    expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain('[object Object]');
+  });
+
+  it('any other renewToken rejection is an error carrying the described fields', async () => {
+    vi.mocked(logger.error).mockClear();
+    const conn = fakeConnection();
+    vi.mocked(conn.renewToken).mockRejectedValue({ type: 700, message: 'bad token', data: {} });
+    const h = harness(
+      () => Promise.resolve(token),
+      () => conn,
+    );
+
+    runChatConnection(h.params);
+    await flush();
+    conn.handler()?.onTokenWillExpire?.();
+    await flush();
+
+    expect(logger.error).toHaveBeenCalledWith('chat: renewToken failed', {
+      error: { name: 'Object', message: 'bad token', type: 700 },
+    });
   });
 
   it('never closes the connection when the Supabase access token rotates; renewal reads the latest one', async () => {

@@ -1,6 +1,7 @@
 import type { BrowserOptions } from '@sentry/react';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { isAgoraDisconnect } from '@/lib/expected-failure';
 
 // Lazy facade over the Sentry browser SDK. This module imports only types
 // from @sentry/react statically, so the logger, TraceProvider and the local error
@@ -19,6 +20,7 @@ let traceIdTag: string | null = null;
 const pending: PendingReport[] = [];
 
 type SentryEvent = Parameters<NonNullable<BrowserOptions['beforeSend']>>[0];
+type SentryHint = Parameters<NonNullable<BrowserOptions['beforeSend']>>[1];
 
 // The agora-chat SDK as a stack frame: its package path (source mapped, dev)
 // or the vendor chunk it is bundled into (vite.config.ts vendor-agora).
@@ -32,10 +34,17 @@ function isAgoraFrame(filename: string | undefined): boolean {
  * Drop only known harmless noise; every other event passes untouched:
  * (a) AbortError "browsing context is going away" (tab closed or navigated);
  * (b) an unhandled rejection whose every frame is inside agora-chat (no
- *     first-party frame). A rejection with no stack (the SDK's plain
- *     {type, message, data} objects) is kept on purpose.
+ *     first-party frame);
+ * (c) an unhandled rejection with no stack whose reason is exactly the
+ *     agora-chat disconnect shape (isAgoraDisconnect: { type: 510, message:
+ *     'websocket disconnected' } or { status: false }), FRONTEND-3. Every
+ *     other no-stack plain-object rejection is still sent.
  */
-export function dropNoise(event: SentryEvent): SentryEvent | null {
+export function dropNoise(event: SentryEvent, hint?: SentryHint): SentryEvent | null {
+  // The raw rejection reason; else Sentry's normalised copy of a plain object.
+  const reason: unknown =
+    hint?.originalException ??
+    (event.extra as { __serialized__?: unknown } | undefined)?.__serialized__;
   for (const ex of event.exception?.values ?? []) {
     if (ex.type === 'AbortError' && (ex.value ?? '').includes('browsing context is going away')) {
       return null;
@@ -45,6 +54,13 @@ export function dropNoise(event: SentryEvent): SentryEvent | null {
       ex.mechanism?.type === 'onunhandledrejection' &&
       frames.length > 0 &&
       frames.every((f) => isAgoraFrame(f.filename))
+    ) {
+      return null;
+    }
+    if (
+      (ex.mechanism?.type ?? '').includes('onunhandledrejection') &&
+      frames.length === 0 &&
+      isAgoraDisconnect(reason)
     ) {
       return null;
     }
