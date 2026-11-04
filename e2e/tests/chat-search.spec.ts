@@ -122,16 +122,18 @@ async function runMediaFlow(page: Page): Promise<void> {
   await expect(photo).toHaveAttribute('aria-pressed', 'true');
   const results = page.locator('[data-media-results="photo"]');
   await expect(results).toBeVisible();
+
+  // Newest first: the 3-photo album's first photo leads, under a month header.
+  // (The results root shows its boxes at once; the read goes out after the
+  // search debounce, so the call is checked once the tiles landed.)
+  await expect(results.locator('[data-media-month]').first()).toBeVisible();
+  const tile = results.locator('[data-media-tile]').first();
+  await expect(tile).toBeVisible();
   const last = calls[calls.length - 1] ?? {};
   expect(last.p_kind).toBe('photo');
   expect(last.p_query).toBe('');
   expect(String(last.p_trace_id)).toMatch(UUID_V7);
   for (const key of Object.keys(last)) expect(key.startsWith('p_')).toBe(true);
-
-  // Newest first: the 3-photo album's first photo leads, under a month header.
-  await expect(results.locator('[data-media-month]').first()).toBeVisible();
-  const tile = results.locator('[data-media-tile]').first();
-  await expect(tile).toBeVisible();
   await expect(tile).toHaveAttribute(
     'data-media-tile',
     `${MEDIA_MSG.photoAlbum}:${MEDIA_VERSION.album1}`,
