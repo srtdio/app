@@ -15,6 +15,7 @@ vi.mock('agora-chat', () => ({
 import { OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
 import { PRESSABLE_ROW_BASE } from '@/components/ui/PressableRow';
 import {
+  VOICE_RELINK_RETRY_MAX_MS,
   VOICE_START_TIMEOUT_MS,
   VoiceNote,
   type VoiceUrlResult,
@@ -112,6 +113,7 @@ describe('VoiceNote playback', () => {
   });
 
   it('a media error then a failed re-link logs the presign reason, never a url', async () => {
+    vi.useFakeTimers();
     play.mockResolvedValue(undefined);
     const refreshUrl = vi.fn(
       async (): Promise<VoiceUrlResult> => ({
@@ -125,6 +127,13 @@ describe('VoiceNote playback', () => {
     fireError(audio);
     await flush();
     expect(refreshUrl).toHaveBeenCalledWith(true);
+    // A network-shaped re-link failure waits, then re-links once more.
+    expect(document.querySelector('[data-voice-error]')).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(VOICE_RELINK_RETRY_MAX_MS);
+    });
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(2);
     expect(document.querySelector('[data-voice-error]')).not.toBeNull();
     // A fetch TypeError behind the re-link is the network: a warning (FRONTEND-J).
     expect(logError).not.toHaveBeenCalled();
@@ -145,6 +154,8 @@ describe('VoiceNote playback', () => {
       online: expect.any(Boolean),
       visibility: expect.any(String),
       refresh_ms: expect.any(Number),
+      // A presigned (cross-origin) url is never probed.
+      probe_status: 'skipped',
     });
     expect(JSON.stringify(logWarn.mock.calls)).not.toContain('https://');
   });
@@ -192,6 +203,7 @@ describe('VoiceNote playback', () => {
         mime: 'audio/webm',
         retried: 'yes',
         reason: 'error',
+        probe_status: 'skipped',
       });
     } finally {
       online.mockRestore();
@@ -243,6 +255,7 @@ describe('VoiceNote playback', () => {
       mime: 'audio/webm',
       retried: 'yes',
       reason: 'error',
+      probe_status: 'skipped',
       error: { name: 'MediaError', message: '', code: 4 },
     });
     expect(JSON.stringify(logError.mock.calls)).not.toContain('https://');
@@ -441,5 +454,95 @@ describe('VoiceNote playback', () => {
     expect(own).not.toMatch(/\brounded-/);
     expect(own).not.toMatch(/(^|\s)(hover:|active:|focus:)?!?bg-/);
     expect(playButton().hasAttribute('data-voice-control')).toBe(true);
+  });
+});
+
+describe('VoiceNote file probe (FRONTEND-R)', () => {
+  const fileLink = (): string => `${location.origin}/f/v1/full?k=key`;
+  const linkFailure: VoiceUrlResult = {
+    ok: false,
+    error: { name: 'TypeError', code: null, message: 'Load failed', linkMode: 'file-link' },
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('a 404 probe logs an error even when the re-link failure is network-shaped', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => ({ status: 404, body: null }) as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
+    play.mockResolvedValue(undefined);
+    const refreshUrl = vi.fn(async (): Promise<VoiceUrlResult> => linkFailure);
+    const audio = mount({ peekUrl: () => fileLink(), refreshUrl });
+    act(() => playButton().click());
+    await flush();
+    fireError(audio);
+    await flush();
+    // The probe runs beside the forced re-link, once, with a two-byte range.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const init = (fetchMock.mock.calls[0] as unknown[])[1] as RequestInit;
+    expect(new Headers(init.headers).get('Range')).toBe('bytes=0-1');
+    act(() => {
+      vi.advanceTimersByTime(VOICE_RELINK_RETRY_MAX_MS);
+    });
+    await flush();
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(2);
+    expect(document.querySelector('[data-voice-error]')).not.toBeNull();
+    expect(logWarn).not.toHaveBeenCalled();
+    expect(logError).toHaveBeenCalledWith(
+      'chat: voice note play failed',
+      expect.objectContaining({
+        name: 'PresignError',
+        probe_status: 404,
+        error: expect.objectContaining({ name: 'TypeError', message: 'Load failed' }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a network re-link failure with no bad probe status stays a warning', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => {
+      throw new TypeError('Load failed');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    play.mockResolvedValue(undefined);
+    const refreshUrl = vi.fn(async (): Promise<VoiceUrlResult> => linkFailure);
+    const audio = mount({ peekUrl: () => fileLink(), refreshUrl });
+    act(() => playButton().click());
+    await flush();
+    fireError(audio);
+    await flush();
+    act(() => {
+      vi.advanceTimersByTime(VOICE_RELINK_RETRY_MAX_MS);
+    });
+    await flush();
+    await flush();
+    expect(logError).not.toHaveBeenCalled();
+    expect(logWarn).toHaveBeenCalledWith(
+      'chat: voice note play failed',
+      expect.objectContaining({ name: 'PresignError', probe_status: 'network' }),
+    );
+  });
+
+  it('a 401 probe followed by a good re-link and play logs nothing', async () => {
+    const fetchMock = vi.fn(async () => ({ status: 401, body: null }) as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
+    play.mockResolvedValue(undefined);
+    const refreshUrl = vi.fn(async (): Promise<VoiceUrlResult> => ok(`${fileLink()}2`));
+    const audio = mount({ peekUrl: () => fileLink(), refreshUrl });
+    act(() => playButton().click());
+    await flush();
+    fireError(audio);
+    await flush();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(play).toHaveBeenCalledTimes(2);
+    fire(audio, 'playing');
+    await flush();
+    expect(document.querySelector('[data-voice-error]')).toBeNull();
+    expect(logError).not.toHaveBeenCalled();
+    expect(logWarn).not.toHaveBeenCalled();
   });
 });

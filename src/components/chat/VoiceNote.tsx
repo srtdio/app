@@ -62,6 +62,7 @@ import { cn } from '@/lib/cn';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { logger } from '@/lib/logger';
 import { describeError, isExpectedNetworkFailure } from '@/lib/expected-failure';
+import { isBadProbeStatus, probeVoiceUrl, type VoiceProbeStatus } from '@/lib/voice-probe';
 import type { Result } from '@srtdio/rpc';
 import { resamplePeaks } from '@/lib/chat/waveform-peaks';
 import {
@@ -230,6 +231,9 @@ export const VOICE_START_TIMEOUT_MS = 10_000;
 export const VOICE_STALL_TIMEOUT_MS = 15_000;
 /** A seek with no 'seeked' within this fails. */
 export const VOICE_SEEK_TIMEOUT_MS = 5_000;
+/** A network-shaped re-link failure waits this long (jittered up to the max) before one more. */
+export const VOICE_RELINK_RETRY_MIN_MS = 1_200;
+export const VOICE_RELINK_RETRY_MAX_MS = 2_000;
 
 /** What failed: a media error, a play() rejection, no progress, or a seek that never lands. */
 export type VoiceFailReason = 'error' | 'reject' | 'stall' | 'seek';
@@ -243,6 +247,8 @@ export interface VoiceFailure {
   reason: VoiceFailReason;
   /** A re-link that failed: why, the failure that asked for it, and how long it took. */
   relink?: VoiceRelink;
+  /** The file status probe started on a first MediaError (absent: none ran). */
+  probe?: Promise<VoiceProbeStatus>;
 }
 
 /** Why a re-link failed (never a url, link key, token or asset id). */
@@ -310,6 +316,12 @@ export function createVoiceRecovery(deps: {
   failed: (failure: VoiceFailure) => void;
   /** Whether a play is wanted (a tap until it is paused, ends or fails). */
   wanted?: (wanted: boolean) => void;
+  /** Probe the applied url's file status after a first MediaError (none: no probe). */
+  probe?: (url: string) => Promise<VoiceProbeStatus>;
+  /** Whether the tab is hidden now (default: document.visibilityState). */
+  hidden?: () => boolean;
+  /** The wait before the second re-link, in ms (default: jittered 1200-2000). */
+  relinkDelay?: () => number;
 }): {
   /** A tap (or the auto-play chain): play from a fresh url. */
   play: () => void;
@@ -352,6 +364,18 @@ export function createVoiceRecovery(deps: {
   let startTimer: ReturnType<typeof setTimeout> | null = null;
   let stallTimer: ReturnType<typeof setTimeout> | null = null;
   let seekTimer: ReturnType<typeof setTimeout> | null = null;
+  // One extra re-link per play attempt after a network-shaped re-link failure.
+  let relinkRetried = false;
+  let relinkTimer: ReturnType<typeof setTimeout> | null = null;
+  // The file probe of this play attempt's first MediaError, if one ran.
+  let probing: Promise<VoiceProbeStatus> | null = null;
+  const hidden =
+    deps.hidden ?? (() => typeof document !== 'undefined' && document.visibilityState === 'hidden');
+  const relinkDelay =
+    deps.relinkDelay ??
+    (() =>
+      VOICE_RELINK_RETRY_MIN_MS +
+      Math.floor(Math.random() * (VOICE_RELINK_RETRY_MAX_MS - VOICE_RELINK_RETRY_MIN_MS + 1)));
 
   const want = (next: boolean): void => {
     if (wantPlay === next) return;
@@ -371,7 +395,11 @@ export function createVoiceRecovery(deps: {
     done = true;
     live = 'none';
     want(false);
-    deps.failed({ ...failure, retried: didRetry });
+    deps.failed({
+      ...failure,
+      retried: didRetry,
+      ...(probing === null ? {} : { probe: probing }),
+    });
   };
   const attempt = (): void => {
     clearTimers();
@@ -403,6 +431,12 @@ export function createVoiceRecovery(deps: {
       return;
     }
     retried = true;
+    // A first MediaError: ask the file link for its status, beside the re-link.
+    const applied = deps.player.applied;
+    if (failure.name === 'MediaError' && probing === null && deps.probe !== undefined) {
+      probing =
+        applied === null ? Promise.resolve<VoiceProbeStatus>('skipped') : deps.probe(applied);
+    }
     withUrl(true, failure, () => {
       if (wantPlay) attempt();
     });
@@ -413,7 +447,7 @@ export function createVoiceRecovery(deps: {
     held = null;
     const at = epoch;
     const startedAt = performance.now();
-    void deps.refreshUrl(force).then((got) => {
+    const settle = (got: VoiceUrlResult): void => {
       busy = false;
       const result = held;
       held = null;
@@ -423,6 +457,23 @@ export function createVoiceRecovery(deps: {
         return;
       }
       if (!got.ok) {
+        // A network-shaped re-link failure gets one more re-link after a short
+        // wait (a momentary drop iOS does not report), unless the tab is hidden.
+        if (!relinkRetried && isExpectedNetworkFailure(got.error)) {
+          relinkRetried = true;
+          if (!hidden()) {
+            busy = true;
+            relinkTimer = setTimeout(() => {
+              relinkTimer = null;
+              if (at !== epoch) {
+                busy = false;
+                return;
+              }
+              void deps.refreshUrl(true).then(settle);
+            }, relinkDelay());
+            return;
+          }
+        }
         const first =
           cause === null ? null : { name: cause.name, code: cause.code, reason: cause.reason };
         final(
@@ -442,7 +493,8 @@ export function createVoiceRecovery(deps: {
         return;
       }
       then();
-    });
+    };
+    void deps.refreshUrl(force).then(settle);
   };
   function fail(failure: Failure): void {
     if (done) return;
@@ -460,6 +512,8 @@ export function createVoiceRecovery(deps: {
       want(true);
       retried = false;
       done = false;
+      relinkRetried = false;
+      probing = null;
       if (busy) return;
       const fresh = deps.peekUrl();
       if (fresh !== null) {
@@ -472,6 +526,11 @@ export function createVoiceRecovery(deps: {
     cancel() {
       epoch += 1;
       held = null;
+      if (relinkTimer !== null) {
+        clearTimeout(relinkTimer);
+        relinkTimer = null;
+        busy = false;
+      }
       live = 'none';
       clearTimers();
       want(false);
@@ -992,19 +1051,30 @@ export function VoiceNote({
           ...(failure.relink === undefined ? {} : relinkFields(failure.relink)),
         };
         // Offline, a hidden tab, or a network/timeout failure (the note's own,
-        // or the re-link behind it) is the device, not a bug: a warning.
+        // or the re-link behind it) is the device, not a bug: a warning. The
+        // device state is read now, at the failure, not when the probe lands.
         const expected =
           isExpectedNetworkFailure(failure) ||
           (failure.relink !== undefined && isExpectedNetworkFailure(failure.relink.error));
-        if (expected) {
-          logger.warn('chat: voice note play failed', fields);
-        } else {
-          logger.error('chat: voice note play failed', {
-            ...fields,
-            error: describeError(failure.relink?.error ?? failure),
-          });
-        }
+        const report = (probeStatus: VoiceProbeStatus | undefined): void => {
+          const withProbe =
+            probeStatus === undefined ? fields : { ...fields, probe_status: probeStatus };
+          // A missing, refused or failing file is a bug even when the re-link
+          // after it looked like the network.
+          if (expected && !isBadProbeStatus(probeStatus)) {
+            logger.warn('chat: voice note play failed', withProbe);
+          } else {
+            logger.error('chat: voice note play failed', {
+              ...withProbe,
+              error: describeError(failure.relink?.error ?? failure),
+            });
+          }
+        };
+        // The error row shows now; only the log waits for the probe (5 s at most).
+        if (failure.probe === undefined) report(undefined);
+        else void failure.probe.then(report, () => report('network'));
       },
+      probe: (applied) => probeVoiceUrl(applied),
       wanted: setWanted,
     });
   }
