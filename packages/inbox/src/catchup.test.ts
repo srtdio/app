@@ -563,7 +563,8 @@ describe('html design and parity', () => {
     const dark = email.html.slice(m?.index ?? 0).toLowerCase();
     expect(dark).toContain('#08090a');
     expect(dark).toContain('#1a1c21');
-    expect(dark).toContain('#e5e5e6');
+    // The dark button is a white fill with ink text (email-shell.ts EMAIL_DARK.btnFill).
+    expect(dark).toContain('.btn { background:#ffffff !important; color:#08090a !important;');
   });
 
   it('uses the accent, a 600px max width and Inter', () => {
