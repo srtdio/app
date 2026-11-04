@@ -98,9 +98,9 @@ export function Button({
     <button
       ref={buttonRef}
       className={buttonClass(variant, shape, className)}
+      {...props}
       disabled={busy || disabled}
       aria-busy={busy ? true : undefined}
-      {...props}
     >
       {busy ? <BusyArc /> : null}
       {children}
