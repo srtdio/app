@@ -101,6 +101,11 @@ function canHover(): boolean {
  * is released or cancelled anywhere, so a finger that slides off never leaves
  * it held). Spread or compose them on the surface's root element.
  */
+// A press is under way on some hold surface (pointerdown until pointerup or
+// cancel). Module-level so a re-render between pointerdown and focus, which
+// makes new handlers, still sees it.
+let pressing = false;
+
 export function holdHandlers(onHold: (reason: HoldReason, held: boolean) => void): {
   onPointerEnter: (event: HoldPointerEvent) => void;
   onPointerLeave: (event: HoldPointerEvent) => void;
@@ -116,9 +121,11 @@ export function holdHandlers(onHold: (reason: HoldReason, held: boolean) => void
       if (event.pointerType === 'mouse') onHold('hover', false);
     },
     onPointerDown() {
+      pressing = true;
       onHold('press', true);
       if (typeof window === 'undefined') return;
       const end = (): void => {
+        pressing = false;
         window.removeEventListener('pointerup', end, true);
         window.removeEventListener('pointercancel', end, true);
         onHold('press', false);
@@ -127,6 +134,10 @@ export function holdHandlers(onHold: (reason: HoldReason, held: boolean) => void
       window.addEventListener('pointercancel', end, true);
     },
     onFocus() {
+      // Focus that comes with a press (a tap or click on the card, which is a
+      // button) is not a hold: nothing would ever blur it, so the card would
+      // never go. The press itself holds until it is released.
+      if (pressing) return;
       onHold('focus', true);
     },
     onBlur(event) {

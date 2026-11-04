@@ -135,3 +135,23 @@ describe('holdHandlers', () => {
     expect(onHold).toHaveBeenLastCalledWith('focus', false);
   });
 });
+
+describe('holdHandlers: a tap that focuses the card', () => {
+  it('holds while pressed, then lets the countdown run once released', () => {
+    const calls: [string, boolean][] = [];
+    const h = holdHandlers((reason, held) => calls.push([reason, held]));
+    h.onPointerDown();
+    h.onFocus();
+    window.dispatchEvent(new Event('pointerup'));
+    expect(calls).toEqual([
+      ['press', true],
+      ['press', false],
+    ]);
+  });
+
+  it('keyboard focus (no press) still holds', () => {
+    const calls: [string, boolean][] = [];
+    holdHandlers((reason, held) => calls.push([reason, held])).onFocus();
+    expect(calls).toEqual([['focus', true]]);
+  });
+});
