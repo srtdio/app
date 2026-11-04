@@ -591,6 +591,7 @@ describe('Contact sheet and Group info: Starred tab', () => {
         "dark": {
           "accent-fg": "hex 08090a",
           "avatar-4": "hex c2392b",
+          "border-strong": "hex 6b7079",
           "fg": "hex f7f8f8",
           "fg-3": "hex 81868f",
           "panel": "hex 0f1011",
@@ -599,6 +600,7 @@ describe('Contact sheet and Group info: Starred tab', () => {
         "light": {
           "accent-fg": "hex ffffff",
           "avatar-4": "hex c2392b",
+          "border-strong": "hex 868b94",
           "fg": "hex 08090a",
           "fg-3": "hex 686c73",
           "panel": "hex ffffff",

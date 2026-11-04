@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { ICON_SIZE, IconPlus } from '@/components/ui/icons';
 
 type Value = 'recent' | 'name';
@@ -45,7 +46,7 @@ describe('SectionHeader', () => {
   it('renders the search input and calls onChange when it changes', () => {
     const onChange = vi.fn();
     const tree = SectionHeader({ search: { value: 'hi', onChange, placeholder: 'Search files' } });
-    const inputs = findAll(tree, (el) => el.type === 'input');
+    const inputs = findAll(tree, (el) => el.type === Input || el.type === 'input');
     expect(inputs).toHaveLength(1);
     const input = inputs[0]!.props as {
       value: string;

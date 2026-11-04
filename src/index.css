@@ -555,10 +555,6 @@
   .lit-press {
     --lit-bg: none;
   }
-  .lit-btn-secondary {
-    /* The bottom edge of a secondary button is the 3:1 control edge. */
-    --lit-edge-bottom: var(--border-strong);
-  }
   .lit-raised {
     background-image: var(--lit-surface);
     box-shadow: var(--lit-raised);
@@ -628,6 +624,8 @@
     box-shadow: none;
   }
   .lit-btn-secondary {
+    /* The bottom edge of a secondary button is the 3:1 control edge. */
+    --lit-edge-bottom: var(--border-strong);
     --lit-bg: var(--lit-chip-bg);
     background-image: var(--lit-chip-bg);
     box-shadow: var(--lit-btn-secondary);
@@ -703,7 +701,7 @@
   }
   /* A secondary part inside a hovered group button hovers with it. */
   @media (hover: hover) {
-    .group:hover > .lit-btn-secondary {
+    .group:hover > .lit-btn-secondary:not(:disabled) {
       background-image: linear-gradient(var(--hover-fill), var(--hover-fill)), var(--lit-bg, none);
     }
   }

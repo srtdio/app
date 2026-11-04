@@ -467,7 +467,7 @@ describe('checkpoint state + feed controls', () => {
     for (const all of [cls(false, false), cls(true, false), cls(true, true)]) {
       expect(all).not.toMatch(/opacity|transition|duration-/);
     }
-    expect(cls(true, true)).toContain('bg-[var(--good-solid)]');
+    expect(cls(true, true)).toContain('bg-good-solid');
     expect(cls(true, false)).toContain('border-good');
     for (const all of [cls(false, false), cls(true, false), cls(true, true)]) {
       expect(all).not.toMatch(/#[0-9a-f]{3,6}\b|rgba\(|\bdark:|translate-x/i);

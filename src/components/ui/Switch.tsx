@@ -26,7 +26,7 @@ export function Switch({ checked, onChange, label }: SwitchProps): ReactElement 
     >
       {/* Off: a panel-2 well with a 3:1 border-strong edge. On: the accent fill.
           The knob (bg-knob) is lighter than the track in both themes and keeps a
-          border-strong ring (a border, so lit-knob's shadow stays). */}
+          border-strong ring (a border, so the lit-knob light stays). */}
       <span
         aria-hidden
         className={cn(
