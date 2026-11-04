@@ -98,7 +98,8 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Colour: token classes only; /opacity allowed. No hex, no dark:. text-accent is for text, bg-accent for fills. good/warn/bad for state; stage-\* only on stage chips and dots. No text-white or bg-white; on solid fills use text-accent-fg.
 - Colour: black, white and greys only (Linear neutrals), light and dark in the app, light-only homepage. Amber = Review, green = Approved/read/unread, red = errors and Reject only. No violet or blue anywhere (guard: palette-rules.test.ts).
 - Contrast: text 4.5:1; control edges, field lines, focus lines, selected lines, dots and tracks 3:1, light and dark (guard: contrast-rules.test.ts).
-- Edges: border-strong is the 3:1 edge for chips, secondary buttons, switch tracks, dots, read bars. border-border is for dividers inside a surface only, never the boundary of a control.
+- Ink line = anything you type into or toggle (fields, code boxes, switch, checkbox, radio). Grey border-strong edge = a choice at rest (chip, secondary button); the chosen one takes the ink line (lit-selected).
+- Edges: border-strong is the 3:1 edge for chips, secondary buttons, dots, read bars. border-border is for dividers inside a surface only, never the boundary of a control.
 - Radius roles: badges (ui/Tag) 6, checkbox (ui/Checkbox, rounded-sm) 6, controls and fields 8, cards/popovers/menus 12, sheets/dialogs 16, pills full. rounded-sm only for badges, checkboxes, highlights, dots and grabbers. Chat bubble radii live only in chat/chat-type.ts.
 - Focus: Button, IconButton and Chip carry the one focus line (focus-visible:lit-focus, an outline, never a box-shadow). Never add a second one on a call site; overlay controls on media (lightbox, file viewer, photo viewer) keep their own white ring.
 - Text fields: ui/Input or ui/Textarea only; date and time fields add font-mono. ui/Input, Textarea, Select, DatePicker, Checkbox and the code boxes draw border-field (ink light, white dark) at rest, lit-well; focus adds lit-focus. Composer bars and borderless inline edits are the only exceptions (allowlist in ui-rules.test.ts).
@@ -120,7 +121,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Phone nav: floating pill (Pipeline, Briefs, Assets, Plan, Activity) plus separate Chat circle, 12px from sides and bottom; only the active tab shows its label.
 - Tappable rows and tiles use PressableRow; dim layers use Backdrop; upload targets use DropZone; never override a ui primitive with "!".
 - Icon sizes come from ICON_SIZE in ui/icons.tsx.
-- Words: Activity (never Notifications), file (the tab is Assets), Due date, stages Draft/Review/Approved/Parked/Rejected. Format, chat and workspace names come from their src/lib functions only.
+- Words: Activity (never Notifications), file (the tab is Assets), Due date, stages Draft/Review/Approved/Parked/Rejected, Retry (never Try again as a button), Alerts (the device switch). Format, chat and workspace names come from their src/lib functions only.
 - Zero results use ui/NoResults only. Zero states are one positive line, "{Things} show up here." Never "Nothing", "No matches" or "empty" in a zero state.
 - Errors: "Couldn't {action}. {reason}". Never mention connection state.
 - Dates and times come from src/lib/time.ts only. No toLocale\*, Intl.DateTimeFormat or date libraries in components.

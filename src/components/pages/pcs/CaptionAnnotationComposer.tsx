@@ -4,6 +4,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Textarea } from '@/components/ui/Textarea';
 import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
+import { errorText } from '@/lib/error-copy';
 
 // F4 caption annotation composer: a bottom sheet that shows the quoted caption
 // selection and a comment field. It owns no RPC; PostDetailPage passes onSubmit,
@@ -23,7 +24,7 @@ export const COMMENT_DISCARD = {
 };
 
 /** Failure copy for both annotation composers; the typed text stays. */
-export const COMMENT_POST_FAILED = "Couldn't post your comment. Try again.";
+export const COMMENT_POST_FAILED = errorText('post your comment', null);
 
 interface CaptionAnnotationComposerProps {
   open: boolean;

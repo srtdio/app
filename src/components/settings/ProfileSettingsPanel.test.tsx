@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
@@ -23,6 +25,7 @@ import {
   submitProfileChange,
   submitEmailOptIn,
   tickEmailOptIn,
+  textFieldsDirty,
   type PhotoIntent,
   type PhotoView,
 } from '@/components/settings/ProfileSettingsPanel';
@@ -585,5 +588,37 @@ describe('Catch-up emails tick', () => {
     expect(on).not.toContain('dark:');
     const off = renderToStaticMarkup(<EmailOptInRow checked={false} onChange={() => {}} />);
     expect(off).not.toContain('checked=""');
+  });
+});
+
+describe('textFieldsDirty (the Back guard on name and designation)', () => {
+  const saved = { display_name: 'Riya Menon', designation: 'Brand Manager' };
+  const fields = { name: 'Riya Menon', designation: 'Brand Manager', nameEdited: false, designationEdited: false };
+
+  it('is clean while nothing was edited, or an edit matches the saved value', () => {
+    expect(textFieldsDirty(fields, saved)).toBe(false);
+    expect(textFieldsDirty({ ...fields, name: ' Riya Menon ', nameEdited: true }, saved)).toBe(false);
+    expect(textFieldsDirty(fields, null)).toBe(false);
+  });
+
+  it('is dirty once the name or designation differs from the saved profile', () => {
+    expect(textFieldsDirty({ ...fields, name: 'Riya M', nameEdited: true }, saved)).toBe(true);
+    expect(textFieldsDirty({ ...fields, name: '', nameEdited: true }, saved)).toBe(true);
+    expect(
+      textFieldsDirty({ ...fields, designation: 'Lead', designationEdited: true }, saved),
+    ).toBe(true);
+  });
+});
+
+describe('Save profile is never disabled for "not valid yet"', () => {
+  it('the source keeps Save live (busy only) and puts the name line beside the field', () => {
+    const src = readFileSync(
+      join(process.cwd(), 'src/components/settings/ProfileSettingsPanel.tsx'),
+      'utf8',
+    );
+    expect(src).not.toContain('disabled={!canSave}');
+    expect(src).toContain('busy={submitting}');
+    expect(src).toContain('<span id="settings-display-name-error">');
+    expect(src).toContain("aria-describedby={nameError !== null ? 'settings-display-name-error' : undefined}");
   });
 });

@@ -35,7 +35,8 @@ describe('composer buttons', () => {
     expect(task).toContain('bg-panel');
     expect(task).toContain('data-task-button=""');
     expect(task).toContain('data-task-unseen=""');
-    expect(task).toContain('aria-label="Tasks"');
+    // The unseen dot rides in the name too ("new"), never colour alone.
+    expect(task).toContain('aria-label="Tasks, new"');
   });
 
   it('emoji: 44x44, 8px radius, ghost', () => {

@@ -2,7 +2,7 @@
 // upload path (uploadChatAttachment over the asset-upload Worker, XHR for
 // progress) and adds what a first upload on a weak connection needs: a progress
 // bar from the real upload progress, three automatic retries, then a plain
-// reason with Try again. File names are never shown (phones name photos
+// reason with Retry. File names are never shown (phones name photos
 // IMG_4821.HEIC). The rest of the sheet keeps everything typed whatever
 // happens here. Chunked background upload is a later backend PR. On the
 // first post (fillOnTap) a tap attaches the bundled sample photo instead of
@@ -30,9 +30,10 @@ import { INDUCTION_KEYS, UPLOAD_RETRIES, uploadFailedReason, withRetries } from 
 import { FIRST_POST_SAMPLE } from '@/lib/induction-copy';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
+import { errorText } from '@/lib/error-copy';
 
 /** The upload path itself is not set up (no endpoint or session): nothing was sent. */
-const NOT_STARTED = "Couldn't start the upload. Try again.";
+const NOT_STARTED = errorText('start the upload', null);
 
 type Upload =
   | { phase: 'idle' }
@@ -299,7 +300,7 @@ export function PresetMediaField({
         </Button>
         {upload.phase === 'failed' ? (
           <Button type="button" variant="ghost" onClick={() => retry(upload.file)}>
-            Try again
+            Retry
           </Button>
         ) : null}
       </div>

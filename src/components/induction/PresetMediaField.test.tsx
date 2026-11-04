@@ -184,7 +184,10 @@ describe('PresetMediaField', () => {
     await pickFile('a.png');
     expect(mockUpload).toHaveBeenCalledTimes(4);
     expect(document.body.textContent).toContain('The file did not reach us.');
-    expect(document.body.textContent).toContain('Try again');
+    const retry = Array.from(document.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Retry',
+    );
+    expect(retry).toBeDefined();
   });
 
   it('never reads 100% before the server answers', () => {

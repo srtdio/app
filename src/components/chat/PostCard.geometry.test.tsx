@@ -177,6 +177,8 @@ describe('chat post card: one fixed shape, loaded or not', () => {
       </MemoryRouter>,
     );
     expect(failed).toContain('data-card-failed');
+    expect(failed).toMatch(/Couldn.{1,6}t load this post\./);
+    expect(failed).toMatch(/<button[^>]*>Retry<\/button>/);
     expect(outerHeight(failed)).toBe(expected);
   });
 

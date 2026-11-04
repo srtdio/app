@@ -2,6 +2,7 @@ import { mark } from '@/lib/perf-marks';
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -41,7 +42,6 @@ import { ScheduledStrip, ScheduleModeStrip } from '@/components/chat/ScheduledSt
 import {
   formatSendLabel,
   inSentence,
-  SCHEDULE_FAILED_COPY,
   SCHEDULE_UPLOAD_FAILED_COPY,
   scheduleAttachmentArgs,
   scheduleWithFiles,
@@ -63,7 +63,11 @@ import { Thumbnail } from '@/components/media';
 import { ComposerEmoji, showsEmojiButton } from '@/components/chat/ComposerEmoji';
 import { insertAtCaret } from '@/lib/chat/emoji-list';
 import { PostPicker, warmPostPicker } from '@/components/chat/PostPicker';
-import { MentionPicker, stepActive } from '@/components/chat/MentionPicker';
+import {
+  MentionPicker,
+  mentionComboboxProps,
+  stepActive,
+} from '@/components/chat/MentionPicker';
 import { ComposerStrip } from '@/components/chat/ComposerStrip';
 import { PendingChip } from '@/components/chat/PendingChip';
 import { PostRefThumb, type PostRefPost } from '@/components/chat/PostRefChip';
@@ -167,6 +171,7 @@ import {
 } from '@/lib/chat/voice-draft';
 import { StopRecordingDialog, VoiceDraftBar, leaveAfterGuard } from '@/components/chat/VoiceDraft';
 import { isSendKeydown } from '@/lib/chat/send-key';
+import { errorText } from '@/lib/error-copy';
 
 export interface ComposerProps {
   /**
@@ -536,7 +541,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
 }
 
 /** The toast when a send (a voice note's upload included) fails; raw text is only logged. */
-export const SEND_FAILED_COPY = "Couldn't send. Try again.";
+export const SEND_FAILED_COPY = errorText('send', null);
 
 /** The pre-check's own lines (size, type, photo-only): known copy, shown as is. */
 const ATTACH_REJECT_COPY: ReadonlySet<string> = new Set([
@@ -547,7 +552,7 @@ const ATTACH_REJECT_COPY: ReadonlySet<string> = new Set([
 
 /** The toast for a file the pre-check refused: its known line, else a fixed one. */
 export function attachRejectCopy(message: string): string {
-  return ATTACH_REJECT_COPY.has(message) ? message : "Couldn't add that file. Try again.";
+  return ATTACH_REJECT_COPY.has(message) ? message : errorText('add that file', message);
 }
 
 /**
@@ -1616,7 +1621,7 @@ export function Composer(props: ComposerProps): ReactElement {
       .onEdit(body)
       .catch((error: unknown) => {
         logger.error('chat composer: edit threw', { error: String(error) });
-        return { ok: false as const, message: "Couldn't edit. Try again." };
+        return { ok: false as const, message: errorText('edit', error) };
       })
       .then((result) => {
         // Success: the parent leaves editing and the earlier draft comes back.
@@ -1687,7 +1692,7 @@ export function Composer(props: ComposerProps): ReactElement {
     );
     if (!taken) {
       // Keep the draft (text + chips + shared posts) so it is not lost.
-      toast.show({ title: "Couldn't send the message. Try again. Your draft is kept." });
+      toast.show({ title: `${errorText('send the message', null)} Your draft is kept.` });
       return;
     }
     // The preview URLs now belong to the bubble (revoked when it goes).
@@ -1803,13 +1808,13 @@ export function Composer(props: ComposerProps): ReactElement {
             )
             .catch((error: unknown) => {
               logger.error('chat composer: schedule threw', { error: String(error) });
-              return { ok: false as const, copy: SCHEDULE_FAILED_COPY };
+              return { ok: false as const, copy: errorText('schedule', error) };
             });
         },
       });
     } catch (error) {
       logger.error('chat composer: schedule threw', { error: String(error) });
-      result = { kind: 'written', result: { ok: false, copy: SCHEDULE_FAILED_COPY } };
+      result = { kind: 'written', result: { ok: false, copy: errorText('schedule', error) } };
     } finally {
       // Never left locked, whatever the run did.
       if (scheduleRunRef.current === run) scheduleRunRef.current = null;
@@ -1951,10 +1956,10 @@ export function Composer(props: ComposerProps): ReactElement {
       } else if (outcome === 'too-short') {
         deleteVoiceDraft(channelId);
         toast.show({ title: VOICE_TOO_SHORT_COPY });
-      } else toast.show({ title: "Couldn't send the voice note. Try again." });
+      } else toast.show({ title: errorText('send the voice note', null) });
     } catch (error) {
       logger.error('chat composer: voice draft send failed', { error: String(error) });
-      toast.show({ title: "Couldn't send the voice note. Try again." });
+      toast.show({ title: errorText('send the voice note', error) });
     } finally {
       setVoiceBusy(false);
     }
@@ -1982,10 +1987,10 @@ export function Composer(props: ComposerProps): ReactElement {
       else if (outcome === 'sent') {
         if (channelId !== undefined) setPrivateReplyDraft(channelId, null);
         props.onCancelReply?.();
-      } else toast.show({ title: "Couldn't send the voice note. Try again." });
+      } else toast.show({ title: errorText('send the voice note', null) });
     } catch (error) {
       logger.error('chat composer: voice note send failed', { error: String(error) });
-      toast.show({ title: "Couldn't send the voice note. Try again." });
+      toast.show({ title: errorText('send the voice note', error) });
     } finally {
       setVoiceBusy(false);
     }
@@ -2025,6 +2030,7 @@ export function Composer(props: ComposerProps): ReactElement {
         )
       : [];
   const activeRow = Math.min(mentionActive, Math.max(mentionRows.length - 1, 0));
+  const mentionListId = useId();
 
   // A pick swaps the "@query" run for "@username " and keeps the mention in the map.
   function pickMention(member: MentionMember | undefined): void {
@@ -2144,7 +2150,12 @@ export function Composer(props: ComposerProps): ReactElement {
           data-mention-anchor=""
           className="absolute inset-x-3 bottom-full z-20 mb-2"
         >
-          <MentionPicker members={mentionRows} active={activeRow} onPick={pickMention} />
+          <MentionPicker
+            members={mentionRows}
+            active={activeRow}
+            onPick={pickMention}
+            listId={mentionListId}
+          />
         </ComposerStrip>
 
         {hashQuery !== null && mentionRows.length === 0 ? (
@@ -2395,6 +2406,8 @@ export function Composer(props: ComposerProps): ReactElement {
 
               <Textarea
                 ref={setTextarea}
+                aria-label="Message"
+                {...mentionComboboxProps(mentionListId, mentionRows.length, activeRow)}
                 data-induction={INDUCTION_KEYS.chatHash}
                 // A chat message, not an AutoFill target: off stops the iOS AutoFill bar.
                 autoComplete="off"

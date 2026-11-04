@@ -58,6 +58,7 @@ import {
 import { formatDateTime, formatDueDate } from '@/lib/time';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import {
   cardMediaHeight,
@@ -340,6 +341,8 @@ export function useRetryInView(
 
 /** Copy for a card whose reads failed every try (not a permission state). */
 export const CARD_LOAD_FAILED = "Couldn't load";
+/** A post card's own failure line; Retry beside it re-runs the read. */
+export const POST_LOAD_FAILED = "Couldn't load this post.";
 
 /**
  * A card whose reads failed every try: neutral, one 44px tap re-reads it.
@@ -1299,8 +1302,8 @@ export function NotVisibleCard(props: { platform?: string | null }): ReactElemen
 }
 
 /**
- * A post card whose reads failed every try: the same fixed box, neutral, the
- * whole card one tap that re-reads it.
+ * A post card whose reads failed every try: the same fixed box, neutral,
+ * "Couldn't load this post." and a Retry in the footer that re-reads it.
  */
 export function PostCouldntLoadCard(props: {
   platform: string | null;
@@ -1308,23 +1311,21 @@ export function PostCouldntLoadCard(props: {
 }): ReactElement {
   const layout = useChatLayout();
   return (
-    <PressableRow
-      inline
-      card
-      type="button"
+    <div
       data-card-failed=""
-      onClick={props.onRetry}
       style={cardBoxStyle(props.platform, layout)}
-      // inline (w-auto) plus a fixed min/max of 240: the card's width without a
-      // w-* class against PressableRow's own.
-      className="flex min-w-[240px] max-w-[240px] flex-col overflow-hidden border bg-panel-2 text-fg-2 lit-card-muted"
+      className="flex min-w-[240px] max-w-[240px] flex-col overflow-hidden rounded-xl border bg-panel-2 text-fg-2 lit-card-muted"
     >
       <CardMediaSlot platform={props.platform} />
       <span className={CARD_BODY}>
-        <CardTitleArea layout={layout}>{CARD_LOAD_FAILED}</CardTitleArea>
-        <span className={cn(CARD_META_ROW, 'text-sm')}>Tap to try again</span>
+        <CardTitleArea layout={layout}>{POST_LOAD_FAILED}</CardTitleArea>
+        <span className={CARD_META_ROW} />
       </span>
-      <span className={cn(CARD_FOOTER, 'w-full')} />
-    </PressableRow>
+      <span className={cn(CARD_FOOTER, 'w-full')}>
+        <Button variant="ghost" onClick={props.onRetry}>
+          Retry
+        </Button>
+      </span>
+    </div>
   );
 }

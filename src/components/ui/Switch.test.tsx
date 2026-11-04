@@ -34,31 +34,52 @@ describe('Switch', () => {
     expect(onOff).toHaveBeenCalledWith(false);
   });
 
-  it('track is lit-well and 44 tall; knob is lit-knob and moves on X only', () => {
-    const on = mount(true);
-    const track = on.querySelector('span[aria-hidden]')!;
-    expect(track.className).toMatch(/\blit-well\b/);
-    expect(track.className).toMatch(/\bh-11\b/);
-    expect(track.className).toMatch(/\bbg-accent\b/);
-    const knob = track.querySelector('span')!;
+  it('the hit row stays 44 tall; the pill inside is 51x31', () => {
+    const row = mount(false);
+    expect(row.tagName).toBe('BUTTON');
+    expect(row.getAttribute('type')).toBe('button');
+    expect(row.className).toMatch(/\bh-11\b/);
+    expect(row.className).toContain('min-h-[44px]');
+    const pill = row.querySelector('span[aria-hidden]')!;
+    expect(pill.className).toContain('h-[31px]');
+    expect(pill.className).toContain('w-[51px]');
+    expect(pill.className).toMatch(/\brounded-full\b/);
+    expect(pill.className).toContain('border-[1.5px]');
+  });
+
+  it('on: accent fill, no line, accent-fg knob 20px across, X only', () => {
+    const pill = mount(true).querySelector('span[aria-hidden]')!;
+    expect(pill.className).toMatch(/\bbg-accent\b/);
+    expect(pill.className).toMatch(/\bborder-transparent\b/);
+    expect(pill.className).toMatch(/\blit-well\b/);
+    const knob = pill.querySelector('span')!;
+    expect(knob.className).toContain('h-[23px]');
+    expect(knob.className).toContain('w-[23px]');
     expect(knob.className).toMatch(/\blit-knob\b/);
-    expect(knob.className).toMatch(/\bbg-knob\b/);
-    expect(knob.className).toMatch(/\bborder-border-strong\b/);
-    expect(knob.className).toContain('translate-x-[22px]');
-    expect(knob.className).not.toMatch(/translate-y|rotate|shadow|\bring-/);
-    const offKnob = mount(false).querySelector('span[aria-hidden] span')!;
-    expect(offKnob.className).toContain('translate-x-0');
+    expect(knob.className).toMatch(/\bbg-accent-fg\b/);
+    expect(knob.className).toMatch(/\btranslate-x-5\b/);
+    expect(knob.className).toMatch(/\bmv-slide\b/);
+    expect(knob.className).not.toMatch(/translate-y|rotate|shadow|\bring-|\bborder\b/);
   });
 
-  it('off track is a panel-2 well with a border-strong edge', () => {
-    const offTrack = mount(false).querySelector('span[aria-hidden]')!;
-    expect(offTrack.className).toMatch(/\bbg-panel-2\b/);
-    expect(offTrack.className).toMatch(/\bborder-border-strong\b/);
-    expect(offTrack.className).toMatch(/\blit-well\b/);
-    expect(offTrack.className).not.toMatch(/\bbg-panel-3\b/);
+  it('off: a clear track with the field line, lit-well, and an ink knob at rest', () => {
+    const pill = mount(false).querySelector('span[aria-hidden]')!;
+    expect(pill.className).toMatch(/\bbg-transparent\b/);
+    expect(pill.className).toMatch(/\bborder-field\b/);
+    expect(pill.className).toMatch(/\blit-well\b/);
+    expect(pill.className).not.toMatch(/\bbg-panel-[23]\b|\bborder-border-strong\b/);
+    const knob = pill.querySelector('span')!;
+    expect(knob.className).toMatch(/\bbg-fg\b/);
+    expect(knob.className).toMatch(/\blit-knob\b/);
+    expect(knob.className).toMatch(/\btranslate-x-0\b/);
   });
 
-  it('the pressable row is a pill so hover and focus follow the track', () => {
-    expect(mount(false).className).toMatch(/\brounded-full\b/);
+  it('hover, press and the focus line follow the pill, not the 44px row', () => {
+    const row = mount(false);
+    const pill = row.querySelector('span[aria-hidden]')!;
+    expect(pill.className).toMatch(/\blit-hover\b/);
+    expect(pill.className).toContain('group-focus-visible:lit-focus');
+    expect(row.className).toMatch(/\bgroup\b/);
+    expect(row.className).not.toMatch(/\blit-hover\b|focus-visible:lit-focus/);
   });
 });

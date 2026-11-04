@@ -35,6 +35,7 @@ import { cn } from '@/lib/cn';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 import { useModalFocus } from '@/lib/modal-focus';
 import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
+import { SPINNER_BUSY, useDelayedBusy } from '@/lib/useDelayedBusy';
 import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
 import { viewportSize } from '@/lib/use-is-laptop';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -356,20 +357,27 @@ function LightboxMedia({
   onRetry: () => void;
 }): ReactElement {
   const { url, failed } = useImageUrl(image, cache, presignEnabled);
+  // A cached or fast URL never flashes the spinner (SPINNER_BUSY: 200 ms in, 400 ms hold).
+  const showSpinner = useDelayedBusy(url === null && !failed, SPINNER_BUSY);
 
   if (failed) {
     return (
       <div className="flex flex-col items-center gap-3">
         <p className="text-base text-overlay-fg-dim">This image did not load.</p>
         <button type="button" onClick={onRetry} className={RETRY_BUTTON}>
-          Try again
+          Retry
         </button>
       </div>
     );
   }
   if (url === null) {
     return (
-      <div className="h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
+      <div
+        className={cn(
+          'h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg',
+          !showSpinner && 'invisible',
+        )}
+      />
     );
   }
   return (

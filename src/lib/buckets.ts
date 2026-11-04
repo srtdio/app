@@ -7,6 +7,7 @@
 
 import type { Client, Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
+import { errorText } from '@/lib/error-copy';
 
 /** One selectable, non-archived bucket, shaped for the picker and the dot. */
 export interface BucketOption {
@@ -73,7 +74,7 @@ export const BUCKET_NAME_MAX = 40;
 export function bucketCreateErrorMessage(message: string): string {
   if (message.includes('name_taken')) return "That name's already taken.";
   if (message.includes('invalid_name')) return 'Use 1 to 40 characters.';
-  return "Couldn't create the bucket. Try again.";
+  return errorText('create the bucket', message);
 }
 
 type CreateArgs = Database['public']['Functions']['workspace_bucket_create']['Args'];

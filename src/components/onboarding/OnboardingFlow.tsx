@@ -42,6 +42,7 @@ import { EntryHand } from '@/components/induction/EntryHand';
 import { readLatestBrandRequest, requestBrandTeam } from '@/components/induction/induction-data';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
@@ -52,10 +53,16 @@ import { Sheet } from '@/components/ui/Sheet';
 import { fireAvatarCleanup, makeAvatarCleanup, uploadAvatarFile } from '@/lib/avatar-upload';
 import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
+import { errorText } from '@/lib/error-copy';
 import { SIGNOUT_EVENT, dispatchSorted } from '@/lib/events';
 import { fetchWithTrace } from '@/lib/fetch';
 import { generateTraceId } from '@/lib/trace';
-import { ONBOARDING_COPY, WELCOME_COPY, fillCopy } from '@/lib/induction-copy';
+import {
+  CHECK_EMAIL_COPY,
+  ONBOARDING_COPY,
+  WELCOME_COPY,
+  fillCopy,
+} from '@/lib/induction-copy';
 import {
   APPROVER_BRAND_STEP,
   APPROVER_WAITING_STEP,
@@ -329,6 +336,9 @@ export function OnboardingFlow({
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Field lines shown after a Continue / Ask tap that found a field not ready
+  // (the buttons are never disabled for "not valid yet"). Keyed by field.
+  const [fieldErrors, setFieldErrors] = useState<OnboardingFieldErrors>({});
   // A photo that did not upload: the profile saved without it, and this says so.
   const [photoNotice, setPhotoNotice] = useState<string | null>(null);
   // A Creator whose photo did not upload stays to read that, then goes on.
@@ -437,6 +447,7 @@ export function OnboardingFlow({
   function back(): void {
     stepDirection.current = -1;
     setError(null);
+    setFieldErrors({});
     if (changingSide) {
       // Changed their mind about changing: still the approver they saved as.
       setChangingSide(false);
@@ -461,7 +472,8 @@ export function OnboardingFlow({
     const saved = await onStep(APPROVER_BRAND_STEP);
     setBusy(false);
     if (!saved) {
-      setError("Couldn't save that. Try again.");
+      // onStep answers a boolean: no error to read, so the reason is the retry line.
+      setError(errorText('save your name', null));
       return;
     }
     setChangingSide(false);
@@ -475,7 +487,7 @@ export function OnboardingFlow({
     const saved = await onStep(WORKSPACE_STEP);
     if (!saved) {
       setBusy(false);
-      setError("Couldn't save that. Try again.");
+      setError(errorText('save the workspace', null));
       return;
     }
     finish(SHELL_HOME);
@@ -574,7 +586,7 @@ export function OnboardingFlow({
         return;
       }
       logger.error('onboarding save failed', { error: saved.error.message });
-      setError("Couldn't save that. Try again.");
+      setError(errorText('save your name', saved.error));
       return;
     }
     // The row now holds the new photo: the one it replaced is cleaned up, never awaited.
@@ -631,6 +643,7 @@ export function OnboardingFlow({
 
   /** brand_agency_request, then the wait is stored so a reload opens on it. */
   async function askTeam(): Promise<void> {
+    if (busy) return;
     setBusy(true);
     setError(null);
     const sent = await requestBrandTeam(supabase, {
@@ -647,6 +660,54 @@ export function OnboardingFlow({
     setBusy(false);
     if (step === 'brand') next();
     else setResent(true);
+  }
+
+  /**
+   * Ask them to join: a malformed or empty email, or an empty brand name, shows
+   * its line under the field and the first one takes focus; otherwise it asks.
+   */
+  function submitBrand(): void {
+    if (busy) return;
+    const errors = brandFieldErrors(teamEmail, brandName);
+    setFieldErrors(errors);
+    const first = firstOnboardingError(errors, ['teamEmail', 'brand']);
+    if (first !== null) {
+      document.getElementById(ONBOARDING_FIELD_IDS[first])?.focus();
+      return;
+    }
+    void askTeam();
+  }
+
+  /**
+   * The name screen's Continue: an empty name or a username that is not ready
+   * yet says why under its field and that field takes focus. A check that got
+   * no answer does not block: the save refuses a taken name.
+   */
+  function submitName(): void {
+    if (busy) return;
+    const errors = nameFieldErrors(name, format);
+    setFieldErrors(errors);
+    const first = firstOnboardingError(errors, ['name', 'username']);
+    if (first !== null) {
+      document.getElementById(ONBOARDING_FIELD_IDS[first])?.focus();
+      return;
+    }
+    // The hint under the username already says why (taken, reserved, malformed,
+    // or still checking): focus it and wait.
+    if (format !== 'ok' || !(nameCheck === 'free' || nameCheck === 'error')) {
+      document.getElementById(ONBOARDING_FIELD_IDS.username)?.focus();
+      return;
+    }
+    next();
+  }
+
+  function clearFieldError(key: keyof OnboardingFieldErrors): void {
+    setFieldErrors((prev) => {
+      if (prev[key] === undefined) return prev;
+      const nextErrors = { ...prev };
+      delete nextErrors[key];
+      return nextErrors;
+    });
   }
 
   // ---------- screens ----------
@@ -727,11 +788,12 @@ export function OnboardingFlow({
     continueEnabled = side !== null && !changingSide;
     primary = (
       <Primary
-        disabled={busy || side === null}
+        disabled={side === null}
+        busy={busy}
         onClick={changingSide ? () => void confirmSide() : next}
         anchor={INDUCTION_KEYS.onboardingSideContinue}
       >
-        {busy ? 'Saving' : 'Continue'}
+        Continue
       </Primary>
     );
   } else if (step === 'name') {
@@ -792,12 +854,18 @@ export function OnboardingFlow({
         <Labeled label="Full name" htmlFor="ob-name">
           <Input
             id="ob-name"
+            name="name"
             autoComplete="name"
             maxLength={80}
             placeholder="Your full name"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            {...fieldErrorProps(fieldErrors, 'name')}
+            onChange={(event) => {
+              setName(event.target.value);
+              clearFieldError('name');
+            }}
           />
+          <FieldErrorNote errors={fieldErrors} field="name" />
         </Labeled>
         <div>
           <label htmlFor="ob-username" className="mb-1.5 block text-base font-medium">
@@ -809,23 +877,29 @@ export function OnboardingFlow({
             </span>
             <Input
               id="ob-username"
+              name="username"
               autoCapitalize="off"
               autoComplete="off"
               spellCheck={false}
               placeholder="your.name"
               value={shownUsername}
+              {...fieldErrorProps(fieldErrors, 'username')}
               onChange={(event) => {
                 setUsernameEdited(true);
                 setUsername(normalizeUsernameInput(event.target.value));
+                clearFieldError('username');
               }}
             />
           </div>
+          <FieldErrorNote errors={fieldErrors} field="username" />
           <p className={cn('mt-1.5 text-sm', hintTone)} aria-live="polite">
             {hint}
           </p>
         </div>
       </>
     );
+    // Whether the guide's hand may sit on Continue (the form is ready). The
+    // button itself is never disabled for "not ready yet": submitName says why.
     continueEnabled =
       !busy &&
       name.trim().length > 0 &&
@@ -834,8 +908,8 @@ export function OnboardingFlow({
       (nameCheck === 'free' || nameCheck === 'error');
     primary = (
       <Primary
-        disabled={!continueEnabled}
-        onClick={next}
+        busy={busy}
+        onClick={submitName}
         anchor={INDUCTION_KEYS.onboardingNameContinue}
       >
         Continue
@@ -863,6 +937,8 @@ export function OnboardingFlow({
           <Labeled label="Tell us your job title" htmlFor="ob-role-other">
             <Input
               id="ob-role-other"
+              name="organization-title"
+              autoComplete="organization-title"
               maxLength={80}
               placeholder="Type your job title"
               value={roleOther}
@@ -876,15 +952,14 @@ export function OnboardingFlow({
     continueEnabled = !busy && !readyForShell && designation.length > 0;
     primary = (
       <Primary
-        disabled={busy}
+        busy={busy}
         onClick={readyForShell ? () => finish(SHELL_HOME) : () => void saveProfile()}
         anchor={INDUCTION_KEYS.onboardingRoleContinue}
       >
-        {busy ? 'Saving' : 'Continue'}
+        Continue
       </Primary>
     );
   } else if (step === 'brand') {
-    const valid = isValidInviteEmail(teamEmail) && brandName.trim().length > 0;
     body = (
       <>
         <Heading
@@ -895,27 +970,50 @@ export function OnboardingFlow({
           <Input
             id="ob-team-email"
             type="email"
+            // Someone else's address: the browser never fills the user's own.
+            name="team-email"
             autoComplete="off"
+            spellCheck={false}
+            autoCapitalize="none"
             placeholder="name@theirteam.com"
             value={teamEmail}
-            onChange={(event) => setTeamEmail(event.target.value)}
+            {...fieldErrorProps(fieldErrors, 'teamEmail')}
+            onChange={(event) => {
+              setTeamEmail(event.target.value);
+              clearFieldError('teamEmail');
+            }}
+            onBlur={() => {
+              // A malformed address says so when the field loses focus too.
+              const line = teamEmailError(teamEmail);
+              if (teamEmail.trim() !== '' && line !== undefined) {
+                setFieldErrors((prev) => ({ ...prev, teamEmail: line }));
+              }
+            }}
           />
+          <FieldErrorNote errors={fieldErrors} field="teamEmail" />
         </Labeled>
         <Labeled label="Brand name" htmlFor="ob-brand" hint="The brand they make posts for.">
           <Input
             id="ob-brand"
+            name="organization"
+            autoComplete="off"
             maxLength={80}
             placeholder="Ramy Group"
             value={brandName}
-            onChange={(event) => setBrandName(event.target.value)}
+            {...fieldErrorProps(fieldErrors, 'brand')}
+            onChange={(event) => {
+              setBrandName(event.target.value);
+              clearFieldError('brand');
+            }}
           />
+          <FieldErrorNote errors={fieldErrors} field="brand" />
         </Labeled>
       </>
     );
     primary = (
       <>
-        <Primary disabled={busy || !valid} onClick={() => void askTeam()}>
-          {busy ? 'Sending' : 'Ask them to join'}
+        <Primary busy={busy} onClick={submitBrand}>
+          Ask them to join
         </Primary>
         {!invitee ? (
           <TextAction
@@ -935,11 +1033,9 @@ export function OnboardingFlow({
     body = <WaitingBody email={teamEmail} resent={resent} />;
     primary = (
       <>
-        <Primary
-          disabled={busy || !isValidInviteEmail(teamEmail) || brandName.trim() === ''}
-          onClick={() => void askTeam()}
-        >
-          {busy ? 'Sending' : 'Resend'}
+        {/* The email and brand were checked on the brand screen; busy is the only hold. */}
+        <Primary busy={busy} onClick={() => void askTeam()}>
+          Resend
         </Primary>
         <TextAction disabled={busy} onClick={() => void switchToCreator()}>
           {ONBOARDING_COPY.makePostsAfterAll}
@@ -1098,13 +1194,95 @@ function Labeled({
   );
 }
 
+/** The onboarding form fields that can show a line after a refused tap. */
+type OnboardingFieldKey = 'name' | 'username' | 'teamEmail' | 'brand';
+type OnboardingFieldErrors = Partial<Record<OnboardingFieldKey, string>>;
+
+const ONBOARDING_FIELD_IDS: Readonly<Record<OnboardingFieldKey, string>> = {
+  name: 'ob-name',
+  username: 'ob-username',
+  teamEmail: 'ob-team-email',
+  brand: 'ob-brand',
+};
+
+/** The field lines a refused Continue / Ask tap shows. */
+export const ONBOARDING_FIELD_COPY = {
+  name: 'Add your full name.',
+  username: 'Add a username.',
+  brand: 'Add the brand name.',
+} as const;
+
+/** Their email's line: empty or malformed reads the sign-in screen's line. Pure. */
+export function teamEmailError(email: string): string | undefined {
+  return isValidInviteEmail(email.trim()) ? undefined : CHECK_EMAIL_COPY.invalidEmail;
+}
+
+/** The name screen's field lines (the username's other states live in its hint). Pure. */
+export function nameFieldErrors(
+  name: string,
+  format: ReturnType<typeof usernameFormat>,
+): OnboardingFieldErrors {
+  const errors: OnboardingFieldErrors = {};
+  if (name.trim() === '') errors.name = ONBOARDING_FIELD_COPY.name;
+  if (format === 'empty') errors.username = ONBOARDING_FIELD_COPY.username;
+  return errors;
+}
+
+/** The brand screen's field lines. Pure. */
+export function brandFieldErrors(email: string, brandName: string): OnboardingFieldErrors {
+  const errors: OnboardingFieldErrors = {};
+  const emailLine = teamEmailError(email);
+  if (emailLine !== undefined) errors.teamEmail = emailLine;
+  if (brandName.trim() === '') errors.brand = ONBOARDING_FIELD_COPY.brand;
+  return errors;
+}
+
+/** The first field (in screen order) with a line, or null. Pure. */
+export function firstOnboardingError(
+  errors: OnboardingFieldErrors,
+  order: readonly OnboardingFieldKey[],
+): OnboardingFieldKey | null {
+  return order.find((key) => errors[key] !== undefined) ?? null;
+}
+
+/** aria-invalid plus aria-describedby to the field's line while it shows. */
+function fieldErrorProps(
+  errors: OnboardingFieldErrors,
+  key: OnboardingFieldKey,
+): { 'aria-invalid': boolean; 'aria-describedby'?: string } {
+  return errors[key] !== undefined
+    ? { 'aria-invalid': true, 'aria-describedby': `${ONBOARDING_FIELD_IDS[key]}-error` }
+    : { 'aria-invalid': false };
+}
+
+/** The field's line under it (ui/ErrorNote, role=alert), or nothing. */
+function FieldErrorNote({
+  errors,
+  field,
+}: {
+  errors: OnboardingFieldErrors;
+  field: OnboardingFieldKey;
+}): ReactElement | null {
+  const line = errors[field];
+  if (line === undefined) return null;
+  return (
+    <ErrorNote className="mt-1.5">
+      <span id={`${ONBOARDING_FIELD_IDS[field]}-error`}>{line}</span>
+    </ErrorNote>
+  );
+}
+
 function Primary({
-  disabled,
+  disabled = false,
+  busy = false,
   onClick,
   anchor,
   children,
 }: {
-  disabled: boolean;
+  /** Only for a choice not made yet (the side tiles); forms use busy and say why on tap. */
+  disabled?: boolean;
+  /** The step is saving or sending: disabled, aria-busy, label kept, spinner beside it. */
+  busy?: boolean;
   onClick: () => void;
   /** The guide's data-induction key, where the hand can sit on it. */
   anchor?: InductionKey;
@@ -1116,6 +1294,7 @@ function Primary({
       variant="primary"
       data-induction={anchor}
       disabled={disabled}
+      busy={busy}
       onClick={onClick}
       className="w-full"
     >

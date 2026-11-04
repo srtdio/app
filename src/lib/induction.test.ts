@@ -718,7 +718,7 @@ describe('brandRequestErrorMessage', () => {
     expect(brandRequestErrorMessage('invalid_payload')).toBe(
       "Couldn't send that. Check the email address and try again.",
     );
-    expect(brandRequestErrorMessage('boom')).toBe("Couldn't send that. Try again.");
+    expect(brandRequestErrorMessage('boom')).toBe("Couldn't send the request. Try again.");
   });
 
   it('every message reads "Couldn\'t {action}. {reason}"', () => {

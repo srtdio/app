@@ -142,6 +142,50 @@ describe('Button design system', () => {
   });
 });
 
+describe('Button busy', () => {
+  type El = ReactElement<{
+    disabled?: boolean;
+    'aria-busy'?: boolean;
+    children: unknown[];
+    className: string;
+  }>;
+  const render = (props: Partial<Props>): El => Button({ children: 'Save', ...props }) as El;
+
+  it('busy disables the button and sets aria-busy', () => {
+    const el = render({ busy: true });
+    expect(el.props.disabled).toBe(true);
+    expect(el.props['aria-busy']).toBe(true);
+  });
+
+  it('busy keeps the label and puts a spinner beside it (never replaces it)', () => {
+    const el = render({ busy: true });
+    const kids = el.props.children.filter((k) => k !== null);
+    expect(kids).toHaveLength(2);
+    expect(kids).toContain('Save');
+    const arc = kids.find((k) => k !== 'Save') as ReactElement<{
+      progress: number | null;
+      className: string;
+    }>;
+    expect(arc.props.progress).toBeNull();
+    expect(arc.props.className).toContain('mv-spin');
+    expect(arc.props.className).not.toMatch(/opacity-|#[0-9a-fA-F]{3,8}\b|dark:/);
+  });
+
+  it('not busy: no spinner, no aria-busy, disabled only when asked', () => {
+    const idle = render({});
+    expect(idle.props.disabled).toBeUndefined();
+    expect(idle.props['aria-busy']).toBeUndefined();
+    expect(idle.props.children.filter((k) => k !== null)).toEqual(['Save']);
+    expect(render({ disabled: true }).props.disabled).toBe(true);
+  });
+
+  it('busy never changes the class string (same look light and dark, no fade)', () => {
+    expect(render({ busy: true, variant: 'primary' }).props.className).toBe(
+      classOf({ variant: 'primary' }),
+    );
+  });
+});
+
 describe('IconButton', () => {
   it('is 44x44 with an 8px radius', () => {
     const el = IconButton({ label: 'Close', children: null }) as ReactElement<{

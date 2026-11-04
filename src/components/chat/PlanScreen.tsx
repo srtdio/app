@@ -121,7 +121,6 @@ import {
   KEEP_EDITING_LABEL,
   NO_DATE_LABEL,
   OPEN_FOR_CLIENT_BODY,
-  OPEN_FOR_CLIENT_FAILED,
   OPEN_FOR_CLIENT_LABEL,
   OPEN_FOR_CLIENT_TITLE,
   OPEN_FOR_CLIENT_TOAST,
@@ -131,7 +130,6 @@ import {
   PLAN_SAVE_ERROR_COPY,
   PLAN_TITLE_MAX,
   RENAMED_TOAST,
-  RENAME_FAILED,
   RENAME_LABEL,
   RETRY_LABEL,
   SAVE_CHANGES_LABEL,
@@ -312,6 +310,7 @@ import {
   planWeekGroups,
   type PlanWeekGroup,
 } from '@/lib/plan-week';
+import { errorText } from '@/lib/error-copy';
 
 // ---------------------------------------------------------------------------
 // Shared pieces
@@ -886,7 +885,7 @@ function ScreenSkeleton(): ReactElement {
 }
 
 /** The screens' load-failure copy (the failed body, and a failed re-read's toast). */
-export const SCREEN_LOAD_FAILED = "Couldn't load. Try again.";
+export const SCREEN_LOAD_FAILED = errorText('load', null);
 
 /** A read that failed: neutral copy and a Retry. */
 export function ScreenFailed(props: { onRetry: () => void }): ReactElement {
@@ -1371,7 +1370,7 @@ export function PlanScreen(props: {
         plan_id: planId,
         error: result.error.message,
       });
-      toast.show({ title: RENAME_FAILED });
+      toast.show({ title: errorText('rename', result.error) });
       return;
     }
     setRenaming(null);
@@ -1469,7 +1468,7 @@ export function PlanScreen(props: {
         plan_id: planId,
         error: result.error.message,
       });
-      setOpenError(OPEN_FOR_CLIENT_FAILED);
+      setOpenError(errorText('open for approvers', result.error));
       return;
     }
     setOpenConfirm(false);

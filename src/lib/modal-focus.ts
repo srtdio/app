@@ -7,11 +7,15 @@
 // if it is still in the document. Layers nest: one document listener, and only
 // the top open layer traps, so a confirm over a sheet traps for itself alone.
 //
-// Non-modal layers (popovers, dropdowns, menus) do not move or trap focus;
-// they call useDismissLayer: Escape closes the top one (escape-stack) and
-// focus goes back to whatever opened it.
+// Non-modal layers (popovers, dropdowns, menus) do not trap focus; they call
+// useDismissLayer: Escape closes the top one (escape-stack) and focus goes
+// back to whatever opened it. A popover that portals out of a Sheet registers
+// its node with useModalScopeNode so the Sheet's trap lets focus live in it.
+// While a modal panel that lives outside #root is open, #root is inert
+// (app-inert.ts).
 
 import { useEffect, useRef, type RefObject } from 'react';
+import { holdAppInert } from '@/lib/app-inert';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { isCoarsePointer } from '@/lib/use-is-laptop';
 
@@ -69,12 +73,44 @@ interface Layer {
 const layers: Layer[] = [];
 let listening = false;
 
+/**
+ * Nodes outside every modal panel that still belong to the open modal scope: a
+ * popover a control inside a Sheet portals onto <body> (the DatePicker
+ * calendar). While focus sits in one, Tab moves through it natively and the
+ * trap stays out of the way.
+ */
+const scopeNodes = new Set<RefObject<HTMLElement | null>>();
+
+/** Whether `el` sits in an allow-listed popover of the modal scope. */
+export function inModalScopeNode(el: Element | null): boolean {
+  if (el === null) return false;
+  for (const node of scopeNodes) {
+    if (node.current?.contains(el) === true) return true;
+  }
+  return false;
+}
+
+/**
+ * Register a portaled popover with the modal focus scope while `open`, so a
+ * Sheet's Tab trap lets focus live in it. Pure registry: no focus moves here.
+ */
+export function useModalScopeNode(node: RefObject<HTMLElement | null>, open: boolean): void {
+  useEffect(() => {
+    if (!open) return;
+    scopeNodes.add(node);
+    return () => {
+      scopeNodes.delete(node);
+    };
+  }, [node, open]);
+}
+
 /** The Tab trap: only the top layer's panel; focus outside it wraps back in. */
 function onKeyDown(event: KeyboardEvent): void {
   if (event.key !== 'Tab') return;
   const top = layers[layers.length - 1];
   const root = top?.panel.current ?? null;
   if (root === null) return;
+  if (inModalScopeNode(document.activeElement)) return;
   const items = focusableIn(root);
   const active = document.activeElement;
   const inside = active instanceof HTMLElement && root.contains(active) && active !== root;
@@ -155,6 +191,8 @@ export function useModalFocus(
     const opener =
       !alreadyInside && before instanceof HTMLElement && before !== document.body ? before : null;
     const pop = pushModalLayer(panelRef);
+    // The page behind goes inert (refcounted, app-inert.ts) while this layer is open.
+    const releaseInert = holdAppInert(root);
     if (root !== null && !alreadyInside) {
       const target = initialFocusTarget(root, initialRef.current?.() ?? null, isTouchDevice());
       if (target === root) focusPanel(root);
@@ -162,6 +200,8 @@ export function useModalFocus(
     }
     return () => {
       pop();
+      // Wake the page first: an inert opener cannot take focus back.
+      releaseInert();
       if (opener === null || !opener.isConnected) return;
       // Hand focus back only when the layer still holds it (or it fell to the
       // body); a caller that moved it on purpose keeps its choice.

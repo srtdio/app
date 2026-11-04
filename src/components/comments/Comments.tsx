@@ -44,6 +44,7 @@ import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { formatDateTime, formatRelative } from '@/lib/time';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { UNDO_MS } from '@/lib/undo';
+import { useBackGuard } from '@/lib/back-guard';
 import { useOptionalToast } from '@/components/ui/toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { friendlyCommentError } from '@/components/comments/comment-errors';
@@ -902,6 +903,16 @@ export function pointEditedMarker(editedAt: string | null, now: Date): string | 
  *  the panel remounting, never a reload). Keyed by entity + thread root. */
 const replyDrafts = new Map<string, string>();
 
+/** The root composer's draft per post (or brief), kept the same way as
+ *  replyDrafts: for as long as the page is open, never across a reload. Keyed
+ *  by workspace + entity. */
+const rootDrafts = new Map<string, string>();
+
+/** True when a draft body holds anything but whitespace. Pure. */
+export function draftHasText(draft: string | undefined): boolean {
+  return draft !== undefined && draft.trim() !== '';
+}
+
 /** True when a reply draft holds text the person typed beyond its seed. */
 export function replyHasTypedText(draft: string | undefined, seed: string): boolean {
   if (draft === undefined) return false;
@@ -1264,6 +1275,25 @@ export function Comments({
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   // The thread whose reply composer is asking "Discard reply?".
   const [discardFor, setDiscardFor] = useState<string | null>(null);
+  // The root composer's unsaved work: typed text (kept in rootDrafts) or any
+  // attachment chip. Booleans only, so a keystroke re-renders the list only
+  // when the draft turns empty or non-empty. A new entity re-reads its draft.
+  const [rootHasText, setRootHasText] = useState(() => draftHasText(rootDrafts.get(entityKey)));
+  const [rootHasChips, setRootHasChips] = useState(false);
+  const [rootDraftFor, setRootDraftFor] = useState(entityKey);
+  if (rootDraftFor !== entityKey) {
+    setRootDraftFor(entityKey);
+    setRootHasText(draftHasText(rootDrafts.get(entityKey)));
+    setRootHasChips(false);
+  }
+  // A discarded root draft remounts the composer blank (text and chips).
+  const [rootEpoch, setRootEpoch] = useState(0);
+  // Back while the root composer holds a draft: "Discard comment?" first.
+  const [rootDiscardAsk, setRootDiscardAsk] = useState(false);
+  const rootGuard = useBackGuard({
+    active: rootHasText || rootHasChips,
+    onBack: () => setRootDiscardAsk(true),
+  });
   const undoable = useUndoableAction();
 
   const [profiles, setProfiles] = useState<Map<string, CommentProfile>>(new Map());
@@ -1275,6 +1305,10 @@ export function Comments({
   const [editBody, setEditBody] = useState('');
   // The edit box shows "@username"; these picks turn each back into its token on save.
   const [editPicks, setEditPicks] = useState<MentionPick[]>([]);
+  // An edit Save in flight: the button shows busy, and a second tap (or Enter
+  // repeat) never sends twice (the ref answers inside the same tick).
+  const [editSaving, setEditSaving] = useState(false);
+  const editSavingRef = useRef(false);
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   // The thread root whose reopen request is in flight; null when idle. A one-tap
@@ -1683,6 +1717,11 @@ export function Comments({
     }
     const parentId = options.parentCommentId;
     if (parentId !== null) replyDrafts.delete(draftKey(parentId));
+    else {
+      // The root comment landed: its kept draft goes (the composer clears its chips).
+      rootDrafts.delete(entityKey);
+      setRootHasText(false);
+    }
     // The guide's reply landed: it moves on even if a phone lost the tap.
     if (parentId !== null && parentId === guideReplyCommentId) {
       dispatchInductionDid(INDUCTION_KEYS.postReplyPost);
@@ -1760,7 +1799,13 @@ export function Comments({
       return;
     }
     const nextBody = serializeMentions(editBody, editPicks);
-    const result = await runEditComment(supabase, commentId, nextBody, newTrace());
+    if (editSavingRef.current) return;
+    editSavingRef.current = true;
+    setEditSaving(true);
+    const result = await runEditComment(supabase, commentId, nextBody, newTrace()).finally(() => {
+      editSavingRef.current = false;
+      setEditSaving(false);
+    });
     if (!result.ok) {
       setRowError({
         id: commentId,
@@ -2271,6 +2316,7 @@ export function Comments({
             variant="primary"
             className="min-w-[44px]"
             disabled={editBody.trim() === ''}
+            busy={editSaving}
             onClick={() => void handleSaveEdit(commentId)}
           >
             Save
@@ -2278,6 +2324,7 @@ export function Comments({
           <Button
             variant="ghost"
             className="min-w-[44px]"
+            disabled={editSaving}
             onClick={() => {
               setEditingId(null);
               setEditBody('');
@@ -2731,11 +2778,19 @@ export function Comments({
       <SlotComposer onSubmit={handleCreateBatch} canAttach={canAttach} uploadFile={uploadFile} />
     ) : (
       <CommentComposer
+        // Remounts per entity (its own kept draft) and after a discarded draft.
+        key={`root-${entityKey}-${rootEpoch}`}
         onSubmit={(body, options) => handleCreate(body, { ...options, parentCommentId: null })}
         members={mentionMembers}
         canAttach={canAttach}
         uploadFile={uploadFile}
         placeholder="Write a comment"
+        {...(rootDrafts.has(entityKey) ? { initialBody: rootDrafts.get(entityKey) ?? '' } : {})}
+        onBodyChange={(body) => {
+          rootDrafts.set(entityKey, body);
+          setRootHasText(draftHasText(body));
+        }}
+        onAttachmentCountChange={(count) => setRootHasChips(count > 0)}
       />
     );
 
@@ -2848,6 +2903,27 @@ export function Comments({
             toggleReply(id);
           }}
           onCancel={() => setDiscardFor(null)}
+        />
+      ) : null}
+
+      {rootDiscardAsk ? (
+        <ConfirmDialog
+          title="Discard comment?"
+          message="Your comment has not been sent."
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          destructive
+          onConfirm={() => {
+            // Released first, so the guard's own entry pops cleanly; the next
+            // Back leaves the page.
+            rootGuard.release();
+            setRootDiscardAsk(false);
+            rootDrafts.delete(entityKey);
+            setRootHasText(false);
+            setRootHasChips(false);
+            setRootEpoch((n) => n + 1);
+          }}
+          onCancel={() => setRootDiscardAsk(false)}
         />
       ) : null}
 

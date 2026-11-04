@@ -21,6 +21,7 @@ import {
   normalizeDomain,
   removeClientDomain,
 } from './workspace-settings-data';
+import { errorText } from '@/lib/error-copy';
 
 export function ApprovedAddressesSection({
   workspaceId,
@@ -102,7 +103,7 @@ export function ApprovedAddressesSection({
       </div>
 
       {loadError ? (
-        <p className="text-base text-bad">Couldn&apos;t load addresses. Try again.</p>
+        <p className="text-base text-bad">{errorText('load addresses', null)}</p>
       ) : domains.length > 0 ? (
         <ul aria-label="Approved addresses" className="flex flex-col divide-y divide-border">
           {domains.map((domain) => (

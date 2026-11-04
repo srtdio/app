@@ -1,5 +1,5 @@
 import { mark } from '@/lib/perf-marks';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
@@ -450,6 +450,13 @@ interface PaletteBodyProps {
   onRemoveRecent?: (recent: { type: RecentType; id: string }) => void;
   /** The Recent header's Clear all. */
   onClearRecents?: () => void;
+  /** The listbox's id: each row's id is paletteOptionId(listId, index). */
+  listId?: string;
+}
+
+/** A palette row's id (the field's aria-activedescendant). Pure. */
+export function paletteOptionId(listId: string, index: number): string {
+  return `${listId}-option-${index}`;
 }
 
 // X and Clear all keep the field focused (and the phone keeps its keyboard).
@@ -538,6 +545,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
               type: 'button' as const,
               role: 'option',
               'aria-selected': isActive,
+              ...(props.listId !== undefined ? { id: paletteOptionId(props.listId, index) } : {}),
               'data-palette-item': item.id,
               'data-active': isActive ? '' : undefined,
               onMouseEnter: () => props.onHover(index),
@@ -660,6 +668,7 @@ export function CommandPalette({
   }
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  const listId = useId();
   const [expanded, setExpanded] = useState<ReadonlySet<ResultGroup>>(new Set());
   const [search, setSearch] = useState<PaletteSearchState>(IDLE_PALETTE_SEARCH);
   const toast = useToast();
@@ -968,6 +977,13 @@ export function CommandPalette({
             onKeyDown={onKeyDown}
             placeholder="Search anything"
             aria-label="Search this workspace"
+            role="combobox"
+            aria-expanded={flat.length > 0}
+            aria-controls={listId}
+            aria-autocomplete="list"
+            {...(flat[active] !== undefined
+              ? { 'aria-activedescendant': paletteOptionId(listId, active) }
+              : {})}
             enterKeyHint="search"
             className="flex-1 min-w-0 h-12 bg-transparent outline-none text-input sm:text-base placeholder:text-fg-3"
           />
@@ -1001,6 +1017,7 @@ export function CommandPalette({
         </div>
         <div
           ref={listRef}
+          id={listId}
           role="listbox"
           aria-label="Search this workspace"
           className="flex-1 overflow-y-auto py-2 sm:flex-none sm:max-h-[60dvh]"
@@ -1010,6 +1027,7 @@ export function CommandPalette({
             search={search}
             sections={sections}
             active={active}
+            listId={listId}
             onHover={setActive}
             onPick={pick}
             onRetry={() => runnerRef.current?.retry()}

@@ -402,6 +402,7 @@ import { createCmdMessage } from '@/lib/chat/message-factory';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import type { ChatConnection } from '@/lib/chat/types';
+import { errorText } from '@/lib/error-copy';
 
 interface MessageThreadProps {
   title: string;
@@ -1032,10 +1033,10 @@ export function bubbleChip(
 export const ABOUT_UNAVAILABLE_TOAST = 'That post is not available here';
 
 /** Toast when a share cannot be sent (no open conversation). */
-export const SHARE_UNAVAILABLE_TOAST = "Couldn't share. Try again.";
+export const SHARE_UNAVAILABLE_TOAST = errorText('share', null);
 
 /** Toast when a thread's root or first page cannot be read; the chat stays as it is. */
-const THREAD_OPEN_FAILED_TOAST = "Couldn't open this thread. Try again.";
+const THREAD_OPEN_FAILED_TOAST = errorText('open this thread', null);
 
 /** The thread view composer's placeholder. */
 const THREAD_REPLY_PLACEHOLDER = 'Reply in thread';
@@ -1197,6 +1198,7 @@ function TypingIndicator(props: {
   return (
     <div
       data-typing-row=""
+      role="status"
       className={cn('flex shrink-0 items-center gap-2 px-4 py-1.5 text-fg-3', TYPING_ROW_TYPE)}
     >
       <span className="flex items-center gap-1" aria-hidden="true">
@@ -4540,6 +4542,10 @@ function ThreadBody(
       <div data-thread-viewport="" className="relative flex min-h-0 flex-1 flex-col">
         <ul
           ref={listRef}
+          // New messages are read out politely as they arrive.
+          role="log"
+          aria-live="polite"
+          aria-label="Messages"
           onTouchStart={touchStart}
           onTouchMove={userGesture}
           onWheel={userGesture}

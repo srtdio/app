@@ -90,7 +90,7 @@ async function advance(ms: number): Promise<void> {
 
 async function tapTryAgain(): Promise<void> {
   const button = Array.from(host?.querySelectorAll('button') ?? []).find(
-    (b) => b.textContent === 'Try again',
+    (b) => b.textContent === 'Retry',
   );
   expect(button).toBeDefined();
   await act(async () => {

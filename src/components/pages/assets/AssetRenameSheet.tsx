@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import type { RenameOutcome } from '@/lib/asset-upload';
@@ -14,10 +15,22 @@ const ASSET_RENAME_DISCARD = {
   message: 'The file keeps its current name.',
 };
 
-/** Save is enabled for a non-empty, changed name within the ceiling. Pure. */
-function canSaveAssetName(name: string, initialName: string): boolean {
+/** The line under the Name field when Save meets an empty name. */
+export const ASSET_NAME_REQUIRED = 'The file needs a name';
+
+/**
+ * What a Save tap does with the typed name: an empty one says why, an
+ * unchanged one just closes (nothing to write), else it renames. The field's
+ * maxLength holds the ceiling. Pure.
+ */
+export function assetRenameAction(
+  name: string,
+  initialName: string,
+): 'empty' | 'unchanged' | 'rename' {
   const trimmed = name.trim();
-  return trimmed !== '' && trimmed.length <= MAX_ASSET_NAME && trimmed !== initialName.trim();
+  if (trimmed === '') return 'empty';
+  if (trimmed === initialName.trim()) return 'unchanged';
+  return 'rename';
 }
 
 interface AssetRenameSheetProps {
@@ -44,6 +57,10 @@ export function AssetRenameSheet({
 }: AssetRenameSheetProps) {
   const [name, setName] = useState(initialName);
   const [saving, setSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const ids = useId();
+  const formId = `${ids}-form`;
+  const fieldId = `${ids}-name`;
 
   // Seed while rendering (not in an effect) so the open frame never reads as
   // dirty and places a Back guard for a name nobody typed.
@@ -52,16 +69,27 @@ export function AssetRenameSheet({
   if (seeded !== seedKey) {
     setSeeded(seedKey);
     setName(open ? initialName : '');
+    setNameError(null);
     if (!open) setSaving(false);
   }
 
   // A changed name is unsaved work: X, Escape, the backdrop and system Back ask first.
   const dirty = open && name !== initialName;
 
-  const canSave = canSaveAssetName(name, initialName) && !saving;
-
+  // Save is never disabled for "not valid yet": an empty name says why under
+  // the field and the field takes focus. Busy is the only hold.
   async function save(): Promise<void> {
-    if (!canSave) return;
+    if (saving) return;
+    const action = assetRenameAction(name, initialName);
+    if (action === 'empty') {
+      setNameError(ASSET_NAME_REQUIRED);
+      document.getElementById(fieldId)?.focus();
+      return;
+    }
+    if (action === 'unchanged') {
+      onClose();
+      return;
+    }
     setSaving(true);
     const outcome = await onSubmit(name.trim());
     setSaving(false);
@@ -78,8 +106,8 @@ export function AssetRenameSheet({
       <Button variant="ghost" onClick={onClose} disabled={saving}>
         Cancel
       </Button>
-      <Button variant="primary" disabled={!canSave} onClick={() => void save()}>
-        {saving ? 'Saving' : 'Save'}
+      <Button variant="primary" type="submit" form={formId} busy={saving}>
+        Save
       </Button>
     </span>
   );
@@ -94,17 +122,42 @@ export function AssetRenameSheet({
       dirty={dirty}
       discard={ASSET_RENAME_DISCARD}
     >
-      <label className="flex flex-col gap-1.5">
-        <span className="text-base font-medium text-fg-2">Name</span>
+      {/* A form so Enter in the field saves; the footer's Save submits it
+          through the form attribute. */}
+      <form
+        id={formId}
+        noValidate
+        className="flex flex-col gap-1.5"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void save();
+        }}
+      >
+        <label htmlFor={fieldId} className="text-base font-medium text-fg-2">
+          Name
+        </label>
         <Input
+          id={fieldId}
+          name="file-name"
+          autoComplete="off"
           aria-label="File name"
           value={name}
           maxLength={MAX_ASSET_NAME}
           disabled={saving}
-          onChange={(event) => setName(event.target.value)}
+          aria-invalid={nameError !== null}
+          aria-describedby={nameError !== null ? `${fieldId}-error` : undefined}
+          onChange={(event) => {
+            setName(event.target.value);
+            if (event.target.value.trim() !== '') setNameError(null);
+          }}
           className="h-11"
         />
-      </label>
+        {nameError !== null ? (
+          <ErrorNote>
+            <span id={`${fieldId}-error`}>{nameError}</span>
+          </ErrorNote>
+        ) : null}
+      </form>
     </Sheet>
   );
 }

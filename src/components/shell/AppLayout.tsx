@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { flushSync } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Sidebar } from '@/components/shell/Sidebar';
 import { BottomTabs } from '@/components/shell/BottomTabs';
@@ -48,6 +48,8 @@ import { applyScrollMode, scrollModeFor, useTouchTablet, type ScrollMode } from 
 import { barTintFor, type BarTint } from '@/lib/bar-tint';
 import { syncThemeColorMeta } from '@/lib/theme';
 import { useIsLaptop } from '@/lib/use-is-laptop';
+import { useRouteA11y } from '@/lib/route-a11y';
+import { errorText } from '@/lib/error-copy';
 
 // The operator's Cockpit (dot + panel): one lazy chunk, requested only when the
 // operator flag is true. Nobody else downloads it or makes any request for it.
@@ -180,6 +182,16 @@ let firstShellPainted = false;
  */
 export const SHELL_GATE_MS = 12_000;
 
+/**
+ * Toasts and the Undo strip render on <body>, outside #root, so they stay
+ * usable while a modal holds the app root inert (app-inert.ts). Fixed
+ * position: nothing moves on screen.
+ */
+function BodyToastViewport() {
+  if (typeof document === 'undefined') return <ToastViewport />;
+  return createPortal(<ToastViewport />, document.body);
+}
+
 // One ToastProvider for every branch below: a toast fired as the shell swaps
 // branches (e.g. "<name> deleted for good" as the last workspace goes, through
 // the induction read's blank frame) survives the swap.
@@ -215,6 +227,8 @@ function AppLayoutBody() {
   } = useCurrentProfile();
   const [searchParams, setSearchParams] = useSearchParams();
   const { pathname, search } = useLocation();
+  // Tab title "{Screen} · Sorted"; focus to the new screen's h1 on navigation.
+  useRouteA11y(pathname);
   // A newer deploy is live: the next route change loads it (src/lib/app-version.ts).
   useReloadOnNavigateWhenStale();
   const { session } = useSession();
@@ -379,7 +393,7 @@ function AppLayoutBody() {
       setFlow({
         ...flow,
         finishing: null,
-        finishError: "Couldn't open your workspace. Try again.",
+        finishError: errorText('open your workspace', workspaceError),
       });
       return;
     }
@@ -502,7 +516,7 @@ function AppLayoutBody() {
             {/* No workspace yet: the locked shell as before (no scroll mode set). */}
             <main className={shellChrome(!chrome.showBottomTabs).mainClassName} />
           </div>
-          <ToastViewport />
+          <BodyToastViewport />
           <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
           {/* A self-signed-up Creator can still say "I approve posts": storing the
               approver's brand step flips approverStageOf to 'brand', so the
@@ -582,7 +596,7 @@ function AppLayoutBody() {
               ) : null}
             </div>
             {chrome.showBottomTabs ? <BottomTabs /> : null}
-            <ToastViewport />
+            <BodyToastViewport />
             <CommandPalette
               open={paletteOpen}
               onClose={closePalette}

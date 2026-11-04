@@ -65,6 +65,7 @@ import {
 } from '@/lib/chat/status-bar';
 import { paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { useModalFocus } from '@/lib/modal-focus';
+import { errorText } from '@/lib/error-copy';
 
 /** Snap open past this share of the panel's height. */
 const SNAP_SHARE = 0.4;
@@ -449,7 +450,7 @@ export function takeDrawerMemory(
 }
 
 /** The copy when a tapped post cannot be opened. */
-export const POST_OPEN_FAILED = "Couldn't open this post. Try again.";
+export const POST_OPEN_FAILED = errorText('open this post', null);
 
 /** How long a tapped post may wait on its read before the tap gives up (ms). */
 const POST_TAP_WAIT_MS = READ_TIMEOUT_MS + 1_000;

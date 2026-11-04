@@ -38,8 +38,11 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import { UsernameField } from '@/components/settings/UsernameField';
 import { Field } from '@/components/ui/Field';
+import { useBackGuard } from '@/lib/back-guard';
 import { Bone, BoxSkeleton } from '@/lib/motion';
 import { IconCamera, IconPause, ICON_SIZE } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
@@ -71,6 +74,7 @@ import {
   useCurrentProfile,
   type CurrentProfile,
 } from '@/lib/use-current-profile';
+import { errorText } from '@/lib/error-copy';
 
 /** What a save does to the photo: leave it, replace it, or clear it. */
 type PhotoChange = { kind: 'keep' } | { kind: 'set'; url: string } | { kind: 'clear' };
@@ -180,7 +184,7 @@ export async function submitUsePhoto(deps: {
   if (file === null) {
     return {
       ok: false,
-      error: { code: 'unknown', message: "Couldn't read the photo. Try again." },
+      error: { code: 'unknown', message: errorText('read the photo', null) },
     };
   }
   deps.onExported(file);
@@ -241,7 +245,7 @@ export function submitEmailOptIn(deps: {
   });
 }
 
-export const EMAIL_OPT_IN_FAILED = "Couldn't save. Try again.";
+export const EMAIL_OPT_IN_FAILED = errorText('save', null);
 
 /**
  * One tick: apply `next` at once, save, and on failure revert to `previous` and
@@ -277,12 +281,12 @@ export interface PhotoView {
 
 export const PHOTO_VIEW_INITIAL: PhotoView = { previewUrl: null, removed: false, expect: null };
 
-const SAVE_FALLBACK = "Couldn't save your profile. Try again.";
+const SAVE_FALLBACK = 'save your profile';
 
 /** One readable line for a server / upload error. Pure. */
 export function profileErrorMessage(message: string): string {
   const line = message.split('\n')[0]?.trim() ?? '';
-  if (line.length === 0 || /^[a-z_]+$/.test(line)) return SAVE_FALLBACK;
+  if (line.length === 0 || /^[a-z_]+$/.test(line)) return errorText(SAVE_FALLBACK, line);
   return line;
 }
 
@@ -362,6 +366,21 @@ export function prefillFields(
     designationEdited: fields.designationEdited,
     prefilledFor: userId,
   };
+}
+
+/**
+ * Whether the name or designation holds an edit that differs from the saved
+ * profile (trimmed, as Save would send it). Untouched fields never count. Pure.
+ */
+export function textFieldsDirty(
+  fields: Pick<TextFields, 'name' | 'designation' | 'nameEdited' | 'designationEdited'>,
+  profile: Pick<CurrentProfile, 'display_name' | 'designation'> | null,
+): boolean {
+  if (profile === null) return false;
+  const nameChanged = fields.nameEdited && fields.name.trim() !== profile.display_name;
+  const designationChanged =
+    fields.designationEdited && fields.designation.trim() !== (profile.designation ?? '');
+  return nameChanged || designationChanged;
 }
 
 /**
@@ -446,7 +465,32 @@ export function ProfileSettingsPanel(): React.ReactElement {
 
   const trimmedName = fields.name.trim();
   const busy = submitting || photoBusy;
-  const canSave = profile !== null && !busy && trimmedName.length >= 1;
+  // Save is never disabled for "not valid yet": an empty name shows its error
+  // under the field on tap and the field takes focus. Busy is the only hold.
+  const [nameError, setNameError] = useState<string | null>(null);
+  // Unsaved name or designation: system or browser Back asks before dropping it.
+  const textDirty = textFieldsDirty(fields, profile);
+  const [discardAsk, setDiscardAsk] = useState(false);
+  const textGuard = useBackGuard({
+    active: textDirty || submitting,
+    onBack: () => {
+      if (submitting) return;
+      setDiscardAsk(true);
+    },
+  });
+  function discardTextEdits(): void {
+    textGuard.release();
+    setDiscardAsk(false);
+    setNameError(null);
+    if (profile === null) return;
+    setFields((current) => ({
+      ...current,
+      name: profile.display_name,
+      designation: profile.designation ?? '',
+      nameEdited: false,
+      designationEdited: false,
+    }));
+  }
 
   function uploadFile(file: File): Promise<Result<{ avatarUrl: string }>> {
     return (async () => {
@@ -454,7 +498,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
       if (endpoint === undefined) {
         return {
           ok: false,
-          error: { code: 'unknown', message: "Couldn't upload the photo. Try again." },
+          error: { code: 'unknown', message: errorText('upload the photo', null) },
         };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
@@ -542,7 +586,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
       isLatest: () => seq === emailSeqRef.current,
       onFail: (message) => {
         logger.error('settings email opt-in save failed', { error: message });
-        toast?.show({ title: EMAIL_OPT_IN_FAILED, tone: 'error' });
+        toast?.show({ title: errorText('save', message), tone: 'error' });
       },
     });
   }
@@ -556,11 +600,13 @@ export function ProfileSettingsPanel(): React.ReactElement {
   }
 
   async function handleSave(): Promise<void> {
-    if (profile === null) return;
+    if (profile === null || submitting) return;
     if (trimmedName.length < 1) {
-      setFormError('Display name is required');
+      setNameError('Display name is required');
+      document.getElementById('settings-display-name')?.focus();
       return;
     }
+    setNameError(null);
     setSubmitting(true);
     setFormError(null);
     setSaved(false);
@@ -646,7 +692,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
   if (mode === 'error' || profile === null) {
     return (
       <div className="max-w-[520px] flex flex-col gap-3">
-        <p className="text-base text-bad">{"Couldn't load your profile. Try again."}</p>
+        <p className="text-base text-bad">{errorText('load your profile', null)}</p>
         <div>
           <Button onClick={refetch}>Retry</Button>
         </div>
@@ -703,15 +749,25 @@ export function ProfileSettingsPanel(): React.ReactElement {
       <Field label="Display name" htmlFor="settings-display-name">
         <Input
           id="settings-display-name"
+          name="name"
+          autoComplete="name"
           value={fields.name}
           maxLength={80}
           placeholder="Your name"
+          aria-invalid={nameError !== null}
+          aria-describedby={nameError !== null ? 'settings-display-name-error' : undefined}
           onChange={(event) => {
             const value = event.target.value;
             setFields((current) => ({ ...current, name: value, nameEdited: true }));
             setSaved(false);
+            if (value.trim() !== '') setNameError(null);
           }}
         />
+        {nameError !== null ? (
+          <ErrorNote className="mt-1.5">
+            <span id="settings-display-name-error">{nameError}</span>
+          </ErrorNote>
+        ) : null}
       </Field>
 
       <UsernameField current={profile?.username ?? null} onSaved={refetch} />
@@ -719,6 +775,8 @@ export function ProfileSettingsPanel(): React.ReactElement {
       <Field label="Designation" htmlFor="settings-designation">
         <Input
           id="settings-designation"
+          name="organization-title"
+          autoComplete="organization-title"
           value={fields.designation}
           maxLength={80}
           placeholder="e.g. Brand Manager"
@@ -738,19 +796,32 @@ export function ProfileSettingsPanel(): React.ReactElement {
 
       <AlertsBlock userId={userId} />
 
-      {formError !== null ? <p className="text-base text-bad">{formError}</p> : null}
+      {formError !== null ? <ErrorNote>{formError}</ErrorNote> : null}
 
       <div className="flex items-center gap-3">
         <Button
           type="button"
           variant="primary"
-          disabled={!canSave}
+          busy={submitting}
+          disabled={photoBusy}
           onClick={() => void handleSave()}
         >
-          {submitting ? 'Saving...' : 'Save profile'}
+          Save profile
         </Button>
         {saved ? <span className="text-base text-fg-2">Saved</span> : null}
       </div>
+
+      {discardAsk ? (
+        <ConfirmDialog
+          title="Discard changes?"
+          message="Your changes will be lost."
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          destructive
+          onConfirm={discardTextEdits}
+          onCancel={() => setDiscardAsk(false)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -858,7 +929,7 @@ export function pauseLabel(hours: PauseHours): string {
 }
 
 /**
- * Alerts on this device: Sound and Notifications switches, the paused banner
+ * Alerts on this device: Sound and Alerts switches, the paused banner
  * (only while paused) and the Pause for chips. Each tap saves at once through
  * the device prefs (localStorage), never through Save profile. The hook reads
  * the device on the first frame, so the block paints in its final height; it
@@ -884,7 +955,7 @@ export function AlertsBlock(props: { userId: string | null }): React.ReactElemen
           onChange={(sound) => setPrefs({ ...prefs, sound })}
         />
         <AlertSwitchRow
-          label="Notifications"
+          label="Alerts"
           checked={prefs.notifications}
           onChange={(notifications) => setPrefs({ ...prefs, notifications })}
         />
@@ -963,10 +1034,10 @@ export function PhotoPickActions(props: {
         type="button"
         variant="primary"
         data-action="use-photo"
-        disabled={props.busy}
+        busy={props.busy}
         onClick={props.onUse}
       >
-        {props.busy ? 'Saving...' : 'Use photo'}
+        Use photo
       </Button>
       <Button
         type="button"

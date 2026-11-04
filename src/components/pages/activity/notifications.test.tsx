@@ -412,7 +412,10 @@ describe('Retry on a failed send', () => {
       'w1',
       't',
     );
-    expect(refused).toMatchObject({ kind: 'failed', copy: "Couldn't do that. Try again." });
+    expect(refused).toMatchObject({
+      kind: 'failed',
+      copy: "Couldn't update that activity. Try again.",
+    });
     const gone = await retryFailedSend(
       recorder({ message: 'scheduled message not found' }).client,
       failed(),
@@ -1028,14 +1031,16 @@ describe('notifications fixes: page and provider wiring', () => {
   });
 
   it('fix 24: a failed refresh with rows on screen keeps them and toasts', () => {
-    expect(page).toContain('if (itemsRef.current.length > 0) push(REFRESH_FAILED);');
+    expect(page).toContain(
+      "if (itemsRef.current.length > 0) push(errorText('refresh', result.error));",
+    );
     expect(page).toContain('else setError(true);');
     expect(page).toContain(') : error && items.length === 0 ? (');
   });
 
-  it('fix 25: a failed snooze toasts the fixed copy and logs the trace id, never the raw error', () => {
+  it('fix 25: a failed snooze toasts errorCopy and logs the trace id, never the raw error', () => {
     expect(page).toMatch(
-      /logger\.warn\('notifications: snooze failed', \{\s*trace_id: traceId,\s*error: result\.error\.message,\s*\}\);\s*push\(SNOOZE_FAILED\);/,
+      /logger\.warn\('notifications: snooze failed', \{\s*trace_id: traceId,\s*error: result\.error\.message,\s*\}\);\s*push\(errorText\('snooze', result\.error\)\);/,
     );
     expect(page).not.toContain('push(result.error.message)');
   });

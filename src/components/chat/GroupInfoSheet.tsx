@@ -55,6 +55,7 @@ import { isOwnerOrAdmin } from '@/components/pages/pcs/roles';
 import { SHEET_NOTICE_TYPE } from '@/components/chat/chat-type';
 import { MODAL_HEADER_SAFE, ModalPanel } from '@/components/chat/ModalPanel';
 import { listSkeleton } from '@/components/chat/ListSkeleton';
+import { errorText } from '@/lib/error-copy';
 
 /**
  * The inline line a member who cannot rename the group sees. It names the
@@ -65,9 +66,9 @@ export const GROUP_INFO_ADMIN_ONLY =
   "Only the group's creator or an admin can edit this group's info";
 
 /** Group photo failures in plain words (FN23); the raw upload error goes to the logger. */
-export const GROUP_PHOTO_UNAVAILABLE = "Couldn't add the photo. Try again.";
+export const GROUP_PHOTO_UNAVAILABLE = errorText('add the photo', null);
 export const GROUP_PHOTO_UNREADABLE = "Couldn't open that photo. Choose another one.";
-export const GROUP_PHOTO_UPLOAD_FAILED = "Couldn't upload the photo. Try again.";
+export const GROUP_PHOTO_UPLOAD_FAILED = errorText('upload the photo', null);
 
 /** FN24: the member list's loading state, three row skeletons (tokens only). */
 export function membersSkeleton(): ReactElement {
@@ -75,7 +76,7 @@ export function membersSkeleton(): ReactElement {
 }
 
 /** Any failure without a sentence of its own. */
-export const GROUP_ACTION_FALLBACK = "Couldn't update the group. Try again.";
+export const GROUP_ACTION_FALLBACK = errorText('update the group', null);
 
 /** Every group proc refusal the sheet can meet, as the sentence shown. */
 export const GROUP_ACTION_MESSAGES: Readonly<Record<string, string>> = {
@@ -174,7 +175,7 @@ export function groupActionMessage(error: { code: string; message: string }): st
   return (
     GROUP_ACTION_MESSAGES[error.code] ??
     GROUP_ACTION_MESSAGES[error.message] ??
-    GROUP_ACTION_FALLBACK
+    errorText('update the group', error)
   );
 }
 
@@ -496,7 +497,7 @@ export interface MembersState {
 }
 
 /** The line when the member list could not be re-read after an add or remove. */
-export const MEMBERS_REFRESH_FAILED = "Couldn't refresh members. Try again.";
+export const MEMBERS_REFRESH_FAILED = errorText('refresh members', null);
 
 /**
  * The member list after a refresh (following an add or remove). A failed

@@ -16,6 +16,7 @@ import {
   type LibraryVersionRow,
   type MessageAttachment,
 } from '@/lib/chat/attachments';
+import { errorText } from '@/lib/error-copy';
 
 /** Page size of the library picker (the "Load 50 more" step). */
 export const ASSET_PAGE_SIZE = 50;
@@ -24,7 +25,7 @@ export const ASSET_PAGE_SIZE = 50;
 export const ASSET_SEARCH_DEBOUNCE_MS = 200;
 
 /** The library picker's error line when a read fails; the raw text is only logged. */
-export const ASSETS_LOAD_FAILED = "Couldn't load files. Try again.";
+export const ASSETS_LOAD_FAILED = errorText('load files', null);
 
 /** One library asset as the picker shows and sends it. */
 export interface LibraryAsset {

@@ -21,6 +21,7 @@ import { fractionToPercent } from '@/lib/upload-queue';
 import { dispatchInductionRefresh } from '@/lib/induction';
 import { ROOT_LABEL } from '@/components/pages/assets/assets-nav';
 import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
+import { errorText } from '@/lib/error-copy';
 
 /** One queued file with an optional image preview. Names are derived per mode. */
 interface PendingUpload {
@@ -122,15 +123,12 @@ export function uploadSummary(args: {
   if (failed > 0) {
     if (ok === 0) {
       return {
-        title:
-          failed === 1
-            ? "Couldn't upload the file. Try again."
-            : `Couldn't upload ${failed} files. Try again.`,
+        title: errorText(failed === 1 ? 'upload the file' : `upload ${failed} files`, null),
         sticky: true,
       };
     }
     return {
-      title: `Uploaded ${ok} of ${ok + failed}. Couldn't upload ${failed}. Try again.`,
+      title: `Uploaded ${ok} of ${ok + failed}. ${errorText(`upload ${failed}`, null)}`,
       sticky: true,
     };
   }

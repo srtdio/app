@@ -29,11 +29,8 @@ import {
 } from '@/components/chat/ScheduledListSheet';
 import { mentionHandle, mentionNamesIn } from '@/lib/chat/mentions';
 import { newMessageId } from '@/lib/chat/message-id';
-import {
-  ACTION_FAILED_COPY,
-  REMINDERS_CHANGED_EVENT,
-  announceRemindersChanged,
-} from '@/lib/chat/reminders';
+import { REMINDERS_CHANGED_EVENT, announceRemindersChanged } from '@/lib/chat/reminders';
+import { errorText } from '@/lib/error-copy';
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import { chatMessageHref } from '@/lib/inbox/bell-types';
 import { logger } from '@/lib/logger';
@@ -54,8 +51,6 @@ import {
   sharedMentionCount,
   upcomingKey,
   type LoadResult,
-  REFRESH_FAILED,
-  SNOOZE_FAILED,
   appendUnique,
   bucketActorNames,
   bucketActors,
@@ -109,7 +104,7 @@ import { undoFailureTitle } from '@/lib/use-undoable-action';
 import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import { ActivityBoxes, UpcomingBoxes } from '@/components/pages/activity/ActivityBoxes';
 
-/** Fixed failure copy for Mark all read: "Couldn't mark as read. Try again." */
+/** Failure copy for Mark all read: "Couldn't mark as read. {reason}" */
 const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
 
 /** The page title: the surface is Activity. */
@@ -401,7 +396,7 @@ export function NotificationsPage() {
         logger.warn('notifications: load failed', { error: result.error });
         // A failed quiet refresh keeps the kept page, silently.
         if (mode === 'merge' || quiet) return;
-        if (itemsRef.current.length > 0) push(REFRESH_FAILED);
+        if (itemsRef.current.length > 0) push(errorText('refresh', result.error));
         else setError(true);
         return;
       }
@@ -461,7 +456,7 @@ export function NotificationsPage() {
       return;
     }
     if (!result.ok) {
-      push("Couldn't load more activity. Try again.");
+      push(errorText('load more activity', result.error));
       return;
     }
     setItems((prev) => appendUnique(prev, result.data));
@@ -822,7 +817,7 @@ export function NotificationsPage() {
       markReadLocal(item.id);
       void markEntryRead(supabase, item, workspaceId, newTrace()).then((result) => {
         if (!result.ok) {
-          push("Couldn't mark as read. Try again.");
+          push(errorText('mark as read', result.error));
           void loadActivity();
           return;
         }
@@ -925,7 +920,7 @@ export function NotificationsPage() {
             trace_id: traceId,
             error: result.error.message,
           });
-          push(SNOOZE_FAILED);
+          push(errorText('snooze', result.error));
           return;
         }
         window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
@@ -974,10 +969,15 @@ export function NotificationsPage() {
   // (the reminder sheet in change mode, with Cancel reminder) and Cancel (a
   // confirm); a scheduled message's Edit ("Scheduled in this chat": Send now,
   // Edit, Time, Don't send) and Cancel (a confirm). Every write carries its
-  // own trace id; a failure toasts "Couldn't do that. Try again." (a "not
+  // own trace id; a failure toasts "Couldn't do that. {reason}" (a "not
   // found" stays silent) and the rows reload.
   const upcomingFailed = useCallback(
-    (what: string, traceId: string, message: string, copy: string | null = ACTION_FAILED_COPY) => {
+    (
+      what: string,
+      traceId: string,
+      message: string,
+      copy: string | null = errorText('do that', message),
+    ) => {
       logger.warn(`notifications: ${what} failed`, { trace_id: traceId, error: message });
       if (copy !== null) toast?.show({ title: copy });
     },
@@ -1107,7 +1107,9 @@ export function NotificationsPage() {
     <>
       {/* No visible title (as Pipeline, Briefs, Assets and Plan): the page starts with the
           search row. The h1 stays for screen readers and e2e. */}
-      <h1 className="sr-only">{ACTIVITY_TITLE}</h1>
+      <h1 tabIndex={-1} className="sr-only">
+        {ACTIVITY_TITLE}
+      </h1>
 
       {/* The shared list header: search left, sort right. */}
       <SectionHeader<ActivityDirection>
@@ -1115,6 +1117,7 @@ export function NotificationsPage() {
           value: search,
           onChange: setSearch,
           placeholder: 'Search activity',
+          label: 'Search activity',
         }}
         sort={{
           node: (

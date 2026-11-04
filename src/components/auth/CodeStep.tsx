@@ -61,7 +61,10 @@ export async function verifyEmailCode(
   return { status: 'signed-in' };
 }
 
-/** Only digits, at most CODE_LENGTH of them (a pasted "123 456" or "123-456" still fits). */
+/**
+ * Only digits, at most CODE_LENGTH of them: a pasted "123 456", "123-456" or
+ * "Code: 123456" still fits, and a longer run keeps its first six.
+ */
 export function codeDigits(raw: string): string {
   return raw.replace(/\D/g, '').slice(0, CODE_LENGTH);
 }
@@ -209,7 +212,9 @@ export function CodeStep({
           autoComplete="one-time-code"
           inputMode="numeric"
           pattern="[0-9]*"
-          maxLength={CODE_LENGTH}
+          // No maxLength: a paste like "Code: 123456" or "123 456" is longer than
+          // six characters, and a cap would cut it before codeDigits() reads it.
+          // handleChange keeps the first six digits.
           // The keyboard opens with the step; the card swap follows the user's own tap.
           autoFocus
           readOnly={verifying}

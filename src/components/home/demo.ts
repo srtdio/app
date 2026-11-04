@@ -2,6 +2,7 @@
 // days in DEMO.timeZone (IST), never the visitor's own zone.
 
 import { DEMO, type DemoSlot } from './config';
+import { errorText } from '@/lib/error-copy';
 
 /** A calendar day; month is 1-12. */
 export interface CalendarDay {
@@ -181,7 +182,7 @@ export function demoBookedLine(day: CalendarDay, slot: DemoSlot): string {
   return `${shortDate(day)} · ${slot} ${DEMO.timeZoneLabel}. The team sends a Google Meet link to your email before the call.`;
 }
 
-export const DEMO_SEND_ERROR = "Couldn't send. Try again.";
+export const DEMO_SEND_ERROR = errorText('send', null);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MOBILE_RE = /^[6-9]\d{9}$/;

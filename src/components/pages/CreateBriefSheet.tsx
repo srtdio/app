@@ -228,6 +228,26 @@ function briefTitleInput(): HTMLElement | null {
   return document.getElementById('brief-title');
 }
 
+/** The brief fields that can carry a line after Create. */
+type BriefErrorField = 'title' | 'objective';
+
+/** The field's control id. */
+function briefFieldId(key: BriefErrorField): string {
+  return `brief-${key}`;
+}
+
+/** The id of the field's error line (the control's aria-describedby). */
+export function briefErrorId(key: BriefErrorField): string {
+  return `brief-${key}-error`;
+}
+
+/** The first field with an error in screen order (Title, then Objective), or null. Pure. */
+export function firstBriefErrorField(errors: Record<string, string>): BriefErrorField | null {
+  if (errors.title !== undefined) return 'title';
+  if (errors.objective !== undefined) return 'objective';
+  return null;
+}
+
 /** The Create button's label: in flight, uploading, or ready. Pure. */
 function createBriefLabel(submitting: boolean, pendingUploads: number): string {
   if (submitting) return 'Creating…';
@@ -310,6 +330,10 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
     });
     if (!built.ok) {
       setFieldErrors(built.errors);
+      // The first field with a line takes focus (Title, then Objective), the
+      // way New post does it.
+      const first = firstBriefErrorField(built.errors);
+      if (first !== null) document.getElementById(briefFieldId(first))?.focus();
       return;
     }
     setFieldErrors({});
@@ -342,10 +366,22 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
     onCreated({ briefId: result.briefId, noteFailed: result.noteFailed });
   }
 
-  function fieldError(key: string): ReactElement | null {
+  function fieldError(key: BriefErrorField): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
-      <p className="mt-1.5 text-sm text-bad">{fieldErrors[key]}</p>
+      <ErrorNote className="mt-1.5">
+        <span id={briefErrorId(key)}>{fieldErrors[key]}</span>
+      </ErrorNote>
     ) : null;
+  }
+
+  /** aria-invalid plus aria-describedby to the field's line while it shows. */
+  function fieldErrorProps(key: BriefErrorField): {
+    'aria-invalid': boolean;
+    'aria-describedby'?: string;
+  } {
+    return fieldErrors[key] !== undefined
+      ? { 'aria-invalid': true, 'aria-describedby': briefErrorId(key) }
+      : { 'aria-invalid': false };
   }
 
   // Create sits in the header like New post (ComposerSheet): no footer, and
@@ -381,6 +417,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             id="brief-title"
             data-induction={INDUCTION_KEYS.briefSheetTitle}
             value={form.title}
+            {...fieldErrorProps('title')}
             enterKeyHint="next"
             onChange={(event) => patch({ title: event.target.value })}
             onKeyDown={(event) => {
@@ -400,6 +437,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             data-induction={INDUCTION_KEYS.briefSheetObjective}
             autoGrow
             value={form.objective}
+            {...fieldErrorProps('objective')}
             onChange={(event) => patch({ objective: event.target.value })}
             placeholder="What should this brief achieve?"
           />
@@ -419,22 +457,28 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
         <div className="grid grid-cols-2 gap-3">
           <div className="min-w-0">
             <Field label="Format (optional)">
-              <Select
-                label="Format"
-                value={form.format}
-                options={formatOptions}
-                onChange={(value) => patch({ format: value })}
-              />
+              {(id) => (
+                <Select
+                  id={id}
+                  label="Format"
+                  value={form.format}
+                  options={formatOptions}
+                  onChange={(value) => patch({ format: value })}
+                />
+              )}
             </Field>
           </div>
 
           <div className="min-w-0">
             <Field label="Due date (optional)">
-              <DatePicker
-                label="Due date"
-                value={form.targetDate}
-                onChange={(value) => patch({ targetDate: value })}
-              />
+              {(id) => (
+                <DatePicker
+                  id={id}
+                  label="Due date"
+                  value={form.targetDate}
+                  onChange={(value) => patch({ targetDate: value })}
+                />
+              )}
             </Field>
           </div>
         </div>

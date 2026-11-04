@@ -4,7 +4,7 @@
 // emails the team, who send a Google Meet link. A failure stays inline and Book
 // comes back.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -24,6 +24,7 @@ import {
   viewerTimeZone,
   type CallChoice,
 } from './book-call-slots';
+import { errorText } from '@/lib/error-copy';
 
 interface BookCallSheetProps {
   open: boolean;
@@ -31,7 +32,7 @@ interface BookCallSheetProps {
   workspaceId: string;
 }
 
-const SEND_FAILED = "Couldn't send. Try again.";
+const SEND_FAILED = errorText('send', null);
 
 /** 15 minutes, in seconds, for the time input. */
 const TIME_STEP_SECONDS = 15 * 60;
@@ -99,6 +100,7 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [failed, setFailed] = useState(false);
   const [booked, setBooked] = useState<string | null>(null);
 
@@ -120,7 +122,9 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
   const slotAt = chosenInstant({ choice, slots, date, time, minDate, timeZone });
 
   async function book(): Promise<void> {
-    if (slotAt === null) return;
+    // The ref answers inside the same tick, so a double tap never books twice.
+    if (slotAt === null || sendingRef.current) return;
+    sendingRef.current = true;
     setSending(true);
     setFailed(false);
     try {
@@ -128,6 +132,7 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
       if (ok) setBooked(slotLabel(slotAt, timeZone));
       else setFailed(true);
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   }
@@ -160,7 +165,10 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
         <Button
           variant="primary"
           className="ml-auto"
-          disabled={slotAt === null || sending}
+          // No time picked yet is a choice not made (like an unpicked radio),
+          // not a form error; while sending the label stays with a spinner.
+          disabled={slotAt === null}
+          busy={sending}
           onClick={() => void book()}
         >
           Book

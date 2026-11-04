@@ -2183,8 +2183,8 @@ SCREENS.push(
     },
   },
   {
-    // Settings > Profile with Sound switched off: the off track (panel-2 well,
-    // border-strong edge) beside the on Notifications track.
+    // Settings > Profile with Sound switched off: the off ink pill (clear well,
+    // 1.5px field line, ink knob) beside the on Notifications pill.
     name: 'settings-profile-switch-off',
     seed: creator,
     url: '/settings?panel=profile',

@@ -162,7 +162,13 @@ export function MembersPanel() {
     const ids = missingOffByIds(derived).filter((id) => !requestedOffBy.current.has(id));
     if (ids.length === 0) return;
     for (const id of ids) requestedOffBy.current.add(id);
+    // Dropped after unmount or a list change; a read cut short that way frees
+    // its ids so the next run (if they are still missing) asks again.
+    let live = true;
+    let landed = false;
     void readProfiles(supabase, ids).then((res) => {
+      landed = true;
+      if (!live) return;
       if (!res.ok) {
         logger.warn('member email off-by read failed', { error: res.error.message });
         return;
@@ -173,6 +179,10 @@ export function MembersPanel() {
         return next;
       });
     });
+    return () => {
+      live = false;
+      if (!landed) for (const id of ids) requestedOffBy.current.delete(id);
+    };
   }, [canManage, derived]);
 
   const personFor = useCallback(

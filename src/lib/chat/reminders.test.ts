@@ -117,7 +117,10 @@ describe('mapReminderError', () => {
     expect(mapReminderError('reminder must be between 1 minute and 1 year from now')).toBe(
       'Pick a time at least 1 minute from now',
     );
-    expect(mapReminderError('not a member of this chat')).toBe("Couldn't do that. Try again.");
+    expect(mapReminderError('boom')).toBe("Couldn't set the reminder. Try again.");
+    expect(mapReminderError('permission denied for table chat_reminders')).toBe(
+      "Couldn't set the reminder. You don't have access to do this.",
+    );
   });
 });
 

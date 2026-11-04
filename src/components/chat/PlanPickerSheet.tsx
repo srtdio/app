@@ -26,6 +26,7 @@ import {
 import { readUpcomingPlans, type PlanBundle } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
+import { errorText } from '@/lib/error-copy';
 
 export const PICKER_TITLE = 'Plans';
 export const PICKER_EMPTY = 'Upcoming plans show up here.';
@@ -106,7 +107,7 @@ export function PlanPickerSheet(props: {
             </BoxSkeleton>
           ) : read.status === 'error' ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-[18px] text-center">
-              <p className="text-base text-fg-2">Couldn&apos;t load. Try again.</p>
+              <p className="text-base text-fg-2">{errorText('load', null)}</p>
               <Button type="button" variant="link" onClick={reload}>
                 Retry
               </Button>

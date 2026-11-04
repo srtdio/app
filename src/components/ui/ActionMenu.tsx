@@ -203,9 +203,9 @@ export function ActionMenu({
                   onClose={() => setOpen(false)}
                   align={anchor.align}
                   origin={anchor.origin ?? null}
+                  label={title}
                 >
                   <div
-                    aria-label={title}
                     onKeyDown={(event) => {
                       // A popover menu (no aria-modal): arrow keys, Home and End move between rows.
                       if (moveMenuFocus(event.currentTarget, event.key)) event.preventDefault();

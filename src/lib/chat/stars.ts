@@ -34,6 +34,7 @@ import { generateTraceId } from '@/lib/trace';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { onWake } from '@/lib/wake-read';
+import { errorText } from '@/lib/error-copy';
 
 type StarSetArgs = Database['public']['Functions']['chat_message_star_set']['Args'];
 type StarredListFn = Database['public']['Functions']['chat_message_starred_list'];
@@ -54,7 +55,7 @@ export const STARRED_TITLE = 'Starred';
 export const STARRED_HEADER_LABEL = 'Starred messages';
 export const STARRED_EMPTY_TITLE = 'Starred messages show up here.';
 /** The error toast when a star or unstar did not save (the change has reverted). */
-export const STAR_FAILED_TOAST = "Couldn't update the star. Try again.";
+export const STAR_FAILED_TOAST = errorText('update the star', null);
 
 /** One message a star write names. */
 export interface StarTarget {

@@ -116,7 +116,8 @@ describe('CodeStep', () => {
     expect(el.getAttribute('autocomplete')).toBe('one-time-code');
     expect(el.getAttribute('inputmode')).toBe('numeric');
     expect(el.getAttribute('pattern')).toBe('[0-9]*');
-    expect(el.maxLength).toBe(6);
+    // No maxLength: a cap would cut a paste like "Code: 123456" before it is read.
+    expect(el.hasAttribute('maxlength')).toBe(false);
     expect(document.activeElement).toBe(el);
     expect(boxes()).toHaveLength(6);
   });
@@ -144,6 +145,30 @@ describe('CodeStep', () => {
       type: 'email',
     });
     expect(onSignedIn).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['spaces', '123 456'],
+    ['dashes', '123-456'],
+    ['prefix text', 'Code: 123456'],
+    ['seven digits (keeps the first six)', '1234567'],
+  ])('a paste with %s lands as six digits and submits once', async (_label, pasted) => {
+    await render();
+    await type(pasted);
+    expect(boxes()).toEqual(['1', '2', '3', '4', '5', '6']);
+    expect(input().value).toBe('123456');
+    expect(verifyOtp).toHaveBeenCalledTimes(1);
+    expect(verifyOtp).toHaveBeenCalledWith({
+      email: 'dana@kite.in',
+      token: '123456',
+      type: 'email',
+    });
+  });
+
+  it('codeDigits reads prefix text and keeps the first six of a longer run', () => {
+    expect(codeDigits('Code: 123456')).toBe('123456');
+    expect(codeDigits('1234567')).toBe('123456');
+    expect(codeDigits('123-456')).toBe('123456');
   });
 
   it('the 6th digit calls verifyOtp exactly once', async () => {

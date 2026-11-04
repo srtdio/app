@@ -192,7 +192,7 @@ function headline(d: RecipientDigest): string {
     if (clauses.length === 0 && c.newBriefs > 0)
       clauses.push(`${spell(c.newBriefs)} new ${plural(c.newBriefs, 'brief', 'briefs')}`);
   }
-  return clauses.length === 0 ? 'Nothing new since your last catch-up.' : sentence(clauses);
+  return clauses.length === 0 ? "You're all caught up." : sentence(clauses);
 }
 
 interface StatTile {

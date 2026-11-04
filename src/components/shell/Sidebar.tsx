@@ -53,7 +53,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
           <IconChevronDown size={ICON_SIZE.inline} className="text-fg-3 shrink-0" />
         </PressableRow>
       </div>
-      <nav className="flex flex-col gap-0.5 px-2.5">
+      <nav aria-label="Primary" className="flex flex-col gap-0.5 px-2.5">
         {PRIMARY_NAV.map((item) => (
           <NavLink
             key={item.to}

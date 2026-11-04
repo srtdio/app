@@ -10,6 +10,8 @@
 // drive it with a mock and the app passes fetchWithTrace.
 
 import { ALLOWED_MIME_TYPES, isAllowedMime } from '@srtdio/storage';
+import { errorText, REASON_COPY } from '@/lib/error-copy';
+import { MAX_UPLOAD_BYTES } from '@/lib/file-size';
 import { reportWorkspaceFull } from '@/lib/storage-full';
 import { TRACE_ID_HEADER } from '@/lib/trace';
 import {
@@ -28,10 +30,9 @@ import {
   runWithConcurrency,
 } from '@/lib/upload-queue';
 
-// Hard ceiling mirrored from the worker pipeline (MAX_FILE_SIZE_BYTES, 100 MB).
-// The worker rejects strictly greater than this, so the client matches exactly:
-// a file equal to the limit is allowed, one byte over is not.
-export const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+// Hard ceiling mirrored from the worker pipeline (MAX_FILE_SIZE_BYTES, 100 MB);
+// it lives in the leaf src/lib/file-size.ts so pure copy can name it.
+export { MAX_UPLOAD_BYTES };
 
 // The picker `accept` attribute, built from the shared allowlist. Importing the
 // list rather than re-listing it keeps the picker and the pre-check in lockstep
@@ -83,7 +84,7 @@ export function uploadErrorMessage(code: string): string {
     case WORKSPACE_FULL_CODE:
       return 'This workspace is full';
     default:
-      return "Couldn't upload. Try again.";
+      return errorText('upload', code);
   }
 }
 
@@ -589,7 +590,7 @@ export function linkErrorMessage(code: string): string {
     case 'name_required':
       return 'The link needs a name';
     default:
-      return "Couldn't add the link. Try again.";
+      return errorText('add the link', code);
   }
 }
 
@@ -651,7 +652,7 @@ export async function addAssetLink(config: AddLinkConfig): Promise<LinkOutcome> 
 function folderErrorMessage(code: string): string {
   switch (code) {
     default:
-      return "Couldn't create the folder. Try again.";
+      return errorText('create the folder', code);
   }
 }
 
@@ -758,11 +759,11 @@ export async function renameFolderRequest(
         name: config.name.trim(),
       }),
     });
-  } catch {
+  } catch (error: unknown) {
     return {
       ok: false,
       nameTaken: false,
-      message: "Couldn't rename the folder. Try again.",
+      message: errorText('rename the folder', error),
     };
   }
 
@@ -785,7 +786,7 @@ export async function renameFolderRequest(
     return {
       ok: false,
       nameTaken: false,
-      message: "Couldn't rename the folder. Try again.",
+      message: errorText('rename the folder', errorCode(body)),
     };
   }
 
@@ -794,7 +795,7 @@ export async function renameFolderRequest(
     return {
       ok: false,
       nameTaken: false,
-      message: "Couldn't rename the folder. Try again.",
+      message: errorText('rename the folder', null),
     };
   }
   return { ok: true, folder };
@@ -834,15 +835,15 @@ export async function deleteFolderRequest(
         folder_id: config.folderId,
       }),
     });
-  } catch {
-    return { ok: false, message: "Couldn't delete the folder. Try again." };
+  } catch (error: unknown) {
+    return { ok: false, message: errorText('delete the folder', error) };
   }
 
   if (!response.ok) {
     if (response.status === 403) {
       return { ok: false, message: 'Only creators and admins can delete folders.' };
     }
-    return { ok: false, message: "Couldn't delete the folder. Try again." };
+    return { ok: false, message: errorText('delete the folder', { status: response.status }) };
   }
   return { ok: true };
 }
@@ -863,7 +864,7 @@ export interface MoveAssetsConfig {
 }
 
 /** Shared retry copy for a failed move. No em-dashes in any string (CLAUDE.md). */
-const MOVE_RETRY = "Couldn't move the files. Try again.";
+const MOVE_RETRY = errorText('move the files', null);
 
 /**
  * POST {workspace_id, asset_ids, target_folder_id} to the worker's /folders/move
@@ -917,7 +918,7 @@ export function canRenameAssets(role: string | null): boolean {
  */
 export function renameErrorMessage(status: number): string {
   if (status === 403) return 'Only creators and admins can rename files.';
-  return "Couldn't rename this file. Try again.";
+  return errorText('rename this file', { status });
 }
 
 export type RenameOutcome = { ok: true } | { ok: false; message: string };
@@ -1049,7 +1050,7 @@ export const PART_RETRIES = 3;
 
 /** Shown when a resumable upload runs out of retries. No connection wording. */
 export const RESUME_FAILED_MESSAGE =
-  "Couldn't finish uploading this file. It stopped partway too many times. Try again.";
+  `Couldn't finish uploading this file. It stopped partway too many times. ${REASON_COPY.unknown}`;
 
 /** A worker reply as the resumable path reads it. */
 type Reply = { ok: boolean; status: number; body: unknown };

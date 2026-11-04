@@ -24,11 +24,44 @@ export function stepActive(active: number, count: number, key: 'ArrowUp' | 'Arro
   return (next + count) % count;
 }
 
+/** The id of the picker's row `index` (the field's aria-activedescendant). Pure. */
+export function mentionOptionId(listId: string, index: number): string {
+  return `${listId}-option-${index}`;
+}
+
+/**
+ * The text field's combobox wiring while the picker shows rows: role combobox,
+ * aria-controls the list, aria-activedescendant the active row. Closed: none,
+ * so the field reads as a plain text field. Pure.
+ */
+export function mentionComboboxProps(
+  listId: string,
+  count: number,
+  active: number,
+): {
+  role?: 'combobox';
+  'aria-expanded'?: boolean;
+  'aria-controls'?: string;
+  'aria-autocomplete'?: 'list';
+  'aria-activedescendant'?: string;
+} {
+  if (count === 0) return {};
+  return {
+    role: 'combobox',
+    'aria-expanded': true,
+    'aria-controls': listId,
+    'aria-autocomplete': 'list',
+    'aria-activedescendant': mentionOptionId(listId, Math.min(Math.max(active, 0), count - 1)),
+  };
+}
+
 interface MentionPickerProps {
   members: readonly MentionMember[];
   /** The row Enter / Tab would pick. */
   active: number;
   onPick: (member: MentionMember) => void;
+  /** The list's id: the field points aria-controls / aria-activedescendant at it. */
+  listId?: string;
 }
 
 /** The panel; renders nothing when no member matches. */
@@ -39,10 +72,16 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
       data-mention-picker=""
       className="flex max-h-[45dvh] flex-col overflow-y-auto rounded-lg border bg-panel lit-overlay"
     >
-      <ul role="listbox" aria-label={MENTION_PICKER_LABEL} className="flex flex-col">
+      <ul
+        role="listbox"
+        aria-label={MENTION_PICKER_LABEL}
+        {...(props.listId !== undefined ? { id: props.listId } : {})}
+        className="flex flex-col"
+      >
         {props.members.map((member, index) => (
           <li
             key={member.userId}
+            {...(props.listId !== undefined ? { id: mentionOptionId(props.listId, index) } : {})}
             role="option"
             aria-selected={index === props.active}
             data-mention-option={member.userId}
@@ -74,6 +113,7 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
                   name={member.displayName}
                   {...(member.avatarUrl !== null ? { src: member.avatarUrl } : {})}
                   role="row"
+                  decorative
                 />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-base font-medium text-fg">

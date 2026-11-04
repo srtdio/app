@@ -6,6 +6,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { IconCheck, IconSort, ICON_SIZE } from '@/components/ui/icons';
 import { menuMoves } from '@/components/ui/popover-classes';
 import { useDismissLayer } from '@/lib/modal-focus';
+import { useMenuKeys } from '@/lib/useMenuKeys';
 import { usePresence } from '@/lib/motion';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 
@@ -75,6 +76,8 @@ export function SortMenu<T extends string>({
   const presence = usePresence<HTMLDivElement>(open && isDesktop, menuMoves(undefined, 'right'));
   const panelRef = presence.ref;
   useDismissLayer(open && isDesktop, () => setOpen(false), panelRef);
+  // Focus lands on the checked option on open; the arrows move (both layouts).
+  const keys = useMenuKeys(panelRef, open && isDesktop);
 
   function choose(next: T): void {
     onChange(next);
@@ -95,7 +98,7 @@ export function SortMenu<T extends string>({
   );
 
   const list = (
-    <div role="menu" aria-label={label} className="flex flex-col">
+    <div role="menu" aria-label={label} onKeyDown={keys.onKeyDown} className="flex flex-col">
       {sortOptionButtons(options, value, choose)}
     </div>
   );

@@ -10,6 +10,7 @@ import type { Json } from '@srtdio/schemas';
 import { clearOpenCache } from '@/lib/chat/open-cache';
 import { pruneDrafts } from '@/lib/chat/drafts';
 import { writePersistedOutbox, type OutboxStorage } from '@/lib/chat/chat-store';
+import { errorText } from '@/lib/error-copy';
 import { domainBrandWord } from './members-data';
 
 /**
@@ -115,24 +116,19 @@ export function clientDomainErrorMessage(code: string): string {
       return 'Free email addresses cannot be approved.';
     case 'invalid_payload':
       return 'Enter a company domain, like groupcompany.com.';
-    case 'forbidden_role':
-      return "Couldn't save that. You don't have access to do this.";
-    case 'not_found':
-      return "Couldn't save that. It was deleted.";
     default:
-      return "Couldn't save that. Try again.";
+      // forbidden_role and not_found read their reason off the code.
+      return errorText('save the workspace', code);
   }
 }
 
 /** Copy for a failed workspace_update. */
 export function workspaceUpdateErrorMessage(code: string): string {
   switch (code) {
-    case 'forbidden_role':
-      return "Couldn't save. You don't have access to do this.";
     case 'invalid_payload':
       return 'That value is not allowed. Check it and try again.';
     default:
-      return "Couldn't save. Try again.";
+      return errorText('save', code);
   }
 }
 
@@ -171,7 +167,7 @@ export function workspaceDeletedToast(name: string): string {
 export function workspaceDeleteErrorMessage(code: string): string {
   return code === 'owner_only'
     ? "Couldn't delete. You don't have access to do this."
-    : "Couldn't delete. Try again.";
+    : errorText('delete', code);
 }
 
 function localStorageOrNull(): OutboxStorage | null {

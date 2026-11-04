@@ -27,6 +27,7 @@ import { BUCKET_NAME_MAX, listBuckets, type BucketOption } from '@/lib/buckets';
 import type { MemberOption } from '@/components/chat/member-picker';
 import { targetDateFromInput, targetDateInputValue } from '@/components/pages/pcs/post-date';
 import { formatDueDate } from '@/lib/time';
+import { errorText } from '@/lib/error-copy';
 
 interface PostDetailsSheetProps {
   open: boolean;
@@ -186,9 +187,9 @@ export function PostDetailsSheet({
     setNewBucketBusy(true);
     setNewBucketError(null);
     const result = await onCreateBucket(name).catch(
-      (): Result<BucketOption> => ({
+      (error: unknown): Result<BucketOption> => ({
         ok: false,
-        error: { code: 'unknown', message: "Couldn't create the bucket. Try again." },
+        error: { code: 'unknown', message: errorText('create the bucket', error) },
       }),
     );
     setNewBucketBusy(false);

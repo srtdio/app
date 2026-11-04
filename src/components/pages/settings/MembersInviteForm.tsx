@@ -29,12 +29,13 @@ import {
   testAddress,
   testInviteePath,
 } from '@/lib/test-site';
+import { errorText } from '@/lib/error-copy';
 
 export type InviteRole = 'admin' | 'agency' | 'client';
 
 // Friendly, code-free copy: the form maps the few invite-check codes it words
 // itself; every other failure reads as this one plain line.
-export const INVITE_ERROR_MESSAGE = "Couldn't send the invite. Try again.";
+export const INVITE_ERROR_MESSAGE = errorText('send the invite', null);
 /** The invite row exists but the email did not go out; the inviter sends the link. */
 export const INVITE_NOT_SENT_MESSAGE =
   "Invite created, but the email didn't send. Copy the link and send it yourself.";

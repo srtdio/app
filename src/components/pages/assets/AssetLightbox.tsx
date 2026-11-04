@@ -37,11 +37,13 @@ import { useModalFocus } from '@/lib/modal-focus';
 import { SHEET_CLOSE_PX, dialogIn, riseIn, riseOut } from '@/lib/motion';
 import { useGrowFromThumb } from '@/lib/motion/overlays';
 import { useIsLaptop } from '@/lib/use-is-laptop';
+import { SPINNER_BUSY, useDelayedBusy } from '@/lib/useDelayedBusy';
+import { errorText } from '@/lib/error-copy';
 
 /** Layout effect in the browser; a plain effect where there is no DOM (server render, tests). */
 const useBrowserLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-const SIGN_FAIL = "Couldn't get a link for this file. Try again.";
+const SIGN_FAIL = errorText('get a link for this file', null);
 const SWIPE_THRESHOLD = 48;
 
 // The top bar's 44px icon buttons on the overlay (light and dark share it).
@@ -206,9 +208,20 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Mounted only while the media URL resolves. It holds its box from the first
+ * frame but stays unpainted for SPINNER_BUSY.delay (200 ms), so a cached or
+ * fast URL never flashes it; the media replaces it the moment it is ready.
+ */
 function Spinner() {
+  const show = useDelayedBusy(true, SPINNER_BUSY);
   return (
-    <div className="h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
+    <div
+      className={cn(
+        'h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg',
+        !show && 'invisible',
+      )}
+    />
   );
 }
 
@@ -638,7 +651,7 @@ export function AssetLightbox({
               </p>
               <p className="mt-1 text-sm text-fg-3">{humanizeSize(item.sizeBytes)}</p>
               {mediaFailed ? (
-                <p className="mt-1 text-sm text-fg-3">{"Couldn't load this file. Try again."}</p>
+                <p className="mt-1 text-sm text-fg-3">{errorText('load this file', null)}</p>
               ) : null}
               {openFailed ? (
                 <p role="status" className="mt-1 text-sm text-fg-3">

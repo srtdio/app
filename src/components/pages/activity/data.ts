@@ -67,7 +67,7 @@ import {
 import { TASKS_SHEET_ONLY } from '@/lib/chat/tasks';
 import { chatDisplayName } from '@/lib/chat/chat-name';
 import { dmPeerId } from '@/lib/chat-reads';
-import { ACTION_FAILED_COPY } from '@/lib/chat/reminders';
+import { errorText } from '@/lib/error-copy';
 import {
   cancelScheduledMessage,
   mapScheduleError,
@@ -1268,10 +1268,10 @@ export function filterByState(
 export const MARKED_READ_LABEL = 'Marked as read';
 
 /** A refresh that failed with rows already on screen (they stay). */
-export const REFRESH_FAILED = "Couldn't refresh. Try again.";
+export const REFRESH_FAILED = errorText('refresh', null);
 
 /** A snooze that did not save (the raw error goes to the log, never the screen). */
-export const SNOOZE_FAILED = "Couldn't snooze. Try again.";
+export const SNOOZE_FAILED = errorText('snooze', null);
 
 /** The loading line under the chips. */
 export const LOADING_NOTIFICATIONS = 'Loading activity';
@@ -1290,7 +1290,7 @@ export const EMPTY_LINES = {
 } as const;
 
 /** The load error: plain copy, never the raw error. */
-export const ACTIVITY_LOAD_FAILED = "Couldn't load activity. Try again.";
+export const ACTIVITY_LOAD_FAILED = errorText('load activity', null);
 
 /**
  * Whether a chip's Mark all read is the one workspace-wide inbox_mark_all_read
@@ -2362,7 +2362,7 @@ type RetryOutcome =
   | { kind: 'sent' }
   /** Resolved elsewhere (sent, cancelled or edited): the stale entry was marked read. */
   | { kind: 'cleared' }
-  /** `copy` is the toast ("Couldn't do that. Try again."); null stays silent ("not found"). */
+  /** `copy` is the toast ("Couldn't update that activity. {reason}"); null is silent. */
   | { kind: 'failed'; message: string; copy: string | null };
 
 /**
@@ -2385,14 +2385,19 @@ export async function retryFailedSend(
     const res = await markEntryRead(client, item, workspaceId, traceId);
     return res.ok
       ? { kind: 'cleared' }
-      : { kind: 'failed', message: res.error.message, copy: ACTION_FAILED_COPY };
+      : {
+          kind: 'failed',
+          message: res.error.message,
+          copy: errorText('update that activity', res.error),
+        };
   }
   const res = await sendScheduledNow({ client, id: alert.scheduledId, traceId });
   if (res.ok) return { kind: 'sent' };
+  const silent = mapScheduleError(res.message) === null;
   return {
     kind: 'failed',
     message: res.message,
-    copy: mapScheduleError(res.message) === null ? null : ACTION_FAILED_COPY,
+    copy: silent ? null : errorText('update that activity', res.message),
   };
 }
 

@@ -451,6 +451,7 @@ export function MarksList(props: MarksListProps): ReactElement {
             key={option.key}
             label={`${option.label} (${tabCount[option.key]})`}
             size="tap"
+            tab
             selected={tab === option.key}
             onClick={() => setTab(option.key)}
           />

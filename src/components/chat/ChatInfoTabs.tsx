@@ -590,7 +590,7 @@ export function FeedBody<T>(props: {
     return (
       <div data-feed="error" className="flex flex-col items-center gap-2 py-10 text-base text-fg-3">
         <span>Couldn&apos;t load</span>
-        <Button onClick={props.onRetry}>Try again</Button>
+        <Button onClick={props.onRetry}>Retry</Button>
       </div>
     );
   }
@@ -790,6 +790,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
             label={option.label}
             size="tap"
             className="shrink-0"
+            tab
             selected={props.tab === option.key}
             onClick={() => props.onTab(option.key)}
           />

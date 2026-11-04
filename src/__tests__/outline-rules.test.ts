@@ -89,6 +89,7 @@ const OUTLINE_NONE_ALLOW: ReadonlyMap<string, string> = new Map([
   ['pages/assets/AssetLightbox.tsx', 'media viewer: the overlay takes programmatic focus on open'],
   ['chat/PlanScreen.tsx', 'the plan panel and its heading (tabIndex -1) take programmatic focus'],
   ['pages/BriefCard.tsx', 'the stretched card link: the card draws focus-within:lit-focus'],
+  ['shell/PageHead.tsx', 'the screen h1 (tabIndex -1) takes programmatic focus on navigation'],
   ['chat/EmojiPicker.tsx', 'the search input: its label well draws focus-within:lit-focus'],
   ['chat/tasks/TaskRow.tsx', 'borderless inline title edit (CLAUDE.md text-field exception)'],
 ]);

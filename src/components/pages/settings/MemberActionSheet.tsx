@@ -18,6 +18,7 @@ import { RolePicker, getInviteRoleOptions, isInviteRole } from './MembersInviteF
 import type { InviteRole, RoleChoice } from './MembersInviteForm';
 import { emailPatchAfterManagerSet, memberEmailState, roleLabel } from './members-data';
 import type { MemberEmailOptInOutcome, MemberEntry } from './members-data';
+import { errorText } from '@/lib/error-copy';
 
 /** The role picker shows for managers on anyone but the owner and themselves. */
 export function canChangeMemberRole(member: MemberEntry, canManage: boolean): boolean {
@@ -61,7 +62,7 @@ interface MemberActionSheetProps {
   personFor: (userId: string) => SheetPerson | null;
 }
 
-const EMAIL_SAVE_FAILED = "Couldn't save. Try again.";
+const EMAIL_SAVE_FAILED = errorText('save', null);
 
 type EmailFields = Pick<MemberEntry, 'emailOptIn' | 'emailOptOutBy'>;
 

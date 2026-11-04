@@ -7,7 +7,12 @@ import { TestSiteStart } from '@/components/test-site/TestSiteStart';
 import { Button, buttonClass } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
-import { emailFieldError, linkErrorMessage } from '@/components/auth/SignUpPage';
+import {
+  emailFieldError,
+  emailSubmitError,
+  focusFieldById,
+  linkErrorMessage,
+} from '@/components/auth/SignUpPage';
 import { CHECK_EMAIL_COPY, fillCopy } from '@/lib/induction-copy';
 import { entryCopyContext } from '@/lib/onboarding';
 import { supabase } from '@/lib/supabase';
@@ -148,10 +153,16 @@ export function SignInPage() {
   }
 
   async function handleSend(): Promise<void> {
+    if (submitting) return;
     reset();
-    const badEmail = emailFieldError(email);
+    // Send code is never disabled for "not filled yet": an empty or malformed
+    // email shows its line under the field and the field takes focus.
+    const badEmail = emailSubmitError(email);
     setEmailError(badEmail);
-    if (badEmail !== null) return;
+    if (badEmail !== null) {
+      focusFieldById('signin-email');
+      return;
+    }
     setSubmitting(true);
     rememberNext(next);
     const result = await sendSignInLink(client, email);
@@ -226,14 +237,17 @@ export function SignInPage() {
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!busy && email.trim().length > 0) void handleSend();
+          void handleSend();
         }}
       >
         <Field label="Email" htmlFor="signin-email">
           <Input
             id="signin-email"
             type="email"
+            name="email"
             autoComplete="email"
+            spellCheck={false}
+            autoCapitalize="none"
             value={email}
             aria-invalid={emailError !== null}
             aria-describedby={emailError !== null ? 'signin-email-error' : undefined}
@@ -272,13 +286,8 @@ export function SignInPage() {
           </p>
         ) : null}
 
-        <Button
-          variant="primary"
-          type="submit"
-          className="w-full"
-          disabled={busy || email.trim().length === 0}
-        >
-          {busy ? CHECK_EMAIL_COPY.sendingCode : CHECK_EMAIL_COPY.sendCode}
+        <Button variant="primary" type="submit" className="w-full" busy={busy}>
+          {CHECK_EMAIL_COPY.sendCode}
         </Button>
       </form>
     </AuthShell>

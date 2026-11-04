@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconLink } from '@/components/ui/icons';
@@ -30,9 +31,10 @@ interface AddLinkSheetProps {
 
 /**
  * The Add link sheet: a Link field (https:// placeholder, url input mode) and a
- * mandatory Name field. Submit stays disabled until the url parses and starts
- * with http(s):// and the name is non-empty after trim. Validation copy appears
- * inline once a field has been touched. On success it toasts "Added {name}",
+ * mandatory Name field, inside a form so Enter submits. Add link is never
+ * disabled for "not valid yet": a tap shows the lines (a url that does not
+ * start with http(s)://, an empty name) and focuses the first bad field; a
+ * field also says so once it loses focus. On success it toasts "Added {name}",
  * refreshes the grid, and closes; on failure it surfaces the mapped error. All
  * elements use theme tokens so light and dark match; targets are at least 44px.
  */
@@ -54,21 +56,27 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
     }
   }, [open]);
 
+  const ids = useId();
+  const formId = `${ids}-form`;
+  const urlId = `${ids}-url`;
+  const nameId = `${ids}-name`;
   const urlValid = isValidLinkUrl(url);
   const nameValid = name.trim() !== '';
-  const canSubmit = urlValid && nameValid && !submitting;
   // Anything typed is unsaved work: X, Escape, the backdrop and system Back ask first.
   const dirty = addLinkDirty(url, name);
   const showUrlError = urlTouched && !urlValid;
   const showNameError = nameTouched && !nameValid;
 
+  // Add link is never disabled for "not valid yet": a tap (or Enter) shows
+  // both lines and focuses the first bad field. Busy is the only hold.
   async function submit(): Promise<void> {
+    if (submitting) return;
     if (!urlValid || !nameValid) {
       setUrlTouched(true);
       setNameTouched(true);
+      document.getElementById(!urlValid ? urlId : nameId)?.focus();
       return;
     }
-    if (submitting) return;
     const display = name.trim();
     setSubmitting(true);
     const outcome = await onSubmit(url, name);
@@ -87,9 +95,9 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
       <Button variant="ghost" onClick={onClose} disabled={submitting}>
         Cancel
       </Button>
-      <Button variant="primary" disabled={!canSubmit} onClick={() => void submit()}>
-        <IconLink size={ICON_SIZE.inline} />
-        {submitting ? 'Adding' : 'Add link'}
+      <Button variant="primary" type="submit" form={formId} busy={submitting}>
+        {submitting ? null : <IconLink size={ICON_SIZE.inline} />}
+        Add link
       </Button>
     </span>
   );
@@ -105,38 +113,69 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
       busy={submitting}
       busyLabel="Adding…"
     >
-      <div className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium text-fg-2">Link</span>
+      {/* A form so Enter in either field submits; the footer's Add link is
+          its submit button through the form attribute. noValidate: the lines
+          below say what is wrong, never the browser's own bubble. */}
+      <form
+        id={formId}
+        noValidate
+        className="flex flex-col gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={urlId} className="text-base font-medium text-fg-2">
+            Link
+          </label>
           <Input
+            id={urlId}
             type="url"
+            name="url"
+            autoComplete="url"
             inputMode="url"
+            spellCheck={false}
+            autoCapitalize="none"
             placeholder="https://..."
             value={url}
             autoFocus
             aria-invalid={showUrlError}
+            aria-describedby={showUrlError ? `${urlId}-error` : undefined}
             disabled={submitting}
             onChange={(event) => setUrl(event.target.value)}
             onBlur={() => setUrlTouched(true)}
           />
           {showUrlError ? (
-            <span className="text-sm text-bad">Enter a full link starting with https://</span>
+            <ErrorNote>
+              <span id={`${urlId}-error`}>Enter a full link starting with https://</span>
+            </ErrorNote>
           ) : null}
-        </label>
+        </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-base font-medium text-fg-2">Name</span>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={nameId} className="text-base font-medium text-fg-2">
+            Name
+          </label>
           <Input
+            id={nameId}
+            name="link-name"
+            autoComplete="off"
             placeholder="What should this link be called?"
             value={name}
             aria-invalid={showNameError}
+            aria-describedby={showNameError ? `${nameId}-error` : undefined}
             disabled={submitting}
             onChange={(event) => setName(event.target.value)}
             onBlur={() => setNameTouched(true)}
           />
-          {showNameError ? <span className="text-sm text-bad">The link needs a name</span> : null}
-        </label>
-      </div>
+          {showNameError ? (
+            <ErrorNote>
+              <span id={`${nameId}-error`}>The link needs a name</span>
+            </ErrorNote>
+          ) : null}
+        </div>
+      </form>
     </Sheet>
   );
 }

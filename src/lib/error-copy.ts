@@ -5,6 +5,8 @@
 // locked, conflict, a bad field) reads the same on a second try. Pure, apart
 // from the navigator.onLine probe the offline check makes.
 
+import { humanizeSize, MAX_UPLOAD_BYTES } from '@/lib/file-size';
+
 /** Why an action failed, as the copy groups it. */
 export type ErrorReason =
   | 'offline'
@@ -14,6 +16,7 @@ export type ErrorReason =
   | 'approved_locked'
   | 'caption_too_long'
   | 'title_required'
+  | 'file_too_large'
   | 'unknown';
 
 /** The approved reason lines (23 Oct 2026), one per reason. */
@@ -26,6 +29,8 @@ export const REASON_COPY: Record<ErrorReason, string> = {
   approved_locked: 'Approved posts are locked.',
   caption_too_long: 'Captions can be up to 4,000 characters.',
   title_required: 'Add a title to save.',
+  // The limit is the upload ceiling (src/lib/file-size.ts), never a typed number.
+  file_too_large: `Files can be up to ${humanizeSize(MAX_UPLOAD_BYTES)}.`,
   unknown: 'Try again.',
 };
 
@@ -45,8 +50,11 @@ function partsOf(error: unknown): { code: string; message: string; isTypeError: 
   if (typeof error === 'object' && error !== null) {
     const code = (error as { code?: unknown }).code;
     const message = (error as { message?: unknown }).message;
+    // An HTTP status rides along as a code when there is no string one (413).
+    const status = (error as { status?: unknown }).status;
+    const statusCode = typeof status === 'number' ? String(status) : '';
     return {
-      code: typeof code === 'string' ? code : '',
+      code: typeof code === 'string' ? `${code} ${statusCode}`.trim() : statusCode,
       message: typeof message === 'string' ? message : '',
       isTypeError: error instanceof TypeError,
     };
@@ -67,6 +75,10 @@ export function errorReason(error: unknown): ErrorReason {
   if (/post_approved_locked|approved_locked/i.test(text)) return 'approved_locked';
   if (/caption_too_long/i.test(text)) return 'caption_too_long';
   if (/title_required/i.test(text)) return 'title_required';
+  // A 413 is too large unless the Worker says the workspace is full (its own sheet).
+  if (!/workspace_full/i.test(text) && /file_too_large|payload too large|\b413\b/i.test(text)) {
+    return 'file_too_large';
+  }
   if (/forbidden_role|workspace_member_only|permission denied|\b42501\b/i.test(text)) {
     return 'forbidden';
   }

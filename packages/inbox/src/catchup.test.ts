@@ -258,6 +258,16 @@ describe('buildCatchupSubject', () => {
   });
 });
 
+describe('zero headline', () => {
+  it('with nothing counted, the headline is one positive line', () => {
+    for (const digest of [makeDigest(), agencyDigest()]) {
+      const email = renderCatchupEmail(digest);
+      expect(email.text).toContain("You're all caught up.");
+      expect(email.text).not.toContain('Nothing new since your last catch-up.');
+    }
+  });
+});
+
 describe('header, eyebrow and since line', () => {
   it('renders the afternoon header copy', () => {
     const email = renderCatchupEmail(makeDigest({ review: section(postItems(1)) }));

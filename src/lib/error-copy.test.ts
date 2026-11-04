@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { errorCopy, errorReason, errorText, REASON_COPY } from './error-copy';
+import { humanizeSize, MAX_UPLOAD_BYTES } from './file-size';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -81,7 +82,42 @@ describe('errorCopy', () => {
       approved_locked: 'Approved posts are locked.',
       caption_too_long: 'Captions can be up to 4,000 characters.',
       title_required: 'Add a title to save.',
+      file_too_large: 'Files can be up to 100 MB.',
       unknown: 'Try again.',
     });
+  });
+});
+
+describe('file_too_large', () => {
+  it('the Worker code reads the upload ceiling, no Retry', () => {
+    const copy = errorCopy('upload', { code: 'file_too_large', message: 'Part exceeds 8 MB.' });
+    expect(copy).toEqual({
+      reason: 'file_too_large',
+      text: "Couldn't upload. Files can be up to 100 MB.",
+      retryable: false,
+    });
+  });
+
+  it('the limit comes from MAX_UPLOAD_BYTES through humanizeSize', () => {
+    expect(REASON_COPY.file_too_large).toBe(
+      `Files can be up to ${humanizeSize(MAX_UPLOAD_BYTES)}.`,
+    );
+  });
+
+  it('a 413 status or "Payload Too Large" message reads too large', () => {
+    expect(errorReason({ status: 413, message: '' })).toBe('file_too_large');
+    expect(errorReason(new Error('Payload Too Large'))).toBe('file_too_large');
+    expect(errorReason({ code: 'unknown', message: 'HTTP 413' })).toBe('file_too_large');
+  });
+
+  it('a 413 workspace_full is not a file size refusal', () => {
+    expect(errorReason({ status: 413, code: 'workspace_full', message: 'x' })).not.toBe(
+      'file_too_large',
+    );
+  });
+
+  it('a refusal wins over the offline probe', () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    expect(errorReason('file_too_large')).toBe('file_too_large');
   });
 });

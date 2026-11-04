@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
+import { PageHead } from '@/components/shell/PageHead';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { ICON_SIZE, IconAssets } from '@/components/ui/icons';
 import { AssetGrid } from '@/components/pages/assets/AssetGrid';
@@ -97,6 +98,7 @@ import {
   type AssetTab,
 } from '@/lib/assets';
 import { useServerSearch } from '@/lib/search/server-search';
+import { errorText } from '@/lib/error-copy';
 
 const SKELETON_COUNT = 12;
 
@@ -107,7 +109,7 @@ const SEARCH_PARAM = 'q';
 const NO_ITEMS: AssetListItem[] = [];
 
 /** The Load more failure toast: "Couldn't {action}. {reason}". */
-export const LOAD_MORE_FAILED = "Couldn't load more files. Try again.";
+export const LOAD_MORE_FAILED = errorText('load more files', null);
 
 /** Tab counts before the first server count lands: zero shows no number. */
 const NO_COUNTS: Record<AssetTab, number> = {
@@ -385,7 +387,7 @@ export function AssetsPage() {
     setLoadingMore(false);
     if (!result.ok) {
       logger.warn('assets: next page read failed', { error: result.error.message });
-      showToast?.({ title: LOAD_MORE_FAILED, tone: 'error' });
+      showToast?.({ title: errorText('load more files', result.error), tone: 'error' });
       return;
     }
     setItemsAndKeep((prev) => mergeAssetPages(prev, result.data.items), result.data.next);
@@ -707,7 +709,7 @@ export function AssetsPage() {
             } else if (isAssetInUseError(failure.error)) {
               await showInUse(failedTargets, itemsRef.current);
             } else {
-              push(deleteFailedLabel(ids.length), 'error');
+              push(deleteFailedLabel(ids.length, failure.error), 'error');
             }
             return;
           }
@@ -747,14 +749,14 @@ export function AssetsPage() {
       onProgress?: (fraction: number) => void,
     ): Promise<UploadOutcome> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
-        return { ok: false, message: "Couldn't upload. Try again." };
+        return { ok: false, message: errorText('upload', null) };
       }
       if (workspaceId === null) {
-        return { ok: false, message: "Couldn't upload. Try again." };
+        return { ok: false, message: errorText('upload', null) };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       if (token === null || token === '') {
-        return { ok: false, message: "Couldn't upload. Try again." };
+        return { ok: false, message: errorText('upload', null) };
       }
       return uploadAssetFile(file, {
         endpoint: uploadEndpoint,
@@ -784,14 +786,14 @@ export function AssetsPage() {
   const handleAddLink = useCallback(
     async (url: string, name: string): Promise<LinkOutcome> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
-        return { ok: false, message: "Couldn't add the link. Try again." };
+        return { ok: false, message: errorText('add the link', null) };
       }
       if (workspaceId === null) {
-        return { ok: false, message: "Couldn't add the link. Try again." };
+        return { ok: false, message: errorText('add the link', null) };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       if (token === null || token === '') {
-        return { ok: false, message: "Couldn't add the link. Try again." };
+        return { ok: false, message: errorText('add the link', null) };
       }
       return addAssetLink({
         endpoint: uploadEndpoint,
@@ -813,17 +815,14 @@ export function AssetsPage() {
   const handleRename = useCallback(
     async (item: AssetListItem, name: string): Promise<RenameOutcome> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
-        return {
-          ok: false,
-          message: "Couldn't rename this file. Try again.",
-        };
+        return { ok: false, message: errorText('rename this file', null) };
       }
       if (workspaceId === null) {
-        return { ok: false, message: "Couldn't rename this file. Try again." };
+        return { ok: false, message: errorText('rename this file', null) };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       if (token === null || token === '') {
-        return { ok: false, message: "Couldn't rename this file. Try again." };
+        return { ok: false, message: errorText('rename this file', null) };
       }
       const outcome = await renameAsset({
         endpoint: uploadEndpoint,
@@ -879,7 +878,7 @@ export function AssetsPage() {
       setLoadingMore(false);
       if (!result.ok) {
         logger.warn('assets: next search page read failed', { error: result.error.message });
-        showToast?.({ title: LOAD_MORE_FAILED, tone: 'error' });
+        showToast?.({ title: errorText('load more files', result.error), tone: 'error' });
         return;
       }
       searchUpdate((data) =>
@@ -917,9 +916,15 @@ export function AssetsPage() {
 
   return (
     <>
+      <PageHead title="Assets" hidden />
       {/* Search + sort + add, then the type tabs: shared page-header chrome. */}
       <SectionHeader<AssetSort>
-        search={{ value: search, onChange: setSearch, placeholder: 'Search files' }}
+        search={{
+          value: search,
+          onChange: setSearch,
+          placeholder: 'Search files',
+          label: 'Search files',
+        }}
         sort={{ options: ASSET_SORT_OPTIONS, value: sort, onChange: setSort }}
         primaryAction={{
           node: (
@@ -1006,7 +1011,7 @@ export function AssetsPage() {
             ))}
           </BoxSkeleton>
         ) : !searching && tab === 'all' && liveItems.length === 0 ? (
-          // One line; the header's New asset is the only create button.
+          // One line; the header's New file is the only create button.
           <EmptyState icon={<IconAssets size={ICON_SIZE.status} />} title="Files show up here." />
         ) : visible.length === 0 ? (
           searching ? (

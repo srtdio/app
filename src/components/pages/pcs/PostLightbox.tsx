@@ -33,9 +33,11 @@ import { classifyFileKind, type FileKind } from '@/lib/chat/attachments';
 import { useOptionalToast } from '@/components/ui/toast';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { riseIn, riseOut } from '@/lib/motion';
+import { SPINNER_BUSY, useDelayedBusy } from '@/lib/useDelayedBusy';
 import { useGrowFromThumb } from '@/lib/motion/overlays';
 import { fileKindLabel } from '@/lib/files/display-name';
 import type { GalleryItem } from '@srtdio/posts';
+import { errorText } from '@/lib/error-copy';
 
 // wrapIndex / lightboxCounter live in the shared ImageLightbox now; re-exported
 // here so existing importers (and the gallery's own looping navigation) resolve
@@ -248,7 +250,7 @@ export function removeImageConfirmCopy(count: number): {
 
 /** Lightbox download toasts. */
 export const DOWNLOAD_DONE = 'Downloaded';
-export const DOWNLOAD_FAILED = "Couldn't download. Try again.";
+export const DOWNLOAD_FAILED = errorText('download', null);
 
 /**
  * The agency manage actions, prewired to the current slide. #26: no per-tap
@@ -269,9 +271,17 @@ export interface StageGestures {
   onClick: (event: ReactMouseEvent<HTMLDivElement>) => void;
 }
 
+/** A slide image's alt: "{post title}, slide N", or "Slide N" with no title. Pure. */
+export function slideAlt(title: string | undefined, index: number): string {
+  const n = index + 1;
+  return title !== undefined && title.trim() !== '' ? `${title}, slide ${n}` : `Slide ${n}`;
+}
+
 export interface LightboxViewProps {
   items: GalleryItem[];
   index: number;
+  /** The post's title: each slide's alt reads "{title}, slide N". */
+  title?: string | undefined;
   presignEnabled: boolean;
   chrome: boolean;
   busy: boolean;
@@ -316,6 +326,23 @@ export interface LightboxViewProps {
   openFailedFor?: ((item: GalleryItem) => boolean) | undefined;
 }
 
+/**
+ * A slide's spinner, mounted only while its URL resolves. It holds its box
+ * from the first frame but stays unpainted for SPINNER_BUSY.delay (200 ms), so
+ * a cached or fast URL never flashes it; the image replaces it once ready.
+ */
+function SlideSpinner(): ReactElement {
+  const show = useDelayedBusy(true, SPINNER_BUSY);
+  return (
+    <div
+      className={cn(
+        'h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg',
+        !show && 'invisible',
+      )}
+    />
+  );
+}
+
 /** One slide's stage: the fully-visible sharp image, no letterbox filler. */
 function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): ReactElement {
   const { zoom, srcFor, failedFor, dimsFor, presignEnabled, onImageLoad, pinOverlay } = props;
@@ -347,7 +374,7 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
         >
           <img
             src={src}
-            alt={`Slide ${i + 1}`}
+            alt={slideAlt(props.title, i)}
             draggable={false}
             onLoad={(event) => onImageLoad(item, event)}
             className="h-full w-full object-contain"
@@ -359,7 +386,7 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
       ) : showImage ? (
         <img
           src={src}
-          alt={`Slide ${i + 1}`}
+          alt={slideAlt(props.title, i)}
           draggable={false}
           onLoad={(event) => onImageLoad(item, event)}
           style={zoomStyle}
@@ -376,7 +403,7 @@ function fitSlide(props: LightboxViewProps, item: GalleryItem, i: number): React
           onOpen={() => props.onOpenFile?.(item)}
         />
       ) : isInlineRenderable(item) && !failed ? (
-        <div className="h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg" />
+        <SlideSpinner />
       ) : (
         <GracefulPanel
           message="This image could not be loaded."
@@ -696,6 +723,8 @@ interface PostLightboxProps {
     | undefined;
   /** A gallery write is in flight: delete taps do nothing. */
   saving?: boolean | undefined;
+  /** The post's title, for each slide's alt ("{title}, slide N"). */
+  title?: string | undefined;
 }
 
 /**
@@ -716,6 +745,7 @@ export function PostLightbox({
   pinOverlay,
   manage,
   saving = false,
+  title,
 }: PostLightboxProps) {
   const toast = useOptionalToast();
   const [srcs, setSrcs] = useState<Record<string, string>>({});
@@ -1110,6 +1140,7 @@ export function PostLightbox({
 
   const view = lightboxView({
     items,
+    title,
     index,
     presignEnabled,
     chrome,

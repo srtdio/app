@@ -126,6 +126,9 @@ export function StageMoveConfirmView(props: StageMoveConfirmViewProps): ReactEle
       open={props.open}
       onClose={props.onCancel}
       title={copy.title}
+      // A typed reject reason is unsaved work: X, backdrop, Escape, drag and
+      // Back ask before dropping it (the Sheet's own discard confirm).
+      dirty={copy.reason && props.reason.trim() !== ''}
       footer={
         <div className="flex w-full gap-2">
           <Button variant="ghost" className="flex-1" onClick={props.onCancel}>

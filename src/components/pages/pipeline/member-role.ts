@@ -6,6 +6,7 @@
 
 import type { Client } from '@srtdio/posts';
 import { readSharedMemberRole, type MemberRoleRead } from '@/lib/member-role';
+import { errorText } from '@/lib/error-copy';
 
 /** The role read's lifecycle: unknown while loading, failed, or settled. */
 export type RoleStatus = 'loading' | 'error' | 'ready';
@@ -24,7 +25,7 @@ export function readMemberRole(
 }
 
 /** The line the move sheet shows when the role read failed. */
-export const ROLE_READ_ERROR = "Couldn't check your access. Try again.";
+export const ROLE_READ_ERROR = errorText('check your access', null);
 
 /** The line the move sheet shows while the role read is in flight. */
 export const ROLE_READ_PENDING = 'Checking your access…';

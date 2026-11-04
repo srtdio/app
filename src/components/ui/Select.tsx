@@ -167,6 +167,8 @@ interface SelectProps {
   label?: string;
   /** When set, a tap on the trigger calls this instead of opening the menu (the first post picks for the person). */
   onPress?: () => void;
+  /** The trigger's id (a Field label points at it). */
+  id?: string;
 }
 
 export function Select({
@@ -177,6 +179,7 @@ export function Select({
   disabled = false,
   label,
   onPress,
+  id,
 }: SelectProps): ReactElement {
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<MenuPlacement>('down');
@@ -227,6 +230,7 @@ export function Select({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        {...(id !== undefined ? { id } : {})}
         {...(label !== undefined ? { 'aria-label': label } : {})}
         disabled={disabled}
         onClick={toggle}

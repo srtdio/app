@@ -89,12 +89,13 @@ import {
   type TaskPriority,
   type TaskSide,
 } from '@/lib/chat/tasks';
+import { errorText } from '@/lib/error-copy';
 
 export const TASK_SHEET_TITLE = 'Tasks';
 const SHARE_LABEL = 'Share to chat';
 export const ADD_PLACEHOLDER = 'Add a task';
 export const DISCARD_TITLE = 'Discard unsaved changes?';
-const SAVE_FAILED = "Couldn't save. Try again.";
+const SAVE_FAILED = errorText('save', null);
 /** LoadError's "Couldn't load tasks." */
 const TASKS_LOAD_THING = 'tasks';
 const SAVING_LABEL = 'Saving…';

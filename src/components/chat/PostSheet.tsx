@@ -759,6 +759,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
               <div className="my-auto w-full max-w-[calc((100dvh-6rem)*0.8)]">
                 <PostLightbox
                   items={items}
+                  title={post.title}
                   index={Math.min(viewer, items.length - 1)}
                   presignEnabled={props.presignEnabled}
                   cache={props.cache}

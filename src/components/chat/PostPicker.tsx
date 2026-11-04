@@ -101,6 +101,7 @@ import {
   type PickerSection,
 } from '@/components/chat/post-picker';
 import { listSkeleton } from '@/components/chat/ListSkeleton';
+import { errorText } from '@/lib/error-copy';
 
 /** Search debounce, in milliseconds. */
 const SEARCH_DEBOUNCE_MS = 200;
@@ -170,10 +171,10 @@ interface PickerSectionsData {
 }
 
 /** The picker's error line when a posts read fails; the raw text is only logged. */
-export const POSTS_LOAD_FAILED = "Couldn't load posts. Try again.";
+export const POSTS_LOAD_FAILED = errorText('load posts', null);
 
 /** The picker's error line when the briefs read fails; the raw text is only logged. */
-const BRIEFS_LOAD_FAILED = "Couldn't load briefs. Try again.";
+const BRIEFS_LOAD_FAILED = errorText('load briefs', null);
 
 /** The briefs tab's error line for a read: fixed copy on failure (raw text logged), else null. */
 export function briefsLoadError(
@@ -827,17 +828,20 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     >
       <div className="flex flex-col gap-3 sm:min-h-0 sm:flex-1" data-picker-mode={sheetMode}>
         <Field label="Search">
-          <div className="relative">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
-              <IconSearch size={ICON_SIZE.inline} />
-            </span>
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={mode === 'briefs' ? 'Search briefs' : 'Search posts'}
-              className="pl-9"
-            />
-          </div>
+          {(id) => (
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
+                <IconSearch size={ICON_SIZE.inline} />
+              </span>
+              <Input
+                id={id}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={mode === 'briefs' ? 'Search briefs' : 'Search posts'}
+                className="pl-9"
+              />
+            </div>
+          )}
         </Field>
 
         {mode !== 'briefs' ? (

@@ -81,13 +81,18 @@ describe('F1: every group failure is a readable sentence', () => {
     for (const error of [
       { code: 'weird_code', message: 'weird_code' },
       { code: 'unknown', message: 'Network down' },
-      { code: '', message: 'permission denied for table groups' },
     ]) {
       const shown = groupActionMessage(error);
       expect(shown).toBe(GROUP_ACTION_FALLBACK);
       expect(shown).not.toContain(error.code || 'x');
       expect(shown).not.toContain(error.message);
     }
+  });
+
+  it('a refusal reads its reason through errorCopy, never the raw text', () => {
+    const shown = groupActionMessage({ code: '', message: 'permission denied for table groups' });
+    expect(shown).toBe("Couldn't update the group. You don't have access to do this.");
+    expect(shown).not.toContain('permission denied');
   });
 });
 

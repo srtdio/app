@@ -127,7 +127,7 @@ describe('reminder writes', () => {
   it('a refused set toasts the action copy; "message not found" is silent', async () => {
     const refused = harness({ message: 'boom' });
     await refused.actions.setReminderAt({ messageId: 'm1', channelId: 'c1' }, new Date());
-    expect(refused.toasts).toEqual(["Couldn't do that. Try again."]);
+    expect(refused.toasts).toEqual(["Couldn't set the reminder. Try again."]);
     const gone = harness({ message: 'message not found' });
     await gone.actions.setReminderAt({ messageId: 'm1', channelId: 'c1' }, new Date());
     expect(gone.toasts).toEqual([]);

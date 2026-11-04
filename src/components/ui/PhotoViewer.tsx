@@ -18,6 +18,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconX } from '@/components/ui/icons';
 import { useBackGuard } from '@/lib/back-guard';
 import { useEscapeLayer } from '@/lib/escape-stack';
+import { useModalFocus } from '@/lib/modal-focus';
 import { SHEET_CLOSE_PX, riseIn, riseOut, useDragDismiss } from '@/lib/motion';
 import { useGrowFromThumb } from '@/lib/motion/overlays';
 
@@ -36,6 +37,7 @@ export interface PhotoViewerProps {
 export function PhotoViewer(props: PhotoViewerProps): ReactElement {
   const { onClose, trigger } = props;
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const closing = useRef(false);
   // A drag is not a tap: the click that ends it never closes.
@@ -84,17 +86,21 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
   });
   useBackGuard({ active: true, onBack: onClose });
 
+  // As the other viewers: focus lands on the X, Tab stays inside, the page
+  // behind is inert, and focus goes back on close (modal-focus.ts).
+  useModalFocus(dialogRef, true, { initial: () => closeRef.current });
+  // A tap that never focused the photo (iOS): the tapped element still gets it back.
   useEffect(() => {
-    closeRef.current?.focus({ preventScroll: true });
     return () => {
       const active = document.activeElement;
-      const held = active === null || active === document.body || active === closeRef.current;
+      const held = active === null || active === document.body;
       if (held && trigger !== null && trigger.isConnected) trigger.focus({ preventScroll: true });
     };
   }, [trigger]);
 
   return createPortal(
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={props.name}
@@ -132,6 +138,7 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
             role="profile"
             name={props.name}
             {...(props.avatarUrl !== null ? { src: props.avatarUrl } : {})}
+            decorative
           />
         </span>
         <p className="max-w-[80vw] truncate text-xl font-semibold text-overlay-fg">{props.name}</p>

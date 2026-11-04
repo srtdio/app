@@ -82,46 +82,60 @@ export function UploadRing({
   const indeterminate = progress === null;
   const size = UPLOAD_RING_SIZES[variant];
   return (
-    <PressableRow
-      inline
-      type="button"
-      data-upload-ring=""
-      data-ring-variant={variant}
-      data-upload-progress={indeterminate ? 'unknown' : String(Math.round(progress * 100))}
-      aria-label="Cancel upload"
-      aria-hidden={hidden ? true : undefined}
-      tabIndex={hidden ? -1 : undefined}
-      // The press never reaches the bubble (no long-press, no swipe).
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!hidden) onCancel?.();
-      }}
-      className={cn(
-        // PressableRow (not IconButton): no text-fg-2 for the own bubble's
-        // [&_.text-fg-2]:opacity-80 to dim, so the ring keeps its overlay ink.
-        'grid shrink-0 place-items-center text-overlay-fg',
-        HIT_CLASS[variant],
-        hidden && 'pointer-events-none mv-ring-out',
-        className,
+    <>
+      <PressableRow
+        inline
+        type="button"
+        data-upload-ring=""
+        data-ring-variant={variant}
+        data-upload-progress={indeterminate ? 'unknown' : String(Math.round(progress * 100))}
+        aria-label="Cancel upload"
+        aria-hidden={hidden ? true : undefined}
+        tabIndex={hidden ? -1 : undefined}
+        // The press never reaches the bubble (no long-press, no swipe).
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!hidden) onCancel?.();
+        }}
+        className={cn(
+          // PressableRow (not IconButton): no text-fg-2 for the own bubble's
+          // [&_.text-fg-2]:opacity-80 to dim, so the ring keeps its overlay ink.
+          'grid shrink-0 place-items-center text-overlay-fg',
+          HIT_CLASS[variant],
+          hidden && 'pointer-events-none mv-ring-out',
+          className,
+        )}
+      >
+        <span
+          aria-hidden="true"
+          data-upload-disc=""
+          className={cn(LAYER, RING_CLASS[variant], 'rounded-full bg-overlay opacity-60 lit-media')}
+        />
+        <ProgressRing
+          progress={progress}
+          size={size}
+          stroke={STROKE}
+          arc={ARC}
+          className={cn(LAYER, RING_CLASS[variant], indeterminate && 'mv-spin')}
+          trackClass="text-overlay-dot"
+          arcClass="text-overlay-fg"
+        />
+        <IconX size={UPLOAD_RING_X} className={LAYER} />
+      </PressableRow>
+      {/* The progress for screen readers: a button's children are not read, so
+          the progressbar sits beside it, sr-only (out of flow, nothing paints). */}
+      {hidden ? null : (
+        <span
+          role="progressbar"
+          aria-label="Upload progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          {...(indeterminate ? {} : { 'aria-valuenow': Math.round(progress * 100) })}
+          className="sr-only"
+        />
       )}
-    >
-      <span
-        aria-hidden="true"
-        data-upload-disc=""
-        className={cn(LAYER, RING_CLASS[variant], 'rounded-full bg-overlay opacity-60 lit-media')}
-      />
-      <ProgressRing
-        progress={progress}
-        size={size}
-        stroke={STROKE}
-        arc={ARC}
-        className={cn(LAYER, RING_CLASS[variant], indeterminate && 'mv-spin')}
-        trackClass="text-overlay-dot"
-        arcClass="text-overlay-fg"
-      />
-      <IconX size={UPLOAD_RING_X} className={LAYER} />
-    </PressableRow>
+    </>
   );
 }
 

@@ -37,7 +37,7 @@
 // Shift+Enter (and Return on touch) adds a line; while the @ picker is open
 // Enter or Tab picks. Tokens only.
 
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -82,7 +82,11 @@ import {
   RemoveFromPlanButton,
   planConceptMenuItems,
 } from '@/components/chat/PlanMoveSheet';
-import { MentionPicker, stepActive } from '@/components/chat/MentionPicker';
+import {
+  MentionPicker,
+  mentionComboboxProps,
+  stepActive,
+} from '@/components/chat/MentionPicker';
 import {
   CLIENT_VISIBILITY_LINE,
   EVERYONE_CHIP_LABEL,
@@ -202,6 +206,7 @@ import { useEscapeLayer } from '@/lib/escape-stack';
 import { resolvePeople } from '@/lib/people-names';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { firstExternalUrl } from '@/lib/chat/message-links';
+import { errorText } from '@/lib/error-copy';
 
 /** The preview card for the first external link in a concept's description. */
 function ConceptLinkCard(props: { text: string }): ReactElement | null {
@@ -342,7 +347,7 @@ export const CONCEPT_EDIT_RESET_HINT =
 
 /** Toasts after an Edit concept save. */
 export const CONCEPT_UPDATED = 'Concept updated';
-export const CONCEPT_SAVE_FAILED = "Couldn't save. Try again.";
+export const CONCEPT_SAVE_FAILED = errorText('save', null);
 
 /** Whether saving an edit resets a review: the team or client one is not waiting. Pure. */
 export function conceptEditResets(team: ReviewStatus, client: ReviewStatus): boolean {
@@ -623,7 +628,7 @@ export function PlanItemScreen(props: {
         item_id: item.id,
         error: result.error.message,
       });
-      setActionError("Couldn't save. Try again.");
+      setActionError(errorText('save', result.error));
       return false;
     }
     setConfirmOpen(false);
@@ -840,6 +845,7 @@ export function PlanItemScreen(props: {
       : { rows: [] as MentionMember[], hiddenApprovers: false };
   const mentionRows = picker.rows;
   const activeRow = Math.min(mentionActive, Math.max(mentionRows.length - 1, 0));
+  const mentionListId = useId();
   // The body a send stores: picked "@handle"s become tokens, and so does a
   // typed @username of someone who can be tagged here.
   const commentBody = (): string =>
@@ -1165,7 +1171,12 @@ export function PlanItemScreen(props: {
                   data-mention-anchor=""
                   className="absolute inset-x-0 bottom-full z-20 mb-2 flex flex-col gap-1"
                 >
-                  <MentionPicker members={mentionRows} active={activeRow} onPick={pickMention} />
+                  <MentionPicker
+                    members={mentionRows}
+                    active={activeRow}
+                    onPick={pickMention}
+                    listId={mentionListId}
+                  />
                   {picker.hiddenApprovers ? (
                     <p
                       data-plan-mention-note=""
@@ -1220,6 +1231,7 @@ export function PlanItemScreen(props: {
                   onKeyDown={commentKeyDown}
                   data-plan-comment-input=""
                   aria-label="Comment"
+                  {...mentionComboboxProps(mentionListId, mentionRows.length, activeRow)}
                   autoComplete="off"
                   enterKeyHint={coarse ? 'enter' : 'send'}
                   maxLength={5000}

@@ -3,6 +3,7 @@ import { useChat } from '@/lib/chat';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { ChatShell } from '@/components/chat/ChatShell';
+import { PageHead } from '@/components/shell/PageHead';
 
 /**
  * Reads the live connection from the shell-level ChatProvider (mounted once in
@@ -40,6 +41,7 @@ function ChatScreen(): ReactElement {
 export function ChatPage(): ReactElement {
   return (
     <div className="flex h-full flex-col">
+      <PageHead title="Chat" hidden />
       <div className="min-h-0 flex-1">
         <ChatScreen />
       </div>

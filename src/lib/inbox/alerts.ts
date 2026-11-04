@@ -25,6 +25,7 @@ import {
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isBellTaskEvent } from '@/lib/inbox/bell-types';
 import { formatCivilDayHeader } from '@/lib/plan-week';
+import { errorText } from '@/lib/error-copy';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -320,7 +321,7 @@ export function failureInPlainWords(reason: string | null): string {
   if (/exceeds 5000/i.test(r)) return 'The message is too long';
   if (/no body, attachments/i.test(r)) return 'The message was empty';
   if (/reply target/i.test(r)) return 'The message it replied to is gone';
-  return "Couldn't send. Try again.";
+  return errorText('send', r);
 }
 
 /** A previewed chat message. */

@@ -1,10 +1,14 @@
-// The one on/off switch: a PressableRow with role="switch" around a pill
-// track (lit-well) and a knob (bg-knob lit-knob). The whole 44px-tall track is the
-// tap target; only the knob moves (translateX). The call site lays out its
-// label; `label` names the switch for assistive tech.
+// The one on/off switch, the "ink pill": a 51x31 pill centred in a 44px-tall
+// button (role="switch"), so the tap target stays 44 tall while hover, press
+// and the focus line follow the pill, not the row. Off: a clear track with a
+// 1.5px field line (ink light, white dark), lit-well, and an ink knob. On: the
+// accent fill, no line, an accent-fg knob. Only the knob moves (translateX,
+// mv-slide). The call site lays out its label; `label` names the switch for
+// assistive tech. A raw <button> (ui/ owns the primitives): PressableRow would
+// paint its hover and focus on the 44px row.
 import type { ReactElement } from 'react';
-import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
+import { MOVE_CLASS } from '@/lib/motion';
 
 export interface SwitchProps {
   checked: boolean;
@@ -15,33 +19,37 @@ export interface SwitchProps {
 
 export function Switch({ checked, onChange, label }: SwitchProps): ReactElement {
   return (
-    <PressableRow
-      inline
+    <button
+      type="button"
       role="switch"
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      // rounded-full: hover and the focus line follow the pill, not a rectangle.
-      className="inline-flex shrink-0 items-center rounded-full"
+      // The 44px hit row: no look of its own; the focus line is drawn on the
+      // pill (group-focus-visible:lit-focus), so the row drops the UA outline.
+      className={cn(
+        'group inline-flex h-11 min-h-[44px] w-auto shrink-0 items-center rounded-full outline-none',
+        MOVE_CLASS.press,
+      )}
     >
-      {/* Off: a panel-2 well with a 3:1 border-strong edge. On: the accent fill.
-          The knob (bg-knob) is lighter than the track in both themes and keeps a
-          border-strong ring (a border, so the lit-knob light stays). */}
       <span
         aria-hidden
         className={cn(
-          'relative inline-flex h-11 w-[60px] items-center rounded-full border px-1 lit-well mv-tint',
-          checked ? 'border-transparent bg-accent' : 'border-border-strong bg-panel-2',
+          'relative inline-flex h-[31px] w-[51px] items-center rounded-full border-[1.5px] px-[2.5px] lit-well lit-hover group-focus-visible:lit-focus',
+          MOVE_CLASS.tint,
+          checked ? 'border-transparent bg-accent' : 'border-field bg-transparent',
         )}
       >
         <span
           className={cn(
-            'h-7 w-7 rounded-full border border-border-strong bg-knob lit-knob mv-slide',
-            // 60 - 2 (border) - 8 (px-1) - 28 (knob) = 22.
-            checked ? 'translate-x-[22px]' : 'translate-x-0',
+            'h-[23px] w-[23px] rounded-full lit-knob',
+            MOVE_CLASS.slide,
+            checked ? 'bg-accent-fg' : 'bg-fg',
+            // 51 - 3 (border) - 5 (px-[2.5px]) - 23 (knob) = 20.
+            checked ? 'translate-x-5' : 'translate-x-0',
           )}
         />
       </span>
-    </PressableRow>
+    </button>
   );
 }

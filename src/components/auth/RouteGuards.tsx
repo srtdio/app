@@ -4,6 +4,7 @@ import { Navigate, Outlet, useLocation, useNavigate, useSearchParams } from 'rea
 import { resolveNext, withNext } from '@/components/auth/next-param';
 import { Button } from '@/components/ui/Button';
 import { useSession } from '@/lib/session-context';
+import { errorText } from '@/lib/error-copy';
 
 /**
  * Minimal centered loading state shown while the initial Supabase session
@@ -18,11 +19,11 @@ export function SessionLoading() {
 }
 
 /** The one sentence every full-screen load failure shows. */
-export const LOAD_FAILED_TEXT = "Couldn't load. Try again.";
+export const LOAD_FAILED_TEXT = errorText('load', null);
 
 /**
  * The full-screen failure that replaces a loader once its wait has a ceiling
- * (session, workspace list, first page chunk): one line and Try again. Same
+ * (session, workspace list, first page chunk): one line and Retry. Same
  * canvas as SessionLoading, tokens only, so light and dark match.
  */
 export function LoadFailed({ onRetry }: { onRetry: () => void }) {
@@ -30,7 +31,7 @@ export function LoadFailed({ onRetry }: { onRetry: () => void }) {
     <div role="alert" className="min-h-full w-full grid place-items-center bg-bg px-4">
       <div className="flex flex-col items-center gap-3 text-center">
         <p className="text-base text-fg-2">{LOAD_FAILED_TEXT}</p>
-        <Button onClick={onRetry}>Try again</Button>
+        <Button onClick={onRetry}>Retry</Button>
       </div>
     </div>
   );

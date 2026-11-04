@@ -69,6 +69,20 @@ Only `src/lib/motion/` moves. Everything else calls one of the nine moves below.
 | Hover / state colour             | none        | colour only, 120 ms                                               | CSS `mv-tint`                                |
 | Knob, thumb, chevron flip        | X / rotate  | 160 ms                                                            | CSS `mv-slide`, `mv-turn`                    |
 
+## Waits
+
+Busy indicators and timed surfaces share two helpers; no surface keeps its own timer.
+
+| Indicator / surface                                                          | Helper                                                 | Ceiling                                                                                                                       |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `BoxSkeleton` (every loading-box screen)                                     | `useDelayedBusy(busy, SKELETON_BUSY)`                  | Unpainted for up to 150 ms (its layout box is there from the first frame); once painted, holds at least 300 ms while busy     |
+| Image spinners: ImageLightbox, AssetLightbox, PostLightbox slide, FileViewer | `useDelayedBusy(busy, SPINNER_BUSY)`                   | Unpainted for up to 200 ms; once painted, holds at least 400 ms while busy                                                    |
+| Undo strip (`UNDO_MS`, 4000 ms)                                              | `createPausableTimer` + `holdHandlers` (ToastProvider) | Pauses while hovered (mouse), focused, or touched (pointerdown until pointerup/pointercancel); resumes with the time left      |
+| Toast card (`TOAST_MS`, 4000 ms; error tone at least `ERROR_TOAST_MS`, 8000) | `createPausableTimer` + `holdHandlers` (ToastProvider) | Same pauses as the strip                                                                                                      |
+
+- `src/lib/useDelayedBusy.ts`: shows only after `delay` ms of continuous busy, then stays at least `minVisible` ms. The delays gate the placeholder only and never delay content: a placeholder is unmounted the moment content is ready, so a load that lands inside the delay paints content with no placeholder ever drawn.
+- `src/lib/pausable-timer.ts`: named holds (hover, focus, press); the clock runs only while no hold is on. A finger released anywhere (window pointerup/pointercancel) ends a press hold. Guard: `src/__tests__/timing-rules.test.ts`.
+
 ## Loading the code
 
 - `motion` (MIT), pinned exact. Boot carries `LazyMotion` + `m` only (about 5 KB gzip) plus the module (WAAPI, no library).

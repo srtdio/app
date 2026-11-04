@@ -30,8 +30,10 @@ export interface ToastOptions {
    */
   tone?: ToastTone;
   /**
-   * Auto-dismiss delay in milliseconds. Omitted falls back to the default
-   * (4000ms). `0` or `null` makes the toast sticky (no auto-dismiss).
+   * Auto-dismiss delay in milliseconds. Omitted falls back to TOAST_MS
+   * (4000ms); an error tone never runs shorter than ERROR_TOAST_MS (8000ms).
+   * `0` or `null` makes the toast sticky (no auto-dismiss). The countdown
+   * pauses while the toast is hovered, focused or touched.
    */
   durationMs?: number | null;
   /**

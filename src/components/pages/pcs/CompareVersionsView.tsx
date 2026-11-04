@@ -65,8 +65,9 @@ function formatTimestamp(value: string): string {
 
 const NO_CAPTION = <span className="text-fg-3">No caption in this version.</span>;
 
-// Render the segments a side keeps, marking add (green) and del (red-strikethrough)
-// runs; eq runs paint plain. `include` selects which kinds this side shows.
+// Render the segments a side keeps, marking add (green, underlined) and del
+// (red-strikethrough) runs, each with an sr-only "added" / "removed" so the
+// change never rests on colour alone; eq runs paint plain. `include` selects which kinds this side shows.
 function renderMarked(
   segs: readonly DiffSegment[],
   include: (kind: DiffKind) => boolean,
@@ -76,13 +77,15 @@ function renderMarked(
     if (!include(seg.kind)) return;
     if (seg.kind === 'add') {
       out.push(
-        <span key={i} className="rounded-sm bg-good-soft text-good">
+        <span key={i} className="rounded-sm bg-good-soft text-good underline">
+          <span className="sr-only">added </span>
           {seg.text}
         </span>,
       );
     } else if (seg.kind === 'del') {
       out.push(
         <span key={i} className="rounded-sm bg-bad-soft text-bad line-through">
+          <span className="sr-only">removed </span>
           {seg.text}
         </span>,
       );

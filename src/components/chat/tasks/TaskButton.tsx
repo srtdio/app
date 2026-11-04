@@ -15,6 +15,11 @@ import { INDUCTION_KEYS } from '@/lib/induction';
 
 const TASK_BUTTON_LABEL = 'Tasks';
 
+/** The button's name: "Tasks", or "Tasks, new" while the dot shows (never colour alone). Pure. */
+export function taskButtonLabel(unseen: boolean): string {
+  return unseen ? `${TASK_BUTTON_LABEL}, new` : TASK_BUTTON_LABEL;
+}
+
 export function TaskButton(props: {
   unseen: boolean;
   /** Someone else is editing the list right now. */
@@ -30,7 +35,7 @@ export function TaskButton(props: {
       type="button"
       variant="secondary"
       shape="round"
-      aria-label={TASK_BUTTON_LABEL}
+      aria-label={taskButtonLabel(props.unseen)}
       data-task-button=""
       data-induction={INDUCTION_KEYS.chatTasks}
       {...(props.unseen ? { 'data-task-unseen': '' } : {})}

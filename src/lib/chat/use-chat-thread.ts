@@ -172,6 +172,7 @@ import {
 import type { ChatConnection, ChatStatus } from '@/lib/chat/types';
 import type { PrivateReply } from '@/lib/chat/private-reply';
 import { channelOlderKey, setOlderPageFailed } from '@/lib/chat/older-page-status';
+import { errorText } from '@/lib/error-copy';
 
 /**
  * The channel's read cursors for the reading layer: every member's position
@@ -2326,7 +2327,7 @@ export function useChatThread(params: {
   const editMessage = useCallback<UseChatThread['editMessage']>(
     async (messageId, body) => {
       const forChannel = channelRef.current;
-      if (forChannel === null) return { ok: false, message: "Couldn't edit. Try again." };
+      if (forChannel === null) return { ok: false, message: errorText('edit', null) };
       const traceId = generateTraceId();
       const connection = clientRef.current;
       const liveTarget = targetRef.current;
