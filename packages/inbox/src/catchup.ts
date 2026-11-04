@@ -23,6 +23,7 @@ import {
   EMAIL_SANS,
   EMAIL_TABLE,
   emailButton,
+  emailEscape,
   emailDocument,
   emailLink,
 } from './email-shell';
