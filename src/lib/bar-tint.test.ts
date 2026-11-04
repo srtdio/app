@@ -5,9 +5,9 @@ import { barTintFor } from '@/lib/bar-tint';
 // screen: the Topbar (panel) almost everywhere, a phone chat thread's header
 // (panel), and the canvas (bg) on a phone Post or Brief detail page.
 
-const phone = (pathname: string, search = '', threadOpen = false) =>
+const phone = (pathname: string, search: string | URLSearchParams = '', threadOpen = false) =>
   barTintFor({ pathname, search, isLaptop: false, threadOpen });
-const laptop = (pathname: string, search = '', threadOpen = false) =>
+const laptop = (pathname: string, search: string | URLSearchParams = '', threadOpen = false) =>
   barTintFor({ pathname, search, isLaptop: true, threadOpen });
 
 describe('barTintFor', () => {
