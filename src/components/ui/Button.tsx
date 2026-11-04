@@ -100,7 +100,7 @@ export function Button({
       className={buttonClass(variant, shape, className)}
       {...props}
       disabled={busy || disabled}
-      aria-busy={busy ? true : undefined}
+      aria-busy={busy ? true : props['aria-busy']}
     >
       {busy ? <BusyArc /> : null}
       {children}
