@@ -274,6 +274,43 @@ export function rememberThumbnail(
   });
 }
 
+/**
+ * Video lengths read on this device at send (the local thumbnail's element),
+ * by asset version id. Kept apart from the attachment's own durationMs on
+ * purpose: a durationMs on an attachment means a voice note to the thread,
+ * the list line and the summary, so a video only ever gets its length in the
+ * persisted attachment_meta (buildAttachmentMeta). Never persisted here.
+ */
+const storedVideoDurations = new Map<string, number>();
+
+/** Record a sent video's length for its version (new uploads only; no backfill). */
+export function rememberVideoDuration(versionId: string, durationMs: number | undefined): void {
+  const ms = positiveInt(durationMs);
+  if (versionId === '' || ms === undefined) return;
+  storedVideoDurations.set(versionId, ms);
+}
+
+/** The length recorded for a video version this session, or undefined. */
+export function videoDurationOf(
+  attachment: Pick<MessageAttachment, 'assetId' | 'mime'>,
+): number | undefined {
+  if (classifyFileKind(attachment.mime) !== 'video') return undefined;
+  return storedVideoDurations.get(attachment.assetId);
+}
+
+/**
+ * A video's length from a row's attachment_meta (duration_ms), for the media
+ * search tiles; undefined for any other kind or when absent. Pure.
+ */
+export function attachmentMetaVideoDurationMs(meta: unknown, assetId: string): number | undefined {
+  if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) return undefined;
+  const raw = (meta as Record<string, unknown>)[assetId];
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const entry = raw as Record<string, unknown>;
+  if (typeof entry.mime !== 'string' || classifyFileKind(entry.mime) !== 'video') return undefined;
+  return positiveInt(entry.duration_ms);
+}
+
 /** The attachment's thumbnail meta: its own, else the one recorded for its version. */
 export function thumbnailMetaOf(attachment: MessageAttachment): ThumbnailMeta | null {
   if (attachment.thumbW !== undefined && attachment.thumbH !== undefined) {
@@ -357,11 +394,12 @@ export function buildAttachmentMeta(attachments: readonly MessageAttachment[]): 
   const meta: AttachmentMetaMap = {};
   for (const a of attachments) {
     const thumb = thumbnailMetaOf(a);
+    const durationMs = a.durationMs ?? videoDurationOf(a);
     meta[a.assetId] = {
       mime: a.mime,
       name: a.name,
       size: a.size ?? 0,
-      ...(a.durationMs !== undefined ? { duration_ms: a.durationMs } : {}),
+      ...(durationMs !== undefined ? { duration_ms: durationMs } : {}),
       ...(a.peaks !== undefined ? { peaks: [...a.peaks] } : {}),
       ...(thumb !== null
         ? {
@@ -395,15 +433,22 @@ export function parseAttachmentMeta(
     const name = typeof entry.name === 'string' ? entry.name : '';
     const mime = typeof entry.mime === 'string' ? entry.mime : '';
     const peaks = parsePeaks(entry.peaks);
+    const thumb = parseThumbnailKeys(entry.page_count, entry.thumb_w, entry.thumb_h);
+    // A video with a thumbnail and a duration_ms is a sent video's length
+    // (buildAttachmentMeta), not a voice note: it stays off durationMs, which
+    // the thread reads as "voice note". attachmentMetaVideoDurationMs reads it.
+    const videoLength = classifyFileKind(mime) === 'video' && thumb.thumbW !== undefined;
     return {
       assetId,
       name,
       mime,
       ...(typeof entry.transcript === 'string' ? { transcript: entry.transcript } : {}),
       ...(typeof entry.size === 'number' ? { size: entry.size } : {}),
-      ...(typeof entry.duration_ms === 'number' ? { durationMs: entry.duration_ms } : {}),
+      ...(typeof entry.duration_ms === 'number' && !videoLength
+        ? { durationMs: entry.duration_ms }
+        : {}),
       ...(peaks !== undefined ? { peaks } : {}),
-      ...parseThumbnailKeys(entry.page_count, entry.thumb_w, entry.thumb_h),
+      ...thumb,
     };
   });
 }
@@ -657,7 +702,7 @@ export type ChatAttachmentUpload =
        * the upload attaches later), else the kind's box while it is still being
        * made. Absent when the file has no thumbnail.
        */
-      thumbnail?: { width: number; height: number; pageCount?: number };
+      thumbnail?: { width: number; height: number; pageCount?: number; durationMs?: number };
     }
   | { ok: false; message: string };
 
@@ -700,7 +745,7 @@ export const PENDING_THUMB_SIZE: Readonly<Record<'pdf' | 'video', ThumbnailMeta>
 export function pickTimeThumbnail(
   mime: string,
   local: ThumbnailResult | undefined,
-): { width: number; height: number; pageCount?: number } | null {
+): { width: number; height: number; pageCount?: number; durationMs?: number } | null {
   const kind = thumbnailKind(mime);
   if (kind === null) return null;
   if (local === undefined) {
@@ -712,6 +757,7 @@ export function pickTimeThumbnail(
     width: local.width,
     height: local.height,
     ...(local.pageCount !== undefined ? { pageCount: local.pageCount } : {}),
+    ...(local.durationMs !== undefined ? { durationMs: local.durationMs } : {}),
   };
 }
 
@@ -720,11 +766,20 @@ export async function uploadChatAttachment(
 ): Promise<ChatAttachmentUpload> {
   // The local thumbnail (the one the sending bubble shows and the upload
   // attaches) is read as it settles; the upload never waits for it.
-  const local: { made?: ThumbnailResult } = {};
+  const local: { made?: ThumbnailResult; versionId?: string } = {};
+  // A video's length rides the same thumbnail attempt (read from the element
+  // it loads for the frame): recorded for the version whichever lands last,
+  // the upload or the thumbnail. Never awaited.
+  const noteVideoLength = (): void => {
+    const made = local.made;
+    if (local.versionId === undefined || made === undefined || !made.ok) return;
+    rememberVideoDuration(local.versionId, made.durationMs);
+  };
   if (thumbnailKind(params.file.type) !== null) {
     void sharedThumbnail(params.file)
       .then((made) => {
         local.made = made;
+        noteVideoLength();
       })
       .catch(() => {
         local.made = { ok: false, reason: 'failed' };
@@ -749,6 +804,10 @@ export async function uploadChatAttachment(
   }
   // The message records this size once (Agora meta is never updated), so it
   // is the one the card's box keeps when the stored thumbnail fills it later.
+  if (classifyFileKind(params.file.type) === 'video') {
+    local.versionId = versionId;
+    noteVideoLength();
+  }
   const thumbnail = outcome.thumbnail ?? pickTimeThumbnail(params.file.type, local.made);
   if (thumbnail !== null) {
     rememberThumbnail(versionId, thumbnail);

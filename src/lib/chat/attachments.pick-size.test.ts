@@ -23,7 +23,10 @@ vi.mock('@/lib/files/thumbnail', async (importOriginal) => {
 });
 
 import {
+  attachmentMetaVideoDurationMs,
+  buildAttachmentExt,
   buildAttachmentMeta,
+  parseAttachmentMeta,
   PENDING_THUMB_SIZE,
   pickTimeThumbnail,
   thumbnailMetaOf,
@@ -153,5 +156,98 @@ describe('uploadChatAttachment never waits on the thumbnail', () => {
     expect(
       thumbnailMetaOf({ assetId: 'v-failed', name: 'deck.pdf', mime: 'application/pdf' }),
     ).toBe(null);
+  });
+});
+
+const clip = (): File => new File(['vid'], 'clip.mp4', { type: 'video/mp4' });
+
+describe('video length on new chat video sends', () => {
+  it('pickTimeThumbnail carries the local video length with its size', () => {
+    const made: ThumbnailResult = {
+      ok: true,
+      blob: new Blob(['x']),
+      width: 580,
+      height: 326,
+      durationMs: 12000,
+    };
+    expect(pickTimeThumbnail('video/mp4', made)).toEqual({
+      width: 580,
+      height: 326,
+      durationMs: 12000,
+    });
+  });
+
+  it('the length rides attachment_meta as duration_ms, never the live ext', async () => {
+    local.next = Promise.resolve({
+      ok: true,
+      blob: new Blob(['jpeg'], { type: 'image/jpeg' }),
+      width: 580,
+      height: 326,
+      durationMs: 12000,
+    });
+    const result = await uploadChatAttachment(params(clip(), 'v-video'));
+    expect(result.ok).toBe(true);
+    const attachment = { assetId: 'v-video', name: 'clip.mp4', mime: 'video/mp4', size: 3 };
+    const meta = buildAttachmentMeta([attachment]);
+    expect(meta['v-video']).toMatchObject({
+      mime: 'video/mp4',
+      duration_ms: 12000,
+      thumb_w: 580,
+      thumb_h: 326,
+    });
+    // The live ext keeps no durationMs on a video (durationMs means voice note).
+    expect(buildAttachmentExt([attachment]).attachment_meta[0]?.durationMs).toBe(undefined);
+    // Read back, the video stays a video: no durationMs; the length is read raw.
+    const [parsed] = parseAttachmentMeta(meta, ['v-video']);
+    expect(parsed?.durationMs).toBe(undefined);
+    expect(attachmentMetaVideoDurationMs(meta, 'v-video')).toBe(12000);
+  });
+
+  it('a thumbnail that lands after the upload still records the length', async () => {
+    let finish: (made: ThumbnailResult) => void = () => undefined;
+    local.next = new Promise<ThumbnailResult>((resolve) => {
+      finish = resolve;
+    });
+    const result = await uploadChatAttachment(params(clip(), 'v-late'));
+    expect(result.ok).toBe(true);
+    const attachment = { assetId: 'v-late', name: 'clip.mp4', mime: 'video/mp4' };
+    expect(buildAttachmentMeta([attachment])['v-late']?.duration_ms).toBe(undefined);
+    finish({ ok: true, blob: new Blob(['j']), width: 580, height: 326, durationMs: 4500 });
+    await vi.waitFor(() =>
+      expect(buildAttachmentMeta([attachment])['v-late']?.duration_ms).toBe(4500),
+    );
+  });
+
+  it('a video with no readable length writes no duration_ms', async () => {
+    local.next = Promise.resolve({ ok: true, blob: new Blob(['j']), width: 580, height: 326 });
+    await uploadChatAttachment(params(clip(), 'v-nolen'));
+    const meta = buildAttachmentMeta([
+      { assetId: 'v-nolen', name: 'clip.mp4', mime: 'video/mp4' },
+    ]);
+    expect(meta['v-nolen']?.duration_ms).toBe(undefined);
+    expect(attachmentMetaVideoDurationMs(meta, 'v-nolen')).toBe(undefined);
+  });
+
+  it('a pdf never gets a duration_ms', async () => {
+    local.next = Promise.resolve({
+      ok: true,
+      blob: new Blob(['j']),
+      width: 580,
+      height: 820,
+      pageCount: 2,
+    });
+    await uploadChatAttachment(params(pdf(), 'v-pdf-len'));
+    const meta = buildAttachmentMeta([
+      { assetId: 'v-pdf-len', name: 'deck.pdf', mime: 'application/pdf' },
+    ]);
+    expect(meta['v-pdf-len']?.duration_ms).toBe(undefined);
+  });
+
+  it('a voice note keeps its durationMs on read back', () => {
+    const meta = {
+      'v-voice': { mime: 'audio/webm', name: 'Voice note', size: 9, duration_ms: 7000 },
+    };
+    expect(parseAttachmentMeta(meta, ['v-voice'])[0]?.durationMs).toBe(7000);
+    expect(attachmentMetaVideoDurationMs(meta, 'v-voice')).toBe(undefined);
   });
 });

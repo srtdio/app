@@ -32,6 +32,11 @@ export interface Thumbnail {
   height: number;
   /** PDFs only: the document's page count. */
   pageCount?: number;
+  /**
+   * Videos only: the length read from the element the frame came from, in
+   * whole ms. Absent when the browser reports no finite positive duration.
+   */
+  durationMs?: number;
 }
 
 export interface NoThumbnail {
@@ -42,6 +47,22 @@ export interface NoThumbnail {
 export type ThumbnailResult = Thumbnail | NoThumbnail;
 
 type ThumbnailKind = 'pdf' | 'video' | 'docx' | 'xlsx';
+
+/**
+ * A video's length in whole ms from `HTMLVideoElement.duration` (seconds);
+ * undefined unless finite and > 0. Pure.
+ */
+export function videoDurationMs(seconds: number): number | undefined {
+  if (!Number.isFinite(seconds) || seconds <= 0) return undefined;
+  const ms = Math.round(seconds * 1000);
+  return ms > 0 ? ms : undefined;
+}
+
+/** What the video grabber returns: the frame's canvas and, when known, the length. */
+export interface VideoFrame {
+  canvas: HTMLCanvasElement;
+  durationMs?: number;
+}
 
 /** Which thumbnail path a mime takes, or null for none (pptx and the rest). */
 export function thumbnailKind(mime: string): ThumbnailKind | null {
@@ -151,8 +172,11 @@ export interface ThumbnailDeps {
   createCanvas: () => HTMLCanvasElement;
   /** JPEG-encode a canvas; null when the browser cannot. */
   encode: (canvas: HTMLCanvasElement, quality: number) => Promise<Blob | null>;
-  /** Draw one early frame of a video file onto a fresh canvas; see grabVideoFrame. */
-  videoFrame: (file: File, signal: AbortSignal) => Promise<HTMLCanvasElement>;
+  /**
+   * Draw one early frame of a video file onto a fresh canvas; see grabVideoFrame.
+   * A bare canvas means the length is unknown.
+   */
+  videoFrame: (file: File, signal: AbortSignal) => Promise<HTMLCanvasElement | VideoFrame>;
   readBytes: (file: File) => Promise<Uint8Array>;
   /**
    * Parse a docx/xlsx in the office Worker and draw its thumbnail onto a fresh
@@ -212,7 +236,7 @@ function once(target: EventTarget, type: string, signal: AbortSignal): Promise<v
  * min(1 s, 10% of its length). The blob URL is revoked and the element emptied
  * in a finally, whatever happens.
  */
-async function grabVideoFrame(file: File, signal: AbortSignal): Promise<HTMLCanvasElement> {
+async function grabVideoFrame(file: File, signal: AbortSignal): Promise<VideoFrame> {
   if (typeof document === 'undefined') throw new Error('no document');
   const video = document.createElement('video');
   const url = URL.createObjectURL(file);
@@ -227,6 +251,8 @@ async function grabVideoFrame(file: File, signal: AbortSignal): Promise<HTMLCanv
     video.src = url;
     await loaded;
     const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    // Read once here, from the element already loaded for the frame.
+    const durationMs = videoDurationMs(video.duration);
     const at = Math.max(Math.min(1, duration * 0.1), 0.001);
     const seeked = once(video, 'seeked', signal);
     video.currentTime = at;
@@ -244,7 +270,7 @@ async function grabVideoFrame(file: File, signal: AbortSignal): Promise<HTMLCanv
       throw new Error('no 2d context');
     }
     ctx.drawImage(video, 0, 0, Math.round(width * box.scale), Math.round(height * box.scale));
-    return canvas;
+    return durationMs !== undefined ? { canvas, durationMs } : { canvas };
   } finally {
     video.removeAttribute('src');
     video.load();
@@ -405,12 +431,20 @@ export async function makeThumbnail(
     local.signal.addEventListener('abort', onStop, { once: true });
     try {
       let pageCount: number | undefined;
+      let durationMs: number | undefined;
       if (kind === 'pdf') {
         pageCount = (await renderPdfPage1(deps, file, local.signal, held)).pageCount;
       } else if (office) {
         await deps.officeFrame(file, local.signal, held);
       } else {
-        held.canvas = await deps.videoFrame(file, local.signal);
+        const frame = await deps.videoFrame(file, local.signal);
+        if ('canvas' in frame) {
+          held.canvas = frame.canvas;
+          const ms = frame.durationMs;
+          if (ms !== undefined && Number.isInteger(ms) && ms > 0) durationMs = ms;
+        } else {
+          held.canvas = frame;
+        }
       }
       const canvas = held.canvas;
       if (canvas === null || local.signal.aborted) return { ok: false, reason: 'aborted' };
@@ -422,6 +456,7 @@ export async function makeThumbnail(
         width: canvas.width,
         height: canvas.height,
         ...(pageCount !== undefined ? { pageCount } : {}),
+        ...(durationMs !== undefined ? { durationMs } : {}),
       };
     } catch {
       return { ok: false, reason: 'failed' };
