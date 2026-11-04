@@ -3,7 +3,9 @@
 // Keep everything below this header identical to that file; change both together.
 
 // The mail goes to the team inbox (BOOK_CALL_TO_ADDRESS), so it is a plain
-// heading + label/value rows card. Every color is inline, no <style>.
+// heading + label/value rows card in the shared email shell (email-shell.ts).
+
+import { EMAIL_LIGHT, EMAIL_SANS, emailCard, emailDocument } from './email-shell.ts';
 
 const HTML_ESCAPES: Record<string, string> = {
   '&': '&amp;',
@@ -28,21 +30,25 @@ export function requestEmailBody(input: { heading: string; rows: MailRow[] }): {
   text: string;
 } {
   const text = `${input.heading}\n\n${input.rows.map((row) => `${row.label}: ${row.value}`).join('\n')}\n`;
-  const font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
+  const L = EMAIL_LIGHT;
   const rows = input.rows
     .map(
       (row) =>
-        `<tr><td style="padding:6px 0;font-family:${font};font-size:13px;color:#62666d;width:140px;vertical-align:top;">${escapeHtml(row.label)}</td>` +
-        `<td style="padding:6px 0;font-family:${font};font-size:15px;color:#08090a;vertical-align:top;">${escapeHtml(row.value)}</td></tr>`,
+        `<tr><td class="fg2" style="padding:6px 12px 6px 0;font-family:${EMAIL_SANS};font-size:13px;line-height:20px;color:${L.fg2};width:140px;vertical-align:top;">${escapeHtml(row.label)}</td>` +
+        `<td class="fg" style="padding:6px 0;font-family:${EMAIL_SANS};font-size:15px;line-height:20px;color:${L.fg};vertical-align:top;">${escapeHtml(row.value)}</td></tr>`,
     )
     .join('');
-  const html =
-    `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"></head>` +
-    `<body style="margin:0;padding:24px;background-color:#f4f5f6;">` +
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#ffffff;border-radius:12px;border:1px solid #e4e5e8;border-top-color:#eceef1;border-bottom:2px solid #c9ced5;">` +
-    `<tr><td style="padding:24px 28px 8px 28px;"><h1 style="margin:0;font-family:${font};font-size:20px;font-weight:700;color:#08090a;">${escapeHtml(input.heading)}</h1></td></tr>` +
-    `<tr><td style="padding:8px 28px 24px 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table></td></tr>` +
-    `</table></body></html>`;
+  const html = emailDocument({
+    title: input.heading,
+    content:
+      `<tr><td>` +
+      emailCard(
+        `<h1 class="fg" style="margin:0;font-family:${EMAIL_SANS};font-size:20px;line-height:28px;font-weight:600;color:${L.fg};">${escapeHtml(input.heading)}</h1>` +
+          `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px">${rows}</table>`,
+      ) +
+      `</td></tr>`,
+    footer: 'Sent by Sorted to the team inbox.',
+  });
   return { html, text };
 }
 
