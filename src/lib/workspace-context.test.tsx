@@ -6,11 +6,12 @@ import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 type AuthListener = (event: AuthChangeEvent, session: Session | null) => void;
 
-const { auth, listWorkspaces, newTrace, loggerError } = vi.hoisted(() => ({
+const { auth, listWorkspaces, newTrace, loggerError, loggerWarn } = vi.hoisted(() => ({
   auth: { listener: null as AuthListener | null, initial: null as Session | null },
   listWorkspaces: vi.fn(),
   newTrace: () => 'trace-1',
   loggerError: vi.fn(),
+  loggerWarn: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase', () => {
@@ -38,7 +39,7 @@ vi.mock('@srtdio/workspace', () => ({ listWorkspaces }));
 vi.mock('@srtdio/rpc', () => ({ workspaceCreate: vi.fn() }));
 vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => newTrace }));
 vi.mock('@/lib/logger', () => ({
-  logger: { error: loggerError, warn: vi.fn(), info: vi.fn() },
+  logger: { error: loggerError, warn: loggerWarn, info: vi.fn() },
 }));
 
 import { SessionProvider, useSession } from '@/lib/session-context';
@@ -124,6 +125,7 @@ beforeEach(() => {
   listWorkspaces.mockReset();
   listWorkspaces.mockResolvedValue({ ok: true, data: [ws('ws-1')] });
   loggerError.mockClear();
+  loggerWarn.mockClear();
 });
 
 afterEach(() => {
@@ -267,5 +269,101 @@ describe('WorkspaceProvider from the device cache (cold open)', () => {
     await emit('SIGNED_IN', session('u2', 't9'));
     expect(peekKept(workspacesReadKey('u1'))).toBeUndefined();
     expect(last()).toMatchObject({ loaded: true, ids: ['ws-9'] });
+  });
+});
+
+describe('WorkspaceProvider: failed re-list behind the saved list (FRONTEND-Q)', () => {
+  const networkDown = { ok: false, error: { message: 'TypeError: Failed to fetch' } };
+  const fire = async (target: EventTarget, type: string): Promise<void> => {
+    act(() => {
+      target.dispatchEvent(new Event(type));
+    });
+    await flush();
+  };
+  const bootstrapLogs = (fn: typeof loggerError) =>
+    fn.mock.calls.filter((call) => call[0] === 'workspace bootstrap failed');
+
+  it('a network failure logs a warning, not an error', async () => {
+    primeRead(workspacesReadKey('u1'), [ws('ws-1')]);
+    listWorkspaces.mockResolvedValue(networkDown);
+    await mount();
+    expect(last()).toMatchObject({ loaded: true, error: null, ids: ['ws-1'] });
+    expect(bootstrapLogs(loggerError)).toHaveLength(0);
+    expect(loggerWarn).toHaveBeenCalledWith('workspace bootstrap failed', {
+      error: 'TypeError: Failed to fetch',
+    });
+  });
+
+  it('any other failure still logs an error', async () => {
+    primeRead(workspacesReadKey('u1'), [ws('ws-1')]);
+    listWorkspaces.mockResolvedValue({ ok: false, error: { message: 'permission denied' } });
+    await mount();
+    expect(loggerError).toHaveBeenCalledWith('workspace bootstrap failed', {
+      error: 'permission denied',
+    });
+    expect(bootstrapLogs(loggerWarn)).toHaveLength(0);
+  });
+
+  it('re-runs once on the next online event, then removes both listeners', async () => {
+    const removeWin = vi.spyOn(window, 'removeEventListener');
+    try {
+      primeRead(workspacesReadKey('u1'), [ws('ws-1')]);
+      listWorkspaces.mockResolvedValue(networkDown);
+      await mount();
+      expect(listWorkspaces).toHaveBeenCalledTimes(1);
+      listWorkspaces.mockResolvedValue({ ok: true, data: [ws('ws-1'), ws('ws-2')] });
+      await fire(window, 'online');
+      expect(listWorkspaces).toHaveBeenCalledTimes(2);
+      expect(last()).toMatchObject({ loaded: true, error: null, ids: ['ws-1', 'ws-2'] });
+      const removed = removeWin.mock.calls.map((call) => call[0]);
+      expect(removed).toContain('online');
+      expect(removed).toContain('visibilitychange');
+      await fire(window, 'online');
+      await fire(document, 'visibilitychange');
+      // The wake recheck may read on a return to the tab; the bootstrap re-run never again.
+      expect(listWorkspaces.mock.calls.length).toBeLessThanOrEqual(3);
+      await fire(window, 'online');
+      await fire(window, 'online');
+      expect(listWorkspaces.mock.calls.length).toBeLessThanOrEqual(3);
+    } finally {
+      removeWin.mockRestore();
+    }
+  });
+
+  it('re-runs once on a return to the tab; a failed re-run keeps the saved list', async () => {
+    primeRead(workspacesReadKey('u1'), [ws('ws-1')]);
+    listWorkspaces.mockResolvedValue(networkDown);
+    await mount();
+    expect(listWorkspaces).toHaveBeenCalledTimes(1);
+    await fire(document, 'visibilitychange');
+    // One read for the wake: the re-run, with the wake recheck skipping behind it.
+    expect(listWorkspaces).toHaveBeenCalledTimes(2);
+    expect(last()).toMatchObject({ loaded: true, error: null, ids: ['ws-1'] });
+    expect(history.every((h) => h.token === null || h.ids.length > 0)).toBe(true);
+    expect(bootstrapLogs(loggerWarn)).toHaveLength(2);
+    // Listeners gone: an online event does not re-run the bootstrap.
+    await fire(window, 'online');
+    expect(listWorkspaces).toHaveBeenCalledTimes(2);
+  });
+
+  it('a hidden visibilitychange does not re-run', async () => {
+    primeRead(workspacesReadKey('u1'), [ws('ws-1')]);
+    listWorkspaces.mockResolvedValue(networkDown);
+    await mount();
+    const hidden = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    try {
+      await fire(document, 'visibilitychange');
+      expect(listWorkspaces).toHaveBeenCalledTimes(1);
+    } finally {
+      hidden.mockRestore();
+    }
+  });
+
+  it('a failed re-list with nothing saved is unchanged: the error shows, no re-run', async () => {
+    listWorkspaces.mockResolvedValue(networkDown);
+    await mount();
+    expect(last()).toMatchObject({ loaded: false, error: 'TypeError: Failed to fetch' });
+    await fire(window, 'online');
+    expect(listWorkspaces).toHaveBeenCalledTimes(1);
   });
 });

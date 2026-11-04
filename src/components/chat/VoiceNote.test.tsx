@@ -26,6 +26,8 @@ import {
   VOICE_SEEK_TIMEOUT_MS,
   VOICE_STALL_TIMEOUT_MS,
   VOICE_START_TIMEOUT_MS,
+  VOICE_RELINK_RETRY_MAX_MS,
+  VOICE_RELINK_RETRY_MIN_MS,
   type VoiceAudio,
   type VoiceFailure,
   type VoiceUrlResult,
@@ -894,5 +896,185 @@ describe('bars from the real waveform', () => {
     expect(wave).not.toContain('data-played');
     const sent = renderToStaticMarkup(<VoiceNote {...base} mine peaks={[50, 60]} />);
     expect(sent).toContain('w-0.5 shrink-0 rounded-full bg-white/[.45]');
+  });
+});
+
+describe('playback recovery: second re-link and file probe (FRONTEND-R)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  const flush = async (): Promise<void> => {
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  };
+  const networkFailure: VoiceUrlResult = {
+    ok: false,
+    error: { name: 'TypeError', code: null, message: 'Load failed', linkMode: 'file-link' },
+  };
+  const DELAY = 1_500;
+  function setup(opts: {
+    results: VoiceUrlResult[];
+    hidden?: boolean;
+    probe?: (url: string) => Promise<'skipped' | 'network' | number>;
+  }) {
+    let applied: string | null = 'https://srtd.io/f/v1/full?k=a';
+    const results = [...opts.results];
+    const play = vi.fn(() => Promise.resolve());
+    const refreshUrl = vi.fn<(force: boolean) => Promise<VoiceUrlResult>>(
+      async () => results.shift() ?? networkFailure,
+    );
+    const failed = vi.fn<(failure: VoiceFailure) => void>();
+    const relinkDelay = vi.fn(() => DELAY);
+    const recovery = createVoiceRecovery({
+      player: {
+        get applied() {
+          return applied;
+        },
+        currentTime: 0,
+        apply: (url) => {
+          applied = url;
+        },
+        play,
+      },
+      peekUrl: () => 'https://srtd.io/f/v1/full?k=a',
+      refreshUrl,
+      failed,
+      hidden: () => opts.hidden ?? false,
+      relinkDelay,
+      ...(opts.probe === undefined ? {} : { probe: opts.probe }),
+    });
+    return { recovery, play, refreshUrl, failed, relinkDelay };
+  }
+
+  it('the default wait is jittered between 1200 and 2000 ms', () => {
+    expect(VOICE_RELINK_RETRY_MIN_MS).toBe(1_200);
+    expect(VOICE_RELINK_RETRY_MAX_MS).toBe(2_000);
+  });
+
+  it('a network-shaped re-link failure waits, re-links once more, then plays', async () => {
+    const { recovery, play, refreshUrl, failed } = setup({
+      results: [networkFailure, { ok: true, data: 'https://srtd.io/f/v1/full?k=b' }],
+    });
+    recovery.play();
+    await flush();
+    recovery.mediaError(4);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(DELAY - 1);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(2);
+    expect(refreshUrl).toHaveBeenLastCalledWith(true);
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(failed).not.toHaveBeenCalled();
+  });
+
+  it('only one extra re-link per play attempt', async () => {
+    const { recovery, refreshUrl, failed } = setup({ results: [networkFailure, networkFailure] });
+    recovery.play();
+    await flush();
+    recovery.mediaError(4);
+    await flush();
+    vi.advanceTimersByTime(DELAY);
+    await flush();
+    vi.advanceTimersByTime(DELAY * 5);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(2);
+    expect(failed).toHaveBeenCalledTimes(1);
+    expect(failed.mock.calls[0]?.[0]).toMatchObject({ name: 'PresignError', retried: true });
+  });
+
+  it('no second re-link while the tab is hidden: straight to the failure', async () => {
+    const { recovery, refreshUrl, failed, relinkDelay } = setup({
+      results: [networkFailure],
+      hidden: true,
+    });
+    recovery.play();
+    await flush();
+    recovery.mediaError(4);
+    await flush();
+    expect(failed).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(DELAY * 2);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(1);
+    expect(relinkDelay).not.toHaveBeenCalled();
+  });
+
+  it('a re-link failure that is not network-shaped fails at once', async () => {
+    const { recovery, refreshUrl, failed } = setup({
+      results: [
+        {
+          ok: false,
+          error: { name: 'PresignError', code: 'forbidden', message: '403', linkMode: 'file-link' },
+        },
+      ],
+    });
+    recovery.play();
+    await flush();
+    recovery.mediaError(4);
+    await flush();
+    expect(failed).toHaveBeenCalledTimes(1);
+    expect(refreshUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('a pause (cancel) during the wait stops it: no re-link, no failure', async () => {
+    const { recovery, refreshUrl, failed, play } = setup({ results: [networkFailure] });
+    recovery.play();
+    await flush();
+    recovery.mediaError(4);
+    await flush();
+    recovery.cancel();
+    vi.advanceTimersByTime(DELAY * 2);
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(1);
+    expect(failed).not.toHaveBeenCalled();
+    // A new tap plays normally afterwards.
+    recovery.play();
+    await flush();
+    expect(play).toHaveBeenCalledTimes(2);
+  });
+
+  it('a first MediaError probes the applied url once, beside the re-link', async () => {
+    const probe = vi.fn(async () => 404 as const);
+    const { recovery, refreshUrl, failed } = setup({
+      results: [networkFailure, networkFailure],
+      probe,
+    });
+    recovery.play();
+    await flush();
+    recovery.mediaError(4);
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(probe).toHaveBeenCalledWith('https://srtd.io/f/v1/full?k=a');
+    expect(refreshUrl).toHaveBeenCalledTimes(1);
+    await flush();
+    vi.advanceTimersByTime(DELAY);
+    await flush();
+    expect(probe).toHaveBeenCalledTimes(1);
+    const failure = failed.mock.calls[0]?.[0];
+    expect(failure?.probe).toBeDefined();
+    await expect(failure?.probe).resolves.toBe(404);
+  });
+
+  it('a first failure that is not a MediaError never probes', async () => {
+    const probe = vi.fn(async () => 404 as const);
+    const { recovery } = setup({ results: [{ ok: true, data: 'https://srtd.io/x' }], probe });
+    recovery.play();
+    await flush();
+    vi.advanceTimersByTime(VOICE_START_TIMEOUT_MS);
+    await flush();
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('a first play that works makes no extra request', async () => {
+    const probe = vi.fn(async () => 404 as const);
+    const { recovery, refreshUrl } = setup({ results: [], probe });
+    recovery.play();
+    await flush();
+    expect(refreshUrl).not.toHaveBeenCalled();
+    expect(probe).not.toHaveBeenCalled();
   });
 });

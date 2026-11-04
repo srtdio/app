@@ -20,6 +20,7 @@ import { useSession } from '@/lib/session-context';
 import { useNewTrace } from '@/lib/trace-context';
 import { getCurrentTraceId } from '@/lib/trace';
 import { logger } from '@/lib/logger';
+import { isExpectedNetworkFailure } from '@/lib/expected-failure';
 import { primeWorkspacePlatforms } from '@/lib/workspace-context-platform';
 import {
   dropWorkspaceReads,
@@ -402,6 +403,53 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const settled = (): void => {
       if (bootRef.current === run) bootRef.current = null;
     };
+    // A failed re-list behind the saved list: the network or the device is a
+    // warning, anything else an error (FRONTEND-Q).
+    const logKeptFailure = (error: string): void => {
+      if (isExpectedNetworkFailure(error)) logger.warn('workspace bootstrap failed', { error });
+      else logger.error('workspace bootstrap failed', { error });
+    };
+    // Re-run the bootstrap once, on the next return to the tab or the next
+    // online event (whichever comes first); no timer, no polling. The saved
+    // list stays on screen throughout and a failed re-run never blanks it.
+    let offRetry = (): void => undefined;
+    const retryOnceOnReturn = (): void => {
+      const go = (): void => {
+        offRetry();
+        const next = sessionRef.current;
+        if (!active || next === null || next.user.id !== userId) return;
+        const again = {};
+        bootRef.current = again;
+        bootstrapWorkspaces(supabase, next, bootstrapGuard, newTrace)
+          .then((res) => {
+            if (bootRef.current === again) bootRef.current = null;
+            if (!active) return;
+            if (res.error !== null) {
+              logKeptFailure(res.error);
+              return;
+            }
+            keepFreshList(userId, res.workspaces);
+            setWorkspaces(res.workspaces);
+            setActiveId((prev) => nextActiveId(prev, res.workspaces));
+            setLoaded(true);
+          })
+          .catch((err: unknown) => {
+            if (bootRef.current === again) bootRef.current = null;
+            if (active) logKeptFailure(String(err));
+          });
+      };
+      const onVisibility = (): void => {
+        if (document.visibilityState === 'visible') go();
+      };
+      // Capture on window: runs before the wake recheck's document listener,
+      // so the recheck sees this re-run out (bootRef) and skips: one read.
+      window.addEventListener('visibilitychange', onVisibility, true);
+      window.addEventListener('online', go);
+      offRetry = () => {
+        window.removeEventListener('visibilitychange', onVisibility, true);
+        window.removeEventListener('online', go);
+      };
+    };
     bootstrapWorkspaces(supabase, current, bootstrapGuard, newTrace)
       .then((res) => {
         settled();
@@ -410,7 +458,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setCacheFor(null);
         if (res.error !== null && shownFromCache) {
           // The saved list is on screen: keep it, as a failed re-list does.
-          logger.error('workspace bootstrap failed', { error: res.error });
+          logKeptFailure(res.error);
+          retryOnceOnReturn();
         } else if (res.error !== null) {
           setError(res.error);
           setWorkspaces([]);
@@ -443,6 +492,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
       offHydrated();
+      offRetry();
     };
   }, [userId, newTrace, bootAttempt]);
 
