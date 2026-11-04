@@ -122,8 +122,14 @@ export function SectionHeader<S extends string = string>({
     <>
       <div
         className={cn(
-          'px-4 md:px-6 mt-3 flex items-center gap-2',
-          stackSearchMd && 'md:flex-wrap md:gap-y-3',
+          // One fixed 44px row on every list page (Pipeline, Briefs, Assets,
+          // Plan, Activity), so the search and the chip row below it sit at
+          // the same height on each tab and nothing jumps on switching. A
+          // taller control (Plan's bordered Month | Week well) centres in the
+          // row instead of growing it. The stacked chat-list pane wraps to two
+          // rows at md, so it keeps its natural height there.
+          'px-4 md:px-6 mt-3 flex h-11 items-center gap-2',
+          stackSearchMd && 'md:h-auto md:flex-wrap md:gap-y-3',
         )}
       >
         {title !== undefined ? (
