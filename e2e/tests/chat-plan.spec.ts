@@ -361,7 +361,9 @@ async function clientFlow(page: Page): Promise<void> {
   const tile = page.locator('[data-tray-tile="plan"]');
   await expect(tile).toBeDisabled();
   await expect(tile).toHaveAttribute('aria-disabled', 'true');
-  expect(Number(await tile.evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
+  // Disabled is fg-3 ink, never a fade (Visible and lit).
+  expect(Number(await tile.evaluate((el) => getComputedStyle(el).opacity))).toBe(1);
+  await expect(tile).toHaveClass(/disabled:text-fg-3/);
   await tile.click({ force: true });
   await expect(page_(page, 'compose')).toHaveCount(0);
   await page.keyboard.press('Escape');
