@@ -57,6 +57,16 @@ describe('flattenMedia', () => {
     expect(flattenMedia([h], 'file')).toEqual([]);
   });
 
+  it('reads a thumbnailed video length from the meta', () => {
+    const h = hit('m6', {
+      attachmentAssetIds: ['v'],
+      attachmentMeta: {
+        v: { mime: 'video/mp4', name: 'v.mp4', size: 2, duration_ms: 9000, thumb_w: 580, thumb_h: 326 },
+      },
+    });
+    expect(flattenMedia([h], 'video')[0]?.durationMs).toBe(9000);
+  });
+
   it('keeps file page counts and voice notes apart', () => {
     const h = hit('m3', {
       attachmentAssetIds: ['d', 'n'],

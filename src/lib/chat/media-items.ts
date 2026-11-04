@@ -6,7 +6,7 @@
 // ("This week", "October", "September 2025"). Plus the device-cache key and
 // value of each chip's first page, so a chip tap paints before any read.
 
-import { parseAttachmentMeta } from '@/lib/chat/attachments';
+import { attachmentMetaVideoDurationMs, parseAttachmentMeta } from '@/lib/chat/attachments';
 import { toLinkItems } from '@/lib/chat/channel-media';
 import type { EntityRoutes } from '@/lib/chat/message-links';
 import type { SearchHit, SearchKind } from '@/lib/chat/search';
@@ -112,7 +112,11 @@ export function flattenMedia(
           height: size.height,
           thumbW: a.thumbW ?? null,
           thumbH: a.thumbH ?? null,
-          durationMs: a.durationMs ?? null,
+          // A video's length is read apart: parseAttachmentMeta keeps durationMs for voice notes.
+          durationMs:
+            a.durationMs ??
+            (kind === 'video' ? attachmentMetaVideoDurationMs(hit.attachmentMeta, a.assetId) : undefined) ??
+            null,
           pageCount: a.pageCount ?? null,
         },
       ];
