@@ -1,6 +1,14 @@
 import { expect, test, type Page, type Request } from '@playwright/test';
 import { installHarnessNetwork } from '../fixtures/harness-routes';
 import { GROUP_NAME, PEER_NAME } from '../fixtures/chat-data';
+import { installLinkPreviewStub } from '../fixtures/link-previews';
+import {
+  installMediaSearch,
+  MEDIA_ALBUM_BODY,
+  MEDIA_MSG,
+  MEDIA_VERSION,
+  SEARCH_CHIP_ORDER,
+} from '../fixtures/search-data';
 
 // Message search (UI-4): the chat home's Messages results, a hit opening its
 // chat at the message with the in-chat bar, the bar's arrows, and Clear
@@ -91,6 +99,70 @@ async function runSearchFlow(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Search this chat' })).toBeVisible();
 }
 
+/**
+ * The media chips: their order (Starred, Photos, Videos, Links, Files, Voice
+ * notes), then Photos alone (empty query, p_kind photo) lists photo tiles
+ * newest first; the first tile opens the viewer with its details on top, and
+ * Show in chat opens the thread at that message.
+ */
+async function runMediaFlow(page: Page): Promise<void> {
+  const network = await installHarnessNetwork(page);
+  await installLinkPreviewStub(page);
+  const calls = await installMediaSearch(page, network.world.tables);
+  await page.goto('/chat');
+  await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
+
+  const chips = await page
+    .locator('[data-search-chip]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('data-search-chip')));
+  expect(chips).toEqual([...SEARCH_CHIP_ORDER]);
+
+  const photo = page.locator('[data-search-chip="photo"]');
+  await photo.click();
+  await expect(photo).toHaveAttribute('aria-pressed', 'true');
+  const results = page.locator('[data-media-results="photo"]');
+  await expect(results).toBeVisible();
+  const last = calls[calls.length - 1] ?? {};
+  expect(last.p_kind).toBe('photo');
+  expect(last.p_query).toBe('');
+  expect(String(last.p_trace_id)).toMatch(UUID_V7);
+  for (const key of Object.keys(last)) expect(key.startsWith('p_')).toBe(true);
+
+  // Newest first: the 3-photo album's first photo leads, under a month header.
+  await expect(results.locator('[data-media-month]').first()).toBeVisible();
+  const tile = results.locator('[data-media-tile]').first();
+  await expect(tile).toBeVisible();
+  await expect(tile).toHaveAttribute(
+    'data-media-tile',
+    `${MEDIA_MSG.photoAlbum}:${MEDIA_VERSION.album1}`,
+  );
+  // Every photo of both photo messages has its own tile.
+  await expect(results.locator(`[data-media-tile^="${MEDIA_MSG.photoAlbum}:"]`)).toHaveCount(3);
+  await expect(results.locator(`[data-media-tile^="${MEDIA_MSG.photoOne}:"]`)).toHaveCount(1);
+
+  // The viewer opens with its details on top and Show in chat.
+  await tile.click();
+  await expect(page.locator('[data-lightbox-details]')).toBeVisible();
+  const show = page.locator('[data-show-in-chat]');
+  await expect(show).toBeVisible();
+  await show.click();
+
+  // The thread shows the message. The arrival glow is a 2s tint: checked first.
+  const landed = page.locator(`[data-msg-id="${MEDIA_MSG.photoAlbum}"]`);
+  await expect(
+    page.locator(`[data-msg-id="${MEDIA_MSG.photoAlbum}"][data-jump-glow]`).first(),
+  ).toBeVisible();
+  await expect(page.locator('[data-lightbox-details]')).toHaveCount(0);
+  await expect(landed.first()).toContainText(MEDIA_ALBUM_BODY);
+  await expect(landed.first()).toBeInViewport();
+
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+}
+
+test('chat search: media chips, photo tile, Show in chat (phone)', async ({ page }) => {
+  await runMediaFlow(page);
+});
+
 test('chat search: phone', async ({ page }) => {
   await runSearchFlow(page);
 });
@@ -109,6 +181,10 @@ test('chat search: in-chat bar from the header icon', async ({ page }) => {
 
 test.describe('laptop', () => {
   test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false });
+
+  test('chat search: media chips, photo tile, Show in chat (laptop)', async ({ page }) => {
+    await runMediaFlow(page);
+  });
 
   test('chat search: laptop', async ({ page }) => {
     await runSearchFlow(page);
