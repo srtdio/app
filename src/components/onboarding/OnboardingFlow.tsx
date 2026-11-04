@@ -1178,7 +1178,7 @@ function WelcomeBody({
       <p className="min-h-[20px] text-base text-fg-2 [text-wrap:balance]" aria-live="polite">
         {subline}
       </p>
-      <p className="rounded-lg border bg-panel lit-card px-4 py-3 text-base text-fg">{joiningAs}</p>
+      <p className="rounded-xl border bg-panel lit-card px-4 py-3 text-base text-fg">{joiningAs}</p>
     </div>
   );
 }
@@ -1204,7 +1204,7 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
         {WAITING_LINES.map((line, i) => (
           <li
             key={line}
-            className="flex items-center gap-3 rounded-lg border bg-panel lit-card p-3.5"
+            className="flex items-center gap-3 rounded-xl border bg-panel lit-card p-3.5"
           >
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft lit-pill font-mono text-base font-medium text-accent">
               {i + 1}

@@ -112,7 +112,7 @@ export function ScheduledListSheet(
             <li
               key={row.id}
               data-scheduled-card={row.id}
-              className="flex flex-col gap-2 rounded-lg border bg-panel-2 p-3 lit-card-muted"
+              className="flex flex-col gap-2 rounded-xl border bg-panel-2 p-3 lit-card-muted"
             >
               <div className={cn('flex items-center gap-2 text-fg-2', NO_TOUCH_SELECT)}>
                 <IconCalendarClock size={ICON_SIZE.inline} className="text-accent" />
@@ -226,9 +226,11 @@ export function ScheduledListSheet(
 }
 
 const CARD_ACTION_TONE = {
-  primary: 'bg-accent text-accent-fg hover:bg-accent-hover',
-  plain: 'border border-border bg-panel text-fg hover:bg-panel-3',
-  danger: 'border border-border bg-panel text-bad hover:bg-bad-soft',
+  primary: 'bg-accent text-accent-fg hover:bg-accent-hover lit-btn-primary',
+  // Button secondary's look (lit-btn-secondary: gradient, border-strong bottom
+  // edge, --hover-fill overlay on hover).
+  plain: 'border bg-panel text-fg lit-btn-secondary',
+  danger: 'border bg-panel text-bad lit-btn-secondary',
 } as const;
 
 /** One of a card's four equal 44px actions. */

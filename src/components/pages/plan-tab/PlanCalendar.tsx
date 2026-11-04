@@ -497,8 +497,15 @@ function dayAttrs(props: CellProps): {
 const DAY_FOCUS = 'focus-visible:lit-focus focus-visible:-outline-offset-2';
 // Today's inset edge is 1px, so the inset focus outline reads on top of it.
 const DAY_FOCUS_TODAY = DAY_FOCUS;
-const DROP = 'lit-today';
+// A drop over today shows both: the dashed drop line and today's inset edge.
+const DROP = 'lit-drop';
 const TODAY_DAY = 'lit-today';
+// Grid lines sit on the cell's bottom and right. A today or drop cell draws its
+// own edge, so its grid line is transparent: no border-border beside an
+// outline class on one element (guard: outline-rules.test.ts).
+function cellLine(isToday: boolean, over: boolean): string {
+  return isToday || over ? 'border-transparent' : 'border-border';
+}
 const TODAY_PILL = 'lit-pill shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold';
 
 /** The month grid's weekday header row (px), fixed so each week row's height is known. */
@@ -524,7 +531,7 @@ function MonthGrid(props: {
   return (
     <div
       data-plan-tab-month=""
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border lit-card"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border lit-card"
     >
       <div className="lit-header grid h-7 shrink-0 grid-cols-7 border-b bg-panel-2">
         {weeks[0]?.map((cell) => (
@@ -556,7 +563,8 @@ function MonthGrid(props: {
                 data-plan-tab-out={cell.inMonth ? undefined : ''}
                 data-plan-tab-today-cell={isToday ? '' : undefined}
                 className={cn(
-                  'flex h-full min-h-0 min-w-0 flex-col gap-0.5 overflow-hidden border-b border-r border-border p-1.5 last:border-r-0',
+                  'flex h-full min-h-0 min-w-0 flex-col gap-0.5 overflow-hidden border-b border-r p-1.5 last:border-r-0',
+                  cellLine(isToday, cp.over),
                   cell.inMonth ? 'bg-bg' : 'bg-panel-2',
                   isToday && TODAY_DAY,
                   isToday ? DAY_FOCUS_TODAY : DAY_FOCUS,
@@ -588,6 +596,7 @@ function MonthGrid(props: {
                 </span>
                 {props.loading && cell.inMonth && (weekIndex * 7 + cellIndex) % 3 === 1 ? (
                   <Bone
+                    lit="flat"
                     className={cn('w-4/5 shrink-0 rounded-lg', props.coarse ? 'h-11' : 'h-[22px]')}
                   />
                 ) : null}
@@ -680,7 +689,7 @@ function WeekGrid(props: {
   return (
     <div
       data-plan-tab-week=""
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border lit-card"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border lit-card"
     >
       <div className="lit-header grid shrink-0 grid-cols-7 border-b bg-panel-2">
         {days.map((day) => {
@@ -723,7 +732,8 @@ function WeekGrid(props: {
               {...dayAttrs(cp)}
               data-plan-tab-today-cell={isToday ? '' : undefined}
               className={cn(
-                'flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto border-r border-border p-2 last:border-r-0',
+                'flex min-h-0 min-w-0 flex-col gap-2 overflow-y-auto border-r p-2 last:border-r-0',
+                cellLine(isToday, cp.over),
                 'bg-bg',
                 isToday && TODAY_DAY,
                 isToday ? DAY_FOCUS_TODAY : DAY_FOCUS,
@@ -731,7 +741,7 @@ function WeekGrid(props: {
               )}
             >
               {props.loading && dayIndex % 2 === 0 ? (
-                <Bone className="h-24 w-full shrink-0 rounded-xl" />
+                <Bone lit="lit-card" className="h-24 w-full shrink-0 rounded-xl" />
               ) : null}
               {(props.entries.get(day) ?? []).map((entry) => (
                 <WeekCard key={entry.key} {...props.entryProps(entry)} thumbs={props.thumbs} />
@@ -771,6 +781,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
   const pill = entry.kind === 'item' ? planPill(entry.bundle, entry.item) : null;
   return (
     <PressableRow
+      card
       type="button"
       data-plan-tab-entry={entry.key}
       data-plan-tab-lifted={props.lifted ? '' : undefined}

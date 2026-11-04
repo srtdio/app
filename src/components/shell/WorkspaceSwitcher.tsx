@@ -310,7 +310,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative flex w-full max-w-[420px] max-h-[84vh] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay outline-none"
+        className="relative flex w-full max-w-[420px] max-h-[84svh] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay outline-none"
       >
         <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-[15px]">
           <h2 className="text-lg font-semibold">{title}</h2>

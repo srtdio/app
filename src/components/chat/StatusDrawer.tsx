@@ -144,8 +144,8 @@ export interface StatusDrawerActions {
 }
 
 // Layout and colour only: PressableRow provides width, 44px height, radius,
-// left alignment, hover and the focus ring.
-const ROW = 'flex items-center gap-3 py-1 mv-tint active:bg-panel-2';
+// left alignment, the lit-hover hover/press overlay and the focus ring.
+const ROW = 'flex items-center gap-3 py-1 mv-tint';
 const DATE_COL = 'w-12 shrink-0 font-mono text-sm leading-4 tabular-nums text-fg-3';
 const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base leading-5 text-fg';
 const ROW_SUB = 'block truncate text-sm leading-4 text-fg-3';
@@ -154,7 +154,8 @@ const PILL =
 
 const SEGMENT_CLASS: Record<PlanSegment, string> = {
   client: 'bg-accent',
-  team: 'bg-accent-soft ring-1 ring-inset ring-border-strong',
+  // Team-held items: the one selected look (lit-selected edge), no ring.
+  team: 'border lit-selected',
   changes: 'bg-warn',
   waiting: 'bg-panel-2',
 };
@@ -445,7 +446,7 @@ export function StatusMarkRow(props: {
           role="group"
           aria-label={markConfirmCopy(mark.type, 'resolve')}
           data-mark-confirm="resolve"
-          className="mb-1 flex flex-wrap items-center gap-2 rounded-lg border bg-panel-2 px-3 py-2 lit-card-muted"
+          className="mb-1 flex flex-wrap items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
         >
           <span className="min-w-0 flex-1 text-base text-fg">
             {markConfirmCopy(mark.type, 'resolve')}

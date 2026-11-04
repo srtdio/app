@@ -30,7 +30,7 @@ interface SheetProps {
   children: ReactNode;
   footer?: ReactNode;
   /**
-   * At sm+ the box keeps one fixed height, min(640px, 84vh), from its first
+   * At sm+ the box keeps one fixed height, min(640px, 84svh), from its first
    * paint (a list that loads or filters inside never grows it); the body
    * fills it. Phone and the default (content height) are unchanged.
    */
@@ -223,9 +223,10 @@ export function Sheet({
           // Rendered at rest; the rise (phone, Y) or grow (laptop, scale) is
           // laid over it by the motion module.
           // Phone height caps at 90dvh (the visible viewport under Safari's
-          // bars); 90vh stays as the fallback where dvh is unknown.
-          'relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border bg-panel lit-overlay will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
-          fixedHeight === true && 'sm:h-[min(640px,84vh)]',
+          // bars and the keyboard); 90svh stays as the static fallback where
+          // dvh is unknown.
+          'relative flex w-full max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border bg-panel lit-overlay will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84svh] sm:rounded-xl',
+          fixedHeight === true && 'sm:h-[min(640px,84svh)]',
           wide === true && 'lg:w-[960px]',
         )}
       >

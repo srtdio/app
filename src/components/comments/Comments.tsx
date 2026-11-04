@@ -252,19 +252,23 @@ export function emptyListText(entityType: CommentEntityType, filter: CommentFilt
 /**
  * Layout added to every text row action (the checkpoint checkbox, Confirm,
  * Resolve, Reply). Each is a ghost <Button> (44 tall, 8px radius, 14 / 500);
- * this only keeps the 44px minimum width and the hover that reads on panel-2
- * rows. Reply privately and Copy are 44x44 IconButtons with the same hover.
- * The row's 12px side padding comes from COMMENT_ACTIONS_ROW_CLASS.
+ * this only keeps the 44px minimum width. Hover is the primitive's lit-hover
+ * overlay, which reads on panel-2 rows too. Reply privately and Copy are 44x44
+ * IconButtons with the same overlay. The row's 12px side padding comes from
+ * COMMENT_ACTIONS_ROW_CLASS.
  */
-export const ROW_ACTION_CLASS = 'min-w-[44px] hover:bg-panel-3';
+export const ROW_ACTION_CLASS = 'min-w-[44px]';
 
 /** The passive (non-interactive) checkbox: the same box, height and padding as
  *  a ghost row-action Button without the hover or focus treatment. */
 export const ROW_ACTION_STATIC_CLASS =
   'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-3 text-base font-medium';
 
-/** The hover the icon-only row actions (Reply privately, Copy) share. */
-export const ROW_ICON_ACTION_CLASS = 'hover:bg-panel-3';
+/**
+ * Extra classes for the icon-only row actions (Reply privately, Copy): none,
+ * their hover is IconButton's own lit-hover overlay.
+ */
+export const ROW_ICON_ACTION_CLASS = '';
 
 /**
  * The one-line comment action row: never wraps. Its direct text Buttons take
@@ -2772,11 +2776,11 @@ export function Comments({
               className="rounded-xl border bg-panel-2 px-4 py-3 lit-card-muted"
             >
               <div className="flex items-center gap-2">
-                <Bone as="div" className="h-8 w-8 shrink-0 rounded-full" />
-                <Bone as="div" className="h-3 w-24 rounded" />
+                <Bone lit="lit-avatar" as="div" className="h-8 w-8 shrink-0 rounded-full" />
+                <Bone lit="flat" as="div" className="h-3 w-24 rounded" />
               </div>
-              <Bone as="div" className="mt-3 h-3 w-full rounded" />
-              <Bone as="div" className="mt-2 h-3 w-2/3 rounded" />
+              <Bone lit="flat" as="div" className="mt-3 h-3 w-full rounded" />
+              <Bone lit="flat" as="div" className="mt-2 h-3 w-2/3 rounded" />
             </div>
           ))}
         </div>

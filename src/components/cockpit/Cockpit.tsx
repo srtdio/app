@@ -134,7 +134,7 @@ function Tiles({ state, onPick }: { state: CockpitState; onPick: (tab: CockpitTa
               <span className="truncate text-sm text-fg-2">{label}</span>
             </span>
             {tile === undefined ? (
-              <Bone className="h-7 w-10 rounded" />
+              <Bone lit="flat" className="h-7 w-10 rounded" />
             ) : tile.state === 'ok' ? (
               <span className="font-mono text-2xl font-semibold tabular-nums text-fg">
                 {countText(tile.value)}

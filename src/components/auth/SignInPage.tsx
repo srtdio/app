@@ -193,7 +193,7 @@ export function SignInPage() {
       <span>New to Sorted?</span>
       <Link
         to="/signup"
-        className="inline-flex min-h-[44px] items-center justify-center font-medium text-accent hover:underline"
+        className="inline-flex min-h-[44px] items-center justify-center font-medium text-accent hover:underline focus-visible:lit-focus"
       >
         Sign up free
       </Link>

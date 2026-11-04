@@ -10,9 +10,18 @@ import { useRef, type HTMLAttributes, type ReactElement, type ReactNode } from '
 import { useModalFocus } from '@/lib/modal-focus';
 import { riseIn, useMoveOnMount } from '@/lib/motion';
 import { useIsLaptop } from '@/lib/use-is-laptop';
+import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 
 /** The full-screen chat page box (Contact, Group info, Starred). */
 export const MODAL_PAGE_CLASS = 'fixed inset-0 z-50 flex flex-col bg-bg outline-none';
+
+/**
+ * The modal page's 56px header height plus the status-bar strip it covers
+ * (--shell-safe-top; 0 off the phone), padded so its controls sit below the
+ * notch. Every ModalPanel header (Contact, Group info, Starred) takes this
+ * instead of h-14.
+ */
+export const MODAL_HEADER_SAFE = SAFE_TOP_BAR_CLASS;
 
 export function ModalPanel(
   props: HTMLAttributes<HTMLDivElement> & { children?: ReactNode },

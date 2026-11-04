@@ -51,15 +51,13 @@ function over(top: readonly number[], alpha: number, under: readonly number[]): 
 }
 
 describe('11c own-bubble post card', () => {
-  it('card surfaces darken (black/12), secondary ink at opacity-90', () => {
+  it('card surfaces take an on-bubble/12 overlay, secondary ink at full accent-fg (no opacity)', () => {
     for (const token of [
-      '[&_.bg-panel]:bg-black/[.12]',
-      '[&_.bg-panel-2]:bg-black/[.12]',
-      '[&_.bg-panel-3]:bg-black/[.12]',
+      '[&_.bg-panel]:bg-on-bubble/[.12]',
+      '[&_.bg-panel-2]:bg-on-bubble/[.12]',
+      '[&_.bg-panel-3]:bg-on-bubble/[.12]',
       '[&_.text-fg-2]:text-accent-fg',
-      '[&_.text-fg-2]:opacity-90',
       '[&_.text-fg-3]:text-accent-fg',
-      '[&_.text-fg-3]:opacity-90',
     ]) {
       expect(OWN_BUBBLE_CONTENT).toContain(token);
     }
@@ -67,6 +65,9 @@ describe('11c own-bubble post card', () => {
       '[&_.bg-panel]:bg-white/[.16]',
       '[&_.bg-panel-2]:bg-white/[.16]',
       '[&_.bg-panel-3]:bg-white/[.16]',
+      '[&_.bg-panel]:bg-black/[.12]',
+      '[&_.bg-panel-2]:bg-black/[.12]',
+      '[&_.bg-panel-3]:bg-black/[.12]',
       '[&_.text-fg-2]:opacity-80',
       '[&_.text-fg-3]:opacity-80',
     ]) {
@@ -85,14 +86,19 @@ describe('11c own-bubble post card', () => {
     const blocks = [/^:root \{([\s\S]*?)^\}/m, /^\.dark \{([\s\S]*?)^\}/m].map(
       (re) => re.exec(css)?.[1] ?? '',
     );
-    const pairs = blocks.map((b) => [triplet(b, 'bubble-own'), triplet(b, 'accent-fg')] as const);
+    // The card overlay is on-bubble/12 (white over the black light bubble,
+    // near-black over the off-white dark one).
+    const pairs = blocks.map(
+      (b) => [triplet(b, 'bubble-own'), triplet(b, 'accent-fg'), triplet(b, 'on-bubble')] as const,
+    );
     // Light and dark.
-    expect(pairs.map(([fill, ink]) => fill.length + ink.length)).toEqual([6, 6]);
-    const black = [0, 0, 0];
-    for (const [fill, ink] of pairs) {
-      const card = over(black, 0.12, fill);
-      // Secondary ink (fg-2 / fg-3 -> accent-fg at opacity-90) on the card.
-      expect(contrast(over(ink, 0.9, card), card)).toBeGreaterThanOrEqual(4.5);
+    expect(pairs.map(([fill, ink, line]) => fill.length + ink.length + line.length)).toEqual([
+      9, 9,
+    ]);
+    for (const [fill, ink, line] of pairs) {
+      const card = over(line, 0.12, fill);
+      // Secondary ink (fg-2 / fg-3 -> accent-fg, solid) on the card.
+      expect(contrast(ink, card)).toBeGreaterThanOrEqual(4.5);
       // Primary ink (fg -> accent-fg) on the card.
       expect(contrast(ink, card)).toBeGreaterThanOrEqual(4.5);
     }

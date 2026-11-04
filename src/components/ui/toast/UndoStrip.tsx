@@ -147,20 +147,18 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
       className={cn(
-        'pointer-events-auto fixed inset-x-4 bottom-[var(--strip-bottom,calc(env(safe-area-inset-bottom)_+_16px))] z-[70] flex min-h-[50px] touch-none select-none items-center gap-3 rounded-xl border border-[var(--strip-border)] bg-[var(--strip-bg)] py-0 pl-[18px] pr-[5px] lit-float md:inset-x-0 md:bottom-6 md:mx-auto md:w-[480px]',
+        'pointer-events-auto fixed inset-x-4 bottom-[var(--strip-bottom,calc(env(safe-area-inset-bottom)_+_16px))] z-[70] flex min-h-[50px] touch-none select-none items-center gap-3 rounded-xl border border-strip bg-strip py-0 pl-[18px] pr-[5px] lit-strip md:inset-x-0 md:bottom-6 md:mx-auto md:w-[480px]',
         // Motion off: a leaving strip goes at once (no exit to wait for).
         leaving && off && 'invisible',
       )}
     >
-      <span className="min-w-0 flex-1 truncate text-lg font-medium text-[var(--strip-fg)]">
-        {title}
-      </span>
+      <span className="min-w-0 flex-1 truncate text-lg font-medium text-strip">{title}</span>
       {action !== undefined ? (
         <button
           type="button"
           data-toast-action=""
           onClick={() => onAction(id)}
-          className="flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-base font-medium text-[var(--strip-action)] focus-visible:lit-focus focus-visible:outline-[color:var(--strip-action)]"
+          className="flex h-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg px-4 text-base font-medium text-strip-action focus-visible:lit-focus focus-visible:outline-overlay-fg"
         >
           {action.label}
         </button>

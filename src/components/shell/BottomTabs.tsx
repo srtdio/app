@@ -21,8 +21,12 @@ const PILL_NAV = PRIMARY_NAV.filter((item) => item.showChatBadge !== true);
 /** Chat: its own circle right of the pill. */
 const CHAT_NAV = PRIMARY_NAV.find((item) => item.showChatBadge === true);
 
-/** The floating row: 12px from both sides and the bottom (above the home indicator). */
-export const PHONE_BAR_OFFSETS = 'left-3 right-3 bottom-[calc(12px+env(safe-area-inset-bottom))]';
+/**
+ * The floating row: 12px from both sides and the bottom, each past the safe
+ * area (home indicator; the notch and rounded corners in landscape).
+ */
+export const PHONE_BAR_OFFSETS =
+  'left-[calc(12px+env(safe-area-inset-left))] right-[calc(12px+env(safe-area-inset-right))] bottom-[calc(12px+env(safe-area-inset-bottom))]';
 
 /** The Chat circle's accessible name: "Chat", plus the unread count. Pure. */
 export function chatTabLabel(unread: number): string {
@@ -36,10 +40,8 @@ export function chatTabLabel(unread: number): string {
  */
 function tabClass(active: boolean): string {
   return cn(
-    'relative flex h-11 min-w-[44px] shrink-0 items-center justify-center rounded-full',
-    active
-      ? 'gap-1.5 bg-[var(--lit-tab-active-bg)] pl-3 pr-2.5 text-accent lit-active'
-      : 'w-11 text-fg',
+    'relative flex h-11 min-w-[44px] shrink-0 items-center justify-center rounded-full focus-visible:lit-focus',
+    active ? 'gap-1.5 bg-tab-active pl-3 pr-2.5 text-accent lit-active' : 'w-11 text-fg',
   );
 }
 
@@ -109,7 +111,7 @@ export function BottomTabs() {
               {unreadCount > 0 ? (
                 <CountBadge
                   count={unreadCount}
-                  className="absolute -right-2 -top-1.5 border-2 border-[var(--lit-surface-top)]"
+                  className="absolute -right-2 -top-1.5 border-2 border-surface-top"
                 />
               ) : null}
             </span>
@@ -125,11 +127,9 @@ export function BottomTabs() {
             {...navPrefetchProps(CHAT_NAV.to)}
             // bg-panel in every state: accent-soft is translucent, so on its own
             // the chat rows would show through the circle on /chat.
-            className={({ isActive }) =>
-              cn(
-                'relative flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border bg-panel lit-raised',
-                isActive ? 'text-accent' : 'text-fg',
-              )
+            // A function, so NavLink adds no bare "active" class.
+            className={() =>
+              'relative flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border bg-panel lit-raised text-fg focus-visible:lit-focus'
             }
           >
             {({ isActive }) => (
@@ -138,7 +138,8 @@ export function BottomTabs() {
                   <span
                     aria-hidden
                     data-chat-tab-tint=""
-                    className="pointer-events-none absolute inset-0 rounded-full bg-accent-soft lit-active"
+                    // Active is the one selected look: lit-selected inside the raised circle.
+                    className="pointer-events-none absolute inset-0 rounded-full border lit-selected"
                   />
                 ) : null}
                 <span className="relative">
@@ -147,7 +148,7 @@ export function BottomTabs() {
                 {total > 0 ? (
                   <CountBadge
                     count={total}
-                    className="absolute right-0 top-0 border-2 border-[var(--lit-surface-top)]"
+                    className="absolute right-0 top-0 border-2 border-surface-top"
                   />
                 ) : null}
               </>

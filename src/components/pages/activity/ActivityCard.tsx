@@ -583,7 +583,8 @@ export function ActivityCard({
           data-activity-lead=""
           className={cn(
             'flex items-start gap-3 p-[14px]',
-            leadTappable && 'cursor-pointer mv-tint hover:bg-panel-2',
+            // Inside the overflow-hidden card: the inset focus line, the lit-hover overlay.
+            leadTappable && 'cursor-pointer mv-tint lit-hover focus-visible:lit-focus-inset',
           )}
         >
           <div className="min-w-0 flex-1">
@@ -645,7 +646,7 @@ export function ActivityCard({
             ) : null}
           </div>
 
-          <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg">
+          <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg lit-media">
             {alert !== null ? (
               <AlertIcon item={lead} alert={alert} />
             ) : planItem ? (
@@ -771,7 +772,8 @@ export function ActivityCard({
                     })}
                 className={cn(
                   'flex min-h-[44px] items-center gap-2 py-2 pl-[14px] pr-3',
-                  !opensNothing(entry) && 'cursor-pointer mv-tint hover:bg-panel-2',
+                  !opensNothing(entry) &&
+                    'cursor-pointer mv-tint lit-hover focus-visible:lit-focus-inset',
                 )}
               >
                 <div className="min-w-0 flex-1">
@@ -854,7 +856,7 @@ export function UpcomingCard({
           onClick={() => onOpen(item)}
           onKeyDown={onKeyDown}
           data-upcoming-open=""
-          className="flex cursor-pointer items-start gap-3 p-[14px] mv-tint hover:bg-panel-2"
+          className="flex cursor-pointer items-start gap-3 p-[14px] mv-tint lit-hover focus-visible:lit-focus-inset"
         >
           <div className="min-w-0 flex-1">
             <div className="mb-1.5 flex items-center gap-[7px]">
@@ -868,7 +870,7 @@ export function UpcomingCard({
             </p>
           </div>
 
-          <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg">
+          <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg lit-media">
             <div
               aria-hidden="true"
               className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"

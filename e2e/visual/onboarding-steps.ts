@@ -450,7 +450,7 @@ async function tourCommentButton(page: Page): Promise<void> {
  * (the boxes stay filled), 'wrong' refuses as Supabase does for a bad code.
  * Preflights fall through to the harness.
  */
-async function routeVerify(page: Page, mode: 'hold' | 'wrong'): Promise<void> {
+export async function routeVerify(page: Page, mode: 'hold' | 'wrong'): Promise<void> {
   await page.route(`${SUPABASE}/auth/v1/verify*`, async (route) => {
     if (route.request().method() !== 'POST') {
       await route.fallback();
@@ -479,7 +479,7 @@ async function pastFirstSecond(page: Page): Promise<void> {
 }
 
 /** From the sign-in card: type the email, Send code, wait for the code step. */
-async function toSignInCode(page: Page): Promise<void> {
+export async function toSignInCode(page: Page): Promise<void> {
   await waitFor([page.getByRole('button', { name: CHECK_EMAIL_COPY.sendCode })], 'sign in');
   await page.locator('#signin-email').fill('dana@kite.in');
   await page.getByRole('button', { name: CHECK_EMAIL_COPY.sendCode }).click();

@@ -206,7 +206,7 @@ export function Thumbnail({
         className="pointer-events-none absolute inset-0"
       />
       {state === 'shimmer' ? (
-        <Bone as="div" className="h-full w-full" />
+        <Bone lit="flat" as="div" className="h-full w-full" />
       ) : state === 'image' ? (
         <>
           {smallUrl !== null ? (

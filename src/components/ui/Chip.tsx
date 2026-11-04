@@ -2,10 +2,8 @@ import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { MOVE_CLASS } from '@/lib/motion';
 
-interface ChipProps extends Omit<
-  ButtonHTMLAttributes<HTMLButtonElement>,
-  'className' | 'onClick' | 'children'
-> {
+interface ChipProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'onClick' | 'children'> {
   label: string;
   /** An optional leading mark before the label (Pipeline's stage dot). */
   dot?: ReactNode;
@@ -59,14 +57,16 @@ export function Chip({
       ref={buttonRef}
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg border text-base font-medium focus-visible:lit-focus',
+        // Hover/press: the lit-chip / lit-selected overlay rule (index.css), no
+        // flat swap. Disabled: fg-3 ink, no hover, never a fade.
+        'inline-flex items-center gap-1.5 rounded-lg border text-base font-medium focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none disabled:cursor-default',
         MOVE_CLASS.press,
         sizes[size],
         variant === 'add'
-          ? 'border-dashed border-border text-fg-3 hover:bg-panel-2'
+          ? 'lit-chip border-dashed border-border-strong text-fg-3'
           : selected
             ? 'lit-selected'
-            : 'lit-chip text-fg hover:bg-panel-2',
+            : 'lit-chip border-border-strong text-fg',
         className,
       )}
     >

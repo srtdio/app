@@ -6,6 +6,7 @@ import { guestDestination } from '@/components/auth/RouteGuards';
 import { TestSiteStart } from '@/components/test-site/TestSiteStart';
 import { isTestSite, startTestSession } from '@/lib/test-site';
 import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { isValidInviteEmail } from '@/components/pages/settings/MembersInviteForm';
@@ -200,7 +201,7 @@ export function SignUpPage(): ReactElement {
         footer={
           <Link
             to="/signin"
-            className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline"
+            className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline focus-visible:lit-focus"
           >
             Back to sign in
           </Link>
@@ -225,7 +226,7 @@ export function SignUpPage(): ReactElement {
           <span>Already have an account?</span>
           <Link
             to="/signin"
-            className="inline-flex min-h-[44px] items-center justify-center font-medium text-accent hover:underline"
+            className="inline-flex min-h-[44px] items-center justify-center font-medium text-accent hover:underline focus-visible:lit-focus"
           >
             Sign in
           </Link>
@@ -267,12 +268,10 @@ export function SignUpPage(): ReactElement {
             htmlFor="signup-email-opt-in"
             className="flex min-h-11 cursor-pointer items-center gap-3"
           >
-            <input
+            <Checkbox
               id="signup-email-opt-in"
-              type="checkbox"
               checked={emailOptIn}
               onChange={(event) => setEmailOptIn(event.target.checked)}
-              className="m-0 h-4 w-4 shrink-0 accent-accent"
             />
             <span>Email me updates I miss</span>
           </label>
@@ -283,16 +282,14 @@ export function SignUpPage(): ReactElement {
             htmlFor="signup-policy-consent"
             className="flex min-h-11 cursor-pointer items-center gap-3"
           >
-            <input
+            <Checkbox
               id="signup-policy-consent"
-              type="checkbox"
               checked={policyConsent}
               onChange={(event) => {
                 setPolicyConsent(event.target.checked);
                 if (event.target.checked && error === POLICY_CONSENT_MESSAGE) setError(null);
               }}
               aria-label="Agree to the Terms and Privacy Policy"
-              className="m-0 h-4 w-4 shrink-0 accent-accent"
             />
             <span>I agree to the</span>
           </label>
@@ -300,7 +297,7 @@ export function SignUpPage(): ReactElement {
             to="/legal/terms-and-conditions"
             target="_blank"
             rel="noreferrer"
-            className="flex min-h-11 items-center text-accent underline underline-offset-2"
+            className="flex min-h-11 items-center text-accent underline underline-offset-2 focus-visible:lit-focus"
           >
             Terms
           </Link>
@@ -309,7 +306,7 @@ export function SignUpPage(): ReactElement {
             to="/legal/privacy-policy"
             target="_blank"
             rel="noreferrer"
-            className="flex min-h-11 items-center text-accent underline underline-offset-2"
+            className="flex min-h-11 items-center text-accent underline underline-offset-2 focus-visible:lit-focus"
           >
             Privacy Policy
           </Link>

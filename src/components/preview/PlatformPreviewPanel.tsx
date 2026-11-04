@@ -143,7 +143,7 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
         onKeyDown={onKeyDown}
         className="absolute inset-y-0 right-0 flex w-full max-w-[460px] flex-col border-l bg-panel lit-overlay will-change-transform"
       >
-        <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-2">
+        <div className="flex items-center gap-2.5 border-b border-border px-[18px] pb-2 pt-[calc(0.5rem+env(safe-area-inset-top,0px))]">
           <h2 className="text-lg font-semibold">{title}</h2>
           <div ref={closeRef} className="ml-auto">
             <IconButton label="Close preview" onClick={onClose}>
@@ -151,7 +151,7 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
             </IconButton>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-[18px] py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-[18px] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-4">
           {isPostPlatform(props.platform) ? <PreviewBody {...props} /> : null}
         </div>
       </div>
@@ -257,7 +257,7 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
   if (kind === 'document') {
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex min-h-[44px] items-center gap-2 rounded-lg border bg-panel-2 px-3 py-2 lit-card-muted">
+        <div className="flex min-h-[44px] items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted">
           <IconFile size={ICON_SIZE.inline} />
           <span className="min-w-0 flex-1 truncate text-base text-fg">{firstMedia?.filename}</span>
         </div>
@@ -523,10 +523,10 @@ function ShownWindow({ window: win }: { window: CropWindow }): ReactElement {
   const pct = (n: number): string => `${n * 100}%`;
   return (
     <div
-      className="absolute rounded-sm border-2 border-accent shadow-[var(--shadow-spotlight)]"
+      className="absolute rounded-sm border-2 border-accent lit-spotlight"
       style={{ left: pct(win.x), top: pct(win.y), width: pct(win.w), height: pct(win.h) }}
     >
-      <span className="absolute left-1 top-1 rounded bg-accent px-1.5 py-0.5 text-xs font-semibold text-accent-fg">
+      <span className="absolute left-1 top-1 rounded bg-accent lit-badge px-1.5 py-0.5 text-xs font-semibold text-accent-fg">
         Shown
       </span>
     </div>

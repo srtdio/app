@@ -203,7 +203,7 @@ export function PlanDayPopover(props: {
       onKeyDown={onKeyDown}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        'fixed z-[45] flex max-h-[calc(100vh-16px)] flex-col gap-0.5 overflow-y-auto rounded-xl border bg-panel p-1.5 font-sans lit-overlay',
+        'fixed z-[45] flex max-h-[calc(100svh-16px)] flex-col gap-0.5 overflow-y-auto rounded-xl border bg-panel p-1.5 font-sans lit-overlay',
         pos === null && 'invisible',
         NO_TOUCH_SELECT,
       )}

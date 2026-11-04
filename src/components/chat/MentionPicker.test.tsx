@@ -37,7 +37,7 @@ describe('MentionPicker', () => {
     expect(html.match(/min-h-\[44px\]/g)).toHaveLength(2);
     expect(html).toContain('aria-selected="true"');
     // Same anchor panel as the hash picker (chat-tokens.test.ts guards tokens-only).
-    expect(html).toContain('max-h-[45vh]');
+    expect(html).toContain('max-h-[45dvh]');
   });
 
   it('renders nothing when no member matches', () => {

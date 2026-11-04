@@ -1,6 +1,6 @@
 // The @ member picker above the composer. It mirrors the hash post picker's
 // inline panel exactly: the same anchor (absolute, full composer width, above
-// the input), the same bordered panel capped at 45vh, no motion, and the same
+// the input), the same bordered panel capped at 45dvh, no motion, and the same
 // dismissal (Escape, or the caret leaving the @ run). Rows are 44px min: avatar,
 // display name, then @username and role. A press never takes focus from the textarea (so the
 // keyboard stays up on touch); the keyboard is driven by the composer, which
@@ -37,7 +37,7 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
   return (
     <div
       data-mention-picker=""
-      className="flex max-h-[45vh] flex-col overflow-y-auto rounded-lg border bg-panel lit-overlay"
+      className="flex max-h-[45dvh] flex-col overflow-y-auto rounded-lg border bg-panel lit-overlay"
     >
       <ul role="listbox" aria-label={MENTION_PICKER_LABEL} className="flex flex-col">
         {props.members.map((member, index) => (
@@ -51,7 +51,7 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => props.onPick(member)}
             className={cn(
-              'flex min-h-[44px] cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 hover:bg-panel-2',
+              'flex min-h-[44px] cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 lit-hover',
               index === props.active ? 'bg-panel-2' : undefined,
             )}
           >

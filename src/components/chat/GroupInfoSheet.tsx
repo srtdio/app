@@ -53,7 +53,7 @@ import {
 import { useWorkspaceMembers, withMembersLoadCopy } from '@/lib/workspace-members';
 import { isOwnerOrAdmin } from '@/components/pages/pcs/roles';
 import { SHEET_NOTICE_TYPE } from '@/components/chat/chat-type';
-import { ModalPanel } from '@/components/chat/ModalPanel';
+import { MODAL_HEADER_SAFE, ModalPanel } from '@/components/chat/ModalPanel';
 import { listSkeleton } from '@/components/chat/ListSkeleton';
 
 /**
@@ -396,7 +396,7 @@ export function GroupHero(props: {
             <span
               data-camera-badge=""
               aria-hidden="true"
-              className="absolute -bottom-1 -right-1 flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-fg outline outline-4 outline-bg lit-btn-primary"
+              className="absolute -bottom-2 -right-2 flex h-12 w-12 items-center justify-center rounded-full border-4 border-bg bg-accent text-accent-fg lit-btn-primary"
             >
               <IconCamera size={ICON_SIZE.control} />
             </span>
@@ -439,7 +439,9 @@ export function groupInfoPage(props: {
       data-group-page=""
       className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
     >
-      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header">
+      <div
+        className={`flex shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header ${MODAL_HEADER_SAFE}`}
+      >
         {select?.selecting === true ? (
           select.header
         ) : (

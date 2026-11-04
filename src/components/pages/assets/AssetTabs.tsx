@@ -55,7 +55,13 @@ export function AssetTabs({ value, counts, onChange }: AssetTabsProps) {
           <Chip
             key={tab}
             label={TAB_LABELS[tab]}
-            count={counts[tab]}
+            // The count slot is always there (min 2ch), empty at 0, so the
+            // row does not shift when the counts land or change.
+            trailing={
+              <span data-asset-tab-count="" className="min-w-[2ch] tabular-nums">
+                {counts[tab] > 0 ? counts[tab] : null}
+              </span>
+            }
             selected={selected}
             size="tap"
             buttonRef={(el) => {

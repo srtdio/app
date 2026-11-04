@@ -18,16 +18,24 @@ interface PressableRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
    * surface; the CLAUDE.md exception, guarded in ui-rules.test.ts).
    */
   dense?: boolean;
+  /**
+   * Draw the focus line inside the edge (lit-focus-inset) so an overflow-hidden
+   * card or a flush tile does not clip it.
+   */
+  insetFocus?: boolean;
 }
 
 // The tappable-surface primitive: list rows, menu rows, tiles, cards and
 // calendar cells. Full width, at least 44 tall (22 when dense), 8px radius,
-// left aligned, a panel-2 hover, a focus-visible ring and a disabled fade. No
-// other visual classes: callers add layout (flex, gap, padding) and colour
-// through className, and change width, radius, alignment or height only through
-// the props above. Press (motion move 5): MOVE_CLASS.press sinks the row to .97
-// while held (120 ms) and eases the hover colour.
-const PRESSABLE_ROW_LOOK = `${MOVE_CLASS.press} hover:bg-panel-2 focus-visible:lit-focus disabled:opacity-50 disabled:pointer-events-none`;
+// left aligned, the lit-hover overlay (hover and press keep the light), a
+// focus-visible line and a solid fg-3 disabled look (never a fade). No other
+// visual classes: callers add layout (flex, gap, padding) and colour through
+// className, and change width, radius, alignment, height or focus placement
+// only through the props above. Press (motion move 5): MOVE_CLASS.press sinks
+// the row to .97 while held (120 ms).
+const FOCUS = 'focus-visible:lit-focus';
+const FOCUS_INSET = 'focus-visible:lit-focus-inset';
+const PRESSABLE_ROW_LOOK = `${MOVE_CLASS.press} lit-hover ${FOCUS} disabled:text-fg-3 disabled:pointer-events-none disabled:cursor-default`;
 export const PRESSABLE_ROW_BASE = `min-h-[44px] ${PRESSABLE_ROW_LOOK}`;
 const PRESSABLE_ROW_DENSE = `min-h-[22px] ${PRESSABLE_ROW_LOOK}`;
 
@@ -39,15 +47,17 @@ export function PressableRow({
   card = false,
   align = 'left',
   dense = false,
+  insetFocus = false,
   type = 'button',
   ...props
 }: PressableRowProps) {
+  const base = dense ? PRESSABLE_ROW_DENSE : PRESSABLE_ROW_BASE;
   return (
     <button
       ref={buttonRef}
       type={type}
       className={cn(
-        dense ? PRESSABLE_ROW_DENSE : PRESSABLE_ROW_BASE,
+        insetFocus ? base.replace(FOCUS, FOCUS_INSET) : base,
         inline ? 'w-auto' : 'w-full',
         flat ? 'rounded-none' : card ? 'rounded-xl' : 'rounded-lg',
         align === 'center' ? 'text-center' : 'text-left',

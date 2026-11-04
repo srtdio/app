@@ -1547,7 +1547,7 @@ export function CreatePostSheet({
                 {newBucketOpen ? (
                   <div
                     data-new-bucket=""
-                    className="mt-2 flex flex-col gap-2 rounded-lg border bg-panel-2 p-3 lit-card-muted"
+                    className="mt-2 flex flex-col gap-2 rounded-xl border bg-panel-2 p-3 lit-card-muted"
                   >
                     <Input
                       aria-label="New bucket name"
@@ -1780,15 +1780,13 @@ function PresetFields(props: {
     const root = formatRef.current;
     if (root === null) return undefined;
     function mark(el: HTMLElement): void {
-      el.querySelector('[aria-haspopup="listbox"]')?.setAttribute(
-        'data-induction',
-        INDUCTION_KEYS.postSheetFormat,
-      );
+      el
+        .querySelector('[aria-haspopup="listbox"]')
+        ?.setAttribute('data-induction', INDUCTION_KEYS.postSheetFormat);
       if (singleIndex < 0) return;
-      el.querySelectorAll('[role="option"]')[singleIndex]?.setAttribute(
-        'data-induction',
-        INDUCTION_KEYS.postSheetFormatSingle,
-      );
+      el
+        .querySelectorAll('[role="option"]')
+        [singleIndex]?.setAttribute('data-induction', INDUCTION_KEYS.postSheetFormatSingle);
     }
     mark(root);
     const observer = new MutationObserver(() => mark(root));

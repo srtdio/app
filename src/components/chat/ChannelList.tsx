@@ -351,7 +351,7 @@ const SKELETON_PEOPLE = SKELETON_ROWS - SKELETON_GROUPS;
 function skeletonLabel(first: boolean): ReactElement {
   return (
     <div className={first ? 'pt-1' : 'pt-3'}>
-      <Bone as="div" className="h-4 w-16 rounded" />
+      <Bone lit="flat" as="div" className="h-4 w-16 rounded" />
     </div>
   );
 }
@@ -365,19 +365,16 @@ function skeletonLabel(first: boolean): ReactElement {
  */
 export function channelListSkeleton(): ReactElement {
   return (
-    <BoxSkeleton className={CHAT_HOME_STACK} label="Loading conversations">
+    <BoxSkeleton lit="flat" className={CHAT_HOME_STACK} label="Loading conversations">
       {skeletonLabel(true)}
       <ul className={GROUP_TILE_LIST}>
         {Array.from({ length: SKELETON_GROUPS }, (_, i) => (
           <li key={i} className="min-w-0">
-            <div
-              data-skeleton-row="wide"
-              className={cn(tileBoxClass('wide'), 'border-border bg-panel')}
-            >
-              <Bone as="div" className="h-[72px] w-[72px] shrink-0 rounded-xl" />
+            <div data-skeleton-row="wide" className={cn(tileBoxClass('wide'), 'bg-panel lit-card')}>
+              <Bone lit="lit-avatar" as="div" className="h-[72px] w-[72px] shrink-0 rounded-xl" />
               <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <Bone as="div" className="h-4 w-1/2 rounded" />
-                <Bone as="div" className="h-3 w-3/4 rounded" />
+                <Bone lit="flat" as="div" className="h-4 w-1/2 rounded" />
+                <Bone lit="flat" as="div" className="h-3 w-3/4 rounded" />
               </div>
             </div>
           </li>
@@ -389,11 +386,11 @@ export function channelListSkeleton(): ReactElement {
           <li key={i} className="min-w-0">
             <div
               data-skeleton-row="square"
-              className={cn(tileBoxClass('square'), 'border-border bg-panel')}
+              className={cn(tileBoxClass('square'), 'bg-panel lit-card')}
             >
-              <Bone as="div" className="h-[72px] w-[72px] shrink-0 rounded-full" />
-              <Bone as="div" className="mt-2 h-3.5 w-2/3 rounded" />
-              <Bone as="div" className="mt-2 h-3 w-full rounded" />
+              <Bone lit="lit-avatar" as="div" className="h-[72px] w-[72px] shrink-0 rounded-full" />
+              <Bone lit="flat" as="div" className="mt-2 h-3.5 w-2/3 rounded" />
+              <Bone lit="flat" as="div" className="mt-2 h-3 w-full rounded" />
             </div>
           </li>
         ))}
@@ -557,9 +554,9 @@ export interface ChannelRowState {
 /**
  * The tile's tap target classes: the whole tile is one button, a lit card
  * (lit-card draws the edges); a checked tile takes the selected tint
- * (lit-selected, ink line), the open chat on desktop takes panel-2
- * (bg-none drops the card gradient so the fill shows). Token classes only, so
- * light and dark stay at parity.
+ * (lit-selected, ink line), and so does the open chat on desktop (the one
+ * selected look). Hover and press are the lit-card overlay (index.css). Token
+ * classes only, so light and dark stay at parity.
  */
 export function channelRowClass(state: ChannelRowState): string {
   const checked = state.selecting && state.checked;
@@ -567,9 +564,7 @@ export function channelRowClass(state: ChannelRowState): string {
   return cn(
     tileBoxClass(state.kind, state.more === true),
     CHANNEL_ROW_BUTTON,
-    checked
-      ? 'lit-selected bg-panel'
-      : cn('lit-card', open ? 'bg-panel-2 bg-none' : 'bg-panel hover:bg-panel-2'),
+    checked || open ? 'lit-selected bg-panel' : 'lit-card bg-panel',
   );
 }
 
@@ -733,7 +728,7 @@ export function channelRowBody(props: {
  * itself is ROW_MORE_BUTTON. Tokens only.
  */
 export const ROW_MORE_BUTTON =
-  'flex h-11 w-11 items-center justify-center rounded-lg text-fg-3 mv-tint hover:bg-panel-3 hover:text-fg';
+  'flex h-11 w-11 items-center justify-center rounded-lg text-fg-3 mv-tint lit-hover hover:text-fg focus-visible:lit-focus';
 
 export function rowMoreClass(kind: TileKind): string {
   return cn('absolute right-1 flex', kind === 'wide' ? 'top-1/2 -translate-y-1/2' : 'bottom-1');
@@ -966,15 +961,15 @@ export function notesTile(props: {
         className={cn(
           tileBoxClass('wide'),
           CHANNEL_ROW_BUTTON,
-          'group/notes-row lit-card disabled:cursor-default',
-          props.selected && !props.selecting ? 'bg-panel-2 bg-none' : 'bg-panel',
-          !props.selecting && 'hover:bg-panel-2',
+          'group/notes-row disabled:cursor-default bg-panel',
+          // Open is the one selected look; hover is PressableRow's lit-hover overlay.
+          props.selected && !props.selecting ? 'lit-selected' : 'lit-card',
         )}
       >
         <NotesAvatar
           role="profile"
           src={notes.avatarUrl}
-          surface={props.selected && !props.selecting ? 'panel-2' : 'panel'}
+          surface="panel"
           {...(!props.selected && !props.selecting ? { hoverSurface: 'panel-2' as const } : {})}
         />
         <span className="flex min-w-0 flex-1 flex-col gap-1">

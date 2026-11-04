@@ -471,18 +471,21 @@ function PlanBubble(props: {
         ) : null}
         <div
           data-plan-comment-bubble=""
+          // The own bubble: the outline family draws in on-bubble ink here.
+          data-own={mine && !team ? '' : undefined}
           className={cn(
             'flex min-w-0 flex-col gap-1',
             sized(BUBBLE_SHAPE, layout),
             sized(BUBBLE_PAD, layout),
             team
               ? // bg-none: the warn fill shows through the bubble's lit gradient.
-                'border border-[color:var(--warn-line)] bg-warn-soft bg-none text-fg lit-bubble-other'
+                'border border-warn-line bg-warn-soft bg-none text-fg lit-bubble-other'
               : mine
                 ? 'bg-bubble-own text-accent-fg lit-bubble-own'
                 : 'bg-panel-2 text-fg lit-bubble-other',
             c.pending && 'opacity-70',
-            props.highlighted && 'lit-today',
+            // The jump-to mark: the focus line (on-bubble ink on my own bubble).
+            props.highlighted && 'lit-focus',
           )}
         >
           {team ? (
@@ -511,11 +514,7 @@ function PlanBubble(props: {
         {replyTo !== null ? (
           <div data-plan-comment-actions="" className="-ml-2 flex items-center">
             {quote !== null ? (
-              <ReplyPrivatelyButton
-                authorUserId={replyTo.authorUserId}
-                className="hover:bg-panel-3"
-                draft={quote}
-              />
+              <ReplyPrivatelyButton authorUserId={replyTo.authorUserId} draft={quote} />
             ) : null}
           </div>
         ) : null}

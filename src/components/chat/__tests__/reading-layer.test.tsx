@@ -127,7 +127,9 @@ describe('T8 tray and emoji button by pointer', () => {
     expect(draft).toContain('disabled=""');
     expect(draft).toContain('aria-disabled="true"');
     expect(draft).toContain(`aria-label="${DRAFT_UNAVAILABLE_LABEL}"`);
-    expect(draft).toContain('disabled:opacity-50');
+    // Disabled is solid fg-3 ink (PressableRow), never a fade.
+    expect(draft).toContain('disabled:text-fg-3');
+    expect(draft).not.toContain('disabled:opacity-');
     const live = renderToStaticMarkup(
       <TrayGrid tiles={trayTiles('touch', { draft: true })} onPick={() => undefined} />,
     );

@@ -988,6 +988,7 @@ export function AssetsPage() {
           </div>
         ) : listLoading ? (
           <BoxSkeleton
+            lit="flat"
             label="Loading files"
             className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]"
           >
@@ -997,9 +998,9 @@ export function AssetsPage() {
                 data-skeleton-tile=""
                 className="lit-card rounded-xl border bg-panel overflow-hidden"
               >
-                <Bone as="div" className="aspect-[4/3] w-full" />
+                <Bone lit="flat" as="div" className="aspect-[4/3] w-full" />
                 <div className="flex h-9 items-center border-t border-border px-3">
-                  <Bone className="h-3 w-2/3 rounded" />
+                  <Bone lit="flat" className="h-3 w-2/3 rounded" />
                 </div>
               </div>
             ))}
@@ -1085,7 +1086,8 @@ export function AssetsPage() {
             {...bottomAnchorProps}
             style={{ bottom: selectBarInset }}
             className={cn(
-              'lit-dock fixed inset-x-0 z-40 border-t bg-panel px-4 pt-3 md:hidden',
+              'lit-dock fixed inset-x-0 z-40 border-t bg-panel pt-3 md:hidden',
+              'pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))]',
               selectBarInset > 0 ? 'pb-3' : 'pb-[max(12px,env(safe-area-inset-bottom))]',
             )}
           >

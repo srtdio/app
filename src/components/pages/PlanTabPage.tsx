@@ -440,7 +440,7 @@ function ViewSwitch(props: {
     { view: 'week', label: WEEK_LABEL },
   ];
   return (
-    <div className="lit-well flex overflow-hidden rounded-lg border border-border bg-panel-2">
+    <div className="lit-well flex overflow-hidden rounded-lg border border-field bg-panel-2">
       {options.map((o) => (
         <PressableRow
           key={o.view}

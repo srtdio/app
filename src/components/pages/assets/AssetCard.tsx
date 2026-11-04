@@ -46,6 +46,9 @@ function assetFallback(item: AssetListItem): ThumbnailFallback {
   return { kind: 'file', extension: fileExtension(item.filename) };
 }
 
+/** An empty select box over media: overlay ink edge on the media badge fill, lit as media. */
+export const SELECT_BOX_EMPTY = 'border-[1.5px] border-overlay-fg bg-overlay-badge lit-media';
+
 export function AssetCard({
   item,
   presignEnabled,
@@ -82,6 +85,7 @@ export function AssetCard({
   return (
     <div className="relative">
       <PressableRow
+        card
         type="button"
         {...interaction}
         style={{ touchAction: 'manipulation' }}
@@ -95,9 +99,7 @@ export function AssetCard({
             aria-hidden="true"
             className={cn(
               'absolute left-3.5 top-3.5 z-10 flex h-4 w-4 items-center justify-center rounded',
-              selected
-                ? 'bg-accent text-accent-fg'
-                : 'border-[1.5px] border-white bg-black/15 ring-1 ring-black/30',
+              selected ? 'bg-accent text-accent-fg' : SELECT_BOX_EMPTY,
             )}
           >
             {selected ? <IconCheck size={12} /> : null}
@@ -171,7 +173,7 @@ export function CardSelectBox({ name, onPress }: { name: string; onPress: () => 
       onClick={onPress}
       className="absolute left-0 top-0 z-10"
     >
-      <span className="h-4 w-4 rounded border-[1.5px] border-white bg-black/15 ring-1 ring-black/30" />
+      <span className={cn('h-4 w-4 rounded', SELECT_BOX_EMPTY)} />
     </IconButton>
   );
 }

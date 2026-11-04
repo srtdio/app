@@ -863,7 +863,7 @@ export function reorderView(model: ReorderModel): ReactElement {
                 className={cn(
                   'relative flex h-24 min-w-[44px] touch-none cursor-grab items-center justify-center overflow-hidden border-2 bg-panel-2 mv-tint',
                   SLIDE_PRESS_CLASS,
-                  selected ? 'lit-selected' : 'border-border',
+                  slideEdge(selected),
                   dragging && 'z-10 cursor-grabbing lit-float',
                 )}
               >
@@ -985,6 +985,14 @@ export function SnapshotThumbs({
 // T13: a long-press on a slide must never open the browser's image callout or
 // start a text selection; the callout property is inherited by the image inside.
 const SLIDE_PRESS_CLASS = 'select-none [-webkit-touch-callout:none]';
+
+/**
+ * A slide's edge: the selected look, else the hairline; never both on one slide
+ * (guard: outline-rules.test.ts). A dragged selected slide adds lit-float.
+ */
+function slideEdge(selected: boolean): string {
+  return selected ? 'lit-selected' : 'border-border';
+}
 
 /**
  * The gallery's presentational tree, kept hookless so the tree-walking unit tests
@@ -1167,6 +1175,7 @@ export function galleryView({
                 className={cn('relative shrink-0 overflow-hidden', !solo && 'snap-start')}
               >
                 <PressableRow
+                  insetFocus
                   type="button"
                   aria-label={`View image ${index + 1}`}
                   {...(slideGestures !== undefined ? slideGestures(index) : {})}
@@ -1179,7 +1188,7 @@ export function galleryView({
                     onOpen(index);
                   }}
                   className={cn(
-                    'group absolute inset-0 flex items-center justify-center border border-border bg-panel-2 mv-tint hover:border-border-strong focus-visible:-outline-offset-2',
+                    'group absolute inset-0 flex items-center justify-center border border-border bg-panel-2 mv-tint hover:border-border-strong',
                     SLIDE_PRESS_CLASS,
                     pinArmedIndex === index && 'cursor-crosshair',
                   )}

@@ -251,12 +251,12 @@ export function PostSheetMedia(props: {
           bordered={false}
           empty
         >
-          <Bone as="div" className="absolute inset-0" />
+          <Bone lit="flat" as="div" className="absolute inset-0" />
         </PlatformFrame>
       </div>
     ) : (
       <div data-strip-skeleton="" className={STRIP_BOX}>
-        <Bone as="div" className="absolute inset-0" />
+        <Bone lit="flat" as="div" className="absolute inset-0" />
       </div>
     );
   }

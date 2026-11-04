@@ -211,7 +211,7 @@ export function captionView({
         {quote}
         <sup
           {...{ [CAPTION_MARKER_ATTR]: '' }}
-          className="ml-0.5 align-super select-none text-xs font-semibold text-annotation-line"
+          className="ml-0.5 align-super select-none text-xs font-semibold text-fg"
           style={{ userSelect: 'none' }}
         >
           {a.n}

@@ -753,7 +753,7 @@ describe('first paint', () => {
       /data-voice-dot=""[^>]*class="[^"]*h-2\.5 w-2\.5 rounded-full bg-accent\b/,
     );
     expect(render('fp-dot-s', true)).toMatch(
-      /data-voice-dot=""[^>]*class="[^"]*h-2\.5 w-2\.5 rounded-full bg-accent-fg/,
+      /data-voice-dot=""[^>]*class="[^"]*h-2\.5 w-2\.5 rounded-full bg-on-bubble\b/,
     );
   });
 
@@ -767,9 +767,9 @@ describe('first paint', () => {
     expect(html).toMatch(/data-voice-mic="played" class="[^"]*bg-fg-3\b/);
   });
 
-  it('sent badge is white with an accent mic, ringed in the bubble colour', () => {
+  it('sent badge is on-bubble ink with a bubble-colour mic, ringed in the bubble colour', () => {
     expect(render('fp-own-badge', true)).toMatch(
-      /data-voice-mic="own" class="[^"]*ring-2 ring-bubble-own bg-accent-fg text-\[color:var\(--accent\)\]/,
+      /data-voice-mic="own" class="[^"]*ring-2 ring-bubble-own bg-on-bubble text-bubble-own/,
     );
   });
 
@@ -889,13 +889,13 @@ describe('bars from the real waveform', () => {
     expect(Math.max(...heights)).toBeLessThanOrEqual(MAX_BAR_PX);
   });
 
-  it('unplayed bars: the muted token received, white at 45% sent; 2px wide, full radius', () => {
+  it('unplayed bars: the muted token received, on-bubble at 45% sent; 2px wide, full radius', () => {
     const received = renderToStaticMarkup(<VoiceNote {...base} peaks={[50, 60]} />);
     const wave = received.slice(received.indexOf('data-voice-bars'));
     expect((wave.match(/w-0\.5 shrink-0 rounded-full bg-fg-3"/g) ?? []).length).toBe(30);
     expect(wave).not.toContain('data-played');
     const sent = renderToStaticMarkup(<VoiceNote {...base} mine peaks={[50, 60]} />);
-    expect(sent).toContain('w-0.5 shrink-0 rounded-full bg-white/[.45]');
+    expect(sent).toContain('w-0.5 shrink-0 rounded-full bg-on-bubble/[.45]');
   });
 });
 

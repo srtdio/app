@@ -210,7 +210,7 @@ export function AssetPicker(props: {
   );
 }
 
-const GRID_CLASS = 'grid max-h-[50vh] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4';
+const GRID_CLASS = 'grid max-h-[50svh] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4';
 
 /** Loading state: six static placeholder tiles (no motion). */
 export function AssetGridSkeleton(): ReactElement {

@@ -617,15 +617,14 @@ describe('CommandPalette', () => {
       (el) => (el.props as { 'aria-selected': boolean })['aria-selected'],
     );
     expect(selected).toEqual([false, true]);
-    // The keyboard-selected row carries the accent tint; every row tints while pressed.
+    // The keyboard-selected row is lit-selected; every row takes the lit-hover
+    // press overlay from PressableRow.
     const classes = findAll(tree, 'data-palette-item').map(
       (el) => (el.props as { className: string }).className,
     );
-    expect(classes[1]).toContain('bg-accent-soft');
-    expect(classes[1]).toContain('lit-active');
-    expect(classes[0]).not.toContain('lit-active');
-    expect(classes[0]).not.toMatch(/(^|\s)bg-accent-soft/);
-    for (const cls of classes) expect(cls).toContain('active:bg-accent-soft');
+    expect(classes[1]).toContain('lit-selected');
+    expect(classes[0]).not.toContain('lit-selected');
+    for (const cls of classes) expect(cls).not.toMatch(/(^|\s)(active:)?bg-accent-soft/);
   });
 
   it('marks every matched word, inside a rendered @username too', () => {

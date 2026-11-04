@@ -31,7 +31,14 @@ import {
 } from '../fixtures/remove-files';
 import { installLinkPreviewStub } from '../fixtures/link-previews';
 import { installMediaSearch, type MediaKind } from '../fixtures/search-data';
-import { ONBOARDING_NOW, ONBOARDING_SCREENS, signOut } from './onboarding-steps';
+import {
+  ONBOARDING_NOW,
+  ONBOARDING_SCREENS,
+  routeVerify,
+  signOut,
+  toSignInCode,
+} from './onboarding-steps';
+import { CHECK_EMAIL_COPY } from '../../src/lib/induction-copy';
 
 // Visual lock: every screen of the consistency audit (24 Oct 2026), the chat
 // PostSheet and the onboarding screens (onboarding-steps.ts: sign up, sign in,
@@ -79,6 +86,13 @@ interface Screen {
   dark?: boolean;
   /** Light projects only (the homepage is light-only): skipped in every *-dark project. */
   lightOnly?: true;
+  /**
+   * The steps own the pointer and focus: the shot keeps the hover, the open
+   * menu or the focused field they leave (stabilise() then neither parks the
+   * pointer nor blurs). Steps that set this park the pointer themselves when
+   * the state is not a hover.
+   */
+  hold?: true;
   /** Parts painted over in the shot (moving media: the homepage's clips and photos). */
   mask?: (page: Page) => Locator[];
   url: string;
@@ -2094,6 +2108,136 @@ SCREENS.push(
   },
 );
 
+// "Visible and lit" (PR 1): the states the lighting pass changed, each in the
+// projects of the visual-coverage guard (src/__tests__/visual-coverage.test.ts).
+
+/** The stages a creator may move a card out of into Review (canRoleMove). */
+const TO_REVIEW_FROM = ':is([data-stage="draft"], [data-stage="parked"], [data-stage="rejected"])';
+
+/**
+ * Lifts a card and holds it over the Review column: a native dragstart on the
+ * card (it lifts one height, lit-float) and a dragover on the column (lit-drop),
+ * never a drop, so nothing moves in the world.
+ */
+async function liftOverReview(page: Page): Promise<void> {
+  await pipelineReady(page);
+  const card = await firstVisible(
+    [page.locator(`[data-drag-container]${TO_REVIEW_FROM} [data-drag-item][draggable="true"]`)],
+    'a card that may move to Review',
+  );
+  const review = page.locator('[data-drag-container][data-stage="review"]').first();
+  await review.scrollIntoViewIfNeeded();
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await card.dispatchEvent('dragstart', { dataTransfer });
+  await review.dispatchEvent('dragenter', { dataTransfer });
+  await review.dispatchEvent('dragover', { dataTransfer });
+  await expect(card).toHaveClass(/(^|\s)lit-float(\s|$)/);
+  await expect(review).toHaveClass(/(^|\s)lit-drop(\s|$)/);
+}
+
+/** The Profile panel's alerts block in view (Sound, Notifications, Pause for). */
+async function alertsBlock(page: Page): Promise<void> {
+  const block = page.locator('[data-alerts-block]');
+  await waitFor([block], 'alerts block');
+  await block.scrollIntoViewIfNeeded();
+}
+
+SCREENS.push(
+  {
+    // Laptop board: a card lifted (lit-float) over the Review column (lit-drop,
+    // the 1px dashed line plus its inset ring).
+    name: 'pipeline-drag-drop',
+    seed: creator,
+    only: 'laptop',
+    url: '/pipeline',
+    steps: liftOverReview,
+  },
+  {
+    // ME's own voice note in the DM (n=28 in the fixture): played and unplayed
+    // bars, the speed pill and the transcribe link in on-bubble ink (dark too).
+    name: 'chat-thread-own-voice',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      const note = await lastVisible(
+        page.locator('[data-own] [data-voice-note]'),
+        'own voice note',
+      );
+      await note.scrollIntoViewIfNeeded();
+      await waitFor([note.locator('[data-voice-bars]')], 'voice bars');
+      await threadStill(page);
+    },
+  },
+  {
+    // Settings > Profile with Sound switched off: the off track (panel-2 well,
+    // border-strong edge) beside the on Notifications track.
+    name: 'settings-profile-switch-off',
+    seed: creator,
+    url: '/settings?panel=profile',
+    steps: async (page) => {
+      await alertsBlock(page);
+      const sound = page.getByRole('switch', { name: 'Sound', exact: true });
+      await sound.click();
+      await expect(sound).toHaveAttribute('aria-checked', 'false');
+    },
+  },
+  {
+    // Laptop: the pointer over an unselected Pause for chip (1 hour) beside the
+    // selected one (3 hours): the --hover-fill overlay on the chip's light.
+    name: 'chip-row-hover',
+    seed: creator,
+    only: 'laptop',
+    hold: true,
+    prepare: seedAlertsPaused,
+    url: '/settings?panel=profile',
+    steps: async (page) => {
+      await waitFor([page.locator('[data-alerts-paused]')], 'paused banner');
+      await alertsBlock(page);
+      await page.locator('[data-pause-hours="1"]').hover();
+    },
+  },
+  {
+    // The create-post sheet's Format select open: the option list (lit-overlay)
+    // with the picked option ticked.
+    name: 'select-open',
+    seed: creator,
+    hold: true,
+    url: '/pipeline',
+    steps: async (page) => {
+      await pipelineReady(page);
+      await tap([page.getByRole('button', { name: 'New post', exact: true })], 'New post');
+      const sheet = page.getByRole('dialog');
+      await waitFor([sheet], 'create post sheet');
+      await tap(
+        [sheet.getByRole('button', { name: 'Format', exact: true })],
+        'Format select trigger',
+      );
+      await waitFor([page.getByRole('listbox')], 'select options');
+      // No hover on an option: the open list as it lands.
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // The sign-in code step after a wrong code, the field focused again: the
+    // invalid boxes (lit-bad) with the focus line still on the active box.
+    name: 'code-step-error-focused',
+    seed: null,
+    signedOut: true,
+    hold: true,
+    prepare: (_network, page) => routeVerify(page, 'wrong'),
+    url: '/signin',
+    steps: async (page) => {
+      await toSignInCode(page);
+      await page.locator('#auth-code').fill('000000');
+      await waitFor([page.getByText(CHECK_EMAIL_COPY.wrongCode)], 'wrong code');
+      await page.mouse.move(0, 0);
+      await page.locator('#auth-code').focus();
+      await waitFor([page.locator('[data-code-box].lit-focus')], 'focused code box');
+    },
+  },
+);
+
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
 
@@ -2107,12 +2251,14 @@ SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: n
  * ones (the guide hand's press loop) never end; animations: 'disabled' holds
  * those still in the shot.
  */
-async function stabilise(page: Page): Promise<void> {
-  await page.mouse.move(0, 0);
-  await page.evaluate(() => {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement) active.blur();
-  });
+async function stabilise(page: Page, hold = false): Promise<void> {
+  if (!hold) {
+    await page.mouse.move(0, 0);
+    await page.evaluate(() => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) active.blur();
+    });
+  }
   await page.waitForFunction(
     () =>
       document
@@ -2177,7 +2323,7 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   await installDeletedRoutes(page, network);
   await page.goto(screen.url);
   await screen.steps(page);
-  await stabilise(page);
+  await stabilise(page, screen.hold === true);
   await settle(page);
   await expect(page).toHaveScreenshot(`${screen.name}.png`, {
     maxDiffPixelRatio: 0.002,
@@ -2197,6 +2343,7 @@ const LAPTOP_DARK_SCREENS = new Set([
   'plan-tab',
   'plan-screen-today',
   'chat-thread',
+  'chat-thread-own-voice',
   'post-detail',
   'briefs-approver',
   'assets',

@@ -891,7 +891,7 @@ export function InlinePickerPanel(props: {
       data-post-picker-inline=""
       role="region"
       aria-label="Bring a post into the conversation"
-      className="flex max-h-[45vh] flex-col overflow-y-auto rounded-lg border bg-panel lit-overlay [&>ul]:mx-0 [&>ul]:max-h-none [&>ul]:border-t-0"
+      className="flex max-h-[45dvh] flex-col overflow-y-auto rounded-lg border bg-panel lit-overlay [&>ul]:mx-0 [&>ul]:max-h-none [&>ul]:border-t-0"
     >
       {props.children}
     </div>
@@ -912,7 +912,7 @@ export interface PostRowContext {
 }
 
 const LIST_CLASS =
-  '-mx-[18px] flex max-h-[50vh] flex-col gap-2 overflow-y-auto bg-bg px-[18px] py-2 sm:max-h-none sm:min-h-0 sm:flex-1';
+  '-mx-[18px] flex max-h-[50dvh] flex-col gap-2 overflow-y-auto bg-bg px-[18px] py-2 sm:max-h-none sm:min-h-0 sm:flex-1';
 
 /** Loading state: three static placeholder rows (no motion). */
 export function PickerSkeleton(): ReactElement {

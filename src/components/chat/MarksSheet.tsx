@@ -76,7 +76,7 @@ function OpenPostThumb(props: { assetVersionId: string | null }) {
       ref={thumb.ref}
       aria-hidden="true"
       data-open-post-thumb=""
-      className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3"
+      className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3 lit-media"
     >
       {thumb.url !== null && !thumb.failed ? (
         <img
@@ -167,7 +167,7 @@ export function OpenPostsList(props: OpenPostsSection): ReactElement | null {
       <h3 className="px-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
         {props.heading}
       </h3>
-      <ul className="flex max-h-[40vh] flex-col overflow-y-auto">
+      <ul className="flex max-h-[40dvh] flex-col overflow-y-auto">
         {props.posts.map((post) => (
           <OpenPostSheetRow
             key={post.id}
@@ -343,7 +343,7 @@ export function MarkSheetRow(props: {
           role="group"
           aria-label={markConfirmCopy(mark.type, action)}
           data-mark-confirm={action}
-          className="mx-2 mb-1 flex flex-wrap items-center gap-2 rounded-lg border bg-panel-2 px-3 py-2 lit-card-muted"
+          className="mx-2 mb-1 flex flex-wrap items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
         >
           <span className="min-w-0 flex-1 text-base text-fg">
             {markConfirmCopy(mark.type, action)}
@@ -469,7 +469,7 @@ export function MarksList(props: MarksListProps): ReactElement {
           title={tab === 'open' ? 'Open marks show up here.' : 'Stamped marks show up here.'}
         />
       ) : (
-        <ul className="flex max-h-[55vh] flex-col overflow-y-auto">
+        <ul className="flex max-h-[55dvh] flex-col overflow-y-auto">
           {shownRows.map((mark) => {
             const message = messageFor(mark.messageId);
             const sender =

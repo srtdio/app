@@ -70,6 +70,22 @@ describe('motion durations', () => {
     expect(EASE.pop).toBe('cubic-bezier(0.34, 1.56, 0.64, 1)');
   });
 
+  it('growFromTrigger (menus, popovers) uses ease-enter; pop() keeps ease-pop', () => {
+    const moves = readFileSync(
+      fileURLToPath(new URL('./motion/moves.ts', import.meta.url)),
+      'utf8',
+    );
+    const body = (name: string): string => {
+      const start = moves.indexOf(`export function ${name}(`);
+      expect(start, name).toBeGreaterThan(-1);
+      const next = moves.indexOf('\nexport ', start + 1);
+      return moves.slice(start, next === -1 ? undefined : next);
+    };
+    expect(body('growFromTrigger')).toContain('easing: EASE.enter');
+    expect(body('growFromTrigger')).not.toContain('EASE.pop');
+    expect(body('pop')).toContain('easing: EASE.pop');
+  });
+
   it('every token is registered in tailwind.config.ts', () => {
     for (const [token] of DURATION_TOKENS) expect(tailwind, token).toContain(`var(--${token})`);
     for (const name of Object.keys(EASE)) expect(tailwind, name).toContain(`var(--ease-${name})`);

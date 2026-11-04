@@ -20,12 +20,15 @@ describe('AssetTabs', () => {
       ...ASSET_TABS,
     ]);
     expect(html.match(/role="tab"/g)).toHaveLength(6);
-    expect(html).toContain('>All <span class="tabular-nums">3</span>');
-    expect(html).toContain('>Media <span class="tabular-nums">3</span>');
+    const slot = '<span data-asset-tab-count="" class="min-w-[2ch] tabular-nums">';
+    expect(html).toContain(`>All</span>${slot}3</span>`);
+    expect(html).toContain(`>Media</span>${slot}3</span>`);
+    // Zero: the slot is reserved (no shift when counts land) but empty.
     for (const label of ['PDF', 'Docs', 'Sheets', 'Links']) {
-      expect(html).toContain(`>${label}</button>`);
+      expect(html).toContain(`>${label}</span>${slot}</span></button>`);
     }
-    expect(html).not.toContain('<span class="tabular-nums">0</span>');
+    expect(html).not.toContain(`${slot}0</span>`);
+    expect(html.match(/data-asset-tab-count=""/g)).toHaveLength(6);
     expect(html).toContain('min-h-[44px]');
     // The shared Chip selected style on the selected tab.
     expect(html).toMatch(/aria-selected="true"[^>]*class="[^"]*lit-selected/);

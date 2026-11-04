@@ -32,3 +32,24 @@ describe('src/main.tsx boot order (FRONTEND-N)', () => {
     expect(line?.startsWith('installDomMutationGuard(')).toBe(true);
   });
 });
+
+describe('src/main.tsx font preload', () => {
+  it('preloads Inter 400/500/600 latin woff2 via ?url imports', () => {
+    for (const weight of ['400', '500', '600']) {
+      expect(code).toContain(`@fontsource/inter/files/inter-latin-${weight}-normal.woff2?url'`);
+    }
+    expect(code).toMatch(/link\.rel = 'preload'/);
+    expect(code).toMatch(/link\.as = 'font'/);
+    expect(code).toMatch(/link\.type = 'font\/woff2'/);
+    expect(code).toMatch(/link\.crossOrigin = 'anonymous'/);
+  });
+
+  it('runs at module top level before any root is created, with no await', () => {
+    const call = code.search(/^preloadFonts\(/m);
+    expect(call).toBeGreaterThanOrEqual(0);
+    const roots = [...code.matchAll(/\b(createRoot|hydrateRoot)\s*\(/g)].map((m) => m.index);
+    for (const at of roots) expect(at).toBeGreaterThan(call);
+    const fn = code.slice(code.indexOf('function preloadFonts'), call);
+    expect(fn).not.toMatch(/\bawait\b|\bfetch\b/);
+  });
+});

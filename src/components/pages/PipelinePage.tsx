@@ -405,20 +405,21 @@ function skeletonCard(index: number, ratio: number | null): ReactElement {
       key={index}
       aria-hidden="true"
       data-skeleton-card=""
-      className="flex h-full min-w-0 flex-col overflow-hidden rounded-lg border bg-panel lit-card"
+      className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border bg-panel lit-card"
     >
       <Bone
+        lit="flat"
         as="div"
         className={cn(ratio === null && 'aspect-square')}
         {...(ratio !== null ? { style: { aspectRatio: String(ratio) } } : {})}
       />
       <div className="flex flex-col gap-1.5 p-3">
         <div className="flex min-h-[2.75em] flex-col justify-center gap-1.5 text-base leading-snug">
-          <Bone as="div" className="h-3.5 w-3/4 rounded" />
-          <Bone as="div" className="h-3.5 w-1/2 rounded" />
+          <Bone lit="flat" as="div" className="h-3.5 w-3/4 rounded" />
+          <Bone lit="flat" as="div" className="h-3.5 w-1/2 rounded" />
         </div>
         <div className="flex h-5 items-center">
-          <Bone as="div" className="h-3 w-1/3 rounded" />
+          <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />
         </div>
       </div>
     </div>
@@ -452,7 +453,7 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
             className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2 lit-well-soft"
           >
             <div className="flex h-11 items-center gap-2 border-b px-3 lit-header">
-              <Bone as="div" className="h-3 w-1/3 rounded" />
+              <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />
             </div>
             <div className="flex flex-col gap-2 p-2">
               {Array.from({ length: SKELETON_COLUMN_CARDS }, (_card, index) =>

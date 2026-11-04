@@ -122,7 +122,7 @@ const ROW = cn('flex min-h-[64px] min-w-0 items-center gap-3 px-2 py-2', NO_TOUC
 
 /** The 44px leading box of a file or link row (the chat info Files and Links rows). */
 const ROW_ICON =
-  'relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-2 text-fg-3';
+  'relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-2 text-fg-3 lit-media';
 
 /** A row's date: right, mono, meta ink. */
 const ROW_DATE = 'shrink-0 font-mono text-sm tabular-nums text-fg-3';
@@ -185,16 +185,14 @@ function PhotoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement
   const { item } = props;
   return (
     <PressableRow
+      insetFocus
       type="button"
       flat
       data-media-tile={item.key}
       aria-label={item.name !== '' ? item.name : 'Photo'}
       onClick={props.onOpen}
       onContextMenu={noCallout}
-      className={cn(
-        'relative block aspect-square overflow-hidden bg-panel-3 focus-visible:-outline-offset-2',
-        NO_TOUCH_SELECT,
-      )}
+      className={cn('relative block aspect-square overflow-hidden bg-panel-3', NO_TOUCH_SELECT)}
     >
       <span className="absolute inset-0">
         <Thumbnail
@@ -228,16 +226,14 @@ function VideoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement
   const url = failed ? null : (stored.url ?? known);
   return (
     <PressableRow
+      insetFocus
       type="button"
       flat
       data-media-tile={item.key}
       aria-label={item.name !== '' ? item.name : 'Video'}
       onClick={props.onOpen}
       onContextMenu={noCallout}
-      className={cn(
-        'relative block aspect-square overflow-hidden bg-panel-3 focus-visible:-outline-offset-2',
-        NO_TOUCH_SELECT,
-      )}
+      className={cn('relative block aspect-square overflow-hidden bg-panel-3', NO_TOUCH_SELECT)}
     >
       <span ref={ref} className="absolute inset-0">
         {url !== null ? (
@@ -692,7 +688,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
       <ul data-media-skeleton="" className={GRID}>
         {Array.from({ length: LOADING_TILES }, (_, i) => (
           <li key={i} className="aspect-square">
-            <Bone as="div" className="h-full w-full" />
+            <Bone lit="lit-media" as="div" className="h-full w-full" />
           </li>
         ))}
       </ul>
@@ -700,10 +696,10 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
       <ul data-media-skeleton="" className="flex flex-col">
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
           <li key={i} className="flex items-center gap-3 px-2 py-2">
-            <Bone as="div" className="h-11 w-11 shrink-0 rounded-lg" />
+            <Bone lit="lit-media" as="div" className="h-11 w-11 shrink-0 rounded-lg" />
             <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <Bone as="div" className="h-3.5 w-1/3 rounded" />
-              <Bone as="div" className="h-3 w-3/4 rounded" />
+              <Bone lit="flat" as="div" className="h-3.5 w-1/3 rounded" />
+              <Bone lit="flat" as="div" className="h-3 w-3/4 rounded" />
             </div>
           </li>
         ))}
@@ -782,7 +778,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
         <ul className="flex flex-col">
           {loadingMore ? (
             <li data-search-more="" className="px-2 py-3">
-              <Bone as="div" className="mx-auto h-3 w-1/3 rounded" />
+              <Bone lit="flat" as="div" className="mx-auto h-3 w-1/3 rounded" />
             </li>
           ) : null}
           {moreFailed || failed ? searchRetryRow(onRetry) : null}

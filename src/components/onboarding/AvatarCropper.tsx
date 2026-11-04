@@ -302,7 +302,7 @@ function AvatarCropperImpl(
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         style={{ width: FRAME, height: FRAME, touchAction: 'none' }}
-        className="relative overflow-hidden rounded-lg border bg-panel-2 lit-card-muted"
+        className="relative overflow-hidden rounded-xl border bg-panel-2 lit-card-muted"
       >
         <canvas
           ref={canvasRef}
@@ -336,7 +336,7 @@ function AvatarCropperImpl(
             label="Zoom out"
             onClick={() => stepZoom(-0.25)}
             disabled={!hasPhoto}
-            className="shrink-0 disabled:pointer-events-none disabled:opacity-50"
+            className="shrink-0"
           >
             <IconMinus size={ICON_SIZE.control} />
           </IconButton>
@@ -355,14 +355,14 @@ function AvatarCropperImpl(
                 FRAME / 2,
               )
             }
-            className="h-11 flex-1 accent-accent disabled:opacity-50"
+            className="h-11 flex-1 accent-accent disabled:accent-fg-3"
           />
           <IconButton
             type="button"
             label="Zoom in"
             onClick={() => stepZoom(0.25)}
             disabled={!hasPhoto}
-            className="shrink-0 disabled:pointer-events-none disabled:opacity-50"
+            className="shrink-0"
           >
             <IconPlus size={ICON_SIZE.control} />
           </IconButton>

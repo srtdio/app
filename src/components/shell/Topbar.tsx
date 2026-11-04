@@ -61,7 +61,7 @@ export function Topbar({
           <span className="truncate">Create your workspace</span>
         </Button>
       ) : workspaceName === null ? (
-        <Bone className="md:hidden h-4 w-24 rounded" />
+        <Bone lit="flat" className="md:hidden h-4 w-24 rounded" />
       ) : (
         <Button
           type="button"

@@ -32,6 +32,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
+import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 import { useModalFocus } from '@/lib/modal-focus';
 import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
 import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
@@ -428,7 +429,7 @@ function DownloadControl({
         aria-label="Download"
         disabled={target === null || busy}
         onClick={onDownload}
-        className={cn(TOOLBAR_BUTTON, 'disabled:opacity-40')}
+        className={cn(TOOLBAR_BUTTON, 'disabled:text-overlay-fg-dim')}
       >
         <IconDownload size={ICON_SIZE.control} />
       </button>
@@ -750,7 +751,7 @@ export function ImageLightbox({
         className="absolute inset-0 bg-overlay backdrop-blur-xl"
         style={dragY > 0 ? { opacity: dismissOpacity(dragY) } : undefined}
       />
-      <div className="relative flex h-14 shrink-0 items-center gap-2 px-3">
+      <div className={cn('relative flex shrink-0 items-center gap-2 px-3', SAFE_TOP_BAR_CLASS)}>
         {multiple ? (
           <span className="shrink-0 font-mono text-md tabular-nums text-overlay-fg">
             {lightboxCounter(index, count)}

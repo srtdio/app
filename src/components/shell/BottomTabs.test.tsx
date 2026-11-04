@@ -95,7 +95,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
 
   it('guard: the row floats 12px from the sides and the bottom, phone only', () => {
     expect(PHONE_BAR_OFFSETS).toBe(
-      'left-3 right-3 bottom-[calc(12px+env(safe-area-inset-bottom))]',
+      'left-[calc(12px+env(safe-area-inset-left))] right-[calc(12px+env(safe-area-inset-right))] bottom-[calc(12px+env(safe-area-inset-bottom))]',
     );
     const container = render('/pipeline');
     const cls = classes(nav(container));
@@ -143,7 +143,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     const active = links[1];
     if (active === undefined) throw new Error('no Briefs tab');
     expect(classes(active)).toEqual(
-      expect.arrayContaining(['bg-[var(--lit-tab-active-bg)]', 'text-accent', 'lit-active']),
+      expect.arrayContaining(['bg-tab-active', 'text-accent', 'lit-active']),
     );
     expect(classes(active)).not.toContain('bg-accent-soft');
     const label = active.querySelector('span');
@@ -183,7 +183,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     const badge = activity?.querySelector('[data-count-badge]');
     expect(badge?.textContent).toBe('4');
     expect(classes(badge ?? document.body)).toEqual(
-      expect.arrayContaining(['border-2', 'border-[var(--lit-surface-top)]']),
+      expect.arrayContaining(['border-2', 'border-surface-top']),
     );
   });
 
@@ -196,13 +196,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     const badge = chat.querySelector('[data-count-badge]');
     expect(badge?.textContent).toBe('2');
     expect(classes(badge ?? chat)).toEqual(
-      expect.arrayContaining([
-        'absolute',
-        'right-0',
-        'top-0',
-        'border-2',
-        'border-[var(--lit-surface-top)]',
-      ]),
+      expect.arrayContaining(['absolute', 'right-0', 'top-0', 'border-2', 'border-surface-top']),
     );
     expect(container.querySelector('[data-activity-tab] [data-count-badge]')).toBeNull();
   });
@@ -213,16 +207,19 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     expect(chatLink(container).getAttribute('aria-label')).toBe('Chat');
   });
 
-  it('Chat circle: fg ink at rest, accent ink over an inner accent-soft tint when active', () => {
+  it('Chat circle: fg ink in every state, an inner lit-selected layer when active', () => {
     const idle = chatLink(render('/pipeline'));
-    expect(classes(idle)).toEqual(expect.arrayContaining(['bg-panel', 'text-fg']));
+    expect(classes(idle)).toEqual(
+      expect.arrayContaining(['bg-panel', 'text-fg', 'focus-visible:lit-focus']),
+    );
     expect(idle.querySelector('[data-chat-tab-tint]')).toBeNull();
     act(() => root?.unmount());
     host?.remove();
     const active = chatLink(render('/chat'));
-    // Solid in every state: the translucent tint never replaces the panel fill.
+    // Solid in every state: the raised circle keeps its panel fill.
     expect(classes(active)).toContain('bg-panel');
-    expect(classes(active)).toContain('text-accent');
+    expect(classes(active)).toContain('text-fg');
+    expect(classes(active)).not.toContain('text-accent');
     expect(classes(active)).not.toContain('bg-accent-soft');
     const tint = active.querySelector('[data-chat-tab-tint]');
     expect(tint?.getAttribute('aria-hidden')).toBe('true');
@@ -232,10 +229,11 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
         'absolute',
         'inset-0',
         'rounded-full',
-        'bg-accent-soft',
-        'lit-active',
+        'border',
+        'lit-selected',
       ]),
     );
+    expect(classes(tint ?? active)).not.toContain('bg-accent-soft');
   });
 
   it('tour anchors: activityTab on the Activity tab, chatTab on the Chat circle, once each', () => {

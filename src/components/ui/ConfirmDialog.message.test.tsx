@@ -41,7 +41,7 @@ describe('ConfirmDialog actions', () => {
     const dialog = await mount('Body');
     const [cancel, confirm] = [...dialog.querySelectorAll<HTMLButtonElement>('button')];
     expect(cancel?.textContent).toBe('Cancel');
-    expect(cancel?.className).toContain('text-fg-2 hover:bg-panel-2');
+    expect(cancel?.className).toContain('lit-hover text-fg-2');
     expect(cancel?.className).not.toContain('border-border');
     expect(confirm?.textContent).toBe('Send anyway');
     expect(confirm?.className).toContain('bg-accent');

@@ -212,7 +212,7 @@ function SheetGrid(props: {
       tabIndex={0}
       aria-label={sheet.name}
       onScroll={onScroll}
-      className="min-h-0 flex-1 overflow-auto overscroll-contain bg-panel [touch-action:pan-x_pan-y] focus-visible:outline-none"
+      className="min-h-0 flex-1 overflow-auto overscroll-contain bg-panel [touch-action:pan-x_pan-y] focus-visible:lit-focus-inset"
     >
       <table
         data-sheet-grid=""
@@ -300,7 +300,7 @@ export function SheetViewer(props: {
               className={cn(
                 'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 text-base',
                 'focus-visible:lit-focus',
-                selected ? 'bg-panel-2 font-medium text-fg lit-chip' : 'text-fg-2 hover:bg-panel-2',
+                selected ? 'bg-panel-2 font-medium text-fg lit-selected' : 'lit-hover text-fg-2',
               )}
             >
               {s.name}

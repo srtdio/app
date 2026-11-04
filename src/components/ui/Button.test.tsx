@@ -73,21 +73,47 @@ describe('Button design system', () => {
       'lit-btn-primary bg-accent text-accent-fg hover:bg-accent-hover',
     );
     expect(classOf({ variant: 'secondary' })).toContain(
-      'lit-btn-secondary bg-panel text-fg border hover:bg-panel-2',
+      'lit-btn-secondary bg-panel text-fg border',
     );
     expect(tokens(classOf({ variant: 'secondary' }))).not.toContain('border-border');
-    // Flat: no lit height. The focus line (focus-visible:lit-focus) is not a height.
-    expect(classOf({ variant: 'ghost' })).not.toMatch(/(^|\s)lit-/);
-    expect(classOf({ variant: 'link' })).not.toMatch(/(^|\s)lit-/);
-    expect(classOf({ variant: 'ghost' })).toContain('text-fg-2 hover:bg-panel-2 hover:text-fg');
+    // Flat: no lit height. The focus line (focus-visible:lit-focus) and the
+    // lit-hover overlay are not heights.
+    const height = (cls: string) =>
+      tokens(cls).filter((c) => c.startsWith('lit-') && c !== 'lit-hover');
+    expect(height(classOf({ variant: 'ghost' }))).toEqual([]);
+    expect(height(classOf({ variant: 'link' }))).toEqual([]);
+    expect(classOf({ variant: 'ghost' })).toContain('lit-hover text-fg-2 hover:text-fg');
     expect(classOf({ variant: 'link' })).toContain('text-accent');
     expect(classOf({ variant: 'link' })).toContain('!px-2');
     expect(classOf({ variant: 'success' })).toContain(
-      'lit-btn-success bg-good-solid text-accent-fg hover:opacity-90',
+      'lit-btn-success lit-hover bg-good-solid text-accent-fg',
     );
     expect(classOf({ variant: 'danger' })).toContain(
-      'lit-btn-danger bg-bad-solid text-accent-fg hover:opacity-90',
+      'lit-btn-danger lit-hover bg-bad-solid text-accent-fg',
     );
+  });
+
+  it('hover keeps the light: no flat panel swap and no opacity', () => {
+    for (const variant of VARIANTS) {
+      expect(classOf({ variant })).not.toMatch(/hover:bg-panel|hover:opacity-/);
+    }
+  });
+
+  it('disabled never fades: solid fg-3 fill or fg-3 text, no hover, default cursor', () => {
+    for (const variant of VARIANTS) {
+      const t = tokens(classOf({ variant }));
+      expect(t.some((c) => /^disabled:opacity-/.test(c))).toBe(false);
+      expect(t).toContain('disabled:pointer-events-none');
+      expect(t).toContain('disabled:cursor-default');
+    }
+    for (const variant of ['primary', 'success', 'danger'] as const) {
+      const t = tokens(classOf({ variant }));
+      expect(t).toContain('disabled:bg-fg-3');
+      expect(t).toContain('disabled:text-accent-fg');
+    }
+    for (const variant of ['secondary', 'ghost', 'link'] as const) {
+      expect(tokens(classOf({ variant }))).toContain('disabled:text-fg-3');
+    }
   });
 
   it("'default' is an alias of secondary and is the default", () => {
@@ -135,7 +161,20 @@ describe('IconButton', () => {
     const t = tokens(el.props.className);
     expect(t).toContain('text-fg');
     expect(t).not.toContain('text-fg-2');
-    expect(t.some((c) => c.startsWith('lit-'))).toBe(false);
+    // No lit height; lit-hover is the hover/press overlay, not a height.
+    expect(t.some((c) => c.startsWith('lit-') && c !== 'lit-hover')).toBe(false);
+    expect(t).toContain('lit-hover');
+    expect(t).not.toContain('hover:bg-panel-2');
+  });
+
+  it('disabled is fg-3 ink with no hover, never a fade', () => {
+    const el = IconButton({ label: 'Close', children: null }) as ReactElement<{
+      className: string;
+    }>;
+    const t = tokens(el.props.className);
+    expect(t).toContain('disabled:text-fg-3');
+    expect(t).toContain('disabled:pointer-events-none');
+    expect(t.some((c) => /opacity-/.test(c))).toBe(false);
   });
 });
 
@@ -152,11 +191,12 @@ describe('Chip', () => {
       expect(t).toContain('text-fg');
       expect(t).not.toContain('text-fg-2');
       expect(t).not.toContain('border-border');
+      expect(t).toContain('border-border-strong');
       expect(t).not.toContain('h-8');
     }
   });
 
-  it('selected is lit-selected with no soft fill; add stays flat', () => {
+  it('selected is lit-selected with no soft fill; add is a dashed lit-chip', () => {
     const sel = tokens(
       (Chip({ label: 'All', selected: true }) as ReactElement<{ className: string }>).props
         .className,
@@ -171,7 +211,8 @@ describe('Chip', () => {
         .className,
     );
     expect(add).toContain('border-dashed');
-    expect(add.some((c) => c.startsWith('lit-'))).toBe(false);
+    expect(add).toContain('border-border-strong');
+    expect(add).toContain('lit-chip');
   });
 });
 

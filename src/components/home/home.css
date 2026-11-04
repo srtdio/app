@@ -17,9 +17,8 @@
   font-weight: 200 800;
   src: url('@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-opsz-normal.woff2')
     format('woff2-variations');
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 /* App tokens: the light values of src/index.css :root, same names (keep in
@@ -183,6 +182,10 @@ html:has(.home) body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* On the dark band the focus line takes the band's own ink, never ink on ink. */
+.home .band :is(.btn, .icon-btn, input, button, a):focus-visible {
+  outline-color: var(--band-fg);
+}
 .home .cta {
   display: flex;
   justify-content: center;
@@ -220,21 +223,21 @@ html:has(.home) body {
   fill: var(--accent);
 }
 
-/* header */
+/* header: solid panel with the app's lit-header shade (light values of
+   --lit-header in src/index.css, inline: the homepage loads no app CSS). No
+   backdrop-filter: a blur costs a full-width repaint per scrolled frame. */
 .home .top {
   position: sticky;
   top: env(safe-area-inset-top, 0px);
   z-index: 50;
-  background: rgb(var(--panel-rgb) / 0.9);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgb(var(--panel-rgb));
+  box-shadow: 0 6px 14px -10px rgba(20, 22, 30, 0.24);
   border-bottom: 1px solid transparent;
 }
 /* Browser bar tint: iOS Safari 26 and every WebKit iOS or in-app browser
-   sample a solid fixed element at the top edge and skip one with
-   backdrop-filter, so the frosted .top above is never read. This solid strip
+   sample a solid fixed element at the top edge. This solid strip
    fills the status bar inset above .top (which pins at that inset) in the
-   colour the frosted bar reads as (--panel, white; the homepage is light only),
+   bar's own colour (--panel, white; the homepage is light only),
    so the bar matches. No blur, no opacity; 0px tall where there is no inset,
    so the page itself looks exactly the same. */
 .home::before {
@@ -294,23 +297,25 @@ html:has(.home) body {
 }
 
 /* sidebar */
+/* Never fade (docs/motion.md): the panel translates on X; the scrim is on
+   while the menu is open and stays until the panel has slid out (0.28s),
+   then the layer hides. Nothing animates opacity. */
 .home .menu {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: var(--scrim);
-  opacity: 0;
+  background: transparent;
   visibility: hidden;
   pointer-events: none;
   transition:
-    opacity 0.2s,
+    background-color 0s linear 0.28s,
     visibility 0s linear 0.28s;
 }
 .home .menu.open {
-  opacity: 1;
+  background: var(--scrim);
   visibility: visible;
   pointer-events: auto;
-  transition: opacity 0.2s;
+  transition: none;
 }
 .home .panel {
   position: absolute;
@@ -740,13 +745,17 @@ html:has(.home) body {
   cursor: default;
 }
 
-/* Never paint an undecoded video: hidden until a frame is decoded. */
+/* Never paint an undecoded video: hidden until a frame is decoded. Revealed
+   by a clip from the top edge down (axis: clip), never an opacity fade; the
+   hidden state is a state, not an animation. */
 .home video[data-clip] {
   opacity: 0;
-  transition: opacity 0.2s ease;
+  clip-path: inset(0 0 100% 0);
+  transition: clip-path 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .home video[data-clip='ready'] {
   opacity: 1;
+  clip-path: inset(0);
 }
 .home .c1 {
   background: var(--t1);
@@ -799,7 +808,8 @@ html:has(.home) body {
   width: 100%;
   height: 44px;
   border-radius: 8px;
-  border: 1px solid var(--band-line);
+  /* The field edge at rest: the band's ink (3:1 on the band). */
+  border: 1px solid var(--band-fg);
   background: var(--band-2);
   color: var(--band-fg);
   padding: 0 16px;
@@ -1228,7 +1238,8 @@ html:has(.home) body {
   width: 100%;
   min-width: 0;
   height: 48px;
-  border: 1px solid var(--border);
+  /* The field edge at rest: full ink (3:1 on the panel). */
+  border: 1px solid var(--fg);
   border-radius: 12px;
   background: var(--panel);
   color: var(--fg);
@@ -1241,7 +1252,7 @@ html:has(.home) body {
 }
 .home .tel {
   display: flex;
-  border: 1px solid var(--border);
+  border: 1px solid var(--fg);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -1413,6 +1424,7 @@ html:has(.home) body {
   display: grid;
   place-items: center;
   min-height: 100vh;
+  min-height: 100svh;
   font-size: 14px;
 }
 
@@ -1421,7 +1433,8 @@ html:has(.home) body {
     scroll-behavior: auto;
   }
   .home .panel,
-  .home .menu {
+  .home .menu,
+  .home video[data-clip] {
     transition: none;
   }
 }

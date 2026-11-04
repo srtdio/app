@@ -242,11 +242,16 @@ export function CheckpointStrip({
   const counts = checkpointCounts(shown);
 
   // The sticky background is the comments card's own surface (bg-panel-2), so
-  // the strip never reads as a different-coloured band while pinned.
+  // the strip never reads as a different-coloured band while pinned. In page
+  // mode (phone, touch tablet) the window scrolls, so it pins below the sticky
+  // header and status-bar strip (--shell-sticky-top); 0 inside a laptop scroller.
   return (
     <div
       data-checkpoint-strip=""
-      className={cn('sticky top-0 z-10 flex border-b py-2 lit-header', STRIP_SURFACE_CLASS)}
+      className={cn(
+        'sticky top-[var(--shell-sticky-top,0px)] z-10 flex border-b py-2 lit-header',
+        STRIP_SURFACE_CLASS,
+      )}
     >
       {/* axis: horizontal scroll only (overflow-x). Never overflow-y, never wrap:
           a twenty-point post stays one row and never grows vertically. */}

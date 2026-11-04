@@ -63,12 +63,6 @@ export function formatDuration(seconds: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 }
 
-const SURFACE: Record<CardTone, string> = {
-  in: 'border-border bg-panel text-fg',
-  out: 'border-overlay-line bg-overlay-surface text-inherit',
-  plain: 'border-border bg-panel-2 text-fg',
-};
-
 /** A real card lifts: lit-card draws its edges, so the neutral border colour goes. */
 const CARD_SURFACE: Record<CardTone, string> = {
   in: 'bg-panel text-fg',
@@ -88,7 +82,7 @@ const TILE: Record<CardTone, string> = {
   plain: 'bg-accent text-accent-fg',
 };
 
-const WARN = 'border-[color:var(--warn-line)] bg-warn-soft text-[color:var(--warn-ink)]';
+const WARN = 'border-warn-line bg-warn-soft text-warn-ink';
 
 /** Shared guard: no iOS text selection or callout on long-press over a card. */
 const NO_CALLOUT = 'select-none [-webkit-touch-callout:none]';
@@ -163,7 +157,7 @@ function MediaSlot(props: {
       )}
     >
       {props.warn === true ? (
-        <span className="absolute inset-0 grid place-items-center text-[color:var(--warn-ink)]">
+        <span className="absolute inset-0 grid place-items-center text-warn-ink">
           <IconAlertTriangle size={ICON_SIZE.status} />
         </span>
       ) : showImage && props.src !== null ? (
@@ -188,7 +182,7 @@ function MediaSlot(props: {
       )}
       {props.video ? (
         <span className="absolute inset-0 grid place-items-center">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-[color:var(--media-meta-bg)] pl-0.5 lit-media text-[color:var(--media-meta-fg)]">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-overlay-badge pl-0.5 lit-media text-overlay-fg">
             <IconPlay size={ICON_SIZE.nav} />
           </span>
         </span>
@@ -207,7 +201,7 @@ function TallBody(props: {
 }): ReactElement {
   return (
     <div className="flex min-w-0 flex-col gap-0.5 px-2.5 pb-[9px] pt-2">
-      <div className="flex h-4 min-w-0 items-center gap-1.5 text-sm leading-4 opacity-75">
+      <div className="flex h-4 min-w-0 items-center gap-1.5 text-sm leading-4 text-fg-3">
         <LetterTile
           letter={props.letter}
           tone={props.tone}
@@ -216,14 +210,14 @@ function TallBody(props: {
         <span className="min-w-0 truncate">{props.site}</span>
       </div>
       <div className="line-clamp-2 h-9 text-base font-medium leading-tight">{props.title}</div>
-      <div className="line-clamp-2 h-8 text-sm leading-4 opacity-80">{props.detail}</div>
+      <div className="line-clamp-2 h-8 text-sm leading-4 text-fg-2">{props.detail}</div>
     </div>
   );
 }
 
 // Loading bars are the shared Bone (a top-lit sweep, never a pulse).
 function SkeletonBar(props: { className: string }): ReactElement {
-  return <Bone className={cn('rounded', props.className)} />;
+  return <Bone lit="flat" className={cn('rounded', props.className)} />;
 }
 
 function TallSkeleton(props: { tone: CardTone }): ReactElement {
@@ -231,9 +225,9 @@ function TallSkeleton(props: { tone: CardTone }): ReactElement {
     <div
       data-card-type="skeleton"
       aria-hidden="true"
-      className={cn('rounded-xl border', SURFACE[props.tone])}
+      className={cn('rounded-xl border lit-card', CARD_SURFACE[props.tone])}
     >
-      <Bone as="div" className="aspect-[1.91/1] w-full rounded-t-xl" />
+      <Bone lit="flat" as="div" className="aspect-[1.91/1] w-full rounded-t-xl" />
       <div className="flex flex-col gap-0.5 px-2.5 pb-[9px] pt-2">
         <div className="flex h-4 items-center">
           <SkeletonBar className="h-2.5 w-24" />
@@ -255,7 +249,10 @@ function CompactSkeleton(props: { tone: CardTone }): ReactElement {
     <div
       data-card-type="skeleton"
       aria-hidden="true"
-      className={cn('flex h-16 items-center gap-2.5 rounded-xl border px-2.5', SURFACE[props.tone])}
+      className={cn(
+        'flex h-16 items-center gap-2.5 rounded-xl border px-2.5 lit-card',
+        CARD_SURFACE[props.tone],
+      )}
     >
       <SkeletonBar className="h-10 w-10 shrink-0 rounded-xl" />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -368,7 +365,7 @@ function Tall(props: {
         site={site}
         title={
           preview.path !== '' ? (
-            <span className="break-all font-mono text-sm font-normal opacity-80">
+            <span className="break-all font-mono text-sm font-normal text-fg-2">
               {preview.path}
             </span>
           ) : (
@@ -406,7 +403,7 @@ function Compact(props: {
         <IconAlertTriangle size={ICON_SIZE.control} className="shrink-0" />
         <span className="flex min-w-0 flex-col">
           <span className="truncate text-base font-medium">This link may be unsafe</span>
-          <span className="truncate text-sm leading-4 opacity-90">{`${preview.domain} · tap to check`}</span>
+          <span className="truncate text-sm leading-4">{`${preview.domain} · tap to check`}</span>
         </span>
       </button>
     );
@@ -426,14 +423,14 @@ function Compact(props: {
           {titled ? preview.title : preview.domain}
         </span>
         {via ? (
-          <span className="truncate font-mono text-sm opacity-70">{siteText(preview)}</span>
+          <span className="truncate font-mono text-sm text-fg-3">{siteText(preview)}</span>
         ) : titled ? (
-          <span className="truncate text-sm opacity-75">{preview.domain}</span>
+          <span className="truncate text-sm text-fg-3">{preview.domain}</span>
         ) : preview.path !== '' ? (
-          <span className="truncate font-mono text-sm opacity-70">{preview.path}</span>
+          <span className="truncate font-mono text-sm text-fg-3">{preview.path}</span>
         ) : null}
         {preview.type === 'login' ? (
-          <span className="truncate text-sm opacity-75">Sign-in needed to preview</span>
+          <span className="truncate text-sm text-fg-3">Sign-in needed to preview</span>
         ) : null}
       </span>
     </CardLink>
@@ -468,7 +465,7 @@ function Draft(props: {
     lines = (
       <>
         <span className="block truncate text-base font-medium">This link may be unsafe</span>
-        <span className="block truncate text-sm leading-4 opacity-90">{preview.domain}</span>
+        <span className="block truncate text-sm leading-4">{preview.domain}</span>
       </>
     );
   } else {
@@ -495,7 +492,7 @@ function Draft(props: {
     const titled = preview.type === 'full' || preview.type === 'text';
     lines = (
       <>
-        <span className="block truncate text-sm leading-4 opacity-75">{siteText(preview)}</span>
+        <span className="block truncate text-sm leading-4 text-fg-3">{siteText(preview)}</span>
         <span className="line-clamp-2 text-base font-medium leading-tight">
           {titled
             ? preview.title

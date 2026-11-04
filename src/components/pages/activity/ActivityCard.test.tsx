@@ -350,6 +350,15 @@ describe('AvatarStack', () => {
     expect(html).not.toContain('-8px');
     expect(html).toMatch(/class="ml-\[-4px\][^"]*ring-2 ring-bg"[^>]*>\+2</);
   });
+
+  it('the ring takes the colour of the surface the stack sits on', () => {
+    const html = renderToStaticMarkup(
+      <AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} ring="ring-panel" />,
+    );
+    expect(count(html, 'rounded-full ring-2 ring-panel')).toBe(3);
+    expect(html).not.toContain('ring-bg');
+    expect(html).toMatch(/class="ml-\[-4px\][^"]*ring-2 ring-panel"[^>]*>\+2</);
+  });
 });
 
 describe('ActivityCard chat mention row', () => {

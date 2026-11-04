@@ -140,7 +140,7 @@ export function ScheduledAttachments(props: {
           data-scheduled-file=""
           className={cn(
             'flex min-w-0 items-center gap-1.5 text-fg-2',
-            !strip && 'max-w-[85%] rounded-lg border bg-panel px-2 py-1.5 lit-card',
+            !strip && 'max-w-[85%] rounded-xl border bg-panel px-2 py-1.5 lit-card',
           )}
         >
           <IconFile size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
@@ -229,7 +229,7 @@ export function ScheduleModeStrip(props: { label: string; onStop: () => void }):
         ref={ref}
         data-schedule-mode=""
         className={cn(
-          'flex min-w-0 items-center gap-2 bg-accent-soft pl-3 lit-tint',
+          'flex min-w-0 items-center gap-2 rounded-lg border border-border-strong bg-accent-soft pl-3 lit-tint',
           NO_TOUCH_SELECT,
         )}
       >

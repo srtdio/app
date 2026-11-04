@@ -116,7 +116,7 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
         label="Close"
         data-photo-viewer-close=""
         onClick={onClose}
-        className="absolute right-3 top-[max(12px,env(safe-area-inset-top))] text-overlay-fg hover:bg-overlay-surface"
+        className="absolute right-3 top-[max(12px,env(safe-area-inset-top))] text-overlay-fg hover:bg-overlay-surface focus-visible:outline-overlay-fg"
       >
         <IconX size={ICON_SIZE.control} />
       </IconButton>

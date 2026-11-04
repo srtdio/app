@@ -398,9 +398,12 @@ describe('load status', () => {
     expect(kinds).toEqual(['wide', 'wide', 'square', 'square', 'square', 'square']);
     for (const tile of tiles) {
       const cls = (tile.props as { className: string }).className;
-      for (const token of ['rounded-xl', 'border', 'border-border']) {
+      // Loading shells take the lit class of the tile they become (lit-card
+      // draws the edges, so no neutral border colour).
+      for (const token of ['rounded-xl', 'border', 'lit-card']) {
         expect(cls).toContain(token);
       }
+      expect(cls).not.toContain('border-border');
       // Boxes sweep (motion Bone); never a pulse or fade.
       expect(cls).not.toContain('animate-pulse');
       expect(findAll(tile, (el) => el.type === Bone).length).toBeGreaterThan(0);

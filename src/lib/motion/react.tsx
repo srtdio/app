@@ -409,7 +409,36 @@ export function dimFor(offset: number, height: number): string {
 
 // ---------- 9. sweepBoxes: Bone and BoxSkeleton ----------
 
+/**
+ * The lit height of what replaces a loading box (docs/lighting.md): a loading
+ * shell takes the same lit-* class as the card, field or tile it becomes.
+ * 'flat' is the Flat height (text lines, plain list rows, a page-level
+ * wrapper): no lit class. Required on every Bone and BoxSkeleton (guard:
+ * src/__tests__/shell-rules.test.ts).
+ */
+export type BoneLit =
+  | 'flat'
+  | 'lit-card'
+  | 'lit-card-muted'
+  | 'lit-well'
+  | 'lit-media'
+  | 'lit-avatar'
+  | 'lit-pill'
+  | 'lit-badge'
+  | 'lit-chip'
+  | 'lit-btn-secondary'
+  | 'lit-raised'
+  | 'lit-bubble-own'
+  | 'lit-bubble-other';
+
+/** The class a `lit` prop renders ('' for flat). */
+export function boneLitClass(lit: BoneLit): string {
+  return lit === 'flat' ? '' : lit;
+}
+
 interface BoneProps {
+  /** The lit-* class of what replaces this box, or 'flat'. */
+  lit: BoneLit;
   className?: string;
   style?: CSSProperties;
   /** Render as a block-level <div> (default <span class="block">). */
@@ -418,19 +447,23 @@ interface BoneProps {
 
 /**
  * One loading box. Size and radius come from the caller so it matches the
- * final layout exactly (no shift on landing). A top-lit sweep runs over it,
- * 1100 ms linear, looping; it never fades or pulses.
+ * final layout exactly (no shift on landing); its lit height comes from `lit`,
+ * the class of what replaces it. A top-lit sweep runs over it, 1100 ms linear,
+ * looping; it never fades or pulses.
  */
-export function Bone({ className, style, as = 'span' }: BoneProps) {
+export function Bone({ lit, className, style, as = 'span' }: BoneProps) {
   return createElement(as, {
     'aria-hidden': true,
     'data-bone': '',
-    className: cn('block mv-bone', className),
+    'data-lit': lit,
+    className: cn('block mv-bone', boneLitClass(lit), className),
     style,
   });
 }
 
 interface BoxSkeletonProps extends HTMLAttributes<HTMLDivElement> {
+  /** The lit-* class of what replaces this wrapper, or 'flat' for a plain layout box. */
+  lit: BoneLit;
   /** Screen-reader label, e.g. "Loading activity". */
   label?: string;
   children: ReactNode;
@@ -440,7 +473,13 @@ interface BoxSkeletonProps extends HTMLAttributes<HTMLDivElement> {
  * Wraps a screen's boxes. Render it ONLY when the device or session holds
  * nothing for that screen; kept views and the device cache paint at once.
  */
-export function BoxSkeleton({ label = 'Loading', className, children, ...rest }: BoxSkeletonProps) {
+export function BoxSkeleton({
+  lit,
+  label = 'Loading',
+  className,
+  children,
+  ...rest
+}: BoxSkeletonProps) {
   return createElement(
     'div',
     {
@@ -449,7 +488,8 @@ export function BoxSkeleton({ label = 'Loading', className, children, ...rest }:
       'aria-busy': true,
       'aria-label': label,
       'data-box-skeleton': '',
-      className,
+      'data-lit': lit,
+      className: cn(boneLitClass(lit), className) || undefined,
     },
     children,
   );

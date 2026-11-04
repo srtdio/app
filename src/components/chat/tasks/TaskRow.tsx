@@ -191,6 +191,7 @@ function PriorityMenu(props: {
     >
       {TASK_PRIORITIES.map((p) => (
         <PressableRow
+          insetFocus
           key={p}
           type="button"
           role="menuitemradio"
@@ -198,10 +199,7 @@ function PriorityMenu(props: {
           data-task-menu-p={p}
           onClick={() => props.onPick(p)}
           onContextMenu={(e) => e.preventDefault()}
-          className={cn(
-            'flex h-11 items-center gap-2 px-2.5 text-base text-fg focus-visible:-outline-offset-2',
-            NO_TOUCH_SELECT,
-          )}
+          className={cn('flex h-11 items-center gap-2 px-2.5 text-base text-fg', NO_TOUCH_SELECT)}
         >
           <span className={cn('rounded-lg px-1.5 font-mono text-sm', P_TAG[p])}>P{p}</span>
           <span className="flex-1">{PRIORITY_LABEL[p]}</span>
@@ -291,12 +289,13 @@ function TitleCell(props: {
   }
   return (
     <PressableRow
+      insetFocus
       type="button"
       data-task-title=""
       onClick={begin}
       onContextMenu={(e) => e.preventDefault()}
       className={cn(
-        'min-w-0 flex-1 py-3 text-base font-medium focus-visible:-outline-offset-2',
+        'min-w-0 flex-1 py-3 text-base font-medium',
         props.done ? 'text-fg-3 line-through' : 'text-fg',
       )}
     >
@@ -377,7 +376,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
       data-task-number={props.number ?? ''}
       {...(props.dot ? { 'data-task-marked': '' } : {})}
       {...(props.queuedDelete ? { 'data-task-deleting': '' } : {})}
-      className={cn('flex flex-col', props.dot && 'bg-accent-soft')}
+      className={cn('flex flex-col', props.dot && 'bg-hover-fill')}
     >
       <div className="flex min-h-[44px] items-start gap-1 pl-1 pr-1">
         <IconButton
@@ -390,7 +389,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
           disabled={props.queuedDelete || props.canTick === false}
           onClick={props.onToggle}
           onContextMenu={(e) => e.preventDefault()}
-          className={cn('relative shrink-0 disabled:opacity-50', NO_TOUCH_SELECT)}
+          className={cn('relative shrink-0', NO_TOUCH_SELECT)}
         >
           <TaskGlyph status={props.done ? 'done' : 'todo'} />
         </IconButton>

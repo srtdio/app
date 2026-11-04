@@ -337,7 +337,7 @@ const TONES: Record<ViewerTone, ToneClasses> = {
     bar:
       'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
       'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
-      'focus-visible:ring-overlay-fg disabled:opacity-40',
+      'focus-visible:ring-overlay-fg disabled:text-overlay-fg-dim disabled:pointer-events-none',
     text:
       'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
       'text-overlay-fg bg-overlay-surface lit-media hover:bg-overlay-line focus-visible:outline-none ' +
@@ -350,10 +350,10 @@ const TONES: Record<ViewerTone, ToneClasses> = {
     chip: 'bg-panel text-fg border border-border lit-pill',
     bar:
       'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-fg ' +
-      'hover:bg-panel-3 focus-visible:lit-focus disabled:opacity-40',
+      'lit-hover focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none',
     text:
       'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
-      'text-fg bg-panel border lit-btn-secondary hover:bg-panel-3 focus-visible:lit-focus',
+      'text-fg bg-panel border lit-btn-secondary focus-visible:lit-focus',
   },
 };
 
@@ -666,7 +666,7 @@ function PdfPage(props: {
   return (
     <div
       data-pdf-page={pageNumber}
-      className="relative w-full overflow-hidden rounded-sm border border-border bg-panel"
+      className="relative w-full overflow-hidden rounded-sm border border-border bg-panel lit-page"
       style={{ aspectRatio: `1 / ${aspect}` }}
     >
       {preview !== undefined && preview !== null ? (
@@ -956,7 +956,7 @@ function PdfRenderer(props: RendererProps): ReactElement {
       tabIndex={0}
       aria-label="Pages"
       onScroll={onScroll}
-      className="absolute inset-0 overflow-auto overscroll-contain [touch-action:pan-x_pan-y]"
+      className="absolute inset-0 overflow-auto overscroll-contain [touch-action:pan-x_pan-y] focus-visible:lit-focus-inset"
     >
       <div
         className="mx-auto flex flex-col px-2 py-2"

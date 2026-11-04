@@ -82,6 +82,8 @@ import {
   threadStripSlot,
   type ThreadRow,
   mentionClass,
+  MENTION_ME_OWN,
+  MENTION_ME_PEER,
   mentionsMe,
   nextPill,
   profileNameOf,
@@ -1256,14 +1258,12 @@ describe('own-bubble inner content', () => {
       '[&_.text-fg]:text-accent-fg',
       '[&_.text-accent]:text-accent-fg',
       '[&_.text-fg-2]:text-accent-fg',
-      '[&_.text-fg-2]:opacity-90',
-      '[&_.text-fg-3]:opacity-90',
-      '[&_.bg-panel]:bg-black/[.12]',
+      '[&_.bg-panel]:bg-on-bubble/[.12]',
       // The stage tag on a shared card is bg-panel-2: without this it stays a
-      // solid light block under white ink.
-      '[&_.bg-panel-2]:bg-black/[.12]',
-      '[&_.bg-panel-3]:bg-black/[.12]',
-      '[&_.bg-accent]:bg-white/70',
+      // solid light block under on-bubble ink.
+      '[&_.bg-panel-2]:bg-on-bubble/[.12]',
+      '[&_.bg-panel-3]:bg-on-bubble/[.12]',
+      '[&_.bg-accent]:bg-on-bubble/70',
     ]) {
       expect(OWN_BUBBLE_CONTENT).toContain(token);
     }
@@ -2475,7 +2475,7 @@ describe('tombstones, edited label and the neutral selection', () => {
     expect(renderStrip(render({ ...tomb, editedAt: 'x' }))).not.toContain('data-edited');
   });
 
-  it('a checked row gets the neutral full-width tint; no accent ring on the bubble', () => {
+  it('a checked row gets the full-width lit-selected layer; no accent ring on the bubble', () => {
     const checked = render(makeMessage({ mine: true }), {
       selection: { role: 'selectable', checked: true, onToggle: noop },
     });
@@ -2483,7 +2483,8 @@ describe('tombstones, edited label and the neutral selection', () => {
     const tint = els.find((el) => el.props['data-selected-tint'] !== undefined);
     expect(tint?.props.className).toBe(SELECTED_ROW_TINT);
     expect(SELECTED_ROW_TINT).toContain('absolute inset-0');
-    expect(SELECTED_ROW_TINT).toContain('bg-panel-3 opacity-60');
+    expect(SELECTED_ROW_TINT).toContain('lit-selected');
+    expect(SELECTED_ROW_TINT).not.toMatch(/opacity-/);
     expect(String(checked.props.className)).toContain('relative');
     expect(String(checked.props.className)).toContain('isolate');
     const bubble = els.find((el) => el.props['data-bubble'] !== undefined);
@@ -3445,7 +3446,18 @@ describe('F5 mentions are bold and the peer ink clears 4.5:1 in both themes', ()
     return ((hi ?? 0) + 0.05) / ((lo ?? 0) + 0.05);
   }
 
-  /** accent-soft: the accent at 10% (light) / 16% (dark) over the peer bubble. */
+  /** --hover-fill (an rgba token) in a theme block: its channels and alpha. */
+  function hoverFill(selector: string): { rgb: number[]; alpha: number } {
+    const start = css.indexOf(`${selector} {`);
+    const body = css.slice(start, css.indexOf('}', start));
+    const m = /--hover-fill:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/.exec(body);
+    return {
+      rgb: [Number(m?.[1] ?? 0), Number(m?.[2] ?? 0), Number(m?.[3] ?? 0)],
+      alpha: Number(m?.[4] ?? 0),
+    };
+  }
+
+  /** A fill at `alpha` over the peer bubble. */
   function tint(accent: number[], alpha: number, under: number[]): number[] {
     return accent.map((v, i) => Math.round(alpha * v + (1 - alpha) * (under[i] ?? 0)));
   }
@@ -3463,26 +3475,33 @@ describe('F5 mentions are bold and the peer ink clears 4.5:1 in both themes', ()
     // Black and white palette: near-black hover ink (light), white (dark) on panel-2.
     expect(lightRatio.toFixed(2)).toBe('13.30');
     expect(darkRatio.toFixed(2)).toBe('17.92');
-    // A mention of me also sits on accent-soft: the ink still clears 4.5:1 there.
+    // A mention of me also sits on the hover fill: the ink still clears 4.5:1 there.
+    expect(mentionClass(false, true)).toContain(MENTION_ME_PEER);
+    const fillLight = hoverFill(':root');
+    const fillDark = hoverFill('.dark');
     const selfLight = ratio(
       at(light, 'accent-hover'),
-      tint(at(light, 'accent'), 0.1, at(light, 'panel-2')),
+      tint(fillLight.rgb, fillLight.alpha, at(light, 'panel-2')),
     );
     const selfDark = ratio(
       at(dark, 'accent-hover'),
-      tint(at(dark, 'accent'), 0.16, at(dark, 'panel-2')),
+      tint(fillDark.rgb, fillDark.alpha, at(dark, 'panel-2')),
     );
     expect(selfLight).toBeGreaterThanOrEqual(4.5);
     expect(selfDark).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('F5 every mention is font-semibold in own and peer bubbles; a mention of me adds accent-soft', () => {
+  it('F5 every mention is font-semibold in own and peer bubbles; a mention of me adds its tint', () => {
     for (const mine of [true, false]) {
       expect(mentionClass(mine, false)).toContain('font-semibold');
       expect(mentionClass(mine, true)).toContain('font-semibold');
-      expect(mentionClass(mine, true)).toContain('bg-accent-soft');
-      expect(mentionClass(mine, false)).not.toContain('bg-accent-soft');
+      expect(mentionClass(mine, true)).toContain(mine ? MENTION_ME_OWN : MENTION_ME_PEER);
+      expect(mentionClass(mine, false)).not.toContain(MENTION_ME_OWN);
+      expect(mentionClass(mine, false)).not.toContain(MENTION_ME_PEER);
+      expect(mentionClass(mine, true)).not.toContain('bg-accent-soft');
     }
+    expect(MENTION_ME_PEER).toBe('bg-hover-fill');
+    expect(MENTION_ME_OWN).toBe('bg-on-bubble/15');
     expect(mentionClass(true, false)).toContain('text-accent-fg');
   });
 });
@@ -3511,13 +3530,13 @@ describe('A3 "@all" renders bold, as a mention of me for recipients, and inert',
     expect(html).not.toContain('<button');
     expect(html).toContain(mentionClass(false, true));
     expect(mentionClass(false, true)).toContain('font-semibold');
-    expect(mentionClass(false, true)).toContain('bg-accent-soft');
+    expect(mentionClass(false, true)).toContain(MENTION_ME_PEER);
   });
 
   it('A3 sender: "@all" bold in own ink, no me tint', () => {
     const html = allMarkup(true);
     expect(html).toContain(mentionClass(true, false));
-    expect(html).not.toContain('bg-accent-soft');
+    expect(html).not.toContain(MENTION_ME_OWN);
     expect(html).not.toContain('<button');
   });
 
@@ -3661,17 +3680,17 @@ describe('J8 the mention-of-me tint follows the stored mentions', () => {
     );
     expect(forwarded).toContain(`class="${mentionClass(false, false)}">@all`);
     expect(forwarded).toContain('font-semibold');
-    expect(forwarded).not.toContain('bg-accent-soft');
+    expect(forwarded).not.toContain(MENTION_ME_PEER);
     // A DM with a stray @[all]: the server stored no mention of me.
     const dm = render({ body: '@[all] hi', mine: false, mentions: [] }, false);
     expect(dm).toContain('font-semibold');
-    expect(dm).not.toContain('bg-accent-soft');
+    expect(dm).not.toContain(MENTION_ME_PEER);
     // A live DM row (not read yet) predicts the same: no tint.
     expect(mentionsMe({ body: '@[all] hi', mine: false }, 'me', false)).toBe(false);
     // Real @all in a group: the server expanded it to me.
     const real = render({ body: '@[all] standup', mine: false, mentions: ['me', 'ana'] }, true);
     expect(real).toContain(`class="${mentionClass(false, true)}">@all`);
-    expect(real).toContain('bg-accent-soft');
+    expect(real).toContain(MENTION_ME_PEER);
     // Stored mentions drive it even when the live prediction would differ.
     expect(mentionsMe({ body: 'no token', mine: false, mentions: ['me'] }, 'me', true)).toBe(true);
     expect(mentionsMe({ body: '@[all]', mine: false }, 'me', true)).toBe(true);

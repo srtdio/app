@@ -232,7 +232,7 @@ export function EmojiSearchField(props: {
 }): ReactElement {
   return (
     <div className="flex shrink-0 items-center gap-1 px-2 pt-2">
-      <label className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-fg-3 lit-well focus-within:lit-focus">
+      <label className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-field bg-panel-2 px-3 text-fg-3 lit-well focus-within:lit-focus">
         <IconSearch size={ICON_SIZE.inline} />
         <input
           type="search"
@@ -277,7 +277,7 @@ export function EmojiTabs(props: {
           data-emoji-tab={section.group}
           onClick={() => props.onTab(section.group)}
           className={cn(
-            'shrink-0 opacity-60 aria-selected:bg-panel-3 aria-selected:opacity-100',
+            'shrink-0 text-fg-3 aria-selected:bg-panel-3 aria-selected:text-fg',
             !searching && props.activeGroup === section.group && 'lit-chip',
             EMOJI_GLYPH_TYPE,
           )}

@@ -86,31 +86,32 @@ export function focusCommentBox(root: HTMLElement | null): boolean {
 export function BriefDetailSkeleton(): ReactElement {
   const row = (key: number) => (
     <div key={key} className="flex flex-col gap-1">
-      <Bone as="div" className="h-4 w-16 rounded" />
-      <Bone as="div" className="h-4 w-20 rounded" />
+      <Bone lit="flat" as="div" className="h-4 w-16 rounded" />
+      <Bone lit="flat" as="div" className="h-4 w-20 rounded" />
     </div>
   );
   return (
     <BoxSkeleton
+      lit="flat"
       label="Loading brief"
       data-testid="brief-detail-skeleton"
       className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6"
     >
       <div className="md:col-span-2 flex flex-col gap-6">
-        <Bone as="div" className="h-8 w-3/4 rounded" />
+        <Bone lit="flat" as="div" className="h-8 w-3/4 rounded" />
         <div className="flex flex-col gap-1.5 md:hidden">
-          <Bone as="div" className="h-4 w-52 rounded" />
-          <Bone as="div" className="h-4 w-28 rounded" />
+          <Bone lit="flat" as="div" className="h-4 w-52 rounded" />
+          <Bone lit="flat" as="div" className="h-4 w-28 rounded" />
         </div>
         <div className="flex flex-col gap-2">
-          <Bone as="div" className="mb-1 h-3 w-20 rounded" />
-          <Bone as="div" className="h-4 w-full rounded" />
-          <Bone as="div" className="h-4 w-11/12 rounded" />
-          <Bone as="div" className="h-4 w-2/3 rounded" />
+          <Bone lit="flat" as="div" className="mb-1 h-3 w-20 rounded" />
+          <Bone lit="flat" as="div" className="h-4 w-full rounded" />
+          <Bone lit="flat" as="div" className="h-4 w-11/12 rounded" />
+          <Bone lit="flat" as="div" className="h-4 w-2/3 rounded" />
         </div>
       </div>
       <aside className="hidden md:flex flex-col gap-3">
-        <Bone as="div" className="mb-2 h-3 w-14 rounded" />
+        <Bone lit="flat" as="div" className="mb-2 h-3 w-14 rounded" />
         {[0, 1, 2, 3, 4].map(row)}
       </aside>
     </BoxSkeleton>
@@ -791,7 +792,7 @@ export function BriefDetailPage({
                 <Link
                   to={`/posts/${post.id}`}
                   data-linked-post=""
-                  className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-lg px-2 text-base text-fg mv-tint hover:bg-panel-2 focus-visible:lit-focus"
+                  className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-lg px-2 text-base text-fg mv-tint lit-hover focus-visible:lit-focus"
                 >
                   <span
                     aria-hidden="true"
@@ -806,7 +807,7 @@ export function BriefDetailPage({
           <Link
             to="/pipeline"
             data-linked-posts-count=""
-            className="-mx-2 inline-flex min-h-[44px] min-w-[44px] items-center rounded-lg px-2 text-base tabular-nums text-accent mv-tint hover:bg-panel-2 focus-visible:lit-focus"
+            className="-mx-2 inline-flex min-h-[44px] min-w-[44px] items-center rounded-lg px-2 text-base tabular-nums text-accent mv-tint lit-hover focus-visible:lit-focus"
           >
             {linkedCount}
           </Link>
@@ -965,7 +966,7 @@ export function BriefDetailPage({
           <div
             data-brief-action-bar=""
             {...bottomAnchorProps}
-            className="lit-dock fixed inset-x-0 bottom-0 z-40 border-t bg-panel px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
+            className="lit-dock fixed inset-x-0 bottom-0 z-40 border-t bg-panel pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))] pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
           >
             <Button
               variant="primary"

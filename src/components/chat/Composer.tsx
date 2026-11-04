@@ -1062,7 +1062,7 @@ function PendingThumb(props: {
           className={cn('h-full w-full object-cover', uploading && 'opacity-50')}
         />
       ) : (
-        <IconFile size={ICON_SIZE.inline} className={cn(uploading && 'opacity-50')} />
+        <IconFile size={ICON_SIZE.inline} className={cn(uploading && 'text-fg-3')} />
       )}
       {uploading ? (
         <span
@@ -2323,7 +2323,7 @@ export function Composer(props: ComposerProps): ReactElement {
               >
                 <IconTrash size={ICON_SIZE.control} />
               </IconButton>
-              <div className="flex h-11 flex-1 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 lit-well">
+              <div className="flex h-11 flex-1 items-center gap-2 rounded-lg border border-border-strong bg-panel-2 px-3 lit-tint">
                 {/* The recording dot is still (motion never pulses or fades). */}
                 <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-bad" />
                 <span className="text-base text-fg-2">Recording</span>

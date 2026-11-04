@@ -68,7 +68,7 @@ export function PlanGrip(props: { onLift: (clientY: number) => void }): ReactEle
       onPointerDown={onPointerDown}
       onContextMenu={(event) => event.preventDefault()}
       className={cn(
-        'flex h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center self-start rounded-lg text-fg-3 hover:bg-panel-2',
+        'flex h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center self-start rounded-lg text-fg-3 lit-hover',
         NO_TOUCH_SELECT,
       )}
     >

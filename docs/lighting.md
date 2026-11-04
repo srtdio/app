@@ -10,12 +10,25 @@ At most one soft (blurred) shadow per token; use a 1px ring for edge definition 
 
 ## How the classes combine with utilities
 
-- Lit classes sit in the components layer, so utilities on the same element win. Gradients are `background-image`, so the element keeps its own `bg-*` colour underneath.
+- Lit classes sit in the components layer, so utilities on the same element win; the outline family (below) sits in `@layer utilities` at the end of `src/index.css`, so it always wins. Gradients are `background-image`, so the element keeps its own `bg-*` colour underneath.
 - Edge classes (`lit-raised`, `lit-card`, `lit-card-muted`, `lit-overlay`, `lit-btn-secondary`, `lit-chip`) set the border colour (top light, sides mid, bottom dark): drop the neutral `border-border` utility, keep the width. State outlines come only from the outline family below.
 - `lit-header`, `lit-side`, `lit-dock` turn their border transparent and draw it as part of the shadow. A non-sticky header lifts to `position: relative; z-index: 1` so its shade paints over the next sibling; sticky headers keep their own position and z-index.
 - Browser bar strips (no new height): the phone chat thread strip (`ThreadTopStrip`, MessageThread.tsx) and the homepage strip (`.home::before`, home.css) fill only the status bar inset, solid `bg-panel` / `--panel`, so iOS Safari samples a solid top edge. Each is part of the surface below it (the thread header, `lit-header`; the homepage `.top`), takes no `lit-*` of its own and adds no rim, blur or opacity. 0px tall without an inset.
 - `lit-selected` replaces the element's own `lit-card` / `lit-chip` on the picked state (it carries the chip light); drop the selected-state fill and accent border utilities.
 - Never transition `box-shadow`, `filter` or `backdrop-filter`.
+
+## Fields, edges and states
+
+- Fields: ui/Input, Textarea, Select, DatePicker, Checkbox and the code boxes draw `border-field` (`--field-line`: ink `#08090a` light, `rgba(255, 255, 255, 0.92)` dark, the same as `--sel-edge`) at rest, on `bg-panel-2` with `lit-well`; focus adds `lit-focus`; errors `lit-bad`.
+- Edges: `border-strong` (`#868b94` light, `#6b7079` dark, 3:1 on bg, panel and panel-2) is the edge of a control at rest: chips, secondary buttons (bottom edge), switch tracks, unchecked SelectCheck, carousel and guide dots, read bars, track rings. `border-border` is a divider inside a surface only.
+- Hover: `--hover-fill` (`rgba(8, 9, 10, 0.08)` / `rgba(255, 255, 255, 0.1)`) stacked over the surface's own gradient (`--lit-bg`), so the light stays. `lit-chip`, `lit-btn-secondary`, `lit-selected` and interactive `lit-card` / `lit-card-muted` get it for free; anything else that hovers (PressableRow, ghost buttons, IconButton, div cards) carries `lit-hover`. Never `hover:bg-panel-2/3`, never `background-image: none`, never opacity.
+- Press: `--press-fill` (`.14` / `.16`) on `:active`, same stacking.
+- Selected, open, active, current: `lit-selected`.
+- Disabled: `fg-3` ink, no hover, no press light, no shadow on a primary (`bg-fg-3 text-accent-fg`). Never opacity.
+- Switch: off track `bg-panel-2` + `border-strong` + `lit-well`; on track `bg-accent`; knob `bg-knob` (`#fff` light, `#1d1e21` dark: lighter than its track) with a `border-strong` ring and `lit-knob`.
+- Own chat bubble: every line and fill inside uses `on-bubble/*` (`#fff` light, `#08090a` dark); the outline family inside `[data-own]` draws in `--on-bubble`, cards in the bubble keep their own ink.
+- Dark document pages and thumbnails: `lit-page` (brightness .86 in dark only).
+- Undo strip: `lit-strip` (a faint top line) instead of `lit-float`, both themes.
 
 ## Heights
 
@@ -33,7 +46,7 @@ At most one soft (blurred) shadow per token; use a 1px ring for edge definition 
 
 Light stays put while things move: one point straight above. A moving surface keeps its `lit-*` class through every move (push, grow, rise, glide, strips). No new heights for motion:
 
-- Loading boxes (`Bone`, `mv-bone`) are **Flat**: a `panel-3` fill with a top-lit sweep band (`--panel` tint in light, a faint ink lift in dark: higher is lighter). No shadow.
+- Loading boxes (`Bone`, `BoxSkeleton`, `mv-bone`) take a required `lit` prop, the class of what replaces them (`lit-card`, `lit-well`, `lit-avatar`, `lit-media`, ...; `flat` for text lines and inner fills); the sweep inside is **Flat**: a `panel-3` fill with a top-lit sweep band (`--panel` tint in light, a faint ink lift in dark: higher is lighter). No shadow.
 - A dragged board card lifts **one** height: Card to Float (`lit-card` to `lit-float`) and scales to 1.02 (`mv-lift`).
 - A pressed control sinks (scale .97, `mv-press`); its `lit-*` class does not change.
 - A pushed screen's incoming edge is a 1px ring (no shadow).
@@ -66,13 +79,14 @@ Labels and icons on raised controls use full ink (`text-fg`); icon stroke is 1.8
 
 One outline family, from `--sel-edge` (`#08090a` light, `rgba(255, 255, 255, 0.92)` dark): a crisp ink line in light, a crisp white line in dark. No accent tint, no glow. Guard: `src/__tests__/outline-rules.test.ts` (no `border-accent`, `border-accent-line`, `ring-accent`, `lit-chip-selected` on a call site).
 
-| Class          | Draws                                                     | Where                                                                                                     |
-| -------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `lit-selected` | `--sel-edge` border, chip gradient and `--lit-chip` light | picked or active state: chips, segment thumbs (Month/Week), picked picker rows and tiles, today Plan card |
-| `lit-focus`    | `outline: 1.5px solid --sel-edge`, offset 2px             | `focus-visible:lit-focus` on Button, IconButton, Chip and other focusable call sites                      |
-| `lit-bad`      | `--bad` border colour, keeps its own lit class            | error inputs, failed (Not sent) bubbles                                                                   |
-| `lit-drop`     | 1.5px dashed `--sel-edge` border on `--panel`             | DropZone while dragging, plan drop slot, board drop                                                       |
-| `lit-today`    | inset 1px `--sel-edge` ring, no fill                      | today's column or cell in the Plan calendar                                                               |
+| Class             | Draws                                                       | Where                                                                                                                                                                                                                                                               |
+| ----------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lit-selected`    | `--sel-edge` border, chip gradient and `--lit-chip` light   | picked, open, active or current state: chips, segment thumbs (Month/Week), picked picker rows and tiles, Select picked option, open chat row, Sidebar / tab active, palette highlighted row, message select mode, search and comment arrival flash, today Plan card |
+| `lit-focus`       | `outline: 1.5px solid --sel-edge`, offset 2px               | `focus-visible:lit-focus` on Button, IconButton, Chip and other focusable call sites                                                                                                                                                                                |
+| `lit-focus-inset` | the same line, offset -2px                                  | rows inside `overflow-hidden` cards, so the line is not clipped                                                                                                                                                                                                     |
+| `lit-bad`         | `--bad` border colour, keeps its own lit class              | error inputs, failed (Not sent) bubbles                                                                                                                                                                                                                             |
+| `lit-drop`        | 1px dashed `--sel-edge` border plus inset ring on `--panel` | DropZone while dragging, plan drop slot, board drop                                                                                                                                                                                                                 |
+| `lit-today`       | inset 1px `--sel-edge` ring, no fill                        | today's column or cell in the Plan calendar                                                                                                                                                                                                                         |
 
 Focus is an outline, never a box-shadow, so it never wipes a surface's light or fights a moving shadow. Exceptions: overlay controls on media (lightbox, file viewer, photo viewer) keep their own white ring; the induction spotlight keeps `--shadow-spotlight`.
 
@@ -88,9 +102,16 @@ Emails: one look, lit edges drawn with borders (canvas `#f4f5f6`, white card rad
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--lit-hl`              | `inset 0 1px 0 rgba(255, 255, 255, 0.95)`                                                                            | `inset 0 1px 0 rgba(255, 255, 255, 0.1)`                                                                                                                |
 | `--sel-edge`            | `#08090a`                                                                                                            | `rgba(255, 255, 255, 0.92)`                                                                                                                             |
-| `--lit-edge-top`        | `#eceef1`                                                                                                            | `rgba(255, 255, 255, 0.08)`                                                                                                                             |
-| `--lit-edge-side`       | `#e1e4e8`                                                                                                            | `rgba(255, 255, 255, 0.055)`                                                                                                                            |
-| `--lit-edge-bottom`     | `#d3d7dd`                                                                                                            | `rgba(255, 255, 255, 0.035)`                                                                                                                            |
+| `--field-line`          | `#08090a`                                                                                                            | `rgba(255, 255, 255, 0.92)`                                                                                                                             |
+| `--border-strong`       | `#868b94`                                                                                                            | `#6b7079`                                                                                                                                               |
+| `--hover-fill`          | `rgba(8, 9, 10, 0.08)`                                                                                               | `rgba(255, 255, 255, 0.1)`                                                                                                                              |
+| `--press-fill`          | `rgba(8, 9, 10, 0.14)`                                                                                               | `rgba(255, 255, 255, 0.16)`                                                                                                                             |
+| `--on-bubble`           | `#ffffff`                                                                                                            | `#08090a`                                                                                                                                               |
+| `--knob`                | `#ffffff`                                                                                                            | `#1d1e21`                                                                                                                                               |
+| `--lit-strip`           | `inset 0 1px 0 rgba(255, 255, 255, 0.12)`                                                                            | `inset 0 1px 0 rgba(255, 255, 255, 0.12)`                                                                                                               |
+| `--lit-edge-top`        | `#eceef1`                                                                                                            | `rgba(255, 255, 255, 0.14)`                                                                                                                             |
+| `--lit-edge-side`       | `#e1e4e8`                                                                                                            | `rgba(255, 255, 255, 0.1)`                                                                                                                              |
+| `--lit-edge-bottom`     | `#d3d7dd`                                                                                                            | `rgba(255, 255, 255, 0.06)`                                                                                                                             |
 | `--lit-surface`         | `linear-gradient(#fff, #f6f7f9)`                                                                                     | `linear-gradient(#17181b, #111214)`                                                                                                                     |
 | `--lit-surface-top`     | `#fff`                                                                                                               | `#24262d`                                                                                                                                               |
 | `--lit-chip-bg`         | `linear-gradient(#fff, #f8f9fa)`                                                                                     | `linear-gradient(#17181b, #121315)`                                                                                                                     |
@@ -121,7 +142,7 @@ Emails: one look, lit edges drawn with borders (canvas `#f4f5f6`, white card rad
 | `--lit-avatar`          | `inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.08), 0 1px 2px rgba(20, 22, 30, 0.16)`      | `inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.6)`                                               |
 | `--lit-badge`           | `inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(20, 22, 30, 0.35)`                                          | `inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.6)`                                                                                 |
 | `--lit-bubble-own`      | `inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 3px 8px -3px rgba(0, 0, 0, 0.4)`                                         | `inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.55)`                                                              |
-| `--lit-bubble-other`    | `inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.03), 0 3px 8px -4px rgba(20, 22, 30, 0.18)`   | `inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.25)`       |
+| `--lit-bubble-other`    | `inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.08), 0 3px 8px -4px rgba(20, 22, 30, 0.18)`   | `inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.1)`  |
 
 ## Adding a surface
 

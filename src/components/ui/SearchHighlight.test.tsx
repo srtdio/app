@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  GLOW_LAYER_CLASS,
   GLOW_MS,
   glowTarget,
   JUMP_SETTLE_MS,
@@ -91,7 +92,9 @@ describe('glowTarget (arrival tint)', () => {
     glowTarget(el);
     expect(el.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
     expect(el.hasAttribute('data-jump-glow')).toBe(true);
-    expect(layer(el)?.style.backgroundColor).toBe('var(--accent-soft)');
+    expect(layer(el)?.className).toBe(GLOW_LAYER_CLASS);
+    expect(layer(el)?.classList.contains('lit-selected')).toBe(true);
+    expect(layer(el)?.style.backgroundColor).toBe('');
     expect(layer(el)?.style.zIndex).toBe('-1');
     expect(el.style.isolation).toBe('isolate');
     // The row's own background is never touched.

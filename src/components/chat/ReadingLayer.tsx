@@ -73,11 +73,11 @@ export function UnreadDivider({ count }: { count: number }): ReactElement {
       data-unread-divider=""
       className={cn('flex items-center gap-3 px-4 pb-1 pt-3', NO_TOUCH_SELECT)}
     >
-      <span aria-hidden="true" className="h-px flex-1 bg-accent-line" />
+      <span aria-hidden="true" className="h-px flex-1 bg-border-strong" />
       <span className="text-sm font-medium text-accent">
         <span className="font-mono tabular-nums">{count}</span> unread
       </span>
-      <span aria-hidden="true" className="h-px flex-1 bg-accent-line" />
+      <span aria-hidden="true" className="h-px flex-1 bg-border-strong" />
     </li>
   );
 }

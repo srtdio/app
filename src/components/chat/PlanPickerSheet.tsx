@@ -36,7 +36,7 @@ export const NEW_PLAN_LABEL = 'New plan';
  * it fills the sheet's fixed box instead.
  */
 const BODY_BOX =
-  'flex h-[min(420px,56vh)] flex-col overflow-y-auto overscroll-contain sm:h-auto sm:min-h-0 sm:flex-1';
+  'flex h-[min(420px,56dvh)] flex-col overflow-y-auto overscroll-contain sm:h-auto sm:min-h-0 sm:flex-1';
 
 /** Skeleton rows while the list loads: enough to fill the fixed body. */
 const SKELETON_ROWS = 5;
@@ -99,7 +99,7 @@ export function PlanPickerSheet(props: {
         </p>
         <div className={BODY_BOX}>
           {read.status === 'loading' ? (
-            <BoxSkeleton label="Loading plans" className="flex flex-col gap-2 px-[18px]">
+            <BoxSkeleton lit="flat" label="Loading plans" className="flex flex-col gap-2 px-[18px]">
               {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
                 <PickerSkeletonRow key={i} />
               ))}
@@ -194,11 +194,11 @@ function PickerSkeletonRow(): ReactElement {
       data-plan-pick-skeleton=""
       className="flex min-h-[72px] w-full items-center gap-3 rounded-xl border bg-panel p-2.5 lit-card"
     >
-      <Bone className="h-10 w-10 shrink-0 rounded-lg" />
+      <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <Bone className="h-5 w-40 rounded" />
-        <Bone className="h-4 w-24 rounded" />
-        <Bone className="h-5 w-32 rounded" />
+        <Bone lit="flat" className="h-5 w-40 rounded" />
+        <Bone lit="flat" className="h-4 w-24 rounded" />
+        <Bone lit="flat" className="h-5 w-32 rounded" />
       </span>
     </div>
   );

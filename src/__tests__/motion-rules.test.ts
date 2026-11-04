@@ -18,6 +18,13 @@ const ALLOW: Record<string, string> = {
   'components/chat/PaintLog.tsx': 'dev only: the ?paintlog=1 panel',
   'components/home/Chrome.tsx': 'home/ marketing page chrome: its own bundle, not the app',
 };
+// el.style.transition set by hand: [file]: [text on the line, reason].
+const STYLE_TRANSITION_ALLOW: Record<string, readonly [string, string]> = {
+  'components/chat/MessageThread.tsx': [
+    'bubble.style.transition',
+    'swipe-to-reply: the bubble follows the finger, then springs back on DUR_SLOW_MS --ease-enter',
+  ],
+};
 const ALLOW_DIRS = [
   // The marketing page (signed-out home) ships as its own bundle and keeps its own look.
   'components/home/',
@@ -144,9 +151,53 @@ describe('motion rules', () => {
     ).not.toThrow();
   });
 
+  it('no hand-set transition on an element (el.style.transition = ...) outside the module', () => {
+    // Clearing ('' / 'none') or restoring a saved value is fine; setting a
+    // move by hand is not (the nine moves live in src/lib/motion).
+    const set = hits(
+      /\.style\.transition\s*=(?!=)|\.style\.setProperty\(\s*['"]transition['"]/,
+      isTs,
+    ).filter((hit) => {
+      const rhs = /\.style\.transition\s*=\s*([^;]+)/.exec(hit)?.[1]?.trim() ?? '';
+      if (/^(['"`])(none)?\1$/.test(rhs)) return false;
+      // A saved value put back (prev.transition, saved).
+      if (/^[\w.]+$/.test(rhs)) return false;
+      return true;
+    });
+    const allowed = (hit: string): boolean =>
+      Object.entries(STYLE_TRANSITION_ALLOW).some(
+        ([rel, needle]) => hit.startsWith(`${rel}:`) && hit.includes(needle[0]),
+      );
+    expect(set.filter((hit) => !allowed(hit))).toEqual([]);
+  });
+
+  it('menus and popovers grow with --ease-enter; pop() keeps --ease-pop', () => {
+    const movesSrc = readFileSync(join(SRC, 'lib/motion/moves.ts'), 'utf8');
+    const body = (name: string): string => {
+      const at = movesSrc.indexOf(`export function ${name}(`);
+      const open = movesSrc.indexOf('{', movesSrc.indexOf(')', at));
+      return movesSrc.slice(open, movesSrc.indexOf('\n}', open));
+    };
+    expect(body('growFromTrigger')).toContain('EASE.enter');
+    expect(body('growFromTrigger')).not.toContain('EASE.pop');
+    expect(body('pop')).toContain('EASE.pop');
+  });
+
+  it('a theme switch turns every transition off for two frames (motion.css)', () => {
+    const css = readFileSync(join(SRC, 'lib/motion/motion.css'), 'utf8').replace(/\s+/g, ' ');
+    expect(css).toMatch(/html\.theme-switching \*[^{]*\{ transition: none !important; \}/);
+    const theme = readFileSync(join(SRC, 'lib/theme.ts'), 'utf8');
+    expect(theme).toContain('theme-switching');
+    expect(theme).toContain('requestAnimationFrame');
+  });
+
   it('the allowlist names files that exist', () => {
-    for (const rel of Object.keys(ALLOW)) {
+    for (const rel of [...Object.keys(ALLOW), ...Object.keys(STYLE_TRANSITION_ALLOW)]) {
       expect(() => statSync(join(SRC, rel)), rel).not.toThrow();
+    }
+    for (const [rel, [needle, reason]] of Object.entries(STYLE_TRANSITION_ALLOW)) {
+      expect(readFileSync(join(SRC, rel), 'utf8'), rel).toContain(needle);
+      expect(reason.length, rel).toBeGreaterThan(10);
     }
   });
 

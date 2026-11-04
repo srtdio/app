@@ -113,3 +113,37 @@ describe('syncThemeColorMeta', () => {
     for (const s of spies) expect(s).not.toHaveBeenCalled();
   });
 });
+
+describe('toggleTheme transition hold', () => {
+  it('adds html.theme-switching synchronously and removes it after two frames', async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    vi.stubGlobal('cancelAnimationFrame', () => undefined);
+    const { toggleTheme, THEME_SWITCHING_CLASS } = await load();
+    const root = document.documentElement;
+    toggleTheme();
+    expect(root.classList.contains('dark')).toBe(true);
+    expect(root.classList.contains(THEME_SWITCHING_CLASS)).toBe(true);
+    frames.shift()?.(0);
+    expect(root.classList.contains(THEME_SWITCHING_CLASS)).toBe(true);
+    frames.shift()?.(16);
+    expect(root.classList.contains(THEME_SWITCHING_CLASS)).toBe(false);
+  });
+
+  it('writes theme-color in the same call as the flip (no frame wait)', async () => {
+    vi.stubGlobal('requestAnimationFrame', () => 1);
+    vi.stubGlobal('cancelAnimationFrame', () => undefined);
+    const { toggleTheme } = await load();
+    toggleTheme();
+    expect(contents()).toEqual([TOKENS.dark.bg, TOKENS.dark.bg]);
+  });
+
+  it('initTheme does not add the switching class', async () => {
+    const { initTheme, THEME_SWITCHING_CLASS } = await load();
+    initTheme();
+    expect(document.documentElement.classList.contains(THEME_SWITCHING_CLASS)).toBe(false);
+  });
+});

@@ -150,7 +150,7 @@ export function notesAvatarView(input: {
     >
       <span
         className={cn(
-          'flex h-full w-full items-center justify-center overflow-hidden bg-accent-soft text-accent lit-avatar',
+          'flex h-full w-full items-center justify-center overflow-hidden bg-avatar-1 text-overlay-fg lit-avatar',
           box,
         )}
       >

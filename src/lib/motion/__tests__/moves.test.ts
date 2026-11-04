@@ -13,11 +13,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   bellSwing,
   Bone,
+  BoxSkeleton,
   checkKeyframes,
   dialogIn,
   dialogOut,
   drawTick,
   dropIn,
+  EASE,
   GlideItem,
   growBackIntoCard,
   growFromCard,
@@ -281,12 +283,33 @@ describe('(c) final state first: rendered before the motion features load', () =
   });
 
   it('sweepBoxes: a Bone is a box at its final size, swept (never faded or pulsing)', () => {
-    const host = mount(createElement(Bone, { className: 'h-4 w-20' }));
+    const host = mount(createElement(Bone, { lit: 'flat', className: 'h-4 w-20' }));
     const bone = host.querySelector<HTMLElement>('[data-bone]');
     expect(bone).not.toBeNull();
     expect(bone?.className).toContain('mv-bone');
     expect(bone?.className).not.toMatch(/animate-|opacity|transition/);
+    expect(bone?.className).not.toMatch(/\blit-/);
     expect(bone?.style.opacity).toBe('');
+  });
+
+  it('sweepBoxes: a Bone renders the lit class of what replaces it', () => {
+    const host = mount(createElement(Bone, { lit: 'lit-card', className: 'h-20 rounded-xl' }));
+    const bone = host.querySelector<HTMLElement>('[data-bone]');
+    expect(bone?.className).toContain('lit-card');
+    expect(bone?.className).toContain('mv-bone');
+    expect(bone?.getAttribute('data-lit')).toBe('lit-card');
+  });
+
+  it('sweepBoxes: a BoxSkeleton renders its lit class, none when flat', () => {
+    const lit = mount(
+      createElement(BoxSkeleton, { lit: 'lit-card-muted', className: 'p-4', children: 'x' }),
+    ).querySelector<HTMLElement>('[data-box-skeleton]');
+    expect(lit?.className).toBe('lit-card-muted p-4');
+    const flat = mount(
+      createElement(BoxSkeleton, { lit: 'flat', children: 'x' }),
+    ).querySelector<HTMLElement>('[data-box-skeleton]');
+    expect(flat?.getAttribute('class')).toBeNull();
+    expect(flat?.getAttribute('data-lit')).toBe('flat');
   });
 
   it('rise: an open presence is mounted on the first render, at rest, with no Web Animations', () => {
@@ -311,6 +334,25 @@ describe('(c) final state first: rendered before the motion features load', () =
       atRest(el);
     });
   }
+});
+
+describe('easing per move', () => {
+  it('growFromTrigger (menus, popovers) eases with --ease-enter, no overshoot', () => {
+    growFromTrigger(document.createElement('div'), 'top right');
+    expect(animate.mock.calls.at(-1)?.[1]?.easing).toBe(EASE.enter);
+  });
+
+  it('pop keeps --ease-pop', () => {
+    pop(document.createElement('div'));
+    expect(animate.mock.calls.at(-1)?.[1]?.easing).toBe(EASE.pop);
+  });
+});
+
+describe('theme switch', () => {
+  it('motion.css turns every transition off under html.theme-switching', () => {
+    const css = readFileSync(join(process.cwd(), 'src/lib/motion/motion.css'), 'utf8');
+    expect(css).toMatch(/html\.theme-switching \*,[^{]*\{\s*transition:\s*none !important;\s*\}/);
+  });
 });
 
 describe('never fade', () => {

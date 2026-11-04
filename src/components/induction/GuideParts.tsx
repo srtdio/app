@@ -38,7 +38,6 @@ const GUIDE_Z = 'z-[55]';
 const AMBER_BG = 'bg-[var(--guide)]';
 const AMBER_INK = 'text-[var(--guide-ink)]';
 const AMBER_DEEP_BG = 'bg-[var(--guide-deep)]';
-const AMBER_LIGHT_BG = 'bg-[var(--guide-light)]';
 const LABEL_EDGE = 'border border-[rgb(var(--guide-ink-rgb)/0.12)]';
 
 /**
@@ -262,7 +261,7 @@ export const GuideBar = forwardRef<
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(progress * 100)}
-        className={`h-1 w-full ${AMBER_LIGHT_BG} lit-well`}
+        className="h-1 w-full bg-panel-3 lit-well lit-track"
       >
         <div
           data-induction-progress=""
@@ -409,7 +408,7 @@ export function GuideCard({
           {copy.stats.map((stat) => (
             <div
               key={stat.label}
-              className="flex-1 rounded-lg border bg-panel-2 px-3 py-2.5 lit-card-muted"
+              className="flex-1 rounded-xl border bg-panel-2 px-3 py-2.5 lit-card-muted"
             >
               <p className="text-2xl font-semibold tabular-nums text-accent">{stat.value}</p>
               <p className="text-sm text-fg-2">{stat.label}</p>

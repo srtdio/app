@@ -23,8 +23,20 @@
   --panel-3-rgb: 236 237 240;
   --border: #e6e8eb;
   --border-rgb: 230 232 235;
-  --border-strong: #d7dade;
-  --border-strong-rgb: 215 218 222;
+  /* border-strong is the 3:1 edge of a control at rest (chips, secondary
+     buttons, switch tracks, dots, read bars). border stays for dividers inside
+     a surface only. 3.4:1 on panel, 3.1:1 on panel-2 (#8a8f98 was 2.9 there). */
+  --border-strong: #868b94;
+  --border-strong-rgb: 134 139 148;
+  /* The field line: every input, select, date and code box draws it at rest.
+     Same value as --sel-edge (ink in light, white in dark). */
+  --field-line: #08090a;
+  /* Hover and press: overlays stacked on top of a surface's lit gradient. */
+  --hover-fill: rgba(8, 9, 10, 0.08);
+  --press-fill: rgba(8, 9, 10, 0.14);
+  /* Switch knob: lighter than its track in both themes (higher is lighter). */
+  --knob: #ffffff;
+  --knob-rgb: 255 255 255;
   --fg: #08090a;
   --fg-rgb: 8 9 10;
   --fg-2: #62666d;
@@ -50,6 +62,9 @@
      accent fill), so its meta ink clears 4.5:1 in both themes. */
   --bubble-own: #08090a;
   --bubble-own-rgb: 8 9 10;
+  /* Ink for every line and fill drawn inside the own bubble (on-bubble/*). */
+  --on-bubble: #ffffff;
+  --on-bubble-rgb: 255 255 255;
   /* Chat bubble meta (time, edited, ticks). Peer meta on panel-2 is 5.2:1;
      own meta on bubble-own is white, 19.9:1 (the green read tick, a glyph, 8.0:1).
      The media pill is a translucent black under white ink: 4.7:1 even over a
@@ -191,33 +206,26 @@
   --lit-shine: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
   --lit-muted-shine: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
   --lit-tab-active-bg: rgba(8, 9, 10, 0.06);
-  --lit-raised:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.04),
+  --lit-raised: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.04),
     0 10px 28px -6px rgba(20, 22, 30, 0.24);
-  --lit-card:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.03),
+  --lit-card: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.03),
     0 4px 12px -4px rgba(20, 22, 30, 0.14);
-  --lit-float:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.05),
+  --lit-float: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.05),
     0 12px 28px -6px rgba(20, 22, 30, 0.32);
-  --lit-overlay:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.06),
+  --lit-overlay: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.06),
     0 24px 56px -12px rgba(20, 22, 30, 0.4);
   --lit-header: 0 1px 0 var(--border), 0 6px 14px -10px rgba(20, 22, 30, 0.24);
   --lit-side: 1px 0 0 var(--border), 8px 0 16px -12px rgba(20, 22, 30, 0.18);
   --lit-dock: inset 0 1px 0 #fff, 0 -1px 0 var(--border), 0 -8px 18px -12px rgba(20, 22, 30, 0.2);
-  --lit-btn-primary:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.55),
+  --lit-btn-primary: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.55),
     0 3px 9px -2px rgba(0, 0, 0, 0.35);
-  --lit-btn-success:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(20, 22, 30, 0.06),
+  --lit-btn-success: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(20, 22, 30, 0.06),
     0 3px 9px -2px rgba(47, 138, 91, 0.5);
-  --lit-btn-danger:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(20, 22, 30, 0.06),
+  --lit-btn-danger: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 0 1px rgba(20, 22, 30, 0.06),
     0 3px 9px -2px rgba(200, 60, 60, 0.5);
   --lit-btn-secondary: inset 0 1px 0 #fff, 0 1px 2px rgba(20, 22, 30, 0.1);
-  --lit-chip:
-    inset 0 1px 0 #fff, 0 0 0 1px rgba(20, 22, 30, 0.03), 0 3px 8px -2px rgba(20, 22, 30, 0.16);
+  --lit-chip: inset 0 1px 0 #fff, 0 0 0 1px rgba(20, 22, 30, 0.03),
+    0 3px 8px -2px rgba(20, 22, 30, 0.16);
   --lit-well: inset 0 1px 2px rgba(20, 22, 30, 0.1), inset 0 0 0 1px rgba(20, 22, 30, 0.02);
   --lit-well-soft: inset 0 1px 2px rgba(20, 22, 30, 0.05);
   --lit-pill: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 1px rgba(20, 22, 30, 0.08);
@@ -225,14 +233,13 @@
   --lit-active: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(8, 9, 10, 0.08);
   --lit-knob: 0 2px 6px rgba(20, 22, 30, 0.18), inset 0 1px 0 #fff;
   --lit-media: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.35);
-  --lit-avatar:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+  --lit-avatar: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.08),
     0 1px 2px rgba(20, 22, 30, 0.16);
   --lit-badge: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(20, 22, 30, 0.35);
   --lit-bubble-own: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 3px 8px -3px rgba(0, 0, 0, 0.4);
-  --lit-bubble-other:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.03),
+  --lit-bubble-other: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(20, 22, 30, 0.08),
     0 3px 8px -4px rgba(20, 22, 30, 0.18);
+  --lit-strip: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 .dark {
   --bg: #08090a;
@@ -249,8 +256,13 @@
   --panel-3-rgb: 29 30 33;
   --border: #1c1d1e;
   --border-rgb: 28 29 30;
-  --border-strong: #2a2b2f;
-  --border-strong-rgb: 42 43 47;
+  --border-strong: #6b7079;
+  --border-strong-rgb: 107 112 121;
+  --field-line: rgba(255, 255, 255, 0.92);
+  --hover-fill: rgba(255, 255, 255, 0.1);
+  --press-fill: rgba(255, 255, 255, 0.16);
+  --knob: #1d1e21;
+  --knob-rgb: 29 30 33;
   --fg: #f7f8f8;
   --fg-rgb: 247 248 248;
   --fg-2: #8a8f98;
@@ -274,6 +286,8 @@
   --accent-line: rgba(255, 255, 255, 0.32);
   --bubble-own: #e5e5e6;
   --bubble-own-rgb: 229 229 230;
+  --on-bubble: #08090a;
+  --on-bubble-rgb: 8 9 10;
   /* Own meta on bubble-own 15.8:1 (the green read tick, a glyph, 4.0:1). */
   --bubble-meta: #9aa0a8;
   --bubble-meta-own: #08090a;
@@ -346,14 +360,15 @@
   --guide-ink: #1a1100;
   --guide-rgb: 251 181 60;
   --guide-ink-rgb: 26 17 0;
-  --guide-dim: rgba(0, 0, 0, 0.22);
+  --guide-dim: rgba(0, 0, 0, 0.5);
   --shadow-spotlight: 0 0 0 200vmax var(--guide-dim);
   /* Lighting, dark: higher is lighter, plus a dark outline ring. */
   --lit-hl: inset 0 1px 0 rgba(255, 255, 255, 0.1);
   --sel-edge: rgba(255, 255, 255, 0.92);
-  --lit-edge-top: rgba(255, 255, 255, 0.08);
-  --lit-edge-side: rgba(255, 255, 255, 0.055);
-  --lit-edge-bottom: rgba(255, 255, 255, 0.035);
+  /* Raised surfaces separate from the page at 1.3:1 or more. */
+  --lit-edge-top: rgba(255, 255, 255, 0.14);
+  --lit-edge-side: rgba(255, 255, 255, 0.1);
+  --lit-edge-bottom: rgba(255, 255, 255, 0.06);
   --lit-surface: linear-gradient(#17181b, #111214);
   --lit-surface-top: #24262d;
   --lit-chip-bg: linear-gradient(#17181b, #121315);
@@ -362,37 +377,27 @@
   --lit-shine: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
   --lit-muted-shine: linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
   --lit-tab-active-bg: rgba(255, 255, 255, 0.1);
-  --lit-raised:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+  --lit-raised: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
     0 0 0 1px rgba(0, 0, 0, 0.6), 0 14px 34px -6px rgba(0, 0, 0, 0.85);
-  --lit-card:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+  --lit-card: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
     0 0 0 1px rgba(0, 0, 0, 0.4), 0 6px 16px -6px rgba(0, 0, 0, 0.7);
-  --lit-float:
-    inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+  --lit-float: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
     0 0 0 1px rgba(0, 0, 0, 0.65), 0 16px 36px -6px rgba(0, 0, 0, 0.9);
-  --lit-overlay:
-    inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+  --lit-overlay: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 -1px 0 rgba(255, 255, 255, 0.05),
     0 0 0 1px rgba(0, 0, 0, 0.7), 0 28px 64px -8px rgba(0, 0, 0, 0.95);
   --lit-header: 0 1px 0 rgba(0, 0, 0, 0.6), 0 8px 16px -10px rgba(0, 0, 0, 0.85);
   --lit-side: 1px 0 0 rgba(0, 0, 0, 0.6), 8px 0 16px -12px rgba(0, 0, 0, 0.8);
-  --lit-dock:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 -1px 0 rgba(0, 0, 0, 0.6),
+  --lit-dock: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 -1px 0 rgba(0, 0, 0, 0.6),
     0 -10px 20px -12px rgba(0, 0, 0, 0.75);
-  --lit-btn-primary:
-    inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.6),
-    0 3px 10px -2px rgba(0, 0, 0, 0.7);
-  --lit-btn-success:
-    inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-    0 3px 10px -2px rgba(92, 194, 141, 0.35);
-  --lit-btn-danger:
-    inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-    0 3px 10px -2px rgba(230, 90, 90, 0.35);
-  --lit-btn-secondary:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.5);
-  --lit-chip:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+  --lit-btn-primary: inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(0, 0, 0, 0.6), 0 3px 10px -2px rgba(0, 0, 0, 0.7);
+  --lit-btn-success: inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08), 0 3px 10px -2px rgba(92, 194, 141, 0.35);
+  --lit-btn-danger: inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08), 0 3px 10px -2px rgba(230, 90, 90, 0.35);
+  --lit-btn-secondary: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --lit-chip: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
     0 1px 2px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(0, 0, 0, 0.3);
   --lit-well: inset 0 1px 2px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
   --lit-well-soft: inset 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -401,15 +406,15 @@
   --lit-active: inset 0 1px 0 rgba(255, 255, 255, 0.1);
   --lit-knob: 0 1px 2px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5);
   --lit-media: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.35);
-  --lit-avatar:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+  --lit-avatar: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.2),
     0 1px 2px rgba(0, 0, 0, 0.6);
   --lit-badge: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 1px 2px rgba(0, 0, 0, 0.6);
-  --lit-bubble-own:
-    inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.55);
-  --lit-bubble-other:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.25);
+  --lit-bubble-own: inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.55);
+  --lit-bubble-other: inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  --lit-strip: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 @layer base {
   html,
@@ -518,15 +523,27 @@
   .lit-chip {
     border-color: var(--lit-edge-top) var(--lit-edge-side) var(--lit-edge-bottom);
   }
+  /* Each lit gradient is also held in --lit-bg so hover and press can stack
+     an overlay on top of it (never background-image: none). */
+  .lit-hover,
+  .lit-press {
+    --lit-bg: none;
+  }
+  .lit-btn-secondary {
+    /* The bottom edge of a secondary button is the 3:1 control edge. */
+    --lit-edge-bottom: var(--border-strong);
+  }
   .lit-raised {
     background-image: var(--lit-surface);
     box-shadow: var(--lit-raised);
   }
   .lit-card {
+    --lit-bg: var(--lit-chip-bg);
     background-image: var(--lit-chip-bg);
     box-shadow: var(--lit-card);
   }
   .lit-card-muted {
+    --lit-bg: var(--lit-muted-shine);
     background-image: var(--lit-muted-shine);
     box-shadow: var(--lit-card);
   }
@@ -563,14 +580,17 @@
     box-shadow: var(--lit-dock);
   }
   .lit-btn-primary {
+    --lit-bg: var(--lit-shine);
     background-image: var(--lit-shine);
     box-shadow: var(--lit-btn-primary);
   }
   .lit-btn-success {
+    --lit-bg: var(--lit-shine);
     background-image: var(--lit-shine);
     box-shadow: var(--lit-btn-success);
   }
   .lit-btn-danger {
+    --lit-bg: var(--lit-shine);
     background-image: var(--lit-shine);
     box-shadow: var(--lit-btn-danger);
   }
@@ -582,10 +602,12 @@
     box-shadow: none;
   }
   .lit-btn-secondary {
+    --lit-bg: var(--lit-chip-bg);
     background-image: var(--lit-chip-bg);
     box-shadow: var(--lit-btn-secondary);
   }
   .lit-chip {
+    --lit-bg: var(--lit-chip-bg);
     background-image: var(--lit-chip-bg);
     box-shadow: var(--lit-chip);
   }
@@ -594,6 +616,12 @@
   }
   .lit-well-soft {
     box-shadow: var(--lit-well-soft);
+  }
+  /* A meter / progress track: the well plus a 3:1 border-strong ring. */
+  .lit-track {
+    box-shadow:
+      var(--lit-well),
+      inset 0 0 0 1px var(--border-strong);
   }
   .lit-pill {
     box-shadow: var(--lit-pill);
@@ -625,29 +653,67 @@
     background-image: var(--lit-bubble-other-bg);
     box-shadow: var(--lit-bubble-other);
   }
-  /* Hover shows through: on a pointer that hovers, the lit gradient steps
-     aside so the call site's hover:bg-* fill paints (light and dark). */
+  /* Hover keeps the light: an --hover-fill overlay stacks on top of the
+     surface's own gradient (--lit-bg). Press stacks --press-fill. Never a flat
+     bg-panel-2/3 swap, never background-image: none, never opacity. */
   @media (hover: hover) {
     .lit-btn-secondary:hover,
     .lit-chip:hover,
+    .lit-selected:hover,
+    .lit-hover:hover,
     :is(button, a, [role='button']).lit-card:hover,
     :is(button, a, [role='button']).lit-card-muted:hover {
-      background-image: none;
+      background-image: linear-gradient(var(--hover-fill), var(--hover-fill)), var(--lit-bg, none);
     }
-    /* Cards that are divs but carry their own hover fill (Pipeline, Briefs). */
-    .lit-card[class*='hover:bg-']:hover,
-    .lit-card-muted[class*='hover:bg-']:hover {
-      background-image: none;
+  }
+  .lit-btn-secondary:active,
+  .lit-chip:active,
+  .lit-selected:active,
+  .lit-press:active,
+  .lit-hover:active,
+  :is(button, a, [role='button']).lit-card:active,
+  :is(button, a, [role='button']).lit-card-muted:active {
+    background-image: linear-gradient(var(--press-fill), var(--press-fill)), var(--lit-bg, none);
+  }
+  /* A secondary part inside a hovered group button hovers with it. */
+  @media (hover: hover) {
+    .group:hover > .lit-btn-secondary {
+      background-image: linear-gradient(var(--hover-fill), var(--hover-fill)), var(--lit-bg, none);
     }
+  }
+  /* Disabled solid buttons: fg-3 fill (call site), no light at all. */
+  :is(.lit-btn-primary, .lit-btn-success, .lit-btn-danger):disabled {
+    background-image: none;
+    box-shadow: none;
+  }
+  /* Disabled controls take no hover or press light. */
+  :is(.lit-btn-secondary, .lit-chip, .lit-hover, .lit-press):disabled {
+    background-image: var(--lit-bg, none);
+  }
+  /* The guide spotlight: a cut-out dim, not a light. */
+  .lit-spotlight {
+    box-shadow: var(--shadow-spotlight);
+  }
+  /* The undo strip: a dark bar in both themes, a faint top line only. */
+  .lit-strip {
+    box-shadow: var(--lit-strip);
+  }
+  /* Dark mode: soften white document pages and thumbnails (Apple HIG). */
+  .dark .lit-page {
+    filter: brightness(0.86);
   }
   /* A track's fill (progress, storage, upload, scrubber) catches the light. */
   .lit-fill {
     background-image: var(--lit-shine);
   }
-  /* Outlines: one family, a crisp line from --sel-edge (ink in light, white in
-     dark). No accent tint, no glow. Defined after the edge classes so the
-     line wins over lit-card / lit-chip edges on the same element. */
+}
+/* Outlines: one family, a crisp line from --sel-edge (ink in light, white in
+   dark). No accent tint, no glow. In @layer utilities, at the end, so the line
+   always beats a border-* / bg-* utility or a lit-* edge on the same element
+   (guard: outline-rules.test.ts). */
+@layer utilities {
   .lit-selected {
+    --lit-bg: var(--lit-chip-bg);
     border-color: var(--sel-edge);
     background-image: var(--lit-chip-bg);
     box-shadow: var(--lit-chip);
@@ -659,15 +725,37 @@
     outline: 1.5px solid var(--sel-edge);
     outline-offset: 2px;
   }
+  /* Inside an overflow-hidden card the line sits inside the edge. */
+  .lit-focus-inset {
+    outline: 1.5px solid var(--sel-edge);
+    outline-offset: -2px;
+  }
   /* Errors and Not sent: the element keeps its own lit class. */
   .lit-bad {
     border-color: var(--bad);
   }
+  /* 1px dashed (no layout shift against a 1px border) plus an inset ring. */
   .lit-drop {
-    border: 1.5px dashed var(--sel-edge);
+    border: 1px dashed var(--sel-edge);
+    box-shadow: inset 0 0 0 1px var(--sel-edge);
     background-color: var(--panel);
   }
   .lit-today {
     box-shadow: inset 0 0 0 1px var(--sel-edge);
+  }
+  .lit-selected:disabled {
+    color: var(--fg-3);
+  }
+  /* A dragged selected slide still floats one height. */
+  .lit-selected.lit-float {
+    box-shadow: var(--lit-float);
+  }
+  /* Inside the own bubble the outline is on-bubble ink; cards in the bubble
+     keep the card ink. */
+  [data-own] {
+    --sel-edge: var(--on-bubble);
+  }
+  [data-own] :is(.lit-card, .lit-card-muted, .lit-overlay) {
+    --sel-edge: var(--field-line);
   }
 }

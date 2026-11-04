@@ -295,13 +295,18 @@ export function briefsLoadMore(
  */
 export function BriefsListSkeleton(): ReactElement {
   return (
-    <BoxSkeleton label="Loading briefs" data-testid="briefs-skeleton" className={LIST_CLASS}>
+    <BoxSkeleton
+      lit="flat"
+      label="Loading briefs"
+      data-testid="briefs-skeleton"
+      className={LIST_CLASS}
+    >
       <section>
         <div className="py-2">
-          <Bone as="div" className="h-5 w-24 rounded" />
+          <Bone lit="flat" as="div" className="h-5 w-24 rounded" />
         </div>
         <div className="pt-3 pb-1">
-          <Bone as="div" className="h-4 w-14 rounded" />
+          <Bone lit="flat" as="div" className="h-4 w-14 rounded" />
         </div>
         <div className={GRID_CLASS}>
           {[0, 1, 2].map((key) => (
@@ -310,14 +315,14 @@ export function BriefsListSkeleton(): ReactElement {
               data-brief-card-skeleton=""
               className="lit-card rounded-xl border bg-panel p-4 flex gap-3 min-w-0"
             >
-              <Bone as="div" className="w-16 shrink-0 aspect-square rounded-lg" />
+              <Bone lit="lit-media" as="div" className="w-16 shrink-0 aspect-square rounded-lg" />
               <div className="flex min-w-0 flex-1 flex-col gap-2.5">
                 <div className="flex items-start gap-3">
-                  <Bone as="div" className="h-4 flex-1 rounded" />
-                  <Bone as="div" className="h-6 w-14 shrink-0 rounded-full" />
+                  <Bone lit="flat" as="div" className="h-4 flex-1 rounded" />
+                  <Bone lit="lit-badge" as="div" className="h-6 w-14 shrink-0 rounded-full" />
                 </div>
-                <Bone as="div" className="h-4 w-4/5 rounded" />
-                <Bone as="div" className="h-3 w-16 rounded" />
+                <Bone lit="flat" as="div" className="h-4 w-4/5 rounded" />
+                <Bone lit="flat" as="div" className="h-3 w-16 rounded" />
               </div>
             </div>
           ))}

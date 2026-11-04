@@ -36,7 +36,7 @@ export function voiceDraftView(props: {
         data-voice-draft-play=""
         label={props.playing ? 'Pause voice note' : 'Play voice note'}
         onClick={props.onPlay}
-        className="shrink-0 hover:bg-panel-3"
+        className="shrink-0"
       >
         {props.playing ? (
           <IconPause size={ICON_SIZE.control} />
@@ -51,7 +51,7 @@ export function voiceDraftView(props: {
         label="Delete voice note"
         disabled={props.busy}
         onClick={props.onDelete}
-        className="shrink-0 text-bad hover:bg-bad-soft hover:text-bad disabled:opacity-50"
+        className="shrink-0 text-bad hover:bg-bad-soft hover:text-bad"
       >
         <IconTrash size={ICON_SIZE.control} />
       </IconButton>

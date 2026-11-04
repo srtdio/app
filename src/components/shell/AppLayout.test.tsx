@@ -187,6 +187,20 @@ describe('AppLayout scroll mode', () => {
     }
   });
 
+  it('the laptop scroller keeps a stable scrollbar gutter (no sideways shift)', () => {
+    for (const threadOpen of [false, true]) {
+      for (const mode of ['locked', 'page'] as const) {
+        expect(split(shellChrome(threadOpen, mode).mainClassName)).toContain(
+          'md:[scrollbar-gutter:stable]',
+        );
+      }
+      // Touch tablet page mode: the document scrolls, main is no scroller.
+      expect(split(shellChrome(threadOpen, 'page', true).mainClassName)).not.toContain(
+        'md:[scrollbar-gutter:stable]',
+      );
+    }
+  });
+
   it('page mode keeps the BottomTabs room and the thread/detail chrome', () => {
     const list = shellChrome(false, 'page');
     expect(list.mainClassName).toContain('pb-[calc(84px+env(safe-area-inset-bottom))]');

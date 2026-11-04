@@ -308,7 +308,8 @@ describe('SignUpPage', () => {
     expect(label.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['flex', 'items-center', 'gap-3', 'min-h-11']),
     );
-    expect(checkbox.parentElement).toBe(label);
+    // ui/Checkbox wraps the native input in an 18px box span inside the label.
+    expect(checkbox.parentElement?.parentElement).toBe(label);
     expect(label.textContent).toContain('I agree to the');
     expect(checkbox.className.split(/\s+/)).toContain('m-0');
   });

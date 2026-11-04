@@ -226,11 +226,12 @@ describe('chat home tile', () => {
     expect({ tile: t.cls, classes: t.classes }).toMatchSnapshot();
   });
 
-  it('selected (desktop active): panel-2 fill', () => {
+  it('selected (desktop active): the one selected look, lit-selected', () => {
     const t = tile(dm, read, { selected: true });
-    expect(t.cls).toContain('bg-panel-2');
-    // bg-none drops the card gradient so the panel-2 fill shows.
-    expect(t.cls.split(' ')).toEqual(expect.arrayContaining(['lit-card', 'bg-none']));
+    expect(t.cls.split(' ')).toEqual(expect.arrayContaining(['lit-selected', 'bg-panel']));
+    expect(t.cls.split(' ')).not.toContain('bg-none');
+    expect(t.cls.split(' ')).not.toContain('bg-panel-2');
+    expect(t.cls).not.toContain('hover:bg-panel');
     expect(t.cls).not.toContain('bg-accent-soft');
     tokenOnly(t.cls + t.html);
   });

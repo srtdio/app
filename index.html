@@ -106,13 +106,14 @@
          iOS zoom-on-focus is prevented by 16px text fields instead. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <!-- Browser bar tint (Android Chrome, Samsung Internet, installed app): one
-         meta per colour scheme, each the --panel value src/index.css paints
-         (light :root, dark .dark), the solid Topbar on top of most screens.
-         Everyone starts light; src/lib/theme.ts then writes the current
-         screen's top surface (src/lib/bar-tint.ts) onto every theme-color
-         meta on theme and route change. iOS Safari ignores these and samples
-         the top of the page. -->
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+         meta per colour scheme, the pre-JS fallback only. Light is the --bg
+         canvas (#f7f8f9, src/index.css :root, same as site.webmanifest
+         theme_color); dark is the dark --panel. Everyone starts light;
+         src/lib/theme.ts initTheme and every toggle then write the computed
+         colour of the current screen's top surface (src/lib/bar-tint.ts)
+         onto every theme-color meta, synchronously. iOS Safari ignores these
+         and samples the top of the page. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f8f9" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1011" />
     <title>Sorted</title>
     <link rel="icon" href="/favicon.ico" sizes="32x32" />

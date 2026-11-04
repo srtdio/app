@@ -72,7 +72,7 @@ export function ReadOnlyVersionView({
             size="lg"
           />
         ) : (
-          <div className="rounded-lg border bg-panel-2 px-4 py-6 lit-card-muted text-center text-base text-fg-3">
+          <div className="rounded-xl border bg-panel-2 px-4 py-6 lit-card-muted text-center text-base text-fg-3">
             {imageCountLabel(imageCount)}
           </div>
         )}

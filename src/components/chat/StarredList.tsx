@@ -27,6 +27,7 @@ import { ICON_SIZE, IconChevronLeft, IconChevronRight, IconStar } from '@/compon
 import { useToast } from '@/components/ui/toast';
 import { BUBBLE_SHAPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
+import { Bone } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-reads';
 import { knownMentionName, resolveMentionText, withFormer } from '@/lib/chat/mentions';
@@ -53,7 +54,7 @@ import {
   type StarTarget,
   type StarWriteResult,
 } from '@/lib/chat/stars';
-import { MODAL_PAGE_CLASS, ModalPanel } from '@/components/chat/ModalPanel';
+import { MODAL_HEADER_SAFE, MODAL_PAGE_CLASS, ModalPanel } from '@/components/chat/ModalPanel';
 
 /** Typing settles this long before a narrowed list is read. */
 const STARRED_DEBOUNCE_MS = 250;
@@ -308,7 +309,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
         onClick={selecting !== undefined ? selecting.onToggle : props.onOpen}
         onContextMenu={noCallout}
         className={cn(
-          'flex min-w-0 items-center gap-3 rounded-2xl border bg-panel p-3 lit-card',
+          'flex min-w-0 items-center gap-3 rounded-xl border bg-panel p-3 lit-card',
           NO_TOUCH_SELECT,
         )}
       >
@@ -592,12 +593,12 @@ export function starredListView(props: StarredListViewProps): ReactElement {
     body = (
       <ul data-starred-loading="" className="flex flex-col gap-2.5">
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
-          <li key={i} className="flex flex-col gap-2 rounded-2xl border bg-panel p-3 lit-card">
+          <li key={i} className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card">
             <div className="flex items-center gap-2">
-              <div className="h-5 w-5 shrink-0 rounded-full bg-panel-2" />
-              <div className="h-3.5 w-1/3 rounded bg-panel-2" />
+              <Bone as="div" lit="lit-avatar" className="h-5 w-5 shrink-0 rounded-full" />
+              <Bone as="div" lit="flat" className="h-3.5 w-1/3 rounded" />
             </div>
-            <div className={cn('h-8 w-2/3 bg-panel-2', BUBBLE_SHAPE.touch)} />
+            <Bone as="div" lit="lit-bubble-other" className={cn('h-8 w-2/3', BUBBLE_SHAPE.touch)} />
           </li>
         ))}
       </ul>
@@ -633,7 +634,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
         ))}
         {feed.loadingMore ? (
           <li data-starred-more="" className="px-2 py-3">
-            <div className="mx-auto h-3 w-1/3 rounded bg-panel-2" />
+            <Bone as="div" lit="flat" className="mx-auto h-3 w-1/3 rounded" />
           </li>
         ) : null}
         {feed.moreFailed ? retryRow : null}
@@ -725,7 +726,12 @@ export function StarredSheet(props: {
   if (!open) return null;
   return createPortal(
     <ModalPanel aria-label={STARRED_TITLE} data-starred-sheet="" className={MODAL_PAGE_CLASS}>
-      <div className="flex h-14 shrink-0 items-center gap-1 border-b bg-panel px-2 md:px-4 lit-header">
+      <div
+        className={cn(
+          'flex shrink-0 items-center gap-1 border-b bg-panel px-2 md:px-4 lit-header',
+          MODAL_HEADER_SAFE,
+        )}
+      >
         <IconButton label="Back" onClick={onClose}>
           <IconChevronLeft size={ICON_SIZE.control} />
         </IconButton>

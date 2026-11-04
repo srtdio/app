@@ -120,6 +120,9 @@ export function shellChrome(
         : page
           ? 'flex-1 overflow-x-clip md:overflow-y-auto md:overflow-x-hidden md:pr-[var(--side-panel-w,0px)]'
           : 'flex-1 overflow-y-auto overflow-x-hidden md:pr-[var(--side-panel-w,0px)]',
+      // Laptop scroller: the scrollbar's room is kept whether or not a page
+      // overflows, so switching pages never shifts the layout sideways.
+      !pageTablet && 'md:[scrollbar-gutter:stable]',
       threadOpen ? 'pb-0' : 'pb-[calc(84px+env(safe-area-inset-bottom))] md:pb-0',
     ),
     shellClassName: pageTablet

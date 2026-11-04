@@ -731,7 +731,10 @@ export function ReactionsRow(props: {
           aria-pressed={emoji === currentReaction}
           {...(reactionsOnly ? { 'data-menu-item': `react-${emoji}` } : {})}
           onClick={() => props.onReact(emoji)}
-          className={cn('shrink-0 text-2xl', emoji === currentReaction && 'bg-panel-3')}
+          className={cn(
+            'shrink-0 text-2xl',
+            emoji === currentReaction && 'border bg-panel lit-selected',
+          )}
         >
           <span aria-hidden="true">{emoji}</span>
         </IconButton>
@@ -836,7 +839,7 @@ export function resetEmojiPickerLoad(): void {
   emojiPickerLoad = null;
 }
 
-/** The laptop popover's size (the touch sheet is 70vh). */
+/** The laptop popover's size (the touch sheet is 70dvh). */
 export const EMOJI_POPOVER_WIDTH = 352;
 export const EMOJI_POPOVER_HEIGHT = 400;
 
@@ -1109,7 +1112,7 @@ export function EmojiPickerShell(props: {
         {...dialogProps}
         data-emoji-picker="touch"
         onClick={(e) => e.stopPropagation()}
-        className="absolute inset-x-0 bottom-0 flex h-[70vh] flex-col overflow-hidden rounded-t-2xl border-t bg-panel pb-[env(safe-area-inset-bottom)] lit-overlay focus:outline-none"
+        className="absolute inset-x-0 bottom-0 flex h-[70dvh] flex-col overflow-hidden rounded-t-2xl border-t bg-panel pb-[env(safe-area-inset-bottom)] lit-overlay focus:outline-none"
       >
         {body}
       </div>

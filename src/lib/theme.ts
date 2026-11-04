@@ -52,8 +52,36 @@ function setTheme(theme: Theme): void {
   syncThemeColorMeta();
 }
 
+// While html.theme-switching is on, src/lib/motion/motion.css turns every
+// transition off, so a theme flip lands in one frame instead of each mv-tint
+// and mv-press easing its colours separately (docs/motion.md). Two frames:
+// the first paints the new theme, the second lets styles settle before
+// transitions come back. No await: the flip and the meta write stay
+// synchronous; only the class removal is deferred.
+export const THEME_SWITCHING_CLASS = 'theme-switching';
+
+let switchFrame = 0;
+
+function holdTransitionsForTwoFrames(): void {
+  const root = document.documentElement;
+  root.classList.add(THEME_SWITCHING_CLASS);
+  if (typeof requestAnimationFrame !== 'function') {
+    root.classList.remove(THEME_SWITCHING_CLASS);
+    return;
+  }
+  // A second toggle inside the two frames restarts the count.
+  if (switchFrame) cancelAnimationFrame(switchFrame);
+  switchFrame = requestAnimationFrame(() => {
+    switchFrame = requestAnimationFrame(() => {
+      switchFrame = 0;
+      root.classList.remove(THEME_SWITCHING_CLASS);
+    });
+  });
+}
+
 export function toggleTheme(): Theme {
   const next: Theme = getTheme() === 'dark' ? 'light' : 'dark';
+  holdTransitionsForTwoFrames();
   setTheme(next);
   return next;
 }

@@ -377,7 +377,8 @@ describe('checkpoint state + feed controls', () => {
 
   it('renders a resolved tick with the filled token treatment, never text-white', () => {
     const cls = tickClasses(true);
-    expect(cls).toContain('bg-[var(--good-solid)]');
+    expect(cls).toContain('bg-good-solid');
+    expect(cls).not.toContain('bg-[var(--good-solid)]');
     expect(cls).toContain('text-accent-fg');
     expect(cls).not.toContain('text-white');
     expect(cls).toContain('opacity-100');

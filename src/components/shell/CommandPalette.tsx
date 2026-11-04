@@ -429,10 +429,12 @@ export function namesNeeded(
   return ids;
 }
 
-const ROW = 'flex items-center px-2 text-base mv-tint active:bg-accent-soft';
+// Rows are PressableRows: hover and press are its lit-hover overlay. The border
+// is transparent at rest so the selected edge never shifts the row.
+const ROW = 'flex items-center border px-2 text-base mv-tint';
 
-/** The keyboard-selected (or hovered) row: the accent tint, the pressed row's tint too. */
-const ACTIVE_ROW = 'bg-accent-soft text-fg lit-active';
+/** The keyboard-selected (or hovered) row: the one selected look, lit-selected. */
+const ACTIVE_ROW = 'lit-selected text-fg';
 
 interface PaletteBodyProps {
   query: string;
@@ -531,7 +533,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
           {section.items.map((item) => {
             const index = flat.indexOf(item);
             const isActive = index === props.active;
-            const tone = isActive ? ACTIVE_ROW : 'text-fg-2';
+            const tone = isActive ? ACTIVE_ROW : 'border-transparent text-fg-2';
             const common = {
               type: 'button' as const,
               role: 'option',
@@ -546,7 +548,11 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                 <PressableRow
                   key={`${section.label}:${item.id}`}
                   {...common}
-                  className={cn(ROW, 'font-medium', isActive ? ACTIVE_ROW : 'text-accent')}
+                  className={cn(
+                    ROW,
+                    'font-medium',
+                    isActive ? ACTIVE_ROW : 'border-transparent text-accent',
+                  )}
                 >
                   {`Show all (${item.count})`}
                 </PressableRow>
@@ -941,7 +947,7 @@ export function CommandPalette({
   return (
     <div
       data-palette-overlay=""
-      className="fixed inset-0 z-50 bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12vh] sm:px-4"
+      className="fixed inset-0 z-50 bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12svh] sm:px-4"
       onClick={onOverlayClick}
     >
       <div
@@ -997,7 +1003,7 @@ export function CommandPalette({
           ref={listRef}
           role="listbox"
           aria-label="Search this workspace"
-          className="flex-1 overflow-y-auto py-2 sm:flex-none sm:max-h-[60vh]"
+          className="flex-1 overflow-y-auto py-2 sm:flex-none sm:max-h-[60dvh]"
         >
           <PaletteBody
             query={query}

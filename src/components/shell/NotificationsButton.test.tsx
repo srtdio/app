@@ -47,14 +47,15 @@ describe('NotificationsButton', () => {
     expect(html).not.toContain('bg-accent px-1');
   });
 
-  it('tints while the Activity page is on screen, never elsewhere', () => {
+  it('is lit-selected while the Activity page is on screen, never elsewhere', () => {
     const active = render(NOTIFICATIONS_PATH);
-    expect(active).toContain('bg-accent-soft');
-    // The accent ink rides on the icon's span, never as a ! override on the button.
-    expect(active).toContain('class="inline-flex text-accent"');
+    expect(active).toContain('lit-selected');
+    expect(active).not.toContain('bg-accent-soft');
+    // Full ink on the icon; never a ! override on the button.
+    expect(active).toContain('class="inline-flex"');
     expect(active).not.toMatch(/(^|[\s:"])!/);
     expect(render(NOTIFICATIONS_PATH)).toContain('aria-current="page"');
-    expect(render('/chat')).not.toContain('bg-accent-soft');
+    expect(render('/chat')).not.toContain('lit-selected');
     expect(onNotifications('/notifications')).toBe(true);
     expect(onNotifications('/notificationsx')).toBe(false);
     expect(onNotifications('/plans/x')).toBe(false);

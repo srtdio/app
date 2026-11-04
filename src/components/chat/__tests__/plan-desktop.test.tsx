@@ -288,11 +288,11 @@ describe('the day popover', () => {
 });
 
 describe('Sheet: the fixed-height box is additive', () => {
-  it('default keeps content height; fixedHeight sizes min(640px, 84vh) at sm+ only', () => {
+  it('default keeps content height; fixedHeight sizes min(640px, 84svh) at sm+ only', () => {
     const src = ui('Sheet.tsx');
     expect(src).toContain('fixedHeight?: boolean;');
-    expect(src).toContain("fixedHeight === true && 'sm:h-[min(640px,84vh)]'");
-    expect(src).toContain('sm:max-h-[84vh]');
+    expect(src).toContain("fixedHeight === true && 'sm:h-[min(640px,84svh)]'");
+    expect(src).toContain('sm:max-h-[84svh]');
   });
 
   it('every plan sheet that loads or filters a list uses it; the Day picker keeps content height', () => {

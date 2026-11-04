@@ -25,20 +25,24 @@ describe('index.html viewport (pinch zoom works)', () => {
 });
 
 describe('index.html theme-color (FT7)', () => {
-  it('has one meta per colour scheme, each the --panel value the stylesheet paints', () => {
+  it('has one meta per colour scheme: light the --bg canvas, dark the --panel', () => {
     const tags = metas('theme-color');
     expect(tags).toHaveLength(2);
     const light = tags.find((t) => t.includes('media="(prefers-color-scheme: light)"'));
     const dark = tags.find((t) => t.includes('media="(prefers-color-scheme: dark)"'));
-    expect(light).toContain('content="#ffffff"');
+    expect(light).toContain('content="#f7f8f9"');
     expect(dark).toContain('content="#0f1011"');
   });
 
-  it('the values are the --panel tokens in src/index.css', () => {
+  it('the values are the tokens in src/index.css and the manifest theme_color', () => {
     const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8');
-    expect(css).toMatch(/:root \{[^}]*--panel: #ffffff;/);
+    expect(css).toMatch(/:root \{[^}]*--bg: #f7f8f9;/);
     expect(css).toMatch(/\.dark \{[^}]*--panel: #0f1011;/);
-    expect(html).toContain('--panel value src/index.css paints');
+    const manifest = JSON.parse(
+      readFileSync(new URL('../../public/site.webmanifest', import.meta.url), 'utf8'),
+    ) as { theme_color: string };
+    expect(manifest.theme_color).toBe('#f7f8f9');
+    expect(html).toContain('pre-JS fallback only');
   });
 
   it('the pre-CSS canvas colours are unchanged', () => {

@@ -18,6 +18,27 @@ import {
 import { reloadIfStale } from '@/lib/chunk-reload';
 import { startBootChunks } from '@/lib/page-loaders';
 import { captureEarlyErrors, scheduleSentry } from '@/lib/sentry-lazy';
+import inter400 from '@fontsource/inter/files/inter-latin-400-normal.woff2?url';
+import inter500 from '@fontsource/inter/files/inter-latin-500-normal.woff2?url';
+import inter600 from '@fontsource/inter/files/inter-latin-600-normal.woff2?url';
+
+// Preload Inter 400/500/600 (latin) before anything renders, so first paint
+// does not wait for the stylesheet to discover them. The same hashed files the
+// @fontsource CSS points at; font-display: swap stays. Synchronous, no await:
+// link tags only, and no file is fetched that the page would not fetch anyway.
+function preloadFonts(hrefs: readonly string[]): void {
+  for (const href of hrefs) {
+    if (document.head.querySelector(`link[rel="preload"][href="${href}"]`)) continue;
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'font';
+    link.type = 'font/woff2';
+    link.href = href;
+    link.crossOrigin = 'anonymous';
+    document.head.appendChild(link);
+  }
+}
+preloadFonts([inter400, inter500, inter600]);
 
 // Entry point. Decides synchronously whether "/" is a guest visit; a guest gets
 // the homepage chunk only (no App, router, Supabase, Sentry, Agora or app CSS).

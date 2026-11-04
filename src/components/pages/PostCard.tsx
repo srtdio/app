@@ -377,10 +377,12 @@ export function PostCard({
             },
           }
         : {})}
-      className="relative flex h-full min-w-0 flex-col rounded-xl border bg-panel lit-card mv-tint hover:bg-panel-2"
+      className="relative flex h-full min-w-0 flex-col rounded-xl border bg-panel lit-card mv-tint"
     >
+      {/* Hover and press: the Open post row's lit-hover overlay, card corners. */}
       <PressableRow
         type="button"
+        card
         aria-label={`Open post ${post.title}`}
         onPointerDown={pressPrefetch}
         onTouchStart={pressPrefetch}

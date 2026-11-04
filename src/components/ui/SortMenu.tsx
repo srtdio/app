@@ -35,8 +35,8 @@ export function sortOptionButtons<T extends string>(
         aria-checked={selected}
         onClick={() => onPick(option.value)}
         className={cn(
-          'flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-left text-base mv-tint',
-          selected ? 'text-fg' : 'text-fg-2 hover:bg-panel-2',
+          'flex min-h-[44px] items-center gap-2.5 rounded-lg px-3 text-left text-base mv-tint focus-visible:lit-focus',
+          selected ? 'lit-selected text-fg' : 'lit-hover text-fg-2',
         )}
       >
         <span className="flex h-4 w-4 shrink-0 items-center justify-center text-accent">

@@ -72,7 +72,7 @@ export function ReminderOptions(props: {
       {props.preview !== null ? (
         <p
           data-reminder-preview=""
-          className="mb-2 truncate rounded-lg bg-panel-2 px-3 py-2 text-base text-fg-2 lit-well-soft"
+          className="mb-2 truncate rounded-xl border bg-panel-2 px-3 py-2 text-base text-fg-2 lit-card-muted"
         >
           {props.preview}
         </p>
