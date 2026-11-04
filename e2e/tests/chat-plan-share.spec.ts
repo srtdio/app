@@ -300,12 +300,11 @@ test('agency: Send in {chat} reads Sending, then Sent; again does nothing; an ed
   await primary.dblclick();
   await expect(primary).toHaveText(`Sending in ${PEER_NAME}…`);
   await expect(primary).toBeDisabled();
-  // Then "Sent": disabled, the selected accent chip light, no icon, same box.
+  // Then "Sent": the primary button's disabled state, no icon, same box.
   await expect(primary).toHaveText('Sent');
   await expect(primary).toHaveAttribute('data-plan-send-state', 'sent');
   await expect(primary).toBeDisabled();
-  await expect(primary).toHaveClass(/lit-chip-selected/);
-  await expect(primary).toHaveClass(/text-accent/);
+  await expect(primary).toHaveClass(/lit-btn-primary/);
   await expect(primary.locator('svg')).toHaveCount(0);
   const sentBox = await primary.boundingBox();
   expect(sentBox?.height).toBe(idleBox?.height);

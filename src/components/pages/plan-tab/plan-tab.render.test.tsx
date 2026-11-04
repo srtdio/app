@@ -289,14 +289,14 @@ describe('PlanTabPage', () => {
     expect(html).not.toContain('Create plan');
   });
 
-  it('laptop Month: today is the boxed cell (accent-soft, 2px inset ring) with a Today pill', () => {
+  it('laptop Month: today is the boxed cell (lit-today inset edge) with a Today pill', () => {
     const html = renderCalendar('month');
     const cell = between(html, 'data-plan-tab-today-cell', 'data-plan-tab-day=');
     expect(cell).toContain(`data-plan-tab-day="${TODAY}"`);
-    expect(cell).toContain('bg-accent-soft');
-    expect(cell).toContain('ring-2 ring-inset ring-accent');
-    // The keyboard ring stays visible over the today ring.
-    expect(cell).toContain('focus-visible:ring-4');
+    expect(cell).toContain('lit-today');
+    expect(cell).not.toContain('bg-accent-soft');
+    // The keyboard outline sits inside the cell, over the today edge.
+    expect(cell).toContain('focus-visible:lit-focus');
     expect(cell).toMatch(/data-plan-tab-today=""[^>]*class="[^"]*bg-accent text-accent-fg/);
     expect(cell).toMatch(
       /data-plan-tab-today-pill="" class="[^"]*rounded-full[^"]*bg-accent text-accent-fg[^"]*">Today</,
@@ -316,8 +316,8 @@ describe('PlanTabPage', () => {
       /data-plan-tab-today-pill="" class="[^"]*ml-auto bg-accent-fg text-accent[^"]*">Today</,
     );
     const col = between(html, 'data-plan-tab-today-cell', '>');
-    expect(col).toContain('bg-accent-soft');
-    expect(col).toContain('ring-2 ring-inset ring-accent');
+    expect(col).toContain('lit-today');
+    expect(col).not.toContain('bg-accent-soft');
     expect(
       html.match(/data-plan-tab-day="[^"]+"[^>]*class="[^"]*min-h-0[^"]*overflow-y-auto/g),
     ).toHaveLength(7);

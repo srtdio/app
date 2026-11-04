@@ -196,12 +196,15 @@ describe('open at today', () => {
         html.match(new RegExp(`<div data-plan-day="${day}"[^>]*>`))?.[0] ?? '';
       const today = groupTag('2026-10-13');
       expect(today).toContain('data-plan-day-today=""');
-      // 4px rule + pl-3 = the other days' 16px, so titles stay aligned.
-      expect(today).toContain('border-l-4 border-l-accent bg-accent-soft pl-3');
-      expect(today).toContain('pr-4');
+      // Each day is a card; today's takes the selected edge, not a band.
+      expect(today).toContain('rounded-xl border bg-panel p-3');
+      expect(today).toContain('lit-selected');
+      expect(today).not.toContain('lit-card');
+      expect(today).not.toContain('bg-accent-soft');
       const other = groupTag('2026-10-15');
       expect(other).not.toContain('data-plan-day-today');
-      expect(other).toContain('pl-4');
+      expect(other).toContain('rounded-xl border bg-panel p-3');
+      expect(other).toContain('lit-card');
       expect(other).not.toContain('bg-accent-soft');
       expect(html.match(/data-plan-day-today=""/g)).toHaveLength(1);
       expect(html.match(/data-plan-today=""/g)).toHaveLength(1);
