@@ -13,6 +13,10 @@ import { requestEmailBody as demoRequestBody } from '../../supabase/functions/de
 // iphone-light and iphone-dark. The wordmark's https://srtd.io/email/... URLs
 // are served from public/email so the shot never touches the network.
 
+// Tagged @email: the ipad-* projects grep @tablet and laptop-dark greps
+// @laptop-dark, so neither picks it up; laptop-light (grepInvert @tablet only)
+// is skipped below by project name, since the config may change testMatch only.
+const EMAIL_TAG = '@email';
 const EMAIL_PROJECTS = /^iphone-(light|dark)$/;
 
 const digest: RecipientDigest = {
@@ -124,7 +128,7 @@ const EMAILS: readonly (readonly [string, () => string])[] = [
 ];
 
 for (const [name, render] of EMAILS) {
-  test(name, async ({ page }, testInfo) => {
+  test(name, { tag: EMAIL_TAG }, async ({ page }, testInfo) => {
     test.skip(
       !EMAIL_PROJECTS.test(testInfo.project.name),
       'emails shoot on iPhone light and dark only',
