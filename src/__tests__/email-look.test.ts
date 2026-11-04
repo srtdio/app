@@ -75,11 +75,7 @@ describe('email look: one shell for every email', () => {
   });
 
   it.each(TEMPLATES)('%s is generated from auth-templates.ts', (rel) => {
-    const kind = (Object.keys(AUTH_TEMPLATES) as (keyof typeof AUTH_TEMPLATES)[]).find(
-      (k) => AUTH_TEMPLATES[k] === rel,
-    );
-    expect(kind).toBeDefined();
-    expect(read(rel)).toBe(renderAuthCodeTemplate(kind!));
+    expect(read(rel)).toBe(renderAuthCodeTemplate());
   });
 
   it.each(TEMPLATES)(

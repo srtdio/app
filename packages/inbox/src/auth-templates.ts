@@ -27,8 +27,8 @@ function line(cls: 'fg2' | 'fg3', text: string, top: number): string {
   return `<div class="${cls}" style="padding-top:${top}px;font-family:${EMAIL_SANS};font-size:14px;line-height:22px;color:${L[cls]}">${text}</div>`;
 }
 
-/** The whole template, Go tags ({{ .Token }}, {{ .Email }}) left in place. */
-export function renderAuthCodeTemplate(_kind: AuthTemplate): string {
+/** The whole template (magic-link and confirm-signup are the same), Go tags ({{ .Token }}, {{ .Email }}) left in place. */
+export function renderAuthCodeTemplate(): string {
   const inner =
     `<div class="fg" style="font-family:${EMAIL_SANS};font-size:20px;font-weight:600;line-height:28px;letter-spacing:-0.01em;color:${L.fg}">Your Sorted code</div>` +
     line('fg2', 'Enter this code in Sorted to sign in.', 8) +
