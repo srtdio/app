@@ -38,6 +38,7 @@ import {
 } from 'react';
 import type { MutableRefObject, ReactElement, ReactNode, RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { Button } from '@/components/ui/Button';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { IconDownload, IconFile, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -45,6 +46,7 @@ import { useModalFocus } from '@/lib/modal-focus';
 import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
 import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
 import { humanizeSize } from '@/lib/assets';
+import { formatDateTime } from '@/lib/time';
 import { PresignError, type PresignCache } from '@/lib/asset-presign';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { attachmentLink, saveFromLink, type HeldLink } from '@/lib/files/download';
@@ -365,6 +367,75 @@ export function viewerTone(kind: ViewerKind): ViewerTone {
 const OVERLAY = TONES.overlay;
 /** No selection or iOS callout on the viewer's controls. */
 const NO_SELECT = 'select-none [-webkit-touch-callout:none] [-webkit-user-select:none]';
+
+/** The bottom bar's text control that opens the chat at the file's message. */
+export const SHOW_IN_CHAT_LABEL = 'Show in chat';
+
+/**
+ * The Show in chat Button on the theme-independent dark overlay (the
+ * PostLightbox precedent: ghost, recoloured to the overlay tokens; the overlay
+ * ring is the allowed exception to the one accent ring). 44 tall.
+ */
+export const SHOW_IN_CHAT_OVERLAY_CLASS =
+  'shrink-0 text-overlay-fg hover:bg-overlay-surface hover:text-overlay-fg ' +
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70';
+
+/**
+ * The two-line details block at the top centre of the image and file viewers:
+ * the sender's name (sm/500), then the date and time (xs mono tabular, already
+ * formatted through src/lib/time.ts). An empty line is left out. Shared by
+ * ImageLightbox.
+ */
+export function ViewerDetails(props: {
+  sender: string;
+  time: string;
+  fgClass?: string;
+  fgDimClass?: string;
+}): ReactElement {
+  return (
+    <div
+      data-lightbox-details=""
+      className={cn(
+        'pointer-events-none flex min-w-0 max-w-full flex-col items-center text-center',
+        NO_SELECT,
+      )}
+    >
+      {props.sender !== '' ? (
+        <span
+          className={cn(
+            'max-w-full truncate text-sm font-medium',
+            props.fgClass ?? 'text-overlay-fg',
+          )}
+        >
+          {props.sender}
+        </span>
+      ) : null}
+      {props.time !== '' ? (
+        <span
+          className={cn(
+            'max-w-full truncate font-mono text-xs tabular-nums',
+            props.fgDimClass ?? 'text-overlay-fg-dim',
+          )}
+        >
+          {props.time}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** The FileViewer's details lines from its optional props; null when neither is given. Pure. */
+export function fileViewerDetails(
+  sender: string | undefined,
+  sentAt: string | undefined,
+  now: Date = new Date(),
+): { sender: string; time: string } | null {
+  if (sender === undefined && sentAt === undefined) return null;
+  const time = sentAt !== undefined ? formatDateTime(sentAt, now) : '';
+  const name = sender ?? '';
+  if (name === '' && time === '') return null;
+  return { sender: name, time };
+}
 
 /** The centred message with Retry and Download: a failed load is never blank. */
 function ViewerError(props: {
@@ -1017,6 +1088,12 @@ export interface FileViewerProps {
   subtitle?: string | undefined;
   /** The tile's rect to grow from; default: the tile the opening tap hit. */
   from?: Box | null | undefined;
+  /** Chat: who sent the file, shown small at the top centre with `sentAt`. */
+  sender?: string | undefined;
+  /** Chat: when it was sent (ISO), shown as date and time on the device zone. */
+  sentAt?: string | undefined;
+  /** Chat home: a "Show in chat" text button in a bottom bar opens the chat at the file's message. */
+  onShowInChat?: (() => void) | undefined;
 }
 
 /** The top bar's line under the name with caller actions: "Page 3 of 12" for a PDF. Pure. */
@@ -1098,7 +1175,8 @@ function TopBar(props: {
 }
 
 export function FileViewerSheet(props: FileViewerProps): ReactElement {
-  const { name, kind, size, source, onLoadError, actions, subtitle } = props;
+  const { name, kind, size, source, onLoadError, actions, subtitle, onShowInChat } = props;
+  const details = fileViewerDetails(props.sender, props.sentAt);
   // Callers pass a fresh onClose each render: keep the latest in a ref so the
   // key and swipe listeners are not re-attached (and a drag not dropped).
   const onCloseRef = useRef(props.onClose);
@@ -1279,6 +1357,16 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
           actions={actions}
           line={actions !== undefined ? viewerBarLine(null, subtitle) : null}
         />
+        {details !== null ? (
+          <div className="relative z-10 flex shrink-0 justify-center px-14 pb-1">
+            <ViewerDetails
+              sender={details.sender}
+              time={details.time}
+              fgClass={tone.fg}
+              fgDimClass={tone.fgDim}
+            />
+          </div>
+        ) : null}
         <div className="relative flex min-h-0 flex-1 items-center justify-center">
           <Renderer
             name={name}
@@ -1291,6 +1379,25 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
             onFailed={onFailed}
           />
         </div>
+        {onShowInChat !== undefined ? (
+          <div
+            data-viewer-bottom-bar=""
+            className={cn(
+              'relative z-10 flex h-16 shrink-0 items-center px-4 pb-[env(safe-area-inset-bottom)]',
+              NO_SELECT,
+            )}
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              data-show-in-chat=""
+              onClick={onShowInChat}
+              className={tone === OVERLAY ? SHOW_IN_CHAT_OVERLAY_CLASS : 'shrink-0'}
+            >
+              {SHOW_IN_CHAT_LABEL}
+            </Button>
+          </div>
+        ) : null}
         {pages !== null && kind === 'pdf' ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] flex justify-center">
             <span
