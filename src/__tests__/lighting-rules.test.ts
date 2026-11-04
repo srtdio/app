@@ -63,6 +63,11 @@ const MEDIA_LINE =
 // [file, text on the line, reason]: opacity that is not dimmed copy.
 const OPACITY_ALLOW: readonly (readonly [string, string, string])[] = [
   [
+    'chat/FileBubble.tsx',
+    "props.dimmed && 'opacity-80'",
+    'the file image under its swap (media, not text)',
+  ],
+  [
     'pages/pcs/checkpoint-controls.tsx',
     "'opacity-100' : 'opacity-60'",
     'the tick glyph inside the checkpoint box (an icon, not copy), full when marked',
