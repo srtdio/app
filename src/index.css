@@ -96,8 +96,8 @@
   --search-mark-bg-rgb: 255 233 184;
   --search-mark-fg: #1b1c20;
   /* Stage inks clear 4.5:1 on bg, panel, panel-2 and panel-3. */
-  --stage-review: #ae5009;
-  --stage-review-rgb: 174 80 9;
+  --stage-review: #8f6300;
+  --stage-review-rgb: 143 99 0;
   --stage-approved: #147c3b;
   --stage-approved-rgb: 20 124 59;
   --stage-rejected: #b91c1c;
@@ -304,8 +304,8 @@
   --search-mark-bg: #e8b84a;
   --search-mark-bg-rgb: 232 184 74;
   --search-mark-fg: #16171b;
-  --stage-review: #e0954a;
-  --stage-review-rgb: 224 149 74;
+  --stage-review: #f2c94c;
+  --stage-review-rgb: 242 201 76;
   --stage-approved: #46b47a;
   --stage-approved-rgb: 70 180 122;
   --stage-rejected: #e0685a;
