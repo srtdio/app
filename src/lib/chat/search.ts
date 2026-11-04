@@ -6,7 +6,7 @@
 // chats the caller is in (after their Clear chat), deleted rows are excluded,
 // newest first (created_at desc, id desc). It is always called with NAMED args,
 // with a fresh uuid_v7 p_trace_id per call. A filter chip passes p_kind (photo,
-// voice, file, link); with a chip the query may be empty (newest matches).
+// video, voice, file, link); with a chip the query may be empty (newest matches).
 // Paging is keyset: the last row's created_at and id go back as the cursor.
 
 import type { Client } from '@srtdio/rpc';
@@ -36,11 +36,12 @@ export const SEARCH_PAGE_SIZE = 30;
 export const SEARCH_DEBOUNCE_MS = 250;
 
 /** A filter chip's kind: chat_message_search p_kind. */
-export type SearchKind = 'photo' | 'link' | 'file' | 'voice';
+export type SearchKind = 'photo' | 'video' | 'link' | 'file' | 'voice';
 
-/** The chips under the chat home search box, in order. */
+/** The chips under the chat home search box, in order (WhatsApp's). */
 export const SEARCH_CHIPS: readonly { kind: SearchKind; label: string }[] = [
   { kind: 'photo', label: 'Photos' },
+  { kind: 'video', label: 'Videos' },
   { kind: 'link', label: 'Links' },
   { kind: 'file', label: 'Files' },
   { kind: 'voice', label: 'Voice notes' },
@@ -83,6 +84,9 @@ export interface SearchHit {
    * file): "Photo", "Voice message (0:12)", "File"; '' when it has a body.
    */
   mediaLine?: string;
+  /** The row's attachment ids and render meta, for the chip grids (media-items.ts). */
+  attachmentAssetIds?: string[] | null;
+  attachmentMeta?: unknown;
 }
 
 /** The keyset cursor: the last row of the previous page. */
@@ -159,6 +163,8 @@ function toHit(row: SearchRow): SearchHit {
       body.trim() !== ''
         ? ''
         : previewText(messagePreviewContent(rowToThreadMessage(row as ChatMessageRow, ''))),
+    attachmentAssetIds: row.attachment_asset_ids ?? null,
+    attachmentMeta: row.attachment_meta,
   };
 }
 

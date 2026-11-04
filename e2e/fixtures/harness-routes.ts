@@ -1388,9 +1388,12 @@ function kindSearch(args: Record<string, unknown>, tables: Tables): Row[] {
     if (kind === 'link') return /https?:\/\//i.test(String(m.body ?? ''));
     const list = mimes(m);
     if (kind === 'photo') return list.some((t) => t.startsWith('image/'));
+    if (kind === 'video') return list.some((t) => t.startsWith('video/'));
     if (kind === 'voice') return list.some((t) => t.startsWith('audio/'));
     if (kind === 'file')
-      return list.some((t) => !t.startsWith('image/') && !t.startsWith('audio/'));
+      return list.some(
+        (t) => !t.startsWith('image/') && !t.startsWith('video/') && !t.startsWith('audio/'),
+      );
     return false;
   };
   return (tables.chat_messages ?? [])

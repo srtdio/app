@@ -29,6 +29,8 @@ import {
   seedRemovableFiles,
   seedRemovedLine,
 } from '../fixtures/remove-files';
+import { installLinkPreviewStub } from '../fixtures/link-previews';
+import { installMediaSearch, type MediaKind } from '../fixtures/search-data';
 import { ONBOARDING_NOW, ONBOARDING_SCREENS, signOut } from './onboarding-steps';
 
 // Visual lock: every screen of the consistency audit (24 Oct 2026), the chat
@@ -1312,6 +1314,71 @@ for (const dark of [false, true]) {
       await openNewChatBlocked(page, true);
       await tap([page.getByRole('button', { name: /Contact us/ })], 'Contact us');
       await waitFor([page.getByRole('button', { name: 'Copy email', exact: true })], 'Copy email');
+    },
+  });
+}
+
+// The chat home's media chips (Photos, Videos, Links, Files, Voice notes) over
+// the media fixtures (search-data.ts: a 3-photo album and a single photo a
+// month back, a video with duration_ms 12000 and one without, a pdf with
+// page_count and a docx, a message with 2 links, a voice note), and the photo
+// viewer opened from the first Photos tile with its details on top. Phone
+// light/dark and laptop light come from the projects; -dark adds laptop dark.
+
+/** Seed the media rows and answer p_kind searches like the live proc (videos apart). */
+async function seedMediaChips(network: HarnessNetwork, page: Page, now: number): Promise<void> {
+  await installLinkPreviewStub(page);
+  await installMediaSearch(page, network.world.tables, now);
+}
+
+/** The chat home with one media chip on and its results painted. */
+async function openMediaChip(page: Page, kind: MediaKind): Promise<Locator> {
+  await chatListReady(page);
+  await tap([page.locator(`[data-search-chip="${kind}"]`)], `${kind} chip`);
+  const results = page.locator(`[data-media-results="${kind}"]`);
+  await waitFor([results], `${kind} results`);
+  await waitFor(
+    [results.locator('[data-media-tile]'), results.locator('[data-media-row]')],
+    `${kind} items`,
+  );
+  if (kind === 'video') await waitFor([results.locator('[data-media-duration]')], 'duration');
+  return results;
+}
+
+const MEDIA_CHIP_SCREENS: Array<{ kind: MediaKind; name: string }> = [
+  { kind: 'photo', name: 'photos' },
+  { kind: 'video', name: 'videos' },
+  { kind: 'link', name: 'links' },
+  { kind: 'file', name: 'files' },
+  { kind: 'voice', name: 'voice-notes' },
+];
+
+for (const dark of [false, true]) {
+  const suffix = dark ? '-dark' : '';
+  const laptopDark = dark ? { only: 'laptop' as const, dark } : {};
+  for (const chip of MEDIA_CHIP_SCREENS) {
+    SCREENS.push({
+      name: `chat-home-chip-${chip.name}${suffix}`,
+      seed: creator,
+      prepare: seedMediaChips,
+      ...laptopDark,
+      url: '/chat',
+      steps: async (page) => {
+        await openMediaChip(page, chip.kind);
+      },
+    });
+  }
+  SCREENS.push({
+    name: `chat-media-lightbox-details${suffix}`,
+    seed: creator,
+    prepare: seedMediaChips,
+    ...laptopDark,
+    url: '/chat',
+    steps: async (page) => {
+      const results = await openMediaChip(page, 'photo');
+      await tap([results.locator('[data-media-tile]').first()], 'first photo tile');
+      await waitFor([page.locator('[data-lightbox-details]')], 'viewer details');
+      await waitFor([page.locator('[data-show-in-chat]')], 'Show in chat');
     },
   });
 }

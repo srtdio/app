@@ -206,7 +206,7 @@ test('chat stars: star, list everywhere, jump, unstar from Edit', async ({ page 
   const chips = await page
     .locator('[data-search-chip]')
     .evaluateAll((els) => els.map((el) => el.getAttribute('data-search-chip')));
-  expect(chips).toEqual(['starred', 'photo', 'link', 'file', 'voice']);
+  expect(chips).toEqual(['starred', 'photo', 'video', 'link', 'file', 'voice']);
   await page.locator('[data-search-chip="starred"]').click();
   const home = page.locator('[data-starred-home]');
   await expect(home.locator('[data-starred-row]', { hasText: PEER_LINE })).toBeVisible();

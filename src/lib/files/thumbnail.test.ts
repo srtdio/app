@@ -14,6 +14,7 @@ import {
   imageThumbnailBox,
   isListCopyImage,
   makeImageThumbnail,
+  videoDurationMs,
 } from '@/lib/files/thumbnail';
 import { handleOfficeRequest } from '@/lib/files/office/handle';
 import type { OfficeWorkerLike } from '@/lib/files/office/run';
@@ -375,6 +376,43 @@ describe('makeThumbnail', () => {
     expect(result).toMatchObject({ ok: true, width: 580, height: 326 });
     expect(result.ok && result.pageCount).toBe(undefined);
     expect(frame.canvas.width).toBe(0);
+  });
+
+  it('a video grabber that reads the length passes durationMs through', async () => {
+    const frame = fakeCanvas();
+    frame.canvas.width = 580;
+    frame.canvas.height = 326;
+    const videoFrame = vi.fn<ThumbnailDeps['videoFrame']>(async () => ({
+      canvas: frame.canvas,
+      durationMs: 12000,
+    }));
+    const { deps: d } = deps({ videoFrame });
+    const video = new File(['x'], 'clip.mp4', { type: 'video/mp4' });
+    const result = await makeThumbnail(video, new AbortController().signal, d);
+    expect(result).toMatchObject({ ok: true, width: 580, height: 326, durationMs: 12000 });
+    expect(frame.canvas.width).toBe(0);
+  });
+
+  it('a video with no usable length has no durationMs', async () => {
+    const frame = fakeCanvas();
+    frame.canvas.width = 580;
+    frame.canvas.height = 326;
+    const videoFrame = vi.fn<ThumbnailDeps['videoFrame']>(async () => ({ canvas: frame.canvas }));
+    const { deps: d } = deps({ videoFrame });
+    const video = new File(['x'], 'clip.mp4', { type: 'video/mp4' });
+    const result = await makeThumbnail(video, new AbortController().signal, d);
+    expect(result.ok).toBe(true);
+    expect(result.ok && 'durationMs' in result).toBe(false);
+  });
+
+  it('videoDurationMs keeps only finite positive lengths, in whole ms', () => {
+    expect(videoDurationMs(12)).toBe(12000);
+    expect(videoDurationMs(1.2345)).toBe(1235);
+    expect(videoDurationMs(0)).toBe(undefined);
+    expect(videoDurationMs(-1)).toBe(undefined);
+    expect(videoDurationMs(Number.NaN)).toBe(undefined);
+    expect(videoDurationMs(Number.POSITIVE_INFINITY)).toBe(undefined);
+    expect(videoDurationMs(0.0001)).toBe(undefined);
   });
 
   it('a failing video grabber is no thumbnail', async () => {

@@ -29,6 +29,7 @@ import {
   IconX,
   ICON_SIZE,
 } from '@/components/ui/icons';
+import { Button } from '@/components/ui/Button';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -36,7 +37,12 @@ import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
 import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
 import { viewportSize } from '@/lib/use-is-laptop';
 import type { PresignCache } from '@/lib/asset-presign';
-import { VIEWER_ERROR } from '@/components/ui/FileViewer';
+import {
+  SHOW_IN_CHAT_LABEL,
+  SHOW_IN_CHAT_OVERLAY_CLASS,
+  VIEWER_ERROR,
+  ViewerDetails,
+} from '@/components/ui/FileViewer';
 import { attachmentLink, saveFromLink, type HeldLink } from '@/lib/files/download';
 
 /** Minimum horizontal travel (px) for a swipe to count as navigation. */
@@ -305,12 +311,19 @@ export function indexAfterRemove(index: number, count: number): number | null {
   return index >= count - 1 ? 0 : index;
 }
 
-/** Optional bottom bar (chat): who sent the image and when, plus Download. */
+/**
+ * Optional (chat): who sent the image and when, shown small at the top centre
+ * (two lines), plus the bin and Download in the bottom bar.
+ */
 export interface LightboxDetails {
   sender: string;
-  /** Already formatted by the caller's time helper (HH:mm). */
+  /** Already formatted by the caller's src/lib/time.ts helper (formatTime or formatDateTime). */
   time: string;
 }
+
+// The top-centre details block and the Show in chat label/skin live in the
+// FileViewer (so its lazy chunk never pulls this module in) and are shared here.
+export { SHOW_IN_CHAT_LABEL, SHOW_IN_CHAT_OVERLAY_CLASS, ViewerDetails };
 
 /** The current image's display URL: its local preview, else the shared presign. */
 function useImageUrl(
@@ -431,8 +444,17 @@ export interface ImageLightboxProps {
   presignEnabled: boolean;
   onIndexChange: (index: number) => void;
   onClose: () => void;
-  /** Chat: sender + time, the bin (onRemove) and Download in a bottom bar. Comments omit it. */
+  /**
+   * Chat: sender + time at the top centre, and the bin (onRemove) and Download
+   * in a bottom bar. Comments omit it.
+   */
   details?: LightboxDetails;
+  /**
+   * Chat home: a "Show in chat" text button in the bottom bar opens the chat at
+   * the shown image's message. Called with the index currently shown. Omitted:
+   * no button.
+   */
+  onShowInChat?: (index: number) => void;
   /** The thumbnail's rect to grow from; default: the thumbnail the opening tap hit. */
   from?: Box | null;
 }
@@ -453,6 +475,7 @@ export function ImageLightbox({
   onIndexChange,
   onClose,
   details,
+  onShowInChat,
   from,
 }: ImageLightboxProps): ReactElement | null {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -733,6 +756,12 @@ export function ImageLightbox({
             {lightboxCounter(index, count)}
           </span>
         ) : null}
+        {details !== undefined ? (
+          // Top centre, clear of the counter (left) and Close (right).
+          <div className="pointer-events-none absolute inset-x-20 top-0 flex h-14 items-center justify-center">
+            <ViewerDetails sender={details.sender} time={details.time} />
+          </div>
+        ) : null}
         <button
           ref={closeRef}
           type="button"
@@ -801,15 +830,21 @@ export function ImageLightbox({
         </div>
       ) : null}
 
-      {details !== undefined ? (
+      {details !== undefined || onShowInChat !== undefined ? (
         <div className="relative flex h-16 shrink-0 items-center gap-3 px-4 pb-[env(safe-area-inset-bottom)]">
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-base font-medium text-overlay-fg">{details.sender}</span>
-            <span className="font-mono text-sm tabular-nums text-overlay-fg-dim">
-              {details.time}
-            </span>
-          </span>
-          {current.onRemove !== undefined ? (
+          {onShowInChat !== undefined ? (
+            <Button
+              type="button"
+              variant="ghost"
+              data-show-in-chat=""
+              onClick={() => onShowInChat(index)}
+              className={SHOW_IN_CHAT_OVERLAY_CLASS}
+            >
+              {SHOW_IN_CHAT_LABEL}
+            </Button>
+          ) : null}
+          <span className="min-w-0 flex-1" />
+          {details !== undefined && current.onRemove !== undefined ? (
             <button
               type="button"
               aria-label={current.removeLabel ?? REMOVE_IMAGE_LABEL}
@@ -819,12 +854,14 @@ export function ImageLightbox({
               <IconTrash size={ICON_SIZE.control} />
             </button>
           ) : null}
-          <DownloadControl
-            key={`${current.assetId}:${current.src ?? ''}`}
-            image={current}
-            cache={cache}
-            presignEnabled={presignEnabled}
-          />
+          {details !== undefined ? (
+            <DownloadControl
+              key={`${current.assetId}:${current.src ?? ''}`}
+              image={current}
+              cache={cache}
+              presignEnabled={presignEnabled}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>,

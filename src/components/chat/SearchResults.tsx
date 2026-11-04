@@ -72,7 +72,7 @@ export function useMessageSearch(params: {
 }
 
 /** Section label, matching the chat home's Groups / People labels. */
-const RESULT_LABEL = 'px-1 pt-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+export const RESULT_LABEL = 'px-1 pt-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /** A result row: one 64px tap target, no text selection and no iOS callout on hold. */
 const RESULT_ROW = cn(
@@ -127,8 +127,24 @@ export function boldMatches(text: string, words: readonly string[]): ReactNode[]
 }
 
 /** Long-press and right-click never open a native menu or callout on a row. */
-function noCallout(event: { preventDefault: () => void }): void {
+export function noCallout(event: { preventDefault: () => void }): void {
   event.preventDefault();
+}
+
+/** The "Couldn't search. Try again." row (a list item): a tap retries. Hook-free. */
+export function searchRetryRow(onRetry: () => void): ReactElement {
+  return (
+    <li>
+      <PressableRow
+        type="button"
+        data-search-retry=""
+        onClick={onRetry}
+        className="flex items-center justify-center px-3 text-base text-fg-2"
+      >
+        {SEARCH_FAILED_COPY}
+      </PressableRow>
+    </li>
+  );
 }
 
 interface SearchResultsProps {
@@ -179,18 +195,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
     const channel = props.channelsById.get(hit.channelId);
     return channel !== undefined ? [{ hit, channel }] : [];
   });
-  const retryRow = (
-    <li>
-      <PressableRow
-        type="button"
-        data-search-retry=""
-        onClick={props.onRetry}
-        className="flex items-center justify-center px-3 text-base text-fg-2"
-      >
-        {SEARCH_FAILED_COPY}
-      </PressableRow>
-    </li>
-  );
+  const retryRow = searchRetryRow(props.onRetry);
   return (
     <div data-search-results="" className="flex flex-col gap-2 px-[14px] pb-4">
       {props.chats.length > 0 && kind === null ? (
