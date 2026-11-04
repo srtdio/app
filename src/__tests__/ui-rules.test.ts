@@ -325,7 +325,6 @@ const FIELD_ALLOWLIST = [
   'pages/settings/MembersList.tsx',
   'pages/PostDetailPage.tsx',
   'shell/CommandPalette.tsx',
-  'shell/SectionHeader.tsx',
   'comments/CommentComposer.tsx',
   'comments/SlotComposer.tsx',
   'pages/create/AttachmentsField.tsx',
@@ -335,7 +334,8 @@ const FIELD_ALLOWLIST = [
   'chat/PlanItemScreen.tsx',
 ];
 const FIELD_PREFIX_ALLOWLIST = ['ui/', 'onboarding/', 'induction/', 'auth/'];
-const FIELD_LOOK = 'border border-border bg-panel-2';
+// The field look at rest, old (border-border) and current (border-field).
+const FIELD_LOOKS = ['border border-border bg-panel-2', 'border border-field bg-panel-2'];
 
 describe('ui rules: one text field', () => {
   it('no <input>/<textarea> with the hand-built field look outside ui/ and the allowlist', () => {
@@ -350,10 +350,33 @@ describe('ui rules: one text field', () => {
         const consts = names
           .map((n) => new RegExp(`const ${n}\\s*=\\s*([^;]+);`).exec(src)?.[1] ?? '')
           .join(' ');
-        if (`${tag} ${consts}`.includes(FIELD_LOOK)) offenders.push(`${rel}:${lineOf(src, start)}`);
+        if (FIELD_LOOKS.some((look) => `${tag} ${consts}`.includes(look))) {
+          offenders.push(`${rel}:${lineOf(src, start)}`);
+        }
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+// The one checkbox: a native type="checkbox" input renders only inside the
+// allowlisted ui primitive; call sites render <Checkbox>.
+const CHECKBOX_ALLOWLIST = ['ui/Checkbox.tsx'];
+
+describe('ui rules: one checkbox', () => {
+  it('no native type="checkbox" input outside ui/Checkbox.tsx', () => {
+    expect(
+      offendersOf(/type=(?:"checkbox"|'checkbox'|\{'checkbox'\})/, (rel) =>
+        CHECKBOX_ALLOWLIST.includes(rel),
+      ),
+    ).toEqual([]);
+  });
+
+  it('ui/Checkbox is the 18px field box with the accent tick', () => {
+    const src = bySrc('ui/Checkbox.tsx');
+    expect(src).toContain('type="checkbox"');
+    const look = ['h-[18px]', 'border-field', 'lit-well', 'checked:bg-accent', 'text-accent-fg'];
+    for (const c of look) expect(src).toContain(c);
   });
 });
 

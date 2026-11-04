@@ -790,14 +790,14 @@ function sideTone(mine: boolean): {
   return mine
     ? {
         glyph: 'text-accent-fg',
-        played: 'bg-accent-fg',
-        unplayed: 'bg-white/[.45]',
+        played: 'bg-on-bubble',
+        unplayed: 'bg-on-bubble/[.45]',
         ink: 'text-accent-fg',
         focus: 'focus-visible:lit-focus focus-visible:outline-accent-fg',
         ring: 'ring-bubble-own',
-        panel: 'bg-white/[.16]',
-        panelInk: 'text-accent-fg',
-        pill: 'bg-white/[.22] text-accent-fg',
+        panel: 'bg-on-bubble/10',
+        panelInk: 'text-on-bubble',
+        pill: 'bg-on-bubble/15 text-on-bubble',
       }
     : {
         glyph: 'text-accent',
@@ -808,7 +808,7 @@ function sideTone(mine: boolean): {
         ring: 'ring-panel-2',
         panel: 'bg-panel-3',
         panelInk: 'text-fg',
-        pill: 'bg-[color-mix(in_srgb,var(--accent)_14%,transparent)] text-accent',
+        pill: 'bg-hover-fill text-accent',
       };
 }
 
@@ -1424,7 +1424,7 @@ export function VoiceNote({
               'absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2',
               tone.ring,
               mine
-                ? 'bg-accent-fg text-[color:var(--accent)]'
+                ? 'bg-on-bubble text-bubble-own'
                 : played
                   ? 'bg-fg-3 text-panel-2'
                   : 'bg-accent text-accent-fg',

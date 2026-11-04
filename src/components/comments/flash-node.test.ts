@@ -83,22 +83,22 @@ describe('flashNode', () => {
     expect(() => flashNode('missing')).not.toThrow();
   });
 
-  it('adds the ring classes then removes them around the 1200ms timeout', () => {
+  it('adds lit-selected then removes it around the 1200ms timeout', () => {
     const node = makeNode();
     stubDom({ present: node });
 
     flashNode('present');
 
     expect(node.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
-    expect(node.classList.add).toHaveBeenCalledWith('ring-2', 'ring-annotation-line');
-    // The ring stays until the timeout fires.
+    expect(node.classList.add).toHaveBeenCalledWith('lit-selected');
+    // The selected edge stays until the timeout fires.
     expect(node.classList.remove).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(1199);
     expect(node.classList.remove).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(1);
-    expect(node.classList.remove).toHaveBeenCalledWith('ring-2', 'ring-annotation-line');
+    expect(node.classList.remove).toHaveBeenCalledWith('lit-selected');
   });
 
   it('centres the node in its own scroller and never scrolls the window', () => {
@@ -111,6 +111,6 @@ describe('flashNode', () => {
     // Node top 900 (100 tall) in a 600px view scrolled 300: centred at 300 + 900 - 250.
     expect(scroller.scrollTo).toHaveBeenCalledWith({ top: 950, behavior: 'smooth' });
     expect(node.scrollIntoView).not.toHaveBeenCalled();
-    expect(node.classList.add).toHaveBeenCalledWith('ring-2', 'ring-annotation-line');
+    expect(node.classList.add).toHaveBeenCalledWith('lit-selected');
   });
 });

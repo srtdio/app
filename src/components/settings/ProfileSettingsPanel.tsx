@@ -36,6 +36,7 @@ import { userProfileUpdate } from '@srtdio/rpc';
 import { AvatarCropper, type AvatarCropperHandle } from '@/components/onboarding/AvatarCropper';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Chip } from '@/components/ui/Chip';
 import { UsernameField } from '@/components/settings/UsernameField';
 import { Field } from '@/components/ui/Field';
@@ -628,14 +629,14 @@ export function ProfileSettingsPanel(): React.ReactElement {
     // Boxes in the panel's own shape (the 72px photo, then the fields), only
     // while nothing is held for the profile; a kept profile paints at once.
     return (
-      <BoxSkeleton label="Loading profile" className="max-w-[520px] flex flex-col gap-4">
-        <Bone className="h-[72px] w-[72px] rounded-full" />
+      <BoxSkeleton lit="flat" label="Loading profile" className="max-w-[520px] flex flex-col gap-4">
+        <Bone lit="lit-avatar" className="h-[72px] w-[72px] rounded-full" />
         {[0, 1].map((key) => (
           <div key={key}>
             <div className="mb-1.5 flex h-5 items-center">
-              <Bone className="h-3.5 w-28 rounded" />
+              <Bone lit="flat" className="h-3.5 w-28 rounded" />
             </div>
-            <Bone className="h-11 w-full rounded-lg" />
+            <Bone lit="lit-well" className="h-11 w-full rounded-lg" />
           </div>
         ))}
       </BoxSkeleton>
@@ -773,7 +774,7 @@ export function CameraBadge(props: { disabled: boolean; onPress: () => void }): 
       <span
         data-camera-badge=""
         aria-hidden="true"
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg outline outline-2 outline-bg lit-btn-primary"
+        className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-bg bg-accent text-accent-fg lit-btn-primary"
       >
         <IconCamera size={ICON_SIZE.inline} />
       </span>
@@ -798,13 +799,11 @@ export function EmailOptInRow(props: {
       className="flex min-h-11 cursor-pointer items-start gap-3 py-1"
     >
       <span className="flex h-6 shrink-0 items-center">
-        <input
+        <Checkbox
           id="settings-email-opt-in"
-          type="checkbox"
           checked={props.checked}
           aria-describedby="settings-email-opt-in-help"
           onChange={(event) => props.onChange(event.target.checked)}
-          className="m-0 h-4 w-4 shrink-0 accent-accent"
         />
       </span>
       <span className="flex min-w-0 flex-col">

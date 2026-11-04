@@ -97,10 +97,11 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Icons: only src/components/ui/icons.tsx, stroke 1.85, sizes 16 beside text, 18 sidebar, 20 alone or tab bar, 22 tray/menu. One icon per concept. No inline <svg> outside ui/.
 - Colour: token classes only; /opacity allowed. No hex, no dark:. text-accent is for text, bg-accent for fills. good/warn/bad for state; stage-\* only on stage chips and dots. No text-white or bg-white; on solid fills use text-accent-fg.
 - Colour: black, white and greys only (Linear neutrals), light and dark in the app, light-only homepage. Amber = Review, green = Approved/read/unread, red = errors and Reject only. No violet or blue anywhere (guard: palette-rules.test.ts).
-- Contrast: every text token passes 4.5:1 on bg and panel in both themes.
-- Radius roles: badges (ui/Tag) 6, controls and fields 8, cards/popovers/menus 12, sheets/dialogs 16, pills full. rounded-sm only for highlights, dots and grabbers. Chat bubble radii live only in chat/chat-type.ts.
+- Contrast: text 4.5:1; control edges, field lines, focus lines, selected lines, dots and tracks 3:1, light and dark (guard: contrast-rules.test.ts).
+- Edges: border-strong is the 3:1 edge for chips, secondary buttons, switch tracks, dots, read bars. border-border is for dividers inside a surface only, never the boundary of a control.
+- Radius roles: badges (ui/Tag) 6, checkbox (ui/Checkbox, rounded-sm) 6, controls and fields 8, cards/popovers/menus 12, sheets/dialogs 16, pills full. rounded-sm only for badges, checkboxes, highlights, dots and grabbers. Chat bubble radii live only in chat/chat-type.ts.
 - Focus: Button, IconButton and Chip carry the one focus line (focus-visible:lit-focus, an outline, never a box-shadow). Never add a second one on a call site; overlay controls on media (lightbox, file viewer, photo viewer) keep their own white ring.
-- Text fields: ui/Input or ui/Textarea only; date and time fields add font-mono. Composer bars and borderless inline edits are the only exceptions (allowlist in ui-rules.test.ts).
+- Text fields: ui/Input or ui/Textarea only; date and time fields add font-mono. ui/Input, Textarea, Select, DatePicker, Checkbox and the code boxes draw border-field (ink light, white dark) at rest, lit-well; focus adds lit-focus. Composer bars and borderless inline edits are the only exceptions (allowlist in ui-rules.test.ts).
 - Inline errors: ui/ErrorNote only. Small labels (stage, status, role, draft): ui/Tag only.
 - Lighting: one light, straight above. Every surface takes exactly one lit-\* class from src/index.css; never box-shadow, shadow-\*, drop-shadow or backdrop-blur on a call site (guard: lighting-rules.test.ts).
   - Heights: flat (list rows, page), card (lit-card / lit-card-muted), raised (nav, chat circle, auth/onboarding cards), float (toasts, strip, unread/latest pills, drags), overlay (menus, popovers, sheets, dialogs, side panels). Headers lit-header, bottom bars lit-dock, sidebar lit-side.
@@ -109,8 +110,9 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
   - At most one soft (blurred) shadow per token; use a 1px ring for edge definition (speed).
   - New surface: pick a height from this list, in light and dark, and add it to docs/lighting.md.
 - Lighting covers every screen, sheet, picker, loading box and email: anything with a fill plus border or radius takes a lit-\* height (guard: lit-coverage.test.ts). Pages are grey (bg-bg) with lit cards; never a white page of flat bands.
-- Loading shells use the same lit-\* class as the card that replaces them.
-- Outlines: only lit-selected (picked/active), lit-focus (focus), lit-bad (error), lit-drop (drop), lit-today (today). White line in dark, ink line in light, no tint or glow (guard: outline-rules.test.ts).
+- Loading shells: Bone and BoxSkeleton take the lit class of what they replace (required lit prop; guard: shell-rules.test.ts).
+- States: hover and press are --hover-fill / --press-fill overlays (lit-hover) on top of the lit gradient, never a flat bg-panel-2/3 swap and never opacity. Selected, open, active, current = lit-selected. Disabled = fg-3 ink and no light, never opacity.
+- Outlines: only lit-selected (picked/active), lit-focus (focus), lit-bad (error), lit-drop (drop), lit-today (today). White line in dark, ink line in light, no tint or glow; they live in @layer utilities so they always win on an element (guard: outline-rules.test.ts). Inside the own bubble every line and fill uses on-bubble/\*.
 - Emails: one look, lit edges drawn with borders, no shadows (guard: email-look.test.ts).
 - Every page, sheet and picker has screenshots in the visual suite (guard: visual-coverage.test.ts).
   - Labels and icons on raised controls use full ink (text-fg); icon stroke 1.85.
@@ -144,7 +146,8 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Exception: laptop Plan month item lines use PressableRow dense (22px); mouse-only surface, decided 28 Oct 2026. dense is allowed nowhere else.
 - Every UI change updates the visual baselines in the same PR and lists the changed screens. Never update baselines to hide an unplanned change.
 - Onboarding follows the app: it uses only shared pieces, the tour finds controls by data-induction. Any UI change that moves, renames or removes a data-induction control updates the tour step, its copy (src/lib/induction-copy.ts) and its visual baselines in the same PR. Never delete a data-induction attribute without updating the tour.
-- App height: html/body/#root use 100svh; never 100vh/100% alone for full-screen layout (iOS keyboard).
+- Viewport: svh/dvh only, never vh; html/body/#root use 100svh. Fixed and sticky bars take the safe-area inset for every edge they touch (guard: viewport-rules.test.ts).
+- Theme: meta theme-color follows --bg; a theme switch runs with transitions off for two frames.
 - Tab return paints the kept view with no skeleton or fade; never drop a session read on page leave; own writes update kept values (src/lib/session-read.ts, src/lib/kept-view.ts).
 - Speed: screens paint on the first frame from what the device or session already holds. No network read before first paint for data the device can keep (recents, titles, drafts, settings). Background refresh runs after paint, batched (one read per table, never per item), at most once per session per screen, and never repaints rows already on screen. Any unavoidable wait states its ceiling in ms and its reason in the PR body.
 - Recent lists (search) offer Clear all with UndoStrip and a per-row remove X; never a confirm dialog.

@@ -394,10 +394,11 @@ export function RolePicker({
     <label
       className={cn(
         'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel lit-well px-2.5 py-1 text-base mv-tint focus-within:lit-focus',
-        invalid ? 'border-bad lit-bad bg-bad-soft' : 'border-border',
+        invalid ? 'border-bad lit-bad bg-bad-soft' : 'border-field',
         current === undefined ? 'text-fg-3' : 'text-fg',
         fill ? 'min-w-0 flex-1' : 'max-w-[45%] shrink-0',
-        disabled && 'opacity-60',
+        // Disabled is solid fg-3 ink (fg-3 sorts after fg), never a fade.
+        disabled && 'text-fg-3',
       )}
     >
       <span aria-hidden="true" className="min-w-0 leading-tight">
@@ -747,7 +748,7 @@ export function MembersInviteForm({
                     if (el === null) rowEls.current.delete(String(row.key));
                     else rowEls.current.set(String(row.key), el);
                   }}
-                  className="flex flex-col rounded-lg border bg-panel-2 lit-card-muted py-1 pl-3 pr-1"
+                  className="flex flex-col rounded-xl border bg-panel-2 lit-card-muted py-1 pl-3 pr-1"
                 >
                   <div className="flex items-center gap-2">
                     <input
@@ -760,7 +761,7 @@ export function MembersInviteForm({
                       onChange={(event) =>
                         updateRow(row.key, { email: event.target.value, error: null })
                       }
-                      className="h-11 min-w-0 flex-1 border-0 border-b border-transparent bg-transparent px-0 text-input text-fg outline-none mv-tint hover:border-dashed hover:border-border-strong focus:lit-focus md:text-base"
+                      className="h-11 min-w-0 flex-1 border-0 border-b border-field bg-transparent px-0 text-input text-fg outline-none mv-tint focus:lit-focus md:text-base"
                     />
                     <RolePicker
                       label={`Role for ${row.email}`}

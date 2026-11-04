@@ -208,6 +208,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
   const sending = progress !== null;
   return (
     <PressableRow
+      card
       type="button"
       onClick={props.onOpen}
       aria-label={`Open ${props.name}`}
@@ -219,7 +220,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
       {ratio !== null ? (
         <span
           data-file-thumb=""
-          className="relative block w-full overflow-hidden border-b border-border bg-panel-3"
+          className="relative block w-full overflow-hidden border-b border-border bg-panel-3 lit-media"
           style={{ aspectRatio: `1 / ${ratio}` }}
         >
           <span
@@ -246,7 +247,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
       ) : null}
       <span className="flex min-h-[56px] w-full items-center gap-2.5 px-3 py-2.5">
         {ratio === null ? (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3 lit-media">
             <KindIcon kind={kind} size={ICON_SIZE.control} />
           </span>
         ) : null}

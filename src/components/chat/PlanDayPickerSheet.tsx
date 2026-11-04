@@ -213,7 +213,7 @@ export const DATE_FIT =
  * border, fill, radius, padding, focus and the 16px phone text): the WebKit
  * fit, mono digits and the disabled dim.
  */
-export const DATE_FIELD = cn(DATE_FIT, 'font-mono disabled:opacity-60');
+export const DATE_FIELD = cn(DATE_FIT, 'font-mono disabled:text-fg-3');
 
 const PLAN_DATES_TITLE = 'Plan dates';
 const PLAN_DATES_HINT = 'Up to 5 weeks. Items on days you drop go back to "Pick a day".';

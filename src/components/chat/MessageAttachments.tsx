@@ -31,7 +31,7 @@ import { Bone } from '@/lib/motion';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { useCallback, useEffect, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import { ICON_SIZE, IconBan, IconDownload, IconFile, IconImage } from '@/components/ui/icons';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { downloadFile, remoteFileSource } from '@/components/ui/FileViewer';
@@ -243,6 +243,26 @@ export function attachmentView(args: {
   return { kind: 'file', name: attachment.name, url };
 }
 
+/** The inline image's largest box (comments, chat single image), in px. */
+const INLINE_IMAGE_MAX_W = 260;
+const INLINE_IMAGE_MAX_H = 192;
+
+/**
+ * The inline image's box, final on first paint: the stored pixel size when the
+ * attachment carries one (thumbW/thumbH), else a 4:3 box, fitted inside
+ * 260 x 192. The pending Bone takes the same box, so nothing shifts when the
+ * image lands.
+ */
+export function inlineImageBox(
+  attachment: Pick<MessageAttachment, 'thumbW' | 'thumbH'>,
+): CSSProperties {
+  const w = attachment.thumbW;
+  const h = attachment.thumbH;
+  const ratio = w !== undefined && h !== undefined && w > 0 && h > 0 ? w / h : 4 / 3;
+  const width = Math.round(Math.min(INLINE_IMAGE_MAX_W, INLINE_IMAGE_MAX_H * ratio));
+  return { width: `${width}px`, maxWidth: '100%', aspectRatio: String(ratio) };
+}
+
 function AttachmentItem({
   attachment,
   cache,
@@ -282,7 +302,8 @@ function AttachmentItem({
           src={view.src}
           alt={view.alt}
           draggable={false}
-          className="max-h-48 max-w-[260px] rounded-lg border border-border object-cover"
+          style={inlineImageBox(attachment)}
+          className="block rounded-lg border border-border object-cover lit-media"
         />
       );
       // When the caller wants tap-to-open (comments), wrap the unchanged <img> in
@@ -317,7 +338,14 @@ function AttachmentItem({
         </div>
       );
     case 'image-pending':
-      return <Bone as="div" className="h-32 w-44 rounded-lg border border-border" />;
+      return (
+        <Bone
+          as="div"
+          lit="lit-media"
+          style={inlineImageBox(attachment)}
+          className="rounded-lg border border-border"
+        />
+      );
     case 'audio':
       // One wrapper in both states; the ring sits in the play spot, so the
       // bubble keeps its size when the upload completes (X becomes play).
@@ -494,6 +522,7 @@ export function AlbumGrid({
         const attachment = images[tile.index] as MessageAttachment;
         return (
           <PressableRow
+            insetFocus
             key={attachment.local?.key ?? `${attachment.assetId}-${tile.index}`}
             flat
             type="button"
@@ -501,7 +530,6 @@ export function AlbumGrid({
             onClick={() => onOpen(tile.index)}
             className={cn(
               'relative block cursor-zoom-in overflow-hidden bg-panel-3 [-webkit-touch-callout:none]',
-              'focus-visible:-outline-offset-2',
               tile.className,
             )}
           >
@@ -509,7 +537,7 @@ export function AlbumGrid({
             {tile.more > 0 ? (
               <span
                 aria-hidden="true"
-                className="absolute inset-0 flex items-center justify-center bg-black/50 text-2xl font-semibold text-overlay-fg"
+                className="absolute inset-0 flex items-center justify-center bg-overlay-badge text-2xl font-semibold text-overlay-fg"
               >
                 +{tile.more}
               </span>
@@ -608,7 +636,7 @@ export function AttachmentsFallback(props: {
             key={`${attachment.assetId}-${index}`}
             className="flex min-w-0 items-center gap-2.5 rounded-xl border bg-panel px-3 py-2 lit-card"
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3 lit-media">
               <IconFile size={ICON_SIZE.nav} />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">

@@ -1754,11 +1754,12 @@ export function bubbleClass(
 
 /**
  * A deleted message's bubble: same side, radius and tail as a live one, but a
- * hairline border on no fill, muted italic ink, and no focus (no menu).
+ * muted card (panel-2 fill, hairline border), muted italic ink, and no focus (no
+ * menu).
  */
 export function tombstoneClass(shape: BubbleShape): string {
   return cn(
-    'relative flex min-w-0 items-center gap-1.5 border border-border italic text-fg-3',
+    'relative flex min-w-0 items-center gap-1.5 border border-border bg-panel-2 italic text-fg-3 lit-card-muted',
     NO_TOUCH_SELECT,
     sized(BUBBLE_BODY_TYPE, shape.layout),
     bubbleCorners(shape),
@@ -1790,31 +1791,33 @@ export const SELECTION_ROW_OFFSET = 'relative pl-[60px]';
 /** Where the check circle (or lock) sits: the row's left column, vertically centred. */
 export const SELECTION_CHECK_SLOT = 'absolute left-4 top-1/2 flex -translate-y-1/2';
 
-/** A checked row's neutral tint: panel-3 at partial opacity across the full row. */
-export const SELECTED_ROW_TINT = 'pointer-events-none absolute inset-0 -z-10 bg-panel-3 opacity-60';
+/** A checked row's layer: the one selected look (lit-selected) across the full row, never opacity. */
+export const SELECTED_ROW_TINT = 'pointer-events-none absolute inset-0 -z-10 border-y lit-selected';
 
 /**
  * Own-bubble inner content (reply quote, file chips, shared cards, voice note)
  * restyled for the solid fill without touching the shared child components:
- * ink goes accent-fg (secondary at opacity-90), card surfaces a black/12 overlay
- * (darker than the fill, so accent-fg ink such as "Waiting on approvers" and the
- * Review chip text keeps at least 4.5:1 in both themes), the quote rule and
- * played waveform white/70, icons follow currentColor. White is accent-fg's
- * value in both themes. Peer bubbles never get this class. The UploadRing
+ * ink goes accent-fg (secondary at opacity-90), card surfaces an on-bubble/12
+ * overlay with on-bubble/16 edges, the quote rule and played waveform
+ * on-bubble/70, icons follow currentColor. on-bubble is the bubble's own ink in
+ * each theme (white on the near-black light-theme fill, near-black on the light
+ * dark-theme fill), the same value as accent-fg, so accent-fg ink such as
+ * "Waiting on approvers" and the Review chip text keeps at least 4.5:1 over the
+ * overlay in both themes. Peer bubbles never get this class. The UploadRing
  * (data-upload-ring) is left alone: it draws on overlay tokens and stays a
  * solid dark circle, never a translucent tile.
  */
 export const OWN_BUBBLE_CONTENT = cn(
-  '[&_.bg-panel]:bg-black/[.12] [&_.bg-panel-2]:bg-black/[.12] [&_.bg-panel-3]:bg-black/[.12] [&_.border-border]:border-white/[.16]',
+  '[&_.bg-panel]:bg-on-bubble/[.12] [&_.bg-panel-2]:bg-on-bubble/[.12] [&_.bg-panel-3]:bg-on-bubble/[.12] [&_.border-border]:border-on-bubble/[.16]',
   // Lit surfaces inside the fill: drop their light gradient (it would paint
-  // over the black/12 overlay) and take the same white/16 edge.
+  // over the on-bubble/12 overlay) and take the same on-bubble/16 edge.
   '[&_.lit-card]:bg-none [&_.lit-card-muted]:bg-none [&_.lit-chip]:bg-none [&_.lit-btn-secondary]:bg-none',
-  '[&_.lit-card]:border-white/[.16] [&_.lit-card-muted]:border-white/[.16] [&_.lit-chip]:border-white/[.16]',
-  '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-white/[.24] [&_a:hover>span]:bg-white/[.24]',
-  '[&_.bg-accent]:bg-white/70 [&_.bg-accent.text-accent-fg]:bg-white/[.16] [&_.bg-fg-3]:bg-white/40',
+  '[&_.lit-card]:border-on-bubble/[.16] [&_.lit-card-muted]:border-on-bubble/[.16] [&_.lit-chip]:border-on-bubble/[.16]',
+  '[&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-transparent [&_button:not([data-upload-ring]):not([data-voice-control]):hover]:bg-on-bubble-hover [&_a:hover>span]:bg-transparent [&_a:hover>span]:bg-on-bubble-hover',
+  '[&_.bg-accent]:bg-on-bubble/70 [&_.bg-accent.text-accent-fg]:bg-on-bubble/[.16] [&_.bg-fg-3]:bg-on-bubble/40',
   '[&_.text-fg]:text-accent-fg [&_.text-accent]:text-accent-fg',
-  '[&_.text-fg-2]:text-accent-fg [&_.text-fg-2]:opacity-90',
-  '[&_.text-fg-3]:text-accent-fg [&_.text-fg-3]:opacity-90',
+  '[&_.text-fg-2]:text-accent-fg',
+  '[&_.text-fg-3]:text-accent-fg',
 );
 
 // renderMessageBody, bodyLinkClass and markSearchWords live in message-body.tsx
@@ -1883,14 +1886,17 @@ export function mentionsMe(
 /**
  * A mention's ink inside a bubble, always bold: accent-fg on own, accent-hover
  * on peer (the accent family token that clears 4.5:1 on panel-2 in both
- * themes). A mention of me also sits on the accent-soft tint. Tokens only, so
- * light and dark stay at parity.
+ * themes). A mention of me also sits on a tint: the hover fill on a peer
+ * bubble, on-bubble at 15% on my own. Tokens only, so light and dark stay at
+ * parity.
  */
+export const MENTION_ME_PEER = 'bg-hover-fill';
+export const MENTION_ME_OWN = 'bg-on-bubble/15';
 export function mentionClass(mine: boolean, self: boolean): string {
   return cn(
     'whitespace-nowrap font-semibold',
     mine ? 'text-accent-fg' : 'text-accent-hover',
-    self && 'rounded-sm bg-accent-soft px-[3px]',
+    self && cn('rounded-sm px-[3px]', mine ? MENTION_ME_OWN : MENTION_ME_PEER),
   );
 }
 
@@ -2478,6 +2484,7 @@ export function MessageBubble(props: {
           <div
             ref={bubbleRef}
             data-bubble=""
+            data-own={mine ? '' : undefined}
             data-swipe-reply={swipe !== undefined ? '' : undefined}
             role="group"
             tabIndex={0}
@@ -2969,8 +2976,8 @@ export function threadListItems(
       <li key="loading-older" aria-busy="true" className="flex flex-col gap-2 px-4 py-2">
         <span className="sr-only">Loading earlier messages</span>
         {/* Two bubble-shaped boxes (other, then own side); a sweep, never a pulse. */}
-        <Bone className="h-9 w-48 rounded-2xl" />
-        <Bone className="h-9 w-36 self-end rounded-2xl" />
+        <Bone lit="lit-bubble-other" className="h-9 w-48 rounded-2xl" />
+        <Bone lit="lit-bubble-own" className="h-9 w-36 self-end rounded-2xl" />
       </li>,
     );
   }
@@ -4324,7 +4331,9 @@ function ThreadBody(
     sourceRef.current = 'program';
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     const flash = el.querySelector('[data-bubble]') ?? el;
-    const ring = ['lit-today'];
+    // The focus line, never a box-shadow over the bubble's light; on my own
+    // bubble [data-own] turns it on-bubble ink.
+    const ring = ['lit-focus'];
     flash.classList.add(...ring);
     window.setTimeout(() => flash.classList.remove(...ring), 1200);
   };
@@ -4930,7 +4939,7 @@ export function DayPill({ label, layout }: { label: string; layout: ChatLayout }
     <li role="separator" aria-label={label} className="flex justify-center">
       <span
         className={cn(
-          'self-center mb-1.5 mt-2 rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-fg-3 lit-pill',
+          'self-center mb-1.5 mt-2 rounded-full border border-border-strong bg-panel px-2.5 py-0.5 text-fg-3 lit-pill',
           sized(DATE_PILL_TYPE, layout),
         )}
       >
@@ -5050,8 +5059,8 @@ export function threadOpeningSkeleton(
             <IconChevronLeft size={ICON_SIZE.control} />
           </IconButton>
         ) : null}
-        <Bone as="div" className="h-9 w-9 shrink-0 rounded-full" />
-        <Bone as="div" className="h-3.5 w-32 rounded" />
+        <Bone lit="lit-avatar" as="div" className="h-9 w-9 shrink-0 rounded-full" />
+        <Bone lit="flat" as="div" className="h-3.5 w-32 rounded" />
       </div>
       {threadSkeleton()}
     </div>
@@ -5100,7 +5109,10 @@ export function threadSkeleton(): ReactElement {
           data-skeleton-bubble={i % 2 === 1 ? 'own' : 'other'}
           className={cn('flex', i % 2 === 1 && 'justify-end')}
         >
-          <Bone className={cn('h-10 rounded-xl', width)} />
+          <Bone
+            lit={i % 2 === 1 ? 'lit-bubble-own' : 'lit-bubble-other'}
+            className={cn('h-10 rounded-xl', width)}
+          />
         </li>
       ))}
     </ul>

@@ -1187,7 +1187,7 @@ export function PlanItemScreen(props: {
                     label="Cancel ask changes"
                     data-plan-ask-cancel=""
                     onClick={() => setAskingChanges(false)}
-                    className="shrink-0 hover:bg-panel-3"
+                    className="shrink-0"
                   >
                     <IconX size={ICON_SIZE.control} />
                   </IconButton>
@@ -1286,7 +1286,9 @@ export function PlanItemScreen(props: {
           <>
             {item.post_id !== null ? (
               <PostSheetPlanRowsContext.Provider value={planRows}>
-                <Suspense fallback={<Bone as="div" className="m-4 h-[170px] rounded-lg" />}>
+                <Suspense
+                  fallback={<Bone lit="lit-card" as="div" className="m-4 h-[170px] rounded-xl" />}
+                >
                   <PostDetailPage
                     postId={item.post_id}
                     embedded
@@ -1319,7 +1321,7 @@ export function PlanItemScreen(props: {
             </section>
             <div
               data-plan-description-card=""
-              className="flex flex-col gap-1.5 rounded-lg border bg-panel p-3 lit-card"
+              className="flex flex-col gap-1.5 rounded-xl border bg-panel p-3 lit-card"
             >
               <div className="flex items-start justify-between gap-2">
                 <h3 className="min-w-0 break-words pt-2.5 text-lg font-semibold text-fg">
@@ -1349,7 +1351,7 @@ export function PlanItemScreen(props: {
             </div>
             <div
               data-plan-status=""
-              className="flex flex-col gap-1.5 rounded-lg border bg-panel p-3 lit-card"
+              className="flex flex-col gap-1.5 rounded-xl border bg-panel p-3 lit-card"
             >
               <div className="flex min-h-[28px] items-center justify-between gap-2">
                 <span className="text-base text-fg-3">Date</span>
@@ -1433,7 +1435,7 @@ export function PlanItemScreen(props: {
             <section ref={commentsRef} className="flex flex-col gap-2.5" aria-label="Comments">
               <h4 className={SECTION_LABEL}>Comments</h4>
               {read.status === 'loading' ? (
-                <Bone as="div" className="h-[72px] rounded-lg" />
+                <Bone lit="lit-card" as="div" className="h-[72px] rounded-xl" />
               ) : read.status === 'error' ? (
                 <ScreenFailed onRetry={reload} />
               ) : shown.length === 0 ? (
@@ -1697,7 +1699,7 @@ export function LinkedPostPage(props: {
         />
       }
     >
-      <Suspense fallback={<Bone as="div" className="m-4 h-[170px] rounded-lg" />}>
+      <Suspense fallback={<Bone lit="lit-card" as="div" className="m-4 h-[170px] rounded-xl" />}>
         <PostDetailPage
           postId={props.postId}
           embedded
@@ -1737,7 +1739,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="failed"
-        className="flex min-h-[72px] items-center justify-between gap-3 rounded-lg border bg-panel px-3.5 lit-card"
+        className="flex min-h-[72px] items-center justify-between gap-3 rounded-xl border bg-panel px-3.5 lit-card"
       >
         <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
         <Button data-plan-media-retry="" onClick={props.onRetry}>
@@ -1749,7 +1751,7 @@ function ItemMedia(props: {
   if (read.status !== 'ready') {
     return (
       <div data-plan-media="loading">
-        <Bone as="div" className="h-[170px] rounded-lg" />
+        <Bone lit="lit-media" as="div" className="h-[170px] rounded-lg" />
       </div>
     );
   }
@@ -1791,7 +1793,7 @@ function ItemMedia(props: {
               onClick={() => open(file)}
               className="flex min-w-0 flex-col gap-1"
             >
-              <span className="block w-full overflow-hidden rounded-lg border bg-panel-2 lit-card-muted">
+              <span className="block w-full overflow-hidden rounded-xl border bg-panel-2 lit-card-muted">
                 <Thumbnail
                   assetVersionId={file.versionId}
                   cache={sharedCardPresignCache()}

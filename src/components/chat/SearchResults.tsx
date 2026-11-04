@@ -231,10 +231,10 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
           {loading ? (
             Array.from({ length: LOADING_ROWS }, (_, i) => (
               <li key={i} data-search-skeleton="" className="flex items-center gap-3 px-2 py-2">
-                <Bone as="div" className="h-12 w-12 shrink-0 rounded-full" />
+                <Bone lit="lit-avatar" as="div" className="h-12 w-12 shrink-0 rounded-full" />
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <Bone as="div" className="h-3.5 w-1/3 rounded" />
-                  <Bone as="div" className="h-3 w-3/4 rounded" />
+                  <Bone lit="flat" as="div" className="h-3.5 w-1/3 rounded" />
+                  <Bone lit="flat" as="div" className="h-3 w-3/4 rounded" />
                 </div>
               </li>
             ))
@@ -304,7 +304,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
           )}
           {!loading && !failed && props.state.loadingMore ? (
             <li data-search-more="" className="px-2 py-3">
-              <Bone as="div" className="mx-auto h-3 w-1/3 rounded" />
+              <Bone lit="flat" as="div" className="mx-auto h-3 w-1/3 rounded" />
             </li>
           ) : null}
           {!loading && !failed && props.state.moreFailed ? retryRow : null}

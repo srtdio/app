@@ -42,10 +42,23 @@ describe('Switch', () => {
     expect(track.className).toMatch(/\bbg-accent\b/);
     const knob = track.querySelector('span')!;
     expect(knob.className).toMatch(/\blit-knob\b/);
-    expect(knob.className).toContain('translate-x-[24px]');
-    expect(knob.className).not.toMatch(/translate-y|rotate|shadow/);
+    expect(knob.className).toMatch(/\bbg-knob\b/);
+    expect(knob.className).toMatch(/\bborder-border-strong\b/);
+    expect(knob.className).toContain('translate-x-[22px]');
+    expect(knob.className).not.toMatch(/translate-y|rotate|shadow|\bring-/);
     const offKnob = mount(false).querySelector('span[aria-hidden] span')!;
     expect(offKnob.className).toContain('translate-x-0');
-    expect(mount(false).querySelector('span[aria-hidden]')!.className).toMatch(/\bbg-panel-3\b/);
+  });
+
+  it('off track is a panel-2 well with a border-strong edge', () => {
+    const offTrack = mount(false).querySelector('span[aria-hidden]')!;
+    expect(offTrack.className).toMatch(/\bbg-panel-2\b/);
+    expect(offTrack.className).toMatch(/\bborder-border-strong\b/);
+    expect(offTrack.className).toMatch(/\blit-well\b/);
+    expect(offTrack.className).not.toMatch(/\bbg-panel-3\b/);
+  });
+
+  it('the pressable row is a pill so hover and focus follow the track', () => {
+    expect(mount(false).className).toMatch(/\brounded-full\b/);
   });
 });

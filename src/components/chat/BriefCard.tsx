@@ -101,7 +101,7 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
   if (view.kind === 'unavailable') {
     return (
       <div className={`${SHARED_CARD} ${BRIEF_CARD_HEIGHT} text-fg-3`}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 lit-media">
           <IconBriefs size={ICON_SIZE.nav} />
         </span>
         <span className="text-base font-medium">Brief unavailable</span>
@@ -117,7 +117,7 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
       onClick={() => navigate(briefRoute(view.briefId))}
       className={`${SHARED_CARD} ${BRIEF_CARD_HEIGHT} mv-tint`}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3 lit-media">
         <IconBriefs size={ICON_SIZE.nav} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">

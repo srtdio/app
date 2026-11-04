@@ -36,10 +36,11 @@ describe('DropZone', () => {
     }
   });
 
-  it('carries a focus-visible ring and a disabled fade', () => {
+  it('carries a focus-visible ring and a solid fg-3 disabled look (never a fade)', () => {
     const t = tokens(render());
     expect(t).toContain('focus-visible:lit-focus');
-    expect(t).toContain('disabled:opacity-50');
+    expect(t).toContain('disabled:text-fg-3');
+    expect(t.some((c) => /^disabled:opacity-/.test(c))).toBe(false);
   });
 
   it('takes its minimum height from the minHeight prop, 44px by default', () => {

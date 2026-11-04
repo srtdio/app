@@ -133,6 +133,7 @@ export function PlanTabCard(props: {
   const meta = planCardMeta(props.bundle);
   return (
     <PressableRow
+      card
       type="button"
       data-plan-tab-card={props.bundle.plan.id}
       onClick={(event) => {
@@ -149,7 +150,7 @@ export function PlanTabCard(props: {
             <span
               key={version}
               data-plan-tab-cover=""
-              className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-panel-2"
+              className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-panel-2 lit-media"
             >
               <Thumbnail
                 assetVersionId={version}
@@ -204,36 +205,37 @@ export function DraftTag(): ReactElement {
 export function PlanTabBoxes(): ReactElement {
   return (
     <BoxSkeleton
+      lit="flat"
       label="Loading plans"
       data-plan-tab-loading=""
       className="flex flex-col gap-5 px-4 pb-8 pt-4"
     >
       <section className="flex flex-col gap-2">
         <div className="flex h-4 items-center">
-          <Bone className="h-3 w-20 rounded" />
+          <Bone lit="flat" className="h-3 w-20 rounded" />
         </div>
         {[0, 1, 2].map((key) => (
           <div
             key={key}
             data-plan-tab-box=""
-            className="lit-card flex flex-col gap-2 rounded-lg border bg-panel px-3.5 pb-3 pt-3"
+            className="lit-card flex flex-col gap-2 rounded-xl border bg-panel px-3.5 pb-3 pt-3"
           >
             <div className="flex h-4 items-center">
-              <Bone className="h-3 w-12 rounded" />
+              <Bone lit="flat" className="h-3 w-12 rounded" />
             </div>
             <div className="flex h-7 items-center">
-              <Bone className="h-5 w-2/3 rounded" />
+              <Bone lit="flat" className="h-5 w-2/3 rounded" />
             </div>
             <div className="flex h-5 items-center">
-              <Bone className="h-3.5 w-32 rounded" />
+              <Bone lit="flat" className="h-3.5 w-32 rounded" />
             </div>
             <div className="flex h-10 gap-1.5">
-              <Bone className="h-10 w-10 shrink-0 rounded-lg" />
-              <Bone className="h-10 w-10 shrink-0 rounded-lg" />
-              <Bone className="h-10 w-10 shrink-0 rounded-lg" />
+              <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />
+              <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />
+              <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />
             </div>
             <div className="flex h-4 items-center">
-              <Bone className="h-3 w-1/3 rounded" />
+              <Bone lit="flat" className="h-3 w-1/3 rounded" />
             </div>
           </div>
         ))}

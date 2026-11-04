@@ -130,7 +130,7 @@ export function SharedPlanCards(props: { planIds: string[]; senderName: string }
       >
         {props.planIds.map((id) => (
           <div key={id} data-plan-skeleton="">
-            <Bone as="div" className={PLAN_CARD_SKELETON} />
+            <Bone lit="lit-card" as="div" className={PLAN_CARD_SKELETON} />
           </div>
         ))}
       </div>
@@ -231,7 +231,7 @@ export function PlanCardBar(props: {
       aria-valuemin={0}
       aria-valuemax={props.max}
       aria-valuenow={props.value}
-      className="block h-1.5 overflow-hidden rounded-full bg-panel-3 lit-well"
+      className="block h-1.5 overflow-hidden rounded-full bg-panel-3 lit-well lit-track"
     >
       <span
         data-plan-card-bar={props.side}

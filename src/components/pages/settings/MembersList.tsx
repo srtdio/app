@@ -23,7 +23,6 @@ import {
   IconUser,
 } from '@/components/ui/icons';
 import type { SelectOption } from '@/components/ui/Select';
-import { cn } from '@/lib/cn';
 import {
   INVITE_INVALID_EMAIL_MESSAGE,
   RolePicker,
@@ -225,11 +224,7 @@ function PendingRowItem({
               <Button variant="ghost" disabled={cancelling} onClick={() => setEditing(true)}>
                 Edit
               </Button>
-              <Button
-                disabled={cancelling}
-                onClick={() => onCancelInvite(member)}
-                className={cn(cancelling && 'opacity-70')}
-              >
+              <Button disabled={cancelling} onClick={() => onCancelInvite(member)}>
                 {cancelling ? 'Cancelling' : 'Cancel'}
               </Button>
             </div>
@@ -323,7 +318,7 @@ function PendingEditFields({
             setEmail(event.target.value);
             setError(null);
           }}
-          className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-panel-2 lit-well px-3 text-input text-fg outline-none placeholder:text-fg-3 focus:lit-focus md:text-base"
+          className="h-11 min-w-0 flex-1 rounded-lg border border-field bg-panel-2 lit-well px-3 text-input text-fg outline-none placeholder:text-fg-3 focus:lit-focus md:text-base"
         />
         <RolePicker
           label={`Role for ${trimmed}`}

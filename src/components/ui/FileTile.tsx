@@ -146,7 +146,8 @@ export function FileTileBody(props: FileTileBodyProps): ReactElement {
             onError={props.onImageError}
             className={cn(
               'absolute inset-0 h-full w-full',
-              kind === 'video' ? 'object-cover' : 'object-cover object-top',
+              // A document page thumbnail is softened in dark (lit-page); a video frame is not.
+              kind === 'video' ? 'object-cover' : 'object-cover object-top lit-page',
             )}
           />
         ) : (

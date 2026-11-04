@@ -102,7 +102,9 @@ async function trayAndPickers(page: Page): Promise<void> {
   await expect(draft).toBeDisabled();
   await expect(draft).toHaveAttribute('aria-disabled', 'true');
   await expect(draft).toHaveAttribute('aria-label', 'Draft, not available in chats with approvers');
-  expect(Number(await draft.evaluate((el) => getComputedStyle(el).opacity))).toBeLessThan(1);
+  // Disabled is fg-3 ink, never a fade (Visible and lit).
+  expect(Number(await draft.evaluate((el) => getComputedStyle(el).opacity))).toBe(1);
+  await expect(draft).toHaveClass(/disabled:text-fg-3/);
   for (const box of await page
     .locator('[data-tray-tile]')
     .evaluateAll((els) => els.map((e) => e.getBoundingClientRect()))) {

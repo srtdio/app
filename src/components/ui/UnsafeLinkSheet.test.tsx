@@ -69,7 +69,7 @@ describe('UnsafeLinkSheet', () => {
     expect(anyway?.getAttribute('rel')).toBe('noopener noreferrer');
     expect(anyway?.getAttribute('target')).toBe('_blank');
     // The warn ink wins by its data variant, never by a "!" modifier.
-    expect(anyway?.className).toContain('data-[unsafe-open-anyway]:text-[color:var(--warn-ink)]');
+    expect(anyway?.className).toContain('data-[unsafe-open-anyway]:text-warn-ink');
     expect(anyway?.className).not.toMatch(/(^|\s)!/);
   });
 

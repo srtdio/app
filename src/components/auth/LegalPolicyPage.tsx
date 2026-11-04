@@ -141,7 +141,7 @@ function PrivacyPolicyContent() {
           If you have questions or concerns about this Privacy Policy, please contact us at{' '}
           <a
             href="mailto:support@srtd.io"
-            className="text-accent underline underline-offset-2 mv-tint hover:text-accent/80"
+            className="text-accent underline underline-offset-2 mv-tint hover:text-accent/80 focus-visible:lit-focus"
           >
             support@srtd.io
           </a>
@@ -235,7 +235,7 @@ function TermsAndConditionsContent() {
           For questions regarding these terms, contact us at{' '}
           <a
             href="mailto:support@srtd.io"
-            className="text-accent underline underline-offset-2 mv-tint hover:text-accent/80"
+            className="text-accent underline underline-offset-2 mv-tint hover:text-accent/80 focus-visible:lit-focus"
           >
             support@srtd.io
           </a>
@@ -263,7 +263,7 @@ export function LegalPolicyPage() {
       footer={
         <Link
           to="/signup"
-          className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline"
+          className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline focus-visible:lit-focus"
         >
           Back to sign up
         </Link>

@@ -106,7 +106,7 @@ export function UsernameField({
         Username
       </label>
       <div className="flex gap-2">
-        <div className="flex h-11 min-w-0 flex-1 items-center rounded-lg border border-border bg-panel-2 lit-well pl-3 focus-within:lit-focus">
+        <div className="flex h-11 min-w-0 flex-1 items-center rounded-lg border border-field bg-panel-2 lit-well pl-3 focus-within:lit-focus">
           <span className="text-base text-fg-3">@</span>
           <input
             id="settings-username"

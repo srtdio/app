@@ -229,7 +229,11 @@ export function dialogOut(panel: Element | null): Played {
 
 // ---------- 4. growFromTrigger ----------
 
-/** Menu grows .90 to 1 from `origin` (CSS transform-origin, e.g. "top right" or "12px 40px"). 160 ms ease-pop. */
+/**
+ * Menu grows .90 to 1 from `origin` (CSS transform-origin, e.g. "top right" or
+ * "12px 40px"). 160 ms ease-enter: menus and popovers land without overshoot
+ * (ease-pop is kept for pop() only).
+ */
 export function growFromTrigger(menu: Element | null, origin = 'top left'): Played {
   return play(
     menu,
@@ -237,7 +241,7 @@ export function growFromTrigger(menu: Element | null, origin = 'top left'): Play
     [{ transform: `scale(${MENU_FROM_SCALE})` }, { transform: 'scale(1)' }],
     {
       duration: DUR_MENU_MS,
-      easing: EASE.pop,
+      easing: EASE.enter,
       origin,
     },
   );

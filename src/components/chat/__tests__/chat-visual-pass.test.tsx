@@ -23,7 +23,7 @@ const read = (rel: string): string =>
 
 describe('chat visual pass', () => {
   it('own-bubble cards remap the panel-2 fill, so the stage tag reads on indigo', () => {
-    expect(OWN_BUBBLE_CONTENT).toContain('[&_.bg-panel-2]:bg-black/[.12]');
+    expect(OWN_BUBBLE_CONTENT).toContain('[&_.bg-panel-2]:bg-on-bubble/[.12]');
   });
 
   it('times and dates are mono: bubble time, day pill, list time', () => {

@@ -402,13 +402,14 @@ function MediaTile(props: {
   const { tick } = props;
   return (
     <PressableRow
+      insetFocus
       type="button"
       aria-label={props.item.name !== '' ? props.item.name : 'Photo'}
       onClick={props.selecting ? (tick?.onToggle ?? NO_TAP) : props.onOpen}
       {...(tick !== null ? { 'aria-pressed': tick.checked, 'data-info-tick': '' } : {})}
       flat
       className={cn(
-        'relative block aspect-square overflow-hidden bg-panel-3 focus-visible:-outline-offset-2',
+        'relative block aspect-square overflow-hidden bg-panel-3',
         !props.selecting && 'cursor-zoom-in',
       )}
     >
@@ -432,7 +433,7 @@ function MediaTile(props: {
 const ROW =
   'flex min-h-[64px] w-full items-center gap-3 border-b border-border py-2 last:border-b-0';
 const ROW_ICON =
-  'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-panel-2 text-fg-3';
+  'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-panel-2 text-fg-3 lit-media';
 
 /** "size · date" under a file name. Pure. */
 function fileMetaLine(item: ChannelAttachmentItem, timeZone?: string): string {
@@ -509,7 +510,7 @@ export function LinkRow(props: {
         <UnsafeLinkText
           url={props.item.url}
           reasons={verdict.reasons}
-          className={cn(ROW, 'w-full rounded-lg text-left hover:bg-panel-2')}
+          className={cn(ROW, 'w-full rounded-lg text-left lit-hover')}
         >
           <span className={cn(ROW_ICON, 'text-[color:var(--warn-ink)]')}>
             <IconAlertTriangle size={ICON_SIZE.control} />
@@ -530,7 +531,7 @@ export function LinkRow(props: {
         href={props.item.url}
         target="_blank"
         rel="noopener noreferrer"
-        className={cn(ROW, 'rounded-lg text-left hover:bg-panel-2')}
+        className={cn(ROW, 'rounded-lg text-left lit-hover focus-visible:lit-focus')}
       >
         <span className={ROW_ICON}>
           <IconLink size={ICON_SIZE.control} />

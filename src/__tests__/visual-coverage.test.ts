@@ -66,6 +66,8 @@ const REQUIRED: readonly string[] = [
   'chat-thread',
   'chat-thread-files-removed',
   'chat-thread-group',
+  'chat-thread-own-voice',
+  'chip-row-hover',
   'cockpit-dot-green',
   'cockpit-dot-green-dark',
   'cockpit-dot-red',
@@ -76,6 +78,7 @@ const REQUIRED: readonly string[] = [
   'cockpit-panel-users-dark',
   'cockpit-sheet-traffic',
   'cockpit-sheet-users',
+  'code-step-error-focused',
   'command-palette',
   'command-palette-recents',
   'command-palette-recents-cleared',
@@ -136,6 +139,7 @@ const REQUIRED: readonly string[] = [
   'person-photo-viewer-laptop',
   'pipeline',
   'pipeline-approver',
+  'pipeline-drag-drop',
   'pipeline-search-empty',
   'plan-item',
   'plan-item-mention-picker',
@@ -160,8 +164,10 @@ const REQUIRED: readonly string[] = [
   'recently-deleted-empty',
   'reminder-sheet',
   'schedule-sheet',
+  'select-open',
   'settings-profile',
   'settings-profile-paused',
+  'settings-profile-switch-off',
   'settings-workspace',
   'support-contact-sheet',
   'support-contact-sheet-dark',
@@ -200,8 +206,17 @@ interface Exception {
 /** Phone-only screens (skipped on laptop: `only: 'phone'`). */
 const PHONE_ONLY_NAMES = ['cockpit-sheet-users', 'cockpit-sheet-traffic', 'person-card-inline'];
 
-/** Laptop-only light screens (`only: 'laptop'`): the Cockpit side panel and the Week view. */
-const LAPTOP_LIGHT_NAMES = ['cockpit-panel-needs', 'cockpit-panel-users', 'plan-tab-week'];
+/**
+ * Laptop-only light screens (`only: 'laptop'`): the Cockpit side panel, the Week
+ * view, the board drag (a mouse-only gesture) and the chip hover (a hover pointer).
+ */
+const LAPTOP_LIGHT_NAMES = [
+  'cockpit-panel-needs',
+  'cockpit-panel-users',
+  'plan-tab-week',
+  'pipeline-drag-drop',
+  'chip-row-hover',
+];
 
 /** Laptop dark shots taken in the laptop-light project (`only: 'laptop', dark: true`). */
 const LAPTOP_FORCED_DARK_NAMES = [

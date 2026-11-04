@@ -95,8 +95,10 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: Brie
     <div
       ref={cardRef}
       data-brief-card=""
-      className={`lit-card relative rounded-xl border bg-panel p-4 flex gap-3 min-w-0 overflow-hidden min-h-[44px] mv-tint hover:bg-panel-2 focus-within:lit-focus ${
-        closed ? 'opacity-70' : ''
+      // Hover/press: the lit-hover overlay over the card's light. A closed brief
+      // is the muted card with an fg-2 title and its status tag, never dimmed.
+      className={`lit-hover relative rounded-xl border p-4 flex gap-3 min-w-0 overflow-hidden min-h-[44px] mv-tint focus-within:lit-focus ${
+        closed ? 'lit-card-muted bg-panel-2' : 'lit-card bg-panel'
       }`}
     >
       <Link
@@ -134,7 +136,9 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: Brie
         <div className="flex min-w-0 items-start gap-3">
           <span
             aria-hidden="true"
-            className="min-w-0 flex-1 break-words text-base font-medium leading-snug line-clamp-2 text-fg"
+            className={`min-w-0 flex-1 break-words text-base font-medium leading-snug line-clamp-2 ${
+              closed ? 'text-fg-2' : 'text-fg'
+            }`}
           >
             {brief.title}
           </span>

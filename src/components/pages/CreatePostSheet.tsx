@@ -1547,7 +1547,7 @@ export function CreatePostSheet({
                 {newBucketOpen ? (
                   <div
                     data-new-bucket=""
-                    className="mt-2 flex flex-col gap-2 rounded-lg border bg-panel-2 p-3 lit-card-muted"
+                    className="mt-2 flex flex-col gap-2 rounded-xl border bg-panel-2 p-3 lit-card-muted"
                   >
                     <Input
                       aria-label="New bucket name"

@@ -233,7 +233,7 @@ export function MoveSheetView({
             <div
               data-role-error=""
               role="alert"
-              className="flex items-center gap-3 rounded-lg border bg-panel-2 px-3 py-2 lit-card-muted"
+              className="flex items-center gap-3 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
             >
               <p className="flex-1 text-base text-fg-2">{ROLE_READ_ERROR}</p>
               <Button onClick={() => onRetryRole?.()}>Retry</Button>

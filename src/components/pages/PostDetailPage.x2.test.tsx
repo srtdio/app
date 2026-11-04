@@ -225,7 +225,7 @@ describe('13 / 14. skeleton and load error', () => {
     );
     expect(paint).toContain('aria-busy="true"');
     expect(paint).toContain('<span className="sr-only">Loading post</span>');
-    expect(paint).toContain('<Bone as="div"');
+    expect(paint).toContain('<Bone lit="flat" as="div"');
     expect(paint).not.toContain('animate-pulse');
   });
 

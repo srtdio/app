@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { Input } from '@/components/ui/Input';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import { IconPlus, IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { SHELL_STICKY_TOP_CLASS } from '@/lib/scroll-mode';
@@ -148,16 +149,13 @@ export function SectionHeader<S extends string = string>({
             <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-fg-3">
               <IconSearch size={ICON_SIZE.inline} />
             </span>
-            <input
+            <Input
               type="search"
               value={search.value}
               onChange={(e) => search.onChange(e.target.value)}
               placeholder={search.placeholder}
               {...(search.label !== undefined ? { 'aria-label': search.label } : {})}
-              className={cn(
-                'h-11 w-full min-w-0 rounded-lg border border-border bg-panel-2 pl-7 text-input md:text-base text-fg placeholder:text-fg-3 focus:border-border-strong focus:outline-none lit-well',
-                searching ? 'pr-11' : 'pr-2',
-              )}
+              className={cn('min-w-0 pl-7', searching ? 'pr-11' : 'pr-2')}
             />
             {searching ? (
               <IconButton

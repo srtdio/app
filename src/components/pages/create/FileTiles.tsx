@@ -43,6 +43,17 @@ interface Gesture {
   el: HTMLElement;
 }
 
+/**
+ * A tile's edge: at rest the hairline, picked the one selected look, failed the
+ * error line. One per tile, so an outline class never shares an element with
+ * border-border (guard: outline-rules.test.ts).
+ */
+function tileEdge(state: 'rest' | 'picked' | 'failed'): string {
+  if (state === 'picked') return 'lit-selected';
+  if (state === 'failed') return 'border-bad lit-bad';
+  return 'border-border';
+}
+
 function TilePicture({ src, video }: { src: string | undefined; video: boolean }): ReactElement {
   if (src === undefined) return <span className="block h-full w-full bg-panel-3" />;
   return video ? (
@@ -235,7 +246,7 @@ export function FileTiles({
               onClick={() => tap(index)}
               className={cn(
                 'block h-full overflow-hidden border bg-panel-3',
-                index === activeIndex ? 'lit-selected' : 'border-border',
+                tileEdge(index === activeIndex ? 'picked' : 'rest'),
               )}
             >
               <TilePicture src={item.previewUrl} video={item.mime?.startsWith('video/') === true} />
@@ -252,19 +263,19 @@ export function FileTiles({
           {...(tile.failed ? { 'data-failed': '' } : {})}
           aria-label={tile.failed ? `${tile.name} didn't upload` : `Uploading ${tile.name}`}
           className={cn(
-            'relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-panel-3',
-            tile.failed ? 'border-bad lit-bad' : 'border-border',
+            'relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-panel-3 lit-media',
+            tileEdge(tile.failed ? 'failed' : 'rest'),
           )}
         >
+          {/* The dim is on the picture only (media); the state reads from a solid badge. */}
           <span className={cn('block h-full w-full', tile.failed ? 'opacity-40' : 'opacity-70')}>
             <TilePicture src={tile.previewUrl} video={tile.video} />
           </span>
           {tile.failed ? (
-            <span
-              aria-hidden="true"
-              className="absolute inset-0 flex items-center justify-center text-lg font-semibold text-bad"
-            >
-              !
+            <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-bad-solid text-base font-semibold text-accent-fg lit-badge">
+                !
+              </span>
             </span>
           ) : (
             <span

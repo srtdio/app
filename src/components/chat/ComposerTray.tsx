@@ -225,7 +225,7 @@ export function ComposerTray(props: {
 
 /**
  * The tray's tile grid, 4 columns (8 tiles: two rows of 4; 7 in notes). A
- * disabled tile is faded, carries the disabled attribute and aria-disabled,
+ * disabled tile takes fg-3 ink (never a fade), carries the disabled attribute and aria-disabled,
  * says why in its name, and never calls onPick.
  */
 export function TrayGrid(props: {

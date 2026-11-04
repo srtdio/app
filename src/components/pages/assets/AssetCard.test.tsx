@@ -167,8 +167,10 @@ describe('AssetCard select mode', () => {
     const out = renderSelect(false);
     expect(out).toContain('aria-pressed="false"');
     expect(out).toContain('h-4 w-4');
-    expect(out).toContain('border-[1.5px] border-white');
-    expect(out).toContain('bg-black/15');
+    expect(out).toContain('border-[1.5px] border-overlay-fg');
+    expect(out).toContain('bg-overlay-badge');
+    expect(out).not.toContain('border-white');
+    expect(out).not.toContain('bg-black/');
   });
 
   it('keeps the open behaviour and no selection affordance out of select mode', () => {

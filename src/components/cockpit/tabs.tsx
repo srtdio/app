@@ -31,9 +31,9 @@ export const AGORA_CONSOLE_URL = 'https://console.agora.io';
 /** A tab whose source has not answered yet this session paints this until it does. */
 function Pending() {
   return (
-    <BoxSkeleton label="Loading" className="flex flex-col gap-2">
-      <Bone className="h-16 rounded-xl" />
-      <Bone className="h-16 rounded-xl" />
+    <BoxSkeleton lit="flat" label="Loading" className="flex flex-col gap-2">
+      <Bone lit="lit-card" className="h-16 rounded-xl" />
+      <Bone lit="lit-card" className="h-16 rounded-xl" />
     </BoxSkeleton>
   );
 }

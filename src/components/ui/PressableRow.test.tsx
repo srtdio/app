@@ -19,7 +19,9 @@ describe('PressableRow', () => {
     expect(t).toContain('w-full');
     expect(t).toContain('rounded-lg');
     expect(t).toContain('text-left');
-    expect(t).toContain('hover:bg-panel-2');
+    // Hover keeps the light: the lit-hover overlay, never a flat panel swap.
+    expect(t).toContain('lit-hover');
+    expect(t).not.toContain('hover:bg-panel-2');
   });
 
   it('carries a focus-visible ring', () => {
@@ -27,11 +29,18 @@ describe('PressableRow', () => {
     expect(t).toContain('focus-visible:lit-focus');
   });
 
-  it('fades and ignores taps when disabled', () => {
+  it('insetFocus draws the line inside the edge (overflow-hidden cards)', () => {
+    const t = tokens(render({ insetFocus: true }));
+    expect(t).toContain('focus-visible:lit-focus-inset');
+    expect(t).not.toContain('focus-visible:lit-focus');
+  });
+
+  it('turns fg-3 and ignores taps when disabled, never a fade', () => {
     const el = render({ disabled: true });
     expect(el.props.disabled).toBe(true);
-    expect(tokens(el)).toContain('disabled:opacity-50');
+    expect(tokens(el)).toContain('disabled:text-fg-3');
     expect(tokens(el)).toContain('disabled:pointer-events-none');
+    expect(tokens(el).some((c) => /opacity-/.test(c))).toBe(false);
   });
 
   it('defaults to type=button and appends caller classes last', () => {

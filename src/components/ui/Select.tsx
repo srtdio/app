@@ -58,8 +58,8 @@ export function selectOptionRows(
         aria-selected={selected}
         onClick={() => onPick(option.value)}
         className={cn(
-          'flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-3 text-left text-base mv-tint',
-          selected ? 'text-fg' : 'text-fg-2 hover:bg-panel-2',
+          'flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-3 text-left text-base mv-tint focus-visible:lit-focus',
+          selected ? 'lit-selected text-fg' : 'lit-hover text-fg-2',
         )}
       >
         {option.renderLeft !== undefined ? (
@@ -231,7 +231,7 @@ export function Select({
         disabled={disabled}
         onClick={toggle}
         // 16px text below md so iOS Safari does not zoom on focus; 14px from md up.
-        className="lit-well flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-input md:text-base mv-tint hover:bg-panel-3 disabled:pointer-events-none disabled:opacity-50"
+        className="group lit-well lit-hover flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-field bg-panel-2 px-3 text-input md:text-base mv-tint focus-visible:lit-focus disabled:pointer-events-none disabled:cursor-default"
       >
         {selected?.renderLeft !== undefined ? (
           <span className="flex shrink-0 items-center">{selected.renderLeft}</span>
@@ -239,7 +239,8 @@ export function Select({
         <span
           className={cn(
             'min-w-0 flex-1 truncate text-left',
-            selected !== undefined ? 'text-fg' : 'text-fg-3',
+            // Disabled is solid fg-3 ink, never a fade.
+            selected !== undefined ? 'text-fg group-disabled:text-fg-3' : 'text-fg-3',
           )}
         >
           {selected?.label ?? placeholder}

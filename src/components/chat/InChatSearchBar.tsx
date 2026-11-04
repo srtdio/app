@@ -250,16 +250,10 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
         label="Older match"
         disabled={!ready || (index >= total - 1 && !state.hasMore)}
         onClick={() => void older()}
-        className="disabled:opacity-40"
       >
         <IconChevronDown size={ICON_SIZE.control} className="-scale-y-100" />
       </IconButton>
-      <IconButton
-        label="Newer match"
-        disabled={!ready || index <= 0}
-        onClick={newer}
-        className="disabled:opacity-40"
-      >
+      <IconButton label="Newer match" disabled={!ready || index <= 0} onClick={newer}>
         <IconChevronDown size={ICON_SIZE.control} />
       </IconButton>
       {failed ? (

@@ -163,7 +163,7 @@ export function AuthCallbackPage() {
   const backToSignIn = (
     <Link
       to={withNext('/signin', next)}
-      className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline"
+      className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline focus-visible:lit-focus"
     >
       Back to sign in
     </Link>

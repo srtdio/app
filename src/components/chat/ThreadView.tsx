@@ -134,8 +134,8 @@ export function ThreadViewFrame(props: {
       data-thread-view=""
       onKeyDown={onKeyDown}
       {...edgeBack}
-      // The incoming edge: a 1px ring, no shadow.
-      className="absolute inset-0 z-30 flex flex-col bg-bg ring-1 ring-border"
+      // The incoming edge: the card height's lit edge, no ring.
+      className="absolute inset-0 z-30 flex flex-col bg-bg lit-card"
     >
       <div
         data-thread-view-header=""

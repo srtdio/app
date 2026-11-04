@@ -42,6 +42,9 @@ export const JUMP_SETTLE_MS = 700;
 /** How long an arrived-at target keeps its tint before it wipes away. */
 export const GLOW_MS = 2000;
 
+/** The arrival layer: the selected look, its 1px edge drawn by the layer's own border. */
+export const GLOW_LAYER_CLASS = 'lit-selected border';
+
 /**
  * Tint an arrived-at row for 2s, then wipe the tint away left to right
  * (wipeAway, clip axis, DUR_WIPE_MS; never a fade). Motion off: the tint just
@@ -64,13 +67,15 @@ export function tintTarget(el: HTMLElement): () => void {
   const layer = document.createElement('span');
   layer.setAttribute('data-jump-glow-layer', '');
   layer.setAttribute('aria-hidden', 'true');
+  // The arrival mark is the one selected look (lit-selected: its fill and edge
+  // line), never an accent tint.
+  layer.className = GLOW_LAYER_CLASS;
   Object.assign(layer.style, {
     position: 'absolute',
     inset: '0',
     zIndex: '-1',
     pointerEvents: 'none',
     borderRadius: 'inherit',
-    backgroundColor: 'var(--accent-soft)',
   });
   el.appendChild(layer);
   let wipe: Played | null = null;

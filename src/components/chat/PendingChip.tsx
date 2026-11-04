@@ -19,11 +19,11 @@ export function PendingChip(props: {
   return (
     <li
       className={cn(
-        'flex items-center gap-2 rounded-lg border bg-panel-2 py-1 pl-1 pr-1 lit-card-muted',
+        'flex items-center gap-2 rounded-xl border bg-panel-2 py-1 pl-1 pr-1 lit-card-muted',
         error && 'border-bad lit-bad',
       )}
     >
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3">
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3 lit-media">
         {props.thumb}
       </span>
       <span className="flex min-w-0 max-w-[180px] flex-col">

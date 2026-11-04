@@ -129,7 +129,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         aria-labelledby="unsafe-link-title"
         // Follows the finger while dragged (and holds there until the exit takes over).
         style={drag > 0 ? { transform: `translateY(${drag}px)` } : undefined}
-        className="relative flex max-h-[90vh] w-full max-w-[480px] touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg lit-overlay will-change-transform"
+        className="relative flex max-h-[90svh] w-full max-w-[480px] touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border bg-panel px-4 pb-[calc(18px+env(safe-area-inset-bottom))] pt-2.5 font-sans text-fg lit-overlay will-change-transform"
       >
         {/* The swipe-down handle: grabber, then the title left and the close X
             right (every sheet header). The rest of the sheet scrolls normally
@@ -146,7 +146,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
           <div className="flex items-center gap-2">
             <h2
               id="unsafe-link-title"
-              className="flex min-w-0 flex-1 items-center gap-2 text-lg font-semibold text-[color:var(--warn-ink)]"
+              className="flex min-w-0 flex-1 items-center gap-2 text-lg font-semibold text-warn-ink"
             >
               <IconAlertTriangle size={ICON_SIZE.tray} />
               Check before opening
@@ -168,7 +168,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
               <li key={reason} className="flex gap-2">
                 <span
                   aria-hidden="true"
-                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--warn-ink)]"
+                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-warn-ink"
                 />
                 {reason}
               </li>
@@ -194,7 +194,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
             className={buttonClass(
               'secondary',
               'default',
-              'w-full data-[unsafe-open-anyway]:text-[color:var(--warn-ink)] no-underline',
+              'w-full data-[unsafe-open-anyway]:text-warn-ink no-underline',
             )}
           >
             Open anyway
@@ -237,7 +237,10 @@ export function UnsafeLinkText(props: {
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') show(event);
         }}
-        className={cn('cursor-pointer break-all', props.className ?? 'inline')}
+        className={cn(
+          'cursor-pointer break-all focus-visible:lit-focus',
+          props.className ?? 'inline',
+        )}
       >
         {props.children}
       </span>
@@ -267,7 +270,7 @@ export function UnsafeLinkButton(props: {
       url={props.url}
       reasons={props.reasons}
       className={cn(
-        'inline-flex h-11 min-h-[44px] max-w-full items-center gap-2 rounded-lg border border-[color:var(--warn-line)] bg-warn-soft px-4 text-base font-medium text-[color:var(--warn-ink)] focus-visible:lit-focus',
+        'inline-flex h-11 min-h-[44px] max-w-full items-center gap-2 rounded-lg border border-warn-line bg-warn-soft lit-tint px-4 text-base font-medium text-warn-ink focus-visible:lit-focus',
         props.className,
       )}
     >

@@ -43,7 +43,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             <Avatar role="header" kind="group" />
           )}
           {workspaceName === null ? (
-            <Bone className="flex-1 h-4 rounded" />
+            <Bone lit="flat" className="flex-1 h-4 rounded" />
           ) : (
             // "<Brand> - <Platform>": wrap (up to three lines) rather than clip the platform.
             <span className="flex-1 min-w-0 font-semibold text-base leading-tight line-clamp-3 break-words">
@@ -62,10 +62,11 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 min-h-[44px] px-3 rounded-lg text-base font-medium mv-tint',
+                'flex items-center gap-3 min-h-[44px] px-3 rounded-lg border text-base font-medium mv-tint focus-visible:lit-focus',
+                // Active is the one selected look (lit-selected); hover is the lit-hover overlay.
                 isActive
-                  ? 'bg-accent-soft text-accent lit-active'
-                  : 'text-fg-2 hover:bg-panel-2 hover:text-fg',
+                  ? 'lit-selected text-fg'
+                  : 'border-transparent text-fg-2 lit-hover hover:text-fg',
               )
             }
           >

@@ -1,7 +1,8 @@
-// Scroll a DOM node into view and briefly ring it. Pure DOM, best-effort: when
-// the target id is not currently rendered (e.g. an unloaded comments page) it is
-// a no-op and never throws. Extracted from PostDetailPage's local flashTo so the
-// caption/pin highlights and the email deep-link comment focus share one behavior.
+// Scroll a DOM node into view and briefly mark it selected (lit-selected). Pure
+// DOM, best-effort: when the target id is not currently rendered (e.g. an
+// unloaded comments page) it is a no-op and never throws. Extracted from
+// PostDetailPage's local flashTo so the caption/pin highlights and the email
+// deep-link comment focus share one behavior.
 //
 // The node is centred in its own scroller (the shell's main), never by the
 // window: scrollIntoView also scrolls the document when the scroller cannot
@@ -12,6 +13,9 @@
 // scrollIntoView.
 
 import { centredTop, scrollParent } from '@/lib/focus-target';
+
+const FLASH_CLASS = 'lit-selected';
+const FLASH_MS = 1200;
 
 export function flashNode(elementId: string): void {
   const node = document.getElementById(elementId);
@@ -34,6 +38,7 @@ export function flashNode(elementId: string): void {
   } else {
     node.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
-  node.classList.add('ring-2', 'ring-annotation-line');
-  window.setTimeout(() => node.classList.remove('ring-2', 'ring-annotation-line'), 1200);
+  // The arrival highlight is the one selected edge (lit-selected), never a ring.
+  node.classList.add(FLASH_CLASS);
+  window.setTimeout(() => node.classList.remove(FLASH_CLASS), FLASH_MS);
 }

@@ -238,7 +238,7 @@ describe('the thread looks like chat', () => {
       />,
     );
     expect(html).toContain('bg-warn-soft');
-    expect(html).toContain('border-[color:var(--warn-line)]');
+    expect(html).toContain('border-warn-line');
     expect(html).toMatch(/data-plan-comment-team=""[^>]*>[\s\S]*?<svg[\s\S]*?Creators only/);
     expect(html).not.toContain('bg-bubble-own');
   });

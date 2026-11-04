@@ -146,7 +146,7 @@ export function ComposerSheet({
         data-composer-sheet=""
         className={cn(
           // Axis: rise (translateY) on phone, scale on laptop, as the shared Sheet.
-          'relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border bg-panel lit-overlay will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl',
+          'relative flex w-full max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border bg-panel lit-overlay will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84svh] sm:rounded-xl',
           wide && 'lg:w-[960px]',
         )}
       >

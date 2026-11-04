@@ -408,7 +408,7 @@ export function PipelineFilterControl({
         <span
           aria-hidden="true"
           data-filter-dot=""
-          className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent ring-2 ring-bg"
+          className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-accent lit-badge"
         />
       ) : null}
     </IconButton>

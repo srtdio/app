@@ -220,12 +220,12 @@ export function fitFrameStyle(width: number, height: number): CSSProperties {
 // translucent chip keeps them legible over any photo, dark in both app themes.
 const OVERLAY_SKIN =
   'bg-overlay-surface text-overlay-fg lit-media hover:bg-overlay-line hover:text-overlay-fg ' +
-  'disabled:opacity-40 focus-visible:lit-focus focus-visible:outline-overlay-fg/70';
+  'disabled:text-overlay-fg-dim focus-visible:lit-focus focus-visible:outline-overlay-fg/70';
 
 // Icon buttons in the action bar below the image, which sits on the viewer's own
 // dark backdrop, so they need no chip of their own.
 const TOOLBAR_SKIN =
-  'text-overlay-fg hover:bg-overlay-surface disabled:opacity-40 focus-visible:lit-focus ' +
+  'text-overlay-fg hover:bg-overlay-surface disabled:text-overlay-fg-dim focus-visible:lit-focus ' +
   'focus-visible:outline-overlay-fg/70';
 
 /**

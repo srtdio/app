@@ -11,6 +11,7 @@ import {
   albumGridClass,
   albumTiles,
   attachmentView,
+  inlineImageBox,
 } from '@/components/chat/MessageAttachments';
 import { BUBBLE_FILL } from '@/components/chat/FileBubble';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -526,7 +527,7 @@ describe('album grid', () => {
       <AlbumGrid images={images(6)} cache={cache} presignEnabled onOpen={() => {}} />,
     );
     expect(html).toContain('+2');
-    expect(html).toContain('bg-black/50');
+    expect(html).toContain('bg-overlay-badge');
     expect(html).toContain('text-2xl font-semibold text-overlay-fg');
     expect(html).toContain('gap-[2px]');
     // No corners passed: the touch bubble's 18px.
@@ -668,5 +669,26 @@ describe('AttachmentsFallback width', () => {
     );
     expect(html).toContain(BUBBLE_FILL);
     expect(html).not.toContain('w-[100vw]');
+  });
+});
+
+describe('inline image box (comments): final on first paint', () => {
+  it('uses the stored pixel size when present, fitted inside 260 x 192', () => {
+    expect(inlineImageBox({ thumbW: 1000, thumbH: 500 })).toEqual({
+      width: '260px',
+      maxWidth: '100%',
+      aspectRatio: '2',
+    });
+    expect(inlineImageBox({ thumbW: 600, thumbH: 1200 })).toEqual({
+      width: '96px',
+      maxWidth: '100%',
+      aspectRatio: '0.5',
+    });
+  });
+
+  it('falls back to a 4:3 box with no size', () => {
+    const box = inlineImageBox({});
+    expect(box.width).toBe('256px');
+    expect(Number(box.aspectRatio)).toBeCloseTo(4 / 3);
   });
 });

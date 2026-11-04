@@ -457,17 +457,18 @@ describe('error view (F4)', () => {
 describe('tokens', () => {
   it('the camera badge cut-out is the page canvas token and the badge is lit; no hex or dark: literals', () => {
     const badge = renderToStaticMarkup(<CameraBadge disabled={false} onPress={() => {}} />);
-    expect(badge).toContain('outline-bg');
-    expect(badge).not.toContain('outline-panel');
-    // A ring would override the lit box-shadow; the cut-out is an outline.
+    expect(badge).toContain('border-2 border-bg');
+    expect(badge).not.toContain('outline-');
+    // A ring would override the lit box-shadow, and an outline is the focus
+    // family's alone; the cut-out is a canvas border.
     expect(badge).not.toMatch(/(?<![:\w-])ring-(2|bg)\b/);
     expect(badge).toContain('h-11');
     expect(badge).toContain('w-11');
     expect(badge).toContain('rounded-full');
-    // A 32px badge with a 2px canvas outline, overlapping the avatar edge by 4px.
+    // A 32px badge inside a 2px canvas border (36 in all), overlapping the avatar edge.
     expect(badge).toContain('absolute -bottom-1 -right-1');
     expect(badge).toContain(
-      'flex h-8 w-8 items-center justify-center rounded-full bg-accent text-accent-fg outline outline-2 outline-bg lit-btn-primary',
+      'flex h-9 w-9 items-center justify-center rounded-full border-2 border-bg bg-accent text-accent-fg lit-btn-primary',
     );
     expect(badge).toContain('width="16"');
     const actions = renderToStaticMarkup(
@@ -571,7 +572,11 @@ describe('Catch-up emails tick', () => {
     expect(on).toContain('type="checkbox"');
     expect(on).toContain('checked=""');
     expect(on).toContain('min-h-11');
-    expect(on).toContain('h-4 w-4 shrink-0 accent-accent');
+    // ui/Checkbox: 18px field box, accent fill when ticked.
+    expect(on).toContain('h-[18px] w-[18px]');
+    expect(on).toContain('border-field');
+    expect(on).toContain('checked:bg-accent');
+    expect(on).not.toContain('accent-accent');
     expect(on).toContain('Catch-up emails');
     expect(on).toContain(
       'Unread updates by email, weekdays. Sign-in codes and invites always arrive.',

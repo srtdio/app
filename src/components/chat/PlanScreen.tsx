@@ -771,7 +771,7 @@ export function ConceptDateField(props: {
           value={props.value}
           disabled={props.disabled === true}
           onChange={(e) => props.onChange(e.target.value)}
-          className="min-w-0 flex-1 font-mono disabled:opacity-60"
+          className="min-w-0 flex-1 font-mono disabled:text-fg-3"
         />
         {props.value !== '' ? (
           <IconButton
@@ -780,7 +780,7 @@ export function ConceptDateField(props: {
             data-plan-concept-date-clear=""
             disabled={props.disabled === true}
             onClick={() => props.onChange('')}
-            className="shrink-0 text-fg-3 disabled:opacity-60"
+            className="shrink-0 text-fg-3"
           >
             <IconX size={ICON_SIZE.control} />
           </IconButton>
@@ -875,11 +875,11 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }
 /** The loading body: fixed rows so the list lands without a shift. */
 function ScreenSkeleton(): ReactElement {
   return (
-    <BoxSkeleton label="Loading plan" className="flex flex-col gap-2 p-4">
-      <Bone className="h-1.5 w-full rounded-full" />
-      <Bone className="h-10 w-48 rounded-full" />
+    <BoxSkeleton lit="flat" label="Loading plan" className="flex flex-col gap-2 p-4">
+      <Bone lit="lit-well" className="h-1.5 w-full rounded-full" />
+      <Bone lit="lit-well" className="h-10 w-48 rounded-full" />
       {[0, 1, 2].map((i) => (
-        <Bone key={i} className="h-[104px] w-full rounded-lg" />
+        <Bone lit="lit-card" key={i} className="h-[104px] w-full rounded-xl" />
       ))}
     </BoxSkeleton>
   );
@@ -2284,7 +2284,7 @@ export function PlanScreen(props: {
       >
         <span
           data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-lg border bg-panel px-3 text-base font-semibold leading-5 text-fg lit-btn-secondary group-hover:bg-panel-2 group-focus-visible:lit-focus"
+          className="flex h-[34px] items-center gap-1.5 rounded-lg border bg-panel px-3 text-base font-semibold leading-5 text-fg lit-btn-secondary group-focus-visible:lit-focus"
         >
           <IconEdit size={ICON_SIZE.inline} />
           {EDIT_LABEL}
@@ -2699,7 +2699,7 @@ export function PlanEditHeader(props: {
             data-plan-save-retry=""
             disabled={props.saving}
             onClick={props.onRetry}
-            className="shrink-0 text-bad hover:bg-panel hover:text-bad"
+            className="shrink-0 text-bad hover:text-bad"
           >
             {RETRY_LABEL}
           </Button>
@@ -2907,7 +2907,7 @@ export function RenameField(props: {
           if (e.key === 'Enter' && valid) props.onDone();
           if (e.key === 'Escape') props.onCancel();
         }}
-        className="min-w-0 flex-1 font-semibold disabled:opacity-60"
+        className="min-w-0 flex-1 font-semibold disabled:text-fg-3"
       />
       <IconButton
         type="button"
@@ -2915,7 +2915,7 @@ export function RenameField(props: {
         data-plan-rename-cancel=""
         disabled={props.busy}
         onClick={props.onCancel}
-        className="shrink-0 disabled:opacity-60"
+        className="shrink-0"
       >
         <IconX size={ICON_SIZE.control} />
       </IconButton>
@@ -2987,7 +2987,8 @@ export function PlanFooter(props: {
         variant="primary"
         data-plan-primary={props.error !== null ? 'retry' : action.kind}
         data-plan-send-state={state}
-        className={cn('w-full min-w-0', state === 'sending' && 'disabled:opacity-100')}
+        // Sending keeps the primary fill (accent sorts after fg-3, so it wins).
+        className={cn('w-full min-w-0', state === 'sending' && 'disabled:bg-accent')}
         aria-busy={props.busy}
         disabled={props.busy || state !== 'idle'}
         onClick={props.onPress}
@@ -3522,7 +3523,7 @@ export function DayColumn(props: {
       data-plan-day-col=""
       {...(isToday ? { 'data-plan-today': '' } : {})}
       className={cn(
-        'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border lit-card',
+        'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-xl border lit-card',
         // Today keeps its solid accent fill: bg-none drops lit-card's gradient.
         isToday ? 'border-transparent bg-accent bg-none' : 'bg-panel',
       )}
@@ -3658,7 +3659,7 @@ export function PlanDecidedPill(props: {
     >
       {ok ? <IconCheck size={ICON_SIZE.inline} /> : <IconX size={ICON_SIZE.inline} />}
       {ok ? PLAN_OK_LABEL : PLAN_NOT_OK_LABEL}
-      <span aria-hidden="true" className="opacity-70">
+      <span aria-hidden="true">
         <IconChevronDown size={ICON_SIZE.inline} />
       </span>
     </Button>

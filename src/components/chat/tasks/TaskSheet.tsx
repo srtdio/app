@@ -165,7 +165,7 @@ function AddRow(props: {
       <form
         data-task-add=""
         onSubmit={submit}
-        className="flex min-h-[44px] items-center gap-1 pl-1 pr-1 lit-well"
+        className="flex min-h-[44px] items-center gap-1 rounded-lg border border-field bg-panel-2 pl-1 pr-1 lit-well focus-within:lit-focus"
       >
         <span aria-hidden="true" className="w-11 shrink-0" />
         <span className="w-6 shrink-0 font-mono text-sm text-fg-3">{props.preview}</span>
@@ -180,7 +180,7 @@ function AddRow(props: {
           maxLength={TASK_TITLE_MAX}
           placeholder={ADD_PLACEHOLDER}
           onChange={(e) => setText(e.target.value)}
-          className="min-h-[44px] min-w-0 flex-1 bg-transparent text-input text-fg placeholder:text-fg-3 focus:outline-none md:text-base"
+          className="min-h-[44px] min-w-0 flex-1 bg-transparent text-input text-fg placeholder:text-fg-3 outline-none md:text-base"
         />
         <PriorityChip
           priority={priority}
@@ -206,15 +206,16 @@ function AddRow(props: {
 function TasksSkeleton(): ReactElement {
   return (
     <BoxSkeleton
+      lit="flat"
       data-task-skeleton=""
       label="Loading tasks"
       className="flex flex-col gap-3 px-4 py-4"
     >
       {[0, 1, 2, 3].map((k) => (
         <div key={k} className="flex items-center gap-3">
-          <Bone className="h-4 w-4 shrink-0 rounded-lg" />
-          <Bone className="h-4 flex-1 rounded-lg" />
-          <Bone className="h-4 w-8 shrink-0 rounded-lg" />
+          <Bone lit="lit-well" className="h-4 w-4 shrink-0 rounded-lg" />
+          <Bone lit="flat" className="h-4 flex-1 rounded-lg" />
+          <Bone lit="flat" className="h-4 w-8 shrink-0 rounded-lg" />
         </div>
       ))}
     </BoxSkeleton>
@@ -581,7 +582,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         aria-modal="true"
         tabIndex={-1}
         aria-label={TASK_SHEET_TITLE}
-        className="relative flex w-full max-h-[90vh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border bg-panel lit-overlay focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84vh] sm:rounded-xl"
+        className="relative flex w-full max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border bg-panel lit-overlay focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84svh] sm:rounded-xl"
       >
         <div className="flex items-center gap-1 border-b border-border py-1.5 pl-4 pr-1.5">
           <div className="flex min-w-0 flex-1 flex-col">

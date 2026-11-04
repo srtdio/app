@@ -53,9 +53,9 @@ export function friendlyPointFreezeError(
 }
 
 /** The filled "resolved" circle: tokens only, never a literal colour. The fill is
- *  --good-solid (the light green kept in both themes so on-colour ink stays at
+ *  bg-good-solid (the light green kept in both themes so on-colour ink stays at
  *  4.5:1 or more) under the accent-fg ink token. Shared with the strip chips. */
-export const RESOLVED_FILL_CLASS = 'border-good bg-[var(--good-solid)] text-accent-fg';
+export const RESOLVED_FILL_CLASS = 'border-good bg-good-solid text-accent-fg';
 
 /** The hollow "resolved, not yet confirmed" circle: the good outline and ink over
  *  a transparent body, so it reads as done-by-the-creator but still awaiting the

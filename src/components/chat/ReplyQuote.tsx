@@ -29,9 +29,18 @@ import {
   type ChatLayout,
 } from '@/components/chat/chat-type';
 
-/** The box without its radius: the tappable quote takes PressableRow's. */
-const REPLY_QUOTE_LAYOUT = 'flex min-w-0 gap-2 overflow-hidden bg-panel-3 lit-well';
+/** The box without its fill or radius: the tappable quote takes PressableRow's radius. */
+const REPLY_QUOTE_LAYOUT = 'flex min-w-0 gap-2 overflow-hidden';
 const REPLY_QUOTE_BOX = `${REPLY_QUOTE_LAYOUT} rounded-lg`;
+
+/**
+ * The quote's fill. In a bubble: a flat panel box on the panel-2 peer fill (the
+ * own bubble remaps bg-panel to its on-bubble overlay). The composer bars keep
+ * the well.
+ */
+function quoteFill(inBubble: ChatLayout | undefined): string {
+  return inBubble !== undefined ? 'bg-panel' : 'bg-panel-3 lit-well';
+}
 
 /** The rule and author ink: accent for a reply, warn for the editing bar. */
 type QuoteTone = 'accent' | 'warn';
@@ -100,7 +109,7 @@ function ThumbBox({ src }: { src: string | null }): ReactElement {
   return (
     <span
       data-quote-thumb=""
-      className="my-1 mr-1 h-9 w-9 shrink-0 self-center overflow-hidden rounded-lg bg-panel-2"
+      className="my-1 mr-1 h-9 w-9 shrink-0 self-center overflow-hidden rounded-lg bg-panel-2 lit-media"
     >
       {src !== null ? (
         <img
@@ -240,7 +249,7 @@ export function ReplyQuoteBox(props: {
           e.stopPropagation();
           onJump();
         }}
-        className={cn(REPLY_QUOTE_LAYOUT, props.className)}
+        className={cn(REPLY_QUOTE_LAYOUT, quoteFill(inBubble), props.className)}
       >
         {quoteLines(
           props.author,
@@ -256,7 +265,7 @@ export function ReplyQuoteBox(props: {
     );
   }
   return (
-    <div className={cn(REPLY_QUOTE_BOX, 'items-center', props.className)}>
+    <div className={cn(REPLY_QUOTE_BOX, quoteFill(inBubble), 'items-center', props.className)}>
       {quoteLines(
         props.author,
         props.preview,

@@ -274,7 +274,7 @@ describe('week list layout (L1-L4)', () => {
   it('date tile: 56x56, weekday strip over the number; today solid accent with a Today pill; No date', () => {
     const today = renderToStaticMarkup(<DayColumn day="2026-10-14" today="2026-10-14" />);
     expect(today).toContain(
-      'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-lg border lit-card',
+      'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-xl border lit-card',
     );
     // Today keeps its solid accent: bg-none drops lit-card's gradient.
     expect(today).toMatch(
@@ -294,7 +294,7 @@ describe('week list layout (L1-L4)', () => {
     const other = renderToStaticMarkup(<DayColumn day="2026-10-15" today="2026-10-14" />);
     expect(other).not.toContain('data-plan-today');
     // A lit card: lit-card draws the edges (no border-border-strong).
-    expect(other).toContain('rounded-lg border lit-card bg-panel');
+    expect(other).toContain('rounded-xl border lit-card bg-panel');
     expect(other).not.toContain('border-border-strong');
     expect(other).toMatch(/^<div data-plan-day-col=""/);
     expect(other).toMatch(/data-plan-day-weekday=""[^>]*bg-panel-2 text-fg-2">Thu</);

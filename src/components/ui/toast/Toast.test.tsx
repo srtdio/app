@@ -124,7 +124,7 @@ describe('Toast', () => {
     const ok = Toast({ toast: { ...base, tone: 'success' }, onDismiss: () => {} });
     // Opaque panel under the translucent success tint.
     expect(cls(ok)).toContain('border-good bg-panel');
-    expect(cls(ok)).toContain('var(--good-soft)');
+    expect(cls(ok)).toContain('bg-good-tint');
     expect((ok.props as Record<string, unknown>)['data-toast-tone']).toBe('success');
     expect(cls(Toast({ toast: base, onDismiss: () => {} }))).toContain('border-border bg-panel');
   });

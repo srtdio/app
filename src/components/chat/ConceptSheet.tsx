@@ -72,7 +72,7 @@ const CONCEPT_DESCRIPTION_MAX = 5000;
  * The plan form fields' own classes on top of ui/Input / ui/Textarea (which own
  * the field look: border, fill, radius, padding, focus and the 16px phone text).
  */
-export const FIELD = 'disabled:opacity-60';
+export const FIELD = 'disabled:text-fg-3';
 
 /** The hint once the files reach the cap (library picks and uploads together). */
 export const CONCEPT_FILES_LIMIT_HINT = `You can add up to ${CONCEPT_FILES_MAX} files.`;
@@ -410,12 +410,12 @@ export function ConceptSheet(props: {
           ) : null}
           {filesState === 'loading' ? (
             <div data-plan-concept-files-loading="" aria-label="Loading files">
-              <Bone as="div" className="h-[72px] rounded-lg" />
+              <Bone lit="lit-card" as="div" className="h-[72px] rounded-xl" />
             </div>
           ) : filesState === 'failed' ? (
             <div
               data-plan-concept-files-failed=""
-              className="flex min-h-[72px] items-center justify-between gap-3 rounded-lg border bg-panel px-3.5 lit-card"
+              className="flex min-h-[72px] items-center justify-between gap-3 rounded-xl border bg-panel px-3.5 lit-card"
             >
               <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
               <Button data-plan-concept-files-retry="" onClick={props.onRetryFiles}>
@@ -433,7 +433,7 @@ export function ConceptSheet(props: {
                       title={f.name}
                       className="relative flex min-w-0 flex-col gap-1"
                     >
-                      <span className="block overflow-hidden rounded-lg border bg-panel-2 lit-card-muted">
+                      <span className="block overflow-hidden rounded-xl border bg-panel-2 lit-card-muted">
                         <Thumbnail
                           assetVersionId={f.versionId}
                           cache={sharedCardPresignCache()}

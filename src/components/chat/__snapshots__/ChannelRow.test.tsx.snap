@@ -4,7 +4,7 @@ exports[`chat home tile > Groups wide: 100 tall row, 72px rounded-square photo, 
 {
   "classes": [
     "flex shrink-0",
-    "rounded-xl lit-avatar inline-flex shrink-0 items-center justify-center select-none bg-avatar-4 text-accent-fg font-medium text-2xl",
+    "rounded-xl lit-avatar inline-flex shrink-0 items-center justify-center select-none bg-avatar-4 text-avatar-ink font-medium text-2xl",
     "flex min-w-0 flex-1 flex-col gap-1",
     "flex min-w-0 items-baseline gap-2",
     "flex min-w-0 flex-1",
@@ -13,7 +13,7 @@ exports[`chat home tile > Groups wide: 100 tall row, 72px rounded-square photo, 
     "min-w-0 break-words line-clamp-2 text-base font-normal text-fg-2",
     "lit-badge inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent px-1 text-xs font-semibold leading-none text-accent-fg",
   ],
-  "tile": "flex w-full rounded-xl border h-[100px] items-center gap-3 py-3 pl-3 pr-4 min-w-0 text-left mv-tint focus-visible:lit-focus select-none [-webkit-touch-callout:none] lit-card bg-panel hover:bg-panel-2",
+  "tile": "flex w-full rounded-xl border h-[100px] items-center gap-3 py-3 pl-3 pr-4 min-w-0 text-left mv-tint focus-visible:lit-focus select-none [-webkit-touch-callout:none] lit-card bg-panel",
 }
 `;
 
@@ -22,7 +22,7 @@ exports[`chat home tile > People square: 168 tall centred column, 72px disc, 1-l
   "classes": [
     "flex shrink-0",
     "relative cursor-pointer focus-visible:lit-focus after:absolute after:left-1/2 after:top-1/2 after:h-11 after:min-h-full after:w-11 after:min-w-full after:-translate-x-1/2 after:-translate-y-1/2 inline-flex shrink-0 rounded-full",
-    "rounded-full lit-avatar inline-flex shrink-0 items-center justify-center select-none bg-avatar-2 text-accent-fg font-medium text-2xl",
+    "rounded-full lit-avatar inline-flex shrink-0 items-center justify-center select-none bg-avatar-2 text-avatar-ink font-medium text-2xl",
     "mt-1.5 flex w-full min-w-0 justify-center",
     "min-w-0 truncate text-fg text-lg font-semibold",
     "mt-0.5 flex w-full min-w-0 justify-center",
@@ -34,6 +34,6 @@ exports[`chat home tile > People square: 168 tall centred column, 72px disc, 1-l
     "absolute right-3 top-3 flex",
     "lit-badge inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent px-1 text-xs font-semibold leading-none text-accent-fg",
   ],
-  "tile": "flex w-full rounded-xl border relative h-[168px] flex-col items-center px-3 pt-4 pb-[14px] text-center min-w-0 text-left mv-tint focus-visible:lit-focus select-none [-webkit-touch-callout:none] lit-card bg-panel hover:bg-panel-2",
+  "tile": "flex w-full rounded-xl border relative h-[168px] flex-col items-center px-3 pt-4 pb-[14px] text-center min-w-0 text-left mv-tint focus-visible:lit-focus select-none [-webkit-touch-callout:none] lit-card bg-panel",
 }
 `;

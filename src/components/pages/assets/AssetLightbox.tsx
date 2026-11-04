@@ -49,7 +49,7 @@ const SWIPE_THRESHOLD = 48;
 const BAR_BUTTON =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-overlay-fg ' +
   'mv-tint hover:bg-overlay-surface hover:text-overlay-fg ' +
-  'disabled:opacity-40 focus-visible:lit-focus focus-visible:outline-overlay-fg';
+  'disabled:text-overlay-fg-dim focus-visible:lit-focus focus-visible:outline-overlay-fg';
 
 /**
  * A bar class handed in (the lightbox's or the FileViewer's tone) on the shared

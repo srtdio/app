@@ -442,7 +442,8 @@ describe('Plan screen send button: Sending / Sent', () => {
     const src = readFileSync(fileURLToPath(new URL('./PlanScreen.tsx', import.meta.url)), 'utf8');
     expect(src).toContain('sentInChannelId,');
     expect(src).toContain('bg-accent-soft');
-    expect(src).toContain("state === 'sending' && 'disabled:opacity-100'");
+    expect(src).toContain("state === 'sending' && 'disabled:bg-accent'");
+    expect(src).not.toMatch(/disabled:opacity-/);
     expect(src).toMatch(/if \(sendingRef\.current \|\| sendState !== 'idle'\) return;/);
   });
 });

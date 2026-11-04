@@ -60,7 +60,7 @@ function PhotoOptionRow(props: {
       onClick={() => props.onSelect(props.option)}
       className={cn(
         'flex min-h-[48px] w-full select-none items-center gap-3 rounded-lg px-3 text-left text-base font-medium [-webkit-touch-callout:none]',
-        'hover:bg-panel-2 focus-visible:lit-focus disabled:opacity-50',
+        'lit-hover focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none',
         danger ? 'text-bad' : 'text-fg',
       )}
     >

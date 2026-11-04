@@ -102,6 +102,15 @@
   );
 }
 
+/* Theme switch. src/lib/theme.ts toggleTheme holds html.theme-switching for two
+   frames so a light/dark flip lands at once: no mv-tint or mv-press colour ease
+   per element, no half-switched frame. Not a move; nothing animates. */
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: none !important;
+}
+
 /* Off: Reduce Motion or ?motion=0. Everything lands on its end state at once. */
 html[data-motion='off'] [class*='mv-'],
 html[data-motion='off'] [class*='mv-']::before,

@@ -240,8 +240,8 @@ describe('CreateBriefSheet: header actions like New post (15f)', () => {
     await mount();
     const panel = document.querySelector<HTMLElement>('[data-composer-sheet]');
     expect(panel).not.toBeNull();
-    expect(panel?.className).toContain('max-h-[90vh]');
-    expect(panel?.className).toContain('sm:max-h-[84vh]');
+    expect(panel?.className).toContain('max-h-[90svh]');
+    expect(panel?.className).toContain('sm:max-h-[84svh]');
     expect(panel?.className).not.toContain('lg:w-[960px]');
   });
 });

@@ -223,7 +223,7 @@ export function versionHistorySheet({
                   className={cn(
                     'flex h-[18px] w-[18px] items-center justify-center rounded-full border',
                     selected
-                      ? 'border-transparent bg-accent text-accent-fg'
+                      ? 'border-transparent bg-accent text-accent-fg lit-badge'
                       : 'border-border-strong text-transparent',
                   )}
                 >

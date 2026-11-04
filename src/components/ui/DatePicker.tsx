@@ -118,12 +118,13 @@ export function dayCells(
           if (!past) onPick(iso);
         }}
         className={cn(
-          'flex h-11 w-11 items-center justify-center rounded-lg text-base tabular-nums mv-tint',
+          'flex h-11 w-11 items-center justify-center rounded-lg text-base tabular-nums mv-tint focus-visible:lit-focus',
+          // Past days are solid fg-3 ink, never a fade.
           past
-            ? 'cursor-default text-fg-3 opacity-50'
+            ? 'cursor-default text-fg-3'
             : selected
               ? 'bg-accent text-accent-fg lit-pill'
-              : 'text-fg hover:bg-panel-2',
+              : 'lit-hover text-fg',
           !selected && !past && isToday ? 'lit-today' : '',
         )}
       >
@@ -208,7 +209,7 @@ export function DatePicker({
         aria-expanded={open}
         {...(label !== undefined ? { 'aria-label': label } : {})}
         onClick={() => setOpen((prev) => !prev)}
-        className="lit-well flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-border bg-panel-2 px-3 text-base mv-tint hover:bg-panel-3"
+        className="lit-well lit-hover flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-field bg-panel-2 px-3 text-base mv-tint focus-visible:lit-focus"
       >
         <IconCalendar size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
         <span

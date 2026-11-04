@@ -52,9 +52,9 @@ describe('Sheet bottom edge and height (iPhone)', () => {
     expect(body?.className).toContain('pb-[max(16px,env(safe-area-inset-bottom))]');
   });
 
-  it('caps at 90dvh with 90vh as the fallback', async () => {
+  it('caps at 90dvh with 90svh as the fallback', async () => {
     const { panel } = await mount(true);
-    expect(panel.className).toContain('max-h-[90vh]');
+    expect(panel.className).toContain('max-h-[90svh]');
     expect(panel.className).toContain('supports-[height:1dvh]:max-h-[90dvh]');
   });
 });

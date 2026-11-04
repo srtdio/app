@@ -942,7 +942,8 @@ function PostCardItem(
         onClick={tap.onClick}
         onKeyDown={tap.onKeyDown}
         style={cardBoxStyle(platform, layout)}
-        className={cn(POST_CARD, 'cursor-pointer mv-tint hover:bg-panel-2')}
+        // Hover/press: the lit-card overlay on [role=button] (index.css).
+        className={cn(POST_CARD, 'cursor-pointer mv-tint focus-visible:lit-focus')}
       >
         {textOnly ? (
           <CardText platform={platform} text={cardText(post)} />

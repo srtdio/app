@@ -168,7 +168,7 @@ export function SelectionBarView(props: {
           variant="ghost"
           data-selection-delete=""
           aria-describedby={props.block !== null ? 'selection-delete-reason' : undefined}
-          className="text-bad hover:bg-bad-soft hover:text-bad disabled:opacity-50"
+          className="text-bad hover:bg-bad-soft hover:text-bad"
           disabled={!props.canDelete}
           onClick={props.onDeleteTap}
         >

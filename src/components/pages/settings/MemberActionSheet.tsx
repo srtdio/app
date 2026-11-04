@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Sheet } from '@/components/ui/Sheet';
@@ -126,13 +127,11 @@ function EmailOptInRow({
           className="flex min-h-11 cursor-pointer items-start gap-3 py-1"
         >
           <span className="flex h-6 shrink-0 items-center">
-            <input
+            <Checkbox
               id="member-email-opt-in"
-              type="checkbox"
               checked={state === 'on'}
               aria-describedby="member-email-opt-in-help"
               onChange={(event) => void tick(event.target.checked)}
-              className="m-0 h-4 w-4 shrink-0 accent-accent"
             />
           </span>
           <span className="flex min-w-0 flex-col">

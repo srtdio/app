@@ -292,10 +292,10 @@ function PaintLogPanel(): ReactElement {
           readOnly
           value={text()}
           onFocus={(e) => e.currentTarget.select()}
-          className="h-[30vh] w-full resize-none bg-panel-2 p-2 font-mono text-xs leading-4 text-fg"
+          className="h-[30svh] w-full resize-none bg-panel-2 p-2 font-mono text-xs leading-4 text-fg"
         />
       ) : open ? (
-        <ol ref={listRef} className="max-h-[30vh] overflow-y-auto p-2 font-mono text-xs leading-4">
+        <ol ref={listRef} className="max-h-[30svh] overflow-y-auto p-2 font-mono text-xs leading-4">
           {entries.map((e, i) => (
             <li key={i} className="whitespace-pre-wrap break-all">
               <span className="text-fg-3">{e.at.toFixed(1)}</span> {e.what}
@@ -319,7 +319,7 @@ function PaintLogPanel(): ReactElement {
               Copy
             </Button>
           </div>
-          <ol className="max-h-[20vh] overflow-y-auto px-2 pb-2 font-mono text-xs leading-4 tabular-nums">
+          <ol className="max-h-[20svh] overflow-y-auto px-2 pb-2 font-mono text-xs leading-4 tabular-nums">
             {marks.map((m, i) => (
               <li key={i} className="flex gap-2">
                 <span className="min-w-0 flex-1 break-all">{m.name}</span>

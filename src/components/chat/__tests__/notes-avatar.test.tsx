@@ -65,7 +65,7 @@ describe('notes avatar', () => {
   it('no photo: notebook square, no badge, no image', () => {
     const html = view({ src: null, loaded: false });
     expect(html).toContain('data-notes-avatar="notebook"');
-    expect(html).toContain('bg-accent-soft text-accent');
+    expect(html).toContain('bg-avatar-1 text-overlay-fg');
     expect(html).not.toContain('<img');
     expect(html).not.toContain('data-notes-badge');
   });
