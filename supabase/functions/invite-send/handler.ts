@@ -72,8 +72,8 @@ function uuidv7(): string {
   bytes[3] = Math.floor(ts / 2 ** 16) & 0xff;
   bytes[4] = Math.floor(ts / 2 ** 8) & 0xff;
   bytes[5] = ts & 0xff;
-  bytes[6] = 0x70 | (bytes[6] & 0x0f); // version 7
-  bytes[8] = 0x80 | (bytes[8] & 0x3f); // RFC 4122 variant
+  bytes[6] = 0x70 | ((bytes[6] ?? 0) & 0x0f); // version 7
+  bytes[8] = 0x80 | ((bytes[8] ?? 0) & 0x3f); // RFC 4122 variant
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
@@ -394,12 +394,14 @@ export async function handleInviteSend(req: Request, deps: InviteSendDeps): Prom
     if (!skipsMailLookup(domain)) {
       const lookupMailDomain =
         deps.checkMailDomain ??
-        ((name: string) =>
-          checkMailDomain(name, {
+        ((name: string) => {
+          const dnsUrl = deps.env('MAIL_DNS_URL');
+          return checkMailDomain(name, {
             fetch: globalThis.fetch,
             timeoutMs: MAIL_DNS_TIMEOUT_MS,
-            dnsUrl: deps.env('MAIL_DNS_URL') || undefined,
-          }));
+            ...(dnsUrl ? { dnsUrl } : {}),
+          });
+        });
       const mail = await lookupMailDomain(domain);
       if (mail === 'no_mail') {
         return json(
