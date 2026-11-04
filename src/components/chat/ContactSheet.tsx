@@ -102,8 +102,10 @@ function contactPage(props: {
   );
 }
 
-export interface ContactSheetViewProps
-  extends Omit<ChatInfoTabsViewProps, 'open' | 'mode' | 'expanded' | 'onSeeAll'> {
+export interface ContactSheetViewProps extends Omit<
+  ChatInfoTabsViewProps,
+  'open' | 'mode' | 'expanded' | 'onSeeAll'
+> {
   open: boolean;
   onClose: () => void;
   /** The page title; defaults to "Contact info". */
