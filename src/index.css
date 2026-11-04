@@ -95,7 +95,8 @@
   --search-mark-bg: #ffe9b8;
   --search-mark-bg-rgb: 255 233 184;
   --search-mark-fg: #1b1c20;
-  /* Stage inks clear 4.5:1 on bg, panel, panel-2 and panel-3. */
+  /* Stage inks clear 4.5:1 on bg, panel, panel-2 and panel-3. Review is the
+     status amber: 4.54:1 on panel-3 here, 10.5:1 on dark panel-3. */
   --stage-review: #8f6300;
   --stage-review-rgb: 143 99 0;
   --stage-approved: #147c3b;
