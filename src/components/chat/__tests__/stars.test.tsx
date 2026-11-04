@@ -332,10 +332,11 @@ describe('thread', () => {
 });
 
 describe('chat home chips', () => {
-  it('Starred first, then Photos, Links, Files, Voice notes', () => {
+  it('Starred first, then Photos, Videos, Links, Files, Voice notes', () => {
     expect(HOME_CHIPS.map((c) => c.label)).toEqual([
       'Starred',
       'Photos',
+      'Videos',
       'Links',
       'Files',
       'Voice notes',
@@ -360,6 +361,7 @@ describe('chat home chips', () => {
     expect(toggleHomeChip('starred', 'starred')).toBeNull();
     expect(searchKindOf('starred')).toBeNull();
     expect(searchKindOf('file')).toBe('file');
+    expect(searchKindOf('video')).toBe('video');
   });
 
   it('Starred on: the starred list replaces the chats, Personal notes hidden', () => {
