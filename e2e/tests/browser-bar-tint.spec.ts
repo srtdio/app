@@ -40,6 +40,29 @@ async function expectTint(page: Page, name: '--panel' | '--bg'): Promise<void> {
     .toBe(true);
 }
 
+// The harness page (e2e/harness/index.html) has no theme-color metas; seed the
+// two index.html ships (same media split and default --panel values) before
+// any app script runs, so the sync has the real tags to write.
+async function seedMetas(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const add = (media: string, content: string): void => {
+      const meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      meta.media = media;
+      meta.content = content;
+      // querySelectorAll finds it wherever it sits; head may not exist yet.
+      (document.head ?? document.documentElement).appendChild(meta);
+    };
+    const seed = (): void => {
+      if (document.querySelector('meta[name="theme-color"]') !== null) return;
+      add('(prefers-color-scheme: light)', '#ffffff');
+      add('(prefers-color-scheme: dark)', '#141519');
+    };
+    if (document.documentElement !== null) seed();
+    else document.addEventListener('DOMContentLoaded', seed);
+  });
+}
+
 async function go(page: Page, url: string): Promise<void> {
   await page.evaluate((u) => {
     window.history.pushState({}, '', u);
@@ -51,6 +74,7 @@ test('theme-color follows the top surface: Pipeline, chat list, thread, post det
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 780 });
+  await seedMetas(page);
   const network = await installHarnessNetwork(page);
   await page.goto('/pipeline?stage=all');
   await expect(page.getByRole('button', { name: 'Open post Monday carousel' })).toBeVisible({
@@ -101,6 +125,7 @@ test('theme-color follows the top surface: Pipeline, chat list, thread, post det
 test('theme-color is --panel on every route on laptop; no thread strip there @desktop', async ({
   page,
 }) => {
+  await seedMetas(page);
   const network = await installHarnessNetwork(page);
   await page.goto(`/posts/${POST}`);
   await expect(page.getByRole('heading', { name: 'Monday carousel', level: 1 })).toBeVisible({
