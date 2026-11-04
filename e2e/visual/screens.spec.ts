@@ -2025,8 +2025,17 @@ SCREENS.push(
     steps: async (page) => {
       await openDmMessageMenu(page);
       await tap([page.locator('[data-menu-item="forward"]')], 'Forward');
-      const sheet = page.getByRole('dialog', { name: 'Forward to' });
-      await waitFor([sheet.getByText(GROUP_NAME, { exact: true })], 'forward picker rows');
+      // The menu's Forward starts a selection with this message; the selection
+      // bar's Forward opens the picker.
+      await tap([page.getByRole('button', { name: 'Forward', exact: true }).last()], 'Forward bar');
+      // Any chat row (a toggle button) or the zero line, inside the open sheet.
+      await waitFor(
+        [
+          page.locator('[role="dialog"] li button[aria-pressed]').first(),
+          page.getByText('Chats show up here.', { exact: true }),
+        ],
+        'forward picker rows',
+      );
     },
   },
   {
