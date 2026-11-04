@@ -2160,7 +2160,9 @@ SCREENS.push(
     name: 'pipeline-drag-drop',
     seed: creator,
     only: 'laptop',
-    url: '/pipeline',
+    // The kanban (one column per stage) shows only on All; a single stage is
+    // a grid with nowhere to drop.
+    url: '/pipeline?stage=all',
     steps: liftOverReview,
   },
   {
