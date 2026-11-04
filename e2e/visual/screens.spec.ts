@@ -488,7 +488,7 @@ async function openContactTab(page: Page, label: string): Promise<void> {
   await tap([page.locator('[data-contact-open]')], 'contact info trigger');
   await waitFor([page.getByRole('button', { name: 'Close contact info', exact: true })], 'contact');
   await tap(
-    [page.getByRole('tablist').getByRole('button', { name: label, exact: true })],
+    [page.getByRole('tablist').getByRole('tab', { name: label, exact: true })],
     `${label} tab`,
   );
   await waitFor([page.locator(`[data-contact-tab="${label.toLowerCase()}"]`)], `${label} tab`);
