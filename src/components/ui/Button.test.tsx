@@ -162,7 +162,9 @@ describe('Button busy', () => {
     const kids = el.props.children.filter((k) => k !== null);
     expect(kids).toHaveLength(2);
     expect(kids).toContain('Save');
-    const arc = kids.find((k) => k !== 'Save') as ReactElement<{
+    // The busy mark is a small wrapper; call it to read the ProgressRing it draws.
+    const mark = kids.find((k) => k !== 'Save') as ReactElement;
+    const arc = (mark.type as () => ReactElement)() as ReactElement<{
       progress: number | null;
       className: string;
     }>;

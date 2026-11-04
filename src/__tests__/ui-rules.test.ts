@@ -152,6 +152,7 @@ const CONFIRM_DIALOG_ALLOWLIST: Record<string, string> = {
   'ui/Sheet.tsx': 'Discard changes (every dirty sheet close)',
   'pages/create/ComposerSheet.tsx': 'Discard the composed post',
   'pages/PostDetailPage.tsx': 'Discard caption changes',
+  'settings/ProfileSettingsPanel.tsx': 'Discard name and designation edits (Back while dirty)',
   'chat/PlanComposeScreen.tsx': 'Discard a new plan',
   'chat/PlanScreen.tsx': 'Discard plan edits',
   'chat/ConceptSheet.tsx': 'Discard a concept',
