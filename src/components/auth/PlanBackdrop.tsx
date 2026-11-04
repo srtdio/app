@@ -188,7 +188,7 @@ function PhonePlan({ weeks, weekdays, monthLabel }: PlanProps): ReactElement {
       </div>
       <div className="mx-12 mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
         {listThumbs.map((cell, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-xl bg-panel p-2">
+          <div key={i} className="flex items-center gap-3 rounded-xl border bg-panel p-2 lit-card">
             <Thumb thumb={cell.thumb} className="h-10 w-10 shrink-0" />
             <Bar className="h-2.5 w-1/2" />
           </div>

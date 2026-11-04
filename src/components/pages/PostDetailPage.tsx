@@ -1943,7 +1943,7 @@ export function PostDetailPage({
                     // 44px floor as the tappable title, with no border (the
                     // ring draws outside the box), so entering edit never
                     // shifts the page.
-                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-lg border-0 bg-panel-2 px-2 py-1 text-3xl font-semibold tracking-tight text-fg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
+                    className="-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-lg border-0 bg-panel-2 px-2 py-1 text-3xl font-semibold tracking-tight text-fg lit-well outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-line"
                   />
                   {isTouchDevice() ? (
                     // FN9: a phone has no Enter / Escape to hand; Save and Cancel are

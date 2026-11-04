@@ -405,7 +405,7 @@ function skeletonCard(index: number, ratio: number | null): ReactElement {
       key={index}
       aria-hidden="true"
       data-skeleton-card=""
-      className="flex h-full min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel"
+      className="flex h-full min-w-0 flex-col overflow-hidden rounded-lg border bg-panel lit-card"
     >
       <Bone
         as="div"

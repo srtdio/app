@@ -308,7 +308,7 @@ export function BriefsListSkeleton(): ReactElement {
             <div
               key={key}
               data-brief-card-skeleton=""
-              className="rounded-xl border border-border bg-panel p-4 flex gap-3 min-w-0"
+              className="lit-card rounded-xl border bg-panel p-4 flex gap-3 min-w-0"
             >
               <Bone as="div" className="w-16 shrink-0 aspect-square rounded-lg" />
               <div className="flex min-w-0 flex-1 flex-col gap-2.5">

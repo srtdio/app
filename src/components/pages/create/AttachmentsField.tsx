@@ -153,7 +153,7 @@ export function attachmentItemList(
       return (
         <li
           key={`${item.versionId}-${index}`}
-          className="relative aspect-square h-20 shrink-0 overflow-hidden rounded-lg border border-border bg-panel-3"
+          className="relative aspect-square h-20 shrink-0 overflow-hidden rounded-lg border border-border bg-panel-3 lit-pill"
         >
           {item.previewUrl === undefined ? (
             <span className="flex h-full w-full items-center justify-center text-fg-3">

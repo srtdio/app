@@ -73,7 +73,7 @@ export function SharedBriefCards({ briefIds }: { briefIds: string[] }): ReactEle
           <div
             key={id}
             data-brief-skeleton=""
-            className={`${BRIEF_CARD_HEIGHT} w-[240px] rounded-xl border border-border bg-panel-2`}
+            className={`${BRIEF_CARD_HEIGHT} w-[240px] rounded-xl border bg-panel lit-card`}
           />
         ))}
       </div>

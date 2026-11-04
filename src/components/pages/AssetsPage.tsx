@@ -995,7 +995,7 @@ export function AssetsPage() {
               <div
                 key={i}
                 data-skeleton-tile=""
-                className="rounded-xl border border-border bg-panel overflow-hidden"
+                className="lit-card rounded-xl border bg-panel overflow-hidden"
               >
                 <Bone as="div" className="aspect-[4/3] w-full" />
                 <div className="flex h-9 items-center border-t border-border px-3">

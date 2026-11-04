@@ -1757,7 +1757,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="empty"
-        className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel text-md text-fg-3"
+        className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel-2 text-md text-fg-3 lit-well"
       >
         No files
       </div>
