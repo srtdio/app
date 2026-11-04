@@ -119,11 +119,11 @@ function contrast(a: string, b: string): number {
   return (hi! + 0.05) / (lo! + 0.05);
 }
 
-/** Same Button as the app's primary (in-app New post): accent fill, 44 tall, 8px radius. */
+/** The app's primary colours (accent fill, 44 tall) as a homepage pill (9999px radius). */
 async function expectAppPrimary(page: Page, selector: string): Promise<void> {
   const cta = await ctaStyle(page, selector);
   expect(cta.height).toBe(44);
-  expect(cta.radius).toBe('8px');
+  expect(cta.radius).toBe('9999px');
   expect(cta.accentFill).not.toBe('rgba(0, 0, 0, 0)');
   expect(cta.bg).toBe(cta.accentFill);
   expect(contrast(cta.fg, cta.bg)).toBeGreaterThanOrEqual(4.5);
@@ -191,7 +191,12 @@ test.describe('phone', () => {
     await expect(page.locator('.home .hero .btn').first()).toBeVisible();
     await expectAppPrimary(page, '.home .hero .btn:not(.line)');
     await expectAppPrimary(page, '.home .top .btn:not(.ghost)');
-    await expectAppPrimary(page, '.home .band .btn:not(.line)');
+    // The signup band is near-black, so its button is an off-white pill with dark ink.
+    const band = await ctaStyle(page, '.home .band .btn:not(.line)');
+    expect(band.height).toBe(44);
+    expect(band.radius).toBe('9999px');
+    expect(band.bg).toBe('rgb(229, 229, 230)');
+    expect(contrast(band.fg, band.bg)).toBeGreaterThanOrEqual(4.5);
   });
 
   test('cards: the clip ending moves the rail on; 3 seconds on a card nudges once', async ({

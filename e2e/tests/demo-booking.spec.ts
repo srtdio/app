@@ -122,11 +122,11 @@ function contrast(a: string, b: string): number {
   return (hi! + 0.05) / (lo! + 0.05);
 }
 
-/** Same Button as the app's primary (in-app New post): accent fill, 44 tall, 8px radius. */
+/** The app's primary colours (accent fill, 44 tall) as a homepage pill (9999px radius). */
 async function expectAppPrimary(page: Page, selector: string): Promise<void> {
   const cta = await ctaStyle(page, selector);
   expect(cta.height).toBe(44);
-  expect(cta.radius).toBe('8px');
+  expect(cta.radius).toBe('9999px');
   expect(cta.accentFill).not.toBe('rgba(0, 0, 0, 0)');
   expect(cta.bg).toBe(cta.accentFill);
   expect(contrast(cta.fg, cta.bg)).toBeGreaterThanOrEqual(4.5);
