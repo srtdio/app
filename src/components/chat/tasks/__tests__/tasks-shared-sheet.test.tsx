@@ -160,6 +160,21 @@ describe('shared Tasks sheet', () => {
     expect(payload.deletes).toEqual([]);
   });
 
+  it('the round Add task button beside the well adds like Enter; it waits for text', () => {
+    render(x4FakeTasks([A]));
+    const add = q('[data-task-add-submit]') as HTMLButtonElement;
+    expect(add.getAttribute('aria-label')).toBe('Add task');
+    expect(add.disabled).toBe(true);
+    const input = q('[data-task-add] input') as HTMLInputElement;
+    act(() => x4Type(input, 'Story'));
+    expect(add.disabled).toBe(false);
+    act(() => add.click());
+    expect(q('[data-task-row-id] [data-task-title]')?.textContent).toContain('Story');
+    expect(input.value).toBe('');
+    expect(add.disabled).toBe(true);
+    expect(saveButton().disabled).toBe(false);
+  });
+
   it('a new task takes Today by default, sends due_on, and the sheet moves to Today', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-05T10:00:00.000Z'));

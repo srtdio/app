@@ -263,13 +263,23 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
   expectClean(network);
 });
 
-test('Back with unsaved changes asks "Discard unsaved changes?" in the page; a swipe left (or the row menu\'s Delete) queues into Save', async ({
+test('Back with unsaved changes asks "Discard unsaved changes?" in the page; the Add button adds; a swipe left (or the row menu\'s Delete) queues into Save', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
   seedTasks(network.world);
   await openChat(page, GROUP_NAME);
   const sheet = await openSheet(page);
+  // The round Add button beside the well (44px, like the chat composer's
+  // send) adds a task as Enter does; it waits for text.
+  const add = sheet.getByRole('textbox', { name: 'Add a task' });
+  const addButton = sheet.getByRole('button', { name: 'Add task' });
+  await expect(addButton).toBeDisabled();
+  expectMinTouchTarget(await addButton.boundingBox());
+  await add.fill('Story frames');
+  await addButton.click();
+  await expect(rowOf(sheet, 'Story frames')).toHaveAttribute('data-task-marked', '');
+  await expect(addButton).toBeDisabled();
   const row = rowOf(sheet, 'Shot list');
   // On a phone there is no bin button: the row swipes left. A short drag
   // springs back; past the trigger it is queued, with Undo; the row menu still
