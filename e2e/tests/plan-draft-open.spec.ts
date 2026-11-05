@@ -403,7 +403,7 @@ test('Notifications: plan alerts under Plans; a deleted plan only toasts; a tap 
 
   // A date change opens the plan at the item.
   await line('plan_date_changed').locator('[data-activity-lead]').click();
-  await expect(page).toHaveURL(new RegExp(`/plans/${DATED_PLAN_ID}\\?item=${concept.id}$`));
+  await expect(page).toHaveURL(new RegExp(`/plan/${DATED_PLAN_ID}\\?item=${concept.id}$`));
   await expect(page.locator('[data-plan-page="item"]')).toBeVisible();
   expect(network.rpcCalls.filter((c) => c.name === 'inbox_mark_read')).toHaveLength(2);
   expectClean(network);
