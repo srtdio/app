@@ -5105,7 +5105,9 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           deleted_by: string | null
+          done_at: string | null
           due_at: string | null
+          due_on: string | null
           due_passed_at: string | null
           due_set_at: string | null
           due_set_by: string | null
@@ -5125,7 +5127,9 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          done_at?: string | null
           due_at?: string | null
+          due_on?: string | null
           due_passed_at?: string | null
           due_set_at?: string | null
           due_set_by?: string | null
@@ -5145,7 +5149,9 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
+          done_at?: string | null
           due_at?: string | null
+          due_on?: string | null
           due_passed_at?: string | null
           due_set_at?: string | null
           due_set_by?: string | null
