@@ -10148,6 +10148,17 @@ export type Database = {
           unread: number
         }[]
       }
+      inbox_unread_entity_targets: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: {
+          entity_id: string
+          entity_type: string
+          latest_at: string
+          latest_comment_id: string
+          plan_id: string
+          unread: number
+        }[]
+      }
       induction_finish: { Args: { p_trace_id: string }; Returns: undefined }
       induction_sample_clear: {
         Args: { p_trace_id: string; p_workspace_id: string }

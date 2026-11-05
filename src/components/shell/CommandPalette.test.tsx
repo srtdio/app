@@ -377,8 +377,8 @@ describe('CommandPalette', () => {
       x.items.flatMap((item) => (item.type === 'result' ? [item.target] : [])),
     );
     expect(targets).toEqual([
-      { path: '/plans/plan1?q=diwali&at=plan_item7' },
-      { path: '/plans/plan1?q=diwali&at=plan_item7' },
+      { path: '/plan/plan1?q=diwali&at=plan_item7' },
+      { path: '/plan/plan1?q=diwali&at=plan_item7' },
     ]);
   });
 
@@ -463,8 +463,8 @@ describe('CommandPalette', () => {
       { path: '/p/gbl-3?comment=comment3&q=diwali' },
       { path: '/b/gbl-4?comment=comment4&q=diwali' },
       { path: '/assets?asset=file5&q=diwali' },
-      { path: '/plans/plan6?q=diwali' },
-      { path: '/plans/plan1?q=diwali&at=plan_item7' },
+      { path: '/plan/plan6?q=diwali' },
+      { path: '/plan/plan1?q=diwali&at=plan_item7' },
       { path: '/chat?channel=group__w__g&task=task8&q=diwali' },
       { path: '/chat?channel=group__w__g&q=diwali' },
       { path: '/chat?channel=group__w__g&message=m1&q=diwali' },

@@ -37,7 +37,12 @@ import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { CountBadge } from '@/components/ui/CountBadge';
-import { unreadCommentsLabel, useEntityUnread } from '@/lib/inbox/unread-entities';
+import {
+  unreadCommentsLabel,
+  useEntityUnread,
+  useEntityUnreadComment,
+  withCommentTarget,
+} from '@/lib/inbox/unread-entities';
 import { rememberCard } from '@/lib/motion';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
 import { useMenuGesture } from '@/components/ui/useLongPress';
@@ -327,12 +332,18 @@ export function PostCard({
   const pressPrefetch = (): void => prefetchPostOpen(post.id);
   // growFromCard: the page grows out of this card; Back grows it back in.
   const cardRef = useGrowBackIntoCard<HTMLDivElement>(post.id);
+  // The newest unread comment on this post: the card's open lands on it.
+  const latestUnread = useEntityUnreadComment('post', post.id);
   const open = (): void => {
     mark('post:open:tap');
     mark('post:click');
     confirmPostOpen(post.id);
     rememberCard(post.id, cardRef.current);
-    navigate(href, openState === undefined ? undefined : { state: openState });
+    // Unread comments: land on the newest one (jump to latest), else the top.
+    navigate(
+      withCommentTarget(href, latestUnread),
+      openState === undefined ? undefined : { state: openState },
+    );
   };
   const caption = captionPreview(post);
   const stage = post.stage as Stage;
@@ -536,7 +547,10 @@ export function PostCard({
                   // Opens with the id (no ref lookup) but reads afresh: no press to join.
                   onOpen: () => {
                     rememberCard(post.id, cardRef.current);
-                    navigate(href, openState === undefined ? undefined : { state: openState });
+                    navigate(
+                      withCommentTarget(href, latestUnread),
+                      openState === undefined ? undefined : { state: openState },
+                    );
                   },
                   onCopyLink: copyLink,
                   ...(canMove && directMoves.length > 0

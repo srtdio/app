@@ -263,7 +263,8 @@ export function recentFromRoute(
     const id = decodeURIComponent(tail);
     if (head === 'posts') return { type: 'post', id };
     if (head === 'briefs') return { type: 'brief', id };
-    if (head === 'plans') return { type: 'plan', id };
+    // A plan opens at /plan/:id (the Plan tab) or, from older links, /plans/:id.
+    if (head === 'plans' || head === 'plan') return { type: 'plan', id };
     if (head === 'p' || head === 'b') {
       const ref = parseEntityRef(id);
       if (ref === null || ctx.workspaceKey === null) return null;

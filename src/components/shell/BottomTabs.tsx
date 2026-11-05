@@ -11,7 +11,12 @@ import {
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { CountBadge } from '@/components/ui/CountBadge';
 import { useNudgeOnRise } from '@/lib/motion';
-import { unreadCommentsLabel, usePlanItemsUnreadTotal } from '@/lib/inbox/unread-entities';
+import {
+  planTabHref,
+  unreadCommentsLabel,
+  useNewestPlanUnread,
+  usePlanItemsUnreadTotal,
+} from '@/lib/inbox/unread-entities';
 import { cn } from '@/lib/cn';
 import { activityPrefetchProps, navPrefetchProps } from '@/lib/route-prefetch';
 import { IconNotifications, ICON_SIZE } from '@/components/ui/icons';
@@ -55,9 +60,12 @@ function tabClass(active: boolean): string {
 function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number }) {
   const { item, planUnread } = props;
   const active = useMatch({ path: item.to, end: false }) !== null;
+  // Plan with unread comments: the tap lands on the newest one (jump to latest).
+  const newest = useNewestPlanUnread();
+  const to = item.showPlanBadge === true && planUnread > 0 ? planTabHref(item.to, newest) : item.to;
   return (
     <NavLink
-      to={item.to}
+      to={to}
       data-selected={active ? 'true' : undefined}
       aria-label={item.showPlanBadge === true ? planTabLabel(item.label, planUnread) : item.label}
       {...navPrefetchProps(item.to)}

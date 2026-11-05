@@ -70,10 +70,10 @@ describe('isBellEntry: the rows the live layer toasts apart', () => {
     expect(isBellPlanEvent('comment')).toBe(false);
   });
 
-  it('a plan alert opens /plans/{plan_id}, with ?item= when it names one', () => {
-    expect(planHref('p1', null)).toBe('/plans/p1');
-    expect(planHref('p1', 'i 2')).toBe('/plans/p1?item=i%202');
-    expect(planHref('p1', '')).toBe('/plans/p1');
+  it('a plan alert opens /plan/{plan_id}, with ?item= when it names one', () => {
+    expect(planHref('p1', null)).toBe('/plan/p1');
+    expect(planHref('p1', 'i 2')).toBe('/plan/p1?item=i%202');
+    expect(planHref('p1', '')).toBe('/plan/p1');
   });
 
   it('the task alerts', () => {

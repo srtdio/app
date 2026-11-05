@@ -58,6 +58,7 @@ import { stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { listBriefLinkedPosts } from '../../../packages/posts/src/reads';
 import { briefClose } from '@srtdio/rpc';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
+import { currentEntryState } from '@/lib/focus-target';
 
 // The line under a closed brief's title (and in the Close confirm).
 export const CLOSED_BRIEF_LINE = 'Closed briefs stay readable and open to comments.';
@@ -425,13 +426,17 @@ export function BriefDetailPage({
   // this page unmounts (the target comment comes through ?comment= below).
   const searchJump = useSearchJump();
   const [focusCommentId, setFocusCommentId] = useState<string | null>(null);
+  // A fresh key per arriving link, so the same comment linked twice lands twice.
+  const [focusRequestKey, setFocusRequestKey] = useState<string | null>(null);
   useEffect(() => {
     const comment = searchParams.get('comment');
     if (comment === null || comment === '') return;
     setFocusCommentId(comment);
+    setFocusRequestKey(`${comment}:${Date.now()}`);
     const next = new URLSearchParams(searchParams);
     next.delete('comment');
-    setSearchParams(next, { replace: true });
+    // Keep the entry's router state (an in-app open's ref id).
+    setSearchParams(next, { replace: true, state: currentEntryState() });
   }, [searchParams, setSearchParams]);
 
   // "Add note" from the create toast (?note=1): captured, stripped, then the
@@ -947,6 +952,7 @@ export function BriefDetailPage({
                 entityId={briefId}
                 whereLabel={brief.title}
                 focusCommentId={focusCommentId}
+                focusRequestKey={focusRequestKey}
               />
             </section>
           ) : null}
