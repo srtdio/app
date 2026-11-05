@@ -126,7 +126,10 @@ describe('parseFormat: protected spans', () => {
   });
 
   it('a closing marker after a url with trailing punctuation', () => {
-    expect(parseFormat('*see https://x.com*.')).toEqual([seg('see https://x.com', 'bold'), seg('.')]);
+    expect(parseFormat('*see https://x.com*.')).toEqual([
+      seg('see https://x.com', 'bold'),
+      seg('.'),
+    ]);
   });
 
   it('mentions inside a style', () => {

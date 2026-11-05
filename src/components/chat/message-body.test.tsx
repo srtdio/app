@@ -71,7 +71,9 @@ describe('message-body: WhatsApp formatting is the outer layer', () => {
 
   it('search marks still run inside a styled segment', () => {
     const out = renderToStaticMarkup(
-      <MemoryRouter>{renderMessageBody('*diwali lights*', false, ORIGIN, ['diwali'])}</MemoryRouter>,
+      <MemoryRouter>
+        {renderMessageBody('*diwali lights*', false, ORIGIN, ['diwali'])}
+      </MemoryRouter>,
     );
     expect(out).toMatch(/<strong[^>]*><mark/);
   });

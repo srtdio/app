@@ -45,4 +45,3 @@ test('select a word, tap Bold, send: the bubble shows it bold without stars', as
   await expect(bubble.locator('[data-msg-body] strong', { hasText: 'today' })).toBeVisible();
   await expect(bubble.locator('[data-msg-body]')).not.toContainText('*');
 });
-

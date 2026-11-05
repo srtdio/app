@@ -27,13 +27,12 @@ import { useKeyboardInset } from '@/lib/use-keyboard-inset';
 type Field = HTMLTextAreaElement | HTMLElement;
 
 /** The four strip buttons, in order. Labels are the only new visible copy. */
-export const STRIP_BUTTONS: readonly { style: FormatStyle; label: string; className: string }[] =
-  [
-    { style: 'bold', label: 'Bold', className: 'font-semibold' },
-    { style: 'italic', label: 'Italic', className: 'italic' },
-    { style: 'strike', label: 'Strike', className: 'line-through' },
-    { style: 'underline', label: 'Underline', className: 'underline' },
-  ];
+export const STRIP_BUTTONS: readonly { style: FormatStyle; label: string; className: string }[] = [
+  { style: 'bold', label: 'Bold', className: 'font-semibold' },
+  { style: 'italic', label: 'Italic', className: 'italic' },
+  { style: 'strike', label: 'Strike', className: 'line-through' },
+  { style: 'underline', label: 'Underline', className: 'underline' },
+];
 
 /** The style a key press asks for, or null. Pure. */
 export function shortcutStyle(e: {

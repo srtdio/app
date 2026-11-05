@@ -49,10 +49,7 @@ export const FORMAT_MONO_CLASS = 'rounded-sm bg-panel-2 font-mono';
  * text in <code>, never passed to `inner`. A body with no formatting returns
  * exactly `inner(body)`, so plain bodies render as before.
  */
-export function renderFormatted(
-  body: string,
-  inner: (text: string) => ReactNode[],
-): ReactNode[] {
+export function renderFormatted(body: string, inner: (text: string) => ReactNode[]): ReactNode[] {
   const segments = parseFormat(body);
   const only = segments[0];
   if (segments.length === 0) return [];

@@ -54,8 +54,7 @@ const MONO = '```';
 // punctuation trimmed.
 const URL_AT = /https?:\/\/[^\s<]+/iy;
 const URL_TRAILING = /[.,;:!?)\]}'"]+$/;
-const MENTION_AT =
-  /@\[(?:all|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/iy;
+const MENTION_AT = /@\[(?:all|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/iy;
 const PUNCT = /^[\p{P}\p{S}]$/u;
 const SPACE = /^\s$/u;
 
@@ -186,7 +185,12 @@ function pairsForLine(line: string): Pair[] {
   return pairs;
 }
 
-function pushRun(runs: FormatRun[], kind: FormatRun['kind'], text: string, styles: FormatStyle[]): void {
+function pushRun(
+  runs: FormatRun[],
+  kind: FormatRun['kind'],
+  text: string,
+  styles: FormatStyle[],
+): void {
   if (text === '') return;
   const prev = runs[runs.length - 1];
   if (
@@ -350,12 +354,28 @@ export function toggleFormat(
   const inner = value.slice(s, e);
   // Markers just outside the selection: unwrap.
   if (s - m >= 0 && value.slice(s - m, s) === marker && value.slice(e, e + m) === marker) {
-    return { mode: 'unwrap', marker, from: s - m, to: e + m, insert: inner, selStart: s - m, selEnd: e - m };
+    return {
+      mode: 'unwrap',
+      marker,
+      from: s - m,
+      to: e + m,
+      insert: inner,
+      selStart: s - m,
+      selEnd: e - m,
+    };
   }
   // Markers inside the selection edges: unwrap.
   if (inner.length >= 2 * m + 1 && inner.startsWith(marker) && inner.endsWith(marker)) {
     const bare = inner.slice(m, inner.length - m);
-    return { mode: 'unwrap', marker, from: s, to: e, insert: bare, selStart: s, selEnd: s + bare.length };
+    return {
+      mode: 'unwrap',
+      marker,
+      from: s,
+      to: e,
+      insert: bare,
+      selStart: s,
+      selEnd: s + bare.length,
+    };
   }
   return {
     mode: 'wrap',

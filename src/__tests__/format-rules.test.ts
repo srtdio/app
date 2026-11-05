@@ -35,7 +35,10 @@ const hasFormatting = (tag: string): boolean => /\sformatting(\s|=|\/?>)/.test(t
 
 describe('format rules', () => {
   it('post captions never format: CreatePostSheet and PostDetailPage Textareas', () => {
-    for (const rel of ['components/pages/CreatePostSheet.tsx', 'components/pages/PostDetailPage.tsx']) {
+    for (const rel of [
+      'components/pages/CreatePostSheet.tsx',
+      'components/pages/PostDetailPage.tsx',
+    ]) {
       const found = tags(read(rel), 'Textarea');
       expect(found.length).toBeGreaterThan(0);
       for (const tag of found) expect(hasFormatting(tag)).toBe(false);
@@ -76,7 +79,9 @@ describe('format rules', () => {
     expect(read('components/chat/MessageThread.tsx')).toContain('renderFormatted(body');
     expect(read('components/chat/PlanItemThread.tsx')).toContain('renderFormatted(body');
     expect(read('components/comments/Comments.tsx')).toContain('renderFormatted(body');
-    expect(read('components/pages/BriefDetailPage.tsx')).toContain('renderFormatted(brief.objective');
+    expect(read('components/pages/BriefDetailPage.tsx')).toContain(
+      'renderFormatted(brief.objective',
+    );
   });
 
   it('CLAUDE.md carries the rule and lists FormatStrip', () => {

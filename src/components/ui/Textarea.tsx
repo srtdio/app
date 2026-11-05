@@ -76,7 +76,9 @@ const MIRROR_PROPS = [
 export function mirrorClass(run: FormatRun): string {
   return cn(
     run.kind === 'marker' && 'text-fg-3',
-    run.kind === 'text' && run.styles.includes('bold') && '[-webkit-text-stroke:0.03em_currentColor]',
+    run.kind === 'text' &&
+      run.styles.includes('bold') &&
+      '[-webkit-text-stroke:0.03em_currentColor]',
     run.kind === 'text' && run.styles.includes('mono') && 'rounded-sm bg-fg/10',
     run.styles.includes('strike') && run.styles.includes('underline')
       ? '[text-decoration-line:underline_line-through]'
