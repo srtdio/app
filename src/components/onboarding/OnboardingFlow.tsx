@@ -30,7 +30,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { stepX } from '@/lib/motion';
+import { stepX, selectionSlideRef } from '@/lib/motion';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LABELS, isPostPlatform } from '@srtdio/posts';
 import { userOnboardingSave } from '@srtdio/rpc';
@@ -764,17 +764,25 @@ export function OnboardingFlow({
           {SIDE_TILES.map((tile) => (
             <PressableRow
               key={tile.side}
+              buttonRef={selectionSlideRef(side === tile.side)}
+              data-selected={side === tile.side ? 'true' : undefined}
               type="button"
               role="radio"
               aria-checked={side === tile.side}
               onClick={() => setSide(tile.side)}
               className={cn(
-                'flex flex-col items-start justify-center gap-0.5 border px-3.5 py-2.5',
-                side === tile.side ? 'bg-panel lit-selected' : 'bg-panel lit-chip',
+                'flex flex-col items-start justify-center gap-0.5 px-3.5 py-2.5',
+                side === tile.side
+                  ? 'bg-accent text-accent-fg lit-pill'
+                  : 'bg-panel-3 text-fg lit-well-soft',
               )}
             >
-              <span className="text-base font-medium text-fg">{tile.title}</span>
-              <span className="text-sm text-fg-2">{tile.sub}</span>
+              <span className="text-base font-medium">{tile.title}</span>
+              <span
+                className={cn('text-sm', side === tile.side ? 'text-accent-fg/80' : 'text-fg-2')}
+              >
+                {tile.sub}
+              </span>
             </PressableRow>
           ))}
         </div>

@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
-import { pop } from '@/lib/motion';
+import { pop, selectionSlideRef } from '@/lib/motion';
 import type { Result } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { Sheet } from '@/components/ui/Sheet';
@@ -432,14 +432,18 @@ export function WhoReactedSheet(props: {
                 <PressableRow
                   key={t.key}
                   inline
+                  buttonRef={selectionSlideRef(tab === t.key)}
+                  data-selected={tab === t.key ? 'true' : undefined}
                   type="button"
                   role="tab"
                   aria-selected={tab === t.key}
                   data-reactor-tab={t.key}
                   onClick={() => setTab(t.key)}
                   className={cn(
-                    'flex items-center gap-1.5 border px-4 text-base font-medium',
-                    tab === t.key ? 'lit-selected' : 'text-fg lit-chip',
+                    'flex items-center gap-1.5 px-4 text-base font-medium',
+                    tab === t.key
+                      ? 'bg-accent text-accent-fg lit-pill'
+                      : 'bg-panel-3 text-fg lit-well-soft',
                   )}
                 >
                   <span>{t.emoji ?? 'All'}</span>

@@ -15,6 +15,10 @@ import {
   Bone,
   nudgeIcon,
   slideFill,
+  fillSlideFrames,
+  fillHandover,
+  handoverFrames,
+  tintPick,
   widenBadge,
   BoxSkeleton,
   checkKeyframes,
@@ -103,7 +107,19 @@ const RUNS: ReadonlyArray<readonly [string, (el: HTMLElement) => Played | void]>
   ['touch: handPress', (el) => handPress(el)],
   ['touch: handRipple', (el) => handRipple(el)],
   ['touch: guideNudge', (el) => guideNudge(el)],
-  ['touch: slideFill', (el) => slideFill(el, { dx: -40, dy: 0, width: 60 }, 80)],
+  [
+    'touch: slideFill',
+    (el) =>
+      slideFill(
+        el,
+        { left: 0, top: 0, width: 60, height: 44 },
+        { left: 68, top: 0, width: 80, height: 44 },
+      ),
+  ],
+  [
+    'touch: tintPick',
+    (el) => tintPick(el, [{ color: 'rgb(0, 0, 0)' }, { color: 'rgb(255, 255, 255)' }]),
+  ],
   ['touch: widenBadge', (el) => widenBadge(el, 18, 26)],
   ['touch: nudgeIcon', (el) => nudgeIcon(el)],
 ];
@@ -383,5 +399,97 @@ describe('never fade', () => {
       const frames = call[0];
       expect(frames.some((frame) => 'opacity' in frame)).toBe(false);
     }
+  });
+});
+
+describe('fillSlideFrames: the selection fill glides like a drop', () => {
+  const from = { left: 0, top: 0, width: 60, height: 44 };
+  const to = { left: 140, top: 0, width: 80, height: 44 };
+
+  it('starts on the old pick, ends exactly on the new pick, transform only', () => {
+    const frames = fillSlideFrames(from, to);
+    expect(frames).toHaveLength(3);
+    expect(frames[0]?.transform).toBe('translate(-140px, 0px) scale(0.75, 1)');
+    expect(frames[2]?.transform).toBe('translate(0px, 0px) scale(1, 1)');
+    for (const frame of frames) {
+      expect(Object.keys(frame).filter((k) => k !== 'offset')).toEqual(['transform']);
+    }
+  });
+
+  it('mid glide the leading edge runs ahead and the box stretches past both picks', () => {
+    const mid = fillSlideFrames(from, to)[1];
+    expect(mid?.offset).toBe(0.5);
+    const m = /translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+), ([\d.]+)\)/.exec(
+      String(mid?.transform),
+    );
+    expect(m).not.toBeNull();
+    const left = to.left + Number(m?.[1]);
+    const width = to.width * Number(m?.[3]);
+    // Moving right: the left (trailing) edge has covered less than half its way,
+    // the right (leading) edge more than half.
+    expect(left - from.left).toBeLessThan((to.left - from.left) / 2);
+    expect(left + width - (from.left + from.width)).toBeGreaterThan(
+      (to.left + to.width - (from.left + from.width)) / 2,
+    );
+    expect(width).toBeGreaterThan(Math.max(from.width, to.width));
+  });
+
+  it('moving left mirrors the stretch: the left edge leads', () => {
+    const mid = fillSlideFrames(to, from)[1];
+    const m = /translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+), ([\d.]+)\)/.exec(
+      String(mid?.transform),
+    );
+    const left = from.left + Number(m?.[1]);
+    expect(to.left - left).toBeGreaterThan((to.left - from.left) / 2);
+  });
+});
+
+describe('fillHandover: each label changes ink exactly as the fill reaches or leaves it', () => {
+  const a = { left: 0, top: 0, width: 60, height: 44 };
+  const b = { left: 68, top: 0, width: 80, height: 44 };
+
+  it('neighbours: the fill reaches the new pick early, covers it by mid glide', () => {
+    const at = fillHandover(a, b);
+    expect(at.enter).toBeGreaterThanOrEqual(0);
+    expect(at.enter).toBeLessThan(at.cover);
+    expect(at.cover).toBe(0.5);
+  });
+
+  it('the old label hands back between a third and two thirds of its width, then the pick clears', () => {
+    const at = fillHandover(a, b);
+    expect(at.labelFrom).toBeLessThan(at.labelTo);
+    expect(at.labelTo).toBeLessThan(at.clear);
+    expect(at.clear).toBeLessThanOrEqual(1);
+  });
+
+  it('is the same handover in either direction', () => {
+    const right = fillHandover(a, b);
+    const left = fillHandover(b, a);
+    expect(left.cover).toBe(right.cover);
+    expect(left.enter).toBeGreaterThanOrEqual(0);
+    expect(left.labelFrom).toBeLessThan(left.clear);
+  });
+
+  it('a vertical row (Sidebar) hands over along y', () => {
+    const at = fillHandover(
+      { left: 0, top: 0, width: 200, height: 44 },
+      { left: 0, top: 132, width: 200, height: 44 },
+    );
+    expect(at.enter).toBeGreaterThan(0);
+    expect(at.clear).toBeLessThan(1);
+  });
+});
+
+describe('handoverFrames', () => {
+  it('merges points at the same progress and keeps offsets in order, clamped to 0..1', () => {
+    const frames = handoverFrames([
+      [0, { color: 'red' }],
+      [0.6, { color: 'blue' }],
+      [0.6, { backgroundColor: 'white' }],
+      [0.2, { backgroundColor: 'black' }],
+      [1.4, { color: 'blue' }],
+    ]);
+    expect(frames.map((f) => f.offset)).toEqual([0, 0.2, 0.6, 1]);
+    expect(frames[2]).toEqual({ color: 'blue', backgroundColor: 'white', offset: 0.6 });
   });
 });

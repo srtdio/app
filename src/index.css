@@ -780,8 +780,8 @@
     color: var(--fg-3);
   }
   /* The selection fill slide (src/lib/motion/selection.ts): while the fill
-     ghost travels to the new pick, the pick shows no fill of its own and sits
-     above the ghost so its label stays on top. */
+     ghost glides behind the row's picks to the new pick, the new pick shows no
+     fill of its own and its label stays on top. */
   [data-fill-slide] {
     position: relative;
     z-index: 2;

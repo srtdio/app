@@ -182,7 +182,7 @@ export function HelpPage() {
               <NavLink
                 key={link.to}
                 to={link.to}
-                className="inline-flex min-h-[44px] items-center rounded-full border bg-panel lit-chip px-4 text-base font-medium text-fg mv-tint focus-visible:lit-focus"
+                className="inline-flex min-h-[44px] items-center rounded-full bg-panel-3 lit-well-soft lit-hover px-4 text-base font-medium text-fg focus-visible:lit-focus"
               >
                 {link.label}
               </NavLink>

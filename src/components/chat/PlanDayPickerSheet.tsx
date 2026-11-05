@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { cn } from '@/lib/cn';
+import { selectionSlideRef } from '@/lib/motion';
 import { composeRangeProblem, type ComposeDay, type ComposeRange } from '@/lib/chat/plans';
 import {
   civilDaysBetween,
@@ -84,26 +85,28 @@ export function PlanDayTiles(props: {
               return (
                 <PressableRow
                   key={day}
+                  buttonRef={selectionSlideRef(on)}
                   align="center"
                   type="button"
                   data-plan-day-tile={day}
                   aria-pressed={on}
+                  data-selected={on ? 'true' : undefined}
                   aria-label={formatCivilDayHeader(day)}
                   disabled={props.disabled === true}
                   onClick={() => props.onPick(day)}
                   className={cn(
-                    'relative flex min-h-[62px] flex-col items-center justify-center gap-px border',
-                    // A selection fill, not a button: solid accent with a pill
-                    // light (no glow), lit-chip when idle.
+                    'relative flex min-h-[62px] flex-col items-center justify-center gap-px',
+                    // The pick is the ink fill (slides within the week); idle
+                    // days rest on the grey fill like every chip.
                     on
                       ? 'border-transparent bg-accent text-accent-fg hover:bg-accent lit-pill'
-                      : 'bg-panel text-fg lit-chip',
+                      : 'bg-panel-3 text-fg lit-well-soft',
                   )}
                 >
                   <span
                     className={cn(
                       'text-xs font-semibold uppercase tracking-[0.06em]',
-                      on ? 'text-accent-fg' : day === props.today ? 'text-accent' : 'text-fg-3',
+                      on ? 'text-accent-fg' : day === props.today ? 'text-accent' : 'text-fg-2',
                     )}
                   >
                     {civilWeekdayShort(day)}
@@ -114,7 +117,7 @@ export function PlanDayTiles(props: {
                   <span
                     className={cn(
                       'font-mono text-xs tabular-nums',
-                      on ? 'text-accent-fg' : 'text-fg-3',
+                      on ? 'text-accent-fg' : 'text-fg-2',
                     )}
                   >
                     {tileCaption(day, count)}

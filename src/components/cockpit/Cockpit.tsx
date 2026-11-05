@@ -40,7 +40,7 @@ import {
   type TabDataMap,
 } from '@/lib/cockpit/types';
 import { mark } from '@/lib/perf-marks';
-import { Bone } from '@/lib/motion';
+import { Bone, selectionSlideRef } from '@/lib/motion';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 
 let poller: CockpitPoller | null = null;
@@ -119,11 +119,13 @@ function Tiles({ state, onPick }: { state: CockpitState; onPick: (tab: CockpitTa
           <PressableRow
             key={key}
             card
+            buttonRef={selectionSlideRef(selected)}
+            data-selected={selected ? 'true' : undefined}
             aria-pressed={selected}
             onClick={() => onPick(tab)}
             className={cn(
               'flex min-w-0 flex-col gap-1 border px-3 py-2.5',
-              selected ? 'lit-selected' : 'lit-card',
+              selected ? 'border-transparent bg-accent text-accent-fg lit-pill' : 'lit-card',
             )}
           >
             <span className="flex w-full items-center gap-1.5">
@@ -131,16 +133,29 @@ function Tiles({ state, onPick }: { state: CockpitState; onPick: (tab: CockpitTa
                 level={tile === undefined ? 'grey' : tile.state === 'ok' ? tile.level : 'amber'}
                 small
               />
-              <span className="truncate text-sm text-fg-2">{label}</span>
+              <span
+                className={cn('truncate text-sm', selected ? 'text-accent-fg/80' : 'text-fg-2')}
+              >
+                {label}
+              </span>
             </span>
             {tile === undefined ? (
               <Bone lit="flat" className="h-7 w-10 rounded" />
             ) : tile.state === 'ok' ? (
-              <span className="font-mono text-2xl font-semibold tabular-nums text-fg">
+              <span
+                className={cn(
+                  'font-mono text-2xl font-semibold tabular-nums',
+                  selected ? 'text-accent-fg' : 'text-fg',
+                )}
+              >
                 {countText(tile.value)}
               </span>
             ) : (
-              <span className="text-sm text-fg-2 line-clamp-2">{tile.reason}</span>
+              <span
+                className={cn('text-sm line-clamp-2', selected ? 'text-accent-fg/80' : 'text-fg-2')}
+              >
+                {tile.reason}
+              </span>
             )}
           </PressableRow>
         );
