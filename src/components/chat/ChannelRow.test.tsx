@@ -8,7 +8,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { act, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
