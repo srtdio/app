@@ -4,7 +4,7 @@
 // tap expands its rows in place (Added, Edited with the old title struck,
 // Priority with the old level struck, Done, Reopened, Due date with the old
 // day struck, Deleted, each with the
-// task number and title), then an "Open tasks" button. Older rows without a batch
+// task number and title); the card itself opens the tasks. Older rows without a batch
 // id read as before (a single change, a quick run of adds, a burst). The
 // actor's name is semibold; numbers are mono. Pills are pressable: no iOS
 // selection callout. No motion.
@@ -12,6 +12,7 @@
 import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconChevronDown, IconChevronRight } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
@@ -123,7 +124,7 @@ function BatchRowView(props: { row: BatchRow }): ReactElement {
   }
 }
 
-/** One Save: "<Name> edited tasks" with a chevron; a tap shows its rows and "Open tasks". */
+/** One Save: "<Name> edited tasks" with a chevron; a tap shows its rows (the card opens the tasks). */
 function TaskBatch(props: {
   line: Extract<TaskLine, { kind: 'batch' }>;
   ctx: TaskLineContext;
@@ -156,26 +157,29 @@ function TaskBatch(props: {
         </span>
       </Button>
       {open ? (
-        <div
+        // The rows, and the whole card opens the tasks (a chevron at its end).
+        <PressableRow
+          card
+          type="button"
           data-task-batch-rows=""
-          className="mx-4 mb-1 flex w-[min(100%-2rem,420px)] flex-col gap-1 rounded-xl border bg-panel-2 px-3 py-2 text-md text-fg-2 lit-card-muted"
+          data-task-open=""
+          aria-label={OPEN_TASKS_LABEL}
+          onClick={() => ctx.onOpenTask(TASKS_SHEET_ONLY)}
+          onContextMenu={(e) => e.preventDefault()}
+          className={cn(
+            'mx-4 mb-1 flex w-[min(100%-2rem,420px)] items-center gap-2 border bg-panel-2 px-3 py-2 text-md text-fg-2 lit-card-muted',
+            NO_TOUCH_SELECT,
+          )}
         >
-          {rows.map((row, k) => (
-            <p key={k} data-task-batch-row={row.kind} className="leading-5">
-              <BatchRowView row={row} />
-            </p>
-          ))}
-          <Button
-            type="button"
-            variant="link"
-            data-task-open=""
-            onClick={() => ctx.onOpenTask(TASKS_SHEET_ONLY)}
-            onContextMenu={(e) => e.preventDefault()}
-            className={cn('mt-1 self-start', NO_TOUCH_SELECT)}
-          >
-            {OPEN_TASKS_LABEL}
-          </Button>
-        </div>
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
+            {rows.map((row, k) => (
+              <span key={k} data-task-batch-row={row.kind} className="block leading-5">
+                <BatchRowView row={row} />
+              </span>
+            ))}
+          </span>
+          <IconChevronRight size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
+        </PressableRow>
       ) : null}
     </div>
   );

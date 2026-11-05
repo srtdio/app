@@ -12,10 +12,10 @@ import {
 } from '../fixtures/tasks-data';
 import { withSaveData } from '../helpers/save-data';
 
-// The chat Tasks: one shared list every member edits the same way, a full
-// page like Contact and Group info. The composer button, the page (tick,
+// The chat Tasks: one shared list every member edits the same way, a sheet at
+// the height of what it holds. The composer button, the sheet (chips, tick,
 // inline edit, the priority menu, add, the row menu's Delete), nothing
-// written until one Save (from the ⋯ menu, one chat_task_save_batch), one
+// written until one Save (one chat_task_save_batch), one
 // "edited tasks" line per Save that expands in place, the marks another
 // person's Save leaves, both editing the same task (Keep mine / Keep theirs),
 // Share, the bell and numbered list continuation. The real app tree runs
@@ -103,16 +103,17 @@ test(
     expectMinTouchTarget(await button.boundingBox());
 
     const sheet = await openSheet(page);
-    // Nothing dated: one No date section, in number order (no groups, no side
-    // labels, no old due-time labels), and no Save in the menu yet.
-    await expect(sheet.locator('[data-task-section]')).toHaveCount(1);
-    await expect(sheet.locator('[data-task-section="none"]')).toBeVisible();
+    // Nothing dated: the sheet opens on No date, one flat list in number order
+    // (no groups, no side labels, no old due-time labels); Save waits for a change.
+    await expect(sheet.locator('[data-task-list]')).toHaveAttribute('data-task-chip', 'none');
     const titles = await sheet.locator('[data-task-row-id] [data-task-title]').allTextContents();
     expect(titles).toEqual(['Hook options', 'Shot list', TASK_DUE_TITLE, 'Brand colours']);
     await expect(sheet).not.toContainText('Creators');
     await expect(sheet).not.toContainText('Approvers');
     await expect(sheet.locator('[data-task-due]')).toHaveCount(0);
-    expect(await menuLabels(page)).toEqual(['Search tasks', 'Share to chat']);
+    const save = sheet.locator('[data-task-save]');
+    await expect(save).toBeDisabled();
+    expect(await menuLabels(page)).toEqual(['Search tasks', 'Share to chat', 'Full screen']);
     expectMinTouchTarget(
       await rowOf(sheet, 'Hook options').locator('[data-task-tick]').boundingBox(),
     );
@@ -140,14 +141,16 @@ test(
     await rowOf(sheet, 'Hook options').locator('[data-task-tick]').click();
     await rowOf(sheet, 'Hook options').locator('[data-task-tick]').click();
     const add = sheet.getByRole('textbox', { name: 'Add a task' });
+    // No date, so the new task stays on this chip, unsaved (its dot).
+    await sheet.locator('[data-task-days="add"] [data-task-day="none"]').click();
     await add.fill('Story frames');
     await add.press('Enter');
     await expect(add).toBeFocused();
-    // The new task lands in No date, unsaved (its dot), until a day is given.
     await expect(rowOf(sheet, 'Story frames')).toHaveAttribute('data-task-marked', '');
     expect(network.rpcCalls.some((c) => c.name.startsWith('chat_task'))).toBe(false);
 
-    await menuPick(page, 'Save');
+    await expect(save).toBeEnabled();
+    await save.click();
     await expect
       .poll(() => network.rpcCalls.filter((c) => c.name === 'chat_task_save_batch').length)
       .toBe(1);
@@ -162,7 +165,7 @@ test(
     expect(batch.edits.every((e) => typeof e.base_updated_at === 'string')).toBe(true);
     expect(typeof call?.args.p_trace_id).toBe('string');
     await expect(rowOf(sheet, 'Story frames')).not.toHaveAttribute('data-task-marked', '');
-    expect(await menuLabels(page)).toEqual(['Search tasks', 'Share to chat']);
+    await expect(save).toBeDisabled();
 
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Tasks' })).toHaveCount(0);
@@ -227,7 +230,7 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
     },
     COLLEAGUE_A,
   );
-  await menuPick(page, 'Save');
+  await sheet.locator('[data-task-save]').click();
 
   // Everything else is saved; task 8 stays dirty and asks.
   await expect(sheet.locator('[data-task-conflict]')).toContainText('changed this to "Hook (Leo)"');
@@ -235,7 +238,7 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
   await expect(sheet.locator('[data-task-keep-theirs]')).toHaveText('Keep theirs');
   expect(taskRow(network, 11).status).toBe('done');
   expect(taskRow(network, 8).title).toBe('Hook (Leo)');
-  expect(await menuLabels(page)).toEqual(['Save', 'Search tasks', 'Share to chat']);
+  await expect(sheet.locator('[data-task-save]')).toBeEnabled();
 
   await sheet.locator('[data-task-keep-mine]').click();
   await expect(sheet.locator('[data-task-conflict]')).toHaveCount(0);

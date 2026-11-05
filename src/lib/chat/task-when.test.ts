@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  TASK_SECTIONS,
   calendarDays,
+  countByWhen,
   dayChoices,
-  groupBySection,
   isPickableDay,
+  openingChip,
   rowDateLine,
   searchTasks,
-  taskSection,
+  taskWhen,
   type TaskCalendar,
 } from '@/lib/chat/task-when';
 
@@ -20,7 +20,7 @@ const CAL: TaskCalendar = {
 const DAYS = calendarDays(CAL);
 const open = { status: 'todo' as const, doneAt: null };
 
-describe('task sections', () => {
+describe('task chips', () => {
   it('today and the week end read on the workspace calendar', () => {
     expect(DAYS).toEqual({ today: '2026-11-05', weekEnd: '2026-11-08' });
     // Sunday start: the week ends Saturday 7 Nov.
@@ -30,52 +30,24 @@ describe('task sections', () => {
     expect(calendarDays(mumbai).today).toBe('2026-11-06');
   });
 
-  it('an open task falls under Overdue, Today, This week, Later or No date; a done one under Done', () => {
-    expect(TASK_SECTIONS.map((s) => s.label)).toEqual([
-      'Overdue',
-      'Today',
-      'This week',
-      'Later',
-      'No date',
-    ]);
-    expect(taskSection({ ...open, dueOn: null }, DAYS)).toBe('none');
-    expect(taskSection({ ...open, dueOn: '2026-11-04' }, DAYS)).toBe('overdue');
-    expect(taskSection({ ...open, dueOn: '2026-11-05' }, DAYS)).toBe('today');
-    expect(taskSection({ ...open, dueOn: '2026-11-06' }, DAYS)).toBe('week');
-    expect(taskSection({ ...open, dueOn: '2026-11-08' }, DAYS)).toBe('week');
-    expect(taskSection({ ...open, dueOn: '2026-11-09' }, DAYS)).toBe('later');
-    // Done, even when it was overdue: Done keeps what happened.
-    expect(taskSection({ status: 'done', dueOn: '2026-11-01' }, DAYS)).toBe('done');
+  it('a task falls under Past, Today, This week, Later or No date by its due day', () => {
+    expect(taskWhen({ dueOn: null }, DAYS)).toBe('none');
+    expect(taskWhen({ dueOn: '2026-11-04' }, DAYS)).toBe('past');
+    expect(taskWhen({ dueOn: '2026-11-05' }, DAYS)).toBe('today');
+    expect(taskWhen({ dueOn: '2026-11-06' }, DAYS)).toBe('week');
+    expect(taskWhen({ dueOn: '2026-11-08' }, DAYS)).toBe('week');
+    expect(taskWhen({ dueOn: '2026-11-09' }, DAYS)).toBe('later');
   });
 
-  it('groups in reading order: by day then number; Done newest first, unstamped last', () => {
-    const t = (number: number, dueOn: string | null, done?: string | null) => ({
-      number,
-      dueOn,
-      status: done === undefined ? ('todo' as const) : ('done' as const),
-      doneAt: done ?? null,
-    });
-    const out = groupBySection(
-      [
-        t(1, '2026-11-20'),
-        t(2, '2026-11-09'),
-        t(3, null),
-        t(4, '2026-11-01'),
-        t(5, '2026-11-03'),
-        t(6, '2026-11-03'),
-        t(7, '2026-11-01', '2026-11-02T09:00:00.000Z'),
-        t(8, null, null),
-        t(9, null, '2026-11-04T09:00:00.000Z'),
-        t(10, '2026-11-05'),
-      ],
+  it('opens on Today when it holds anything, else the first chip that does, else Today', () => {
+    const counts = countByWhen(
+      [{ dueOn: '2026-11-01' }, { dueOn: null }, { dueOn: '2026-11-20' }],
       DAYS,
     );
-    expect(out.overdue.map((x) => x.number)).toEqual([4, 5, 6]);
-    expect(out.today.map((x) => x.number)).toEqual([10]);
-    expect(out.week).toEqual([]);
-    expect(out.later.map((x) => x.number)).toEqual([2, 1]);
-    expect(out.none.map((x) => x.number)).toEqual([3]);
-    expect(out.done.map((x) => x.number)).toEqual([9, 7, 8]);
+    expect(counts).toEqual({ past: 1, today: 0, week: 0, later: 1, none: 1 });
+    expect(openingChip(counts)).toBe('past');
+    expect(openingChip({ ...counts, today: 2 })).toBe('today');
+    expect(openingChip({ past: 0, today: 0, week: 0, later: 0, none: 0 })).toBe('today');
   });
 });
 

@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-// The shared Tasks page: nothing writes until Save (in the ⋯ menu, only while
-// something changed); Save is one saveBatch with only the changed fields;
-// change-then-revert leaves no Save; a conflicting edit stays dirty with Keep
-// mine / Keep theirs; a deleted one offers Restore mine / OK; marks show other
-// people's changes; Cmd+S saves; the sections, the row menu's days, Done
-// folded, and search across every section.
+// The shared Tasks sheet: nothing writes until Save; Save is one saveBatch
+// with only the changed fields; change-then-revert keeps Save disabled; a
+// conflicting edit stays dirty with Keep mine / Keep theirs; a deleted one
+// offers Restore mine / OK; marks show other people's changes; Cmd+S saves;
+// the chips, the row menu's days, Past's Not done / Done, full screen, and
+// search (from the ⋯ menu) across every chip.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -27,6 +27,7 @@ import { x4FakeTasks, x4Task, x4Type } from './x4-fake-tasks';
 
 let root: Root | null = null;
 const q = (s: string) => document.querySelector<HTMLElement>(s);
+const saveButton = () => q('[data-task-save]') as HTMLButtonElement;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** The ⋯ menu's rows by label (open it first). */
@@ -49,22 +50,6 @@ async function closeMenu(): Promise<void> {
     await wait(30);
   });
 }
-async function menuLabels(): Promise<string[]> {
-  await openMenu();
-  const labels = menuRows().map(rowLabel);
-  await closeMenu();
-  return labels;
-}
-/** Save from the ⋯ menu. */
-async function save(): Promise<void> {
-  await openMenu();
-  const row = menuRows().find((r) => rowLabel(r) === 'Save');
-  if (row === undefined) throw new Error('no Save');
-  await act(async () => {
-    row.click();
-    await wait(30);
-  });
-}
 /** A row's own menu (a right-click on its title), its rows. */
 async function openRowMenu(id: string): Promise<HTMLButtonElement[]> {
   const title = q(`[data-task-row-id="${id}"] [data-task-title]`);
@@ -83,11 +68,7 @@ async function pickRow(rows: HTMLButtonElement[], label: string): Promise<void> 
     await wait(30);
   });
 }
-/** The sections on the page, in order. */
-const sectionKeys = (): string[] =>
-  [...document.querySelectorAll('[data-task-section]')].map(
-    (el) => el.getAttribute('data-task-section') ?? '',
-  );
+const chipOf = (): string | null => q('[data-task-list]')?.getAttribute('data-task-chip') ?? null;
 const submitAdd = (): void => {
   act(() => q('[data-task-add]')?.dispatchEvent(new Event('submit', { bubbles: true })));
 };
@@ -123,14 +104,14 @@ const A = x4Task({ id: 'a', number: 1, title: 'Hook', priority: 2 });
 const B = x4Task({ id: 'b', number: 2, title: 'Grid', priority: 1 });
 
 describe('shared Tasks sheet', () => {
-  it('nothing writes until Save; the menu offers Save only while something changed', async () => {
+  it('nothing writes until Save; change-then-revert keeps Save disabled', () => {
     const tasks = x4FakeTasks([A, B]);
     render(tasks);
-    expect(await menuLabels()).toEqual(['Search tasks']);
+    expect(saveButton().disabled).toBe(true);
     act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
-    expect(await menuLabels()).toEqual(['Save', 'Search tasks']);
+    expect(saveButton().disabled).toBe(false);
     act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
-    expect(await menuLabels()).toEqual(['Search tasks']);
+    expect(saveButton().disabled).toBe(true);
     expect(tasks.saveBatch).not.toHaveBeenCalled();
   });
 
@@ -142,9 +123,10 @@ describe('shared Tasks sheet', () => {
     act(() => q('[data-task-menu-p="0"]')?.click());
     const input = q('[data-task-add] input') as HTMLInputElement;
     act(() => x4Type(input, 'Story'));
+    // No date: the create carries no due_on.
+    act(() => q('[data-task-days="add"] [data-task-day="none"]')?.click());
     submitAdd();
-    // A new task has no date until one is given: the create carries no due_on.
-    await save();
+    await act(async () => saveButton().click());
     expect(tasks.saveBatch).toHaveBeenCalledTimes(1);
     const payload = (tasks.saveBatch as ReturnType<typeof vi.fn>).mock
       .calls[0]?.[0] as BatchPayload;
@@ -156,25 +138,22 @@ describe('shared Tasks sheet', () => {
     expect(payload.deletes).toEqual([]);
   });
 
-  it('a new task lands in No date; its menu gives it a day, and the row moves to that section', async () => {
+  it('a new task takes Today by default, sends due_on, and the sheet moves to Today', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-05T10:00:00.000Z'));
     try {
       const tasks = x4FakeTasks([A, B]);
       render(tasks);
-      expect(sectionKeys()).toEqual(['none']);
+      // Nothing is dated: the sheet opens on No date, where A and B sit.
+      expect(chipOf()).toBe('none');
+      expect(q('[data-task-row-id="a"]')).not.toBeNull();
       const input = q('[data-task-add] input') as HTMLInputElement;
       act(() => x4Type(input, 'Story'));
       submitAdd();
-      const fresh = q('[data-task-section="none"] [data-task-marked]');
-      expect(fresh?.textContent).toContain('Story');
-      const key = fresh?.getAttribute('data-task-row-id') ?? '';
-      const rows = await openRowMenu(key);
-      expect(rows.map(rowLabel)).toEqual(['Today', 'Tomorrow', 'Pick a date', 'Delete']);
-      await pickRow(rows, 'Today');
-      expect(sectionKeys()).toEqual(['today', 'none']);
-      expect(q(`[data-task-section="today"] [data-task-row-id="${key}"]`)).not.toBeNull();
-      await save();
+      expect(chipOf()).toBe('today');
+      expect(q('[data-task-row-id="a"]')).toBeNull();
+      expect(q('[data-task-list] [data-task-marked]')?.textContent).toContain('Story');
+      await act(async () => saveButton().click());
       const payload = (tasks.saveBatch as ReturnType<typeof vi.fn>).mock
         .calls[0]?.[0] as BatchPayload;
       expect(payload.creates).toEqual([
@@ -185,7 +164,7 @@ describe('shared Tasks sheet', () => {
     }
   });
 
-  it('sections in page order, Done folded; search lists matches across every section', async () => {
+  it('chips: Past splits Not done above Done; search (from the menu) finds tasks across every chip', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-05T10:00:00.000Z'));
     try {
@@ -200,30 +179,33 @@ describe('shared Tasks sheet', () => {
       });
       const later = x4Task({ id: 'l1', number: 6, title: 'Logo files', dueOn: '2026-11-20' });
       render(x4FakeTasks([A, late, shipped, later]));
-      expect(sectionKeys()).toEqual(['overdue', 'later', 'none', 'done']);
-      expect(q('[data-task-row-id="p1"] [data-task-when]')?.textContent).toBe('3 Nov');
-      expect(q('[data-task-row-id="l1"] [data-task-when]')?.textContent).toBe('20 Nov');
-      expect(q('[data-task-row-id="a"] [data-task-when]')).toBeNull();
-      // Done is folded: its count shows, its rows open on a tap.
-      expect(q('[data-task-row-id="p2"]')).toBeNull();
-      expect(q('[data-task-done-fold]')?.textContent).toContain('Done');
-      act(() => q('[data-task-done-fold]')?.click());
+      act(() => q('[data-task-when-chip="past"]')?.click());
+      expect(chipOf()).toBe('past');
+      const sections = [...document.querySelectorAll('[data-task-section]')].map((el) =>
+        el.getAttribute('data-task-section'),
+      );
+      expect(sections).toEqual(['open', 'done']);
+      expect(q('[data-task-row-id="p1"] [data-task-when]')?.textContent).toBe('Overdue · 3 Nov');
       expect(q('[data-task-row-id="p2"] [data-task-when]')?.textContent).toContain(
         'Due 2 Nov · done',
       );
-      // Search: across every section, by word prefix, one flat list.
+      expect(q('[data-task-row-id="l1"]')).toBeNull();
+      // Today holds nothing: one positive line.
+      act(() => q('[data-task-when-chip="today"]')?.click());
+      expect(q('[data-task-zero]')?.textContent).toBe('Tasks due today show up here.');
+      // Search: from the menu, across every chip, by word prefix.
       await openMenu();
       await pickRow(menuRows(), 'Search tasks');
       const field = q('[data-task-search] input') as HTMLInputElement;
       act(() => x4Type(field, 'log'));
-      expect(q('[data-task-list]')?.getAttribute('data-task-chip')).toBe('search');
-      expect(sectionKeys()).toEqual([]);
+      expect(chipOf()).toBe('search');
+      expect(q('[data-task-chips]')).toBeNull();
       expect(q('[data-task-row-id="l1"]')).not.toBeNull();
       expect(q('[data-task-row-id="p1"]')).toBeNull();
       expect(q('[data-task-add]')).toBeNull();
       act(() => q('[data-task-search-cancel]')?.click());
       expect(q('[data-task-search]')).toBeNull();
-      expect(sectionKeys()).toEqual(['overdue', 'later', 'none', 'done']);
+      expect(chipOf()).toBe('today');
     } finally {
       vi.useRealTimers();
     }
@@ -238,12 +220,13 @@ describe('shared Tasks sheet', () => {
       let rows = await openRowMenu('a');
       expect(rows.map(rowLabel)).toEqual(['Today', 'Tomorrow', 'Pick a date', 'Delete']);
       await pickRow(rows, 'Tomorrow');
-      expect(sectionKeys()).toEqual(['week']);
+      // The sheet follows the row to This week.
+      expect(chipOf()).toBe('week');
       expect(q('[data-task-row-id="a"] [data-task-when]')?.textContent).toBe('6 Nov');
       rows = await openRowMenu('a');
       expect(rows.map(rowLabel)).toEqual(['Today', 'Tomorrow', 'Pick a date', 'No date', 'Delete']);
       await closeMenu();
-      await save();
+      await act(async () => saveButton().click());
       const payload = (tasks.saveBatch as ReturnType<typeof vi.fn>).mock
         .calls[0]?.[0] as BatchPayload;
       expect(payload.edits).toEqual([
@@ -258,10 +241,23 @@ describe('shared Tasks sheet', () => {
     render(x4FakeTasks([A, B]));
     await pickRow(await openRowMenu('a'), 'Delete');
     expect(q('[data-task-row-id="a"]')?.hasAttribute('data-task-deleting')).toBe(true);
-    expect(await menuLabels()).toEqual(['Save', 'Search tasks']);
+    expect(saveButton().disabled).toBe(false);
     act(() => q('[data-task-undo-delete]')?.click());
     expect(q('[data-task-row-id="a"]')?.hasAttribute('data-task-deleting')).toBe(false);
-    expect(await menuLabels()).toEqual(['Search tasks']);
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('full screen from the menu fills the screen; Half screen returns', async () => {
+    render(x4FakeTasks([A]));
+    const dialog = () => q('[role="dialog"][aria-label="Tasks"]');
+    expect(dialog()?.hasAttribute('data-task-full')).toBe(false);
+    await openMenu();
+    await pickRow(menuRows(), 'Full screen');
+    expect(dialog()?.hasAttribute('data-task-full')).toBe(true);
+    await openMenu();
+    expect(menuRows().map(rowLabel)).toEqual(['Search tasks', 'Half screen']);
+    await pickRow(menuRows(), 'Half screen');
+    expect(dialog()?.hasAttribute('data-task-full')).toBe(false);
   });
 
   it('the priority menu lists P0 Urgent, P1 High, P2 Normal with the current ticked', () => {
@@ -313,9 +309,9 @@ describe('shared Tasks sheet', () => {
     const title = q('[data-task-title-input]') as HTMLInputElement;
     act(() => x4Type(title, 'Hook (mine)'));
     act(() => title.blur());
-    await save();
+    await act(async () => saveButton().click());
     expect(q('[data-task-conflict]')?.textContent).toContain('Leo changed this to "Hook (Leo)"');
-    expect(await menuLabels()).toEqual(['Save', 'Search tasks']);
+    expect(saveButton().disabled).toBe(false);
     await act(async () => q('[data-task-keep-mine]')?.click());
     const again = saveBatch.mock.calls[1]?.[0];
     expect(again?.edits).toEqual([
@@ -348,13 +344,13 @@ describe('shared Tasks sheet', () => {
     );
     render(x4FakeTasks([A], { saveBatch }));
     act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
-    await save();
+    await act(async () => saveButton().click());
     expect(q('[data-task-conflict]')?.textContent).toContain('deleted this');
     expect(q('[data-task-keep-mine]')?.textContent).toBe('Restore mine');
     expect(q('[data-task-keep-theirs]')?.textContent).toBe('OK');
     act(() => q('[data-task-keep-theirs]')?.click());
     expect(q('[data-task-conflict]')).toBeNull();
-    expect(await menuLabels()).toEqual(['Search tasks']);
+    expect(saveButton().disabled).toBe(true);
   });
 
   it("marks: the strip, a dot and a 'was' line for someone else's Save", () => {
