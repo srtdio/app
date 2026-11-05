@@ -79,7 +79,7 @@ async function addDraft(title: string): Promise<void> {
   const input = q('[data-task-add] input') as HTMLInputElement;
   act(() => input.focus());
   act(() => x4Type(input, title));
-  act(() => q('[data-task-add] [data-task-add-submit]')?.click());
+  act(() => q('[data-task-add]')?.dispatchEvent(new Event('submit', { bubbles: true })));
   // The Sheet's guard places its step after the commit (a microtask).
   await settle();
 }

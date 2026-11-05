@@ -12,7 +12,8 @@
 // workspace calendar): Overdue, Today, This week, Later, No date, each shown
 // only while it holds tasks, then Done folded at the end (tap to open). A row
 // is tick, title, priority; the day sits under the title only when the section
-// does not already say it. A long-press (right-click on laptop) on a title
+// does not already say it. A tick here strikes the row where it is; Save moves
+// it to Done. A long-press (right-click on laptop) on a title
 // opens the row's menu: Today, Tomorrow, Pick a date (the shared calendar in
 // a sheet; never before today), No date, Delete. The last line is "Add a task":
 // type and Enter, and the task lands in No date until a day is given. Search
@@ -67,6 +68,7 @@ import {
   IconCheck,
   IconChevronDown,
   IconChevronLeft,
+  IconChevronRight,
   IconForward,
   IconPlus,
   IconSearch,
@@ -202,10 +204,14 @@ type Entry =
   | { kind: 'task'; key: string; task: ChatTask; shown: ChatTask }
   | { kind: 'new'; key: string; c: DraftNew; number: number };
 
-/** The fields a section is read from. Pure. */
+/**
+ * The fields a section is read from: the day as this draft shows it, but the
+ * SAVED status, so a row ticked (or reopened) here stays where it is, struck,
+ * until Save moves it. Pure.
+ */
 function sectionable(e: Entry): Pick<ChatTask, 'dueOn' | 'status' | 'doneAt' | 'number'> {
   return e.kind === 'task'
-    ? e.shown
+    ? { ...e.shown, status: e.task.status }
     : { dueOn: e.c.dueOn, status: 'todo', doneAt: null, number: e.number };
 }
 
@@ -937,8 +943,12 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
                           <span className="font-mono text-sm tabular-nums text-fg-3">
                             {doneRows.length}
                           </span>
-                          <span className={cn('ml-auto text-fg-3', doneOpen && 'rotate-180')}>
-                            <IconChevronDown size={ICON_SIZE.inline} />
+                          <span className="ml-auto text-fg-3">
+                            {doneOpen ? (
+                              <IconChevronDown size={ICON_SIZE.inline} />
+                            ) : (
+                              <IconChevronRight size={ICON_SIZE.inline} />
+                            )}
                           </span>
                         </PressableRow>
                         {doneOpen ? (

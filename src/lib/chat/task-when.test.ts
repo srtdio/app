@@ -45,7 +45,7 @@ describe('task sections', () => {
     expect(taskSection({ ...open, dueOn: '2026-11-08' }, DAYS)).toBe('week');
     expect(taskSection({ ...open, dueOn: '2026-11-09' }, DAYS)).toBe('later');
     // Done, even when it was overdue: Done keeps what happened.
-    expect(taskSection({ status: 'done', doneAt: null, dueOn: '2026-11-01' }, DAYS)).toBe('done');
+    expect(taskSection({ status: 'done', dueOn: '2026-11-01' }, DAYS)).toBe('done');
   });
 
   it('groups in reading order: by day then number; Done newest first, unstamped last', () => {
@@ -81,7 +81,10 @@ describe('task sections', () => {
 
 describe('the date line', () => {
   it('open tasks: the day alone, bad when overdue; nothing for today or no date', () => {
-    expect(rowDateLine({ ...open, dueOn: '2026-11-03' }, CAL)).toEqual({ text: '3 Nov', bad: true });
+    expect(rowDateLine({ ...open, dueOn: '2026-11-03' }, CAL)).toEqual({
+      text: '3 Nov',
+      bad: true,
+    });
     expect(rowDateLine({ ...open, dueOn: '2026-11-05' }, CAL)).toBeNull();
     expect(rowDateLine({ ...open, dueOn: '2026-11-12' }, CAL)).toEqual({
       text: '12 Nov',
