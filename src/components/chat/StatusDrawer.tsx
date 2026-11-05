@@ -147,8 +147,12 @@ export interface StatusDrawerActions {
 // Layout and colour only: PressableRow provides width, 44px height, radius,
 // left alignment, the lit-hover hover/press overlay and the focus ring.
 // Rows in one card part with a border-border divider (each row after another).
+// Rows bleed to the card's edges (-mx-3 px-3 over its p-3) and are flat: the
+// card clips (overflow-hidden), so the divider and the pressed fill run edge
+// to edge, square inside the card.
 const ROW_RULE = '[&+&]:border-t [&+&]:border-border';
-const ROW = `flex items-center gap-3 py-1 mv-tint ${ROW_RULE}`;
+const ROW_BASE = 'flex items-center gap-3 py-1 mv-tint';
+const ROW = `${ROW_BASE} -mx-3 px-3 ${ROW_RULE}`;
 const DATE_COL = 'w-12 shrink-0 font-mono text-sm leading-4 tabular-nums text-fg-3';
 const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base leading-5 text-fg';
 const ROW_SUB = 'block truncate text-sm leading-4 text-fg-3';
@@ -178,6 +182,7 @@ function SeeAllRow(props: { total: number; onClick: () => void; attr: string }):
   return (
     <PressableRow
       type="button"
+      flat
       data-see-all={props.attr}
       onClick={props.onClick}
       className={cn(ROW, 'text-base font-medium text-accent')}
@@ -316,9 +321,9 @@ export function PlanBlock(props: {
   return (
     <div
       data-plan-block={bundle.plan.id}
-      className={cn(!props.first && 'mt-3 border-t border-border pt-3')}
+      className={cn(!props.first && '-mx-3 mt-3 border-t border-border px-3 pt-3')}
     >
-      <PressableRow type="button" data-plan-open="" onClick={props.onOpen} className={ROW}>
+      <PressableRow type="button" flat data-plan-open="" onClick={props.onOpen} className={ROW}>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-lg font-semibold leading-5 text-fg">
             {bundle.plan.title}
@@ -349,6 +354,7 @@ export function PlanBlock(props: {
           <PressableRow
             key={item.id}
             type="button"
+            flat
             data-plan-item={item.id}
             onClick={() => props.onOpenItem(item.id)}
             className={ROW}
@@ -411,13 +417,14 @@ export function StatusMarkRow(props: {
   const { mark } = props;
   const priority = mark.type === 'pending' ? priorityLabel(mark.priority) : '';
   return (
-    <div data-status-mark={mark.messageId} className={cn('flex flex-col', ROW_RULE)}>
+    <div data-status-mark={mark.messageId} className={cn('-mx-3 flex flex-col pr-3', ROW_RULE)}>
       <div className="flex items-center gap-3">
         <PressableRow
           type="button"
+          flat
           data-mark-jump=""
           onClick={props.onJump}
-          className={cn(ROW, 'flex-1')}
+          className={cn(ROW_BASE, 'flex-1 pl-3')}
         >
           <span className="min-w-0 flex-1">
             <span className={ROW_TITLE}>{props.text}</span>
@@ -449,7 +456,7 @@ export function StatusMarkRow(props: {
           role="group"
           aria-label={markConfirmCopy(mark.type, 'resolve')}
           data-mark-confirm="resolve"
-          className="mb-1 flex flex-wrap items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
+          className="mb-1 ml-3 flex flex-wrap items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
         >
           <span className="min-w-0 flex-1 text-base text-fg">
             {markConfirmCopy(mark.type, 'resolve')}
@@ -541,7 +548,7 @@ export function StatusDrawerList(
     <section
       key={key}
       data-status-section={key}
-      className="mb-3 rounded-xl border bg-panel p-3 pb-1 lit-card"
+      className="mb-3 overflow-hidden rounded-xl border bg-panel p-3 pb-1 lit-card"
     >
       <SectionHeader
         sectionKey={key}
@@ -586,6 +593,7 @@ export function StatusDrawerList(
                   <PressableRow
                     key={post.id}
                     type="button"
+                    flat
                     data-status-post={post.id}
                     aria-busy={busy}
                     onClick={() => props.onOpenPost(post.id)}
@@ -622,6 +630,7 @@ export function StatusDrawerList(
                 <PressableRow
                   key={brief.id}
                   type="button"
+                  flat
                   data-status-brief={brief.id}
                   onClick={() => props.onOpenBrief(brief.id)}
                   className={ROW}
