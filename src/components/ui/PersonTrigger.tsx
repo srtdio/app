@@ -7,11 +7,11 @@
 // tappable without moving the layout.
 //
 // The surface decides only what a tap opens: `view` 'card' (default, the inline
-// message card) or 'photo' (the photo-only viewer: inside a DM and on the chat
-// list's People cards). `source` is the comment or group chat message the tap
-// came from, built at tap time from what the row holds. The open is flushed
-// inside the tap (flushSync) so the card's input takes focus within the
-// gesture: iOS raises the keyboard only then.
+// message card) or 'photo' (the photo-only viewer: inside a DM only; the
+// chat list's People tiles open the chat). `source` is the comment or group
+// chat message the tap came from, built at tap time from what the row holds.
+// The open is flushed inside the tap (flushSync) so the card's input takes
+// focus within the gesture: iOS raises the keyboard only then.
 
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { flushSync } from 'react-dom';
@@ -46,7 +46,7 @@ export function openPersonCardFrom(
   });
 }
 
-/** The photo-only viewer for `hint` (DM rows, DM header, chat list People cards). */
+/** The photo-only viewer for `hint` (DM rows, DM header). */
 export function openPersonPhotoFrom(el: HTMLElement | null, hint: PersonCardHint): void {
   openPersonCardFrom(el, hint, 'photo');
 }

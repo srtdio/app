@@ -11,7 +11,6 @@ import { describe, expect, it } from 'vitest';
 const SURFACES: readonly { file: string; what: string }[] = [
   { file: 'chat/MessageThread.tsx', what: 'group sender photo + name, bubble @mentions' },
   { file: 'chat/ChatConnected.tsx', what: 'bubble @mention tap opens the card' },
-  { file: 'chat/ChannelList.tsx', what: 'People tile photo' },
   { file: 'chat/GroupInfoSheet.tsx', what: 'group members photo + name' },
   { file: 'chat/ReadingLayer.tsx', what: 'read by / reactions rows' },
   { file: 'chat/StarredList.tsx', what: 'starred row sender photo + name' },
@@ -52,9 +51,12 @@ describe('person surfaces open the shared person card', () => {
   });
 });
 
-describe('photo-only surfaces (inside a DM, chat list People cards)', () => {
-  it('the chat list People tile photo opens the photo viewer', () => {
-    expect(source('chat/ChannelList.tsx')).toContain('view="photo"');
+describe('photo-only surfaces (inside a DM)', () => {
+  it('the chat list People tile photo opens the chat, not the photo viewer', () => {
+    const list = source('chat/ChannelList.tsx');
+    expect(list).not.toMatch(/from '@\/components\/ui\/PersonTrigger'/);
+    expect(list).not.toContain('PersonTrigger');
+    expect(list).not.toContain('view="photo"');
   });
 
   it('the DM header photo opens the photo viewer', () => {

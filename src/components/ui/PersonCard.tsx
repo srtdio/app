@@ -13,7 +13,7 @@
 // A send closes the card at once, then queues through the outbox
 // (use-person-message-send). Me keeps "Message yourself" (Personal notes); a
 // removed member keeps "No longer in this workspace". A trigger with view
-// 'photo' (inside a DM, the chat list's People cards) opens PhotoViewer instead.
+// 'photo' (inside a DM only) opens PhotoViewer instead.
 
 import {
   useCallback,

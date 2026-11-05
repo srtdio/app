@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -8,7 +9,8 @@ vi.mock('agora-chat', () => ({
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { isValidElement, type ReactElement, type ReactNode } from 'react';
+import { act, isValidElement, type ReactElement, type ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
 import {
   CHANNEL_ROW_BUTTON,
   CHAT_HOME_STACK,
@@ -338,5 +340,83 @@ describe('G1: one layout listener per ChannelList, not one per tile', () => {
     // The list reads them once.
     const list = source.slice(source.indexOf('export function ChannelList('));
     expect(list).toContain('useChannelListInput()');
+  });
+});
+
+// 5 Nov 2026: on the chat list the whole People tile, photo included, opens
+// the chat. The enlarged photo lives only inside a DM (header photo).
+describe('People tile photo opens the chat (no photo popup)', () => {
+  function mount(props: { onSelect: () => void; onToggle?: (id: string) => void }): {
+    host: HTMLDivElement;
+    unmount: () => void;
+  } {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => {
+      root.render(
+        <ChannelCard
+          channel={dm}
+          selected={false}
+          summary={read}
+          nowMs={NOW}
+          timeZone="UTC"
+          onSelect={props.onSelect}
+          input={DEFAULT_LIST_INPUT}
+          {...(props.onToggle !== undefined ? { onToggle: props.onToggle, checked: false } : {})}
+        />,
+      );
+    });
+    return {
+      host,
+      unmount: () => {
+        act(() => root.unmount());
+        host.remove();
+      },
+    };
+  }
+
+  it('a DM tile, not selecting: no button inside the photo slot, slot box unchanged', () => {
+    const t = tile(dm, read);
+    expect(t.html).toContain(`data-person-photo="" class="${esc(PERSON_TILE_PHOTO)}"`);
+    const { host, unmount } = mount({ onSelect: () => {} });
+    const slot = host.querySelector('[data-person-photo]');
+    expect(slot).not.toBeNull();
+    expect(slot?.className).toBe(PERSON_TILE_PHOTO);
+    expect(slot?.querySelector('[role="button"], button, [tabindex]')).toBeNull();
+    unmount();
+  });
+
+  it('a click on the photo calls the same open handler as the tile body', () => {
+    const onSelect = vi.fn();
+    const { host, unmount } = mount({ onSelect });
+    const photo = host.querySelector('[data-person-photo] [data-avatar-role="profile"]');
+    expect(photo).not.toBeNull();
+    act(() => {
+      (photo as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(dm);
+    const body = host.querySelector('button[aria-label^="Open "]');
+    act(() => {
+      (body as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenLastCalledWith(dm);
+    unmount();
+  });
+
+  it('selecting: a click on the photo toggles the tile, never opens it', () => {
+    const onSelect = vi.fn();
+    const onToggle = vi.fn();
+    const { host, unmount } = mount({ onSelect, onToggle });
+    const photo = host.querySelector('[data-person-photo] [data-avatar-role="profile"]');
+    act(() => {
+      (photo as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onToggle).toHaveBeenCalledWith(dm.channelId);
+    expect(onSelect).not.toHaveBeenCalled();
+    unmount();
   });
 });
