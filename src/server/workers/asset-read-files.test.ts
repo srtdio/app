@@ -1,4 +1,5 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { logger } from '@/server/logger';
 import worker, {
   fileCacheKey,
   parseFilePath,
@@ -54,6 +55,8 @@ interface Harness {
   setVersion(version: AssetVersionLocator | null): void;
   setRendition(key: string | null): void;
   setBucket(bucket: string): void;
+  /** Make R2 answer 404 for every object. */
+  setR2Missing(missing: boolean): void;
 }
 
 function harness(): Harness {
@@ -66,6 +69,7 @@ function harness(): Harness {
   const fetched: { url: string; range: string | null }[] = [];
   const signed: { bucket: string; key: string }[] = [];
   const pending: Promise<unknown>[] = [];
+  let r2Missing = false;
 
   const store: AssetReadStore = {
     findVersion: (id) => Promise.resolve(id === VERSION ? version : null),
@@ -105,6 +109,7 @@ function harness(): Harness {
     },
     fetchObject: (url, range) => {
       fetched.push({ url, range });
+      if (r2Missing) return Promise.resolve(new Response('NoSuchKey', { status: 404 }));
       if (range !== null) {
         return Promise.resolve(
           new Response('ab', {
@@ -149,6 +154,9 @@ function harness(): Harness {
     },
     setBucket: (bucket) => {
       version = version === null ? null : { ...version, bucket };
+    },
+    setR2Missing: (missing) => {
+      r2Missing = missing;
     },
   };
 }
@@ -316,6 +324,92 @@ describe('serveFile cache and bytes', () => {
     const res = await serveFile(h.deps, request({ key: await keyFor(MEMBER), kind: 'thumb' }));
     expect(res.status).toBe(302);
     expect(res.headers.get('Location')).toBe(`${ORIGIN}/induction-sample/thumb/look-1.jpg`);
+  });
+});
+
+describe('serveFile miss logging (FRONTEND-R)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  const reasons = (warn: { mock: { calls: ReadonlyArray<ReadonlyArray<unknown>> } }): unknown[] =>
+    warn.mock.calls.filter((c) => c[0] === 'file read miss').map((c) => c[1]);
+
+  it('version_not_found: an unknown version', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness();
+    h.setVersion(null);
+    const res = await serveFile(h.deps, request({ key: await keyFor(MEMBER) }));
+    expect(res.status).toBe(404);
+    expect(reasons(warn)).toEqual([
+      { asset_version_id: VERSION, kind: 'full', reason: 'version_not_found' },
+    ]);
+  });
+
+  it('version_not_found: a link version with no stored bytes', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness();
+    h.setVersion(libraryVersion({ kind: 'link', r2Key: null }));
+    const res = await serveFile(h.deps, request({ key: await keyFor(MEMBER) }));
+    expect(res.status).toBe(404);
+    expect(reasons(warn)).toEqual([
+      { asset_version_id: VERSION, kind: 'full', reason: 'version_not_found' },
+    ]);
+  });
+
+  it('not_member: a non-member gets 403', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness();
+    const res = await serveFile(h.deps, request({ key: await keyFor(OUTSIDER) }));
+    expect(res.status).toBe(403);
+    expect(reasons(warn)).toEqual([
+      { asset_version_id: VERSION, kind: 'full', reason: 'not_member' },
+    ]);
+  });
+
+  it('no_thumbnail: thumb with no rendition row', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness();
+    h.setRendition(null);
+    const res = await serveFile(h.deps, request({ key: await keyFor(MEMBER), kind: 'thumb' }));
+    expect(res.status).toBe(404);
+    expect(reasons(warn)).toEqual([
+      { asset_version_id: VERSION, kind: 'thumb', reason: 'no_thumbnail' },
+    ]);
+  });
+
+  it('r2_missing_original: the original object is gone', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness();
+    h.setR2Missing(true);
+    const res = await serveFile(h.deps, request({ key: await keyFor(MEMBER) }));
+    expect(res.status).toBe(404);
+    expect(h.fetched).toHaveLength(1);
+    expect(reasons(warn)).toEqual([
+      { asset_version_id: VERSION, kind: 'full', reason: 'r2_missing_original' },
+    ]);
+  });
+
+  it('r2_missing_copy: the thumbnail object is gone', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness();
+    h.setR2Missing(true);
+    const res = await serveFile(h.deps, request({ key: await keyFor(MEMBER), kind: 'thumb' }));
+    expect(res.status).toBe(404);
+    expect(h.fetched).toHaveLength(1);
+    expect(reasons(warn)).toEqual([
+      { asset_version_id: VERSION, kind: 'thumb', reason: 'r2_missing_copy' },
+    ]);
+  });
+
+  it('logs nothing on a served file, and never the link key', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness();
+    const key = await keyFor(MEMBER);
+    expect((await serveFile(h.deps, request({ key }))).status).toBe(200);
+    expect(reasons(warn)).toEqual([]);
+    h.setVersion(null);
+    await serveFile(h.deps, request({ key }));
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(key);
   });
 });
 

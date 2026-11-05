@@ -995,6 +995,28 @@ function attachmentDisposition(filename: string): string {
 }
 
 /**
+ * Why a file read answered 403 or 404, logged with the version id only.
+ * workspace_deleted and asset_deleted are reserved: the store does not yet
+ * report a soft-deleted workspace or asset, so they are never emitted today.
+ */
+export type FileMissReason =
+  | 'version_not_found'
+  | 'workspace_deleted'
+  | 'asset_deleted'
+  | 'not_member'
+  | 'no_thumbnail'
+  | 'r2_missing_original'
+  | 'r2_missing_copy';
+
+function logFileMiss(req: FileRequest, reason: FileMissReason): void {
+  logger.warn('file read miss', {
+    asset_version_id: req.assetVersionId,
+    kind: req.kind,
+    reason,
+  });
+}
+
+/**
  * Serve one file. Order is fixed: the link key is verified, then the caller's
  * own gate (authorizeVersion: workspace membership, or chat readability for a
  * chat file) runs live, and only then is the edge cache read or R2 fetched. A
@@ -1002,6 +1024,8 @@ function attachmentDisposition(filename: string): string {
  * failed beyond 401 / 403 / 404. If-None-Match is honoured only after the gate:
  * a matching ETag (from the edge copy, or R2's own 304) returns a bodiless 304,
  * so a non-member is always denied first, whatever validator they send.
+ * Every 403 and 404 logs one 'file read miss' warning with a reason code and
+ * the version id (never the link key or a token), fire-and-forget.
  */
 export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<Response> {
   if (req.key === null || req.key === '') {
@@ -1027,8 +1051,11 @@ export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<
   if (!readable.ok) {
     if (readable.error.code === 'forbidden') {
       logger.warn('file read denied', { asset_version_id: req.assetVersionId });
+      logFileMiss(req, 'not_member');
       return fileError(403, 'Not allowed.');
     }
+    // not_found, or a version with no stored bytes (a link): no file to serve.
+    logFileMiss(req, 'version_not_found');
     return fileError(404, 'Not found.');
   }
   const { version, bucket, r2Key } = readable.value;
@@ -1050,6 +1077,7 @@ export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<
   let audioCopy = false;
   if (req.kind === 'thumb') {
     if (rendition === null) {
+      logFileMiss(req, 'no_thumbnail');
       return fileError(404, 'No small copy.');
     }
     objectKey = rendition.r2Key;
@@ -1063,21 +1091,18 @@ export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<
     }
   }
 
-  const disposition =
+  const disposition = (copy: boolean): string =>
     req.download && req.kind === 'full'
-      ? attachmentDisposition(
-          audioCopy ? audioCopyFilename(version) : buildDownloadFilename(version),
-        )
+      ? attachmentDisposition(copy ? audioCopyFilename(version) : buildDownloadFilename(version))
       : inlineDisposition();
   // The small copy's type comes from R2 (stored at upload); the original's from
   // the version row; the voice note copy is always audio/mp4.
-  const contentType =
-    req.kind === 'full' ? (audioCopy ? AUDIO_COPY_MIME : (version.mimeType ?? null)) : null;
-  const cacheKey = fileCacheKey(
-    req.origin,
-    req.assetVersionId,
-    audioCopy ? 'full:compressed' : req.kind,
-  );
+  const contentTypeFor = (copy: boolean): string | null =>
+    req.kind === 'full' ? (copy ? AUDIO_COPY_MIME : (version.mimeType ?? null)) : null;
+  const cacheKeyFor = (copy: boolean): string =>
+    fileCacheKey(req.origin, req.assetVersionId, copy ? 'full:compressed' : req.kind);
+  let contentType = contentTypeFor(audioCopy);
+  let cacheKey = cacheKeyFor(audioCopy);
 
   // A Range request (video seek) goes straight to R2 and is never cached.
   if (req.range === null) {
@@ -1088,31 +1113,51 @@ export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<
         // Not awaited: cancelling one branch of a teed body settles only once
         // the other branch is done too.
         void cached.body?.cancel().catch(() => undefined);
-        return notModified(cachedEtag, disposition);
+        return notModified(cachedEtag, disposition(audioCopy));
       }
       return new Response(cached.body, {
         status: 200,
-        headers: fileHeaders({ contentType, disposition, upstream: cached.headers }),
+        headers: fileHeaders({
+          contentType,
+          disposition: disposition(audioCopy),
+          upstream: cached.headers,
+        }),
       });
     }
   }
 
-  const url = await deps.signer.presignGetUrl({
-    bucket,
-    key: objectKey,
-    expiresInSeconds: URL_TTL_SECONDS,
-  });
   const ifNoneMatch = req.ifNoneMatch ?? null;
-  const upstream = await deps.fetchObject(url, req.range, ifNoneMatch);
+  const fetchKey = async (key: string): Promise<Response> => {
+    const url = await deps.signer.presignGetUrl({
+      bucket,
+      key,
+      expiresInSeconds: URL_TTL_SECONDS,
+    });
+    return deps.fetchObject(url, req.range, ifNoneMatch);
+  };
+  let upstream = await fetchKey(objectKey);
+  if (upstream.status === 404 && audioCopy) {
+    // The MP4 copy row exists but its object is gone: fall back to the
+    // original once, with the original's type, name and cache key. This read
+    // runs only after a copy miss, so no other request pays for it.
+    await upstream.body?.cancel();
+    logFileMiss(req, 'r2_missing_copy');
+    audioCopy = false;
+    objectKey = r2Key;
+    contentType = contentTypeFor(false);
+    cacheKey = cacheKeyFor(false);
+    upstream = await fetchKey(objectKey);
+  }
   if (upstream.status === 304) {
     await upstream.body?.cancel();
     // R2 matched the validator. Echo its ETag (or the one the browser sent).
     const etag = upstream.headers.get('ETag') ?? ifNoneMatch;
-    if (etag !== null && etag !== '') return notModified(etag, disposition);
+    if (etag !== null && etag !== '') return notModified(etag, disposition(audioCopy));
     throw new Error('object fetch returned 304 without a validator');
   }
   if (upstream.status === 404) {
     await upstream.body?.cancel();
+    logFileMiss(req, req.kind === 'thumb' ? 'r2_missing_copy' : 'r2_missing_original');
     return fileError(404, 'Not found.');
   }
   if (upstream.status === 416) {
@@ -1130,10 +1175,14 @@ export async function serveFile(deps: FileRouteDeps, req: FileRequest): Promise<
   const upstreamEtag = upstream.headers.get('ETag');
   if (upstream.status === 200 && upstreamEtag !== null && etagMatches(ifNoneMatch, upstreamEtag)) {
     await upstream.body?.cancel();
-    return notModified(upstreamEtag, disposition);
+    return notModified(upstreamEtag, disposition(audioCopy));
   }
 
-  const headers = fileHeaders({ contentType, disposition, upstream: upstream.headers });
+  const headers = fileHeaders({
+    contentType,
+    disposition: disposition(audioCopy),
+    upstream: upstream.headers,
+  });
   const length = Number(upstream.headers.get('Content-Length') ?? 'NaN');
   const cacheable =
     req.range === null &&

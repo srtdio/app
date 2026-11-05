@@ -431,9 +431,14 @@ export function createVoiceRecovery(deps: {
       return;
     }
     retried = true;
-    // A first MediaError: ask the file link for its status, beside the re-link.
+    // A first MediaError, or a first play() rejection named NotSupportedError
+    // (iOS rejects play() on a 404 body): ask the file link for its status,
+    // beside the re-link.
     const applied = deps.player.applied;
-    if (failure.name === 'MediaError' && probing === null && deps.probe !== undefined) {
+    const probeWorthy =
+      failure.name === 'MediaError' ||
+      (failure.reason === 'reject' && failure.name === 'NotSupportedError');
+    if (probeWorthy && probing === null && deps.probe !== undefined) {
       probing =
         applied === null ? Promise.resolve<VoiceProbeStatus>('skipped') : deps.probe(applied);
     }
