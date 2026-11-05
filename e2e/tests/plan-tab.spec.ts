@@ -99,8 +99,13 @@ test('phone: the Plan tab lists plans in sections and a tap opens the plan @them
   seedPlanTab(network.world, { sender: ME });
   await openTab(page);
 
+  // The phone opens on the This week chip: its plans, no group heading (the chip names it).
+  await expect(page.locator('[data-plan-tab-when="this"]')).toHaveAttribute('aria-pressed', 'true');
   const list = page.locator('[data-plan-tab-list]');
   const thisWeek = list.locator('[data-plan-tab-section="this"]');
+  await expect(thisWeek.locator('h2')).toHaveCount(0);
+  // All shows every group with its heading.
+  await page.locator('[data-plan-tab-when="all"]').click();
   await expect(thisWeek).toContainText('This week');
   await expect(thisWeek.locator(`[data-plan-tab-card="${TAB_SHARED_PLAN_ID}"]`)).toContainText(
     TAB_SHARED_PLAN_TITLE,
@@ -147,15 +152,20 @@ test('phone: Load more ends the list while older plans remain, then appends them
   });
   (network.world.tables.plans ??= []).push(...older);
   await openTab(page);
+  // This week reads its own week; every plan is read once behind it, so All
+  // paints from that read with no request of its own.
+  await page.locator('[data-plan-tab-when="all"]').click();
 
   const list = page.locator('[data-plan-tab-list]');
   const more = list.locator('[data-plan-tab-load-more]');
   await expect(list.locator('[data-plan-tab-card]')).toHaveCount(12);
   await expect(more).toHaveText('Load more');
   expectMinTouchTarget(await more.boundingBox());
-  const firstCall = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read');
-  expect(firstCall).toHaveLength(1);
-  expect(firstCall[0]?.args.p_before_starts_on).toBeUndefined();
+  const allReads = network.rpcCalls.filter(
+    (c) => c.name === 'plan_bundle_read' && c.args.p_range_start === undefined,
+  );
+  expect(allReads).toHaveLength(1);
+  expect(allReads[0]?.args.p_before_starts_on).toBeUndefined();
 
   await shootBoth(page, 'plan-tab-phone-load-more', async () => {
     await expect(page.locator('[data-plan-tab-load-more]')).toBeVisible({ timeout: 15_000 });

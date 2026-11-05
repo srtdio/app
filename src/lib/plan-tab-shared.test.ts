@@ -150,13 +150,17 @@ describe('Plan tab nav press', () => {
     expect(peekPlanTab('u1', ARGS)).toBeDefined();
   });
 
-  it('a press with no zone known reads no workspaces row (the bundle carries the zone)', async () => {
+  it('a phone press with no zone known reads no workspaces row and reads This week (the default chip)', async () => {
     const { client, rounds } = gatedClient();
-    const press = startPlanTabRead(client, { userId: 'u1', workspaceId: 'ws' }, false);
+    // Thursday 5 Nov 2026 midday UTC: Thursday in every zone the device could be in.
+    const now = new Date('2026-11-05T12:00:00.000Z');
+    const press = startPlanTabRead(client, { userId: 'u1', workspaceId: 'ws' }, false, now);
     const seen = await rounds();
     await press;
     expect(seen.flat()).toEqual(['rpc:plan_bundle_read']);
-    expect(peekPlanTab('u1', { ...ARGS, range: null })).toBeDefined();
+    const thisWeek = { start: '2026-11-02', end: '2026-11-08' };
+    expect(peekPlanTab('u1', { ...ARGS, range: thisWeek })).toBeDefined();
+    expect(peekPlanTab('u1', { ...ARGS, range: null })).toBeUndefined();
   });
 
   it('a plan or post change marks the kept read stale: it still paints, the next read asks', async () => {

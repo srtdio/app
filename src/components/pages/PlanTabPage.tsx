@@ -21,7 +21,7 @@
 // the phone list and the search results, never the laptop calendar.
 
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -53,9 +53,19 @@ import {
   visibleBundles,
   visibleRange,
   zeroStateCopy,
+  PLAN_WEEK_CHIP_DEFAULT,
+  PLAN_WEEK_CHIP_ZERO,
+  PLAN_WEEK_CHIPS,
+  PLAN_WEEK_PARAM,
+  parsePlanWeekChip,
+  planSectionOf,
+  planWeekChipLabel,
+  planWeekChipRange,
   type CalendarEntry,
   type PlanTabView,
+  type PlanWeekChip,
 } from '@/lib/plan-tab';
+import { Chip } from '@/components/ui/Chip';
 import {
   PLAN_SORT_DEFAULT,
   PLAN_SORT_OPTIONS,
@@ -63,6 +73,7 @@ import {
   searchPlanTab,
   sortPlanBundles,
   type PlanSearchData,
+  type PlanTabData,
   type PlanTabSort,
 } from '@/lib/plan-tab-read';
 import { civilToday } from '@/lib/plan-week';
@@ -82,7 +93,7 @@ import {
   planCovers,
   type PlanTabMore,
 } from './plan-tab/PlanTabList';
-import { usePlanTabData } from './plan-tab/use-plan-tab-data';
+import { usePlanTabData, warmPlanTabRead } from './plan-tab/use-plan-tab-data';
 import { peekEntityUnreadComment, withCommentTarget } from '@/lib/inbox/unread-entities';
 
 /** The route a calendar entry opens: its item in its plan, or a post's page. Pure. */
@@ -128,11 +139,19 @@ export function PlanSearchResults(props: {
   query: string;
   onOpenPlan: (planId: string) => void;
   onOpenItem: (planId: string, itemId: string) => void;
+  /** Whether a chip also narrows the results (the phone's week chips); Clear then resets it too. */
+  filtersActive?: boolean;
   onClear: () => void;
 }): ReactElement {
   const words = queryWords(props.query);
   if (props.bundles.length === 0) {
-    return <NoResults query={props.query} filtersActive={false} onClear={props.onClear} />;
+    return (
+      <NoResults
+        query={props.query}
+        filtersActive={props.filtersActive ?? false}
+        onClear={props.onClear}
+      />
+    );
   }
   return (
     <div data-plan-tab-results="" className="flex flex-col gap-2 px-4 pb-8 pt-4 md:px-6">
@@ -178,6 +197,11 @@ function PlanTabFlatList(props: {
 }): ReactElement {
   return (
     <div data-plan-tab-list="" className="flex flex-col gap-2 px-4 pb-8 pt-4">
+      {props.bundles.length === 0 ? (
+        <div data-plan-tab-chip-zero="">
+          <EmptyState icon={<IconPlan size={ICON_SIZE.tray} />} title={PLAN_WEEK_CHIP_ZERO} />
+        </div>
+      ) : null}
       {props.bundles.map((bundle) => (
         <PlanTabCard
           key={bundle.plan.id}
@@ -229,6 +253,27 @@ export function PlanTabPage(): ReactElement {
     },
     [setParams],
   );
+  // The phone's week chip: in the URL (?week=) so Back lands on it, else this
+  // session's last pick (a tab return), else This week.
+  const [keptChip, setKeptChip] = useKeptState<PlanWeekChip>(
+    keptKey('week'),
+    PLAN_WEEK_CHIP_DEFAULT,
+  );
+  const chip = parsePlanWeekChip(params.get(PLAN_WEEK_PARAM)) ?? keptChip;
+  const setChip = useCallback(
+    (value: PlanWeekChip): void => {
+      setKeptChip(value);
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set(PLAN_WEEK_PARAM, value);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setKeptChip, setParams],
+  );
   const { value: storedSort, setValue: setSort } = useSort<PlanTabSort>('plan', PLAN_SORT_DEFAULT);
   const sort = sanitizePlanSort(storedSort);
   const planSearch = useServerSearch<PlanSearchData>(
@@ -245,19 +290,46 @@ export function PlanTabPage(): ReactElement {
   const searching = planSearch.active;
   const { load, reload, retry, loadMore, moreBusy } = usePlanTabData({
     workspaceId,
-    range: desktop ? visibleRange(view, anchor) : null,
+    range: desktop ? visibleRange(view, anchor) : planWeekChipRange(chip, today),
     onlyShared: !creator,
     enabled: ready,
   });
-  const data = load.status === 'ready' ? load.data : null;
+  // The chip's own read. On the phone a chip whose read is still on its way
+  // paints at once from the last read this mount held (narrowed to the chip),
+  // and its own read replaces it when it lands (speed rule: paint what the
+  // device holds, fetch the rest behind it). Never across workspaces or sides.
+  const own = load.status === 'ready' ? load.data : null;
+  const heldKey = `${workspaceId ?? ''}:${String(creator)}`;
+  const held = useRef<{ key: string; data: PlanTabData } | null>(null);
+  if (own !== null && !desktop) held.current = { key: heldKey, data: own };
+  const borrowed =
+    own === null && !desktop && load.status === 'loading' && held.current?.key === heldKey
+      ? held.current.data
+      : null;
+  const data = own ?? borrowed;
   useKeptScroll(keptKey('scroll'), data !== null);
+  // Load more belongs to the chip's own read only.
   const more = useMemo(
-    () => (data !== null && data.nextCursor !== null ? { busy: moreBusy, onMore: loadMore } : null),
-    [data, moreBusy, loadMore],
+    () => (own !== null && own.nextCursor !== null ? { busy: moreBusy, onMore: loadMore } : null),
+    [own, moreBusy, loadMore],
   );
+  // After This week or Next week paints on the phone, every plan is read once
+  // behind it (one request, not on a paint or tap path), so All, Upcoming and
+  // Past paint at once when tapped.
+  const weekRead = planWeekChipRange(chip, today) !== null;
+  const ownReady = own !== null;
+  useEffect(() => {
+    if (desktop || !ownReady || !weekRead || workspaceId === null) return;
+    warmPlanTabRead({ workspaceId, range: null, onlyShared: !creator });
+  }, [desktop, ownReady, weekRead, workspaceId, creator]);
   const bundles = useMemo(
     () => (data !== null ? visibleBundles(data.bundles, side) : []),
     [data, side],
+  );
+  // The phone's chip narrows the list and the search results to its week group.
+  const inChip = useCallback(
+    (b: PlanBundle): boolean => desktop || chip === 'all' || planSectionOf(b.plan, today) === chip,
+    [desktop, chip, today],
   );
   const calendarData = useMemo(
     () => (data !== null ? { bundles, posts: data.posts, thumbs: data.thumbs } : null),
@@ -269,9 +341,9 @@ export function PlanTabPage(): ReactElement {
   const results = useMemo(
     () =>
       planSearch.data !== null
-        ? sortPlanBundles(visibleBundles(planSearch.data.bundles, side), sort)
+        ? sortPlanBundles(visibleBundles(planSearch.data.bundles, side).filter(inChip), sort)
         : null,
-    [planSearch.data, side, sort],
+    [planSearch.data, side, sort, inChip],
   );
 
   const sortMenu = (
@@ -327,7 +399,9 @@ export function PlanTabPage(): ReactElement {
             },
           }
         : {})}
-    />
+    >
+      {desktop ? undefined : <PlanWeekChips chip={chip} onChip={setChip} />}
+    </SectionHeader>
   );
 
   if (data !== null && !zero && !searching) mark('plan-tab:paint');
@@ -337,7 +411,11 @@ export function PlanTabPage(): ReactElement {
     searching &&
     !(planSearch.status === 'error' && planSearch.data === null) &&
     (results === null || planSearch.data === null);
-  const listBoxes = !searching && load.status !== 'failed' && !desktop && data === null;
+  // A borrowed read with nothing in the picked chip is not this chip's answer
+  // yet: boxes until its own read lands, never the zero line.
+  const borrowedEmpty = borrowed !== null && !bundles.some(inChip);
+  const listBoxes =
+    !searching && load.status !== 'failed' && !desktop && (data === null || borrowedEmpty);
   const hadBoxes = useHadBoxes(searchBoxes || listBoxes);
   const landedRef = useRef<HTMLDivElement>(null);
   const landed = searching ? results !== null && results.length > 0 : data !== null && !zero;
@@ -359,7 +437,11 @@ export function PlanTabPage(): ReactElement {
           onOpenItem={(planId, itemId) =>
             navigate(withNewestUnread(itemRoute(planId, itemId), 'plan_item', itemId))
           }
-          onClear={() => setSearch('')}
+          filtersActive={!desktop && chip !== 'all'}
+          onClear={() => {
+            setSearch('');
+            if (!desktop) setChip('all');
+          }}
         />
       );
   } else if (load.status === 'failed') {
@@ -402,8 +484,9 @@ export function PlanTabPage(): ReactElement {
         more={more}
       />
     );
-  } else if (data === null) {
-    body = <PlanTabBoxes />;
+  } else if (data === null || borrowedEmpty) {
+    // Only the grouped All list has headings; elsewhere the boxes draw none (no shift on landing).
+    body = <PlanTabBoxes heading={chip === 'all' && sort === PLAN_SORT_DEFAULT} />;
   } else if (sort === PLAN_SORT_DEFAULT) {
     body = (
       <PlanTabList
@@ -412,12 +495,13 @@ export function PlanTabPage(): ReactElement {
         today={today}
         onOpen={(planId) => navigate(`/plan/${planId}`)}
         more={more}
+        chip={chip}
       />
     );
   } else {
     body = (
       <PlanTabFlatList
-        bundles={sortPlanBundles(bundles, sort)}
+        bundles={sortPlanBundles(bundles.filter(inChip), sort)}
         thumbs={data.thumbs}
         onOpen={(planId) => navigate(`/plan/${planId}`)}
         more={more}
@@ -450,6 +534,32 @@ export function PlanTabPage(): ReactElement {
           <PlanTabAdd target={addTo} timeZone={timeZone} onClose={() => setAddTo(null)} />
         </>
       ) : null}
+    </>
+  );
+}
+
+/**
+ * The phone's week chips under the search row (All, This week, Next week,
+ * Upcoming, Past), on the same line as Pipeline's stage chips so switching
+ * tabs never moves the page. No counts: the list reads a page at a time.
+ */
+function PlanWeekChips(props: {
+  chip: PlanWeekChip;
+  onChip: (chip: PlanWeekChip) => void;
+}): ReactElement {
+  return (
+    <>
+      {PLAN_WEEK_CHIPS.map((key) => (
+        <Chip
+          key={key}
+          label={planWeekChipLabel(key)}
+          selected={props.chip === key}
+          size="tap"
+          data-plan-tab-when={key}
+          className="flex-none whitespace-nowrap"
+          onClick={() => props.onChip(key)}
+        />
+      ))}
     </>
   );
 }

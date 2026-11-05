@@ -1,5 +1,5 @@
 // The Plan tab on a phone: the plans as cards in sections (This week, Next
-// week, Later, Earlier; empty ones hidden). A card has the chat plan card's
+// week, Upcoming, Past; empty ones hidden). A card has the chat plan card's
 // look (PLAN, the title on up to two lines, the mono date range) with the
 // plan's covers, then a shared plan's bar and "N of M OK", or a Draft's tag
 // and "N items · only your team sees this" ("1 item" for one). A tap opens the plan's own screen (full page). The phone
@@ -20,7 +20,9 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { tagClass } from '@/components/ui/Tag';
 import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
-import { planCardMeta, planSections } from '@/lib/plan-tab';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
+import { PLAN_WEEK_CHIP_ZERO, planCardMeta, planSections, type PlanWeekChip } from '@/lib/plan-tab';
 
 /** Load more's copy: 'Loading' while the page is in flight. Pure. */
 export function loadMoreLabel(busy: boolean): string {
@@ -92,19 +94,33 @@ export function PlanTabList(props: {
   onOpen: (planId: string) => void;
   /** Load more while more plans remain; null when every plan is in. */
   more: PlanTabMore | null;
+  /** The picked chip: All shows every group with its heading; a group shows only itself, no heading (the chip names it). */
+  chip: PlanWeekChip;
 }): ReactElement {
+  const { chip } = props;
+  const sections = planSections(props.bundles, props.today).filter(
+    (section) => chip === 'all' || section.key === chip,
+  );
+  // Keyed on every read plan, not the shown ones: a chip pick switches instantly (no rise).
   const rise = useAppendedRise(props.bundles.map((b) => b.plan.id));
   return (
     <div data-plan-tab-list="" className="flex flex-col gap-5 px-4 pb-8 pt-4">
-      {planSections(props.bundles, props.today).map((section) => (
+      {sections.length === 0 ? (
+        <div data-plan-tab-chip-zero="">
+          <EmptyState icon={<IconPlan size={ICON_SIZE.tray} />} title={PLAN_WEEK_CHIP_ZERO} />
+        </div>
+      ) : null}
+      {sections.map((section) => (
         <section
           key={section.key}
           data-plan-tab-section={section.key}
           className="flex flex-col gap-2"
         >
-          <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-            {section.label}
-          </h2>
+          {chip === 'all' ? (
+            <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+              {section.label}
+            </h2>
+          ) : null}
           {section.bundles.map((bundle) => {
             const id = bundle.plan.id;
             return (
@@ -202,7 +218,9 @@ export function DraftTag(): ReactElement {
  * plan-card-shaped Bones in PlanTabCard's own layout (eyebrow, title, mono
  * range, covers, the progress line). Only when nothing is held for the tab.
  */
-export function PlanTabBoxes(): ReactElement {
+/** `heading`: the group heading's bone, drawn only where the list will have one (All, search). */
+export function PlanTabBoxes(props: { heading?: boolean } = {}): ReactElement {
+  const heading = props.heading ?? true;
   return (
     <BoxSkeleton
       lit="flat"
@@ -211,9 +229,11 @@ export function PlanTabBoxes(): ReactElement {
       className="flex flex-col gap-5 px-4 pb-8 pt-4"
     >
       <section className="flex flex-col gap-2">
-        <div className="flex h-4 items-center">
-          <Bone lit="flat" className="h-3 w-20 rounded" />
-        </div>
+        {heading ? (
+          <div className="flex h-4 items-center">
+            <Bone lit="flat" className="h-3 w-20 rounded" />
+          </div>
+        ) : null}
         {[0, 1, 2].map((key) => (
           <div
             key={key}

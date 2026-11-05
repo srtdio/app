@@ -458,21 +458,62 @@ export function postStageLine(bundle: LinkBundle, item: PlanItemRow): string {
 // The phone list
 // ---------------------------------------------------------------------------
 
-type PlanSectionKey = 'this' | 'next' | 'later' | 'earlier';
+export type PlanSectionKey = 'this' | 'next' | 'later' | 'earlier';
 
-const PLAN_SECTION_LABELS: Readonly<Record<PlanSectionKey, string>> = {
+export const PLAN_SECTION_LABELS: Readonly<Record<PlanSectionKey, string>> = {
   this: 'This week',
   next: 'Next week',
-  later: 'Later',
-  earlier: 'Earlier',
+  later: 'Upcoming',
+  earlier: 'Past',
 };
 
-const SECTION_ORDER: readonly PlanSectionKey[] = ['this', 'next', 'later', 'earlier'];
+export const SECTION_ORDER: readonly PlanSectionKey[] = ['this', 'next', 'later', 'earlier'];
+
+/**
+ * The phone Plan tab's chip row (the same line as Pipeline's stage chips): All,
+ * then the four week groups (Upcoming and Past named 5 Nov 2026). One pick;
+ * This week by default.
+ */
+export type PlanWeekChip = 'all' | PlanSectionKey;
+export const PLAN_WEEK_CHIPS: readonly PlanWeekChip[] = ['all', ...SECTION_ORDER];
+export const PLAN_WEEK_CHIP_DEFAULT: PlanWeekChip = 'this';
+/** The chip's URL param (?week=), so Back lands on the same chip. */
+export const PLAN_WEEK_PARAM = 'week';
+
+/** A chip's label: All, or its week group's heading. Pure. */
+export function planWeekChipLabel(chip: PlanWeekChip): string {
+  return chip === 'all' ? 'All' : PLAN_SECTION_LABELS[chip];
+}
+
+/** A URL value as a chip, or null when it names none. Pure. */
+export function parsePlanWeekChip(value: string | null): PlanWeekChip | null {
+  return PLAN_WEEK_CHIPS.find((c) => c === value) ?? null;
+}
+
+/** The zero line under a picked chip with no plans in it (as Pipeline's "Posts show up here."). */
+export const PLAN_WEEK_CHIP_ZERO = 'Plans show up here.';
+
+/**
+ * The read a chip asks for on the phone: This week and Next week read just
+ * that Mon to Sun week (so the week's plans land on the first page however
+ * many plans the workspace has); All, Upcoming and Past read every plan, a
+ * page at a time, and Upcoming and Past keep their group. Pure.
+ */
+export function planWeekChipRange(
+  chip: PlanWeekChip,
+  today: string,
+): { start: string; end: string } | null {
+  if (chip !== 'this' && chip !== 'next') return null;
+  const thisWeek = weekRangeOf(today);
+  const week =
+    chip === 'this' ? thisWeek : weekRangeOf(addCivilDays(thisWeek.startsOn, PLAN_WEEK_DAYS));
+  return { start: week.startsOn, end: week.endsOn };
+}
 
 /**
  * A plan's section from `today` (Mon to Sun weeks, workspace zone): overlapping
  * this week, else overlapping next week, else starting after next week
- * (Later), else Earlier. Pure.
+ * (Upcoming), else Past. Pure.
  */
 export function planSectionOf(
   plan: Pick<PlanRow, 'starts_on' | 'ends_on'>,
@@ -489,8 +530,8 @@ export function planSectionOf(
 }
 
 /**
- * The phone list's sections in order (This week, Next week, Later, Earlier),
- * empty ones left out; within one, start date ascending (Earlier: the most
+ * The phone list's sections in order (This week, Next week, Upcoming, Past),
+ * empty ones left out; within one, start date ascending (Past: the most
  * recent first). Ties by id. Pure.
  */
 export function planSections<T extends { plan: Pick<PlanRow, 'id' | 'starts_on' | 'ends_on'> }>(

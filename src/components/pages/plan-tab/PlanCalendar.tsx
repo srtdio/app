@@ -382,7 +382,13 @@ const PLAN_CHIP = 'max-w-[260px] shrink-0 gap-2';
 /** The legend (plan item: round dot; post in no plan: square dot), for the page's top bar. */
 export function PlanTabLegend(): ReactElement {
   return (
-    <div data-plan-tab-legend="" className="flex min-w-0 items-center gap-4 text-sm text-fg-2">
+    // Hidden under 1100px wide (iPad upright): beside the search, Month | Week
+    // and New plan there it squeezed the search to its icon and pushed New
+    // plan off the edge. The plan chips and colours still say which is which.
+    <div
+      data-plan-tab-legend=""
+      className="hidden min-w-0 items-center gap-4 text-sm text-fg-2 min-[1100px]:flex"
+    >
       <span className="flex items-center gap-1.5 whitespace-nowrap">
         <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-accent" />
         {PLAN_ITEM_LEGEND}

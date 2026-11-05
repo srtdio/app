@@ -18,6 +18,11 @@ import {
   planPill,
   planSectionOf,
   planSections,
+  parsePlanWeekChip,
+  planWeekChipLabel,
+  planWeekChipRange,
+  PLAN_WEEK_CHIPS,
+  PLAN_WEEK_CHIP_DEFAULT,
   planTones,
   plansCovering,
   postStageLine,
@@ -325,8 +330,8 @@ describe('the phone list', () => {
     );
     expect(sections.map((s) => [s.label, s.bundles.map((b) => b.plan.id)])).toEqual([
       ['This week', ['this1', 'this2']],
-      ['Later', ['later']],
-      ['Earlier', ['old2', 'old1']],
+      ['Upcoming', ['later']],
+      ['Past', ['old2', 'old1']],
     ]);
   });
 
@@ -383,5 +388,45 @@ describe('zero state', () => {
     expect(onboardingFinished('step')).toBe(false);
     expect(onboardingFinished('intro')).toBe(false);
     expect(onboardingFinished('closing')).toBe(false);
+  });
+});
+
+describe('phone week chips', () => {
+  it('reads the chips in order, This week by default', () => {
+    expect(PLAN_WEEK_CHIPS.map(planWeekChipLabel)).toEqual([
+      'All',
+      'This week',
+      'Next week',
+      'Upcoming',
+      'Past',
+    ]);
+    expect(PLAN_WEEK_CHIP_DEFAULT).toBe('this');
+  });
+
+  it('parses only the chips it knows', () => {
+    expect(parsePlanWeekChip('next')).toBe('next');
+    expect(parsePlanWeekChip('all')).toBe('all');
+    expect(parsePlanWeekChip('soon')).toBeNull();
+    expect(parsePlanWeekChip(null)).toBeNull();
+  });
+
+  it('reads one Mon to Sun week for This week and Next week, every plan for the rest', () => {
+    // Thursday 5 Nov 2026.
+    expect(planWeekChipRange('this', '2026-11-05')).toEqual({
+      start: '2026-11-02',
+      end: '2026-11-08',
+    });
+    expect(planWeekChipRange('next', '2026-11-05')).toEqual({
+      start: '2026-11-09',
+      end: '2026-11-15',
+    });
+    // A Sunday stays in its own week.
+    expect(planWeekChipRange('this', '2026-11-08')).toEqual({
+      start: '2026-11-02',
+      end: '2026-11-08',
+    });
+    expect(planWeekChipRange('all', '2026-11-05')).toBeNull();
+    expect(planWeekChipRange('later', '2026-11-05')).toBeNull();
+    expect(planWeekChipRange('earlier', '2026-11-05')).toBeNull();
   });
 });
