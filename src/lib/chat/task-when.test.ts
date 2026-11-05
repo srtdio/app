@@ -52,9 +52,9 @@ describe('task chips', () => {
 });
 
 describe('the date line', () => {
-  it('open tasks: the day alone, bad when overdue; nothing for today or no date', () => {
+  it('open tasks: Overdue in the bad tone, the day alone later; nothing for today or no date', () => {
     expect(rowDateLine({ ...open, dueOn: '2026-11-03' }, CAL)).toEqual({
-      text: '3 Nov',
+      text: 'Overdue · 3 Nov',
       bad: true,
     });
     expect(rowDateLine({ ...open, dueOn: '2026-11-05' }, CAL)).toBeNull();
