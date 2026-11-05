@@ -8,12 +8,10 @@ import {
   flattenOrder,
   hasTicks,
   isNoop,
-  isRenderableRange,
   moveItem,
   moveToEnd,
   orderLike,
   rebuildOps,
-  withHeaderUpdate,
   type DayIds,
 } from '@/lib/chat/plan-drag';
 import type { PlanBundle, PlanItemRow } from '@/lib/chat/plans';
@@ -260,35 +258,5 @@ describe('Save changes on fresh data (F8)', () => {
 
   it('nothing left: a queue whose items are all gone rebuilds to nothing', () => {
     expect(rebuildOps(bundleOf([]), [{ op: 'remove', item_id: 'a' }])).toEqual([]);
-  });
-});
-
-describe('the header draft (F10, F11)', () => {
-  const plan = { title: 'Week', starts_on: '2026-10-12', ends_on: '2026-10-16' };
-
-  it('F10: an empty From or To, or From after To, keeps the last range that rendered', () => {
-    expect(isRenderableRange({ startsOn: '2026-10-12', endsOn: '2026-10-12' })).toBe(true);
-    expect(isRenderableRange({ startsOn: '', endsOn: '2026-10-16' })).toBe(false);
-    expect(isRenderableRange({ startsOn: '2026-10-17', endsOn: '2026-10-16' })).toBe(false);
-    // No earlier edit: the plan's own range, so no op.
-    const noRange = { title: 'Week', startsOn: '', endsOn: '2026-10-16' };
-    expect(withHeaderUpdate([], plan, noRange)).toEqual([]);
-    // An earlier valid edit: its range is kept while the fields are broken.
-    const widened = withHeaderUpdate([], plan, {
-      title: 'Week',
-      startsOn: '2026-10-12',
-      endsOn: '2026-10-19',
-    });
-    const kept = [{ op: 'update', title: 'Week', starts_on: '2026-10-12', ends_on: '2026-10-19' }];
-    const backwards = { title: 'Week', startsOn: '2026-10-20', endsOn: '2026-10-19' };
-    expect(withHeaderUpdate(widened, plan, backwards)).toEqual(kept);
-    const noEnd = { title: 'Week', startsOn: '2026-10-12', endsOn: '' };
-    expect(withHeaderUpdate(widened, plan, noEnd)).toEqual(kept);
-  });
-
-  it('F11: an empty title is never swapped for the saved one', () => {
-    expect(
-      withHeaderUpdate([], plan, { title: '  ', startsOn: '2026-10-12', endsOn: '2026-10-16' }),
-    ).toEqual([{ op: 'update', title: '', starts_on: '2026-10-12', ends_on: '2026-10-16' }]);
   });
 });

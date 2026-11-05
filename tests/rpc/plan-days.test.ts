@@ -615,22 +615,34 @@ describe.runIf(RPC_SUITE)('plan item days (authenticated role)', () => {
     ).toBe('false');
   });
 
-  it('2b: a Draft plan sends no alerts except plan_deleted; payloads carry plan_title', async () => {
+  it('a Draft plan: merged team edit cards and plan_deleted only; plan_title set', async () => {
+    // 20261105180000_plan_team_edit_alerts: edits on a team plan fold into one
+    // 'edited' card per editor per hour for agency-side members; clients get none.
     const planId = await newPlan('team');
     const concept = await newConcept(planId, '2026-11-02');
     await addPosts(planId, [await seedPost('2026-11-03T12:00:00Z')]);
     psql(`update public.plan_items set title = 'Draft concept renamed' where id = '${concept}'`);
-    const count = (): string =>
+    const rows = (where: string): string =>
       psql(
-        `select count(*) from public.inbox_entries where entity_type = 'plan' and entity_id = '${planId}'`,
+        `select coalesce(string_agg(distinct event_type || ':' || coalesce(payload->>'kind', '-'), ','), '')
+           from public.inbox_entries where entity_type = 'plan' and entity_id = '${planId}' and ${where}`,
       );
-    expect(count()).toBe('0');
+    expect(rows('true')).toBe('plan_updated:edited');
+    expect(rows(`user_id = '${client.id}'`)).toBe('');
+    // One card for agency's edits per other agency-side member.
+    expect(
+      psql(
+        `select count(*) from public.inbox_entries where entity_type = 'plan' and entity_id = '${planId}'
+            and actor_user_id = '${agency.id}' and user_id = '${owner.id}'`,
+      ),
+    ).toBe('1');
     expect((await call(agency, 'plan_delete', { p_plan_id: planId })).error).toBeNull();
     expect(
       psql(
-        `select string_agg(distinct event_type || ':' || (payload->>'plan_title' is not null)::text, ',')
+        `select string_agg(distinct event_type || ':' || (payload->>'plan_title' is not null)::text, ',' order by event_type || ':' || (payload->>'plan_title' is not null)::text)
            from public.inbox_entries where entity_type = 'plan' and entity_id = '${planId}'`,
       ),
-    ).toBe('plan_deleted:true');
+    ).toBe('plan_deleted:true,plan_updated:true');
+    expect(rows(`user_id = '${client.id}'`)).toBe('');
   });
 });

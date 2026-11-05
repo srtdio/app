@@ -154,7 +154,6 @@ const CONFIRM_DIALOG_ALLOWLIST: Record<string, string> = {
   'pages/PostDetailPage.tsx': 'Discard caption changes',
   'settings/ProfileSettingsPanel.tsx': 'Discard name and designation edits (Back while dirty)',
   'chat/PlanComposeScreen.tsx': 'Discard a new plan',
-  'chat/PlanScreen.tsx': 'Discard plan edits',
   'chat/ConceptSheet.tsx': 'Discard a concept',
   'comments/Comments.tsx': 'Discard reply',
   'chat/Composer.tsx': 'Delete or replace the saved voice draft',

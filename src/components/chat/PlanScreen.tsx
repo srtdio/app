@@ -2,24 +2,30 @@
 // title, "{range} · Draft" or "{range} · Shared with approvers", progress, and
 // one list grouped by each item's plan day (a post slot's day is its post's
 // posts.target_date in the workspace zone, a concept's plan_items.target_date)
-// for every day of the range ("Planned posts show up here." on an empty day, "No date"
-// last; a plan longer than a week adds a sticky "Week of" header per week).
+// for every day of the range ("Planned posts show up here." on an empty day,
+// a run of two or more empty days folded into one card, "No date" last; a plan
+// longer than a week adds a sticky "Week of" header per week).
 //
-// View mode (the default, everyone): each day shows one calendar date tile
-// (56x56) beside its first row; a row is the title block (title, format line,
-// "Also in") with the thumbnail (56x56) on the right, then two lines: PLAN
-// (the viewer's check of the slot) and POST (the post's stage). PLAN is the
-// OK | Not OK switch while undecided and a solid pill once decided (tap to
-// change). OK is optimistic behind a 4s Undo strip
-// (useUndoableAction; the write goes when the toast ends, never after Undo);
-// Not OK opens the Item screen with the note box open. One view: a Draft plan
-// shows the team side (agency only, writable), an Open plan the client side
-// (a client writes, the agency reads it as text). No drag, no swipe, no grip,
-// no row dustbin. Tapping a row opens the Item screen. The
-// agency side also gets the title menu (Rename, Delete plan), Add under each
-// day and "+" in the header (instant, their sheets have their own Save), the
-// header's "Edit" button, and the footer's one primary button: from a chat
-// "Send to approvers in {chat}" on a Draft plan (plan_share_with_client, then
+// Everyone sees the same rows: one calendar date tile (56x56) beside a day's
+// first row; a row is the title block (title, format line, "Also in") with the
+// thumbnail (56x56) on the right, then two lines: PLAN (the viewer's check of
+// the slot) and POST (the post's stage). PLAN is the OK | Not OK switch while
+// undecided and a solid pill once decided (tap to change). OK is optimistic
+// behind a 4s Undo strip (useUndoableAction; the write goes when the strip
+// ends, never after Undo); Not OK opens the Item screen with the note box open.
+// A Draft plan shows the team side (agency only, writable), an Open plan the
+// client side (a client writes, the agency reads it as text). Tapping a row
+// opens the Item screen.
+//
+// No Edit mode: every change saves itself. Creators get the title menu
+// (Rename, Change dates, Delete plan), Add under each day and in the header,
+// and a ⋯ menu on each row (Open, Move to another day, Remove from plan;
+// long-press on touch and right-click on laptop open it too). A move or a
+// remove paints at once and is written when its Undo strip ends (one
+// plan_save with that one op); Undo takes it back and nothing is written.
+// Moving an Open plan's client-approved slot still asks "Keep the approval?"
+// first. Last save wins. The footer's one primary button: from a chat "Send to
+// approvers in {chat}" on a Draft plan (plan_share_with_client, then
 // chat_plan_share; a failed second step offers Retry that only reposts) or
 // "Send in {chat}" on an Open plan; outside a chat "Open for approvers" on a
 // Draft plan, nothing on an Open one. A send from a chat reads "Sending in
@@ -27,40 +33,18 @@
 // until a change here, and on reopening while the chat's last send of this
 // plan (read with the screen) is newer than the plan's last change.
 //
-// Edit mode (agency, "Edit"): the header becomes Cancel / "Editing plan" /
-// "Save changes"; the title and From/To dates are fields at the top; each row
-// is grip | date tile | title block | thumbnail with PLAN and POST as text,
-// and a bottom line with the day chip (the day picker) left and the remove
-// icon right (touch or mouse drag on the grip; the laptop keyboard move too);
-// the footer is hidden. Every change
-// paints at once but is only queued (plan-drag.ts: applyPlanOps); nothing is
-// written until Save changes, which sends the queue in one plan_save call
-// (all or nothing). Moving an Open plan's client-approved slot still asks
-// "Keep the approval?" at the move and records keep_reviews in that op. Save:
-// toast "Plan saved", view mode, re-read; a failure keeps edit mode and the
-// queue with an inline error and Retry; while saving the screen cannot close.
-// Cancel, the screen's own back, Esc and system/browser Back with queued
-// changes ask "Discard changes?" (ConfirmDialog; useBackGuard holds the Back).
+// Live: while open, the screen listens on the plan's private broadcast topic
+// (plan:<id>, src/lib/chat/plan-live.ts); any change by anyone re-reads the
+// plan in the background, keeping what is shown meanwhile.
 // One read per table per open (plans.ts), bounded at 5s; nothing paints until
 // that read settles. This file also holds the page frame (phone: a modal
 // dialog whose focus moves in and returns on close), the bounded read hook
 // and the confirm sheet the other plan screens share.
 // Laptop (md and up): the screens dock as a full-height panel beside the chat
-// (440px from 972px, 360px below; translateX in); edit mode adds a right-click
-// day menu and the keyboard move (plan-keyboard-move.ts).
-// Motion: drag on translateY and scale only (no scale on a laptop); the page,
-// menu and sheets on translateY. Tokens only.
+// (440px from 972px, 360px below; translateX in).
 
 import { mark } from '@/lib/perf-marks';
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   ReactElement,
@@ -85,15 +69,18 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
+import { ActionMenu } from '@/components/ui/ActionMenu';
+import { useMenuGesture } from '@/components/ui/useLongPress';
 import {
   ICON_SIZE,
+  IconCalendar,
   IconChat,
   IconCheck,
   IconChevronDown,
   IconChevronLeft,
+  IconChevronRight,
   IconEdit,
   IconFile,
   IconLink,
@@ -107,18 +94,8 @@ import { Thumbnail } from '@/components/media/Thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import {
   ADD_FAILED,
-  CANCEL_EDIT_LABEL,
   DELETE_PLAN_LABEL,
-  DISCARD_EDITS,
-  DISCARD_LABEL,
   DRAFT_NOT_READY,
-  DRAFT_PROBLEM_COPY,
-  EDITING_TITLE,
-  EDIT_FROM_LABEL,
-  EDIT_LABEL,
-  EDIT_TITLE_LABEL,
-  EDIT_TO_LABEL,
-  KEEP_EDITING_LABEL,
   NO_DATE_LABEL,
   OPEN_FOR_CLIENT_BODY,
   OPEN_FOR_CLIENT_LABEL,
@@ -126,14 +103,16 @@ import {
   OPEN_FOR_CLIENT_TOAST,
   PLAN_DELETED_TOAST,
   PLAN_NOT_AVAILABLE,
-  PLAN_SAVED_TOAST,
   PLAN_SAVE_ERROR_COPY,
   PLAN_TITLE_MAX,
   RENAMED_TOAST,
   RENAME_LABEL,
+  CHANGE_DATES_LABEL,
+  DATES_CHANGED_TOAST,
+  MOVE_TO_DAY_LABEL,
+  OPEN_ITEM_LABEL,
+  REMOVED_TOAST,
   RETRY_LABEL,
-  SAVE_CHANGES_LABEL,
-  SAVING_LABEL,
   SEND_AFTER_OPEN_FAILED,
   SEND_FAILED,
   SEND_NEEDS_OPEN,
@@ -146,7 +125,6 @@ import {
   dayHeaderOf,
   deletePlanErrorCopy,
   draftLocked,
-  draftProblem,
   itemDateLabel,
   keepApprovalBody,
   keepApprovalTitle,
@@ -187,55 +165,30 @@ import {
 } from '@/components/chat/plan-card';
 import { LinkedPostPage, PlanItemScreen } from '@/components/chat/PlanItemScreen';
 import { PlanAddSheet } from '@/components/chat/PlanAddSheet';
-import { PlanKeepApprovalSheet, type MoveDay } from '@/components/chat/PlanMoveSheet';
 import {
-  ConceptSheet,
-  EMPTY_CONCEPT,
-  FIELD,
-  type ConceptForm,
-} from '@/components/chat/ConceptSheet';
+  PlanKeepApprovalSheet,
+  REMOVE_ROW_LABEL,
+  type MoveDay,
+} from '@/components/chat/PlanMoveSheet';
+import { ConceptSheet, EMPTY_CONCEPT, type ConceptForm } from '@/components/chat/ConceptSheet';
 import { PostPicker } from '@/components/chat/PostPicker';
 import {
-  DATE_FIELD,
+  PlanDatesSheet,
   PlanDayPickerSheet,
   dayPickerSubline,
 } from '@/components/chat/PlanDayPickerSheet';
-import { PlanDayPopover, type PopoverAnchor } from '@/components/chat/PlanDayPopover';
-import {
-  PlanDropHere,
-  PlanDropLine,
-  PlanGrip,
-  PlanGripSpacer,
-  PlanKeyHints,
-  PlanRowEditButtons,
-} from '@/components/chat/PlanRowActions';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import {
   applyPlanOps,
-  dropIndex,
   findItem,
   flattenOrder,
-  hasQueuedOps,
-  headerDraftOf,
+  hasTicks,
   isNoop,
   moveItem,
-  queueOp,
   rebuildOps,
-  withHeaderUpdate,
   type DayIds,
-  type DayIndex,
-  type PlanHeaderDraft,
 } from '@/lib/chat/plan-drag';
-import {
-  DROPPED,
-  MOVE_CANCELLED,
-  PICKED_UP,
-  othersIn,
-  previewGroups,
-  rowKeyIntent,
-  slotAnnouncement,
-  stepSlot,
-} from '@/lib/chat/plan-keyboard-move';
+import { dayMoveToast, othersIn } from '@/lib/chat/plan-keyboard-move';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
 import {
   LATE_READ_GRACE_MS,
@@ -251,10 +204,10 @@ import { sharePlanToChannel } from '@/lib/chat/share-plan';
 import type { ChatMessageRow } from '@/lib/chat/thread';
 import { createInFlightGuard } from '@/lib/chat/thread-actions';
 import { fetchMemberRole } from '@/lib/assets';
-import { useBackGuard } from '@/lib/back-guard';
 import { useModalFocus } from '@/lib/modal-focus';
 import { useSession } from '@/lib/session-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
+import { subscribePlanLive } from '@/lib/chat/plan-live';
 import {
   PLAN_CHANGED_EVENT,
   dispatchPlanChanged,
@@ -267,6 +220,7 @@ import {
   readPlanBundles,
   readPlanScreen,
   refusedForClient,
+  type ComposeRange,
   type ConceptThumb,
   type PlanBundle,
   type PlanItemRow,
@@ -279,7 +233,7 @@ import { safeTimeZone } from '@/lib/time';
 import { HISTORY_STEP_KEYS, useHistoryStep } from '@/lib/chat/use-history-step';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
-import { prefersReducedMotion, useIsLaptop } from '@/lib/use-is-laptop';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { logger } from '@/lib/logger';
 import {
@@ -1011,9 +965,6 @@ interface KeepAsk {
   approver: string;
 }
 
-/** Where a discard confirm leads: back to view mode, or out of the screen (Back). */
-type LeaveEdit = 'exit' | 'close';
-
 /**
  * The approvers' names the workspace members read already holds, and the ids
  * it lacks (an ex-member, or no members read in this window). Pure.
@@ -1145,20 +1096,15 @@ export function PlanScreen(props: {
   const [sendGuard] = useState(createInFlightGuard);
   const { canAttach, uploadFile } = useCommentAttachments();
   const bodyRef = useRef<HTMLDivElement>(null);
-  // Edit mode: the queued plan_save ops (applied to the paint, written on
-  // Save), the header fields, the save in flight and its error, the discard
-  // confirm, and the row whose day picker is open.
-  const [editMode, setEditMode] = useState(false);
+  // Autosave: a move or a remove paints at once as a plan_save op laid over
+  // the read, and is written when its Undo strip ends (one op per write). A
+  // written op stays painted until the re-read lands; Undo or a failed write
+  // takes it back off. The row whose ⋯ menu or day picker is open.
   const [ops, setOps] = useState<PlanSaveOp[]>([]);
-  const [headerDraft, setHeaderDraft] = useState<PlanHeaderDraft>({
-    title: '',
-    startsOn: '',
-    endsOn: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [discardAsk, setDiscardAsk] = useState<LeaveEdit | null>(null);
+  const writtenOps = useRef(new Set<PlanSaveOp>());
+  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [dayFor, setDayFor] = useState<string | null>(null);
+  const [datesOpen, setDatesOpen] = useState(false);
   useHistoryStep(
     itemId !== null && itemId !== entryItemId && props.open,
     HISTORY_STEP_KEYS.planItem,
@@ -1191,11 +1137,11 @@ export function PlanScreen(props: {
     setSendError(null);
     setSentHere(null);
     setKeepAsk(null);
-    setEditMode(false);
     setOps([]);
-    setSaveError(null);
-    setDiscardAsk(null);
+    writtenOps.current.clear();
+    setMenuFor(null);
     setDayFor(null);
+    setDatesOpen(false);
   }, [props.open]);
 
   // A write anywhere re-reads this plan (keeping what is shown meanwhile).
@@ -1210,6 +1156,13 @@ export function PlanScreen(props: {
     window.addEventListener(PLAN_CHANGED_EVENT, onChanged);
     return () => window.removeEventListener(PLAN_CHANGED_EVENT, onChanged);
   }, [props.open, planId, reload]);
+  // Live: a change by anyone (a comment, OK / Not OK, a move, a rename) is
+  // announced on the plan's topic; it re-reads every open plan surface the
+  // same way a local write does. Starts after paint, never holds it.
+  useEffect(() => {
+    if (!props.open) return;
+    return subscribePlanLive(supabase, planId, () => dispatchPlanChanged(window, planId));
+  }, [props.open, planId]);
 
   const readBundle = read.status === 'ready' ? read.data.bundle : null;
   if (readBundle !== null) mark('plan:ready');
@@ -1234,17 +1187,13 @@ export function PlanScreen(props: {
       return Object.keys(kept).length === Object.keys(prev).length ? prev : kept;
     });
   }, [shownBundle]);
-  // A saved queue stays painted until the re-read lands (no flash of the old
-  // list), then goes; a cancelled one goes at once (exitEdit). The clear is
-  // tied to the save that asked for it: the save stores its edit session, and
-  // a newer session (enterEdit) drops the token, so its queue is never wiped.
-  const editSessionRef = useRef(0);
-  const savedTokenRef = useRef<number | null>(null);
+  // A written op stays painted until the re-read lands (no flash of the old
+  // list), then goes; an op still behind its Undo strip stays.
   useEffect(() => {
-    const token = savedTokenRef.current;
-    if (token === null) return;
-    savedTokenRef.current = null;
-    if (token === editSessionRef.current) setOps([]);
+    const written = writtenOps.current;
+    if (written.size === 0) return;
+    setOps((prev) => prev.filter((op) => !written.has(op)));
+    written.clear();
   }, [shownBundle]);
   // A re-read that failed while the screen shows data (after a save, an add,
   // a tick): the load-failure copy as a toast with Retry, never silence.
@@ -1290,15 +1239,16 @@ export function PlanScreen(props: {
       clear?.();
     };
   }, [props.open, jumpItemId, hasJumpRow]);
-  // View mode shows a linked concept and its post as one pair: the post item
-  // the pair stands in for is left out of the list (its data untouched). Edit
-  // mode keeps every row, so a save's order always names every live item.
+  // The list shows a linked concept and its post as one pair: the post item
+  // the pair stands in for is left out (its data untouched). A move's order
+  // is taken from every live item (allGroups), so a write always names them all.
   const groups = useMemo(
-    () =>
-      bundle !== null
-        ? planListGroups(editMode ? bundle : withoutPairedPosts(bundle), timeZone, side)
-        : [],
-    [bundle, timeZone, side, editMode],
+    () => (bundle !== null ? planListGroups(withoutPairedPosts(bundle), timeZone, side) : []),
+    [bundle, timeZone, side],
+  );
+  const allGroups = useMemo(
+    () => (bundle !== null ? planListGroups(bundle, timeZone, side) : []),
+    [bundle, timeZone, side],
   );
   const names = read.status === 'ready' ? (read.data.names ?? {}) : {};
   const nameOf = (userId: string | null): string =>
@@ -1332,12 +1282,6 @@ export function PlanScreen(props: {
   const subtitle =
     bundle !== null && side !== 'unknown' ? planHeaderSubtitle(bundle.plan) : undefined;
   const agency = side === 'agency' && bundle !== null;
-  // Laptop (md and up): the docked panel; edit mode adds the right-click day
-  // menu and the keyboard move (agency only).
-  const desktop = useIsLaptop();
-  const deskAgency = desktop && agency;
-  const editing = agency && editMode;
-  const deskEditing = deskAgency && editMode;
   // Delete is for the plan's creator or a workspace owner/admin: one role read
   // per open, agency side only.
   const [role, setRole] = useState<string | null>(null);
@@ -1569,8 +1513,8 @@ export function PlanScreen(props: {
     });
   };
   const planOk = (item: PlanItemRow): void => {
-    // Read-only (the agency on an Open plan) never writes; edit mode shows text.
-    if (bundle === null || slot === null || editMode) return;
+    // Read-only (the agency on an Open plan) never writes.
+    if (bundle === null || slot === null) return;
     const previous = reviewStatus(bundle, item.id, slot);
     if (previous === 'approved') return;
     const day = planItemDayInZone(item, bundle.postInfo, timeZone);
@@ -1578,7 +1522,7 @@ export function PlanScreen(props: {
     tickSlot(item, slot, previous, dayHeader);
   };
   const planNotOk = (item: PlanItemRow): void => {
-    if (bundle === null || slot === null || editMode) return;
+    if (bundle === null || slot === null) return;
     // A pending OK goes first, so the note's 'changes' lands after it.
     undoable.flush();
     setAskChanges(true);
@@ -1586,78 +1530,12 @@ export function PlanScreen(props: {
     setItemId(item.id);
   };
 
-  // Edit mode. Enter copies the header into its fields; every change paints
-  // at once through the queue (nothing is written). Leaving with queued
-  // changes asks; Save sends the queue as one plan_save.
-  const enterEdit = (): void => {
-    if (bundle === null || !agency) return;
-    // A new session: an earlier save's pending clear no longer applies.
-    editSessionRef.current += 1;
-    savedTokenRef.current = null;
-    setHeaderDraft(headerDraftOf(bundle.plan));
-    setOps([]);
-    setSaveError(null);
-    setMenuOpen(false);
-    setRenaming(null);
-    setEditMode(true);
-  };
-  const exitEdit = (): void => {
-    setEditMode(false);
-    setOps([]);
-    setSaveError(null);
-    setDayFor(null);
-    setKeepAsk(null);
-    setPopover(null);
-    cancelPick();
-    drag.cancel();
-  };
-  const requestLeaveEdit = (then: LeaveEdit): void => {
-    if (saving) return;
-    if (hasQueuedOps(ops)) {
-      setDiscardAsk(then);
-      return;
-    }
-    exitEdit();
-    if (then === 'close') props.onClose();
-  };
-  const dirty = editMode && hasQueuedOps(ops);
-  // System or browser Back: queued changes ask (the same confirm as Cancel);
-  // a save in flight keeps the screen as it is. The guard is released right
-  // before a confirmed Discard, so that close pops cleanly.
-  const guard = useBackGuard({
-    active: props.open && (dirty || saving),
-    onBack: () => {
-      if (saving) return;
-      setDiscardAsk('close');
-    },
-  });
-  const discardEdits = (): void => {
-    const then = discardAsk;
-    setDiscardAsk(null);
-    guard.release();
-    exitEdit();
-    if (then === 'close') props.onClose();
-  };
-  const headerProblem =
-    bundle !== null && editMode
-      ? draftProblem({
-          // The title as typed: an empty one reads "Add a title." and blocks Save.
-          title: headerDraft.title,
-          startsOn: headerDraft.startsOn,
-          endsOn: headerDraft.endsOn,
-        })
-      : null;
-  const changeHeader = (next: PlanHeaderDraft): void => {
-    if (shownBundle === null) return;
-    setHeaderDraft(next);
-    setOps((prev) => withHeaderUpdate(prev, shownBundle.plan, next));
-  };
-  // Save changes: one read of the plan as it is now (on the tap only), the
-  // queue rebuilt on it (rebuildOps: every move's full order from the fresh
-  // items, this session's placement on top), then one plan_save. A move that
-  // still finds something gone ("no longer available") reads once more,
-  // rebuilds and retries once; a second failure shows the failure line. Retry
-  // runs this same path, so it never re-sends an old order.
+  // Autosave. A move or a remove paints at once (an op over the read) and is
+  // written when its Undo strip ends: one read of the plan as it is now, the
+  // op rebuilt on it (rebuildOps), then one plan_save with that op. A write
+  // that finds something gone ("no longer available") reads once more and
+  // retries once. Undo, or a failed write, takes the op back off the paint.
+  // Last save wins: the procs never reject a stale order.
   const sendQueued = async (
     queued: readonly PlanSaveOp[],
     traceId: string,
@@ -1671,7 +1549,7 @@ export function PlanScreen(props: {
       return { ok: false, error: { code: 'unknown', message: 'invalid_payload' } };
     }
     const rebuilt = rebuildOps(now, queued, timeZone);
-    // Everything this session touched is gone already: nothing left to write.
+    // Everything this op touched is gone already: nothing left to write.
     if (rebuilt.length === 0) return { ok: true, data: undefined };
     try {
       return await planSave(supabase, { p_plan_id: planId, p_ops: rebuilt, p_trace_id: traceId });
@@ -1679,76 +1557,63 @@ export function PlanScreen(props: {
       return { ok: false, error: { code: 'unknown', message: String(thrown) } };
     }
   };
-  const saveChanges = async (): Promise<void> => {
-    if (saving || bundle === null) return;
-    if (!hasQueuedOps(ops)) {
-      exitEdit();
-      return;
-    }
-    if (headerProblem !== null) return;
-    setSaving(true);
-    setSaveError(null);
-    const traceId = generateTraceId();
-    const queued = ops;
-    let result = await sendQueued(queued, traceId);
-    if (
-      !result.ok &&
-      planSaveErrorCopy(result.error.message) === PLAN_SAVE_ERROR_COPY.invalid_payload
-    ) {
-      result = await sendQueued(queued, traceId);
-    }
-    setSaving(false);
-    if (!result.ok) {
-      logger.warn('chat: plan save failed', {
-        trace_id: traceId,
-        plan_id: planId,
-        ops: queued.length,
-        error: result.error.message,
-      });
-      setSaveError(planSaveErrorCopy(result.error.message));
-      return;
-    }
-    // The queue stays painted until the re-read lands; only this session's.
-    savedTokenRef.current = editSessionRef.current;
-    setEditMode(false);
-    setSaveError(null);
-    setDayFor(null);
-    setKeepAsk(null);
-    setPopover(null);
-    cancelPick();
-    toast.show({ title: PLAN_SAVED_TOAST });
-    dispatchPlanChanged(window, planId);
+  const autosave = (op: PlanSaveOp, label: string): void => {
+    setOps((prev) => [...prev, op]);
+    undoable.run({
+      label,
+      commit: async () => {
+        const traceId = generateTraceId();
+        let result = await sendQueued([op], traceId);
+        if (
+          !result.ok &&
+          planSaveErrorCopy(result.error.message) === PLAN_SAVE_ERROR_COPY.invalid_payload
+        ) {
+          result = await sendQueued([op], traceId);
+        }
+        if (!result.ok) {
+          logger.warn('chat: plan autosave failed', {
+            trace_id: traceId,
+            plan_id: planId,
+            op: op.op,
+            error: result.error.message,
+          });
+          throw new Error(planSaveErrorCopy(result.error.message));
+        }
+        writtenOps.current.add(op);
+        dispatchPlanChanged(window, planId);
+      },
+      revert: () => setOps((prev) => prev.filter((queued) => queued !== op)),
+    });
   };
 
-  // A drop, a day chip pick or a keyboard drop: queued as one 'move' op (the
-  // full new order and the day), painted at once. On an Open plan a day
-  // change of a client-approved slot asks "Keep the approval?" first
-  // (cancelling cancels the move); every other move resets (false).
+  // A day pick (the row's ⋯ menu): one 'move' op, the item's new day and the
+  // plan's full new order, saved behind Undo. On an Open plan a day change of
+  // a client-approved slot asks "Keep the approval?" first (cancelling
+  // cancels the move); every other move resets (false).
   const commitMove = (
     moved: string,
     toDay: string | null,
     toIndex: number,
     keep: boolean,
   ): void => {
-    if (bundle === null || !editMode) return;
-    const days = planDayIds(groups);
+    if (bundle === null || !agency) return;
+    const item = bundle.items.find((i) => i.id === moved);
+    const days = planDayIds(allGroups);
     const from = findItem(days, moved);
-    if (from === null || isNoop(days, moved, { day: toDay, index: toIndex })) return;
+    if (item === undefined || from === null) return;
+    if (isNoop(days, moved, { day: toDay, index: toIndex })) return;
     const order = flattenOrder(moveItem(days, moved, toDay, toIndex));
-    setOps((prev) =>
-      queueOp(prev, {
-        op: 'move',
-        item_id: moved,
-        target_date: toDay,
-        item_ids: order,
-        keep_reviews: keep,
-      }),
+    // Nothing is reset until the write, so Undo is always offered.
+    const resets = !keep && from.day !== toDay && hasTicks(bundle, moved);
+    autosave(
+      { op: 'move', item_id: moved, target_date: toDay, item_ids: order, keep_reviews: keep },
+      dayMoveToast(dayHeaderOf(toDay), item.kind === 'post', resets).title,
     );
   };
   const moveTo = (moved: string, toDay: string | null, toIndex: number): void => {
     if (bundle === null) return;
     const item = bundle.items.find((i) => i.id === moved);
-    const from = findItem(planDayIds(groups), moved);
+    const from = findItem(planDayIds(allGroups), moved);
     if (item === undefined || from === null) return;
     if (moveAsksKeep(bundle, item, from.day, toDay)) {
       setKeepAsk({
@@ -1761,19 +1626,13 @@ export function PlanScreen(props: {
     }
     commitMove(moved, toDay, toIndex, false);
   };
-  const drag = usePlanDrag({
-    enabled: editing,
-    bodyRef,
-    onDrop: (moved, toDay, toIndex) => moveTo(moved, toDay, toIndex),
-  });
-  // Remove (edit mode): queued as one 'remove' op; the row goes at once.
+  // Remove from plan: one 'remove' op, the row goes at once, saved behind Undo.
   const removeRow = (id: string): void => {
-    if (!editing) return;
+    if (!agency) return;
     setDayFor(null);
-    setOps((prev) => queueOp(prev, { op: 'remove', item_id: id }));
+    autosave({ op: 'remove', item_id: id }, REMOVED_TOAST);
   };
   const openItem = (id: string): void => {
-    if (editMode) return;
     mark('plan:item:open');
     setAskChanges(false);
     setRowHighlight(peekEntityUnreadComment('plan_item', id));
@@ -1782,7 +1641,7 @@ export function PlanScreen(props: {
   // A pair's post (or a concept's Post row) opens as a post item opens: the
   // plan's own post item when the post is one, else the post alone.
   const openLinkedPost = (postId: string): void => {
-    if (editMode || bundle === null) return;
+    if (bundle === null) return;
     const postItem = postItemOf(bundle, postId);
     if (postItem !== null && !draftLocked(bundle, postItem, side)) {
       openItem(postItem.id);
@@ -1792,188 +1651,44 @@ export function PlanScreen(props: {
     setItemId(null);
     setLinkedOpenId(postId);
   };
-
-  // Laptop (agency, edit mode): the right-click day menu with Remove, the
-  // keyboard pick-up and its live region.
-  const [popover, setPopover] = useState<{
-    itemId: string;
-    anchor: PopoverAnchor;
-    withRemove: boolean;
-  } | null>(null);
-  const [pick, setPick] = useState<{ itemId: string; from: DayIndex; at: DayIndex } | null>(null);
-  const pickRef = useRef(pick);
-  pickRef.current = pick;
-  const [announce, setAnnounce] = useState('');
-  useEffect(() => {
-    if (deskEditing) return;
-    setPopover(null);
-    setPick(null);
-  }, [deskEditing]);
-  // A pick-up never outlives its row's focus: nothing unsaved stays on screen.
-  const cancelPick = useCallback((): void => {
-    if (pickRef.current === null) return;
-    pickRef.current = null;
-    setPick(null);
-    setAnnounce(MOVE_CANCELLED);
-  }, []);
-  const pickedId = pick?.itemId ?? null;
-  useEffect(() => {
-    if (pickedId === null) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    // A step re-renders the row and focus is put back before this check runs.
-    const onFocusOut = (): void => {
-      if (timer !== null) clearTimeout(timer);
-      timer = setTimeout(() => {
-        const now = document.activeElement;
-        if (!(now instanceof HTMLElement && now.matches(`button[data-plan-row="${pickedId}"]`))) {
-          cancelPick();
-        }
-      }, 0);
-    };
-    document.addEventListener('focusout', onFocusOut, true);
-    return () => {
-      document.removeEventListener('focusout', onFocusOut, true);
-      if (timer !== null) clearTimeout(timer);
-    };
-  }, [pickedId, cancelPick]);
-  // The list as shown: a pick-up previews its slot (nothing is queued yet).
-  const viewGroups = useMemo(
-    () => (pick !== null ? previewGroups(groups, pick.itemId, pick.at) : groups),
-    [groups, pick],
-  );
-  // What a refocus aims at next render (a CSS selector inside the list).
-  const refocus = useRef<string | null>(null);
-  // A pick-up step or a removal re-renders rows: focus follows.
-  useLayoutEffect(() => {
-    const target = refocus.current;
-    const body = bodyRef.current;
-    if (target === null || body === null) return;
-    const el = body.querySelector<HTMLElement>(target);
-    if (el === null) return;
-    refocus.current = null;
-    if (document.activeElement !== el) el.focus({ preventScroll: true });
-    el.scrollIntoView({ block: 'nearest' });
-  });
-  // Laptop removal: focus goes to the next row, the previous one when it was
-  // last, or the day's drop target when the day is now empty; never to the page.
-  const removeWithFocus = (id: string): void => {
-    const body = bodyRef.current;
-    const rows = rowButtons();
-    const row = body?.querySelector<HTMLElement>(`button[data-plan-row="${id}"]`) ?? null;
-    const at = row !== null ? rows.indexOf(row) : -1;
-    const next = rows[at + 1] ?? rows[at - 1] ?? null;
-    refocus.current =
-      next !== null ? `button[data-plan-row="${next.getAttribute('data-plan-row') ?? ''}"]` : null;
-    if (refocus.current === null) {
-      body
-        ?.closest('[data-plan-page]')
-        ?.querySelector<HTMLElement>('[data-plan-heading]')
-        ?.focus({ preventScroll: true });
-    }
-    removeRow(id);
-  };
-  const dayLabelOf = (day: string | null): string => dayHeaderOf(day) ?? NO_DATE_LABEL;
-  const isDroppable = (day: string | null): boolean =>
-    day === null || (bundle !== null && day >= bundle.plan.starts_on && day <= bundle.plan.ends_on);
   const moveToDay = (id: string, day: string | null): void => {
-    const days = planDayIds(groups);
+    const days = planDayIds(allGroups);
     const from = findItem(days, id);
     if (from === null || from.day === day) return;
     moveTo(id, day, othersIn(days, id, day));
   };
-  const openPopover = (id: string, anchor: PopoverAnchor): void => {
-    if (drag.state !== null) return;
-    setDayFor(null);
-    setPopover({ itemId: id, anchor, withRemove: true });
-  };
-  const popoverDays = useMemo(() => {
-    if (bundle === null) return [];
-    const days = planDayIds(groups);
-    return planMoveDays(bundle.plan).map((d) => ({
-      ...d,
-      count: days.find((g) => g.day === d.day)?.ids.length ?? 0,
-    }));
-  }, [bundle, groups]);
   const dayCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const d of planDayIds(groups)) if (d.day !== null) counts[d.day] = d.ids.length;
     return counts;
   }, [groups]);
-  const rowButtons = (): HTMLElement[] => [
-    ...(bodyRef.current?.querySelectorAll<HTMLElement>('button[data-plan-row]') ?? []),
-  ];
-  const onRowKey = (event: ReactKeyboardEvent<HTMLElement>): void => {
-    if (!deskEditing || !(event.target instanceof HTMLElement)) return;
-    const row = event.target.closest<HTMLElement>('button[data-plan-row]');
-    if (row === null || row !== event.target) return;
-    const id = row.getAttribute('data-plan-row') ?? '';
-    const picking = pick !== null && pick.itemId === id;
-    const intent = rowKeyIntent(event.key, picking);
-    if (intent === null) return;
-    event.preventDefault();
-    const days = planDayIds(groups);
-    if (intent === 'up' || intent === 'down') {
-      const dir = intent === 'up' ? -1 : 1;
-      if (pick !== null && picking) {
-        const next = stepSlot(days, id, pick.at, dir, isDroppable);
-        if (next === null) return;
-        refocus.current = `button[data-plan-row="${id}"]`;
-        setPick({ ...pick, at: next });
-        setAnnounce(slotAnnouncement(dayLabelOf(next.day), next.index));
-        return;
-      }
-      const rows = rowButtons();
-      rows[rows.indexOf(row) + dir]?.focus();
+  // Change dates (title ⋯ menu): saved at once through plan_update, like Rename.
+  const saveDates = async (range: ComposeRange): Promise<void> => {
+    if (bundle === null) return;
+    setDatesOpen(false);
+    if (range.startsOn === bundle.plan.starts_on && range.endsOn === bundle.plan.ends_on) return;
+    const traceId = generateTraceId();
+    const result = await planUpdate(supabase, {
+      p_plan_id: planId,
+      p_title: bundle.plan.title,
+      p_starts_on: range.startsOn,
+      p_ends_on: range.endsOn,
+      p_trace_id: traceId,
+    });
+    if (!result.ok) {
+      logger.warn('chat: plan dates change failed', {
+        trace_id: traceId,
+        plan_id: planId,
+        error: result.error.message,
+      });
+      toast.show({ title: planSaveErrorCopy(result.error.message), tone: 'error' });
       return;
     }
-    if (intent === 'pick') {
-      // Space on another row while one is up puts that one back first.
-      if (pick !== null) {
-        cancelPick();
-        return;
-      }
-      const from = findItem(days, id);
-      if (from === null || !isDroppable(from.day)) return;
-      setPopover(null);
-      refocus.current = `button[data-plan-row="${id}"]`;
-      setPick({ itemId: id, from, at: from });
-      setAnnounce(PICKED_UP);
-      return;
-    }
-    if (intent === 'cancel') {
-      refocus.current = `button[data-plan-row="${id}"]`;
-      cancelPick();
-      return;
-    }
-    if (intent === 'drop' && pick !== null) {
-      const to = pick.at;
-      refocus.current = `button[data-plan-row="${id}"]`;
-      pickRef.current = null;
-      setPick(null);
-      setAnnounce(DROPPED);
-      if (!isNoop(days, id, to)) moveTo(id, to.day, to.index);
-      return;
-    }
-    if (intent === 'remove') {
-      cancelPick();
-      removeWithFocus(id);
-    }
+    toast.show({ title: DATES_CHANGED_TOAST });
+    dispatchPlanChanged(window, planId);
   };
   // Laptop Escape inside the panel: the innermost layer first; true when taken.
   const onPanelEscape = (): boolean => {
-    if (drag.state !== null) {
-      drag.cancel();
-      return true;
-    }
-    if (pickRef.current !== null) {
-      refocus.current = `button[data-plan-row="${pickRef.current.itemId}"]`;
-      cancelPick();
-      return true;
-    }
-    if (popover !== null) {
-      setPopover(null);
-      return true;
-    }
     if (menuOpen) {
       setMenuOpen(false);
       return true;
@@ -1982,18 +1697,7 @@ export function PlanScreen(props: {
       setRenaming(null);
       return true;
     }
-    if (editMode) {
-      // Esc is Cancel: queued changes ask first.
-      requestLeaveEdit('exit');
-      return true;
-    }
     return false;
-  };
-  // Space must never also click the row.
-  const onRowKeyUp = (event: ReactKeyboardEvent<HTMLElement>): void => {
-    if (deskEditing && event.key === ' ' && event.target instanceof HTMLElement) {
-      if (event.target.matches('button[data-plan-row]')) event.preventDefault();
-    }
   };
 
   // Open at today: when the plan's range holds today (workspace zone) and no
@@ -2237,7 +1941,7 @@ export function PlanScreen(props: {
   const item =
     found !== null && bundle !== null && !draftLocked(bundle, found, side) ? found : null;
   const footer =
-    !editMode && bundle !== null && (primary.kind !== 'none' || sendError !== null) ? (
+    bundle !== null && (primary.kind !== 'none' || sendError !== null) ? (
       <PlanFooter
         action={primary}
         busy={sendBusy || openBusy}
@@ -2247,26 +1951,8 @@ export function PlanScreen(props: {
         onPress={onPrimary}
       />
     ) : undefined;
-  const editHeaderSlot = (
-    <h2 data-plan-editing-title="" className="truncate text-lg font-semibold text-fg">
-      {EDITING_TITLE}
-    </h2>
-  );
-  const saveButton = (
-    <Button
-      type="button"
-      variant="link"
-      data-plan-save=""
-      aria-busy={saving}
-      disabled={saving || headerProblem !== null}
-      onClick={() => void saveChanges()}
-      className="-mr-2 shrink-0 md:mr-0"
-    >
-      {saving ? SAVING_LABEL : SAVE_CHANGES_LABEL}
-    </Button>
-  );
-  // Line 2's boxed pair: Add (accent soft), then Edit (outlined), each box 34px
-  // in a 44px tap target, the last one's right edge on the 16px line.
+  // Line 2's box: Add (accent soft), 34px in a 44px tap target, its right
+  // edge on the 16px line. No Edit: every change saves itself.
   const viewActions = (
     <span data-plan-header-actions="" className="flex shrink-0 items-center gap-2">
       <PressableRow
@@ -2285,21 +1971,6 @@ export function PlanScreen(props: {
           Add
         </span>
       </PressableRow>
-      <PressableRow
-        type="button"
-        inline
-        data-plan-edit=""
-        onClick={enterEdit}
-        className="group flex h-11 shrink-0 items-center"
-      >
-        <span
-          data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-lg border bg-panel px-3 text-base font-semibold leading-5 text-fg lit-btn-secondary group-focus-visible:lit-focus"
-        >
-          <IconEdit size={ICON_SIZE.inline} />
-          {EDIT_LABEL}
-        </span>
-      </PressableRow>
     </span>
   );
   return (
@@ -2307,63 +1978,56 @@ export function PlanScreen(props: {
       <PlanPage
         open={props.open}
         testId="plan"
-        title={editing ? EDITING_TITLE : title}
-        // The inline rename takes the whole title column; edit mode has its own line.
-        subtitle={renaming !== null || editing ? undefined : subtitle}
-        backLabel={editing ? 'Cancel editing' : 'Back'}
-        onBack={editing ? () => requestLeaveEdit('exit') : props.onClose}
+        title={title}
+        // The inline rename takes the whole title column.
+        subtitle={renaming !== null ? undefined : subtitle}
+        backLabel="Back"
+        onBack={props.onClose}
         closeLabel="Close plan"
-        onDismiss={editing ? () => requestLeaveEdit('close') : props.onClose}
+        onDismiss={props.onClose}
         onEscape={onPanelEscape}
         bodyRef={bodyRef}
         footer={footer}
-        {...(editing
+        {...(renaming === null ? { twoLine: agency ? { actions: viewActions } : {} } : {})}
+        {...(agency
           ? {
-              backText: CANCEL_EDIT_LABEL,
-              desktopBack: true,
-              titleSlot: editHeaderSlot,
-              action: saveButton,
-            }
-          : renaming === null
-            ? { twoLine: agency ? { actions: viewActions } : {} }
-            : {})}
-        {...(editing
-          ? {}
-          : agency
-            ? {
-                titleSlot:
-                  renaming !== null ? (
-                    <RenameField
-                      value={renaming}
-                      busy={renameBusy}
-                      onChange={setRenaming}
-                      onCancel={() => setRenaming(null)}
-                      onDone={() => void saveRename()}
-                    />
-                  ) : (
-                    <PlanTitleButton
-                      title={title}
-                      open={menuOpen}
-                      onToggle={() => setMenuOpen((v) => !v)}
-                    />
-                  ),
-                overlay: (
-                  <PlanHeaderMenu
-                    open={props.open && menuOpen}
-                    canDelete={mayDelete}
-                    onRename={() => {
-                      setMenuOpen(false);
-                      setRenaming(bundle?.plan.title ?? '');
-                    }}
-                    onDelete={() => {
-                      setMenuOpen(false);
-                      deletePlan();
-                    }}
-                    onClose={() => setMenuOpen(false)}
+              titleSlot:
+                renaming !== null ? (
+                  <RenameField
+                    value={renaming}
+                    busy={renameBusy}
+                    onChange={setRenaming}
+                    onCancel={() => setRenaming(null)}
+                    onDone={() => void saveRename()}
+                  />
+                ) : (
+                  <PlanTitleButton
+                    title={title}
+                    open={menuOpen}
+                    onToggle={() => setMenuOpen((v) => !v)}
                   />
                 ),
-              }
-            : {})}
+              overlay: (
+                <PlanHeaderMenu
+                  open={props.open && menuOpen}
+                  canDelete={mayDelete}
+                  onRename={() => {
+                    setMenuOpen(false);
+                    setRenaming(bundle?.plan.title ?? '');
+                  }}
+                  onChangeDates={() => {
+                    setMenuOpen(false);
+                    setDatesOpen(true);
+                  }}
+                  onDelete={() => {
+                    setMenuOpen(false);
+                    deletePlan();
+                  }}
+                  onClose={() => setMenuOpen(false)}
+                />
+              ),
+            }
+          : {})}
       >
         {skippedNotes.length > 0 ? (
           <div
@@ -2386,11 +2050,6 @@ export function PlanScreen(props: {
             </IconButton>
           </div>
         ) : null}
-        {deskEditing ? (
-          <p role="status" aria-live="polite" data-plan-live="" className="sr-only">
-            {announce}
-          </p>
-        ) : null}
         {read.status === 'loading' ? (
           <ScreenSkeleton />
         ) : read.status === 'error' ? (
@@ -2402,106 +2061,34 @@ export function PlanScreen(props: {
           </div>
         ) : (
           <>
-            {editing ? (
-              <PlanEditHeader
-                draft={headerDraft}
-                problem={headerProblem !== null ? DRAFT_PROBLEM_COPY[headerProblem] : null}
-                saving={saving}
-                error={saveError}
-                onChange={changeHeader}
-                onRetry={() => void saveChanges()}
-                keyHints={deskEditing}
-              />
-            ) : null}
             <PlanBody
               bundle={bundle}
-              groups={viewGroups}
+              groups={groups}
               side={side}
               timeZone={timeZone}
               thumbs={read.status === 'ready' ? read.data.thumbs : {}}
               conceptThumbs={read.status === 'ready' ? (read.data.conceptThumbs ?? {}) : {}}
               commentCounts={read.status === 'ready' ? read.data.commentCounts : {}}
               alsoIn={read.status === 'ready' ? (read.data.alsoIn ?? {}) : {}}
-              drag={drag.state}
               onOpenItem={openItem}
               onOpenLinkedPost={openLinkedPost}
               onPlanOk={planOk}
               onPlanNotOk={planNotOk}
-              {...(editing
+              {...(agency
                 ? {
-                    onDragStart: (id: string, row: HTMLElement, clientY: number) =>
-                      drag.start(id, row, clientY),
-                    edit: {
-                      pickedId: pick?.itemId ?? null,
-                      dayOpenId: dayFor,
-                      dragging: drag.state !== null,
-                      onDay: (id: string) => {
-                        setPopover(null);
-                        setDayFor(id);
-                      },
-                      onRemove: deskEditing ? removeWithFocus : removeRow,
-                      ...(deskEditing
-                        ? {
-                            onMenu: (id: string, row: HTMLElement, x: number, y: number) => {
-                              const r = row.getBoundingClientRect();
-                              openPopover(id, {
-                                el: row,
-                                point: { dx: x - r.left, dy: y - r.top },
-                              });
-                            },
-                            onKeyDown: onRowKey,
-                            onKeyUp: onRowKeyUp,
-                          }
-                        : {}),
+                    onAdd: openAdd,
+                    rowMenu: {
+                      openId: menuFor,
+                      onOpenChange: (id: string, open: boolean) => setMenuFor(open ? id : null),
+                      onMove: (id: string) => setDayFor(id),
+                      onRemove: removeRow,
                     },
                   }
-                : agency
-                  ? { onAdd: openAdd }
-                  : {})}
+                : {})}
             />
           </>
         )}
       </PlanPage>
-      {deskEditing && popover !== null && props.open ? (
-        <PlanDayPopover
-          anchor={popover.anchor}
-          bounds={bodyRef.current}
-          days={popoverDays}
-          current={findItem(planDayIds(groups), popover.itemId)?.day ?? null}
-          withRemove={popover.withRemove}
-          onPick={(day) => {
-            const id = popover.itemId;
-            setPopover(null);
-            refocus.current = `button[data-plan-row="${id}"]`;
-            moveToDay(id, day);
-          }}
-          onRemove={() => {
-            const id = popover.itemId;
-            setPopover(null);
-            removeWithFocus(id);
-          }}
-          onClose={() => setPopover(null)}
-        />
-      ) : null}
-      {drag.state !== null && bundle !== null ? (
-        <DragCard
-          bundle={bundle}
-          state={drag.state}
-          desktop={desktop}
-          thumb={(() => {
-            const dragged = bundle.items.find((i) => i.id === drag.state?.itemId);
-            return dragged?.post_id != null && read.status === 'ready'
-              ? (read.data.thumbs[dragged.post_id] ?? null)
-              : null;
-          })()}
-          conceptThumb={(() => {
-            const dragged = bundle.items.find((i) => i.id === drag.state?.itemId);
-            return dragged?.kind === 'concept' && read.status === 'ready'
-              ? (read.data.conceptThumbs?.[dragged.id] ?? null)
-              : null;
-          })()}
-        />
-      ) : null}
       {bundle !== null && item !== null ? (
         <PlanItemScreen
           open={props.open && itemId !== null}
@@ -2548,17 +2135,6 @@ export function PlanScreen(props: {
         }}
         onCancel={() => setKeepAsk(null)}
       />
-      {props.open && discardAsk !== null ? (
-        <ConfirmDialog
-          title={DISCARD_EDITS.title}
-          message={DISCARD_EDITS.message}
-          confirmLabel={DISCARD_LABEL}
-          cancelLabel={KEEP_EDITING_LABEL}
-          destructive
-          onConfirm={discardEdits}
-          onCancel={() => setDiscardAsk(null)}
-        />
-      ) : null}
       {agency ? (
         <>
           <PlanConfirmSheet
@@ -2574,7 +2150,7 @@ export function PlanScreen(props: {
             }}
           />
           <PlanDayPickerSheet
-            open={props.open && editMode && dayFor !== null}
+            open={props.open && dayFor !== null}
             title={shownDayItem !== null && bundle !== null ? rowTitle(bundle, shownDayItem) : ''}
             subline={
               shownDayItem !== null
@@ -2593,6 +2169,12 @@ export function PlanScreen(props: {
               if (id !== null) moveToDay(id, day === 'none' ? null : day);
             }}
             onClose={() => setDayFor(null)}
+          />
+          <PlanDatesSheet
+            open={props.open && datesOpen}
+            range={planRange}
+            onSave={(range) => void saveDates(range)}
+            onClose={() => setDatesOpen(false)}
           />
           <PlanAddSheet
             open={props.open && addFor !== null}
@@ -2679,90 +2261,6 @@ interface OutsidePost {
 /** The name an approver reads as when their name did not load. */
 export const MEMBER_NAME = 'Member';
 
-/**
- * Edit mode's top block (FT53): the plan name and From / To as fields, a
- * problem line when the dates or name are not right, and the Save changes
- * failure (plain words, Retry) when a save failed. Nothing here writes: every
- * change goes into the queue. Laptop: the keyboard hint line sits under it.
- */
-export function PlanEditHeader(props: {
-  draft: PlanHeaderDraft;
-  problem: string | null;
-  saving: boolean;
-  error: string | null;
-  onChange: (draft: PlanHeaderDraft) => void;
-  onRetry: () => void;
-  keyHints?: boolean;
-}): ReactElement {
-  const { draft } = props;
-  return (
-    <div
-      data-plan-edit-header=""
-      className="flex flex-col gap-2.5 border-b border-border px-4 pb-4 pt-3"
-    >
-      {props.error !== null ? (
-        <div
-          role="alert"
-          data-plan-save-error=""
-          className="flex items-center justify-between gap-2 rounded-xl bg-bad-soft py-1 pl-3 pr-1 text-md leading-[1.45] text-bad lit-tint"
-        >
-          <p className="min-w-0 flex-1 py-2">{props.error}</p>
-          <Button
-            type="button"
-            variant="ghost"
-            data-plan-save-retry=""
-            disabled={props.saving}
-            onClick={props.onRetry}
-            className="shrink-0 text-bad hover:text-bad"
-          >
-            {RETRY_LABEL}
-          </Button>
-        </div>
-      ) : null}
-      <label className="flex flex-col gap-1">
-        <span className="text-md text-fg-3">{EDIT_TITLE_LABEL}</span>
-        <Input
-          data-plan-edit-title=""
-          value={draft.title}
-          maxLength={PLAN_TITLE_MAX}
-          autoComplete="off"
-          enterKeyHint="done"
-          disabled={props.saving}
-          onChange={(e) => props.onChange({ ...draft, title: e.target.value })}
-          className={cn(FIELD, 'font-semibold')}
-        />
-      </label>
-      <div className="grid grid-cols-2 gap-2">
-        {(
-          [
-            ['startsOn', EDIT_FROM_LABEL],
-            ['endsOn', EDIT_TO_LABEL],
-          ] as const
-        ).map(([field, label]) => (
-          <label key={field} className="flex w-full min-w-0 flex-col gap-1">
-            <span className="text-md text-fg-3">{label}</span>
-            <Input
-              type="date"
-              data-plan-edit-date={field}
-              value={draft[field]}
-              disabled={props.saving}
-              onChange={(e) => props.onChange({ ...draft, [field]: e.target.value })}
-              className={DATE_FIELD}
-            />
-          </label>
-        ))}
-      </div>
-      {props.problem !== null ? (
-        <p role="alert" data-plan-edit-problem="" className="text-md text-bad">
-          {props.problem}
-        </p>
-      ) : null}
-      {props.keyHints === true ? <PlanKeyHints /> : null}
-    </div>
-  );
-}
-
-/** The view header's title: the page title role (28/34, 600, tight), 2 lines at most. */
 const PLAN_HEADER_TITLE = 'line-clamp-2 break-normal text-3xl font-semibold tracking-tight text-fg';
 
 /**
@@ -2807,6 +2305,7 @@ export function PlanHeaderMenu(props: {
   open: boolean;
   canDelete: boolean;
   onRename: () => void;
+  onChangeDates: () => void;
   onDelete: () => void;
   onClose: () => void;
 }): ReactElement | null {
@@ -2875,6 +2374,17 @@ export function PlanHeaderMenu(props: {
       >
         <IconEdit size={ICON_SIZE.tray} />
         {RENAME_LABEL}
+      </PressableRow>
+      <PressableRow
+        type="button"
+        role="menuitem"
+        data-plan-menu-dates=""
+        onClick={props.onChangeDates}
+        flat
+        className="flex items-center gap-3 px-3 text-lg text-fg"
+      >
+        <IconCalendar size={ICON_SIZE.tray} />
+        {CHANGE_DATES_LABEL}
       </PressableRow>
       {props.canDelete ? (
         <PressableRow
@@ -2953,7 +2463,7 @@ export function RenameField(props: {
  * approvers" (planPrimaryAction). An error line sits above it; while an
  * error is shown the button reads "Retry". From a chat a send in flight reads
  * "Sending in {chat}…"; a sent "Send in {chat}" reads "Sent" in the primary
- * button's disabled state (same box, no icon). Hidden in edit mode.
+ * button's disabled state (same box, no icon).
  */
 export function PlanFooter(props: {
   action: PrimaryAction;
@@ -3013,236 +2523,6 @@ export function PlanFooter(props: {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Drag (edit mode): the grip lifts a row, the pointer moves it, a drop queues a move
-// ---------------------------------------------------------------------------
-
-/** The drop's settle (ms): the card eases to the slot (mv-slide, 160 ms), then commits. */
-export const DRAG_SNAP_MS = 180;
-/** Auto-scroll: the edge band (px) and the step per frame (px). */
-const EDGE_PX = 56;
-const EDGE_STEP_PX = 10;
-
-/** A drag in progress: the item, where it started, the pointer and the hovered drop. */
-export interface DragState {
-  itemId: string;
-  /** The row's rect when lifted (viewport px). */
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  /** Pointer y at lift and now (viewport px). */
-  startY: number;
-  y: number;
-  /** The hovered droppable day (undefined = none) and the index in it. */
-  overDay: string | null | undefined;
-  overIndex: number;
-  /** Set once dropped: the clone eases to this top before the move lands. */
-  snapTop: number | null;
-}
-
-/**
- * The drag controller: `start` from a row's grip lifts it; window pointer
- * listeners move it (translateY only), hover a day block, auto-scroll near
- * the body's edges; pointerup drops (one onDrop), Escape or pointercancel
- * cancels with no change. Every listener, frame and timer is removed on end
- * and on unmount.
- */
-function usePlanDrag(opts: {
-  enabled: boolean;
-  bodyRef: RefObject<HTMLDivElement>;
-  onDrop: (itemId: string, toDay: string | null, toIndex: number) => void;
-}): {
-  state: DragState | null;
-  start: (itemId: string, row: HTMLElement, clientY: number) => void;
-  /** Escape: puts the row back while the pointer is down; once released the drop commits. */
-  cancel: () => void;
-} {
-  const [state, setState] = useState<DragState | null>(null);
-  const stateRef = useRef<DragState | null>(null);
-  const onDropRef = useRef(opts.onDrop);
-  onDropRef.current = opts.onDrop;
-  const cleanupRef = useRef<(() => void) | null>(null);
-
-  const set = (next: DragState | null): void => {
-    stateRef.current = next;
-    setState(next);
-  };
-  const end = useCallback((): void => {
-    cleanupRef.current?.();
-    cleanupRef.current = null;
-    stateRef.current = null;
-    setState(null);
-  }, []);
-  useEffect(() => end, [end]);
-  useEffect(() => {
-    if (!opts.enabled) end();
-  }, [opts.enabled, end]);
-
-  const start = (itemId: string, row: HTMLElement, clientY: number): void => {
-    if (!opts.enabled || stateRef.current !== null) return;
-    const body = opts.bodyRef.current;
-    if (body === null) return;
-    const rect = row.getBoundingClientRect();
-    let frame = 0;
-    let snapTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const target = (y: number): { day: string | null | undefined; index: number } => {
-      const x = rect.left + 8;
-      const hit = document.elementFromPoint(x, y);
-      const block = hit?.closest<HTMLElement>('[data-plan-drop]') ?? null;
-      if (block === null) return { day: undefined, index: 0 };
-      const raw = block.getAttribute('data-plan-day');
-      const day = raw === null || raw === 'none' ? null : raw;
-      const middles = [...block.querySelectorAll<HTMLElement>('[data-plan-row-wrap]')]
-        .filter((el) => el.getAttribute('data-plan-row-wrap') !== itemId)
-        .map((el) => {
-          const r = el.getBoundingClientRect();
-          return r.top + r.height / 2;
-        });
-      return { day, index: dropIndex(middles, y) };
-    };
-    const update = (y: number): void => {
-      const current = stateRef.current;
-      if (current === null || current.snapTop !== null) return;
-      const hit = target(y);
-      set({ ...current, y, overDay: hit.day, overIndex: hit.index });
-    };
-    const onMove = (event: PointerEvent): void => update(event.clientY);
-    const onTouchMove = (event: TouchEvent): void => event.preventDefault();
-    const cancel = (): void => end();
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && stateRef.current?.snapTop === null) cancel();
-    };
-    const onUp = (): void => {
-      const current = stateRef.current;
-      if (current === null || current.snapTop !== null) return;
-      if (current.overDay === undefined) {
-        cancel();
-        return;
-      }
-      const toDay = current.overDay;
-      const toIndex = current.overIndex;
-      const commit = (): void => {
-        end();
-        onDropRef.current(itemId, toDay, toIndex);
-      };
-      const slot = document.querySelector<HTMLElement>('[data-plan-drop-slot]');
-      if (prefersReducedMotion() || slot === null) {
-        commit();
-        return;
-      }
-      set({ ...current, snapTop: slot.getBoundingClientRect().top });
-      snapTimer = setTimeout(commit, DRAG_SNAP_MS);
-    };
-    // Auto-scroll near the body's top or bottom edge while the pointer rests.
-    const tick = (): void => {
-      const current = stateRef.current;
-      if (current !== null && current.snapTop === null) {
-        const box = body.getBoundingClientRect();
-        const before = body.scrollTop;
-        if (current.y < box.top + EDGE_PX) body.scrollTop -= EDGE_STEP_PX;
-        else if (current.y > box.bottom - EDGE_PX) body.scrollTop += EDGE_STEP_PX;
-        // The rows moved under a resting pointer: re-aim the drop.
-        if (body.scrollTop !== before) update(current.y);
-      }
-      frame = requestAnimationFrame(tick);
-    };
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', cancel);
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    frame = requestAnimationFrame(tick);
-    cleanupRef.current = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      window.removeEventListener('pointercancel', cancel);
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('touchmove', onTouchMove);
-      cancelAnimationFrame(frame);
-      if (snapTimer !== null) clearTimeout(snapTimer);
-    };
-    const first = target(clientY);
-    set({
-      itemId,
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height,
-      startY: clientY,
-      y: clientY,
-      overDay: first.day,
-      overIndex: first.index,
-      snapTop: null,
-    });
-  };
-
-  const cancel = (): void => {
-    if (stateRef.current !== null && stateRef.current.snapTop === null) end();
-  };
-  return { state, start, cancel };
-}
-
-/**
- * The lifted card: fixed over the list at the row's place, moved with
- * translateY only, raised one lit height (lit-float) at 1.02 (mv-lift); on
- * drop it eases to the slot (mv-slide). Reduced motion: the snap is skipped.
- */
-function DragCard(props: {
-  bundle: PlanBundle;
-  state: DragState;
-  thumb: string | null;
-  conceptThumb?: ConceptThumb | null;
-  /** Laptop: no lift scale (translateY only) and a grabbing cursor on the whole page. */
-  desktop?: boolean;
-}): ReactElement | null {
-  const { state } = props;
-  const item = props.bundle.items.find((i) => i.id === state.itemId);
-  if (item === undefined) return null;
-  const dy = state.snapTop !== null ? state.snapTop - state.top : state.y - state.startY;
-  return createPortal(
-    <div
-      aria-hidden="true"
-      data-plan-drag-card=""
-      className={cn(
-        'pointer-events-none fixed z-[60]',
-        NO_TOUCH_SELECT,
-        state.snapTop !== null && 'mv-slide',
-      )}
-      style={{
-        left: state.left,
-        top: state.top,
-        width: state.width,
-        transform: `translateY(${dy}px)`,
-      }}
-    >
-      {props.desktop === true ? <style>{'*{cursor:grabbing !important}'}</style> : null}
-      <div
-        className={cn(
-          'flex items-start gap-3 rounded-lg border border-border bg-panel p-2 lit-float',
-          props.desktop !== true && 'mv-lift',
-        )}
-      >
-        <RowTile
-          item={item}
-          thumb={props.thumb}
-          conceptThumb={props.conceptThumb ?? null}
-          muted={false}
-        />
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-base font-medium text-fg">
-            {rowTitle(props.bundle, item)}
-          </span>
-          <span className="truncate text-sm text-fg-3">{rowMeta(props.bundle, item)}</span>
-        </span>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
 /**
  * The Plan screen's header: the read's title once ready (or "Plan not
  * available"), else the cached card's title, else "Plan" when nothing is
@@ -3289,22 +2569,15 @@ export function rowSubline(item: PlanItemRow): string {
   return item.kind === 'concept' ? (item.description ?? '') : '';
 }
 
-/** Edit mode's row controls (agency, every width), handed down to each row. */
-export interface PlanRowEdit {
-  /** The row the keyboard has picked up (laptop), or null. */
-  pickedId: string | null;
-  /** The row whose day picker is open, or null. */
-  dayOpenId: string | null;
-  /** A drag is running: no menu opens. */
-  dragging: boolean;
-  /** The day chip: opens the day picker for the row. */
-  onDay: (id: string, anchor: HTMLElement) => void;
+/** A creator's row ⋯ menu: Open, Move to another day, Remove from plan. */
+export interface PlanRowMenu {
+  /** The row whose menu is open, or null. */
+  openId: string | null;
+  onOpenChange: (id: string, open: boolean) => void;
+  /** Move to another day: opens the day picker for the row. */
+  onMove: (id: string) => void;
+  /** Remove from plan: at once, behind Undo. */
   onRemove: (id: string) => void;
-  /** Laptop right-click: the day menu with Remove, at the pointer (kept on the row). */
-  onMenu?: (id: string, row: HTMLElement, x: number, y: number) => void;
-  /** Laptop: the list's key handlers (rows are the targets). */
-  onKeyDown?: (event: ReactKeyboardEvent<HTMLElement>) => void;
-  onKeyUp?: (event: ReactKeyboardEvent<HTMLElement>) => void;
 }
 
 export function PlanBody(props: {
@@ -3319,39 +2592,25 @@ export function PlanBody(props: {
   commentCounts?: Readonly<Record<string, number>>;
   /** Other plans' titles by post id (the Also in pill). */
   alsoIn?: Readonly<Record<string, string[]>>;
-  /** The drag in progress, or null. */
-  drag: DragState | null;
   onOpenItem: (id: string) => void;
-  /** View mode: a pair's post row opens its post. */
+  /** A pair's post row opens its post. */
   onOpenLinkedPost?: (postId: string) => void;
   /** PLAN: OK on a row (behind the Undo toast). */
   onPlanOk: (item: PlanItemRow) => void;
   /** PLAN: Not OK on a row (the Item screen with the note box open). */
   onPlanNotOk: (item: PlanItemRow) => void;
-  /** Agency, view mode: a day's Add row (null = No date). */
+  /** Creators: a day's Add row (null = No date). */
   onAdd?: (day: string | null) => void;
-  /** Edit mode: a row's grip lifts it. */
-  onDragStart?: (itemId: string, row: HTMLElement, clientY: number) => void;
-  /** Edit mode: grip, day chip, remove (laptop: right-click, keyboard). */
-  edit?: PlanRowEdit;
+  /** Creators: each row's ⋯ menu (Open, Move to another day, Remove from plan). */
+  rowMenu?: PlanRowMenu;
 }): ReactElement {
-  const { bundle, side, drag, edit } = props;
+  const { bundle, side, rowMenu } = props;
   const weeks = planShowsWeeks(bundle.plan.starts_on, bundle.plan.ends_on);
   const today = civilToday(new Date(), props.timeZone);
-  const dragFrom = drag !== null ? (findItem(planDayIds(props.groups), drag.itemId) ?? null) : null;
-  const keyHandlers =
-    edit?.onKeyDown !== undefined && edit.onKeyUp !== undefined
-      ? { onKeyDown: edit.onKeyDown, onKeyUp: edit.onKeyUp }
-      : {};
   return (
     <>
       <PlanProgressRow bundle={bundle} side={side} />
-      <div
-        data-plan-list={weeks ? 'weeks' : 'days'}
-        {...(edit !== undefined ? { 'data-plan-list-mode': 'edit' } : {})}
-        className="flex flex-col gap-2.5 pb-4 pt-3"
-        {...keyHandlers}
-      >
+      <div data-plan-list={weeks ? 'weeks' : 'days'} className="flex flex-col gap-2.5 pb-4 pt-3">
         {props.groups.map((week, w) => (
           <section
             key={week.label ?? `days-${w}`}
@@ -3367,44 +2626,26 @@ export function PlanBody(props: {
               </h3>
             ) : null}
             {week.days.map((day) => {
-              const droppable = drag !== null && (day.day === null || day.inRange);
-              const hovered = droppable && drag.overDay === day.day;
               const items = day.items;
-              // The drop slot shows where the item would land, unless that is where it is.
-              const slotAt =
-                hovered &&
-                !(
-                  dragFrom !== null &&
-                  dragFrom.day === day.day &&
-                  dragFrom.index === drag.overIndex
-                )
-                  ? drag.overIndex
-                  : null;
-              const others = items.filter((i) => drag === null || i.id !== drag.itemId);
               const empty = items.length === 0;
               // One date tile per day: on its first row, or beside the empty day's line.
               const tile = <DayColumn day={day.day} today={today} empty={empty} />;
-              let k = 0;
               const emptyBody =
-                droppable && empty ? (
-                  <PlanDropHere over={hovered} />
-                ) : props.onAdd !== undefined && (day.day === null || day.inRange) ? (
+                props.onAdd !== undefined && (day.day === null || day.inRange) ? (
                   <AddRow day={day.day} empty onAdd={props.onAdd} />
-                ) : slotAt === null ? (
+                ) : (
                   <p
                     data-plan-day-empty=""
                     className="flex min-h-[44px] items-center text-md text-fg-3"
                   >
                     Planned posts show up here.
                   </p>
-                ) : null;
+                );
               return (
                 <div
                   key={day.day ?? 'none'}
                   data-plan-day={day.day ?? 'none'}
                   {...(day.day !== null && !day.inRange ? { 'data-plan-day-out': '' } : {})}
-                  {...(droppable ? { 'data-plan-drop': '' } : {})}
-                  {...(hovered ? { 'data-plan-drop-over': '' } : {})}
                   {...(day.day === today ? { 'data-plan-day-today': '' } : {})}
                   className={cn(
                     // One card per day (12px in, 10px apart); today takes the selected edge.
@@ -3412,54 +2653,36 @@ export function PlanBody(props: {
                     day.day === today ? 'lit-selected' : 'lit-card',
                   )}
                 >
-                  {items.map((item, index) => {
-                    const lifted = drag !== null && item.id === drag.itemId;
-                    const slotHere = !lifted && slotAt === k;
-                    if (!lifted) k += 1;
-                    return (
-                      <Fragment key={item.id}>
-                        {slotHere ? <PlanDropLine /> : null}
-                        <PlanRow
-                          bundle={bundle}
-                          item={item}
-                          side={side}
-                          thumb={
-                            item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null
-                          }
-                          conceptThumb={props.conceptThumbs?.[item.id] ?? null}
-                          pairThumb={
-                            item.linked_post_id != null
-                              ? (props.thumbs[item.linked_post_id] ?? null)
-                              : null
-                          }
-                          {...(props.onOpenLinkedPost !== undefined
-                            ? { onOpenLinkedPost: props.onOpenLinkedPost }
-                            : {})}
-                          commentCount={props.commentCounts?.[item.id] ?? 0}
-                          dimmed={lifted}
-                          tile={index === 0 ? tile : null}
-                          timeZone={props.timeZone}
-                          alsoIn={item.post_id !== null ? (props.alsoIn?.[item.post_id] ?? []) : []}
-                          day={day.day}
-                          onOpen={() => props.onOpenItem(item.id)}
-                          onPlanOk={() => props.onPlanOk(item)}
-                          onPlanNotOk={() => props.onPlanNotOk(item)}
-                          {...(props.onDragStart !== undefined && (day.day === null || day.inRange)
-                            ? { onDragStart: props.onDragStart }
-                            : {})}
-                          {...(edit !== undefined ? { edit } : {})}
-                        />
-                      </Fragment>
-                    );
-                  })}
-                  {slotAt !== null && slotAt >= others.length && !empty ? <PlanDropLine /> : null}
+                  {items.map((item, index) => (
+                    <PlanRow
+                      key={item.id}
+                      bundle={bundle}
+                      item={item}
+                      side={side}
+                      thumb={item.post_id !== null ? (props.thumbs[item.post_id] ?? null) : null}
+                      conceptThumb={props.conceptThumbs?.[item.id] ?? null}
+                      pairThumb={
+                        item.linked_post_id != null
+                          ? (props.thumbs[item.linked_post_id] ?? null)
+                          : null
+                      }
+                      {...(props.onOpenLinkedPost !== undefined
+                        ? { onOpenLinkedPost: props.onOpenLinkedPost }
+                        : {})}
+                      commentCount={props.commentCounts?.[item.id] ?? 0}
+                      tile={index === 0 ? tile : null}
+                      timeZone={props.timeZone}
+                      alsoIn={item.post_id !== null ? (props.alsoIn?.[item.post_id] ?? []) : []}
+                      onOpen={() => props.onOpenItem(item.id)}
+                      onPlanOk={() => props.onPlanOk(item)}
+                      onPlanNotOk={() => props.onPlanNotOk(item)}
+                      {...(rowMenu !== undefined && (day.day === null || day.inRange)
+                        ? { menu: rowMenu }
+                        : {})}
+                    />
+                  ))}
                   {empty ? (
                     <div className="flex items-center">
-                      {edit !== undefined ? (
-                        <span className="mr-1 shrink-0">
-                          <PlanGripSpacer />
-                        </span>
-                      ) : null}
                       {tile}
                       <div className="ml-3 min-w-0 flex-1">{emptyBody}</div>
                     </div>
@@ -3697,15 +2920,15 @@ const POST_LINE_TONES: Record<PostLineTone, string> = {
 
 /**
  * Under the title row: PLAN (the switch, the pill, or read-only text) and
- * POST (an 8px dot and the stage, same colour). Edit mode shows both as text.
+ * POST (an 8px dot and the stage, same colour); creators get the row's ⋯ menu at the POST line's end.
  */
 function PlanStatusLines(props: {
   bundle: PlanBundle;
   item: PlanItemRow;
   side: ViewerSide;
   title: string;
-  /** Edit mode: text only. */
-  readOnly: boolean;
+  /** Creators: the row's ⋯ menu, at the end of the POST line. */
+  menu?: ReactNode;
   onOk: () => void;
   onNotOk: () => void;
 }): ReactElement {
@@ -3716,13 +2939,8 @@ function PlanStatusLines(props: {
   useEffect(() => setChanging(false), [decided]);
   const post = postLine(props.bundle, props.item, props.side);
   let plan: ReactNode = null;
-  if (control.kind === 'text' || (props.readOnly && control.kind !== 'none')) {
-    const status =
-      control.kind === 'text'
-        ? control.status
-        : control.kind === 'pill'
-          ? control.status
-          : 'waiting';
+  if (control.kind === 'text') {
+    const status = control.status;
     plan = (
       <span
         data-plan-slot={control.side}
@@ -3769,7 +2987,14 @@ function PlanStatusLines(props: {
           {plan}
         </div>
       ) : null}
-      <PostStatusLine post={post} />
+      {props.menu !== undefined && props.menu !== null ? (
+        <div className="flex items-center justify-between gap-3">
+          <PostStatusLine post={post} />
+          {props.menu}
+        </div>
+      ) : (
+        <PostStatusLine post={post} />
+      )}
     </div>
   );
 }
@@ -4049,39 +3274,32 @@ function PlanRow(props: {
   conceptThumb?: ConceptThumb | null;
   /** A linked concept's post: its first image (the pair's tile); null for none. */
   pairThumb?: string | null;
-  /** View mode: the pair's post row opens its post. */
+  /** The pair's post row opens its post. */
   onOpenLinkedPost?: (postId: string) => void;
   /** Visible comments on the item; 0 shows nothing. */
   commentCount?: number;
-  dimmed: boolean;
   /** The day's date tile on its first row; null on the rows under it. */
   tile: ReactNode;
   /** The workspace zone (the date line). */
   timeZone?: string;
   /** Other live plans this post sits in (the Also in pill). */
   alsoIn?: readonly string[];
-  /** The row's plan day (the edit chip's label). */
-  day?: string | null;
   onOpen: () => void;
   /** PLAN: OK (behind the Undo toast). */
   onPlanOk: () => void;
   /** PLAN: Not OK (the Item screen with the note box open). */
   onPlanNotOk: () => void;
-  /** Edit mode: the grip lifts the row. */
-  onDragStart?: (itemId: string, row: HTMLElement, clientY: number) => void;
-  /** Edit mode: grip, day chip, remove (laptop: right-click, keyboard). */
-  edit?: PlanRowEdit;
+  /** Creators: the row's ⋯ menu; right-click on laptop and long-press on touch open it too. */
+  menu?: PlanRowMenu;
 }): ReactElement {
-  const onDragStart = props.onDragStart;
-  const edit = props.edit;
   const zone = props.timeZone ?? 'UTC';
   const id = props.item.id;
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const lastPointer = useRef('');
+  const menu = props.menu;
   const title = rowTitle(props.bundle, props.item);
   const date = itemDateLabel(props.bundle, props.item, zone);
   const alsoIn = alsoInLabel(props.alsoIn ?? []);
-  const dim = props.dimmed && 'opacity-25';
+  // Long-press on touch and right-click on laptop open the same ⋯ menu.
+  const gesture = useMenuGesture(() => menu?.onOpenChange(id, true));
   // The tile column stays 56px wide on every row, so titles align.
   const tileCol = props.tile ?? <span aria-hidden="true" className="w-14 shrink-0" />;
   // Rows under a day's first sit on a hairline, centred in the 16px gap.
@@ -4130,25 +3348,19 @@ function PlanRow(props: {
       </div>
     );
   }
-  const picked = edit?.pickedId === id;
   const meta = rowMeta(props.bundle, props.item);
   const rowButton = (
     <PressableRow
       type="button"
       data-plan-row={props.item.id}
-      onContextMenu={(event) => event.preventDefault()}
+      {...(menu !== undefined
+        ? gesture.handlers
+        : { onContextMenu: (event: { preventDefault: () => void }) => event.preventDefault() })}
       onClick={() => {
-        // Edit mode rows do not open: the row's controls are the grip, chip and remove.
-        if (edit !== undefined) return;
+        if (gesture.consumeClickSuppression()) return;
         props.onOpen();
       }}
-      {...(picked ? { 'data-plan-row-picked': '' } : {})}
-      className={cn(
-        'flex min-w-0 items-start gap-3',
-        picked && 'rounded-lg lit-focus',
-        edit !== undefined && 'cursor-default',
-        NO_TOUCH_SELECT,
-      )}
+      className={cn('flex min-w-0 items-start gap-3', NO_TOUCH_SELECT)}
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         {titleText(false)}
@@ -4177,78 +3389,49 @@ function PlanRow(props: {
       </TileColumn>
     </PressableRow>
   );
+  const menuNode =
+    menu !== undefined ? (
+      <ActionMenu
+        title={title}
+        open={menu.openId === id}
+        onOpenChange={(open) => menu.onOpenChange(id, open)}
+        align="right"
+        items={[
+          { id: 'open', label: OPEN_ITEM_LABEL, icon: IconChevronRight, onSelect: props.onOpen },
+          {
+            id: 'move',
+            label: MOVE_TO_DAY_LABEL,
+            icon: IconCalendar,
+            onSelect: () => menu.onMove(id),
+          },
+          {
+            id: 'remove',
+            label: REMOVE_ROW_LABEL,
+            icon: IconTrash,
+            tone: 'danger',
+            onSelect: () => menu.onRemove(id),
+          },
+        ]}
+      />
+    ) : null;
   const lines = (
     <PlanStatusLines
       bundle={props.bundle}
       item={props.item}
       side={props.side}
       title={title}
-      readOnly={edit !== undefined}
+      menu={menuNode}
       onOk={props.onPlanOk}
       onNotOk={props.onPlanNotOk}
     />
   );
-  if (edit !== undefined) {
-    // Edit mode: grip | date tile | title block | thumbnail; PLAN and POST as
-    // text; the day chip and the remove icon on the row's bottom line.
-    return (
-      <div
-        ref={wrapRef}
-        data-plan-row-wrap={id}
-        data-plan-row-item={id}
-        data-plan-row-edit=""
-        {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
-        onPointerDownCapture={(event) => {
-          lastPointer.current = event.pointerType;
-        }}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          // A touch long-press never opens the menu (the grip drags).
-          const native = event.nativeEvent as Partial<PointerEvent>;
-          if (native.pointerType === 'touch' || lastPointer.current === 'touch') return;
-          if (edit.onMenu === undefined || edit.dragging || wrapRef.current === null) return;
-          edit.onMenu(id, wrapRef.current, event.clientX, event.clientY);
-        }}
-        className={cn('group flex w-full min-w-0 items-start', rowLine, NO_TOUCH_SELECT)}
-      >
-        <span className={cn('mr-1 shrink-0', dim)}>
-          {onDragStart !== undefined ? (
-            <PlanGrip
-              onLift={(clientY) => {
-                if (wrapRef.current !== null) onDragStart(id, wrapRef.current, clientY);
-              }}
-            />
-          ) : (
-            <PlanGripSpacer />
-          )}
-        </span>
-        {tileCol}
-        <div className={cn('ml-3 flex min-w-0 flex-1 flex-col', dim)}>
-          {rowButton}
-          {lines}
-          <PlanRowEditButtons
-            title={title}
-            dayLabel={dropDayLabel(props.day ?? null)}
-            dayOpen={edit.dayOpenId === id}
-            onDay={(anchor) => edit.onDay(id, anchor)}
-            onRemove={() => edit.onRemove(id)}
-          />
-        </div>
-      </div>
-    );
-  }
-  // View mode: date tile | title block | thumbnail, then PLAN and POST; a
-  // linked concept's post row joins under it as one pair.
+  // Date tile | title block | thumbnail, then PLAN and POST (the ⋯ menu at the
+  // POST line's end for creators); a linked concept's post row joins under it.
   const link = linkedPost(props.bundle, props.item, props.side);
   return (
-    <div
-      ref={wrapRef}
-      data-plan-row-wrap={id}
-      {...(props.dimmed ? { 'data-plan-row-lifted': '' } : {})}
-      className={cn('flex w-full min-w-0 items-start gap-3', rowLine)}
-    >
+    <div data-plan-row-wrap={id} className={cn('flex w-full min-w-0 items-start gap-3', rowLine)}>
       {tileCol}
-      <div className={cn('flex min-w-0 flex-1 flex-col', dim)}>
+      <div className="flex min-w-0 flex-1 flex-col">
         {rowButton}
         {lines}
         {link.kind !== 'none' ? (

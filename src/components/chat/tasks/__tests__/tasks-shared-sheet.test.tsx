@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-// The shared Tasks sheet: nothing writes until Save; Save is one saveBatch
-// with only the changed fields; change-then-revert keeps Save disabled; a
-// conflicting edit stays dirty with Keep mine / Keep theirs; a deleted one
-// offers Restore mine / OK; marks show other people's changes; Cmd+S saves;
+// The shared Tasks sheet: every change saves itself TASK_AUTOSAVE_MS after the
+// last one, as one saveBatch with only the changed fields; change-then-revert
+// writes nothing; the header reads Saving… / Saved; a conflicting edit waits
+// with Keep mine / Keep theirs; a deleted one offers Restore mine / OK; marks
+// show other people's changes; Cmd+S saves at once;
 // the chips, the row menu's days, Past's Not done / Done, full screen, a
 // swipe left to delete, and search (from the ⋯ menu) across every chip.
 import { act } from 'react';
@@ -18,7 +19,7 @@ vi.mock('@/components/ui/SearchHighlight', async (importOriginal) => ({
   glowTarget: () => () => {},
 }));
 
-import { TaskSheet } from '@/components/chat/tasks/TaskSheet';
+import { TASK_AUTOSAVE_MS, TaskSheet } from '@/components/chat/tasks/TaskSheet';
 import type { SaveOutcome, UseChatTasks } from '@/components/chat/tasks/useChatTasks';
 import type { BatchPayload, TaskEvent } from '@/lib/chat/tasks';
 import { x4FakeTasks, x4Task, x4Type } from './x4-fake-tasks';
@@ -27,7 +28,15 @@ import { x4FakeTasks, x4Task, x4Type } from './x4-fake-tasks';
 
 let root: Root | null = null;
 const q = (s: string) => document.querySelector<HTMLElement>(s);
-const saveButton = () => q('[data-task-save]') as HTMLButtonElement;
+/** The header's save state: 'saving' (a change waits or is in flight), 'saved', or null. */
+const saveState = (): string | null =>
+  q('[data-task-save-state]')?.getAttribute('data-task-save-state') ?? null;
+/** Cmd+S: save at once instead of waiting for the changes to settle. */
+async function saveNow(): Promise<void> {
+  await act(async () => {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true }));
+  });
+}
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** The ⋯ menu's rows by label (open it first). */
@@ -126,18 +135,37 @@ const A = x4Task({ id: 'a', number: 1, title: 'Hook', priority: 2 });
 const B = x4Task({ id: 'b', number: 2, title: 'Grid', priority: 1 });
 
 describe('shared Tasks sheet', () => {
-  it('nothing writes until Save; change-then-revert keeps Save disabled', () => {
-    const tasks = x4FakeTasks([A, B]);
-    render(tasks);
-    expect(saveButton().disabled).toBe(true);
-    act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
-    expect(saveButton().disabled).toBe(false);
-    act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
-    expect(saveButton().disabled).toBe(true);
-    expect(tasks.saveBatch).not.toHaveBeenCalled();
+  it('a change saves itself once changes settle; change-then-revert writes nothing', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const tasks = x4FakeTasks([A, B]);
+      render(tasks);
+      expect(q('[data-task-save]')).toBeNull();
+      expect(saveState()).toBeNull();
+      act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
+      expect(saveState()).toBe('saving');
+      act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
+      expect(saveState()).toBeNull();
+      act(() => {
+        vi.advanceTimersByTime(TASK_AUTOSAVE_MS);
+      });
+      expect(tasks.saveBatch).not.toHaveBeenCalled();
+      act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
+      act(() => {
+        vi.advanceTimersByTime(TASK_AUTOSAVE_MS - 1);
+      });
+      expect(tasks.saveBatch).not.toHaveBeenCalled();
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(tasks.saveBatch).toHaveBeenCalledTimes(1);
+      expect(saveState()).toBe('saved');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('Save is one saveBatch: edits with only changed fields, the new task on my side at P1', async () => {
+  it('one saveBatch: edits with only changed fields, the new task on my side at P1', async () => {
     const tasks = x4FakeTasks([A, B]);
     render(tasks);
     act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
@@ -148,7 +176,7 @@ describe('shared Tasks sheet', () => {
     // No date: the create carries no due_on.
     act(() => q('[data-task-days="add"] [data-task-day="none"]')?.click());
     submitAdd();
-    await act(async () => saveButton().click());
+    await saveNow();
     expect(tasks.saveBatch).toHaveBeenCalledTimes(1);
     const payload = (tasks.saveBatch as ReturnType<typeof vi.fn>).mock
       .calls[0]?.[0] as BatchPayload;
@@ -172,7 +200,7 @@ describe('shared Tasks sheet', () => {
     expect(q('[data-task-row-id] [data-task-title]')?.textContent).toContain('Story');
     expect(input.value).toBe('');
     expect(add.disabled).toBe(true);
-    expect(saveButton().disabled).toBe(false);
+    expect(saveState()).toBe('saving');
   });
 
   it('a new task takes Today by default, sends due_on, and the sheet moves to Today', async () => {
@@ -190,7 +218,7 @@ describe('shared Tasks sheet', () => {
       expect(chipOf()).toBe('today');
       expect(q('[data-task-row-id="a"]')).toBeNull();
       expect(q('[data-task-list] [data-task-marked]')?.textContent).toContain('Story');
-      await act(async () => saveButton().click());
+      await saveNow();
       const payload = (tasks.saveBatch as ReturnType<typeof vi.fn>).mock
         .calls[0]?.[0] as BatchPayload;
       expect(payload.creates).toEqual([
@@ -263,7 +291,7 @@ describe('shared Tasks sheet', () => {
       rows = await openRowMenu('a');
       expect(rows.map(rowLabel)).toEqual(['Today', 'Tomorrow', 'Pick a date', 'No date', 'Delete']);
       await closeMenu();
-      await act(async () => saveButton().click());
+      await saveNow();
       const payload = (tasks.saveBatch as ReturnType<typeof vi.fn>).mock
         .calls[0]?.[0] as BatchPayload;
       expect(payload.edits).toEqual([
@@ -274,14 +302,14 @@ describe('shared Tasks sheet', () => {
     }
   });
 
-  it("the row menu's Delete queues the task into Save, with Undo on the row", async () => {
+  it("the row menu's Delete queues the task for the save, with Undo on the row", async () => {
     render(x4FakeTasks([A, B]));
     await pickRow(await openRowMenu('a'), 'Delete');
     expect(q('[data-task-row-id="a"]')?.hasAttribute('data-task-deleting')).toBe(true);
-    expect(saveButton().disabled).toBe(false);
+    expect(saveState()).toBe('saving');
     act(() => q('[data-task-undo-delete]')?.click());
     expect(q('[data-task-row-id="a"]')?.hasAttribute('data-task-deleting')).toBe(false);
-    expect(saveButton().disabled).toBe(true);
+    expect(saveState()).toBeNull();
   });
 
   it('a swipe left past the trigger queues the task; a swipe right or a short one does not', async () => {
@@ -292,7 +320,7 @@ describe('shared Tasks sheet', () => {
     expect(q('[data-task-row-id="a"]')?.hasAttribute('data-task-deleting')).toBe(false);
     await swipeRow('a', -90);
     expect(q('[data-task-row-id="a"]')?.hasAttribute('data-task-deleting')).toBe(true);
-    expect(saveButton().disabled).toBe(false);
+    expect(saveState()).toBe('saving');
     // The queued row holds Undo, and B is untouched.
     expect(q('[data-task-row-id="a"] [data-task-undo-delete]')).not.toBeNull();
     expect(q('[data-task-row-id="b"]')?.hasAttribute('data-task-deleting')).toBe(false);
@@ -304,7 +332,7 @@ describe('shared Tasks sheet', () => {
       touch(undo, 'pointerup', 300, 520);
       undo.click();
     });
-    expect(saveButton().disabled).toBe(true);
+    expect(saveState()).toBeNull();
   });
 
   it('full screen from the menu fills the screen; Half screen returns', async () => {
@@ -330,7 +358,7 @@ describe('shared Tasks sheet', () => {
     expect(q('[data-task-menu]')).toBeNull();
   });
 
-  it('a conflict stays dirty with Keep mine / Keep theirs; Keep mine re-sends with the new base', async () => {
+  it('a conflict waits with Keep mine / Keep theirs (never auto-sent); Keep mine re-sends with the new base', async () => {
     const conflict: SaveOutcome = {
       ok: true,
       createdIds: [],
@@ -369,9 +397,12 @@ describe('shared Tasks sheet', () => {
     const title = q('[data-task-title-input]') as HTMLInputElement;
     act(() => x4Type(title, 'Hook (mine)'));
     act(() => title.blur());
-    await act(async () => saveButton().click());
+    await saveNow();
     expect(q('[data-task-conflict]')?.textContent).toContain('Leo changed this to "Hook (Leo)"');
-    expect(saveButton().disabled).toBe(false);
+    // The conflicting row is held back: nothing waits to be sent.
+    expect(saveState()).toBe('saved');
+    await saveNow();
+    expect(saveBatch).toHaveBeenCalledTimes(1);
     await act(async () => q('[data-task-keep-mine]')?.click());
     const again = saveBatch.mock.calls[1]?.[0];
     expect(again?.edits).toEqual([
@@ -404,13 +435,14 @@ describe('shared Tasks sheet', () => {
     );
     render(x4FakeTasks([A], { saveBatch }));
     act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
-    await act(async () => saveButton().click());
+    await saveNow();
     expect(q('[data-task-conflict]')?.textContent).toContain('deleted this');
     expect(q('[data-task-keep-mine]')?.textContent).toBe('Restore mine');
     expect(q('[data-task-keep-theirs]')?.textContent).toBe('OK');
     act(() => q('[data-task-keep-theirs]')?.click());
     expect(q('[data-task-conflict]')).toBeNull();
-    expect(saveButton().disabled).toBe(true);
+    expect(saveState()).toBe('saved');
+    expect(saveBatch).toHaveBeenCalledTimes(1);
   });
 
   it("marks: the strip, a dot and a 'was' line for someone else's Save", () => {
@@ -435,15 +467,30 @@ describe('shared Tasks sheet', () => {
     expect(q('[data-task-row-id="b"]')?.hasAttribute('data-task-marked')).toBe(false);
   });
 
-  it('"<Name> is editing…" under the title; Cmd+S saves', async () => {
+  it('"<Name> is editing…" under the title; Cmd+S saves at once', async () => {
     const tasks = x4FakeTasks([A], { editors: ['u2'] });
     render(tasks);
     expect(q('[data-task-editing]')?.textContent).toBe('Leo is editing…');
     act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
     expect(tasks.setEditing).toHaveBeenLastCalledWith(true);
-    await act(async () => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true }));
-    });
+    await saveNow();
     expect(tasks.saveBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed save shows Retry and the error; Retry sends again', async () => {
+    const saveBatch = vi
+      .fn<(p: BatchPayload) => Promise<SaveOutcome>>()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValue({ ok: true, createdIds: [], conflicts: [], batchId: 'b2' });
+    render(x4FakeTasks([A], { saveBatch }));
+    act(() => q('[data-task-row-id="a"] [data-task-tick]')?.click());
+    await saveNow();
+    expect(q('[data-task-save-failed]')).not.toBeNull();
+    const retry = q('[data-task-retry]');
+    expect(retry?.textContent).toBe('Retry');
+    await act(async () => retry?.click());
+    expect(saveBatch).toHaveBeenCalledTimes(2);
+    expect(q('[data-task-retry]')).toBeNull();
+    expect(saveState()).toBe('saved');
   });
 });

@@ -15,7 +15,6 @@ import {
   addSheetTitle,
   addedToast,
   itemStatusLine,
-  movedToast,
   planHeaderSubtitle,
   planProgressView,
   planRangeShort,
@@ -158,10 +157,7 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     expect(addedToast('concept', 'Wed 14 Oct')).toBe('Concept added to Wed 14 Oct');
   });
 
-  it('move toasts: "ticks were reset" only when it had a tick; failures', () => {
-    expect(movedToast('Thu 15 Oct', true)).toBe('Moved to Thu 15 Oct. Its ticks were reset.');
-    expect(movedToast('Thu 15 Oct', false)).toBe('Moved to Thu 15 Oct.');
-    expect(movedToast(null, false)).toBe('Moved to No date.');
+  it('move failures', () => {
     expect(planWriteErrorCopy('date_outside_plan', MOVE_FAILED)).toBe(DATE_OUTSIDE_PLAN);
     expect(DATE_OUTSIDE_PLAN).toBe('That day is outside this plan.');
     expect(planWriteErrorCopy('boom', MOVE_FAILED)).toBe("Couldn't move this item. Try again.");
@@ -177,7 +173,7 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     expect(src).toContain('onClick={openHeaderAdd}');
     expect(src).toContain('setAddFor({ day: null, noDate: false })');
     expect(src).toContain('excludePostIds={inPlan}');
-    // A drop queues one 'move' op with the full order; plan_save writes it.
+    // A move is one 'move' op with the full order; plan_save writes it after Undo.
     expect(src).toContain('item_ids: order,');
     expect(src).not.toContain('planItemMove(');
     expect(src.match(/planSave\(supabase/g)).toHaveLength(1);
@@ -188,13 +184,11 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     expect(src.match(/p_trace_id: traceId/g)?.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('agency only: Add rows and "+" in view mode; grip, chip and remove in edit mode', () => {
+  it('agency only: Add rows, "+" and the row ⋯ menu; no Edit mode', () => {
     const src = read('PlanScreen.tsx');
-    expect(src).toMatch(/:\s*agency\s*\?\s*\{\s*onAdd: openAdd\s*\}/);
-    expect(src).toMatch(/\{\.\.\.\(editing\s*\?\s*\{\s*onDragStart:/);
-    expect(src).toContain('const deskAgency = desktop && agency;');
+    expect(src).toMatch(/\{\.\.\.\(agency\s*\?\s*\{\s*onAdd: openAdd,\s*rowMenu:/);
     expect(src).toContain("const agency = side === 'agency' && bundle !== null;");
-    expect(src).toContain('const editing = agency && editMode;');
+    expect(src).not.toContain('editMode');
     expect(src).toMatch(/\{agency \? \(\s*<>\s*<PlanConfirmSheet[\s\S]*<PlanAddSheet/);
     const item = read('PlanItemScreen.tsx');
     expect(item).toContain("const planActions = side === 'agency';");
@@ -207,24 +201,5 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     // item keeps its red button under the Plan notes (the post's own sheet has none).
     expect(item).toMatch(/onRemove: \(\) => setRemoveOpen\(true\)/);
     expect(item).toContain('<RemoveFromPlanButton');
-  });
-
-  it('drag cleans up every listener, frame and timer; Escape and pointercancel cancel with no change', () => {
-    const src = read('PlanScreen.tsx');
-    const hook = src.slice(src.indexOf('function usePlanDrag('), src.indexOf('function DragCard('));
-    for (const ev of ['pointermove', 'pointerup', 'pointercancel', 'keydown', 'touchmove']) {
-      expect(hook).toContain(`window.addEventListener('${ev}'`);
-      expect(hook).toContain(`window.removeEventListener('${ev}'`);
-    }
-    expect(hook).toContain('cancelAnimationFrame(frame)');
-    expect(hook).toContain('clearTimeout(snapTimer)');
-    // Escape cancels while the pointer is down; once released the drop commits.
-    expect(hook).toContain(
-      "if (event.key === 'Escape' && stateRef.current?.snapTop === null) cancel();",
-    );
-    expect(hook).toContain('useEffect(() => end, [end]);');
-    // A cancel never calls onDrop.
-    const cancel = hook.slice(hook.indexOf('const cancel = (): void => end();'));
-    expect(cancel.startsWith('const cancel = (): void => end();')).toBe(true);
   });
 });

@@ -342,12 +342,13 @@ test('agency: Send in {chat} reads Sending, then Sent; again does nothing; an ed
   await expect(primary).toHaveText('Sent');
   expect(labels.filter((t) => t.startsWith('Send in'))).toEqual([]);
 
-  // Edit the plan (Save in Edit mode): back to "Send in {chat}".
-  await plan.locator('[data-plan-edit]').click();
-  const titleField = plan.locator('[data-plan-edit-title]');
+  // Change the plan (a rename saves itself): back to "Send in {chat}".
+  await plan.locator('[data-plan-title-menu]').click();
+  await plan.locator('[data-plan-menu-rename]').click();
+  const titleField = plan.locator('[data-plan-rename-input]');
   await titleField.fill(`${UPCOMING_CLIENT_PLAN_TITLE} v2`);
-  await plan.locator('[data-plan-save]').click();
-  await expect(page.getByText('Plan saved')).toBeVisible();
+  await titleField.press('Enter');
+  await expect(page.getByText('Renamed', { exact: true })).toBeVisible();
   await expect(primary).toHaveText(`Send in ${PEER_NAME}`);
   await expect(primary).toBeEnabled();
   await expect(primary).toHaveAttribute('data-plan-send-state', 'idle');

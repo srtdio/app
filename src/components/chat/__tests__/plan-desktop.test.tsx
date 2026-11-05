@@ -1,7 +1,6 @@
-// Plan on a laptop (md and up): the docked panel's frame, edit mode's grip,
-// day chip, remove and keyboard wiring, view mode's plain rows, and the
-// Sheet's additive fixed-height box. Gestures, drag and keys run end to end
-// in e2e/tests/plan-desktop.spec.ts.
+// Plan on a laptop (md and up): the docked panel's frame, the creators' row
+// ⋯ menu (no Edit mode, no grip or keyboard pick-up), and the Sheet's
+// additive fixed-height box.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -19,9 +18,8 @@ import {
   PlanBody,
   isTextField,
   planListGroups,
-  type PlanRowEdit,
+  type PlanRowMenu,
 } from '@/components/chat/PlanScreen';
-import { outOfView, placePopover } from '@/components/chat/PlanDayPopover';
 import type { PlanBundle, PlanItemRow } from '@/lib/chat/plans';
 
 const dir = fileURLToPath(new URL('..', import.meta.url));
@@ -63,19 +61,14 @@ function bundle(): PlanBundle {
   } as unknown as PlanBundle;
 }
 
-const edit = (over: Partial<PlanRowEdit> = {}): PlanRowEdit => ({
-  pickedId: null,
-  dayOpenId: null,
-  dragging: false,
-  onDay: () => undefined,
+const rowMenu: PlanRowMenu = {
+  openId: null,
+  onOpenChange: () => undefined,
+  onMove: () => undefined,
   onRemove: () => undefined,
-  onMenu: () => undefined,
-  onKeyDown: () => undefined,
-  onKeyUp: () => undefined,
-  ...over,
-});
+};
 
-const paint = (side: 'agency' | 'client', rowEdit?: PlanRowEdit): string =>
+const paint = (side: 'agency' | 'client'): string =>
   renderToStaticMarkup(
     <MemoryRouter>
       <PlanBody
@@ -84,108 +77,32 @@ const paint = (side: 'agency' | 'client', rowEdit?: PlanRowEdit): string =>
         side={side}
         timeZone="UTC"
         thumbs={{}}
-        drag={null}
         onOpenItem={() => undefined}
         onPlanOk={() => undefined}
         onPlanNotOk={() => undefined}
-        {...(rowEdit !== undefined ? { onDragStart: () => undefined, edit: rowEdit } : {})}
-        {...(side === 'agency' && rowEdit === undefined ? { onAdd: () => undefined } : {})}
+        {...(side === 'agency' ? { onAdd: () => undefined, rowMenu } : {})}
       />
     </MemoryRouter>,
   );
 
-describe('edit mode rows (agency, laptop and phone alike)', () => {
-  it('grip, date tile, the row, then the bottom line (day chip, remove); PLAN as text, no swipe', () => {
-    const html = paint('agency', edit());
-    // c1 is inside the plan (grip); c2 is dated outside it (a spacer keeps the column).
-    expect(html.match(/data-plan-grip=""/g)).toHaveLength(1);
-    expect(html.match(/data-plan-row-day-chip=""/g)).toHaveLength(2);
-    expect(html.match(/data-plan-row-remove-edit=""/g)).toHaveLength(2);
-    expect(html).not.toContain('data-plan-row-swipe');
-    expect(html).not.toContain('data-plan-row-remove="');
-    // PLAN and POST stay as read-only text: no OK / Not OK switch, no pill.
-    expect(html).toContain('data-plan-control="text"');
-    expect(html).not.toContain('data-plan-control="switch"');
-    expect(html).not.toContain('data-plan-control="pill"');
-    expect(html).not.toContain('data-plan-ok=');
-    expect(html.match(/data-plan-line="post"/g)).toHaveLength(2);
-    expect(html.match(/data-plan-row-edit-line=""/g)).toHaveLength(2);
-    expect(html).not.toContain('data-plan-add=');
-    expect(html).toContain('data-plan-list-mode="edit"');
-    const row = html.slice(html.indexOf('data-plan-row-wrap="c1"'));
-    const order = [
-      'data-plan-grip',
-      'data-plan-day-col',
-      'data-plan-row="c1"',
-      'data-plan-line="plan"',
-      'data-plan-row-edit-line',
-      'data-plan-row-day-chip',
-      'data-plan-row-remove-edit',
-    ].map((k) => row.indexOf(k));
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
-  });
-
-  it('grip 28x44, always shown, muted; the chip names the day; the remove is bad colour, 44px', () => {
-    const html = paint('agency', edit());
-    expect(html).toMatch(
-      /data-plan-grip=""[^>]*class="[^"]*h-11 w-11[^"]*cursor-grab[^"]*touch-none/,
-    );
-    expect(html).not.toMatch(/data-plan-grip=""[^>]*opacity-0/);
-    // The chip: the shared 44px secondary button (8px radius, bordered).
-    expect(html).toMatch(
-      /class="[^"]*h-11[^"]*rounded-lg[^"]*border[^"]*"[^>]*data-plan-row-day-chip=""/,
-    );
-    expect(html).not.toContain(
-      'flex h-8 items-center gap-1.5 rounded-lg border border-border-strong',
-    );
-    expect(html).toContain('>Tue 13<');
-    expect(html).toContain('>Tue 20<');
-    expect(html).toMatch(
-      /class="[^"]*h-11 w-11[^"]*text-bad[^"]*"[^>]*data-plan-row-remove-edit=""/,
-    );
-    expect(html).toContain('select-none');
-  });
-
-  it('a touch long-press never opens the day menu; nor does a running drag', () => {
-    const src = read('PlanScreen.tsx');
-    expect(src).toContain(
-      "if (native.pointerType === 'touch' || lastPointer.current === 'touch') return;",
-    );
-    expect(src).toContain(
-      'if (edit.onMenu === undefined || edit.dragging || wrapRef.current === null) return;',
-    );
-  });
-
-  it('a picked-up row carries the accent outline and its marker', () => {
-    const html = paint('agency', edit({ pickedId: 'c1' }));
-    // PressableRow renders class before the spread data attributes.
-    expect(html).toMatch(
-      /class="[^"]*rounded-lg lit-focus[^"]*" data-plan-row="c1"[^>]*data-plan-row-picked=""/,
-    );
-  });
-
-  it('the list takes the keys (rows are the targets) in edit mode only', () => {
-    const src = read('PlanScreen.tsx');
-    expect(src).toContain('{ onKeyDown: edit.onKeyDown, onKeyUp: edit.onKeyUp }');
-    expect(src).toContain('if (!deskEditing || !(event.target instanceof HTMLElement)) return;');
-  });
-});
-
-describe('view mode (laptop and phone)', () => {
-  it('no grip, chip, remove or menu for anyone; the PLAN line as before', () => {
-    for (const side of ['agency', 'client'] as const) {
-      const html = paint(side);
+describe('rows (laptop and phone alike)', () => {
+  it('creators get one ⋯ menu per in-range row; approvers none; no grip, chip or remove', () => {
+    const agency = paint('agency');
+    // c1 sits inside the plan; c2's day is outside it, so it has no menu.
+    expect(agency.match(/aria-label="More actions"/g)).toHaveLength(1);
+    const client = paint('client');
+    expect(client).not.toContain('aria-label="More actions"');
+    for (const html of [agency, client]) {
       for (const k of ['data-plan-grip', 'data-plan-row-day-chip', 'data-plan-row-remove-edit']) {
         expect(html).not.toContain(k);
       }
       expect(html).toContain('data-plan-slot="client"');
     }
     const src = read('PlanScreen.tsx');
-    expect(src).toContain('const deskAgency = desktop && agency;');
-    expect(src).toContain('const deskEditing = deskAgency && editMode;');
-    // The keyboard hint line sits in the edit header, never in the footer.
-    expect(src).toContain('keyHints={deskEditing}');
-    expect(src).not.toMatch(/\{deskAgency \? <PlanKeyHints \/> : null\}/);
+    expect(src).not.toContain('editMode');
+    expect(src).not.toContain('PlanKeyHints');
+    // Long-press and right-click open the same menu.
+    expect(src).toContain('useMenuGesture(');
   });
 });
 
@@ -239,51 +156,6 @@ describe('the docked panel', () => {
     }
     expect(isTextField({ tagName: 'INPUT' } as unknown as EventTarget)).toBe(true);
     expect(isTextField({ tagName: 'BUTTON' } as unknown as EventTarget)).toBe(false);
-  });
-
-  it('a drop commits once released: Escape cancels only while the pointer is down', () => {
-    const src = read('PlanScreen.tsx');
-    expect(src).toContain(
-      "if (event.key === 'Escape' && stateRef.current?.snapTop === null) cancel();",
-    );
-  });
-});
-
-describe('the day popover', () => {
-  const vp = { width: 1280, height: 800 };
-  it('under its button, right-aligned; flips above near the bottom; never covers its button', () => {
-    const rect = { kind: 'rect' as const, left: 1100, right: 1136, top: 100, bottom: 144 };
-    expect(placePopover(rect, { width: 240, height: 400 }, vp)).toEqual({
-      left: 896,
-      top: 148,
-      maxHeight: null,
-    });
-    const low = { ...rect, top: 700, bottom: 744 };
-    expect(placePopover(low, { width: 240, height: 400 }, vp)).toEqual({
-      left: 896,
-      top: 296,
-      maxHeight: null,
-    });
-    // Neither side fits: the roomier side, capped there.
-    const mid = { ...rect, top: 340, bottom: 384 };
-    expect(placePopover(mid, { width: 240, height: 500 }, vp)).toEqual({
-      left: 896,
-      top: 388,
-      maxHeight: 404,
-    });
-    const point = { kind: 'point' as const, x: 1270, y: 790 };
-    expect(placePopover(point, { width: 240, height: 400 }, vp)).toEqual({
-      left: 1032,
-      top: 392,
-      maxHeight: null,
-    });
-  });
-
-  it('closes once its row leaves the list view', () => {
-    const view = { top: 60, bottom: 700 };
-    expect(outOfView({ top: 100, bottom: 160 }, view)).toBe(false);
-    expect(outOfView({ top: 10, bottom: 60 }, view)).toBe(true);
-    expect(outOfView({ top: 700, bottom: 760 }, view)).toBe(true);
   });
 });
 

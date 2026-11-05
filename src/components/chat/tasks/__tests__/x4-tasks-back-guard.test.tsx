@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // X4 (FT49): TaskSheet under a real useHistoryStep('chatTasks') parent, the
-// way MessageThread mounts it. With unsaved changes, system Back shows
-// "Discard unsaved changes?" (Discard / Save, in the page), the parent's close
-// callback never runs, Esc keeps the work, and Discard closes with no stray
-// history entry.
+// way MessageThread mounts it. Tasks save themselves: with changes still
+// waiting, system Back sends them first and then closes the sheet (the
+// parent's own close callback never runs); a failed save keeps the sheet open
+// with Retry; a clean sheet closes through the parent step as before.
 import { act, useState, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,8 +16,9 @@ vi.mock('@/components/ui/SearchHighlight', async (importOriginal) => ({
   glowTarget: () => () => {},
 }));
 
-import { DISCARD_TITLE, TaskSheet } from '@/components/chat/tasks/TaskSheet';
-import type { UseChatTasks } from '@/components/chat/tasks/useChatTasks';
+import { TaskSheet } from '@/components/chat/tasks/TaskSheet';
+import type { SaveOutcome, UseChatTasks } from '@/components/chat/tasks/useChatTasks';
+import type { BatchPayload } from '@/lib/chat/tasks';
 import { resetHistorySteps, useHistoryStep } from '@/lib/chat/use-history-step';
 import { DUR_BASE_MS } from '@/lib/motion';
 import { x4FakeTasks, x4Task, x4Type } from './x4-fake-tasks';
@@ -64,8 +65,6 @@ async function mount(tasks: UseChatTasks): Promise<{ onParentBack: ReturnType<ty
 
 const q = (s: string) => document.querySelector<HTMLElement>(s);
 const confirmDialog = () => q('[role="alertdialog"]');
-const button = (label: string) =>
-  [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === label);
 const sheetOpen = () => q('[data-task-sheet]') !== null;
 
 async function pressBack(): Promise<void> {
@@ -97,54 +96,37 @@ afterEach(async () => {
 });
 
 describe('X4 TaskSheet and system Back', () => {
-  it('with new tasks: Back asks, the parent close never runs, Esc keeps them', async () => {
-    const { onParentBack } = await mount(x4FakeTasks([]));
+  it('with new tasks: Back saves them, then closes; the parent close never runs', async () => {
+    const tasks = x4FakeTasks([]);
+    const { onParentBack } = await mount(tasks);
     await addDraft('Hook');
     await addDraft('Grid');
     await pressBack();
-    expect(confirmDialog()?.getAttribute('aria-label')).toBe(DISCARD_TITLE);
-    expect(onParentBack).not.toHaveBeenCalled();
-    expect(sheetOpen()).toBe(true);
-    await act(async () => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-      await wait(40);
-    });
+    await settle();
+    await act(async () => wait(DUR_BASE_MS + 40));
     expect(confirmDialog()).toBeNull();
-    expect(document.querySelectorAll('[data-task-list] [data-task-marked]')).toHaveLength(2);
-    // Back again asks again: the guard's entry came back.
-    await pressBack();
-    expect(confirmDialog()).not.toBeNull();
+    expect(tasks.saveBatch).toHaveBeenCalledTimes(1);
+    const payload = (tasks.saveBatch as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as BatchPayload;
+    expect(payload.creates.map((c) => c.title)).toEqual(['Hook', 'Grid']);
+    expect(sheetOpen()).toBe(false);
     expect(onParentBack).not.toHaveBeenCalled();
   });
 
-  it('with a ticked row: Back asks the same and the parent close never runs', async () => {
-    const { onParentBack } = await mount(x4FakeTasks([x4Task({})]));
+  it('a failed save keeps the sheet open with Retry, and the tick stays', async () => {
+    const saveBatch = vi.fn(async (): Promise<SaveOutcome> => ({ ok: false }));
+    const { onParentBack } = await mount(x4FakeTasks([x4Task({})], { saveBatch }));
     act(() => q('[data-task-row-id="t1"] [data-task-tick]')?.click());
     await settle();
     await pressBack();
-    expect(confirmDialog()?.getAttribute('aria-label')).toBe(DISCARD_TITLE);
+    await settle();
+    expect(saveBatch).toHaveBeenCalledTimes(1);
+    expect(sheetOpen()).toBe(true);
+    expect(q('[data-task-retry]')).not.toBeNull();
     expect(onParentBack).not.toHaveBeenCalled();
     expect(q('[data-task-row-id="t1"] [data-task-tick]')?.getAttribute('aria-checked')).toBe(
       'true',
     );
-  });
-
-  it('Discard closes the sheet and pops both entries (guard, then the sheet step)', async () => {
-    const { onParentBack } = await mount(x4FakeTasks([]));
-    await addDraft('Hook');
-    await pressBack();
-    // jsdom resolves two back() calls queued in one task to the same entry
-    // (both read the index before either lands); browsers, and X1's own
-    // queued-window tests, apply them in turn. So the test counts the pops:
-    // the guard's entry and the 'chatTasks' entry each go, none is left.
-    const back = vi.spyOn(window.history, 'back');
-    await act(async () => button('Discard')?.click());
-    await settle();
-    await act(async () => wait(DUR_BASE_MS + 40));
-    expect(sheetOpen()).toBe(false);
-    expect(onParentBack).not.toHaveBeenCalled();
-    expect(back).toHaveBeenCalledTimes(2);
-    back.mockRestore();
   });
 
   it('a clean sheet: Back closes through the parent step as before', async () => {
