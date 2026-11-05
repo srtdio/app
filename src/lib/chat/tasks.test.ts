@@ -528,7 +528,11 @@ describe('reads and the write', () => {
     const { client, calls } = fakeClient({ data: [], error: null });
     expect(await readChannelTasks(client, 'c1')).toEqual({ ok: true, data: [] });
     expect(calls.map((c) => c.method)).toEqual(['from', 'select', 'eq', 'is']);
-    expect(String(calls[1]?.args[0])).not.toContain('due');
+    // The due day and done time are read; the retired due timer's columns are not.
+    const columns = String(calls[1]?.args[0]);
+    expect(columns).toContain('due_on');
+    expect(columns).toContain('done_at');
+    expect(columns).not.toMatch(/due_at|due_set|due_passed/);
     expect(calls[3]?.args).toEqual(['deleted_at', null]);
   });
   it('reads tasks by id in one IN read, none for no ids', async () => {
