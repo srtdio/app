@@ -71,7 +71,7 @@ test('Pipeline: every button is 44 tall with an 8px radius or round', async ({ p
 });
 
 test(
-  'Pipeline tab bar: five 20px pill icons and the 22px Chat circle, the active one in accent',
+  'Pipeline tab bar: five 20px pill icons and the 22px Chat circle, the active one the ink fill',
   { tag: '@theme' },
   async ({ page }) => {
     await installHarnessNetwork(page);
@@ -87,15 +87,22 @@ test(
       expect(box?.width).toBeCloseTo(size, 0);
       expect(box?.height).toBeCloseTo(size, 0);
     }
-    // The accent token's resolved colour, read from a probe in this theme.
-    const accent = await page.evaluate(() => {
-      const probe = document.createElement('span');
-      probe.className = 'text-accent';
-      document.body.appendChild(probe);
-      const color = getComputedStyle(probe).color;
-      probe.remove();
-      return color;
-    });
+    // The picked tab is the solid ink fill: accent fill, accent-fg ink, read from
+    // probes in this theme.
+    const probe = (cls: string, prop: 'color' | 'backgroundColor') =>
+      page.evaluate(
+        ([c, p]) => {
+          const el = document.createElement('span');
+          el.className = c;
+          document.body.appendChild(el);
+          const value = getComputedStyle(el)[p];
+          el.remove();
+          return value;
+        },
+        [cls, prop] as const,
+      );
+    const ink = await probe('text-accent-fg', 'color');
+    const fill = await probe('bg-accent', 'backgroundColor');
     const active = page.locator('nav[data-undo-anchor] a[aria-current="page"]');
     await expect(active).toHaveCount(1);
     expect(
@@ -103,7 +110,8 @@ test(
         .locator('svg')
         .first()
         .evaluate((el) => getComputedStyle(el).color),
-    ).toBe(accent);
+    ).toBe(ink);
+    expect(await active.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(fill);
   },
 );
 
