@@ -1,6 +1,6 @@
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { dialogIn } from '@/lib/motion';
+import { dialogIn, selectionSlideRef } from '@/lib/motion';
 import type { FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { workspaceCreate } from '@srtdio/rpc';
@@ -412,13 +412,17 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                   return (
                     <PressableRow
                       key={value}
+                      buttonRef={selectionSlideRef(selected)}
+                      data-selected={selected ? 'true' : undefined}
                       type="button"
                       role="radio"
                       aria-checked={selected}
                       onClick={() => setPlatform(value)}
                       className={cn(
-                        'flex min-w-[44px] items-center gap-2 border px-3 text-base font-medium mv-tint',
-                        selected ? 'lit-selected' : 'text-fg lit-chip',
+                        'flex min-w-[44px] items-center gap-2 px-3 text-base font-medium',
+                        selected
+                          ? 'bg-accent text-accent-fg lit-pill'
+                          : 'bg-panel-3 text-fg lit-well-soft',
                       )}
                     >
                       <PlatformMark platform={value} />

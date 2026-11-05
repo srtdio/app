@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import type { MutableRefObject, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { selectionSlideRef } from '@/lib/motion';
 import type { SheetCell, SheetMerge, SheetView, XlsxView } from '@/lib/files/office/types';
 
 /** One grid row's height in px (h-7). */
@@ -285,22 +286,26 @@ export function SheetViewer(props: {
       <div
         role="tablist"
         aria-label="Sheets"
-        className="flex shrink-0 gap-1 overflow-x-auto overscroll-contain border-t border-border bg-panel lit-well px-2 pb-[max(env(safe-area-inset-bottom),4px)] pt-1"
+        className="flex shrink-0 gap-2 overflow-x-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-border bg-panel lit-well px-2 pb-[max(env(safe-area-inset-bottom),4px)] pt-1"
       >
         {book.sheets.map((s, i) => {
           const selected = s === sheet;
           return (
             <button
               key={i}
+              ref={selectionSlideRef(selected)}
               type="button"
               role="tab"
               aria-selected={selected}
+              data-selected={selected ? 'true' : undefined}
               data-sheet-tab={s.name}
               onClick={() => setActive(i)}
               className={cn(
                 'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 text-base',
                 'focus-visible:lit-focus',
-                selected ? 'bg-panel-2 font-medium text-fg lit-selected' : 'lit-hover text-fg-2',
+                selected
+                  ? 'bg-accent font-medium text-accent-fg lit-pill'
+                  : 'bg-panel-3 text-fg lit-well-soft lit-hover',
               )}
             >
               {s.name}
