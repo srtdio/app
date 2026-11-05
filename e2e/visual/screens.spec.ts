@@ -1021,7 +1021,7 @@ const SCREENS: Screen[] = [
     url: '/plan',
     steps: async (page) => {
       await waitFor([page.getByText('Autumn launch')], 'plan');
-      await tap([page.locator('[data-plan-tab-chip="earlier"]')], 'Past');
+      await tap([page.locator('[data-plan-tab-when="earlier"]')], 'Past');
       await waitFor([page.locator('[data-plan-tab-chip-zero]')], 'week zero');
     },
   },

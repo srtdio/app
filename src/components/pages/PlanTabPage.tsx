@@ -538,7 +538,7 @@ function PlanWeekChips(props: {
           label={planWeekChipLabel(key)}
           selected={props.chip === key}
           size="tap"
-          data-plan-tab-chip={key}
+          data-plan-tab-when={key}
           className="flex-none whitespace-nowrap"
           onClick={() => props.onChip(key)}
         />
