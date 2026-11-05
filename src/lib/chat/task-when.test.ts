@@ -11,7 +11,7 @@ import {
   type TaskCalendar,
 } from '@/lib/chat/task-when';
 
-// Wednesday 5 Nov 2026, 10:00 UTC; the week runs Monday 3 to Sunday 9 Nov.
+// Thursday 5 Nov 2026, 10:00 UTC; the week runs Monday 2 to Sunday 8 Nov.
 const CAL: TaskCalendar = {
   now: new Date('2026-11-05T10:00:00.000Z'),
   timeZone: 'UTC',
@@ -21,7 +21,7 @@ const DAYS = calendarDays(CAL);
 
 describe('task chips', () => {
   it('today and the week end read on the workspace calendar', () => {
-    expect(DAYS).toEqual({ today: '2026-11-05', weekEnd: '2026-11-09' });
+    expect(DAYS).toEqual({ today: '2026-11-05', weekEnd: '2026-11-08' });
     // Sunday start: the week ends Saturday 7 Nov.
     expect(calendarDays({ ...CAL, weekStartDay: 0 }).weekEnd).toBe('2026-11-07');
     // Late evening in Mumbai is already the next day there.
@@ -34,8 +34,8 @@ describe('task chips', () => {
     expect(taskWhen({ dueOn: '2026-11-04' }, DAYS)).toBe('past');
     expect(taskWhen({ dueOn: '2026-11-05' }, DAYS)).toBe('today');
     expect(taskWhen({ dueOn: '2026-11-06' }, DAYS)).toBe('week');
-    expect(taskWhen({ dueOn: '2026-11-09' }, DAYS)).toBe('week');
-    expect(taskWhen({ dueOn: '2026-11-10' }, DAYS)).toBe('later');
+    expect(taskWhen({ dueOn: '2026-11-08' }, DAYS)).toBe('week');
+    expect(taskWhen({ dueOn: '2026-11-09' }, DAYS)).toBe('later');
   });
 
   it('opens on Today when it holds anything, else the first chip that does, else Today', () => {
