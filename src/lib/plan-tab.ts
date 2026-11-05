@@ -505,7 +505,8 @@ export function planWeekChipRange(
 ): { start: string; end: string } | null {
   if (chip !== 'this' && chip !== 'next') return null;
   const thisWeek = weekRangeOf(today);
-  const week = chip === 'this' ? thisWeek : weekRangeOf(addCivilDays(thisWeek.startsOn, PLAN_WEEK_DAYS));
+  const week =
+    chip === 'this' ? thisWeek : weekRangeOf(addCivilDays(thisWeek.startsOn, PLAN_WEEK_DAYS));
   return { start: week.startsOn, end: week.endsOn };
 }
 

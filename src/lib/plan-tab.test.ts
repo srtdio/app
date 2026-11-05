@@ -412,10 +412,19 @@ describe('phone week chips', () => {
 
   it('reads one Mon to Sun week for This week and Next week, every plan for the rest', () => {
     // Thursday 5 Nov 2026.
-    expect(planWeekChipRange('this', '2026-11-05')).toEqual({ start: '2026-11-02', end: '2026-11-08' });
-    expect(planWeekChipRange('next', '2026-11-05')).toEqual({ start: '2026-11-09', end: '2026-11-15' });
+    expect(planWeekChipRange('this', '2026-11-05')).toEqual({
+      start: '2026-11-02',
+      end: '2026-11-08',
+    });
+    expect(planWeekChipRange('next', '2026-11-05')).toEqual({
+      start: '2026-11-09',
+      end: '2026-11-15',
+    });
     // A Sunday stays in its own week.
-    expect(planWeekChipRange('this', '2026-11-08')).toEqual({ start: '2026-11-02', end: '2026-11-08' });
+    expect(planWeekChipRange('this', '2026-11-08')).toEqual({
+      start: '2026-11-02',
+      end: '2026-11-08',
+    });
     expect(planWeekChipRange('all', '2026-11-05')).toBeNull();
     expect(planWeekChipRange('later', '2026-11-05')).toBeNull();
     expect(planWeekChipRange('earlier', '2026-11-05')).toBeNull();

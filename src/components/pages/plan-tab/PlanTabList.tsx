@@ -22,12 +22,7 @@ import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
-import {
-  PLAN_WEEK_CHIP_ZERO,
-  planCardMeta,
-  planSections,
-  type PlanWeekChip,
-} from '@/lib/plan-tab';
+import { PLAN_WEEK_CHIP_ZERO, planCardMeta, planSections, type PlanWeekChip } from '@/lib/plan-tab';
 
 /** Load more's copy: 'Loading' while the page is in flight. Pure. */
 export function loadMoreLabel(busy: boolean): string {

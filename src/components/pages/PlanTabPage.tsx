@@ -319,8 +319,7 @@ export function PlanTabPage(): ReactElement {
   );
   // The phone's chip narrows the list and the search results to its week group.
   const inChip = useCallback(
-    (b: PlanBundle): boolean =>
-      desktop || chip === 'all' || planSectionOf(b.plan, today) === chip,
+    (b: PlanBundle): boolean => desktop || chip === 'all' || planSectionOf(b.plan, today) === chip,
     [desktop, chip, today],
   );
   const calendarData = useMemo(
@@ -392,9 +391,7 @@ export function PlanTabPage(): ReactElement {
           }
         : {})}
     >
-      {desktop ? undefined : (
-        <PlanWeekChips chip={chip} onChip={setChip} />
-      )}
+      {desktop ? undefined : <PlanWeekChips chip={chip} onChip={setChip} />}
     </SectionHeader>
   );
 
