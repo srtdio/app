@@ -44,6 +44,11 @@ beforeEach(() => {
   document.documentElement.className = '';
   addMetas();
   stubComputed();
+  // No real frames: a toggle in one test must never leave jsdom's own
+  // requestAnimationFrame pending to strip html.theme-switching during the
+  // next (it fired mid-test on a slow runner). The hold test stubs its own.
+  vi.stubGlobal('requestAnimationFrame', () => 1);
+  vi.stubGlobal('cancelAnimationFrame', () => undefined);
 });
 
 afterEach(() => {
