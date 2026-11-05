@@ -276,6 +276,8 @@ test('Back with unsaved changes asks "Discard unsaved changes?" in the page; the
   const addButton = sheet.getByRole('button', { name: 'Add task' });
   await expect(addButton).toBeDisabled();
   expectMinTouchTarget(await addButton.boundingBox());
+  // No date, so the sheet stays on this chip (a dated task moves it to Today).
+  await sheet.locator('[data-task-days="add"] [data-task-day="none"]').click();
   await add.fill('Story frames');
   await addButton.click();
   await expect(rowOf(sheet, 'Story frames')).toHaveAttribute('data-task-marked', '');
