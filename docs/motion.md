@@ -14,6 +14,7 @@ Only `src/lib/motion/` moves. Everything else calls one of the nine moves below.
 - **Laptop** (`useIsLaptop`): pane and screen switches are instant. Kept: grow-from-card, menus growing from their trigger, centre dialogs growing 95% to 100%, press, list item in/out/glide, loading boxes.
 - **Theme switch is instant.** `toggleTheme` (`src/lib/theme.ts`) adds `html.theme-switching` for two frames (rAF x2, then removed); `motion.css` sets `transition: none !important` on every element under it, so light/dark lands in one frame with no per-control colour ease. The flip and the theme-color meta write stay synchronous.
 - **No motion at all**: the bottom tab bar, tab switches and kept-view tab return, workspace switch (clean cut), a scheduled strip that is already there when a chat opens.
+- Search focus: one glide, x-axis, --dur-base; the lift and line are instant.
 
 ## Tokens
 
@@ -65,6 +66,7 @@ Only `src/lib/motion/` moves. Everything else calls one of the nine moves below.
 | Upload ring                      | fill, scale | fills at real progress; finish scales to 0, tile settles ease-pop | CSS `mv-fill`, `mv-ring-out`, `uploadSettle` |
 | Tour cards, onboarding steps     | X           | slide, Back reverses                                              | `stepX`                                      |
 | Command palette                  | Y           | drops 8 px                                                        | `dropIn`                                     |
+| Search focus                     | X           | one glide, --dur-base, ease-move; the lift and line are instant   | `glideAside` (`GLIDE_ASIDE`)                 |
 | Spinner                          | rotate      | 800 ms linear loop                                                | CSS `mv-spin`                                |
 | Hover / state colour             | none        | colour only, 120 ms                                               | CSS `mv-tint`                                |
 | Knob, thumb, chevron flip        | X / rotate  | 160 ms                                                            | CSS `mv-slide`, `mv-turn`                    |
@@ -111,6 +113,7 @@ Busy indicators and timed surfaces share two helpers; no surface keeps its own t
 | ui/FileViewer, ImageLightbox, PhotoViewer                 | growFromCard from the thumbnail; swipe down closes (rise out)            |
 | ui/UnsafeLinkSheet                                        | rise                                                                     |
 | shell/CommandPalette                                      | dropIn (8 px from the top)                                               |
+| shell/SectionHeader search (phone)                        | glideAside: sort and New glide out on X, back on blur or Cancel          |
 | preview/PlatformPreviewPanel                              | rise (phone), instant (laptop side panel)                                |
 | chat/ThreadView                                           | push                                                                     |
 | chat/ComposerEmoji, ContactSheet, ModalPanel, StarredList | rise                                                                     |

@@ -10,6 +10,7 @@ import type {
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
 import { IconSearch, IconX, ICON_SIZE } from '@/components/ui/icons';
@@ -969,9 +970,15 @@ export function CommandPalette({
         // rest; dropIn (Y, 8 px) is laid over it.
         className="flex flex-col w-full h-full scale-100 bg-panel lit-overlay overflow-hidden will-change-transform sm:h-auto sm:max-w-[560px] sm:rounded-xl sm:border"
       >
-        <div className="flex shrink-0 items-center gap-2.5 px-4 border-b border-border pt-[env(safe-area-inset-top)] sm:pt-0">
-          <IconSearch size={ICON_SIZE.nav} className="text-fg-3" />
-          <input
+        {/* The search is a tool: quiet at rest, ink line and lift while focused
+            (ui/Input tone search); the icon takes full ink with it. */}
+        <div className="group/sfield flex shrink-0 items-center gap-2.5 px-4 py-2 border-b border-border pt-[calc(env(safe-area-inset-top)+0.5rem)] sm:pt-2">
+          <IconSearch
+            size={ICON_SIZE.nav}
+            className="text-fg-3 group-focus-within/sfield:text-fg"
+          />
+          <Input
+            tone="search"
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -986,7 +993,7 @@ export function CommandPalette({
               ? { 'aria-activedescendant': paletteOptionId(listId, active) }
               : {})}
             enterKeyHint="search"
-            className="flex-1 min-w-0 h-12 bg-transparent outline-none text-input sm:text-base placeholder:text-fg-3"
+            className="flex-1 min-w-0 h-12 sm:text-base"
           />
           {query !== '' ? (
             <IconButton

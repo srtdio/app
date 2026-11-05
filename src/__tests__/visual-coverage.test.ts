@@ -63,6 +63,8 @@ const REQUIRED: readonly string[] = [
   'chat-post-sheet-approver',
   'chat-post-sheet-scrolled',
   'chat-search-empty',
+  'chat-status-drawer',
+  'chat-status-drawer-plan',
   'chat-thread',
   'chat-thread-files-removed',
   'chat-thread-group',
@@ -141,6 +143,8 @@ const REQUIRED: readonly string[] = [
   'pipeline-approver',
   'pipeline-drag-drop',
   'pipeline-search-empty',
+  'pipeline-search-focused',
+  'pipeline-search-typed',
   'plan-item',
   'plan-item-mention-picker',
   'plan-item-more-menu',
@@ -204,13 +208,19 @@ interface Exception {
 }
 
 /** Phone-only screens (skipped on laptop: `only: 'phone'`). */
-const PHONE_ONLY_NAMES = ['cockpit-sheet-users', 'cockpit-sheet-traffic', 'person-card-inline'];
+const PHONE_ONLY_NAMES = [
+  'cockpit-sheet-users',
+  'cockpit-sheet-traffic',
+  'person-card-inline',
+  'pipeline-search-focused',
+];
 
 /**
  * Laptop-only light screens (`only: 'laptop'`): the Cockpit side panel, the Week
  * view, the board drag (a mouse-only gesture) and the chip hover (a hover pointer).
  */
 const LAPTOP_LIGHT_NAMES = [
+  'pipeline-search-typed',
   'cockpit-panel-needs',
   'cockpit-panel-users',
   'plan-tab-week',

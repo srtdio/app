@@ -156,6 +156,7 @@ describe('lighting rules', () => {
       'lit-header',
       'lit-side',
       'lit-dock',
+      'lit-dock-joined',
       'lit-btn-primary',
       'lit-btn-success',
       'lit-btn-danger',
@@ -180,6 +181,35 @@ describe('lighting rules', () => {
       expect(CSS.split(token).length - 1, token).toBe(2);
     }
     expect(CSS).not.toMatch(/transition[^;]*box-shadow/);
+  });
+
+  it('lit-dock-joined (the composer bar under the open tray) draws no top edge in either theme', () => {
+    const block = (sel: string): string => {
+      const start = CSS.indexOf(`${sel} {`);
+      return CSS.slice(start, CSS.indexOf('\n}', start));
+    };
+    for (const sel of [':root', '\n.dark']) {
+      const value = (/--lit-dock-joined:([^;]+);/.exec(block(sel))?.[1] ?? '').replace(/\s+/g, ' ');
+      expect(value.trim(), sel.trim()).not.toBe('');
+      // No top inset highlight, no top line, no upward (negative y) shade.
+      expect(value, sel.trim()).not.toMatch(/inset 0 1px/);
+      expect(value, sel.trim()).not.toMatch(/(^|,)\s*-?\d+(\.\d+)?(px)? -\d/);
+      // The dock itself keeps its top edge.
+      expect(block(sel), sel.trim()).toMatch(/--lit-dock:[^;]*inset 0 1px 0/);
+    }
+    const flat = CSS.replace(/\s+/g, ' ');
+    const own = flat.split('.lit-dock-joined {')[1]?.split('}')[0] ?? '';
+    expect(own).toContain('box-shadow: var(--lit-dock-joined)');
+    expect(own).toContain('border-top-color: transparent');
+  });
+
+  it('the composer bar takes lit-dock-joined only while the tray shows; the tray keeps lit-dock', () => {
+    const composer = src('chat/Composer.tsx');
+    expect(composer).toMatch(/trayShown\s*\?\s*'[^']*lit-dock-joined'\s*:\s*'[^']*lit-dock'/);
+    expect(composer).toContain('onShownChange={setTrayShown}');
+    expect(src('chat/ComposerTray.tsx')).toMatch(
+      /data-tray=""[\s\S]*?className="[^"]*\blit-dock\b(?!-)/,
+    );
   });
 
   it('the old shadow tokens are gone; the spotlight stays', () => {

@@ -206,4 +206,19 @@ describe('motion rules', () => {
     expect(css).not.toMatch(/@keyframes/);
     expect(css).toContain("@import './lib/motion/motion.css';");
   });
+
+  it('the search focus glide is the module glide, X only, --dur-base', () => {
+    expect(moves.GLIDE_ASIDE).toEqual({ move: 'glide', axis: ['x'] });
+    expect(() =>
+      checkKeyframes(moves.GLIDE_ASIDE, [
+        { transform: 'translateX(0)' },
+        { transform: moves.GLIDE_ASIDE_X },
+      ]),
+    ).not.toThrow();
+    const motion = readFileSync(join(SRC, 'lib/motion/moves.ts'), 'utf8');
+    const body = motion.slice(motion.indexOf('export function glideAside'));
+    expect(body.slice(0, body.indexOf('\n}\n'))).toContain('duration: DUR_BASE_MS');
+    const header = readFileSync(join(SRC, 'components/shell/SectionHeader.tsx'), 'utf8');
+    expect(header).toMatch(/import \{[^}]*\bglideAside\b[^}]*\} from '@\/lib\/motion'/);
+  });
 });

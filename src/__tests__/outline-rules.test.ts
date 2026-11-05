@@ -416,3 +416,57 @@ describe('outline rules', () => {
     }
   });
 });
+
+// Search is a tool, not a field to fill: every type="search" input is
+// ui/Input tone="search" (quiet well at rest; ink line, lit-focus and lift on
+// focus). Each exception with its reason.
+const SEARCH_TONE_ALLOW: ReadonlyMap<string, string> = new Map([
+  ['chat/EmojiPicker.tsx', 'a raw input inside its own label well (focus-within:lit-focus)'],
+  ['cockpit/tabs.tsx', 'operator Cockpit logs search: outside the search-tone PR, follow-up'],
+  ['pages/HelpPage.tsx', 'Help page search: outside the search-tone PR, follow-up'],
+]);
+
+describe('outline rules: search tone', () => {
+  it('no type="search" input without tone="search"', () => {
+    const offenders: string[] = [];
+    for (const { rel, src } of FILES) {
+      if (SEARCH_TONE_ALLOW.has(rel)) continue;
+      const re = /<(?:Input|input)\b/g;
+      for (let m = re.exec(src); m !== null; m = re.exec(src)) {
+        const tag = openingTag(src, m.index);
+        if (!/\btype=["']search["']/.test(tag)) continue;
+        if (/\btone=["']search["']/.test(tag)) continue;
+        offenders.push(`${rel}:${lineOf(src, m.index)}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('ui/Input search tone: no line at rest; the ink line, lit-focus and lift on focus', () => {
+    const input = readFileSync(join(ROOT, 'ui/Input.tsx'), 'utf8');
+    const search = /search:\s*'([^']+)'/.exec(input)?.[1] ?? '';
+    const toks = search.split(/\s+/);
+    for (const t of [
+      'border-transparent',
+      'bg-panel-2',
+      'lit-well',
+      'focus:border-field',
+      'focus:bg-panel',
+      'focus:lit-card',
+    ]) {
+      expect(toks, t).toContain(t);
+    }
+    expect(toks).not.toContain('border-field');
+    expect(input).toContain('focus:lit-focus');
+  });
+
+  it('every search-tone allowlist entry names a file that exists and gives a reason', () => {
+    for (const [rel, reason] of SEARCH_TONE_ALLOW) {
+      expect(
+        FILES.some((f) => f.rel === rel),
+        rel,
+      ).toBe(true);
+      expect(reason.length, rel).toBeGreaterThan(10);
+    }
+  });
+});

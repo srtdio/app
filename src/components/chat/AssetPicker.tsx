@@ -193,11 +193,12 @@ export function AssetPicker(props: {
       <div className="flex flex-col gap-3" data-asset-picker="">
         <Field label="Search">
           {(id) => (
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3">
+            <div className="group/sfield relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3 group-focus-within/sfield:text-fg">
                 <IconSearch size={ICON_SIZE.inline} />
               </span>
               <Input
+                tone="search"
                 id={id}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}

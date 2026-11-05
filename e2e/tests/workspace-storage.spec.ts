@@ -212,8 +212,10 @@ test('Settings > Storage under the warning line has no talk-to-us rows @theme', 
   await routeUsage(page, 300);
   await routeWorkspaceStorage(page, { used: 300, library: 220, chat: 60, voice: 12, deleted: 8 });
   await page.goto('/settings');
-  // The Storage tab (the Workspace panel's Storage row comes second).
-  await page.getByRole('button', { name: 'Storage', exact: true }).first().click();
+  // The Storage tab: the Workspace panel's Storage row is a button whose name
+  // grows the usage line once the read lands, so an exact 'Storage' button
+  // match races the usage answer.
+  await page.getByRole('tab', { name: 'Storage', exact: true }).click();
 
   const meter = page.getByRole('meter', { name: 'Storage' });
   await expect(meter).toBeVisible({ timeout: 15_000 });

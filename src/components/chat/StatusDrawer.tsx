@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode, PointerEvent as ReactPointerEvent, Ref } from 'react';
+import { CountBadge } from '@/components/ui/CountBadge';
 import { Button } from '@/components/ui/Button';
 import { Backdrop } from '@/components/ui/Backdrop';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -145,7 +146,13 @@ export interface StatusDrawerActions {
 
 // Layout and colour only: PressableRow provides width, 44px height, radius,
 // left alignment, the lit-hover hover/press overlay and the focus ring.
-const ROW = 'flex items-center gap-3 py-1 mv-tint';
+// Rows in one card part with a border-border divider (each row after another).
+// Rows bleed to the card's edges (-mx-3 px-3 over its p-3) and are flat: the
+// card clips (overflow-hidden), so the divider and the pressed fill run edge
+// to edge, square inside the card.
+const ROW_RULE = '[&+&]:border-t [&+&]:border-border';
+const ROW_BASE = 'flex items-center gap-3 py-1 mv-tint';
+const ROW = `${ROW_BASE} -mx-3 px-3 ${ROW_RULE}`;
 const DATE_COL = 'w-12 shrink-0 font-mono text-sm leading-4 tabular-nums text-fg-3';
 const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base leading-5 text-fg';
 const ROW_SUB = 'block truncate text-sm leading-4 text-fg-3';
@@ -168,13 +175,14 @@ const PILL_CLASS: Record<PlanSegment, string> = {
 };
 
 function Chevron(): ReactElement {
-  return <IconChevronRight size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />;
+  return <IconChevronRight size={ICON_SIZE.inline} className="shrink-0 text-fg" />;
 }
 
 function SeeAllRow(props: { total: number; onClick: () => void; attr: string }): ReactElement {
   return (
     <PressableRow
       type="button"
+      flat
       data-see-all={props.attr}
       onClick={props.onClick}
       className={cn(ROW, 'text-base font-medium text-accent')}
@@ -192,12 +200,12 @@ function SectionHeader(props: {
 }): ReactElement {
   const Icon = STATUS_ICON[props.sectionKey];
   return (
-    <div className="mb-2 flex h-5 items-center gap-2 text-fg-2">
+    <div className="mb-2 flex h-6 items-center gap-2 text-fg-2">
       <Icon size={ICON_SIZE.inline} className="shrink-0" />
       <h3 className="min-w-0 flex-1 truncate text-sm font-semibold uppercase tracking-[0.06em]">
         {props.label}
       </h3>
-      <span className="font-mono text-sm font-medium tabular-nums">{props.count}</span>
+      <CountBadge tone="section" count={props.count} />
     </div>
   );
 }
@@ -313,9 +321,9 @@ export function PlanBlock(props: {
   return (
     <div
       data-plan-block={bundle.plan.id}
-      className={cn(!props.first && 'mt-3 border-t border-dashed border-border pt-3')}
+      className={cn(!props.first && '-mx-3 mt-3 border-t border-border px-3 pt-3')}
     >
-      <PressableRow type="button" data-plan-open="" onClick={props.onOpen} className={ROW}>
+      <PressableRow type="button" flat data-plan-open="" onClick={props.onOpen} className={ROW}>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-lg font-semibold leading-5 text-fg">
             {bundle.plan.title}
@@ -346,6 +354,7 @@ export function PlanBlock(props: {
           <PressableRow
             key={item.id}
             type="button"
+            flat
             data-plan-item={item.id}
             onClick={() => props.onOpenItem(item.id)}
             className={ROW}
@@ -408,13 +417,14 @@ export function StatusMarkRow(props: {
   const { mark } = props;
   const priority = mark.type === 'pending' ? priorityLabel(mark.priority) : '';
   return (
-    <div data-status-mark={mark.messageId} className="flex flex-col">
+    <div data-status-mark={mark.messageId} className={cn('-mx-3 flex flex-col pr-3', ROW_RULE)}>
       <div className="flex items-center gap-3">
         <PressableRow
           type="button"
+          flat
           data-mark-jump=""
           onClick={props.onJump}
-          className={cn(ROW, 'flex-1')}
+          className={cn(ROW_BASE, 'flex-1 pl-3')}
         >
           <span className="min-w-0 flex-1">
             <span className={ROW_TITLE}>{props.text}</span>
@@ -446,7 +456,7 @@ export function StatusMarkRow(props: {
           role="group"
           aria-label={markConfirmCopy(mark.type, 'resolve')}
           data-mark-confirm="resolve"
-          className="mb-1 flex flex-wrap items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
+          className="mb-1 ml-3 flex flex-wrap items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
         >
           <span className="min-w-0 flex-1 text-base text-fg">
             {markConfirmCopy(mark.type, 'resolve')}
@@ -538,7 +548,7 @@ export function StatusDrawerList(
     <section
       key={key}
       data-status-section={key}
-      className="border-b border-border pb-2 pt-4 last:border-b-0"
+      className="mb-3 overflow-hidden rounded-xl border bg-panel p-3 pb-1 lit-card"
     >
       <SectionHeader
         sectionKey={key}
@@ -583,6 +593,7 @@ export function StatusDrawerList(
                   <PressableRow
                     key={post.id}
                     type="button"
+                    flat
                     data-status-post={post.id}
                     aria-busy={busy}
                     onClick={() => props.onOpenPost(post.id)}
@@ -619,6 +630,7 @@ export function StatusDrawerList(
                 <PressableRow
                   key={brief.id}
                   type="button"
+                  flat
                   data-status-brief={brief.id}
                   onClick={() => props.onOpenBrief(brief.id)}
                   className={ROW}
@@ -715,13 +727,13 @@ export function StatusDrawerPanel(props: {
         data-status-panel=""
         role="dialog"
         aria-label="Open in this chat"
-        className="absolute inset-x-0 top-0 flex max-h-[calc(100%-48px)] flex-col rounded-b-2xl border-b bg-panel lit-overlay"
+        className="absolute inset-x-0 top-0 flex max-h-[calc(100%-48px)] flex-col rounded-b-2xl border-b bg-bg lit-overlay"
         style={{ transform: props.transform }}
       >
         <div
           ref={props.listRef}
           data-status-list=""
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-1 pt-3"
         >
           {props.children}
         </div>
@@ -731,7 +743,7 @@ export function StatusDrawerPanel(props: {
           {...props.handle}
           className="flex h-6 shrink-0 cursor-grab items-center justify-center [touch-action:none]"
         >
-          <span className="h-1 w-8 rounded-full bg-border" />
+          <span className="h-1 w-8 rounded-full bg-border-strong" />
         </div>
       </div>
     </div>

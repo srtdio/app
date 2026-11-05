@@ -212,6 +212,7 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
       </IconButton>
       <Input
         type="search"
+        tone="search"
         enterKeyHint="search"
         aria-label="Search this chat"
         placeholder="Search this chat"

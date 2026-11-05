@@ -33,6 +33,33 @@ describe('CountBadge', () => {
   });
 });
 
+describe('CountBadge tone section', () => {
+  it('draws the neutral section pill and takes a ratio', () => {
+    const html = renderToStaticMarkup(<CountBadge tone="section" count="1/5" />);
+    expect(html).toContain('>1/5<');
+    expect(html).toContain('data-count-badge="section"');
+    for (const token of [
+      'lit-pill',
+      'bg-panel-2',
+      'border-border-strong',
+      'rounded-full',
+      'px-2',
+      'min-w-6',
+      'text-center',
+      'font-mono',
+      'tabular-nums',
+    ]) {
+      expect(html).toContain(token);
+    }
+    expect(html).not.toContain('bg-accent');
+    expect(html).not.toContain('lit-badge');
+  });
+
+  it('caps a number at 99+ like the unread pill', () => {
+    expect(renderToStaticMarkup(<CountBadge tone="section" count={120} />)).toContain('>99+<');
+  });
+});
+
 describe('SelectCheck', () => {
   it('toggles the on and off classes', () => {
     expect(selectCheckClass(true)).toContain('border-transparent bg-accent text-accent-fg');
