@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-// Type roles on the Tasks sheet: the sheet title (15/20, 600), a task row's
-// title as the row title (14, 500), the number column as mono meta (12) and
-// the add field at 16px on a phone (iOS never zooms), 14 from md up.
+// Type roles on the Tasks page: the page title (15, 600), a task row's title
+// as the row title (14, 500), a section's count as mono meta (12) and the add
+// field at 16px on a phone (iOS never zooms), 14 from md up.
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -74,16 +74,16 @@ describe('Tasks sheet type roles', () => {
 
   it('row title: base, 500 (was 16px)', () => {
     show();
-    const title = byText('[data-task-list] button', 'Hook');
+    const title = byText('[data-task-list] [data-task-title] > span', 'Hook');
     expect(classes(title)).toEqual(expect.arrayContaining(['text-base', 'font-medium', 'text-fg']));
     expect(classes(title)).not.toContain('text-lg');
   });
 
-  it('meta: the task number column is mono sm', () => {
+  it('meta: a section count is mono sm', () => {
     show();
-    const number = byText('[data-task-list] span', '1');
-    expect(classes(number)).toEqual(expect.arrayContaining(['font-mono', 'text-sm']));
-    expect(classes(number)).not.toContain('font-semibold');
+    const count = byText('[data-task-section="none"] h3 span', '2');
+    expect(classes(count)).toEqual(expect.arrayContaining(['font-mono', 'text-sm']));
+    expect(classes(count)).not.toContain('font-semibold');
   });
 
   it('add field: 16px on a phone, base from md up', () => {

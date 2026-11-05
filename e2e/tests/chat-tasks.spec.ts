@@ -12,9 +12,10 @@ import {
 } from '../fixtures/tasks-data';
 import { withSaveData } from '../helpers/save-data';
 
-// The chat Tasks: one shared, flat list every member edits the same way. The
-// composer button, the sheet (tick, inline edit, the priority menu, add,
-// delete), nothing written until one Save (one chat_task_save_batch), one
+// The chat Tasks: one shared list every member edits the same way, a full
+// page like Contact and Group info. The composer button, the page (tick,
+// inline edit, the priority menu, add, the row menu's Delete), nothing
+// written until one Save (from the ⋯ menu, one chat_task_save_batch), one
 // "edited tasks" line per Save that expands in place, the marks another
 // person's Save leaves, both editing the same task (Keep mine / Keep theirs),
 // Share, the bell and numbered list continuation. The real app tree runs
@@ -41,6 +42,47 @@ async function openSheet(page: Page): Promise<ReturnType<Page['getByRole']>> {
   return sheet;
 }
 
+/** The page's ⋯ menu: its rows by label; Escape closes it. */
+async function openMenu(page: Page): Promise<void> {
+  await page
+    .getByRole('dialog', { name: 'Tasks' })
+    .getByRole('button', { name: 'More actions' })
+    .click();
+  await expect(page.getByRole('menuitem').first()).toBeVisible();
+}
+async function menuLabels(page: Page): Promise<string[]> {
+  await openMenu(page);
+  const labels = await page
+    .getByRole('menuitem')
+    .evaluateAll((rows) =>
+      rows.map((r) =>
+        (r.querySelector('span.truncate')?.textContent ?? r.textContent ?? '').trim(),
+      ),
+    );
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menuitem')).toHaveCount(0);
+  return labels;
+}
+async function menuPick(page: Page, label: string): Promise<void> {
+  await openMenu(page);
+  await page.getByRole('menuitem', { name: label }).click();
+  await expect(page.getByRole('menuitem')).toHaveCount(0);
+}
+/** The row whose title holds `text`. */
+function rowOf(sheet: ReturnType<Page['getByRole']>, text: string): ReturnType<Page['locator']> {
+  return sheet.locator('[data-task-row-id]', { hasText: text });
+}
+/** A row's own menu (a right-click on its title), then one of its rows. */
+async function rowMenuPick(
+  page: Page,
+  row: ReturnType<Page['locator']>,
+  label: string,
+): Promise<void> {
+  await row.locator('[data-task-title]').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: label }).click();
+  await expect(page.getByRole('menuitem')).toHaveCount(0);
+}
+
 /** The fixture row of task number `n` in the group chat. */
 function taskRow(network: HarnessNetwork, n: number): Record<string, unknown> {
   const row = network.world.tables.chat_tasks?.find(
@@ -61,24 +103,22 @@ test(
     expectMinTouchTarget(await button.boundingBox());
 
     const sheet = await openSheet(page);
-    // Nothing dated: the sheet opens on No date, one flat numbered list (no
-    // groups, no side labels, no old due-time labels).
-    await expect(sheet.locator('[data-task-list]')).toHaveAttribute('data-task-chip', 'none');
-    const numbers = await sheet
-      .locator('[data-task-row-id]')
-      .evaluateAll((rows) => rows.map((r) => r.getAttribute('data-task-number')));
-    expect(numbers).toEqual(['8', '9', '10', '11']);
+    // Nothing dated: one No date section, in number order (no groups, no side
+    // labels, no old due-time labels), and no Save in the menu yet.
+    await expect(sheet.locator('[data-task-section]')).toHaveCount(1);
+    await expect(sheet.locator('[data-task-section="none"]')).toBeVisible();
+    const titles = await sheet.locator('[data-task-row-id] [data-task-title]').allTextContents();
+    expect(titles).toEqual(['Hook options', 'Shot list', TASK_DUE_TITLE, 'Brand colours']);
     await expect(sheet).not.toContainText('Creators');
     await expect(sheet).not.toContainText('Approvers');
     await expect(sheet.locator('[data-task-due]')).toHaveCount(0);
-    const save = sheet.locator('[data-task-save]');
-    await expect(save).toBeDisabled();
+    expect(await menuLabels(page)).toEqual(['Search tasks', 'Share to chat']);
     expectMinTouchTarget(
-      await sheet.locator('[data-task-number="8"] [data-task-tick]').boundingBox(),
+      await rowOf(sheet, 'Hook options').locator('[data-task-tick]').boundingBox(),
     );
 
     // The priority menu on the last row stays fully on screen.
-    await sheet.locator('[data-task-number="11"] [data-task-chip]').click();
+    await rowOf(sheet, 'Brand colours').locator('[data-task-chip]').click();
     const menu = page.locator('[data-task-menu]');
     await expect(menu).toBeVisible();
     const box = await menu.boundingBox();
@@ -92,23 +132,22 @@ test(
     await expect(menu).toHaveCount(0);
 
     // Edit a title in place, add one; change-then-revert is no change.
-    await sheet.locator('[data-task-number="9"] [data-task-title]').click();
+    await rowOf(sheet, 'Shot list').locator('[data-task-title]').click();
     const title = sheet.locator('[data-task-title-input]');
     await expect(title).toBeFocused();
     await title.fill('Shot list v2');
     await title.press('Enter');
-    await sheet.locator('[data-task-number="8"] [data-task-tick]').click();
-    await sheet.locator('[data-task-number="8"] [data-task-tick]').click();
+    await rowOf(sheet, 'Hook options').locator('[data-task-tick]').click();
+    await rowOf(sheet, 'Hook options').locator('[data-task-tick]').click();
     const add = sheet.getByRole('textbox', { name: 'Add a task' });
-    // The new task stays undated (No date), so the sheet keeps this chip.
-    await sheet.locator('[data-task-days="add"] [data-task-day="none"]').click();
     await add.fill('Story frames');
     await add.press('Enter');
     await expect(add).toBeFocused();
+    // The new task lands in No date, unsaved (its dot), until a day is given.
+    await expect(rowOf(sheet, 'Story frames')).toHaveAttribute('data-task-marked', '');
     expect(network.rpcCalls.some((c) => c.name.startsWith('chat_task'))).toBe(false);
 
-    await expect(save).toBeEnabled();
-    await save.click();
+    await menuPick(page, 'Save');
     await expect
       .poll(() => network.rpcCalls.filter((c) => c.name === 'chat_task_save_batch').length)
       .toBe(1);
@@ -122,8 +161,8 @@ test(
     expect(batch.edits.map((e) => e.changes)).toEqual([{ priority: 0 }, { title: 'Shot list v2' }]);
     expect(batch.edits.every((e) => typeof e.base_updated_at === 'string')).toBe(true);
     expect(typeof call?.args.p_trace_id).toBe('string');
-    await expect(sheet.locator('[data-task-number="12"]')).toContainText('Story frames');
-    await expect(save).toBeDisabled();
+    await expect(rowOf(sheet, 'Story frames')).not.toHaveAttribute('data-task-marked', '');
+    expect(await menuLabels(page)).toEqual(['Search tasks', 'Share to chat']);
 
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Tasks' })).toHaveCount(0);
@@ -154,13 +193,10 @@ test(
     );
     const again = await openSheet(page);
     await expect(again.locator('[data-task-strip]')).toContainText('Leo Martins changed 1 task');
-    const marked = again.locator('[data-task-number="9"]');
+    const marked = rowOf(again, 'Shot list v3');
     await expect(marked).toHaveAttribute('data-task-marked', '');
     await expect(marked.locator('[data-task-mark]')).toHaveText('was Shot list v2');
-    await expect(again.locator('[data-task-number="8"]')).not.toHaveAttribute(
-      'data-task-marked',
-      '',
-    );
+    await expect(rowOf(again, 'Hook options')).not.toHaveAttribute('data-task-marked', '');
     expectClean(network);
   },
 );
@@ -170,10 +206,10 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
   seedTasks(network.world);
   await openChat(page, GROUP_NAME);
   const sheet = await openSheet(page);
-  await sheet.locator('[data-task-number="8"] [data-task-title]').click();
+  await rowOf(sheet, 'Hook options').locator('[data-task-title]').click();
   await sheet.locator('[data-task-title-input]').fill('Hook (mine)');
   await sheet.locator('[data-task-title-input]').press('Enter');
-  await sheet.locator('[data-task-number="11"] [data-task-tick]').click();
+  await rowOf(sheet, 'Brand colours').locator('[data-task-tick]').click();
 
   // Meanwhile the other member saves task 8 first.
   const eight = taskRow(network, 8);
@@ -191,7 +227,7 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
     },
     COLLEAGUE_A,
   );
-  await sheet.locator('[data-task-save]').click();
+  await menuPick(page, 'Save');
 
   // Everything else is saved; task 8 stays dirty and asks.
   await expect(sheet.locator('[data-task-conflict]')).toContainText('changed this to "Hook (Leo)"');
@@ -199,7 +235,7 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
   await expect(sheet.locator('[data-task-keep-theirs]')).toHaveText('Keep theirs');
   expect(taskRow(network, 11).status).toBe('done');
   expect(taskRow(network, 8).title).toBe('Hook (Leo)');
-  await expect(sheet.locator('[data-task-save]')).toBeEnabled();
+  expect(await menuLabels(page)).toEqual(['Save', 'Search tasks', 'Share to chat']);
 
   await sheet.locator('[data-task-keep-mine]').click();
   await expect(sheet.locator('[data-task-conflict]')).toHaveCount(0);
@@ -207,16 +243,17 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
   expectClean(network);
 });
 
-test('Close with unsaved changes asks "Discard unsaved changes?" in the page; Delete queues into Save', async ({
+test('Back with unsaved changes asks "Discard unsaved changes?" in the page; the row menu\'s Delete queues into Save', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
   seedTasks(network.world);
   await openChat(page, GROUP_NAME);
   const sheet = await openSheet(page);
-  await sheet.locator('[data-task-number="9"] [data-task-delete]').click();
-  await expect(sheet.locator('[data-task-number="9"]')).toHaveAttribute('data-task-deleting', '');
-  await sheet.getByRole('button', { name: 'Close' }).click();
+  const row = rowOf(sheet, 'Shot list');
+  await rowMenuPick(page, row, 'Delete');
+  await expect(row).toHaveAttribute('data-task-deleting', '');
+  await sheet.getByRole('button', { name: 'Close tasks' }).click();
   const ask = page.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
   await expect(ask).toBeVisible();
   await ask.getByRole('button', { name: 'Save' }).click();
@@ -259,8 +296,8 @@ test('Share: the snapshot lands here and, Forwarded, in the picked chat and its 
   const network = await installHarnessNetwork(page);
   seedTasks(network.world);
   await openChat(page, GROUP_NAME);
-  const sheet = await openSheet(page);
-  await sheet.getByRole('button', { name: 'Share to chat' }).click();
+  await openSheet(page);
+  await menuPick(page, 'Share to chat');
 
   const picker = page.getByRole('dialog', { name: 'Forward to' });
   await expect(picker).toBeVisible();

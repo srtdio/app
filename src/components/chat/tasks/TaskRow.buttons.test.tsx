@@ -1,16 +1,23 @@
-// Button system regression: the task row's Undo, delete, Keep mine / Keep
-// theirs and the Not saved Retry render the shared 44px, 8px-radius recipe.
+// Button system regression: the task row's Undo, Keep mine / Keep theirs and
+// the Not saved Retry render the shared 44px, 8px-radius recipe; the title is
+// one 44px PressableRow carrying the date line; the row menu's rows end with
+// Delete and offer No date only once dated.
 
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { NotSaved, TaskRow, type TaskRowProps } from '@/components/chat/tasks/TaskRow';
+import {
+  NotSaved,
+  TaskRow,
+  rowMenuItems,
+  type RowMenu,
+  type TaskRowProps,
+} from '@/components/chat/tasks/TaskRow';
 
 const noop = (): void => {};
 
 function props(over: Partial<TaskRowProps> = {}): TaskRowProps {
   return {
     id: 't1',
-    number: 3,
     title: 'Write the caption',
     done: false,
     priority: 2,
@@ -38,12 +45,34 @@ function expectOnSystem(t: string): void {
 }
 
 describe('task row buttons', () => {
-  it('delete is the 44x44 IconButton', () => {
+  it('no delete button on the row: Delete is the last row of its menu', () => {
     const html = renderToStaticMarkup(<TaskRow {...props()} />);
-    const del = tag(html, 'data-task-delete=""');
-    expectOnSystem(del);
-    expect(del).toContain('h-11 w-11');
-    expect(del).toContain('aria-label="Delete Write the caption"');
+    expect(html).not.toContain('data-task-delete');
+    const menu: RowMenu = {
+      choices: [
+        { key: 'today', label: 'Today', dueOn: '2026-11-05' },
+        { key: 'tomorrow', label: 'Tomorrow', dueOn: '2026-11-06' },
+        { key: 'none', label: 'No date', dueOn: null },
+      ],
+      hasDate: false,
+      onDay: noop,
+      onPickDate: noop,
+    };
+    expect(rowMenuItems(menu, noop).map((i) => i.label)).toEqual([
+      'Today',
+      'Tomorrow',
+      'Pick a date',
+      'Delete',
+    ]);
+    const dated = rowMenuItems({ ...menu, hasDate: true }, noop);
+    expect(dated.map((i) => i.label)).toEqual([
+      'Today',
+      'Tomorrow',
+      'Pick a date',
+      'No date',
+      'Delete',
+    ]);
+    expect(dated.at(-1)?.tone).toBe('danger');
   });
 
   it('Undo is the link Button', () => {
@@ -68,30 +97,19 @@ describe('task row buttons', () => {
     }
   });
 
-  it('the date line is a 44px PressableRow: "Add date" with none, the day in mono otherwise', () => {
-    const none = tag(
-      renderToStaticMarkup(<TaskRow {...props({ onDate: noop })} />),
-      'data-task-when=""',
+  it('the title is a 44px PressableRow; the date line sits under it, mono, bad when overdue', () => {
+    const none = renderToStaticMarkup(<TaskRow {...props()} />);
+    const title = tag(none, 'data-task-title=""');
+    expect(title).toContain('min-h-[44px]');
+    expect(title).toContain('rounded-lg');
+    expect(none).not.toContain('data-task-when');
+    const late = renderToStaticMarkup(
+      <TaskRow {...props({ dateLine: { text: '3 Nov', bad: true } })} />,
     );
-    expect(none).toContain('min-h-[44px]');
-    expect(none).toContain('aria-label="Add date"');
-    expect(none).toContain('aria-expanded="false"');
-    const late = tag(
-      renderToStaticMarkup(
-        <TaskRow
-          {...props({
-            onDate: noop,
-            dateOpen: true,
-            dateLine: { text: 'Overdue · 3 Nov', bad: true },
-          })}
-        />,
-      ),
-      'data-task-when=""',
-    );
-    expect(late).toContain('font-mono');
-    expect(late).toContain('text-bad');
-    expect(late).toContain('aria-expanded="true"');
-    expect(late).toContain('aria-label="Change date, Overdue · 3 Nov"');
+    const when = /<span[^>]*data-task-when=""[^>]*>/.exec(late)?.[0] ?? '';
+    expect(when).toContain('font-mono');
+    expect(when).toContain('text-bad');
+    expect(late).toContain('>3 Nov</span>');
   });
 
   it('Not saved Retry is a 44px Button in bad ink', () => {
