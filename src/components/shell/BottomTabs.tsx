@@ -99,15 +99,20 @@ export function BottomTabs() {
             >
               {({ isActive }) => (
                 <>
-                  <span className="relative inline-flex">
+                  {item.showPlanBadge === true ? (
+                    // Plan: the icon carries the unread plan comments badge.
+                    <span className="relative inline-flex">
+                      <item.Icon size={ICON_SIZE.control} />
+                      {planUnread > 0 ? (
+                        <CountBadge
+                          count={planUnread}
+                          className="absolute -right-2 -top-1.5 border-2 border-surface-top"
+                        />
+                      ) : null}
+                    </span>
+                  ) : (
                     <item.Icon size={ICON_SIZE.control} />
-                    {item.showPlanBadge === true && planUnread > 0 ? (
-                      <CountBadge
-                        count={planUnread}
-                        className="absolute -right-2 -top-1.5 border-2 border-surface-top"
-                      />
-                    ) : null}
-                  </span>
+                  )}
                   <TabLabel active={isActive} label={item.label} />
                 </>
               )}
