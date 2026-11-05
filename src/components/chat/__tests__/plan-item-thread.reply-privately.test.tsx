@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-// Reply privately on plan item comments: shown only on someone else's recorded
+// Reply privately on plan item comments: no button on the row (6 Nov 2026);
+// a tap on the author's photo or name opens the person card's inline message
+// with the plan_comment quote as its source, only on someone else's recorded
 // comment whose name is known and who is still a member (never mine, a pending
-// one, an unknown name or a former member); a tap opens the person card's
-// inline message for the author with the plan_comment quote as its source.
-// The author's photo and name carry the same source.
+// one, an unknown name or a former member).
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -32,7 +32,6 @@ import {
   showPlanReplyPrivately,
   type ShownComment,
 } from '@/components/chat/PlanItemThread';
-import { REPLY_PRIVATELY } from '@/lib/chat/private-reply';
 import { closePersonCard, personCardSnapshot } from '@/lib/person-card';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -115,38 +114,21 @@ function mount(comments: ShownComment[], withTarget = true): void {
   });
 }
 
-function replyPrivately(id: string): HTMLButtonElement | null {
-  return (
-    host?.querySelector<HTMLButtonElement>(
-      `[data-plan-comment-id="${id}"] [data-row-action="reply-privately"]`,
-    ) ?? null
-  );
+function authorTap(userId: string): HTMLElement | null {
+  return host?.querySelector<HTMLElement>(`[data-person-trigger="${userId}"]`) ?? null;
 }
 
 describe('Reply privately in the plan thread', () => {
-  it('shows under an active member comment only; never mine or a former member', () => {
-    mount([
-      shown({ id: 'other' }),
-      shown({ id: 'mine', mine: true, authorUserId: ME, authorName: 'You' }),
-      shown({ id: 'gone', authorUserId: GONE, authorName: 'Gus Gone' }),
-      shown({ id: 'unnamed', authorKnown: false, authorName: 'Member' }),
-    ]);
-    const button = replyPrivately('other');
-    // Icon-only (person), accessible name "Reply privately", 44x44.
-    expect(button?.getAttribute('aria-label')).toBe(REPLY_PRIVATELY);
-    expect(button?.textContent).toBe('');
-    expect(button?.querySelector('svg')).toBeTruthy();
-    expect(button?.className).toContain('h-11');
-    expect(button?.className).toContain('w-11');
-    expect(button?.className).toContain('min-w-[44px]');
-    expect(replyPrivately('mine')).toBeNull();
-    expect(replyPrivately('gone')).toBeNull();
-    expect(replyPrivately('unnamed')).toBeNull();
+  it('no row carries a Reply privately button', () => {
+    mount([shown({ id: 'other' }), shown({ id: 'mine', mine: true, authorUserId: ME })]);
+    expect(host?.querySelector('[data-row-action="reply-privately"]')).toBeNull();
+    expect(host?.querySelector('[data-plan-comment-actions]')).toBeNull();
   });
 
-  it('a thread without a target never offers it', () => {
+  it('a thread without a target opens the card with no source', () => {
     mount([shown({ id: 'other' })], false);
-    expect(replyPrivately('other')).toBeNull();
+    act(() => authorTap(ASHA)?.click());
+    expect(personCardSnapshot()?.source ?? null).toBeNull();
   });
 
   const QUOTE = {
@@ -159,14 +141,14 @@ describe('Reply privately in the plan thread', () => {
     link: { kind: 'plan_comment', planId: 'plan-1', itemId: 'item-1', commentId: 'pc-1' },
   };
 
-  it('a tap opens the inline message card with the plan_comment source', () => {
+  it('a tap on the author opens the inline message card with the plan_comment source', () => {
     mount([shown({ id: 'pc-1' })]);
-    const button = replyPrivately('pc-1');
-    act(() => button?.click());
+    const trigger = authorTap(ASHA);
+    act(() => trigger?.click());
     const request = personCardSnapshot();
     expect(request?.userId).toBe(ASHA);
     expect(request?.view).toBe('card');
-    expect(request?.trigger).toBe(button);
+    expect(request?.trigger).toBe(trigger);
     expect(request?.source).toEqual(QUOTE);
   });
 

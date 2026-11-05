@@ -2,16 +2,16 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-// Guard (3 Nov 2026): a comment row's Reply privately and Copy are icon-only
-// (person and clipboard), and Copy is the clipboard everywhere (IconCopy).
-// Their accessible names stay "Reply privately" and "Copy".
+// Guard (3 Nov 2026): a comment row's Copy is icon-only (clipboard), and Copy
+// is the clipboard everywhere (IconCopy); its accessible name stays "Copy".
+// Comment rows carry no Reply privately button (6 Nov 2026): a tap on the
+// author opens the same card with the comment quoted.
 
 function source(rel: string): string {
   return readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 }
 
 const COMMENTS = source('./Comments.tsx');
-const REPLY_PRIVATELY_BUTTON = source('./ReplyPrivatelyButton.tsx');
 const ICONS = source('../ui/icons.tsx');
 
 /** Every <Button ...>children</Button> body in a source file. */
@@ -28,12 +28,10 @@ describe('comment row icon actions', () => {
     }
   });
 
-  it('ReplyPrivatelyButton renders no Button, only the person IconButton', () => {
-    expect(REPLY_PRIVATELY_BUTTON).not.toMatch(/<Button\b/);
-    expect(REPLY_PRIVATELY_BUTTON).not.toContain('>{REPLY_PRIVATELY}<');
-    expect(REPLY_PRIVATELY_BUTTON).toMatch(/<IconButton\b/);
-    expect(REPLY_PRIVATELY_BUTTON).toContain('label={REPLY_PRIVATELY}');
-    expect(REPLY_PRIVATELY_BUTTON).toContain('<IconUser size={ICON_SIZE.nav} />');
+  it('no comment row renders a Reply privately button (the author tap is the one way in)', () => {
+    expect(COMMENTS).not.toContain('ReplyPrivatelyButton');
+    expect(COMMENTS).not.toContain('data-row-action="reply-privately"');
+    expect(source('../chat/PlanItemThread.tsx')).not.toContain('ReplyPrivatelyButton');
   });
 
   it('the row Copy is an IconButton labelled "Copy" with the clipboard icon', () => {

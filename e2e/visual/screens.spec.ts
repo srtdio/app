@@ -1787,7 +1787,7 @@ function postComment(id: string, author: string, body: string, at: number): Row 
   };
 }
 
-/** Priya's comment on Monday carousel: its row offers Reply privately. */
+/** Priya's comment on Monday carousel: a tap on her name offers Reply privately. */
 function seedPeerComment(network: HarnessNetwork): void {
   (network.world.tables.comments ??= []).push(
     postComment(PEER_COMMENT_ID, PEER, PEER_COMMENT_BODY, NOW - 60_000),
@@ -2088,22 +2088,6 @@ SCREENS.push(
       await theirs.scrollIntoViewIfNeeded();
     },
   },
-  {
-    name: 'post-comment-reply-privately',
-    seed: creator,
-    extra: seedPeerComment,
-    url: `/posts/${POST}`,
-    steps: async (page) => {
-      await postDetailReady(page);
-      const text = page.getByText(PEER_COMMENT_BODY, { exact: true });
-      await text.scrollIntoViewIfNeeded();
-      const action = await lastVisible(
-        page.locator('[data-row-action="reply-privately"]'),
-        'Reply privately on the comment row',
-      );
-      await action.scrollIntoViewIfNeeded();
-    },
-  },
 );
 
 /** Priya's comment on the post: a tap on her name opens the inline card with its context line. */
@@ -2163,24 +2147,6 @@ SCREENS.push(
     dark: true,
     url: `/posts/${POST}`,
     steps: openCommentAuthorCard,
-  },
-  {
-    // Reply privately on a comment row now opens the same inline card with
-    // the comment as its source (no navigation into the DM).
-    name: 'post-comment-reply-privately-card',
-    seed: creator,
-    extra: seedPeerComment,
-    url: `/posts/${POST}`,
-    steps: async (page) => {
-      await postDetailReady(page);
-      await page.getByText(PEER_COMMENT_BODY, { exact: true }).scrollIntoViewIfNeeded();
-      const action = await lastVisible(
-        page.locator('[data-row-action="reply-privately"]'),
-        'Reply privately on the comment row',
-      );
-      await action.click();
-      await waitFor([page.locator('[data-person-context]')], 'context line');
-    },
   },
   {
     // Inside a DM the header photo opens the photo only: dark overlay, the

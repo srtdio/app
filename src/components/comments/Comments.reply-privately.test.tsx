@@ -5,11 +5,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommentRow, CommentResult } from '@srtdio/comments';
 
-// Reply privately on post and brief comments: shown only on someone else's
-// comment with a known current author (never mine, a legacy author or a former
-// member), between Reply and Copy; a tap opens the person card's inline
-// message for the author with the comment as its source (no navigation). The
-// author's photo and name carry the same source.
+// Reply privately on post and brief comments: no button on the row (6 Nov
+// 2026); a tap on the author's photo or name opens the person card's inline
+// message with the comment as its source (no navigation), only on someone
+// else's comment with a known current author (never mine, a legacy author or
+// a former member).
 
 type ListResult = CommentResult<CommentRow[]>;
 
@@ -159,10 +159,6 @@ function actionWords(id: string): string[] {
   );
 }
 
-function replyPrivately(id: string): HTMLButtonElement | null {
-  return rowEl(id)?.querySelector<HTMLButtonElement>('[data-row-action="reply-privately"]') ?? null;
-}
-
 beforeEach(() => {
   h.rows = [
     row('c-other', OTHER, `Can @[${ME}] check the hook?`, {
@@ -186,25 +182,11 @@ afterEach(() => {
 });
 
 describe('Reply privately on comments', () => {
-  it("shows on another member's comment, between Reply and Copy", async () => {
+  it('no row carries a Reply privately button: Reply and Copy only', async () => {
     await mount();
-    expect(actionWords('c-other')).toEqual(['Resolve', 'Reply', REPLY_PRIVATELY, 'Copy']);
-    const button = replyPrivately('c-other');
-    expect(button?.className).toContain('h-11');
-    expect(button?.className).toContain('min-w-[44px]');
-  });
-
-  it('is hidden on my own, a former member and a legacy author', async () => {
-    await mount();
-    for (const id of ['c-mine', 'c-gone', 'c-legacy']) {
-      expect(replyPrivately(id)).toBeNull();
-      expect(actionWords(id)).not.toContain(REPLY_PRIVATELY);
-    }
-  });
-
-  it('draws nothing outside a router (nowhere to open)', async () => {
-    await mount(false);
-    expect(replyPrivately('c-other')).toBeNull();
+    expect(actionWords('c-other')).toEqual(['Resolve', 'Reply', 'Copy']);
+    expect(host?.querySelector('[data-row-action="reply-privately"]')).toBeNull();
+    expect(actionWords('c-other')).not.toContain(REPLY_PRIVATELY);
   });
 
   const QUOTE = {
@@ -217,26 +199,18 @@ describe('Reply privately on comments', () => {
     link: { kind: 'comment', entityType: 'brief', entityId: 'brief-1', commentId: 'c-other' },
   };
 
-  it('a tap opens the inline message card with the comment as its source', async () => {
-    await mount();
-    const button = replyPrivately('c-other');
-    act(() => button?.click());
-    const request = personCardSnapshot();
-    expect(request?.userId).toBe(OTHER);
-    expect(request?.view).toBe('card');
-    expect(request?.trigger).toBe(button);
-    expect(request?.source).toEqual(QUOTE);
-  });
-
-  it("the author's name opens the card carrying the same source", async () => {
+  it('a tap on the author opens the inline message card with the comment as its source', async () => {
     await mount();
     const trigger = rowEl('c-other')?.querySelector<HTMLElement>(
       `[data-person-trigger="${OTHER}"]`,
     );
     expect(trigger).not.toBeNull();
     act(() => trigger?.click());
-    expect(personCardSnapshot()?.userId).toBe(OTHER);
-    expect(personCardSnapshot()?.source).toEqual(QUOTE);
+    const request = personCardSnapshot();
+    expect(request?.userId).toBe(OTHER);
+    expect(request?.view).toBe('card');
+    expect(request?.trigger).toBe(trigger);
+    expect(request?.source).toEqual(QUOTE);
   });
 
   it('my own comment and a former member open the card with no source', async () => {

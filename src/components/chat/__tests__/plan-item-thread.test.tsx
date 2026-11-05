@@ -81,7 +81,11 @@ vi.mock('@/lib/chat/plans', async (importOriginal) => ({
   readItemScreen: async () => env.result,
 }));
 
-import { PlanItemScreen, planItemMenuItems } from '@/components/chat/PlanItemScreen';
+import {
+  COMMENT_PLACEHOLDER,
+  PlanItemScreen,
+  planItemMenuItems,
+} from '@/components/chat/PlanItemScreen';
 import {
   MENTION_TEAM_NOTE,
   PLAN_RUN_GAP_MS,
@@ -483,30 +487,25 @@ afterEach(async () => {
   resetHistorySteps();
 });
 
-describe('the who-can-see chip', () => {
-  it('agency: one chip toggles Everyone can see and Creators only; the placeholder follows', async () => {
+describe('one chat per item', () => {
+  it('agency: no who-can-see chip; every comment goes to everyone', async () => {
     await mount('agency');
-    expect($('[data-plan-visibility]')).toBeNull();
-    const chip = $('[data-plan-visibility-chip]') as HTMLButtonElement;
-    expect(chip.textContent).toBe('Everyone can see');
-    expect(box().placeholder).toBe('Comment for everyone');
-    await act(async () => chip.click());
-    const on = $('[data-plan-visibility-chip]') as HTMLButtonElement;
-    expect(on.getAttribute('data-plan-visibility-chip')).toBe('team');
-    expect(on.textContent).toBe('Creators only');
-    expect(on.querySelector('svg')).not.toBeNull();
-    expect(on.className).toContain('bg-warn-soft');
-    expect(box().placeholder).toBe('Note for creators only');
-    // The laptop hint sits on the chip's line, on the right.
-    const hint = $('[data-plan-comment-hint]') as HTMLElement;
-    expect(hint.parentElement).toBe(on.parentElement);
-    expect(hint.className).toContain('ml-auto');
+    expect($('[data-plan-visibility-chip]')).toBeNull();
+    expect($('[data-plan-visibility-line]')).toBeNull();
+    expect(box().placeholder).toBe(COMMENT_PLACEHOLDER);
+    box().focus();
+    await act(async () => type(box(), 'For all'));
+    await act(async () => key(box(), { key: 'Enter' }));
+    await settle();
+    const args = env.comment.mock.calls[0]?.[1] as { p_visibility: string };
+    expect(args.p_visibility).toBe('everyone');
   });
 
-  it('client: a plain line, no chip, and no More button', async () => {
+  it('client: the same box, no chip and no line, and no More button', async () => {
     await mount('client');
     expect($('[data-plan-visibility-chip]')).toBeNull();
-    expect($('[data-plan-visibility-line]')?.textContent).toBe('Everyone in this plan can see');
+    expect($('[data-plan-visibility-line]')).toBeNull();
+    expect(box().placeholder).toBe(COMMENT_PLACEHOLDER);
     expect($('[data-plan-item-more]')).toBeNull();
   });
 });
@@ -536,16 +535,6 @@ describe('@ tagging', () => {
     expect(options()).not.toContain(ME);
   });
 
-  it('creators only: approvers are left out and the one note line shows', async () => {
-    await mount('agency');
-    await act(async () => ($('[data-plan-visibility-chip]') as HTMLButtonElement).click());
-    box().focus();
-    await act(async () => type(box(), '@'));
-    await settle();
-    expect(options()).toEqual([ASHA]);
-    expect($('[data-plan-mention-note]')?.textContent).toBe(MENTION_TEAM_NOTE);
-  });
-
   it('a plan not shared with the client: agency side only, even for Everyone', async () => {
     await mount('agency', { ...BUNDLE, plan: { ...BUNDLE.plan, audience: 'team' } });
     box().focus();
@@ -570,26 +559,6 @@ describe('@ tagging', () => {
     const args = env.comment.mock.calls[0]?.[1] as { p_body: string; p_visibility: string };
     expect(args.p_body).toBe(`@[${ASHA}] looks good`);
     expect(args.p_visibility).toBe('everyone');
-  });
-
-  it('Creators only with an approver tagged: the note shows and Send waits until it is removed', async () => {
-    await mount('agency');
-    box().focus();
-    await act(async () => type(box(), '@cl'));
-    await settle();
-    await act(async () => key(box(), { key: 'Tab' }));
-    await settle();
-    expect(box().value).toBe('@cli ');
-    await act(async () => ($('[data-plan-visibility-chip]') as HTMLButtonElement).click());
-    const send = $('[data-plan-comment-send]') as HTMLButtonElement;
-    expect(send.disabled).toBe(true);
-    expect($('[data-plan-mention-blocked]')?.textContent).toBe(MENTION_TEAM_NOTE);
-    await act(async () => key(box(), { key: 'Enter' }));
-    await settle();
-    expect(env.comment).not.toHaveBeenCalled();
-    await act(async () => type(box(), 'just us'));
-    expect(($('[data-plan-comment-send]') as HTMLButtonElement).disabled).toBe(false);
-    expect($('[data-plan-mention-blocked]')).toBeNull();
   });
 
   it('a server invalid_mention refusal toasts the note and keeps the draft', async () => {

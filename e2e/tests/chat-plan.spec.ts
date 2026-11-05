@@ -226,15 +226,15 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(confirm).toBeHidden();
   await expect(item.locator('[data-plan-status] [data-plan-pill="team"]')).toHaveText('Checked');
 
-  // A creators-only comment: the chip turns it on; the bubble is tinted, with the lock label.
-  await item.locator('[data-plan-visibility-chip="everyone"]').click();
-  await expect(item.locator('[data-plan-visibility-chip="team"]')).toHaveText('Creators only');
+  // One chat per item: no who-can-see chip; a comment goes to everyone.
+  await expect(item.locator('[data-plan-visibility-chip]')).toHaveCount(0);
   await item.getByRole('textbox', { name: 'Comment' }).fill('Need drone shots, checking Tuesday.');
   await item.getByRole('button', { name: 'Send comment' }).click();
-  const note = item.locator('[data-plan-comment="team"]');
+  const note = item.locator('[data-plan-comment="everyone"]', {
+    hasText: 'Need drone shots, checking Tuesday.',
+  });
   await expect(note).toBeVisible();
-  await expect(note.getByText('Creators only')).toBeVisible();
-  await expect(note.locator('[data-plan-comment-bubble]')).toHaveClass(/bg-warn-soft/);
+  await expect(note.getByText('Creators only')).toHaveCount(0);
 
   // Back closes one layer: the item; the Draft plan shows the team OK pill.
   await page.goBack();
@@ -430,9 +430,7 @@ async function clientFlow(page: Page): Promise<void> {
   await expect(item).toBeVisible();
   await expect(item.getByText('Can we keep it under 30 seconds?')).toBeVisible();
   await expect(item.locator('[data-plan-visibility-chip]')).toHaveCount(0);
-  await expect(item.locator('[data-plan-visibility-line]')).toHaveText(
-    'Everyone in this plan can see',
-  );
+  await expect(item.locator('[data-plan-visibility-line]')).toHaveCount(0);
   await item.locator('[data-plan-approve]').click();
   const confirm = page.getByRole('dialog', { name: 'Approve' });
   await expect(confirm).toBeVisible();

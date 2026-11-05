@@ -166,8 +166,6 @@ const REQUIRED: readonly string[] = [
   'plan-tab-week',
   'plan-tab-week-dark',
   'plan-tab-week-zero',
-  'post-comment-reply-privately',
-  'post-comment-reply-privately-card',
   'post-detail',
   'post-detail-approver',
   'post-more-menu',

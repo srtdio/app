@@ -46,7 +46,6 @@ import { civilDay, formatTime } from '@/lib/time';
 import { isFormerMember, resolvePersonMentionText } from '@/lib/chat/mentions';
 import { canReplyPrivately, planCommentPrivateReplyDraft } from '@/lib/reply-privately';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
-import { ReplyPrivatelyButton } from '@/components/comments/ReplyPrivatelyButton';
 import { supabase } from '@/lib/supabase';
 import { peekWorkspaceMembers, type WorkspaceMembersData } from '@/lib/workspace-members';
 
@@ -113,13 +112,6 @@ const AGENCY_ROLES = new Set(['owner', 'admin', 'agency']);
 /** The one line when an approver cannot be tagged (picker, box, server refusal toast). */
 export const MENTION_TEAM_NOTE =
   "Approvers can't see creators-only notes, so they can't be tagged here.";
-
-/** The client's line under the box (no chip). */
-export const CLIENT_VISIBILITY_LINE = 'Everyone in this plan can see';
-
-/** The agency chip's labels. */
-export const EVERYONE_CHIP_LABEL = 'Everyone can see';
-export const TEAM_CHIP_LABEL = TEAM_ONLY_LABEL;
 
 /** One thread row: a day line or a comment with its place in its run. */
 export type PlanThreadRow =
@@ -409,7 +401,7 @@ function PlanBubble(props: {
   // The author's photo and name open the person card (a pending own comment
   // and an author with no id have nothing to open).
   const authorId = !mine && !c.pending ? authorUserId : null;
-  // Reply privately's quote: the card's source when the author is tapped too.
+  // Reply privately: a tap on the author opens the card with this comment as its source.
   const quote =
     replyTo !== null
       ? (): PrivateReplyDraft =>
@@ -516,13 +508,6 @@ function PlanBubble(props: {
           <time dateTime={c.createdAt} className="px-1 font-mono text-sm tabular-nums text-fg-3">
             {formatTime(c.createdAt)}
           </time>
-        ) : null}
-        {replyTo !== null ? (
-          <div data-plan-comment-actions="" className="-ml-2 flex items-center">
-            {quote !== null ? (
-              <ReplyPrivatelyButton authorUserId={replyTo.authorUserId} draft={quote} />
-            ) : null}
-          </div>
         ) : null}
       </div>
     </li>
