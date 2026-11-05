@@ -285,7 +285,7 @@ function seedDatedTasks(network: HarnessNetwork): void {
   );
 }
 
-/** The group chat's Tasks page. */
+/** The group chat's Tasks sheet, open on its opening chip (Today). */
 async function openTasks(page: Page): Promise<Locator> {
   await openChat(page, GROUP_NAME);
   await tap([page.getByRole('button', { name: /^Tasks(, new)?$/ })], 'Tasks button');
@@ -767,8 +767,8 @@ const SCREENS: Screen[] = [
     steps: openStatusDrawer,
   },
   {
-    // The Tasks page: every section (Overdue in the bad tone, Today, This
-    // week, Later, No date), Done folded, the add line.
+    // The Tasks sheet at the height of what it holds, on Today: the chips,
+    // the row, the add row with its day choices.
     name: 'chat-tasks-sheet',
     seed: creator,
     extra: seedDatedTasks,
@@ -778,15 +778,17 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // Done open: what was due and when it was done.
-    name: 'chat-tasks-done-open',
+    // Full screen (from the menu) on Past: Not done (overdue, bad tone) above Done.
+    name: 'chat-tasks-past-full',
     seed: creator,
     extra: seedDatedTasks,
     url: '/chat',
     steps: async (page) => {
       const sheet = await openTasks(page);
-      await tap([sheet.locator('[data-task-done-fold]')], 'Done fold');
-      await waitFor([sheet.locator('[data-task-section="done"] [data-task-row-id]')], 'Done rows');
+      await tap([sheet.getByRole('button', { name: 'More actions' })], 'Tasks menu');
+      await tap([page.getByRole('menuitem', { name: 'Full screen' })], 'Full screen');
+      await tap([sheet.locator('[data-task-when-chip="past"]')], 'Past chip');
+      await waitFor([sheet.locator('[data-task-section="done"]')], 'Past sections');
     },
   },
   {
@@ -803,7 +805,7 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // Search (from the ⋯ menu): one flat list of matches across every section.
+    // Search (from the menu) takes the chip line: one flat list across every chip.
     name: 'chat-tasks-search',
     seed: creator,
     extra: seedDatedTasks,

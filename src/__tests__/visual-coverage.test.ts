@@ -66,7 +66,7 @@ const REQUIRED: readonly string[] = [
   'chat-search-empty',
   'chat-status-drawer',
   'chat-status-drawer-plan',
-  'chat-tasks-done-open',
+  'chat-tasks-past-full',
   'chat-tasks-row-menu',
   'chat-tasks-search',
   'chat-tasks-sheet',
