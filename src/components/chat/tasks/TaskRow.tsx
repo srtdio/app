@@ -16,6 +16,13 @@
 // one), Delete last. The trailing click of a long-press is swallowed so it
 // never also starts an edit.
 //
+// Delete is also one gesture away: on touch the row swipes left (the
+// swipe-to-reply core mirrored, src/lib/chat/swipe-reply.ts) and a bin shows
+// behind its right edge, bad at rest, ink-filled once armed; released past the
+// trigger (or flicked) the row is queued for Save, struck, with Undo. On
+// laptop (useIsLaptop) a bin button sits at the end of every row instead. The
+// row follows the finger on X and springs home (lib/motion paintSwipe).
+//
 // The chip's menu (P0 Urgent, P1 High, P2 Normal, current ticked) renders in a
 // portal layer above the page, never clipped by the scrolling list: below the
 // chip, flipped above when space below is short, clamped on screen. A scroll
@@ -24,7 +31,14 @@
 // Mark checked draws the tick (drawTick). Never a fade.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, MouseEvent, ReactElement, ReactNode, RefObject } from 'react';
+import type {
+  KeyboardEvent,
+  MouseEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactElement,
+  ReactNode,
+  RefObject,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
@@ -38,15 +52,16 @@ import {
   IconMinus,
   IconTrash,
 } from '@/components/ui/icons';
-import { useMenuGesture } from '@/components/ui/useLongPress';
+import { cancelPendingLongPressesWithin, useMenuGesture } from '@/components/ui/useLongPress';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { STATUS_LABEL, TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
 import { Highlight } from '@/components/ui/SearchHighlight';
 import { cn } from '@/lib/cn';
 import { useDismissLayer } from '@/lib/modal-focus';
-import { viewportSize } from '@/lib/use-is-laptop';
+import { useIsLaptop, usePrefersReducedMotion, viewportSize } from '@/lib/use-is-laptop';
 import { centreOf, menuOrigin } from '@/components/ui/popover-classes';
-import { drawTick, GlideItem, growFromTrigger } from '@/lib/motion';
+import { drawTick, GlideItem, growFromTrigger, paintSwipe } from '@/lib/motion';
+import { createSwipeReplyController, type SwipeReplyController } from '@/lib/chat/swipe-reply';
 import {
   PRIORITY_LABEL,
   TASK_PRIORITIES,
@@ -60,6 +75,7 @@ import type { DayChoice, TaskDateLine } from '@/lib/chat/task-when';
 
 const NOT_SAVED = 'Not saved';
 export const PICK_DATE_LABEL = 'Pick a date';
+export const DELETE_LABEL = 'Delete';
 
 const P_TAG: Record<TaskPriority, string> = {
   0: 'bg-bad-soft text-bad',
@@ -460,7 +476,7 @@ export function rowMenuItems(menu: RowMenu, onDelete: () => void): ActionMenuIte
   }
   items.push({
     id: 'delete',
-    label: 'Delete',
+    label: DELETE_LABEL,
     icon: IconTrash,
     tone: 'danger',
     onSelect: onDelete,
@@ -468,9 +484,100 @@ export function rowMenuItems(menu: RowMenu, onDelete: () => void): ActionMenuIte
   return items;
 }
 
+/**
+ * The bin behind a row's right edge, revealed as the row slides left. 32px
+ * circle, bad ink on the panel at rest, ink-filled when armed (data-armed).
+ * Scale and opacity are painted per frame by paintSwipe; at rest the classes
+ * hold it at scale 0, opacity 0.
+ */
+function SwipeDeleteIcon(props: { iconRef: RefObject<HTMLSpanElement> }): ReactElement {
+  return (
+    <span
+      ref={props.iconRef}
+      aria-hidden="true"
+      data-task-swipe-icon=""
+      className="pointer-events-none absolute inset-y-0 right-2 my-auto flex h-8 w-8 scale-0 items-center justify-center rounded-full bg-panel-3 text-bad opacity-0 data-[armed]:bg-accent data-[armed]:text-accent-fg"
+    >
+      <IconTrash size={ICON_SIZE.nav} />
+    </span>
+  );
+}
+
+/**
+ * The row's swipe to delete: touch and pen only (the core ignores a mouse),
+ * off while the row is already queued. The trailing click is swallowed so a
+ * swipe never also ticks, edits or opens the chip.
+ */
+function useSwipeDelete(args: {
+  sliderRef: RefObject<HTMLDivElement>;
+  iconRef: RefObject<HTMLSpanElement>;
+  enabled: boolean;
+  onDelete: () => void;
+}): {
+  handlers: {
+    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void;
+    onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => void;
+    onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => void;
+    onPointerCancel: () => void;
+  };
+  onClickCapture: (e: MouseEvent<HTMLDivElement>) => void;
+} {
+  const latest = useRef(args);
+  latest.current = args;
+  const reducedMotion = usePrefersReducedMotion();
+  const reduced = useRef(reducedMotion);
+  reduced.current = reducedMotion;
+  const ref = useRef<SwipeReplyController | null>(null);
+  const { sliderRef, iconRef } = args;
+  if (ref.current === null) {
+    ref.current = createSwipeReplyController({
+      direction: 'left',
+      onReply: () => latest.current.onDelete(),
+      onFrame: (frame) => paintSwipe(sliderRef.current, iconRef.current, frame, 'left'),
+      onStart: (pointerId) => {
+        // A swipe never opens the menu: end the title's hold (it would fire at
+        // 10px; the swipe locks at 8px) and keep the pointer on the row.
+        if (sliderRef.current !== null) cancelPendingLongPressesWithin(sliderRef.current);
+        if (pointerId === undefined) return;
+        try {
+          sliderRef.current?.setPointerCapture(pointerId);
+        } catch {
+          // The pointer is already gone; the gesture ends on its own.
+        }
+      },
+      enabled: () => latest.current.enabled,
+      reducedMotion: () => reduced.current,
+    });
+  }
+  const swipe = ref.current;
+  useEffect(() => () => swipe.dispose(), [swipe]);
+  return {
+    handlers: {
+      onPointerDown: (e) => swipe.handlers.onPointerDown(e),
+      onPointerMove: (e) => swipe.handlers.onPointerMove(e),
+      onPointerUp: (e) => swipe.handlers.onPointerUp(e),
+      onPointerCancel: () => swipe.handlers.onPointerCancel(),
+    },
+    onClickCapture: (e) => {
+      if (!swipe.consumeClickSuppression()) return;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+  };
+}
+
 export function TaskRow(props: TaskRowProps): ReactElement {
   const priorityMarked = props.marks.some((m) => m.kind === 'priority');
   const [menuOpen, setMenuOpen] = useState(false);
+  const laptop = useIsLaptop();
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const swipeIconRef = useRef<HTMLSpanElement>(null);
+  const swipe = useSwipeDelete({
+    sliderRef,
+    iconRef: swipeIconRef,
+    enabled: !props.queuedDelete,
+    onDelete: props.onDelete,
+  });
   // Mark checked: the tick draws (220 ms) when the box turns done, never on a
   // row that paints done.
   const tickRef = useRef<HTMLButtonElement>(null);
@@ -490,9 +597,17 @@ export function TaskRow(props: TaskRowProps): ReactElement {
       {...(props.dot ? { 'data-task-marked': '' } : {})}
       {...(props.queuedDelete ? { 'data-task-deleting': '' } : {})}
       {...(menuOpen ? { 'data-task-menu-open': '' } : {})}
-      className={cn('flex flex-col', (props.dot || menuOpen) && 'bg-hover-fill')}
+      className={cn('relative flex flex-col', (props.dot || menuOpen) && 'bg-hover-fill')}
     >
-      <div className="flex min-h-[44px] items-start gap-1 pl-1 pr-1">
+      {props.queuedDelete ? null : <SwipeDeleteIcon iconRef={swipeIconRef} />}
+      <div
+        ref={sliderRef}
+        data-task-swipe=""
+        {...swipe.handlers}
+        onClickCapture={swipe.onClickCapture}
+        // Vertical scroll stays the list's; a horizontal move is the swipe's.
+        className="relative flex min-h-[44px] touch-pan-y touch-pinch-zoom items-start gap-1 pl-1 pr-1"
+      >
         <IconButton
           buttonRef={tickRef}
           type="button"
@@ -539,6 +654,18 @@ export function TaskRow(props: TaskRowProps): ReactElement {
             onPick={props.onPriority}
           />
         )}
+        {laptop && !props.queuedDelete ? (
+          <IconButton
+            type="button"
+            label={`${DELETE_LABEL}: ${props.title}`}
+            data-task-delete=""
+            onClick={props.onDelete}
+            onContextMenu={(e) => e.preventDefault()}
+            className={cn('shrink-0 text-fg-3 hover:text-bad', NO_TOUCH_SELECT)}
+          >
+            <IconTrash size={ICON_SIZE.inline} />
+          </IconButton>
+        ) : null}
       </div>
       {menu !== undefined ? (
         <ActionMenu

@@ -363,3 +363,49 @@ describe('createSwipeReplyController', () => {
     expect(onStart).not.toHaveBeenCalled();
   });
 });
+
+describe("direction left (a task row's swipe to delete)", () => {
+  it('mirrors the gesture: leftward locks and fires, rightward releases', () => {
+    const { c, onReply, last } = setup({ direction: 'left' });
+    c.handlers.onPointerDown(touch(0, 0, 0));
+    for (let x = 1; x <= 70; x += 1) c.handlers.onPointerMove(touch(-x, 0, x * 10));
+    expect(c.swiping()).toBe(true);
+    // The frame carries the magnitude; the view mirrors it.
+    expect(last()?.offset).toBe(64 + (70 - 64) * 0.3);
+    expect(last()?.armed).toBe(true);
+    c.handlers.onPointerUp(touch(-70, 0, 700));
+    expect(onReply).toHaveBeenCalledTimes(1);
+
+    const right = setup({ direction: 'left' });
+    drag(right.c, 30);
+    expect(right.c.swiping()).toBe(false);
+    right.c.handlers.onPointerUp();
+    expect(right.onReply).not.toHaveBeenCalled();
+  });
+
+  it('a press at the right screen edge belongs to the system gesture', () => {
+    vi.stubGlobal('window', {
+      innerWidth: 400,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    });
+    const { c } = setup({ direction: 'left' });
+    c.handlers.onPointerDown({
+      clientX: 390,
+      clientY: 0,
+      pointerType: 'touch',
+      pointerId: 1,
+      timeStamp: 0,
+    });
+    for (let x = 1; x <= 40; x += 1) {
+      c.handlers.onPointerMove({
+        clientX: 390 - x,
+        clientY: 0,
+        pointerType: 'touch',
+        pointerId: 1,
+        timeStamp: x * 10,
+      });
+    }
+    expect(c.swiping()).toBe(false);
+  });
+});

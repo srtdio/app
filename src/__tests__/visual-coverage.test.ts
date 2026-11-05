@@ -66,10 +66,12 @@ const REQUIRED: readonly string[] = [
   'chat-search-empty',
   'chat-status-drawer',
   'chat-status-drawer-plan',
+  'chat-tasks-delete',
   'chat-tasks-past-full',
   'chat-tasks-row-menu',
   'chat-tasks-search',
   'chat-tasks-sheet',
+  'chat-tasks-swipe',
   'chat-thread',
   'chat-thread-files-removed',
   'chat-thread-group',
@@ -220,6 +222,7 @@ const PHONE_ONLY_NAMES = [
   'cockpit-sheet-traffic',
   'person-card-inline',
   'pipeline-search-focused',
+  'chat-tasks-swipe',
 ];
 
 /**

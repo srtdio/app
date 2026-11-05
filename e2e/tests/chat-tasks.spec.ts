@@ -14,7 +14,8 @@ import { withSaveData } from '../helpers/save-data';
 
 // The chat Tasks: one shared list every member edits the same way, a sheet at
 // the height of what it holds. The composer button, the sheet (chips, tick,
-// inline edit, the priority menu, add, the row menu's Delete), nothing
+// inline edit, the priority menu, add, a swipe left or the row menu's Delete),
+// nothing
 // written until one Save (one chat_task_save_batch), one
 // "edited tasks" line per Save that expands in place, the marks another
 // person's Save leaves, both editing the same task (Keep mine / Keep theirs),
@@ -81,6 +82,22 @@ async function rowMenuPick(
   await row.locator('[data-task-title]').click({ button: 'right' });
   await page.getByRole('menuitem', { name: label }).click();
   await expect(page.getByRole('menuitem')).toHaveCount(0);
+}
+
+/** A finger drags a row's title by dx px (left when negative) and lets go, on touch. */
+async function swipeRow(row: ReturnType<Page['locator']>, dx: number): Promise<void> {
+  const title = row.locator('[data-task-title]');
+  const box = await title.boundingBox();
+  if (box === null) throw new Error('row has no box');
+  const y = box.y + box.height / 2;
+  const x0 = box.x + box.width / 2;
+  const touch = { pointerType: 'touch', pointerId: 7, isPrimary: true, clientY: y };
+  await title.dispatchEvent('pointerdown', { ...touch, clientX: x0 });
+  const steps = 8;
+  for (let i = 1; i <= steps; i += 1) {
+    await title.dispatchEvent('pointermove', { ...touch, clientX: x0 + (dx * i) / steps });
+  }
+  await title.dispatchEvent('pointerup', { ...touch, clientX: x0 + dx });
 }
 
 /** The fixture row of task number `n` in the group chat. */
@@ -246,14 +263,37 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
   expectClean(network);
 });
 
-test('Back with unsaved changes asks "Discard unsaved changes?" in the page; the row menu\'s Delete queues into Save', async ({
+test('Back with unsaved changes asks "Discard unsaved changes?" in the page; the Add button adds; a swipe left (or the row menu\'s Delete) queues into Save', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
   seedTasks(network.world);
   await openChat(page, GROUP_NAME);
   const sheet = await openSheet(page);
+  // The round Add button beside the well (44px, like the chat composer's
+  // send) adds a task as Enter does; it waits for text.
+  const add = sheet.getByRole('textbox', { name: 'Add a task' });
+  const addButton = sheet.getByRole('button', { name: 'Add task' });
+  await expect(addButton).toBeDisabled();
+  expectMinTouchTarget(await addButton.boundingBox());
+  // No date, so the sheet stays on this chip (a dated task moves it to Today).
+  await sheet.locator('[data-task-days="add"] [data-task-day="none"]').click();
+  await add.fill('Story frames');
+  await addButton.click();
+  await expect(rowOf(sheet, 'Story frames')).toHaveAttribute('data-task-marked', '');
+  await expect(addButton).toBeDisabled();
   const row = rowOf(sheet, 'Shot list');
+  // On a phone there is no bin button: the row swipes left. A short drag
+  // springs back; past the trigger it is queued, with Undo; the row menu still
+  // offers Delete.
+  await expect(row.locator('[data-task-delete]')).toHaveCount(0);
+  await swipeRow(row, -30);
+  await expect(row).not.toHaveAttribute('data-task-deleting', '');
+  await swipeRow(row, -90);
+  await expect(row).toHaveAttribute('data-task-deleting', '');
+  await expect(row.locator('[data-task-undo-delete]')).toBeVisible();
+  await row.locator('[data-task-undo-delete]').click();
+  await expect(row).not.toHaveAttribute('data-task-deleting', '');
   await rowMenuPick(page, row, 'Delete');
   await expect(row).toHaveAttribute('data-task-deleting', '');
   await sheet.getByRole('button', { name: 'Close tasks' }).click();

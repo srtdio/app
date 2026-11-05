@@ -165,13 +165,9 @@ import {
   type ChatLayout,
   type ChatSize,
 } from '@/components/chat/chat-type';
-import {
-  createSwipeReplyController,
-  type SwipeFrame,
-  type SwipeReplyController,
-} from '@/lib/chat/swipe-reply';
+import { createSwipeReplyController, type SwipeReplyController } from '@/lib/chat/swipe-reply';
 import type { PresignCache } from '@/lib/asset-presign';
-import { Bone, DUR_SLOW_MS, itemIn, pop, useFreshKeys } from '@/lib/motion';
+import { Bone, itemIn, paintSwipe, pop, useFreshKeys } from '@/lib/motion';
 import { freshTailIds } from '@/lib/chat/fresh-tail';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import {
@@ -3451,35 +3447,6 @@ export function createSelectionGesture(deps: {
       };
     },
   };
-}
-
-/**
- * Paint one swipe frame: the bubble moves on X only (translateX), the icon
- * scales 0.6 to 1 and fades in toward the threshold and fills when armed. At
- * rest the inline styles clear and the classes take over again.
- */
-function paintSwipe(
-  bubble: HTMLDivElement | null,
-  icon: HTMLSpanElement | null,
-  frame: SwipeFrame,
-): void {
-  const moved = frame.offset > 0;
-  // Spring-back on the slow motion token (nearest to the gesture's 180ms) and the enter curve.
-  const spring = frame.animate ? `${DUR_SLOW_MS}ms var(--ease-enter)` : '';
-  if (bubble !== null) {
-    // translateX only; the compositor hint lives only while the finger drags.
-    bubble.style.willChange = frame.dragging ? 'transform' : '';
-    bubble.style.transition = spring !== '' ? `transform ${spring}` : '';
-    bubble.style.transform = moved ? `translate3d(${frame.offset}px,0,0)` : '';
-  }
-  if (icon !== null) {
-    // The icon follows the frame with no motion of its own (the bubble's
-    // translateX spring is the only animation).
-    icon.style.transition = '';
-    icon.style.opacity = moved ? String(frame.progress) : '';
-    icon.style.transform = moved ? `scale(${frame.progress})` : '';
-    icon.toggleAttribute('data-armed', frame.armed);
-  }
 }
 
 /** What a thread list needs to draw card threads. */

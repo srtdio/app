@@ -3,8 +3,8 @@
 // with only the changed fields; change-then-revert keeps Save disabled; a
 // conflicting edit stays dirty with Keep mine / Keep theirs; a deleted one
 // offers Restore mine / OK; marks show other people's changes; Cmd+S saves;
-// the chips, the row menu's days, Past's Not done / Done, full screen, and
-// search (from the ⋯ menu) across every chip.
+// the chips, the row menu's days, Past's Not done / Done, full screen, a
+// swipe left to delete, and search (from the ⋯ menu) across every chip.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -69,6 +69,28 @@ async function pickRow(rows: HTMLButtonElement[], label: string): Promise<void> 
   });
 }
 const chipOf = (): string | null => q('[data-task-list]')?.getAttribute('data-task-chip') ?? null;
+/** One touch pointer event on a row's slider (jsdom has no PointerEvent: a MouseEvent carrying its fields). */
+function touch(el: Element, type: string, x: number, t: number): void {
+  const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: 20 });
+  Object.defineProperty(e, 'pointerType', { value: 'touch' });
+  Object.defineProperty(e, 'pointerId', { value: 7 });
+  Object.defineProperty(e, 'timeStamp', { value: t });
+  el.dispatchEvent(e);
+}
+/** A finger drags a row's title by dx px (left when negative) and lets go. */
+async function swipeRow(id: string, dx: number): Promise<void> {
+  const title = q(`[data-task-row-id="${id}"] [data-task-title]`);
+  if (title === null) throw new Error(`no row ${id}`);
+  await act(async () => {
+    touch(title, 'pointerdown', 200, 0);
+    const steps = 8;
+    for (let i = 1; i <= steps; i += 1) {
+      touch(title, 'pointermove', 200 + (dx * i) / steps, i * 16);
+    }
+    touch(title, 'pointerup', 200 + dx, steps * 16 + 16);
+    await wait(30);
+  });
+}
 const submitAdd = (): void => {
   act(() => q('[data-task-add]')?.dispatchEvent(new Event('submit', { bubbles: true })));
 };
@@ -136,6 +158,21 @@ describe('shared Tasks sheet', () => {
     ]);
     expect(payload.creates).toEqual([{ title: 'Story', priority: 1, side: 'client' }]);
     expect(payload.deletes).toEqual([]);
+  });
+
+  it('the round Add task button beside the well adds like Enter; it waits for text', () => {
+    render(x4FakeTasks([A]));
+    const add = q('[data-task-add-submit]') as HTMLButtonElement;
+    expect(add.getAttribute('aria-label')).toBe('Add task');
+    expect(add.disabled).toBe(true);
+    const input = q('[data-task-add] input') as HTMLInputElement;
+    act(() => x4Type(input, 'Story'));
+    expect(add.disabled).toBe(false);
+    act(() => add.click());
+    expect(q('[data-task-row-id] [data-task-title]')?.textContent).toContain('Story');
+    expect(input.value).toBe('');
+    expect(add.disabled).toBe(true);
+    expect(saveButton().disabled).toBe(false);
   });
 
   it('a new task takes Today by default, sends due_on, and the sheet moves to Today', async () => {
@@ -244,6 +281,29 @@ describe('shared Tasks sheet', () => {
     expect(saveButton().disabled).toBe(false);
     act(() => q('[data-task-undo-delete]')?.click());
     expect(q('[data-task-row-id="a"]')?.hasAttribute('data-task-deleting')).toBe(false);
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it('a swipe left past the trigger queues the task; a swipe right or a short one does not', async () => {
+    render(x4FakeTasks([A, B]));
+    await swipeRow('a', 40);
+    expect(q('[data-task-row-id="a"]')?.hasAttribute('data-task-deleting')).toBe(false);
+    await swipeRow('a', -30);
+    expect(q('[data-task-row-id="a"]')?.hasAttribute('data-task-deleting')).toBe(false);
+    await swipeRow('a', -90);
+    expect(q('[data-task-row-id="a"]')?.hasAttribute('data-task-deleting')).toBe(true);
+    expect(saveButton().disabled).toBe(false);
+    // The queued row holds Undo, and B is untouched.
+    expect(q('[data-task-row-id="a"] [data-task-undo-delete]')).not.toBeNull();
+    expect(q('[data-task-row-id="b"]')?.hasAttribute('data-task-deleting')).toBe(false);
+    // A tap on Undo (its own press, then its click) is not the swipe's trailing click.
+    const undo = q('[data-task-undo-delete]');
+    if (undo === null) throw new Error('no Undo');
+    act(() => {
+      touch(undo, 'pointerdown', 300, 500);
+      touch(undo, 'pointerup', 300, 520);
+      undo.click();
+    });
     expect(saveButton().disabled).toBe(true);
   });
 

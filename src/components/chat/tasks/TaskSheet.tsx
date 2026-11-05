@@ -158,6 +158,7 @@ import { errorText } from '@/lib/error-copy';
 export const TASK_SHEET_TITLE = 'Tasks';
 const SHARE_LABEL = 'Share to chat';
 export const ADD_PLACEHOLDER = 'Add a task';
+export const ADD_TASK_LABEL = 'Add task';
 export const DISCARD_TITLE = 'Discard unsaved changes?';
 const SAVE_FAILED = errorText('save', null);
 /** LoadError's "Couldn't load tasks." */
@@ -268,38 +269,43 @@ function AddRow(props: {
     setDueOn(today);
     inputRef.current?.focus();
   };
+  const blank = text.trim() === '';
   return (
     <li className="flex flex-col px-3 pt-3">
-      <form
-        data-task-add=""
-        onSubmit={submit}
-        className="flex min-h-[44px] items-center gap-1 rounded-lg border border-field bg-panel-2 pl-1 pr-1 lit-well focus-within:lit-focus"
-      >
-        <span
-          aria-hidden="true"
-          className="flex h-11 w-11 shrink-0 items-center justify-center text-fg-3"
+      {/* The well and, like the chat composer's send, a round add button beside it: Enter adds too. */}
+      <form data-task-add="" onSubmit={submit} className="flex items-center gap-2">
+        <div className="flex min-h-[44px] min-w-0 flex-1 items-center gap-1 rounded-lg border border-field bg-panel-2 pl-3 pr-1 lit-well focus-within:lit-focus">
+          <input
+            ref={inputRef}
+            type="text"
+            aria-label={ADD_PLACEHOLDER}
+            enterKeyHint="enter"
+            autoComplete="off"
+            value={text}
+            disabled={props.disabled}
+            maxLength={TASK_TITLE_MAX}
+            placeholder={ADD_PLACEHOLDER}
+            onChange={(e) => setText(e.target.value)}
+            className="min-h-[44px] min-w-0 flex-1 bg-transparent text-input text-fg placeholder:text-fg-3 outline-none md:text-base"
+          />
+          <PriorityChip
+            priority={priority}
+            onPick={setPriority}
+            label={`New task priority P${priority}`}
+            disabled={props.disabled}
+          />
+        </div>
+        <Button
+          type="submit"
+          variant="primary"
+          shape="round"
+          aria-label={ADD_TASK_LABEL}
+          data-task-add-submit=""
+          disabled={props.disabled || blank}
+          className="shrink-0"
         >
           <IconPlus size={ICON_SIZE.control} />
-        </span>
-        <input
-          ref={inputRef}
-          type="text"
-          aria-label={ADD_PLACEHOLDER}
-          enterKeyHint="enter"
-          autoComplete="off"
-          value={text}
-          disabled={props.disabled}
-          maxLength={TASK_TITLE_MAX}
-          placeholder={ADD_PLACEHOLDER}
-          onChange={(e) => setText(e.target.value)}
-          className="min-h-[44px] min-w-0 flex-1 bg-transparent text-input text-fg placeholder:text-fg-3 outline-none md:text-base"
-        />
-        <PriorityChip
-          priority={priority}
-          onPick={setPriority}
-          label={`New task priority P${priority}`}
-          disabled={props.disabled}
-        />
+        </Button>
       </form>
       <div
         data-task-days="add"

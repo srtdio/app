@@ -1,7 +1,9 @@
 // Button system regression: the task row's Undo, Keep mine / Keep theirs and
 // the Not saved Retry render the shared 44px, 8px-radius recipe; the title is
 // one 44px PressableRow carrying the date line; the row menu's rows end with
-// Delete and offer No date only once dated.
+// Delete and offer No date only once dated. Delete by gesture: on a phone the
+// swipe bin sits behind the row's right edge and there is no button; the
+// laptop bin button is covered in TaskRow.laptop.test.tsx.
 
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -45,9 +47,21 @@ function expectOnSystem(t: string): void {
 }
 
 describe('task row buttons', () => {
-  it('no delete button on the row: Delete is the last row of its menu', () => {
+  it('on a phone no delete button: the swipe bin behind the row, and Delete last in its menu', () => {
     const html = renderToStaticMarkup(<TaskRow {...props()} />);
-    expect(html).not.toContain('data-task-delete');
+    expect(html).not.toContain('data-task-delete=');
+    const bin = /<span[^>]*data-task-swipe-icon=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(bin).toContain('right-2');
+    expect(bin).toContain('text-bad');
+    expect(bin).toContain('scale-0');
+    expect(bin).toContain('data-[armed]:bg-accent');
+    // The row is the slider: vertical scroll stays the list's.
+    const slider = /<div[^>]*data-task-swipe=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(slider).toContain('touch-pan-y');
+    // A row already queued has no bin to swipe.
+    expect(renderToStaticMarkup(<TaskRow {...props({ queuedDelete: true })} />)).not.toContain(
+      'data-task-swipe-icon',
+    );
     const menu: RowMenu = {
       choices: [
         { key: 'today', label: 'Today', dueOn: '2026-11-05' },

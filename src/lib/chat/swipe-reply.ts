@@ -95,6 +95,12 @@ export interface SwipeReplyOptions {
   cancelRaf?: (handle: number) => void;
   /** Clock for samples without a timeStamp (ms). */
   now?: () => number;
+  /**
+   * Which way the gesture goes; default right (reply). 'left' mirrors it (a
+   * task row's swipe to delete): the frame's offset is still the magnitude,
+   * and a press within SWIPE_EDGE_PX of the right screen edge is the system's.
+   */
+  direction?: 'right' | 'left';
 }
 
 /** The bubble offset for a finger travel: 1:1 to the trigger, 0.3 beyond, capped, never left. */
@@ -132,11 +138,13 @@ function defaultNow(): number {
 }
 
 /**
- * Framework-free swipe-to-reply core, the sibling of createLongPressController.
- * Touch and pen only. A press is pending until it moves SWIPE_LOCK_PX: rightward
- * (and more horizontal than vertical) locks the swipe in, anything else releases
- * it for the list to scroll. A tap that never moves that far is not a swipe. A
- * press within SWIPE_EDGE_PX of the left edge is the system back gesture's.
+ * Framework-free swipe core, the sibling of createLongPressController: swipe
+ * to reply (rightward, the default) and, mirrored, a task row's swipe to
+ * delete (direction 'left'). Touch and pen only. A press is pending until it
+ * moves SWIPE_LOCK_PX: the gesture's way (and more horizontal than vertical)
+ * locks the swipe in, anything else releases it for the list to scroll. A tap
+ * that never moves that far is not a swipe. A press within SWIPE_EDGE_PX of
+ * the screen edge the system's own gesture owns is left to it.
  */
 export function createSwipeReplyController({
   onReply,
@@ -148,7 +156,9 @@ export function createSwipeReplyController({
   raf = defaultRaf,
   cancelRaf = defaultCancelRaf,
   now = defaultNow,
+  direction = 'right',
 }: SwipeReplyOptions): SwipeReplyController {
+  const sign = direction === 'left' ? -1 : 1;
   let phase: 'idle' | 'pending' | 'swiping' = 'idle';
   let startX = 0;
   let startY = 0;
@@ -208,6 +218,13 @@ export function createSwipeReplyController({
     reset();
   }
 
+  /** The screen edge the system's own gesture owns: left for a rightward swipe, right for a leftward one. */
+  function nearSystemEdge(clientX: number): boolean {
+    if (direction === 'right') return clientX < SWIPE_EDGE_PX;
+    const width = typeof window !== 'undefined' ? window.innerWidth : Number.POSITIVE_INFINITY;
+    return clientX > width - SWIPE_EDGE_PX;
+  }
+
   function samePointer(event: SwipePointerSample): boolean {
     return (
       pointerId === undefined || event.pointerId === undefined || event.pointerId === pointerId
@@ -224,14 +241,14 @@ export function createSwipeReplyController({
     const last = recent[recent.length - 1];
     const first = recent[0];
     if (last === undefined || first === undefined || last.t <= first.t) return 0;
-    return (last.x - first.x) / (last.t - first.t);
+    return (sign * (last.x - first.x)) / (last.t - first.t);
   }
 
   function onPointerDown(event: SwipePointerSample): void {
     reset();
     suppressClick = false;
     if ((event.pointerType ?? '') === 'mouse' || !enabled()) return;
-    if (event.clientX < SWIPE_EDGE_PX) return;
+    if (nearSystemEdge(event.clientX)) return;
     phase = 'pending';
     startX = event.clientX;
     startY = event.clientY;
@@ -247,12 +264,12 @@ export function createSwipeReplyController({
     while (samples.length > 2 && t - (samples[0]?.t ?? t) > SWIPE_VELOCITY_WINDOW_MS) {
       samples.shift();
     }
-    dx = event.clientX - startX;
+    dx = sign * (event.clientX - startX);
     const dy = event.clientY - startY;
     if (phase === 'pending') {
       if (dx * dx + dy * dy < SWIPE_LOCK_PX * SWIPE_LOCK_PX) return;
       if (dx <= 0 || Math.abs(dy) >= dx) {
-        // Vertical or leftward: not ours. The list scrolls, long-press as before.
+        // Vertical or the other way: not ours. The list scrolls, long-press as before.
         reset();
         return;
       }
