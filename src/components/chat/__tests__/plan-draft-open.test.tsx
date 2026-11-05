@@ -143,26 +143,48 @@ describe('item 2: Plans sheet', () => {
 });
 
 describe('item 3: header menu, rename, delete, subtitle', () => {
-  it('the menu: Rename always, Delete plan (danger, bin) only when allowed; 44px rows', () => {
+  it('the menu: Rename, Change dates, Delete plan (danger, bin) when allowed; 44px', () => {
     const noop = (): void => undefined;
     const both = renderToStaticMarkup(
-      <PlanHeaderMenu open canDelete onRename={noop} onDelete={noop} onClose={noop} />,
+      <PlanHeaderMenu
+        open
+        canDelete
+        onRename={noop}
+        onChangeDates={noop}
+        onDelete={noop}
+        onClose={noop}
+      />,
     );
     expect(both).toContain('role="menu"');
     expect(both).toContain('Rename');
     expect(both).toMatch(/<button(?=[^>]*data-plan-menu-delete="")(?=[^>]*class="[^"]*text-bad)/);
+    expect(both).toContain('Change dates');
     expect(both).toContain('Delete plan');
-    expect(both.match(/min-h-\[44px\]/g)).toHaveLength(2);
+    expect(both.match(/min-h-\[44px\]/g)).toHaveLength(3);
     // The menu grows from its trigger (growFromTrigger, a JS move): no CSS
     // transition, translate or rotate on the markup.
     expect(both).not.toMatch(/translate-x|rotate|transition/);
     const renameOnly = renderToStaticMarkup(
-      <PlanHeaderMenu open canDelete={false} onRename={noop} onDelete={noop} onClose={noop} />,
+      <PlanHeaderMenu
+        open
+        canDelete={false}
+        onRename={noop}
+        onChangeDates={noop}
+        onDelete={noop}
+        onClose={noop}
+      />,
     );
     expect(renameOnly).not.toContain('Delete plan');
     expect(
       renderToStaticMarkup(
-        <PlanHeaderMenu open={false} canDelete onRename={noop} onDelete={noop} onClose={noop} />,
+        <PlanHeaderMenu
+          open={false}
+          canDelete
+          onRename={noop}
+          onChangeDates={noop}
+          onDelete={noop}
+          onClose={noop}
+        />,
       ),
     ).toBe('');
   });
@@ -512,7 +534,7 @@ describe('item 7: moves keep or reset the approval', () => {
     expect(item).toMatch(/moveAsksKeep\(/);
     expect(item).toContain('void moveItemTo(day, false);');
     const screen = read('PlanScreen.tsx');
-    expect(screen).toMatch(/op: 'move',[\s\S]*?keep_reviews: keep,/);
+    expect(screen).toMatch(/op: 'move',[\s\S]*?keep_reviews: keep\b/);
     expect(screen).toMatch(/moveAsksKeep\(/);
     expect(screen).toContain('commitMove(moved, toDay, toIndex, false);');
   });

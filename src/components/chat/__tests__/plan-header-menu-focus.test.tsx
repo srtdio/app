@@ -31,6 +31,7 @@ function Probe(): ReactElement {
         open={open}
         canDelete
         onRename={() => undefined}
+        onChangeDates={() => undefined}
         onDelete={() => undefined}
         onClose={() => set(false)}
       />
@@ -63,9 +64,12 @@ describe('PlanHeaderMenu focus', () => {
     title?.focus();
     await act(async () => setOpen?.(true));
     const rename = document.querySelector<HTMLElement>('[data-plan-menu-rename]');
+    const dates = document.querySelector<HTMLElement>('[data-plan-menu-dates]');
     const del = document.querySelector<HTMLElement>('[data-plan-menu-delete]');
     expect(rename).not.toBeNull();
     expect(document.activeElement).toBe(rename);
+    await act(async () => key('ArrowDown'));
+    expect(document.activeElement).toBe(dates);
     await act(async () => key('ArrowDown'));
     expect(document.activeElement).toBe(del);
     await act(async () => key('ArrowDown'));
