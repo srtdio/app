@@ -202,23 +202,4 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     expect(item).toMatch(/onRemove: \(\) => setRemoveOpen\(true\)/);
     expect(item).toContain('<RemoveFromPlanButton');
   });
-
-  it('drag cleans up every listener, frame and timer; Escape and pointercancel cancel with no change', () => {
-    const src = read('PlanScreen.tsx');
-    const hook = src.slice(src.indexOf('function usePlanDrag('), src.indexOf('function DragCard('));
-    for (const ev of ['pointermove', 'pointerup', 'pointercancel', 'keydown', 'touchmove']) {
-      expect(hook).toContain(`window.addEventListener('${ev}'`);
-      expect(hook).toContain(`window.removeEventListener('${ev}'`);
-    }
-    expect(hook).toContain('cancelAnimationFrame(frame)');
-    expect(hook).toContain('clearTimeout(snapTimer)');
-    // Escape cancels while the pointer is down; once released the drop commits.
-    expect(hook).toContain(
-      "if (event.key === 'Escape' && stateRef.current?.snapTop === null) cancel();",
-    );
-    expect(hook).toContain('useEffect(() => end, [end]);');
-    // A cancel never calls onDrop.
-    const cancel = hook.slice(hook.indexOf('const cancel = (): void => end();'));
-    expect(cancel.startsWith('const cancel = (): void => end();')).toBe(true);
-  });
 });

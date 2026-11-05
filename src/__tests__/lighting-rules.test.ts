@@ -107,11 +107,6 @@ const OPACITY_ALLOW: readonly (readonly [string, string, string])[] = [
     "props.dimmed === true && 'opacity-50'",
     'a person avatar dimmed in the read sheet (a picture, not copy)',
   ],
-  [
-    'chat/PlanScreen.tsx',
-    "props.dimmed && 'opacity-25'",
-    'the drag ghost left in place while its lifted row floats (data-plan-row-lifted)',
-  ],
 ];
 
 const DEFINED = new Set([...CSS.matchAll(/\.(lit-[a-z-]+)/g)].map((m) => m[1]));
