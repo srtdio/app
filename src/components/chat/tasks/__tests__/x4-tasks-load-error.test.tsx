@@ -68,7 +68,8 @@ describe('X4 Tasks sheet load states', () => {
     show(sheet(tasks));
     expect(q('[role="alert"]')?.textContent).toContain("Couldn't load tasks.");
     expect(q('[data-task-list]')).toBeNull();
-    expect(q('[data-task-share]')).toBeNull();
+    // Nothing to search or share yet: no ⋯ menu.
+    expect(q('[aria-label="More actions"]')).toBeNull();
     const retry = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Retry');
     act(() => retry?.click());
     expect(tasks.refetch).toHaveBeenCalledTimes(1);

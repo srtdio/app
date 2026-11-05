@@ -134,6 +134,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Post and brief decisions render only through PostDecisionBar: phone bottom bar, laptop header right. Every surface that shows a post offers the same actions for the same role.
 - ⋯ menus use ui/ActionMenu only: sheet on phone, popover on laptop. Order: Open, Copy link, others, Delete last.
 - Sheets: title left, X right. Cancel only in footers, ghost, left of the primary.
+- Chat Tasks, Contact, Group info, Starred and Thread are modal pages (chat/ModalPanel): Back left, title, ⋯ right; never a sheet, an X or a half height.
 - New buttons: primary with IconPlus. Empty states have no create button.
 - Hide what a person can't do; never disable for permission.
 - Delete = UndoStrip for UNDO_MS (src/lib/undo.ts). ConfirmDialog only when the action cannot be undone.

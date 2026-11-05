@@ -285,7 +285,7 @@ function seedDatedTasks(network: HarnessNetwork): void {
   );
 }
 
-/** The group chat's Tasks sheet, open on its opening chip (Today). */
+/** The group chat's Tasks page. */
 async function openTasks(page: Page): Promise<Locator> {
   await openChat(page, GROUP_NAME);
   await tap([page.getByRole('button', { name: /^Tasks(, new)?$/ })], 'Tasks button');
@@ -767,8 +767,8 @@ const SCREENS: Screen[] = [
     steps: openStatusDrawer,
   },
   {
-    // The Tasks sheet, half height on Today: chips, search at the line's end,
-    // the date line, the add row with its day choices.
+    // The Tasks page: every section (Overdue in the bad tone, Today, This
+    // week, Later, No date), Done folded, the add line.
     name: 'chat-tasks-sheet',
     seed: creator,
     extra: seedDatedTasks,
@@ -778,32 +778,32 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // Full screen on Past: Not done (overdue, bad tone) above Done.
-    name: 'chat-tasks-past-full',
+    // Done open: what was due and when it was done.
+    name: 'chat-tasks-done-open',
     seed: creator,
     extra: seedDatedTasks,
     url: '/chat',
     steps: async (page) => {
       const sheet = await openTasks(page);
-      await tap([sheet.locator('[data-task-resize]')], 'Full screen');
-      await tap([sheet.locator('[data-task-when-chip="past"]')], 'Past chip');
-      await waitFor([sheet.locator('[data-task-section="done"]')], 'Past sections');
+      await tap([sheet.locator('[data-task-done-fold]')], 'Done fold');
+      await waitFor([sheet.locator('[data-task-section="done"] [data-task-row-id]')], 'Done rows');
     },
   },
   {
-    // A task's date line tapped: its day choices open under the row.
-    name: 'chat-tasks-row-date',
+    // A row's menu (long-press, right-click): Today, Tomorrow, Pick a date, No date, Delete.
+    name: 'chat-tasks-row-menu',
     seed: creator,
     extra: seedDatedTasks,
     url: '/chat',
     steps: async (page) => {
       const sheet = await openTasks(page);
-      await tap([sheet.locator('[data-task-number="8"] [data-task-when]')], 'date line');
-      await waitFor([sheet.locator('[data-task-day-editor]')], 'day choices');
+      const row = sheet.locator('[data-task-row-id]', { hasText: 'Hook options' });
+      await openMenuGesture(page, row.locator('[data-task-title]'));
+      await waitFor([page.getByRole('menuitem', { name: 'Delete' })], 'row menu');
     },
   },
   {
-    // Search open in the chip line, finding across every chip.
+    // Search (from the ⋯ menu): one flat list of matches across every section.
     name: 'chat-tasks-search',
     seed: creator,
     extra: seedDatedTasks,
@@ -811,7 +811,8 @@ const SCREENS: Screen[] = [
     hold: true,
     steps: async (page) => {
       const sheet = await openTasks(page);
-      await tap([sheet.locator('[data-task-search-open]')], 'Search tasks');
+      await tap([sheet.getByRole('button', { name: 'More actions' })], 'Tasks menu');
+      await tap([page.getByRole('menuitem', { name: 'Search tasks' })], 'Search tasks');
       await sheet.locator('[data-task-search] input').fill('ca');
       await waitFor([sheet.locator('[data-task-list][data-task-chip="search"]')], 'results');
     },
