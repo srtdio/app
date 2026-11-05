@@ -9,11 +9,12 @@
 // room, above it otherwise.
 
 import { useEffect, useRef, useState } from 'react';
-import type { ReactElement } from 'react';
+import type { KeyboardEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { centreOf, menuMoves } from '@/components/ui/popover-classes';
-import { useDismissLayer } from '@/lib/modal-focus';
+import { useDismissLayer, useModalScopeNode } from '@/lib/modal-focus';
+import { formatSpokenDate } from '@/lib/time';
 import { usePresence } from '@/lib/motion';
 import { viewportSize } from '@/lib/use-is-laptop';
 import { Button } from '@/components/ui/Button';
@@ -87,9 +88,76 @@ export function formatDisplay(value: string): string {
 }
 
 /**
+ * Move an ISO day by `days` (calendar arithmetic, no zone involved). Pure so the
+ * grid's arrow keys unit-test without a DOM.
+ */
+export function shiftDay(iso: string, days: number): string {
+  const parsed = parseISO(iso);
+  if (parsed === null) return iso;
+  const d = new Date(Date.UTC(parsed.year, parsed.monthIndex, parsed.day + days));
+  return toISO(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+/** Days each arrow key moves in the grid (Home/End: to the week's ends). */
+export function gridKeyTarget(iso: string, key: string): string | null {
+  const parsed = parseISO(iso);
+  if (parsed === null) return null;
+  const weekday = new Date(Date.UTC(parsed.year, parsed.monthIndex, parsed.day)).getUTCDay();
+  switch (key) {
+    case 'ArrowLeft':
+      return shiftDay(iso, -1);
+    case 'ArrowRight':
+      return shiftDay(iso, 1);
+    case 'ArrowUp':
+      return shiftDay(iso, -7);
+    case 'ArrowDown':
+      return shiftDay(iso, 7);
+    case 'Home':
+      return shiftDay(iso, -weekday);
+    case 'End':
+      return shiftDay(iso, 6 - weekday);
+    default:
+      return null;
+  }
+}
+
+/**
+ * The day that holds the grid's one tab stop for a shown month: `focusISO`
+ * when it is in that month, else the selected day, else today, else the 1st;
+ * never a day before `minISO` when another day in the month can take it.
+ */
+export function rovingDay(
+  year: number,
+  monthIndex: number,
+  focusISO: string,
+  selectedISO: string,
+  todayISO: string,
+  minISO?: string,
+): string {
+  const prefix = `${year}-${pad(monthIndex + 1)}-`;
+  const min = minISO ?? '';
+  const ok = (iso: string): boolean => iso.startsWith(prefix) && (min === '' || iso >= min);
+  for (const candidate of [focusISO, selectedISO, todayISO]) {
+    if (ok(candidate)) return candidate;
+  }
+  const first = toISO(year, monthIndex, 1);
+  if (min !== '' && min.startsWith(prefix) && min > first) return min;
+  return first;
+}
+
+/** Split day cells into week rows of seven (role=row in the grid). */
+export function weekRows<T>(cells: readonly T[]): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+  return rows;
+}
+
+/**
  * Day cell buttons for the calendar grid: 44x44 touch targets. The selected day
  * uses the accent fill; today (when not selected) carries an accent ring. Days
- * before minISO (when given) are greyed and cannot be picked. Pure (no hooks) so
+ * before minISO (when given) are greyed and cannot be picked. Each day's name is
+ * its spoken date (formatSpokenDate, e.g. "Saturday, 14 November 2026"); only
+ * `tabISO` takes Tab (a roving stop, the arrows move it). Pure (no hooks) so
  * picking a day and the markers are unit-testable.
  */
 export function dayCells(
@@ -99,9 +167,10 @@ export function dayCells(
   todayISO: string,
   onPick: (iso: string) => void,
   minISO?: string,
+  tabISO?: string,
 ): ReactElement[] {
   return monthGrid(year, monthIndex).map((day, index) => {
-    if (day === null) return <span key={`blank-${index}`} aria-hidden="true" />;
+    if (day === null) return <span key={`blank-${index}`} role="presentation" aria-hidden="true" />;
     const iso = toISO(year, monthIndex, day);
     const selected = iso === selectedISO;
     const isToday = iso === todayISO;
@@ -112,6 +181,10 @@ export function dayCells(
         type="button"
         role="gridcell"
         aria-selected={selected}
+        aria-label={formatSpokenDate(iso)}
+        {...(isToday ? { 'aria-current': 'date' as const } : {})}
+        data-iso={iso}
+        tabIndex={tabISO === undefined || iso === tabISO ? 0 : -1}
         disabled={past}
         aria-disabled={past ? 'true' : undefined}
         onClick={() => {
@@ -145,6 +218,8 @@ interface DatePickerProps {
   disablePast?: boolean;
   /** Show the "Clear date" and "Done" buttons under the grid. */
   actions?: boolean;
+  /** The trigger's id (a Field label points at it). */
+  id?: string;
 }
 
 export function DatePicker({
@@ -154,6 +229,7 @@ export function DatePicker({
   label,
   disablePast = false,
   actions = false,
+  id,
 }: DatePickerProps): ReactElement {
   const [open, setOpen] = useState(false);
   const now = new Date();
@@ -181,6 +257,44 @@ export function DatePicker({
   );
   const panelRef = presence.ref;
   useDismissLayer(open, () => setOpen(false), panelRef);
+  // Portaled onto <body>: inside a Sheet, the Sheet's Tab trap lets focus live here.
+  useModalScopeNode(panelRef, open);
+
+  // The grid's one tab stop. Open: focus moves onto it (the selected day, else
+  // today); the arrows move it and cross into the next or previous month.
+  const minISO = disablePast ? todayISO : undefined;
+  const [focusISO, setFocusISO] = useState('');
+  const tabISO = rovingDay(view.year, view.monthIndex, focusISO, value, todayISO, minISO);
+  useEffect(() => {
+    if (!open) {
+      setFocusISO('');
+      return;
+    }
+    const parsed = parseISO(value);
+    setFocusISO(parsed !== null ? value : todayISO);
+    // Only on open: the arrows own focus after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  useEffect(() => {
+    if (!open || focusISO === '') return;
+    const cell = panelRef.current?.querySelector<HTMLElement>(`[data-iso="${tabISO}"]`);
+    cell?.focus({ preventScroll: true });
+    // Focus follows the roving day only when it changes (open, an arrow key).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, focusISO]);
+
+  function onGridKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    const target = gridKeyTarget(tabISO, event.key);
+    if (target === null) return;
+    event.preventDefault();
+    if (minISO !== undefined && target < minISO) return;
+    const parsed = parseISO(target);
+    if (parsed === null) return;
+    if (parsed.year !== view.year || parsed.monthIndex !== view.monthIndex) {
+      setView({ year: parsed.year, monthIndex: parsed.monthIndex });
+    }
+    setFocusISO(target);
+  }
 
   function pick(iso: string): void {
     onChange(iso);
@@ -207,6 +321,7 @@ export function DatePicker({
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
+        {...(id !== undefined ? { id } : {})}
         {...(label !== undefined ? { 'aria-label': label } : {})}
         onClick={() => setOpen((prev) => !prev)}
         className="lit-well lit-hover flex h-11 w-full min-w-0 items-center gap-2 rounded-lg border border-field bg-panel-2 px-3 text-base mv-tint focus-visible:lit-focus"
@@ -256,20 +371,29 @@ export function DatePicker({
                     <IconChevronRight size={ICON_SIZE.inline} />
                   </IconButton>
                 </div>
-                <div className="grid grid-cols-7 place-items-center gap-0.5 text-center text-xs text-fg-3">
+                {/* Weekday letters are visual only: every day cell's name is its full spoken date. */}
+                <div
+                  aria-hidden="true"
+                  className="grid grid-cols-7 place-items-center gap-0.5 text-center text-xs text-fg-3"
+                >
                   {WEEKDAYS.map((weekday, index) => (
                     <span key={`${weekday}-${index}`}>{weekday}</span>
                   ))}
                 </div>
-                <div className="mt-1 grid grid-cols-7 place-items-center gap-0.5">
-                  {dayCells(
-                    view.year,
-                    view.monthIndex,
-                    value,
-                    todayISO,
-                    pick,
-                    disablePast ? todayISO : undefined,
-                  )}
+                <div
+                  role="grid"
+                  aria-label={`${MONTHS[view.monthIndex]} ${view.year}`}
+                  onKeyDown={onGridKeyDown}
+                  className="mt-1 grid grid-cols-7 place-items-center gap-0.5"
+                >
+                  {/* Week rows are display:contents, so the seven-column grid lays out as before. */}
+                  {weekRows(
+                    dayCells(view.year, view.monthIndex, value, todayISO, pick, minISO, tabISO),
+                  ).map((week, index) => (
+                    <div key={`week-${index}`} role="row" className="contents">
+                      {week}
+                    </div>
+                  ))}
                 </div>
                 {actions ? (
                   <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">

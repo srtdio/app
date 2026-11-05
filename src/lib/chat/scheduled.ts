@@ -28,6 +28,7 @@ import {
 } from '@/lib/chat/attachments';
 import { SEND_TIMEOUT_MS, type RecordFailed } from '@/lib/chat/record';
 import { formatTime } from '@/lib/time';
+import { errorText } from '@/lib/error-copy';
 
 type Functions = Database['public']['Functions'];
 
@@ -156,9 +157,9 @@ export { shortZoneName } from '@/lib/time';
 
 const SCHEDULE_RANGE_COPY = 'Pick a time at least 1 minute from now';
 const SCHEDULE_LIMIT_COPY = 'You already have 100 scheduled messages';
-export const SCHEDULE_FAILED_COPY = "Couldn't schedule. Try again.";
+export const SCHEDULE_FAILED_COPY = errorText('schedule', null);
 /** A picked file did not upload: nothing was scheduled. */
-export const SCHEDULE_UPLOAD_FAILED_COPY = "Couldn't upload. Try again.";
+export const SCHEDULE_UPLOAD_FAILED_COPY = errorText('upload', null);
 /** The Edit card's line under read-only files. */
 export const SCHEDULED_FILES_READONLY_COPY = 'To change files, cancel and schedule again.';
 
@@ -171,7 +172,7 @@ export function mapScheduleError(message: string): string | null {
   if (/scheduled message not found/i.test(message)) return null;
   if (/send time must be between/i.test(message)) return SCHEDULE_RANGE_COPY;
   if (/too many scheduled messages/i.test(message)) return SCHEDULE_LIMIT_COPY;
-  return SCHEDULE_FAILED_COPY;
+  return errorText('schedule', message);
 }
 
 /** "1 scheduled message" / "N scheduled messages". Pure. */

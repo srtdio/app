@@ -10,7 +10,7 @@
 
 import { mark } from '@/lib/perf-marks';
 import { linkTypedUsernames } from '@/lib/chat/mentions';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { itemIn, useFreshKeys } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -64,6 +64,9 @@ interface CommentComposerProps {
   /** Every draft change (token form, the same shape initialBody takes), so a
    *  parent can keep the draft across close/reopen. */
   onBodyChange?: (body: string) => void;
+  /** How many attachment chips the composer holds (any state), on each change,
+   *  so a parent can guard Back while a draft holds files. */
+  onAttachmentCountChange?: (count: number) => void;
 }
 
 export type PendingStatus =
@@ -111,6 +114,7 @@ export function CommentComposer({
   initialBody,
   submitAnchor,
   onBodyChange,
+  onAttachmentCountChange,
 }: CommentComposerProps): ReactElement {
   const [body, setBody] = useState('');
   // The MentionInput is contentEditable and uncontrolled; clearing the draft
@@ -129,6 +133,14 @@ export function CommentComposer({
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The chip count up to the parent (its Back guard); after commit, never on paint.
+  const chipCount = pending.length;
+  const onAttachmentCountRef = useRef(onAttachmentCountChange);
+  onAttachmentCountRef.current = onAttachmentCountChange;
+  useEffect(() => {
+    onAttachmentCountRef.current?.(chipCount);
+  }, [chipCount]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<MentionInputHandle>(null);

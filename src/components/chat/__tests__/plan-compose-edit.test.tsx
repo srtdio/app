@@ -257,7 +257,7 @@ describe('concept sheet: tiles and soft counter', () => {
   it('tiles plus No date (selected) replace the native date; 4-line description', () => {
     const html = sheet('', RANGE);
     expect(html).not.toContain('type="date"');
-    expect(html).toMatch(/data-plan-day-none="" aria-pressed="true"/);
+    expect(html).toMatch(/<button(?=[^>]*aria-pressed="true")(?=[^>]*data-plan-day-none="")/);
     expect(html).toContain('rows="4"');
     expect(html).toContain('min-height:104px');
     expect(html).toContain(

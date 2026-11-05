@@ -1012,7 +1012,7 @@ export function CreatePostSheet({
         description: 'The post is in review. Try again to add the photo.',
         tone: 'error',
         durationMs: null,
-        action: { label: 'Try again', onPress: () => void finishInBackground(postId, items) },
+        action: { label: 'Retry', onPress: () => void finishInBackground(postId, items) },
       });
       dispatchWorkspaceDataChanged();
       return;
@@ -1537,87 +1537,102 @@ export function CreatePostSheet({
           {moreOpen ? (
             <div id="post-more-options" className="flex flex-col gap-4">
               <Field label="Bucket">
-                <Select
-                  label="Bucket"
-                  value={form.bucketId}
-                  options={bucketOptions}
-                  onChange={onBucketChange}
-                  placeholder="No bucket"
-                />
-                {newBucketOpen ? (
-                  <div
-                    data-new-bucket=""
-                    className="mt-2 flex flex-col gap-2 rounded-xl border bg-panel-2 p-3 lit-card-muted"
-                  >
-                    <Input
-                      aria-label="New bucket name"
-                      placeholder="Bucket name"
-                      value={newBucketName}
-                      maxLength={BUCKET_NAME_MAX}
-                      disabled={newBucketBusy}
-                      onChange={(event) => {
-                        setNewBucketName(event.target.value);
-                        setNewBucketError(null);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          void submitNewBucket();
-                        }
-                      }}
+                {(id) => (
+                  <>
+                    <Select
+                      id={id}
+                      label="Bucket"
+                      value={form.bucketId}
+                      options={bucketOptions}
+                      onChange={onBucketChange}
+                      placeholder="No bucket"
                     />
-                    {newBucketError !== null ? (
-                      <p role="alert" className="text-sm text-bad">
-                        {newBucketError}
-                      </p>
+                    {newBucketOpen ? (
+                      <div
+                        data-new-bucket=""
+                        className="mt-2 flex flex-col gap-2 rounded-xl border bg-panel-2 p-3 lit-card-muted"
+                      >
+                        <Input
+                          aria-label="New bucket name"
+                          placeholder="Bucket name"
+                          value={newBucketName}
+                          maxLength={BUCKET_NAME_MAX}
+                          disabled={newBucketBusy}
+                          onChange={(event) => {
+                            setNewBucketName(event.target.value);
+                            setNewBucketError(null);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              void submitNewBucket();
+                            }
+                          }}
+                        />
+                        {newBucketError !== null ? (
+                          <p role="alert" className="text-sm text-bad">
+                            {newBucketError}
+                          </p>
+                        ) : null}
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="primary"
+                            disabled={newBucketBusy}
+                            onClick={() => void submitNewBucket()}
+                          >
+                            {newBucketBusy ? 'Creating…' : 'Create'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            disabled={newBucketBusy}
+                            onClick={() => {
+                              setNewBucketOpen(false);
+                              setNewBucketName('');
+                              setNewBucketError(null);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
                     ) : null}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="primary"
-                        disabled={newBucketBusy}
-                        onClick={() => void submitNewBucket()}
-                      >
-                        {newBucketBusy ? 'Creating…' : 'Create'}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        disabled={newBucketBusy}
-                        onClick={() => {
-                          setNewBucketOpen(false);
-                          setNewBucketName('');
-                          setNewBucketError(null);
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
+                  </>
+                )}
               </Field>
 
               <Field label="Due date">
-                <DatePicker
-                  label="Due date"
-                  value={form.targetDate}
-                  disablePast
-                  actions
-                  onChange={(value) => patchField('targetDate', { targetDate: value })}
-                />
-                {gridError('targetDate')}
+                {(id) => (
+                  <>
+                    <DatePicker
+                      id={id}
+                      label="Due date"
+                      value={form.targetDate}
+                      disablePast
+                      actions
+                      onChange={(value) => patchField('targetDate', { targetDate: value })}
+                    />
+                    {gridError('targetDate')}
+                  </>
+                )}
               </Field>
 
               <Field label="Brief" hint={BRIEF_HELPER}>
-                <Select
-                  label="Brief"
-                  value={form.briefId}
-                  options={briefOptions}
-                  onChange={(value) => patchField('briefId', { briefId: value })}
-                  placeholder="No brief"
-                />
-                {gridError('briefId')}
+                {(id) => (
+                  <>
+                    <Select
+                      id={id}
+                      label="Brief"
+                      value={form.briefId}
+                      options={briefOptions}
+                      onChange={(value) => patchField('briefId', { briefId: value })}
+                      placeholder="No brief"
+                    />
+                    {gridError('briefId')}
+                  </>
+                )}
               </Field>
             </div>
           ) : null}
@@ -1824,22 +1839,28 @@ function PresetFields(props: {
       <div className="grid grid-cols-2 gap-3">
         <div ref={formatRef} className="min-w-0">
           <Field label="Format">
-            <Select
-              label="Format"
-              value={form.format}
-              options={props.formatOptions}
-              onChange={props.onFormatChange}
-              {...(fill !== undefined && singleIndex >= 0 ? { onPress: pickSingle } : {})}
-            />
+            {(id) => (
+              <Select
+                id={id}
+                label="Format"
+                value={form.format}
+                options={props.formatOptions}
+                onChange={props.onFormatChange}
+                {...(fill !== undefined && singleIndex >= 0 ? { onPress: pickSingle } : {})}
+              />
+            )}
           </Field>
         </div>
         <div className="min-w-0">
           <Field label="Due date (optional)">
-            <DatePicker
-              label="Due date"
-              value={form.targetDate}
-              onChange={(value) => patch({ targetDate: value })}
-            />
+            {(id) => (
+              <DatePicker
+                id={id}
+                label="Due date"
+                value={form.targetDate}
+                onChange={(value) => patch({ targetDate: value })}
+              />
+            )}
           </Field>
         </div>
       </div>

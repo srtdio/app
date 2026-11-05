@@ -109,7 +109,7 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
       return;
     }
     if (result.failed !== null) {
-      toast.show({ title: forwardFailedMessage(chatDisplayName(result.failed)) });
+      toast.show({ title: forwardFailedMessage(chatDisplayName(result.failed)), tone: 'error' });
     }
   }
 
@@ -124,7 +124,10 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
         <Button
           variant="primary"
           className="w-full"
-          disabled={selected.size === 0 || busy}
+          // Nothing picked yet is a choice not made, not a form error; while
+          // sending the label stays with a spinner beside it.
+          disabled={selected.size === 0}
+          busy={busy}
           onClick={() => void send()}
         >
           {sendToLabel(selected.size)}

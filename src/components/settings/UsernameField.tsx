@@ -12,6 +12,7 @@ import { normalizeUsernameInput, usernameFormat } from '@/lib/onboarding';
 import { supabase } from '@/lib/supabase';
 import { useNewTrace } from '@/lib/trace-context';
 import { checkUsername } from '@/lib/username-check';
+import { errorText } from '@/lib/error-copy';
 
 type Check = 'idle' | 'checking' | 'free' | 'taken' | 'error';
 
@@ -68,7 +69,7 @@ export function UsernameField({
         return;
       }
       logger.error('settings username save failed', { error: res.error.message });
-      setMessage("Couldn't save your username. Try again.");
+      setMessage(errorText('save your username', res.error));
       return;
     }
     setEdited(false);

@@ -45,7 +45,9 @@ function ariaLabel(el: ReactElement): string | undefined {
 describe('SectionHeader', () => {
   it('renders the search input and calls onChange when it changes', () => {
     const onChange = vi.fn();
-    const tree = SectionHeader({ search: { value: 'hi', onChange, placeholder: 'Search files' } });
+    const tree = SectionHeader({
+      search: { value: 'hi', onChange, placeholder: 'Search files', label: 'Search files' },
+    });
     const inputs = findAll(tree, (el) => el.type === Input || el.type === 'input');
     expect(inputs).toHaveLength(1);
     const input = inputs[0]!.props as {
@@ -61,10 +63,10 @@ describe('SectionHeader', () => {
 
   it('shows the clear button only when search has a value and clears via onChange', () => {
     const onChange = vi.fn();
-    const empty = SectionHeader({ search: { value: '', onChange } });
+    const empty = SectionHeader({ search: { value: '', onChange, label: 'Search' } });
     expect(findAll(empty, (el) => ariaLabel(el) === 'Clear search')).toHaveLength(0);
 
-    const filled = SectionHeader({ search: { value: 'x', onChange } });
+    const filled = SectionHeader({ search: { value: 'x', onChange, label: 'Search' } });
     const clears = findAll(filled, (el) => ariaLabel(el) === 'Clear search');
     expect(clears).toHaveLength(1);
     (clears[0]!.props as { onClick: () => void }).onClick();
@@ -120,7 +122,8 @@ describe('SectionHeader', () => {
   });
 
   it('omits the sort control when sort is not provided and does not throw', () => {
-    const render = () => SectionHeader({ search: { value: '', onChange: () => {} } });
+    const render = () =>
+      SectionHeader({ search: { value: '', onChange: () => {}, label: 'Search' } });
     expect(render).not.toThrow();
     expect(findAll(render(), (el) => el.type === SortMenu)).toHaveLength(0);
   });
@@ -136,12 +139,15 @@ describe('SectionHeader fixed row height', () => {
   }
 
   it('pins the search row to 44px so every list tab starts at the same height', () => {
-    const tree = SectionHeader({ search: { value: '', onChange: () => {} } });
+    const tree = SectionHeader({ search: { value: '', onChange: () => {}, label: 'Search' } });
     expect(rowClass(tree).split(' ')).toContain('h-11');
   });
 
   it('lets the stacked chat-list pane grow at md', () => {
-    const tree = SectionHeader({ search: { value: '', onChange: () => {} }, stackSearchMd: true });
+    const tree = SectionHeader({
+      search: { value: '', onChange: () => {}, label: 'Search' },
+      stackSearchMd: true,
+    });
     expect(rowClass(tree).split(' ')).toContain('md:h-auto');
   });
 });

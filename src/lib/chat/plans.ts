@@ -32,6 +32,7 @@ import { PLAN_BUNDLE_CHUNK, readPlanBundleRpc, type PlanBundleRead } from '@/lib
 import { openPlans } from '@/lib/chat/status-bar';
 import { getPrefetchContext } from '@/lib/prefetch-context';
 import { civilDayOf, civilDaysBetween, formatCivilDayHeader } from '@/lib/plan-week';
+import { errorText } from '@/lib/error-copy';
 
 /** Ids per IN read (the PostgREST URL stays short). */
 export const PLAN_READ_CHUNK = 100;
@@ -1147,9 +1148,9 @@ export interface PlanShareDeps {
 }
 
 /** Shown inline when a share step fails. */
-export const PLAN_SHARE_FAILED = "Couldn't share. Try again.";
+export const PLAN_SHARE_FAILED = errorText('share', null);
 /** Shown inline when Create plan fails (a retry resumes). */
-export const PLAN_CREATE_FAILED = "Couldn't create. Try again.";
+export const PLAN_CREATE_FAILED = errorText('create', null);
 /** Shown when a Draft plan meets a chat with a client (the server refused it). */
 export const TEAM_PLAN_CLIENT_CHAT = 'Open the plan for approvers first.';
 
@@ -1655,7 +1656,7 @@ export function createConceptFilesRead<T = PlanItemFile[]>(deps: {
 }
 
 /** The toast when Save meets a failed upload. */
-export const CONCEPT_UPLOAD_FAILED = "Couldn't upload. Try again.";
+export const CONCEPT_UPLOAD_FAILED = errorText('upload', null);
 
 /** A fresh upload in the concept sheet, until it lands in the file list. */
 export interface ConceptUpload {

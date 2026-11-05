@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/icons';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useDismissLayer } from '@/lib/modal-focus';
+import { useMenuKeys } from '@/lib/useMenuKeys';
 import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
 import {
   DATE_WINDOW_OPTIONS,
@@ -188,6 +189,8 @@ function MenuShell(props: {
 }): ReactElement {
   const panelRef = useRef<HTMLDivElement>(null);
   useDismissLayer(props.isDesktop && props.open, props.onClose, panelRef);
+  // The checked row takes focus on open; the arrows move between rows.
+  const keys = useMenuKeys(panelRef, props.isDesktop && props.open);
   if (props.isDesktop) {
     return (
       <div className="relative">
@@ -197,6 +200,7 @@ function MenuShell(props: {
             <div className="fixed inset-0 z-40" aria-hidden="true" onClick={props.onClose} />
             <div
               ref={panelRef}
+              onKeyDown={keys.onKeyDown}
               className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-xl border bg-panel p-1.5 lit-overlay"
             >
               {props.body}

@@ -15,6 +15,7 @@ import { entryCopyContext } from '@/lib/onboarding';
 import { supabase } from '@/lib/supabase';
 import { prefetchShellWhenIdle } from '@/lib/chunk-reload';
 import { deviceTimeZone } from '@/lib/time';
+import { errorText } from '@/lib/error-copy';
 
 /** Seconds before Resend code can be tapped again; lives with CodeStep. */
 export { RESEND_COOLDOWN_SECONDS };
@@ -75,6 +76,21 @@ export function emailFieldError(email: string): string | null {
 }
 
 /**
+ * The email field's line on a submit tap: an empty field asks for an email too
+ * (the button is never disabled for "not filled yet"). Pure.
+ */
+export function emailSubmitError(email: string): string | null {
+  if (email.trim() === '') return CHECK_EMAIL_COPY.invalidEmail;
+  return emailFieldError(email);
+}
+
+/** Focus a field by id after a refused submit (the first field with an error). */
+export function focusFieldById(id: string): void {
+  if (typeof document === 'undefined') return;
+  document.getElementById(id)?.focus();
+}
+
+/**
  * Passwordless sign-up: email a 6-digit code that creates the account. Name,
  * username, role and the workspace come one question at a time in onboarding
  * (OnboardingFlow), which the app shell shows to anyone whose profile is
@@ -110,7 +126,7 @@ export function testSignUpMessage(code: string): string {
   }
   if (code.includes('invalid_email')) return 'Enter a valid email address.';
   if (code.includes('rate_limited')) return 'Too many test accounts this hour. Try again later.';
-  return "Couldn't start that. Try again.";
+  return errorText('start that', code);
 }
 
 export function SignUpPage(): ReactElement {
@@ -129,8 +145,8 @@ export function SignUpPage(): ReactElement {
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
 
-  // Never disabled for the consent box: an unticked tap says why instead.
-  const canSubmit = email.trim().length > 0 && !submitting;
+  // Never disabled for "not valid yet" (an empty or malformed email, the
+  // consent box): a tap says why and focuses the field. Busy is the only hold.
 
   /** One request per call; the caller decides when (a tap), never a retry loop. */
   async function requestCode(): Promise<string | null> {
@@ -156,11 +172,16 @@ export function SignUpPage(): ReactElement {
   }
 
   async function handleSignUp(): Promise<void> {
-    const badEmail = emailFieldError(email);
+    if (submitting) return;
+    const badEmail = emailSubmitError(email);
     setEmailError(badEmail);
-    if (badEmail !== null) return;
+    if (badEmail !== null) {
+      focusFieldById('signup-email');
+      return;
+    }
     if (!policyConsent) {
       setError(POLICY_CONSENT_MESSAGE);
+      focusFieldById('signup-policy-consent');
       return;
     }
     if (isTestSite()) {
@@ -238,14 +259,17 @@ export function SignUpPage(): ReactElement {
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          if (canSubmit) void handleSignUp();
+          void handleSignUp();
         }}
       >
         <Field label="Work email" htmlFor="signup-email">
           <Input
             id="signup-email"
             type="email"
+            name="email"
             autoComplete="email"
+            spellCheck={false}
+            autoCapitalize="none"
             placeholder="you@company.com"
             value={email}
             aria-invalid={emailError !== null}
@@ -318,8 +342,8 @@ export function SignUpPage(): ReactElement {
           </p>
         ) : null}
 
-        <Button variant="primary" className="w-full" type="submit" disabled={!canSubmit}>
-          {submitting ? CHECK_EMAIL_COPY.sendingCode : CHECK_EMAIL_COPY.sendCode}
+        <Button variant="primary" className="w-full" type="submit" busy={submitting}>
+          {CHECK_EMAIL_COPY.sendCode}
         </Button>
       </form>
     </AuthShell>

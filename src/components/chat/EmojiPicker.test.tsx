@@ -269,14 +269,14 @@ describe('F15: the emoji data generator is typechecked and linted', () => {
 describe('R3: the picker chunk fails to load', () => {
   afterEach(() => resetEmojiPickerLoad());
 
-  it('shows the copy and a 44x44 Try again, never the raw error, and is not busy', () => {
+  it('shows the copy and a 44x44 Retry, never the raw error, and is not busy', () => {
     const onRetry = vi.fn();
     const html = renderToStaticMarkup(<EmojiPickerLoadFailed onRetry={onRetry} />);
     // The markup escapes the apostrophe; the line itself is the fixed copy.
     const line = all(EmojiPickerLoadFailed({ onRetry })).find((e) => e.type === 'p');
     expect(line?.props.children).toBe(EMOJI_LOAD_FAILED);
     expect(EMOJI_LOAD_FAILED).toBe("Couldn't load emoji. Try again.");
-    expect(html).toContain('Try again');
+    expect(html).toContain('>Retry<');
     expect(html).toMatch(/h-11[^"]*min-w-\[44px\]|min-w-\[44px\][^"]*h-11/);
     expect(html).not.toContain('chunk');
     const el = EmojiPickerLoadFailed({ onRetry });

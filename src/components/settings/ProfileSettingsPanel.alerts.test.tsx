@@ -79,7 +79,7 @@ describe('Alerts on this device', () => {
     );
     expect(el.querySelectorAll('[role="switch"]')).toHaveLength(2);
     switchFor(el, 'Sound');
-    switchFor(el, 'Notifications');
+    switchFor(el, 'Alerts');
     expect(el.textContent).toContain('Pause for');
     const all = chips(el);
     expect(all.map((c) => c.textContent)).toEqual(LABELS);

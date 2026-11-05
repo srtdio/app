@@ -18,6 +18,7 @@ import {
   type StepPlace,
 } from './induction-model';
 import { isApplicable } from './induction-routes';
+import { errorText } from './error-copy';
 
 export { INDUCTION_KEYS, inductionSelector, type InductionKey } from './induction-keys';
 
@@ -705,5 +706,5 @@ export function brandRequestErrorMessage(message: string): string {
   if (message.includes('invalid_payload')) {
     return "Couldn't send that. Check the email address and try again.";
   }
-  return "Couldn't send that. Try again.";
+  return errorText('send the request', message);
 }

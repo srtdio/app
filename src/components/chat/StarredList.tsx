@@ -55,6 +55,7 @@ import {
   type StarWriteResult,
 } from '@/lib/chat/stars';
 import { MODAL_HEADER_SAFE, MODAL_PAGE_CLASS, ModalPanel } from '@/components/chat/ModalPanel';
+import { errorText } from '@/lib/error-copy';
 
 /** Typing settles this long before a narrowed list is read. */
 const STARRED_DEBOUNCE_MS = 250;
@@ -432,7 +433,13 @@ export function StarredList(props: StarredListProps): ReactElement {
     );
     if (ids.length === 0) return;
     for (const id of ids) asked.current.add(id);
+    // Dropped after unmount or a change of rows; a read cut short that way
+    // frees its ids so the next run (if they are still unnamed) asks again.
+    let live = true;
+    let landed = false;
     void readProfiles(supabase, ids).then((result) => {
+      landed = true;
+      if (!live) return;
       if (!result.ok || result.data.length === 0) return;
       setRead((prev) => {
         const next = new Map(prev);
@@ -440,6 +447,10 @@ export function StarredList(props: StarredListProps): ReactElement {
         return next;
       });
     });
+    return () => {
+      live = false;
+      if (!landed) for (const id of ids) asked.current.delete(id);
+    };
   }, [feed.rows, currentUserId, nameOf]);
 
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
@@ -581,7 +592,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
         onClick={props.onRetry}
         className="flex items-center justify-center px-3 text-base text-fg-2"
       >
-        Couldn&apos;t load. Try again.
+        {errorText('load', null)}
       </PressableRow>
     </li>
   );

@@ -106,6 +106,7 @@ import { uploadAssetFile, type UploadOutcome } from '@/lib/asset-upload';
 import { attachLateThumbnail } from '@/lib/asset-thumbnail-attach';
 import { useNewTrace } from '@/lib/trace-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
+import { useBackGuard } from '@/lib/back-guard';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { formatDue } from '@/lib/time';
@@ -1299,6 +1300,17 @@ export function PostDetailPage({
     setEditingCaption(false);
     setCaptionError(null);
   }
+  // System or browser Back while the caption edit holds changes asks the same
+  // "Discard your changes?" as Cancel; a save in flight keeps the page as it
+  // is. Released right before a confirmed Discard, so that close pops cleanly.
+  const captionDirty = editingCaption && captionDraft !== (detail?.post.caption ?? '');
+  const captionGuard = useBackGuard({
+    active: captionDirty || (editingCaption && captionSaving),
+    onBack: () => {
+      if (captionSaving) return;
+      setConfirmCaptionDiscard(true);
+    },
+  });
 
   // Whole-gallery replace via gallery_set (auto-versions + re-stales annotations
   // server-side). load(true) refreshes the post; reloadGallery refreshes the grid.
@@ -1380,14 +1392,14 @@ export function PostDetailPage({
       const slot = slots.length;
       slots.push('');
       if (uploadEndpoint === undefined || uploadEndpoint === '') {
-        return { ok: false, message: "Couldn't upload. Try again." };
+        return { ok: false, message: errorText('upload', null) };
       }
       if (workspaceId === null) {
-        return { ok: false, message: "Couldn't upload. Try again." };
+        return { ok: false, message: errorText('upload', null) };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       if (token === null || token === '') {
-        return { ok: false, message: "Couldn't upload. Try again." };
+        return { ok: false, message: errorText('upload', null) };
       }
       const outcome = await uploadAssetFile(file, {
         endpoint: uploadEndpoint,
@@ -2043,6 +2055,7 @@ export function PostDetailPage({
               ) : (
                 <PostGallery
                   items={gallery}
+                  title={detail?.post.title}
                   cache={cache}
                   deps={deps}
                   presignEnabled={presignEnabled}
@@ -2167,10 +2180,10 @@ export function PostDetailPage({
                   <div className="flex items-center gap-2">
                     <Button
                       variant="primary"
-                      disabled={captionSaving}
+                      busy={captionSaving}
                       onClick={() => void saveCaption()}
                     >
-                      {captionSaving ? 'Saving…' : captionSaveLabel(currentVersionNumber)}
+                      {captionSaveLabel(currentVersionNumber)}
                     </Button>
                     <Button variant="ghost" disabled={captionSaving} onClick={cancelCaptionEdit}>
                       Cancel
@@ -2291,6 +2304,7 @@ export function PostDetailPage({
           cancelLabel="Keep editing"
           destructive
           onConfirm={() => {
+            captionGuard.release();
             setConfirmCaptionDiscard(false);
             setEditingCaption(false);
             setCaptionError(null);
@@ -2321,7 +2335,7 @@ export function PostDetailPage({
               ok: false as const,
               error: {
                 code: 'unknown' as const,
-                message: "Couldn't create the bucket. Try again.",
+                message: errorText('create the bucket', null),
               },
             });
           }

@@ -9,9 +9,10 @@ vi.mock('@/lib/motion', async (importOriginal) => ({
 }));
 import {
   createToastStore,
-  DEFAULT_DURATION_MS,
+  ERROR_TOAST_MS,
   EXIT_MS,
   MAX_VISIBLE,
+  TOAST_MS,
 } from '@/components/ui/toast/ToastProvider';
 
 describe('createToastStore', () => {
@@ -58,8 +59,78 @@ describe('createToastStore', () => {
     store.dispose();
   });
 
-  it('defaults to 4000ms, matching the undo window', () => {
-    expect(DEFAULT_DURATION_MS).toBe(4000);
+  it('defaults to TOAST_MS (4000ms), matching the undo window', () => {
+    expect(TOAST_MS).toBe(4000);
+  });
+
+  it('an error toast stays up ERROR_TOAST_MS (8000ms)', () => {
+    expect(ERROR_TOAST_MS).toBe(8000);
+    const store = createToastStore();
+    const onExpire = vi.fn();
+    store.show({ title: "Couldn't save. Try again.", tone: 'error', onExpire });
+    vi.advanceTimersByTime(ERROR_TOAST_MS - 1);
+    expect(onExpire).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    store.dispose();
+  });
+
+  it('an error toast never runs shorter than ERROR_TOAST_MS; sticky stays sticky', () => {
+    const store = createToastStore();
+    const short = vi.fn();
+    store.show({ title: 'Short', tone: 'error', durationMs: 2000, onExpire: short });
+    store.show({ title: 'Sticky', tone: 'error', durationMs: null });
+    vi.advanceTimersByTime(ERROR_TOAST_MS - 1);
+    expect(short).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(short).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1_000_000);
+    expect(store.getSnapshot().find((t) => t.title === 'Sticky')!.leaving).toBe(false);
+    store.dispose();
+  });
+
+  it('hold pauses the countdown; release resumes with the time left', () => {
+    const store = createToastStore();
+    const onExpire = vi.fn();
+    const id = store.show({ title: 'Saved', onExpire });
+    vi.advanceTimersByTime(3000);
+    store.hold(id, 'hover', true);
+    vi.advanceTimersByTime(60_000);
+    expect(onExpire).not.toHaveBeenCalled();
+    expect(store.getSnapshot()[0]!.leaving).toBe(false);
+    store.hold(id, 'hover', false);
+    vi.advanceTimersByTime(TOAST_MS - 3000 - 1);
+    expect(onExpire).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    store.dispose();
+  });
+
+  it('an undo strip holds through hover, focus and touch together', () => {
+    const store = createToastStore();
+    const onExpire = vi.fn();
+    const id = store.show({ title: 'Post deleted', durationMs: 4000, kind: 'undo', onExpire });
+    store.hold(id, 'hover', true);
+    store.hold(id, 'focus', true);
+    store.hold(id, 'press', true);
+    store.hold(id, 'hover', false);
+    store.hold(id, 'press', false);
+    vi.advanceTimersByTime(10_000);
+    expect(onExpire).not.toHaveBeenCalled();
+    store.hold(id, 'focus', false);
+    vi.advanceTimersByTime(4000);
+    expect(onExpire).toHaveBeenCalledTimes(1);
+    store.dispose();
+  });
+
+  it('a hold never delays a leaving toast from unmounting', () => {
+    const store = createToastStore();
+    const id = store.show({ title: 'Bye' });
+    store.dismiss(id);
+    store.hold(id, 'hover', true);
+    vi.advanceTimersByTime(EXIT_MS);
+    expect(store.getSnapshot()).toHaveLength(0);
+    store.dispose();
   });
 
   it('keeps the error tone on the shown toast', () => {
@@ -72,7 +143,7 @@ describe('createToastStore', () => {
   it('uses the default duration when none is given', () => {
     const store = createToastStore();
     store.show({ title: 'Default' });
-    vi.advanceTimersByTime(DEFAULT_DURATION_MS - 1);
+    vi.advanceTimersByTime(TOAST_MS - 1);
     expect(store.getSnapshot()).toHaveLength(1);
     vi.advanceTimersByTime(1);
     expect(store.getSnapshot()[0]!.leaving).toBe(true);

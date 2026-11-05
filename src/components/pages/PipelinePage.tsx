@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
+import { PageHead } from '@/components/shell/PageHead';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { ICON_SIZE, IconCalendar, IconPipeline, IconPlus } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
@@ -174,6 +175,7 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
           value: props.search,
           onChange: props.onSearchChange,
           placeholder: 'Search posts',
+          label: 'Search posts',
         }}
         sort={{
           node: (
@@ -1291,6 +1293,7 @@ export function PipelinePage() {
 
   return (
     <>
+      <PageHead title="Pipeline" hidden />
       {pipelineHeader({
         search,
         onSearchChange: setSearch,

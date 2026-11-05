@@ -18,6 +18,7 @@
 import type { Client, Result } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { abortable } from '@/lib/chat-reads';
+import { errorText } from '@/lib/error-copy';
 import { SEND_TIMEOUT_MS, type RecordFailed } from '@/lib/chat/record';
 import {
   formatSendLabel,
@@ -83,7 +84,6 @@ export function reminderSummary(at: Date, now: Date): string {
 }
 
 const REMINDER_RANGE_COPY = 'Pick a time at least 1 minute from now';
-export const ACTION_FAILED_COPY = "Couldn't do that. Try again.";
 
 /**
  * User copy for a failed reminder write, from the proc's exception text. Null
@@ -93,7 +93,7 @@ export const ACTION_FAILED_COPY = "Couldn't do that. Try again.";
 export function mapReminderError(message: string): string | null {
   if (/message not found/i.test(message)) return null;
   if (/between 1 minute and 1 year/i.test(message)) return REMINDER_RANGE_COPY;
-  return ACTION_FAILED_COPY;
+  return errorText('set the reminder', message);
 }
 
 // ---------------------------------------------------------------------------

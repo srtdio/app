@@ -25,6 +25,7 @@ import {
 import { parsePeaks } from '@/lib/chat/waveform-peaks';
 import { isOfficeMime } from '@/lib/files/display-name';
 import { sharedThumbnail, thumbnailKind, type ThumbnailResult } from '@/lib/files/thumbnail';
+import { errorText } from '@/lib/error-copy';
 
 /**
  * One Sorted asset version referenced by a chat message: the asset VERSION id to
@@ -719,7 +720,7 @@ export type ChatAttachmentUpload =
  * upload layer's generic line mentions the connection; chat never shows
  * connection wording, so it is replaced here (still a transient failure).
  */
-export const CHAT_UPLOAD_FAILED = "Couldn't upload. Try again.";
+export const CHAT_UPLOAD_FAILED = errorText('upload', null);
 
 /** Chat copy for an upload failure: named reasons stay, the generic one is neutral. */
 export function chatUploadMessage(message: string): string {

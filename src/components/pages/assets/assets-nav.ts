@@ -1,6 +1,8 @@
 // Pure helpers behind the Assets page's URL state, in-app links, delete copy and
 // selection. React-free so each rule is unit-tested without a DOM.
 
+import { errorText } from '@/lib/error-copy';
+
 /** The library's name, everywhere it is shown (upload copy). */
 export const ROOT_LABEL = 'All files';
 
@@ -58,10 +60,8 @@ export function assetParamIsGone(
 }
 
 /** The failure toast when a delete could not be saved; the files are back. */
-export function deleteFailedLabel(count: number): string {
-  return count === 1
-    ? "Couldn't delete the file. Try again."
-    : "Couldn't delete the files. Try again.";
+export function deleteFailedLabel(count: number, error: unknown = null): string {
+  return errorText(count === 1 ? 'delete the file' : 'delete the files', error);
 }
 
 function filesCount(count: number): string {
@@ -77,7 +77,7 @@ export function partialDeleteLabel(notDeleted: number, deleted: number): string 
 }
 
 /** The toast when Select all could not read the matching files. Pure. */
-export const SELECT_ALL_FAILED = "Couldn't select all files. Try again.";
+export const SELECT_ALL_FAILED = errorText('select all files', null);
 
 /** The select-mode count line. */
 export function selectedLabel(count: number): string {

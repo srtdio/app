@@ -4,6 +4,8 @@ import type { Toast as ToastModel } from '@/components/ui/toast/types';
 import { BOTTOM_ANCHOR_ATTR, measureBottomInset } from '@/lib/bottom-inset';
 import { cn } from '@/lib/cn';
 import { riseIn, stripIn, stripOut, useMotionOff } from '@/lib/motion';
+import { holdHandlers } from '@/lib/pausable-timer';
+import type { HoldReason } from '@/lib/pausable-timer';
 import { isLaptopNow } from '@/lib/use-is-laptop';
 
 /** Gap between the strip and the surface it sits on (tab bar or composer). */
@@ -40,20 +42,27 @@ interface UndoStripProps {
   onAccept: (id: string) => void;
   /** The Undo button. */
   onAction: (id: string) => void;
+  /**
+   * Holds the strip's UNDO_MS countdown (the provider's pausable timer) while
+   * it is hovered, focused or touched; it resumes with the time left.
+   */
+  onHold?: (id: string, reason: HoldReason, held: boolean) => void;
 }
 
 /**
  * The bottom Undo strip (Instagram style). Phone: 16px side margins, 8px above
  * the bottom tab bar or the chat composer, else 16px above the safe-area inset.
  * Laptop (md+): bottom centre, 480px wide, 24px up. Label left, "Undo" right;
- * no X, no countdown, no icon. Motion (docs/motion.md, edgeStrip): rendered at
- * rest, it rises from the bottom edge on the first frame and leaves the same
+ * no X, no countdown, no icon. Its UNDO_MS window pauses while it is hovered,
+ * focused or touched and resumes with the time left (onHold). Motion
+ * (docs/motion.md, edgeStrip): rendered at rest, it rises from the bottom edge on the first frame and leaves the same
  * way (from wherever a swipe left it). Swipe down follows the finger
  * (translateY only) and accepts past 40% of its height, else springs back.
  * Never a fade; with motion off it simply goes.
  */
-export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoStripProps) {
+export function UndoStrip({ toast, leaving = false, onAccept, onAction, onHold }: UndoStripProps) {
   const { id, title, action } = toast;
+  const holds = holdHandlers((reason, held) => onHold?.(id, reason, held));
   const ref = useRef<HTMLDivElement | null>(null);
   const startY = useRef<number | null>(null);
   const [drag, setDrag] = useState(0);
@@ -104,6 +113,8 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
     if (leaving) return;
+    // Touch anywhere on the strip (the Undo button too) holds the countdown.
+    holds.onPointerDown();
     if ((event.target as Element).closest('button') !== null) return;
     startY.current = event.clientY;
     setDragging(true);
@@ -142,6 +153,10 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction }: UndoSt
       data-undo-strip=""
       {...(leaving ? { 'data-leaving': '' } : {})}
       style={style}
+      onPointerEnter={holds.onPointerEnter}
+      onPointerLeave={holds.onPointerLeave}
+      onFocus={holds.onFocus}
+      onBlur={holds.onBlur}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}

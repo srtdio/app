@@ -33,8 +33,8 @@ import { newMessageId } from '@/lib/chat/message-id';
 import type { NameOf } from '@/lib/chat/mentions';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import { MESSAGE_LABEL, messagePreview } from '@/lib/inbox/alerts';
+import { errorText } from '@/lib/error-copy';
 import {
-  ACTION_FAILED_COPY,
   REMINDERS_CHANGED_EVENT,
   announceRemindersChanged,
   cancelReminder,
@@ -219,7 +219,7 @@ export function ReminderProvider(props: {
         client: supabase,
         newTraceId: generateTraceId,
         newId: newMessageId,
-        failed: (what, traceId, message, copy = ACTION_FAILED_COPY) => {
+        failed: (what, traceId, message, copy = errorText('do that', message)) => {
           logger.warn(`reminders: ${what} failed`, { trace_id: traceId, error: message });
           if (copy !== null) toast.show({ title: copy });
         },

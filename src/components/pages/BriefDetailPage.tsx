@@ -51,7 +51,8 @@ import { bottomAnchorProps } from '@/lib/bottom-inset';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import { getBrief, getBriefGallery, reopenBrief } from '@srtdio/briefs';
 import type { Brief, BriefGalleryItem, BriefWithLinkedCount, DomainError } from '@srtdio/briefs';
-import type { PipelinePost } from '@srtdio/posts';
+import type { PipelinePost, Stage } from '@srtdio/posts';
+import { stageLabel } from '@/components/pages/pipeline/stage-meta';
 // Not on the package index (owned elsewhere); the read lives beside listPosts.
 import { listBriefLinkedPosts } from '../../../packages/posts/src/reads';
 import { briefClose } from '@srtdio/rpc';
@@ -799,6 +800,8 @@ export function BriefDetailPage({
                     className={`h-[7px] w-[7px] shrink-0 rounded-full ${LINKED_STAGE_DOT[post.stage] ?? 'bg-fg-3'}`}
                   />
                   <span className="min-w-0 flex-1 truncate">{post.title}</span>
+                  {/* The dot's stage in words, so the row name never rests on colour. */}
+                  <span className="sr-only">, {stageLabel(post.stage as Stage)}</span>
                 </Link>
               </li>
             ))}
@@ -908,6 +911,7 @@ export function BriefDetailPage({
             <section className="min-w-0">
               <PostGallery
                 items={mediaItems}
+                title={brief.title}
                 cache={cache}
                 deps={deps}
                 presignEnabled={presignEnabled}

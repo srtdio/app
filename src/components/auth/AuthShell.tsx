@@ -8,7 +8,8 @@ import { Wordmark } from '@/components/home/Wordmark';
  * radial accent-soft gradient). The srtd. wordmark links home: HomeGate shows
  * the home page signed out and sends a signed-in person to Pipeline.
  *
- * Rendered outside AppLayout: no sidebar, topbar, or bottom tabs.
+ * Rendered outside AppLayout: no sidebar, topbar, or bottom tabs. The shell is
+ * the page's <main> landmark and the title is its h1.
  */
 interface AuthShellProps {
   title: string;
@@ -28,7 +29,7 @@ export function AuthShell({
   backdrop = true,
 }: AuthShellProps) {
   return (
-    <div
+    <main
       className={
         backdrop
           ? 'relative min-h-full w-full grid place-items-center overflow-hidden px-4 py-10 bg-bg'
@@ -49,9 +50,9 @@ export function AuthShell({
           >
             <Wordmark />
           </Link>
-          <div className="mt-4 text-3xl font-semibold tracking-tight [text-wrap:balance]">
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight [text-wrap:balance]">
             {title}
-          </div>
+          </h1>
           <p className="mt-1 text-base text-fg-2 [text-wrap:balance]">{subtitle}</p>
         </div>
         {children}
@@ -61,6 +62,6 @@ export function AuthShell({
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }

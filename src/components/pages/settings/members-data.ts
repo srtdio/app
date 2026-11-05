@@ -7,6 +7,7 @@ import type { Database } from '@srtdio/schemas';
 import type { DomainErrorCode } from '@srtdio/rpc';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { formatDate } from '@/lib/time';
+import { errorText } from '@/lib/error-copy';
 
 export type WorkspaceMemberRow = Database['public']['Tables']['workspace_members']['Row'];
 
@@ -193,7 +194,7 @@ export function memberRemoveErrorMessage(code: DomainErrorCode): string {
     case 'workspace_member_only':
       return "Couldn't remove the member. Someone else changed it. Refresh to see the latest.";
     default:
-      return "Couldn't remove the member. Try again.";
+      return errorText('remove the member', code);
   }
 }
 
@@ -256,7 +257,7 @@ export const UNCONFIRMED_ACCOUNT_MESSAGE =
 /** Inline copy when an approver address is outside the workspace's client domain. */
 export function clientDomainMismatchMessage(domainLabel: string): string {
   return domainLabel === ''
-    ? "Couldn't send the invite. Try again."
+    ? errorText('send the invite', null)
     : `Use a ${domainLabel} email, or a personal one like Gmail.`;
 }
 

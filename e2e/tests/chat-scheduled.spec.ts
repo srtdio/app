@@ -80,7 +80,10 @@ async function trayOrSkip(page: Page): Promise<void> {
 
 /** Hold Send like a finger: pointerdown, 600ms, pointerup, then the trailing click. */
 async function holdSend(page: Page): Promise<void> {
-  const send = page.getByRole('button', { name: 'Send', exact: true });
+  // Take the button once: the Schedule sheet opens mid-hold and hides the page
+  // behind it from the accessibility tree, so a role lookup at release finds nothing.
+  const send = await page.getByRole('button', { name: 'Send', exact: true }).elementHandle();
+  if (send === null) throw new Error('no Send button');
   const box = await send.boundingBox();
   if (box === null) throw new Error('send has no box');
   const at = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };

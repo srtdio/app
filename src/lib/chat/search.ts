@@ -22,6 +22,7 @@ import { rowToThreadMessage, type ChatMessageRow } from '@/lib/chat/thread';
 import { resolveMentionText } from '@/lib/chat/mentions';
 import { civilDay, formatTime } from '@/lib/time';
 import { generateTraceId } from '@/lib/trace';
+import { errorText } from '@/lib/error-copy';
 
 type SearchFn = Database['public']['Functions']['chat_message_search'];
 type SearchArgs = SearchFn['Args'];
@@ -70,7 +71,7 @@ function effectiveQuery(raw: string, kind: SearchKind | null): string {
 }
 
 /** The failure row's copy (never connection wording). */
-export const SEARCH_FAILED_COPY = "Couldn't search. Try again.";
+export const SEARCH_FAILED_COPY = errorText('search', null);
 
 /** One message hit, as the result rows and the in-chat bar read it. */
 export interface SearchHit {

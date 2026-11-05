@@ -17,6 +17,7 @@ import {
   RATE_LIMIT_MESSAGE,
   RESEND_COOLDOWN_SECONDS,
   SignUpPage,
+  emailSubmitError,
   linkErrorMessage,
   performSignUp,
   testSignUpMessage,
@@ -172,6 +173,33 @@ describe('SignUpPage', () => {
     await click(create);
     expect(signInWithOtp).not.toHaveBeenCalled();
     expect(document.querySelector('[role="alert"]')?.textContent).toBe(POLICY_CONSENT_MESSAGE);
+  });
+
+  // Forms rule: Send code is never disabled for "not filled yet".
+  it('an empty email keeps Send code live; a tap says why and focuses the field', async () => {
+    await render();
+    const input = document.querySelector<HTMLInputElement>('#signup-email')!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    await act(async () => {
+      setter?.call(input, '');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const create = button(CHECK_EMAIL_COPY.sendCode);
+    expect(create.disabled).toBe(false);
+    await click(create);
+    expect(signInWithOtp).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain(CHECK_EMAIL_COPY.invalidEmail);
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('the email field skips spellcheck and capitals and is named email', async () => {
+    await render();
+    const input = document.querySelector<HTMLInputElement>('#signup-email')!;
+    expect(input.getAttribute('spellcheck')).toBe('false');
+    expect(input.getAttribute('autocapitalize')).toBe('none');
+    expect(input.getAttribute('name')).toBe('email');
+    expect(input.getAttribute('autocomplete')).toBe('email');
   });
 
   // W11 fix 5: the email format is checked when the field loses focus.
@@ -335,5 +363,14 @@ describe('testSignUpMessage', () => {
       'Too many test accounts this hour. Try again later.',
     );
     expect(testSignUpMessage('boom')).toBe("Couldn't start that. Try again.");
+  });
+});
+
+describe('emailSubmitError', () => {
+  it('asks for an email when empty, flags a malformed one, passes a good one', () => {
+    expect(emailSubmitError('')).toBe(CHECK_EMAIL_COPY.invalidEmail);
+    expect(emailSubmitError('   ')).toBe(CHECK_EMAIL_COPY.invalidEmail);
+    expect(emailSubmitError('dana@kite')).toBe(CHECK_EMAIL_COPY.invalidEmail);
+    expect(emailSubmitError('dana@kite.in')).toBeNull();
   });
 });

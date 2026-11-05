@@ -9,9 +9,10 @@ import { mark } from '@/lib/perf-marks';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { notesChannelId } from '@/lib/chat/notes';
 import { privateReplyLine, type PrivateReplyDraft } from '@/lib/chat/private-reply';
+import { errorText } from '@/lib/error-copy';
 
 /** The DM open failure toast (the chat @mention tap's copy, reused everywhere). */
-export const MENTION_DM_FAILED = "Couldn't open that chat. Try again.";
+export const MENTION_DM_FAILED = errorText('open that chat', null);
 
 /** What a trigger hands the card: the person and what the screen already shows for them. */
 export interface PersonCardHint {

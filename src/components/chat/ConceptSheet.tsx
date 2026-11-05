@@ -47,6 +47,7 @@ import {
   wordCounterLabel,
 } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
+import { errorText } from '@/lib/error-copy';
 
 /** A concept file as the sheet shows it (a library pick, or a recorded version). */
 export interface ConceptFile {
@@ -78,7 +79,7 @@ export const FIELD = 'disabled:text-fg-3';
 export const CONCEPT_FILES_LIMIT_HINT = `You can add up to ${CONCEPT_FILES_MAX} files.`;
 
 /** The files section when the concept's files could not be read. */
-export const CONCEPT_FILES_READ_FAILED = "Couldn't load files. Try again.";
+export const CONCEPT_FILES_READ_FAILED = errorText('load files', null);
 
 /** The Save label while it waits for uploads. */
 export const CONCEPT_SAVE_UPLOADING = 'Uploading...';

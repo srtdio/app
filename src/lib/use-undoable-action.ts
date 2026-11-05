@@ -3,6 +3,7 @@ import { useOptionalToast } from '@/components/ui/toast';
 import type { ToastApi, ToastOptions } from '@/components/ui/toast/types';
 import { logger } from '@/lib/logger';
 import { UNDO_MS } from '@/lib/undo';
+import { errorText } from '@/lib/error-copy';
 
 /** How long an Undo toast stays up before the action commits: UNDO_MS from src/lib/undo.ts. */
 export const UNDO_WINDOW_MS = UNDO_MS;
@@ -52,24 +53,25 @@ const PARTICIPLE_VERB: Readonly<Record<string, string>> = {
 };
 
 /**
- * Failure toast copy: "Couldn't {verb}. Try again." Never the raw error. A
+ * Failure toast copy: "Couldn't {verb}. {reason}", the reason read off the
+ * commit's error by errorCopy (src/lib/error-copy.ts). Never the raw error. A
  * done-label reads as its verb ("Task deleted" -> "Couldn't delete the task.",
  * "3 posts moved to Review" -> "Couldn't move 3 posts to Review.", "Marked as
  * read" -> "Couldn't mark as read."); an imperative label is the verb already
  * ("Archive Brief" -> "Couldn't archive brief."). Pure.
  */
-export function undoFailureTitle(label: string): string {
+export function undoFailureTitle(label: string, error: unknown = null): string {
   const words = label
     .trim()
     .split(/\s+/)
     .filter((w) => w !== '');
   const at = words.findIndex((w) => PARTICIPLE_VERB[w.toLowerCase()] !== undefined);
   const verb = at >= 0 ? PARTICIPLE_VERB[(words[at] ?? '').toLowerCase()] : undefined;
-  if (at < 0 || verb === undefined) return `Couldn't ${label.trim().toLowerCase()}. Try again.`;
+  if (at < 0 || verb === undefined) return errorText(label.trim().toLowerCase(), error);
   const subject = words.slice(0, at).join(' ').toLowerCase();
   const rest = words.slice(at + 1).join(' ');
   const object = subject === '' ? '' : /^\d/.test(subject) ? ` ${subject}` : ` the ${subject}`;
-  return `Couldn't ${verb}${object}${rest !== '' ? ` ${rest}` : ''}. Try again.`;
+  return errorText(`${verb}${object}${rest !== '' ? ` ${rest}` : ''}`, error);
 }
 
 /**
@@ -97,7 +99,7 @@ export function useUndoableAction(): {
     const fail = (err: unknown): void => {
       logger.warn('undoable action commit failed', { label, error: String(err) });
       revert?.();
-      toastRef.current?.show({ title: failure ?? undoFailureTitle(label) });
+      toastRef.current?.show({ title: failure ?? undoFailureTitle(label, err) });
     };
     try {
       void Promise.resolve(entry.action.commit()).catch(fail);

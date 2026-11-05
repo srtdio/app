@@ -29,6 +29,7 @@ import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
 import { ScreenFailed } from '@/components/chat/PlanScreen';
 import { postRoute } from '@/components/chat/post-card';
 import { useInduction } from '@/components/induction/InductionProvider';
+import { PageHead } from '@/components/shell/PageHead';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -278,7 +279,12 @@ export function PlanTabPage(): ReactElement {
   // sort, then New plan.
   const head = (
     <SectionHeader<PlanTabSort>
-      search={{ value: search, onChange: setSearch, placeholder: 'Search plans' }}
+      search={{
+        value: search,
+        onChange: setSearch,
+        placeholder: 'Search plans',
+        label: 'Search plans',
+      }}
       sort={
         desktop
           ? {
@@ -404,6 +410,7 @@ export function PlanTabPage(): ReactElement {
 
   return (
     <>
+      <PageHead title="Plan" hidden />
       {head}
       <div ref={landedRef} className="contents">
         {body}

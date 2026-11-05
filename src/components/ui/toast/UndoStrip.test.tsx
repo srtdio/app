@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/toast/UndoStrip';
 import { ToastProvider, ToastViewport, useToast } from '@/components/ui/toast/ToastProvider';
 import type { Toast as ToastModel, ToastApi } from '@/components/ui/toast/types';
+import { UNDO_MS } from '@/lib/undo';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -342,6 +343,104 @@ describe('ToastViewport', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(onExpire).not.toHaveBeenCalled();
     expect(strip().hasAttribute('data-leaving')).toBe(true);
+  });
+
+  describe('the UNDO_MS window pauses while the strip is in use', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function showStrip(onExpire: () => void): void {
+      act(() => {
+        api?.show({
+          title: 'Post deleted',
+          kind: 'undo',
+          durationMs: UNDO_MS,
+          action: { label: 'Undo', onPress: () => {} },
+          onExpire,
+        });
+      });
+    }
+
+    function tick(ms: number): void {
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    }
+
+    it('a touch holds it until the finger lifts, then the time left runs', () => {
+      const onExpire = vi.fn();
+      showStrip(onExpire);
+      tick(1000);
+      pointer(strip().querySelector('span')!, 'pointerdown', 100);
+      tick(UNDO_MS * 3);
+      expect(onExpire).not.toHaveBeenCalled();
+      pointer(strip().querySelector('span')!, 'pointerup', 100);
+      tick(UNDO_MS - 1000 - 1);
+      expect(onExpire).not.toHaveBeenCalled();
+      tick(1);
+      expect(onExpire).toHaveBeenCalledTimes(1);
+    });
+
+    it('a press on the Undo button holds it too', () => {
+      const onExpire = vi.fn();
+      showStrip(onExpire);
+      const button = strip().querySelector('button')!;
+      pointer(button, 'pointerdown', 100);
+      tick(UNDO_MS * 2);
+      expect(onExpire).not.toHaveBeenCalled();
+      // A finger that slides off still releases it (window pointercancel).
+      pointer(document.body, 'pointercancel', 100);
+      tick(UNDO_MS);
+      expect(onExpire).toHaveBeenCalledTimes(1);
+    });
+
+    it('focus holds it until focus leaves the strip', () => {
+      const onExpire = vi.fn();
+      showStrip(onExpire);
+      act(() => {
+        strip().querySelector('button')!.focus();
+      });
+      tick(UNDO_MS * 2);
+      expect(onExpire).not.toHaveBeenCalled();
+      act(() => {
+        strip().querySelector('button')!.blur();
+      });
+      tick(UNDO_MS);
+      expect(onExpire).toHaveBeenCalledTimes(1);
+    });
+
+    const hasPointerEvent = typeof PointerEvent === 'function';
+
+    it.runIf(hasPointerEvent)('mouse hover holds it until the mouse leaves', () => {
+      const onExpire = vi.fn();
+      showStrip(onExpire);
+      const hover = (type: 'pointerover' | 'pointerout'): void => {
+        act(() => {
+          strip().dispatchEvent(
+            new PointerEvent(type, { bubbles: true, pointerType: 'mouse', relatedTarget: null }),
+          );
+        });
+      };
+      hover('pointerover');
+      tick(UNDO_MS * 2);
+      expect(onExpire).not.toHaveBeenCalled();
+      hover('pointerout');
+      tick(UNDO_MS);
+      expect(onExpire).toHaveBeenCalledTimes(1);
+    });
+
+    it('untouched, it still ends at UNDO_MS', () => {
+      const onExpire = vi.fn();
+      showStrip(onExpire);
+      tick(UNDO_MS - 1);
+      expect(onExpire).not.toHaveBeenCalled();
+      tick(1);
+      expect(onExpire).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('a swipe down in the strip accepts: onExpire once', () => {

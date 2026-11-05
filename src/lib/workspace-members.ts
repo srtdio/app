@@ -34,6 +34,7 @@ import { useSession } from '@/lib/session-context';
 import { SIGNOUT_EVENT, WORKSPACE_DATA_CHANGED_EVENT } from '@/lib/events';
 import { invalidateReads, peekKept, readKey, sharedRead } from '@/lib/session-read';
 import { toMemberOptions, type MemberOption } from '@/components/chat/member-picker';
+import { errorText } from '@/lib/error-copy';
 
 /** One membership row, exactly as listMembers returns it. */
 export type WorkspaceMemberRow = Database['public']['Tables']['workspace_members']['Row'];
@@ -135,7 +136,7 @@ export function mentionCandidates(
 }
 
 /** The chat pickers' members failure line; the raw error goes to the logger only. */
-export const MEMBERS_LOAD_FAILED = "Couldn't load members. Try again.";
+export const MEMBERS_LOAD_FAILED = errorText('load members', null);
 
 /** The same state with any raw error replaced by the fixed chat copy. */
 export function withMembersLoadCopy<T extends { error: string | null }>(state: T): T {

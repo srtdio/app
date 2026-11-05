@@ -194,7 +194,8 @@ describe('the page', () => {
       'utf8',
     );
     expect(src).toContain("export const ACTIVITY_TITLE = 'Activity';");
-    expect(src).toContain('<h1 className="sr-only">{ACTIVITY_TITLE}</h1>');
+    // The h1 is focusable from script (tabIndex -1) so a route change can move focus to it.
+    expect(src).toMatch(/<h1 tabIndex=\{-1\} className="sr-only">\s*\{ACTIVITY_TITLE\}\s*<\/h1>/);
     expect(src).not.toContain('NOTIFICATIONS_TITLE');
     expect(src).toMatch(
       /state === 'plans' \? \(\s*<EmptyState icon=\{<IconPlan size=\{ICON_SIZE\.status\} \/>\} title=\{EMPTY_LINES\.plans\} \/>/,
@@ -209,7 +210,9 @@ describe('the page', () => {
     );
     expect(src).not.toContain('PageHead');
     expect(src).not.toContain('@/components/shell/PageHead');
-    expect(src.indexOf('<h1 className="sr-only">')).toBeLessThan(src.indexOf('<SectionHeader'));
+    expect(src.indexOf('<h1 tabIndex={-1} className="sr-only">')).toBeLessThan(
+      src.indexOf('<SectionHeader'),
+    );
   });
 });
 
@@ -412,7 +415,10 @@ describe('Retry on a failed send', () => {
       'w1',
       't',
     );
-    expect(refused).toMatchObject({ kind: 'failed', copy: "Couldn't do that. Try again." });
+    expect(refused).toMatchObject({
+      kind: 'failed',
+      copy: "Couldn't update that activity. Try again.",
+    });
     const gone = await retryFailedSend(
       recorder({ message: 'scheduled message not found' }).client,
       failed(),
@@ -1028,14 +1034,16 @@ describe('notifications fixes: page and provider wiring', () => {
   });
 
   it('fix 24: a failed refresh with rows on screen keeps them and toasts', () => {
-    expect(page).toContain('if (itemsRef.current.length > 0) push(REFRESH_FAILED);');
+    expect(page).toContain(
+      "if (itemsRef.current.length > 0) push(errorText('refresh', result.error));",
+    );
     expect(page).toContain('else setError(true);');
     expect(page).toContain(') : error && items.length === 0 ? (');
   });
 
-  it('fix 25: a failed snooze toasts the fixed copy and logs the trace id, never the raw error', () => {
+  it('fix 25: a failed snooze toasts errorCopy and logs the trace id, never the raw error', () => {
     expect(page).toMatch(
-      /logger\.warn\('notifications: snooze failed', \{\s*trace_id: traceId,\s*error: result\.error\.message,\s*\}\);\s*push\(SNOOZE_FAILED\);/,
+      /logger\.warn\('notifications: snooze failed', \{\s*trace_id: traceId,\s*error: result\.error\.message,\s*\}\);\s*push\(errorText\('snooze', result\.error\)\);/,
     );
     expect(page).not.toContain('push(result.error.message)');
   });

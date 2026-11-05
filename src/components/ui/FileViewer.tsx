@@ -44,6 +44,7 @@ import { IconDownload, IconFile, IconX, ICON_SIZE } from '@/components/ui/icons'
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
+import { SPINNER_BUSY, useDelayedBusy } from '@/lib/useDelayedBusy';
 import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
 import { humanizeSize } from '@/lib/assets';
 import { formatDateTime } from '@/lib/time';
@@ -67,6 +68,7 @@ import {
   type OfficeResponse,
   type XlsxView,
 } from '@/lib/files/office/types';
+import { errorText } from '@/lib/error-copy';
 
 const WordViewer = lazy(() =>
   import('@/components/ui/viewers/WordViewer').then((m) => ({ default: m.WordViewer })),
@@ -79,9 +81,9 @@ const SheetViewer = lazy(() =>
 export type ViewerKind = 'pdf' | 'video' | 'office' | 'file';
 
 /** The viewer's error line: never connection wording. */
-export const VIEWER_ERROR = "Couldn't open. Try again.";
+export const VIEWER_ERROR = errorText('open', null);
 /** Shown when Download could not save the file (the file itself may be fine). */
-export const DOWNLOAD_ERROR = "Couldn't download. Try again.";
+export const DOWNLOAD_ERROR = errorText('download', null);
 export const PREVIEW_UNAVAILABLE = 'Preview not available yet';
 
 /** Pages rendered on each side of the current one; the rest hold no canvas. */
@@ -464,12 +466,21 @@ function ViewerError(props: {
   );
 }
 
+/**
+ * Mounted only while the file is loading. It holds its box from the first
+ * frame but stays unpainted for SPINNER_BUSY.delay (200 ms), so a fast load
+ * never flashes it; content replaces it the moment it is ready.
+ */
 function Spinner(): ReactElement {
+  const show = useDelayedBusy(true, SPINNER_BUSY);
   return (
     <div
       role="status"
       aria-label="Loading"
-      className="h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg"
+      className={cn(
+        'h-10 w-10 mv-spin rounded-full border-2 border-overlay-line border-t-overlay-fg',
+        !show && 'invisible',
+      )}
     />
   );
 }

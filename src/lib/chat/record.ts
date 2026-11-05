@@ -18,6 +18,7 @@ import type { Database } from '@srtdio/schemas';
 import type { ChatMessageRow } from '@/lib/chat/thread';
 import type { AttachmentMetaMap } from '@/lib/chat/attachments';
 import type { PrivateReplyKind } from '@/lib/chat/private-reply';
+import { errorText } from '@/lib/error-copy';
 
 type Functions = Database['public']['Functions'];
 
@@ -236,11 +237,11 @@ export function editFailureCopy(message: string): string {
   if (/marked messages (cannot|can't) be edited/i.test(message)) {
     return "Marked messages can't be edited";
   }
-  return "Couldn't edit. Try again.";
+  return errorText('edit', message);
 }
 
 /** User-facing copy for a failed mark; the raw proc text is only ever logged. */
-export const MARK_FAILED_COPY = "Couldn't mark. Try again.";
+export const MARK_FAILED_COPY = errorText('mark', null);
 
 /**
  * User-facing copy for a failed delete, mapped from the proc's exception text
@@ -252,7 +253,7 @@ export function deleteFailureCopy(message: string): string {
     return 'Delete window has closed (30 min)';
   }
   if (/marked messages cannot be deleted/i.test(message)) return "Marked messages can't be deleted";
-  return "Couldn't delete. Try again.";
+  return errorText('delete', message);
 }
 
 /**
@@ -261,7 +262,7 @@ export function deleteFailureCopy(message: string): string {
  */
 export function deleteOutcomeCopy(deleted: number, total: number, message: string): string {
   if (deleted === 0) return deleteFailureCopy(message);
-  return `Couldn't delete ${total - deleted} of ${total}. Try again.`;
+  return errorText(`delete ${total - deleted} of ${total}`, message);
 }
 
 /** A void proc outcome; the message is the raw error for logging. */

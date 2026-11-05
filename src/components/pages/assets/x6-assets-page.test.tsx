@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // X6 Assets page regressions, rendered for real in jsdom with the data reads
 // mocked: a failed files read is a page load error (never a partial grid),
-// ?asset= for a gone file says so, the header offers a "New asset" menu, and the
+// ?asset= for a gone file says so, the header offers a "New file" menu, and the
 // page has no folder UI at all.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -241,12 +241,12 @@ describe('X6 bulk delete keeps the files in use', () => {
   });
 });
 
-describe('Assets header "New asset" menu', () => {
-  it('is a visible "New asset" text button that opens Upload files and Add link', async () => {
+describe('Assets header "New file" menu', () => {
+  it('is a visible "New file" text button that opens Upload files and Add link', async () => {
     listAssets.mockResolvedValue({ ok: true, data: [asset({ folderId: null })] });
     await mount();
 
-    const trigger = button('New asset');
+    const trigger = button('New file');
     expect(trigger).toBeDefined();
     expect(trigger?.getAttribute('aria-haspopup')).toBe('menu');
     expect(trigger?.getAttribute('aria-expanded')).toBe('false');

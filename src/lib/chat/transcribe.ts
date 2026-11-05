@@ -6,6 +6,8 @@
 // header); tests pass a mock. Expected failures return a Result, never throw, so
 // a failed or timed-out tap reads "Transcript not available" and nothing else.
 
+import { errorText } from '@/lib/error-copy';
+
 /** A tap-to-transcribe request is aborted after this long. */
 export const TRANSCRIBE_TIMEOUT_MS = 20_000;
 
@@ -21,7 +23,7 @@ interface TranscribeParams {
   timeoutMs?: number;
 }
 
-const FAILURE_MESSAGE = "Couldn't transcribe the voice note. Try again.";
+const FAILURE_MESSAGE = errorText('transcribe the voice note', null);
 
 export async function transcribeAudio(params: TranscribeParams): Promise<TranscribeResult> {
   const controller = new AbortController();

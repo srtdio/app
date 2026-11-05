@@ -915,20 +915,10 @@ export function imageTileState(args: {
   return 'shimmer';
 }
 
-const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
-
-/** Humanize a byte count, or an em-dash-free placeholder when unknown. */
-export function humanizeSize(bytes: number | null): string {
-  if (bytes === null || bytes <= 0) return '-';
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < SIZE_UNITS.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  const rounded = value >= 10 || unit === 0 ? Math.round(value) : Math.round(value * 10) / 10;
-  return `${rounded} ${SIZE_UNITS[unit]}`;
-}
+// The byte formatter lives in the leaf src/lib/file-size.ts; re-exported here
+// for existing callers.
+import { humanizeSize } from '@/lib/file-size';
+export { humanizeSize };
 
 /** Uppercase file extension from a filename, or empty when there is none. */
 export function fileExtension(filename: string): string {

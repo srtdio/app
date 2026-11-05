@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { MOVE_CLASS } from '@/lib/motion';
+import { ProgressRing } from '@/components/ui/ProgressRing';
 
 export type ButtonVariant =
   | 'primary'
@@ -23,6 +24,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   shape?: 'default' | 'round';
   /** Ref to the rendered <button>; a plain prop so Button stays a callable function. */
   buttonRef?: Ref<HTMLButtonElement> | undefined;
+  /**
+   * The action is running: the button is disabled and aria-busy, the label
+   * stays as it is (never swapped for "Saving..."), and a small turning arc
+   * sits beside it. Busy is the only reason a submit button is disabled; a
+   * form that is not valid yet keeps its button live and shows the field error.
+   */
+  busy?: boolean | undefined;
 }
 
 // One height (44), one radius (8), one type (14 / 500). Tokens only, so light
@@ -80,8 +88,42 @@ export function Button({
   shape = 'default',
   className,
   buttonRef,
+  busy = false,
+  disabled,
+  children,
   ...props
 }: ButtonProps) {
   void size;
-  return <button ref={buttonRef} className={buttonClass(variant, shape, className)} {...props} />;
+  return (
+    <button
+      ref={buttonRef}
+      className={buttonClass(variant, shape, className)}
+      {...props}
+      disabled={busy || disabled}
+      aria-busy={busy ? true : props['aria-busy']}
+    >
+      {busy ? <BusyArc /> : null}
+      {children}
+    </button>
+  );
+}
+
+/**
+ * The busy mark beside the label: the shared ProgressRing's indeterminate arc
+ * (no track) turning on the motion module's spin (still under Reduce Motion).
+ * currentColor ink, so it follows the button's own (disabled) text in light
+ * and dark. Hidden from assistive tech; aria-busy carries the state.
+ */
+function BusyArc() {
+  return (
+    <ProgressRing
+      progress={null}
+      size={16}
+      stroke={2}
+      arc={0.25}
+      className={cn('h-4 w-4 shrink-0', MOVE_CLASS.spin)}
+      trackClass="text-transparent"
+      arcClass="text-current"
+    />
+  );
 }

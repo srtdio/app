@@ -22,7 +22,12 @@ async function mount(value = ''): Promise<void> {
     root?.render(
       <SectionHeader
         title="Briefs"
-        search={{ value, onChange: () => {}, placeholder: 'Search briefs' }}
+        search={{
+          value,
+          onChange: () => {},
+          placeholder: 'Search briefs',
+          label: 'Search briefs',
+        }}
       />,
     );
   });

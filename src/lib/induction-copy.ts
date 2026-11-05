@@ -5,6 +5,7 @@
 // supabase/functions/invite-send/handler.ts (Deno cannot import from src).
 
 import type { CopyContext } from './induction-model';
+import { errorText, REASON_COPY } from '@/lib/error-copy';
 
 /** Sign-in and sign-up cards and the enter-the-code step (email code, no link). */
 export const CHECK_EMAIL_COPY = {
@@ -19,14 +20,14 @@ export const CHECK_EMAIL_COPY = {
   /** Followed by the cooldown as m:ss: "Resend in 0:28". */
   resendIn: 'Resend in',
   resendCode: 'Resend code',
-  wrongCode: "That code didn't work. Try again.",
+  wrongCode: `That code didn't work. ${REASON_COPY.unknown}`,
   /** Followed by the tappable resendCode action. */
   expiredCode: 'That code has expired.',
   rateLimited: 'Too many tries. Wait a minute and try again.',
   /** Shown under the email field when it loses focus with a malformed address. */
   invalidEmail: 'Enter a valid email, like name@company.com',
   /** Any other refusal from the code request: never the raw provider text. */
-  genericError: "Couldn't send the code. Try again.",
+  genericError: errorText('send the code', null),
 } as const;
 
 /** The pre-app screens (OnboardingFlow): only the lines that changed in W11. */
@@ -54,7 +55,7 @@ export const WORKSPACE_CREATE_COPY = {
   keepCreator: 'Keep as Creator',
   switchConfirm: 'Switch',
   switching: 'Switching',
-  switchFailed: "Couldn't switch. Try again.",
+  switchFailed: errorText('switch', null),
   discardTitle: 'Discard this workspace?',
   discardMessage: 'The brand name and platform you picked will be lost.',
   discardConfirm: 'Discard',

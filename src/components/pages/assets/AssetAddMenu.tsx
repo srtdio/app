@@ -17,7 +17,7 @@ interface AssetAddMenuProps {
 }
 
 /**
- * The Assets toolbar add control: a 44px-tall "New asset" primary trigger (IconPlus before the label) that
+ * The Assets toolbar add control: a 44px-tall "New file" primary trigger (IconPlus before the label) that
  * opens a small menu anchored beneath it. "Upload files" opens the upload sheet;
  * "Add link" opens the link sheet. Selecting starts from the round box on each
  * file card. Outside tap and Esc dismiss
@@ -39,10 +39,10 @@ export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
         className="whitespace-nowrap"
       >
         <IconPlus size={ICON_SIZE.inline} />
-        New asset
+        New file
       </Button>
 
-      <MenuPopover open={open} onClose={() => setOpen(false)} align="right">
+      <MenuPopover open={open} onClose={() => setOpen(false)} align="right" label="New file">
         <PressableRow
           type="button"
           role="menuitem"

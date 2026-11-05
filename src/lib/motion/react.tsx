@@ -15,6 +15,7 @@ import {
 import { LazyMotion, MotionGlobalConfig } from 'motion/react';
 import { article as MArticle, div as MDiv, li as MLi, section as MSection } from 'motion/react-m';
 import { cn } from '@/lib/cn';
+import { SKELETON_BUSY, useDelayedBusy } from '@/lib/useDelayedBusy';
 import { installMotionPreference, motionOff } from './preference';
 import type { Played } from './run';
 import { settle, type Box } from './moves';
@@ -472,18 +473,25 @@ interface BoxSkeletonProps extends HTMLAttributes<HTMLDivElement> {
 /**
  * Wraps a screen's boxes. Render it ONLY when the device or session holds
  * nothing for that screen; kept views and the device cache paint at once.
+ * It is mounted only while that screen loads: it holds its layout from the
+ * first frame but stays unpainted for SKELETON_BUSY.delay (150 ms), so a fast
+ * load never flashes boxes. Content replaces it the moment it is ready (the
+ * caller unmounts it), so it never delays content (docs/motion.md, Waits).
  */
 export function BoxSkeleton({
   lit,
   label = 'Loading',
   className,
   children,
+  style,
   ...rest
 }: BoxSkeletonProps) {
+  const show = useDelayedBusy(true, SKELETON_BUSY);
   return createElement(
     'div',
     {
       ...rest,
+      style: show ? style : { ...style, visibility: 'hidden' },
       role: 'status',
       'aria-busy': true,
       'aria-label': label,

@@ -46,6 +46,7 @@ import { useModalFocus } from '@/lib/modal-focus';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
 import { REPLY_PRIVATELY, replyPrivatelyTo } from '@/lib/chat/private-reply';
 import { personFirstName } from '@/lib/person-card';
+import { errorText } from '@/lib/error-copy';
 
 /** Quick-react row offered when a message's action menu is opened; "+" opens the picker after it. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '👌', '🙏'] as const;
@@ -909,7 +910,7 @@ export function returnPickerFocus(plus: (Focusable & { isConnected: boolean }) |
 }
 
 /** The picker body's load failure line (never the raw error). */
-export const EMOJI_LOAD_FAILED = "Couldn't load emoji. Try again.";
+export const EMOJI_LOAD_FAILED = errorText('load emoji', null);
 
 /** What the picker shell shows under its frame. Pure. */
 export function pickerBodyState(
@@ -920,7 +921,7 @@ export function pickerBodyState(
   return failed ? 'failed' : 'loading';
 }
 
-/** The grid area when the picker chunk failed to load: the line and a 44x44 Try again. */
+/** The grid area when the picker chunk failed to load: the line and a 44x44 Retry. */
 export function EmojiPickerLoadFailed(props: { onRetry: () => void }): ReactElement {
   return (
     <div
@@ -929,7 +930,7 @@ export function EmojiPickerLoadFailed(props: { onRetry: () => void }): ReactElem
     >
       <p className="text-base text-fg-3">{EMOJI_LOAD_FAILED}</p>
       <Button type="button" data-emoji-retry="" className="min-w-[44px]" onClick={props.onRetry}>
-        Try again
+        Retry
       </Button>
     </div>
   );
@@ -1362,7 +1363,13 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
         style={{ top: anchor.bottom - lift, left: mine ? anchor.right : anchor.left }}
       >
         <span className="relative block">
-          <MenuPopover open onClose={onClose} align={mine ? 'right' : 'left'}>
+          <MenuPopover
+            open
+            onClose={onClose}
+            align={mine ? 'right' : 'left'}
+            label="Message actions"
+            menu={false}
+          >
             {body}
           </MenuPopover>
         </span>

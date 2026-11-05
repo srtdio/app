@@ -117,7 +117,7 @@ function advance(ms: number): void {
 
 function tapTryAgain(): void {
   const button = Array.from(host?.querySelectorAll('button') ?? []).find(
-    (b) => b.textContent === 'Try again',
+    (b) => b.textContent === 'Retry',
   );
   expect(button).toBeDefined();
   act(() => {

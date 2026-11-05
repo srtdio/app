@@ -645,6 +645,11 @@ function holdAttrs(props: EntryProps): {
     : {};
 }
 
+/** The plan an entry belongs to, in words (its dot's meaning): the plan title, or "Post not in a plan". Pure. */
+export function entryPlanName(entry: CalendarEntry): string {
+  return entry.kind === 'item' ? entry.bundle.plan.title : LOOSE_POST_LEGEND;
+}
+
 function MonthEntry(props: EntryProps): ReactElement {
   const look = entryLook(props.entry);
   return (
@@ -670,6 +675,8 @@ function MonthEntry(props: EntryProps): ReactElement {
     >
       <span aria-hidden="true" className={cn('h-2 w-2 shrink-0', look.dot)} />
       <span className="min-w-0 flex-1 truncate">{props.entry.title}</span>
+      {/* The dot's colour names the plan; the name says it in words too. */}
+      <span className="sr-only">, {entryPlanName(props.entry)}</span>
       <PlanCommentCount count={entryCommentCount(props.entry)} />
     </PressableRow>
   );

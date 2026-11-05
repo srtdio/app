@@ -11,6 +11,7 @@ import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import type { ToastOptions } from '@/components/ui/toast/types';
+import { PageHead } from '@/components/shell/PageHead';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { ICON_SIZE, IconBriefs, IconPlus } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS } from '@/components/pages/BriefCard';
@@ -71,6 +72,7 @@ import { cn } from '@/lib/cn';
 import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { INDUCTION_KEYS } from '@/lib/induction';
+import { errorText } from '@/lib/error-copy';
 
 // Filter chips: All shows everything; Open/Closed key off brief.status. The
 // status keys come from the @srtdio/briefs type, never inline literals.
@@ -113,6 +115,7 @@ export function briefsHeader(props: BriefsHeaderProps): ReactElement {
         value: props.search,
         onChange: props.onSearchChange,
         placeholder: 'Search briefs',
+        label: 'Search briefs',
       }}
       {...(props.sort !== undefined
         ? {
@@ -258,7 +261,7 @@ interface BriefSearchPage {
 export const BRIEF_COUNTS_PAINT_WAIT_MS = 5_000;
 
 /** The Load more failure toast: "Couldn't {action}. {reason}". */
-export const BRIEFS_LOAD_MORE_FAILED = "Couldn't load more briefs. Try again.";
+export const BRIEFS_LOAD_MORE_FAILED = errorText('load more briefs', null);
 
 /**
  * The Load more control under the list: the shared secondary Button (44 tall,
@@ -765,7 +768,7 @@ export function BriefsPage() {
     if (generation !== loadGeneration.current) return;
     setLoadingMore(false);
     if (!result.ok) {
-      showToast?.({ title: BRIEFS_LOAD_MORE_FAILED, tone: 'error' });
+      showToast?.({ title: errorText('load more briefs', result.error), tone: 'error' });
       return;
     }
     setBriefsAndKeep((prev) => mergeBriefPages(prev, result.data.items), result.data.next);
@@ -792,7 +795,7 @@ export function BriefsPage() {
     const result = await listBriefsPage(supabase, workspaceId, cursor);
     setLoadingMore(false);
     if (!result.ok) {
-      showToast?.({ title: BRIEFS_LOAD_MORE_FAILED, tone: 'error' });
+      showToast?.({ title: errorText('load more briefs', result.error), tone: 'error' });
       return;
     }
     briefSearch.update((data) =>
@@ -895,6 +898,7 @@ export function BriefsPage() {
 
   return (
     <>
+      <PageHead title="Briefs" hidden />
       {briefsHeader({
         search,
         onSearchChange: (value) => setListState(filter, value),

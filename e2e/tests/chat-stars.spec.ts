@@ -196,7 +196,7 @@ test('chat stars: star, list everywhere, jump, unstar from Edit', async ({ page 
 
   // Contact sheet: the Starred tab lists it.
   await page.locator('[data-contact-open]').click();
-  await page.getByRole('button', { name: 'Starred', exact: true }).click();
+  await page.getByRole('tab', { name: 'Starred', exact: true }).click();
   const tab = page.locator('[data-starred-tab]');
   await expect(tab.locator('[data-starred-row]', { hasText: PEER_LINE })).toBeVisible();
   await page.getByRole('button', { name: 'Close contact info' }).click();
@@ -231,7 +231,7 @@ test('chat stars: star, list everywhere, jump, unstar from Edit', async ({ page 
   await expect(page.locator('[data-starred-sheet] [data-starred-empty]')).toBeVisible();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await page.locator('[data-contact-open]').click();
-  await page.getByRole('button', { name: 'Starred', exact: true }).click();
+  await page.getByRole('tab', { name: 'Starred', exact: true }).click();
   await expect(page.locator('[data-starred-tab] [data-starred-empty]')).toBeVisible();
 });
 

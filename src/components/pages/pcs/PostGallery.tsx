@@ -1265,6 +1265,8 @@ export function galleryView({
 
 interface PostGalleryProps {
   items: GalleryItem[];
+  /** The post's (or brief's) title: the open viewer's slide alt reads "{title}, slide N". */
+  title?: string | undefined;
   cache: PresignCache;
   deps: PresignDeps;
   presignEnabled: boolean;
@@ -1353,6 +1355,7 @@ interface GalleryTools {
  */
 export function PostGallery({
   items,
+  title,
   cache,
   deps,
   presignEnabled,
@@ -1646,6 +1649,7 @@ export function PostGallery({
   return viewerReplacesRibbon(openIndex, items.length) && openIndex !== null ? (
     <PostLightbox
       items={items}
+      title={title}
       index={openIndex}
       presignEnabled={presignEnabled}
       cache={cache}

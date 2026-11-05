@@ -6,6 +6,7 @@
 // a mock and the app passes fetchWithTrace; there is no native fetch in this file.
 
 import type { Result } from '@srtdio/rpc';
+import { errorText } from '@/lib/error-copy';
 
 interface AvatarUploadConfig {
   /** The avatar-upload Worker URL (env.VITE_AVATAR_UPLOAD_URL). */
@@ -54,18 +55,22 @@ export async function uploadAvatarFile(
       headers,
       body: form,
     });
-  } catch {
-    return fail("Couldn't upload. Try again.");
+  } catch (error: unknown) {
+    return fail(errorText('upload', error));
   }
 
   if (!response.ok) {
-    return fail("Couldn't upload. Try again.");
+    // The Worker's { error: { code } } names a refusal. Its 413 is the avatar's
+    // own cap, not the file upload ceiling, so it reads as the retry line.
+    const body = response.status === 413 ? null : await readJson(response);
+    const code = (body as { error?: { code?: unknown } } | null)?.error?.code;
+    return fail(errorText('upload', typeof code === 'string' ? code : null));
   }
 
   const body = await readJson(response);
   const avatarUrl = avatarUrlOf(body);
   if (avatarUrl === null) {
-    return fail("Couldn't upload. Try again.");
+    return fail(errorText('upload', null));
   }
   return { ok: true, data: { avatarUrl } };
 }

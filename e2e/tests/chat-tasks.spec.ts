@@ -33,7 +33,7 @@ async function openChat(page: Page, name: string): Promise<void> {
 }
 
 async function openSheet(page: Page): Promise<ReturnType<Page['getByRole']>> {
-  const button = page.getByRole('button', { name: 'Tasks', exact: true });
+  const button = page.getByRole('button', { name: /^Tasks(, new)?$/ });
   await button.click();
   const sheet = page.getByRole('dialog', { name: 'Tasks' });
   await expect(sheet).toBeVisible();
@@ -57,7 +57,7 @@ test(
     const network = await installHarnessNetwork(page);
     seedTasks(network.world);
     await openChat(page, GROUP_NAME);
-    const button = page.getByRole('button', { name: 'Tasks', exact: true });
+    const button = page.getByRole('button', { name: /^Tasks(, new)?$/ });
     expectMinTouchTarget(await button.boundingBox());
 
     const sheet = await openSheet(page);

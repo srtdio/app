@@ -209,7 +209,7 @@ describe('AcceptFailureView', () => {
     const html = view('wrong-account');
     expect(html).toContain(RECOVERY_COPY.wrongAccount);
     expect(html).toContain(RECOVERY_COPY.differentEmail);
-    expect(html).not.toContain('Try again');
+    expect(html).not.toContain('>Retry<');
     expect(html).not.toContain(errorHtml);
     expect(html).toContain('h-11');
   });
@@ -217,7 +217,8 @@ describe('AcceptFailureView', () => {
   it.each(['not-found', 'generic'] as const)('%s keeps the plain message and retry', (kind) => {
     const html = view(kind);
     expect(html).toContain(errorHtml);
-    expect(html).toContain('Try again');
+    expect(html).toContain('>Retry<');
+    expect(html).not.toContain('Try again<');
     expect(html).toContain('Go to your workspace');
     expect(html).not.toContain(RECOVERY_COPY.wrongAccount);
   });

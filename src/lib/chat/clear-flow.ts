@@ -5,6 +5,7 @@
 // failure toast lives here too so the list and its tests share one source.
 
 import type { WriteResult } from '@/lib/chat/record';
+import { errorText } from '@/lib/error-copy';
 
 /** Confirm body: the delete is local to the caller and undone by a new message. */
 export const DELETE_CHATS_BODY =
@@ -16,8 +17,8 @@ export function deleteChatsTitle(count: number): string {
 }
 
 /** Toast when a chat could not be hidden (the list's action reads "Hide"). */
-export function deleteChatFailedMessage(title: string): string {
-  return `Couldn't hide ${title}. Try again.`;
+export function deleteChatFailedMessage(title: string, error: unknown = null): string {
+  return errorText(`hide ${title}`, error);
 }
 
 export type ClearRunResult<T> = { ok: true } | { ok: false; failed: T; message: string };

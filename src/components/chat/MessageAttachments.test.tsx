@@ -311,8 +311,8 @@ describe('instant send tile (local preview + upload progress)', () => {
     // A plain flat line; the bars are not visible.
     expect(html).toContain('data-voice-flat="shown"');
     expect(html).toMatch(/data-voice-bars="peaks" class="[^"]*invisible opacity-0/);
-    // No upload bar anywhere.
-    expect(html).not.toContain('role="progressbar"');
+    // No visible upload bar; the ring's progress is announced by an sr-only progressbar.
+    expect(html).toMatch(/role="progressbar"[^>]*class="sr-only"/);
     expect(html).not.toContain('h-[3px]');
     expect(html).not.toContain('WEBM');
     expect(html).not.toContain('Open');
@@ -404,7 +404,7 @@ describe('instant send tile (local preview + upload progress)', () => {
     expect(html).toContain('aria-label="Cancel upload"');
     expect(html).toContain('data-upload-progress="40"');
     expect(html).toContain('absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2');
-    expect(html).not.toContain('progressbar');
+    expect(html).toMatch(/role="progressbar"[^>]*class="sr-only"/);
     // The local preview never presigns.
     expect(fetcher).not.toHaveBeenCalled();
   });
@@ -638,7 +638,7 @@ describe('album grid', () => {
     // Uploading tiles are dimmed; the grid holds the ring.
     expect((html.match(/brightness-75/g) ?? []).length).toBe(2);
     expect(html).toContain('relative w-[320px]');
-    expect(html).not.toContain('progressbar');
+    expect(html).toMatch(/role="progressbar"[^>]*class="sr-only"/);
   });
 });
 

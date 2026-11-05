@@ -50,6 +50,7 @@ import {
   uploadChatAttachment,
   type ChatAttachmentUpload,
 } from '@/lib/chat/attachments';
+import { errorText } from '@/lib/error-copy';
 
 /** Photos and videos from the upload allowlist: what a post's creative is. */
 export const MEDIA_ACCEPT = ALLOWED_MIME_TYPES.filter(
@@ -537,9 +538,9 @@ export function failedUploadCount(
   return rows.filter((row) => row.error !== null && row.file !== undefined).length;
 }
 
-/** The line under the tiles while files failed: "Couldn't upload 1 file. Try again." Pure. */
+/** The line under the tiles while files failed: "Couldn't upload 1 file. {reason}" Pure. */
 export function failedFilesLine(count: number): string {
-  return `Couldn't upload ${count} ${count === 1 ? 'file' : 'files'}. Try again.`;
+  return errorText(`upload ${count} ${count === 1 ? 'file' : 'files'}`, null);
 }
 
 /**
@@ -647,11 +648,11 @@ export function AttachmentsField({
   const uploadFile = useCallback(
     async (file: File, onProgress: (fraction: number) => void): Promise<ChatAttachmentUpload> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '' || workspaceId === null) {
-        return { ok: false, message: "Couldn't upload. Try again." };
+        return { ok: false, message: errorText('upload', null) };
       }
       const token = (await supabase.auth.getSession()).data.session?.access_token ?? null;
       if (token === null || token === '') {
-        return { ok: false, message: "Couldn't upload. Try again." };
+        return { ok: false, message: errorText('upload', null) };
       }
       return uploadChatAttachment({
         file,

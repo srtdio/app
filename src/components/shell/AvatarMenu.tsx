@@ -19,6 +19,7 @@ import { GUIDE_CHROME } from '@/lib/induction-copy';
 import { useTheme } from '@/lib/use-theme';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useDismissLayer } from '@/lib/modal-focus';
+import { useMenuKeys } from '@/lib/useMenuKeys';
 
 interface AvatarMenuProps {
   open: boolean;
@@ -34,6 +35,8 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
   // (the phone Sheet does both itself).
   const panelRef = useRef<HTMLDivElement>(null);
   useDismissLayer(open && isDesktop, onClose, panelRef);
+  // First item takes focus on open; the arrows move between items.
+  const keys = useMenuKeys(panelRef, open && isDesktop);
 
   function go(to: string): void {
     onClose();
@@ -105,6 +108,8 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
         <div
           ref={panelRef}
           role="menu"
+          aria-label="Account"
+          onKeyDown={keys.onKeyDown}
           className="fixed top-[56px] right-3 z-50 w-[244px] rounded-xl border bg-panel p-1.5 lit-overlay"
         >
           {rows}

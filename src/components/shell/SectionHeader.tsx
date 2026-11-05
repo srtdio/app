@@ -11,8 +11,8 @@ interface SectionHeaderSearch {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  /** Accessible name for the field when the placeholder is shorter than the purpose. */
-  label?: string;
+  /** The field's accessible name, from the screen ("Search posts"). Required: a placeholder is not a name. */
+  label: string;
 }
 
 interface SectionHeaderSort<S extends string> {
@@ -154,7 +154,7 @@ export function SectionHeader<S extends string = string>({
               value={search.value}
               onChange={(e) => search.onChange(e.target.value)}
               placeholder={search.placeholder}
-              {...(search.label !== undefined ? { 'aria-label': search.label } : {})}
+              aria-label={search.label}
               className={cn('min-w-0 pl-7', searching ? 'pr-11' : 'pr-2')}
             />
             {searching ? (

@@ -12,6 +12,8 @@ import { Toast } from '@/components/ui/toast/Toast';
 import { UndoStrip } from '@/components/ui/toast/UndoStrip';
 import type { Toast as ToastModel, ToastApi, ToastOptions } from '@/components/ui/toast/types';
 import { cn } from '@/lib/cn';
+import { createPausableTimer, holdHandlers } from '@/lib/pausable-timer';
+import type { HoldReason, PausableTimer } from '@/lib/pausable-timer';
 import {
   DUR_SHEET_OUT_MS,
   motionOff,
@@ -24,7 +26,12 @@ import {
 } from '@/lib/motion';
 
 /** Default auto-dismiss delay when `durationMs` is omitted. */
-export const DEFAULT_DURATION_MS = 4000;
+export const TOAST_MS = 4000;
+/**
+ * How long an error-tone toast stays up at least: a failure takes longer to
+ * read and act on than a confirmation. Sticky error toasts stay sticky.
+ */
+export const ERROR_TOAST_MS = 8000;
 /** Newest-first cap on top cards; older cards beyond this are dropped on show(). */
 export const MAX_VISIBLE = 3;
 /**
@@ -52,6 +59,12 @@ interface ToastStore extends ToastApi {
   expire: (id: string) => void;
   /** Press a toast's action: run it, then dismiss; onExpire never runs. */
   act: (id: string) => void;
+  /**
+   * Hold (held true) or release a live toast's countdown for one reason
+   * (hover, focus, press). It resumes with the time it had left once no reason
+   * holds it. No-op for a leaving or sticky toast.
+   */
+  hold: (id: string, reason: HoldReason, held: boolean) => void;
   getSnapshot: () => ManagedToast[];
   subscribe: (listener: (toasts: ManagedToast[]) => void) => () => void;
   /** Clear every pending timer and listener. Called on provider unmount. */
@@ -62,7 +75,8 @@ export function createToastStore(): ToastStore {
   let toasts: ManagedToast[] = [];
   let seq = 0;
   const listeners = new Set<(toasts: ManagedToast[]) => void>();
-  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  // One countdown per toast: its lifetime while live, then its exit removal.
+  const timers = new Map<string, PausableTimer>();
   // onExpire per live toast; deleted when it fires or the action is pressed, so
   // it runs at most once.
   const expires = new Map<string, () => void>();
@@ -72,9 +86,9 @@ export function createToastStore(): ToastStore {
   }
 
   function clearTimer(id: string): void {
-    const handle = timers.get(id);
-    if (handle !== undefined) {
-      clearTimeout(handle);
+    const timer = timers.get(id);
+    if (timer !== undefined) {
+      timer.cancel();
       timers.delete(id);
     }
   }
@@ -105,7 +119,7 @@ export function createToastStore(): ToastStore {
     emit();
     timers.set(
       id,
-      setTimeout(() => remove(id), EXIT_MS),
+      createPausableTimer(() => remove(id), EXIT_MS),
     );
   }
 
@@ -132,6 +146,15 @@ export function createToastStore(): ToastStore {
     dismiss(id);
   }
 
+  function hold(id: string, reason: HoldReason, held: boolean): void {
+    const current = toasts.find((toast) => toast.id === id);
+    if (current === undefined || current.leaving) return;
+    const timer = timers.get(id);
+    if (timer === undefined) return;
+    if (held) timer.hold(reason);
+    else timer.release(reason);
+  }
+
   function show(options: ToastOptions): string {
     const id = String((seq += 1));
     const toast: ManagedToast = {
@@ -145,8 +168,10 @@ export function createToastStore(): ToastStore {
       ...(options.kind !== undefined ? { kind: options.kind } : {}),
       leaving: false,
     };
-    const ms = options.durationMs === undefined ? DEFAULT_DURATION_MS : options.durationMs;
-    const timedMs = ms !== null && ms > 0 ? ms : null;
+    const ms = options.durationMs === undefined ? TOAST_MS : options.durationMs;
+    // An error toast never leaves before ERROR_TOAST_MS; sticky stays sticky.
+    const floorMs = options.tone === 'error' ? ERROR_TOAST_MS : 0;
+    const timedMs = ms !== null && ms > 0 ? Math.max(ms, floorMs) : null;
     if (options.onExpire !== undefined) expires.set(id, options.onExpire);
 
     // One strip at a time: a new Undo strip accepts the live one (commit now)
@@ -175,14 +200,14 @@ export function createToastStore(): ToastStore {
     if (timedMs !== null) {
       timers.set(
         id,
-        setTimeout(() => expire(id), timedMs),
+        createPausableTimer(() => expire(id), timedMs),
       );
     }
     return id;
   }
 
   function dispose(): void {
-    for (const handle of timers.values()) clearTimeout(handle);
+    for (const timer of timers.values()) timer.cancel();
     timers.clear();
     expires.clear();
     listeners.clear();
@@ -194,6 +219,7 @@ export function createToastStore(): ToastStore {
     dismiss,
     expire,
     act,
+    hold,
     dispose,
     getSnapshot: () => toasts,
     subscribe: (listener) => {
@@ -209,6 +235,7 @@ interface ToastContextValue extends ToastApi {
   toasts: ManagedToast[];
   expire: (id: string) => void;
   act: (id: string) => void;
+  hold: (id: string, reason: HoldReason, held: boolean) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -246,6 +273,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       dismiss: store.dismiss,
       expire: store.expire,
       act: store.act,
+      hold: store.hold,
     }),
     [toasts, store],
   );
@@ -264,10 +292,13 @@ function ToastSlot({
   toast,
   onDismiss,
   onAction,
+  onHold,
 }: {
   toast: ManagedToast;
   onDismiss: (id: string) => void;
   onAction: (id: string) => void;
+  /** Holds the card's countdown while hovered, focused or touched. */
+  onHold: (id: string, reason: HoldReason, held: boolean) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const off = useMotionOff();
@@ -304,6 +335,8 @@ function ToastSlot({
       if (offset !== 0) riseIn(el, offset);
     },
   });
+  // Reading, focusing or touching the card holds its countdown (TOAST_MS).
+  const holds = holdHandlers((reason, held) => onHold(toast.id, reason, held));
 
   return (
     <div
@@ -314,6 +347,14 @@ function ToastSlot({
         toast.leaving && off && 'invisible',
       )}
       {...drag}
+      onPointerEnter={holds.onPointerEnter}
+      onPointerLeave={holds.onPointerLeave}
+      onFocus={holds.onFocus}
+      onBlur={holds.onBlur}
+      onPointerDown={(event) => {
+        holds.onPointerDown();
+        drag.onPointerDown(event);
+      }}
     >
       <Toast toast={toast} leaving={toast.leaving} onDismiss={onDismiss} onAction={onAction} />
     </div>
@@ -339,7 +380,13 @@ export function ToastViewport() {
         className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex flex-col items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:inset-x-auto md:right-4 md:items-end"
       >
         {cards.map((toast) => (
-          <ToastSlot key={toast.id} toast={toast} onDismiss={ctx.expire} onAction={ctx.act} />
+          <ToastSlot
+            key={toast.id}
+            toast={toast}
+            onDismiss={ctx.expire}
+            onAction={ctx.act}
+            onHold={ctx.hold}
+          />
         ))}
       </div>
       {strips.map((toast) => (
@@ -349,6 +396,7 @@ export function ToastViewport() {
           leaving={toast.leaving}
           onAccept={ctx.expire}
           onAction={ctx.act}
+          onHold={ctx.hold}
         />
       ))}
     </>

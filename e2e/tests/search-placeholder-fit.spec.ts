@@ -81,7 +81,7 @@ test('Briefs: "Search briefs" fits at 360px', async ({ page }) => {
 test('Assets: "Search files" fits at 360px', async ({ page }) => {
   await installHarnessNetwork(page);
   await page.goto('/assets');
-  await expect(page.getByRole('button', { name: 'New asset' })).toBeVisible({
+  await expect(page.getByRole('button', { name: 'New file' })).toBeVisible({
     timeout: 15_000,
   });
   await expectPlaceholderFits(page, 'Search files');

@@ -204,7 +204,7 @@ export function AcceptFailureView(props: {
         onClick={props.actions.retry}
         disabled={props.submitting}
       >
-        Try again
+        Retry
       </Button>
       {/* Secondary path so an already-joined user is never stuck. */}
       <Button variant="default" className="w-full" onClick={props.actions.goToWorkspace}>

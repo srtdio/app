@@ -50,7 +50,7 @@ async function openDm(page: Page): Promise<void> {
 async function openContactMedia(page: Page): Promise<void> {
   await page.locator('[data-contact-open]').first().click();
   await expect(page.getByRole('button', { name: 'Close contact info' })).toBeVisible();
-  await page.getByRole('tablist').getByRole('button', { name: 'Media', exact: true }).click();
+  await page.getByRole('tablist').getByRole('tab', { name: 'Media', exact: true }).click();
   await expect(page.locator('[data-contact-tab="media"]')).toBeVisible();
 }
 

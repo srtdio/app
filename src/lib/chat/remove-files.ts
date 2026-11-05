@@ -29,6 +29,7 @@ import {
   type ThreadMessage,
 } from '@/lib/chat/thread';
 import type { ChatConnection } from '@/lib/chat/types';
+import { errorText } from '@/lib/error-copy';
 
 export type { RemoveFileTarget } from '@/lib/chat/record';
 export type { RemovedFiles } from '@/lib/chat/thread';
@@ -45,7 +46,7 @@ export const REMOVE_VIDEO_ARIA = 'Remove video';
 /** The ownership or marked refusal. */
 export const REMOVE_REFUSED_TOAST = "Couldn't remove. Only your own files can be removed.";
 /** Any other failure. */
-export const REMOVE_FAILED_TOAST = "Couldn't remove. Try again.";
+export const REMOVE_FAILED_TOAST = errorText('remove', null);
 
 /** The viewer bin's label for an image or a video. Pure. */
 export function removeMediaAria(mime: string): string {

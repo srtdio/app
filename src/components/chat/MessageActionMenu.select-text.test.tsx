@@ -270,7 +270,9 @@ describe('menu style', () => {
     );
     expect(src).toContain('const isLaptop = useIsLaptop();');
     expect(src).toContain('<Sheet open={active} onClose={onClose} title="Message actions">');
-    expect(src).toContain("<MenuPopover open onClose={onClose} align={mine ? 'right' : 'left'}>");
+    expect(src).toMatch(
+      /<MenuPopover\s+open\s+onClose=\{onClose\}\s+align=\{mine \? 'right' : 'left'\}/,
+    );
     expect(src).not.toContain(['Icon', 'More'].join(''));
     // Six 44px reaction cells, the row's 10px sides and the 1px border each side.
     expect(MENU_WIDTH_PX).toBeGreaterThanOrEqual(6 * 44 + 20 + 2);

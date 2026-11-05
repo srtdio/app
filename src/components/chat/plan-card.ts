@@ -18,6 +18,7 @@ import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isOwnerOrAdmin } from '@/components/pages/pcs/roles';
 import { formatCivilDayHeader } from '@/lib/plan-week';
 import { civilDay, formatTime } from '@/lib/time';
+import { errorText } from '@/lib/error-copy';
 
 /** Card and screen copy. */
 export const PLAN_EYEBROW = 'PLAN';
@@ -40,7 +41,7 @@ export const HAS_CLIENT_TAG = 'Has approvers';
 /** A draft post's pill, and a client's sub line on its row. */
 export const DRAFT_LABEL = 'Draft';
 export const DRAFT_NOT_READY = 'Not ready to view yet';
-export const COMMENT_FAILED = "Couldn't send. Try again.";
+export const COMMENT_FAILED = errorText('send', null);
 
 /**
  * The longest plan, in days between From and To: the New plan screen's 5-week
@@ -409,7 +410,7 @@ export const DRAFT_PROBLEM_COPY: Record<Exclude<DraftProblem, null>, string> = {
 
 /** Toast and error copy for a slot tick. */
 export const SLOT_REMOVED_TOAST = 'Slot approval removed';
-export const SLOT_FAILED = "Couldn't update this slot. Try again.";
+export const SLOT_FAILED = errorText('update this slot', null);
 export const SLOT_POST_NOT_READY = "This post isn't ready yet.";
 export const SLOT_UNDO = 'Undo';
 /** The post item header's subtitle. */
@@ -834,11 +835,11 @@ export function addedToast(kind: 'concept' | 'post', dayHeader: string | null): 
 }
 
 /** Add and move failure copy. */
-export const ADD_FAILED = "Couldn't add. Try again.";
-export const MOVE_FAILED = "Couldn't move this item. Try again.";
+export const ADD_FAILED = errorText('add', null);
+export const MOVE_FAILED = errorText('move this item', null);
 export const DATE_OUTSIDE_PLAN = 'That day is outside this plan.';
 export const REMOVED_TOAST = 'Removed from plan';
-export const REMOVE_FAILED = "Couldn't remove. Try again.";
+export const REMOVE_FAILED = errorText('remove', null);
 /** The swipe action behind a plan row (agency side). */
 export const SWIPE_REMOVE_LABEL = 'Remove';
 /** The reduced-motion stand-in for the one-time swipe peek. */
@@ -857,7 +858,7 @@ export const PLAN_WRITE_ERROR_COPY: PlanWriteErrorTable = { date_outside_plan: D
 
 /** New plan's Create (one transaction: a failure always saved nothing). */
 export const PLAN_CREATE_ERROR_COPY: PlanWriteErrorTable = {
-  network: "Couldn't create the plan. Try again. Nothing was saved.",
+  network: `${errorText('create the plan', null)} Nothing was saved.`,
   date_outside_plan:
     "A post's date changed and is now outside this plan. Nothing was saved. Check the orange items.",
   invalid_payload:
@@ -866,7 +867,7 @@ export const PLAN_CREATE_ERROR_COPY: PlanWriteErrorTable = {
 };
 
 /** New plan's Create, any other failure. */
-export const PLAN_CREATE_FAILED_COPY = "Couldn't create the plan. Try again. Nothing was saved.";
+export const PLAN_CREATE_FAILED_COPY = `${errorText('create the plan', null)} Nothing was saved.`;
 
 /** Whether a raw error reads as the request never reaching the server. Pure. */
 export function isNetworkFailure(message: string): boolean {
@@ -920,24 +921,23 @@ export function movedKeptToast(dayHeader: string | null): string {
 
 export const RENAME_LABEL = 'Rename';
 export const RENAMED_TOAST = 'Renamed';
-export const RENAME_FAILED = "Couldn't rename. Try again.";
+export const RENAME_FAILED = errorText('rename', null);
 export const DELETE_PLAN_LABEL = 'Delete plan';
 export const DELETE_PLAN_TITLE = 'Delete this plan?';
 export const PLAN_DELETED_TOAST = 'Plan deleted';
 export const DELETE_FORBIDDEN = "Couldn't delete the plan. You don't have access to do this.";
-export const DELETE_FAILED = "Couldn't delete. Try again.";
+export const DELETE_FAILED = errorText('delete', null);
 export const OPEN_FOR_CLIENT_LABEL = 'Open for approvers';
 export const OPEN_FOR_CLIENT_TITLE = 'Open this plan for approvers?';
 export const OPEN_FOR_CLIENT_BODY =
   'Approvers can open it from any plan card in chat and tick slots. They get a notification. This cannot be undone.';
 /** N28: after Open for approvers (and after Send to approvers). */
 export const OPEN_FOR_CLIENT_TOAST = 'Approvers can now review this plan';
-export const OPEN_FOR_CLIENT_FAILED = "Couldn't open for approvers. Try again.";
+export const OPEN_FOR_CLIENT_FAILED = errorText('open for approvers', null);
 export const SEND_NEEDS_OPEN = 'Open the plan for approvers to send it here.';
-export const SEND_FAILED = "Couldn't send. Try again.";
+export const SEND_FAILED = errorText('send', null);
 /** Send to approvers: the plan opened but chat_plan_share failed; Retry only reposts. */
-export const SEND_AFTER_OPEN_FAILED =
-  "Couldn't post the card. Try again. The plan is open for approvers.";
+export const SEND_AFTER_OPEN_FAILED = `${errorText('post the card', null)} The plan is open for approvers.`;
 export const RETRY_LABEL = 'Retry';
 export const GO_TO_CARD_LABEL = 'Go to card';
 
@@ -965,14 +965,14 @@ export const EDIT_TO_LABEL = 'To';
 
 /** Save changes failures, in plain words; nothing is ever half saved. */
 export const PLAN_SAVE_ERROR_COPY: PlanWriteErrorTable = {
-  network: "Couldn't save the plan. Try again. Nothing was saved.",
+  network: `${errorText('save the plan', null)} Nothing was saved.`,
   date_outside_plan:
     'An item sits on a day outside the plan dates. Nothing was saved. Move it or widen the dates.',
   invalid_payload:
     'Something in this plan is no longer available, such as a removed item. Nothing was saved.',
   forbidden: "Couldn't save the plan. You don't have access to do this. Nothing was saved.",
 };
-export const PLAN_SAVE_FAILED_COPY = "Couldn't save the plan. Try again. Nothing was saved.";
+export const PLAN_SAVE_FAILED_COPY = `${errorText('save the plan', null)} Nothing was saved.`;
 
 /** A failed plan_save's copy by cause. Pure. */
 export function planSaveErrorCopy(message: string): string {

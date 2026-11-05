@@ -28,6 +28,7 @@ import {
 } from '@/lib/chat/thread';
 import type { HistoryPage } from '@/lib/chat/history';
 import type { ChatConnection } from '@/lib/chat/types';
+import { errorText } from '@/lib/error-copy';
 
 export type { MarkPriority, MarkType } from '@/lib/chat/record';
 
@@ -197,7 +198,7 @@ export function markConfirmAction(type: MarkType, action: MarkTransition): strin
 }
 
 /** Toast when a stamp or reopen write fails (the row has already reverted). */
-export const MARK_UPDATE_FAILED = "Couldn't update. Try again.";
+export const MARK_UPDATE_FAILED = errorText('update', null);
 
 /**
  * The mark as it looks after a transition: stamped by `actorId` at `nowIso`, or

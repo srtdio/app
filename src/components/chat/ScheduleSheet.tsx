@@ -30,6 +30,7 @@ import {
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 import { usePresence } from '@/lib/motion';
+import { useMenuKeys } from '@/lib/useMenuKeys';
 import { centreOf, menuMoves } from '@/components/ui/popover-classes';
 
 const SCHEDULE_SHEET_TITLE = 'Schedule message';
@@ -89,7 +90,7 @@ export function ScheduleOptions(props: OptionsProps): ReactElement {
         </p>
       ) : null}
       {step === 'presets' ? (
-        <ul className="flex flex-col">
+        <ul role="menu" aria-label={SCHEDULE_SHEET_TITLE} className="flex flex-col">
           <PresetRow
             id="tomorrow"
             label="Tomorrow"
@@ -159,9 +160,10 @@ function PresetRow(props: {
   onClick: () => void;
 }): ReactElement {
   return (
-    <li>
+    <li role="none">
       <PressableRow
         type="button"
+        role="menuitem"
         data-schedule-row={props.id}
         onClick={props.onClick}
         className="flex min-h-[56px] items-center gap-3 px-2 text-fg"
@@ -240,6 +242,8 @@ export function ScheduleMenu(props: {
     menuMoves(() => centreOf(anchorRef?.current), 'right'),
   );
   const onClose = props.onClose;
+  // The first preset takes focus on open; the arrows move between presets.
+  const keys = useMenuKeys(rootRef, props.open);
   useEffect(() => {
     if (!props.open) return;
     function onKey(event: KeyboardEvent): void {
@@ -268,6 +272,7 @@ export function ScheduleMenu(props: {
       ref={rootRef}
       role="dialog"
       aria-label={SCHEDULE_SHEET_TITLE}
+      onKeyDown={keys.onKeyDown}
       data-schedule-menu=""
       className="absolute bottom-full right-3 z-30 mb-2 flex w-[340px] max-w-[calc(100%-24px)] flex-col rounded-xl border bg-panel lit-overlay"
     >

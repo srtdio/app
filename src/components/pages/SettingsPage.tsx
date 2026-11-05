@@ -52,7 +52,7 @@ export function SettingsPage() {
     <>
       <PageHead title="Settings" />
       <div className="px-4 md:px-6">
-        <Tabs items={PANELS} active={active} onChange={setActive} />
+        <Tabs label="Settings" items={PANELS} active={active} onChange={setActive} />
       </div>
       <div className="px-4 md:px-6 py-5">
         {active === 'workspace' ? (

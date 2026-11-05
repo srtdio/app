@@ -77,7 +77,8 @@ describe('createBucket', () => {
     expect(res.ok ? null : res.error.message).toBe("That name's already taken.");
     expect(bucketCreateErrorMessage('invalid_name')).toBe('Use 1 to 40 characters.');
     expect(bucketCreateErrorMessage('permission denied for function')).toBe(
-      "Couldn't create the bucket. Try again.",
+      "Couldn't create the bucket. You don't have access to do this.",
     );
+    expect(bucketCreateErrorMessage('boom')).toBe("Couldn't create the bucket. Try again.");
   });
 });

@@ -604,11 +604,9 @@ export function ActivityCard({
                 {alert !== null ? alertTopLine(lead, alert) : actorLine(actorEntry, actorName)}
               </span>
               {unread ? (
-                <span
-                  className={cn('ml-auto', UNREAD_DOT_CLASS)}
-                  aria-label="Unread"
-                  role="status"
-                />
+                // A plain label, not a live region: the dot is part of the
+                // card's name ("Unread"), never announced on its own.
+                <span className={cn('ml-auto', UNREAD_DOT_CLASS)} role="img" aria-label="Unread" />
               ) : null}
             </div>
 

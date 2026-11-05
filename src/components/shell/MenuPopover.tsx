@@ -3,6 +3,7 @@ import { cn } from '@/lib/cn';
 import { useDismissLayer } from '@/lib/modal-focus';
 import { menuMoves } from '@/components/ui/popover-classes';
 import { usePresence } from '@/lib/motion';
+import { useMenuKeys } from '@/lib/useMenuKeys';
 
 interface MenuPopoverProps {
   open: boolean;
@@ -14,6 +15,13 @@ interface MenuPopoverProps {
    * trigger.
    */
   origin?: { x: number; y: number } | null;
+  /** The menu's accessible name (role="menu" carries it). */
+  label: string;
+  /**
+   * False when the children are the menu themselves (their own role="menu",
+   * label and keys): the box is then a plain container. Default true.
+   */
+  menu?: boolean;
   children: ReactNode;
 }
 
@@ -22,13 +30,16 @@ interface MenuPopoverProps {
  * its trigger. Closes on outside click (transparent backdrop) and Escape (the
  * top layer only), and hands focus back to its trigger on close. Motion
  * (docs/motion.md, growFromTrigger): rendered at rest, it grows .90 to 1 from
- * the trigger and shrinks back on close. Scale only, never a fade.
+ * the trigger and shrinks back on close. Scale only, never a fade. Keyboard
+ * (useMenuKeys): focus moves to the first item on open, the arrows move.
  */
 export function MenuPopover({
   open,
   onClose,
   align = 'right',
   origin,
+  label,
+  menu = true,
   children,
 }: MenuPopoverProps) {
   const presence = usePresence<HTMLDivElement>(
@@ -37,6 +48,7 @@ export function MenuPopover({
   );
   const panelRef = presence.ref;
   useDismissLayer(open, onClose, panelRef);
+  const keys = useMenuKeys(panelRef, open);
 
   if (!presence.rendered) {
     return null;
@@ -47,7 +59,8 @@ export function MenuPopover({
       {open ? <div className="fixed inset-0 z-40" aria-hidden="true" onClick={onClose} /> : null}
       <div
         ref={panelRef}
-        role="menu"
+        {...(menu ? { role: 'menu', 'aria-label': label } : {})}
+        onKeyDown={keys.onKeyDown}
         className={cn(
           // Rendered at rest; the grow from the trigger is laid over it.
           'absolute z-50 mt-2 min-w-[220px] rounded-xl border bg-panel p-1.5 lit-overlay will-change-transform',

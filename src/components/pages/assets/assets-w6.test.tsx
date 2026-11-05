@@ -221,10 +221,10 @@ describe('7. select mode', () => {
   });
 });
 
-describe('7b. the "New asset" add menu', () => {
-  it('is a "New asset" text button offering upload and link only; no New folder sheet', () => {
+describe('7b. the "New file" add menu', () => {
+  it('is a "New file" text button offering upload and link only; no New folder sheet', () => {
     const menu = read('src/components/pages/assets/AssetAddMenu.tsx');
-    expect(menu).toContain('New asset');
+    expect(menu).toContain('New file');
     expect(menu).not.toContain('aria-label="Add asset"');
     expect(menu).not.toContain('New folder');
     expect(menu).toContain('<span>Upload files</span>');

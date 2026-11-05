@@ -16,7 +16,16 @@ interface ChipProps extends Omit<
   trailing?: ReactNode;
   /** A filter's count, shown after the label only when above 0. */
   count?: number;
+  /**
+   * The chip's on state. When set, a toggle chip announces it as aria-pressed;
+   * a tab chip (`tab`, or role="tab") announces it as aria-selected instead.
+   */
   selected?: boolean;
+  /**
+   * The chip is one tab of a role="tablist" row (in-sheet segment tabs): it
+   * renders role="tab" with aria-selected, never aria-pressed.
+   */
+  tab?: boolean;
   variant?: 'default' | 'add';
   /**
    * Both sizes render the one 44px button height (design system); 'sm' stays
@@ -39,12 +48,27 @@ const sizes: Record<NonNullable<ChipProps['size']>, string> = {
   tap: 'min-h-[44px] px-4 justify-center',
 };
 
+/**
+ * The chip's state for assistive tech: a tab chip is role="tab" with
+ * aria-selected; a toggle chip (selected given) is aria-pressed; an action chip
+ * (no selected) carries neither. A call site's own aria props still win. Pure.
+ */
+export function chipStateAria(
+  selected: boolean | undefined,
+  tab: boolean,
+): { role?: 'tab'; 'aria-selected'?: boolean; 'aria-pressed'?: boolean } {
+  if (tab) return { role: 'tab', 'aria-selected': selected ?? false };
+  if (selected === undefined) return {};
+  return { 'aria-pressed': selected };
+}
+
 export function Chip({
   label,
   dot,
   trailing,
   count,
-  selected = false,
+  selected: selectedProp,
+  tab = false,
   variant = 'default',
   size = 'sm',
   className,
@@ -52,9 +76,11 @@ export function Chip({
   buttonRef,
   ...props
 }: ChipProps) {
+  const selected = selectedProp ?? false;
   return (
     <button
       type="button"
+      {...chipStateAria(selectedProp, tab || props.role === 'tab')}
       {...props}
       ref={buttonRef}
       onClick={onClick}

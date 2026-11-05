@@ -19,8 +19,19 @@ interface AvatarProps {
   role: AvatarRole;
   /** Defaults to 'person' (circle). */
   kind?: AvatarKind;
-  /** 'online' adds a bottom-right presence dot; absent renders no dot. */
+  /** 'online' adds a bottom-right presence dot (and "online" to the name); absent renders no dot. */
   presence?: 'online' | undefined;
+  /**
+   * A visible name sits right beside the avatar: the picture is decoration
+   * (alt="", hidden from screen readers) so the name is not read twice.
+   */
+  decorative?: boolean;
+}
+
+/** The avatar's accessible name: the person's name, plus "online" with the presence dot. Pure. */
+export function avatarLabel(name: string | undefined, online: boolean): string {
+  const parts = [name !== undefined && name.trim() !== '' ? name : null, online ? 'online' : null];
+  return parts.filter((part): part is string => part !== null).join(', ');
 }
 
 /** The pixel size of each role (exported for tests and for layout that must line up with it). */
@@ -78,7 +89,7 @@ export function Avatar({ presence, ...props }: AvatarProps) {
   if (presence !== 'online') return <AvatarFace {...props} />;
   return (
     <span className="relative inline-flex shrink-0">
-      <AvatarFace {...props} />
+      <AvatarFace {...props} online />
       <span
         data-presence="online"
         aria-hidden="true"
@@ -88,8 +99,23 @@ export function Avatar({ presence, ...props }: AvatarProps) {
   );
 }
 
-function AvatarFace({ name, src, role, kind = 'person' }: Omit<AvatarProps, 'presence'>) {
+function AvatarFace({
+  name,
+  src,
+  role,
+  kind = 'person',
+  decorative = false,
+  online = false,
+}: Omit<AvatarProps, 'presence'> & { online?: boolean }) {
   const [errored, setErrored] = useState(false);
+  const label = avatarLabel(name, online);
+  // Decorative: hidden. Online: the face is an image named "{name}, online"
+  // (the dot itself is aria-hidden). Otherwise the face reads as before.
+  const a11y = decorative
+    ? { 'aria-hidden': true as const }
+    : online && label !== ''
+      ? { role: 'img', 'aria-label': label }
+      : {};
   const px = AVATAR_PX[role];
   const box = `${avatarShapeClass(role, kind)} ${base}`;
   const style: CSSProperties = { width: px, height: px };
@@ -98,7 +124,7 @@ function AvatarFace({ name, src, role, kind = 'person' }: Omit<AvatarProps, 'pre
     return (
       <img
         src={src}
-        alt={name ?? ''}
+        alt={decorative ? '' : label}
         style={style}
         data-avatar-role={role}
         onError={() => setErrored(true)}
@@ -112,6 +138,7 @@ function AvatarFace({ name, src, role, kind = 'person' }: Omit<AvatarProps, 'pre
       <div
         style={style}
         data-avatar-role={role}
+        {...a11y}
         className={cn(box, avatarFillFor(name), 'text-avatar-ink font-medium', INITIALS_TYPE[role])}
       >
         {initialsFor(name)}
@@ -123,6 +150,7 @@ function AvatarFace({ name, src, role, kind = 'person' }: Omit<AvatarProps, 'pre
     <div
       style={style}
       data-avatar-role={role}
+      {...a11y}
       className={cn(box, 'bg-accent-soft border border-border text-accent')}
     >
       <IconUser size={Math.round(px * 0.6)} />

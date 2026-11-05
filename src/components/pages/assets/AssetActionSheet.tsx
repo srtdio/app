@@ -4,8 +4,9 @@ import { linkDomain, type AssetListItem } from '@/lib/assets';
 import { downloadFile, openLinkInNewTab } from '@/components/pages/assets/openExternal';
 import { assetLink } from '@/components/pages/assets/assets-nav';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
+import { errorText } from '@/lib/error-copy';
 
-const SIGN_FAIL = "Couldn't get a link for this file. Try again.";
+const SIGN_FAIL = errorText('get a link for this file', null);
 
 /** Toast sink for Assets: a failure passes 'error' (the bad tone); a success passes nothing (neutral). */
 export type AssetToast = (message: string, tone?: 'error') => void;

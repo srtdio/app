@@ -13,6 +13,7 @@ import { previewText } from '@/lib/chat/chat-store';
 import type { ChatMark, SelectionRole } from '@/lib/chat/marks';
 import type { SendRecordParams } from '@/lib/chat/record';
 import { compareMessages, type ThreadMessage } from '@/lib/chat/thread';
+import { errorText } from '@/lib/error-copy';
 
 /**
  * Only a recorded, live message can be forwarded: a sending or failed bubble
@@ -195,8 +196,8 @@ export function sendToLabel(count: number): string {
 }
 
 /** Toast when forwarding to a chat failed. */
-export function forwardFailedMessage(title: string): string {
-  return `Couldn't forward to ${title}. Try again.`;
+export function forwardFailedMessage(title: string, error: unknown = null): string {
+  return errorText(`forward to ${title}`, error);
 }
 
 /** The label shown above a forwarded message's body. */

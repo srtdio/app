@@ -20,6 +20,7 @@ import { moreGroupsRequest } from '@/lib/support';
 import { SupportRows } from '@/components/support/SupportRows';
 import { ContactSheet } from '@/components/support/ContactSheet';
 import { BookCallSheet } from '@/components/support/BookCallSheet';
+import { errorText } from '@/lib/error-copy';
 
 interface NewChatSheetProps {
   open: boolean;
@@ -38,8 +39,8 @@ interface NewChatSheetProps {
 type Mode = 'choose' | 'dm' | 'group';
 
 /** The sheet's failure lines; the raw error goes to the logger only. */
-export const NEW_DM_FAILED = "Couldn't start the chat. Try again.";
-export const NEW_GROUP_FAILED = "Couldn't create the group. Try again.";
+export const NEW_DM_FAILED = errorText('start the chat', null);
+export const NEW_GROUP_FAILED = errorText('create the group', null);
 
 /** Discard confirm while a group name is typed or anyone is picked (FB3). */
 export const NEW_CHAT_DISCARD = {

@@ -25,10 +25,10 @@ import {
   restoreAsset,
   type DeletedAssetItem,
 } from '@/lib/assets';
+import { errorText } from '@/lib/error-copy';
 
-const RESTORE_FAILED = "Couldn't restore the file. Try again.";
-const DELETE_ONE_FAILED = "Couldn't delete the file. Try again.";
-const EMPTY_FAILED = "Couldn't empty Recently deleted. Try again.";
+const DELETE_ONE_FAILED = errorText('delete the file', null);
+const EMPTY_FAILED = errorText('empty Recently deleted', null);
 
 /** The zero state: one positive line. */
 export const RECENTLY_DELETED_EMPTY = 'Deleted posts and files show up here.';
@@ -91,7 +91,7 @@ export function RecentlyDeletedView({
       {failed ? (
         <div className="mt-4">
           <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-base text-bad">
-            {"Couldn't load deleted files. Try again."}
+            {errorText('load deleted files', null)}
           </div>
           <div className="mt-3">
             <Button onClick={onRetry}>Retry</Button>
@@ -183,11 +183,19 @@ export function RecentlyDeletedPage() {
   const [confirm, setConfirm] = useState<PendingConfirm>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
+  // Load generation (as the Activity page's activitySeqRef): each load takes
+  // the next number, and a result that lands after a newer load, a workspace
+  // switch or unmount is dropped, so an old read never overwrites the list.
+  const loadGeneration = useRef(0);
+
   const load = useCallback(async () => {
     if (workspaceId === null) return;
+    loadGeneration.current += 1;
+    const generation = loadGeneration.current;
     setLoading(true);
     setFailed(false);
     const result = await listDeletedAssets(supabase, workspaceId);
+    if (generation !== loadGeneration.current) return;
     mark('deleted:rows-in');
     setLoading(false);
     setNow(Date.now());
@@ -204,6 +212,10 @@ export function RecentlyDeletedPage() {
     mark('deleted:mount');
     setConfirm(null);
     void load();
+    return () => {
+      // Workspace switch or unmount: whatever is in flight is stale.
+      loadGeneration.current += 1;
+    };
   }, [load]);
 
   const restore = useCallback(
@@ -214,7 +226,7 @@ export function RecentlyDeletedPage() {
         const result = await restoreAsset(supabase, item.id, newTrace());
         mark('asset:restore:end');
         if (!result.ok) {
-          push(RESTORE_FAILED, true);
+          push(errorText('restore the file', result.error), true);
           return;
         }
         setItems((prev) => prev.filter((candidate) => candidate.id !== item.id));
@@ -262,7 +274,10 @@ export function RecentlyDeletedPage() {
       logger.warn('recently deleted: purge failed', {
         error: cause instanceof Error ? cause.message : String(cause),
       });
-      push(confirm.kind === 'one' ? DELETE_ONE_FAILED : EMPTY_FAILED, true);
+      push(
+        errorText(confirm.kind === 'one' ? 'delete the file' : 'empty Recently deleted', cause),
+        true,
+      );
     } finally {
       setConfirmBusy(false);
       setConfirm(null);
