@@ -1,4 +1,5 @@
-// Unread comment markers (inbox_unread_entity_counts, inbox_mark_entity_read),
+// Unread comment markers (inbox_unread_entity_counts, inbox_unread_entity_targets,
+// inbox_mark_entity_read),
 // exercised end to end against the local stack as the authenticated role. The
 // read counts only the caller's unread comment + mention rows per post and per
 // plan item; the write marks only the caller's rows for one entity, rejects
@@ -30,6 +31,8 @@ const INBOX_SUITE = process.env.INBOX_SUITE === '1';
 const SNOOZED_FUTURE = '2099-01-01T00:00:00.000Z';
 type CountsArgs = Database['public']['Functions']['inbox_unread_entity_counts']['Args'];
 type MarkArgs = Database['public']['Functions']['inbox_mark_entity_read']['Args'];
+type TargetsArgs = Database['public']['Functions']['inbox_unread_entity_targets']['Args'];
+type TargetRow = Database['public']['Functions']['inbox_unread_entity_targets']['Returns'][number];
 
 describe.runIf(INBOX_SUITE)('inbox unread entity procs', () => {
   let env: RlsEnv;
@@ -69,6 +72,15 @@ describe.runIf(INBOX_SUITE)('inbox unread entity procs', () => {
     if (res.error) throw new Error(`counts failed: ${res.error.message}`);
     const out: Record<string, number> = {};
     for (const row of res.data ?? []) out[`${row.entity_type}:${row.entity_id}`] = row.unread;
+    return out;
+  }
+
+  async function targets(userId: string): Promise<Record<string, TargetRow>> {
+    const args: TargetsArgs = { p_trace_id: generateTraceId(), p_workspace_id: ws.id };
+    const res = await clientFor(userId).rpc('inbox_unread_entity_targets', args);
+    if (res.error) throw new Error(`targets failed: ${res.error.message}`);
+    const out: Record<string, TargetRow> = {};
+    for (const row of res.data ?? []) out[`${row.entity_type}:${row.entity_id}`] = row;
     return out;
   }
 
@@ -128,6 +140,45 @@ describe.runIf(INBOX_SUITE)('inbox unread entity procs', () => {
 
   it('a non-member reads nothing', async () => {
     expect(await counts(outsider.id)).toEqual({});
+    expect(await targets(outsider.id)).toEqual({});
+  });
+
+  it('targets name the newest unread comment per entity, with the same counts', async () => {
+    const postC = crypto.randomUUID();
+    const itemC = crypto.randomUUID();
+    const plan = crypto.randomUUID();
+    const later = new Date(Date.parse(partitionTimestamp) + 60_000).toISOString();
+    const older = crypto.randomUUID();
+    const newer = crypto.randomUUID();
+    await insertEntry(member.id, { entity_id: postC, payload: { comment_id: older } });
+    await insertEntry(member.id, {
+      entity_id: postC,
+      event_type: 'mention',
+      created_at: later,
+      payload: { comment_id: newer },
+    });
+    await insertEntry(member.id, {
+      entity_id: postC,
+      created_at: later,
+      read_at: new Date().toISOString(),
+      payload: { comment_id: crypto.randomUUID() },
+    });
+    await insertEntry(member.id, {
+      event_type: 'plan_comment',
+      entity_type: 'plan_item',
+      entity_id: itemC,
+      payload: { comment_id: older, plan_id: plan },
+    });
+
+    const mine = await targets(member.id);
+    expect(mine[`post:${postC}`]).toMatchObject({ unread: 2, latest_comment_id: newer });
+    expect(mine[`plan_item:${itemC}`]).toMatchObject({
+      unread: 1,
+      latest_comment_id: older,
+      plan_id: plan,
+    });
+    const all = await counts(member.id);
+    for (const [key, row] of Object.entries(mine)) expect(all[key]).toBe(row.unread);
   });
 
   it('mark read clears the caller rows for that entity only', async () => {
@@ -162,6 +213,9 @@ describe.runIf(INBOX_SUITE)('inbox unread entity procs', () => {
     const readArgs: CountsArgs = { p_trace_id: generateTraceId(), p_workspace_id: ws.id };
     const read = await anon.rpc('inbox_unread_entity_counts', readArgs);
     expect(read.error).not.toBeNull();
+    const targetArgs: TargetsArgs = { p_trace_id: generateTraceId(), p_workspace_id: ws.id };
+    const target = await anon.rpc('inbox_unread_entity_targets', targetArgs);
+    expect(target.error).not.toBeNull();
     const writeArgs: MarkArgs = {
       p_workspace_id: ws.id,
       p_entity_type: 'post',

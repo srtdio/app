@@ -14,6 +14,11 @@ import { resetSessionReads } from '@/lib/session-read';
 import {
   entityKey,
   mapUnreadEntities,
+  mapUnreadTargets,
+  newestPlanUnread,
+  peekEntityUnreadComment,
+  planTabHref,
+  withCommentTarget,
   markEntityReadOnOpen,
   planItemsUnreadTotal,
   resetUnreadEntitiesForTest,
@@ -25,12 +30,19 @@ import {
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type Row = { entity_type: string; entity_id: string; unread: number };
+type Row = {
+  entity_type: string;
+  entity_id: string;
+  unread: number;
+  latest_comment_id?: string | null;
+  plan_id?: string | null;
+  latest_at?: string;
+};
 
 function answer(rows: Row[]): void {
   rpc.mockImplementation((fn: string) =>
     Promise.resolve(
-      fn === 'inbox_unread_entity_counts'
+      fn === 'inbox_unread_entity_targets'
         ? { data: rows, error: null }
         : { data: null, error: null },
     ),
@@ -129,8 +141,8 @@ describe('the shared store', () => {
     mount('ws-1');
     await settle();
     expect(shown()).toBe('3|2|2');
-    expect(calls('inbox_unread_entity_counts')).toHaveLength(1);
-    expect(calls('inbox_unread_entity_counts')[0]?.[1]).toMatchObject({ p_workspace_id: 'ws-1' });
+    expect(calls('inbox_unread_entity_targets')).toHaveLength(1);
+    expect(calls('inbox_unread_entity_targets')[0]?.[1]).toMatchObject({ p_workspace_id: 'ws-1' });
   });
 
   it('reads 0 with no driver mounted and makes no call', () => {
@@ -148,7 +160,7 @@ describe('the shared store', () => {
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT));
     });
     await settle();
-    expect(calls('inbox_unread_entity_counts')).toHaveLength(2);
+    expect(calls('inbox_unread_entity_targets')).toHaveLength(2);
     expect(shown()).toBe('0|0|0');
   });
 
@@ -189,7 +201,7 @@ describe('the shared store', () => {
   it('a failed mark restores the count quietly', async () => {
     rpc.mockImplementation((fn: string) =>
       Promise.resolve(
-        fn === 'inbox_unread_entity_counts'
+        fn === 'inbox_unread_entity_targets'
           ? { data: [{ entity_type: 'plan_item', entity_id: 'i1', unread: 2 }], error: null }
           : { data: null, error: { message: 'boom' } },
       ),
@@ -200,5 +212,84 @@ describe('the shared store', () => {
     expect(shown()).toBe('0|0|0');
     await settle();
     expect(shown()).toBe('0|2|2');
+  });
+});
+
+describe('jump to the newest unread comment', () => {
+  it('maps each entity to its newest unread comment and plan', () => {
+    expect(
+      mapUnreadTargets([
+        {
+          entity_type: 'post',
+          entity_id: 'p1',
+          unread: 2,
+          latest_comment_id: 'c9',
+          plan_id: null,
+          latest_at: '2026-11-05T10:00:00Z',
+        },
+        {
+          entity_type: 'plan_item',
+          entity_id: 'i1',
+          unread: 1,
+          latest_comment_id: 'pc1',
+          plan_id: 'pl1',
+          latest_at: '2026-11-05T11:00:00Z',
+        },
+        { entity_type: 'brief', entity_id: 'b1', unread: 1, latest_comment_id: 'x' },
+        { entity_type: 'post', entity_id: 'p2', unread: 0, latest_comment_id: 'x' },
+      ]),
+    ).toEqual({
+      'post:p1': { commentId: 'c9', planId: null, at: '2026-11-05T10:00:00Z' },
+      'plan_item:i1': { commentId: 'pc1', planId: 'pl1', at: '2026-11-05T11:00:00Z' },
+    });
+  });
+
+  it('the Plan badge picks the newest unread plan item comment across plans', () => {
+    const counts = { 'plan_item:i1': 1, 'plan_item:i2': 3, 'post:p1': 5 };
+    const targets = {
+      'plan_item:i1': { commentId: 'a', planId: 'pl1', at: '2026-11-05T09:00:00Z' },
+      'plan_item:i2': { commentId: 'b', planId: 'pl2', at: '2026-11-05T12:00:00Z' },
+      'post:p1': { commentId: 'z', planId: null, at: '2026-11-06T00:00:00Z' },
+    };
+    expect(newestPlanUnread(counts, targets)).toEqual({
+      planId: 'pl2',
+      itemId: 'i2',
+      commentId: 'b',
+    });
+    expect(newestPlanUnread({ 'plan_item:i2': 0 }, targets)).toBeNull();
+  });
+
+  it('links land on the comment, keeping any query', () => {
+    expect(withCommentTarget('/p/GBL-4', 'c1')).toBe('/p/GBL-4?comment=c1');
+    expect(withCommentTarget('/plan/pl1?item=i1', 'c 2')).toBe('/plan/pl1?item=i1&comment=c%202');
+    expect(withCommentTarget('/p/GBL-4', null)).toBe('/p/GBL-4');
+  });
+
+  it('the Plan tab opens the newest unread comment, else the tab', () => {
+    expect(planTabHref('/plan', null)).toBe('/plan');
+    expect(planTabHref('/plan', { planId: 'pl1', itemId: 'i1', commentId: 'c1' })).toBe(
+      '/plan/pl1?item=i1&comment=c1',
+    );
+    expect(planTabHref('/plan', { planId: 'pl1', itemId: 'i1', commentId: null })).toBe(
+      '/plan/pl1?item=i1',
+    );
+  });
+
+  it('a read names the target; opening the entity clears it', async () => {
+    answer([
+      {
+        entity_type: 'plan_item',
+        entity_id: 'i1',
+        unread: 2,
+        latest_comment_id: 'pc7',
+        plan_id: 'pl1',
+        latest_at: '2026-11-05T10:00:00Z',
+      },
+    ]);
+    mount('ws-1');
+    await settle();
+    expect(peekEntityUnreadComment('plan_item', 'i1')).toBe('pc7');
+    act(() => markEntityReadOnOpen('plan_item', 'i1'));
+    expect(peekEntityUnreadComment('plan_item', 'i1')).toBeNull();
   });
 });

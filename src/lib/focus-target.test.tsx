@@ -8,7 +8,7 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
   prefersReducedMotion: () => false,
 }));
 
-import { centredTop, FOCUS_WAIT_MS, useFocusTarget } from '@/lib/focus-target';
+import { centredTop, FOCUS_SETTLE_MS, FOCUS_WAIT_MS, useFocusTarget } from '@/lib/focus-target';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -21,9 +21,15 @@ interface Spies {
   untint: ReturnType<typeof vi.fn>;
 }
 
-function Probe(props: { id: string | null; absent?: boolean; spies: Spies }): null {
+function Probe(props: {
+  id: string | null;
+  absent?: boolean;
+  spies: Spies;
+  runKey?: string;
+}): null {
   useFocusTarget({
     targetId: props.id,
+    ...(props.runKey !== undefined ? { targetKey: props.runKey } : {}),
     findElement: (id) => document.getElementById(`row-${id}`),
     ...(props.absent !== undefined ? { absent: props.absent } : {}),
     onMissing: props.spies.onMissing,
@@ -131,6 +137,66 @@ describe('useFocusTarget', () => {
     render(null, s);
     render('a', s);
     expect(s.highlight).toHaveBeenCalledTimes(1);
+  });
+
+  it('the same id with a fresh targetKey lands again (a second tap on one comment)', () => {
+    const s = spies();
+    addRow('a');
+    act(() => root?.render(<Probe id="a" runKey="tap-1" spies={s} />));
+    act(() => root?.render(<Probe id="a" runKey="tap-1" spies={s} />));
+    expect(s.highlight).toHaveBeenCalledTimes(1);
+    act(() => root?.render(<Probe id="a" runKey="tap-2" spies={s} />));
+    expect(s.highlight).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the row in place when content loads above it, until the settle window ends', async () => {
+    const s = spies();
+    const row = addRow('a');
+    let top = 500;
+    row.getBoundingClientRect = () => ({ top, height: 40 }) as DOMRect;
+    const scrollTo = window.scrollTo as unknown as ReturnType<typeof vi.fn>;
+    render('a', s);
+    const landings = scrollTo.mock.calls.length;
+    // The landing scroll's resting place is taken, then rows load above.
+    act(() => vi.advanceTimersByTime(500));
+    top = 800;
+    await act(async () => {
+      document.body.appendChild(document.createElement('div'));
+      await Promise.resolve();
+    });
+    act(() => vi.advanceTimersByTime(50));
+    expect(scrollTo.mock.calls.length).toBeGreaterThan(landings + 1);
+    // After the settle window nothing re-scrolls.
+    act(() => vi.advanceTimersByTime(FOCUS_SETTLE_MS));
+    const settled = scrollTo.mock.calls.length;
+    top = 1200;
+    await act(async () => {
+      document.body.appendChild(document.createElement('div'));
+      await Promise.resolve();
+    });
+    act(() => vi.advanceTimersByTime(50));
+    expect(scrollTo.mock.calls.length).toBe(settled);
+  });
+
+  it('a touch hands the scroll back: no re-centre after it', async () => {
+    const s = spies();
+    const row = addRow('a');
+    let top = 500;
+    row.getBoundingClientRect = () => ({ top, height: 40 }) as DOMRect;
+    const scrollTo = window.scrollTo as unknown as ReturnType<typeof vi.fn>;
+    render('a', s);
+    act(() => vi.advanceTimersByTime(500));
+    act(() => {
+      window.dispatchEvent(new Event('pointerdown'));
+    });
+    const after = scrollTo.mock.calls.length;
+    top = 900;
+    await act(async () => {
+      document.body.appendChild(document.createElement('div'));
+      await Promise.resolve();
+    });
+    act(() => vi.advanceTimersByTime(50));
+    expect(scrollTo.mock.calls.length).toBe(after);
   });
 
   it('unmount clears the wait (no late onMissing) and the tint', () => {

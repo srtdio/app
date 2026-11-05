@@ -4,7 +4,12 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const counts = vi.hoisted(() => ({ chat: 0, inbox: 0, plan: 0 }));
+const counts = vi.hoisted(() => ({
+  chat: 0,
+  inbox: 0,
+  plan: 0,
+  newest: null as { planId: string; itemId: string; commentId: string | null } | null,
+}));
 
 vi.mock('@/components/chat/ChatStoreProvider', () => ({
   useChatStore: () => ({ state: {} }),
@@ -15,6 +20,14 @@ vi.mock('@/components/shell/InboxStoreProvider', () => ({
 }));
 vi.mock('@/lib/inbox/unread-entities', () => ({
   usePlanItemsUnreadTotal: () => counts.plan,
+  useNewestPlanUnread: () => counts.newest,
+  planTabHref: (
+    tab: string,
+    newest: { planId: string; itemId: string; commentId: string | null } | null,
+  ) =>
+    newest === null
+      ? tab
+      : `/plan/${newest.planId}?item=${newest.itemId}${newest.commentId !== null ? `&comment=${newest.commentId}` : ''}`,
   unreadCommentsLabel: (n: number) => (n === 1 ? '1 unread comment' : `${n} unread comments`),
 }));
 vi.mock('@/lib/logger', () => ({
@@ -53,6 +66,7 @@ function render(path: string, chat = 0, inbox = 0): HTMLDivElement {
 
 afterEach(() => {
   counts.plan = 0;
+  counts.newest = null;
   act(() => root?.unmount());
   root = null;
   host?.remove();
@@ -286,6 +300,14 @@ describe('Plan tab unread comments badge', () => {
     expect(plan?.getAttribute('aria-label')).toBe('Plan, 3 unread comments');
     const others = pillLinks(view).filter((a) => a.getAttribute('href') !== '/plan');
     for (const link of others) expect(link.querySelector('[data-count-badge]')).toBeNull();
+  });
+
+  it('with unread, the Plan tab opens the newest unread plan comment (jump to latest)', () => {
+    counts.plan = 2;
+    counts.newest = { planId: 'pl1', itemId: 'i1', commentId: 'c1' };
+    const view = render('/pipeline');
+    const plan = pillLinks(view).find((a) => a.getAttribute('aria-label')?.startsWith('Plan'));
+    expect(plan?.getAttribute('href')).toBe('/plan/pl1?item=i1&comment=c1');
   });
 
   it('no unread: no badge and the plain label', () => {

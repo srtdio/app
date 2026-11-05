@@ -312,7 +312,11 @@ import {
 } from '@/lib/plan-week';
 import { errorText } from '@/lib/error-copy';
 import { CountBadge } from '@/components/ui/CountBadge';
-import { unreadCommentsLabel, useEntityUnread } from '@/lib/inbox/unread-entities';
+import {
+  peekEntityUnreadComment,
+  unreadCommentsLabel,
+  useEntityUnread,
+} from '@/lib/inbox/unread-entities';
 
 // ---------------------------------------------------------------------------
 // Shared pieces
@@ -1098,6 +1102,9 @@ export function PlanScreen(props: {
   const [linkedOpenId, setLinkedOpenId] = useState<string | null>(null);
   // The Item screen was opened by a row's Not OK: its note box opens focused.
   const [askChanges, setAskChanges] = useState(false);
+  // A row opened with unread comments lands on the newest one (read at tap
+  // time: opening the item marks them read and clears the marker).
+  const [rowHighlight, setRowHighlight] = useState<string | null>(null);
   const entryItemId = props.initialItemId ?? null;
   // Add: the sheet (its target; null = closed), the concept sheet, the picker.
   const [addFor, setAddFor] = useState<AddTarget | null>(null);
@@ -1575,6 +1582,7 @@ export function PlanScreen(props: {
     // A pending OK goes first, so the note's 'changes' lands after it.
     undoable.flush();
     setAskChanges(true);
+    setRowHighlight(null);
     setItemId(item.id);
   };
 
@@ -1768,6 +1776,7 @@ export function PlanScreen(props: {
     if (editMode) return;
     mark('plan:item:open');
     setAskChanges(false);
+    setRowHighlight(peekEntityUnreadComment('plan_item', id));
     setItemId(id);
   };
   // A pair's post (or a concept's Post row) opens as a post item opens: the
@@ -2506,9 +2515,13 @@ export function PlanScreen(props: {
                 backLabel: 'Back',
                 ...(props.highlightCommentId !== undefined
                   ? { highlightCommentId: props.highlightCommentId }
-                  : {}),
+                  : rowHighlight !== null
+                    ? { highlightCommentId: rowHighlight }
+                    : {}),
               }
-            : {})}
+            : rowHighlight !== null
+              ? { highlightCommentId: rowHighlight }
+              : {})}
           onClose={() => (itemId === entryItemId ? props.onClose() : setItemId(null))}
           onDismiss={props.onClose}
           onRemoved={() => setItemId(null)}

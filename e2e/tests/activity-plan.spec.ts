@@ -25,7 +25,7 @@ import {
 // Plan rows on Notifications (the bell merged into Activity): a plan_comment
 // or plan_review row is an Activity plan-item card with its Activity wording,
 // listed under All and the Plans chip; a tap marks it read and opens the
-// standalone Plan page (/plans/:planId?item=, a comment adds &comment=) with
+// Plan tab's plan page (/plan/:planId?item=, a comment adds &comment=) with
 // that item open. A cold deep link to an unreadable plan shows "Plan not
 // available" and Back lands on Notifications. Runs in both colour schemes (the
 // dark and light projects) on the iPhone viewport. Linux WebKit approximates
@@ -80,9 +80,7 @@ test('agency: a plan_comment row is a Notifications card (All and Plans) and ope
   // The tap: marked read, then the standalone page with the item open.
   await row.click();
   await expect(page).toHaveURL(
-    new RegExp(
-      `/plans/${PLAN_ID}\\?item=${PLAN_CONCEPT_ITEM}&comment=${ACTIVITY_PLAN_COMMENT_ID}$`,
-    ),
+    new RegExp(`/plan/${PLAN_ID}\\?item=${PLAN_CONCEPT_ITEM}&comment=${ACTIVITY_PLAN_COMMENT_ID}$`),
   );
   const item = planPage(page, 'item');
   await expect(item).toBeVisible();
@@ -116,7 +114,7 @@ test('client: a plan_review row is a Notifications card and opens the post item'
   await expect(row).toContainText('Maya Chen approved a plan item', { timeout: 15_000 });
 
   await row.click();
-  await expect(page).toHaveURL(new RegExp(`/plans/${PLAN_ID}\\?item=${PLAN_POST_ITEM}$`));
+  await expect(page).toHaveURL(new RegExp(`/plan/${PLAN_ID}\\?item=${PLAN_POST_ITEM}$`));
   const item = planPage(page, 'item');
   await expect(item).toBeVisible();
   await expect(item.getByRole('heading', { name: POST_TITLE })).toBeVisible();

@@ -94,6 +94,7 @@ import {
   type PlanTabMore,
 } from './plan-tab/PlanTabList';
 import { usePlanTabData, warmPlanTabRead } from './plan-tab/use-plan-tab-data';
+import { peekEntityUnreadComment, withCommentTarget } from '@/lib/inbox/unread-entities';
 
 /** The route a calendar entry opens: its item in its plan, or a post's page. Pure. */
 export function entryRoute(entry: CalendarEntry): string {
@@ -105,6 +106,14 @@ export function entryRoute(entry: CalendarEntry): string {
 /** The route an item opens: the item in its plan (the calendar's and the search's). Pure. */
 export function itemRoute(planId: string, itemId: string): string {
   return `/plan/${planId}?item=${itemId}`;
+}
+
+/**
+ * A calendar or list open with unread comments lands on the newest one (the
+ * jump-to-latest rule); read at tap time, since the open marks them read.
+ */
+function withNewestUnread(route: string, type: 'post' | 'plan_item', id: string): string {
+  return withCommentTarget(route, peekEntityUnreadComment(type, id));
 }
 
 /** The list search's URL param (?q=), as on every list screen. */
@@ -425,7 +434,9 @@ export function PlanTabPage(): ReactElement {
           matchedItems={planSearch.data.matchedItems}
           query={planSearch.query}
           onOpenPlan={(planId) => navigate(`/plan/${planId}`)}
-          onOpenItem={(planId, itemId) => navigate(itemRoute(planId, itemId))}
+          onOpenItem={(planId, itemId) =>
+            navigate(withNewestUnread(itemRoute(planId, itemId), 'plan_item', itemId))
+          }
           filtersActive={!desktop && chip !== 'all'}
           onClear={() => {
             setSearch('');
@@ -460,7 +471,13 @@ export function PlanTabPage(): ReactElement {
           setView('week');
           setAnchor(day);
         }}
-        onOpen={(entry) => navigate(entryRoute(entry))}
+        onOpen={(entry) =>
+          navigate(
+            entry.kind === 'item'
+              ? withNewestUnread(entryRoute(entry), 'plan_item', entry.item.id)
+              : withNewestUnread(entryRoute(entry), 'post', entry.post.id),
+          )
+        }
         onAddTo={setAddTo}
         onNewPlan={openCompose}
         reload={reload}

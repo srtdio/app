@@ -6,7 +6,11 @@ import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { dispatchSorted } from '@/lib/events';
 import { CountBadge } from '@/components/ui/CountBadge';
-import { usePlanItemsUnreadTotal } from '@/lib/inbox/unread-entities';
+import {
+  planTabHref,
+  useNewestPlanUnread,
+  usePlanItemsUnreadTotal,
+} from '@/lib/inbox/unread-entities';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { navPrefetchProps } from '@/lib/route-prefetch';
@@ -77,9 +81,12 @@ function SideNavItem(props: {
   const { item, chatUnread, planUnread } = props;
   const active = useMatch({ path: item.to, end: false }) !== null;
   const nudgeRef = useNudgeOnRise(item.showChatBadge === true ? chatUnread : 0);
+  // Plan with unread comments: the tap lands on the newest one (jump to latest).
+  const newest = useNewestPlanUnread();
+  const to = item.showPlanBadge === true && planUnread > 0 ? planTabHref(item.to, newest) : item.to;
   return (
     <NavLink
-      to={item.to}
+      to={to}
       data-selected={active ? 'true' : undefined}
       {...navPrefetchProps(item.to)}
       {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}

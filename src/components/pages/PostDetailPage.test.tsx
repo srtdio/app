@@ -260,7 +260,8 @@ describe('PostDetailPage embedded', () => {
     // Exactly one write: the ?comment= strip (replace). Pin / highlight taps
     // never touch the URL (flow B: no tabs, no history entries).
     expect(src.match(/setSearchParams\(/g)).toHaveLength(1);
-    expect(src).toContain('setSearchParams(next, { replace: true });');
+    // The strip keeps the entry's router state (a card's ref id): no ref lookup after it.
+    expect(src).toContain('setSearchParams(next, { replace: true, state: currentEntryState() });');
     expect(src).toMatch(/useEffect\(\(\) => \{\n\s+if \(embedded\) return;\n\s+const comment/);
     // Every hard navigation to the pipeline goes through leave().
     expect(src.match(/navigate\('\/pipeline'\)/g)).toHaveLength(1);

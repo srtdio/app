@@ -322,20 +322,20 @@ describe('taps: every former bell row keeps its behaviour', () => {
     );
   });
 
-  it('a plan alert marks read, then opens /plans/{id} with ?item= (not when the item left)', () => {
+  it('a plan alert marks read, then opens /plan/{id} with ?item= (not when the item left)', () => {
     expect(openAction(plan('plan_opened'))).toEqual({
-      href: '/plans/plan1?item=i1',
+      href: '/plan/plan1?item=i1',
       markRead: true,
       toast: null,
     });
     const left = plan('plan_date_changed', {
       payload: { plan_id: 'plan1', item_id: 'i1', left_plan: true },
     });
-    expect(openAction(left).href).toBe('/plans/plan1');
+    expect(openAction(left).href).toBe('/plan/plan1');
     const edited = plan('plan_updated', {
       payload: { plan_id: 'plan1', plan_title: 'Week of 12 Oct', kind: 'edited' },
     });
-    expect(openAction(edited)).toEqual({ href: '/plans/plan1', markRead: true, toast: null });
+    expect(openAction(edited)).toEqual({ href: '/plan/plan1', markRead: true, toast: null });
   });
 
   it('plan_deleted (or a plan alert with no id) marks read, toasts and opens nothing', () => {
@@ -346,8 +346,8 @@ describe('taps: every former bell row keeps its behaviour', () => {
   });
 
   it('plan_comment and plan_review keep their Activity deep link', () => {
-    expect(openAction(planItemEvent('plan_comment')).href).toBe('/plans/plan1?item=i1&comment=pc1');
-    expect(openAction(planItemEvent('plan_review')).href).toBe('/plans/plan1?item=i1');
+    expect(openAction(planItemEvent('plan_comment')).href).toBe('/plan/plan1?item=i1&comment=pc1');
+    expect(openAction(planItemEvent('plan_review')).href).toBe('/plan/plan1?item=i1');
   });
 
   it('a task alert marks read and opens the chat with its task sheet', () => {
