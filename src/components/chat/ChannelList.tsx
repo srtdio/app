@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode } from 'react';
 import { stripFormat } from '@srtdio/comments';
 import { Avatar } from '@/components/ui/Avatar';
-import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { createPressIntent, type PressIntent } from '@/lib/chat/press-intent';
@@ -659,29 +658,15 @@ export function channelRowBody(props: {
       kind={wide ? 'group' : 'person'}
     />
   );
-  // A person tile's photo opens the photo-only viewer (the tile itself is the
-  // chat); the rest of the tile still opens the chat. Never while selecting
-  // (a tap there toggles the tile).
-  const peerId =
-    channel.channelType === 'dm' && !props.selecting ? (channel.peerUserId ?? null) : null;
+  // The photo is part of the tile: a tap on it opens the chat (or toggles the
+  // tile while selecting), same as the rest of the tile. The enlarged photo
+  // lives only inside a DM (header photo).
   const photo = (
     <span
       {...(wide ? { 'data-group-photo': '' } : { 'data-person-photo': '' })}
       className={wide ? GROUP_TILE_PHOTO : PERSON_TILE_PHOTO}
     >
-      {peerId !== null ? (
-        <PersonTrigger
-          userId={peerId}
-          name={chatDisplayName(channel)}
-          avatarUrl={channel.avatarUrl}
-          display="block"
-          view="photo"
-        >
-          {avatar}
-        </PersonTrigger>
-      ) : (
-        avatar
-      )}
+      {avatar}
     </span>
   );
   if (wide) {

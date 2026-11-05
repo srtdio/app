@@ -21,7 +21,6 @@ exports[`chat home tile > People square: 168 tall centred column, 72px disc, 1-l
 {
   "classes": [
     "flex shrink-0",
-    "relative cursor-pointer focus-visible:lit-focus after:absolute after:left-1/2 after:top-1/2 after:h-11 after:min-h-full after:w-11 after:min-w-full after:-translate-x-1/2 after:-translate-y-1/2 inline-flex shrink-0 rounded-full",
     "rounded-full lit-avatar inline-flex shrink-0 items-center justify-center select-none bg-avatar-2 text-avatar-ink font-medium text-2xl",
     "mt-1.5 flex w-full min-w-0 justify-center",
     "min-w-0 truncate text-fg text-lg font-semibold",

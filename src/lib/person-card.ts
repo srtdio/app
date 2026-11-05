@@ -34,7 +34,7 @@ export interface PersonCardHint {
 
 /**
  * What a tap opens: the inline message card (default), or the photo-only
- * viewer (inside a DM and on the chat list's People cards).
+ * viewer (inside a DM only).
  */
 export type PersonView = 'card' | 'photo';
 
