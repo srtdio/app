@@ -55,6 +55,31 @@ function stamp(): string {
   return new Date(lastStamp).toISOString();
 }
 
+/**
+ * Tasks save themselves, so the SQL folds one person's saves in a chat within
+ * half an hour of their first into one batch (20261105183000_task_batch_half_hour).
+ */
+export const TASK_BATCH_WINDOW_MS = 30 * 60_000;
+
+/** The actor's batch in this chat still inside its half hour, else null. */
+function openBatchOf(tables: Tables, channelId: string, actor: string, now: string): string | null {
+  const first = new Map<string, number>();
+  const last = new Map<string, number>();
+  for (const e of tables.chat_task_events ?? []) {
+    if (e.channel_id !== channelId || e.actor_user_id !== actor || e.batch_id == null) continue;
+    const id = String(e.batch_id);
+    const at = Date.parse(String(e.created_at));
+    first.set(id, Math.min(first.get(id) ?? at, at));
+    last.set(id, Math.max(last.get(id) ?? at, at));
+  }
+  let pick: string | null = null;
+  for (const [id, at] of last) {
+    if (Date.parse(now) - (first.get(id) ?? at) >= TASK_BATCH_WINDOW_MS) continue;
+    if (pick === null || at > (last.get(pick) ?? 0)) pick = id;
+  }
+  return pick;
+}
+
 /** chat_task_save_batch as the SQL behaves, for any actor (the harness's "other person" too). */
 export function applyTaskBatch(
   tables: Tables,
@@ -63,8 +88,8 @@ export function applyTaskBatch(
   actor: string,
 ): { batch_id: string | null; created_ids: string[]; conflicts: Row[] } {
   const rows = (tables.chat_tasks ??= []);
-  const batchId = nextId('b00');
   const now = stamp();
+  const batchId = openBatchOf(tables, channelId, actor, now) ?? nextId('b00');
   const conflicts: Row[] = [];
   let touched = 0;
   const conflict = (task: Row, deleted: boolean): void => {

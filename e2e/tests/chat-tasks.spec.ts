@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expectMinTouchTarget } from '../helpers/touch-target';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { COLLEAGUE_A, DM_CHANNEL, GROUP_NAME, PEER_NAME } from '../fixtures/chat-data';
@@ -15,13 +15,35 @@ import { withSaveData } from '../helpers/save-data';
 // The chat Tasks: one shared list every member edits the same way, a sheet at
 // the height of what it holds. The composer button, the sheet (chips, tick,
 // inline edit, the priority menu, add, a swipe left or the row menu's Delete),
-// nothing
-// written until one Save (one chat_task_save_batch), one
-// "edited tasks" line per Save that expands in place, the marks another
-// person's Save leaves, both editing the same task (Keep mine / Keep theirs),
-// Share, the bell and numbered list continuation. The real app tree runs
-// against fixture data; the other member's Save is written straight into the
-// fixture tables. Linux WebKit approximates iOS WebKit.
+// every change saving itself (chat_task_save_batch once changes settle, the
+// header reading Saving… / Saved), one "edited tasks" line for one person's
+// saves in half an hour that expands in place, the marks another person's
+// save leaves, both editing the same task (Keep mine / Keep theirs), Share,
+// the bell and numbered list continuation. The real app tree runs against
+// fixture data; the other member's save is written straight into the fixture
+// tables. Linux WebKit approximates iOS WebKit.
+
+interface SentBatch {
+  creates: { title: string; priority: number; side: string }[];
+  edits: { task_id: string; changes: Record<string, unknown>; base_updated_at: string }[];
+  deletes: unknown[];
+}
+
+/** Every chat_task_save_batch payload sent so far. */
+function batchesOf(network: HarnessNetwork): SentBatch[] {
+  return network.rpcCalls
+    .filter((c) => c.name === 'chat_task_save_batch')
+    .map((c) => c.args.p_batch as SentBatch);
+}
+
+/** The header settles on Saved once nothing waits to be sent. */
+async function expectSaved(sheet: Locator): Promise<void> {
+  await expect(sheet.locator('[data-task-save-state]')).toHaveAttribute(
+    'data-task-save-state',
+    'saved',
+    { timeout: 8000 },
+  );
+}
 
 function expectClean(network: HarnessNetwork): void {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
@@ -110,7 +132,7 @@ function taskRow(network: HarnessNetwork, n: number): Record<string, unknown> {
 }
 
 test(
-  'one Save: edit 2, add 1, exactly one "edited tasks" line that expands to 3 rows; the other side is marked',
+  'changes save themselves: edit 2, add 1, exactly one "edited tasks" line that expands to 3 rows; the other side is marked',
   { tag: '@theme' },
   async ({ page }) => {
     const network = await installHarnessNetwork(page);
@@ -121,15 +143,15 @@ test(
 
     const sheet = await openSheet(page);
     // Nothing dated: the sheet opens on No date, one flat list in number order
-    // (no groups, no side labels, no old due-time labels); Save waits for a change.
+    // (no groups, no side labels, no old due-time labels); no Save button.
     await expect(sheet.locator('[data-task-list]')).toHaveAttribute('data-task-chip', 'none');
     const titles = await sheet.locator('[data-task-row-id] [data-task-title]').allTextContents();
     expect(titles).toEqual(['Hook options', 'Shot list', TASK_DUE_TITLE, 'Brand colours']);
     await expect(sheet).not.toContainText('Creators');
     await expect(sheet).not.toContainText('Approvers');
     await expect(sheet.locator('[data-task-due]')).toHaveCount(0);
-    const save = sheet.locator('[data-task-save]');
-    await expect(save).toBeDisabled();
+    await expect(sheet.locator('[data-task-save]')).toHaveCount(0);
+    await expect(sheet.locator('[data-task-save-state]')).toHaveCount(0);
     expect(await menuLabels(page)).toEqual(['Search tasks', 'Share to chat', 'Full screen']);
     expectMinTouchTarget(
       await rowOf(sheet, 'Hook options').locator('[data-task-tick]').boundingBox(),
@@ -163,26 +185,23 @@ test(
     await add.fill('Story frames');
     await add.press('Enter');
     await expect(add).toBeFocused();
-    await expect(rowOf(sheet, 'Story frames')).toHaveAttribute('data-task-marked', '');
-    expect(network.rpcCalls.some((c) => c.name.startsWith('chat_task'))).toBe(false);
 
-    await expect(save).toBeEnabled();
-    await save.click();
-    await expect
-      .poll(() => network.rpcCalls.filter((c) => c.name === 'chat_task_save_batch').length)
-      .toBe(1);
+    // Nothing to press: the changes go out once they settle (one or more
+    // saves, by timing), and the header lands on Saved.
+    await expectSaved(sheet);
+    const batches = batchesOf(network);
+    expect(batches.length).toBeGreaterThanOrEqual(1);
+    expect(batches.flatMap((b) => b.creates)).toEqual([
+      { title: 'Story frames', priority: 1, side: 'agency' },
+    ]);
+    const changes = batches.flatMap((b) => b.edits.map((e) => e.changes));
+    expect(changes).toHaveLength(2);
+    expect(changes).toEqual(expect.arrayContaining([{ priority: 0 }, { title: 'Shot list v2' }]));
+    const bases = batches.flatMap((b) => b.edits.map((e) => e.base_updated_at));
+    expect(bases.every((b) => typeof b === 'string')).toBe(true);
     const call = network.rpcCalls.find((c) => c.name === 'chat_task_save_batch');
-    const batch = call?.args.p_batch as {
-      creates: { title: string; priority: number }[];
-      edits: { task_id: string; changes: Record<string, unknown>; base_updated_at: string }[];
-      deletes: unknown[];
-    };
-    expect(batch.creates).toEqual([{ title: 'Story frames', priority: 1, side: 'agency' }]);
-    expect(batch.edits.map((e) => e.changes)).toEqual([{ priority: 0 }, { title: 'Shot list v2' }]);
-    expect(batch.edits.every((e) => typeof e.base_updated_at === 'string')).toBe(true);
     expect(typeof call?.args.p_trace_id).toBe('string');
     await expect(rowOf(sheet, 'Story frames')).not.toHaveAttribute('data-task-marked', '');
-    await expect(save).toBeDisabled();
 
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Tasks' })).toHaveCount(0);
@@ -226,12 +245,7 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
   seedTasks(network.world);
   await openChat(page, GROUP_NAME);
   const sheet = await openSheet(page);
-  await rowOf(sheet, 'Hook options').locator('[data-task-title]').click();
-  await sheet.locator('[data-task-title-input]').fill('Hook (mine)');
-  await sheet.locator('[data-task-title-input]').press('Enter');
-  await rowOf(sheet, 'Brand colours').locator('[data-task-tick]').click();
-
-  // Meanwhile the other member saves task 8 first.
+  // The other member saves task 8 first; this sheet still holds its old row.
   const eight = taskRow(network, 8);
   applyTaskBatch(
     network.world.tables,
@@ -247,15 +261,18 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
     },
     COLLEAGUE_A,
   );
-  await sheet.locator('[data-task-save]').click();
+  await rowOf(sheet, 'Hook options').locator('[data-task-title]').click();
+  await sheet.locator('[data-task-title-input]').fill('Hook (mine)');
+  await sheet.locator('[data-task-title-input]').press('Enter');
+  await rowOf(sheet, 'Brand colours').locator('[data-task-tick]').click();
 
-  // Everything else is saved; task 8 stays dirty and asks.
-  await expect(sheet.locator('[data-task-conflict]')).toContainText('changed this to "Hook (Leo)"');
+  // Everything else saves itself; task 8 is held back and asks.
+  const conflict = sheet.locator('[data-task-conflict]');
+  await expect(conflict).toContainText('changed this to "Hook (Leo)"', { timeout: 8000 });
   await expect(sheet.locator('[data-task-keep-mine]')).toHaveText('Keep mine');
   await expect(sheet.locator('[data-task-keep-theirs]')).toHaveText('Keep theirs');
-  expect(taskRow(network, 11).status).toBe('done');
+  await expect.poll(() => taskRow(network, 11).status).toBe('done');
   expect(taskRow(network, 8).title).toBe('Hook (Leo)');
-  await expect(sheet.locator('[data-task-save]')).toBeEnabled();
 
   await sheet.locator('[data-task-keep-mine]').click();
   await expect(sheet.locator('[data-task-conflict]')).toHaveCount(0);
@@ -263,7 +280,7 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
   expectClean(network);
 });
 
-test('Back with unsaved changes asks "Discard unsaved changes?" in the page; the Add button adds; a swipe left (or the row menu\'s Delete) queues into Save', async ({
+test('Close with changes still waiting saves them, then closes; the Add button adds; a swipe left (or the row menu\'s Delete) queues a delete', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -297,16 +314,14 @@ test('Back with unsaved changes asks "Discard unsaved changes?" in the page; the
   await rowMenuPick(page, row, 'Delete');
   await expect(row).toHaveAttribute('data-task-deleting', '');
   await sheet.getByRole('button', { name: 'Close tasks' }).click();
-  const ask = page.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
-  await expect(ask).toBeVisible();
-  await ask.getByRole('button', { name: 'Save' }).click();
-  // Wait for the Save itself, then for the row to be deleted.
-  await expect
-    .poll(() => network.rpcCalls.filter((c) => c.name === 'chat_task_save_batch').length)
-    .toBe(1);
+  // No question: what waits is sent, then the sheet closes.
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Tasks' })).toHaveCount(0);
   await expect.poll(() => taskRow(network, 9).deleted_at).not.toBeNull();
-  const call = network.rpcCalls.find((c) => c.name === 'chat_task_save_batch');
-  expect((call?.args.p_batch as { deletes: unknown[] }).deletes).toHaveLength(1);
+  expect(batchesOf(network).flatMap((b) => b.deletes)).toHaveLength(1);
+  expect(batchesOf(network).flatMap((b) => b.creates.map((c) => c.title))).toEqual([
+    'Story frames',
+  ]);
   expect(network.rpcCalls.some((c) => c.name === 'chat_task_delete')).toBe(false);
   expectClean(network);
 });

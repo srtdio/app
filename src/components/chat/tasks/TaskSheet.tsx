@@ -1,8 +1,11 @@
 // The chat's Tasks: one shared list in a sheet. Every member has the same
-// powers (tick, inline edit, priority, date, delete, add, Save, Share).
-// Nothing writes until Save: the sheet holds a local draft (edits, new tasks,
-// queued deletes, each touched task's base updated_at), and Save sends it as
-// ONE chat_task_save_batch. A change that is reverted is no change.
+// powers (tick, inline edit, priority, date, delete, add, Share).
+// Every change saves itself: the sheet holds a local draft (edits, new tasks,
+// queued deletes, each touched task's base updated_at) and sends it as ONE
+// chat_task_save_batch TASK_AUTOSAVE_MS after the last change (a queued delete
+// waits out its Undo, UNDO_MS), and at once on close. A change that is
+// reverted is no change. The server folds one person's saves within half an
+// hour into one chat line and one alert.
 //
 // The sheet rises from the bottom at the height of what it holds (a short
 // list, a short sheet; up to 88% of the screen, then the list scrolls inside),
@@ -10,7 +13,7 @@
 // screen; swipe down or Half screen returns. The resize itself is instant (no
 // move in src/lib/motion fits it). Laptop: a centre box (960px wide when full).
 // Header: Back, "Tasks" (with "<Name> is editing…" under it while another
-// member holds unsaved changes), Save (disabled until something changed) and a
+// member holds unsaved changes), "Saving…" / "Saved" (Retry after a failure) and a
 // ⋯ menu (ui/ActionMenu): Search tasks, Share to chat, Full screen / Half
 // screen. Under it the chips Past, Today, This week, Later, No date
 // (src/lib/chat/task-when.ts; due days on the workspace calendar), sized to
@@ -18,16 +21,16 @@
 // the row is too narrow for them. The sheet opens on Today (else the first chip
 // that holds tasks). Past lists Not done above Done. A row is tick, title,
 // priority; the day sits under the title only when the chip does not say it. A
-// tick here strikes the row where it is; Save moves it. A long-press
+// tick here strikes the row where it is; the save moves it. A long-press
 // (right-click on laptop) on a title opens the row's menu: Today, Tomorrow,
 // Pick a date (the shared calendar in a sheet; never before today), No date,
 // Delete. The add row takes a day (Today, Tomorrow, No date, or a picked
 // day) and the sheet moves to the chip the new task lands on. Search (from the
 // menu) takes the chip line and lists matches across every chip as one flat
 // list.
-// Back, swipe down, a tap outside, Esc or System Back with unsaved changes
-// asks in the page "Discard unsaved changes?" (Discard / Save); never
-// window.confirm. Laptop: Cmd/Ctrl+S saves.
+// Back, swipe down, a tap outside, Esc or System Back save what is left first,
+// then close; a failed save keeps the sheet open with Retry. Laptop: Cmd/Ctrl+S
+// saves at once.
 //
 // Marks: on open, tasks other people changed since this device last looked
 // (or, never looked, the latest Save by someone else) carry an accent dot,
@@ -154,16 +157,20 @@ import {
   type TaskSide,
 } from '@/lib/chat/tasks';
 import { errorText } from '@/lib/error-copy';
+import { UNDO_MS } from '@/lib/undo';
 
 export const TASK_SHEET_TITLE = 'Tasks';
 const SHARE_LABEL = 'Share to chat';
 export const ADD_PLACEHOLDER = 'Add a task';
 export const ADD_TASK_LABEL = 'Add task';
-export const DISCARD_TITLE = 'Discard unsaved changes?';
 const SAVE_FAILED = errorText('save', null);
 /** LoadError's "Couldn't load tasks." */
 const TASKS_LOAD_THING = 'tasks';
 const SAVING_LABEL = 'Saving…';
+const SAVED_LABEL = 'Saved';
+const RETRY_LABEL = 'Retry';
+/** A change saves itself this long after the last one (typing settles first). */
+export const TASK_AUTOSAVE_MS = 800;
 const SEARCH_LABEL = 'Search tasks';
 const BACK_LABEL = 'Close tasks';
 const FULL_LABEL = 'Full screen';
@@ -501,7 +508,9 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const [notices, setNotices] = useState<Map<string, Notice>>(new Map());
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  // Close asked for: it waits for the last save, then closes (a failure keeps it open).
+  const [wantClose, setWantClose] = useState(false);
+  const [savedOnce, setSavedOnce] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   // What the marks are measured from (frozen at open) and the latest other Save then.
   const [openedSeen, setOpenedSeen] = useState<number | null>(props.seenMs);
@@ -548,7 +557,8 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
       setDraft(EMPTY_DRAFT);
       setNotices(new Map());
       setSaveFailed(false);
-      setConfirming(false);
+      setWantClose(false);
+      setSavedOnce(false);
       setOpenedSeen(props.seenMs);
       setOpenedAt(Date.now());
       setPickedChip(null);
@@ -614,7 +624,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
 
   const runSave = useCallback(
     async (next: SheetDraft, payload: BatchPayload): Promise<void> => {
-      if (saving || isEmptyPayload(payload)) return;
+      if (savingRef.current || isEmptyPayload(payload)) return;
       setSaving(true);
       savingRef.current = true;
       setSaveFailed(false);
@@ -625,15 +635,27 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         setSaveFailed(true);
         return;
       }
+      setSavedOnce(true);
       const conflicted = new Set(outcome.conflicts.map((c) => c.taskId));
-      // Everything sent is saved, except the conflicts: those keep the edit.
+      // Everything sent is saved, except the conflicts: those keep the edit. A
+      // task edited again while this save was in flight keeps the newer edit,
+      // based on the fresh row (the save re-read the list before returning).
       setDraft((cur) => {
         let out: SheetDraft = {
           ...cur,
           creates: cur.creates.filter((c) => !next.creates.includes(c)),
         };
-        for (const e of payload.edits)
-          if (!conflicted.has(e.task_id)) out = dropTask(out, e.task_id);
+        for (const e of payload.edits) {
+          if (conflicted.has(e.task_id)) continue;
+          if (cur.edits[e.task_id] === next.edits[e.task_id]) {
+            out = dropTask(out, e.task_id);
+          } else {
+            const bases = Object.fromEntries(
+              Object.entries(out.bases).filter(([id]) => id !== e.task_id),
+            );
+            out = { ...out, bases };
+          }
+        }
         for (const d of payload.deletes)
           if (!conflicted.has(d.task_id)) out = dropTask(out, d.task_id);
         return out;
@@ -647,33 +669,45 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         return map;
       });
     },
-    [saving, tasks, byId],
+    [tasks, byId],
   );
 
+  // What a save would send now: a row waiting on Keep mine / Keep theirs is
+  // held back until the person picks.
+  const sendable = useMemo(() => {
+    const payload = batchPayload(draft, byId);
+    if (notices.size === 0) return payload;
+    return {
+      creates: payload.creates,
+      edits: payload.edits.filter((e) => !notices.has(e.task_id)),
+      deletes: payload.deletes.filter((d) => !notices.has(d.task_id)),
+    };
+  }, [draft, byId, notices]);
+  const pending = !isEmptyPayload(sendable);
   const save = useCallback((): void => {
-    void runSave(draft, batchPayload(draft, byId));
-  }, [runSave, draft, byId]);
+    void runSave(draft, sendable);
+  }, [runSave, draft, sendable]);
+
+  // Autosave: the draft goes out once changes settle; a queued delete waits out
+  // its row's Undo (UNDO_MS) first. After a failure it waits for Retry or the
+  // next change (an edit clears the failure). Closing sends at once.
+  const holdsDelete = sendable.deletes.length > 0;
+  useEffect(() => {
+    if (!props.open || !pending || saving || saveFailed || wantClose) return;
+    const timer = setTimeout(save, holdsDelete ? UNDO_MS : TASK_AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [props.open, pending, holdsDelete, saving, saveFailed, wantClose, save]);
 
   const close = props.onClose;
-  const requestClose = useCallback((): void => {
-    if (saving) return;
-    if (dirty) {
-      setConfirming(true);
-      return;
-    }
-    close();
-  }, [saving, dirty, close]);
+  const requestClose = useCallback((): void => setWantClose(true), []);
 
-  useEscapeLayer(props.open && !confirming && !shareOpen && pick === null, requestClose);
+  useEscapeLayer(props.open && !shareOpen && pick === null, requestClose);
   // Esc in an open search ends the search first (the top layer), never the sheet.
   const closeSearch = useCallback((): void => {
     setQuery('');
     setSearchOpen(false);
   }, []);
-  useEscapeLayer(
-    props.open && searchOpen && !confirming && !shareOpen && pick === null,
-    closeSearch,
-  );
+  useEscapeLayer(props.open && searchOpen && !shareOpen && pick === null, closeSearch);
 
   // Phone: swipe up on the header fills the screen; swipe down there returns
   // to content height. The size change is instant at release (no move fits it).
@@ -688,11 +722,25 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   });
   useModalFocus(panelRef, props.open && rendered);
   const guard = useBackGuard({
-    active: props.open && (dirty || saving),
-    onBack: () => {
-      if (!saving) setConfirming(true);
-    },
+    active: props.open && (pending || saving),
+    onBack: requestClose,
   });
+  // A close waits for the save in flight, sends what is left, then closes; a
+  // failed save keeps the sheet open (Retry shows).
+  useEffect(() => {
+    if (!wantClose || saving) return;
+    if (saveFailed) {
+      setWantClose(false);
+      return;
+    }
+    if (pending) {
+      save();
+      return;
+    }
+    setWantClose(false);
+    guard.release();
+    close();
+  }, [wantClose, saving, saveFailed, pending, save, guard, close]);
 
   // Laptop: Cmd/Ctrl+S saves.
   useEffect(() => {
@@ -700,12 +748,12 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && typeof e.key === 'string' && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        if (dirty && !saving) save();
+        if (pending && !saving) save();
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [props.open, dirty, saving, save]);
+  }, [props.open, pending, saving, save]);
 
   // A bell row's task comes into view with the arrival tint (its chip is opened).
   const focusTaskId = props.focusTaskId === TASKS_SHEET_ONLY ? null : props.focusTaskId;
@@ -992,7 +1040,6 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
               label={BACK_LABEL}
               data-task-back=""
               onClick={requestClose}
-              {...(saving ? { 'aria-disabled': 'true' as const } : {})}
             >
               <IconChevronLeft size={ICON_SIZE.control} />
             </IconButton>
@@ -1004,15 +1051,26 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
                 </p>
               ) : null}
             </div>
-            <Button
-              variant="primary"
-              data-task-save=""
-              disabled={!dirty || saving}
-              aria-busy={saving}
-              onClick={save}
-            >
-              {saving ? SAVING_LABEL : saveFailed ? 'Retry' : 'Save'}
-            </Button>
+            {saveFailed ? (
+              <Button
+                variant="ghost"
+                data-task-retry=""
+                onClick={() => {
+                  setSaveFailed(false);
+                  save();
+                }}
+              >
+                {RETRY_LABEL}
+              </Button>
+            ) : saving || pending || savedOnce ? (
+              <span
+                data-task-save-state={saving || pending ? 'saving' : 'saved'}
+                aria-live="polite"
+                className="shrink-0 px-2 text-sm text-fg-3"
+              >
+                {saving || pending ? SAVING_LABEL : SAVED_LABEL}
+              </span>
+            ) : null}
             <ActionMenu title={TASK_SHEET_TITLE} items={headerItems} />
           </div>
         </div>
@@ -1088,7 +1146,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
                 {searching ? null : (
                   <AddRow
                     calendar={calendar}
-                    disabled={saving || side === null || draft.creates.length >= 50}
+                    disabled={side === null || draft.creates.length >= 50}
                     onPickDate={(current, set) => setPick({ current, set })}
                     onAdd={(title, priority, dueOn) => {
                       if (side === null) return;
@@ -1116,26 +1174,6 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
           ) : null}
         </div>
       </div>
-      {confirming ? (
-        <DiscardConfirm
-          saving={saving}
-          onDiscard={() => {
-            setConfirming(false);
-            setDraft(EMPTY_DRAFT);
-            setNotices(new Map());
-            guard.release();
-            close();
-          }}
-          onSave={() => {
-            setConfirming(false);
-            save();
-          }}
-          onCancel={() => {
-            setConfirming(false);
-            panelRef.current?.focus();
-          }}
-        />
-      ) : null}
     </div>,
     document.body,
   );
@@ -1164,7 +1202,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
           onSend={taskShare.share}
           onSent={() => {
             setShareOpen(false);
-            if (!dirty) close();
+            requestClose();
           }}
         />
       ) : null}
@@ -1189,40 +1227,4 @@ function taskFromConflictStub(c: TaskConflict): ChatTask {
     dueOn: c.dueOn,
     doneAt: null,
   };
-}
-
-/** The in-page "Discard unsaved changes?" with Discard / Save (Esc or outside: keep editing). */
-function DiscardConfirm(props: {
-  saving: boolean;
-  onDiscard: () => void;
-  onSave: () => void;
-  onCancel: () => void;
-}): ReactElement {
-  const panelRef = useRef<HTMLDivElement>(null);
-  useEscapeLayer(true, props.onCancel);
-  useModalFocus(panelRef, true);
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center px-4 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:items-center">
-      <Backdrop aria-label="Keep editing" position="absolute" onClick={props.onCancel} />
-      <div
-        ref={panelRef}
-        role="alertdialog"
-        aria-modal="true"
-        aria-label={DISCARD_TITLE}
-        tabIndex={-1}
-        data-task-discard=""
-        className="relative w-full max-w-sm rounded-2xl border bg-panel p-5 lit-overlay outline-none"
-      >
-        <h2 className="text-lg font-semibold text-fg">{DISCARD_TITLE}</h2>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="danger" disabled={props.saving} onClick={props.onDiscard}>
-            Discard
-          </Button>
-          <Button variant="primary" disabled={props.saving} onClick={props.onSave}>
-            Save
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
 }
