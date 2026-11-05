@@ -18,9 +18,10 @@
 // under its Plan notes) (the Remove confirm, then plan_item_remove) and Move to
 // another day: a move that resets
 // nothing waits behind a 4s Undo strip (useUndoableAction;
-// the write goes when the toast ends, never after Undo). Comments: the agency
-// sees all and toggles one chip under the box (Everyone can see / Creators
-// only); a client sees Everyone ones (RLS) and a plain line. The comments read
+// the write goes when the toast ends, never after Undo). Comments: one chat
+// per item, every new comment visible to everyone on the plan (no visibility
+// chip; Shubham, 5 Nov 2026); older creators-only notes keep their tag and stay
+// agency-only (RLS). The comments read
 // as a chat thread (PlanItemThread). @ tags the workspace's people (chat's
 // picker above the box; members load on focus or the first "@", from the held
 // cache), never me, and only the agency side on a creators-only note or a plan
@@ -49,7 +50,6 @@ import {
   planItemReview,
 } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Textarea } from '@/components/ui/Textarea';
@@ -62,7 +62,6 @@ import {
   IconArrowUp,
   IconChevronRight,
   IconLink,
-  IconLock,
   IconMore,
   IconTrash,
   IconX,
@@ -84,11 +83,8 @@ import {
 } from '@/components/chat/PlanMoveSheet';
 import { MentionPicker, mentionComboboxProps, stepActive } from '@/components/chat/MentionPicker';
 import {
-  CLIENT_VISIBILITY_LINE,
-  EVERYONE_CHIP_LABEL,
   MENTION_TEAM_NOTE,
   PlanItemThread,
-  TEAM_CHIP_LABEL,
   blockedMentions,
   isInvalidMention,
   mentionKeyAction,
@@ -408,10 +404,8 @@ export function planItemMenuItems(props: {
   ];
 }
 
-/** The comment box placeholder for the visibility. */
-export function commentPlaceholder(teamNote: boolean): string {
-  return teamNote ? 'Note for creators only' : 'Comment for everyone';
-}
+/** The comment box placeholder: one chat per item, so no audience in it. */
+export const COMMENT_PLACEHOLDER = 'Add a comment';
 
 export function PlanItemScreen(props: {
   open: boolean;
@@ -484,7 +478,6 @@ export function PlanItemScreen(props: {
   const [keepFor, setKeepFor] = useState<{ day: string | null } | null>(null);
   const [planBusy, setPlanBusy] = useState(false);
   const [text, setText] = useState('');
-  const [visibility, setVisibility] = useState<CommentVisibility>('everyone');
   const [pending, setPending] = useState<ShownComment[]>([]);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -542,7 +535,6 @@ export function PlanItemScreen(props: {
     setActionError(null);
     setText('');
     setPicks([]);
-    setVisibility('everyone');
     setPending([]);
     setSendError(null);
     setAskingChanges(false);
@@ -780,7 +772,7 @@ export function PlanItemScreen(props: {
 
   /** One comment write; true when it landed on this item. */
   const sendComment = async (body: string): Promise<boolean> => {
-    const vis: CommentVisibility = side === 'agency' ? visibility : 'everyone';
+    const vis: CommentVisibility = 'everyone';
     const localId = `local-${Date.now()}`;
     const forItem = item.id;
     setSending(true);
@@ -840,7 +832,7 @@ export function PlanItemScreen(props: {
   // plan not shared with the client; never me. The picker opens on an "@" run
   // before the caret once the members are held (loaded on focus or the first
   // "@", never on paint).
-  const restricted = side === 'agency' && mentionsRestricted(visibility, bundle.plan.audience);
+  const restricted = side === 'agency' && mentionsRestricted('everyone', bundle.plan.audience);
   const openMention = !mentionDismissed ? mentionQuery(text, caret) : null;
   const picker =
     openMention !== null && mentionPeople.members !== null
@@ -1106,7 +1098,6 @@ export function PlanItemScreen(props: {
     setScrollToId(null);
   }, [scrollToId, shown]);
 
-  const teamNote = side === 'agency' && visibility === 'team';
   return (
     <>
       <PlanPage
@@ -1239,13 +1230,8 @@ export function PlanItemScreen(props: {
                   autoComplete="off"
                   enterKeyHint={coarse ? 'enter' : 'send'}
                   maxLength={5000}
-                  placeholder={
-                    askingChanges ? ASK_CHANGES_PLACEHOLDER : commentPlaceholder(teamNote)
-                  }
-                  className={cn(
-                    'min-w-0 flex-1',
-                    teamNote ? 'border-warn' : askingChanges ? 'border-border-strong' : null,
-                  )}
+                  placeholder={askingChanges ? ASK_CHANGES_PLACEHOLDER : COMMENT_PLACEHOLDER}
+                  className={cn('min-w-0 flex-1', askingChanges ? 'border-border-strong' : null)}
                   style={{ maxHeight: COMMENT_BOX_MAX_PX }}
                 />
                 <Button
@@ -1267,33 +1253,11 @@ export function PlanItemScreen(props: {
                   {MENTION_TEAM_NOTE}
                 </p>
               ) : null}
-              <div className="flex min-h-[44px] items-center gap-2">
-                {side === 'agency' ? (
-                  <Chip
-                    label={teamNote ? TEAM_CHIP_LABEL : EVERYONE_CHIP_LABEL}
-                    {...(teamNote ? { dot: <IconLock size={ICON_SIZE.inline} /> } : {})}
-                    aria-pressed={teamNote}
-                    data-plan-visibility-chip={visibility}
-                    onClick={() => setVisibility(teamNote ? 'everyone' : 'team')}
-                    className={cn(
-                      'shrink-0',
-                      // bg-none: the warn fill shows through the chip's lit gradient.
-                      teamNote
-                        ? 'border-[color:var(--warn-line)] bg-warn-soft bg-none text-warn'
-                        : null,
-                    )}
-                  />
-                ) : (
-                  <p data-plan-visibility-line="" className="text-sm text-fg-3">
-                    {CLIENT_VISIBILITY_LINE}
-                  </p>
-                )}
-                {isLaptop && !coarse ? (
-                  <p data-plan-comment-hint="" className="ml-auto text-sm text-fg-3">
-                    {COMMENT_SEND_HINT}
-                  </p>
-                ) : null}
-              </div>
+              {isLaptop && !coarse ? (
+                <p data-plan-comment-hint="" className="text-right text-sm text-fg-3">
+                  {COMMENT_SEND_HINT}
+                </p>
+              ) : null}
             </form>
           )
         }

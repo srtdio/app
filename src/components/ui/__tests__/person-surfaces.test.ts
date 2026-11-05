@@ -69,9 +69,9 @@ describe('photo-only surfaces (inside a DM)', () => {
 
   it('Reply privately opens the card in place (no DM navigation)', () => {
     expect(source('chat/ChatConnected.tsx')).toContain('openReplyPrivatelyCard(');
-    const button = source('comments/ReplyPrivatelyButton.tsx');
-    expect(button).not.toContain('useOpenPersonDm');
-    expect(button).not.toContain('setPrivateReplyDraft');
+    const opener = source('comments/ReplyPrivatelyButton.tsx');
+    expect(opener).not.toContain('useOpenPersonDm');
+    expect(opener).not.toContain('setPrivateReplyDraft');
   });
 
   it('no file outside ui/ renders PhotoViewer directly', () => {

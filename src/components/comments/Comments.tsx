@@ -107,7 +107,6 @@ import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/pe
 import { isFormerMember } from '@/lib/chat/mentions';
 import { canReplyPrivately, commentPrivateReplyDraft } from '@/lib/reply-privately';
 import type { PrivateReplyDraft } from '@/lib/chat/private-reply';
-import { ReplyPrivatelyButton } from '@/components/comments/ReplyPrivatelyButton';
 
 /**
  * A mention as it reads in a comment: "@username", or "@Former member" for
@@ -2302,12 +2301,11 @@ export function Comments({
     );
   }
 
-  // Reply privately, between Reply and Copy: only on someone else's comment
-  // whose author is a known current member (canReplyPrivately). The quote is
-  // built at tap time from what the row shows; no read.
-  // The same quote is the person card's source when the author's photo or
-  // name is tapped (its context line and what its send carries); null when
-  // the comment offers no Reply privately.
+  // Reply privately: a tap on the author's photo or name opens the person
+  // card with this comment as its source (its context line and what its send
+  // carries), only on someone else's comment whose author is a known current
+  // member (canReplyPrivately). Built at tap time from what the row shows; no
+  // read; null when the comment offers no Reply privately.
   function privateReplySource(
     comment: CommentRow,
     authorName: string,
@@ -2331,18 +2329,6 @@ export function Comments({
         entityType,
         entityId,
       });
-  }
-
-  function replyPrivatelyControl(comment: CommentRow, authorName: string): ReactNode {
-    const draft = privateReplySource(comment, authorName);
-    if (draft === null) return null;
-    return (
-      <ReplyPrivatelyButton
-        authorUserId={comment.author_user_id}
-        className={ROW_ICON_ACTION_CLASS}
-        draft={draft}
-      />
-    );
   }
 
   function renderEditor(commentId: string): ReactNode {
@@ -2568,7 +2554,6 @@ export function Comments({
             <div data-comment-actions="" className={COMMENT_ACTIONS_ROW_CLASS}>
               {opts.leading}
               {opts.replyButton}
-              {opts.actions.canCopy ? replyPrivatelyControl(comment, authorName) : null}
               {opts.actions.canCopy ? copyControl(comment) : null}
             </div>
           ) : null}
