@@ -109,3 +109,26 @@ describe('firstExternalUrl', () => {
     expect(firstExternalUrl('no links here', ORIGIN, APP_ENTITY_ROUTES)).toBeNull();
   });
 });
+
+describe('tokenize: a closing format marker after a url', () => {
+  it('*see https://x.com* keeps the closing star out of the url', () => {
+    expect(tokenize('*see https://x.com*')).toEqual([
+      { kind: 'text', text: '*see ' },
+      { kind: 'url', url: 'https://x.com' },
+      { kind: 'text', text: '*' },
+    ]);
+  });
+
+  it('a trailing marker with no opener stays in the url', () => {
+    expect(tokenize('see https://x.com/a_')).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'url', url: 'https://x.com/a_' },
+    ]);
+  });
+
+  it('firstExternalUrl drops the closing marker', () => {
+    expect(firstExternalUrl('_read https://x.com/post_', ORIGIN, APP_ENTITY_ROUTES)).toBe(
+      'https://x.com/post',
+    );
+  });
+});

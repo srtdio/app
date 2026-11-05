@@ -1590,3 +1590,29 @@ describe('runCatchup: plan comments, OK / Not OK and plan mentions', () => {
     }
   });
 });
+
+describe('runCatchup: DM preview hides formatting markers', () => {
+  function dmWorld(body: string): World {
+    const w = new World();
+    w.user(A, 'Anna Client');
+    w.user(X, 'Xavier Alphateam');
+    w.workspace(W1, 'Alphaworks Wone');
+    w.member(W1, A, 'client');
+    w.member(W1, X, 'agency');
+    w.message(w.dm(W1, A, X), W1, X, body, IN_WINDOW);
+    return w;
+  }
+
+  it('the DM line reads the words without markers', async () => {
+    const out = await run(dmWorld('*ship* _today_'));
+    const body = renderedBody(only(out, A, W1));
+    expect(body).toContain('ship today');
+    expect(body).not.toContain('*ship*');
+    expect(body).not.toContain('_today_');
+  });
+
+  it('mid-word markers stay as typed', async () => {
+    const out = await run(dmWorld('snake_case_name'));
+    expect(renderedBody(only(out, A, W1))).toContain('snake_case_name');
+  });
+});

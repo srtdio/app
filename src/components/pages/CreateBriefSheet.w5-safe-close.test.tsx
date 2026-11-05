@@ -56,7 +56,8 @@ vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 'trace-1' }));
 vi.mock('@/lib/workspace-context-platform', () => ({ useWorkspacePlatform: () => 'instagram' }));
 const { briefCreate } = vi.hoisted(() => ({ briefCreate: vi.fn() }));
 vi.mock('@srtdio/rpc', () => ({ briefCreate: (...args: unknown[]) => briefCreate(...args) }));
-vi.mock('@srtdio/comments', () => ({
+vi.mock('@srtdio/comments', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@srtdio/comments')>()),
   createComment: vi.fn(async () => ({ ok: true, data: 'c' })),
 }));
 

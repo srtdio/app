@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode } from 'react';
+import { stripFormat } from '@srtdio/comments';
 import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Button } from '@/components/ui/Button';
@@ -99,7 +100,7 @@ export function rowDraft(draft: string, open: boolean): string | null {
  * workspace's registry only. Pure over the registry.
  */
 export function draftLine(stored: string, workspaceId: string | null): string {
-  return resolveMentionPreview(stored, mentionNamesIn(workspaceId));
+  return resolveMentionPreview(stripFormat(stored), mentionNamesIn(workspaceId));
 }
 
 /** A list line with each real "@all" token drawn bold (the ink stays the line's own). */
@@ -422,7 +423,7 @@ export function channelListError(onRetry: () => void): ReactElement {
 export function previewLine(summary: ConversationSummary): string {
   if (summary.lastMessageText === '') return '';
   const prefix = summary.lastMessagePrefix !== undefined ? `${summary.lastMessagePrefix}: ` : '';
-  return `${prefix}${summary.lastMessageText}`;
+  return `${prefix}${stripFormat(summary.lastMessageText)}`;
 }
 
 /**
@@ -1005,7 +1006,7 @@ export function notesLastLine(
   timeZone?: string,
 ): { preview: string; time: string } | null {
   if (summary === undefined || summary.lastMessageTs <= 0) return null;
-  const preview = summary.lastMessageText;
+  const preview = stripFormat(summary.lastMessageText);
   if (preview === '') return null;
   return { preview, time: formatChatTime(summary.lastMessageTs, new Date(nowMs), timeZone) };
 }

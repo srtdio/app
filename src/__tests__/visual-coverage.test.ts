@@ -42,6 +42,7 @@ const REQUIRED: readonly string[] = [
   'chat-dm-private-reply-long',
   'chat-dm-private-reply-long-sent',
   'chat-dm-private-reply-strip',
+  'chat-format-strip',
   'chat-home-chip-files',
   'chat-home-chip-files-dark',
   'chat-home-chip-links',

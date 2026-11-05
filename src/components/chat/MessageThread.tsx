@@ -1,4 +1,5 @@
 import { mark } from '@/lib/perf-marks';
+import { stripFormat } from '@srtdio/comments';
 import {
   createContext,
   Fragment,
@@ -81,7 +82,13 @@ import {
   type ScrollSource,
 } from '@/lib/chat/stick-to-bottom';
 import { currentOrigin, firstExternalUrl } from '@/lib/chat/message-links';
-import { bodyLinkClass, markSearchWords, renderMessageBody } from '@/components/chat/message-body';
+import {
+  bodyLinkClass,
+  markSearchWords,
+  renderBodyLinks,
+  renderFormatted,
+  renderMessageBody,
+} from '@/components/chat/message-body';
 import { Avatar } from '@/components/ui/Avatar';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { Button } from '@/components/ui/Button';
@@ -248,7 +255,7 @@ import {
   chatPrivateReplyDraft,
   privateReplyHeader,
   privateReplyHref,
-  privateReplyLine,
+  privateReplyPreview,
   type PrivateReply,
   type PrivateReplyDraft,
 } from '@/lib/chat/private-reply';
@@ -1334,7 +1341,7 @@ function PrivateReplyQuote(props: {
     <ReplyQuoteBox
       author={privateReplyHeader(author, reply.whereLabel)}
       preview={resolveMentionText(
-        privateReplyLine(reply.excerpt),
+        privateReplyPreview(reply.excerpt),
         profileNameOf(profiles, workspaceId),
       )}
       inBubble={props.layout}
@@ -1947,17 +1954,28 @@ export function renderBodyWithMentions(
   mine: boolean,
   ctx: MentionRenderContext,
 ): ReactNode[] {
-  const segments = splitMentions(body);
   const highlight = ctx.highlight ?? [];
-  // No mention: exactly the plain renderer's runs.
-  if (segments.every((segment) => segment.kind === 'text')) {
+  // No mention: exactly the plain renderer's runs (formatting included).
+  if (splitMentions(body).every((segment) => segment.kind === 'text')) {
     return renderMessageBody(body, mine, currentOrigin(), highlight);
   }
-  return segments.map((segment, i) => {
+  // Formatting is the outer layer; mentions and links render inside each
+  // styled segment, so *hey @[id]* is a bold mention.
+  return renderFormatted(body, (text) => mentionRuns(text, mine, ctx, highlight));
+}
+
+/** One styled segment's text: mention tokens as "@Name", links between. */
+function mentionRuns(
+  text: string,
+  mine: boolean,
+  ctx: MentionRenderContext,
+  highlight: readonly string[],
+): ReactNode[] {
+  return splitMentions(text).map((segment, i) => {
     if (segment.kind === 'text') {
       return (
         <Fragment key={i}>
-          {renderMessageBody(segment.text, mine, currentOrigin(), highlight)}
+          {renderBodyLinks(segment.text, mine, currentOrigin(), highlight)}
         </Fragment>
       );
     }
@@ -2547,7 +2565,7 @@ export function MessageBubble(props: {
                     parentDeleted
                       ? deletedMessageLabel({ mine: quotedMine })
                       : resolveMentionText(
-                          reply.preview,
+                          stripFormat(reply.preview),
                           profileNameOf(profiles, props.workspaceId ?? null),
                         )
                   }

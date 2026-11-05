@@ -19,6 +19,7 @@ import {
   StarredEmpty,
   StarredList,
   StarredRowView,
+  starredRowText,
   STARRED_LOADING,
   type StarredFeed,
   type StarredListViewProps,
@@ -336,5 +337,23 @@ describe('sender names', () => {
       row('d', { senderUserId: null }),
     ];
     expect(sendersToRead(rows, (id) => id === 'u3')).toEqual(['u2']);
+  });
+});
+
+describe('starredRowText', () => {
+  const ANA = '11111111-2222-4333-8444-555555555555';
+  const nameOf = (id: string) => (id === ANA ? 'Ana' : undefined);
+
+  it('hides formatting markers in the body', () => {
+    expect(starredRowText(row('f', { body: '*ship* _today_' }), nameOf)).toBe('ship today');
+  });
+
+  it('mid-word markers stay as typed', () => {
+    expect(starredRowText(row('f', { body: 'snake_case_name' }), nameOf)).toBe('snake_case_name');
+  });
+
+  it('resolves mentions and falls back to the media line for an empty body', () => {
+    expect(starredRowText(row('f', { body: `_hi_ @[${ANA}]` }), nameOf)).toBe('hi @Ana');
+    expect(starredRowText(row('f', { body: '  ', mediaLine: 'Photo' }), nameOf)).toBe('Photo');
   });
 });

@@ -9,6 +9,7 @@
 // video, voice, file, link); with a chip the query may be empty (newest matches).
 // Paging is keyset: the last row's created_at and id go back as the cursor.
 
+import { stripFormat } from '@srtdio/comments';
 import type { Client } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { abortable, READ_TIMEOUT_MS } from '@/lib/chat-reads';
@@ -463,8 +464,9 @@ const SNIPPET_MAX = 140;
 const ELLIPSIS = '…';
 
 /**
- * A result row's line: mentions as "@Name" (never the raw token), whitespace
- * folded, starting near the first matched word and cut with an ellipsis. Pure.
+ * A result row's line: formatting markers hidden, mentions as "@Name" (never
+ * the raw token), whitespace folded, starting near the first matched word and
+ * cut with an ellipsis. Pure.
  */
 export function snippetText(
   body: string,
@@ -472,7 +474,7 @@ export function snippetText(
   nameOf: PreviewNameOf,
   max: number = SNIPPET_MAX,
 ): string {
-  const text = resolveMentionText(body, nameOf).replace(/\s+/g, ' ').trim();
+  const text = resolveMentionText(stripFormat(body), nameOf).replace(/\s+/g, ' ').trim();
   const first = matchRuns(text, words).reduce<{ at: number; found: boolean }>(
     (acc, run) =>
       acc.found

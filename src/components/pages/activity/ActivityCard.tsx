@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { stripFormat } from '@srtdio/comments';
 import { itemIn, rememberCard, useMoveOnMount } from '@/lib/motion';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react';
@@ -95,7 +96,7 @@ interface ActivityCardProps {
  * `@[uuid]` ever reaches the DOM.
  */
 function mentionPreview(body: string, selfName: string | null, chat = false): ReactElement[] {
-  return segmentSelfMentions(body, selfName).flatMap((seg, i) =>
+  return segmentSelfMentions(stripFormat(body), selfName).flatMap((seg, i) =>
     seg.self
       ? [
           <span key={`s${i}`} className="font-medium text-accent">
@@ -627,7 +628,7 @@ export function ActivityCard({
 
             {showsBody ? (
               <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
-                {cardBodyLine(lead)}
+                {stripFormat(cardBodyLine(lead))}
               </p>
             ) : null}
 
@@ -864,7 +865,7 @@ export function UpcomingCard({
             </div>
             <p className="truncate text-base font-medium text-fg">{upcomingChat(item)}</p>
             <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
-              {item.preview}
+              {stripFormat(item.preview)}
             </p>
           </div>
 

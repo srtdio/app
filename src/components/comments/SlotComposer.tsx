@@ -319,6 +319,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                   </span>
                 ) : null}
                 <Textarea
+                  formatting
                   autoGrow
                   rows={1}
                   aria-label={`Checkpoint ${index + 1}`}

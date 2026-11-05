@@ -221,6 +221,22 @@ async function openDm(page: Page): Promise<void> {
   await waitFor([page.locator('[data-bubble]', { hasText: 'Ready for your look' })], 'DM');
 }
 
+/** The chat composer with formatted text typed and a word selected: live
+ *  styling (faded markers) and the format strip open. */
+async function openFormatStrip(page: Page): Promise<void> {
+  await openDm(page);
+  const box = page.locator('form textarea').first();
+  await box.click();
+  await box.fill('*bold* _italic_ ~strike~ +underline+ ```mono``` today');
+  await box.evaluate((el: HTMLTextAreaElement) => {
+    el.focus();
+    el.setSelectionRange(el.value.length - 5, el.value.length);
+    el.dispatchEvent(new Event('select', { bubbles: true }));
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await waitFor([page.locator('[data-format-strip]')], 'format strip');
+}
+
 async function openChatPostSheet(page: Page): Promise<void> {
   await openDm(page);
   const card = page.getByRole('button', { name: 'Open post Monday carousel' }).last();
@@ -676,6 +692,8 @@ const SCREENS: Screen[] = [
     },
   },
   { name: 'chat-thread', seed: creator, url: '/chat', steps: openDm },
+  // The format strip open over the composer, live styling in the box.
+  { name: 'chat-format-strip', seed: creator, url: '/chat', steps: openFormatStrip },
   {
     // The DM's open-items drawer from its ticker: grey sheet, lit cards.
     name: 'chat-status-drawer',

@@ -12,6 +12,7 @@ import { leaveIntoCard, useGrowFromCard } from '@/lib/motion/pages';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
 import { Comments } from '@/components/comments/Comments';
+import { renderFormatted } from '@/components/chat/message-body';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { LoadError } from '@/components/ui/LoadError';
@@ -894,7 +895,7 @@ export function BriefDetailPage({
           <section className="min-w-0">
             <div className={`${SECTION_LABEL} mb-1`}>Objective</div>
             <p className="text-base leading-relaxed whitespace-pre-wrap break-words text-fg">
-              <Highlight text={brief.objective} />
+              {renderFormatted(brief.objective, (text) => [<Highlight key="h" text={text} />])}
             </p>
           </section>
 
@@ -902,7 +903,7 @@ export function BriefDetailPage({
             <section className="min-w-0">
               <div className={`${SECTION_LABEL} mb-1`}>Brand requirements</div>
               <p className="text-base leading-relaxed whitespace-pre-wrap break-words text-fg">
-                {brief.brand_requirements}
+                {renderFormatted(brief.brand_requirements ?? '', (text) => [text])}
               </p>
             </section>
           ) : null}

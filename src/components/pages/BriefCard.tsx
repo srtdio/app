@@ -1,4 +1,5 @@
 import { rememberCard } from '@/lib/motion';
+import { stripFormat } from '@srtdio/comments';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
 import { Link } from 'react-router-dom';
 import type { ReactElement } from 'react';
@@ -145,7 +146,9 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: Brie
           <BriefStatusPill status={brief.status} />
         </div>
 
-        <p className="min-w-0 break-words text-base text-fg-2 line-clamp-2">{brief.objective}</p>
+        <p className="min-w-0 break-words text-base text-fg-2 line-clamp-2">
+          {stripFormat(brief.objective)}
+        </p>
 
         {/* Above the card link, so a tap follows this link only. */}
         {link !== null ? (

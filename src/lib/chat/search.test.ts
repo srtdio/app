@@ -328,3 +328,20 @@ describe('timers', () => {
     vi.useRealTimers();
   });
 });
+
+describe('snippetText hides formatting markers', () => {
+  it('a formatted body reads as plain words', () => {
+    expect(snippetText('*ship* _today_', ['ship'], () => undefined)).toBe('ship today');
+  });
+
+  it('mid-word markers stay as typed', () => {
+    expect(snippetText('snake_case_name', ['snake'], () => undefined)).toBe('snake_case_name');
+  });
+
+  it('mention tokens inside a styled span still resolve', () => {
+    const id = '11111111-2222-4333-8444-555555555555';
+    expect(snippetText(`*hi @[${id}]*`, ['hi'], (u) => (u === id ? 'Ana' : undefined))).toBe(
+      'hi @Ana',
+    );
+  });
+});

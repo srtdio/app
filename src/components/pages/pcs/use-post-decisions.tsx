@@ -246,6 +246,7 @@ export function StageReasonConfirm(props: {
       <label className="flex flex-col gap-2">
         <span className="text-base text-fg-2">{label}</span>
         <Textarea
+          formatting
           aria-label={label}
           value={props.reason}
           onChange={(event) => props.onReasonChange(event.target.value)}

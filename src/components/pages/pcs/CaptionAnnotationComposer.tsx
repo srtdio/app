@@ -95,6 +95,7 @@ export function CaptionAnnotationComposer({
           {quote}
         </div>
         <Textarea
+          formatting
           ref={textareaRef}
           value={body}
           onChange={(event) => onBodyChange(event.target.value)}

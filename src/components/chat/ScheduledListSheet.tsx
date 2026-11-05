@@ -287,6 +287,7 @@ export function BodyEditor(props: {
         </div>
       ) : null}
       <Textarea
+        formatting
         aria-label="Message"
         value={text}
         autoGrow

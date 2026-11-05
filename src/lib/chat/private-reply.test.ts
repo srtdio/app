@@ -7,6 +7,7 @@ import {
   parsePrivateReplyDraft,
   privateReplyHeader,
   privateReplyLine,
+  privateReplyPreview,
   privateReplyToRow,
   replyPrivatelyTo,
   type PrivateReplyDraft,
@@ -218,5 +219,19 @@ describe('copy', () => {
     expect(REPLY_PRIVATELY).toBe('Reply privately');
     expect(replyPrivatelyTo('Leo')).toBe('to Leo');
     expect(PRIVATE_REPLY_KINDS).toEqual(['chat', 'comment', 'plan_comment']);
+  });
+});
+
+describe('privateReplyPreview', () => {
+  it('hides formatting markers and folds the excerpt onto one line', () => {
+    expect(privateReplyPreview('*ship*\n_today_')).toBe('ship today');
+  });
+
+  it('mid-word markers stay as typed', () => {
+    expect(privateReplyPreview('snake_case_name')).toBe('snake_case_name');
+  });
+
+  it('privateReplyLine (the stored excerpt) keeps the markers', () => {
+    expect(privateReplyLine('*ship* _today_')).toBe('*ship* _today_');
   });
 });

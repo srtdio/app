@@ -26,7 +26,7 @@ import {
   sized,
   useChatLayout,
 } from '@/components/chat/chat-type';
-import { renderMessageBody } from '@/components/chat/message-body';
+import { renderBodyLinks, renderFormatted } from '@/components/chat/message-body';
 import { TEAM_ONLY_LABEL } from '@/components/chat/plan-card';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import { startChatMembers } from '@/lib/chat/open-members';
@@ -314,11 +314,17 @@ export function usePlanMentionMembers(
   return { members, load: () => setAsked(true) };
 }
 
-/** A body with its mention tokens as pills; the text between keeps chat's links. */
+/** A body with WhatsApp formatting outermost, then its mention tokens as
+ *  pills and chat's links in each styled segment. */
 function bodyNodes(body: string, ownTone: boolean, workspaceId: string | null): ReactNode[] {
-  return splitMentions(body).map((segment, i) => {
+  return renderFormatted(body, (text) => mentionNodes(text, ownTone, workspaceId));
+}
+
+/** One styled segment: mention tokens as pills; the text between keeps chat's links. */
+function mentionNodes(text: string, ownTone: boolean, workspaceId: string | null): ReactNode[] {
+  return splitMentions(text).map((segment, i) => {
     if (segment.kind === 'text') {
-      return <Fragment key={i}>{renderMessageBody(segment.text, ownTone)}</Fragment>;
+      return <Fragment key={i}>{renderBodyLinks(segment.text, ownTone)}</Fragment>;
     }
     const label = personMentionLabel(workspaceId, segment.userId);
     if (label === null) return null;

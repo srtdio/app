@@ -1206,3 +1206,27 @@ describe('comment edit box mentions', () => {
     expect(commentCopyText(`cc @[${UUID_A}]`, () => 'ada.k')).toBe('cc @ada.k');
   });
 });
+
+describe('renderCommentBody: WhatsApp formatting', () => {
+  const markup = (body: string): string =>
+    renderToStaticMarkup(<>{renderCommentBody(body, (id) => (id === UUID_A ? 'Ada' : null))}</>);
+
+  it('styles words and hides the markers', () => {
+    const out = markup('*ship* _today_ ~old~ +must+ ```code```');
+    expect(out).toContain('<strong class="font-semibold">ship</strong>');
+    expect(out).toContain('<em class="italic">today</em>');
+    expect(out).toContain('<s class="line-through">old</s>');
+    expect(out).toContain('<u class="underline decoration-current">must</u>');
+    expect(out).toContain('font-mono">code</code>');
+  });
+
+  it('a mention inside a style renders as a bold @Name', () => {
+    const out = markup(`*hey @[${UUID_A}]*`);
+    expect(out).toMatch(/<strong class="font-semibold">hey .*@Ada.*<\/strong>/);
+    expect(out).not.toContain('@[');
+  });
+
+  it('snake_case and plain text stay as before', () => {
+    expect(renderCommentBody('file_name_v2.pdf', () => null)).toEqual(['file_name_v2.pdf']);
+  });
+});

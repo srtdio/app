@@ -245,6 +245,7 @@ export function CommentComposer({
   return (
     <div className="flex flex-col gap-2">
       <MentionInput
+        formatting
         key={composerKey}
         ref={editorRef}
         members={members}
