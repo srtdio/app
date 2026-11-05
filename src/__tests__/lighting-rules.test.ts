@@ -235,6 +235,38 @@ describe('lighting rules', () => {
     }
   });
 
+  it('every single-choice pick is the ink fill that slides; idle options rest on the grey fill', () => {
+    for (const rel of [
+      'shell/Tabs.tsx',
+      'support/BookCallSheet.tsx',
+      'shell/WorkspaceSwitcher.tsx',
+      'onboarding/OnboardingFlow.tsx',
+      'cockpit/Cockpit.tsx',
+      'ui/viewers/SheetViewer.tsx',
+      'chat/ReadingLayer.tsx',
+      'chat/EmojiPicker.tsx',
+      'chat/PlanDayPickerSheet.tsx',
+    ]) {
+      const code = src(rel);
+      expect(code, rel).toContain('selectionSlideRef(');
+      expect(code, rel).toMatch(/bg-accent[^'"]*text-accent-fg[^'"]*lit-pill/);
+    }
+    for (const rel of [
+      'shell/Tabs.tsx',
+      'support/BookCallSheet.tsx',
+      'shell/WorkspaceSwitcher.tsx',
+      'onboarding/OnboardingFlow.tsx',
+      'ui/viewers/SheetViewer.tsx',
+      'chat/ReadingLayer.tsx',
+      'chat/PlanDayPickerSheet.tsx',
+    ]) {
+      const code = src(rel);
+      expect(code, rel).toContain('bg-panel-3');
+      expect(code, rel).toContain('lit-well-soft');
+      expect(code, rel).not.toContain('lit-chip');
+    }
+  });
+
   it('hover keeps the light: the hover rules stack --hover-fill over --lit-bg', () => {
     const flat = CSS.replace(/\s+/g, ' ');
     expect(flat).toContain('@media (hover: hover) {');
