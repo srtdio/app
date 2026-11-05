@@ -180,6 +180,29 @@ async function openMenuGesture(page: Page, target: Locator): Promise<void> {
   await target.dispatchEvent('pointerup', { ...at, pointerType: 'touch', isPrimary: true });
 }
 
+/**
+ * A finger drags a target by dx px (left when negative) on touch and, unless
+ * `release` is false, lets go: the task row's swipe to delete.
+ */
+async function swipeRow(
+  target: Locator,
+  dx: number,
+  options: { release: boolean } = { release: true },
+): Promise<void> {
+  await target.scrollIntoViewIfNeeded();
+  const box = await target.boundingBox();
+  if (box === null) throw new Error('swipe target has no box');
+  const y = box.y + box.height / 2;
+  const x0 = box.x + box.width / 2;
+  const touch = { pointerType: 'touch', pointerId: 7, isPrimary: true, clientY: y };
+  await target.dispatchEvent('pointerdown', { ...touch, clientX: x0 });
+  const steps = 8;
+  for (let i = 1; i <= steps; i += 1) {
+    await target.dispatchEvent('pointermove', { ...touch, clientX: x0 + (dx * i) / steps });
+  }
+  if (options.release) await target.dispatchEvent('pointerup', { ...touch, clientX: x0 + dx });
+}
+
 /** Types a query no row matches into a search field and waits for NoResults. */
 async function searchNoMatch(page: Page, field: Locator[], what: string): Promise<void> {
   const input = await firstVisible(field, `${what} search field`);
@@ -802,6 +825,41 @@ const SCREENS: Screen[] = [
       const row = sheet.locator('[data-task-row-id]', { hasText: 'Hook options' });
       await openMenuGesture(page, row.locator('[data-task-title]'));
       await waitFor([page.getByRole('menuitem', { name: 'Delete' })], 'row menu');
+    },
+  },
+  {
+    // Delete one gesture away: on a phone a row swiped left past the trigger
+    // is queued (struck, Undo); on laptop the bin at the row's end does the
+    // same, and every other row shows its bin.
+    name: 'chat-tasks-delete',
+    seed: creator,
+    extra: seedDatedTasks,
+    url: '/chat',
+    steps: async (page) => {
+      const sheet = await openTasks(page);
+      const row = sheet.locator('[data-task-row-id]', { hasText: 'Hook options' });
+      if (isLaptop(page)) {
+        await tap([row.locator('[data-task-delete]')], 'row bin');
+      } else {
+        await swipeRow(row.locator('[data-task-title]'), -90);
+      }
+      await waitFor([row.locator('[data-task-undo-delete]')], 'queued row');
+    },
+  },
+  {
+    // Phone, mid-swipe: the row follows the finger left and the bin behind its
+    // right edge is armed (ink fill) past the trigger.
+    name: 'chat-tasks-swipe',
+    seed: creator,
+    extra: seedDatedTasks,
+    only: 'phone',
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      const sheet = await openTasks(page);
+      const row = sheet.locator('[data-task-row-id]', { hasText: 'Hook options' });
+      await swipeRow(row.locator('[data-task-title]'), -80, { release: false });
+      await waitFor([row.locator('[data-task-swipe-icon][data-armed]')], 'armed bin');
     },
   },
   {

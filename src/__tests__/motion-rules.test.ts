@@ -19,12 +19,8 @@ const ALLOW: Record<string, string> = {
   'components/home/Chrome.tsx': 'home/ marketing page chrome: its own bundle, not the app',
 };
 // el.style.transition set by hand: [file]: [text on the line, reason].
-const STYLE_TRANSITION_ALLOW: Record<string, readonly [string, string]> = {
-  'components/chat/MessageThread.tsx': [
-    'bubble.style.transition',
-    'swipe-to-reply: the bubble follows the finger, then springs back on DUR_SLOW_MS --ease-enter',
-  ],
-};
+// (The swipe follow moved into src/lib/motion/swipe.ts; nothing is allowed now.)
+const STYLE_TRANSITION_ALLOW: Record<string, readonly [string, string]> = {};
 const ALLOW_DIRS = [
   // The marketing page (signed-out home) ships as its own bundle and keeps its own look.
   'components/home/',
