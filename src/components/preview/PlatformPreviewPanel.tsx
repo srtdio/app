@@ -18,7 +18,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconEye, IconFile, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
-import { riseIn, riseOut, usePresence, selectionSlideRef } from '@/lib/motion';
+import { riseIn, riseOut, usePresence } from '@/lib/motion';
 import { dimWith } from '@/lib/motion/overlays';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -525,18 +525,16 @@ function ShownWindow({ window: win }: { window: CropWindow }): ReactElement {
   );
 }
 
-/** One size pick: the pick is the solid ink fill, sliding over from the last one. */
+/** One size pick: the pick is the solid ink fill. */
 function SizeOption(props: {
   size: PlatformSize;
   selected: boolean;
   onPick: () => void;
 }): ReactElement {
-  const slideRef = selectionSlideRef(props.selected);
   return (
     <PressableRow
       type="button"
       role="radio"
-      buttonRef={slideRef}
       data-selected={props.selected ? 'true' : undefined}
       aria-checked={props.selected}
       onClick={props.onPick}

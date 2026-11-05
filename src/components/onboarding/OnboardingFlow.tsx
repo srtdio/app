@@ -30,7 +30,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
-import { stepX, selectionSlideRef } from '@/lib/motion';
+import { stepX } from '@/lib/motion';
 import { useNavigate } from 'react-router-dom';
 import { PLATFORM_LABELS, isPostPlatform } from '@srtdio/posts';
 import { userOnboardingSave } from '@srtdio/rpc';
@@ -764,7 +764,6 @@ export function OnboardingFlow({
           {SIDE_TILES.map((tile) => (
             <PressableRow
               key={tile.side}
-              buttonRef={selectionSlideRef(side === tile.side)}
               data-selected={side === tile.side ? 'true' : undefined}
               type="button"
               role="radio"

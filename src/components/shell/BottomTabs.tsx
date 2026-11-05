@@ -10,7 +10,7 @@ import {
 } from '@/components/shell/NotificationsButton';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { CountBadge } from '@/components/ui/CountBadge';
-import { useNudgeOnRise, selectionSlideRef } from '@/lib/motion';
+import { useNudgeOnRise } from '@/lib/motion';
 import { unreadCommentsLabel, usePlanItemsUnreadTotal } from '@/lib/inbox/unread-entities';
 import { cn } from '@/lib/cn';
 import { activityPrefetchProps, navPrefetchProps } from '@/lib/route-prefetch';
@@ -42,8 +42,7 @@ export function chatTabLabel(unread: number): string {
 
 /**
  * A pill tab: inactive is the icon alone in a 44x44 target; active is icon and
- * label on the solid ink fill (bg-accent, lit-pill: the one picked look), which
- * slides over from the last tab (selectionSlideRef).
+ * label on the solid ink fill (bg-accent, lit-pill: the one picked look).
  */
 function tabClass(active: boolean): string {
   return cn(
@@ -56,10 +55,8 @@ function tabClass(active: boolean): string {
 function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number }) {
   const { item, planUnread } = props;
   const active = useMatch({ path: item.to, end: false }) !== null;
-  const slideRef = selectionSlideRef(active);
   return (
     <NavLink
-      ref={slideRef}
       to={item.to}
       data-selected={active ? 'true' : undefined}
       aria-label={item.showPlanBadge === true ? planTabLabel(item.label, planUnread) : item.label}
@@ -103,7 +100,6 @@ export function BottomTabs() {
   const planUnread = usePlanItemsUnreadTotal();
   const { pathname } = useLocation();
   const activityActive = onNotifications(pathname);
-  const activitySlideRef = selectionSlideRef(activityActive);
   const activityNudgeRef = useNudgeOnRise(unreadCount);
   const chatNudgeRef = useNudgeOnRise(total);
   return (
@@ -135,7 +131,6 @@ export function BottomTabs() {
             data-induction={INDUCTION_KEYS.activityTab}
             {...(activityActive ? { 'aria-current': 'page' as const } : {})}
             {...activityPrefetchProps()}
-            ref={activitySlideRef}
             data-selected={activityActive ? 'true' : undefined}
             className={tabClass(activityActive)}
           >

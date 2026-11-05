@@ -22,7 +22,7 @@
 
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useHadBoxes, useSettleOnLanding, selectionSlideRef } from '@/lib/motion';
+import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
@@ -461,21 +461,19 @@ function ViewSwitch(props: {
   );
 }
 
-/** One Month | Week option: the pick is the solid ink fill, sliding over from the other. */
+/** One Month | Week option: the pick is the solid ink fill. */
 function ViewOption(props: {
   view: PlanTabView;
   label: string;
   picked: boolean;
   onView: (view: PlanTabView) => void;
 }): ReactElement {
-  const slideRef = selectionSlideRef(props.picked);
   return (
     <PressableRow
       inline
       flat
       align="center"
       type="button"
-      buttonRef={slideRef}
       data-plan-tab-view={props.view}
       data-selected={props.picked ? 'true' : undefined}
       aria-pressed={props.picked}

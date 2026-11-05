@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
-import { pop, selectionSlideRef } from '@/lib/motion';
+import { pop } from '@/lib/motion';
 import type { Result } from '@srtdio/rpc';
 import { supabase } from '@/lib/supabase';
 import { Sheet } from '@/components/ui/Sheet';
@@ -432,7 +432,6 @@ export function WhoReactedSheet(props: {
                 <PressableRow
                   key={t.key}
                   inline
-                  buttonRef={selectionSlideRef(tab === t.key)}
                   data-selected={tab === t.key ? 'true' : undefined}
                   type="button"
                   role="tab"

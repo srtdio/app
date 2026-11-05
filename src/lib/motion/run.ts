@@ -11,7 +11,7 @@ import { mark } from '@/lib/perf-marks';
 import { motionOff } from './preference';
 
 /** Every move declares the axis it moves on (motion law). Lists and feeds are 'y' only. */
-export type Axis = 'x' | 'y' | 'scale' | 'rotate' | 'clip' | 'fill' | 'tint' | 'none';
+export type Axis = 'x' | 'y' | 'scale' | 'rotate' | 'clip' | 'fill' | 'none';
 
 export type MoveName =
   | 'push'
@@ -96,8 +96,6 @@ const AXIS_PROPS: Record<Axis, readonly string[]> = {
   rotate: ['transform', 'rotate'],
   clip: ['clipPath', 'height'],
   fill: ['strokeDashoffset', 'backgroundPosition', 'width'],
-  // Colour only (ink and fill colour): never opacity, never the light.
-  tint: ['color', 'backgroundColor'],
   none: [],
 };
 

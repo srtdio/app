@@ -1,6 +1,6 @@
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { dialogIn, selectionSlideRef } from '@/lib/motion';
+import { dialogIn } from '@/lib/motion';
 import type { FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { workspaceCreate } from '@srtdio/rpc';
@@ -412,7 +412,6 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                   return (
                     <PressableRow
                       key={value}
-                      buttonRef={selectionSlideRef(selected)}
                       data-selected={selected ? 'true' : undefined}
                       type="button"
                       role="radio"

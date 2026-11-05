@@ -16,7 +16,6 @@ import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { cn } from '@/lib/cn';
-import { selectionSlideRef } from '@/lib/motion';
 import { composeRangeProblem, type ComposeDay, type ComposeRange } from '@/lib/chat/plans';
 import {
   civilDaysBetween,
@@ -85,7 +84,6 @@ export function PlanDayTiles(props: {
               return (
                 <PressableRow
                   key={day}
-                  buttonRef={selectionSlideRef(on)}
                   align="center"
                   type="button"
                   data-plan-day-tile={day}

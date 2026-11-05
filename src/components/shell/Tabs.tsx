@@ -2,7 +2,6 @@ import { useRef } from 'react';
 import type { KeyboardEvent } from 'react';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
-import { selectionSlideRef } from '@/lib/motion';
 
 export interface TabItem {
   key: string;
@@ -37,7 +36,7 @@ export function tabKeyTarget(keys: readonly string[], active: string, key: strin
  * with aria-selected, never aria-current="page" (that is for nav links). The
  * active tab is the one Tab stop; the arrow keys move between tabs. The row
  * looks like every chip row: tabs rest on the grey fill, the active tab is the
- * ink fill and slides over from the last one (selectionSlideRef).
+ * ink fill.
  */
 export function Tabs({ items, active, onChange, label }: TabsProps) {
   const refs = useRef(new Map<string, HTMLButtonElement>());
@@ -61,12 +60,10 @@ export function Tabs({ items, active, onChange, label }: TabsProps) {
     >
       {items.map((tab) => {
         const isActive = tab.key === active;
-        const slide = selectionSlideRef(isActive);
         return (
           <PressableRow
             key={tab.key}
             buttonRef={(el: HTMLButtonElement | null) => {
-              slide(el);
               if (el === null) refs.current.delete(tab.key);
               else refs.current.set(tab.key, el);
             }}
