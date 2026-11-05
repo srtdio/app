@@ -1629,7 +1629,8 @@ async function readChatSources(
 
 /** One plan item as the Activity card needs it. */
 interface PlanItemInfo {
-  planId: string;
+  /** Null for an idea in the workspace's idea bank. */
+  planId: string | null;
   kind: string;
   title: string | null;
   postId: string | null;
