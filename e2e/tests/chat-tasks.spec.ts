@@ -280,7 +280,7 @@ test('both edit the same task: the second saver sees Keep mine / Keep theirs', a
   expectClean(network);
 });
 
-test('Close with changes still waiting saves them, then closes; the Add button adds; a swipe left (or the row menu\'s Delete) queues a delete', async ({
+test("Close with changes still waiting saves them, then closes; the Add button adds; a swipe left (or the row menu's Delete) queues a delete", async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);

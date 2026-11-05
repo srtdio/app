@@ -157,6 +157,7 @@ import {
   type TaskSide,
 } from '@/lib/chat/tasks';
 import { errorText } from '@/lib/error-copy';
+import { createPausableTimer } from '@/lib/pausable-timer';
 import { UNDO_MS } from '@/lib/undo';
 
 export const TASK_SHEET_TITLE = 'Tasks';
@@ -694,8 +695,8 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const holdsDelete = sendable.deletes.length > 0;
   useEffect(() => {
     if (!props.open || !pending || saving || saveFailed || wantClose) return;
-    const timer = setTimeout(save, holdsDelete ? UNDO_MS : TASK_AUTOSAVE_MS);
-    return () => clearTimeout(timer);
+    const timer = createPausableTimer(save, holdsDelete ? UNDO_MS : TASK_AUTOSAVE_MS);
+    return () => timer.cancel();
   }, [props.open, pending, holdsDelete, saving, saveFailed, wantClose, save]);
 
   const close = props.onClose;
@@ -1036,11 +1037,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
             />
           )}
           <div className="flex items-center gap-1 py-1.5 pl-1.5 pr-1.5">
-            <IconButton
-              label={BACK_LABEL}
-              data-task-back=""
-              onClick={requestClose}
-            >
+            <IconButton label={BACK_LABEL} data-task-back="" onClick={requestClose}>
               <IconChevronLeft size={ICON_SIZE.control} />
             </IconButton>
             <div className="flex min-w-0 flex-1 flex-col">
