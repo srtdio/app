@@ -58,12 +58,12 @@ describe('plan item mentions in Activity', () => {
     expect(activityLine({ ...item, actorName: null })).toBe('New mention in a plan item');
   });
 
-  it('opens /plans/{plan}?item={item}&comment={comment}, the plan_comment route', () => {
+  it('opens /plan/{plan}?item={item}&comment={comment}, the plan_comment route', () => {
     const item = mapEntry(row({}));
-    expect(entityHref(item)).toBe(`/plans/${PLAN}?item=${ITEM}&comment=${COMMENT}`);
+    expect(entityHref(item)).toBe(`/plan/${PLAN}?item=${ITEM}&comment=${COMMENT}`);
     const comment = mapEntry(row({ event_type: 'plan_comment' }));
     expect(entityHref(comment)).toBe(entityHref(item));
-    expect(entityHref({ ...item, commentId: null })).toBe(`/plans/${PLAN}?item=${ITEM}`);
+    expect(entityHref({ ...item, commentId: null })).toBe(`/plan/${PLAN}?item=${ITEM}`);
     expect(entityHref({ ...item, planId: null })).toBeNull();
   });
 

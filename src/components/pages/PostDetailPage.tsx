@@ -165,6 +165,7 @@ import { postFormatLabel } from '@/lib/post-format';
 import { isPostPlatform, platformLabel as postPlatformLabel } from '@srtdio/posts';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 import { markEntityReadOnOpen } from '@/lib/inbox/unread-entities';
+import { currentEntryState } from '@/lib/focus-target';
 
 // The platform's display name from the single source (@srtdio/posts); a raw
 // value outside it renders as-is rather than throwing on the page.
@@ -324,15 +325,20 @@ export function PostDetailPage({
   // this page unmounts (the target comment comes through ?comment= below).
   const searchJump = useSearchJump(!embedded);
   const [focusCommentId, setFocusCommentId] = useState<string | null>(null);
+  // A fresh key per arriving link, so the same comment linked twice lands twice.
+  const [focusRequestKey, setFocusRequestKey] = useState<string | null>(null);
   useEffect(() => {
     if (embedded) return;
     const comment = searchParams.get('comment');
     if (comment === null || comment === '') return;
     setFocusCommentId(comment);
+    setFocusRequestKey(`${comment}:${Date.now()}`);
     // Strip 'comment' in place (replace): the deep link never adds a history entry.
     const next = new URLSearchParams(searchParams);
     next.delete('comment');
-    setSearchParams(next, { replace: true });
+    // Keep the entry's router state (a post card's ref id): losing it would
+    // send /p/:ref back to a lookup and repaint the page.
+    setSearchParams(next, { replace: true, state: currentEntryState() });
   }, [embedded, searchParams, setSearchParams]);
 
   // PR B: phone pins the decision row to the bottom; laptop (useIsLaptop, the
@@ -1513,6 +1519,7 @@ export function PostDetailPage({
                 focusCommentId={
                   pending ? null : embedded ? (focusCommentIdProp ?? null) : focusCommentId
                 }
+                focusRequestKey={embedded ? null : focusRequestKey}
                 viewerIsClient={clientRole}
                 {...(detail !== null ? { postStage: detail.post.stage } : {})}
                 whereLabel={detail?.post.title ?? ''}

@@ -187,6 +187,7 @@ describe('recentFromRoute', () => {
     expect(recentFromRoute('/b/gbl-3', '', ctx)).toEqual({ type: 'brief', number: 3 });
     expect(recentFromRoute('/p/abc-3', '', ctx)).toBeNull();
     expect(recentFromRoute('/plans/pl1', '?item=i1', ctx)).toEqual({ type: 'plan', id: 'pl1' });
+    expect(recentFromRoute('/plan/pl1', '?item=i1', ctx)).toEqual({ type: 'plan', id: 'pl1' });
     expect(recentFromRoute('/assets', '?asset=a1', ctx)).toEqual({ type: 'file', id: 'a1' });
     expect(recentFromRoute('/assets', '', ctx)).toBeNull();
     expect(recentFromRoute('/chat', `?channel=group__${WS}__g1`, ctx)).toEqual({

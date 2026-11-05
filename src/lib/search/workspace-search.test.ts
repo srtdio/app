@@ -196,11 +196,11 @@ describe('workspaceHitTarget', () => {
       path: '/assets?asset=a1',
     });
     expect(workspaceHitTarget(hit({ kind: 'plan', id: 'pl1' }), 'GBL')).toEqual({
-      path: '/plans/pl1',
+      path: '/plan/pl1',
     });
     expect(
       workspaceHitTarget(hit({ kind: 'plan_item', id: 'i1', parentId: 'pl1' }), 'GBL'),
-    ).toEqual({ path: '/plans/pl1?at=i1' });
+    ).toEqual({ path: '/plan/pl1?at=i1' });
     expect(
       workspaceHitTarget(hit({ kind: 'task', id: 't1', channelId: 'group__w__g' }), 'GBL'),
     ).toEqual({ path: '/chat?channel=group__w__g&task=t1' });
@@ -214,7 +214,7 @@ describe('workspaceHitTarget', () => {
     const item = hit({ kind: 'plan_item', id: 'i1', parentId: 'pl1' });
     const comment = hit({ kind: 'plan_item_comment', id: 'i1', parentId: 'pl1' });
     expect(workspaceHitTarget(comment, 'GBL')).toEqual(workspaceHitTarget(item, 'GBL'));
-    expect(workspaceHitTarget(comment, 'GBL', 'reel')).toEqual({ path: '/plans/pl1?q=reel&at=i1' });
+    expect(workspaceHitTarget(comment, 'GBL', 'reel')).toEqual({ path: '/plan/pl1?q=reel&at=i1' });
   });
 
   it('an activity hit opens its subject through the existing routes', () => {
@@ -230,11 +230,11 @@ describe('workspaceHitTarget', () => {
       workspaceHitTarget(event({ entityType: 'brief', parentId: 'b9', number: 2 }), 'GBL', 'x1'),
     ).toEqual({ path: '/b/gbl-2?q=x1' });
     expect(workspaceHitTarget(event({ entityType: 'plan', parentId: 'pl1' }), 'GBL')).toEqual({
-      path: '/plans/pl1',
+      path: '/plan/pl1',
     });
     // A plan item's event: parent_id is its plan.
     expect(workspaceHitTarget(event({ entityType: 'plan_item', parentId: 'pl1' }), 'GBL')).toEqual({
-      path: '/plans/pl1',
+      path: '/plan/pl1',
     });
     expect(
       workspaceHitTarget(event({ entityType: 'chat_channel', channelId: 'group__w__g' }), 'GBL'),
@@ -285,7 +285,7 @@ describe('workspaceHitTarget', () => {
     ).toEqual({ path: '/p/gbl-3?comment=c1&q=hello' });
     expect(
       workspaceHitTarget(hit({ kind: 'plan_item', id: 'i1', parentId: 'pl1' }), 'GBL', 'reel'),
-    ).toEqual({ path: '/plans/pl1?q=reel&at=i1' });
+    ).toEqual({ path: '/plan/pl1?q=reel&at=i1' });
     expect(
       workspaceHitTarget(hit({ kind: 'task', id: 't1', channelId: 'group__w__g' }), 'GBL', 'fix'),
     ).toEqual({ path: '/chat?channel=group__w__g&task=t1&q=fix' });

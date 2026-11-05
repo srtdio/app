@@ -1,12 +1,17 @@
 // The one way a link that points at a comment lands on it (Activity, toast,
 // email, search): wait for the row to be in the DOM, centre it in its own
 // scroller (scroll-margin on the row keeps it clear of sticky bars), tint it
-// with the search glow (it wipes away left to right, wipeAway; never fades), and re-centre once if the layout shifts while images
-// settle. A target that never shows up calls onMissing once.
+// with the search glow (it wipes away left to right, wipeAway; never fades), and
+// keep it centred while the screen settles: rows that load above it, images
+// that take their size, a page that grows. The settle watch stops at
+// FOCUS_SETTLE_MS or the moment the person touches, scrolls or types, so it
+// never fights a finger. A target that never shows up calls onMissing once.
 //
-// Keyed by the target id: every new id runs again, the same id twice in one
-// mount never does. Nothing here depends on data arrival order or on a slide
-// transition ending: a MutationObserver watches for the row for up to 8s.
+// Keyed by the target id (or targetKey when given): every new key runs again,
+// so a second tap on the same comment lands again when the caller passes a
+// fresh key; the same key twice in one mount never does. Nothing here depends
+// on data arrival order or on a slide transition ending: a MutationObserver
+// watches for the row for up to 8s.
 
 import { useEffect, useRef } from 'react';
 import { tintTarget } from '@/components/ui/SearchHighlight';
@@ -15,15 +20,42 @@ import { prefersReducedMotion } from '@/lib/use-is-laptop';
 /** How long a target may take to render before it counts as missing. */
 export const FOCUS_WAIT_MS = 8000;
 
-/** After arrival: one re-centre on a layout shift inside this window, then stop. */
-export const FOCUS_RECENTRE_MS = 1500;
+/**
+ * After arrival: the row is kept centred through layout shifts (content
+ * loading above it, images settling) for this long, then the watch stops.
+ * Ceiling 2500ms; it never delays a paint, it only re-scrolls.
+ */
+export const FOCUS_SETTLE_MS = 2500;
+
+/** How long the smooth landing scroll is given before its resting place is taken. */
+const LANDING_SCROLL_MS = 450;
+
+/** Changes landing within this beat (one frame) share one position check. */
+const CHECK_BEAT_MS = 16;
+
+/** A drift smaller than this (px) is not worth a re-scroll. */
+const DRIFT_PX = 2;
+
+/** Input that hands the scroll back to the person: the settle watch stops on it. */
+const USER_INPUT = ['pointerdown', 'wheel', 'touchstart', 'keydown'] as const;
 
 /** The one toast when a linked comment cannot be shown. */
 export const FOCUS_MISSING_COPY = "Couldn't open that comment. It was deleted or you can't see it.";
 
+/** The toast when the linked comment could not be read (the read failed twice). */
+export const FOCUS_FAILED_COPY = "Couldn't open that comment. Try again.";
+
+/** A failed read of the linked comment is retried once, after this long. */
+export const FOCUS_READ_RETRY_MS = 1200;
+
 export interface FocusTargetOptions {
   /** The id to land on; null or empty waits for one. */
   targetId: string | null | undefined;
+  /**
+   * What makes a landing new (default: the id). A caller passes a fresh key
+   * per link (e.g. per tap) so the same comment linked twice lands twice.
+   */
+  targetKey?: string | null;
   /** The rendered row for an id, or null while it is not in the DOM. */
   findElement: (id: string) => HTMLElement | null;
   /** The scroller to centre in; default the row's nearest scrollable ancestor. */
@@ -82,48 +114,113 @@ function centre(el: HTMLElement, container: HTMLElement | null, smooth: boolean)
   else window.scrollTo?.({ top, behavior });
 }
 
+/** The row's offset from the top of its scroller's view (px). */
+function offsetInView(el: HTMLElement, container: HTMLElement | null): number {
+  const top = container !== null ? container.getBoundingClientRect().top : 0;
+  return el.getBoundingClientRect().top - top;
+}
+
 /**
- * Land on a target row: centre, tint, one re-centre on a layout shift within
- * FOCUS_RECENTRE_MS. Returns the cleanup (observer, timer, tint).
+ * Land on a target row: centre, tint, then keep it where it landed while the
+ * screen settles (rows loading above it, images taking their size) for
+ * FOCUS_SETTLE_MS, until the person touches, scrolls or types. A drift is
+ * read from the row's own position, so a shift is caught whether or not the
+ * scroller changes size. Returns the cleanup (observers, listeners, timer, tint).
  */
 function arrive(
   el: HTMLElement,
-  container: HTMLElement | null,
+  initialContainer: HTMLElement | null,
   highlight: (el: HTMLElement) => () => void,
 ): () => void {
+  let container = initialContainer;
   centre(el, container, !prefersReducedMotion());
   const untint = highlight(el);
-  let observer: ResizeObserver | null = null;
+  let mutations: MutationObserver | null = null;
+  let sizes: ResizeObserver | null = null;
   let stopTimer: number | null = null;
+  let anchorTimer: number | null = null;
+  let frame: number | null = null;
+  // Where the row should sit once the first (possibly smooth) scroll ends.
+  let anchor: number | null = null;
   const stop = (): void => {
-    observer?.disconnect();
-    observer = null;
+    mutations?.disconnect();
+    mutations = null;
+    sizes?.disconnect();
+    sizes = null;
     if (stopTimer !== null) window.clearTimeout(stopTimer);
     stopTimer = null;
+    if (anchorTimer !== null) window.clearTimeout(anchorTimer);
+    anchorTimer = null;
+    if (frame !== null) window.clearTimeout(frame);
+    frame = null;
+    for (const type of USER_INPUT) window.removeEventListener(type, stop, true);
   };
-  if (typeof ResizeObserver !== 'undefined') {
-    let first = true;
-    observer = new ResizeObserver(() => {
-      // Observing reports the current size once: that is not a shift.
-      if (first) {
-        first = false;
-        return;
-      }
+  const check = (): void => {
+    frame = null;
+    if (!el.isConnected) {
       stop();
-      if (el.isConnected) centre(el, container, false);
-    });
-    observer.observe(container ?? document.body);
-    stopTimer = window.setTimeout(stop, FOCUS_RECENTRE_MS);
+      return;
+    }
+    // A scroller that only became scrollable once rows loaded: use it now.
+    if (container === null || !container.isConnected) container = scrollParent(el);
+    if (anchor === null) {
+      centre(el, container, false);
+      anchor = offsetInView(el, container);
+      return;
+    }
+    if (Math.abs(offsetInView(el, container) - anchor) > DRIFT_PX) {
+      centre(el, container, false);
+      anchor = offsetInView(el, container);
+    }
+  };
+  const schedule = (): void => {
+    // One check per frame-sized beat, however many changes land in it.
+    if (frame === null) frame = window.setTimeout(check, CHECK_BEAT_MS);
+  };
+  for (const type of USER_INPUT) {
+    window.addEventListener(type, stop, { capture: true, passive: true });
   }
+  if (typeof MutationObserver !== 'undefined') {
+    mutations = new MutationObserver(schedule);
+    mutations.observe(container ?? document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'src'],
+    });
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    sizes = new ResizeObserver(schedule);
+    sizes.observe(container ?? document.body);
+    sizes.observe(el);
+  }
+  // The anchor is taken once the landing scroll has had time to finish.
+  anchorTimer = window.setTimeout(schedule, prefersReducedMotion() ? 0 : LANDING_SCROLL_MS);
+  stopTimer = window.setTimeout(stop, FOCUS_SETTLE_MS);
   return () => {
     stop();
     untint();
   };
 }
 
+/**
+ * The current history entry's router state (react-router keeps it under usr):
+ * a caller that strips ?comment= in place passes it back so the entry keeps
+ * what came with it (a post card's ref id). Pure read of window.history.
+ */
+export function currentEntryState(): unknown {
+  const state: unknown = window.history.state;
+  if (typeof state !== 'object' || state === null) return undefined;
+  return (state as Record<string, unknown>).usr;
+}
+
 /** Scroll to, and tint, the row a link points at; see the file header. */
 export function useFocusTarget(options: FocusTargetOptions): void {
   const { targetId, absent = false } = options;
+  const runKey =
+    targetId === null || targetId === undefined || targetId === ''
+      ? null
+      : (options.targetKey ?? targetId);
   const latest = useRef(options);
   latest.current = options;
   // The last id that landed or was reported missing: never run twice.
@@ -132,9 +229,10 @@ export function useFocusTarget(options: FocusTargetOptions): void {
   const arrival = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    if (targetId === null || targetId === undefined || targetId === '') return;
-    if (handled.current === targetId) return;
+    if (runKey === null || targetId === null || targetId === undefined) return;
+    if (handled.current === runKey) return;
     const id = targetId;
+    const key = runKey;
     // A new id: the previous target's tint and watch end now.
     arrival.current?.();
     arrival.current = null;
@@ -148,7 +246,7 @@ export function useFocusTarget(options: FocusTargetOptions): void {
       timer = null;
     };
     const settle = (): void => {
-      handled.current = id;
+      handled.current = key;
       stopWaiting();
     };
     const missing = (): void => {
@@ -176,7 +274,7 @@ export function useFocusTarget(options: FocusTargetOptions): void {
     observer.observe(document.body, { childList: true, subtree: true });
     timer = window.setTimeout(missing, FOCUS_WAIT_MS);
     return stopWaiting;
-  }, [targetId, absent]);
+  }, [targetId, runKey, absent]);
 
   useEffect(
     () => () => {

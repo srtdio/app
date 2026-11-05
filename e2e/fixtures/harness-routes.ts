@@ -1058,12 +1058,23 @@ const BADGE_RPC: Record<string, RpcHandler> = {
     ];
   },
   /**
-   * public.inbox_unread_entity_counts over the fixture inbox: the caller's
-   * unread comment and mention rows per post and per plan item.
+   * public.inbox_unread_entity_targets over the fixture inbox: the caller's
+   * unread comment and mention rows per post and per plan item, with the
+   * newest one's comment id, plan id and time.
    */
-  inbox_unread_entity_counts: (args, tables) => {
+  inbox_unread_entity_targets: (args, tables) => {
     const now = new Date().toISOString();
-    const counts = new Map<string, { entity_type: string; entity_id: string; unread: number }>();
+    const rows = new Map<
+      string,
+      {
+        entity_type: string;
+        entity_id: string;
+        unread: number;
+        latest_comment_id: string | null;
+        plan_id: string | null;
+        latest_at: string;
+      }
+    >();
     for (const e of tables.inbox_entries ?? []) {
       if (e.workspace_id !== args.p_workspace_id || e.user_id !== ME) continue;
       if ((e.read_at ?? null) !== null || (e.deleted_at ?? null) !== null) continue;
@@ -1074,13 +1085,31 @@ const BADGE_RPC: Record<string, RpcHandler> = {
         (type === 'post' && (event === 'comment' || event === 'mention')) ||
         (type === 'plan_item' && (event === 'plan_comment' || event === 'mention'));
       if (!counted || typeof e.entity_id !== 'string' || e.entity_id === '') continue;
+      const payload = (e.payload ?? {}) as Record<string, unknown>;
+      const commentId = typeof payload.comment_id === 'string' ? payload.comment_id : null;
+      const planId = typeof payload.plan_id === 'string' ? payload.plan_id : null;
+      const at = String(e.created_at ?? '');
       const key = `${type}:${e.entity_id}`;
-      const hit = counts.get(key);
-      if (hit === undefined)
-        counts.set(key, { entity_type: type, entity_id: e.entity_id, unread: 1 });
-      else hit.unread += 1;
+      const hit = rows.get(key);
+      if (hit === undefined) {
+        rows.set(key, {
+          entity_type: type,
+          entity_id: e.entity_id,
+          unread: 1,
+          latest_comment_id: commentId,
+          plan_id: planId,
+          latest_at: at,
+        });
+        continue;
+      }
+      hit.unread += 1;
+      if (at > hit.latest_at) {
+        hit.latest_at = at;
+        hit.latest_comment_id = commentId;
+        hit.plan_id = planId;
+      }
     }
-    return [...counts.values()];
+    return [...rows.values()];
   },
   /** public.inbox_mark_entity_read: acknowledged; the fixture inbox is left as seeded. */
   inbox_mark_entity_read: () => null,

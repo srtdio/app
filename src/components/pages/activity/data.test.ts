@@ -1774,7 +1774,7 @@ describe('plan comments and approvals', () => {
     );
     expect(activityLine({ ...named, actorName: null })).toBe('Someone withdrew slot approval');
     // Same tap target as any plan_review row.
-    expect(entityHref(named)).toBe(`/plans/${PLAN}?item=${ITEM}`);
+    expect(entityHref(named)).toBe(`/plan/${PLAN}?item=${ITEM}`);
     // A plain approval row is no withdrawal.
     const plain = mapEntry(
       row({
@@ -1796,12 +1796,12 @@ describe('plan comments and approvals', () => {
       planId: PLAN,
       commentId: COMMENT,
     });
-    expect(entityHref(comment)).toBe(`/plans/${PLAN}?item=${ITEM}&comment=${COMMENT}`);
-    expect(entityHref({ ...comment, commentId: null })).toBe(`/plans/${PLAN}?item=${ITEM}`);
+    expect(entityHref(comment)).toBe(`/plan/${PLAN}?item=${ITEM}&comment=${COMMENT}`);
+    expect(entityHref({ ...comment, commentId: null })).toBe(`/plan/${PLAN}?item=${ITEM}`);
     const review = { ...comment, eventType: 'plan_review', commentId: null };
-    expect(entityHref(review)).toBe(`/plans/${PLAN}?item=${ITEM}`);
+    expect(entityHref(review)).toBe(`/plan/${PLAN}?item=${ITEM}`);
     // A review never carries &comment= even if a comment id leaked in.
-    expect(entityHref({ ...review, commentId: COMMENT })).toBe(`/plans/${PLAN}?item=${ITEM}`);
+    expect(entityHref({ ...review, commentId: COMMENT })).toBe(`/plan/${PLAN}?item=${ITEM}`);
     expect(entityHref({ ...comment, planId: null })).toBeNull();
     const noPlanField: ActivityItem = { ...comment };
     delete noPlanField.planId;
@@ -1856,7 +1856,7 @@ describe('plan comments and approvals', () => {
     expect(c?.body).toBe('Love it');
     expect(c?.actorName).toBe('Ana');
     expect(c && activityLine(c)).toBe('Ana commented on a plan item');
-    expect(c && entityHref(c)).toBe(`/plans/${PLAN}?item=${ITEM}&comment=${COMMENT}`);
+    expect(c && entityHref(c)).toBe(`/plan/${PLAN}?item=${ITEM}&comment=${COMMENT}`);
     expect(r?.title).toBe('Launch post');
     expect(r?.body).toBeNull();
     expect(r && activityLine(r)).toBe('Cy approved a plan item');

@@ -83,11 +83,13 @@ export function isBellPlanEvent(eventType: string): eventType is BellPlanEventTy
 }
 
 /**
- * The link a plan alert opens: /plans/{plan_id}, with ?item={item_id} when the
+ * The link a plan opens: /plan/{plan_id} (the Plan tab), with ?item={item_id} when the
  * row names an item. Pure.
  */
 export function planHref(planId: string, itemId: string | null): string {
-  const base = `/plans/${encodeURIComponent(planId)}`;
+  // The Plan tab's own route: a plan opens in the Plan tab (tab lit, Back to
+  // the calendar on a cold open). /plans/:id stays only for older links.
+  const base = `/plan/${encodeURIComponent(planId)}`;
   return itemId !== null && itemId !== '' ? `${base}?item=${encodeURIComponent(itemId)}` : base;
 }
 

@@ -1168,9 +1168,9 @@ export function entityHref(item: ActivityItem, workspaceKey: string | null = nul
   if (item.eventType === 'assets_deleted') return '/assets';
   if (item.eventType === 'post_deleted') return null;
   if (isPlanEvent(item)) {
-    // The standalone Plan page with the item open; a comment also scrolls to it.
+    // The plan in the Plan tab with the item open; a comment also scrolls to it.
     if (item.planId == null || item.entityId === null) return null;
-    const base = `/plans/${item.planId}?item=${item.entityId}`;
+    const base = planHref(item.planId, item.entityId);
     return isPlanCommentRow(item) && item.commentId !== null
       ? `${base}&comment=${item.commentId}`
       : base;

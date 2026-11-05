@@ -25,7 +25,12 @@ import { parseExternalLink } from '@/lib/links';
 import { firstExternalUrl } from '@/lib/chat/message-links';
 import { renderFormatted } from '@/components/chat/message-body';
 import { highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
-import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
+import {
+  FOCUS_FAILED_COPY,
+  FOCUS_MISSING_COPY,
+  FOCUS_READ_RETRY_MS,
+  useFocusTarget,
+} from '@/lib/focus-target';
 import {
   IconCheck,
   IconCopy,
@@ -142,6 +147,9 @@ interface CommentsProps {
    *  not on page zero, then scrolled to and tinted once per distinct id
    *  (useFocusTarget). One toast when it is deleted or not visible. */
   focusCommentId?: string | null;
+  /** A fresh value per link (e.g. per tap) so the same comment linked twice
+   *  lands twice; defaults to the id. */
+  focusRequestKey?: string | null;
   /** True when the viewer's workspace role is 'client'. Gates ONLY the
    *  top-level composer on posts, which becomes the checkpoint SlotComposer
    *  (comment_batch_create). Replies (any role), the agency composer, and the
@@ -1229,6 +1237,7 @@ export function Comments({
   onAnnotationChipClick,
   refreshSignal,
   focusCommentId,
+  focusRequestKey = null,
   viewerIsClient,
   guideReplyCommentId = null,
   showHeader = false,
@@ -1259,6 +1268,8 @@ export function Comments({
   const [focusRows, setFocusRows] = useState<CommentRow[]>([]);
   // The linked id the by-id read found deleted or not visible.
   const [focusAbsentId, setFocusAbsentId] = useState<string | null>(null);
+  // A linked comment whose read failed twice (not a deleted one): its own toast.
+  const [focusFailedId, setFocusFailedId] = useState<string | null>(null);
   const entityKey = `${workspaceId}:${entityType}:${entityId}`;
   const [focusRowsFor, setFocusRowsFor] = useState(entityKey);
   if (focusRowsFor !== entityKey) {
@@ -1514,8 +1525,17 @@ export function Comments({
         ids,
       });
     void (async () => {
-      const target = await read([focusId]);
-      if (!active || !target.ok) return;
+      let target = await read([focusId]);
+      // One quiet retry when the read itself failed (not a missing comment).
+      if (active && !target.ok) {
+        await new Promise((resolve) => setTimeout(resolve, FOCUS_READ_RETRY_MS));
+        if (active) target = await read([focusId]);
+      }
+      if (!active) return;
+      if (!target.ok) {
+        setFocusFailedId(focusId);
+        return;
+      }
       const row = target.data[0];
       if (row === undefined || row.deleted_at !== null) {
         setFocusAbsentId(focusId);
@@ -1538,10 +1558,15 @@ export function Comments({
   const rootRef = useRef<HTMLDivElement>(null);
   useFocusTarget({
     targetId: focusId,
+    targetKey: focusRequestKey,
     findElement: (id) =>
       rootRef.current?.querySelector<HTMLElement>(`[id="${commentDomId(id)}"]`) ?? null,
-    absent: focusId !== null && focusAbsentId === focusId,
-    onMissing: () => toast?.show({ title: FOCUS_MISSING_COPY, tone: 'error' }),
+    absent: focusId !== null && (focusAbsentId === focusId || focusFailedId === focusId),
+    onMissing: (id) =>
+      toast?.show({
+        title: focusFailedId === id ? FOCUS_FAILED_COPY : FOCUS_MISSING_COPY,
+        tone: 'error',
+      }),
   });
   // A search jump's words: coloured in every comment body until the screen unmounts.
   const searchWords = useContext(SearchWordsContext);
