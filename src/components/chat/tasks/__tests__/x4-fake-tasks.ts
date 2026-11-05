@@ -17,6 +17,8 @@ export function x4Task(over: Partial<ChatTask>): ChatTask {
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
+    dueOn: null,
+    doneAt: null,
     ...over,
   };
 }

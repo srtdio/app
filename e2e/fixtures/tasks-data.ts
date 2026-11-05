@@ -43,7 +43,7 @@ function event(
 
 /** A Save's payload, as chat_task_save_batch takes it. */
 export interface TaskBatch {
-  creates?: { title: string; priority?: number; side: string }[];
+  creates?: { title: string; priority?: number; side: string; due_on?: string }[];
   edits?: { task_id: string; base_updated_at: string; changes: Record<string, unknown> }[];
   deletes?: { task_id: string; base_updated_at: string }[];
 }
@@ -74,6 +74,7 @@ export function applyTaskBatch(
       title: task.title,
       priority: task.priority,
       status: task.status,
+      due_on: task.due_on ?? null,
       updated_at: task.updated_at,
     });
   };
@@ -89,13 +90,24 @@ export function applyTaskBatch(
     const oldValue: Record<string, unknown> = {};
     const newValue: Record<string, unknown> = {};
     for (const [field, raw] of Object.entries(edit.changes)) {
-      const after = field === 'priority' ? Number(raw) : String(raw).trim();
-      if (String(task[field]) === String(after)) continue;
-      oldValue[field] = task[field];
+      // due_on: a day or null (cleared), as the SQL's ::date.
+      const after =
+        field === 'priority'
+          ? Number(raw)
+          : field === 'due_on'
+            ? raw === null || raw === ''
+              ? null
+              : String(raw)
+            : String(raw).trim();
+      const before = task[field] ?? null;
+      if (String(before) === String(after)) continue;
+      oldValue[field] = before;
       newValue[field] = after;
       task[field] = after;
     }
     if (Object.keys(newValue).length === 0) continue;
+    // A status change stamps or clears done_at, as the SQL does.
+    if ('status' in newValue) task.done_at = newValue.status === 'done' ? now : null;
     task.updated_at = now;
     event(
       tables,
@@ -135,6 +147,8 @@ export function applyTaskBatch(
       side: item.side,
       status: 'todo',
       priority: typeof item.priority === 'number' ? item.priority : 1,
+      due_on: typeof item.due_on === 'string' && item.due_on !== '' ? item.due_on : null,
+      done_at: null,
       due_at: null,
       due_set_by: null,
       due_set_at: null,
@@ -296,6 +310,8 @@ export function seedTasks(world: ChatWorld, now: number = Date.now()): void {
     due_set_by: null,
     due_set_at: null,
     due_passed_at: null,
+    due_on: null,
+    done_at: null,
     // Explicit, as the table has it: a test that polls deleted_at "not null"
     // must not pass on a missing key before the Save has even run.
     deleted_at: null,

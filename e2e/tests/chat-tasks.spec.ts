@@ -61,7 +61,9 @@ test(
     expectMinTouchTarget(await button.boundingBox());
 
     const sheet = await openSheet(page);
-    // One flat numbered list: no groups, no side labels, no due labels.
+    // Nothing dated: the sheet opens on No date, one flat numbered list (no
+    // groups, no side labels, no old due-time labels).
+    await expect(sheet.locator('[data-task-list]')).toHaveAttribute('data-task-chip', 'none');
     const numbers = await sheet
       .locator('[data-task-row-id]')
       .evaluateAll((rows) => rows.map((r) => r.getAttribute('data-task-number')));
@@ -98,6 +100,8 @@ test(
     await sheet.locator('[data-task-number="8"] [data-task-tick]').click();
     await sheet.locator('[data-task-number="8"] [data-task-tick]').click();
     const add = sheet.getByRole('textbox', { name: 'Add a task' });
+    // The new task stays undated (No date), so the sheet keeps this chip.
+    await sheet.locator('[data-task-days="add"] [data-task-day="none"]').click();
     await add.fill('Story frames');
     await add.press('Enter');
     await expect(add).toBeFocused();

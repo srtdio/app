@@ -5675,7 +5675,10 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const gateRef = useRef<PageGate | null>(null);
   // Bumped when a page row's hydration wait runs out, so it goes on without it.
   const [hydrationTick, setHydrationTick] = useState(0);
-  const { workspaceId } = useWorkspace();
+  const { workspaceId, workspaces } = useWorkspace();
+  // The Tasks sheet's This week ends on the workspace week start (the zone is
+  // props.timeZone); derived the way the Briefs and Pipeline surfaces do.
+  const workspaceWeekStart = workspaces.find((w) => w.id === workspaceId)?.week_start_day ?? 1;
   const toast = useToast();
   const marks = props.marks ?? NO_MARKS;
   // The chat's task list (never in Personal notes; only where the chat page
@@ -7368,6 +7371,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             }
             seenMs={taskSheet.seenAtOpen}
             focusTaskId={taskSheet.focus}
+            timeZone={props.timeZone}
+            weekStartDay={workspaceWeekStart}
             {...(onForward !== undefined && forwardChannels !== undefined
               ? {
                   share: {

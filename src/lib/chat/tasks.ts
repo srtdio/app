@@ -10,7 +10,7 @@
 import type { Client, Result } from '@srtdio/rpc';
 import type { Database, Json } from '@srtdio/schemas';
 import { abortable } from '@/lib/chat-reads';
-import { formatDateTime } from '@/lib/time';
+import { formatDate, formatDateTime } from '@/lib/time';
 
 type Functions = Database['public']['Functions'];
 type TaskRow = Database['public']['Tables']['chat_tasks']['Row'];
@@ -45,6 +45,10 @@ export interface ChatTask {
   updatedAt: string;
   /** Set once deleted (soft delete); a deleted task never shows in a list. */
   deletedAt?: string | null;
+  /** The due day, 'YYYY-MM-DD' on the workspace zone; null: no date. */
+  dueOn: string | null;
+  /** When it was ticked done (a moment); null while to do (and on rows done before 5 Nov with no stamp). */
+  doneAt: string | null;
 }
 
 /** One change-log row. */
@@ -106,6 +110,11 @@ function asPriority(value: unknown): TaskPriority | null {
   return n === 0 || n === 1 || n === 2 ? n : null;
 }
 
+/** A stored due day: 'YYYY-MM-DD' (a date column), else null. Pure. */
+function asDueOn(value: unknown): string | null {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
 /** Map a row; an impossible row (CHECKs forbid it) is skipped. Pure. */
 export function rowToTask(row: TaskRow): ChatTask | null {
   const side = asSide(row.side);
@@ -123,6 +132,8 @@ export function rowToTask(row: TaskRow): ChatTask | null {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? null,
+    dueOn: asDueOn(row.due_on),
+    doneAt: row.done_at ?? null,
   };
 }
 
@@ -194,6 +205,8 @@ export interface TaskChanges {
   title?: string;
   priority?: TaskPriority;
   status?: TaskStatus;
+  /** The due day 'YYYY-MM-DD'; null clears it. */
+  dueOn?: string | null;
 }
 
 /** A task typed into the add row, not written until Save. */
@@ -202,6 +215,8 @@ export interface DraftNew {
   title: string;
   priority: TaskPriority;
   side: TaskSide;
+  /** The due day 'YYYY-MM-DD'; null: no date. */
+  dueOn: string | null;
 }
 
 /** The sheet's unsaved work. */
@@ -231,6 +246,7 @@ export function effectiveChanges(task: ChatTask, edit: TaskChanges | undefined):
   }
   if (edit.priority !== undefined && edit.priority !== task.priority) out.priority = edit.priority;
   if (edit.status !== undefined && edit.status !== task.status) out.status = edit.status;
+  if (edit.dueOn !== undefined && edit.dueOn !== task.dueOn) out.dueOn = edit.dueOn;
   return out;
 }
 
@@ -246,6 +262,7 @@ export function applyChanges(task: ChatTask, changes: TaskChanges): ChatTask {
     ...(changes.title !== undefined ? { title: changes.title } : {}),
     ...(changes.priority !== undefined ? { priority: changes.priority } : {}),
     ...(changes.status !== undefined ? { status: changes.status } : {}),
+    ...(changes.dueOn !== undefined ? { dueOn: changes.dueOn } : {}),
   };
 }
 
@@ -308,7 +325,31 @@ export function dropTask(draft: SheetDraft, taskId: string): SheetDraft {
 export interface BatchEdit {
   task_id: string;
   base_updated_at: string;
-  changes: { title?: string; priority?: TaskPriority; status?: TaskStatus };
+  changes: BatchChanges;
+}
+
+/** An edit's changes as chat_task_save_batch takes them (snake_case keys). */
+export interface BatchChanges {
+  title?: string;
+  priority?: TaskPriority;
+  status?: TaskStatus;
+  due_on?: string | null;
+}
+
+/** A task with an RPC change set painted (the optimistic paint while a Save runs). Pure. */
+export function applyBatchChanges(task: ChatTask, changes: BatchChanges): ChatTask {
+  const { due_on: dueOn, ...rest } = changes;
+  return applyChanges(task, dueOn === undefined ? rest : { ...rest, dueOn });
+}
+
+/** A change set in the RPC's key names: dueOn goes as due_on (null clears). Pure. */
+function toBatchChanges(changes: TaskChanges): BatchChanges {
+  const out: BatchChanges = {};
+  if (changes.title !== undefined) out.title = changes.title;
+  if (changes.priority !== undefined) out.priority = changes.priority;
+  if (changes.status !== undefined) out.status = changes.status;
+  if (changes.dueOn !== undefined) out.due_on = changes.dueOn;
+  return out;
 }
 
 /** One delete as chat_task_save_batch takes it. */
@@ -322,6 +363,8 @@ export interface BatchCreate {
   title: string;
   priority: TaskPriority;
   side: TaskSide;
+  /** Sent only when the task has a date. */
+  due_on?: string;
 }
 
 export interface BatchPayload {
@@ -342,14 +385,21 @@ export function batchPayload(draft: SheetDraft, byId: ReadonlyMap<string, ChatTa
     const task = byId.get(id);
     if (task === undefined || deleting.has(id)) continue;
     const changes = effectiveChanges(task, edit);
-    if (hasChanges(changes)) edits.push({ task_id: id, base_updated_at: baseOf(task), changes });
+    if (hasChanges(changes)) {
+      edits.push({ task_id: id, base_updated_at: baseOf(task), changes: toBatchChanges(changes) });
+    }
   }
   const deletes: BatchDelete[] = draft.deletes.flatMap((id) => {
     const task = byId.get(id);
     return task === undefined ? [] : [{ task_id: id, base_updated_at: baseOf(task) }];
   });
-  const creates = draft.creates
-    .map((c) => ({ title: c.title.trim(), priority: c.priority, side: c.side }))
+  const creates: BatchCreate[] = draft.creates
+    .map((c) => ({
+      title: c.title.trim(),
+      priority: c.priority,
+      side: c.side,
+      ...(c.dueOn !== null ? { due_on: c.dueOn } : {}),
+    }))
     .filter((c) => c.title !== '');
   return { creates, edits, deletes };
 }
@@ -370,6 +420,8 @@ export interface TaskConflict {
   title: string;
   priority: TaskPriority;
   status: TaskStatus;
+  /** Their due day; null: no date. */
+  dueOn: string | null;
   updatedAt: string;
 }
 
@@ -390,6 +442,7 @@ function parseConflicts(raw: unknown): TaskConflict[] {
         title: typeof r.title === 'string' ? r.title : '',
         priority,
         status: asStatus(typeof r.status === 'string' ? r.status : null),
+        dueOn: asDueOn(r.due_on),
         updatedAt: r.updated_at,
       },
     ];
@@ -405,6 +458,7 @@ export function conflictLine(
   name: string,
   conflict: TaskConflict,
   mine: TaskChanges | undefined,
+  now: Date = new Date(),
 ): string {
   if (conflict.deleted) return `${name} deleted this`;
   const parts: string[] = [];
@@ -412,8 +466,17 @@ export function conflictLine(
   if (all || mine?.title !== undefined) parts.push(`"${conflict.title}"`);
   if (all || mine?.priority !== undefined) parts.push(`P${conflict.priority}`);
   if (mine?.status !== undefined) parts.push(conflict.status === 'done' ? 'done' : 'not done');
+  if (mine?.dueOn !== undefined) parts.push(dueDayText(conflict.dueOn, now));
   return `${name} changed this to ${parts.join(' · ')}`;
 }
+
+/** A due day as a line reads it: "Due 7 Nov" ("Due 7 Nov 2027" off this year), or "No date". Pure. */
+export function dueDayText(dueOn: string | null, now: Date = new Date()): string {
+  return dueOn === null ? NO_DATE_LABEL : `Due ${formatDate(dueOn, now)}`;
+}
+
+/** The words for a task with no due day. */
+export const NO_DATE_LABEL = 'No date';
 
 /** "Keep mine": the draft re-bases the task on their version, so the next Save sends it again. Pure. */
 export function keepMine(draft: SheetDraft, conflict: TaskConflict): SheetDraft {
@@ -427,6 +490,7 @@ export function taskFromConflict(task: ChatTask, conflict: TaskConflict): ChatTa
     title: conflict.title,
     priority: conflict.priority,
     status: conflict.status,
+    dueOn: conflict.dueOn,
     updatedAt: conflict.updatedAt,
     deletedAt: conflict.deleted ? (task.deletedAt ?? conflict.updatedAt) : null,
   };
@@ -456,6 +520,7 @@ export function liveMerge(input: {
         title: old.title,
         priority: old.priority,
         status: old.status,
+        dueOn: old.dueOn,
         updatedAt: fresh?.updatedAt ?? old.updatedAt,
       });
       continue;
@@ -467,6 +532,7 @@ export function liveMerge(input: {
         title: fresh.title,
         priority: fresh.priority,
         status: fresh.status,
+        dueOn: fresh.dueOn,
         updatedAt: fresh.updatedAt,
       });
     }
@@ -495,6 +561,8 @@ function parseChangeJson(raw: string | null): TaskChanges {
     const p = asPriority(r.priority);
     if (p !== null) out.priority = p;
     if (typeof r.status === 'string') out.status = asStatus(r.status);
+    // A cleared date is logged as null: keep it (null means "no date").
+    if ('due_on' in r) out.dueOn = asDueOn(r.due_on);
     return out;
   } catch {
     return {};
@@ -513,6 +581,7 @@ export type BatchRow =
   | { kind: 'priority'; number: number | null; from: TaskPriority; to: TaskPriority }
   | { kind: 'done'; number: number | null; title: string }
   | { kind: 'reopened'; number: number | null; title: string }
+  | { kind: 'due'; number: number | null; from: string | null; to: string | null }
   | { kind: 'deleted'; number: number | null; title: string };
 
 /** What a task reference names in a line. */
@@ -556,6 +625,9 @@ export function batchRows(event: TaskEvent, ref: TaskRef): BatchRow[] {
       if (next.status !== undefined) {
         rows.push({ kind: next.status === 'done' ? 'done' : 'reopened', number, title });
       }
+      if (next.dueOn !== undefined) {
+        rows.push({ kind: 'due', number, from: old.dueOn ?? null, to: next.dueOn });
+      }
       return rows;
     }
     default:
@@ -582,9 +654,16 @@ export function batchRowText(row: BatchRow): string {
       return `Done ${n} ${row.title}`;
     case 'reopened':
       return `Reopened ${n} ${row.title}`;
+    case 'due':
+      return `Due date ${n} ${dueDayValue(row.from)} → ${dueDayValue(row.to)}`;
     case 'deleted':
       return `Deleted ${n} ${row.title}`;
   }
+}
+
+/** A due day's value in a line: "7 Nov", or "No date". Pure. */
+export function dueDayValue(dueOn: string | null, now: Date = new Date()): string {
+  return dueOn === null ? NO_DATE_LABEL : formatDate(dueOn, now);
 }
 
 /** A single older (non-batch) event as one line of text, after the actor's name. Pure. */
@@ -785,7 +864,8 @@ export type TaskMark =
   | { kind: 'renamed'; was: string }
   | { kind: 'priority'; was: TaskPriority }
   | { kind: 'done' }
-  | { kind: 'reopened' };
+  | { kind: 'reopened' }
+  | { kind: 'due'; was: string | null };
 
 interface TaskMarks {
   /** Marks by task id (several per task when one Save changed several fields). */
@@ -842,6 +922,7 @@ export function marksSince(
       add({ kind: 'priority', was: old.priority });
     }
     if (next.status !== undefined) add({ kind: next.status === 'done' ? 'done' : 'reopened' });
+    if (next.dueOn !== undefined) add({ kind: 'due', was: old.dueOn ?? null });
     byTask.set(e.taskId, list);
   }
   for (const [id, list] of byTask) if (list.length === 0) byTask.delete(id);
@@ -880,6 +961,8 @@ export function markText(mark: TaskMark): string {
       return 'marked done';
     case 'reopened':
       return 'reopened';
+    case 'due':
+      return mark.was === null ? 'had no date' : `date was ${dueDayValue(mark.was)}`;
   }
 }
 
@@ -977,7 +1060,7 @@ export function shareSnapshot(input: {
 // ---------------------------------------------------------------------------
 
 const TASK_COLUMNS =
-  'id, channel_id, workspace_id, number, title, side, status, priority, created_by, created_at, updated_at, deleted_at';
+  'id, channel_id, workspace_id, number, title, side, status, priority, due_on, done_at, created_by, created_at, updated_at, deleted_at';
 const EVENT_COLUMNS =
   'id, task_id, channel_id, workspace_id, actor_user_id, kind, old_value, new_value, created_at, batch_id';
 

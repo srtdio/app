@@ -2,7 +2,8 @@
 // the thread by time (an event line ends a message run). One Save (events
 // sharing a batch id) is ONE line "<You|Name> edited tasks" with a chevron; a
 // tap expands its rows in place (Added, Edited with the old title struck,
-// Priority with the old level struck, Done, Reopened, Deleted, each with the
+// Priority with the old level struck, Done, Reopened, Due date with the old
+// day struck, Deleted, each with the
 // task number and title), then an "Open tasks" button. Older rows without a batch
 // id read as before (a single change, a quick run of adds, a burst). The
 // actor's name is semibold; numbers are mono. Pills are pressable: no iOS
@@ -18,6 +19,7 @@ import {
   addedLabel,
   batchRows,
   burstLabel,
+  dueDayValue,
   editedTasksLabel,
   eventText,
   taskNumberLabel,
@@ -102,6 +104,14 @@ function BatchRowView(props: { row: BatchRow }): ReactElement {
       return (
         <>
           Reopened <N n={row.number} /> {row.title}
+        </>
+      );
+    case 'due':
+      return (
+        <>
+          Due date <N n={row.number} />{' '}
+          <s className="font-mono tabular-nums">{dueDayValue(row.from)}</s> →{' '}
+          <span className="font-mono tabular-nums">{dueDayValue(row.to)}</span>
         </>
       );
     case 'deleted':

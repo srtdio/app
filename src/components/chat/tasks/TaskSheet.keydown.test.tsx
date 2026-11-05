@@ -40,6 +40,8 @@ function show(): void {
         side="agency"
         seenMs={null}
         focusTaskId={null}
+        timeZone="UTC"
+        weekStartDay={1}
       />,
     ),
   );
