@@ -140,7 +140,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - List toolbars: search, at most one IconButton, then the New button. No text buttons or dropdown chevrons in the toolbar.
 - Avatars: ui/Avatar roles only (inline 20, header 32, row 40, profile 72). People circle, groups and notes rounded square.
 - People: any person photo, name or @mention renders through PersonTrigger and opens PersonCard; never a per-screen card.
-- Counts and unread badges: ui/CountBadge only. Filter chip counts are plain text.
+- Counts and unread badges: ui/CountBadge only (tone section for a section count on a grey drawer). Filter chip counts are plain text.
 - Icon meanings: Send = send a message only; Forward/Send to chat = IconForward; Reject X, Approve check, Park pause; chat tray opener = plus; attach a file = paper clip. Photos = gallery grid; Assets = picture; Copy link = link. Decision bar buttons have no icons. Copy = clipboard (IconCopy), icon-only outside ⋯/long-press menus; Reply privately = person (IconUser), icon-only in comment rows.
 - Long-press on touch and right-click on laptop open the same ActionMenu. Esc closes every overlay and returns focus to its trigger.
 - Exception: plan edit rows open their menu on right-click only; long-press there is drag.

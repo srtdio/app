@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode, PointerEvent as ReactPointerEvent, Ref } from 'react';
+import { CountBadge } from '@/components/ui/CountBadge';
 import { Button } from '@/components/ui/Button';
 import { Backdrop } from '@/components/ui/Backdrop';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -194,12 +195,12 @@ function SectionHeader(props: {
 }): ReactElement {
   const Icon = STATUS_ICON[props.sectionKey];
   return (
-    <div className="mb-2 flex h-5 items-center gap-2 text-fg-2">
+    <div className="mb-2 flex h-6 items-center gap-2 text-fg-2">
       <Icon size={ICON_SIZE.inline} className="shrink-0" />
       <h3 className="min-w-0 flex-1 truncate text-sm font-semibold uppercase tracking-[0.06em]">
         {props.label}
       </h3>
-      <span className="font-mono text-sm font-medium tabular-nums">{props.count}</span>
+      <CountBadge tone="section" count={props.count} />
     </div>
   );
 }
