@@ -311,6 +311,8 @@ import {
   type PlanWeekGroup,
 } from '@/lib/plan-week';
 import { errorText } from '@/lib/error-copy';
+import { CountBadge } from '@/components/ui/CountBadge';
+import { unreadCommentsLabel, useEntityUnread } from '@/lib/inbox/unread-entities';
 
 // ---------------------------------------------------------------------------
 // Shared pieces
@@ -3977,10 +3979,28 @@ export function commentCountLabel(count: number): string {
 
 /**
  * An item's comment count: IconChat and the number (sm, tabular-nums, fg-2),
- * named "{n} comment(s)". Nothing at all for 0, so a row keeps its height.
+ * named "{n} comment(s)". With the item's id and unread comments for the
+ * viewer, IconChat and the CountBadge pill instead. Nothing at all for 0, so a
+ * row keeps its height.
  * The Plan rows (under the tile) and the Plan tab calendar entries use it.
  */
-export function PlanCommentCount(props: { count: number }): ReactElement | null {
+export function PlanCommentCount(props: { count: number; itemId?: string }): ReactElement | null {
+  const unread = useEntityUnread('plan_item', props.itemId ?? '');
+  if (props.itemId !== undefined && unread > 0) {
+    // Unread comments: the comment glyph and the shared count pill (the same
+    // rows Activity shows); opening the item clears it.
+    return (
+      <span
+        data-plan-comment-unread={unread}
+        role="img"
+        aria-label={unreadCommentsLabel(unread)}
+        className="inline-flex shrink-0 items-center gap-1 text-fg"
+      >
+        <IconChat size={ICON_SIZE.inline} />
+        <CountBadge count={unread} />
+      </span>
+    );
+  }
   if (!(props.count > 0)) return null;
   return (
     <span
@@ -3996,11 +4016,14 @@ export function PlanCommentCount(props: { count: number }): ReactElement | null 
 }
 
 /** The row's 56px tile column: the tile, then the comment count under it (when above 0). */
-function TileColumn(props: { count: number; children: ReactNode }): ReactElement {
+function TileColumn(props: { count: number; itemId?: string; children: ReactNode }): ReactElement {
   return (
     <span data-plan-row-tile-col="" className="flex w-14 shrink-0 flex-col items-center gap-1">
       {props.children}
-      <PlanCommentCount count={props.count} />
+      <PlanCommentCount
+        count={props.count}
+        {...(props.itemId !== undefined ? { itemId: props.itemId } : {})}
+      />
     </span>
   );
 }
@@ -4087,7 +4110,7 @@ function PlanRow(props: {
             <span className="truncate text-sm text-fg-3">{DRAFT_NOT_READY}</span>
             {dateLine}
           </span>
-          <TileColumn count={props.commentCount ?? 0}>
+          <TileColumn count={props.commentCount ?? 0} itemId={props.item.id}>
             <RowTile item={props.item} thumb={null} muted />
           </TileColumn>
         </div>
@@ -4131,7 +4154,7 @@ function PlanRow(props: {
         ) : null}
         {dateLine}
       </span>
-      <TileColumn count={props.commentCount ?? 0}>
+      <TileColumn count={props.commentCount ?? 0} itemId={props.item.id}>
         <RowTile
           item={props.item}
           thumb={props.thumb}

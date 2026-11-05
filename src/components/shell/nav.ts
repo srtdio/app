@@ -7,6 +7,8 @@ interface NavItem {
   Icon: ComponentType<{ size?: number; className?: string }>;
   /** When set, this item shows the chat unread badge (from the chat store). */
   showChatBadge?: boolean;
+  /** When set, this item shows the unread plan comments badge (inbox rows on plan items). */
+  showPlanBadge?: boolean;
 }
 
 /**
@@ -21,6 +23,6 @@ export const PRIMARY_NAV: NavItem[] = [
   { to: '/pipeline', label: 'Pipeline', Icon: IconPipeline },
   { to: '/briefs', label: 'Briefs', Icon: IconBriefs },
   { to: '/assets', label: 'Assets', Icon: IconAssets },
-  { to: '/plan', label: 'Plan', Icon: IconPlan },
+  { to: '/plan', label: 'Plan', Icon: IconPlan, showPlanBadge: true },
   { to: '/chat', label: 'Chat', Icon: IconChat, showChatBadge: true },
 ];

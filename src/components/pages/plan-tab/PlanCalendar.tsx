@@ -97,6 +97,11 @@ export function entryCommentCount(entry: CalendarEntry): number {
   return entry.bundle.commentCounts?.[entry.item.id] ?? 0;
 }
 
+/** The item id PlanCommentCount reads unread comments for; none for a post in no plan. Pure. */
+export function entryUnreadProps(entry: CalendarEntry): { itemId?: string } {
+  return entry.kind === 'item' ? { itemId: entry.item.id } : {};
+}
+
 /** The calendar's data: the plans in the range and the dated posts in no plan. */
 interface CalendarData {
   bundles: readonly PlanBundle[];
@@ -677,7 +682,7 @@ function MonthEntry(props: EntryProps): ReactElement {
       <span className="min-w-0 flex-1 truncate">{props.entry.title}</span>
       {/* The dot's colour names the plan; the name says it in words too. */}
       <span className="sr-only">, {entryPlanName(props.entry)}</span>
-      <PlanCommentCount count={entryCommentCount(props.entry)} />
+      <PlanCommentCount count={entryCommentCount(props.entry)} {...entryUnreadProps(props.entry)} />
     </PressableRow>
   );
 }
@@ -840,7 +845,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
               ? postStageLine(entry.bundle, entry.item)
               : `Post: ${stageStatusWord(entry.post.stage)}`}
           </span>
-          <PlanCommentCount count={entryCommentCount(entry)} />
+          <PlanCommentCount count={entryCommentCount(entry)} {...entryUnreadProps(entry)} />
         </span>
       </span>
     </PressableRow>

@@ -203,6 +203,7 @@ import { resolvePeople } from '@/lib/people-names';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { firstExternalUrl } from '@/lib/chat/message-links';
 import { errorText } from '@/lib/error-copy';
+import { markEntityReadOnOpen } from '@/lib/inbox/unread-entities';
 
 /** The preview card for the first external link in a concept's description. */
 function ConceptLinkCard(props: { text: string }): ReactElement | null {
@@ -551,6 +552,12 @@ export function PlanItemScreen(props: {
     setRemoveOpen(false);
     setKeepFor(null);
     setLinkPickerOpen(false);
+  }, [props.open, item.id]);
+
+  // Opening the item reads its comments: the Plan row marker and the Plan nav
+  // badge drop, and the rows are marked read in the background.
+  useEffect(() => {
+    if (props.open) markEntityReadOnOpen('plan_item', item.id);
   }, [props.open, item.id]);
 
   // A write that lands after the viewer moved on (another item, or closed)

@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const counts = vi.hoisted(() => ({ chat: 0, inbox: 0 }));
+const counts = vi.hoisted(() => ({ chat: 0, inbox: 0, plan: 0 }));
 
 vi.mock('@/components/chat/ChatStoreProvider', () => ({
   useChatStore: () => ({ state: {} }),
@@ -13,11 +13,20 @@ vi.mock('@/lib/chat/chat-store', () => ({ selectTotalUnread: () => counts.chat }
 vi.mock('@/components/shell/InboxStoreProvider', () => ({
   useInboxStore: () => ({ unreadCount: counts.inbox }),
 }));
+vi.mock('@/lib/inbox/unread-entities', () => ({
+  usePlanItemsUnreadTotal: () => counts.plan,
+  unreadCommentsLabel: (n: number) => (n === 1 ? '1 unread comment' : `${n} unread comments`),
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-import { BottomTabs, PHONE_BAR_OFFSETS, chatTabLabel } from '@/components/shell/BottomTabs';
+import {
+  BottomTabs,
+  PHONE_BAR_OFFSETS,
+  chatTabLabel,
+  planTabLabel,
+} from '@/components/shell/BottomTabs';
 import { PRIMARY_NAV } from '@/components/shell/nav';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { BOTTOM_ANCHOR_ATTR } from '@/lib/bottom-inset';
@@ -43,6 +52,7 @@ function render(path: string, chat = 0, inbox = 0): HTMLDivElement {
 }
 
 afterEach(() => {
+  counts.plan = 0;
   act(() => root?.unmount());
   root = null;
   host?.remove();
@@ -274,5 +284,26 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
       ]),
     );
     expect(fade.hasAttribute(BOTTOM_ANCHOR_ATTR)).toBe(false);
+  });
+});
+
+describe('Plan tab unread comments badge', () => {
+  it('shows the shared count pill on the Plan tab only when plan items have unread comments', () => {
+    counts.plan = 3;
+    const view = render('/pipeline');
+    const plan = pillLinks(view).find((a) => a.getAttribute('href') === '/plan');
+    expect(plan?.querySelector('[data-count-badge]')?.textContent).toBe('3');
+    expect(plan?.getAttribute('aria-label')).toBe('Plan, 3 unread comments');
+    const others = pillLinks(view).filter((a) => a.getAttribute('href') !== '/plan');
+    for (const link of others) expect(link.querySelector('[data-count-badge]')).toBeNull();
+  });
+
+  it('no unread: no badge and the plain label', () => {
+    const view = render('/pipeline');
+    const plan = pillLinks(view).find((a) => a.getAttribute('href') === '/plan');
+    expect(plan?.querySelector('[data-count-badge]')).toBeNull();
+    expect(plan?.getAttribute('aria-label')).toBe('Plan');
+    expect(planTabLabel('Plan', 0)).toBe('Plan');
+    expect(planTabLabel('Plan', 1)).toBe('Plan, 1 unread comment');
   });
 });

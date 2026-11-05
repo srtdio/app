@@ -6,6 +6,7 @@ import {
   ICON_SIZE,
   IconArrowUpRight,
   IconCarousel,
+  IconChat,
   IconCheck,
   IconLink,
   IconMore,
@@ -35,6 +36,8 @@ import { cn } from '@/lib/cn';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { CountBadge } from '@/components/ui/CountBadge';
+import { unreadCommentsLabel, useEntityUnread } from '@/lib/inbox/unread-entities';
 import { rememberCard } from '@/lib/motion';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
 import { useMenuGesture } from '@/components/ui/useLongPress';
@@ -353,6 +356,8 @@ export function PostCard({
   // A known role lists its moves in the menu; while it loads, the Move row.
   const directMoves =
     viewer !== undefined && viewer.pending !== true ? moveActions(viewer.role, stage) : [];
+  // The viewer's unread comments on this post (the same rows Activity shows).
+  const unreadComments = useEntityUnread('post', post.id);
 
   return (
     <div
@@ -496,6 +501,19 @@ export function PostCard({
               )}
             >
               {due.text}
+            </span>
+          ) : null}
+          {unreadComments > 0 ? (
+            // Unread comments: the comment glyph and the shared count pill, after
+            // the due reading. The due text truncates first; this never shrinks.
+            <span
+              data-post-card-unread={unreadComments}
+              role="img"
+              aria-label={unreadCommentsLabel(unreadComments)}
+              className="inline-flex shrink-0 items-center gap-1 text-fg"
+            >
+              <IconChat size={ICON_SIZE.inline} />
+              <CountBadge count={unreadComments} />
             </span>
           ) : null}
           {onMove !== undefined ? (

@@ -14,14 +14,17 @@ describe('PRIMARY_NAV', () => {
     expect(PRIMARY_NAV.map((item) => item.to)).not.toContain('/activity');
   });
 
-  it('Plan opens /plan with the plan icon and carries no badge', () => {
+  it('Plan opens /plan with the plan icon and carries the unread plan comments badge', () => {
     const plan = PRIMARY_NAV.find((item) => item.label === 'Plan');
-    expect(plan).toEqual({ to: '/plan', label: 'Plan', Icon: IconPlan });
+    expect(plan).toEqual({ to: '/plan', label: 'Plan', Icon: IconPlan, showPlanBadge: true });
   });
 
-  it('only Chat carries a badge', () => {
+  it('only Chat carries the chat badge and only Plan the plan badge', () => {
     expect(PRIMARY_NAV.filter((item) => item.showChatBadge === true).map((i) => i.label)).toEqual([
       'Chat',
+    ]);
+    expect(PRIMARY_NAV.filter((item) => item.showPlanBadge === true).map((i) => i.label)).toEqual([
+      'Plan',
     ]);
   });
 });

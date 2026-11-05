@@ -6,6 +6,7 @@ import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { dispatchSorted } from '@/lib/events';
 import { CountBadge } from '@/components/ui/CountBadge';
+import { usePlanItemsUnreadTotal } from '@/lib/inbox/unread-entities';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { navPrefetchProps } from '@/lib/route-prefetch';
@@ -22,6 +23,7 @@ interface SidebarProps {
 export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
+  const planUnread = usePlanItemsUnreadTotal();
   return (
     // Positioning only. Pinned while the document scrolls (page mode on a touch
     // tablet, src/lib/scroll-mode.ts): sticky to the window at one viewport
@@ -75,6 +77,12 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
               {item.showChatBadge && total > 0 ? (
                 <CountBadge
                   count={total}
+                  className="absolute -right-2 -top-1.5 border-2 border-panel"
+                />
+              ) : null}
+              {item.showPlanBadge === true && planUnread > 0 ? (
+                <CountBadge
+                  count={planUnread}
                   className="absolute -right-2 -top-1.5 border-2 border-panel"
                 />
               ) : null}

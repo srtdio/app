@@ -10096,6 +10096,15 @@ export type Database = {
         Args: { p_trace_id: string; p_workspace_id: string }
         Returns: undefined
       }
+      inbox_mark_entity_read: {
+        Args: {
+          p_entity_id: string
+          p_entity_type: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
       inbox_mark_read: {
         Args: {
           p_created_at: string
@@ -10130,6 +10139,14 @@ export type Database = {
           p_workspace_id: string
         }
         Returns: undefined
+      }
+      inbox_unread_entity_counts: {
+        Args: { p_trace_id: string; p_workspace_id: string }
+        Returns: {
+          entity_id: string
+          entity_type: string
+          unread: number
+        }[]
       }
       induction_finish: { Args: { p_trace_id: string }; Returns: undefined }
       induction_sample_clear: {

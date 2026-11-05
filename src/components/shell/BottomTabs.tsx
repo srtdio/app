@@ -10,6 +10,7 @@ import {
 } from '@/components/shell/NotificationsButton';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { CountBadge } from '@/components/ui/CountBadge';
+import { unreadCommentsLabel, usePlanItemsUnreadTotal } from '@/lib/inbox/unread-entities';
 import { cn } from '@/lib/cn';
 import { activityPrefetchProps, navPrefetchProps } from '@/lib/route-prefetch';
 import { IconNotifications, ICON_SIZE } from '@/components/ui/icons';
@@ -27,6 +28,11 @@ const CHAT_NAV = PRIMARY_NAV.find((item) => item.showChatBadge === true);
  */
 export const PHONE_BAR_OFFSETS =
   'left-[calc(12px+env(safe-area-inset-left))] right-[calc(12px+env(safe-area-inset-right))] bottom-[calc(12px+env(safe-area-inset-bottom))]';
+
+/** The Plan tab's accessible name: the label, plus its unread comments. Pure. */
+export function planTabLabel(label: string, unread: number): string {
+  return unread > 0 ? `${label}, ${unreadCommentsLabel(unread)}` : label;
+}
 
 /** The Chat circle's accessible name: "Chat", plus the unread count. Pure. */
 export function chatTabLabel(unread: number): string {
@@ -60,6 +66,7 @@ export function BottomTabs() {
   const { state } = useChatStore();
   const total = selectTotalUnread(state);
   const { unreadCount } = useInboxStore();
+  const planUnread = usePlanItemsUnreadTotal();
   const { pathname } = useLocation();
   const activityActive = onNotifications(pathname);
   return (
@@ -84,13 +91,23 @@ export function BottomTabs() {
             <NavLink
               key={item.to}
               to={item.to}
-              aria-label={item.label}
+              aria-label={
+                item.showPlanBadge === true ? planTabLabel(item.label, planUnread) : item.label
+              }
               {...navPrefetchProps(item.to)}
               className={({ isActive }) => tabClass(isActive)}
             >
               {({ isActive }) => (
                 <>
-                  <item.Icon size={ICON_SIZE.control} />
+                  <span className="relative inline-flex">
+                    <item.Icon size={ICON_SIZE.control} />
+                    {item.showPlanBadge === true && planUnread > 0 ? (
+                      <CountBadge
+                        count={planUnread}
+                        className="absolute -right-2 -top-1.5 border-2 border-surface-top"
+                      />
+                    ) : null}
+                  </span>
                   <TabLabel active={isActive} label={item.label} />
                 </>
               )}
