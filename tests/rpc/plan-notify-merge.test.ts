@@ -6,7 +6,8 @@
 //
 // Covered: 3 edits by one actor within the hour leave each recipient exactly
 // one live 'edited' row; an edit after the hour starts a second row; another
-// actor gets a separate row; a draft (audience 'team') plan writes none;
+// actor gets a separate row; a draft (audience 'team') plan merges the same
+// way but only for the team (20261105180000_plan_team_edit_alerts);
 // plan_opened (shared with client) still inserts its own row; the actor never
 // gets a row. No teardown: every fixture has its own plan.
 
@@ -204,12 +205,17 @@ describe.runIf(RPC_SUITE)('plan edit notifications merge (authenticated role)', 
     expect(byUser(rows, agency).map((r) => r.actor_user_id)).toEqual([owner.id]);
   });
 
-  it('a draft (audience team) plan writes no rows', async () => {
+  it('a draft (audience team) plan merges edits into one team-only card', async () => {
     const planId = await newPlan('team');
     await edit(agency, planId);
     await edit(agency, planId);
     await edit(agency, planId);
-    expect(await entries(planId, 'plan_updated')).toEqual([]);
+    const rows = edited(await entries(planId, 'plan_updated'));
+    // The other agency-side member gets one card; clients get none.
+    expect(users(rows)).toEqual(ids(owner));
+    expect(byUser(rows, owner)).toHaveLength(1);
+    expect(byUser(rows, client)).toEqual([]);
+    expect(byUser(rows, client2)).toEqual([]);
   });
 
   it('plan_opened (shared with client) still inserts its own row beside the edit', async () => {
