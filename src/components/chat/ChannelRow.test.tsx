@@ -325,10 +325,7 @@ describe('G1: one layout listener per ChannelList, not one per tile', () => {
   });
 
   it('ChannelCard reads no media query or layout hook of its own, and opens as "Open <name>"', () => {
-    const source = readFileSync(
-      join(process.cwd(), 'src/components/chat/ChannelList.tsx'),
-      'utf8',
-    );
+    const source = readFileSync(join(process.cwd(), 'src/components/chat/ChannelList.tsx'), 'utf8');
     const card = source.slice(
       source.indexOf('export function ChannelCard('),
       source.indexOf('interface ChannelListContentProps'),
