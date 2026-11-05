@@ -6,7 +6,8 @@
 // tables grant service_role nothing.
 //
 // Covered: the agency links and unlinks (audit row each, same value a no-op);
-// a client is forbidden_role; an unapproved concept is concept_not_approved; a
+// a client is forbidden_role; a concept nobody OK'd links too
+// (20261105190000_plan_link_any_time); a
 // post from another workspace and a soft-deleted post are invalid_payload; a
 // post item is invalid_payload; a second concept linking the same post in the
 // same plan is post_already_linked; link and unlink leave the concept's
@@ -281,11 +282,12 @@ describe.runIf(RPC_SUITE)('plan concept link (authenticated role)', () => {
     expect((await itemRow(conceptId)).linked_post_id).toBeNull();
   });
 
-  it('an unapproved concept is concept_not_approved', async () => {
+  it("a concept nobody OK'd links too (no review needed)", async () => {
     const planId = await newPlan();
     const conceptId = await newConcept(planId, false);
     const postId = await seedPost('review');
-    expect((await link(agency, conceptId, postId)).error?.message).toBe('concept_not_approved');
+    expect((await link(agency, conceptId, postId)).error).toBeNull();
+    expect((await itemRow(conceptId)).linked_post_id).toBe(postId);
   });
 
   it('a post from another workspace and a soft-deleted post are invalid_payload', async () => {

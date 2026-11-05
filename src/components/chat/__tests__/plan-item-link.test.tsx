@@ -2,7 +2,7 @@
 // The concept screen's link to a post: the status box's Post row ("Not made
 // yet", "Not ready to view yet", or the post's title and stage, which opens
 // it); the agency's Link a post / Change linked post / Unlink post buttons
-// (only on an approved concept; clients never see them); the link picker in
+// (on any concept, OK'd or not; clients never see them); the link picker in
 // link mode with the concept's day; and the write (plan_concept_link_post with
 // a fresh trace id, then the plan re-read; refusals as toasts).
 
@@ -25,7 +25,7 @@ import {
   UNLINK_POST_LABEL,
   canLinkPost,
 } from '@/components/chat/plan-card';
-import type { PlanBundle, PlanItemRow } from '@/lib/chat/plans';
+import type { PlanItemRow } from '@/lib/chat/plans';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -72,29 +72,10 @@ const concept: PlanItemRow = {
   target_date: '2026-11-06',
 };
 
-function bundle(status: 'approved' | 'waiting'): PlanBundle {
-  return {
-    plan: {
-      id: 'plan',
-      workspace_id: 'ws',
-      title: 'Plan',
-      starts_on: '2026-11-02',
-      ends_on: '2026-11-08',
-      audience: 'client',
-      created_by: null,
-    },
-    items: [concept],
-    reviews: [{ item_id: 'c1', side: 'client', status }],
-    postStages: {},
-    postInfo: {},
-  };
-}
-
-describe('the Link button shows only for the agency on an approved concept', () => {
+describe('the Link button shows for the agency on any concept', () => {
   it('canLinkPost gates it; LinkActions renders nothing without it', () => {
-    expect(canLinkPost(bundle('approved'), concept, 'agency')).toBe(true);
-    expect(canLinkPost(bundle('waiting'), concept, 'agency')).toBe(false);
-    expect(canLinkPost(bundle('approved'), concept, 'client')).toBe(false);
+    expect(canLinkPost(concept, 'agency')).toBe(true);
+    expect(canLinkPost(concept, 'client')).toBe(false);
     mount(
       <LinkActions
         linked={false}
@@ -107,7 +88,7 @@ describe('the Link button shows only for the agency on an approved concept', () 
     expect(buttons()).toHaveLength(0);
   });
 
-  it('an approved, unlinked concept shows one secondary "Link a post" with the link icon', () => {
+  it('an unlinked concept shows one secondary "Link a post" with the link icon', () => {
     const onLink = vi.fn();
     mount(<LinkActions linked={false} mayLink busy={false} onLink={onLink} onUnlink={vi.fn()} />);
     const [link] = buttons();
@@ -123,7 +104,7 @@ describe('the Link button shows only for the agency on an approved concept', () 
     const src = source();
     expect(src).toMatch(/\{side === 'agency' \? \(\s*<LinkActions/);
     expect(src).toContain('mayLink={mayLink}');
-    expect(src).toContain('const mayLink = canLinkPost(bundle, item, side, overrides);');
+    expect(src).toContain('const mayLink = canLinkPost(item, side);');
     // The picker mounts for the agency on a concept only, in link mode.
     const picker = between(src, '<PostPicker', '/>');
     expect(src).toMatch(/side === 'agency' && item\.kind === 'concept' \? \(\s*<PostPicker/);

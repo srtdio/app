@@ -20,7 +20,7 @@ import {
   withoutPairedPosts,
 } from '@/components/chat/plan-card';
 import { assembleBundles, planPostIds } from '@/lib/chat/plans';
-import type { PlanBundle, PlanItemRow, PlanReviewRow } from '@/lib/chat/plans';
+import type { PlanBundle, PlanItemRow } from '@/lib/chat/plans';
 import { calendarEntries, planCardMeta, postStageLine } from '@/lib/plan-tab';
 
 const PLAN = {
@@ -183,18 +183,10 @@ describe('counts with a pair', () => {
 });
 
 describe('the link gate and refusals', () => {
-  const reviews = (status: 'approved' | 'waiting'): PlanReviewRow[] => [
-    { item_id: 'c1', side: 'client', status },
-  ];
-
-  it('only the agency links, and only on an approved concept', () => {
-    expect(canLinkPost(bundle(), concept, 'agency')).toBe(true);
-    expect(canLinkPost(bundle(), concept, 'client')).toBe(false);
-    expect(canLinkPost(bundle({ reviews: reviews('waiting') }), concept, 'agency')).toBe(false);
-    expect(
-      canLinkPost(bundle({ reviews: reviews('waiting') }), concept, 'agency', { team: 'approved' }),
-    ).toBe(true);
-    expect(canLinkPost(bundle(), postItemA, 'agency')).toBe(false);
+  it("only the agency links, on any concept, OK'd or not", () => {
+    expect(canLinkPost(concept, 'agency')).toBe(true);
+    expect(canLinkPost(concept, 'client')).toBe(false);
+    expect(canLinkPost(postItemA, 'agency')).toBe(false);
   });
 
   it('maps the two refusals by name, else the fallback', () => {

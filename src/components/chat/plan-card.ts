@@ -628,20 +628,12 @@ export function postItemOf(bundle: PlanBundle, postId: string): PlanItemRow | nu
 }
 
 /**
- * Whether the viewer may link on this concept: the agency, on a concept with an
- * approved review on either side (plan_concept_link_post's own check).
- * `overrides` are this screen's own review writes, ahead of the re-read. Pure.
+ * Whether the viewer may link on this concept: the agency, on any concept, OK'd
+ * or not (Shubham, 5 Nov 2026; plan_concept_link_post no longer checks reviews,
+ * 20261105190000_plan_link_any_time). Pure.
  */
-export function canLinkPost(
-  bundle: PlanBundle,
-  item: PlanItemRow,
-  side: ViewerSide,
-  overrides: Partial<Record<ReviewSide, ReviewStatus>> = {},
-): boolean {
-  if (side !== 'agency' || item.kind !== 'concept') return false;
-  return (['team', 'client'] as const).some(
-    (s) => (overrides[s] ?? reviewStatus(bundle, item.id, s)) === 'approved',
-  );
+export function canLinkPost(item: PlanItemRow, side: ViewerSide): boolean {
+  return side === 'agency' && item.kind === 'concept';
 }
 
 /** A post stage's POST line name ("Review", never "In review"), as postLine reads it. Pure. */

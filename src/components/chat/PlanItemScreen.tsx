@@ -702,7 +702,7 @@ export function PlanItemScreen(props: {
   // The concept's linked post: the screen's own write first, else the read.
   const link: LinkedPost = linkViewOf(linkedPost(bundle, item, side), linkOverride);
   const linkedId = link.kind === 'linked' ? link.postId : null;
-  const mayLink = canLinkPost(bundle, item, side, overrides);
+  const mayLink = canLinkPost(item, side);
   const openLinkPicker = (): void => {
     setLinkPickId(linkedId);
     setLinkPickRow(null);
@@ -1627,9 +1627,9 @@ export function PostStatusRow(props: {
 }
 
 /**
- * The agency's link buttons under the status box: "Link a post" on an
- * approved concept with no link; with a link, "Change linked post" (approved
- * only: linking needs it) and "Unlink post". Nothing else ever shows.
+ * The agency's link buttons under the status box: "Link a post" on a concept
+ * with no link (OK'd or not); with a link, "Change linked post" and "Unlink
+ * post". Nothing else ever shows.
  */
 export function LinkActions(props: {
   linked: boolean;
