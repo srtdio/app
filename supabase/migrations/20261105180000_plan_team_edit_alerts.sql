@@ -3,7 +3,9 @@
 -- gets: plan_updated and plan_date_changed fold into one 'edited' row per editor
 -- per plan per hour (20261026160000_plan_notify_merge_edits), sent to the other
 -- agency-side members only. Clients never get a row for a team plan. Every other
--- event on a team plan stays silent except plan_deleted, as before.
+-- event on a team plan stays silent except plan_deleted, as before. The
+-- induction sample people (_induction_sample_people, who cannot sign in) never
+-- get a team plan card, so seeding the sample plan writes no alerts.
 -- Only the gate line changes; signature and grants (none) are unchanged, so no
 -- types regen. Applied live via Supabase MCP on movnexawfhsyuluspxoc.
 
@@ -36,6 +38,8 @@ begin
       from public.workspace_members wm
      where wm.workspace_id = v_ws and wm.active = true and wm.user_id is distinct from v_actor
        and (wm.role = any (array['owner','admin','agency']) or (v_aud = 'client' and wm.role = 'client'))
+       -- A team plan never alerts the sample people (they cannot sign in).
+       and (v_aud <> 'team' or wm.user_id <> all (public._induction_sample_people()))
        and not exists (
          select 1 from public.inbox_entries e
           where e.user_id = wm.user_id and e.workspace_id = v_ws
