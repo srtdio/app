@@ -30,9 +30,10 @@ import { cn } from '@/lib/cn';
 import { Bone } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-reads';
-import { knownMentionName, resolveMentionText, withFormer } from '@/lib/chat/mentions';
+import { knownMentionName, resolveMentionText, withFormer, type NameOf } from '@/lib/chat/mentions';
 import { formatChatTime } from '@/lib/time';
 import { chatDisplayName } from '@/lib/chat/chat-name';
+import { stripFormat } from '@srtdio/comments';
 import type { Result } from '@srtdio/rpc';
 import {
   listRowStarred,
@@ -513,7 +514,7 @@ export function StarredList(props: StarredListProps): ReactElement {
             : null,
         mine: row.senderUserId !== null && row.senderUserId === currentUserId,
         date: formatChatTime(row.createdAt, new Date(nowMs), props.timeZone),
-        text: row.body.trim() !== '' ? resolveMentionText(row.body, nameOf) : row.mediaLine,
+        text: starredRowText(row, nameOf),
         // The all-chats list (chat home's Starred chip) shows every line.
         fullText: props.channelId === null,
       };
@@ -540,6 +541,17 @@ export function StarredList(props: StarredListProps): ReactElement {
       ? { noResults: { query: props.query ?? '', onClear: props.onClearQuery } }
       : {}),
   });
+}
+
+/**
+ * A row's text: the body with formatting markers hidden and mentions as
+ * "@Name", or the media line for a message with no text. Pure.
+ */
+export function starredRowText(
+  row: Pick<StarredRow, 'body' | 'mediaLine'>,
+  nameOf: NameOf,
+): string {
+  return row.body.trim() !== '' ? resolveMentionText(stripFormat(row.body), nameOf) : row.mediaLine;
 }
 
 /** Whether the end marker may load the next page (never in a preview). Pure. */

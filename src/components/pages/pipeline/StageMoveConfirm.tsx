@@ -158,6 +158,7 @@ export function StageMoveConfirmView(props: StageMoveConfirmViewProps): ReactEle
               {REASON_LABEL}
             </label>
             <Textarea
+              formatting
               id={props.reasonId}
               rows={3}
               value={props.reason}

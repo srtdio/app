@@ -377,6 +377,7 @@ export function ConceptSheet(props: {
             <label className="flex flex-col gap-1">
               <span className="text-md text-fg-3">Description</span>
               <Textarea
+                formatting
                 data-plan-concept-description=""
                 value={form.description}
                 maxLength={CONCEPT_DESCRIPTION_MAX}

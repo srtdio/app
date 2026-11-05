@@ -433,6 +433,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
 
         <Field label="Objective" htmlFor="brief-objective" required>
           <Textarea
+            formatting
             id="brief-objective"
             data-induction={INDUCTION_KEYS.briefSheetObjective}
             autoGrow
@@ -446,6 +447,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
 
         <Field label="Brand requirements (optional)" htmlFor="brief-brand-requirements">
           <Textarea
+            formatting
             id="brief-brand-requirements"
             autoGrow
             value={form.brandRequirements}
@@ -506,6 +508,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
 
         <Field label="Note to the agency (optional)" htmlFor="brief-initial-comment">
           <Textarea
+            formatting
             id="brief-initial-comment"
             autoGrow
             value={form.initialComment}

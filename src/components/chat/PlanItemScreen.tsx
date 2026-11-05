@@ -1212,6 +1212,7 @@ export function PlanItemScreen(props: {
               ) : null}
               <div className="flex items-end gap-1.5">
                 <Textarea
+                  formatting
                   ref={commentRef}
                   compact
                   rows={1}

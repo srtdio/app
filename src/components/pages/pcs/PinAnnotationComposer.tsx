@@ -80,6 +80,7 @@ export function PinAnnotationComposer({
           {context}
         </div>
         <Textarea
+          formatting
           ref={textareaRef}
           value={body}
           onChange={(event) => onBodyChange(event.target.value)}

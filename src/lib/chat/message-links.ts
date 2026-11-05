@@ -6,6 +6,7 @@
 // shared cards at Send.
 
 import { matchPath } from 'react-router-dom';
+import { closingMarkerTail } from '@srtdio/comments';
 import { parseEntityRef, type EntityRef } from '@/lib/entityRef';
 
 const URL_TOKEN = /https?:\/\/[^\s<]+/gi;
@@ -32,8 +33,15 @@ export function tokenize(body: string): BodySegment[] {
     const start = m.index ?? 0;
     let url = m[0];
     const trail = url.match(URL_TRAILING);
-    const suffix = trail !== null ? trail[0] : '';
+    let suffix = trail !== null ? trail[0] : '';
     if (suffix !== '') url = url.slice(0, url.length - suffix.length);
+    // A closing format marker right after a url (*see https://x.com*) is not
+    // part of the url; only when the same marker opened earlier on the line.
+    const tail = closingMarkerTail(body, start, url);
+    if (tail > 0) {
+      suffix = url.slice(url.length - tail) + suffix;
+      url = url.slice(0, url.length - tail);
+    }
     pushText(body.slice(last, start));
     // Trimming can leave a bare scheme ("http://."): that stays text.
     if (/^https?:\/\/./i.test(url)) {

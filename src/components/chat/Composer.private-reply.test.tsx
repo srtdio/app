@@ -86,3 +86,17 @@ describe('dispatchSend with a quote', () => {
     expect(onSend.mock.calls[0]).toHaveLength(5);
   });
 });
+
+describe('the composer quote strips hide formatting markers', () => {
+  it('the reply bar and the Reply privately bar preview through the stripping helpers', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const source = readFileSync(fileURLToPath(new URL('./Composer.tsx', import.meta.url)), 'utf8');
+    expect(source).toContain(
+      'preview: resolveMentionText(stripFormat(props.reply.quote.preview), nameOf)',
+    );
+    expect(source).toContain(
+      'preview={resolveMentionText(privateReplyPreview(privateReply.excerpt), nameOf)}',
+    );
+  });
+});

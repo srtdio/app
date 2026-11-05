@@ -14,6 +14,13 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import type { KeyboardEvent } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { parseFormatRuns } from '@srtdio/comments';
+import {
+  HIGHLIGHT_NAMES,
+  ensureFormatHighlightCss,
+  rangesForOffsets,
+  useFormatStrip,
+} from '@/components/ui/FormatStrip';
 import type { MentionCandidate } from '@/lib/workspace-members';
 import { useEscapeLayer } from '@/lib/escape-stack';
 
@@ -203,6 +210,73 @@ export function insertTextAtPoint(
   return { node, offset: text.length };
 }
 
+interface HighlightLike {
+  add(range: Range): void;
+  delete(range: Range): boolean;
+}
+interface HighlightRegistryLike {
+  get(name: string): HighlightLike | undefined;
+  set(name: string, highlight: HighlightLike): void;
+}
+
+/** CSS Custom Highlights, where the engine has them (Safari 17.2+, Chrome 105+). */
+function highlightRegistry(): HighlightRegistryLike | null {
+  const g = globalThis as unknown as {
+    CSS?: { highlights?: HighlightRegistryLike };
+    Highlight?: new () => HighlightLike;
+  };
+  return g.CSS?.highlights !== undefined && g.Highlight !== undefined ? g.CSS.highlights : null;
+}
+
+function highlightFor(reg: HighlightRegistryLike, name: string): HighlightLike | null {
+  const have = reg.get(name);
+  if (have !== undefined) return have;
+  const Ctor = (globalThis as unknown as { Highlight?: new () => HighlightLike }).Highlight;
+  if (Ctor === undefined) return null;
+  const made = new Ctor();
+  reg.set(name, made);
+  return made;
+}
+
+/**
+ * Live formatting in the editor: paint *bold* _italic_ ~strike~ +underline+
+ * ```mono``` and the faded markers as CSS highlights over the editor's own text
+ * nodes. The DOM is never touched, so the caret and the chips stay put. Drops
+ * the previous paint (`owned`) and returns the new one. No-op where the engine
+ * has no highlights.
+ */
+export function paintFormatHighlights(
+  root: HTMLElement,
+  body: string,
+  owned: { name: string; range: Range }[],
+): { name: string; range: Range }[] {
+  const reg = highlightRegistry();
+  if (reg === null) return [];
+  for (const o of owned) reg.get(o.name)?.delete(o.range);
+  const next: { name: string; range: Range }[] = [];
+  if (!/[*_~+`]/.test(body)) return next;
+  ensureFormatHighlightCss();
+  let at = 0;
+  for (const run of parseFormatRuns(body)) {
+    const from = at;
+    at += run.text.length;
+    const names =
+      run.kind === 'marker'
+        ? [HIGHLIGHT_NAMES.marker]
+        : run.styles.filter((st) => st !== 'italic').map((st) => HIGHLIGHT_NAMES[st]);
+    if (names.length === 0) continue;
+    for (const range of rangesForOffsets(root, from, at)) {
+      for (const name of names) {
+        const h = highlightFor(reg, name);
+        if (h === null) continue;
+        h.add(range);
+        next.push({ name, range });
+      }
+    }
+  }
+  return next;
+}
+
 /** What a parent can do to the editor (the laptop emoji button inserts here). */
 export interface MentionInputHandle {
   /** Insert text at the last caret in the editor (else the end), caret after it. */
@@ -217,6 +291,9 @@ interface MentionInputProps {
   /** Seed the editor once on mount (e.g. a reply pre-tagging the author). When
    *  empty / undefined the editor mounts blank and uncontrolled, exactly as before. */
   initialBody?: string | undefined;
+  /** Opt-in WhatsApp-style formatting: live styling, the format strip and the
+   *  Cmd/Ctrl shortcuts. Off, the editor is exactly as before. */
+  formatting?: boolean;
 }
 
 /** The text from the start of the editable to the caret, or null if unavailable. */
@@ -232,10 +309,12 @@ function textBeforeCaret(root: HTMLElement): string | null {
 }
 
 export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(function MentionInput(
-  { members, placeholder, autoFocus = false, onChange, initialBody },
+  { members, placeholder, autoFocus = false, onChange, initialBody, formatting = false },
   ref,
 ) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const fmt = useFormatStrip(editorRef, formatting);
+  const painted = useRef<{ name: string; range: Range }[]>([]);
   const seeded = useRef(false);
   // The last selection inside the editor, kept while focus is elsewhere (the
   // emoji picker's search field) so an insert lands where the caret was.
@@ -342,8 +421,22 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
   const open = query !== null && matches.length > 0;
 
   function emit(): void {
-    if (editorRef.current !== null) onChange(serializeComposer(editorRef.current));
+    const root = editorRef.current;
+    if (root === null) return;
+    const body = serializeComposer(root);
+    if (formatting) painted.current = paintFormatHighlights(root, body, painted.current);
+    onChange(body);
   }
+
+  // Drop this editor's highlights when it unmounts.
+  useEffect(() => {
+    const root = editorRef.current;
+    if (!formatting || root === null) return undefined;
+    return () => {
+      paintFormatHighlights(root, '', painted.current);
+      painted.current = [];
+    };
+  }, [formatting]);
 
   function refreshQuery(): void {
     if (editorRef.current === null) return;
@@ -392,6 +485,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
   useEscapeLayer(query !== null, () => setQuery(null));
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (fmt.onKeyDown(event)) return;
     if (!open) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
@@ -428,7 +522,11 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
           saveSelection();
           refreshQuery();
         }}
-        onBlur={saveSelection}
+        onSelect={fmt.onSelect}
+        onBlur={() => {
+          saveSelection();
+          fmt.onBlur();
+        }}
         onKeyDown={onKeyDown}
         className="w-full whitespace-pre-wrap break-words rounded-lg border border-field bg-panel px-3 py-2.5 text-base text-fg outline-none lit-well focus:lit-focus min-h-[44px] empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3"
       />
@@ -470,6 +568,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
           ))}
         </ul>
       ) : null}
+      {fmt.strip}
     </div>
   );
 });

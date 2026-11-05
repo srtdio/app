@@ -172,3 +172,17 @@ describe('openPersonCard view', () => {
     marks.mockRestore();
   });
 });
+
+describe('personContextLine hides formatting markers', () => {
+  it('quotes the words without markers', () => {
+    expect(personContextLine({ whereLabel: 'Launch team', excerpt: '*ship* _today_' })).toBe(
+      'Launch team · "ship today"',
+    );
+  });
+
+  it('mid-word markers stay as typed', () => {
+    expect(personContextLine({ whereLabel: '', excerpt: 'snake_case_name' })).toBe(
+      '"snake_case_name"',
+    );
+  });
+});

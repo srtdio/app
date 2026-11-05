@@ -6,6 +6,7 @@
 // (src/lib/chat/drafts.ts), so it survives a reload like the text does.
 
 import { z } from 'zod';
+import { stripFormat } from '@srtdio/comments';
 import { chatMessageHref, planHref } from '@/lib/inbox/bell-types';
 
 export const PRIVATE_REPLY_KINDS = ['chat', 'comment', 'plan_comment'] as const;
@@ -174,6 +175,14 @@ export function privateReplyHeader(authorName: string, whereLabel: string): stri
 /** The excerpt on one line (newlines folded), for the strip and the bubble. Pure. */
 export function privateReplyLine(excerpt: string): string {
   return excerpt.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * The excerpt as a quote shows it: formatting markers hidden (the stored
+ * excerpt keeps them), then on one line. Pure.
+ */
+export function privateReplyPreview(excerpt: string): string {
+  return privateReplyLine(stripFormat(excerpt));
 }
 
 /** Approved copy (2 Nov 2026). */

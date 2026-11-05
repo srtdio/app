@@ -14,6 +14,9 @@ import {
   ChannelCard,
   channelListContent,
   channelListView,
+  draftLine,
+  notesLastLine,
+  previewLine,
   showSearchResults,
   visibleChannels,
   type ChannelSelectMode,
@@ -496,5 +499,35 @@ describe('message search wiring (S1)', () => {
     expect((headers[0]!.props as { search: { placeholder: string } }).search.placeholder).toBe(
       'Search chats',
     );
+  });
+});
+
+describe('chat list lines hide formatting markers', () => {
+  const line = (text: string, prefix?: string) =>
+    previewLine({
+      lastMessageText: text,
+      ...(prefix !== undefined ? { lastMessagePrefix: prefix } : {}),
+      lastMessageTs: 1,
+      unread: 0,
+    });
+
+  it('the preview line reads the words without markers, after the sender prefix', () => {
+    expect(line('*ship* _today_')).toBe('ship today');
+    expect(line('~old~ +new+ ```code```', 'You')).toBe('You: old new code');
+  });
+
+  it('mid-word and unmatched markers stay as typed', () => {
+    expect(line('snake_case_name')).toBe('snake_case_name');
+    expect(line('2*3 is *six')).toBe('2*3 is *six');
+  });
+
+  it('the notes tile line and a draft line hide markers too', () => {
+    const notes = notesLastLine(
+      { lastMessageText: '*ship* _today_', lastMessageTs: 1, unread: 0 },
+      1,
+    );
+    expect(notes?.preview).toBe('ship today');
+    expect(draftLine('*ship* _today_', 'w1')).toBe('ship today');
+    expect(draftLine('snake_case_name', 'w1')).toBe('snake_case_name');
   });
 });

@@ -91,6 +91,7 @@ import {
   type MessageAttachment,
   type ReplyQuote,
 } from '@/lib/chat/attachments';
+import { stripFormat } from '@srtdio/comments';
 import type { PostCardFields, Result } from '@srtdio/posts';
 // Deep import: the package index is outside this change; the read lives beside readPostsByIds.
 import { readPostIdsByNumbers } from '../../../packages/posts/src/reads';
@@ -117,7 +118,7 @@ import {
 import {
   privateReplyFromDraft,
   privateReplyHeader,
-  privateReplyLine,
+  privateReplyPreview,
   type PrivateReply,
   type PrivateReplyDraft,
 } from '@/lib/chat/private-reply';
@@ -2202,7 +2203,7 @@ export function Composer(props: ComposerProps): ReactElement {
                 ...props.reply,
                 quote: {
                   ...props.reply.quote,
-                  preview: resolveMentionText(props.reply.quote.preview, nameOf),
+                  preview: resolveMentionText(stripFormat(props.reply.quote.preview), nameOf),
                 },
               }}
               viewerUserId={props.viewerUserId}
@@ -2216,7 +2217,7 @@ export function Composer(props: ComposerProps): ReactElement {
         {!bars.editing && privateReply !== null ? (
           <PrivateReplyBar
             quote={privateReply}
-            preview={resolveMentionText(privateReplyLine(privateReply.excerpt), nameOf)}
+            preview={resolveMentionText(privateReplyPreview(privateReply.excerpt), nameOf)}
             onRemove={() => {
               if (channelId !== undefined) setPrivateReplyDraft(channelId, null);
             }}
@@ -2410,6 +2411,7 @@ export function Composer(props: ComposerProps): ReactElement {
               ) : null}
 
               <Textarea
+                formatting
                 ref={setTextarea}
                 aria-label="Message"
                 {...mentionComboboxProps(mentionListId, mentionRows.length, activeRow)}

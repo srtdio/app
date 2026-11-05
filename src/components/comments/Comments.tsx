@@ -23,6 +23,7 @@ import { UnsafeLinkButton } from '@/components/ui/UnsafeLinkSheet';
 import { checkLink } from '@/lib/links/safety';
 import { parseExternalLink } from '@/lib/links';
 import { firstExternalUrl } from '@/lib/chat/message-links';
+import { renderFormatted } from '@/components/chat/message-body';
 import { highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { FOCUS_MISSING_COPY, useFocusTarget } from '@/lib/focus-target';
 import {
@@ -524,14 +525,29 @@ function CommentLink(props: { url: string }): ReactNode {
   return <LinkButton url={props.url} className="align-middle" />;
 }
 
+/**
+ * A comment body (or a brief's objective / brand requirements): WhatsApp
+ * formatting outermost, then mentions, links and search marks inside each
+ * styled segment. A body with no formatting renders exactly as before.
+ */
 export function renderCommentBody(
   body: string,
   nameOf: (id: string) => string | null,
   words: readonly string[] = [],
   cardUrl: string | null = null,
 ): ReactNode[] {
-  const nodes: ReactNode[] = [];
+  // One card slot across segments: the card's link is shown there, once.
   const card = { url: cardUrl };
+  return renderFormatted(body, (text) => commentRuns(text, nameOf, words, card));
+}
+
+function commentRuns(
+  body: string,
+  nameOf: (id: string) => string | null,
+  words: readonly string[],
+  card: { url: string | null },
+): ReactNode[] {
+  const nodes: ReactNode[] = [];
   let last = 0;
   let key = 0;
   for (const match of body.matchAll(MENTION_TOKEN)) {
@@ -571,8 +587,9 @@ export function renderCommentBody(
  * the text. Comments carry no per-comment flag, so there is no X: the card
  * always shows. Links to this app's own pages get none.
  */
-export function CommentLinkCard(props: { body: string }): ReactNode {
-  const url = firstExternalUrl(props.body);
+export function CommentLinkCard(props: { body: string; url?: string | null }): ReactNode {
+  // The row passes the url it already found for the body (one scan per row).
+  const url = props.url !== undefined ? props.url : firstExternalUrl(props.body);
   return url !== null ? (
     <LinkPreviewCard key={url} url={url} className="mt-1.5 w-full max-w-[360px]" />
   ) : null;
@@ -2307,6 +2324,7 @@ export function Comments({
     return (
       <div className="mt-2 flex flex-col gap-2">
         <Textarea
+          formatting
           value={editBody}
           onChange={(event) => setEditBody(event.target.value)}
           aria-label="Edit comment body"
@@ -2393,6 +2411,8 @@ export function Comments({
     const role = comment.legacy_author_name !== null ? null : roleOf(comment.author_user_id);
     const editing = editingId === comment.id;
     const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
+    // One link scan per row: the body's card link feeds both the text and the card.
+    const cardUrl = firstExternalUrl(comment.body);
     const edited = pointEditedMarker(comment.edited_at, new Date());
 
     const meta = (
@@ -2500,15 +2520,10 @@ export function Comments({
                     opts.muted === true ? 'text-fg-2' : 'text-fg',
                   )}
                 >
-                  {renderCommentBody(
-                    comment.body,
-                    handleOf,
-                    searchWords,
-                    firstExternalUrl(comment.body),
-                  )}
+                  {renderCommentBody(comment.body, handleOf, searchWords, cardUrl)}
                 </p>
               ) : null}
-              <CommentLinkCard body={comment.body} />
+              <CommentLinkCard body={comment.body} url={cardUrl} />
               {attachments.length > 0 ? (
                 <MessageAttachments
                   attachments={attachments}

@@ -24,6 +24,7 @@
 
 import { v7 as uuidv7 } from 'uuid';
 import { createClient } from '@supabase/supabase-js';
+import { stripFormat } from '@srtdio/comments';
 import {
   AGENCY_ROLES,
   buildCatchupUrls,
@@ -500,7 +501,8 @@ function assembleDigest(c: DueCandidate, look: Lookups, appBaseUrl: string): Ass
       senderUserId: latest.sender_user_id,
       senderName: name(latest.sender_user_id),
       unreadCount: unread.length,
-      latestBody: latest.body,
+      // The email's one-line preview: formatting markers hidden (mention tokens kept).
+      latestBody: latest.body !== null ? stripFormat(latest.body) : null,
       url: urls.chat(ch.channel_id),
     });
     latestAt.set(ch.channel_id, latest.created_at);

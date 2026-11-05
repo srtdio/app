@@ -8,7 +8,7 @@
 import { mark } from '@/lib/perf-marks';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { notesChannelId } from '@/lib/chat/notes';
-import { privateReplyLine, type PrivateReplyDraft } from '@/lib/chat/private-reply';
+import { privateReplyPreview, type PrivateReplyDraft } from '@/lib/chat/private-reply';
 import { errorText } from '@/lib/error-copy';
 
 /** The DM open failure toast (the chat @mention tap's copy, reused everywhere). */
@@ -145,7 +145,7 @@ export function personContextLine(
   source: Pick<PrivateReplyDraft, 'whereLabel' | 'excerpt'> | null | undefined,
 ): string | null {
   if (source === null || source === undefined) return null;
-  const words = privateReplyLine(source.excerpt)
+  const words = privateReplyPreview(source.excerpt)
     .split(' ')
     .filter((w) => w !== '');
   const cut = words.length > CONTEXT_WORDS;

@@ -28,6 +28,19 @@ import {
 import { parseMentions } from './mentions';
 
 export { parseMentions } from './mentions';
+export {
+  parseFormat,
+  parseFormatRuns,
+  stripFormat,
+  hasFormat,
+  toggleFormat,
+  closingMarkerTail,
+  FORMAT_MARKERS,
+  STYLE_MARKER,
+  type FormatStyle,
+  type FormatSegment,
+  type FormatRun,
+} from './format';
 export type { Client, DomainError, Result } from '@srtdio/rpc';
 
 export { editComment, EditCommentSchema, type EditCommentInput } from './edit';

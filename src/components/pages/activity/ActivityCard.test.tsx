@@ -939,3 +939,38 @@ describe('ActivityCard: merged plan edit time', () => {
     expect(html).not.toContain('2 min ago');
   });
 });
+
+describe('ActivityCard previews hide formatting markers', () => {
+  it('a chat mention preview reads the words without markers', () => {
+    const html = renderCard([
+      item({
+        eventType: 'mention',
+        entityType: 'chat_channel',
+        entityId: 'chan-1',
+        channelType: 'group',
+        title: 'Launch crew',
+        actorName: 'Bob',
+        body: '*ship* _today_',
+      }),
+    ]);
+    expect(html).toContain('ship today');
+    expect(html).not.toContain('*ship*');
+  });
+
+  it('a comment body reads the words without markers; mid-word markers stay', () => {
+    const html = renderCard([
+      item({
+        id: 'pc',
+        eventType: 'plan_comment',
+        entityType: 'plan_item',
+        entityId: 'i1',
+        title: 'Diwali reel',
+        actorName: 'Ana',
+        body: '*ship* _today_ snake_case_name',
+        planId: 'plan1',
+      }),
+    ]);
+    expect(html).toContain('ship today snake_case_name');
+    expect(html).not.toContain('_today_');
+  });
+});

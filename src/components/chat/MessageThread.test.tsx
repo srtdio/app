@@ -4075,3 +4075,39 @@ describe('nextPill (the jump pill waits for the open pin)', () => {
     );
   });
 });
+
+describe('reply quote hides formatting markers', () => {
+  function quotePreview(preview: string): string | undefined {
+    const message = makeMessage({
+      id: 'r1',
+      body: 'On it',
+      reply: { id: 'm0', authorUserId: 'peer-1', preview },
+    });
+    const root = MessageBubble({
+      message,
+      profiles: PROFILES,
+      cache,
+      presignEnabled: false,
+      showTicks: false,
+      isGroup: false,
+      head: true,
+      tail: true,
+      timeZone: 'UTC',
+      layout: 'touch',
+      onBadgeClick: () => {},
+    });
+    let found: string | undefined;
+    walk(root, (el) => {
+      if (el.type === ReplyQuoteBox) found = (el.props as { preview: string }).preview;
+    });
+    return found;
+  }
+
+  it('the quoted line above a reply reads the words without markers', () => {
+    expect(quotePreview('*ship* _today_')).toBe('ship today');
+  });
+
+  it('mid-word markers stay as typed', () => {
+    expect(quotePreview('snake_case_name')).toBe('snake_case_name');
+  });
+});
