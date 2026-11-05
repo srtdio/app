@@ -13,6 +13,7 @@ vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+vi.mock('@/lib/chat/plan-live', () => ({ subscribePlanLive: () => () => undefined }));
 vi.mock('@/lib/workspace-context', () => ({
   useWorkspace: () => ({ workspaceId: 'ws', workspaces: [] }),
 }));

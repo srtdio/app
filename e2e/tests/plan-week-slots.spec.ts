@@ -444,7 +444,7 @@ async function boxOf(locator: ReturnType<Page['locator']>) {
   return box;
 }
 
-test('header: agency sees the 28px title, then boxed Add and Edit on line 2 (both work); a client sees no buttons', async ({
+test('header: agency sees the 28px title, then boxed Add on line 2 (no Edit); a client sees no buttons', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -501,21 +501,16 @@ test('header: agency sees the 28px title, then boxed Add and Edit on line 2 (bot
   expect(Math.round(l2.height)).toBe(44);
   expect(Math.round(l2.x)).toBe(16);
 
-  // Line 2: the subline, then Add, then Edit; the last box on the 16px edge.
+  // Line 2: the subline, then Add on the 16px edge; no Edit (every change saves itself).
   await expect(line2.locator('[data-plan-page-subtitle]')).toHaveText(/ · Shared with approvers$/);
   const add = line2.locator('[data-plan-add-header]');
-  const edit = line2.locator('[data-plan-edit]');
   await expect(add).toHaveAccessibleName('Add to plan');
   await expect(add).toHaveText('Add');
-  await expect(edit).toHaveText('Edit');
+  await expect(line2.locator('[data-plan-edit]')).toHaveCount(0);
   const addBox = await boxOf(add.locator('[data-plan-header-box]'));
-  const editBox = await boxOf(edit.locator('[data-plan-header-box]'));
   expect(Math.round(addBox.height)).toBe(34);
-  expect(Math.round(editBox.height)).toBe(34);
-  expect(Math.round(editBox.x - (addBox.x + addBox.width))).toBe(8);
-  expect(Math.round(viewport.width - (editBox.x + editBox.width))).toBe(16);
+  expect(Math.round(viewport.width - (addBox.x + addBox.width))).toBe(16);
   expectMinTouchTarget(await add.boundingBox());
-  expectMinTouchTarget(await edit.boundingBox());
 
   // Add opens the add sheet, as the header "+" did.
   await add.click();
@@ -523,12 +518,6 @@ test('header: agency sees the 28px title, then boxed Add and Edit on line 2 (bot
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-plan-add-sheet]')).toHaveCount(0);
 
-  // Edit enters Edit mode with its own header; Cancel leaves it.
-  await edit.click();
-  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
-  await plan.locator('[data-plan-back-text]').click();
-  await expect(plan.locator('[data-plan-edit-header]')).toHaveCount(0);
-  await expect(plan.locator('[data-plan-header-line="2"] [data-plan-edit]')).toBeVisible();
   expectClean(network);
 });
 

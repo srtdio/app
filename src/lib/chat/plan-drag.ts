@@ -133,78 +133,14 @@ export function hasTicks(bundle: Pick<PlanBundle, 'reviews'>, itemId: string): b
 }
 
 // ---------------------------------------------------------------------------
-// The edit queue (Save changes)
+// The autosave paint: ops waiting behind their Undo strip
 // ---------------------------------------------------------------------------
 
-/** The title and dates edit mode's header holds. */
-export interface PlanHeaderDraft {
-  title: string;
-  startsOn: string;
-  endsOn: string;
-}
-
-/** The header draft as the plan is now. Pure. */
-export function headerDraftOf(
-  plan: Pick<PlanBundle['plan'], 'title' | 'starts_on' | 'ends_on'>,
-): PlanHeaderDraft {
-  return { title: plan.title, startsOn: plan.starts_on, endsOn: plan.ends_on };
-}
-
 /**
- * Whether the draft's From and To make a range the list can render: both set
- * and From on or before To. Pure.
- */
-export function isRenderableRange(draft: Pick<PlanHeaderDraft, 'startsOn' | 'endsOn'>): boolean {
-  return draft.startsOn !== '' && draft.endsOn !== '' && draft.startsOn <= draft.endsOn;
-}
-
-/**
- * The queue with the header draft laid in: one 'update' op, first (dates
- * widen before any move lands on a new day), replaced on every edit and
- * dropped when the draft is back to what the plan holds. The title is
- * trimmed and never swapped for the plan's: an empty one stays empty (Save is
- * blocked with "Add a title."). A From or To that is empty, or a From after
- * To, keeps the last range that rendered (the queued op's, else the plan's),
- * so the list, the picker and the drag never see a broken range; Save stays
- * blocked by the draft's own check. Pure.
- */
-export function withHeaderUpdate(
-  ops: readonly PlanSaveOp[],
-  plan: Pick<PlanBundle['plan'], 'title' | 'starts_on' | 'ends_on'>,
-  draft: PlanHeaderDraft,
-): PlanSaveOp[] {
-  const prev = ops.find((op): op is Extract<PlanSaveOp, { op: 'update' }> => op.op === 'update');
-  const rest = ops.filter((op) => op.op !== 'update');
-  const title = draft.title.trim();
-  const valid = isRenderableRange(draft);
-  const startsOn = valid ? draft.startsOn : (prev?.starts_on ?? plan.starts_on);
-  const endsOn = valid ? draft.endsOn : (prev?.ends_on ?? plan.ends_on);
-  const same = title === plan.title && startsOn === plan.starts_on && endsOn === plan.ends_on;
-  if (same) return rest;
-  return [{ op: 'update', title, starts_on: startsOn, ends_on: endsOn }, ...rest];
-}
-
-/** The queue with one more op at its end. Pure. */
-export function queueOp(ops: readonly PlanSaveOp[], op: PlanSaveOp): PlanSaveOp[] {
-  return [...ops, op];
-}
-
-/** Whether a Save would write anything. Pure. */
-export function hasQueuedOps(ops: readonly PlanSaveOp[]): boolean {
-  return ops.length > 0;
-}
-
-/** The item ids a 'remove' op in the queue hides. Pure. */
-export function removedIds(ops: readonly PlanSaveOp[]): Set<string> {
-  const out = new Set<string>();
-  for (const op of ops) if (op.op === 'remove') out.add(op.item_id);
-  return out;
-}
-
-/**
- * The bundle as the queue leaves it, for edit mode's paint: the header
- * update on the plan, removed items (and their reviews) gone, each move as
- * applyMove paints it, each reorder's positions. Nothing is written. Pure.
+ * The bundle as the pending ops leave it, for the Plan screen's paint: the
+ * header update on the plan, removed items (and their reviews) gone, each
+ * move as applyMove paints it, each reorder's positions. Nothing is written.
+ * Pure.
  */
 export function applyPlanOps(
   bundle: PlanBundle,

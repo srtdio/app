@@ -1,7 +1,7 @@
-// X3: view mode and edit mode rendering and rules: concept photo tiles, the
-// Edit / Save changes header, the one primary footer action, plan_save failure
-// copy, the discard confirm copy, the New plan title placeholder, and the
-// migration record.
+// The Plan list's rendering and rules: concept photo tiles, autosave (no Edit
+// mode, one plan_save per op behind Undo), the one primary footer action,
+// plan_save failure copy, the New plan title placeholder, and the migration
+// record.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -13,17 +13,11 @@ vi.mock('agora-chat', () => ({
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { PlanBody, PlanEditHeader, planListGroups } from '@/components/chat/PlanScreen';
+import { PlanBody, planListGroups } from '@/components/chat/PlanScreen';
 import {
-  DISCARD_EDITS,
-  EDITING_TITLE,
-  EDIT_LABEL,
   OPEN_FOR_CLIENT_TOAST,
-  PLAN_SAVED_TOAST,
   PLAN_SAVE_ERROR_COPY,
   PLAN_SAVE_FAILED_COPY,
-  SAVE_CHANGES_LABEL,
-  SAVING_LABEL,
   SEND_AFTER_OPEN_FAILED,
   composeTitlePlaceholder,
   planPrimaryAction,
@@ -143,7 +137,6 @@ describe('concept photos (item 2)', () => {
             'c-photo': { kind: 'image', versionId: 'v-img' },
             'c-doc': { kind: 'file' },
           }}
-          drag={null}
           onOpenItem={() => undefined}
           onPlanOk={() => undefined}
           onPlanNotOk={() => undefined}
@@ -161,23 +154,13 @@ describe('concept photos (item 2)', () => {
   });
 });
 
-describe('edit mode header and copy (items 3, 4, 5)', () => {
-  it('copy: Edit, Editing plan, Save changes, Saving…, Plan saved, the discard confirm; no em-dashes', () => {
-    expect(EDIT_LABEL).toBe('Edit');
-    expect(EDITING_TITLE).toBe('Editing plan');
-    expect(SAVE_CHANGES_LABEL).toBe('Save changes');
-    expect(SAVING_LABEL).toBe('Saving…');
-    expect(PLAN_SAVED_TOAST).toBe('Plan saved');
-    expect(DISCARD_EDITS).toEqual({
-      title: 'Discard changes?',
-      message: 'Your edits to this plan will be lost.',
-    });
+describe('autosave (no Edit mode)', () => {
+  it('copy: no em-dashes in the write failures', () => {
     expect(OPEN_FOR_CLIENT_TOAST).toBe('Approvers can now review this plan');
     for (const s of [
       ...Object.values(PLAN_SAVE_ERROR_COPY),
       PLAN_SAVE_FAILED_COPY,
       SEND_AFTER_OPEN_FAILED,
-      DISCARD_EDITS.message,
     ]) {
       expect(s).not.toContain(String.fromCharCode(0x2014));
     }
@@ -193,66 +176,24 @@ describe('edit mode header and copy (items 3, 4, 5)', () => {
       expect(copy).toContain('Nothing was saved');
   });
 
-  it('the edit header: name and From / To fields, a problem line, the save error with Retry', () => {
-    const draft = { title: 'Week of 12 Oct', startsOn: '2026-10-12', endsOn: '2026-10-18' };
-    const html = renderToStaticMarkup(
-      <PlanEditHeader
-        draft={draft}
-        problem={null}
-        saving={false}
-        error={null}
-        onChange={() => undefined}
-        onRetry={() => undefined}
-      />,
-    );
-    expect(html).toContain('data-plan-edit-title=""');
-    expect(html).toContain('enterKeyHint="done"');
-    expect(html).toContain('data-plan-edit-date="startsOn"');
-    expect(html).toContain('data-plan-edit-date="endsOn"');
-    expect(html).toContain('value="2026-10-18"');
-    expect(html).not.toContain('data-plan-save-error');
-    const failed = renderToStaticMarkup(
-      <PlanEditHeader
-        draft={draft}
-        problem="To must be on or after From."
-        saving={false}
-        error={PLAN_SAVE_FAILED_COPY}
-        onChange={() => undefined}
-        onRetry={() => undefined}
-      />,
-    );
-    expect(failed).toMatch(
-      /data-plan-save-error=""[^>]*role="alert"|role="alert"[^>]*data-plan-save-error=""/,
-    );
-    // The static markup HTML-escapes the apostrophe: match the copy's tail.
-    expect(failed).toContain('t save the plan. Try again. Nothing was saved.');
-    expect(failed).toMatch(
-      /class="[^"]*h-11 min-h-\[44px\][^"]*rounded-lg[^"]*"[^>]*data-plan-save-retry=""/,
-    );
-    expect(failed).toContain('>Retry<');
-    expect(failed).toContain('To must be on or after From.');
-    expect(failed).toContain('bg-bad-soft');
-  });
-
-  it('the screen: Edit (agency, view) and Cancel / Editing plan / Save changes (edit); one plan_save; footer hidden', () => {
+  it('the screen: no Edit, Save or discard; each op is one plan_save behind its Undo strip', () => {
     const src = read('PlanScreen.tsx');
-    expect(src).toContain('data-plan-edit=""');
-    expect(src).toContain('backText: CANCEL_EDIT_LABEL');
-    expect(src).toContain('titleSlot: editHeaderSlot');
-    expect(src).toContain('{saving ? SAVING_LABEL : SAVE_CHANGES_LABEL}');
+    for (const gone of [
+      'data-plan-edit=""',
+      'SAVE_CHANGES_LABEL',
+      'DISCARD_EDITS',
+      'useBackGuard',
+    ]) {
+      expect(src).not.toContain(gone);
+    }
     expect(src).toContain(
       'planSave(supabase, { p_plan_id: planId, p_ops: rebuilt, p_trace_id: traceId })',
     );
     expect(src.match(/planSave\(supabase/g)).toHaveLength(1);
-    expect(src).toContain('toast.show({ title: PLAN_SAVED_TOAST })');
-    expect(src).toContain('setSaveError(planSaveErrorCopy(result.error.message))');
-    // Save with nothing queued only leaves edit mode.
-    expect(src).toMatch(/if \(!hasQueuedOps\(ops\)\) \{\s*exitEdit\(\);\s*return;\s*\}/);
-    // The footer is hidden in edit mode; the guard holds Back while dirty or saving.
-    expect(src).toContain('!editMode && bundle !== null && (primary.kind');
-    expect(src).toContain('active: props.open && (dirty || saving)');
-    expect(src).toContain("setDiscardAsk('close')");
-    expect(src).toMatch(/guard\.release\(\);\s*exitEdit\(\);/);
+    expect(src).toContain('let result = await sendQueued([op], traceId);');
+    expect(src).toContain(
+      'revert: () => setOps((prev) => prev.filter((queued) => queued !== op)),',
+    );
     // Keep the approval: the move op records the answer.
     expect(src).toContain('commitMove(ask.itemId, ask.toDay, ask.toIndex, keep)');
   });

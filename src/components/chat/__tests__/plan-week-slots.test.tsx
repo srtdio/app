@@ -364,7 +364,6 @@ describe('week list layout (L1-L4)', () => {
           side={side}
           timeZone="UTC"
           thumbs={{ post1: 'v1' }}
-          drag={null}
           onOpenItem={() => undefined}
           onPlanOk={() => undefined}
           onPlanNotOk={() => undefined}

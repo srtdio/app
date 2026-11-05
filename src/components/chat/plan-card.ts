@@ -840,10 +840,6 @@ export const MOVE_FAILED = errorText('move this item', null);
 export const DATE_OUTSIDE_PLAN = 'That day is outside this plan.';
 export const REMOVED_TOAST = 'Removed from plan';
 export const REMOVE_FAILED = errorText('remove', null);
-/** The swipe action behind a plan row (agency side). */
-export const SWIPE_REMOVE_LABEL = 'Remove';
-/** The reduced-motion stand-in for the one-time swipe peek. */
-export const SWIPE_TIP_TOAST = 'Tip: swipe left on a slot to remove it';
 
 /** Per-cause copy for a failed plan write; a cause left out falls to the fallback. */
 export interface PlanWriteErrorTable {
@@ -892,27 +888,10 @@ export function planWriteErrorCopy(
   return fallback;
 }
 
-/**
- * The toast after a move to another day: "Moved to Thu 15 Oct." and, when the
- * item had a tick that was not waiting, "Its ticks were reset." Pure.
- */
-export function movedToast(dayHeader: string | null, ticksReset: boolean): string {
-  const where = `Moved to ${dayHeader ?? 'No date'}.`;
-  return ticksReset ? `${where} Its ticks were reset.` : where;
-}
-
 /** A row's visible comment count: "1 comment" / "N comments"; null when none. Pure. */
 export function commentsLabel(count: number): string | null {
   if (!(count > 0)) return null;
   return count === 1 ? '1 comment' : `${count} comments`;
-}
-
-/**
- * The toast after a move that kept the approval: "Moved to Thu 15 Oct." (or
- * "Moved to No date."). Pure.
- */
-export function movedKeptToast(dayHeader: string | null): string {
-  return movedToast(dayHeader, false);
 }
 
 // ---------------------------------------------------------------------------
@@ -921,9 +900,12 @@ export function movedKeptToast(dayHeader: string | null): string {
 
 export const RENAME_LABEL = 'Rename';
 export const RENAMED_TOAST = 'Renamed';
+export const CHANGE_DATES_LABEL = 'Change dates';
+export const DATES_CHANGED_TOAST = 'Dates changed';
+export const MOVE_TO_DAY_LABEL = 'Move to another day';
+export const OPEN_ITEM_LABEL = 'Open';
 export const RENAME_FAILED = errorText('rename', null);
 export const DELETE_PLAN_LABEL = 'Delete plan';
-export const DELETE_PLAN_TITLE = 'Delete this plan?';
 export const PLAN_DELETED_TOAST = 'Plan deleted';
 export const DELETE_FORBIDDEN = "Couldn't delete the plan. You don't have access to do this.";
 export const DELETE_FAILED = errorText('delete', null);
@@ -939,31 +921,8 @@ export const SEND_FAILED = errorText('send', null);
 /** Send to approvers: the plan opened but chat_plan_share failed; Retry only reposts. */
 export const SEND_AFTER_OPEN_FAILED = `${errorText('post the card', null)} The plan is open for approvers.`;
 export const RETRY_LABEL = 'Retry';
-export const GO_TO_CARD_LABEL = 'Go to card';
 
-// ---------------------------------------------------------------------------
-// Edit mode (view / Edit / Save changes) copy and rules
-// ---------------------------------------------------------------------------
-
-export const EDIT_LABEL = 'Edit';
-export const EDITING_TITLE = 'Editing plan';
-export const SAVE_CHANGES_LABEL = 'Save changes';
-export const SAVING_LABEL = 'Saving…';
-export const CANCEL_EDIT_LABEL = 'Cancel';
-export const PLAN_SAVED_TOAST = 'Plan saved';
-/** The discard confirm when edit mode is left with queued changes (Cancel, Back, Esc). */
-export const DISCARD_EDITS = {
-  title: 'Discard changes?',
-  message: 'Your edits to this plan will be lost.',
-};
-export const KEEP_EDITING_LABEL = 'Keep editing';
-export const DISCARD_LABEL = 'Discard';
-/** The edit header's fields. */
-export const EDIT_TITLE_LABEL = 'Plan name';
-export const EDIT_FROM_LABEL = 'From';
-export const EDIT_TO_LABEL = 'To';
-
-/** Save changes failures, in plain words; nothing is ever half saved. */
+/** Plan write failures (autosave, Change dates), in plain words; nothing is ever half saved. */
 export const PLAN_SAVE_ERROR_COPY: PlanWriteErrorTable = {
   network: `${errorText('save the plan', null)} Nothing was saved.`,
   date_outside_plan:

@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 // G2 Plan screen fixes (F6 to F15), mounted with stubbed reads and writes;
 // nothing touches a database. F6 the picker's Done adds and its dismiss adds
-// nothing; F7 a save's pending queue clear never wipes a newer edit session;
-// F8 Save changes rebuilds every move's order from one fresh read (and its
-// retries too); F9 No date's Add puts posts on No date; F10 a broken From/To
-// keeps the last range; F11 an empty title blocks Save; F12 the 5-week cap;
-// F13 delete plan rides useUndoableAction; F14 Retry shows loading and a
-// failed re-read toasts; F15 close resets the outside day sheets, the footer
-// Retry keeps the failed send's mode, and every outside day is tried.
+// nothing; F8 autosave: a move or a remove from a row's ⋯ menu paints at once,
+// writes nothing behind its Undo strip, then one fresh read and one plan_save
+// with the rebuilt op (a "no longer available" retries once, a second failure
+// puts the row back); F9 No date's Add puts posts on No date; F13 delete plan
+// rides useUndoableAction; F14 Retry shows loading and a failed re-read
+// toasts; F15 close resets the outside day sheets, the footer Retry keeps the
+// failed send's mode, and every outside day is tried.
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -19,6 +19,7 @@ vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+vi.mock('@/lib/chat/plan-live', () => ({ subscribePlanLive: () => () => undefined }));
 vi.mock('@/lib/workspace-context', () => ({
   useWorkspace: () => ({ workspaceId: 'ws', workspaces: [] }),
 }));
@@ -131,8 +132,8 @@ vi.mock('@/lib/chat/plans', async (importOriginal) => ({
 
 import { PlanScreen } from '@/components/chat/PlanScreen';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
-import { DRAFT_PROBLEM_COPY, PLAN_SAVE_ERROR_COPY, SEND_FAILED } from '@/components/chat/plan-card';
-import { PLAN_TOO_LONG_COPY, dispatchPlanChanged } from '@/lib/chat/plans';
+import { SEND_FAILED } from '@/components/chat/plan-card';
+import { dispatchPlanChanged } from '@/lib/chat/plans';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -199,12 +200,6 @@ const click = async (el: HTMLElement | null | undefined) => {
   await act(async () => el?.click());
   await settle();
 };
-function typeInto(el: HTMLInputElement | null, value: string): void {
-  if (el === null) return;
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-  setter?.call(el, value);
-  el.dispatchEvent(new Event('input', { bubbles: true }));
-}
 const sheet = (title: string) => q<HTMLElement>(`[role="dialog"][aria-label="${title}"]`);
 
 async function openPicker(addSelector: string): Promise<void> {
@@ -215,13 +210,26 @@ async function openPicker(addSelector: string): Promise<void> {
 async function toggle(post: Record<string, unknown>): Promise<void> {
   await act(async () => h.state.picker.onToggle?.(post));
 }
-async function enterEdit(): Promise<void> {
-  await click(q('[data-plan-edit]'));
-  expect(q('[data-plan-editing-title]')).not.toBeNull();
+async function rowMenu(id: string, label: string): Promise<void> {
+  await click(q(`[data-plan-row-wrap="${id}"] button[aria-label="More actions"]`));
+  await click(button(label));
 }
 async function moveAlphaTo14(): Promise<void> {
-  await click(q('[data-plan-row-wrap="alpha"] [data-plan-row-day-chip]'));
+  await rowMenu('alpha', 'Move to another day');
   await click(q('[data-plan-day-tile="2026-10-14"]'));
+}
+/** The page goes hidden: the pending Undo strip commits at once. */
+async function flushUndo(): Promise<void> {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+  try {
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await wait(40);
+    });
+  } finally {
+    Reflect.deleteProperty(document, 'visibilityState');
+  }
+  await settle();
 }
 
 const POST_IN = { id: 'post-in', title: 'Post in', platform: null, format: null, stage: 'draft' };
@@ -284,33 +292,8 @@ describe('F6: the post picker Done adds, a dismiss adds nothing', () => {
   });
 });
 
-describe('F7: the clear after a save never wipes a newer edit session', () => {
-  it('a re-read landing after edit mode was entered again keeps the new queue', async () => {
-    const reread = deferred<ReturnType<typeof h.screenOk>>();
-    h.state.screens = [() => Promise.resolve(h.screenOk(h.BUNDLE)), () => reread.promise];
-    await mount();
-    await enterEdit();
-    await click(q('[data-plan-row-wrap="alpha"] [data-plan-row-remove-edit]'));
-    await click(button('Save changes'));
-    expect(h.planSave).toHaveBeenCalledTimes(1);
-    expect(q('[data-plan-editing-title]')).toBeNull();
-    // Before the re-read lands, a new session removes beta.
-    await enterEdit();
-    await click(q('[data-plan-row-wrap="beta"] [data-plan-row-remove-edit]'));
-    expect(rows()).not.toContain('beta');
-    await act(async () => {
-      reread.resolve(h.screenOk(h.bundleOf([h.item('beta', '2026-10-14', 1)])));
-      await wait(80);
-    });
-    await settle();
-    // The new session's queue survives the save's re-read.
-    expect(q('[data-plan-editing-title]')).not.toBeNull();
-    expect(rows()).toEqual([]);
-  });
-});
-
-describe('F8: Save changes rebuilds the order from one fresh read', () => {
-  it('an item someone else added is kept on its day, after this session’s placed items', async () => {
+describe('F8: autosave, one op per write, rebuilt on one fresh read', () => {
+  it('a move paints at once, writes nothing behind Undo, then one read and one plan_save', async () => {
     h.state.fresh = [
       h.bundleOf([
         h.item('alpha', '2026-10-13', 0),
@@ -319,11 +302,11 @@ describe('F8: Save changes rebuilds the order from one fresh read', () => {
       ]),
     ];
     await mount();
-    await enterEdit();
     await moveAlphaTo14();
-    // Nothing is read before the tap.
+    expect(q('[data-plan-day="2026-10-14"] [data-plan-row="alpha"]')).not.toBeNull();
     expect(h.readPlanBundles).not.toHaveBeenCalled();
-    await click(button('Save changes'));
+    expect(h.planSave).not.toHaveBeenCalled();
+    await flushUndo();
     expect(h.readPlanBundles).toHaveBeenCalledTimes(1);
     expect(h.planSave).toHaveBeenCalledTimes(1);
     expect(h.planSave.mock.calls[0]?.[1].p_ops).toEqual([
@@ -345,30 +328,30 @@ describe('F8: Save changes rebuilds the order from one fresh read', () => {
     ];
     h.planSave.mockResolvedValueOnce(err('invalid_payload')).mockResolvedValueOnce(ok(undefined));
     await mount();
-    await enterEdit();
     await moveAlphaTo14();
-    await click(button('Save changes'));
+    await flushUndo();
     expect(h.readPlanBundles).toHaveBeenCalledTimes(2);
     expect(h.planSave).toHaveBeenCalledTimes(2);
     expect(h.planSave.mock.calls[1]?.[1].p_ops[0].item_ids).toEqual(['alpha']);
-    expect(q('[data-plan-save-error]')).toBeNull();
   });
 
-  it('a second failure shows the failure line; Retry reads fresh data again, never the old array', async () => {
+  it('a second failure puts the row back on its day', async () => {
     h.planSave.mockResolvedValue(err('invalid_payload'));
     await mount();
-    await enterEdit();
     await moveAlphaTo14();
-    await click(button('Save changes'));
+    await flushUndo();
     expect(h.planSave).toHaveBeenCalledTimes(2);
-    expect(q('[data-plan-save-error]')?.textContent).toContain(
-      PLAN_SAVE_ERROR_COPY.invalid_payload,
-    );
-    h.state.fresh = [h.bundleOf([h.item('alpha', '2026-10-13', 0)])];
-    h.planSave.mockResolvedValue(ok(undefined));
-    await click(q('[data-plan-save-retry]'));
-    expect(h.readPlanBundles).toHaveBeenCalledTimes(3);
-    expect(h.planSave.mock.calls[2]?.[1].p_ops[0].item_ids).toEqual(['alpha']);
+    expect(q('[data-plan-day="2026-10-13"] [data-plan-row="alpha"]')).not.toBeNull();
+  });
+
+  it('Remove from plan: the row goes at once; the remove op is written after the strip', async () => {
+    await mount();
+    await rowMenu('beta', 'Remove from plan');
+    expect(rows()).toEqual(['alpha']);
+    expect(h.planSave).not.toHaveBeenCalled();
+    await flushUndo();
+    expect(h.planSave).toHaveBeenCalledTimes(1);
+    expect(h.planSave.mock.calls[0]?.[1].p_ops).toEqual([{ op: 'remove', item_id: 'beta' }]);
   });
 });
 
@@ -385,44 +368,6 @@ describe('F9: No date’s Add is an explicit No date target', () => {
     expect(h.planPostsAdd.mock.calls[0]?.[1]).not.toHaveProperty('p_target_date');
     // Never the header "+" path: no outside-day sheet.
     expect(sheet('Post in')).toBeNull();
-  });
-});
-
-describe('F10, F11, F12: the edit header', () => {
-  it('F10: an empty From, or From after To, keeps the last range; Save is blocked', async () => {
-    await mount();
-    await enterEdit();
-    const days = document.querySelectorAll('[data-plan-day]').length;
-    await act(async () => typeInto(q('[data-plan-edit-date="startsOn"]'), ''));
-    await settle();
-    expect(document.querySelectorAll('[data-plan-day]').length).toBe(days);
-    expect(rows()).toEqual(['alpha', 'beta']);
-    expect(q('[data-plan-edit-problem]')?.textContent).toBe(DRAFT_PROBLEM_COPY.dates);
-    expect(q<HTMLButtonElement>('[data-plan-save]')?.disabled).toBe(true);
-    await act(async () => typeInto(q('[data-plan-edit-date="startsOn"]'), '2026-10-20'));
-    await settle();
-    expect(document.querySelectorAll('[data-plan-day]').length).toBe(days);
-    expect(q('[data-plan-edit-problem]')?.textContent).toBe(DRAFT_PROBLEM_COPY.dates);
-    expect(q<HTMLButtonElement>('[data-plan-save]')?.disabled).toBe(true);
-  });
-
-  it('F11: an emptied title stays empty, reads "Add a title." and blocks Save', async () => {
-    await mount();
-    await enterEdit();
-    await act(async () => typeInto(q('[data-plan-edit-title]'), '   '));
-    await settle();
-    expect(q<HTMLInputElement>('[data-plan-edit-title]')?.value).toBe('   ');
-    expect(q('[data-plan-edit-problem]')?.textContent).toBe('Add a title.');
-    expect(q<HTMLButtonElement>('[data-plan-save]')?.disabled).toBe(true);
-  });
-
-  it('F12: dates over 5 weeks show the New plan message and block Save', async () => {
-    await mount();
-    await enterEdit();
-    await act(async () => typeInto(q('[data-plan-edit-date="endsOn"]'), '2026-11-16'));
-    await settle();
-    expect(q('[data-plan-edit-problem]')?.textContent).toBe(PLAN_TOO_LONG_COPY);
-    expect(q<HTMLButtonElement>('[data-plan-save]')?.disabled).toBe(true);
   });
 });
 

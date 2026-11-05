@@ -38,7 +38,6 @@ import {
   keepApprovalBody,
   keepApprovalTitle,
   moveAsksKeep,
-  movedKeptToast,
   planPrimaryAction,
   planSendAction,
   renameTitle,
@@ -218,13 +217,12 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
     // At once, no confirm: the Undo strip (useUndoableAction, UNDO_MS), the
     // write on its expiry or on page hide / app switch.
     expect(src).toContain('undoable.run({ label: PLAN_DELETED_TOAST, commit: commitDelete });');
-    expect(src).not.toContain('DELETE_PLAN_TITLE');
   });
 
   it('a client gets a plain title (no menu button)', () => {
     const src = read('PlanScreen.tsx');
-    // Edit mode takes the header first; otherwise the agency gets the menu title.
-    expect(src).toMatch(/:\s*agency\s*\?\s*\{\s*titleSlot:/);
+    // The agency gets the menu title; anyone else a plain one.
+    expect(src).toMatch(/\(agency\s*\?\s*\{\s*titleSlot:/);
   });
 });
 
@@ -350,7 +348,6 @@ describe('item 5: one view of the PLAN line', () => {
           side={side}
           timeZone="Asia/Kolkata"
           thumbs={{}}
-          drag={null}
           onOpenItem={() => undefined}
           onPlanOk={() => undefined}
           onPlanNotOk={() => undefined}
@@ -390,7 +387,7 @@ describe('item 5: one view of the PLAN line', () => {
       'const slot = shownBundle !== null ? slotSide(side, shownBundle.plan.audience) : null;',
     );
     expect(src).toMatch(
-      /Read-only \(the agency on an Open plan\) never writes[^\n]*\n\s*if \(bundle === null \|\| slot === null \|\| editMode\) return;/,
+      /Read-only \(the agency on an Open plan\) never writes[^\n]*\n\s*if \(bundle === null \|\| slot === null\) return;/,
     );
   });
 });
@@ -426,7 +423,6 @@ describe('item 6: Approved by', () => {
           side="agency"
           timeZone="Asia/Kolkata"
           thumbs={{}}
-          drag={null}
           onOpenItem={() => undefined}
           onPlanOk={() => undefined}
           onPlanNotOk={() => undefined}
@@ -497,11 +493,10 @@ describe('item 7: moves keep or reset the approval', () => {
     expect(moveAsksKeep(open, open.items[1] as PlanItemRow, '2026-10-14', null)).toBe(false);
   });
 
-  it('copy: title, body, buttons, kept toast', () => {
+  it('copy: title, body, buttons', () => {
     expect(keepApprovalTitle('Riya Shah')).toBe('Slot approved by Riya Shah');
     expect(keepApprovalBody('Thu 15 Oct')).toBe('Moving it to Thu 15 Oct. Keep the approval?');
     expect(keepApprovalBody(null)).toBe('Moving it to No date. Keep the approval?');
-    expect(movedKeptToast('Thu 15 Oct')).toBe('Moved to Thu 15 Oct.');
     // The Sheet portals into the DOM; its wiring is checked through the source.
     const src = read('PlanMoveSheet.tsx');
     expect(src).toContain('onClick={() => props.onKeep(true)}');
@@ -575,7 +570,6 @@ describe('item 9: Also in', () => {
           timeZone="UTC"
           thumbs={{}}
           alsoIn={{ post1: ['Launch'] }}
-          drag={null}
           onOpenItem={() => undefined}
           onPlanOk={() => undefined}
           onPlanNotOk={() => undefined}

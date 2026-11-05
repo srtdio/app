@@ -17,8 +17,9 @@ import { expectMinTouchTarget } from '../helpers/touch-target';
 // Draft / Open wave, screens: the Plan screen's title menu (Rename inline,
 // Delete plan for its creator or an owner/admin), the deleted card, "Approved
 // by" under a client-approved row, the "Also in" pill, the keep-approval sheet
-// on a move (Edit mode, X3: moves and removes are queued and written by Save
-// changes as one plan_save), and the plan alerts as chat bell rows, on the
+// on a move (the row ⋯ menu: a move or a remove paints at once and is written
+// as one plan_save when its Undo strip ends; no Edit mode), and the plan
+// alerts as chat bell rows, on the
 // iPhone viewport. The 120+ character titles test is the plan family's @theme
 // test (light too).
 
@@ -53,82 +54,27 @@ const dated = (title: string) => {
 
 const dayBlock = (plan: Locator, day: string): Locator => plan.locator(`[data-plan-day="${day}"]`);
 
-/** Edit mode: the header's Edit button, then the edit header with its fields. */
-async function enterEdit(plan: Locator): Promise<void> {
-  await plan.locator('[data-plan-edit]').click();
-  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
+/** A creator's row ⋯ menu: open it and pick an item. */
+async function rowMenu(page: Page, plan: Locator, id: string, label: string): Promise<void> {
+  const wrap = plan.locator(`[data-plan-row-wrap="${id}"]`);
+  await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await wrap.getByRole('button', { name: 'More actions' }).click();
+  await page.locator('[role="menu"]').getByText(label, { exact: true }).click();
 }
-
-/** Save changes: the toast, then view mode again. */
-async function saveChanges(page: Page, plan: Locator): Promise<void> {
-  await plan.locator('[data-plan-save]').click();
-  await expect(page.getByText('Plan saved', { exact: true })).toBeVisible();
-  await expect(plan.locator('[data-plan-edit-header]')).toHaveCount(0);
-}
-
-/** Cancel (the edit header's back) with queued changes: the Discard confirm. */
-async function cancelEdit(page: Page, plan: Locator): Promise<Locator> {
-  await plan.locator('[data-plan-back-text]').click();
-  const discard = page.getByRole('alertdialog', { name: 'Discard changes?' });
-  await expect(discard).toBeVisible();
-  await expect(discard).toContainText('Your edits to this plan will be lost.');
-  return discard;
-}
-
 const saves = (network: HarnessNetwork) => network.rpcCalls.filter((c) => c.name === 'plan_save');
 const opsOf = (call: { args: Record<string, unknown> } | undefined) =>
   (call?.args.p_ops ?? []) as Array<Record<string, unknown>>;
 
-/** Edit mode: lift a row by its grip (4px, no long-press) and let go over `day`. */
-async function dragToDay(page: Page, plan: Locator, id: string, day: string): Promise<void> {
-  // Any sheet that just closed has finished sliding away.
-  await page.waitForTimeout(500);
-  const wrap = plan.locator(`[data-plan-row-wrap="${id}"]`);
-  // The source row sits near the top of the list (every move here goes to a
-  // later day), clear of the auto-scroll edge band, so the target day is on
-  // screen below it.
-  await wrap.evaluate((el) => {
-    el.scrollIntoView({ block: 'start' });
-    el.closest<HTMLElement>('.overflow-y-auto')?.scrollBy(0, -90);
-  });
-  await page.waitForTimeout(100);
-  const grip = await wrap.locator('[data-plan-grip]').boundingBox();
-  if (grip === null) throw new Error('grip box');
-  const x = grip.x + grip.width / 2;
-  const y0 = grip.y + grip.height / 2;
-  await page.mouse.move(x, y0);
-  await page.mouse.down();
-  await page.mouse.move(x, y0 + 6);
-  await expect(page.locator('[data-plan-drag-card]')).toBeVisible();
-  // Re-aim until the target day is the hovered drop (the slot shifts rows).
-  // The pointer stays out of the list's auto-scroll bands (56px at each
-  // edge): a target beyond them is brought into reach by scrolling the list.
-  const over = plan.locator(`[data-plan-day="${day}"][data-plan-drop-over]`);
-  const list = plan.locator('[data-plan-list]');
-  for (let k = 0; k < 10 && (await over.count()) === 0; k += 1) {
-    const target = await dayBlock(plan, day).boundingBox();
-    if (target === null) throw new Error('target');
-    const band = await list.evaluate((el) => {
-      const box = el.closest<HTMLElement>('.overflow-y-auto')?.getBoundingClientRect();
-      if (box === undefined) throw new Error('list body');
-      return { top: box.top + 72, bottom: box.bottom - 72 };
-    });
-    const y = target.y + Math.min(30, target.height / 2);
-    if (y > band.bottom || y < band.top) {
-      const delta = y > band.bottom ? y - band.bottom : y - band.top;
-      await list.evaluate(
-        (el, d) => el.closest<HTMLElement>('.overflow-y-auto')?.scrollBy(0, d),
-        delta,
-      );
-      await page.waitForTimeout(120);
-      continue;
-    }
-    await page.mouse.move(x, y, { steps: 4 });
-    await page.waitForTimeout(150);
-  }
-  await expect(over).toHaveCount(1);
-  await page.mouse.up();
-  await expect(page.locator('[data-plan-drag-card]')).toHaveCount(0);
+/** The row ⋯ menu: Move to another day, then the day tile. */
+async function moveToDay(page: Page, plan: Locator, id: string, day: string): Promise<void> {
+  await rowMenu(page, plan, id, 'Move to another day');
+  const picker = page.locator('[data-plan-day-picker]');
+  await expect(picker).toBeVisible();
+  await picker.locator(`[data-plan-day-tile="${day}"]`).click();
+}
+/** The Undo strip ends: wait for the written plan_save calls. */
+async function waitForSaves(network: HarnessNetwork, n: number): Promise<void> {
+  await expect.poll(() => saves(network).length, { timeout: 10_000 }).toBe(n);
 }
 
 test('agency: title menu, inline rename, delete (Open plan copy), the card reads Plan deleted', async ({
@@ -264,14 +210,10 @@ test('Open plan: the client OK on a client-approved row, Also in, and keep the a
   await expect(clientPlan).toHaveText('OK');
   await expect(clientPlan).toHaveClass(/text-good/);
 
-  // Moving the approved slot to another day (Edit mode) asks first; cancelling
-  // cancels. Nothing is written until Save changes.
+  // Moving the approved slot to another day (the row menu) asks first;
+  // cancelling cancels and nothing is written.
   const moves = () => network.rpcCalls.filter((c) => c.name === 'plan_item_move');
-  await enterEdit(plan);
-  // The edit row keeps PLAN as text.
-  await expect(clientPlan).toHaveText('OK');
-  await expect(wrap.locator('[data-plan-row-edit-line]')).toBeVisible();
-  await dragToDay(page, plan, offer.id, '2026-10-14');
+  await moveToDay(page, plan, offer.id, '2026-10-14');
   const keep = page.getByRole('dialog', { name: `Slot approved by ${PEER_NAME}` });
   await expect(keep).toBeVisible();
   await expect(keep).toContainText('Moving it to Wed 14 Oct. Keep the approval?');
@@ -286,18 +228,16 @@ test('Open plan: the client OK on a client-approved row, Also in, and keep the a
     1,
   );
 
-  // Yes, keep it: the move is queued with keep_reviews true and painted; Save
-  // writes it as one plan_save; the approval stays.
-  await dragToDay(page, plan, offer.id, '2026-10-14');
+  // Yes, keep it: painted at once; when the Undo strip ends one plan_save
+  // writes it with keep_reviews true; the approval stays.
+  await moveToDay(page, plan, offer.id, '2026-10-14');
   await expect(keep).toBeVisible();
   await keep.locator('[data-plan-keep-yes]').click();
   await expect(keep).toBeHidden();
   await expect(dayBlock(plan, '2026-10-14').locator(`[data-plan-row="${offer.id}"]`)).toHaveCount(
     1,
   );
-  expect(saves(network)).toEqual([]);
-  await saveChanges(page, plan);
-  expect(saves(network)).toHaveLength(1);
+  await waitForSaves(network, 1);
   expect(opsOf(saves(network)[0])).toEqual([
     expect.objectContaining({
       op: 'move',
@@ -313,14 +253,12 @@ test('Open plan: the client OK on a client-approved row, Also in, and keep the a
   await expect(clientPlan).toHaveAttribute('data-plan-slot-state', 'approved');
   await expect(clientPlan).toHaveText('OK');
 
-  // No, ask again: keep_reviews false; after Save the approval resets.
-  await enterEdit(plan);
-  await dragToDay(page, plan, offer.id, '2026-10-15');
+  // No, ask again: keep_reviews false; once written the approval resets.
+  await moveToDay(page, plan, offer.id, '2026-10-15');
   await expect(keep).toBeVisible();
   await keep.locator('[data-plan-keep-no]').click();
   await expect(keep).toBeHidden();
-  await saveChanges(page, plan);
-  expect(saves(network)).toHaveLength(2);
+  await waitForSaves(network, 2);
   expect(opsOf(saves(network)[1])).toEqual([
     expect.objectContaining({
       op: 'move',
@@ -410,7 +348,7 @@ test('Notifications: plan alerts under Plans; a deleted plan only toasts; a tap 
 });
 
 // ---------------------------------------------------------------------------
-// Plan list: Edit mode remove (agency), queued until Save changes; open at today
+// Plan list: the row menu remove (agency), written once its Undo strip ends; open at today
 // ---------------------------------------------------------------------------
 
 const PEEK_KEY = 'sorted:plan-swipe-peek-seen';
@@ -418,7 +356,7 @@ const PEEK_KEY = 'sorted:plan-swipe-peek-seen';
 const removes = (network: HarnessNetwork) =>
   network.rpcCalls.filter((c) => c.name === 'plan_item_remove');
 
-test('agency: Edit mode remove hides the row at once, Discard restores it with no request, Save sends it once; a grip drag still reorders', async ({
+test('agency: Remove from plan (row menu) hides the row at once, Undo restores it with no request, the strip ending sends one plan_save; a move still names the full order', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -430,60 +368,30 @@ test('agency: Edit mode remove hides the row at once, Discard restores it with n
   const portraits = dated('Family portraits');
   const wrap = plan.locator(`[data-plan-row-wrap="${lantern.id}"]`);
 
-  // View mode: no remove control, no grip, no swipe.
+  // No Edit mode, no grip, no swipe; one 44px ⋯ per row.
   await expect(
-    plan.locator('[data-plan-row-remove-edit], [data-plan-grip], [data-plan-row-swipe]'),
+    plan.locator('[data-plan-edit], [data-plan-grip], [data-plan-row-swipe]'),
   ).toHaveCount(0);
-  await enterEdit(plan);
-
-  // The remove icon: a 44x44 target in the bad colour on the row's bottom
-  // line, at its right edge; a tap on the row itself opens nothing while editing.
   await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  const remove = wrap.locator('[data-plan-row-remove-edit]');
-  await expect(remove).toBeVisible();
-  const removeBox = await remove.boundingBox();
-  const rowBox = await wrap.locator(`[data-plan-row="${lantern.id}"]`).boundingBox();
-  if (removeBox === null || rowBox === null) throw new Error('boxes');
-  expectMinTouchTarget(removeBox);
-  expect(removeBox.y).toBeGreaterThanOrEqual(rowBox.y + rowBox.height - 1);
-  expect(removeBox.x + removeBox.width).toBeGreaterThanOrEqual(rowBox.x + rowBox.width - 1);
-  await expect(remove).toHaveClass(/text-bad/);
-  await expect(remove).toHaveAttribute('aria-label', 'Remove from plan: Lantern workshop');
-  await wrap.locator(`[data-plan-row="${lantern.id}"]`).click();
-  await expect(page.locator('[data-plan-page="item"]')).toHaveCount(0);
+  expectMinTouchTarget(await wrap.getByRole('button', { name: 'More actions' }).boundingBox());
 
-  // Remove: the row is hidden at once; nothing is sent.
-  await remove.click();
+  // Remove: hidden at once, nothing sent; Undo brings it back, still nothing sent.
+  await rowMenu(page, plan, lantern.id, 'Remove from plan');
   await expect(wrap).toHaveCount(0);
   expect(saves(network)).toEqual([]);
-  expect(removes(network)).toEqual([]);
-
-  // Cancel asks; Keep editing keeps the queued removal.
-  let discard = await cancelEdit(page, plan);
-  await discard.getByRole('button', { name: 'Keep editing' }).click();
-  await expect(discard).toBeHidden();
-  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
-  await expect(wrap).toHaveCount(0);
-
-  // Discard: the row is back in place, no request ever.
-  discard = await cancelEdit(page, plan);
-  await discard.getByRole('button', { name: 'Discard' }).click();
-  await expect(discard).toBeHidden();
-  await expect(plan.locator('[data-plan-edit-header]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo' }).click();
   await expect(dayBlock(plan, '2026-10-14').locator(`[data-plan-row="${lantern.id}"]`)).toHaveCount(
     1,
   );
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(5_000);
   expect(saves(network)).toEqual([]);
   expect(removes(network)).toEqual([]);
 
-  // Remove again and Save: exactly one plan_save with the one remove op; the
-  // row never comes back after the re-read; no direct plan_item_remove.
-  await enterEdit(plan);
-  await wrap.locator('[data-plan-row-remove-edit]').click();
+  // Remove again and let the strip end: exactly one plan_save with the one
+  // remove op; the row never comes back after the re-read.
+  await rowMenu(page, plan, lantern.id, 'Remove from plan');
   await expect(wrap).toHaveCount(0);
-  await saveChanges(page, plan);
-  expect(saves(network)).toHaveLength(1);
+  await waitForSaves(network, 1);
   expect(saves(network)[0]?.args).toMatchObject({
     p_plan_id: DATED_PLAN_ID,
     p_ops: [{ op: 'remove', item_id: lantern.id }],
@@ -491,26 +399,20 @@ test('agency: Edit mode remove hides the row at once, Discard restores it with n
   expect(typeof saves(network)[0]?.args.p_trace_id).toBe('string');
   await page.waitForTimeout(1_000);
   await expect(wrap).toHaveCount(0);
-  expect(saves(network)).toHaveLength(1);
   expect(removes(network)).toEqual([]);
   expect((network.world.tables.plan_items ?? []).some((i) => i.id === lantern.id)).toBe(false);
 
-  // The grip drag still moves a row: one move op with the full order minus the removed row.
-  await enterEdit(plan);
-  await dragToDay(page, plan, portraits.id, '2026-10-16');
+  // A move: one move op with the full order minus the removed row.
+  await moveToDay(page, plan, portraits.id, '2026-10-16');
   await expect(
     dayBlock(plan, '2026-10-16').locator(`[data-plan-row="${portraits.id}"]`),
   ).toHaveCount(1);
-  await saveChanges(page, plan);
-  expect(saves(network)).toHaveLength(2);
+  await waitForSaves(network, 2);
   const move = opsOf(saves(network)[1])[0];
   expect(move).toMatchObject({ op: 'move', item_id: portraits.id, target_date: '2026-10-16' });
   const order = move?.item_ids as string[];
   expect(order).toHaveLength(DATED_PLAN_ITEMS.length - 1);
   expect(order).not.toContain(lantern.id);
-  await expect(
-    dayBlock(plan, '2026-10-16').locator(`[data-plan-row="${portraits.id}"]`),
-  ).toHaveCount(1);
   expectClean(network);
 });
 
@@ -561,7 +463,7 @@ async function planLayout(page: Page) {
 }
 
 test(
-  'agency, 120+ character titles: no sideways page, titles clamp, PLAN on screen; the edit controls fit too',
+  'agency, 120+ character titles: no sideways page, titles clamp, PLAN on screen; the row menu fits too',
   {
     tag: '@theme',
   },
@@ -606,11 +508,11 @@ test(
         );
       }
     };
-    /** View mode at rest: the layout, every row with its PLAN control, no edit control. */
+    /** At rest: the layout, every row with its PLAN control, no edit control. */
     const expectAtRest = async (): Promise<void> => {
       await expectInside();
       await expect(
-        plan.locator('[data-plan-row-remove-edit], [data-plan-row-day-chip], [data-plan-grip]'),
+        plan.locator('[data-plan-edit], [data-plan-row-day-chip], [data-plan-grip]'),
       ).toHaveCount(0);
       expect((await planLayout(page)).rows.every((r) => r.tick !== null)).toBe(true);
     };
@@ -633,107 +535,33 @@ test(
     expect(scrolled.rootX).toBe(0);
     await expectAtRest();
 
-    // Edit mode: the grip, the day chip and the 44px remove fit beside a long
-    // title; nothing sideways.
-    await enterEdit(plan);
-    await expectInside();
+    // The 44px ⋯ menu fits beside a long title; nothing sideways.
     for (const id of [long.concept, long.post]) {
       const wrap = plan.locator(`[data-plan-row-wrap="${id}"]`);
       await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-      await expect(wrap.locator('[data-plan-grip]')).toBeVisible();
-      await expect(wrap.locator('[data-plan-row-day-chip]')).toBeVisible();
-      const removeBox = await wrap.locator('[data-plan-row-remove-edit]').boundingBox();
-      if (removeBox === null) throw new Error('remove box');
-      expectMinTouchTarget(removeBox);
-      expect(removeBox.x).toBeGreaterThanOrEqual(0);
-      expect(removeBox.x + removeBox.width).toBeLessThanOrEqual(vw + 0.5);
+      const moreBox = await wrap.getByRole('button', { name: 'More actions' }).boundingBox();
+      if (moreBox === null) throw new Error('menu box');
+      expectMinTouchTarget(moreBox);
+      expect(moreBox.x).toBeGreaterThanOrEqual(0);
+      expect(moreBox.x + moreBox.width).toBeLessThanOrEqual(vw + 0.5);
     }
 
-    // Remove the long concept, then Discard: the row is back, nothing sent.
-    await plan
-      .locator(`[data-plan-row-wrap="${long.concept}"] [data-plan-row-remove-edit]`)
-      .click();
-    await expect(plan.locator(`[data-plan-row-wrap="${long.concept}"]`)).toHaveCount(0);
-    const discard = await cancelEdit(page, plan);
-    await discard.getByRole('button', { name: 'Discard' }).click();
-    await expect(discard).toBeHidden();
-    await expect(
-      dayBlock(plan, '2026-10-14').locator(`[data-plan-row="${long.concept}"]`),
-    ).toHaveCount(1);
-    expect(saves(network)).toEqual([]);
-    expect(removes(network)).toEqual([]);
-    await page.waitForTimeout(400);
-    await expectAtRest();
-
-    // The grip drag still moves a long row (the post's approval is its stage,
-    // not a client review row, so nothing asks); Save writes one plan_save.
-    await enterEdit(plan);
-    await dragToDay(page, plan, long.post, '2026-10-16');
+    // The row menu moves a long row (the post's approval is its stage, not a
+    // client review row, so nothing asks); one plan_save once the strip ends.
+    await moveToDay(page, plan, long.post, '2026-10-16');
     await expect(page.getByRole('dialog', { name: /^Slot approved by/ })).toHaveCount(0);
     await expect(
       dayBlock(plan, '2026-10-16').locator(`[data-plan-row="${long.post}"]`),
     ).toHaveCount(1);
     await expectInside();
-    await saveChanges(page, plan);
-    expect(saves(network)).toHaveLength(1);
+    await waitForSaves(network, 1);
     expect(opsOf(saves(network)[0])).toEqual([
       expect.objectContaining({ op: 'move', item_id: long.post, target_date: '2026-10-16' }),
     ]);
-    await expect(
-      dayBlock(plan, '2026-10-16').locator(`[data-plan-row="${long.post}"]`),
-    ).toHaveCount(1);
     await expectAtRest();
     expectClean(network);
   },
 );
-
-test('agency: a queued removal is never sent on close: Cancel and system Back ask, Keep editing holds it, Save sends it once', async ({
-  page,
-}) => {
-  test.setTimeout(90_000);
-  const network = await installHarnessNetwork(page);
-  seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
-  await openChat(page, PEER_NAME);
-  const plan = await openPlan(page, DATED_PLAN_ID);
-  const lantern = dated('Lantern workshop');
-  const wrap = plan.locator(`[data-plan-row-wrap="${lantern.id}"]`);
-  await enterEdit(plan);
-  await wrap.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await wrap.locator('[data-plan-row-remove-edit]').click();
-  await expect(wrap).toHaveCount(0);
-  expect(saves(network)).toEqual([]);
-  expect(removes(network)).toEqual([]);
-
-  // Cancel asks; Keep editing keeps the queued removal and the screen.
-  const discard = await cancelEdit(page, plan);
-  await discard.getByRole('button', { name: 'Keep editing' }).click();
-  await expect(discard).toBeHidden();
-  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
-  await expect(wrap).toHaveCount(0);
-
-  // System Back asks the same (the Back guard); Keep editing stays.
-  await page.goBack();
-  await expect(discard).toBeVisible();
-  await discard.getByRole('button', { name: 'Keep editing' }).click();
-  await expect(discard).toBeHidden();
-  await expect(plan).toBeVisible();
-  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
-  await expect(wrap).toHaveCount(0);
-  await page.waitForTimeout(500);
-  expect(saves(network)).toEqual([]);
-  expect(removes(network)).toEqual([]);
-
-  // Save: one plan_save; then Back closes the screen with nothing more sent.
-  await saveChanges(page, plan);
-  expect(saves(network)).toHaveLength(1);
-  expect(opsOf(saves(network)[0])).toEqual([{ op: 'remove', item_id: lantern.id }]);
-  await plan.getByRole('button', { name: 'Back' }).first().click();
-  await expect(plan).toBeHidden();
-  await page.waitForTimeout(1_500);
-  expect(saves(network)).toHaveLength(1);
-  expect(removes(network)).toEqual([]);
-  expectClean(network);
-});
 
 test('client: no swipe, no Edit, no Remove on plan rows', async ({ page }) => {
   test.setTimeout(90_000);
@@ -746,15 +574,16 @@ test('client: no swipe, no Edit, no Remove on plan rows', async ({ page }) => {
   const plan = await openPlan(page, DATED_PLAN_ID);
   await expect(plan.locator('[data-plan-row]').first()).toBeVisible();
   await expect(plan.locator('[data-plan-row-swipe]')).toHaveCount(0);
-  await expect(plan.locator('[data-plan-row-remove], [data-plan-row-remove-edit]')).toHaveCount(0);
+  await expect(plan.locator('[data-plan-row-remove]')).toHaveCount(0);
   await expect(plan.locator('[data-plan-edit], [data-plan-grip]')).toHaveCount(0);
+  await expect(plan.getByRole('button', { name: 'More actions' })).toHaveCount(0);
   // No peek for clients either: the device stays unmarked.
   await page.waitForTimeout(2_000);
   expect(await page.evaluate((k) => window.localStorage.getItem(k), PEEK_KEY)).toBeNull();
   expectClean(network);
 });
 
-test('agency: view mode has no edit controls and no peek; Edit shows the fields and a chip and remove per row; Cancel with nothing changed leaves at once', async ({
+test('agency: no Edit mode and no peek; one ⋯ per row; the title menu offers Rename and Change dates', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -765,48 +594,20 @@ test('agency: view mode has no edit controls and no peek; Edit shows the fields 
   // No peek, no tip toast, no swipe row, and the device is never marked.
   await page.waitForTimeout(1_500);
   await expect(
-    plan.locator(
-      '[data-plan-row-swipe], [data-plan-grip], [data-plan-row-day-chip], [data-plan-row-remove-edit]',
-    ),
+    plan.locator('[data-plan-row-swipe], [data-plan-grip], [data-plan-edit], [data-plan-save]'),
   ).toHaveCount(0);
-  await expect(page.getByText('Tip: swipe left on a slot to remove it')).toHaveCount(0);
   expect(await page.evaluate((k) => window.localStorage.getItem(k), PEEK_KEY)).toBeNull();
-
-  // Edit: a 44px text button; the header turns into Cancel / Editing plan / Save changes.
-  const edit = plan.locator('[data-plan-edit]');
-  await expect(edit).toHaveText('Edit');
-  expectMinTouchTarget(await edit.boundingBox());
-  await edit.click();
-  await expect(plan.locator('[data-plan-edit-header]')).toBeVisible();
-  await expect(plan.locator('[data-plan-editing-title]')).toHaveText('Editing plan');
-  await expect(plan.locator('[data-plan-back-text]')).toHaveText('Cancel');
-  await expect(plan.locator('[data-plan-save]')).toHaveText('Save changes');
-  for (const sel of ['[data-plan-back-text]', '[data-plan-save]']) {
-    expectMinTouchTarget(await plan.locator(sel).boundingBox());
-  }
-  await expect(plan.locator('[data-plan-edit-title]')).toHaveValue(DATED_PLAN_TITLE);
-  await expect(plan.locator('[data-plan-edit-date="startsOn"]')).toHaveValue('2026-10-12');
-  await expect(plan.locator('[data-plan-edit-date="endsOn"]')).toHaveValue('2026-10-18');
-  // Every row: a day chip and a remove; PLAN as read-only text and no footer while editing.
+  // Every row in the plan's days has its ⋯ and its PLAN control.
   const rows = plan.locator('[data-plan-row-wrap]');
-  const count = await rows.count();
-  expect(count).toBeGreaterThan(0);
-  await expect(plan.locator('[data-plan-row-wrap] [data-plan-row-day-chip]')).toHaveCount(count);
-  await expect(plan.locator('[data-plan-row-wrap] [data-plan-row-remove-edit]')).toHaveCount(count);
-  expect(await plan.locator('[data-plan-grip]').count()).toBeGreaterThan(0);
-  await expect(plan.locator('[data-plan-row-wrap] [data-plan-row-edit-line]')).toHaveCount(count);
-  await expect(plan.locator('[data-plan-row-wrap] [data-plan-control="text"]')).toHaveCount(count);
-  await expect(
-    plan.locator(
-      '[data-plan-control="switch"], [data-plan-control="pill"], [data-plan-ok], [data-plan-footer]',
-    ),
-  ).toHaveCount(0);
-
-  // Cancel with nothing changed: straight back to view mode, no dialog, nothing written.
-  await plan.locator('[data-plan-back-text]').click();
-  await expect(plan.locator('[data-plan-edit-header]')).toHaveCount(0);
-  await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  expect(await rows.count()).toBeGreaterThan(0);
+  expect(await plan.getByRole('button', { name: 'More actions' }).count()).toBeGreaterThan(0);
   await expect(plan.locator('[data-plan-slot]').first()).toBeVisible();
+  // The title menu: Rename and Change dates (and Delete for the creator).
+  await plan.locator('[data-plan-title-menu]').click();
+  await expect(plan.locator('[data-plan-menu-rename]')).toBeVisible();
+  await expect(plan.locator('[data-plan-menu-dates]')).toBeVisible();
+  await plan.locator('[data-plan-menu-dates]').click();
+  await expect(page.locator('[data-plan-dates-save]')).toBeVisible();
   expect(saves(network)).toEqual([]);
   expectClean(network);
 });

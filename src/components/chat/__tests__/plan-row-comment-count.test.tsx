@@ -66,7 +66,6 @@ function render(counts: Record<string, number>): string {
         timeZone="UTC"
         thumbs={{}}
         commentCounts={counts}
-        drag={null}
         onOpenItem={() => undefined}
         onPlanOk={() => undefined}
         onPlanNotOk={() => undefined}

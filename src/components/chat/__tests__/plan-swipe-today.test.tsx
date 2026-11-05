@@ -1,6 +1,6 @@
-// Plan list, view mode (X3): no swipe to remove, no row dustbin, no grip; the
-// hidden-rows helper and open at today. (Swipe left to remove was retired with
-// edit mode: removing is an edit, saved with Save changes.)
+// Plan list: no swipe to remove, no row dustbin, no grip; creators get one ⋯
+// menu per row (long-press and right-click open it too); the hidden-rows
+// helper and open at today.
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -67,7 +67,6 @@ const paint = (side: 'agency' | 'client', audience: 'team' | 'client'): string =
         side={side}
         timeZone="UTC"
         thumbs={{}}
-        drag={null}
         onOpenItem={() => undefined}
         onPlanOk={() => undefined}
         onPlanNotOk={() => undefined}
@@ -76,7 +75,7 @@ const paint = (side: 'agency' | 'client', audience: 'team' | 'client'): string =
     </MemoryRouter>,
   );
 
-describe('view mode rows: no swipe, no dustbin, no grip', () => {
+describe('rows: no swipe, no dustbin, no grip', () => {
   it('agency rows on Draft and Open plans carry only the row and the PLAN / POST lines', () => {
     for (const audience of ['team', 'client'] as const) {
       const html = paint('agency', audience);
@@ -88,7 +87,7 @@ describe('view mode rows: no swipe, no dustbin, no grip', () => {
       expect(html).not.toContain('touch-pan-y');
       expect(html).not.toContain('translateX(');
       expect(html).toContain('data-plan-slot=');
-      // Add rows stay in view mode (instant adds).
+      // Add rows stay (instant adds).
       expect(html).toContain('data-plan-add="2026-10-12"');
     }
   });
@@ -107,13 +106,13 @@ describe('view mode rows: no swipe, no dustbin, no grip', () => {
     expect(withoutItems(bundle(), new Set())).toEqual(bundle());
   });
 
-  it('the screen no longer swipes, peeks or long-presses; removes are edit ops', () => {
+  it('the screen never swipes or peeks; a long-press opens the row menu; removes autosave', () => {
     const src = read('PlanScreen.tsx');
     expect(src).not.toContain('use-row-swipe');
-    expect(src).not.toContain('useLongPress');
     expect(src).not.toContain('runPlanPeek');
     expect(src).not.toContain('planItemRemove(');
-    expect(src).toContain("queueOp(prev, { op: 'remove', item_id: id })");
+    expect(src).toContain('useMenuGesture(() => menu?.onOpenChange(id, true))');
+    expect(src).toContain("autosave({ op: 'remove', item_id: id }, REMOVED_TOAST);");
   });
 });
 
@@ -145,7 +144,6 @@ describe('long titles stay inside the column (view mode)', () => {
           side="agency"
           timeZone="UTC"
           thumbs={{}}
-          drag={null}
           onOpenItem={() => undefined}
           onPlanOk={() => undefined}
           onPlanNotOk={() => undefined}
