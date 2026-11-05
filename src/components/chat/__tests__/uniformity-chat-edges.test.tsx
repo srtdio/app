@@ -203,9 +203,14 @@ describe('11i tile time clear of the ⋯', () => {
 
 describe('8 motion tokens in the thread', () => {
   it('the swipe spring uses DUR_SLOW_MS and the enter curve; hover controls never fade', () => {
+    // The spring lives in the motion module (lib/motion/swipe.ts, paintSwipe);
+    // the thread paints through it and sets no timing of its own.
+    const swipe = read('../../../lib/motion/swipe.ts');
+    expect(swipe).toContain('`${DUR_SLOW_MS}ms var(--ease-enter)`');
+    expect(swipe).not.toContain('SWIPE_SPRING_MS');
     const src = read('../MessageThread.tsx');
-    expect(src).toContain('`${DUR_SLOW_MS}ms var(--ease-enter)`');
+    expect(src).toContain('paintSwipe');
     expect(src).not.toContain('SWIPE_SPRING_MS');
-    expect(src).not.toMatch(/ms ease-out|duration-\[\d+ms\]|duration-\d+\b/);
+    expect(src).not.toMatch(/ms ease-out|duration-\[\d+ms\]|duration-\d+\b|ease-enter/);
   });
 });
