@@ -332,6 +332,59 @@ describe('replies inside a checkpoint', () => {
     expect(args['p_mentions']).toEqual(expect.arrayContaining([OTHER]));
     expect(String(args['p_body'])).toContain(`@[${OTHER}]`);
   });
+
+  it('a reply in a plain comment thread has its own Reply that posts to the root', async () => {
+    viewer.id = CLIENT;
+    pageRows.current = [
+      row('c-1', 'plain note', { created_at: '2026-01-01T00:00:00.000Z' }),
+      row('r-1', 'on it', {
+        author_user_id: OTHER,
+        parent_comment_id: 'c-1',
+        created_at: '2026-01-02T00:00:00.000Z',
+      }),
+    ];
+    await mount(true);
+
+    const replyToReply = rowEl('r-1')?.querySelector<HTMLButtonElement>('[data-reply-to-reply]');
+    expect(replyToReply).toBeTruthy();
+    expect(replyToReply?.className).toContain('min-h-[44px]');
+    act(() => replyToReply?.click());
+    await settle();
+
+    expect(editor()?.querySelector('[data-mention-id]')?.getAttribute('data-mention-id')).toBe(
+      OTHER,
+    );
+    expect(editor()?.textContent?.trim()).toBe('@omar');
+
+    act(() => composerSubmit()?.click());
+    await settle();
+
+    expect(createSpy).toHaveBeenCalledTimes(1);
+    const args = createArgs();
+    expect(args['p_parent_comment_id']).toBe('c-1');
+    expect(args['p_mentions']).toEqual(expect.arrayContaining([OTHER]));
+  });
+
+  it('replying to your own reply in a plain thread does not @mention yourself', async () => {
+    viewer.id = OTHER;
+    pageRows.current = [
+      row('c-1', 'plain note', { created_at: '2026-01-01T00:00:00.000Z' }),
+      row('r-1', 'on it', {
+        author_user_id: OTHER,
+        parent_comment_id: 'c-1',
+        created_at: '2026-01-02T00:00:00.000Z',
+      }),
+    ];
+    await mount(false);
+
+    const replyToReply = rowEl('r-1')?.querySelector<HTMLButtonElement>('[data-reply-to-reply]');
+    expect(replyToReply).toBeTruthy();
+    act(() => replyToReply?.click());
+    await settle();
+
+    expect(editor()).toBeTruthy();
+    expect(editor()?.querySelector('[data-mention-id]')).toBeNull();
+  });
 });
 
 describe('one row template for checkpoints and comments', () => {

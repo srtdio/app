@@ -2144,7 +2144,7 @@ export function Comments({
     });
   }
 
-  // Reply on a reply inside a checkpoint: the server keeps one reply level, so
+  // Reply on a reply (checkpoint or plain thread): the server keeps one reply level, so
   // the composer is the root's (it posts with p_parent_comment_id = root id) and
   // it opens with the @Name of the person replied to. Typed text survives a
   // retarget; only the leading mention changes.
@@ -2602,8 +2602,9 @@ export function Comments({
     );
   }
 
-  // One reply, on the same row template. Inside a checkpoint a reply gets its
-  // own Reply, which posts to the checkpoint with the reply author's @Name.
+  // One reply, on the same row template. Every live reply (checkpoint or plain
+  // thread) gets its own Reply, which posts to the thread root with the reply
+  // author's @Name.
   function renderReplyRow(reply: CommentRow, onReply?: () => void): ReactNode {
     // A reply is never a tombstone (deleted replies are filtered out).
     return renderRow(reply, {
@@ -2699,7 +2700,7 @@ export function Comments({
                 </Button>
               ),
               replyButton: rootReplyButton(comment),
-              below: renderThreadBelow(comment, replies, false, false),
+              below: renderThreadBelow(comment, replies, false, true),
             })}
       </GlideItem>
     );
