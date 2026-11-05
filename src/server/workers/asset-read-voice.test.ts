@@ -1,4 +1,5 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { logger } from '@/server/logger';
 import {
   audioCopyFilename,
   authorizeAndSign,
@@ -43,7 +44,12 @@ function voiceVersion(overrides: Partial<AssetVersionLocator> = {}): AssetVersio
   };
 }
 
-function harness(version: AssetVersionLocator, copyKey: string | null) {
+function harness(
+  version: AssetVersionLocator,
+  copyKey: string | null,
+  /** R2 keys whose object is gone: fetchObject answers 404 for them. */
+  missing: string[] = [],
+) {
   const finds: Array<{ id: string; role: ReadRenditionRole }> = [];
   const signed: string[] = [];
   const fetched: Array<{ url: string; range: string | null }> = [];
@@ -85,6 +91,9 @@ function harness(version: AssetVersionLocator, copyKey: string | null) {
     },
     fetchObject: (url, range) => {
       fetched.push({ url, range });
+      if (missing.some((key) => url.endsWith(`/${key}`))) {
+        return Promise.resolve(new Response('NoSuchKey', { status: 404 }));
+      }
       if (range !== null) {
         return Promise.resolve(
           new Response('ab', {
@@ -196,6 +205,77 @@ describe('serveFile: old WebM voice notes', () => {
     const res = await serveFile(h.deps, await request());
     expect(res.status).toBe(403);
     expect(h.finds).toEqual([]);
+  });
+});
+
+describe('serveFile: WebM copy missing in R2 (FRONTEND-R)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('falls back to the original once, 200 with the original type and cache key', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness(voiceVersion(), COPY_KEY, [COPY_KEY]);
+    const res = await serveFile(h.deps, await request());
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('audio/webm');
+    expect(await res.text()).toBe('bytes');
+    expect(h.signed).toEqual([COPY_KEY, ORIGINAL_KEY]);
+    expect(warn).toHaveBeenCalledWith('file read miss', {
+      asset_version_id: VERSION,
+      kind: 'full',
+      reason: 'r2_missing_copy',
+    });
+    await Promise.all(h.pending);
+    // The original is cached under 'full', never under the copy's key.
+    expect([...h.cacheStore.keys()]).toEqual([fileCacheKey(ORIGIN, VERSION, 'full')]);
+  });
+
+  it('falls back to the original for a Range request as a 206', async () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness(voiceVersion(), COPY_KEY, [COPY_KEY]);
+    const res = await serveFile(h.deps, await request({ range: 'bytes=0-1' }));
+    expect(res.status).toBe(206);
+    expect(res.headers.get('Content-Type')).toBe('audio/webm');
+    expect(h.fetched).toEqual([
+      { url: `https://r2.test/${BUCKET}/${COPY_KEY}`, range: 'bytes=0-1' },
+      { url: `https://r2.test/${BUCKET}/${ORIGINAL_KEY}`, range: 'bytes=0-1' },
+    ]);
+  });
+
+  it('downloads the fallback under the original name, not .m4a', async () => {
+    vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness(voiceVersion(), COPY_KEY, [COPY_KEY]);
+    const res = await serveFile(h.deps, await request({ download: true }));
+    expect(res.headers.get('Content-Disposition')).toContain('filename="voice-note.webm"');
+  });
+
+  it('still answers 404 with r2_missing_original when the original is gone too', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness(voiceVersion(), COPY_KEY, [COPY_KEY, ORIGINAL_KEY]);
+    const res = await serveFile(h.deps, await request());
+    expect(res.status).toBe(404);
+    expect(h.signed).toEqual([COPY_KEY, ORIGINAL_KEY]);
+    expect(warn.mock.calls.map((c) => (c[1] as { reason?: string }).reason)).toEqual([
+      'r2_missing_copy',
+      'r2_missing_original',
+    ]);
+  });
+
+  it('a present copy makes exactly one R2 read and logs nothing', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness(voiceVersion(), COPY_KEY);
+    await serveFile(h.deps, await request());
+    expect(h.fetched).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('never logs the link key', async () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const h = harness(voiceVersion(), COPY_KEY, [COPY_KEY]);
+    const req = await request();
+    await serveFile(h.deps, req);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(req.key as string);
   });
 });
 

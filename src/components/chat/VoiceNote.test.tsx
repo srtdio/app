@@ -918,10 +918,18 @@ describe('playback recovery: second re-link and file probe (FRONTEND-R)', () => 
     results: VoiceUrlResult[];
     hidden?: boolean;
     probe?: (url: string) => Promise<'skipped' | 'network' | number>;
+    /** When set, the first play() rejects with this; later plays resolve. */
+    firstPlayError?: unknown;
   }) {
     let applied: string | null = 'https://srtd.io/f/v1/full?k=a';
     const results = [...opts.results];
-    const play = vi.fn(() => Promise.resolve());
+    let plays = 0;
+    const play = vi.fn(() => {
+      plays += 1;
+      return plays === 1 && opts.firstPlayError !== undefined
+        ? Promise.reject(opts.firstPlayError)
+        : Promise.resolve();
+    });
     const refreshUrl = vi.fn<(force: boolean) => Promise<VoiceUrlResult>>(
       async () => results.shift() ?? networkFailure,
     );
@@ -1057,6 +1065,52 @@ describe('playback recovery: second re-link and file probe (FRONTEND-R)', () => 
     const failure = failed.mock.calls[0]?.[0];
     expect(failure?.probe).toBeDefined();
     await expect(failure?.probe).resolves.toBe(404);
+  });
+
+  it('a first NotSupportedError play() rejection probes once, beside the re-link', async () => {
+    const probe = vi.fn(async () => 404 as const);
+    const { recovery, refreshUrl, failed } = setup({
+      results: [networkFailure, networkFailure],
+      probe,
+      firstPlayError: new DOMException('The operation is not supported.', 'NotSupportedError'),
+    });
+    recovery.play();
+    await flush();
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(probe).toHaveBeenCalledWith('https://srtd.io/f/v1/full?k=a');
+    expect(refreshUrl).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(DELAY);
+    await flush();
+    expect(probe).toHaveBeenCalledTimes(1);
+    const failure = failed.mock.calls[0]?.[0];
+    await expect(failure?.probe).resolves.toBe(404);
+  });
+
+  it('an AbortError play() rejection never probes and never re-links', async () => {
+    const probe = vi.fn(async () => 404 as const);
+    const { recovery, refreshUrl, failed } = setup({
+      results: [],
+      probe,
+      firstPlayError: new DOMException('The play() request was interrupted.', 'AbortError'),
+    });
+    recovery.play();
+    await flush();
+    expect(probe).not.toHaveBeenCalled();
+    expect(refreshUrl).not.toHaveBeenCalled();
+    expect(failed).not.toHaveBeenCalled();
+  });
+
+  it('a play() rejection with another name never probes', async () => {
+    const probe = vi.fn(async () => 404 as const);
+    const { recovery, refreshUrl } = setup({
+      results: [{ ok: true, data: 'https://srtd.io/f/v1/full?k=b' }],
+      probe,
+      firstPlayError: new DOMException('Not allowed.', 'NotAllowedError'),
+    });
+    recovery.play();
+    await flush();
+    expect(refreshUrl).toHaveBeenCalledTimes(1);
+    expect(probe).not.toHaveBeenCalled();
   });
 
   it('a first failure that is not a MediaError never probes', async () => {
