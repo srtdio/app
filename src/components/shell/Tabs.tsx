@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import type { KeyboardEvent } from 'react';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
+import { selectionSlideRef } from '@/lib/motion';
 
 export interface TabItem {
   key: string;
@@ -34,7 +35,9 @@ export function tabKeyTarget(keys: readonly string[], active: string, key: strin
 /**
  * In-page tabs (Settings panels): a role="tablist" row of role="tab" buttons
  * with aria-selected, never aria-current="page" (that is for nav links). The
- * active tab is the one Tab stop; the arrow keys move between tabs.
+ * active tab is the one Tab stop; the arrow keys move between tabs. The row
+ * looks like every chip row: tabs rest on the grey fill, the active tab is the
+ * ink fill and slides over from the last one (selectionSlideRef).
  */
 export function Tabs({ items, active, onChange, label }: TabsProps) {
   const refs = useRef(new Map<string, HTMLButtonElement>());
@@ -54,14 +57,16 @@ export function Tabs({ items, active, onChange, label }: TabsProps) {
       role="tablist"
       {...(label !== undefined ? { 'aria-label': label } : {})}
       onKeyDown={onKeyDown}
-      className="flex items-stretch gap-1 border-b border-border overflow-x-auto"
+      className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {items.map((tab) => {
         const isActive = tab.key === active;
+        const slide = selectionSlideRef(isActive);
         return (
           <PressableRow
             key={tab.key}
             buttonRef={(el: HTMLButtonElement | null) => {
+              slide(el);
               if (el === null) refs.current.delete(tab.key);
               else refs.current.set(tab.key, el);
             }}
@@ -71,16 +76,14 @@ export function Tabs({ items, active, onChange, label }: TabsProps) {
             role="tab"
             aria-selected={isActive}
             tabIndex={isActive ? 0 : -1}
+            data-selected={isActive ? 'true' : undefined}
             onClick={() => onChange(tab.key)}
             className={cn(
-              'relative flex items-center justify-center px-3 text-base whitespace-nowrap mv-tint',
-              isActive ? 'text-fg' : 'text-fg-2 hover:text-fg',
+              'flex shrink-0 items-center justify-center px-3 text-base font-medium whitespace-nowrap',
+              isActive ? 'bg-accent text-accent-fg lit-pill' : 'bg-panel-3 text-fg lit-well-soft',
             )}
           >
             {tab.label}
-            {isActive ? (
-              <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" />
-            ) : null}
           </PressableRow>
         );
       })}

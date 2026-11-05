@@ -23,6 +23,22 @@ describe('Tabs', () => {
     expect(html).not.toContain('aria-current');
   });
 
+  it('the active tab is the ink fill; the others rest on the grey fill, no underline', () => {
+    const html = renderToStaticMarkup(<Tabs items={ITEMS} active="members" onChange={() => {}} />);
+    const active = /<button[^>]*aria-selected="true"[^>]*>/.exec(html)?.[0] ?? '';
+    expect(active).toContain('data-selected="true"');
+    for (const c of ['bg-accent', 'text-accent-fg', 'lit-pill']) expect(active).toContain(c);
+    const idle = [...html.matchAll(/<button[^>]*aria-selected="false"[^>]*>/g)].map((m) => m[0]);
+    expect(idle).toHaveLength(2);
+    for (const tag of idle) {
+      expect(tag).toContain('bg-panel-3');
+      expect(tag).toContain('lit-well-soft');
+      expect(tag).not.toContain('bg-accent');
+    }
+    expect(html).not.toContain('h-0.5');
+    expect(html).not.toContain('border-b');
+  });
+
   it('only the active tab is a Tab stop', () => {
     const html = renderToStaticMarkup(<Tabs items={ITEMS} active="members" onChange={() => {}} />);
     expect(html.match(/tabindex="0"/g)).toHaveLength(1);
