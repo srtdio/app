@@ -18,7 +18,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconEye, IconFile, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
-import { riseIn, riseOut, usePresence } from '@/lib/motion';
+import { riseIn, riseOut, usePresence, useSelectionSlide } from '@/lib/motion';
 import { dimWith } from '@/lib/motion/overlays';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -348,20 +348,12 @@ function SizePicker({
       {sizes.map((size) => {
         const selected = size.label === value;
         return (
-          <PressableRow
+          <SizeOption
             key={size.label}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            onClick={() => onChange(size.label)}
-            className={cn(
-              'flex flex-col items-start justify-center border px-3 py-1.5 mv-tint',
-              selected ? 'lit-selected' : 'font-medium text-fg lit-chip',
-            )}
-          >
-            <span className="text-base font-medium">{size.label}</span>
-            <span className="text-sm text-fg-3">{sizeMeta(size)}</span>
-          </PressableRow>
+            size={size}
+            selected={selected}
+            onPick={() => onChange(size.label)}
+          />
         );
       })}
     </div>
@@ -530,5 +522,35 @@ function ShownWindow({ window: win }: { window: CropWindow }): ReactElement {
         Shown
       </span>
     </div>
+  );
+}
+
+/** One size pick: the pick is the solid ink fill, sliding over from the last one. */
+function SizeOption(props: {
+  size: PlatformSize;
+  selected: boolean;
+  onPick: () => void;
+}): ReactElement {
+  const slideRef = useSelectionSlide(props.selected);
+  return (
+    <PressableRow
+      type="button"
+      role="radio"
+      buttonRef={slideRef}
+      data-selected={props.selected ? 'true' : undefined}
+      aria-checked={props.selected}
+      onClick={props.onPick}
+      className={cn(
+        'flex flex-col items-start justify-center border px-3 py-1.5 mv-tint',
+        props.selected
+          ? 'border-transparent bg-accent text-accent-fg lit-pill'
+          : 'border-transparent bg-panel-3 font-medium text-fg lit-well-soft lit-hover',
+      )}
+    >
+      <span className="text-base font-medium">{props.size.label}</span>
+      <span className={cn('text-sm', props.selected ? 'text-accent-fg' : 'text-fg-3')}>
+        {sizeMeta(props.size)}
+      </span>
+    </PressableRow>
   );
 }

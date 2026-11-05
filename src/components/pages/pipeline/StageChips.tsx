@@ -73,7 +73,7 @@ export function StageChips({ items, active, onChange }: StageChipsProps): ReactE
     <div
       ref={rowRef}
       data-chip-row=""
-      className="flex flex-nowrap items-center gap-2 overflow-x-auto"
+      className="flex flex-nowrap items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       style={{ paddingRight: 0, WebkitMaskImage: mask, maskImage: mask }}
     >
       {items.map((item) => {

@@ -9,6 +9,7 @@ import type { ReactElement } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useInboxStore } from '@/components/shell/InboxStoreProvider';
 import { CountBadge } from '@/components/ui/CountBadge';
+import { useNudgeOnRise } from '@/lib/motion';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconNotifications, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -36,6 +37,8 @@ export function NotificationsButton(): ReactElement {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const active = onNotifications(pathname);
+  // The icon nudges when the unread count rises (never the badge or the button).
+  const nudgeRef = useNudgeOnRise(unreadCount);
   return (
     <IconButton
       type="button"
@@ -46,10 +49,13 @@ export function NotificationsButton(): ReactElement {
       onClick={() => navigate(NOTIFICATIONS_PATH)}
       // A press starts the Activity chunk and its first reads before the tap lands.
       {...activityPrefetchProps()}
-      // Active is the one selected look (lit-selected), full ink.
-      className={cn('relative shrink-0', active && 'border lit-selected')}
+      // Active is the one picked look: the solid ink fill.
+      className={cn(
+        'relative shrink-0',
+        active && 'border border-transparent bg-accent text-accent-fg lit-pill',
+      )}
     >
-      <span className="inline-flex">
+      <span ref={nudgeRef} className="inline-flex">
         <IconNotifications size={ICON_SIZE.control} />
       </span>
       {unreadCount > 0 ? (

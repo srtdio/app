@@ -225,7 +225,7 @@ describe('IconButton', () => {
 });
 
 describe('Chip', () => {
-  it('both sizes are 44 tall, px-4, 8px radius, weight 500, lit', () => {
+  it('both sizes are 44 tall, px-4, 8px radius, weight 500, the quiet grey well', () => {
     for (const size of ['sm', 'tap'] as const) {
       const el = Chip({ label: 'All', size }) as ReactElement<{ className: string }>;
       const t = tokens(el.props.className);
@@ -233,22 +233,27 @@ describe('Chip', () => {
       expect(t).toContain('px-4');
       expect(t).toContain('rounded-lg');
       expect(t).toContain('font-medium');
-      expect(t).toContain('lit-chip');
+      expect(t).toContain('bg-panel-3');
+      expect(t).toContain('lit-well-soft');
+      expect(t).toContain('lit-hover');
+      expect(t).toContain('border-transparent');
       expect(t).toContain('text-fg');
       expect(t).not.toContain('text-fg-2');
       expect(t).not.toContain('border-border');
-      expect(t).toContain('border-border-strong');
+      expect(t).not.toContain('border-border-strong');
       expect(t).not.toContain('h-8');
     }
   });
 
-  it('selected is lit-selected with no soft fill; add is a dashed lit-chip', () => {
+  it('selected is the solid ink fill (bg-accent, lit-pill); add is a dashed lit-chip', () => {
     const sel = tokens(
       (Chip({ label: 'All', selected: true }) as ReactElement<{ className: string }>).props
         .className,
     );
-    expect(sel).toContain('lit-selected');
-    expect(sel).not.toContain('text-accent');
+    expect(sel).toContain('bg-accent');
+    expect(sel).toContain('text-accent-fg');
+    expect(sel).toContain('lit-pill');
+    expect(sel).not.toContain('lit-selected');
     expect(sel).not.toContain('border-accent-line');
     expect(sel).not.toContain('bg-accent-soft');
     expect(sel).not.toContain('lit-chip');

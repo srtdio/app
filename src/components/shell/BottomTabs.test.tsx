@@ -153,8 +153,9 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     const active = links[1];
     if (active === undefined) throw new Error('no Briefs tab');
     expect(classes(active)).toEqual(
-      expect.arrayContaining(['bg-tab-active', 'text-accent', 'lit-active']),
+      expect.arrayContaining(['bg-accent', 'text-accent-fg', 'lit-pill']),
     );
+    expect(active.getAttribute('data-selected')).toBe('true');
     expect(classes(active)).not.toContain('bg-accent-soft');
     const label = active.querySelector('span');
     expect(classes(label ?? active)).toEqual(
@@ -217,33 +218,22 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     expect(chatLink(container).getAttribute('aria-label')).toBe('Chat');
   });
 
-  it('Chat circle: fg ink in every state, an inner lit-selected layer when active', () => {
+  it('Chat circle: raised panel at rest, the solid ink fill when active', () => {
     const idle = chatLink(render('/pipeline'));
     expect(classes(idle)).toEqual(
-      expect.arrayContaining(['bg-panel', 'text-fg', 'focus-visible:lit-focus']),
+      expect.arrayContaining(['bg-panel', 'lit-raised', 'text-fg', 'focus-visible:lit-focus']),
     );
-    expect(idle.querySelector('[data-chat-tab-tint]')).toBeNull();
+    expect(classes(idle)).not.toContain('bg-accent');
     act(() => root?.unmount());
     host?.remove();
     const active = chatLink(render('/chat'));
-    // Solid in every state: the raised circle keeps its panel fill.
-    expect(classes(active)).toContain('bg-panel');
-    expect(classes(active)).toContain('text-fg');
-    expect(classes(active)).not.toContain('text-accent');
-    expect(classes(active)).not.toContain('bg-accent-soft');
-    const tint = active.querySelector('[data-chat-tab-tint]');
-    expect(tint?.getAttribute('aria-hidden')).toBe('true');
-    expect(classes(tint ?? active)).toEqual(
-      expect.arrayContaining([
-        'pointer-events-none',
-        'absolute',
-        'inset-0',
-        'rounded-full',
-        'border',
-        'lit-selected',
-      ]),
+    // Opaque in every state: the ink fill replaces the panel fill.
+    expect(classes(active)).toEqual(
+      expect.arrayContaining(['bg-accent', 'text-accent-fg', 'lit-pill', 'border-transparent']),
     );
-    expect(classes(tint ?? active)).not.toContain('bg-accent-soft');
+    expect(classes(active)).not.toContain('bg-panel');
+    expect(classes(active)).not.toContain('bg-accent-soft');
+    expect(active.querySelector('[data-chat-tab-tint]')).toBeNull();
   });
 
   it('tour anchors: activityTab on the Activity tab, chatTab on the Chat circle, once each', () => {

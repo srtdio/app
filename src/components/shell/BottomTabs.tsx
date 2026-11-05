@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useMatch } from 'react-router-dom';
 import { PRIMARY_NAV } from '@/components/shell/nav';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import { useInboxStore } from '@/components/shell/InboxStoreProvider';
@@ -10,6 +10,7 @@ import {
 } from '@/components/shell/NotificationsButton';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { CountBadge } from '@/components/ui/CountBadge';
+import { useNudgeOnRise, useSelectionSlide } from '@/lib/motion';
 import { unreadCommentsLabel, usePlanItemsUnreadTotal } from '@/lib/inbox/unread-entities';
 import { cn } from '@/lib/cn';
 import { activityPrefetchProps, navPrefetchProps } from '@/lib/route-prefetch';
@@ -41,13 +42,46 @@ export function chatTabLabel(unread: number): string {
 
 /**
  * A pill tab: inactive is the icon alone in a 44x44 target; active is icon and
- * label in an accent-soft capsule (--lit-tab-active-bg: accent 22% in dark).
- * The switch is instant (no width animation).
+ * label on the solid ink fill (bg-accent, lit-pill: the one picked look), which
+ * slides over from the last tab (useSelectionSlide).
  */
 function tabClass(active: boolean): string {
   return cn(
-    'relative flex h-11 min-w-[44px] shrink-0 items-center justify-center rounded-full focus-visible:lit-focus',
-    active ? 'gap-1.5 bg-tab-active pl-3 pr-2.5 text-accent lit-active' : 'w-11 text-fg',
+    'relative flex h-11 min-w-[44px] shrink-0 items-center justify-center rounded-full focus-visible:lit-focus mv-tint',
+    active ? 'gap-1.5 bg-accent pl-3 pr-2.5 text-accent-fg lit-pill' : 'w-11 text-fg',
+  );
+}
+
+/** One pill tab of the primary nav (Pipeline, Briefs, Assets, Plan). */
+function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number }) {
+  const { item, planUnread } = props;
+  const active = useMatch({ path: item.to, end: false }) !== null;
+  const slideRef = useSelectionSlide(active);
+  return (
+    <NavLink
+      ref={slideRef}
+      to={item.to}
+      data-selected={active ? 'true' : undefined}
+      aria-label={item.showPlanBadge === true ? planTabLabel(item.label, planUnread) : item.label}
+      {...navPrefetchProps(item.to)}
+      className={() => tabClass(active)}
+    >
+      {item.showPlanBadge === true ? (
+        // Plan: the icon carries the unread plan comments badge.
+        <span className="relative inline-flex">
+          <item.Icon size={ICON_SIZE.control} />
+          {planUnread > 0 ? (
+            <CountBadge
+              count={planUnread}
+              className="absolute -right-2 -top-1.5 border-2 border-surface-top"
+            />
+          ) : null}
+        </span>
+      ) : (
+        <item.Icon size={ICON_SIZE.control} />
+      )}
+      <TabLabel active={active} label={item.label} />
+    </NavLink>
   );
 }
 
@@ -69,6 +103,9 @@ export function BottomTabs() {
   const planUnread = usePlanItemsUnreadTotal();
   const { pathname } = useLocation();
   const activityActive = onNotifications(pathname);
+  const activitySlideRef = useSelectionSlide(activityActive);
+  const activityNudgeRef = useNudgeOnRise(unreadCount);
+  const chatNudgeRef = useNudgeOnRise(total);
   return (
     <>
       <div
@@ -88,35 +125,7 @@ export function BottomTabs() {
           className="flex h-[60px] min-w-0 flex-1 items-center justify-between rounded-full border bg-panel p-1 lit-raised"
         >
           {PILL_NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              aria-label={
-                item.showPlanBadge === true ? planTabLabel(item.label, planUnread) : item.label
-              }
-              {...navPrefetchProps(item.to)}
-              className={({ isActive }) => tabClass(isActive)}
-            >
-              {({ isActive }) => (
-                <>
-                  {item.showPlanBadge === true ? (
-                    // Plan: the icon carries the unread plan comments badge.
-                    <span className="relative inline-flex">
-                      <item.Icon size={ICON_SIZE.control} />
-                      {planUnread > 0 ? (
-                        <CountBadge
-                          count={planUnread}
-                          className="absolute -right-2 -top-1.5 border-2 border-surface-top"
-                        />
-                      ) : null}
-                    </span>
-                  ) : (
-                    <item.Icon size={ICON_SIZE.control} />
-                  )}
-                  <TabLabel active={isActive} label={item.label} />
-                </>
-              )}
-            </NavLink>
+            <PillTab key={item.to} item={item} planUnread={planUnread} />
           ))}
           {/* Activity: last in the pill on phone (the top bar's button is laptop only). */}
           <NavLink
@@ -126,10 +135,14 @@ export function BottomTabs() {
             data-induction={INDUCTION_KEYS.activityTab}
             {...(activityActive ? { 'aria-current': 'page' as const } : {})}
             {...activityPrefetchProps()}
+            ref={activitySlideRef}
+            data-selected={activityActive ? 'true' : undefined}
             className={tabClass(activityActive)}
           >
             <span className="relative">
-              <IconNotifications size={ICON_SIZE.control} />
+              <span ref={activityNudgeRef} className="inline-flex">
+                <IconNotifications size={ICON_SIZE.control} />
+              </span>
               {unreadCount > 0 ? (
                 <CountBadge
                   count={unreadCount}
@@ -147,24 +160,20 @@ export function BottomTabs() {
             data-chat-tab=""
             data-induction={INDUCTION_KEYS.chatTab}
             {...navPrefetchProps(CHAT_NAV.to)}
-            // bg-panel in every state: accent-soft is translucent, so on its own
-            // the chat rows would show through the circle on /chat.
-            // A function, so NavLink adds no bare "active" class.
-            className={() =>
-              'relative flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border bg-panel lit-raised text-fg focus-visible:lit-focus'
+            // Opaque in every state, so the chat rows never show through the
+            // circle on /chat. Active is the one picked look: the solid ink fill.
+            className={({ isActive }) =>
+              cn(
+                'relative flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border focus-visible:lit-focus mv-tint',
+                isActive
+                  ? 'border-transparent bg-accent text-accent-fg lit-pill'
+                  : 'bg-panel lit-raised text-fg',
+              )
             }
           >
-            {({ isActive }) => (
+            {() => (
               <>
-                {isActive ? (
-                  <span
-                    aria-hidden
-                    data-chat-tab-tint=""
-                    // Active is the one selected look: lit-selected inside the raised circle.
-                    className="pointer-events-none absolute inset-0 rounded-full border lit-selected"
-                  />
-                ) : null}
-                <span className="relative">
+                <span ref={chatNudgeRef} className="relative inline-flex">
                   <CHAT_NAV.Icon size={ICON_SIZE.tray} />
                 </span>
                 {total > 0 ? (

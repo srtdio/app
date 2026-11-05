@@ -1,6 +1,6 @@
-import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
+import { useCallback, type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react';
 import { cn } from '@/lib/cn';
-import { MOVE_CLASS } from '@/lib/motion';
+import { MOVE_CLASS, useSelectionSlide } from '@/lib/motion';
 
 interface ChipProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -77,24 +77,38 @@ export function Chip({
   ...props
 }: ChipProps) {
   const selected = selectedProp ?? false;
+  // The pick's fill slides over from the row's last pick (src/lib/motion/selection.ts).
+  const slideRef = useSelectionSlide(selected && variant !== 'add');
+  const ref = useCallback(
+    (el: HTMLButtonElement | null) => {
+      slideRef(el);
+      if (typeof buttonRef === 'function') buttonRef(el);
+      else if (buttonRef !== null && buttonRef !== undefined) {
+        (buttonRef as { current: HTMLButtonElement | null }).current = el;
+      }
+    },
+    [slideRef, buttonRef],
+  );
   return (
     <button
       type="button"
       {...chipStateAria(selectedProp, tab || props.role === 'tab')}
       {...props}
-      ref={buttonRef}
+      ref={ref}
+      data-selected={selected ? 'true' : undefined}
       onClick={onClick}
       className={cn(
-        // Hover/press: the lit-chip / lit-selected overlay rule (index.css), no
-        // flat swap. Disabled: fg-3 ink, no hover, never a fade.
+        // At rest a quiet grey fill (no edge); the pick is the solid ink fill
+        // (bg-accent, lit-pill), the same look as a picked day. Hover/press: the
+        // lit-hover overlay, no flat swap. Disabled: fg-3 ink, never a fade.
         'inline-flex items-center gap-1.5 rounded-lg border text-base font-medium focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none disabled:cursor-default',
         MOVE_CLASS.press,
         sizes[size],
         variant === 'add'
           ? 'lit-chip border-dashed border-border-strong text-fg-3'
           : selected
-            ? 'lit-selected'
-            : 'lit-chip border-border-strong text-fg',
+            ? 'border-transparent bg-accent text-accent-fg lit-pill'
+            : 'border-transparent bg-panel-3 text-fg lit-well-soft lit-hover',
         className,
       )}
     >

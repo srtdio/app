@@ -498,3 +498,54 @@ export function dropIn(el: Element | null): Played {
     },
   );
 }
+
+// Selection, count and nav touches (5 Nov 2026, Purist-inspired, approved by Shubham).
+/** Selection fill: the filled highlight slides (and resizes) from the old pick to the new one. */
+export const TOUCH_FILL_SLIDE: MoveSpec = { move: 'touch', axis: ['x', 'y', 'fill'] };
+/** Count badge: the pill widens or narrows with its digits. */
+export const TOUCH_WIDEN: MoveSpec = { move: 'touch', axis: ['fill'] };
+/** Nav icon nudge: a small lift and tilt when its unread count rises. */
+export const TOUCH_NUDGE_ICON: MoveSpec = { move: 'touch', axis: ['y', 'rotate'] };
+
+/**
+ * Selection fill: `ghost` already sits on the new pick (its final box); it
+ * slides from the old pick's offset and width to there, 200 ms, ease-enter.
+ */
+export function slideFill(
+  ghost: Element | null,
+  from: { dx: number; dy: number; width: number },
+  toWidth: number,
+): Played {
+  return play(
+    ghost,
+    TOUCH_FILL_SLIDE,
+    [
+      { translate: `${from.dx}px ${from.dy}px`, width: `${from.width}px` },
+      { translate: '0px 0px', width: `${toWidth}px` },
+    ],
+    { duration: DUR_SLOW_MS, easing: EASE.enter },
+  );
+}
+
+/** Count badge: the pill eases from its old width to its new one, 200 ms, ease-enter. */
+export function widenBadge(el: Element | null, fromWidth: number, toWidth: number): Played {
+  return play(el, TOUCH_WIDEN, [{ width: `${fromWidth}px` }, { width: `${toWidth}px` }], {
+    duration: DUR_SLOW_MS,
+    easing: EASE.enter,
+  });
+}
+
+/** Nav icon nudge: lift 4 px and tilt -8deg, swing to +4deg, settle; 320 ms, ease-pop. */
+export function nudgeIcon(el: Element | null): Played {
+  return play(
+    el,
+    TOUCH_NUDGE_ICON,
+    [
+      { translate: '0px 0px', rotate: '0deg' },
+      { translate: '0px -4px', rotate: '-8deg', offset: 0.35 },
+      { translate: '0px 0px', rotate: '4deg', offset: 0.7 },
+      { translate: '0px 0px', rotate: '0deg' },
+    ],
+    { duration: DUR_SHEET_IN_MS, easing: EASE.pop },
+  );
+}

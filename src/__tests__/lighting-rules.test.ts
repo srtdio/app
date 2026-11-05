@@ -438,8 +438,9 @@ describe('lighting rules', () => {
     for (const c of ['lit-btn-primary', 'lit-btn-secondary', 'lit-btn-success', 'lit-btn-danger']) {
       expect(button, c).toContain(c);
     }
-    expect(src('ui/Chip.tsx')).toContain('lit-chip');
-    expect(src('ui/Chip.tsx')).toContain('lit-selected');
+    // Chips rest on the quiet grey well; the pick is the ink fill (5 Nov 2026).
+    expect(src('ui/Chip.tsx')).toContain('bg-panel-3 text-fg lit-well-soft');
+    expect(src('ui/Chip.tsx')).toContain('bg-accent text-accent-fg lit-pill');
     expect(src('ui/Input.tsx')).toContain('lit-well');
     expect(src('ui/Sheet.tsx')).toContain('lit-overlay');
     expect(src('ui/popover-classes.ts')).toContain('lit-overlay');

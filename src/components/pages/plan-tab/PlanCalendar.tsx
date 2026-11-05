@@ -407,7 +407,10 @@ function ChipRow(props: {
   more: PlanTabMore | null;
 }): ReactElement {
   return (
-    <div data-plan-tab-chips="" className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+    <div
+      data-plan-tab-chips=""
+      className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       <Chip
         type="button"
         label={ALL_LABEL}

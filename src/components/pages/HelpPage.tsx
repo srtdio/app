@@ -203,7 +203,10 @@ export function HelpPage() {
             </p>
           </div>
 
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-2" aria-label="Filter help articles">
+          <div
+            className="mt-4 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            aria-label="Filter help articles"
+          >
             {CATEGORIES.map((item) => (
               <Chip
                 key={item}

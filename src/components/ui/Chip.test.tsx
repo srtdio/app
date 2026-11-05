@@ -46,8 +46,14 @@ describe('Chip aria', () => {
     expect(html).not.toContain('aria-selected');
   });
 
-  it('nothing visual changes: the selected look is still lit-selected', () => {
-    expect(renderToStaticMarkup(<Chip label="Open" selected />)).toContain('lit-selected');
-    expect(renderToStaticMarkup(<Chip label="Open" tab selected />)).toContain('lit-selected');
+  it('the pick is the solid ink fill and marks itself for the slide', () => {
+    const toggle = renderToStaticMarkup(<Chip label="Open" selected />);
+    expect(toggle).toContain('bg-accent text-accent-fg lit-pill');
+    expect(toggle).toContain('data-selected="true"');
+    const tab = renderToStaticMarkup(<Chip label="Open" tab selected />);
+    expect(tab).toContain('bg-accent text-accent-fg lit-pill');
+    const idle = renderToStaticMarkup(<Chip label="Open" selected={false} />);
+    expect(idle).toContain('bg-panel-3 text-fg lit-well-soft');
+    expect(idle).not.toContain('data-selected');
   });
 });
