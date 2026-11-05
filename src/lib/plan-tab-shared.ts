@@ -21,7 +21,12 @@ import type { Client, Result } from '@srtdio/rpc';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
 import { PLAN_CHANGED_EVENT } from '@/lib/chat/plans';
 import { withReadTimeout, READ_TIMEOUT_MS } from '@/lib/chat-reads';
-import { canCreatePlans, visibleRange } from '@/lib/plan-tab';
+import {
+  canCreatePlans,
+  PLAN_WEEK_CHIP_DEFAULT,
+  planWeekChipRange,
+  visibleRange,
+} from '@/lib/plan-tab';
 import { readPlanTab, type PlanTabData } from '@/lib/plan-tab-read';
 import { civilToday } from '@/lib/plan-week';
 import type { PrefetchContext } from '@/lib/prefetch-context';
@@ -105,7 +110,11 @@ export async function startPlanTabRead(
   const { resolveViewerSide } = await import('@/lib/chat/viewer-role');
   const side = await resolveViewerSide(client, ctx.workspaceId, ctx.userId);
   if (side === 'unknown') return;
-  const range = laptop ? visibleRange('month', civilToday(now, safeTimeZone(ctx.timeZone))) : null;
+  // The phone opens on This week (its default chip) and reads just that week.
+  const today = civilToday(now, safeTimeZone(ctx.timeZone));
+  const range = laptop
+    ? visibleRange('month', today)
+    : planWeekChipRange(PLAN_WEEK_CHIP_DEFAULT, today);
   await readSharedPlanTab(client, ctx.userId, {
     workspaceId: ctx.workspaceId,
     range,

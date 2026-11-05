@@ -159,6 +159,7 @@ const REQUIRED: readonly string[] = [
   'plan-tab',
   'plan-tab-week',
   'plan-tab-week-dark',
+  'plan-tab-week-zero',
   'post-comment-reply-privately',
   'post-comment-reply-privately-card',
   'post-detail',
@@ -210,6 +211,7 @@ interface Exception {
 
 /** Phone-only screens (skipped on laptop: `only: 'phone'`). */
 const PHONE_ONLY_NAMES = [
+  'plan-tab-week-zero',
   'cockpit-sheet-users',
   'cockpit-sheet-traffic',
   'person-card-inline',

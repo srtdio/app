@@ -1012,6 +1012,19 @@ const SCREENS: Screen[] = [
     steps: async (page) =>
       waitFor([page.locator('[data-plan-tab-list]'), page.getByText('Autumn launch')], 'plan'),
   },
+  {
+    // The phone's week chips: a chip with no plans in it shows the zero line.
+    name: 'plan-tab-week-zero',
+    only: 'phone',
+    seed: creator,
+    extra: seedTab,
+    url: '/plan',
+    steps: async (page) => {
+      await waitFor([page.getByText('Autumn launch')], 'plan');
+      await tap([page.locator('[data-plan-tab-chip="earlier"]')], 'Past');
+      await waitFor([page.locator('[data-plan-tab-chip-zero]')], 'week zero');
+    },
+  },
   { name: 'post-detail', seed: creator, url: `/posts/${POST}`, steps: postDetailReady },
   { name: 'post-detail-approver', seed: approver, url: `/posts/${POST}`, steps: postDetailReady },
   { name: 'post-more-menu', seed: creator, url: `/posts/${POST}`, steps: openPostMenu },

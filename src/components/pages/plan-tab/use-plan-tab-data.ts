@@ -57,6 +57,17 @@ function sharedUserId(workspaceId: string): string | null {
 }
 
 /**
+ * Reads `args` quietly into this session's shared reads (after a paint, never
+ * on a paint or tap path), so a later chip or range that asks for it paints at
+ * once. No-op without a session context. Never throws.
+ */
+export function warmPlanTabRead(args: PlanTabReadArgs): void {
+  const userId = sharedUserId(args.workspaceId);
+  if (userId === null || peekPlanTab(userId, args) !== undefined) return;
+  void readSharedPlanTab(supabase, userId, args).catch(() => undefined);
+}
+
+/**
  * The page after `shown` (its cursor; in its range on the laptop), bounded at
  * 5s, appended to it. Null when there is no next page. Never throws.
  */
