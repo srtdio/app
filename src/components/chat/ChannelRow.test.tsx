@@ -8,7 +8,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { readFileSync } from 'node:fs';
-import { fileURLToPath, URL } from 'node:url';
+import { join } from 'node:path';
 import { act, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
@@ -326,7 +326,7 @@ describe('G1: one layout listener per ChannelList, not one per tile', () => {
 
   it('ChannelCard reads no media query or layout hook of its own, and opens as "Open <name>"', () => {
     const source = readFileSync(
-      fileURLToPath(new URL('./ChannelList.tsx', import.meta.url)),
+      join(process.cwd(), 'src/components/chat/ChannelList.tsx'),
       'utf8',
     );
     const card = source.slice(
