@@ -113,7 +113,7 @@ function piecesOf(root: HTMLElement): { pieces: Piece[]; text: string } {
   let text = '';
   const walk = (node: Node): void => {
     if (node.nodeType === 3) {
-      const v = (node.nodeValue ?? '').replace(/ /g, ' ');
+      const v = (node.nodeValue ?? '').replace(/\u00a0/g, ' ');
       pieces.push({ node, start: text.length, len: v.length, atomic: false });
       text += v;
       return;
