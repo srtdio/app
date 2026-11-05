@@ -49,7 +49,7 @@ const RLS_SUITE = process.env.RLS_SUITE === '1';
 // (20261026120000_speedy_b.sql, each created with RLS enabled).
 // Then 160 -> 161 for user_active_days
 // (20261025210100_user_active_days.sql, created with RLS enabled).
-const EXPECTED_RELATION_COUNT = 161;
+const EXPECTED_RELATION_COUNT = 162;
 
 interface Relation {
   relname: string;
