@@ -79,7 +79,6 @@ import {
   IconSearch,
   IconX,
 } from '@/components/ui/icons';
-import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import {
   PICK_DATE_LABEL,
   PriorityChip,
@@ -385,7 +384,7 @@ function ChipLine(props: {
         <Chip
           key={c.key}
           label={c.label}
-          count={withCounts ? props.counts[c.key] : undefined}
+          {...(withCounts ? { count: props.counts[c.key] } : {})}
           tab
           selected={props.chip === c.key}
           data-task-when-chip={c.key}
