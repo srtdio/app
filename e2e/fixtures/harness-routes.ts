@@ -1057,6 +1057,33 @@ const BADGE_RPC: Record<string, RpcHandler> = {
       { unread: live.length, mentions: live.filter((e) => e.event_type === 'mention').length },
     ];
   },
+  /**
+   * public.inbox_unread_entity_counts over the fixture inbox: the caller's
+   * unread comment and mention rows per post and per plan item.
+   */
+  inbox_unread_entity_counts: (args, tables) => {
+    const now = new Date().toISOString();
+    const counts = new Map<string, { entity_type: string; entity_id: string; unread: number }>();
+    for (const e of tables.inbox_entries ?? []) {
+      if (e.workspace_id !== args.p_workspace_id || e.user_id !== ME) continue;
+      if ((e.read_at ?? null) !== null || (e.deleted_at ?? null) !== null) continue;
+      if ((e.snoozed_until ?? null) !== null && String(e.snoozed_until) > now) continue;
+      const type = String(e.entity_type ?? '');
+      const event = String(e.event_type ?? '');
+      const counted =
+        (type === 'post' && (event === 'comment' || event === 'mention')) ||
+        (type === 'plan_item' && (event === 'plan_comment' || event === 'mention'));
+      if (!counted || typeof e.entity_id !== 'string' || e.entity_id === '') continue;
+      const key = `${type}:${e.entity_id}`;
+      const hit = counts.get(key);
+      if (hit === undefined)
+        counts.set(key, { entity_type: type, entity_id: e.entity_id, unread: 1 });
+      else hit.unread += 1;
+    }
+    return [...counts.values()];
+  },
+  /** public.inbox_mark_entity_read: acknowledged; the fixture inbox is left as seeded. */
+  inbox_mark_entity_read: () => null,
 };
 
 /** An attachment's version: the embedded row the fixtures carry, else the asset_versions table. */

@@ -164,6 +164,7 @@ import { postStatusLine } from '@/lib/post-detail-presentation';
 import { postFormatLabel } from '@/lib/post-format';
 import { isPostPlatform, platformLabel as postPlatformLabel } from '@srtdio/posts';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
+import { markEntityReadOnOpen } from '@/lib/inbox/unread-entities';
 
 // The platform's display name from the single source (@srtdio/posts); a raw
 // value outside it renders as-is rather than throwing on the page.
@@ -695,6 +696,12 @@ export function PostDetailPage({
     mark('post:mount');
     void load();
   }, [load]);
+
+  // Opening the post reads its comments: the Pipeline card marker clears and
+  // the rows are marked read in the background (after paint, no wait).
+  useEffect(() => {
+    if (postId !== undefined) markEntityReadOnOpen('post', postId);
+  }, [postId]);
 
   // The gallery is a separate read (asset_attachments has no FK back to posts, so
   // it cannot ride getPost's embed). Flow B 36: a failed read is NOT an empty

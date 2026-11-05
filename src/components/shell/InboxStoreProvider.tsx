@@ -82,6 +82,7 @@ import { playToneShared } from '@/lib/chat/notify-sound';
 import { pushTabAlert } from '@/lib/tab-alert';
 import { setAlertPrefsUser } from '@/lib/alert-prefs';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
+import { useUnreadEntitiesSync } from '@/lib/inbox/unread-entities';
 import {
   POLL_MS,
   createTickGate,
@@ -137,6 +138,8 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   // The count with the tenant it belongs to; read through ownedUnread below.
   const [owned, setOwned] = useState<OwnedCount | null>(null);
   const unreadCount = ownedUnread(owned, workspaceId, userId);
+  // Pipeline and Plan unread comment markers read the same inbox rows (after paint).
+  useUnreadEntitiesSync(userId, workspaceId);
 
   // The newest created_at already accounted for (ms), from the server's clock.
   // Null until seeded for the active workspace/user (a tick seeds it and toasts
