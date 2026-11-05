@@ -42,6 +42,8 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'plan_bundle_read',
   'posts_list',
   'ref_resolve',
+  // Read-only STABLE invoker count (20261105110000): writes nothing, so nothing to log.
+  'inbox_unread_entity_counts',
 ]);
 
 /** Public functions whose arguments include p_trace_id but whose body never mentions it. */
