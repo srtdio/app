@@ -12,3 +12,4 @@ export * from './react';
 export * from './touches';
 export * from './pages';
 export * from './overlays';
+export * from './selection';

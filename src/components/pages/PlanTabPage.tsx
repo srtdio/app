@@ -22,7 +22,7 @@
 
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
+import { useHadBoxes, useSettleOnLanding, selectionSlideRef } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
@@ -449,23 +449,45 @@ function ViewSwitch(props: {
   return (
     <div className="lit-well flex overflow-hidden rounded-lg border border-field bg-panel-2">
       {options.map((o) => (
-        <PressableRow
+        <ViewOption
           key={o.view}
-          inline
-          flat
-          align="center"
-          type="button"
-          data-plan-tab-view={o.view}
-          aria-pressed={props.view === o.view}
-          onClick={() => props.onView(o.view)}
-          className={cn(
-            'min-w-[64px] border px-3 text-base font-medium mv-tint focus-visible:-outline-offset-2',
-            props.view === o.view ? 'lit-selected' : 'border-transparent text-fg-2 hover:text-fg',
-          )}
-        >
-          {o.label}
-        </PressableRow>
+          view={o.view}
+          label={o.label}
+          picked={props.view === o.view}
+          onView={props.onView}
+        />
       ))}
     </div>
+  );
+}
+
+/** One Month | Week option: the pick is the solid ink fill, sliding over from the other. */
+function ViewOption(props: {
+  view: PlanTabView;
+  label: string;
+  picked: boolean;
+  onView: (view: PlanTabView) => void;
+}): ReactElement {
+  const slideRef = selectionSlideRef(props.picked);
+  return (
+    <PressableRow
+      inline
+      flat
+      align="center"
+      type="button"
+      buttonRef={slideRef}
+      data-plan-tab-view={props.view}
+      data-selected={props.picked ? 'true' : undefined}
+      aria-pressed={props.picked}
+      onClick={() => props.onView(props.view)}
+      className={cn(
+        'min-w-[64px] border px-3 text-base font-medium mv-tint focus-visible:-outline-offset-2',
+        props.picked
+          ? 'border-transparent bg-accent text-accent-fg lit-pill'
+          : 'border-transparent text-fg-2 hover:text-fg',
+      )}
+    >
+      {props.label}
+    </PressableRow>
   );
 }

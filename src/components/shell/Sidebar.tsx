@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useMatch } from 'react-router-dom';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconChevronDown, ICON_SIZE } from '@/components/ui/icons';
 import { PRIMARY_NAV } from '@/components/shell/nav';
@@ -11,7 +11,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { navPrefetchProps } from '@/lib/route-prefetch';
 import { INDUCTION_KEYS } from '@/lib/induction';
-import { Bone } from '@/lib/motion';
+import { Bone, useNudgeOnRise, selectionSlideRef } from '@/lib/motion';
 
 interface SidebarProps {
   /** The active workspace's display name ("<Brand> - <Platform>"). */
@@ -57,40 +57,62 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
       </div>
       <nav aria-label="Primary" className="flex flex-col gap-0.5 px-2.5">
         {PRIMARY_NAV.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            {...navPrefetchProps(item.to)}
-            {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 min-h-[44px] px-3 rounded-lg border text-base font-medium mv-tint focus-visible:lit-focus',
-                // Active is the one selected look (lit-selected); hover is the lit-hover overlay.
-                isActive
-                  ? 'lit-selected text-fg'
-                  : 'border-transparent text-fg-2 lit-hover hover:text-fg',
-              )
-            }
-          >
-            <span className="relative">
-              <item.Icon size={ICON_SIZE.nav} />
-              {item.showChatBadge && total > 0 ? (
-                <CountBadge
-                  count={total}
-                  className="absolute -right-2 -top-1.5 border-2 border-panel"
-                />
-              ) : null}
-              {item.showPlanBadge === true && planUnread > 0 ? (
-                <CountBadge
-                  count={planUnread}
-                  className="absolute -right-2 -top-1.5 border-2 border-panel"
-                />
-              ) : null}
-            </span>
-            <span>{item.label}</span>
-          </NavLink>
+          <SideNavItem key={item.to} item={item} chatUnread={total} planUnread={planUnread} />
         ))}
       </nav>
     </aside>
+  );
+}
+
+/**
+ * One sidebar nav item. Active is the one picked look: the solid ink fill
+ * (bg-accent, lit-pill), which slides over from the last item
+ * (selectionSlideRef); hover is the lit-hover overlay. The Chat icon nudges when
+ * its unread count rises.
+ */
+function SideNavItem(props: {
+  item: (typeof PRIMARY_NAV)[number];
+  chatUnread: number;
+  planUnread: number;
+}) {
+  const { item, chatUnread, planUnread } = props;
+  const active = useMatch({ path: item.to, end: false }) !== null;
+  const slideRef = selectionSlideRef(active);
+  const nudgeRef = useNudgeOnRise(item.showChatBadge === true ? chatUnread : 0);
+  return (
+    <NavLink
+      ref={slideRef}
+      to={item.to}
+      data-selected={active ? 'true' : undefined}
+      {...navPrefetchProps(item.to)}
+      {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
+      className={() =>
+        cn(
+          'flex items-center gap-3 min-h-[44px] px-3 rounded-lg border text-base font-medium mv-tint focus-visible:lit-focus',
+          active
+            ? 'border-transparent bg-accent text-accent-fg lit-pill'
+            : 'border-transparent text-fg-2 lit-hover hover:text-fg',
+        )
+      }
+    >
+      <span className="relative">
+        <span ref={nudgeRef} className="inline-flex">
+          <item.Icon size={ICON_SIZE.nav} />
+        </span>
+        {item.showChatBadge === true && chatUnread > 0 ? (
+          <CountBadge
+            count={chatUnread}
+            className="absolute -right-2 -top-1.5 border-2 border-panel"
+          />
+        ) : null}
+        {item.showPlanBadge === true && planUnread > 0 ? (
+          <CountBadge
+            count={planUnread}
+            className="absolute -right-2 -top-1.5 border-2 border-panel"
+          />
+        ) : null}
+      </span>
+      <span>{item.label}</span>
+    </NavLink>
   );
 }

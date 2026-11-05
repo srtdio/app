@@ -779,6 +779,16 @@
   .lit-selected:disabled {
     color: var(--fg-3);
   }
+  /* The selection fill slide (src/lib/motion/selection.ts): while the fill
+     ghost travels to the new pick, the pick shows no fill of its own and sits
+     above the ghost so its label stays on top. */
+  [data-fill-slide] {
+    position: relative;
+    z-index: 2;
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+  }
   /* A dragged selected slide still floats one height. */
   .lit-selected.lit-float {
     box-shadow: var(--lit-float);

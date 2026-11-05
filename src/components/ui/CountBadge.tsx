@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react';
 import { cn } from '@/lib/cn';
-import { pop, rollDigit } from '@/lib/motion';
+import { pop, rollDigit, widenBadge } from '@/lib/motion';
 
 type CountBadgeProps =
   | {
@@ -37,8 +37,9 @@ export function countBadgeText(count: number): string {
  *
  * Motion (small touches): the first paint never moves. When the count changes
  * on screen the digits roll one step on Y (rollDigit, 160 ms; up when it grew,
- * down when it fell), clipped by the pill; a badge that appears from zero pops
- * from .9 (ease-pop). The digits sit in their own span only once the count has
+ * down when it fell), clipped by the pill, and when the pill's width changes
+ * (9 to 10, 99 to 99+) it eases to the new width (widenBadge, 200 ms); a badge
+ * that appears from zero pops from .9 (ease-pop). The digits sit in their own span only once the count has
  * changed, so the first paint is the plain pill. tone 'section': a neutral
  * pill (lit-pill, panel-2, border-strong edge, mono digits) for a section's
  * count on a grey drawer; always shown, never moves.
@@ -63,11 +64,15 @@ function UnreadBadge({ count, className }: { count: number; className?: string |
   // The count at the last commit, and whether it has changed since mount.
   const shown = useRef(count);
   const changed = useRef(false);
+  // The pill's width at the last commit (0 before the first measure).
+  const shownWidth = useRef(0);
   if (count !== shown.current) changed.current = true;
 
   useLayoutEffect(() => {
     const before = shown.current;
+    const beforeWidth = shownWidth.current;
     shown.current = count;
+    shownWidth.current = badge.current?.offsetWidth ?? 0;
     if (before === count || !(count > 0)) return;
     if (!(before > 0)) {
       pop(badge.current);
@@ -75,6 +80,11 @@ function UnreadBadge({ count, className }: { count: number; className?: string |
     }
     if (countBadgeText(before) === countBadgeText(count)) return;
     rollDigit(digits.current, count > before ? 1 : -1);
+    // 9 to 10, 99 to 99+ and back: the pill eases to its new width.
+    const nextWidth = shownWidth.current;
+    if (beforeWidth > 0 && nextWidth > 0 && beforeWidth !== nextWidth) {
+      widenBadge(badge.current, beforeWidth, nextWidth);
+    }
   }, [count]);
 
   if (!(count > 0)) return null;

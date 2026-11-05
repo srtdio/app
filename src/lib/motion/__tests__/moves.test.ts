@@ -13,6 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   bellSwing,
   Bone,
+  nudgeIcon,
+  slideFill,
+  widenBadge,
   BoxSkeleton,
   checkKeyframes,
   dialogIn,
@@ -100,6 +103,9 @@ const RUNS: ReadonlyArray<readonly [string, (el: HTMLElement) => Played | void]>
   ['touch: handPress', (el) => handPress(el)],
   ['touch: handRipple', (el) => handRipple(el)],
   ['touch: guideNudge', (el) => guideNudge(el)],
+  ['touch: slideFill', (el) => slideFill(el, { dx: -40, dy: 0, width: 60 }, 80)],
+  ['touch: widenBadge', (el) => widenBadge(el, 18, 26)],
+  ['touch: nudgeIcon', (el) => nudgeIcon(el)],
 ];
 
 interface FakeAnimation {
