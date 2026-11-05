@@ -22,6 +22,7 @@ import { createPortal } from 'react-dom';
 import { toggleFormat, type FormatStyle } from '@srtdio/comments';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
+import { isCoarsePointer } from '@/lib/use-is-laptop';
 import { useKeyboardInset } from '@/lib/use-keyboard-inset';
 
 type Field = HTMLTextAreaElement | HTMLElement;
@@ -244,7 +245,7 @@ export function FormatStrip({ field, open }: FormatStripProps): ReactNode {
     if (el === null || typeof window === 'undefined') return;
     const r = el.getBoundingClientRect();
     const vh = window.innerHeight;
-    const coarse = window.matchMedia?.('(pointer: coarse)').matches === true;
+    const coarse = isCoarsePointer();
     // A gap above the box leaves room for iPhone's own Cut/Copy/Paste menu,
     // which sits just above the selection: the two never overlap.
     const gap = coarse ? 56 : 8;
@@ -253,7 +254,7 @@ export function FormatStrip({ field, open }: FormatStripProps): ReactNode {
       // Pinned just above the keyboard, unless that would cover the box (a
       // bottom composer): then above the box.
       const bottom = r.bottom > kbTop - STRIP_H - gap ? vh - r.top + gap : inset + 8;
-      setPos({ bottom, left: 0, width: window.innerWidth });
+      setPos({ bottom, left: 0, width: document.documentElement.clientWidth });
       return;
     }
     const centre = vh / 2;

@@ -50,6 +50,7 @@ const CHAT_SPECS = [
   'chat-remember-messages',
   'chat-remove-files',
   'chat-reply-focus',
+  'chat-format',
   'chat-scheduled',
   'chat-search',
   'search-placeholder-fit',
