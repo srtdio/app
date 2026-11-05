@@ -94,7 +94,7 @@ test('agency: title menu, inline rename, delete (Open plan copy), the card reads
   await title.click();
   const menu = plan.locator('[data-plan-header-menu]');
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('menuitem')).toHaveText(['Rename', 'Delete plan']);
+  await expect(menu.getByRole('menuitem')).toHaveText(['Rename', 'Change dates', 'Delete plan']);
   await expect(menu.locator('[data-plan-menu-delete]')).toHaveClass(/text-bad/);
   for (const row of await menu.getByRole('menuitem').all()) {
     expectMinTouchTarget(await row.boundingBox());
@@ -143,7 +143,9 @@ test('agency: title menu, inline rename, delete (Open plan copy), the card reads
   expectClean(network);
 });
 
-test('agency: not the creator nor an owner/admin: the menu has Rename only', async ({ page }) => {
+test('agency: not the creator nor an owner/admin: the menu has Rename and Change dates, no Delete', async ({
+  page,
+}) => {
   test.setTimeout(90_000);
   const network = await installHarnessNetwork(page);
   seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: PEER });
@@ -155,6 +157,7 @@ test('agency: not the creator nor an owner/admin: the menu has Rename only', asy
   await plan.locator('[data-plan-title-menu]').click();
   await expect(plan.locator('[data-plan-header-menu]').getByRole('menuitem')).toHaveText([
     'Rename',
+    'Change dates',
   ]);
   await page.keyboard.press('Escape');
   await expect(plan.locator('[data-plan-header-menu]')).toHaveCount(0);

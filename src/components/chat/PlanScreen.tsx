@@ -262,7 +262,6 @@ import {
   formatCivilDayHeader,
   planShowsWeeks,
   planWeekGroups,
-  type PlanDayGroup,
   type PlanWeekGroup,
 } from '@/lib/plan-week';
 import { errorText } from '@/lib/error-copy';
@@ -2581,46 +2580,6 @@ export interface PlanRowMenu {
   onRemove: (id: string) => void;
 }
 
-/**
- * The day cards as shown: each dated day with items, today and No date get
- * their own card; a run of two or more empty days in the plan folds into one
- * card ("Wed 4 – Fri 6"). Pure.
- */
-export type ShownDay<T> =
-  | { kind: 'day'; day: PlanDayGroup<T> }
-  | { kind: 'empty-run'; first: string; last: string; key: string };
-export function foldEmptyDays<T>(days: readonly PlanDayGroup<T>[], today: string): ShownDay<T>[] {
-  const out: ShownDay<T>[] = [];
-  let run: string[] = [];
-  const flush = (): void => {
-    const first = run[0];
-    const last = run[run.length - 1];
-    if (run.length === 1) {
-      const only = days.find((d) => d.day === first);
-      if (only !== undefined) out.push({ kind: 'day', day: only });
-    } else if (first !== undefined && last !== undefined) {
-      out.push({ kind: 'empty-run', first, last, key: `run-${first}` });
-    }
-    run = [];
-  };
-  for (const day of days) {
-    const foldable = day.day !== null && day.inRange && day.items.length === 0 && day.day !== today;
-    if (foldable && day.day !== null) {
-      run.push(day.day);
-      continue;
-    }
-    flush();
-    out.push({ kind: 'day', day });
-  }
-  flush();
-  return out;
-}
-
-/** A folded run's label: "Wed 4 – Fri 6". Pure. */
-export function emptyRunLabel(first: string, last: string): string {
-  return `${dropDayLabel(first)} \u2013 ${dropDayLabel(last)}`;
-}
-
 export function PlanBody(props: {
   bundle: PlanBundle;
   groups: readonly PlanWeekGroup<PlanItemRow>[];
@@ -2666,33 +2625,7 @@ export function PlanBody(props: {
                 {week.label}
               </h3>
             ) : null}
-            {foldEmptyDays(week.days, today).map((shown) => {
-              if (shown.kind === 'empty-run') {
-                return (
-                  <div
-                    key={shown.key}
-                    data-plan-day-run={`${shown.first}..${shown.last}`}
-                    className="mx-4 flex items-center gap-3 rounded-xl border bg-panel px-3 py-1 lit-card"
-                  >
-                    <span className="w-14 shrink-0 font-mono text-sm tabular-nums text-fg-2">
-                      {emptyRunLabel(shown.first, shown.last)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      {props.onAdd !== undefined ? (
-                        <AddRow day={shown.first} empty onAdd={props.onAdd} />
-                      ) : (
-                        <p
-                          data-plan-day-empty=""
-                          className="flex min-h-[44px] items-center text-md text-fg-3"
-                        >
-                          Planned posts show up here.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-              const day = shown.day;
+            {week.days.map((day) => {
               const items = day.items;
               const empty = items.length === 0;
               // One date tile per day: on its first row, or beside the empty day's line.
