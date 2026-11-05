@@ -99,7 +99,7 @@ export function PlanDayTiles(props: {
                     // The pick is the ink fill (slides within the week); idle
                     // days rest on the grey fill like every chip.
                     on
-                      ? 'bg-accent text-accent-fg hover:bg-accent lit-pill'
+                      ? 'border-transparent bg-accent text-accent-fg hover:bg-accent lit-pill'
                       : 'bg-panel-3 text-fg lit-well-soft',
                   )}
                 >
