@@ -9,13 +9,14 @@ import { cn } from '@/lib/cn';
  */
 export type InputTone = 'field' | 'search';
 
-const BASE =
-  'w-full h-11 px-3 rounded-lg border text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus disabled:text-fg-3';
+// Default field: the exact classes it has always had (ink line at rest).
+const FIELD =
+  'lit-well w-full h-11 px-3 rounded-lg border border-field bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus disabled:text-fg-3';
 
 export const INPUT_TONE: Record<InputTone, string> = {
-  field: 'lit-well border-field bg-panel-2',
+  field: FIELD,
   search:
-    'lit-well border-transparent bg-panel-2 caret-fg focus:border-field focus:bg-panel focus:lit-card',
+    'lit-well w-full h-11 px-3 rounded-lg border border-transparent bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus disabled:text-fg-3 caret-fg focus:border-field focus:bg-panel focus:lit-card',
 };
 
 // 16px text below md so iOS Safari does not zoom the page when the field takes
@@ -24,5 +25,5 @@ export const Input = forwardRef<
   HTMLInputElement,
   InputHTMLAttributes<HTMLInputElement> & { tone?: InputTone }
 >(function Input({ className, tone = 'field', ...props }, ref) {
-  return <input ref={ref} className={cn(INPUT_TONE[tone], BASE, className)} {...props} />;
+  return <input ref={ref} className={cn(INPUT_TONE[tone], className)} {...props} />;
 });

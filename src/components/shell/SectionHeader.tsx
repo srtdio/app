@@ -97,9 +97,10 @@ function onSearchBlur(e: FocusEvent<HTMLInputElement>): void {
 }
 
 /** Clear and Cancel: the controls glide back unless the field keeps focus. */
-function glideBack(e: SyntheticEvent<HTMLElement>, blur: boolean): void {
-  if (isLaptopNow()) return;
-  const group = e.currentTarget.closest('[data-search-group]');
+function glideBack(e: SyntheticEvent<HTMLElement> | undefined, blur: boolean): void {
+  const target = e?.currentTarget;
+  if (target === undefined || isLaptopNow()) return;
+  const group = target.closest('[data-search-group]');
   const input = group?.querySelector('input') ?? null;
   const focused = input !== null && document.activeElement === input;
   if (blur && input !== null) {
@@ -107,10 +108,10 @@ function glideBack(e: SyntheticEvent<HTMLElement>, blur: boolean): void {
     // the glide runs here; an empty field glides from its own blur.
     const hadText = input.value !== '';
     input.blur();
-    if (hadText) glideAside(controlsOf(e.currentTarget), false);
+    if (hadText) glideAside(controlsOf(target), false);
     return;
   }
-  if (!focused) glideAside(controlsOf(e.currentTarget), false);
+  if (!focused) glideAside(controlsOf(target), false);
 }
 
 function renderPrimaryAction(action: SectionHeaderPrimaryAction): ReactNode {
