@@ -42,6 +42,8 @@ export const ITEM_OUT: MoveSpec = { move: 'itemOut', axis: ['clip'] };
 // 7. glide. Axis: Y for lists and feeds; X+Y for grids. (GlideList, layout via motion.)
 export const GLIDE_LIST: MoveSpec = { move: 'glide', axis: ['y'] };
 export const GLIDE_GRID: MoveSpec = { move: 'glide', axis: ['x', 'y'] };
+// Search focus: the toolbar's other controls glide aside on X only.
+export const GLIDE_ASIDE: MoveSpec = { move: 'glide', axis: ['x'] };
 // 8. edgeStrip. Axis: Y.
 export const EDGE_STRIP: MoveSpec = { move: 'edgeStrip', axis: ['y'] };
 // 9. sweepBoxes. Axis: fill (background-position sweep in motion.css) + Y settle.
@@ -289,6 +291,25 @@ export function itemOut(el: Element | null): Played {
     duration: DUR_SLOW_MS,
     easing: EASE.exit,
     fill: 'forwards',
+  });
+}
+
+// ---------- 7. glide (search focus) ----------
+
+/** Where the toolbar controls rest while the phone search is the centre (past the row's 16 px inset). */
+export const GLIDE_ASIDE_X = 'translateX(calc(100% + 1rem))';
+
+/**
+ * Phone search focus: the sort and New controls glide out to the right
+ * (`out`) or back into the row. X only, --dur-base, ease-move. The element is
+ * already at its end pose by class (translate-x-[calc(100%+1rem)] or none).
+ */
+export function glideAside(el: Element | null, out: boolean): Played {
+  const from = out ? 'translateX(0)' : GLIDE_ASIDE_X;
+  const to = out ? GLIDE_ASIDE_X : 'translateX(0)';
+  return play(el, GLIDE_ASIDE, [{ transform: from }, { transform: to }], {
+    duration: DUR_BASE_MS,
+    easing: EASE.move,
   });
 }
 

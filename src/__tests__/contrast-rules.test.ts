@@ -192,6 +192,27 @@ describe('contrast rules: dark lighting', () => {
   });
 });
 
+// Search at rest is a tool, not a control edge: a filled well (panel-2 on bg)
+// with no line, so it is exempt from the 3:1 edge rule. Focused it takes the
+// ink line (field-line) over bg-panel, and that line is not exempt.
+describe.each([':root', '.dark'])('contrast rules: search field %s', (selector) => {
+  const t = tokens(selector);
+  it('the focused search line (field-line on panel) is at least 3:1', () => {
+    expect(ratio(pick(t, 'field-line'), pick(t, 'panel'))).toBeGreaterThanOrEqual(3);
+  });
+  it('the search well at rest (panel-2 on bg) is exempt: no edge is drawn', () => {
+    const input = readFileSync(
+      fileURLToPath(new URL('../components/ui/Input.tsx', import.meta.url)),
+      'utf8',
+    );
+    const rest = (/search:\s*'([^']+)'/.exec(input)?.[1] ?? '')
+      .split(/\s+/)
+      .filter((c) => !c.includes(':'));
+    expect(rest).toContain('border-transparent');
+    expect(rest).toContain('bg-panel-2');
+  });
+});
+
 describe('contrast rules: the parser reads every token it is asked for', () => {
   it.each([':root', '.dark'])('%s has every colour token this guard names', (selector) => {
     const t = tokens(selector);

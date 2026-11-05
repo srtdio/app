@@ -1236,6 +1236,8 @@ export function Composer(props: ComposerProps): ReactElement {
   // choice is not stored with the message (no field carries it), so the sent
   // bubble shows its card as usual.
   const [cardText, setCardText] = useState(restored.text);
+  // The attach tray is on screen: the bar takes lit-dock-joined under it.
+  const [trayShown, setTrayShown] = useState(false);
   const [dismissedCardUrl, setDismissedCardUrl] = useState<string | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => setCardText(text), DRAFT_CARD_DEBOUNCE_MS);
@@ -2138,7 +2140,13 @@ export function Composer(props: ComposerProps): ReactElement {
         ref={formRef}
         onSubmit={submit}
         {...bottomAnchorProps}
-        className="relative flex flex-col gap-2 border-t bg-panel px-3 py-2.5 lit-dock"
+        className={cn(
+          'relative flex flex-col gap-2',
+          // The open tray keeps lit-dock; the bar under it joins without a seam.
+          trayShown
+            ? 'border-t bg-panel px-3 py-2.5 lit-dock-joined'
+            : 'border-t bg-panel px-3 py-2.5 lit-dock',
+        )}
       >
         {/* The pickers slide up above the composer (edgeStrip), never a fade. */}
         <ComposerStrip
@@ -2368,6 +2376,7 @@ export function Composer(props: ComposerProps): ReactElement {
                   })}
                   draft={draftEnabled}
                   plan={planEnabled}
+                  onShownChange={setTrayShown}
                   onPick={(id) => {
                     if (scheduleBusy) return;
                     switch (id) {

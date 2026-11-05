@@ -211,6 +211,7 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
         <IconChevronLeft size={ICON_SIZE.control} />
       </IconButton>
       <Input
+        tone="search"
         type="search"
         enterKeyHint="search"
         aria-label="Search this chat"

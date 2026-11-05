@@ -224,6 +224,8 @@
   --lit-header: 0 1px 0 var(--border), 0 6px 14px -10px rgba(20, 22, 30, 0.24);
   --lit-side: 1px 0 0 var(--border), 8px 0 16px -12px rgba(20, 22, 30, 0.18);
   --lit-dock: inset 0 1px 0 #fff, 0 -1px 0 var(--border), 0 -8px 18px -12px rgba(20, 22, 30, 0.2);
+  /* lit-dock under an open tray: no top highlight, top line or upward shade. */
+  --lit-dock-joined: none;
   --lit-btn-primary:
     inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.55),
     0 3px 9px -2px rgba(0, 0, 0, 0.35);
@@ -409,6 +411,7 @@
   --lit-dock:
     inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 -1px 0 rgba(0, 0, 0, 0.6),
     0 -10px 20px -12px rgba(0, 0, 0, 0.75);
+  --lit-dock-joined: none;
   --lit-btn-primary:
     inset 0 1px 0 #ffffff, inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.6),
     0 3px 10px -2px rgba(0, 0, 0, 0.7);
@@ -600,6 +603,12 @@
   .lit-dock {
     border-top-color: transparent;
     box-shadow: var(--lit-dock);
+  }
+  /* The composer bar while the tray above it is open: the tray carries the
+     dock light, the bar joins it with no top edge, so no seam shows. */
+  .lit-dock-joined {
+    border-top-color: transparent;
+    box-shadow: var(--lit-dock-joined);
   }
   .lit-btn-primary {
     --lit-bg: var(--lit-shine);

@@ -135,6 +135,7 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
       }
     >
       <Input
+        tone="search"
         type="search"
         value={search}
         onChange={(e) => setSearch(e.target.value)}

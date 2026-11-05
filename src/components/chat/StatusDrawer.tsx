@@ -145,7 +145,9 @@ export interface StatusDrawerActions {
 
 // Layout and colour only: PressableRow provides width, 44px height, radius,
 // left alignment, the lit-hover hover/press overlay and the focus ring.
-const ROW = 'flex items-center gap-3 py-1 mv-tint';
+// Rows in one card part with a border-border divider (each row after another).
+const ROW_RULE = '[&+&]:border-t [&+&]:border-border';
+const ROW = `flex items-center gap-3 py-1 mv-tint ${ROW_RULE}`;
 const DATE_COL = 'w-12 shrink-0 font-mono text-sm leading-4 tabular-nums text-fg-3';
 const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base leading-5 text-fg';
 const ROW_SUB = 'block truncate text-sm leading-4 text-fg-3';
@@ -168,7 +170,7 @@ const PILL_CLASS: Record<PlanSegment, string> = {
 };
 
 function Chevron(): ReactElement {
-  return <IconChevronRight size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />;
+  return <IconChevronRight size={ICON_SIZE.inline} className="shrink-0 text-fg" />;
 }
 
 function SeeAllRow(props: { total: number; onClick: () => void; attr: string }): ReactElement {
@@ -313,7 +315,7 @@ export function PlanBlock(props: {
   return (
     <div
       data-plan-block={bundle.plan.id}
-      className={cn(!props.first && 'mt-3 border-t border-dashed border-border pt-3')}
+      className={cn(!props.first && 'mt-3 border-t border-border pt-3')}
     >
       <PressableRow type="button" data-plan-open="" onClick={props.onOpen} className={ROW}>
         <span className="min-w-0 flex-1">
@@ -408,7 +410,7 @@ export function StatusMarkRow(props: {
   const { mark } = props;
   const priority = mark.type === 'pending' ? priorityLabel(mark.priority) : '';
   return (
-    <div data-status-mark={mark.messageId} className="flex flex-col">
+    <div data-status-mark={mark.messageId} className={cn('flex flex-col', ROW_RULE)}>
       <div className="flex items-center gap-3">
         <PressableRow
           type="button"
@@ -538,7 +540,7 @@ export function StatusDrawerList(
     <section
       key={key}
       data-status-section={key}
-      className="border-b border-border pb-2 pt-4 last:border-b-0"
+      className="mb-3 rounded-xl border bg-panel p-3 pb-1 lit-card"
     >
       <SectionHeader
         sectionKey={key}
@@ -715,13 +717,13 @@ export function StatusDrawerPanel(props: {
         data-status-panel=""
         role="dialog"
         aria-label="Open in this chat"
-        className="absolute inset-x-0 top-0 flex max-h-[calc(100%-48px)] flex-col rounded-b-2xl border-b bg-panel lit-overlay"
+        className="absolute inset-x-0 top-0 flex max-h-[calc(100%-48px)] flex-col rounded-b-2xl border-b bg-bg lit-overlay"
         style={{ transform: props.transform }}
       >
         <div
           ref={props.listRef}
           data-status-list=""
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-1 pt-3"
         >
           {props.children}
         </div>
@@ -731,7 +733,7 @@ export function StatusDrawerPanel(props: {
           {...props.handle}
           className="flex h-6 shrink-0 cursor-grab items-center justify-center [touch-action:none]"
         >
-          <span className="h-1 w-8 rounded-full bg-border" />
+          <span className="h-1 w-8 rounded-full bg-border-strong" />
         </div>
       </div>
     </div>

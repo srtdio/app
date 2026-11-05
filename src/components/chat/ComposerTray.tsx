@@ -136,6 +136,11 @@ export function ComposerTray(props: {
   draft?: boolean;
   /** True: the Plan tile is live. Absent or false: faded and disabled. */
   plan?: boolean;
+  /**
+   * Told whether the tray is on screen (open or sliding out), so the composer
+   * bar under it takes lit-dock-joined and no seam shows between the two.
+   */
+  onShownChange?: (shown: boolean) => void;
 }): ReactElement {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -145,6 +150,14 @@ export function ComposerTray(props: {
     enter: (el) => stripIn(el, 'above-composer', TRAY_SLIDE_PX),
     exit: (el) => stripOut(el, 'above-composer', TRAY_SLIDE_PX),
   });
+
+  const onShownChange = props.onShownChange;
+  useEffect(() => {
+    if (!tray.rendered) return;
+    onShownChange?.(true);
+    // Also runs on unmount, so the bar never keeps the joined light alone.
+    return () => onShownChange?.(false);
+  }, [tray.rendered, onShownChange]);
 
   useEffect(() => {
     if (open) mark('chat:tray:open');

@@ -444,6 +444,13 @@ async function openChatPlan(page: Page): Promise<void> {
   await waitFor([page.locator('[data-plan-page="plan"]')], 'plan screen');
 }
 
+/** The DM's open-items drawer, opened from the ticker under the header. */
+async function openStatusDrawer(page: Page): Promise<void> {
+  await openDm(page);
+  await tap([page.locator('[data-status-ticker]')], 'status ticker');
+  await waitFor([page.locator('[data-status-drawer="open"]')], 'status drawer');
+}
+
 /** Long-press (phone) or right-click (laptop) a DM message: its action menu. */
 async function openDmMessageMenu(page: Page): Promise<void> {
   await openDm(page);
@@ -670,6 +677,21 @@ const SCREENS: Screen[] = [
   },
   { name: 'chat-thread', seed: creator, url: '/chat', steps: openDm },
   {
+    // The DM's open-items drawer from its ticker: grey sheet, lit cards.
+    name: 'chat-status-drawer',
+    seed: creator,
+    url: '/chat',
+    steps: openStatusDrawer,
+  },
+  {
+    // The drawer with a plan section locked (progress bar and pills).
+    name: 'chat-status-drawer-plan',
+    seed: creator,
+    extra: seedChatPlan,
+    url: '/chat',
+    steps: openStatusDrawer,
+  },
+  {
     name: 'chat-thread-group',
     seed: creator,
     url: '/chat',
@@ -852,6 +874,35 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await pipelineReady(page);
       await searchNoMatch(page, [page.getByPlaceholder('Search posts')], 'pipeline');
+    },
+  },
+  {
+    // Phone: the search is the centre. Tapped: ink line, lift, full row, the
+    // sort and New glided aside, Cancel at the right end (keyboard not needed).
+    name: 'pipeline-search-focused',
+    seed: creator,
+    only: 'phone',
+    hold: true,
+    url: '/pipeline',
+    steps: async (page) => {
+      await pipelineReady(page);
+      await page.getByPlaceholder('Search posts').focus();
+      await waitFor([page.locator('[data-search-cancel]')], 'search cancel');
+    },
+  },
+  {
+    // Laptop: "carousel" typed, the field focused (line and lift), clear X showing.
+    name: 'pipeline-search-typed',
+    seed: creator,
+    only: 'laptop',
+    hold: true,
+    url: '/pipeline',
+    steps: async (page) => {
+      await pipelineReady(page);
+      const field = page.getByPlaceholder('Search posts');
+      await field.click();
+      await field.fill('carousel');
+      await waitFor([page.getByRole('button', { name: 'Clear search', exact: true })], 'clear');
     },
   },
   {
@@ -2364,6 +2415,8 @@ const LAPTOP_DARK_SCREENS = new Set([
   'assets',
   'settings-profile',
   'post-picker',
+  'chat-status-drawer',
+  'chat-status-drawer-plan',
 ]);
 
 for (const screen of SCREENS) {
