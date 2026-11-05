@@ -235,7 +235,7 @@ describe('lighting rules', () => {
     }
   });
 
-  it('every single-choice pick is the ink fill that slides; idle options rest on the grey fill', () => {
+  it('every single-choice pick is the ink fill, switched instantly; idle options rest on the grey fill', () => {
     for (const rel of [
       'shell/Tabs.tsx',
       'support/BookCallSheet.tsx',
@@ -248,7 +248,8 @@ describe('lighting rules', () => {
       'chat/PlanDayPickerSheet.tsx',
     ]) {
       const code = src(rel);
-      expect(code, rel).toContain('selectionSlideRef(');
+      expect(code, rel).not.toContain('selectionSlideRef');
+      expect(code, rel).not.toContain('data-fill-slide');
       expect(code, rel).toMatch(/bg-accent[^'"]*text-accent-fg[^'"]*lit-pill/);
     }
     for (const rel of [

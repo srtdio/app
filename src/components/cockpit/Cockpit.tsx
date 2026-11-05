@@ -40,7 +40,7 @@ import {
   type TabDataMap,
 } from '@/lib/cockpit/types';
 import { mark } from '@/lib/perf-marks';
-import { Bone, selectionSlideRef } from '@/lib/motion';
+import { Bone } from '@/lib/motion';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 
 let poller: CockpitPoller | null = null;
@@ -119,7 +119,6 @@ function Tiles({ state, onPick }: { state: CockpitState; onPick: (tab: CockpitTa
           <PressableRow
             key={key}
             card
-            buttonRef={selectionSlideRef(selected)}
             data-selected={selected ? 'true' : undefined}
             aria-pressed={selected}
             onClick={() => onPick(tab)}

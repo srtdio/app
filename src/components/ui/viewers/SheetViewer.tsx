@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import type { MutableRefObject, ReactElement, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
-import { selectionSlideRef } from '@/lib/motion';
 import type { SheetCell, SheetMerge, SheetView, XlsxView } from '@/lib/files/office/types';
 
 /** One grid row's height in px (h-7). */
@@ -293,7 +292,6 @@ export function SheetViewer(props: {
           return (
             <button
               key={i}
-              ref={selectionSlideRef(selected)}
               type="button"
               role="tab"
               aria-selected={selected}

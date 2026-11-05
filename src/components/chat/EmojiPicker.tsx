@@ -15,7 +15,6 @@ import type { FocusEvent, ReactElement, ReactNode } from 'react';
 import { ICON_SIZE, IconSearch } from '@/components/ui/icons';
 import { IconButton } from '@/components/ui/IconButton';
 import { cn } from '@/lib/cn';
-import { selectionSlideRef } from '@/lib/motion';
 import { EMOJI, EMOJI_GROUPS, type EmojiEntry } from '@/components/chat/emoji-data';
 import {
   EMOJI_GLYPH_TYPE,
@@ -277,7 +276,6 @@ export function EmojiTabs(props: {
           aria-selected={!searching && props.activeGroup === section.group}
           data-emoji-tab={section.group}
           data-selected={!searching && props.activeGroup === section.group ? 'true' : undefined}
-          buttonRef={selectionSlideRef(!searching && props.activeGroup === section.group)}
           onClick={() => props.onTab(section.group)}
           className={cn(
             'shrink-0 text-fg-3',

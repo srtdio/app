@@ -11,7 +11,6 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Input } from '@/components/ui/Input';
 import { IconCheck, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
-import { selectionSlideRef } from '@/lib/motion';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import { logger } from '@/lib/logger';
@@ -79,7 +78,6 @@ async function sendBookCall(input: {
 function ChoiceRow(props: { label: string; selected: boolean; onSelect: () => void }) {
   return (
     <PressableRow
-      buttonRef={selectionSlideRef(props.selected)}
       data-selected={props.selected ? 'true' : undefined}
       type="button"
       role="radio"

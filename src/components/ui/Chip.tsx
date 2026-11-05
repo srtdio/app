@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
-import { MOVE_CLASS, selectionSlideRef } from '@/lib/motion';
+import { MOVE_CLASS } from '@/lib/motion';
 
 interface ChipProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -77,22 +77,12 @@ export function Chip({
   ...props
 }: ChipProps) {
   const selected = selectedProp ?? false;
-  // The pick's fill slides over from the row's last pick (src/lib/motion/selection.ts).
-  // A plain ref callback, no hooks: Chip stays a callable function.
-  const slide = selectionSlideRef(selected && variant !== 'add');
-  const ref = (el: HTMLButtonElement | null): void => {
-    slide(el);
-    if (typeof buttonRef === 'function') buttonRef(el);
-    else if (buttonRef !== null && buttonRef !== undefined) {
-      (buttonRef as { current: HTMLButtonElement | null }).current = el;
-    }
-  };
   return (
     <button
       type="button"
       {...chipStateAria(selectedProp, tab || props.role === 'tab')}
       {...props}
-      ref={ref}
+      ref={buttonRef}
       data-selected={selected ? 'true' : undefined}
       onClick={onClick}
       className={cn(
