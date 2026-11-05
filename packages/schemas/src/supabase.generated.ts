@@ -10369,6 +10369,7 @@ export type Database = {
         Args: { p_item_ids: string[]; p_plan_id: string; p_trace_id: string }
         Returns: undefined
       }
+      plan_live_can_receive: { Args: { p_plan_id: string }; Returns: boolean }
       plan_posts_add: {
         Args: {
           p_plan_id: string
