@@ -57,6 +57,8 @@ function task(over: Partial<ChatTask>): ChatTask {
     createdAt: T0,
     updatedAt: T0,
     deletedAt: null,
+    dueOn: null,
+    doneAt: null,
     ...over,
   };
 }
@@ -125,7 +127,7 @@ describe('draft: diff and no-op detection', () => {
     expect(isDraftDirty(editField(EMPTY_DRAFT, a, { title: '   ' }), byId)).toBe(false);
     const blank: SheetDraft = {
       ...EMPTY_DRAFT,
-      creates: [{ key: 'n', title: '  ', priority: 1, side: 'agency' }],
+      creates: [{ key: 'n', title: '  ', priority: 1, side: 'agency', dueOn: null }],
     };
     expect(isDraftDirty(blank, byId)).toBe(false);
   });
@@ -147,7 +149,10 @@ describe('batch payload', () => {
     let d = editField(EMPTY_DRAFT, a, { priority: 0, title: 'Hook' });
     d = editField(d, b, { title: ' Grid v2 ', status: 'done' });
     d = queueDelete(d, c);
-    d = { ...d, creates: [{ key: 'n1', title: ' Story ', priority: 1, side: 'client' }] };
+    d = {
+      ...d,
+      creates: [{ key: 'n1', title: ' Story ', priority: 1, side: 'client', dueOn: null }],
+    };
     expect(batchPayload(d, byId)).toEqual({
       creates: [{ title: 'Story', priority: 1, side: 'client' }],
       edits: [
@@ -573,5 +578,99 @@ describe('reads and the write', () => {
     expect(
       await saveTaskBatch({ client: refused.client, channelId: 'c1', payload, traceId: 'tr' }),
     ).toEqual({ ok: false, message: 'not a member of this chat' });
+  });
+});
+
+describe('due days', () => {
+  const a = task({ id: 'a', number: 1, title: 'Hook', updatedAt: T0 });
+
+  it('reads due_on and done_at off the row; a bad day reads as no date', () => {
+    const row = {
+      id: 'a',
+      channel_id: 'c1',
+      number: 1,
+      title: 'Hook',
+      side: 'agency',
+      status: 'done',
+      priority: 1,
+      created_by: 'u1',
+      created_at: T0,
+      updated_at: T0,
+      deleted_at: null,
+      due_on: '2026-11-07',
+      done_at: '2026-11-05T09:00:00.000Z',
+    };
+    expect(rowToTask(row as never)).toMatchObject({
+      dueOn: '2026-11-07',
+      doneAt: '2026-11-05T09:00:00.000Z',
+    });
+    expect(rowToTask({ ...row, due_on: '7 Nov' } as never)?.dueOn).toBeNull();
+    expect(rowToTask({ ...row, due_on: undefined, done_at: undefined } as never)).toMatchObject({
+      dueOn: null,
+      doneAt: null,
+    });
+  });
+
+  it('a date edit goes as due_on (null clears); setting it back is no change', () => {
+    const map = new Map([[a.id, a]]);
+    const d = editField(EMPTY_DRAFT, a, { dueOn: '2026-11-07' });
+    expect(batchPayload(d, map).edits).toEqual([
+      { task_id: 'a', base_updated_at: T0, changes: { due_on: '2026-11-07' } },
+    ]);
+    const dated = { ...a, dueOn: '2026-11-07' };
+    const cleared = editField(EMPTY_DRAFT, dated, { dueOn: null });
+    expect(batchPayload(cleared, new Map([[a.id, dated]])).edits[0]?.changes).toEqual({
+      due_on: null,
+    });
+    expect(isDraftDirty(editField(EMPTY_DRAFT, a, { dueOn: null }), map)).toBe(false);
+    expect(applyChanges(a, { dueOn: '2026-11-07' }).dueOn).toBe('2026-11-07');
+  });
+
+  it('a new task sends due_on only when it has a day', () => {
+    const d: SheetDraft = {
+      ...EMPTY_DRAFT,
+      creates: [
+        { key: 'n1', title: 'Dated', priority: 1, side: 'agency', dueOn: '2026-11-06' },
+        { key: 'n2', title: 'Undated', priority: 2, side: 'agency', dueOn: null },
+      ],
+    };
+    expect(batchPayload(d, new Map()).creates).toEqual([
+      { title: 'Dated', priority: 1, side: 'agency', due_on: '2026-11-06' },
+      { title: 'Undated', priority: 2, side: 'agency' },
+    ]);
+  });
+
+  it('the Save line, the marks and a conflict name the date', () => {
+    const edited = ev({
+      kind: 'edited',
+      taskId: 'a',
+      oldValue: JSON.stringify({ due_on: null }),
+      newValue: JSON.stringify({ due_on: '2026-11-07' }),
+      batchId: 'B',
+    });
+    const [row] = batchRows(edited, taskRefOf(a));
+    expect(row && batchRowText(row)).toBe('Due date #1 No date → 7 Nov');
+    const marks = marksSince([edited], 'me', null).byTask.get('a') ?? [];
+    expect(marks.map(markText)).toEqual(['had no date']);
+    const conflict = parseBatchResult({
+      batch_id: null,
+      created_ids: [],
+      conflicts: [
+        {
+          task_id: 'a',
+          deleted: false,
+          title: 'Hook',
+          priority: 1,
+          status: 'todo',
+          due_on: '2026-11-09',
+          updated_at: T0,
+        },
+      ],
+    })?.conflicts[0];
+    if (conflict === undefined) throw new Error('no conflict');
+    expect(conflict.dueOn).toBe('2026-11-09');
+    expect(
+      conflictLine('Leo', conflict, { dueOn: '2026-11-07' }, new Date('2026-11-05T10:00:00Z')),
+    ).toBe('Leo changed this to Due 9 Nov');
   });
 });

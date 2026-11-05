@@ -30,6 +30,7 @@ import {
   seedRemovedLine,
 } from '../fixtures/remove-files';
 import { installLinkPreviewStub } from '../fixtures/link-previews';
+import { seedTasks, TASK_CHANNEL } from '../fixtures/tasks-data';
 import { installMediaSearch, type MediaKind } from '../fixtures/search-data';
 import {
   ONBOARDING_NOW,
@@ -235,6 +236,62 @@ async function openFormatStrip(page: Page): Promise<void> {
     document.dispatchEvent(new Event('selectionchange'));
   });
   await waitFor([page.locator('[data-format-strip]')], 'format strip');
+}
+
+/**
+ * The group chat's tasks with due days around NOW (Wednesday 21 Oct, UTC,
+ * week from Monday): #8 today, #9 later this week, #10 overdue, #11 done
+ * last week, plus #12 with no date and #13 after this week.
+ */
+function seedDatedTasks(network: HarnessNetwork): void {
+  seedTasks(network.world, NOW);
+  const rows = network.world.tables.chat_tasks ?? [];
+  const at = (n: number): Row | undefined =>
+    rows.find((t) => t.channel_id === TASK_CHANNEL && Number(t.number) === n);
+  const dated: Array<[number, string | null, string | null]> = [
+    [8, '2026-10-21', null],
+    [9, '2026-10-23', null],
+    [10, '2026-10-19', null],
+    [11, '2026-10-16', '2026-10-15T12:00:00Z'],
+  ];
+  for (const [n, dueOn, doneAt] of dated) {
+    const row = at(n);
+    if (row === undefined) throw new Error(`no task ${n}`);
+    row.due_on = dueOn;
+    row.done_at = doneAt;
+    if (doneAt !== null) row.status = 'done';
+  }
+  const base = at(11);
+  if (base === undefined) throw new Error('no task 11');
+  rows.push(
+    {
+      ...base,
+      id: '0190e100-0000-7000-8000-000000000012',
+      number: 12,
+      title: 'Caption bank',
+      status: 'todo',
+      due_on: null,
+      done_at: null,
+    },
+    {
+      ...base,
+      id: '0190e100-0000-7000-8000-000000000013',
+      number: 13,
+      title: 'Diwali carousel',
+      status: 'todo',
+      due_on: '2026-11-02',
+      done_at: null,
+    },
+  );
+}
+
+/** The group chat's Tasks sheet, open on its opening chip (Today). */
+async function openTasks(page: Page): Promise<Locator> {
+  await openChat(page, GROUP_NAME);
+  await tap([page.getByRole('button', { name: /^Tasks(, new)?$/ })], 'Tasks button');
+  const sheet = page.getByRole('dialog', { name: 'Tasks' });
+  await waitFor([sheet.locator('[data-task-list]')], 'Tasks sheet');
+  return sheet;
 }
 
 async function openChatPostSheet(page: Page): Promise<void> {
@@ -708,6 +765,56 @@ const SCREENS: Screen[] = [
     extra: seedChatPlan,
     url: '/chat',
     steps: openStatusDrawer,
+  },
+  {
+    // The Tasks sheet, half height on Today: chips, search at the line's end,
+    // the date line, the add row with its day choices.
+    name: 'chat-tasks-sheet',
+    seed: creator,
+    extra: seedDatedTasks,
+    url: '/chat',
+    steps: async (page) => {
+      await openTasks(page);
+    },
+  },
+  {
+    // Full screen on Past: Not done (overdue, bad tone) above Done.
+    name: 'chat-tasks-past-full',
+    seed: creator,
+    extra: seedDatedTasks,
+    url: '/chat',
+    steps: async (page) => {
+      const sheet = await openTasks(page);
+      await tap([sheet.locator('[data-task-resize]')], 'Full screen');
+      await tap([sheet.locator('[data-task-when-chip="past"]')], 'Past chip');
+      await waitFor([sheet.locator('[data-task-section="done"]')], 'Past sections');
+    },
+  },
+  {
+    // A task's date line tapped: its day choices open under the row.
+    name: 'chat-tasks-row-date',
+    seed: creator,
+    extra: seedDatedTasks,
+    url: '/chat',
+    steps: async (page) => {
+      const sheet = await openTasks(page);
+      await tap([sheet.locator('[data-task-number="8"] [data-task-when]')], 'date line');
+      await waitFor([sheet.locator('[data-task-day-editor]')], 'day choices');
+    },
+  },
+  {
+    // Search open in the chip line, finding across every chip.
+    name: 'chat-tasks-search',
+    seed: creator,
+    extra: seedDatedTasks,
+    url: '/chat',
+    hold: true,
+    steps: async (page) => {
+      const sheet = await openTasks(page);
+      await tap([sheet.locator('[data-task-search-open]')], 'Search tasks');
+      await sheet.locator('[data-task-search] input').fill('ca');
+      await waitFor([sheet.locator('[data-task-list][data-task-chip="search"]')], 'results');
+    },
   },
   {
     name: 'chat-thread-group',

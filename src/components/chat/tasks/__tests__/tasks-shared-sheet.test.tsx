@@ -41,6 +41,8 @@ function render(tasks: UseChatTasks, seenMs: number | null = null): void {
         side="client"
         seenMs={seenMs}
         focusTaskId={null}
+        timeZone="UTC"
+        weekStartDay={1}
       />,
     ),
   );
@@ -75,6 +77,8 @@ describe('shared Tasks sheet', () => {
     act(() => q('[data-task-menu-p="0"]')?.click());
     const input = q('[data-task-add] input') as HTMLInputElement;
     act(() => x4Type(input, 'Story'));
+    // No date: the create carries no due_on.
+    act(() => q('[data-task-days="add"] [data-task-day="none"]')?.click());
     act(() => q('[data-task-add-submit]')?.click());
     await act(async () => saveButton().click());
     expect(tasks.saveBatch).toHaveBeenCalledTimes(1);
@@ -86,6 +90,113 @@ describe('shared Tasks sheet', () => {
     ]);
     expect(payload.creates).toEqual([{ title: 'Story', priority: 1, side: 'client' }]);
     expect(payload.deletes).toEqual([]);
+  });
+
+  it('a new task takes Today by default, sends due_on, and the sheet moves to Today', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-05T10:00:00.000Z'));
+    try {
+      const tasks = x4FakeTasks([A, B]);
+      render(tasks);
+      // Nothing is dated: the sheet opens on No date, where A and B sit.
+      expect(q('[data-task-list]')?.getAttribute('data-task-chip')).toBe('none');
+      expect(q('[data-task-row-id="a"]')).not.toBeNull();
+      const input = q('[data-task-add] input') as HTMLInputElement;
+      act(() => x4Type(input, 'Story'));
+      act(() => q('[data-task-add-submit]')?.click());
+      expect(q('[data-task-list]')?.getAttribute('data-task-chip')).toBe('today');
+      expect(q('[data-task-row-id="a"]')).toBeNull();
+      await act(async () => saveButton().click());
+      const payload = (tasks.saveBatch as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0] as BatchPayload;
+      expect(payload.creates).toEqual([
+        { title: 'Story', priority: 1, side: 'client', due_on: '2026-11-05' },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('chips: Past splits Not done above Done; search finds tasks across every chip', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-05T10:00:00.000Z'));
+    try {
+      const late = x4Task({ id: 'p1', number: 4, title: 'Approve plan', dueOn: '2026-11-03' });
+      const shipped = x4Task({
+        id: 'p2',
+        number: 5,
+        title: 'Invoice copy',
+        dueOn: '2026-11-02',
+        status: 'done',
+        doneAt: '2026-11-01T09:00:00.000Z',
+      });
+      const later = x4Task({ id: 'l1', number: 6, title: 'Logo files', dueOn: '2026-11-20' });
+      render(x4FakeTasks([A, late, shipped, later]));
+      act(() => q('[data-task-when-chip="past"]')?.click());
+      expect(q('[data-task-list]')?.getAttribute('data-task-chip')).toBe('past');
+      const sections = [...document.querySelectorAll('[data-task-section]')].map((el) =>
+        el.getAttribute('data-task-section'),
+      );
+      expect(sections).toEqual(['open', 'done']);
+      expect(q('[data-task-row-id="p1"] [data-task-when]')?.textContent).toBe('Overdue · 3 Nov');
+      expect(q('[data-task-row-id="p2"] [data-task-when]')?.textContent).toContain(
+        'Due 2 Nov · done',
+      );
+      expect(q('[data-task-row-id="l1"]')).toBeNull();
+      // Today holds nothing: one positive line.
+      act(() => q('[data-task-when-chip="today"]')?.click());
+      expect(q('[data-task-zero]')?.textContent).toBe('Tasks due today show up here.');
+      // Search: across every chip, by word prefix.
+      act(() => q('[data-task-search-open]')?.click());
+      const field = q('[data-task-search] input') as HTMLInputElement;
+      act(() => x4Type(field, 'log'));
+      expect(q('[data-task-list]')?.getAttribute('data-task-chip')).toBe('search');
+      expect(q('[data-task-row-id="l1"]')).not.toBeNull();
+      expect(q('[data-task-row-id="p1"]')).toBeNull();
+      expect(q('[data-task-add]')).toBeNull();
+      act(() => q('[data-task-search-cancel]')?.click());
+      expect(q('[data-task-search]')).toBeNull();
+      expect(q('[data-task-list]')?.getAttribute('data-task-chip')).toBe('today');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a task's date line opens the day choices; a pick edits due_on and the sheet follows it", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-05T10:00:00.000Z'));
+    try {
+      const tasks = x4FakeTasks([A]);
+      render(tasks);
+      const line = q('[data-task-row-id="a"] [data-task-when]');
+      expect(line?.textContent).toBe('Add date');
+      expect(line?.getAttribute('aria-expanded')).toBe('false');
+      act(() => line?.click());
+      expect(q('[data-task-row-id="a"] [data-task-day-editor]')).not.toBeNull();
+      act(() => q('[data-task-days="a"] [data-task-day="tomorrow"]')?.click());
+      expect(q('[data-task-day-editor]')).toBeNull();
+      expect(q('[data-task-list]')?.getAttribute('data-task-chip')).toBe('week');
+      expect(q('[data-task-row-id="a"] [data-task-when]')?.textContent).toBe('Due 6 Nov');
+      await act(async () => saveButton().click());
+      const payload = (tasks.saveBatch as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0] as BatchPayload;
+      expect(payload.edits).toEqual([
+        { task_id: 'a', base_updated_at: A.updatedAt, changes: { due_on: '2026-11-06' } },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('full screen: the button fills the screen and returns to half', () => {
+    render(x4FakeTasks([A]));
+    const dialog = () => q('[role="dialog"][aria-label="Tasks"]');
+    expect(dialog()?.hasAttribute('data-task-full')).toBe(false);
+    act(() => q('[data-task-resize]')?.click());
+    expect(dialog()?.hasAttribute('data-task-full')).toBe(true);
+    expect(q('[data-task-resize]')?.getAttribute('aria-label')).toBe('Half screen');
+    act(() => q('[data-task-resize]')?.click());
+    expect(dialog()?.hasAttribute('data-task-full')).toBe(false);
   });
 
   it('the priority menu lists P0 Urgent, P1 High, P2 Normal with the current ticked', () => {
@@ -110,6 +221,7 @@ describe('shared Tasks sheet', () => {
           title: 'Hook (Leo)',
           priority: 2,
           status: 'todo',
+          dueOn: null,
           updatedAt: '2026-10-19T10:00:00.000Z',
         },
       ],
@@ -163,6 +275,7 @@ describe('shared Tasks sheet', () => {
             title: 'Hook',
             priority: 2,
             status: 'todo',
+            dueOn: null,
             updatedAt: '2026-10-19T10:00:00.000Z',
           },
         ],

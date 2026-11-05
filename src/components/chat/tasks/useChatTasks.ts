@@ -48,7 +48,7 @@ import {
 } from '@/lib/chat/thread';
 import type { ChatConnection, ChatContextValue } from '@/lib/chat/types';
 import {
-  applyChanges,
+  applyBatchChanges,
   editingSignalStep,
   isEmptyPayload,
   liveEditors,
@@ -204,7 +204,7 @@ function paintPayload(tasks: readonly ChatTask[], payload: BatchPayload): ChatTa
     .filter((t) => !deleting.has(t.id))
     .map((t) => {
       const changes = edits.get(t.id);
-      return changes === undefined ? t : applyChanges(t, changes);
+      return changes === undefined ? t : applyBatchChanges(t, changes);
     });
 }
 

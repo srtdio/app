@@ -5,7 +5,11 @@
 // carry an accent dot (changed by someone else since you looked, or your own
 // unsaved change), its changed chip ringed, and sub-lines: what it was ("was
 // <s>old</s>", "priority was <s>P2</s>", "marked done", "reopened", "New
-// task"), or a both-edited notice with Keep mine / Keep theirs (or "deleted
+// task", "date was <s>3 Nov</s>"), a date line under the title ("Today",
+// "Due 7 Nov", "Overdue · 3 Nov" in the bad tone, "Due 31 Oct · done 30 Oct";
+// a calendar mark before it, "Add date" when there is none; a tap opens the
+// day choices under the row),
+// or a both-edited notice with Keep mine / Keep theirs (or "deleted
 // this" with Restore mine / OK). 44px targets everywhere.
 //
 // The chip's menu (P0 Urgent, P1 High, P2 Normal, current ticked) renders in a
@@ -21,7 +25,7 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { ICON_SIZE, IconCheck, IconChevronDown, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconCalendar, IconCheck, IconChevronDown, IconX } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { STATUS_LABEL, TaskGlyph } from '@/components/chat/tasks/TaskGlyph';
 import { Highlight } from '@/components/ui/SearchHighlight';
@@ -34,12 +38,15 @@ import {
   PRIORITY_LABEL,
   TASK_PRIORITIES,
   TASK_TITLE_MAX,
+  dueDayValue,
   markText,
   type TaskMark,
   type TaskPriority,
 } from '@/lib/chat/tasks';
+import type { TaskDateLine } from '@/lib/chat/task-when';
 
 const NOT_SAVED = 'Not saved';
+export const ADD_DATE_LABEL = 'Add date';
 
 const P_TAG: Record<TaskPriority, string> = {
   0: 'bg-bad-soft text-bad',
@@ -328,6 +335,14 @@ export interface TaskRowProps {
   /** A new task not saved yet has no tick (it is created to do). */
   canTick?: boolean;
   notice: RowNotice | null;
+  /** The date line under the title (src/lib/chat/task-when.ts taskDateLine); null: none. */
+  dateLine?: TaskDateLine | null;
+  /** The date line is a button: tap it to change the day ("Add date" when there is none). */
+  onDate?: () => void;
+  /** The day choices are open under this row. */
+  dateOpen?: boolean;
+  /** The day choices, shown under the row while dateOpen. */
+  dateEditor?: ReactNode;
   failed?: ReactNode;
   onToggle: () => void;
   onTitle: (title: string) => void;
@@ -351,6 +366,13 @@ function MarkLine(props: { mark: TaskMark }): ReactElement {
     return (
       <span>
         priority was <s className="font-mono">P{mark.was}</s>
+      </span>
+    );
+  }
+  if (mark.kind === 'due' && mark.was !== null) {
+    return (
+      <span>
+        date was <s className="font-mono tabular-nums">{dueDayValue(mark.was)}</s>
       </span>
     );
   }
@@ -442,6 +464,34 @@ export function TaskRow(props: TaskRowProps): ReactElement {
           </>
         )}
       </div>
+      {props.onDate !== undefined ? (
+        <div className="-mt-3 pl-[76px] pr-3">
+          <PressableRow
+            inline
+            insetFocus
+            type="button"
+            data-task-when=""
+            aria-expanded={props.dateOpen === true}
+            aria-label={
+              props.dateLine != null ? `Change date, ${props.dateLine.text}` : ADD_DATE_LABEL
+            }
+            onClick={props.onDate}
+            onContextMenu={(e) => e.preventDefault()}
+            className={cn(
+              // A control, so body ink (never the meta tone); dates mono.
+              'flex items-center gap-1.5 px-1 text-md',
+              props.dateLine == null
+                ? 'text-fg-2'
+                : cn('font-mono tabular-nums', props.dateLine.bad ? 'text-bad' : 'text-fg-2'),
+              NO_TOUCH_SELECT,
+            )}
+          >
+            <IconCalendar size={ICON_SIZE.inline} className="shrink-0" />
+            <span>{props.dateLine?.text ?? ADD_DATE_LABEL}</span>
+          </PressableRow>
+        </div>
+      ) : null}
+      {props.dateOpen === true ? props.dateEditor : null}
       {props.marks.length > 0 ? (
         <p
           data-task-mark=""

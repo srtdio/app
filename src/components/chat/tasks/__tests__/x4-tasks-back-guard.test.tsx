@@ -46,6 +46,8 @@ function Parent(props: { tasks: UseChatTasks; onParentBack: () => void }): React
       side="agency"
       seenMs={null}
       focusTaskId={null}
+      timeZone="UTC"
+      weekStartDay={1}
     />
   );
 }

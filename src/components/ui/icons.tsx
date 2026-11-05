@@ -10,6 +10,8 @@ import {
   ArrowUpTrayIcon,
   ArrowUturnLeftIcon,
   ArrowUturnRightIcon,
+  ArrowsPointingInIcon,
+  ArrowsPointingOutIcon,
   ArrowsRightLeftIcon,
   ArrowsUpDownIcon,
   AtSymbolIcon,
@@ -243,6 +245,16 @@ export function IconChevronDown(props: IconProps) {
 
 export function IconSort(props: IconProps) {
   return <Hero icon={ArrowsUpDownIcon} {...props} />;
+}
+
+/** Make a sheet fill the screen (the Tasks sheet's full screen). */
+export function IconExpand(props: IconProps) {
+  return <Hero icon={ArrowsPointingOutIcon} {...props} />;
+}
+
+/** Return a full-screen sheet to its half height. */
+export function IconCollapse(props: IconProps) {
+  return <Hero icon={ArrowsPointingInIcon} {...props} />;
 }
 
 export function IconFilterLines(props: IconProps) {

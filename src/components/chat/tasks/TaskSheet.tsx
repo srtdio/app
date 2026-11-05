@@ -4,8 +4,19 @@
 // deletes, each touched task's base updated_at), and Save sends it as ONE
 // chat_task_save_batch. A change that is reverted is no change.
 //
-// Header: X, "Tasks" (with "<Name> is editing…" under it while another member
-// holds unsaved changes), Share, Save (disabled until something changed).
+// Header: "Tasks" (with "<Name> is editing…" under it while another member
+// holds unsaved changes), Share, Save (disabled until something changed),
+// Full screen / Half screen, X. Under it one line: the chips Past, Today, This
+// week, Later, No date (src/lib/chat/task-when.ts; due days on the workspace
+// calendar), and a search button at its end. Search opens a field in that
+// line (the chips glide aside on a phone, Cancel brings them back) and finds
+// tasks across every chip. The sheet opens half height on Today (else the
+// first chip that holds tasks); swipe up on the header, or the Full screen
+// button, fills the screen (laptop: a larger centre box); swipe down or Half
+// screen returns. The resize itself is instant (no move in src/lib/motion
+// fits it). Past lists Not done above Done. A new task takes a day (Today,
+// Tomorrow, No date, or a picked day; never before today), and the sheet
+// moves to the chip it lands on.
 // Closing with unsaved changes asks in the page "Discard unsaved changes?"
 // (Discard / Save); never window.confirm. Laptop: Cmd/Ctrl+S saves, Esc
 // closes. System Back with unsaved changes asks the same.
@@ -26,16 +37,35 @@
 // position; laptop: the dialog grows 95% to 100%. Never a fade. Boxes (Bone)
 // while the list loads. Tokens only.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { IconButton } from '@/components/ui/IconButton';
+import { Input } from '@/components/ui/Input';
 import { LoadError } from '@/components/ui/LoadError';
-import { glowTarget } from '@/components/ui/SearchHighlight';
+import { NoResults } from '@/components/ui/NoResults';
+import { SearchWordsContext, glowTarget } from '@/components/ui/SearchHighlight';
 import { ForwardPicker } from '@/components/chat/ForwardPicker';
-import { ICON_SIZE, IconForward, IconX } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconCollapse,
+  IconExpand,
+  IconForward,
+  IconSearch,
+  IconX,
+} from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { PriorityChip, TaskRow, type RowNotice } from '@/components/chat/tasks/TaskRow';
 import type { UseChatTasks } from '@/components/chat/tasks/useChatTasks';
@@ -47,15 +77,32 @@ import { useModalFocus } from '@/lib/modal-focus';
 import {
   Bone,
   BoxSkeleton,
+  SHEET_CLOSE_PX,
   dialogIn,
   dialogOut,
+  glideAside,
   itemIn,
   riseIn,
   riseOut,
   trackDim,
+  useDragDismiss,
   useFreshKeys,
   usePresence,
 } from '@/lib/motion';
+import { queryWords } from '@/lib/chat/search';
+import {
+  TASK_WHEN_CHIPS,
+  calendarDays,
+  countByWhen,
+  dayChoices,
+  isPickableDay,
+  openingChip,
+  searchTasks,
+  taskDateLine,
+  taskWhen,
+  type TaskCalendar,
+  type TaskWhen,
+} from '@/lib/chat/task-when';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import {
   DEFAULT_PRIORITY,
@@ -99,6 +146,22 @@ const SAVE_FAILED = errorText('save', null);
 /** LoadError's "Couldn't load tasks." */
 const TASKS_LOAD_THING = 'tasks';
 const SAVING_LABEL = 'Saving…';
+const FULL_LABEL = 'Full screen';
+const HALF_LABEL = 'Half screen';
+const SEARCH_LABEL = 'Search tasks';
+const PAST_OPEN_LABEL = 'Not done';
+const PAST_DONE_LABEL = 'Done';
+const PICK_DATE_LABEL = 'Pick date';
+const SECTION_LABEL = 'px-4 pb-1 pt-3 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+
+/** One positive line per chip when it holds nothing. */
+const CHIP_ZERO: Readonly<Record<TaskWhen, string>> = {
+  past: 'Tasks from past days show up here.',
+  today: 'Tasks due today show up here.',
+  week: 'Tasks due later this week show up here.',
+  later: 'Tasks due after this week show up here.',
+  none: 'Tasks without a date show up here.',
+};
 
 /** "<Name> just saved" (a Save by someone else while this sheet is open). Pure. */
 function justSavedLabel(name: string): string {
@@ -148,21 +211,27 @@ function onlyTask(draft: SheetDraft, taskId: string): SheetDraft {
 function AddRow(props: {
   preview: number;
   disabled: boolean;
-  onAdd: (title: string, priority: TaskPriority) => void;
+  calendar: TaskCalendar;
+  onAdd: (title: string, priority: TaskPriority, dueOn: string | null) => void;
 }): ReactElement {
   const [text, setText] = useState('');
   const [priority, setPriority] = useState<TaskPriority>(DEFAULT_PRIORITY);
+  const choices = dayChoices(props.calendar);
+  const today = choices[0]?.dueOn ?? null;
+  // The day a new task takes: Today until another is picked.
+  const [dueOn, setDueOn] = useState<string | null>(today);
   const inputRef = useRef<HTMLInputElement>(null);
   const submit = (event: FormEvent): void => {
     event.preventDefault();
     if (props.disabled || text.trim() === '') return;
-    props.onAdd(text, priority);
+    props.onAdd(text, priority, dueOn);
     setText('');
     setPriority(DEFAULT_PRIORITY);
+    setDueOn(today);
     inputRef.current?.focus();
   };
   return (
-    <li>
+    <li className="flex flex-col gap-2 px-3 pt-1">
       <form
         data-task-add=""
         onSubmit={submit}
@@ -200,7 +269,195 @@ function AddRow(props: {
           Add
         </Button>
       </form>
+      <DayChoices
+        calendar={props.calendar}
+        value={dueOn}
+        disabled={props.disabled}
+        onPick={setDueOn}
+        name="add"
+      />
     </li>
+  );
+}
+
+/**
+ * The day choices: Today, Tomorrow, No date, and Pick date (the shared
+ * calendar; never a day before today). Under the add row they set a new
+ * task's day; under a task (its date line tapped) they change its day.
+ */
+function DayChoices(props: {
+  calendar: TaskCalendar;
+  value: string | null;
+  disabled?: boolean;
+  onPick: (dueOn: string | null) => void;
+  /** Which control this is ("add", or a task id), for its hooks. */
+  name: string;
+}): ReactElement {
+  const choices = dayChoices(props.calendar);
+  const quick = choices.find((c) => c.dueOn === props.value);
+  return (
+    <div
+      data-task-days={props.name}
+      role="group"
+      aria-label="Due date"
+      className="flex flex-wrap items-center gap-2"
+    >
+      {choices.map((c) => (
+        <Chip
+          key={c.key}
+          label={c.label}
+          selected={quick?.key === c.key}
+          data-task-day={c.key}
+          disabled={props.disabled}
+          onClick={() => props.onPick(c.dueOn)}
+        />
+      ))}
+      <div className="w-40 min-w-0">
+        <DatePicker
+          value={quick === undefined && props.value !== null ? props.value : ''}
+          label={PICK_DATE_LABEL}
+          placeholder={PICK_DATE_LABEL}
+          disablePast
+          onChange={(iso) => {
+            if (iso !== '' && isPickableDay(iso, props.calendar)) props.onPick(iso);
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** A task's day choices under its row; they rise into place as they open (itemIn). */
+function RowDayEditor(props: {
+  calendar: TaskCalendar;
+  value: string | null;
+  onPick: (dueOn: string | null) => void;
+  name: string;
+}): ReactElement {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    itemIn(ref.current);
+  }, []);
+  return (
+    <div ref={ref} data-task-day-editor="" className="pb-3 pl-[80px] pr-3">
+      <DayChoices
+        calendar={props.calendar}
+        value={props.value}
+        onPick={props.onPick}
+        name={props.name}
+      />
+    </div>
+  );
+}
+
+/**
+ * The chip line under the header: the five chips and a search button at the
+ * end; search open, the field takes the line (the chips rest past the right
+ * edge, gliding there on a phone) and Cancel ends it.
+ */
+function ChipLine(props: {
+  chip: TaskWhen;
+  counts: Record<TaskWhen, number>;
+  onChip: (chip: TaskWhen) => void;
+  searchOpen: boolean;
+  query: string;
+  onQuery: (query: string) => void;
+  onOpenSearch: () => void;
+  onCloseSearch: () => void;
+  laptop: boolean;
+}): ReactElement {
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const wasOpen = useRef(props.searchOpen);
+  // The chips' end pose is set by class; the glide is laid over it (phone only).
+  useLayoutEffect(() => {
+    if (wasOpen.current === props.searchOpen) return;
+    wasOpen.current = props.searchOpen;
+    if (!props.laptop) glideAside(chipsRef.current, props.searchOpen);
+    if (props.searchOpen) inputRef.current?.focus();
+  }, [props.searchOpen, props.laptop]);
+  return (
+    <div
+      data-task-chip-line=""
+      className="relative flex h-14 shrink-0 items-center gap-2 overflow-x-clip px-3"
+    >
+      <div
+        ref={chipsRef}
+        data-task-chips=""
+        role="tablist"
+        aria-label="When"
+        className={cn(
+          'flex min-w-0 flex-1 gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+          props.searchOpen &&
+            'absolute inset-y-0 right-3 items-center translate-x-[calc(100%+1rem)]',
+        )}
+      >
+        {TASK_WHEN_CHIPS.map((c) => (
+          <Chip
+            key={c.key}
+            label={c.label}
+            count={props.counts[c.key]}
+            tab
+            selected={props.chip === c.key}
+            data-task-when-chip={c.key}
+            className="shrink-0"
+            onClick={() => props.onChip(c.key)}
+          />
+        ))}
+      </div>
+      {props.searchOpen ? (
+        <div data-task-search="" className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="group/sfield relative min-w-0 flex-1">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-fg-3 group-focus-within/sfield:text-fg">
+              <IconSearch size={ICON_SIZE.inline} />
+            </span>
+            <Input
+              ref={inputRef}
+              tone="search"
+              type="search"
+              value={props.query}
+              onChange={(e) => props.onQuery(e.target.value)}
+              aria-label={SEARCH_LABEL}
+              placeholder={SEARCH_LABEL}
+              className={cn('min-w-0 pl-7', props.query !== '' ? 'pr-11' : 'pr-2')}
+            />
+            {props.query !== '' ? (
+              <IconButton
+                type="button"
+                label="Clear search"
+                onClick={() => {
+                  props.onQuery('');
+                  inputRef.current?.focus();
+                }}
+                className="absolute right-0 top-1/2 -translate-y-1/2"
+              >
+                <IconX size={ICON_SIZE.inline} />
+              </IconButton>
+            ) : null}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            data-task-search-cancel=""
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={props.onCloseSearch}
+            className="shrink-0"
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <IconButton
+          type="button"
+          label={SEARCH_LABEL}
+          data-task-search-open=""
+          onClick={props.onOpenSearch}
+          className="shrink-0"
+        >
+          <IconSearch size={ICON_SIZE.control} />
+        </IconButton>
+      )}
+    </div>
   );
 }
 
@@ -237,6 +494,10 @@ interface TaskSheetProps {
   focusTaskId: string | null;
   /** Share through the thread's send and forward; absent hides Share. */
   share?: TaskShareWiring;
+  /** The workspace zone the due days read on (IANA). */
+  timeZone: string;
+  /** The workspace week start, 0=Sun..6=Sat (This week's last day). */
+  weekStartDay: number;
 }
 
 export function TaskSheet(props: TaskSheetProps): ReactElement | null {
@@ -250,6 +511,17 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   // What the marks are measured from (frozen at open) and the latest other Save then.
   const [openedSeen, setOpenedSeen] = useState<number | null>(props.seenMs);
   const [openedAt, setOpenedAt] = useState<number>(() => Date.now());
+  // The chip the person picked (null: follow the opening rule), the search,
+  // and full screen. Each open starts at half height on the opening chip.
+  const [pickedChip, setPickedChip] = useState<TaskWhen | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [full, setFull] = useState(false);
+  // The row whose day choices are open (a task id or a new task's key).
+  const [dateFor, setDateFor] = useState<string | null>(null);
+  // The thread's search words (a search jump opened the sheet); the sheet's own
+  // search replaces them while it runs.
+  const threadWords = useContext(SearchWordsContext);
   const laptop = useIsLaptop();
   const dimRef = useRef<HTMLButtonElement>(null);
   // Rise (phone) / grow (laptop): the panel is painted at rest on its first
@@ -284,6 +556,11 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
       setConfirming(false);
       setOpenedSeen(props.seenMs);
       setOpenedAt(Date.now());
+      setPickedChip(null);
+      setSearchOpen(false);
+      setQuery('');
+      setFull(false);
+      setDateFor(null);
       return;
     }
     setShareOpen(false);
@@ -393,6 +670,24 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   }, [saving, dirty, close]);
 
   useEscapeLayer(props.open && !confirming && !shareOpen, requestClose);
+  // Esc in an open search ends the search first (the top layer), never the sheet.
+  const closeSearch = useCallback((): void => {
+    setQuery('');
+    setSearchOpen(false);
+  }, []);
+  useEscapeLayer(props.open && searchOpen && !confirming && !shareOpen, closeSearch);
+
+  // Phone: swipe up on the header fills the screen; swipe down there returns
+  // to half height. The size change is instant at release (no move fits it).
+  const resize = useDragDismiss({
+    axis: 'y',
+    direction: full ? 1 : -1,
+    closeAt: SHEET_CLOSE_PX,
+    enabled: !laptop && props.open,
+    onMove: () => {},
+    onDismiss: () => setFull((was) => !was),
+    onCancel: () => {},
+  });
   useModalFocus(panelRef, props.open && rendered);
   const guard = useBackGuard({
     active: props.open && (dirty || saving),
@@ -478,6 +773,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         title: mine.title,
         priority: mine.priority,
         side: n.task.side,
+        dueOn: mine.dueOn,
       };
       const next = dropTask(draft, id);
       setDraft(next);
@@ -521,6 +817,42 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
   const editors = tasks.editors.map(tasks.nameOf);
   const editingLine = editingLabel(editors);
 
+  // When each row falls, on the workspace calendar, as it looks with this
+  // draft's changes; new tasks by the day they were given.
+  const calendar: TaskCalendar = {
+    now: new Date(),
+    timeZone: props.timeZone,
+    weekStartDay: props.weekStartDay,
+  };
+  const days = calendarDays(calendar);
+  const shownOf = (task: ChatTask): ChatTask =>
+    applyChanges(task, effectiveChanges(task, draft.edits[task.id]));
+  const shownRows = rows.map(shownOf);
+  const counts = countByWhen([...shownRows, ...draft.creates], days);
+  const focusTask = focusTaskId !== null ? byId.get(focusTaskId) : undefined;
+  const chip: TaskWhen =
+    pickedChip ?? (focusTask !== undefined ? taskWhen(focusTask, days) : openingChip(counts));
+  const words = searchOpen ? queryWords(query) : [];
+  const searching = words.length > 0;
+  const creates = draft.creates.map((c, k) => ({ c, k }));
+  const listRows = searching
+    ? searchTasks(shownRows, words)
+    : shownRows.filter((t) => taskWhen(t, days) === chip);
+  const listIds = new Set(listRows.map((t) => t.id));
+  const visibleRows = rows.filter((t) => listIds.has(t.id));
+  const visibleCreates = searching
+    ? creates.filter(({ c }) => searchTasks([c], words).length > 0)
+    : creates.filter(({ c }) => taskWhen(c, days) === chip);
+  const doneIds = new Set(listRows.filter((t) => t.status === 'done').map((t) => t.id));
+  const pastSplit = !searching && chip === 'past';
+  const zero = visibleRows.length === 0 && visibleCreates.length === 0;
+  // A day picked under a row: the choices close and, outside a search, the
+  // sheet moves to the chip the task now sits under so it stays in view.
+  const pickDay = (dueOn: string | null): void => {
+    setDateFor(null);
+    if (!searching) setPickedChip(taskWhen({ dueOn }, days));
+  };
+
   const renderRow = (task: ChatTask): ReactElement => {
     const mine = effectiveChanges(task, draft.edits[task.id]);
     const shown = applyChanges(task, mine);
@@ -539,6 +871,20 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         marks={own ? [] : theirMarks}
         queuedDelete={queued}
         notice={rowNotice(task.id)}
+        dateLine={taskDateLine(shown, calendar)}
+        onDate={() => setDateFor((open) => (open === task.id ? null : task.id))}
+        dateOpen={dateFor === task.id && !queued}
+        dateEditor={
+          <RowDayEditor
+            calendar={calendar}
+            value={shown.dueOn}
+            name={task.id}
+            onPick={(dueOn) => {
+              edit(task, { dueOn });
+              pickDay(dueOn);
+            }}
+          />
+        }
         onToggle={() => edit(task, { status: shown.status === 'done' ? 'todo' : 'done' })}
         onTitle={(title) => edit(task, { title })}
         onPriority={(priority) => edit(task, { priority })}
@@ -550,7 +896,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
     );
   };
 
-  const renderNew = (c: DraftNew, k: number): ReactElement => (
+  const renderNew = ({ c, k }: { c: DraftNew; k: number }): ReactElement => (
     <TaskRow
       key={c.key}
       id={c.key}
@@ -563,6 +909,20 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
       queuedDelete={false}
       canTick={false}
       notice={null}
+      dateLine={taskDateLine({ dueOn: c.dueOn, status: 'todo', doneAt: null }, calendar)}
+      onDate={() => setDateFor((open) => (open === c.key ? null : c.key))}
+      dateOpen={dateFor === c.key}
+      dateEditor={
+        <RowDayEditor
+          calendar={calendar}
+          value={c.dueOn}
+          name={c.key}
+          onPick={(dueOn) => {
+            editNew(c.key, { dueOn });
+            pickDay(dueOn);
+          }}
+        />
+      }
       onToggle={() => {}}
       onTitle={(title) => editNew(c.key, { title })}
       onPriority={(priority) => editNew(c.key, { priority })}
@@ -583,47 +943,92 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
         aria-modal="true"
         tabIndex={-1}
         aria-label={TASK_SHEET_TITLE}
-        className="relative flex w-full max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl border bg-panel lit-overlay focus:outline-none sm:w-[560px] sm:max-w-[92%] sm:max-h-[84svh] sm:rounded-xl"
+        data-task-full={full ? '' : undefined}
+        className={cn(
+          'relative flex w-full flex-col overflow-hidden bg-panel lit-overlay focus:outline-none sm:max-w-[92%] sm:rounded-xl sm:border',
+          full
+            ? 'h-[100svh] supports-[height:1dvh]:h-[100dvh] sm:h-[84svh] sm:w-[960px]'
+            : 'max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] rounded-t-2xl border sm:w-[560px] sm:max-h-[84svh]',
+        )}
       >
-        <div className="flex items-center gap-1 border-b border-border py-1.5 pl-4 pr-1.5">
-          <div className="flex min-w-0 flex-1 flex-col">
-            <h2 className="text-lg font-semibold text-fg">{TASK_SHEET_TITLE}</h2>
-            {editingLine !== null ? (
-              <p data-task-editing="" className="truncate text-sm text-fg-3">
-                {editingLine}
-              </p>
+        <div
+          data-task-head=""
+          className={cn(
+            'flex shrink-0 flex-col border-b border-border touch-none md:touch-auto',
+            full && 'pt-[env(safe-area-inset-top)] sm:pt-0',
+          )}
+          {...resize}
+        >
+          {laptop ? null : (
+            <div
+              aria-hidden="true"
+              className="mx-auto mt-1.5 h-1 w-9 rounded-sm bg-border-strong"
+            />
+          )}
+          <div className="flex items-center gap-1 py-1.5 pl-4 pr-1.5">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <h2 className="text-lg font-semibold text-fg">{TASK_SHEET_TITLE}</h2>
+              {editingLine !== null ? (
+                <p data-task-editing="" className="truncate text-sm text-fg-3">
+                  {editingLine}
+                </p>
+              ) : null}
+            </div>
+            {props.share !== undefined && ready ? (
+              <IconButton
+                label={SHARE_LABEL}
+                data-task-share=""
+                onClick={() => {
+                  if (saving) return;
+                  resetShare();
+                  setShareOpen(true);
+                }}
+              >
+                <IconForward />
+              </IconButton>
             ) : null}
-          </div>
-          {props.share !== undefined && ready ? (
-            <IconButton
-              label={SHARE_LABEL}
-              data-task-share=""
-              onClick={() => {
-                if (saving) return;
-                resetShare();
-                setShareOpen(true);
-              }}
+            <Button
+              variant="primary"
+              data-task-save=""
+              disabled={!dirty || saving}
+              aria-busy={saving}
+              onClick={save}
             >
-              <IconForward />
+              {saving ? SAVING_LABEL : saveFailed ? 'Retry' : 'Save'}
+            </Button>
+            <IconButton
+              label={full ? HALF_LABEL : FULL_LABEL}
+              data-task-resize=""
+              onClick={() => setFull((was) => !was)}
+            >
+              {full ? (
+                <IconCollapse size={ICON_SIZE.control} />
+              ) : (
+                <IconExpand size={ICON_SIZE.control} />
+              )}
             </IconButton>
-          ) : null}
-          <Button
-            variant="primary"
-            data-task-save=""
-            disabled={!dirty || saving}
-            aria-busy={saving}
-            onClick={save}
-          >
-            {saving ? SAVING_LABEL : saveFailed ? 'Retry' : 'Save'}
-          </Button>
-          <IconButton
-            label="Close"
-            onClick={requestClose}
-            {...(saving ? { 'aria-disabled': 'true' as const } : {})}
-          >
-            <IconX size={ICON_SIZE.control} />
-          </IconButton>
+            <IconButton
+              label="Close"
+              onClick={requestClose}
+              {...(saving ? { 'aria-disabled': 'true' as const } : {})}
+            >
+              <IconX size={ICON_SIZE.control} />
+            </IconButton>
+          </div>
         </div>
+        {ready ? (
+          <ChipLine
+            chip={chip}
+            counts={counts}
+            onChip={setPickedChip}
+            searchOpen={searchOpen}
+            query={query}
+            onQuery={setQuery}
+            onOpenSearch={() => setSearchOpen(true)}
+            onCloseSearch={closeSearch}
+            laptop={laptop}
+          />
+        ) : null}
         <div
           ref={bodyRef}
           data-task-sheet=""
@@ -653,25 +1058,72 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
             />
           ) : null}
           {ready ? (
-            <ul data-task-list="" className="flex flex-col py-1">
-              {rows.map(renderRow)}
-              {draft.creates.map(renderNew)}
-              <AddRow
-                preview={preview}
-                disabled={saving || side === null || draft.creates.length >= 50}
-                onAdd={(title, priority) => {
-                  if (side === null) return;
-                  setSaveFailed(false);
-                  setDraft((d) => ({
-                    ...d,
-                    creates: [
-                      ...d.creates,
-                      { key: `new-${(newSeq += 1)}`, title: title.trim(), priority, side },
-                    ],
-                  }));
-                }}
-              />
-            </ul>
+            <SearchWordsContext.Provider value={searching ? words : threadWords}>
+              <ul
+                data-task-list=""
+                data-task-chip={searching ? 'search' : chip}
+                className="flex flex-col py-1"
+              >
+                {pastSplit ? (
+                  <>
+                    {visibleRows.some((t) => !doneIds.has(t.id)) || visibleCreates.length > 0 ? (
+                      <li data-task-section="open" className={SECTION_LABEL}>
+                        {PAST_OPEN_LABEL}
+                      </li>
+                    ) : null}
+                    {visibleRows.filter((t) => !doneIds.has(t.id)).map(renderRow)}
+                    {visibleCreates.map(renderNew)}
+                    {doneIds.size > 0 ? (
+                      <li data-task-section="done" className={SECTION_LABEL}>
+                        {PAST_DONE_LABEL}
+                      </li>
+                    ) : null}
+                    {visibleRows.filter((t) => doneIds.has(t.id)).map(renderRow)}
+                  </>
+                ) : (
+                  <>
+                    {visibleRows.map(renderRow)}
+                    {visibleCreates.map(renderNew)}
+                  </>
+                )}
+                {zero && searching ? (
+                  <li>
+                    <NoResults query={query} filtersActive={false} onClear={() => setQuery('')} />
+                  </li>
+                ) : null}
+                {zero && !searching ? (
+                  <li data-task-zero="" className="px-4 py-4 text-base text-fg-3">
+                    {CHIP_ZERO[chip]}
+                  </li>
+                ) : null}
+                {searching ? null : (
+                  <AddRow
+                    preview={preview}
+                    calendar={calendar}
+                    disabled={saving || side === null || draft.creates.length >= 50}
+                    onAdd={(title, priority, dueOn) => {
+                      if (side === null) return;
+                      setSaveFailed(false);
+                      setDraft((d) => ({
+                        ...d,
+                        creates: [
+                          ...d.creates,
+                          {
+                            key: `new-${(newSeq += 1)}`,
+                            title: title.trim(),
+                            priority,
+                            side,
+                            dueOn,
+                          },
+                        ],
+                      }));
+                      // The sheet moves to the chip the new task lands on.
+                      setPickedChip(taskWhen({ dueOn }, days));
+                    }}
+                  />
+                )}
+              </ul>
+            </SearchWordsContext.Provider>
           ) : null}
         </div>
       </div>
@@ -731,6 +1183,8 @@ function taskFromConflictStub(c: TaskConflict): ChatTask {
     createdAt: c.updatedAt,
     updatedAt: c.updatedAt,
     deletedAt: null,
+    dueOn: c.dueOn,
+    doneAt: null,
   };
 }
 

@@ -68,6 +68,32 @@ describe('task row buttons', () => {
     }
   });
 
+  it('the date line is a 44px PressableRow: "Add date" with none, the day in mono otherwise', () => {
+    const none = tag(
+      renderToStaticMarkup(<TaskRow {...props({ onDate: noop })} />),
+      'data-task-when=""',
+    );
+    expect(none).toContain('min-h-[44px]');
+    expect(none).toContain('aria-label="Add date"');
+    expect(none).toContain('aria-expanded="false"');
+    const late = tag(
+      renderToStaticMarkup(
+        <TaskRow
+          {...props({
+            onDate: noop,
+            dateOpen: true,
+            dateLine: { text: 'Overdue · 3 Nov', bad: true },
+          })}
+        />,
+      ),
+      'data-task-when=""',
+    );
+    expect(late).toContain('font-mono');
+    expect(late).toContain('text-bad');
+    expect(late).toContain('aria-expanded="true"');
+    expect(late).toContain('aria-label="Change date, Overdue · 3 Nov"');
+  });
+
   it('Not saved Retry is a 44px Button in bad ink', () => {
     const html = renderToStaticMarkup(<NotSaved onRetry={noop} />);
     const [retry] = html.match(/<button[^>]*>/g) ?? [];
