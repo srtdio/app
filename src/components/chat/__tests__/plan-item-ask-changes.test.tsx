@@ -69,7 +69,7 @@ describe('Not OK on a row: the item screen asks changes at once', () => {
     expect(src).toContain("item.kind === 'post' && !askingChanges ? undefined : (");
     const screen = read('PlanScreen.tsx');
     expect(screen).toMatch(
-      /const planNotOk = [\s\S]*?undoable\.flush\(\);\s*setAskChanges\(true\);\s*setItemId\(item\.id\);/,
+      /const planNotOk = [\s\S]*?undoable\.flush\(\);\s*setAskChanges\(true\);\s*setRowHighlight\(null\);\s*setItemId\(item\.id\);/,
     );
     expect(screen).toContain('askChanges={askChanges}');
   });

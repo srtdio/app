@@ -15,6 +15,7 @@
 
 import { useEffect, useRef } from 'react';
 import { tintTarget } from '@/components/ui/SearchHighlight';
+import { REASON_COPY } from '@/lib/error-copy';
 import { prefersReducedMotion } from '@/lib/use-is-laptop';
 
 /** How long a target may take to render before it counts as missing. */
@@ -43,7 +44,7 @@ const USER_INPUT = ['pointerdown', 'wheel', 'touchstart', 'keydown'] as const;
 export const FOCUS_MISSING_COPY = "Couldn't open that comment. It was deleted or you can't see it.";
 
 /** The toast when the linked comment could not be read (the read failed twice). */
-export const FOCUS_FAILED_COPY = "Couldn't open that comment. Try again.";
+export const FOCUS_FAILED_COPY = `Couldn't open that comment. ${REASON_COPY.unknown}`;
 
 /** A failed read of the linked comment is retried once, after this long. */
 export const FOCUS_READ_RETRY_MS = 1200;
