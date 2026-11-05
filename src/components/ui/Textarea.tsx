@@ -124,6 +124,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
   const autoGrow = autoGrowProp || compact;
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const mirrorRef = useRef<HTMLDivElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const setRef = useCallback(
     (el: HTMLTextAreaElement | null): void => {
       ref.current = el;
@@ -162,6 +163,17 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     m.style.height = `${el.clientHeight}px`;
     m.scrollTop = el.scrollTop;
   }, []);
+
+  // The wrapper takes the box's slot, so the box keeps the display it had
+  // there: blockified as a flex or grid item (composer rows), inline-block in
+  // a block parent (form fields keep their line gap). Set before paint, once.
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    const el = ref.current;
+    if (!formatting || wrap === null || el === null || wrap.parentElement === null) return;
+    const display = window.getComputedStyle(wrap.parentElement).display;
+    if (/flex|grid/.test(display)) el.style.display = 'block';
+  }, [formatting]);
 
   // Copy the type styles once per look (class / mode change), not per key.
   useLayoutEffect(() => {
@@ -252,6 +264,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     // The wrapper takes the box's slot: full width like the box was, unless
     // the caller gave its own width.
     <div
+      ref={wrapRef}
       className={cn(
         'relative',
         !/(^|\s)(?:[a-z]+:)*w-/.test(split.wrapper) && 'w-full',
