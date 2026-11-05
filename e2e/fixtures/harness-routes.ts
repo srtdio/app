@@ -776,10 +776,6 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     if (!AGENCY_ROLES.includes(roleOf(tables, ME))) throw new HarnessRpcError('forbidden_role');
     const postId = typeof args.p_post_id === 'string' ? args.p_post_id : null;
     if (postId !== null) {
-      const approved = (tables.plan_item_reviews ?? []).some(
-        (r) => r.item_id === item.id && r.status === 'approved',
-      );
-      if (!approved) throw new HarnessRpcError('concept_not_approved');
       const post = (tables.posts ?? []).find(
         (p) => p.id === postId && p.workspace_id === item.workspace_id && liveRow(p),
       );
