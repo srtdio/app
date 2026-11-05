@@ -22,7 +22,7 @@
 
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useHadBoxes, useSettleOnLanding, useSelectionSlide } from '@/lib/motion';
+import { useHadBoxes, useSettleOnLanding, selectionSlideRef } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
@@ -468,7 +468,7 @@ function ViewOption(props: {
   picked: boolean;
   onView: (view: PlanTabView) => void;
 }): ReactElement {
-  const slideRef = useSelectionSlide(props.picked);
+  const slideRef = selectionSlideRef(props.picked);
   return (
     <PressableRow
       inline

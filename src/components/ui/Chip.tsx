@@ -1,6 +1,6 @@
-import { useCallback, type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
-import { MOVE_CLASS, useSelectionSlide } from '@/lib/motion';
+import { MOVE_CLASS, selectionSlideRef } from '@/lib/motion';
 
 interface ChipProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -78,17 +78,15 @@ export function Chip({
 }: ChipProps) {
   const selected = selectedProp ?? false;
   // The pick's fill slides over from the row's last pick (src/lib/motion/selection.ts).
-  const slideRef = useSelectionSlide(selected && variant !== 'add');
-  const ref = useCallback(
-    (el: HTMLButtonElement | null) => {
-      slideRef(el);
-      if (typeof buttonRef === 'function') buttonRef(el);
-      else if (buttonRef !== null && buttonRef !== undefined) {
-        (buttonRef as { current: HTMLButtonElement | null }).current = el;
-      }
-    },
-    [slideRef, buttonRef],
-  );
+  // A plain ref callback, no hooks: Chip stays a callable function.
+  const slide = selectionSlideRef(selected && variant !== 'add');
+  const ref = (el: HTMLButtonElement | null): void => {
+    slide(el);
+    if (typeof buttonRef === 'function') buttonRef(el);
+    else if (buttonRef !== null && buttonRef !== undefined) {
+      (buttonRef as { current: HTMLButtonElement | null }).current = el;
+    }
+  };
   return (
     <button
       type="button"

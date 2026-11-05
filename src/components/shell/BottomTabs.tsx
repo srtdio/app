@@ -10,7 +10,7 @@ import {
 } from '@/components/shell/NotificationsButton';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { CountBadge } from '@/components/ui/CountBadge';
-import { useNudgeOnRise, useSelectionSlide } from '@/lib/motion';
+import { useNudgeOnRise, selectionSlideRef } from '@/lib/motion';
 import { unreadCommentsLabel, usePlanItemsUnreadTotal } from '@/lib/inbox/unread-entities';
 import { cn } from '@/lib/cn';
 import { activityPrefetchProps, navPrefetchProps } from '@/lib/route-prefetch';
@@ -43,7 +43,7 @@ export function chatTabLabel(unread: number): string {
 /**
  * A pill tab: inactive is the icon alone in a 44x44 target; active is icon and
  * label on the solid ink fill (bg-accent, lit-pill: the one picked look), which
- * slides over from the last tab (useSelectionSlide).
+ * slides over from the last tab (selectionSlideRef).
  */
 function tabClass(active: boolean): string {
   return cn(
@@ -56,7 +56,7 @@ function tabClass(active: boolean): string {
 function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number }) {
   const { item, planUnread } = props;
   const active = useMatch({ path: item.to, end: false }) !== null;
-  const slideRef = useSelectionSlide(active);
+  const slideRef = selectionSlideRef(active);
   return (
     <NavLink
       ref={slideRef}
@@ -103,7 +103,7 @@ export function BottomTabs() {
   const planUnread = usePlanItemsUnreadTotal();
   const { pathname } = useLocation();
   const activityActive = onNotifications(pathname);
-  const activitySlideRef = useSelectionSlide(activityActive);
+  const activitySlideRef = selectionSlideRef(activityActive);
   const activityNudgeRef = useNudgeOnRise(unreadCount);
   const chatNudgeRef = useNudgeOnRise(total);
   return (

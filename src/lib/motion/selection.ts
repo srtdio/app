@@ -10,7 +10,7 @@
 // old one still reads chosen (data-selected="true": a multi-select row) never
 // slides. Rows whose picks do not share a parent simply never slide.
 
-import { useCallback, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { nudgeIcon, slideFill } from './moves';
 
 /** The pick last chosen in each row (the slide's start). */
@@ -63,31 +63,35 @@ function slideBetween(row: HTMLElement, from: HTMLElement, to: HTMLElement): voi
   else void played.done.then(cleanup);
 }
 
+/** Whether each pick element was chosen at its last commit. */
+const wasChosen = new WeakMap<HTMLElement, boolean>();
+
+/** One commit of a pick: record it, and slide when it just became the row's pick. */
+function notePick(el: HTMLElement, selected: boolean): void {
+  const before = wasChosen.get(el);
+  wasChosen.set(el, selected);
+  if (!selected) return;
+  const row = el.parentElement;
+  if (row === null) return;
+  const prev = lastPick.get(row);
+  lastPick.set(row, el);
+  if (before !== false) return;
+  if (prev === undefined || prev === el || !prev.isConnected) return;
+  if (prev.getAttribute('data-selected') === 'true') return;
+  slideBetween(row, prev, el);
+}
+
 /**
- * A pick in a single-choice row. Returns the ref callback for the pick's element;
- * the element must also carry data-selected="true" while chosen. The first paint
- * never slides; a later change of pick in the same row slides the fill over.
+ * A pick in a single-choice row, as a ref callback (no hooks, so a pick
+ * component stays a plain function). Pass a fresh callback each render; React
+ * calls it on every commit. The element must also carry data-selected="true"
+ * while chosen. The first paint never slides; a later change of pick in the
+ * same row slides the fill over.
  */
-export function useSelectionSlide(selected: boolean): (el: HTMLElement | null) => void {
-  const node = useRef<HTMLElement | null>(null);
-  const was = useRef<boolean | null>(null);
-  useLayoutEffect(() => {
-    const el = node.current;
-    const before = was.current;
-    was.current = selected;
-    if (el === null || !selected) return;
-    const row = el.parentElement;
-    if (row === null) return;
-    const prev = lastPick.get(row);
-    lastPick.set(row, el);
-    if (before !== false) return;
-    if (prev === undefined || prev === el || !prev.isConnected) return;
-    if (prev.getAttribute('data-selected') === 'true') return;
-    slideBetween(row, prev, el);
-  }, [selected]);
-  return useCallback((el: HTMLElement | null) => {
-    node.current = el;
-  }, []);
+export function selectionSlideRef(selected: boolean): (el: HTMLElement | null) => void {
+  return (el) => {
+    if (el !== null) notePick(el, selected);
+  };
 }
 
 /**
@@ -100,7 +104,7 @@ export function useNudgeOnRise(count: number): (el: HTMLElement | null) => void 
   const node = useRef<HTMLElement | null>(null);
   const shown = useRef<number | null>(null);
   const playing = useRef<{ cancel: () => void } | null>(null);
-  useLayoutEffect(() => {
+  useEffect(() => {
     const before = shown.current;
     shown.current = count;
     if (before === null || !(count > before) || node.current === null) return;

@@ -18,7 +18,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconEye, IconFile, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
-import { riseIn, riseOut, usePresence, useSelectionSlide } from '@/lib/motion';
+import { riseIn, riseOut, usePresence, selectionSlideRef } from '@/lib/motion';
 import { dimWith } from '@/lib/motion/overlays';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -531,7 +531,7 @@ function SizeOption(props: {
   selected: boolean;
   onPick: () => void;
 }): ReactElement {
-  const slideRef = useSelectionSlide(props.selected);
+  const slideRef = selectionSlideRef(props.selected);
   return (
     <PressableRow
       type="button"

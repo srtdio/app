@@ -11,7 +11,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { navPrefetchProps } from '@/lib/route-prefetch';
 import { INDUCTION_KEYS } from '@/lib/induction';
-import { Bone, useNudgeOnRise, useSelectionSlide } from '@/lib/motion';
+import { Bone, useNudgeOnRise, selectionSlideRef } from '@/lib/motion';
 
 interface SidebarProps {
   /** The active workspace's display name ("<Brand> - <Platform>"). */
@@ -67,7 +67,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
 /**
  * One sidebar nav item. Active is the one picked look: the solid ink fill
  * (bg-accent, lit-pill), which slides over from the last item
- * (useSelectionSlide); hover is the lit-hover overlay. The Chat icon nudges when
+ * (selectionSlideRef); hover is the lit-hover overlay. The Chat icon nudges when
  * its unread count rises.
  */
 function SideNavItem(props: {
@@ -77,7 +77,7 @@ function SideNavItem(props: {
 }) {
   const { item, chatUnread, planUnread } = props;
   const active = useMatch({ path: item.to, end: false }) !== null;
-  const slideRef = useSelectionSlide(active);
+  const slideRef = selectionSlideRef(active);
   const nudgeRef = useNudgeOnRise(item.showChatBadge === true ? chatUnread : 0);
   return (
     <NavLink
