@@ -144,8 +144,8 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
       busy={busy}
       busyLabel="Adding…"
       footer={
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" type="button" className="mr-auto" onClick={props.onClose}>
+        <div className="grid w-full grid-cols-2 gap-2">
+          <Button variant="ghost" type="button" onClick={props.onClose}>
             Cancel
           </Button>
           <Button variant="primary" type="button" data-bank-add-go="" onClick={() => void submit()}>

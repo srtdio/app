@@ -980,8 +980,8 @@ export function BankPlanItSheets(props: {
         title="Plan it"
         busy={props.busy}
         footer={
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="ghost" type="button" className="mr-auto" onClick={props.onClose}>
+          <div className="grid w-full grid-cols-2 gap-2">
+            <Button variant="ghost" type="button" onClick={props.onClose}>
               Cancel
             </Button>
             <Button
@@ -1015,8 +1015,8 @@ export function BankPlanItSheets(props: {
         title={step?.kind === 'none' ? noPlanTitle(step.day) : ''}
         busy={props.busy}
         footer={
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="ghost" type="button" className="mr-auto" onClick={props.onClose}>
+          <div className="grid w-full grid-cols-2 gap-2">
+            <Button variant="ghost" type="button" onClick={props.onClose}>
               Cancel
             </Button>
             <Button
@@ -1066,8 +1066,8 @@ export function BankPlanItSheets(props: {
         title="Put it in the plan?"
         busy={props.busy}
         footer={
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="ghost" type="button" className="mr-auto" onClick={props.onClose}>
+          <div className="grid w-full grid-cols-2 gap-2">
+            <Button variant="ghost" type="button" onClick={props.onClose}>
               Cancel
             </Button>
             <Button
@@ -1107,8 +1107,8 @@ function BankShowSheet(props: {
       onClose={props.onClose}
       title="Show to client"
       footer={
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" type="button" className="mr-auto" onClick={props.onClose}>
+        <div className="grid w-full grid-cols-2 gap-2">
+          <Button variant="ghost" type="button" onClick={props.onClose}>
             Cancel
           </Button>
           <Button
