@@ -9,11 +9,14 @@
 // right-click on laptop) holds Open, Select, Plan it, Show to client or Hide
 // from client, Star or Unstar, Archive or Unarchive, Delete last. Long-press
 // enters select mode (ui/Checkbox per row, the picked rows lit-selected; the
-// select bar replaces the nudge). Writes are optimistic over the kept page;
+// select bar sits above the rows). Writes are optimistic over the kept page;
 // Delete, Archive, Hide and every bulk write sit behind the Undo strip first.
 // A client reads only, with no menu, select mode or Add idea. Tokens only;
 // lit heights per docs/lighting.md (cards lit-card, sheets lit-overlay, the
-// filter pills lit-badge, the nudge lit-tint, thumbnails lit-media).
+// filter pills lit-badge, thumbnails lit-media). The Untouched for 90 days
+// filter (the Filter and sort sheet) lists live ideas last active over 90
+// days ago and ends with "Archive all {n}" (n = the rows loaded; bulk
+// bank_idea_set behind the Undo strip). Nothing in the Bank is ever counted.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent as ReactDragEvent, ReactElement, ReactNode } from 'react';
@@ -72,10 +75,8 @@ import {
   ideaFilesLine,
   ideaFormatLine,
   ideaMetaLine,
-  isUntouched,
   moreFilesLabel,
   noPlanTitle,
-  nudgeLine,
   planAudienceLabel,
   planItChoice,
   planItError,
@@ -215,42 +216,6 @@ export function BankFilterLine(props: {
   );
 }
 
-/** The 90-day nudge (lit-tint warn) and, in the review, Archive all and Done. */
-function BankNudge(props: {
-  count: number;
-  reviewing: boolean;
-  canWrite: boolean;
-  onReview: () => void;
-  onArchiveAll: () => void;
-  onDone: () => void;
-}): ReactElement | null {
-  if (!props.reviewing && props.count === 0) return null;
-  return (
-    <div
-      data-bank-nudge=""
-      className="lit-tint mx-4 flex min-h-[44px] flex-wrap items-center gap-2 rounded-xl border border-border-strong bg-panel-2 px-3 text-base text-warn md:mx-0"
-    >
-      <span className="min-w-0 flex-1">{nudgeLine(props.count)}</span>
-      {props.reviewing ? (
-        <>
-          {props.canWrite && props.count > 0 ? (
-            <Button type="button" data-bank-archive-all="" onClick={props.onArchiveAll}>
-              {archiveAllLabel(props.count)}
-            </Button>
-          ) : null}
-          <Button variant="link" type="button" data-bank-review-done="" onClick={props.onDone}>
-            Done
-          </Button>
-        </>
-      ) : (
-        <Button variant="link" type="button" data-bank-review="" onClick={props.onReview}>
-          Review
-        </Button>
-      )}
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Rows
 // ---------------------------------------------------------------------------
@@ -372,11 +337,10 @@ export interface BankSurfaceProps {
   canWrite: boolean;
   workspaceId: string;
   today: string;
-  /** The open plans for Plan it (held after paint; joined when not yet in). */
+  /** The open plans for Plan it: one read on the tap. */
   getPlans: () => Promise<
     { ok: true; data: PlanRow[] } | { ok: false; error: { message: string } }
   >;
-  onPlanMade: (plan: PlanRow) => void;
   onOpenIdea: (id: string) => void;
   /** Bumped by the page on a chip change: select mode ends. */
   epoch: string;
@@ -554,7 +518,6 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
       showToast({ title: errorText('make the plan', made.error.message), tone: 'error' });
       return;
     }
-    props.onPlanMade(made.data);
     void place(idea, made.data, day);
   };
 
@@ -619,34 +582,27 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
       return next;
     });
   const pickedIdeas = (ideas ?? []).filter((i) => picked.has(i.id));
-  const untouched = filter.review
-    ? (ideas ?? []).length
-    : (data.counts?.stale ?? (ideas ?? []).filter((i) => isUntouched(i, now)).length);
   const searching = data.search.active;
 
-  const head = (
-    <>
-      {selecting ? (
-        <BankSelectBar
-          count={picked.size}
-          onCancel={leaveSelect}
-          onAll={() => setPicked(new Set((ideas ?? []).map((i) => i.id)))}
-          onNone={() => setPicked(new Set())}
-          onArchive={() => archiveMany(pickedIdeas, !filter.archived)}
-          onDelete={() => deleteMany(pickedIdeas)}
-        />
-      ) : !filter.archived && !searching ? (
-        <BankNudge
-          count={untouched}
-          reviewing={filter.review}
-          canWrite={canWrite}
-          onReview={() => props.onFilter({ ...filter, review: true })}
-          onArchiveAll={() => archiveMany(ideas ?? [], true)}
-          onDone={() => props.onFilter({ ...filter, review: false })}
-        />
-      ) : null}
-    </>
-  );
+  const head = selecting ? (
+    <BankSelectBar
+      count={picked.size}
+      onCancel={leaveSelect}
+      onAll={() => setPicked(new Set((ideas ?? []).map((i) => i.id)))}
+      onNone={() => setPicked(new Set())}
+      onArchive={() => archiveMany(pickedIdeas, !filter.archived)}
+      onDelete={() => deleteMany(pickedIdeas)}
+    />
+  ) : null;
+  // Untouched for 90 days: Archive all {n} after the rows (n = the rows loaded).
+  const archiveAll =
+    canWrite && filter.review && !searching && ideas !== null && ideas.length > 0 ? (
+      <div className="pt-2">
+        <Button type="button" data-bank-archive-all="" onClick={() => archiveMany(ideas, true)}>
+          {archiveAllLabel(ideas.length)}
+        </Button>
+      </div>
+    ) : null;
 
   let body: ReactElement;
   if (ideas === null) {
@@ -753,6 +709,7 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
             <PlanTabLoadMore more={data.more} />
           </div>
         ) : null}
+        {archiveAll}
       </div>
       {layout === 'panel' && canWrite ? (
         <p data-bank-drag-hint="" className="border-t border-border px-4 py-2 text-sm text-fg-3">

@@ -4,6 +4,8 @@ import { bucketWriteError } from '@/lib/buckets';
 import {
   BANK_FILTER_DEFAULT,
   BANK_SORT_OPTIONS,
+  UNTOUCHED_LABEL,
+  archiveAllLabel,
   PAST_DAY_ERROR,
   bankDragId,
   bankItemHref,
@@ -13,11 +15,9 @@ import {
   filterPills,
   ideaFilesLine,
   ideaMetaLine,
-  isUntouched,
   joinNames,
   moreFilesLabel,
   needsSharedWarning,
-  nudgeLine,
   planItChoice,
   planItError,
   plannedToast,
@@ -105,21 +105,14 @@ describe('sort, star first', () => {
   });
 });
 
-describe('the 90-day cut', () => {
-  it('counts a live idea untouched for more than 90 days, never an archived one', () => {
-    expect(isUntouched(idea('x', { last_active_at: '2026-08-01T00:00:00Z' }), NOW)).toBe(true);
-    expect(isUntouched(idea('x', { last_active_at: '2026-08-10T00:00:00Z' }), NOW)).toBe(false);
-    expect(
-      isUntouched(
-        idea('x', { last_active_at: '2026-01-01T00:00:00Z', archived_at: '2026-02-01T00:00:00Z' }),
-        NOW,
-      ),
-    ).toBe(false);
-  });
-
-  it('words the nudge', () => {
-    expect(nudgeLine(3)).toBe('3 ideas untouched for 90 days.');
-    expect(nudgeLine(1)).toBe('1 idea untouched for 90 days.');
+describe('Untouched for 90 days', () => {
+  it('words the switch, its pill and Archive all', () => {
+    expect(UNTOUCHED_LABEL).toBe('Untouched for 90 days');
+    expect(filterPills({ ...BANK_FILTER_DEFAULT, review: true }, []).map((p) => p.label)).toEqual([
+      'Untouched 90 days',
+    ]);
+    expect(archiveAllLabel(4)).toBe('Archive all 4');
+    expect(withoutPill({ ...BANK_FILTER_DEFAULT, review: true }, 'review').review).toBe(false);
   });
 });
 

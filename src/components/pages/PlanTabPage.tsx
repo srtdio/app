@@ -18,8 +18,8 @@
 // (Bank, This week, Next week, Upcoming, Past, All; the tab still opens on
 // This week), whose toolbar is search, Filter and sort, then Add idea; on a
 // laptop a toggle chip after the plan chips that opens ui/SidePanel beside
-// the calendar (Expand swaps the calendar for the Bank table). ?chip=bank (or
-// ?week=bank) lands on it. A client sees it only when their bank read holds
+// the calendar (Expand swaps the calendar for the Bank table). ?week=bank
+// lands on it. A client sees it only when their bank read holds
 // an idea. The Bank reads after the tab paints (use-bank-data.ts).
 // Search (?q=, both widths, src/lib/search/server-search.ts): from 2
 // characters, plan_search then the matched plans in one plan_bundle_read, shown
@@ -64,11 +64,10 @@ import {
   zeroStateCopy,
   PLAN_BANK_CHIP,
   PLAN_BANK_CHIP_LABEL,
-  PLAN_CHIP_PARAM,
   PLAN_WEEK_CHIP_DEFAULT,
   PLAN_WEEK_CHIP_ZERO,
   PLAN_WEEK_PARAM,
-  planChipOfParams,
+  parsePlanWeekChip,
   planSectionOf,
   visiblePlanChips,
   planWeekChipLabel,
@@ -111,7 +110,6 @@ import { BankFilterSheet } from './plan-tab/BankFilterSheet';
 import { BankFilterLine, BankPanel, BankSurface, type BankDropRequest } from './plan-tab/BankList';
 import {
   BANK_FILTER_DEFAULT,
-  bankCountText,
   bankItemHref,
   bucketIdeaCount,
   sanitizeBankFilter,
@@ -121,7 +119,7 @@ import {
   bucketWritesFor,
   useBankBuckets,
   useBankData,
-  useOpenPlans,
+  readPlansForPlanIt,
 } from './plan-tab/use-bank-data';
 import { peekEntityUnreadComment, withCommentTarget } from '@/lib/inbox/unread-entities';
 
@@ -288,7 +286,7 @@ export function PlanTabPage(): ReactElement {
     keptKey('week'),
     PLAN_WEEK_CHIP_DEFAULT,
   );
-  const chip = planChipOfParams(params) ?? keptChip;
+  const chip = parsePlanWeekChip(params.get(PLAN_WEEK_PARAM)) ?? keptChip;
   const setChip = useCallback(
     (value: PlanWeekChip): void => {
       setKeptChip(value);
@@ -296,7 +294,6 @@ export function PlanTabPage(): ReactElement {
         (prev) => {
           const next = new URLSearchParams(prev);
           next.set(PLAN_WEEK_PARAM, value);
-          next.delete(PLAN_CHIP_PARAM);
           // The search box belongs to the chip it was typed under.
           if ((chip === PLAN_BANK_CHIP) !== (value === PLAN_BANK_CHIP)) next.delete(SEARCH_PARAM);
           return next;
@@ -307,11 +304,11 @@ export function PlanTabPage(): ReactElement {
     [chip, setKeptChip, setParams],
   );
   // The Bank (both widths share one hook). Laptop: the side panel's open
-  // state and Expand; ?chip=bank (or ?week=bank) opens the panel.
+  // state and Expand; ?week=bank opens the panel.
   const [bankOpen, setBankOpen] = useKeptState(keptKey('bank-open'), false);
   const [bankExpanded, setBankExpanded] = useState(false);
   const [bankSearchLaptop, setBankSearchLaptop] = useState('');
-  const urlBank = planChipOfParams(params) === PLAN_BANK_CHIP;
+  const urlBank = parsePlanWeekChip(params.get(PLAN_WEEK_PARAM)) === PLAN_BANK_CHIP;
   useEffect(() => {
     if (desktop && urlBank) setBankOpen(true);
   }, [desktop, urlBank, setBankOpen]);
@@ -346,15 +343,8 @@ export function PlanTabPage(): ReactElement {
     searchText: desktop ? bankSearchLaptop : onPhoneBank ? search : '',
   });
   const bankBuckets = useBankBuckets({ workspaceId, userId, enabled: ready });
-  const openPlans = useOpenPlans({
-    workspaceId,
-    userId,
-    today,
-    enabled: ready && creator && onBank && bank.ideas !== null,
-  });
   // A client sees the Bank only when their bank read holds an idea.
-  const bankTotal = bank.counts?.total ?? null;
-  const showBank = creator || (bankTotal ?? 0) > 0 || (bank.ideas?.length ?? 0) > 0;
+  const showBank = creator || (bank.ideas?.length ?? 0) > 0;
   if (onBank && bank.ideas !== null) mark('plan-bank:paint');
   const bucketWrites = useMemo(
     () =>
@@ -554,8 +544,7 @@ export function PlanTabPage(): ReactElement {
           canWrite: creator,
           workspaceId,
           today,
-          getPlans: openPlans.get,
-          onPlanMade: openPlans.add,
+          getPlans: () => readPlansForPlanIt(workspaceId, today),
           onOpenIdea: openIdea,
           epoch: `${chip}:${String(bankExpanded)}`,
         }
@@ -684,7 +673,6 @@ export function PlanTabPage(): ReactElement {
                   selected={bankOpen}
                   data-plan-tab-chip="bank"
                   dot={<IconBank size={ICON_SIZE.inline} />}
-                  {...(bankTotal !== null ? { count: bankTotal } : {})}
                   onClick={() => setBankOpen(!bankOpen)}
                   className="shrink-0"
                 />
@@ -735,7 +723,6 @@ export function PlanTabPage(): ReactElement {
         <BankPanel
           open={bankOpen && !bankExpanded}
           onClose={() => setBankOpen(false)}
-          count={bankCountText(bankTotal)}
           onExpand={() => {
             setBankExpanded(true);
             setBankOpen(false);
@@ -768,12 +755,7 @@ export function PlanTabPage(): ReactElement {
           buckets={bankBuckets.buckets}
           writes={bucketWrites}
           onBuckets={bankBuckets.set}
-          onAdded={(idea) =>
-            bank.patch(
-              (list) => [idea, ...list.filter((i) => i.id !== idea.id)],
-              (c) => ({ ...c, total: c.total + 1 }),
-            )
-          }
+          onAdded={(idea) => bank.patch((list) => [idea, ...list.filter((i) => i.id !== idea.id)])}
         />
       ) : null}
       {creator && workspaceId !== null ? (

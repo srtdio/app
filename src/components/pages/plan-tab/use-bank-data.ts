@@ -100,7 +100,6 @@ export function mergeBankPages(shown: BankPage, next: BankPage): BankPage {
   return {
     ideas: [...shown.ideas, ...next.ideas.filter((i) => !seen.has(i.id))],
     nextCursor: next.nextCursor,
-    counts: shown.counts ?? next.counts,
   };
 }
 
@@ -108,7 +107,7 @@ export function mergeBankPages(shown: BankPage, next: BankPage): BankPage {
 function readFirstPage(key: string, q: BankQuery): Promise<Result<BankPage>> {
   return sharedRead(
     key,
-    () => withReadTimeout((signal) => readBankPage(supabase, q, null, new Date(), signal)),
+    () => withReadTimeout((signal) => readBankPage(supabase, q, null, signal)),
     { freshMs: Number.POSITIVE_INFINITY, isOk: (r) => r.ok },
   );
 }
@@ -122,17 +121,12 @@ export interface BankData {
   load: BankLoad;
   /** The shown ideas in order (search answer while searching), or null before any. */
   ideas: BankIdea[] | null;
-  /** Live ideas and 90-day-untouched ones; null until a first page brought them. */
-  counts: BankPage['counts'];
   search: ServerSearch<BankIdea[]>;
   /** Load more while more remain; null otherwise. */
   more: { busy: boolean; onMore: () => void } | null;
   retry: () => void;
   /** An own write: edit the shown ideas (and the kept page, so a return shows it). */
-  patch: (
-    edit: (ideas: BankIdea[]) => BankIdea[],
-    counts?: (c: NonNullable<BankPage['counts']>) => NonNullable<BankPage['counts']>,
-  ) => void;
+  patch: (edit: (ideas: BankIdea[]) => BankIdea[]) => void;
   /** Mark every Bank read stale and read this filter again (behind what is shown). */
   reload: () => void;
 }
@@ -239,7 +233,6 @@ export function useBankData(input: {
         supabase,
         bankQueryOf(workspaceId, filterRef.current, new Date()),
         cursor,
-        new Date(),
         signal,
       ),
     ).then((next) => {
@@ -269,17 +262,13 @@ export function useBankData(input: {
   );
 
   const patch = useCallback<BankData['patch']>(
-    (edit, counts) => {
+    (edit) => {
       search.update((ideas) => edit(ideas));
       setState((prev) => {
         if (prev.load.status !== 'ready' || prev.key === null) return prev;
         const page: BankPage = {
           ...prev.load.page,
           ideas: sortBankIdeas(edit(prev.load.page.ideas), filterRef.current.sort),
-          counts:
-            counts !== undefined && prev.load.page.counts !== null
-              ? counts(prev.load.page.counts)
-              : prev.load.page.counts,
         };
         primeRead<Result<BankPage>>(prev.key, { ok: true, data: page }, Number.POSITIVE_INFINITY);
         return { key: prev.key, load: { status: 'ready', page } };
@@ -301,7 +290,6 @@ export function useBankData(input: {
   return {
     load,
     ideas,
-    counts: load.status === 'ready' ? load.page.counts : null,
     search,
     more,
     retry,
@@ -311,62 +299,15 @@ export function useBankData(input: {
 }
 
 // ---------------------------------------------------------------------------
-// Plans for Plan it (read after the Bank paints, never on the tap)
+// Plans for Plan it (one read on the tap)
 // ---------------------------------------------------------------------------
 
-/** The session key of the open plans Plan it picks from. */
-function openPlansKey(userId: string, workspaceId: string): string {
-  return readKey(userId, workspaceId, 'bank:open-plans');
-}
-
 /**
- * The open plans (ending today or later), read once after the Bank paints
- * (an effect), kept for the session. `get` answers from what is held, or
- * joins the read when it has not landed yet (bounded at 5s).
+ * The open plans Plan it picks from (ending today or later): one plans read
+ * on the Plan it tap, nothing held, nothing waited on. Never throws.
  */
-export function useOpenPlans(input: {
-  workspaceId: string | null;
-  userId: string | null;
-  today: string;
-  enabled: boolean;
-}): { get: () => Promise<Result<PlanRow[]>>; add: (plan: PlanRow) => void } {
-  const { workspaceId, userId, today, enabled } = input;
-  const key = workspaceId !== null && userId !== null ? openPlansKey(userId, workspaceId) : null;
-  const run = useCallback((): Promise<Result<PlanRow[]>> => {
-    if (key === null || workspaceId === null) return Promise.resolve({ ok: true, data: [] });
-    return sharedRead(
-      key,
-      () => withReadTimeout((signal) => readOpenPlanRows(supabase, workspaceId, today, signal)),
-      { isOk: (r) => r.ok },
-    );
-  }, [key, workspaceId, today]);
-  useEffect(() => {
-    if (enabled) void run();
-  }, [enabled, run]);
-  useEffect(() => {
-    if (key === null) return;
-    const stale = (): void => invalidateReads(key);
-    window.addEventListener(PLAN_CHANGED_EVENT, stale);
-    return () => window.removeEventListener(PLAN_CHANGED_EVENT, stale);
-  }, [key]);
-  const get = useCallback(async (): Promise<Result<PlanRow[]>> => {
-    const kept = key !== null ? peekKept<Result<PlanRow[]>>(key) : undefined;
-    if (kept?.ok === true) {
-      void run();
-      return kept;
-    }
-    return run();
-  }, [key, run]);
-  const add = useCallback(
-    (plan: PlanRow) => {
-      if (key === null) return;
-      const kept = peekKept<Result<PlanRow[]>>(key);
-      const rows = kept?.ok === true ? kept.data : [];
-      primeRead<Result<PlanRow[]>>(key, { ok: true, data: [...rows, plan] });
-    },
-    [key],
-  );
-  return { get, add };
+export function readPlansForPlanIt(workspaceId: string, today: string): Promise<Result<PlanRow[]>> {
+  return readOpenPlanRows(supabase, workspaceId, today);
 }
 
 // ---------------------------------------------------------------------------

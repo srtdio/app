@@ -19,7 +19,6 @@ import {
   planSectionOf,
   planSections,
   parsePlanWeekChip,
-  planChipOfParams,
   visiblePlanChips,
   planWeekChipLabel,
   planWeekChipRange,
@@ -412,13 +411,6 @@ describe('phone week chips', () => {
     expect(parsePlanWeekChip('bank')).toBe('bank');
     expect(parsePlanWeekChip('soon')).toBeNull();
     expect(parsePlanWeekChip(null)).toBeNull();
-  });
-
-  it('reads ?week= first, then ?chip=bank only', () => {
-    expect(planChipOfParams(new URLSearchParams('week=next'))).toBe('next');
-    expect(planChipOfParams(new URLSearchParams('chip=bank'))).toBe('bank');
-    expect(planChipOfParams(new URLSearchParams('chip=next'))).toBeNull();
-    expect(planChipOfParams(new URLSearchParams(''))).toBeNull();
   });
 
   it('hides Bank unless the viewer may see it', () => {

@@ -9,7 +9,8 @@
 //   buckets"); a delete hides the chip behind the Undo strip for UNDO_MS and
 //   workspace_bucket_delete fires when the strip ends.
 // - Sort: the four sorts, a tick on the current.
-// - Show archived ideas: a switch.
+// - Show archived ideas: a switch (archived ideas only).
+// - Untouched for 90 days: a switch (live ideas last active over 90 days ago).
 // Footer: Done. A client never opens it with writes (no add, rename or delete).
 
 import { useRef, useState } from 'react';
@@ -28,7 +29,12 @@ import { useMenuGesture } from '@/components/ui/useLongPress';
 import { BUCKET_NAME_MAX, type BucketOption } from '@/lib/buckets';
 import type { BankSort } from '@/lib/chat/plans';
 import { useUndoableAction } from '@/lib/use-undoable-action';
-import { BANK_SORT_OPTIONS, bucketDeleteLine, type BankFilter } from './bank-parts';
+import {
+  BANK_SORT_OPTIONS,
+  UNTOUCHED_LABEL,
+  bucketDeleteLine,
+  type BankFilter,
+} from './bank-parts';
 
 /** The bucket writes the sheet needs (BankSurface's owner wires them to src/lib/buckets.ts). */
 export interface BucketWrites {
@@ -95,13 +101,23 @@ export function BankFilterSheet(props: {
             ))}
           </div>
         </section>
-        <section className={`${CARD} flex-row items-center justify-between`}>
-          <span className="text-base text-fg">Show archived ideas</span>
-          <Switch
-            checked={filter.archived}
-            label="Show archived ideas"
-            onChange={(archived) => props.onFilter({ ...filter, archived, review: false })}
-          />
+        <section className={CARD}>
+          <div className="flex min-h-[44px] items-center justify-between">
+            <span className="text-base text-fg">Show archived ideas</span>
+            <Switch
+              checked={filter.archived}
+              label="Show archived ideas"
+              onChange={(archived) => props.onFilter({ ...filter, archived, review: false })}
+            />
+          </div>
+          <div className="flex min-h-[44px] items-center justify-between">
+            <span className="text-base text-fg">{UNTOUCHED_LABEL}</span>
+            <Switch
+              checked={filter.review}
+              label={UNTOUCHED_LABEL}
+              onChange={(review) => props.onFilter({ ...filter, review, archived: false })}
+            />
+          </div>
         </section>
       </div>
     </Sheet>

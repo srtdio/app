@@ -103,12 +103,10 @@ describe('a page and its cursor', () => {
     const shown: BankPage = {
       ideas: [idea('a'), idea('b')],
       nextCursor: null,
-      counts: { total: 3, stale: 0 },
     };
-    const next: BankPage = { ideas: [idea('b'), idea('c')], nextCursor: null, counts: null };
+    const next: BankPage = { ideas: [idea('b'), idea('c')], nextCursor: null };
     const merged = mergeBankPages(shown, next);
     expect(merged.ideas.map((i) => i.id)).toEqual(['a', 'b', 'c']);
-    expect(merged.counts).toEqual({ total: 3, stale: 0 });
   });
 });
 
@@ -136,7 +134,6 @@ describe('kept paint', () => {
     const page: BankPage = {
       ideas: [idea('kept')],
       nextCursor: null,
-      counts: { total: 1, stale: 0 },
     };
     primeRead<Result<BankPage>>(key, { ok: true, data: page }, Number.POSITIVE_INFINITY);
     const frames: Array<BankData['load']['status']> = [];

@@ -1738,16 +1738,14 @@ export interface BankQuery {
   bucketId: string | null;
   /** Archived ideas only (Show archived ideas); else the live ones. */
   archived: boolean;
-  /** The 90-day review: live ideas last active before this instant (ISO). */
+  /** Untouched for 90 days: live ideas last active before this instant (ISO). */
   staleBefore: string | null;
 }
 
-/** One page of the Bank, with the bank's counts on a first page. */
+/** One page of the Bank. No counts: the Bank never counts rows. */
 export interface BankPage {
   ideas: BankIdea[];
   nextCursor: BankCursor | null;
-  /** Live ideas, and live ideas untouched for 90 days (first page only; null otherwise). */
-  counts: { total: number; stale: number } | null;
 }
 
 /** A sort's key column and direction. Pure. */
@@ -1867,18 +1865,6 @@ async function readBankGroup(
   return { ok: true, data: (res.data ?? []) as PlanItemRow[] };
 }
 
-/** One exact count of the Bank (head: no rows come back). */
-async function countBank(
-  client: Client,
-  q: BankQuery,
-  signal?: AbortSignal,
-): Promise<Result<number>> {
-  const query = bankBase(client, q, 'id', { count: 'exact', head: true });
-  const res = (await abortable(query, signal)) as SelectResult & { count?: number | null };
-  if (res.error !== null) return fail(`plan_items: ${res.error.message}`);
-  return { ok: true, data: res.count ?? 0 };
-}
-
 /**
  * A page's rows split into the shown ideas and the next cursor: the starred
  * group first (its rows after the cursor), then the rest. Each group was read
@@ -1975,15 +1961,14 @@ export async function enrichBankIdeas(
 
 /**
  * One page of the Bank: starred ideas first, then the rest, each in the sort's
- * order, 12 a page with a keyset cursor. A first page also counts the live
- * bank and its 90-day-untouched ideas, in parallel with the page (head
- * selects, no rows). RLS limits a client to ideas shown to them. Never throws.
+ * order, 12 a page with a keyset cursor. One plan_items read per group, then
+ * one read per table for the page's rows; nothing is ever counted. RLS limits
+ * a client to ideas shown to them. Never throws.
  */
 export async function readBankPage(
   client: Client,
   q: BankQuery,
   cursor: BankCursor | null,
-  now: Date,
   signal?: AbortSignal,
 ): Promise<Result<BankPage>> {
   try {
@@ -1992,14 +1977,10 @@ export async function readBankPage(
       const inBucket = await bucketItemIds(client, q.workspaceId, q.bucketId, signal);
       if (!inBucket.ok) return inBucket;
       ids = inBucket.data;
-      if (ids.length === 0) {
-        return { ok: true, data: { ideas: [], nextCursor: null, counts: null } };
-      }
+      if (ids.length === 0) return { ok: true, data: { ideas: [], nextCursor: null } };
     }
-    const first = cursor === null;
-    const live: BankQuery = { ...q, archived: false, staleBefore: null, bucketId: null };
     const empty: Result<PlanItemRow[]> = { ok: true, data: [] };
-    const [starred, rest, total, stale] = await Promise.all([
+    const [starred, rest] = await Promise.all([
       cursor === null || cursor.starred
         ? readBankGroup(client, q, true, cursor?.after ?? null, ids, signal)
         : Promise.resolve(empty),
@@ -2011,27 +1992,19 @@ export async function readBankPage(
         ids,
         signal,
       ),
-      first ? countBank(client, live, signal) : Promise.resolve(null),
-      first
-        ? countBank(client, { ...live, staleBefore: bankStaleBefore(now) }, signal)
-        : Promise.resolve(null),
     ]);
     if (!starred.ok) return starred;
     if (!rest.ok) return rest;
     const page = bankPageOf(q.sort, cursor, starred.data, rest.data);
     const ideas = await enrichBankIdeas(client, page.rows, signal);
     if (!ideas.ok) return ideas;
-    const counts =
-      total !== null && stale !== null && total.ok && stale.ok
-        ? { total: total.data, stale: stale.data }
-        : null;
-    return { ok: true, data: { ideas: ideas.data, nextCursor: page.nextCursor, counts } };
+    return { ok: true, data: { ideas: ideas.data, nextCursor: page.nextCursor } };
   } catch (error) {
     return fail(String(error));
   }
 }
 
-/** Days without activity before an idea counts as untouched (the 90-day nudge). */
+/** Days without activity before an idea is untouched (the Untouched for 90 days filter). */
 export const BANK_STALE_DAYS = 90;
 
 /** The instant 90 days before `now` (ISO): ideas last active before it are untouched. Pure. */
@@ -2096,8 +2069,9 @@ export function bankReadWhat(q: Omit<BankQuery, 'workspaceId'>): string {
 
 /**
  * The plans Plan it can place an idea into: not deleted, ending today or
- * later (workspace zone), at most 200, one plans select. Read after the Bank
- * paints (never on the tap); Plan it filters it by the picked day. Never throws.
+ * later (workspace zone), at most 200, one plans select, read on the Plan it
+ * tap (no hold, no wait on anything else); Plan it filters it by the picked
+ * day. Never throws.
  */
 export async function readOpenPlanRows(
   client: Client,

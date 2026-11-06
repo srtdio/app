@@ -1355,18 +1355,18 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // The Bank chip: idea cards (thumbnail, star, tags, meta), the 90-day nudge.
+    // The Bank chip: idea cards (thumbnail, star, tags, meta).
     name: 'plan-tab-bank',
     seed: creator,
     extra: seedBank,
-    url: '/plan?chip=bank',
+    url: '/plan?week=bank',
     steps: bankReady,
   },
   {
     name: 'plan-tab-bank-filter',
     seed: creator,
     extra: seedBank,
-    url: '/plan?chip=bank',
+    url: '/plan?week=bank',
     steps: async (page) => {
       await bankReady(page);
       await tap([page.locator('[data-bank-filter-open]').first()], 'Filter and sort');
@@ -1380,7 +1380,7 @@ const SCREENS: Screen[] = [
     name: 'plan-tab-bank-select',
     seed: creator,
     extra: seedBank,
-    url: '/plan?chip=bank',
+    url: '/plan?week=bank',
     steps: async (page) => {
       await bankRowMenu(page, /^Select/);
       await waitFor([page.locator('[data-bank-select-bar]')], 'select bar');
@@ -1390,7 +1390,7 @@ const SCREENS: Screen[] = [
     name: 'plan-tab-bank-add',
     seed: creator,
     extra: seedBank,
-    url: '/plan?chip=bank',
+    url: '/plan?week=bank',
     steps: async (page) => {
       await bankReady(page);
       await tap([page.locator('[data-bank-add-open]').first()], 'Add idea');
@@ -1401,7 +1401,7 @@ const SCREENS: Screen[] = [
     name: 'plan-tab-bank-plan-it',
     seed: creator,
     extra: seedBank,
-    url: '/plan?chip=bank',
+    url: '/plan?week=bank',
     steps: async (page) => {
       await bankRowMenu(page, /^Plan it/);
       await waitFor([page.locator('[data-bank-plan-it]')], 'plan it sheet');
@@ -1413,7 +1413,7 @@ const SCREENS: Screen[] = [
     only: 'laptop',
     seed: creator,
     extra: seedBank,
-    url: '/plan?chip=bank',
+    url: '/plan?week=bank',
     steps: async (page) => {
       await bankReady(page);
       await waitFor([page.locator('[data-bank="panel"] [data-bank-drag-hint]')], 'panel');
@@ -1425,7 +1425,7 @@ const SCREENS: Screen[] = [
     only: 'laptop',
     seed: creator,
     extra: seedBank,
-    url: '/plan?chip=bank',
+    url: '/plan?week=bank',
     steps: async (page) => {
       await bankReady(page);
       await tap([page.locator('[data-bank-expand]')], 'Expand');

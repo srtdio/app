@@ -30,7 +30,7 @@ export interface BankFilter {
   sort: BankSort;
   bucketId: string | null;
   archived: boolean;
-  /** The 90-day review: live ideas untouched for 90 days. */
+  /** Untouched for 90 days: live ideas last active over 90 days ago. */
   review: boolean;
 }
 
@@ -86,26 +86,14 @@ export function sortBankIdeas(ideas: readonly BankIdea[], sort: BankSort): BankI
   });
 }
 
-/** Days without activity before the nudge counts an idea. */
-export const BANK_NUDGE_DAYS = 90;
-
-/** Whether a live idea is untouched for 90 days at `now`. Archived never counts. Pure. */
-export function isUntouched(idea: BankIdea, now: Date): boolean {
-  if (idea.archived_at != null) return false;
-  const at = Date.parse(idea.last_active_at ?? idea.created_at);
-  if (Number.isNaN(at)) return false;
-  return now.getTime() - at > BANK_NUDGE_DAYS * 86_400_000;
-}
-
-/** The nudge's line: "{n} ideas untouched for 90 days." ("1 idea"). Pure. */
-export function nudgeLine(n: number): string {
-  return `${n} ${n === 1 ? 'idea' : 'ideas'} untouched for 90 days.`;
-}
-
-/** The review's bulk archive: "Archive all {n}". Pure. */
+/** The Untouched for 90 days list's bulk archive: "Archive all {n}". Pure. */
 export function archiveAllLabel(n: number): string {
   return `Archive all ${n}`;
 }
+
+/** The Filter and sort switch and its pill. */
+export const UNTOUCHED_LABEL = 'Untouched for 90 days';
+export const UNTOUCHED_PILL = 'Untouched 90 days';
 
 /** One small removable pill of the applied filter line. */
 export interface FilterPill {
@@ -128,7 +116,7 @@ export function filterPills(
     if (bucket !== undefined) out.push({ key: 'bucket', label: bucket.name });
   }
   if (filter.archived) out.push({ key: 'archived', label: 'Archived' });
-  if (filter.review) out.push({ key: 'review', label: 'Untouched 90 days' });
+  if (filter.review) out.push({ key: 'review', label: UNTOUCHED_PILL });
   if (filter.sort !== BANK_SORT_DEFAULT) {
     out.push({ key: 'sort', label: `Sort: ${bankSortLabel(filter.sort)}` });
   }
@@ -344,11 +332,6 @@ export function selectedLabel(n: number): string {
  */
 export function bankItemHref(itemId: string): string {
   return `/plan/bank?${new URLSearchParams({ item: itemId }).toString()}`;
-}
-
-/** The Bank chip's laptop label count: plain text, none at 0. Pure. */
-export function bankCountText(total: number | null): string | null {
-  return total !== null && total > 0 ? String(total) : null;
 }
 
 /** A bucket delete's line: "{n} ideas keep their other buckets". Pure. */
