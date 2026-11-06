@@ -691,7 +691,7 @@ export function PlanItemScreen(props: {
   const reviewSide =
     actions.kind === 'review'
       ? actions.side
-      : props.askChanges === true && !bank
+      : props.askChanges === true
         ? slotSide(side, bundle.plan.audience)
         : null;
   const title = rowTitle(bundle, item);
