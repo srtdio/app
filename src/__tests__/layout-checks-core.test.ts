@@ -158,9 +158,8 @@ describe('text roles per part', () => {
   });
 
   it('a mono date is its own role', () => {
-    expect(tooManyRoles(['a/400/Inter', 'b/500/Inter', 'c/400/Inter', 'c/400/JetBrains'])).toBe(
-      true,
-    );
+    const roles = ['a/400/Inter', 'b/500/Inter', 'c/400/Inter', 'c/400/JetBrains'];
+    expect(tooManyRoles(roles)).toBe(true);
   });
 });
 
@@ -174,8 +173,9 @@ describe('busy width', () => {
 
 describe('messages', () => {
   it('name the screen, the check and the element', () => {
+    const where = boxText(box(4, 2, 30.04, 20));
     const text = formatViolations('chat-thread', [
-      { check: 'edge', message: `span "Hi" within 12px of the left edge (${boxText(box(4, 2, 30.04, 20))})` },
+      { check: 'edge', message: `span "Hi" within 12px of the left edge (${where})` },
       { check: 'tap-overlap', message: 'button "A" overlaps button "B"' },
     ]);
     expect(text).toBe(
