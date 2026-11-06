@@ -135,7 +135,7 @@ function creatorButton(
         data-decision-main=""
         disabled={model.disabled || busy}
         onClick={model.onPress}
-        className="w-full"
+        className="w-full md:w-auto"
       >
         {model.label}
       </Button>

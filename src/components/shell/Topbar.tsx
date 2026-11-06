@@ -100,7 +100,7 @@ export function Topbar({
         <TestSiteAnywhereStart inline />
         {onCreateWorkspace !== undefined ? null : (
           <IconButton label="Search" className="md:hidden" onClick={onOpenPalette}>
-            <IconSearch />
+            <IconSearch size={ICON_SIZE.control} />
           </IconButton>
         )}
         {cockpitSlot}

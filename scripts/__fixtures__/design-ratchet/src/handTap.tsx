@@ -17,6 +17,12 @@ export function Fixture() {
       <span role="button" className="h-[30px]" />
       <Button onClick={f} className="h-8" />
       <div onClick={f} className="h-11" />
+      <IconButton label="Pick">
+        <span className="h-6 w-6" />
+      </IconButton>
+      <IconButton label="Big">
+        <span className="h-11 w-11" />
+      </IconButton>
     </div>
   );
 }

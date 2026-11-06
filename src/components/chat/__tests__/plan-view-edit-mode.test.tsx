@@ -260,10 +260,10 @@ describe('FT56 and FN25 copy', () => {
       'Week of 12 Oct',
     );
     expect(composeTitlePlaceholder({ startsOn: '2026-10-12', endsOn: '2026-10-25' })).toBe(
-      '12 to 25 Oct',
+      '12\u201325 Oct',
     );
     expect(composeTitlePlaceholder({ startsOn: '2026-10-28', endsOn: '2026-11-03' })).toBe(
-      '28 Oct to 3 Nov',
+      '28 Oct \u2013 3 Nov',
     );
     expect(composeTitlePlaceholder({ startsOn: '', endsOn: '' })).toBe('Plan name');
     const compose = read('PlanComposeScreen.tsx');

@@ -201,7 +201,12 @@ export function PersonCardBody({
           {PERSON_CARD_COPY.removed}
         </p>
       ) : (
-        <Button variant="primary" className="w-full" onClick={onAction} buttonRef={actionRef}>
+        <Button
+          variant="primary"
+          className="w-full md:w-auto"
+          onClick={onAction}
+          buttonRef={actionRef}
+        >
           <IconChat size={ICON_SIZE.inline} />
           {PERSON_CARD_COPY.self}
         </Button>

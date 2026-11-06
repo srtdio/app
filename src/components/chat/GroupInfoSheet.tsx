@@ -349,7 +349,7 @@ export function LeaveGroupRow(props: { disabled: boolean; onClick: () => void })
       data-row="leave-group"
       disabled={props.disabled}
       onClick={props.onClick}
-      className="w-full gap-3 text-bad [-webkit-touch-callout:none]"
+      className="w-full md:w-auto gap-3 text-bad [-webkit-touch-callout:none]"
     >
       <span className="flex w-5 shrink-0 justify-center text-bad">
         <IconSignOut size={ICON_SIZE.inline} />
@@ -447,7 +447,7 @@ export function groupInfoPage(props: {
           select.header
         ) : (
           <>
-            <IconButton label="Close group info" onClick={props.onClose}>
+            <IconButton label="Back" onClick={props.onClose}>
               <IconChevronLeft size={ICON_SIZE.control} />
             </IconButton>
             <h2 className="truncate text-lg font-semibold text-fg">{GROUP_INFO_HEADING}</h2>

@@ -40,7 +40,7 @@ const EXPECTED: Record<Metric, number> = {
   outlineNone: 2,
   nowrap: 1,
   exitMix: 1,
-  handTap: 2,
+  handTap: 4,
   fullWidthButton: 1,
   designDisables: 1,
 };
@@ -62,6 +62,42 @@ describe('design ratchet: per-metric counts', () => {
     const c = countHits(scanSource('src/a.tsx', '<div className="p-0.5 m-[8px] gap-[2px]" />'));
     expect(c.offGrid).toBe(0);
     expect(c.arbitraryPx).toBe(2);
+  });
+
+  it('handTap counts the VISIBLE height: a primitive shrunk by className, or a small first child', () => {
+    const shrunk = countHits(
+      scanSource('src/a.tsx', '<Button onClick={f} className="h-8">Go</Button>'),
+    );
+    expect(shrunk.handTap).toBe(1);
+    const face = countHits(
+      scanSource('src/a.tsx', '<IconButton label="x"><span className="h-6 w-6" /></IconButton>'),
+    );
+    expect(face.handTap).toBe(1);
+    const fine = countHits(
+      scanSource(
+        'src/a.tsx',
+        '<IconButton label="x"><IconStar size={ICON_SIZE.control} /></IconButton>',
+      ),
+    );
+    expect(fine.handTap).toBe(0);
+  });
+
+  it('exitMix counts IconX + IconChevronLeft exits whatever their labels say', () => {
+    const src = [
+      '<div>',
+      '  <IconButton label="Done"><IconX /></IconButton>',
+      '  <IconButton label="Previous"><IconChevronLeft /></IconButton>',
+      '</div>',
+    ].join('\n');
+    expect(countHits(scanSource('src/a.tsx', src)).exitMix).toBe(1);
+    const one = '<IconButton label="Back"><IconChevronLeft /></IconButton>';
+    expect(countHits(scanSource('src/a.tsx', one)).exitMix).toBe(0);
+  });
+
+  it('ui/Text.tsx is the role table: its leading/tracking are not counted', () => {
+    const src = "export const R = { display: 'text-3xl tracking-tight leading-9' };";
+    expect(countHits(scanSource('src/components/ui/Text.tsx', src)).tracking).toBe(0);
+    expect(countHits(scanSource('src/components/pages/X.tsx', src)).tracking).toBe(1);
   });
 
   it('ignores import paths', () => {

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { MouseEvent } from 'react';
-import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
-import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconCheck, IconClock, IconMore } from '@/components/ui/icons';
+import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
+import { IconCheck, IconClock } from '@/components/ui/icons';
 import { SNOOZE_OPTIONS, type SnoozeKind } from '@/components/pages/activity/data';
 
 interface ActivityRowMenuProps {
@@ -77,16 +76,13 @@ export function ActivityRowMenu(props: ActivityRowMenuProps) {
         open={open}
         onOpenChange={setOpen}
         trigger={
-          <IconButton
+          <ActionMenuTrigger
             type="button"
-            aria-haspopup="menu"
             aria-expanded={open}
             label="Activity options"
-            // text-fg-3 sorts after IconButton's text-fg-2, so it wins without an override.
-            className="text-fg-3 shrink-0"
-          >
-            <IconMore size={ICON_SIZE.control} />
-          </IconButton>
+            // cn() merges classes: text-fg-3 is the last colour, so it wins.
+            className="text-fg-3"
+          />
         }
       />
     </div>

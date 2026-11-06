@@ -22,6 +22,7 @@ import {
   IconSort,
 } from '@/components/ui/icons';
 import { useIsLaptop } from '@/lib/use-is-laptop';
+import { formatDayRange } from '@/lib/time';
 import { useDismissLayer } from '@/lib/modal-focus';
 import { useMenuKeys } from '@/lib/useMenuKeys';
 import { PipelineDateRangeCalendar } from '@/components/pages/pipeline/PipelineDateRangeCalendar';
@@ -83,12 +84,11 @@ function formatRangeDay(iso: string): string {
   return `${day} ${MONTHS_SHORT[month - 1]}`;
 }
 
-/** The Custom row label: "24 Jun to 27 Jun", "24 Jun" for one day, or "Custom…". */
-export function customRangeLabel(range: DateRange | null): string {
+/** The Custom row label: "24–27 Jun", "24 Jun" for one day, or "Custom…" (lib/time formatDayRange). */
+export function customRangeLabel(range: DateRange | null, now: Date = new Date()): string {
   if (range === null) return 'Custom…';
-  const start = formatRangeDay(range.start);
-  if (range.start === range.end) return start;
-  return `${start} to ${formatRangeDay(range.end)}`;
+  if (formatRangeDay(range.start) === '' || formatRangeDay(range.end) === '') return '';
+  return formatDayRange(range.start, range.end, null, now);
 }
 
 /** A single radio row, sharing SortMenu's row markup (44px, check + label). */
@@ -161,7 +161,7 @@ export function dateControlBody(props: {
   );
 }
 
-/** The date button's label: the active window ("This week", "24 Jun to 27 Jun"). */
+/** The date button's label: the active window ("This week", "24–27 Jun"). */
 export function dateButtonLabel(dateWindow: DateWindow, customRange: DateRange | null): string {
   if (dateWindow === 'custom')
     return customRange === null ? 'Any time' : customRangeLabel(customRange);

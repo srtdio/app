@@ -759,7 +759,7 @@ export function AssetLightbox({
             </dl>
 
             <div className="mt-4 border-t border-border pt-4">
-              <Button variant="danger" className="w-full" onClick={handleDelete}>
+              <Button variant="danger" className="w-full md:w-auto" onClick={handleDelete}>
                 Delete
               </Button>
             </div>

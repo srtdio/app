@@ -135,7 +135,7 @@ export function versionHistorySheet({
           onCompare(fromVersion.id, toVersion.id);
         }
       }}
-      className="w-full"
+      className="w-full md:w-auto"
     >
       {canCompare
         ? `Compare v${fromVersion.versionNumber} and v${toVersion.versionNumber}`

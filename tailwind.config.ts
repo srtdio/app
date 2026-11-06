@@ -130,6 +130,15 @@ export default {
         card: '8px',
         sheet: '16px',
         pill: '9999px',
+        // A picture inset inside a card (ui/Card media inset).
+        inset: '4px',
+      },
+      // Layout roles (CLAUDE.md Layout rules, ui/Row): 15 = 60, the row text
+      // edge and divider inset (16 gutter + 32 avatar + 12 gap); 18 = 72, the
+      // two-line row. Both on the 4px grid.
+      spacing: {
+        '15': '3.75rem',
+        '18': '4.5rem',
       },
       fontFamily: {
         sans: [

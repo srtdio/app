@@ -176,9 +176,9 @@ describe('rows and labels', () => {
     expect(itemKindLabel(MIXED.items, MIXED.items[4] as PlanItemRow)).toBe('Post 2 of 2');
   });
 
-  it('the range reads "12 Oct - 18 Oct" (no em-dash)', () => {
-    const range = planRangeLabel('2026-10-12', '2026-10-18');
-    expect(range).toBe('12 Oct - 18 Oct');
+  it('the range reads "12\u201318 Oct" (en dash, no em-dash)', () => {
+    const range = planRangeLabel('2026-10-12', '2026-10-18', new Date('2026-11-06T12:00:00Z'));
+    expect(range).toBe('12\u201318 Oct');
     expect(range).not.toContain(String.fromCharCode(0x2014));
     expect(clientApproveConfirm('Reel')).toBe(
       'Approve "Reel"? The creators will go ahead and make this into a post.',

@@ -235,7 +235,7 @@ describe('AssetCard ⋯ at the bottom, smaller select box', () => {
       />,
     );
     // The ⋯ is ActionMenu's trigger; its corner box holds the position.
-    expect(out).toMatch(/class="absolute -bottom-0\.5 -right-0\.5 z-10"[^]*?data-card-menu=""/);
+    expect(out).toMatch(/class="absolute bottom-0 right-0 z-10"[^]*?data-card-menu=""/);
     expect(out).toMatch(/class="[^"]*h-11 w-11[^"]*rounded-lg[^"]*"[^>]*data-card-menu=""/);
     expect(out).toContain('aria-haspopup="menu"');
     expect(out).not.toMatch(/class="[^"]*top-0[^"]*"[^>]*data-card-menu=""/);

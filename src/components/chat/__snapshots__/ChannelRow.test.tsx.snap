@@ -33,6 +33,6 @@ exports[`chat home tile > People square: 168 tall centred column, 72px disc, 1-l
     "absolute right-3 top-3 flex",
     "lit-badge inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent px-1 text-xs font-semibold leading-none text-accent-fg",
   ],
-  "tile": "flex w-full rounded-xl border relative h-[168px] flex-col items-center px-3 pt-4 pb-[14px] text-center min-w-0 text-left mv-tint focus-visible:lit-focus select-none [-webkit-touch-callout:none] lit-card bg-panel",
+  "tile": "flex w-full rounded-xl border relative h-[168px] flex-col items-center px-3 pt-4 pb-[14px] min-w-0 mv-tint focus-visible:lit-focus select-none [-webkit-touch-callout:none] lit-card bg-panel text-center",
 }
 `;

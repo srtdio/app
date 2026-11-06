@@ -13,16 +13,9 @@ import { NoResults } from '@/components/ui/NoResults';
 import { SelectCheck } from '@/components/ui/SelectCheck';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { useLongPress } from '@/components/ui';
-import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { Chip } from '@/components/ui/Chip';
-import {
-  ICON_SIZE,
-  IconChat,
-  IconCheckCircle,
-  IconEyeOff,
-  IconMore,
-  IconPlus,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconChat, IconCheckCircle, IconEyeOff, IconPlus } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { SHELL_STICKY_TOP_CLASS } from '@/lib/scroll-mode';
@@ -565,6 +558,9 @@ export function channelRowClass(state: ChannelRowState): string {
     tileBoxClass(state.kind, state.more === true),
     CHANNEL_ROW_BUTTON,
     checked || open ? 'lit-selected bg-panel' : 'lit-card bg-panel',
+    // cn() merges: the square tile's centred text must come after the
+    // button's text-left (it used to win by CSS order).
+    state.kind === 'square' && 'text-center',
   );
 }
 
@@ -893,17 +889,14 @@ export function ChannelCard(props: {
               else props.onMenuClose?.();
             }}
             trigger={
-              <IconButton
+              <ActionMenuTrigger
                 type="button"
                 data-more=""
                 data-row-more=""
                 label={`Actions for ${chatDisplayName(channel)}`}
-                aria-haspopup="menu"
                 aria-expanded={props.menuOpen === true}
                 className={ROW_MORE_BUTTON}
-              >
-                <IconMore size={ICON_SIZE.control} />
-              </IconButton>
+              />
             }
           />
         </div>

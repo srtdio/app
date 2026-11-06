@@ -249,7 +249,12 @@ export function PlanDatesSheet(props: {
       onClose={props.onClose}
       title={PLAN_DATES_TITLE}
       footer={
-        <Button variant="primary" data-plan-dates-save="" className="w-full" onClick={save}>
+        <Button
+          variant="primary"
+          data-plan-dates-save=""
+          className="w-full md:w-auto"
+          onClick={save}
+        >
           {PLAN_DATES_SAVE}
         </Button>
       }

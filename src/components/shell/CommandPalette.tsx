@@ -974,7 +974,7 @@ export function CommandPalette({
             (ui/Input tone search); the icon takes full ink with it. */}
         <div className="group/sfield flex shrink-0 items-center gap-2.5 px-4 py-2 border-b border-border pt-[calc(env(safe-area-inset-top)+0.5rem)] sm:pt-2">
           <IconSearch
-            size={ICON_SIZE.nav}
+            size={ICON_SIZE.control}
             className="text-fg-3 group-focus-within/sfield:text-fg"
           />
           <Input

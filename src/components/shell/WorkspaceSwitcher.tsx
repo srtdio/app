@@ -468,7 +468,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                   setFormError(null);
                   setAskingSwitch(true);
                 }}
-                className="w-full"
+                className="w-full md:w-auto"
               >
                 {WORKSPACE_CREATE_COPY.approveInstead}
               </Button>

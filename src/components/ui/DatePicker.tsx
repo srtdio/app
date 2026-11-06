@@ -359,7 +359,7 @@ export function DatePicker({
                     label="Previous month"
                     onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, -1))}
                   >
-                    <IconChevronLeft size={ICON_SIZE.inline} />
+                    <IconChevronLeft size={ICON_SIZE.control} />
                   </IconButton>
                   <span className="text-base font-medium text-fg">
                     {MONTHS[view.monthIndex]} {view.year}
@@ -368,7 +368,7 @@ export function DatePicker({
                     label="Next month"
                     onClick={() => setView((v) => shiftMonth(v.year, v.monthIndex, 1))}
                   >
-                    <IconChevronRight size={ICON_SIZE.inline} />
+                    <IconChevronRight size={ICON_SIZE.control} />
                   </IconButton>
                 </div>
                 {/* Weekday letters are visual only: every day cell's name is its full spoken date. */}

@@ -9,7 +9,6 @@ import {
   IconChat,
   IconCheck,
   IconLink,
-  IconMore,
   IconPause,
   IconPlay,
   IconSwitch,
@@ -33,8 +32,7 @@ import {
 import { civilDay, formatDue, formatOverdue } from '@/lib/time';
 import { frameFor } from '@/lib/platform-specs';
 import { cn } from '@/lib/cn';
-import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
-import { IconButton } from '@/components/ui/IconButton';
+import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { CountBadge } from '@/components/ui/CountBadge';
 import {
@@ -565,16 +563,14 @@ export function PostCard({
                       : {}),
                 })}
                 trigger={
-                  <IconButton
+                  <ActionMenuTrigger
                     type="button"
                     label={`More actions for ${post.title}`}
-                    aria-haspopup="menu"
                     data-post-card-move=""
                     draggable={false}
-                    className="pointer-events-auto relative z-10 -my-3 -mr-3 text-fg-3"
-                  >
-                    <IconMore size={ICON_SIZE.control} />
-                  </IconButton>
+                    inLine
+                    className="pointer-events-auto relative z-10 text-fg-3"
+                  />
                 }
               />
             </div>

@@ -520,17 +520,19 @@ export function PlanPage(props: {
       </IconButton>
     )
   ) : null;
-  const closeButton = desktop ? (
-    <IconButton
-      type="button"
-      label={props.closeLabel ?? 'Close'}
-      data-plan-close=""
-      onClick={props.onDismiss ?? props.onBack}
-      className="-mr-3 shrink-0 text-fg"
-    >
-      <IconX size={ICON_SIZE.control} />
-    </IconButton>
-  ) : null;
+  // One exit per panel: the X shows only where there is no back "<".
+  const closeButton =
+    desktop && !showBack ? (
+      <IconButton
+        type="button"
+        label={props.closeLabel ?? 'Close'}
+        data-plan-close=""
+        onClick={props.onDismiss ?? props.onBack}
+        className="-mr-3 shrink-0 text-fg"
+      >
+        <IconX size={ICON_SIZE.control} />
+      </IconButton>
+    ) : null;
   return createPortal(
     <div
       ref={pageRef}
@@ -2667,7 +2669,7 @@ export function PlanFooter(props: {
           data-plan-primary={action.kind}
           data-plan-send-state="sent"
           disabled
-          className="w-full min-w-0"
+          className="w-full md:w-auto min-w-0"
         >
           <span className="truncate">{label}</span>
         </Button>
@@ -2686,7 +2688,7 @@ export function PlanFooter(props: {
         data-plan-primary={props.error !== null ? 'retry' : action.kind}
         data-plan-send-state={state}
         // Sending keeps the primary fill (accent sorts after fg-3, so it wins).
-        className={cn('w-full min-w-0', state === 'sending' && 'disabled:bg-accent')}
+        className={cn('w-full md:w-auto min-w-0', state === 'sending' && 'disabled:bg-accent')}
         aria-busy={props.busy}
         disabled={props.busy || state !== 'idle'}
         onClick={props.onPress}

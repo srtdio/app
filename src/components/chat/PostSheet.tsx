@@ -436,7 +436,7 @@ export function PostSheetExtras(props: PostSheetExtrasProps): ReactElement | nul
           variant="secondary"
           data-sheet-comment=""
           onClick={props.onComment}
-          className="w-full"
+          className="w-full md:w-auto"
         >
           Comment on this post
         </Button>
@@ -447,7 +447,7 @@ export function PostSheetExtras(props: PostSheetExtrasProps): ReactElement | nul
           variant="link"
           data-sheet-talk-about=""
           onClick={props.onTalkAbout}
-          className="w-full bg-accent-soft"
+          className="w-full md:w-auto bg-accent-soft"
         >
           {talkAboutLabel()}
         </Button>
@@ -676,7 +676,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
         type="button"
         variant="secondary"
         onClick={() => setCommenting(false)}
-        className="w-full"
+        className="w-full md:w-auto"
       >
         Back
       </Button>

@@ -112,7 +112,7 @@ describe('PlanCardBody', () => {
     const html = render({ kind: 'plan', bundle: bundle('client') }, 'agency');
     expect(html).toContain('PLAN');
     expect(html).toContain('Week of 12 Oct');
-    expect(html).toContain('12 Oct - 18 Oct');
+    expect(html).toContain('12\u201318 Oct');
     expect(html).toContain('1 concept');
     expect(html).toContain('1 post');
     // An Open plan: the client side for everyone, never the team count.

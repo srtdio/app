@@ -12,6 +12,7 @@ import { centreOf } from '@/components/ui/popover-classes';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
 import { recentRightClick } from '@/lib/motion/overlays';
 import { cn } from '@/lib/cn';
+import { CONTROL_IN_LINE, TRAILING_PULL } from '@/components/ui/layout';
 import { useIsLaptop, viewportSize } from '@/lib/use-is-laptop';
 
 /** One row of a ⋯ menu. */
@@ -52,10 +53,33 @@ interface ActionMenuProps {
  */
 export function ActionMenuTrigger({
   label = 'More actions',
+  edge = 'trailing',
+  inLine = false,
+  className,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  label?: string;
+  /**
+   * Where the 44 box sits. 'trailing' (default): the trailing rule, the box is
+   * pulled out by 12 so the glyph's edge sits on the content edge. 'free': no
+   * pull (a trigger placed by its part, such as a tile corner).
+   */
+  edge?: 'trailing' | 'free';
+  /** In a text line shorter than 44 (a card header): keep the box without growing the line. */
+  inLine?: boolean;
+}) {
   return (
-    <IconButton label={label} aria-haspopup="menu" {...props}>
+    <IconButton
+      label={label}
+      aria-haspopup="menu"
+      className={cn(
+        'shrink-0',
+        edge === 'trailing' && TRAILING_PULL,
+        inLine && CONTROL_IN_LINE,
+        className,
+      )}
+      {...props}
+    >
       <IconMore size={ICON_SIZE.control} />
     </IconButton>
   );

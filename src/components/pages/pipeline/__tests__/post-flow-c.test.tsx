@@ -418,7 +418,7 @@ describe('post flow C: header, count and filters', () => {
     expect(dateButtonLabel('month', null)).toBe('This month');
     expect(dateButtonLabel('custom', null)).toBe('Any time');
     expect(dateButtonLabel('custom', { start: '2026-06-24', end: '2026-06-27' })).toBe(
-      '24 Jun to 27 Jun',
+      '24\u201327 Jun',
     );
 
     const sortTrigger = renderToStaticMarkup(

@@ -122,6 +122,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - A panel beside the page is ui/SidePanel only (laptop via useIsLaptop, 380px, translateX, nothing dims, Esc closes); phone shows the same content in a Sheet (guard: cockpit/side-panel-rule.test.ts).
 - Phone nav: floating pill (Pipeline, Briefs, Assets, Plan, Activity) plus separate Chat circle, 12px from sides and bottom; only the active tab shows its label.
 - Tappable rows and tiles use PressableRow; dim layers use Backdrop; upload targets use DropZone; never override a ui primitive with "!".
+- Shared parts own every slot (B1): ui/Text roles, ui/Card, ui/Row, ui/ChatCard (the card is the bubble), ui/Sheet (+ SheetActions), ui/Toolbar, ui/Composer, ui/Tile, ui/HeaderBar, ui/StatusDot, ActionMenuTrigger (the trailing rule). Use the part; never hand-build its frame.
 - Icon sizes come from ICON_SIZE in ui/icons.tsx.
 - Words: Activity (never Notifications), file (the tab is Assets), Due date, stages Draft/Review/Approved/Parked/Rejected, Retry (never Try again as a button), Alerts (the device switch). Format, chat and workspace names come from their src/lib functions only.
 - Zero results use ui/NoResults only. Zero states are one positive line, "{Things} show up here." Never "Nothing", "No matches" or "empty" in a zero state.
