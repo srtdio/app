@@ -6,10 +6,9 @@ import type { ReactElement } from 'react';
 import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
 import { tagClass } from '@/components/ui/Tag';
 import { cn } from '@/lib/cn';
-import { CARD_COVER, Card } from '@/components/ui/Card';
-import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
+import { LIST_CARD_COVER, ListCard } from '@/components/ui/ListCard';
 import { Thumbnail } from '@/components/media';
-import { formatDue } from '@/lib/time';
+import { formatDue, formatWhen } from '@/lib/time';
 import { toExternalLinks, type ExternalLink } from '@/lib/links';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
@@ -71,34 +70,47 @@ interface BriefCardProps {
   brief: BriefWithThumbnail;
   /** The page-owned presign cache, shared across every card; the tile never makes its own. */
   cache: PresignCache;
-  /** False when presigning is unconfigured: the leading tile shows a fallback. */
+  /** False when presigning is unconfigured: the picture shows the brief icon. */
   presignEnabled: boolean;
-  /** Where the title link goes (the pretty /b/KEY-N path, or /briefs/:id). */
+  /** Where the card link goes (the pretty /b/KEY-N path, or /briefs/:id). */
   href: string;
-  /** The workspace zone the due date reads on. Absent: the device zone. */
+  /** The workspace zone the dates read on. Absent: the device zone. */
   timeZone?: string | null | undefined;
+  /** The clock the date reads against. Default: now. */
+  now?: Date;
 }
 
 /**
- * A brief card on ui/Card: the header holds a leading square tile (the first
- * image attachment, else a brief icon) and the title; the body the truncated
- * objective and the optional reference link; the footer the status tag and the
- * due date. The card's one real link is the Card cover (laid over the whole
- * card, named by the title), so nothing interactive is nested inside a link.
- * The optional reference link sits above it. Closing a brief lives in the
- * detail page's menu, never on the card.
+ * A brief's line 3 date: "Due 8 Oct" when it has a due date, else the day it
+ * was raised (formatWhen: "10:27 AM", "Yesterday", "Mon", "19 Oct"). Pure.
  */
-export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: BriefCardProps) {
+export function briefCardDate(
+  brief: Pick<Brief, 'target_date' | 'created_at'>,
+  timeZone: string | null | undefined,
+  now: Date = new Date(),
+): string {
+  if (brief.target_date !== null) return briefDueLabel(brief.target_date, timeZone, now);
+  return formatWhen(brief.created_at, now, timeZone ?? undefined);
+}
+
+/**
+ * A brief on ui/ListCard: the first image attachment (else the brief icon) as
+ * the picture, the title, the objective as the 2-line preview, then the date
+ * and the Open / Closed tag. The card's one real link is laid over the whole
+ * card (named by the title). Closing a brief lives in the detail page's menu,
+ * never on the card.
+ */
+export function BriefCard({ brief, cache, presignEnabled, href, timeZone, now }: BriefCardProps) {
   const closed = isBriefClosed(brief);
-  const link = briefCardLink(brief);
   // growFromCard: the brief's page grows out of this card; Back grows it back.
   const cardRef = useGrowBackIntoCard<HTMLElement>(brief.id);
+  const date = briefCardDate(brief, timeZone, now);
 
   return (
-    <Card
+    <ListCard
       rootRef={cardRef}
       surface={{ 'data-brief-card': '' }}
-      // A closed brief is the muted card with an fg-2 title and its status tag, never dimmed.
+      // A closed brief is the muted card with its Closed tag, never dimmed.
       muted={closed}
       cover={
         <Link
@@ -106,56 +118,43 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: Brie
           aria-label={brief.title}
           onClick={() => rememberCard(brief.id, cardRef.current)}
           data-brief-card-link=""
-          className={CARD_COVER}
+          className={LIST_CARD_COVER}
         />
       }
-      leading={
-        // The leading square visual (32, the header's leading size).
-        <span className="block w-8 overflow-hidden rounded-lg">
-          {brief.thumbnailAssetVersionId !== null ? (
-            <Thumbnail
-              assetVersionId={brief.thumbnailAssetVersionId}
-              cache={cache}
-              presignEnabled={presignEnabled}
-              aspect="square"
-              fallback={{ kind: 'glyph' }}
-              alt={brief.title}
-            />
-          ) : (
-            <span
-              data-brief-tile="icon"
-              className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3 lit-media"
-            >
-              <IconBriefs size={ICON_SIZE.control} />
-            </span>
-          )}
-        </span>
+      picture={
+        brief.thumbnailAssetVersionId !== null
+          ? {
+              kind: 'image',
+              node: (
+                <Thumbnail
+                  assetVersionId={brief.thumbnailAssetVersionId}
+                  cache={cache}
+                  presignEnabled={presignEnabled}
+                  aspect="square"
+                  fallback={{ kind: 'glyph' }}
+                  fallbackTile={
+                    <span
+                      data-brief-tile="icon"
+                      className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2"
+                    >
+                      <IconBriefs size={ICON_SIZE.picture} />
+                    </span>
+                  }
+                  alt={brief.title}
+                />
+              ),
+            }
+          : { kind: 'icon', icon: IconBriefs }
       }
-      title={
-        <span aria-hidden="true" className={closed ? 'text-fg-2' : 'text-fg'}>
-          {brief.title}
-        </span>
-      }
-      badge={<BriefStatusPill status={brief.status} />}
-      {...(brief.target_date !== null
-        ? {
-            footerTrailing: (
-              <span data-brief-due="">{briefDueLabel(brief.target_date, timeZone)}</span>
-            ),
-          }
-        : {})}
-    >
-      <p className="min-w-0 break-words text-base text-fg-2 line-clamp-2">
-        {stripFormat(brief.objective)}
-      </p>
-
-      {/* Above the card link, so a tap follows this link only. */}
-      {link !== null ? (
-        <div className="pointer-events-auto relative z-raised flex min-w-0">
-          {/* Compact: the list card has no room for a picture. */}
-          <LinkPreviewCard url={link.href} size="compact" className="w-full max-w-xs" />
-        </div>
-      ) : null}
-    </Card>
+      pictureHooks={{
+        'data-brief-tile': brief.thumbnailAssetVersionId !== null ? 'image' : 'icon',
+      }}
+      title={<span aria-hidden="true">{brief.title}</span>}
+      preview={stripFormat(brief.objective)}
+      time={date}
+      timeHooks={brief.target_date !== null ? { 'data-brief-due': '' } : { 'data-brief-date': '' }}
+      tag={closed ? 'Closed' : 'Open'}
+      tagHooks={{ 'data-brief-status': closed ? BRIEF_STATUS.closed : BRIEF_STATUS.open }}
+    />
   );
 }
