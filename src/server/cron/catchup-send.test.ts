@@ -741,7 +741,7 @@ class World {
 
   planItem(
     workspaceId: string,
-    planId: string,
+    planId: string | null,
     title: string | null,
     opts: { deleted?: boolean } = {},
   ): string {
@@ -1614,5 +1614,168 @@ describe('runCatchup: DM preview hides formatting markers', () => {
   it('mid-word markers stay as typed', async () => {
     const out = await run(dmWorld('snake_case_name'));
     expect(renderedBody(only(out, A, W1))).toContain('snake_case_name');
+  });
+});
+
+describe('runCatchup: idea bank (Plans section)', () => {
+  const Q = (t: string): string => `\u201c${t}\u201d`;
+  function bankWorld(optIn = true) {
+    const w = new World();
+    w.user(A, 'Anna Agency', { optIn });
+    w.user(X, 'Xavier Client');
+    w.user(Y, 'Yash Team');
+    w.workspace(W1, 'Alphaworks Wone');
+    w.member(W1, A, 'agency');
+    w.member(W1, X, 'client');
+    w.member(W1, Y, 'admin');
+    const plan = w.plan(W1);
+    const idea = w.planItem(W1, null, 'Reels week');
+    const planned = w.planItem(W1, plan, 'Diwali reel');
+    return { w, plan, idea, planned };
+  }
+
+  /** Every bank event, plus a team and an everyone comment on the bank idea, for one recipient. */
+  function mixedSet(
+    w: World,
+    to: string,
+    ids: { plan: string; idea: string; planned: string },
+  ): Record<string, string> {
+    const ref = { type: 'plan_item' as const, id: ids.idea };
+    const at = (n: number): string => new Date(Date.parse(IN_WINDOW) + n * 60_000).toISOString();
+    return {
+      added: w.entry(to, W1, 'bank_idea_added', ref, {
+        actor: Y,
+        createdAt: at(1),
+        payload: { title: 'Reels week', plan_id: null },
+      }),
+      moved: w.entry(to, W1, 'bank_idea_moved', ref, {
+        actor: Y,
+        createdAt: at(2),
+        payload: {
+          title: 'Reels week',
+          from_plan_id: ids.plan,
+          from_plan_title: 'November plan',
+          target_date: '2026-10-20',
+          plan_id: ids.plan,
+        },
+      }),
+      planned: w.entry(
+        to,
+        W1,
+        'bank_idea_planned',
+        { type: 'plan_item', id: ids.planned },
+        {
+          actor: Y,
+          createdAt: at(3),
+          payload: {
+            title: 'Diwali reel',
+            plan_title: 'November plan',
+            target_date: '2026-10-20',
+            plan_id: ids.plan,
+          },
+        },
+      ),
+      shown: w.entry(to, W1, 'bank_idea_shown', ref, {
+        actor: Y,
+        createdAt: at(4),
+        payload: { title: 'Reels week', plan_id: null },
+      }),
+      hidden: w.entry(to, W1, 'bank_idea_hidden', ref, {
+        actor: Y,
+        createdAt: at(5),
+        payload: { title: 'Reels week', plan_id: null },
+      }),
+      teamComment: w.entry(to, W1, 'plan_comment', ref, {
+        actor: Y,
+        createdAt: at(6),
+        payload: { comment_id: 'bc1', visibility: 'team', plan_id: null },
+      }),
+      comment: w.entry(to, W1, 'plan_comment', ref, {
+        actor: Y,
+        createdAt: at(7),
+        payload: { comment_id: 'bc2', visibility: 'everyone', plan_id: null },
+      }),
+    };
+  }
+
+  it('lists every bank event and bank comment for the team under Plans, with bank links', async () => {
+    const { w, plan, idea, planned } = bankWorld();
+    const e = mixedSet(w, A, { plan, idea, planned });
+    const out = await run(w);
+    const req = only(out, A, W1);
+    const text = req.email.rendered.text;
+    const bank = `${ENV.APP_BASE_URL}/plan/bank?w=${W1}&item=${idea}`;
+    expect(text).toContain('\nPlans\n');
+    expect(text).toContain(`- Yash Team added ${Q('Reels week')} to the bank: ${bank}\n`);
+    expect(text).toContain(
+      `- Yash Team moved ${Q('Reels week')} from November plan to the bank: ${bank}\n`,
+    );
+    expect(text).toContain(
+      `- Yash Team planned ${Q('Diwali reel')} in November plan, 20 Oct: ${ENV.APP_BASE_URL}/plans/${plan}?w=${W1}&item=${planned}\n`,
+    );
+    expect(text).toContain(`- Yash Team showed ${Q('Reels week')} to the client: ${bank}\n`);
+    expect(text).toContain(`- Yash Team hid ${Q('Reels week')} from the client: ${bank}\n`);
+    expect(text).toContain(`- Yash Team commented on ${Q('Reels week')}: ${bank}&comment=bc1\n`);
+    expect(text).toContain(`- Yash Team commented on ${Q('Reels week')}: ${bank}&comment=bc2\n`);
+    // Bank comments are Plans lines, not Comments rows.
+    expect(text).not.toContain('Client feedback to address');
+    expect([...req.entryIds].sort()).toEqual(Object.values(e).sort());
+    // The HTML part carries the same section, drawn with borders (no shadows).
+    expect(req.email.rendered.html).toContain('>Plans<');
+    expect(req.email.rendered.html).not.toMatch(/box-shadow/);
+  });
+
+  it('never puts a team-only row in a client email, and words the rest for the client', async () => {
+    const { w, plan, idea, planned } = bankWorld();
+    const e = mixedSet(w, X, { plan, idea, planned });
+    const out = await run(w);
+    const req = only(out, X, W1);
+    const text = req.email.rendered.text;
+    expect(text).toContain(`- Yash Team shared an idea with you: ${Q('Reels week')}`);
+    // A moved idea reads without a name and opens Activity (the bank is not the client's).
+    expect(text).toContain(
+      `- ${Q('Reels week')} was moved to the agency's idea bank: ${ENV.APP_BASE_URL}/activity?w=${W1}\n`,
+    );
+    expect(text).toContain(`commented on ${Q('Reels week')}: `);
+    expect(text).not.toContain(`added ${Q('Reels week')}`);
+    expect(text).not.toContain(`planned ${Q('Diwali reel')}`);
+    expect(text).not.toContain(`hid ${Q('Reels week')}`);
+    expect(text).not.toContain(`showed ${Q('Reels week')}`);
+    expect(text).not.toContain('comment=bc1');
+    expect([...req.entryIds].sort()).toEqual([e.moved, e.shown, e.comment].sort());
+  });
+
+  it('respects the opt-out: nothing for a recipient with email_opt_in false', async () => {
+    const { w, plan, idea, planned } = bankWorld(false);
+    mixedSet(w, A, { plan, idea, planned });
+    const out = await run(w);
+    expect(deliveriesFor(out, A)).toHaveLength(0);
+  });
+
+  it('reads the bank idea with the plan items, and no plans read for a plan-less idea', async () => {
+    const { w, idea } = bankWorld();
+    w.entry(
+      A,
+      W1,
+      'plan_comment',
+      { type: 'plan_item', id: idea },
+      { actor: Y, payload: { comment_id: 'bc3', visibility: 'everyone', plan_id: null } },
+    );
+    const out = await run(w);
+    expect(selects(out, 'plan_items')).toHaveLength(1);
+    expect(only(out, A, W1).email.rendered.text).toContain(`&item=${idea}&comment=bc3`);
+  });
+
+  it('every bank event is a catch-up event type', () => {
+    const catchup = new Set<string>(CATCHUP_EVENT_TYPES);
+    for (const t of [
+      'bank_idea_added',
+      'bank_idea_moved',
+      'bank_idea_planned',
+      'bank_idea_shown',
+      'bank_idea_hidden',
+    ]) {
+      expect(catchup.has(t)).toBe(true);
+    }
   });
 });

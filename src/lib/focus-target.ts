@@ -17,6 +17,40 @@ import { useEffect, useRef } from 'react';
 import { tintTarget } from '@/components/ui/SearchHighlight';
 import { REASON_COPY } from '@/lib/error-copy';
 import { prefersReducedMotion } from '@/lib/use-is-laptop';
+import { planHref } from '@/lib/inbox/bell-types';
+
+/**
+ * The bank idea route (PlanPage.tsx PLAN_BANK_PATH; focus-target.test.tsx
+ * asserts they agree). Kept literal here so a link builder never pulls the
+ * Plan page into its bundle.
+ */
+export const BANK_ITEM_PATH = '/plan/bank';
+
+/**
+ * Where a link to a plan item lands, with the comment to focus when given: an
+ * item in a plan opens /plan/{plan_id}?item={id}[&comment={id}] (the Plan tab);
+ * a bank idea (plan_id null, or scope_key 'bank') opens
+ * /plan/bank?item={id}[&comment={id}]. The comment then lands through
+ * useFocusTarget like every other comment link. Pure.
+ */
+export function planItemFocusHref(target: {
+  planId: string | null;
+  scopeKey?: string | null;
+  itemId: string;
+  commentId?: string | null;
+}): string {
+  const comment =
+    target.commentId !== null && target.commentId !== undefined && target.commentId !== ''
+      ? target.commentId
+      : null;
+  if (target.planId === null || target.planId === '' || target.scopeKey === 'bank') {
+    const q = new URLSearchParams({ item: target.itemId });
+    if (comment !== null) q.set('comment', comment);
+    return `${BANK_ITEM_PATH}?${q.toString()}`;
+  }
+  const base = planHref(target.planId, target.itemId);
+  return comment !== null ? `${base}&comment=${comment}` : base;
+}
 
 /** How long a target may take to render before it counts as missing. */
 export const FOCUS_WAIT_MS = 8000;

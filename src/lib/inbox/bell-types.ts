@@ -22,7 +22,11 @@ export const BELL_CHAT_ENTITY = 'chat_channel';
 /** The mention event_type: a chat mention when its entity is a chat. */
 export const BELL_MENTION_EVENT: InboxEventTypeValue = 'mention';
 
-/** The plan alerts (entity plan, or plan_item for reviews and comments): the Plans chip. */
+/**
+ * The plan alerts (entity plan, or plan_item for reviews, comments and the
+ * idea bank events): the Plans chip. The five bank_idea_* rows are plan_item
+ * rows (scope_key 'bank' while the idea sits in the bank).
+ */
 export const BELL_PLAN_EVENT_TYPES = [
   'plan_opened',
   'plan_deleted',
@@ -30,6 +34,11 @@ export const BELL_PLAN_EVENT_TYPES = [
   'plan_updated',
   'plan_review',
   'plan_comment',
+  'bank_idea_added',
+  'bank_idea_moved',
+  'bank_idea_planned',
+  'bank_idea_shown',
+  'bank_idea_hidden',
 ] as const satisfies readonly InboxEventTypeValue[];
 
 type BellPlanEventType = (typeof BELL_PLAN_EVENT_TYPES)[number];
@@ -61,13 +70,19 @@ export const BELL_ONLY_EVENT_TYPES = [
 const BELL_PLAN = new Set<string>(BELL_PLAN_EVENT_TYPES);
 
 /**
- * The plan alerts that toast, tone and blink like a post comment: a comment and
- * an OK / Not OK on a plan item. They stay in the Plans chip. Plan edits
+ * The plan alerts that toast, tone and blink like a post comment: a comment, an
+ * OK / Not OK on a plan item, and every idea bank event (tier active; none
+ * combine). They stay in the Plans chip. Plan edits
  * (plan_updated, plan_opened, plan_deleted, plan_date_changed) stay silent.
  */
 export const LIVE_PLAN_EVENT_TYPES = [
   'plan_comment',
   'plan_review',
+  'bank_idea_added',
+  'bank_idea_moved',
+  'bank_idea_planned',
+  'bank_idea_shown',
+  'bank_idea_hidden',
 ] as const satisfies readonly BellPlanEventType[];
 
 const LIVE_PLAN = new Set<string>(LIVE_PLAN_EVENT_TYPES);

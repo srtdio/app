@@ -37,6 +37,16 @@ import {
   taskLinkToken,
 } from '@/lib/inbox/bell-types';
 import {
+  bankEventInBank,
+  bankEventOpens,
+  bankFieldsOf,
+  isBankEvent,
+  type BankEventFields,
+  type BankEventType,
+} from '@srtdio/inbox';
+import { planItemFocusHref } from '@/lib/focus-target';
+import {
+  BANK_LABEL,
   CHAT_LABEL,
   MESSAGE_LABEL,
   PLAN_DELETED_TOAST,
@@ -45,6 +55,7 @@ import {
   SCHEDULED_LABEL,
   TASK_ALERT_LABEL,
   alertKindOf,
+  bankAlertLine,
   failureInPlainWords,
   isStaleFailed,
   isTaskBatch,
@@ -278,8 +289,14 @@ export interface ActivityItem {
   filenames?: string[];
   /** assets_deleted only: up to 3 deleted files with their version and type (payload.files); empty on old rows. */
   deletedFiles?: DeletedFile[];
-  /** Plan events only (plan_comment / plan_review): the plan (payload.plan_id); null otherwise. */
+  /**
+   * Plan events (plan_comment / plan_review / plan mentions) and idea bank
+   * alerts: the plan (payload.plan_id); null for a bank idea and on every
+   * other row.
+   */
   planId?: string | null;
+  /** The row's scope_key: 'bank' for a plan-item row on a bank idea. */
+  scopeKey?: string | null;
   /** Plan events only: the plan's title, resolved by the batched plans read. */
   planTitle?: string | null;
   /** plan_review only: which side reviewed (payload.side, 'team' | 'client'). */
@@ -334,6 +351,8 @@ export interface AlertInfo {
   itemTitle: string | null;
   /** task: the payload's fields. */
   task?: TaskAlertFields;
+  /** bank: the payload's fields (title, plan_title, from_plan_title, target_date). */
+  bank?: BankEventFields;
 }
 
 /** An alert's fields from its row: everything the loader does not resolve. Pure. */
@@ -353,6 +372,7 @@ function alertOf(row: InboxEntryRow, payload: unknown): AlertInfo | null {
     planTitle: null,
     itemTitle: null,
     ...(kind === 'task' ? { task: taskFieldsOf(row) } : {}),
+    ...(kind === 'bank' ? { bank: bankFieldsOf(payload) } : {}),
   };
 }
 
@@ -586,7 +606,8 @@ export function mapEntry(row: InboxEntryRow): ActivityItem {
         ? deletedFiles.map((file) => file.filename)
         : payloadStrings(payload, 'filenames'),
     deletedFiles,
-    planId: plan ? payloadStr(payload, 'plan_id') : null,
+    planId: plan || isBankEvent(row.event_type) ? payloadStr(payload, 'plan_id') : null,
+    scopeKey: row.scope_key,
     planTitle: null,
     reviewSide: review ? payloadStr(payload, 'side') : null,
     reviewStatus: review ? payloadStr(payload, 'status') : null,
@@ -828,6 +849,10 @@ export function activityLine(item: ActivityItem): string {
   const who = item.actorName;
   const target = entityTarget(item);
   if (isChatMention(item)) return chatMentionLine(item);
+  // An idea bank row reads its own line (the search hit's words too).
+  if (item.alert?.kind === 'bank') {
+    return bankAlertLine(item.eventType, item.alert.bank, item.actorName, 'unknown');
+  }
   if (isWelcome(item)) return `${welcomeTitle(item)} ${WELCOME_BODY}`;
   const actorRow = actorRowLine(item);
   if (actorRow !== null) return actorRow;
@@ -1035,6 +1060,8 @@ export function alertTopLine(item: Pick<ActivityItem, 'actorName'>, alert: Alert
       return PLAN_LABEL;
     case 'task':
       return TASK_ALERT_LABEL;
+    case 'bank':
+      return BANK_LABEL;
   }
 }
 
@@ -1065,6 +1092,8 @@ export function alertTitle(
       );
     case 'task':
       return taskAlertLine(item.eventType, alert.task, item.actorName);
+    case 'bank':
+      return bankAlertLine(item.eventType, alert.bank, item.actorName, side);
   }
 }
 
@@ -1085,11 +1114,17 @@ export function alertBody(alert: AlertInfo): string | null {
       return failureInPlainWords(alert.reason);
     case 'plan':
       return alert.itemTitle ?? alert.plan?.itemTitle ?? null;
+    case 'bank':
+      // The line already names the idea (and the plan): no second line.
+      return null;
   }
 }
 
-/** The link an alert opens, or null (a failed send, a deleted plan, a row without its chat). Pure. */
-function alertHref(item: ActivityItem, alert: AlertInfo): string | null {
+/**
+ * The link an alert opens, or null (a failed send, a deleted plan, a row
+ * without its chat, a moved idea read by a client). Pure.
+ */
+function alertHref(item: ActivityItem, alert: AlertInfo, side: ViewerSide): string | null {
   switch (alert.kind) {
     case 'reminder':
       return alert.channelId !== null ? chatMessageHref(alert.channelId, item.messageId) : null;
@@ -1104,6 +1139,16 @@ function alertHref(item: ActivityItem, alert: AlertInfo): string | null {
       if (item.eventType === 'plan_deleted' || plan?.planId == null) return null;
       return planHref(plan.planId, plan.leftPlan ? null : plan.itemId);
     }
+    case 'bank': {
+      if (!isBankEvent(item.eventType) || item.entityId === null) return null;
+      if (!bankOpensFor(item.eventType, side)) return null;
+      // A planned idea now sits in its plan; every other bank row opens the idea in the bank.
+      return planItemFocusHref({
+        planId: bankEventInBank(item.eventType) ? null : (item.planId ?? null),
+        scopeKey: bankEventInBank(item.eventType) ? 'bank' : (item.scopeKey ?? null),
+        itemId: item.entityId,
+      });
+    }
     case 'task': {
       if (alert.channelId === null) return null;
       // A batch opens the sheet with no row expanded; one task opens on that row.
@@ -1116,6 +1161,16 @@ function alertHref(item: ActivityItem, alert: AlertInfo): string | null {
       );
     }
   }
+}
+
+/**
+ * Whether a bank row opens for this side. Only the agency side is sure to see
+ * the bank: an unknown side (the shell's live toast, a side still loading)
+ * follows the client rule, so a moved idea never sends a client to a bank
+ * they cannot open (the toast then opens Activity). Pure.
+ */
+function bankOpensFor(eventType: BankEventType, side: ViewerSide): boolean {
+  return bankEventOpens(eventType, side === 'agency' ? 'team' : 'client');
 }
 
 /** What a tap on a row does. */
@@ -1134,8 +1189,12 @@ interface OpenAction {
  * id) marks read, opens nothing and toasts "This plan was deleted"; every
  * other row marks read, then opens its link (entityHref). Pure.
  */
-export function openAction(item: ActivityItem, workspaceKey: string | null = null): OpenAction {
-  const href = entityHref(item, workspaceKey);
+export function openAction(
+  item: ActivityItem,
+  workspaceKey: string | null = null,
+  side: ViewerSide = 'unknown',
+): OpenAction {
+  const href = entityHref(item, workspaceKey, side);
   if (item.alert?.kind === 'reminder') return { href, markRead: false, toast: null };
   if (item.alert?.kind === 'plan' && href === null) {
     return { href: null, markRead: true, toast: PLAN_DELETED_TOAST };
@@ -1143,8 +1202,16 @@ export function openAction(item: ActivityItem, workspaceKey: string | null = nul
   return { href, markRead: true, toast: null };
 }
 
-/** Rows with nowhere to open, whose card is not tappable: a deleted post, a failed send. Pure. */
-export function opensNothing(item: Pick<ActivityItem, 'eventType'>): boolean {
+/**
+ * Rows with nowhere to open, whose card is not tappable: a deleted post, a
+ * failed send, and an idea moved to the bank read by a client (the agency's
+ * bank is not theirs to open). Pure.
+ */
+export function opensNothing(
+  item: Pick<ActivityItem, 'eventType'>,
+  side: ViewerSide = 'unknown',
+): boolean {
+  if (isBankEvent(item.eventType) && !bankOpensFor(item.eventType, side)) return true;
   return item.eventType === 'post_deleted' || item.eventType === 'scheduled_failed';
 }
 
@@ -1155,8 +1222,12 @@ export function opensNothing(item: Pick<ActivityItem, 'eventType'>): boolean {
  * comment via the existing `?comment=` param (consumed by PostDetailPage /
  * BriefDetailPage / AssetsPage already); a non-comment entry lands on the entity.
  */
-export function entityHref(item: ActivityItem, workspaceKey: string | null = null): string | null {
-  if (item.alert != null) return alertHref(item, item.alert);
+export function entityHref(
+  item: ActivityItem,
+  workspaceKey: string | null = null,
+  side: ViewerSide = 'unknown',
+): string | null {
+  if (item.alert != null) return alertHref(item, item.alert, side);
   if (isChatMention(item)) {
     if (item.entityId === null) return null;
     return chatMessageHref(item.entityId, item.messageId);
@@ -1168,12 +1239,15 @@ export function entityHref(item: ActivityItem, workspaceKey: string | null = nul
   if (item.eventType === 'assets_deleted') return '/assets';
   if (item.eventType === 'post_deleted') return null;
   if (isPlanEvent(item)) {
-    // The plan in the Plan tab with the item open; a comment also scrolls to it.
-    if (item.planId == null || item.entityId === null) return null;
-    const base = planHref(item.planId, item.entityId);
-    return isPlanCommentRow(item) && item.commentId !== null
-      ? `${base}&comment=${item.commentId}`
-      : base;
+    // The plan in the Plan tab with the item open; a comment also scrolls to
+    // it. A bank idea (no plan, scope_key 'bank') opens on the bank's route.
+    if (item.entityId === null) return null;
+    return planItemFocusHref({
+      planId: item.planId ?? null,
+      scopeKey: item.scopeKey ?? null,
+      itemId: item.entityId,
+      commentId: isPlanCommentRow(item) ? item.commentId : null,
+    });
   }
   if (item.entityId === null) return null;
   if (item.entityType === 'post') {
@@ -1414,6 +1488,8 @@ export function msUntilZonedMidnight(nowMs: number, tz: string | null): number {
  * it never threads with an unrelated row.
  */
 export function entityKey(item: ActivityItem): string {
+  // Idea bank alerts never combine: each is its own card.
+  if (item.alert?.kind === 'bank') return `solo:${item.id}`;
   if (
     (item.entityType === 'post' ||
       item.entityType === 'brief' ||
