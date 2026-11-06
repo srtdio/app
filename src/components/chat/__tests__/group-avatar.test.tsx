@@ -11,8 +11,7 @@ import type { Database } from '@srtdio/schemas';
 import { shapeChannelSummaries, type ChannelSummary } from '@/lib/chat-reads';
 import {
   channelRowParts,
-  GROUP_TILE_PHOTO,
-  PERSON_TILE_PHOTO,
+  CHAT_ROW_PHOTO,
 } from '@/components/chat/ChannelList';
 import { GroupHero, groupInfoSections, groupInfoSubtitle } from '@/components/chat/GroupInfoSheet';
 import { centerSquare, GROUP_AVATAR_EXPORT_PX } from '@/lib/chat/group-avatar';
@@ -83,7 +82,7 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     expect(html).not.toContain('>LA<');
     // A group is a Row: a 32px rounded-square photo (header role, group kind).
     expect(html).toContain(
-      `data-group-photo="" class="${GROUP_TILE_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
+      `data-group-photo="" class="${CHAT_ROW_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
     );
   });
 
@@ -93,7 +92,7 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     expect(html).not.toContain('<img');
     expect(html).toContain('>O<');
     expect(html).toContain(
-      `data-group-photo="" class="${GROUP_TILE_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
+      `data-group-photo="" class="${CHAT_ROW_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
     );
   });
 
@@ -102,12 +101,12 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     expect(dm.avatarUrl).toBe(PEER_PHOTO);
     const html = rowHtml(dm);
     expect(html).toContain(`src="${PEER_PHOTO}"`);
-    // A DM is a Tile: a 72px circular photo on the tile square.
+    // A DM is a Row: a 32px circular photo (header role, person kind).
     expect(html).toContain(
-      `data-person-photo="" class="${PERSON_TILE_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
+      `data-person-photo="" class="${CHAT_ROW_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
     );
     expect(html).toContain('rounded-full');
-    expect(html).toContain('data-avatar-role="profile"');
+    expect(html).toContain('data-avatar-role="header"');
   });
 });
 

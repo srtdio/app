@@ -16,7 +16,6 @@ vi.mock('@/lib/logger', () => ({
 import {
   CHAT_HOME_EDGE,
   CHAT_HOME_STACK,
-  PEOPLE_TILE_GRID,
   sectionLabelClass,
 } from '@/components/chat/ChannelList';
 import { chatListPaneClass } from '@/components/chat/ChatConnected';
@@ -156,12 +155,12 @@ describe('11f "1 selected" on the 16px edge', () => {
 });
 
 describe('11g phone chat list edges', () => {
-  it('rows, tiles and section labels start on the same 16px edge as search and chips', () => {
-    // Rows (ui/Row) draw their own px-4; the stack itself has no side padding.
+  it('rows draw the 12 chat edge; section labels sit on the 16px edge with search and chips', () => {
+    // Rows (ui/Row gutter "chat") draw their own px-3; the stack has no side padding.
     expect(classes(CHAT_HOME_STACK).some((c) => /^(px|pl|pr)-/.test(c))).toBe(false);
     expect(CHAT_HOME_EDGE).toBe('px-4');
-    expect(read('../../ui/Row.tsx')).toContain('rounded-none px-4');
-    expect(classes(PEOPLE_TILE_GRID)).toContain('px-4');
+    expect(read('../../ui/Row.tsx')).toContain("chat ? CHAT_GUTTER : 'px-4'");
+    expect(read('../ChannelList.tsx').match(/gutter="chat"/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
     for (const first of [true, false]) {
       const label = classes(sectionLabelClass(first));
       expect(label).toContain('px-4');
@@ -180,11 +179,8 @@ describe('11i the ⋯ never covers the time (B1b: parts own the slots)', () => {
     expect(row).not.toMatch(/data-row-more=""[^\n]*absolute/);
   });
 
-  it('a person tile: the time is the meta line, the ⋯ sits on the title line', () => {
-    const tile = read('../../ui/Tile.tsx');
-    // The ⋯ overlay mirrors the caption: title line (the ⋯), then the meta line.
-    expect(tile.lastIndexOf('data-tile-more')).toBeLessThan(tile.lastIndexOf("textRole('meta'"));
-    expect(read('../ChannelList.tsx')).toContain('meta: <span data-tile-time="">');
+  it('a person is the same Row: no Tile in the chat list', () => {
+    expect(read('../ChannelList.tsx')).not.toContain('<Tile');
   });
 });
 
