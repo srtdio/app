@@ -776,7 +776,7 @@ describe('ActivityCard: notifications fixes', () => {
   it('fix 10: a body line wraps anywhere so a long token never overflows', () => {
     const long = 'https://example.com/'.concat('a'.repeat(120));
     const html = renderCard([item({ title: 'Q3', eventType: 'comment', body: long })]);
-    expect(html).toMatch(/<p class="mt-\[3px\][^"]*\[overflow-wrap:anywhere\]">https:\/\/example/);
+    expect(html).toMatch(/<p class="mt-1[^"]*\[overflow-wrap:anywhere\]">https:\/\/example/);
   });
 
   it('fix 15: a live-added card renders at its final place (itemIn lays a Y rise over it), never a class fade or slide', () => {

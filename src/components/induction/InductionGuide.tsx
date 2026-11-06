@@ -295,7 +295,7 @@ function ClearCard({
         title: CLEAR_CARD_COPY.title,
         body: CLEAR_CARD_COPY.body,
         pills: [],
-        button: busy ? CLEAR_CARD_COPY.clearing : CLEAR_CARD_COPY.button,
+        button: CLEAR_CARD_COPY.button,
         stats: [
           { value: String(steps), label: CLEAR_CARD_COPY.thingsDone },
           { value: taken, label: CLEAR_CARD_COPY.timeTaken },
@@ -310,6 +310,7 @@ function ClearCard({
         });
       }}
       dock={dock}
+      busy={busy}
     />
   );
 }

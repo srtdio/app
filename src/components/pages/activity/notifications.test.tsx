@@ -520,7 +520,7 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
     expect(html).not.toContain('Not sent');
     // The reason is the body line, below the title, exactly once.
     expect(html).toMatch(
-      /<p class="mt-\[3px\] line-clamp-2 text-base text-fg-2 \[overflow-wrap:anywhere\]">You&#x27;re no longer in this chat<\/p>/,
+      /<p class="mt-1 line-clamp-2 text-base text-fg-2 \[overflow-wrap:anywhere\]">You&#x27;re no longer in this chat<\/p>/,
     );
     expect(html.split('no longer in this chat')).toHaveLength(2);
     expect(html).toContain('data-activity-action="retry"');

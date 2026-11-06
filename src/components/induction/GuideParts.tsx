@@ -372,10 +372,13 @@ export function GuideCard({
   onPress,
   onSkip,
   dock,
+  busy = false,
 }: {
   kind: 'intro' | 'closing' | 'clear';
   copy: CardCopy;
   onPress: () => void;
+  /** The press is running (the clear card): Button busy, the label kept. */
+  busy?: boolean;
   /** Skip tour beside the button; undefined hides it. */
   onSkip?: (() => void) | undefined;
   dock: DockAt;
@@ -440,7 +443,7 @@ export function GuideCard({
             {copy.skip}
           </Button>
         ) : null}
-        <Button variant="primary" onClick={onPress}>
+        <Button variant="primary" busy={busy} onClick={onPress}>
           {copy.button}
         </Button>
       </div>
