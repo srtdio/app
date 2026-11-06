@@ -2,6 +2,8 @@
 // date and time, and whether Book is enabled. Every time is wall-clock time in
 // the viewer's time zone; the sheet sends the instant (ISO, Z) plus that zone.
 
+import { deviceTimeZone, zonedParts } from '@/lib/time';
+
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -24,31 +26,15 @@ interface CallSlot {
   label: string;
 }
 
-/** The viewer's IANA time zone. */
+/** The viewer's IANA time zone (src/lib/time.ts deviceTimeZone). */
 export function viewerTimeZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return deviceTimeZone();
 }
 
-/** The wall-clock fields of an instant in a time zone. */
+/** The wall-clock fields of an instant in a time zone (src/lib/time.ts zonedParts). */
 function zonedFields(at: Date, timeZone: string): CivilDate & { hour: number; minute: number } {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-  }).formatToParts(at);
-  const field = (type: Intl.DateTimeFormatPartTypes): number =>
-    Number(parts.find((part) => part.type === type)?.value ?? '0');
-  return {
-    year: field('year'),
-    month: field('month'),
-    day: field('day'),
-    hour: field('hour'),
-    minute: field('minute'),
-  };
+  const f = zonedParts(at, timeZone);
+  return { year: f.year, month: f.month, day: f.day, hour: f.hour, minute: f.minute };
 }
 
 /** The zone's offset from UTC at an instant, in ms. */

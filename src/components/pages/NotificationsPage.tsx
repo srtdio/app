@@ -18,6 +18,7 @@ import {
   IconPlan,
 } from '@/components/ui/icons';
 import { ActivityCard, UpcomingCard } from '@/components/pages/activity/ActivityCard';
+import { LIST_CARD_STACK } from '@/components/ui/ListCard';
 import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
 import { cn } from '@/lib/cn';
 import { Text, textRole } from '@/components/ui/Text';
@@ -1150,7 +1151,7 @@ export function NotificationsPage() {
         ) : visibleUpcoming.length === 0 ? (
           <EmptyState icon={<IconCalendarClock size={ICON_SIZE.status} />} title={UPCOMING_EMPTY} />
         ) : (
-          <div data-upcoming-list="" className="mt-4 flex flex-col gap-2 px-4 pb-6 md:px-6">
+          <div data-upcoming-list="" className={cn('mt-4 pb-6', LIST_CARD_STACK, GUTTER)}>
             {visibleUpcoming.map((item) => (
               <UpcomingCard
                 key={item.id}
@@ -1226,13 +1227,14 @@ export function NotificationsPage() {
                     </div>
                   ) : null}
                 </div>
-                <div className={cn('flex flex-col gap-2', GUTTER)}>
+                <div className={cn(LIST_CARD_STACK, GUTTER)}>
                   {bucket.groups.map((group, groupIndex) => {
                     const card = (
                       <ActivityCard
                         key={group[0]?.id ?? bucket.key}
                         group={group}
                         nowMs={nowMs}
+                        timeZone={tz}
                         cache={cache}
                         presignEnabled={presignEnabled}
                         onOpenGroup={handleOpenGroup}
