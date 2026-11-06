@@ -78,7 +78,7 @@ describe('composer buttons', () => {
     // Split send/schedule: one lit primary on the shared wrapper.
     expect(src).toContain("showChevron && 'lit-btn-primary rounded-full'");
     // The composer dock is lit, its neutral top border colour dropped.
-    expect(src).toContain('border-t bg-panel px-3 py-2.5 lit-dock');
+    expect(src).toContain('border-t bg-panel px-3 py-2 lit-dock');
     expect(src).not.toMatch(/size="lg"/);
   });
 });
