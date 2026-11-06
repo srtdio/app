@@ -92,7 +92,8 @@ const layoutWarnings = [
 // B2 migrates, so they warn here and scripts/design-ratchet.ts blocks new ones
 // (leading, tracking, arbitraryPx, handTap). ui/Text.tsx is the only place a
 // type override may live.
-const TYPE_OVERRIDE = '/(^|[\\s:])(leading-|tracking-|text-\\[)/';
+// text-[Npx] / text-[Nrem] already error under DESIGN_CLASS; this warns on the rest.
+const TYPE_OVERRIDE = '/(^|[\\s:])(leading-|tracking-|text-\\[(?![0-9.]+(px|rem)\\]))/';
 const TYPE_MESSAGE = 'Use a text role from ui/Text.tsx (no leading-*, tracking-* or text-[..])';
 const PLACED_BUTTON = '/(^|[\\s:])(absolute|-m[trblxy]?-[0-9])/';
 const typeWarnings = [
