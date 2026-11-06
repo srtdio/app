@@ -499,9 +499,7 @@ describe('in-bubble meta and ticks', () => {
     expect(delivered).toContain('aria-label="Delivered"');
     expect(delivered).toContain('text-bubble-meta-own');
     const read = renderStrip(renderBubble(own({ status: 'read' }), { showTicks: true }));
-    expect(read).toMatch(
-      /data-tick="read"[^>]*text-\[color:var\(--tick-read\)\]|text-\[color:var\(--tick-read\)\][^>]*data-tick="read"/,
-    );
+    expect(read).toMatch(/data-tick="read"[^>]*text-tick-read|text-tick-read[^>]*data-tick="read"/);
     // The tick box is 20x12, the shared double tick's box.
     expect(read).toMatch(/viewBox="0 0 20 12"/);
     expect(read).toContain('h-3 w-5');
@@ -1308,7 +1306,7 @@ describe('own-bubble inner content', () => {
       expect(badge.split(' ')).toContain('top-[calc(100%-3px)]');
       expect(badge).not.toMatch(/(^| )-?bottom-/);
       // The meta starts 3px or more above the bubble's bottom (or sits in flow above it).
-      expect(meta).toMatch(/bottom-\[3px\]|bottom-2|mt-1 flex justify-end/);
+      expect(meta).toMatch(/bottom-1\b|bottom-2|mt-1 flex justify-end/);
       expect(rootClass(root).split(' ')).toContain(REACTION_ROW_SPACE);
     }
     // 20px of room below: the ~17px overhang never touches the next bubble.

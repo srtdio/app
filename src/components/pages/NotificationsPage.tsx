@@ -1109,9 +1109,9 @@ export function NotificationsPage() {
     <>
       {/* No visible title (as Pipeline, Briefs, Assets and Plan): the page starts with the
           search row. The h1 stays for screen readers and e2e. */}
-      <Text as="h1" role="title" tabIndex={-1} className="sr-only">
+      <h1 tabIndex={-1} className="sr-only">
         {ACTIVITY_TITLE}
-      </Text>
+      </h1>
 
       {/* The shared list header: search left, sort right. */}
       <SectionHeader<ActivityDirection>
