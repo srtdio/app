@@ -233,7 +233,8 @@ const PHONE_ONLY_NAMES = [
 
 /**
  * Laptop-only light screens (`only: 'laptop'`): the Cockpit side panel, the Week
- * view, the board drag (a mouse-only gesture) and the chip hover (a hover pointer).
+ * view, the Bank side panel and table, the board drag (a mouse-only gesture) and
+ * the chip hover (a hover pointer).
  */
 const LAPTOP_LIGHT_NAMES = [
   'pipeline-search-typed',
