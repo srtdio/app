@@ -128,9 +128,16 @@ describe('groupBriefsByDay', () => {
     expect(groupBriefsByDay([], ZONE, NOW)).toEqual([]);
   });
 
-  it('labels the day with the app day format, the year only outside now', () => {
+  it('labels a day a week or more away with the date, the year only outside now', () => {
     expect(groupBriefsByDay([at('2026-09-22')], ZONE, NOW)[0]!.label).toBe('22 Sep');
     expect(groupBriefsByDay([at('2025-09-22')], ZONE, NOW)[0]!.label).toBe('22 Sep 2025');
+  });
+
+  it('labels today "Today", then Yesterday, then the weekday 2-6 days back (formatDayLabel)', () => {
+    expect(groupBriefsByDay([at('2026-07-08', '09:00')], ZONE, NOW)[0]!.label).toBe('Today');
+    expect(groupBriefsByDay([at('2026-07-07')], ZONE, NOW)[0]!.label).toBe('Yesterday');
+    expect(groupBriefsByDay([at('2026-07-03')], ZONE, NOW)[0]!.label).toBe('Fri');
+    expect(groupBriefsByDay([at('2026-07-01')], ZONE, NOW)[0]!.label).toBe('1 Jul');
   });
 
   it('shows an unparseable timestamp as stored', () => {

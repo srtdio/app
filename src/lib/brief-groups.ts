@@ -7,7 +7,7 @@
 // reuses the shared helpers (src/lib/list-sort.ts, src/lib/plan-week.ts); nothing
 // here does zone maths of its own.
 
-import { formatDate, isValidTimeZone } from '@/lib/time';
+import { formatDayLabel, isValidTimeZone } from '@/lib/time';
 import { addCivilDays, civilDate } from '@/lib/list-sort';
 import { weekBounds } from '@/lib/plan-week';
 
@@ -156,7 +156,8 @@ export function groupBriefsByDay<T extends { created_at: string }>(
     const group: BriefGroup<T> = {
       key,
       // The workspace zone, so the label always names the day the key groups by.
-      label: formatDate(item.created_at, now, zone) || item.created_at,
+      // A day heading: "Today", else formatWhen ("Yesterday", "Mon", "22 Sep").
+      label: formatDayLabel(item.created_at, now, zone) || item.created_at,
       items: [item],
     };
     byKey.set(key, group);

@@ -2,7 +2,7 @@
 // Row: tick box (to do / done), title (tap to edit in place: Enter or blur
 // keeps, Esc cancels, empty keeps the old title), priority chip. Under the
 // title, only when there is something to say, a date line ("3 Nov" in the bad
-// tone when overdue, "7 Nov", "Due 31 Oct · done 30 Oct"). Every change is
+// tone when overdue, "7 Nov", "Due 31 Oct · done Fri"). Every change is
 // local to the page's draft until Save. A row may carry an accent dot (changed
 // by someone else since you looked, or your own unsaved change), its changed
 // chip ringed, and sub-lines: what it was ("was <s>old</s>", "priority was
