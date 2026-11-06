@@ -149,18 +149,21 @@ function render(card: ReactElement, own: boolean): string {
   );
 }
 
+/** Markup escapes & in attributes; class lists compare unescaped. */
+const unamp = (cls: string): string => cls.replace(/&amp;/g, '&');
+
 /** The class list of each [data-chat-card] root in the markup. */
 function cardRoots(html: string): string[] {
   const out: string[] = [];
   for (const m of html.matchAll(/<div[^>]*data-chat-card=""[^>]*>/g)) {
     const cls = /class="([^"]*)"/.exec(m[0]);
-    out.push(cls?.[1] ?? '');
+    out.push(unamp(cls?.[1] ?? ''));
   }
   return out;
 }
 
 function classes(html: string): string[] {
-  return [...html.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(/\s+/));
+  return [...html.matchAll(/class="([^"]*)"/g)].flatMap((m) => unamp(m[1]!).split(/\s+/));
 }
 
 describe('own chat cards keep the own-bubble ink', () => {
