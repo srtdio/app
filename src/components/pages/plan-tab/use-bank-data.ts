@@ -35,7 +35,7 @@ import {
   renameBucket,
   type BucketOption,
 } from '@/lib/buckets';
-import { READ_TIMEOUT_MS, withReadTimeout } from '@/lib/chat-reads';
+import { withReadTimeout } from '@/lib/chat-reads';
 import {
   PLAN_CHANGED_EVENT,
   bankReadWhat,
