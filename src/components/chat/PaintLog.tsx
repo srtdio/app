@@ -297,7 +297,7 @@ function PaintLogPanel(): ReactElement {
       ) : open ? (
         <ol ref={listRef} className="max-h-[30svh] overflow-y-auto p-2 font-mono text-xs">
           {entries.map((e, i) => (
-            <li key={i} className="whitespace-pre-wrap break-all">
+            <li key={`log-${i}`} className="whitespace-pre-wrap break-all">
               <span className="text-fg-3">{e.at.toFixed(1)}</span> {e.what}
             </li>
           ))}
@@ -321,7 +321,7 @@ function PaintLogPanel(): ReactElement {
           </div>
           <ol className="max-h-[20svh] overflow-y-auto px-2 pb-2 font-mono text-xs tabular-nums">
             {marks.map((m, i) => (
-              <li key={i} className="flex gap-2">
+              <li key={`log-${i}`} className="flex gap-2">
                 <span className="min-w-0 flex-1 break-all">{m.name}</span>
                 <span className="shrink-0 text-fg-3">{m.ms.toFixed(1)}</span>
               </li>

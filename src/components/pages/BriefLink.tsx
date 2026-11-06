@@ -55,7 +55,7 @@ export function BriefLink({
 
   const imageSrc = preview?.type === 'full' ? client.imageUrl(url) : null;
   if (briefLinkShowsCard(preview, imageLoaded)) {
-    return <LinkPreviewCard url={url} client={client} className="w-full max-w-[420px]" />;
+    return <LinkPreviewCard url={url} client={client} className="w-full max-w-md" />;
   }
   return (
     <>
@@ -66,7 +66,7 @@ export function BriefLink({
           alt=""
           aria-hidden="true"
           data-brief-link-probe=""
-          className="hidden"
+          className="hidden h-0 w-0"
           onLoad={() => setImageLoaded(true)}
         />
       ) : null}

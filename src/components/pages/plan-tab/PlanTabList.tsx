@@ -252,7 +252,7 @@ export function PlanTabBoxes(props: { heading?: boolean } = {}): ReactElement {
               <Bone lit="flat" className="h-5 w-2/3 rounded" />
             </div>
             <div className="flex h-5 items-center">
-              <Bone lit="flat" className="h-3.5 w-32 rounded" />
+              <Bone lit="flat" className="h-4 w-32 rounded" />
             </div>
             <div className="flex h-10 gap-2">
               <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />

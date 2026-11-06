@@ -1435,7 +1435,7 @@ export function VoiceNote({
                   : 'bg-accent text-accent-fg',
             )}
           >
-            <IconMic size={12} />
+            <IconMic size={ICON_SIZE.text} />
           </span>
         </span>
       ) : null}
@@ -1482,7 +1482,7 @@ export function VoiceNote({
           >
             {bars.map((height, index) => (
               <span
-                key={index}
+                key={`bar-${index}`}
                 data-played={barPlayed(index, progress, bars.length) ? '' : undefined}
                 className={cn(
                   'w-0.5 shrink-0 rounded-full',
@@ -1521,7 +1521,7 @@ export function VoiceNote({
       <div
         data-voice-foot=""
         className={cn(
-          'flex min-h-4 items-center gap-1 whitespace-nowrap text-sm',
+          'flex min-h-4 shrink-0 items-center gap-1 whitespace-nowrap text-sm',
           UNDER_WAVE,
           tone.ink,
         )}
@@ -1542,7 +1542,7 @@ export function VoiceNote({
           data-voice-error=""
           role="alert"
           className={cn(
-            'flex min-h-4 items-center gap-1 whitespace-nowrap text-sm',
+            'flex min-h-4 shrink-0 items-center gap-1 whitespace-nowrap text-sm',
             UNDER_WAVE,
             tone.ink,
           )}

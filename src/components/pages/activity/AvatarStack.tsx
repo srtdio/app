@@ -57,7 +57,7 @@ export function AvatarStack({
       ))}
       {extra > 0 ? (
         <span
-          className={`ml-[-4px] inline-flex items-center rounded-full bg-panel-2 px-1.5 text-xs font-medium text-fg-3 ring-2 ${ring}`}
+          className={`-ml-1 inline-flex items-center rounded-full bg-panel-2 px-2 text-xs font-medium text-fg-3 ring-2 ${ring}`}
           style={{ height: AVATAR_PX[role] }}
           aria-label={`${extra} more`}
         >

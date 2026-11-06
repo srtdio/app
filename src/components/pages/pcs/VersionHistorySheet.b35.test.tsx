@@ -157,11 +157,11 @@ describe('versions sheet at 360px (post screen polish)', () => {
     expect(html).toContain('+2');
   });
 
-  it('thumbs are h-8 and give way first; the text column keeps about 120px', () => {
+  it('thumbs are h-8 and give way first; the text column keeps 128px', () => {
     expect(VERSION_THUMBS_CLASS).toContain('min-w-0');
     expect(VERSION_THUMBS_CLASS).toContain('overflow-hidden');
     expect(VERSION_THUMBS_CLASS).not.toContain('shrink-0');
-    expect(VERSION_TEXT_CLASS).toContain('min-w-[120px]');
+    expect(VERSION_TEXT_CLASS).toContain('min-w-32');
     const all = elements(
       (sheet([], four) as ReactElement<{ children?: ReactNode }>).props.children,
     );

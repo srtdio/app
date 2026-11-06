@@ -102,7 +102,7 @@ export function PlanPickerSheet(props: {
           {read.status === 'loading' ? (
             <BoxSkeleton lit="flat" label="Loading plans" className="flex flex-col gap-2 px-4">
               {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
-                <PickerSkeletonRow key={i} />
+                <PickerSkeletonRow key={`bone-${i}`} />
               ))}
             </BoxSkeleton>
           ) : read.status === 'error' ? (

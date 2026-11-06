@@ -926,7 +926,7 @@ export function PickerSkeleton(): ReactElement {
     <ul aria-busy="true" aria-label="Loading posts" className={LIST_CLASS}>
       {[0, 1, 2].map((i) => (
         <li
-          key={i}
+          key={`bone-${i}`}
           data-skeleton-row=""
           className="flex min-h-11 items-center gap-3 rounded-xl border bg-panel p-3 lit-card"
         >

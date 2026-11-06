@@ -99,8 +99,8 @@ export function RecentlyDeletedView({
         </div>
       ) : showBoxes ? (
         <BoxSkeleton lit="flat" label="Loading deleted files" className="mt-4 flex flex-col gap-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Bone lit="lit-card" key={i} as="div" className="h-[104px] rounded-xl" />
+          {['box-0', 'box-1', 'box-2'].map((key) => (
+            <Bone lit="lit-card" key={key} as="div" className="h-28 rounded-xl" />
           ))}
         </BoxSkeleton>
       ) : items.length > 0 ? (

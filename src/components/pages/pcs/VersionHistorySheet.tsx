@@ -75,8 +75,8 @@ export const VERSION_THUMBS_MAX = 2;
  */
 export const VERSION_THUMBS_CLASS = 'min-w-0 shrink overflow-hidden';
 
-/** The text column: fills the row and never squeezes below about 120px. */
-export const VERSION_TEXT_CLASS = 'flex min-w-[120px] flex-1 flex-col';
+/** The text column: fills the row and never squeezes below 128px. */
+export const VERSION_TEXT_CLASS = 'flex min-w-32 flex-1 flex-col';
 
 // The app's day formatter (FN7): "11 Jun", with the year once it differs from
 // now's, on the viewer's clock.
@@ -221,13 +221,13 @@ export function versionHistorySheet({
               >
                 <span
                   className={cn(
-                    'flex h-[18px] w-[18px] items-center justify-center rounded-full border',
+                    'flex h-5 w-5 items-center justify-center rounded-full border',
                     selected
                       ? 'border-transparent bg-accent text-accent-fg lit-badge'
                       : 'border-border-strong text-transparent',
                   )}
                 >
-                  {selected ? <IconCheck size={12} /> : null}
+                  {selected ? <IconCheck size={ICON_SIZE.text} /> : null}
                 </span>
               </IconButton>
               {rowButton}

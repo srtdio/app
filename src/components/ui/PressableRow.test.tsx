@@ -15,7 +15,7 @@ function tokens(el: El): string[] {
 describe('PressableRow', () => {
   it('is a full-width, left-aligned, 44px-minimum tappable surface', () => {
     const t = tokens(render());
-    expect(t).toContain('min-h-[44px]');
+    expect(t).toContain('min-h-11');
     expect(t).toContain('w-full');
     expect(t).toContain('rounded-lg');
     expect(t).toContain('text-left');

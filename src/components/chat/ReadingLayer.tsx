@@ -225,7 +225,7 @@ function readByWithMono(label: string): ReactElement {
     <span>
       {parts.map((part, i) =>
         /^\d+$/.test(part) ? (
-          <span key={i} className="font-mono">
+          <span key={`part-${i}`} className="font-mono">
             {part}
           </span>
         ) : (

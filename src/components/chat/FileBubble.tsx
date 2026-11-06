@@ -261,7 +261,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
           </span>
           <span className="text-sm text-fg-3">
             {props.meta.map((part, i) => (
-              <span key={i}>
+              <span key={`part-${i}`}>
                 {i > 0 ? ' · ' : null}
                 <span className={part.mono ? 'font-mono' : undefined}>{part.text}</span>
               </span>

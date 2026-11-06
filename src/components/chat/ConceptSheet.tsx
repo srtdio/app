@@ -82,7 +82,7 @@ export const CONCEPT_FILES_LIMIT_HINT = `You can add up to ${CONCEPT_FILES_MAX} 
 export const CONCEPT_FILES_READ_FAILED = errorText('load files', null);
 
 /** The Save label while it waits for uploads. */
-export const CONCEPT_SAVE_UPLOADING = 'Uploading...';
+export const CONCEPT_SAVE_UPLOADING = 'Uploading…';
 
 /** The files section: known, being read, or the read failed (edit only). */
 export type ConceptFilesState = 'ready' | ConceptFilesReadState;

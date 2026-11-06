@@ -310,7 +310,7 @@ function FileRowItem(props: { item: MediaItem; date: string; onOpen: () => void 
         </span>
         <span className="truncate text-sm text-fg-3">
           {mediaFileMeta(item).map((part, i) => (
-            <span key={i}>
+            <span key={`part-${i}`}>
               {i > 0 ? ' · ' : null}
               <span className={part.mono ? 'font-mono tabular-nums' : undefined}>{part.text}</span>
             </span>
@@ -687,7 +687,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
     grid ? (
       <ul data-media-skeleton="" className={GRID}>
         {Array.from({ length: LOADING_TILES }, (_, i) => (
-          <li key={i} className="aspect-square">
+          <li key={`bone-${i}`} className="aspect-square">
             <Bone lit="lit-media" as="div" className="h-full w-full" />
           </li>
         ))}
@@ -695,7 +695,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
     ) : (
       <ul data-media-skeleton="" className="flex flex-col">
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
-          <li key={i} className="flex items-center gap-3 px-2 py-2">
+          <li key={`bone-${i}`} className="flex items-center gap-3 px-2 py-2">
             <Bone lit="lit-media" as="div" className="h-11 w-11 shrink-0 rounded-lg" />
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />

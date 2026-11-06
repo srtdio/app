@@ -406,7 +406,7 @@ function skeletonCard(index: number, ratio: number | null): ReactElement {
   // never a pulse), each the size of the part that lands there.
   return (
     <div
-      key={index}
+      key={`skeleton-${index}`}
       aria-hidden="true"
       data-skeleton-card=""
       className={cn('flex min-w-0 flex-col self-start overflow-hidden', cardSurface())}
@@ -452,7 +452,7 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
           <div
             key={column}
             aria-hidden="true"
-            className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2 lit-well-soft"
+            className="flex w-64 shrink-0 flex-col rounded-xl border border-border bg-panel-2 lit-well-soft"
           >
             <div className="flex h-11 items-center gap-2 border-b px-3 lit-header">
               <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />

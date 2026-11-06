@@ -801,7 +801,7 @@ function ScreenSkeleton(): ReactElement {
       <Bone lit="lit-well" className="h-1.5 w-full rounded-full" />
       <Bone lit="lit-well" className="h-10 w-48 rounded-full" />
       {[0, 1, 2].map((i) => (
-        <Bone lit="lit-card" key={i} className="h-24 w-full rounded-xl" />
+        <Bone lit="lit-card" key={`bone-${i}`} className="h-24 w-full rounded-xl" />
       ))}
     </BoxSkeleton>
   );
@@ -2933,7 +2933,7 @@ export function DayColumn(props: {
         className={cn(
           'flex flex-1 items-center justify-center',
           props.day === null
-            ? 'whitespace-nowrap text-xs font-semibold text-fg-2'
+            ? 'shrink-0 whitespace-nowrap text-xs font-semibold text-fg-2'
             : cn(
                 'font-mono text-2xl font-medium tabular-nums',
                 isToday ? 'text-accent-fg' : 'text-fg',
@@ -3207,7 +3207,7 @@ function PairedPostRow(props: {
     return (
       <div
         data-plan-pair={link.postId}
-        className="mt-2 flex flex-col border-l-2 border-border-strong pl-3"
+        className="mt-2 flex flex-col border-l border-border-strong pl-3"
       >
         <div
           role="button"
@@ -3240,7 +3240,7 @@ function PairedPostRow(props: {
   return (
     <div
       data-plan-pair={link.postId}
-      className="mt-2 flex flex-col border-l-2 border-border-strong pl-3"
+      className="mt-2 flex flex-col border-l border-border-strong pl-3"
     >
       <PressableRow
         type="button"
@@ -3341,7 +3341,7 @@ function RowTile(props: {
     return (
       <span
         data-plan-row-tile="concept"
-        className="h-14 w-14 shrink-0 rounded-lg border-[1.5px] border-dashed border-border-strong"
+        className="h-14 w-14 shrink-0 rounded-lg border border-dashed border-border-strong"
       />
     );
   }

@@ -498,7 +498,7 @@ function AlertTitle({
 }
 
 /**
- * One digest entry as a single contained card. The card is a flex row: a 3px lead
+ * One digest entry as a single contained card. The card is a flex row: a 4px lead
  * rail, then a column holding the content row (actor line, entity title, body)
  * beside a square media tile inset from the card edge, above a footer that carries
  * the meta (relative time, scope tag, snoozed chip). A threaded group (>1 entry)

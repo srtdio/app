@@ -1440,7 +1440,7 @@ export function MetaStar({ mine }: { mine: boolean }): ReactElement {
       data-meta-star=""
       className={cn('inline-flex', !mine && 'text-fg-3')}
     >
-      <IconStarFilled size={12} />
+      <IconStarFilled size={ICON_SIZE.text} />
     </span>
   );
 }
@@ -1494,7 +1494,7 @@ export function MetaGlyph({ status }: { status: MetaTick }): ReactElement {
         status === 'read' && 'text-[color:var(--tick-read)]',
       )}
     >
-      {status === 'sending' ? <IconClock size={12} /> : null}
+      {status === 'sending' ? <IconClock size={ICON_SIZE.text} /> : null}
       {status === 'delivered' ? <IconTickSingle /> : null}
       {status === 'read' ? <IconTickDouble /> : null}
     </span>
@@ -1521,7 +1521,7 @@ function metaParts(meta: BubbleMeta, mine = true, spacer = false): ReactElement 
       {meta.starred === true ? (
         spacer ? (
           <span className="inline-flex">
-            <IconStarFilled size={12} />
+            <IconStarFilled size={ICON_SIZE.text} />
           </span>
         ) : (
           <MetaStar mine={mine} />
@@ -1578,7 +1578,7 @@ export function BubbleMetaView(props: {
       data-meta={props.placement}
       data-status={props.meta.status ?? undefined}
       className={cn(
-        'items-center gap-1 whitespace-nowrap',
+        'shrink-0 items-center gap-1 whitespace-nowrap',
         BUBBLE_META_TYPE,
         META_POSITION[props.placement],
         // A card's time slot inks it (own card: on-bubble ink; peer: fg-3).
@@ -1602,7 +1602,7 @@ export function MetaSpacer({ meta }: { meta: BubbleMeta }): ReactElement {
       aria-hidden="true"
       data-meta-spacer=""
       className={cn(
-        'pointer-events-none invisible inline-flex select-none items-center gap-1 whitespace-nowrap pl-3 align-baseline',
+        'pointer-events-none invisible inline-flex shrink-0 select-none items-center gap-1 whitespace-nowrap pl-3 align-baseline',
         BUBBLE_META_TYPE,
       )}
     >
@@ -1993,7 +1993,7 @@ function mentionRuns(
   return splitMentions(text).map((segment, i) => {
     if (segment.kind === 'text') {
       return (
-        <Fragment key={i}>
+        <Fragment key={`part-${i}`}>
           {renderBodyLinks(segment.text, mine, currentOrigin(), highlight)}
         </Fragment>
       );
@@ -2014,14 +2014,14 @@ function mentionRuns(
     const known = ctx.nameOf(id) !== undefined || former;
     if (open === undefined || everyone || !known) {
       return (
-        <span key={i} data-mention={id} className={mentionClass(mine, tint)}>
+        <span key={`part-${i}`} data-mention={id} className={mentionClass(mine, tint)}>
           {label}
         </span>
       );
     }
     return (
       <PressableRow
-        key={i}
+        key={`part-${i}`}
         inline
         type="button"
         data-mention={id}

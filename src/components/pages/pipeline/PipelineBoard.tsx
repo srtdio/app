@@ -311,7 +311,7 @@ export function PipelineBoardView({
             onDragOver={(event) => onColumnDragOver(event, stage, role)}
             onDragLeave={onColumnDragLeave}
             onDrop={(event) => onColumnDrop(event, stage, onMovePost, role, onBlockedMove)}
-            className="flex w-[260px] shrink-0 flex-col rounded-xl border border-border bg-panel-2 lit-well-soft"
+            className="flex w-64 shrink-0 flex-col rounded-xl border border-border bg-panel-2 lit-well-soft"
           >
             <div className="flex h-11 items-center gap-2 border-b px-3 lit-header">
               <StageDot stage={stage} />

@@ -202,7 +202,7 @@ export function PlanSearchResults(props: {
                 type="button"
                 data-plan-tab-match={itemId}
                 onClick={() => props.onOpenItem(id, itemId)}
-                className="flex items-center px-3.5 text-base text-fg"
+                className="flex items-center px-4 text-base text-fg"
               >
                 <span className="truncate">
                   <Highlight text={title} words={words} />
@@ -865,7 +865,7 @@ function ViewOption(props: {
       aria-pressed={props.picked}
       onClick={() => props.onView(props.view)}
       className={cn(
-        'min-w-[64px] border px-3 text-base font-medium mv-tint focus-visible:-outline-offset-2',
+        'min-w-16 border px-3 text-base font-medium mv-tint focus-visible:-outline-offset-2',
         props.picked
           ? 'border-transparent bg-accent text-accent-fg lit-pill'
           : 'border-transparent text-fg-2 hover:text-fg',

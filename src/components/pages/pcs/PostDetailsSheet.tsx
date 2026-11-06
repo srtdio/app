@@ -126,7 +126,7 @@ function BucketDot({ colorHex }: { colorHex: string }) {
   return (
     <span
       aria-hidden
-      className="h-2.5 w-2.5 shrink-0 rounded-full"
+      className="h-2 w-2 shrink-0 rounded-full"
       style={{ backgroundColor: colorHex }}
     />
   );

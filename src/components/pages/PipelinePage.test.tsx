@@ -1096,7 +1096,7 @@ describe('E: no jumps while loading', () => {
     expect(skeletonRatio(null)).toBeNull();
     const kanban = renderToStaticMarkup(postsSkeleton(true, { kanban: true, ratio, columns: 5 }));
     expect(kanban).toContain('data-posts-skeleton="kanban"');
-    expect((kanban.match(/w-\[260px\]/g) ?? []).length).toBe(5);
+    expect((kanban.match(/w-64 shrink-0/g) ?? []).length).toBe(5);
     expect(kanban).toContain('aspect-ratio:0.8');
     expect(kanban).not.toContain('aspect-square');
     // The card shape: the ui/Card surface and inset, content height, two title bones.
@@ -1104,7 +1104,7 @@ describe('E: no jumps while loading', () => {
     expect(kanban).toContain('self-start');
     expect(kanban).toContain('p-4');
     const client = renderToStaticMarkup(postsSkeleton(true, { kanban: true, ratio, columns: 4 }));
-    expect((client.match(/w-\[260px\]/g) ?? []).length).toBe(4);
+    expect((client.match(/w-64 shrink-0/g) ?? []).length).toBe(4);
     // A stage view on a laptop draws the same column stacks as the cards.
     const stacks = postsSkeleton(true, { ratio });
     expect(stacks.type).toBe(BoardColumns);

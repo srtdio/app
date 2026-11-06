@@ -7,7 +7,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 
 // The button system's fields: Input, the compact Textarea and the Select
-// trigger are 44 tall (h-11, or min-h-[44px] for the growing composer field),
+// trigger are 44 tall (h-11, or min-h-11 for the growing composer field),
 // with an 8px radius on the panel-2 fill.
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -51,9 +51,9 @@ describe('field shape', () => {
     for (const stale of STALE) expect(classes).not.toContain(stale);
   });
 
-  it('compact Textarea is rounded-lg bg-panel-2 min-h-[44px]', async () => {
+  it('compact Textarea is rounded-lg bg-panel-2 min-h-11', async () => {
     const classes = classesOf(await mount(), 'textarea');
-    expect(classes).toEqual(expect.arrayContaining(['rounded-lg', 'bg-panel-2', 'min-h-[44px]']));
+    expect(classes).toEqual(expect.arrayContaining(['rounded-lg', 'bg-panel-2', 'min-h-11']));
     for (const stale of STALE) expect(classes).not.toContain(stale);
   });
 

@@ -52,7 +52,7 @@ describe('Button design system', () => {
 
   it('every variant is at least 44 wide, link included', () => {
     for (const variant of VARIANTS) {
-      expect(tokens(classOf({ variant }))).toContain('min-w-[44px]');
+      expect(tokens(classOf({ variant }))).toContain('min-w-11');
     }
   });
 
@@ -221,7 +221,7 @@ describe('Chip', () => {
     for (const size of ['sm', 'tap'] as const) {
       const el = Chip({ label: 'All', size }) as ReactElement<{ className: string }>;
       const t = tokens(el.props.className);
-      expect(t).toContain('min-h-[44px]');
+      expect(t).toContain('min-h-11');
       expect(t).toContain('px-4');
       expect(t).toContain('rounded-lg');
       expect(t).toContain('font-medium');
@@ -316,7 +316,7 @@ describe('press (motion move 5): the shared mv-press class, never a call-site tr
 
   it('keeps the 44px target and the one focus ring', () => {
     for (const cls of [classOf(), iconClass()]) {
-      expect(tokens(cls)).toContain('min-h-[44px]');
+      expect(tokens(cls)).toContain('min-h-11');
       expect(tokens(cls)).toContain('focus-visible:lit-focus');
     }
     expect(tokens(chipClass())).toContain('focus-visible:lit-focus');

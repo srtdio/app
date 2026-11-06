@@ -1247,7 +1247,7 @@ function CardPills(props: { post: PostCardRow }): ReactElement {
         <span className="absolute bottom-2 right-2 flex gap-1">
           {pills.video !== null ? (
             <span className={MEDIA_PILL}>
-              <IconPlay size={12} />
+              <IconPlay size={ICON_SIZE.text} />
               {pills.video}
             </span>
           ) : null}

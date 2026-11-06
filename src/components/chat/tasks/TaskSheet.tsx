@@ -403,7 +403,7 @@ function ChipLine(props: {
           tab
           selected={props.chip === c.key}
           data-task-when-chip={c.key}
-          className="min-w-0 flex-auto justify-center whitespace-nowrap px-2"
+          className="min-w-0 flex-auto justify-center truncate whitespace-nowrap px-2"
           onClick={() => props.onChip(c.key)}
         />
       ))}

@@ -345,8 +345,8 @@ describe('the sheet (U1, U2, U5)', () => {
     expect(html).not.toContain('data-plan-concept-upload-pick');
   });
 
-  it('Save reads "Uploading..." while it waits', () => {
-    expect(CONCEPT_SAVE_UPLOADING).toBe('Uploading...');
+  it('Save reads "Uploading…" while it waits', () => {
+    expect(CONCEPT_SAVE_UPLOADING).toBe('Uploading…');
     const sheetSrc = src('ConceptSheet.tsx');
     expect(sheetSrc).toContain("{waiting ? CONCEPT_SAVE_UPLOADING : edit ? 'Save' : 'Add'}");
     // A second tap while waiting does nothing.

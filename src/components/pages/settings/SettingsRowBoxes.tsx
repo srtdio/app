@@ -26,7 +26,7 @@ export function SettingsRowBoxes({ label, rows = 3 }: { label: string; rows?: nu
       <div className={cn('overflow-hidden', cardSurface())}>
         {Array.from({ length: rows }, (_unused, index) => (
           <Row
-            key={index}
+            key={`row-${index}`}
             leading={<Bone lit="lit-avatar" as="span" className="h-8 w-8 rounded-full" />}
             title={<Bone lit="flat" as="span" className="my-1 h-3 w-1/3 rounded" />}
             secondary={<Bone lit="flat" as="span" className="my-1 h-3 w-1/2 rounded" />}

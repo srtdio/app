@@ -273,7 +273,7 @@ function PlanItemTile(props: {
     <span
       aria-hidden="true"
       data-plan-tile="concept"
-      className="h-12 w-12 shrink-0 rounded-lg border-[1.5px] border-dashed border-border-strong"
+      className="h-12 w-12 shrink-0 rounded-lg border border-dashed border-border-strong"
     />
   );
 }

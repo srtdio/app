@@ -284,7 +284,7 @@ export function FileTiles({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(tile.progress * 100)}
-              className="absolute inset-x-1.5 bottom-1.5 h-1 overflow-hidden rounded-full bg-panel"
+              className="absolute inset-x-2 bottom-2 h-1 overflow-hidden rounded-full bg-panel"
             >
               <span
                 className="block h-full rounded-full bg-accent mv-fill"

@@ -102,7 +102,7 @@ export function boldAllMentions(text: string): ReactNode {
   if (runs.every((run) => !run.all)) return text;
   return runs.map((run, i) =>
     run.all ? (
-      <span key={i} data-mention-all="" className="font-semibold">
+      <span key={`part-${i}`} data-mention-all="" className="font-semibold">
         {run.text}
       </span>
     ) : (
@@ -348,7 +348,7 @@ const SKELETON_PEOPLE = SKELETON_ROWS - SKELETON_GROUPS;
 /** One loading row: the real chat Row (72, 32 avatar, two lines) with Bones in its slots. */
 function skeletonRow(i: number, count: number): ReactElement {
   return (
-    <li key={i} data-skeleton-row="row" className="min-w-0">
+    <li key={`bone-${i}`} data-skeleton-row="row" className="min-w-0">
       <Row
         gutter="chat"
         leading={<Bone lit="lit-avatar" as="span" className="h-8 w-8 rounded-lg" />}

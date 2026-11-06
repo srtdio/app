@@ -139,7 +139,7 @@ function TickerItem(props: {
     item.lead === null ? null : props.measure === true && compact && item.trim ? (
       <span data-status-title={item.id}>
         {titleWords(item.lead).map((word, i) => (
-          <span key={i} data-title-word="">
+          <span key={`part-${i}`} data-title-word="">
             {i > 0 ? ` ${word}` : word}
           </span>
         ))}

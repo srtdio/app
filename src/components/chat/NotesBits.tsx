@@ -41,8 +41,8 @@ const NOTES_BADGE: Record<NotesAvatarRole, { box: string; glyph: number }> = {
     box: 'h-8 w-8 -bottom-1 -right-1 border-2',
     glyph: ICON_SIZE.inline,
   },
-  header: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: 12 },
-  row: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: 12 },
+  header: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: ICON_SIZE.text },
+  row: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: ICON_SIZE.text },
 };
 
 /** The surface behind the avatar: the badge ring takes it, so it cuts out cleanly. */

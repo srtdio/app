@@ -616,7 +616,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
     body = (
       <ul data-starred-loading="" className="flex flex-col gap-3">
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
-          <li key={i} className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card">
+          <li key={`bone-${i}`} className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card">
             <div className="flex items-center gap-2">
               <Bone as="div" lit="lit-avatar" className="h-5 w-5 shrink-0 rounded-full" />
               <Bone as="div" lit="flat" className="h-3 w-1/3 rounded" />

@@ -316,7 +316,7 @@ function bodyNodes(body: string, ownTone: boolean, workspaceId: string | null): 
 function mentionNodes(text: string, ownTone: boolean, workspaceId: string | null): ReactNode[] {
   return splitMentions(text).map((segment, i) => {
     if (segment.kind === 'text') {
-      return <Fragment key={i}>{renderBodyLinks(segment.text, ownTone)}</Fragment>;
+      return <Fragment key={`part-${i}`}>{renderBodyLinks(segment.text, ownTone)}</Fragment>;
     }
     const label = personMentionLabel(workspaceId, segment.userId);
     if (label === null) return null;
@@ -324,7 +324,7 @@ function mentionNodes(text: string, ownTone: boolean, workspaceId: string | null
       <span
         data-plan-mention={segment.userId}
         className={cn(
-          'whitespace-nowrap rounded-full px-1.5 font-medium lit-tint',
+          'shrink-0 whitespace-nowrap rounded-full px-1.5 font-medium lit-tint',
           ownTone ? 'bg-accent-fg/[0.22] text-accent-fg' : 'bg-accent-soft text-accent',
         )}
       >
@@ -332,10 +332,10 @@ function mentionNodes(text: string, ownTone: boolean, workspaceId: string | null
       </span>
     );
     // "@all" names no one; every person's pill opens the person card.
-    if (segment.userId.toLowerCase() === ALL_MENTION) return <Fragment key={i}>{pill}</Fragment>;
+    if (segment.userId.toLowerCase() === ALL_MENTION) return <Fragment key={`part-${i}`}>{pill}</Fragment>;
     return (
       <PersonTrigger
-        key={i}
+        key={`part-${i}`}
         userId={segment.userId}
         {...(isFormerMember(workspaceId, segment.userId) ? { former: true } : {})}
       >
