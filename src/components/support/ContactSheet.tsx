@@ -81,7 +81,7 @@ export function ContactSheet({ open, onClose, workspaceName, request }: ContactS
       }
     >
       <div className="flex flex-col gap-3">
-        <p className="text-base leading-relaxed text-fg-2">
+        <p className="text-base text-fg-2">
           Tell us what you need. Someone from the team replies by email.
         </p>
         <div className="flex min-w-0 items-center gap-2 rounded-xl border bg-panel-2 lit-card-muted py-1 pl-3 pr-1">
