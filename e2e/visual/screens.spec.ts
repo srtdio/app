@@ -237,6 +237,17 @@ async function chatListReady(page: Page): Promise<void> {
   await waitFor([page.getByText(PEER_NAME, { exact: true })], 'chat list');
 }
 
+/**
+ * The chat home with all three row kinds on screen: Personal notes (built from
+ * the session), a group (GROUP_NAME) and a person (PEER_NAME), one row style.
+ */
+async function chatListAllRows(page: Page): Promise<void> {
+  await chatListReady(page);
+  await waitFor([page.locator('[data-notes-tile]')], 'Personal notes row');
+  await waitFor([page.locator('[data-section="groups"]').getByText(GROUP_NAME, { exact: true })], 'group row');
+  await waitFor([page.locator('[data-section="people"]').getByText(PEER_NAME, { exact: true })], 'person row');
+}
+
 async function openChat(page: Page, name: string): Promise<void> {
   await chatListReady(page);
   await tap([page.getByText(name, { exact: true })], `${name} row`);
@@ -1080,7 +1091,7 @@ const SCREENS: Screen[] = [
       await waitFor(anyOverlay(page), 'chat row menu');
     },
   },
-  { name: 'chat-list', seed: creator, url: '/chat', steps: chatListReady },
+  { name: 'chat-list', seed: creator, url: '/chat', steps: chatListAllRows },
   {
     name: 'chat-plan-card',
     seed: creator,
