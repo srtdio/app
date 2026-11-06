@@ -153,7 +153,7 @@ export function StageMoveConfirmView(props: StageMoveConfirmViewProps): ReactEle
           </p>
         ) : null}
         {copy.reason ? (
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <label htmlFor={props.reasonId} className="text-base font-medium text-fg-2">
               {REASON_LABEL}
             </label>

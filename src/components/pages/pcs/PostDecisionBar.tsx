@@ -133,7 +133,7 @@ function creatorButton(
   busy: boolean,
 ): ReactNode {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <Button
         variant="primary"
         data-decision-main=""
@@ -171,7 +171,7 @@ function LandedLine(props: { mark: 'tick' | 'cross'; seq: number }): ReactElemen
       ref={ref}
       role="status"
       data-decision-landed={tick ? 'approved' : 'rejected'}
-      className="mb-2 flex items-center gap-1.5 text-base font-medium text-fg"
+      className="mb-2 flex items-center gap-2 text-base font-medium text-fg"
     >
       <DrawnMarkGlyph mark={props.mark} className={tick ? 'text-good' : 'text-bad'} />
       {tick ? 'Approved' : 'Rejected'}

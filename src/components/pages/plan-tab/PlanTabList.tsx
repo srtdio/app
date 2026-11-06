@@ -165,7 +165,7 @@ export function PlanTabCard(props: {
     >
       <PlanCardTop plan={props.bundle.plan} wrapTitle />
       {props.covers.length > 0 ? (
-        <span className="flex h-10 gap-1.5">
+        <span className="flex h-10 gap-2">
           {props.covers.map((version) => (
             <span
               key={version}
@@ -253,7 +253,7 @@ export function PlanTabBoxes(props: { heading?: boolean } = {}): ReactElement {
             <div className="flex h-5 items-center">
               <Bone lit="flat" className="h-3.5 w-32 rounded" />
             </div>
-            <div className="flex h-10 gap-1.5">
+            <div className="flex h-10 gap-2">
               <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />
               <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />
               <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />

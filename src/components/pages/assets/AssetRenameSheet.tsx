@@ -131,7 +131,7 @@ export function AssetRenameSheet({
       <form
         id={formId}
         noValidate
-        className="flex flex-col gap-1.5"
+        className="flex flex-col gap-2"
         onSubmit={(event) => {
           event.preventDefault();
           void save();

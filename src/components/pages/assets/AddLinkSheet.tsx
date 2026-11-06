@@ -129,7 +129,7 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
           void submit();
         }}
       >
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <label htmlFor={urlId} className="text-base font-medium text-fg-2">
             Link
           </label>
@@ -157,7 +157,7 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <label htmlFor={nameId} className="text-base font-medium text-fg-2">
             Name
           </label>

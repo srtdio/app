@@ -1,6 +1,6 @@
 import type { FocusEvent, ReactNode, SyntheticEvent } from 'react';
 import { cn } from '@/lib/cn';
-import { Text, textRole } from '@/components/ui/Text';
+import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';

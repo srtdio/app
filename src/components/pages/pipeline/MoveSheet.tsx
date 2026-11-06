@@ -219,7 +219,7 @@ export function MoveSheetView({
           : {})}
       >
         <div className="flex flex-col gap-3">
-          <div data-move-current="" className="flex items-center gap-1.5 text-base text-fg-3">
+          <div data-move-current="" className="flex items-center gap-2 text-base text-fg-3">
             <span>Currently in</span>
             <StageDot stage={currentStage} />
             <span>{stageLabel(currentStage)}</span>

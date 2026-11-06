@@ -636,7 +636,7 @@ export function AssetUploadSheet({
       ) : (
         <div className="flex flex-col gap-3">
           {/* One file takes one name; several share one base name. */}
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <label htmlFor={`${inputId}-name`} className="text-base font-medium text-fg-2">
               {mode === 'root-bulk' ? 'Name these files' : 'Name'}
             </label>

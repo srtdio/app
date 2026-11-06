@@ -367,7 +367,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
 
   function fieldError(key: BriefErrorField): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
-      <ErrorNote className="mt-1.5">
+      <ErrorNote className="mt-2">
         <span id={briefErrorId(key)}>{fieldErrors[key]}</span>
       </ErrorNote>
     ) : null;
@@ -497,7 +497,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
             // still reads in the error colour.
             <p
               role="status"
-              className={`mt-1.5 text-sm ${pendingUploads > 0 ? 'text-fg-3' : 'text-bad'}`}
+              className={`mt-2 text-sm ${pendingUploads > 0 ? 'text-fg-3' : 'text-bad'}`}
             >
               {uploadNotice}
             </p>

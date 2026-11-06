@@ -139,7 +139,7 @@ export function RecentlyDeletedView({
 
           <div className="mt-4">
             {isOwner ? (
-              <div className="flex flex-col items-start gap-1.5">
+              <div className="flex flex-col items-start gap-2">
                 <Button variant="danger" disabled={busyId !== null} onClick={onEmpty}>
                   Empty now
                 </Button>
