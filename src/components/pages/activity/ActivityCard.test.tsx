@@ -323,7 +323,7 @@ describe('AvatarStack', () => {
     expect(html).not.toContain('ring-panel');
     expect(count(html, 'margin-left:-4px')).toBe(2);
     expect(html).not.toContain('-8px');
-    expect(html).toMatch(/class="ml-\[-4px\][^"]*ring-2 ring-bg"[^>]*>\+2</);
+    expect(html).toMatch(/class="-ml-1 [^"]*ring-2 ring-bg"[^>]*>\+2</);
   });
 
   it('the ring takes the colour of the surface the stack sits on', () => {
@@ -332,7 +332,7 @@ describe('AvatarStack', () => {
     );
     expect(count(html, 'rounded-full ring-2 ring-panel')).toBe(3);
     expect(html).not.toContain('ring-bg');
-    expect(html).toMatch(/class="ml-\[-4px\][^"]*ring-2 ring-panel"[^>]*>\+2</);
+    expect(html).toMatch(/class="-ml-1 [^"]*ring-2 ring-panel"[^>]*>\+2</);
   });
 });
 
