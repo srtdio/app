@@ -12,7 +12,17 @@ describe('cn: tailwind-merge on the custom scale', () => {
   it('two sizes merge, two colours merge', () => {
     expect(cn('text-sm', 'text-base')).toBe('text-base');
     expect(cn('text-fg', 'text-fg-3')).toBe('text-fg-3');
-    expect(cn('text-legacy-sm', 'text-md')).toBe('text-md');
+  });
+  it('named tokens join their groups (tailwind.config.ts value lock)', () => {
+    expect(cn('z-dock', 'z-sheet')).toBe('z-sheet');
+    expect(cn('w-full', 'w-side-panel')).toBe('w-side-panel');
+    expect(cn('py-2', 'py-field-y')).toBe('py-field-y');
+    expect(cn('border-cutout', 'border-bg')).toBe('border-cutout border-bg');
+    expect(cn('border-l-rail', 'border-annotation-line')).toBe(
+      'border-l-rail border-annotation-line',
+    );
+    expect(cn('text-2xl', 'leading-emoji')).toBe('text-2xl leading-emoji');
+    expect(cn('tracking-tight', 'tracking-label')).toBe('tracking-label');
   });
   it('radius: the later wins, custom radii included', () => {
     expect(cn('rounded-lg', 'rounded-full')).toBe('rounded-full');
