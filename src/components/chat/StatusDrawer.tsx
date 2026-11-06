@@ -90,7 +90,7 @@ import {
   type PlanSegment,
   type StatusKey,
 } from '@/lib/chat/status-bar';
-import { formatChatTime } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { OpenBriefRow } from '@/lib/chat/use-status-counts';
@@ -631,7 +631,7 @@ export function StatusDrawerList(
                   onClick={() => props.onOpenBrief(brief.id)}
                   className={ROW}
                 >
-                  <span className={DATE_COL}>{drawerDay(brief.created_at)}</span>
+                  <span className={DATE_COL}>{formatWhen(brief.created_at)}</span>
                   <span className="min-w-0 flex-1">
                     <span className={ROW_TITLE}>{brief.title}</span>
                   </span>
@@ -655,8 +655,8 @@ export function StatusDrawerList(
               const message = messageFor(mark.messageId);
               const when =
                 message !== undefined && message.createdAt !== ''
-                  ? formatChatTime(message.createdAt)
-                  : formatChatTime(mark.markedAt);
+                  ? formatWhen(message.createdAt)
+                  : formatWhen(mark.markedAt);
               return (
                 <StatusMarkRow
                   key={mark.messageId}

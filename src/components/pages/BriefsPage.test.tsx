@@ -386,8 +386,8 @@ describe('briefSections', () => {
       {
         label: 'This week',
         days: [
-          { label: '7 Jul', className: DAY_HEADING_CLASS, cards: 1 },
-          { label: '6 Jul', className: DAY_HEADING_CLASS, cards: 1 },
+          { label: 'Yesterday', className: DAY_HEADING_CLASS, cards: 1 },
+          { label: 'Mon', className: DAY_HEADING_CLASS, cards: 1 },
         ],
       },
       {
@@ -412,7 +412,7 @@ describe('briefSections', () => {
     ]);
     expect(sections).toHaveLength(1);
     const { days } = readSection(sections[0]!);
-    expect(days.map((d) => d.label)).toEqual(['8 Jul', '6 Jul']);
+    expect(days.map((d) => d.label)).toEqual(['Today', 'Mon']);
     expect(days.map((d) => d.cards)).toEqual([2, 1]);
   });
 
@@ -422,7 +422,7 @@ describe('briefSections', () => {
       makeBrief('b', { created_at: created('2026-07-07', '06:00') }),
     ]);
     const { days } = readSection(sections[0]!);
-    expect(days).toEqual([{ label: '7 Jul', className: DAY_HEADING_CLASS, cards: 2 }]);
+    expect(days).toEqual([{ label: 'Yesterday', className: DAY_HEADING_CLASS, cards: 2 }]);
   });
 
   it('reads the day heading in the workspace zone, not the browser zone', () => {
@@ -437,10 +437,10 @@ describe('briefSections', () => {
     };
     expect(
       readSection(briefSections({ ...shared, timeZone: 'Asia/Kolkata' })[0]!).days[0]!.label,
-    ).toBe('8 Jul');
+    ).toBe('Today');
     expect(
       readSection(briefSections({ ...shared, timeZone: 'Europe/London' })[0]!).days[0]!.label,
-    ).toBe('7 Jul');
+    ).toBe('Yesterday');
   });
 });
 
