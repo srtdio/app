@@ -86,7 +86,7 @@ export function UsernameField({
         : format === 'reserved'
           ? `@${value} is reserved. Try another.`
           : check === 'checking'
-            ? 'Checking...'
+            ? 'Checking…'
             : check === 'taken'
               ? `@${value} is taken. Try another.`
               : check === 'error'

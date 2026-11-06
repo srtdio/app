@@ -3,6 +3,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
+import { SHEET_FRAME, SHEET_WIDE } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconX } from '@/components/ui/icons';
 import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
@@ -146,16 +147,17 @@ export function ComposerSheet({
         data-composer-sheet=""
         className={cn(
           // Axis: rise (translateY) on phone, scale on laptop, as the shared Sheet.
-          'relative flex w-full max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border bg-panel lit-overlay will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84svh] sm:rounded-xl',
-          wide && 'lg:w-[960px]',
+          'relative flex flex-col overflow-hidden focus:outline-none will-change-transform',
+          SHEET_FRAME,
+          wide && SHEET_WIDE,
         )}
       >
         <div
           data-composer-header=""
-          className="flex min-w-0 items-center gap-1.5 border-b border-border py-2 pl-[18px] pr-1.5 sm:gap-2.5 sm:pr-2.5"
+          className="flex min-w-0 items-center gap-2 border-b border-border py-2 pl-4 pr-1 sm:gap-3"
         >
           <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-fg">{title}</h2>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">{actions}</div>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">{actions}</div>
           <IconButton
             label="Close"
             onClick={requestClose}
@@ -169,7 +171,7 @@ export function ComposerSheet({
             <IconX size={ICON_SIZE.control} />
           </IconButton>
         </div>
-        <div className="overflow-y-auto px-[18px] py-4 pb-[max(16px,env(safe-area-inset-bottom))]">
+        <div className="overflow-y-auto px-4 py-4 pb-[max(16px,env(safe-area-inset-bottom))]">
           {children}
         </div>
       </div>

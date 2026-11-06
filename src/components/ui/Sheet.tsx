@@ -71,6 +71,9 @@ interface SheetProps {
 export const SHEET_FRAME =
   'w-full max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] rounded-t-2xl border bg-panel lit-overlay sm:w-[540px] sm:max-w-[92%] sm:max-h-[84svh] sm:rounded-xl';
 
+/** The wide sheet from lg: a 960 box for side-by-side content (Sheet `wide`). */
+export const SHEET_WIDE = 'lg:w-[960px]';
+
 const DEFAULT_DISCARD = { title: 'Discard changes?', message: 'Your changes will be lost.' };
 
 export function Sheet({
@@ -271,7 +274,7 @@ export function Sheet({
           'relative flex flex-col overflow-hidden focus:outline-none will-change-transform',
           SHEET_FRAME,
           fixedHeight === true && 'sm:h-[min(640px,84svh)]',
-          wide === true && 'lg:w-[960px]',
+          wide === true && SHEET_WIDE,
         )}
       >
         {/* Header 56 on the 16 edge: the title (heading role) takes what the
