@@ -470,6 +470,18 @@ export function bankIdeaSet(
   return callProc(client, 'bank_idea_set', args);
 }
 
+/** bank_idea_edit: files as plan_concept_edit (null keeps the links; an array replaces them). */
+export type BankIdeaEditArgs = Omit<ProcArgs<'bank_idea_edit'>, 'p_attachment_version_ids'> & {
+  p_attachment_version_ids: string[] | null;
+};
+export function bankIdeaEdit(
+  client: Client,
+  args: BankIdeaEditArgs,
+): Promise<Result<ProcReturns<'bank_idea_edit'>>> {
+  // As planConceptEdit: the proc takes null for the files (keep them); one cast.
+  return callProc(client, 'bank_idea_edit', args as ProcArgs<'bank_idea_edit'>);
+}
+
 export type PlanItemBucketsSetArgs = ProcArgs<'plan_item_buckets_set'>;
 export function planItemBucketsSet(
   client: Client,

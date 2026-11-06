@@ -9,6 +9,7 @@ import {
   IconArchive,
   IconBank,
   IconCalendar,
+  IconEdit,
   IconEye,
   IconEyeOff,
   IconForward,
@@ -20,7 +21,7 @@ import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 import type { ToastOptions } from '@/components/ui/toast/types';
 import { UNDO_MS } from '@/lib/undo';
 import { undoFailureTitle } from '@/lib/use-undoable-action';
-import type { BankIdea, PlanItemRow } from '@/lib/chat/plans';
+import { bankThumbOf, type BankIdea, type PlanItemRow } from '@/lib/chat/plans';
 
 // ---------------------------------------------------------------------------
 // Buckets card
@@ -84,7 +85,7 @@ export function bankIdeaOf(item: PlanItemRow, commentCount: number): BankIdea {
     ...item,
     comment_count: commentCount,
     file_count: 0,
-    thumb: null,
+    thumb: bankThumbOf(undefined, item.description),
     format: null,
   };
 }
@@ -149,14 +150,19 @@ export function plannedConceptMenu(
   ];
 }
 
+/** The bank idea menu's Edit row label. */
+export const EDIT_IDEA_ROW = 'Edit idea';
+
 /**
- * A bank idea's More menu (agency): Plan it, Send to chat, Show to client or
- * Hide from client, Star or Unstar, Archive or Unarchive, Delete last. Pure.
+ * A bank idea's More menu (agency): Plan it, Edit idea, Send to chat, Show to
+ * client or Hide from client, Star or Unstar, Archive or Unarchive, Delete
+ * last. Pure.
  */
 export function bankIdeaMenu(
   idea: Pick<PlanItemRow, 'show_to_client' | 'starred_at' | 'archived_at'>,
   on: {
     onPlanIt: () => void;
+    onEdit: () => void;
     onSendToChat: () => void;
     onShow: () => void;
     onHide: () => void;
@@ -169,6 +175,7 @@ export function bankIdeaMenu(
   const archived = idea.archived_at !== null && idea.archived_at !== undefined;
   return [
     { id: 'plan-it', label: PLAN_IT_ROW, icon: IconCalendar, onSelect: on.onPlanIt },
+    { id: 'edit', label: EDIT_IDEA_ROW, icon: IconEdit, onSelect: on.onEdit },
     { id: 'send-to-chat', label: SEND_TO_CHAT_ROW, icon: IconForward, onSelect: on.onSendToChat },
     idea.show_to_client === true
       ? { id: 'hide', label: HIDE_FROM_CLIENT_LABEL, icon: IconEyeOff, onSelect: on.onHide }

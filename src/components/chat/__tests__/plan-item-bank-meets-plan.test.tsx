@@ -338,13 +338,14 @@ describe('More menu per kind', () => {
     expect(at('Move to bank')).toBe(rows.length - 2);
   });
 
-  it('a bank idea: Plan it, Send to chat, Show, Star, Archive, Delete last', async () => {
+  it('a bank idea: Plan it, Edit idea, Send to chat, Show, Star, Archive, Delete last', async () => {
     env.read = readOf(IDEA);
     await render(<PlanItemScreen open item={IDEA} side="agency" onClose={() => {}} />);
     await click($('[data-plan-item-more]'));
     const rows = menuLabels();
     expect(rows.map((r) => r.replace(/\s+/g, ' '))).toEqual([
       'Plan it',
+      'Edit idea',
       'Send to chat',
       'Show to client',
       'Star',

@@ -8,6 +8,8 @@ import {
   PLAN_SHARE_FAILED,
   TEAM_PLAN_CLIENT_CHAT,
   assembleBundles,
+  bankIdeaEditArgs,
+  bankThumbOf,
   conceptAddArgs,
   conceptEditArgs,
   createShareEpoch,
@@ -916,6 +918,18 @@ describe('concept date args', () => {
     ).toBeNull();
   });
 
+  it('a bank idea edit sends the same fields with no date', () => {
+    const args = bankIdeaEditArgs('i1', { ...base, pickedFiles: ['v2'] }, 't');
+    expect(args).toEqual({
+      p_item_id: 'i1',
+      p_title: 'Reel',
+      p_description: '',
+      p_attachment_version_ids: ['v2'],
+      p_trace_id: 't',
+    });
+    expect('p_target_date' in args).toBe(false);
+  });
+
   it('title-only edit sends null files', () => {
     const args = conceptEditArgs('i1', { ...base, title: 'Reel v2' }, 't');
     expect(args.p_title).toBe('Reel v2');
@@ -1160,5 +1174,41 @@ describe('row thumbnails (L2)', () => {
     expect(result).toEqual({ ok: true, data: { a: 'v-a1', b: 'v-b' } });
     expect((await readPostThumbs({ from } as unknown as Client, [])).ok).toBe(true);
     expect(from).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('bank idea tile (bankThumbOf)', () => {
+  const link = (body: string): string | null =>
+    body.includes('https://x.test/p') ? 'https://x.test/p' : null;
+
+  it('a picture wins over a link', () => {
+    expect(bankThumbOf({ kind: 'image', versionId: 'v1' }, 'see https://x.test/p', link)).toEqual({
+      kind: 'image',
+      versionId: 'v1',
+    });
+  });
+
+  it("the first link's picture beats a file tile and an empty idea", () => {
+    expect(bankThumbOf({ kind: 'file' }, 'see https://x.test/p', link)).toEqual({
+      kind: 'link',
+      url: 'https://x.test/p',
+    });
+    expect(bankThumbOf(undefined, 'https://x.test/p', link)).toEqual({
+      kind: 'link',
+      url: 'https://x.test/p',
+    });
+  });
+
+  it('no link: the file tile, else none', () => {
+    expect(bankThumbOf({ kind: 'file' }, 'plain words', link)).toEqual({ kind: 'file' });
+    expect(bankThumbOf(undefined, null, link)).toBeNull();
+    expect(bankThumbOf(undefined, '', link)).toBeNull();
+  });
+
+  it('uses the real first-external-link rule by default', () => {
+    expect(bankThumbOf(undefined, 'ref https://example.com/a and https://example.com/b')).toEqual({
+      kind: 'link',
+      url: 'https://example.com/a',
+    });
   });
 });

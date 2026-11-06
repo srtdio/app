@@ -50,6 +50,7 @@ import {
   bankChangeOf,
   bankReadWhat,
   bankStaleBefore,
+  bankThumbOf,
   dispatchPlanChanged,
   enrichBankIdeas,
   readBankPage,
@@ -656,7 +657,7 @@ export async function addBankIdea(
     bucket_ids: [...input.bucketIds],
     comment_count: 0,
     file_count: input.versionIds.length,
-    thumb: null,
+    thumb: bankThumbOf(input.versionIds.length > 0 ? { kind: 'file' } : undefined, row.description),
     format: null,
   };
   return { ok: true, data: enriched.ok ? (enriched.data[0] ?? fallback) : fallback };

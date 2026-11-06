@@ -513,6 +513,23 @@ Chat messages never land in the Activity feed. Chat notification is Agora native
 
 Plans: a shared object in chat holding concepts and posts with team and client approval. Schema step 3a applied 9 Oct 2026.
 
+### Idea bank (decided 6 Nov 2026)
+
+| Item | Decision |
+| --- | --- |
+| What | A concept with no plan (plan_items.plan_id null). Lives in the Plan tab behind the Bank chip (phone: first chip; laptop: side panel, expandable to a table). Not a Pipeline chip. |
+| Who sees | Team only by default. Per idea "Show to client" (Planable internal-post style) makes it visible to the client; Hide takes it back. Clients never see team-only ideas, their comments or their buckets. |
+| Buckets | One workspace list. An idea holds several buckets; a post keeps one. Made, renamed and deleted from the Bank's Filter and sort sheet (delete archives the bucket and unlinks it, with Undo). Buckets show on Plan rows. Briefs have no bucket. |
+| Moves | Plan concept to bank: Move to bank (blocked while its linked post is approved; reviews drop; the plan it came from is remembered). Bank to plan: Plan it (one plan, Make plan, or pick; past dates refused; the review starts again). Moving creates no copy. |
+| Edit | Agency edits title, description and files of a bank idea (Edit idea). No date until planned. |
+| Tile | A picture wins; else the first link's picture (link-preview Worker, asked when the row is in view); else a file glyph; else none. |
+| Stars, archive | Stars are shared by the team. Archive is manual; "Untouched for 90 days" is a filter with Archive all, never a count read. |
+| Chat | An idea goes to a chat as a live idea card (chat_plan_item_share). A team-only idea into a client chat asks "Show and send" or "Send in Team instead". A draft plan into a client chat asks "Open for approvers". |
+| Alerts | Creators get every bank event (added, moved, planned, shown, hidden). Approvers get shown as a full alert, moved when the plan was shared (no link), planned through the plan's own alert. All ride Activity and the catch-up email's Plans section. |
+| Live | bank:<workspace_id> broadcast; every open Bank re-reads once per burst and merges in place. Own writes patch the kept page with no read. |
+| Speed | 12 ideas a page, keyset cursor, Recently active default sort. No counts, no reads before first paint, no waits on tap paths. |
+| Not in v2.0 | Pipeline filter by bucket. One-query starred-first cursor. |
+
 ## 24. Compliance
 
 Not covered in MVP PRD. Defer to lawyer review pre-launch.

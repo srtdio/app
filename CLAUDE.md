@@ -68,6 +68,8 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Approval is per-post; there is no bulk approve.
 - No connection-state UI anywhere (no Reconnecting/Connecting/Offline). Failures show per message only: clock while pending, 'Not sent' + retry on failure.
 - AI: voice note transcription only.
+- Idea bank: a concept with plan_id null, team-only unless show_to_client. Bank ideas go through the bank procs only (bank_idea_create, bank_idea_edit, bank_idea_set, plan_item_to_bank, plan_item_from_bank, plan_item_buckets_set), never plan_concept_edit or plan_item_move. Every open Bank re-reads on the bank:<workspace_id> broadcast; an own write patches the kept page through PLAN_CHANGED_EVENT, never a count read.
+- Bank row tile: a picture, else the first link's picture (previewClient, asked when the row is in view), else the file glyph, else none (bankThumbOf).
 
 ## Rules for Claude Code
 
