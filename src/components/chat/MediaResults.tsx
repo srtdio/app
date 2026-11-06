@@ -51,7 +51,7 @@ import { env } from '@/lib/env';
 import { humanizeSize } from '@/lib/assets';
 import { appPresignCache } from '@/lib/shared-presign';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { formatDateTime } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 import { checkLink } from '@/lib/links/safety';
 import { previewClient, type LinkPreview } from '@/lib/links/preview';
 import { useInView } from '@/lib/use-in-view';
@@ -656,7 +656,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
   };
   const dateOf = (item: ChipItem): string => searchDateLabel(item.createdAt, nowMs, timeZone);
   const sentAtLabel = (item: ChipItem): string =>
-    formatDateTime(item.createdAt, new Date(nowMs), timeZone);
+    formatWhen(item.createdAt, new Date(nowMs), timeZone);
   const showInChat = (item: ChipItem): void => {
     setOpenKey(null);
     props.onShowInChat(item.channelId, item.messageId);
