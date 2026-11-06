@@ -26,6 +26,7 @@ import { Bone, BoxSkeleton } from '@/lib/motion';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { CONTROL_IN_LINE } from '@/components/ui/layout';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -279,7 +280,7 @@ export function BankFilterLine(props: {
           <span className="pl-1">{pill.label}</span>
           <IconButton
             label={`Remove ${pill.label}`}
-            className="-my-3"
+            className={CONTROL_IN_LINE}
             onClick={() => props.onFilter(withoutPill(props.filter, pill.key))}
           >
             <IconX size={ICON_SIZE.inline} />
