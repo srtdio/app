@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 import type { ComponentType, HTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { textRole } from '@/components/ui/Text';
@@ -21,7 +22,10 @@ export interface ChatCardProps {
   /** Bottom-trailing time and tick, inside the card. */
   time?: ReactNode;
   tick?: ReactNode;
-  /** Own message: the own-bubble fill; peer: the peer bubble fill. */
+  /**
+   * Own message: the own-bubble fill; peer: the peer bubble fill. Absent: the
+   * nearest ChatCardOwn (the message that holds the card), else peer.
+   */
   own?: boolean;
   /** Tap to open (the whole card), when there is no action row to tap instead. */
   onOpen?: () => void;
@@ -48,6 +52,29 @@ export type ChatCardRootProps = Omit<HTMLAttributes<HTMLDivElement>, 'className'
 
 /** A whole-card press target's look: the hover / press overlay and the one focus line. */
 const CHAT_CARD_PRESS = 'cursor-pointer lit-hover mv-tint focus-visible:lit-focus';
+
+/**
+ * Whose message holds the cards below: the thread wraps each message's cards
+ * in it, so every card kind and state (live, loading, failed, not visible)
+ * takes the own-bubble fill in an own message without each card file passing
+ * it. No provider: peer. Render only; no read.
+ */
+const ChatCardOwnContext = createContext(false);
+export const ChatCardOwn = ChatCardOwnContext.Provider;
+
+/**
+ * The own card's child ink: every line, meta, tag and action label inside the
+ * own-bubble fill reads on it (the on-bubble ink, the same value as
+ * accent-fg), and inner fills take the on-bubble overlay, never a light panel
+ * over the text. The same mapping the own bubble used for cards before the
+ * card became the bubble (MessageThread OWN_BUBBLE_CONTENT).
+ */
+export const OWN_CARD_INK = cn(
+  '[&_.text-fg]:text-accent-fg [&_.text-fg-2]:text-accent-fg [&_.text-fg-3]:text-accent-fg [&_.text-accent]:text-accent-fg',
+  '[&_.bg-panel]:bg-on-bubble/[.12] [&_.bg-panel-2]:bg-on-bubble/[.12] [&_.bg-panel-3]:bg-on-bubble/[.12] [&_.border-border]:border-on-bubble/[.16]',
+  '[&_.bg-accent]:bg-on-bubble/70 [&_.bg-accent.text-accent-fg]:bg-on-bubble/[.16] [&_.bg-fg-3]:bg-on-bubble/40',
+  '[&_.lit-card]:bg-none [&_.lit-card-muted]:bg-none [&_.lit-chip]:bg-none',
+);
 
 /** The width every chat card takes: 288, never past the bubble column. */
 export const CHAT_CARD_WIDTH = 'w-72 max-w-full';
@@ -76,7 +103,7 @@ export function ChatCard({
   primaryAction,
   time,
   tick,
-  own = false,
+  own: ownProp,
   onOpen,
   openLabel,
   muted = false,
@@ -85,6 +112,8 @@ export function ChatCard({
   rootProps,
 }: ChatCardProps) {
   const layout = useChatLayout();
+  const ownMessage = useContext(ChatCardOwnContext);
+  const own = ownProp ?? ownMessage;
   const head = (
     <>
       <span className="flex min-w-0 items-center gap-3">
@@ -107,10 +136,13 @@ export function ChatCard({
     <div
       {...rootProps}
       data-chat-card=""
+      data-chat-card-own={own ? '' : undefined}
+      data-own={own ? '' : undefined}
       className={cn(
         'flex flex-col gap-2 p-3',
         CHAT_CARD_WIDTH,
         chatCardSurface(layout, own),
+        own && OWN_CARD_INK,
         rootProps?.role === 'button' && CHAT_CARD_PRESS,
         className,
       )}

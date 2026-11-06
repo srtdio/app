@@ -186,6 +186,7 @@ import {
   type LightboxImage,
 } from '@/components/ui/ImageLightbox';
 import { SharedPostCards } from '@/components/chat/PostCard';
+import { ChatCardOwn } from '@/components/ui/ChatCard';
 import { ThreadViewFrame } from '@/components/chat/ThreadView';
 import {
   RailElbow,
@@ -1579,15 +1580,12 @@ export function BubbleMetaView(props: {
         'items-center gap-1 whitespace-nowrap',
         BUBBLE_META_TYPE,
         META_POSITION[props.placement],
-        // A card's time slot inks it (the card fill is the peer bubble's).
+        // A card's time slot inks it (own card: on-bubble ink; peer: fg-3).
         props.placement !== 'pill' && props.placement !== 'card' && metaInk(props.mine),
         props.className,
       )}
     >
-      {metaParts(
-        props.meta,
-        props.placement === 'card' ? false : props.mine || props.placement === 'pill',
-      )}
+      {metaParts(props.meta, props.mine || props.placement === 'pill')}
     </span>
   );
 }
@@ -2638,132 +2636,136 @@ export function MessageBubble(props: {
                 )
               ) : null}
             </div>
-            <div
-              data-bubble-content=""
-              // A card-only message's card is the bubble, never inside the own fill.
-              className={cn('contents', mine && !cardOnly && OWN_BUBBLE_CONTENT)}
-            >
-              {threadMember ? null : chip?.kind === 'chip' && !parentDeleted ? (
-                <PostRefChip
-                  post={chip.post}
-                  onTap={chip.onTap}
-                  className={album ? 'mx-[9px]' : '-mb-1.5 -mt-2'}
-                />
-              ) : (chip === undefined || parentDeleted) && reply !== null ? (
-                <ReplyQuoteBox
-                  author={
-                    reply.authorUserId !== null
-                      ? (profiles.get(reply.authorUserId)?.displayName ?? 'Member')
-                      : 'Member'
-                  }
-                  preview={
-                    parentDeleted
-                      ? deletedMessageLabel({ mine: quotedMine })
-                      : resolveMentionText(
-                          stripFormat(reply.preview),
-                          profileNameOf(profiles, props.workspaceId ?? null),
-                        )
-                  }
-                  deleted={parentDeleted}
-                  inBubble={layout}
-                  media={parentDeleted ? null : quoteMedia(props.quoted)}
-                  thumbSource={{ cache, presignEnabled }}
-                  onJump={() => props.onJumpToMessage?.(reply.id)}
-                  className={album ? 'mx-[9px] mb-1 mt-[5px]' : 'mb-1'}
-                />
-              ) : null}
-              {message.privateReply != null ? (
-                <PrivateReplyQuote
-                  reply={message.privateReply}
-                  profiles={profiles}
-                  workspaceId={props.workspaceId ?? null}
-                  layout={layout}
-                  onOpen={props.onOpenPrivateReply}
-                  className={album ? 'mx-[9px] mb-1 mt-[5px]' : 'mb-1'}
-                />
-              ) : null}
-              {textOnly ? (
-                <>
-                  {removedLine}
-                  {linkCard}
-                  {body}
-                </>
-              ) : voiceOnly ? (
-                <>
-                  {removedLine}
-                  <MessageAttachments
-                    attachments={message.attachments}
-                    cache={cache}
-                    presignEnabled={presignEnabled}
-                    onCancelUpload={cancelUpload}
-                    voice={{
-                      messageId: message.id,
-                      mine,
-                      sender: { name, ...senderAvatarProps(message, profiles) },
-                      nextVoiceId: props.nextVoiceId ?? null,
-                      // The time sits in the note's last row (Transcribe row / length row).
-                      meta: <BubbleMetaView meta={meta} mine={mine} placement={placement} />,
-                      ...(!mine && props.onTranscribe !== undefined && isTranscribable(message)
-                        ? { onTranscribe: props.onTranscribe }
-                        : {}),
-                    }}
+            {/* Every card in this message takes its side's fill: own, the
+                own-bubble ink (ui/ChatCard), never a light peer card. */}
+            <ChatCardOwn value={mine}>
+              <div
+                data-bubble-content=""
+                // A card-only message's card is the bubble, never inside the own fill.
+                className={cn('contents', mine && !cardOnly && OWN_BUBBLE_CONTENT)}
+              >
+                {threadMember ? null : chip?.kind === 'chip' && !parentDeleted ? (
+                  <PostRefChip
+                    post={chip.post}
+                    onTap={chip.onTap}
+                    className={album ? 'mx-[9px]' : '-mb-1.5 -mt-2'}
                   />
-                </>
-              ) : album ? (
-                <>
-                  <MessageAttachments
-                    attachments={message.attachments}
-                    cache={cache}
-                    presignEnabled={presignEnabled}
-                    album
-                    albumCorners={bubbleCorners(shape)}
-                    onCancelUpload={cancelUpload}
-                    caption={
-                      removedLine !== null || hasBody ? (
-                        <>
-                          {removedLine}
-                          {hasBody ? body : null}
-                        </>
-                      ) : undefined
+                ) : (chip === undefined || parentDeleted) && reply !== null ? (
+                  <ReplyQuoteBox
+                    author={
+                      reply.authorUserId !== null
+                        ? (profiles.get(reply.authorUserId)?.displayName ?? 'Member')
+                        : 'Member'
                     }
-                    onImageClick={(_attachment, index) => props.onOpenImage?.(index)}
+                    preview={
+                      parentDeleted
+                        ? deletedMessageLabel({ mine: quotedMine })
+                        : resolveMentionText(
+                            stripFormat(reply.preview),
+                            profileNameOf(profiles, props.workspaceId ?? null),
+                          )
+                    }
+                    deleted={parentDeleted}
+                    inBubble={layout}
+                    media={parentDeleted ? null : quoteMedia(props.quoted)}
+                    thumbSource={{ cache, presignEnabled }}
+                    onJump={() => props.onJumpToMessage?.(reply.id)}
+                    className={album ? 'mx-[9px] mb-1 mt-[5px]' : 'mb-1'}
                   />
-                  {hasCards ? (
-                    <div className="flex flex-col px-[9px] pb-[5px]">
-                      <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
-                      <SharedBriefCards briefIds={message.sharedBriefIds} />
-                      <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
-                      <SharedIdeaCards ideaIds={sharedIdeaIds} />
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  {hasAttachments ? null : removedLine}
-                  {hasBody ? linkCard : null}
-                  {hasBody ? body : null}
-                  {hasAttachments ? removedLine : null}
-                  <MessageAttachments
-                    attachments={message.attachments}
-                    cache={cache}
-                    presignEnabled={presignEnabled}
-                    onCancelUpload={cancelUpload}
+                ) : null}
+                {message.privateReply != null ? (
+                  <PrivateReplyQuote
+                    reply={message.privateReply}
+                    profiles={profiles}
+                    workspaceId={props.workspaceId ?? null}
+                    layout={layout}
+                    onOpen={props.onOpenPrivateReply}
+                    className={album ? 'mx-[9px] mb-1 mt-[5px]' : 'mb-1'}
                   />
-                  <SharedPostCards
-                    postIds={message.sharedPostIds}
-                    {...cardRefs}
-                    {...cardPlace('post')}
-                  />
-                  <SharedBriefCards briefIds={message.sharedBriefIds} {...cardPlace('brief')} />
-                  <SharedPlanCards
-                    planIds={sharedPlanIds}
-                    senderName={name}
-                    {...cardPlace('plan')}
-                  />
-                  <SharedIdeaCards ideaIds={sharedIdeaIds} {...cardPlace('idea')} />
-                </>
-              )}
-            </div>
+                ) : null}
+                {textOnly ? (
+                  <>
+                    {removedLine}
+                    {linkCard}
+                    {body}
+                  </>
+                ) : voiceOnly ? (
+                  <>
+                    {removedLine}
+                    <MessageAttachments
+                      attachments={message.attachments}
+                      cache={cache}
+                      presignEnabled={presignEnabled}
+                      onCancelUpload={cancelUpload}
+                      voice={{
+                        messageId: message.id,
+                        mine,
+                        sender: { name, ...senderAvatarProps(message, profiles) },
+                        nextVoiceId: props.nextVoiceId ?? null,
+                        // The time sits in the note's last row (Transcribe row / length row).
+                        meta: <BubbleMetaView meta={meta} mine={mine} placement={placement} />,
+                        ...(!mine && props.onTranscribe !== undefined && isTranscribable(message)
+                          ? { onTranscribe: props.onTranscribe }
+                          : {}),
+                      }}
+                    />
+                  </>
+                ) : album ? (
+                  <>
+                    <MessageAttachments
+                      attachments={message.attachments}
+                      cache={cache}
+                      presignEnabled={presignEnabled}
+                      album
+                      albumCorners={bubbleCorners(shape)}
+                      onCancelUpload={cancelUpload}
+                      caption={
+                        removedLine !== null || hasBody ? (
+                          <>
+                            {removedLine}
+                            {hasBody ? body : null}
+                          </>
+                        ) : undefined
+                      }
+                      onImageClick={(_attachment, index) => props.onOpenImage?.(index)}
+                    />
+                    {hasCards ? (
+                      <div className="flex flex-col px-[9px] pb-[5px]">
+                        <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
+                        <SharedBriefCards briefIds={message.sharedBriefIds} />
+                        <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
+                        <SharedIdeaCards ideaIds={sharedIdeaIds} />
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    {hasAttachments ? null : removedLine}
+                    {hasBody ? linkCard : null}
+                    {hasBody ? body : null}
+                    {hasAttachments ? removedLine : null}
+                    <MessageAttachments
+                      attachments={message.attachments}
+                      cache={cache}
+                      presignEnabled={presignEnabled}
+                      onCancelUpload={cancelUpload}
+                    />
+                    <SharedPostCards
+                      postIds={message.sharedPostIds}
+                      {...cardRefs}
+                      {...cardPlace('post')}
+                    />
+                    <SharedBriefCards briefIds={message.sharedBriefIds} {...cardPlace('brief')} />
+                    <SharedPlanCards
+                      planIds={sharedPlanIds}
+                      senderName={name}
+                      {...cardPlace('plan')}
+                    />
+                    <SharedIdeaCards ideaIds={sharedIdeaIds} {...cardPlace('idea')} />
+                  </>
+                )}
+              </div>
+            </ChatCardOwn>
             {voiceOnly || cardOnly ? null : (
               <BubbleMetaView
                 meta={meta}
