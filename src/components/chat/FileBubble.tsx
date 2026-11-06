@@ -278,7 +278,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
         <span
           data-file-progress=""
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-[3px] bg-panel-3 lit-well"
+          className="absolute inset-x-0 bottom-0 h-1 bg-panel-3 lit-well"
         >
           <span
             className="block h-full origin-left bg-accent lit-fill mv-fill"

@@ -576,7 +576,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                     {...common}
                     className={cn(
                       ROW,
-                      'min-w-0 flex-1 flex-col items-stretch justify-center gap-0.5 py-1.5',
+                      'min-w-0 flex-1 flex-col items-stretch justify-center gap-0.5 py-1',
                       tone,
                     )}
                   >
@@ -602,7 +602,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
               <PressableRow
                 key={`${section.label}:${item.id}`}
                 {...common}
-                className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1.5', tone)}
+                className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1', tone)}
               >
                 <span className="flex min-w-0 items-baseline gap-2">
                   <span className="min-w-0 flex-1 truncate font-medium text-fg">
@@ -968,11 +968,11 @@ export function CommandPalette({
         aria-label="Command palette"
         // Phones: a full-screen sheet. Wider: the centred card. Rendered at
         // rest; dropIn (Y, 8 px) is laid over it.
-        className="flex flex-col w-full h-full scale-100 bg-panel lit-overlay overflow-hidden will-change-transform sm:h-auto sm:max-w-[560px] sm:rounded-xl sm:border"
+        className="flex flex-col w-full h-full scale-100 bg-panel lit-overlay overflow-hidden will-change-transform sm:h-auto sm:max-w-xl sm:rounded-xl sm:border"
       >
         {/* The search is a tool: quiet at rest, ink line and lift while focused
             (ui/Input tone search); the icon takes full ink with it. */}
-        <div className="group/sfield flex shrink-0 items-center gap-2.5 px-4 py-2 border-b border-border pt-[calc(env(safe-area-inset-top)+0.5rem)] sm:pt-2">
+        <div className="group/sfield flex shrink-0 items-center gap-2 px-4 py-2 border-b border-border pt-[calc(env(safe-area-inset-top)+0.5rem)] sm:pt-2">
           {/* One search field: the icon and the ONE clear X sit inside the box. */}
           <div data-palette-field="" className="relative min-w-0 flex-1">
             <span className="pointer-events-none absolute left-3 top-1/2 flex -translate-y-1/2 text-fg-3 group-focus-within/sfield:text-fg">
@@ -1013,7 +1013,7 @@ export function CommandPalette({
               </IconButton>
             ) : null}
           </div>
-          <kbd className="hidden sm:inline text-xs text-fg-3 border border-border rounded px-1.5 py-0.5">
+          <kbd className="hidden sm:inline text-xs text-fg-3 border border-border rounded px-1 py-0.5">
             Esc
           </kbd>
           <Button

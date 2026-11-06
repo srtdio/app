@@ -241,7 +241,7 @@ describe('CommandPalette', () => {
       (el) => (el.props as { role: string }).role === 'dialog',
     );
     expect((dialog?.props as { className: string }).className).toContain('h-full');
-    expect((dialog?.props as { className: string }).className).toContain('sm:max-w-[560px]');
+    expect((dialog?.props as { className: string }).className).toContain('sm:max-w-xl');
     const all = texts(tree);
     expect(all).toContain('Cancel');
     expect(all).toContain('Esc');

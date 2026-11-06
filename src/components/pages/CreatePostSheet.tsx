@@ -6,6 +6,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -858,7 +859,7 @@ export function CreatePostSheet({
       label: bucket.name,
       renderLeft: (
         <span
-          className="inline-block h-2.5 w-2.5 rounded-full"
+          className="inline-block h-2 w-2 rounded-full"
           style={{ backgroundColor: bucket.colorHex }}
           aria-hidden="true"
         />
@@ -1264,7 +1265,7 @@ export function CreatePostSheet({
 
   function gridError(key: string): ReactElement | null {
     return fieldErrors[key] !== undefined ? (
-      <p className="mt-1.5 text-sm text-bad">{fieldErrors[key]}</p>
+      <p className="mt-2 text-sm text-bad">{fieldErrors[key]}</p>
     ) : null;
   }
 
@@ -1395,9 +1396,9 @@ export function CreatePostSheet({
               aria-label={previewChipLabel(preview.platform)}
               className="hidden lg:sticky lg:top-0 lg:flex lg:flex-col lg:gap-3"
             >
-              <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+              <Text as="h3" role="section">
                 {previewChipLabel(preview.platform)}
-              </h3>
+              </Text>
               <PreviewBody {...preview} />
             </aside>
           ) : null}
@@ -1449,7 +1450,7 @@ export function CreatePostSheet({
               <p
                 id="post-title-count"
                 data-title-count=""
-                className="mt-1.5 text-right text-sm tabular-nums text-fg-3"
+                className="mt-2 text-right text-sm tabular-nums text-fg-3"
               >
                 {captionCounterText(form.title.length, TITLE_MAX)}
               </p>

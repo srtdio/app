@@ -19,7 +19,7 @@ export function Checkbox(props: CheckboxProps): ReactElement {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 hidden items-center justify-center text-accent-fg peer-checked:flex"
       >
-        <IconCheck size={ICON_SIZE.text} />
+        <IconCheck size={ICON_SIZE.inline} />
       </span>
     </span>
   );

@@ -2922,7 +2922,7 @@ export function DayColumn(props: {
       <span
         data-plan-day-weekday=""
         className={cn(
-          `flex h-[18px] shrink-0 items-center justify-center whitespace-nowrap ${SECTION_LABEL_INK}`,
+          `flex h-5 shrink-0 items-center justify-center whitespace-nowrap ${SECTION_LABEL_INK}`,
           isToday ? 'bg-accent text-accent-fg' : 'bg-panel-2 text-fg-2',
         )}
       >

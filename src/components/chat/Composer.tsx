@@ -516,7 +516,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
         NO_TOUCH_SELECT,
       )}
     >
-      <span className="w-[3px] shrink-0 self-stretch rounded-full bg-accent" aria-hidden="true" />
+      <span className="w-1 shrink-0 self-stretch rounded-full bg-accent" aria-hidden="true" />
       {post !== null ? (
         <PostRefThumb assetVersionId={post.thumbnailAssetVersionId} size={32} />
       ) : (
@@ -527,7 +527,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
         {post !== null ? (
           <span className="truncate text-sm text-fg-2">{post.title}</span>
         ) : (
-          <span aria-hidden="true" className="my-[3px] h-3 w-28 rounded bg-panel-2" />
+          <span aria-hidden="true" className="my-0.5 h-3 w-28 rounded bg-panel-2" />
         )}
       </span>
       <IconButton label="Close about" className="shrink-0" onClick={props.onCancel}>
@@ -1073,7 +1073,7 @@ function PendingThumb(props: {
         <span
           data-schedule-upload-bar={progress}
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-[3px] bg-panel-3 lit-well"
+          className="absolute inset-x-0 bottom-0 h-1 bg-panel-3 lit-well"
         >
           <span className="block h-full bg-accent lit-fill" style={{ width: `${progress}%` }} />
         </span>
