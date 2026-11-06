@@ -208,6 +208,11 @@ export default {
         strip: 'var(--strip-fg)',
         'strip-action': 'var(--strip-action)',
         'warn-ink': 'var(--warn-ink)',
+        // Chat meta ink (times, ticks, media pills), one name per index.css token.
+        'bubble-meta': 'var(--bubble-meta)',
+        'bubble-meta-own': 'var(--bubble-meta-own)',
+        'tick-read': 'var(--tick-read)',
+        'media-meta': 'var(--media-meta-fg)',
       },
       backgroundColor: {
         accent: 'rgb(var(--accent-fill-rgb) / <alpha-value>)',
@@ -231,50 +236,42 @@ export default {
         'on-bubble-hover':
           'linear-gradient(rgb(var(--on-bubble-rgb) / 0.1), rgb(var(--on-bubble-rgb) / 0.1)), linear-gradient(rgb(var(--on-bubble-rgb) / 0.12), rgb(var(--on-bubble-rgb) / 0.12))',
       },
-      // Type scale (Design rules in CLAUDE.md). Overrides Tailwind's defaults on
-      // purpose. legacy-* freeze the old Tailwind sizes until the type
-      // migration PR moves every screen onto the scale and removes them.
-      fontSize: {
-        xs: ['11px', '14px'],
-        sm: ['12px', '16px'],
-        md: ['13px', '18px'],
-        base: ['14px', '20px'],
-        lg: ['15px', '20px'],
-        xl: ['17px', '22px'],
-        '2xl': ['20px', '26px'],
-        '3xl': ['28px', '34px'],
-        // Inputs below md: 16px so iOS never zooms on focus (md:text-base above).
-        input: ['16px', '22px'],
-        'legacy-xs': ['12px', '16px'],
-        'legacy-sm': ['14px', '20px'],
-        'legacy-base': ['16px', '24px'],
-        'legacy-lg': ['18px', '28px'],
-        'legacy-xl': ['20px', '28px'],
-        'legacy-2xl': ['24px', '32px'],
-        'legacy-3xl': ['30px', '36px'],
+      // Named panel and popover sizes: one name per surface, never w-[Npx] at a call site.
+      width: {
+        // Chat list column on laptop (xl), ChatConnected.
+        'chat-list': '352px',
+        // Emoji popover from the message action menu (MessageActionMenu).
+        emoji: '352px',
+        // Emoji tray above the composer (ComposerEmoji).
+        'emoji-tray': '368px',
+        // Plan panel beside chat: narrow laptop, then full from 972px (PlanScreen).
+        'plan-narrow': '360px',
+        'plan-panel': '440px',
+        // Schedule-send popover above the composer (ScheduleSheet).
+        schedule: '340px',
+        // Sheet as a centred dialog from sm (ui/Sheet), and the wide sheet (tasks, composer).
+        sheet: '540px',
+        'sheet-wide': '960px',
+        // ui/SidePanel on laptop (CLAUDE.md: 380px).
+        'side-panel': '380px',
+        // The thread rail glyph in ui/icons (the rail geometry is 13px).
+        'rail-glyph': '13px',
       },
-      // One radius for controls and cards (8), 12 popovers, 16 sheet tops.
-      borderRadius: {
-        DEFAULT: '8px',
-        none: '0',
-        sm: '6px',
-        md: '8px',
-        lg: '8px',
-        xl: '12px',
-        '2xl': '16px',
-        full: '9999px',
-        card: '8px',
-        sheet: '16px',
-        pill: '9999px',
-        // A picture inset inside a card (ui/Card media inset).
-        inset: '4px',
+      height: {
+        // Emoji popover from the message action menu (MessageActionMenu).
+        emoji: '400px',
+        // PressableRow dense: laptop Plan month item lines (decided 28 Oct 2026).
+        dense: '22px',
+        // The thread rail glyph in ui/icons.
+        'rail-glyph': '13px',
       },
-      // Layout roles (CLAUDE.md Layout rules, ui/Row): 15 = 60, the row text
-      // edge and divider inset (16 gutter + 32 avatar + 12 gap); 18 = 72, the
-      // two-line row. Both on the 4px grid.
-      spacing: {
-        '15': '3.75rem',
-        '18': '4.5rem',
+      margin: {
+        // Room for the plan panel beside the page (PlanBesideLayout, ChatConnected).
+        'plan-panel': '440px',
+      },
+      padding: {
+        // Text field vertical inset (10px): a one-line Textarea / MentionInput is 44 with its edge.
+        'field-y': '0.625rem',
       },
       // Auto-fill grids that fill the laptop width (ui/Tile TILE_GRID, ui/Card CARD_GRID).
       gridTemplateColumns: {
