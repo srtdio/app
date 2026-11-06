@@ -117,7 +117,7 @@ describe('Tasks sheet: one frame, the height of what it holds', () => {
     expect(src).not.toContain('88svh');
     expect(src).not.toContain('w-[560px]');
     expect(SHEET_FRAME).toContain('max-h-[90svh]');
-    expect(SHEET_FRAME).toContain('sm:w-[540px]');
+    expect(SHEET_FRAME).toContain('sm:w-sheet');
     expect(source('../../ui/Sheet.tsx')).toContain('SHEET_FRAME,');
   });
 });

@@ -108,7 +108,7 @@ describe('rows (laptop and phone alike)', () => {
 
 describe('the docked panel', () => {
   it('440px from 972px, 360px below (CSS, final on the first frame); full height, not modal', () => {
-    expect(PLAN_PANEL_WIDTH).toBe('w-[360px] min-[972px]:w-[440px]');
+    expect(PLAN_PANEL_WIDTH).toBe('w-plan-narrow min-[972px]:w-plan-panel');
     const src = read('PlanScreen.tsx');
     expect(src).not.toContain('PLAN_PANEL_PX');
     expect(src).toContain("'fixed inset-y-0 right-0 z-dock flex flex-col border-l bg-panel");
@@ -136,7 +136,7 @@ describe('the docked panel', () => {
 
   it('the chat thread narrows by 440px from 1180px; the list steps aside at 768 to 891px', () => {
     const chat = read('ChatConnected.tsx');
-    expect(chat).toContain("planPanelOpen && 'min-[1180px]:mr-[440px]'");
+    expect(chat).toContain("planPanelOpen && 'min-[1180px]:mr-plan-panel'");
     expect(chat).toContain('max-[891px]:invisible max-[891px]:absolute');
     expect(chat).toContain('useIsLaptop()');
   });

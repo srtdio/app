@@ -16,7 +16,7 @@ interface SidePanelProps {
 }
 
 /** The laptop side panel's one width. */
-export const SIDE_PANEL_WIDTH_CLASS = 'w-[380px]';
+export const SIDE_PANEL_WIDTH_CLASS = 'w-side-panel';
 const SIDE_PANEL_WIDTH_PX = '380px';
 
 /**

@@ -1021,7 +1021,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
           // At the height of what it holds: the one sheet frame (ui/Sheet
           // SHEET_FRAME). Full screen fills the viewport (laptop a 960 box).
           full
-            ? 'w-full h-[100svh] supports-[height:1dvh]:h-[100dvh] bg-panel lit-overlay sm:h-[84svh] sm:w-[960px] sm:max-w-[92%] sm:rounded-xl sm:border'
+            ? 'w-full h-[100svh] supports-[height:1dvh]:h-[100dvh] bg-panel lit-overlay sm:h-[84svh] sm:w-sheet-wide sm:max-w-[92%] sm:rounded-xl sm:border'
             : SHEET_FRAME,
         )}
       >

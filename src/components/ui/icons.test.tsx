@@ -233,7 +233,7 @@ describe('non-icon glyphs drawn in the icon file', () => {
     );
     expect(tick).toContain('d="M1 0A12 12 0 0 0 13 12"');
     expect(tick).toContain(
-      'class="absolute h-[13px] w-[13px] overflow-visible text-border-strong bottom-0 left-0"',
+      'class="absolute h-rail-glyph w-rail-glyph overflow-visible text-border-strong bottom-0 left-0"',
     );
     expect(tick).toContain('stroke-width="2"');
     const elbow = renderToStaticMarkup(

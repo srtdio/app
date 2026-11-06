@@ -514,7 +514,7 @@ function VoiceRowItem(props: {
         </span>
         <span className={ROW_DATE}>{props.date}</span>
       </div>
-      <div className="pl-[52px]">
+      <div className="pl-13">
         <VoiceNote
           url={PRESIGN_ENABLED && !failed ? url : null}
           name={item.name}

@@ -69,10 +69,10 @@ interface SheetProps {
  * one way.
  */
 export const SHEET_FRAME =
-  'w-full max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] rounded-t-2xl border bg-panel lit-overlay sm:w-[540px] sm:max-w-[92%] sm:max-h-[84svh] sm:rounded-xl';
+  'w-full max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] rounded-t-2xl border bg-panel lit-overlay sm:w-sheet sm:max-w-[92%] sm:max-h-[84svh] sm:rounded-xl';
 
 /** The wide sheet from lg: a 960 box for side-by-side content (Sheet `wide`). */
-export const SHEET_WIDE = 'lg:w-[960px]';
+export const SHEET_WIDE = 'lg:w-sheet-wide';
 
 const DEFAULT_DISCARD = { title: 'Discard changes?', message: 'Your changes will be lost.' };
 

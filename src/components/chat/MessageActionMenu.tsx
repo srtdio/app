@@ -1101,7 +1101,7 @@ export function EmojiPickerShell(props: {
         <div
           {...dialogProps}
           data-emoji-picker="laptop"
-          className="fixed z-dialog flex h-[400px] w-[352px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay focus:outline-none"
+          className="fixed z-dialog flex h-emoji w-emoji max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay focus:outline-none"
           style={{ top: position?.top ?? 8, left: position?.left ?? 8 }}
         >
           {body}

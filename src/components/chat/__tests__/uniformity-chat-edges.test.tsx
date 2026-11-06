@@ -120,7 +120,7 @@ describe('11d laptop Chat with a Plan open', () => {
 
   it('plan closed: the list returns (no step-aside classes at any width)', () => {
     const closed = chatListPaneClass(false);
-    expect(closed).toBe('h-full w-full border-border md:w-72 md:border-r xl:w-[352px]');
+    expect(closed).toBe('h-full w-full border-border md:w-72 md:border-r xl:w-chat-list');
     expect(closed).not.toContain('invisible');
   });
 
@@ -128,7 +128,7 @@ describe('11d laptop Chat with a Plan open', () => {
     const src = read('../ChatConnected.tsx');
     expect(src).toContain('className={chatListPaneClass(planPanelOpen, listPageScroll)}>');
     // The thread narrows beside the panel from 1180px, as before.
-    expect(src).toContain("planPanelOpen && 'min-[1180px]:mr-[440px]'");
+    expect(src).toContain("planPanelOpen && 'min-[1180px]:mr-plan-panel'");
     // The thread's key is the chat only: opening or closing the plan never remounts it.
     expect(src).toContain('key={selected.channelId}');
     expect(src).not.toMatch(/key=\{[^}]*planPanelOpen/);

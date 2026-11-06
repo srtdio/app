@@ -108,7 +108,7 @@ describe('PlanPage', () => {
     try {
       const html = render(`/plans/${PLAN}?item=${ITEM}`);
       expect(html).toContain('activity-beside');
-      expect(html).toContain('min-[1180px]:mr-[440px]');
+      expect(html).toContain('min-[1180px]:mr-plan-panel');
       expect(html).toContain(`screen plan=${PLAN} item=${ITEM}`);
       expect(render('/plans/not-a-plan')).toContain('activity-beside');
     } finally {
@@ -129,7 +129,7 @@ describe('PlanPage', () => {
     try {
       const html = render(`/plan/${PLAN}?item=${ITEM}`);
       expect(html.indexOf('activity-beside')).toBeLessThan(html.indexOf('screen plan='));
-      expect(html).toContain('min-[1180px]:mr-[440px]');
+      expect(html).toContain('min-[1180px]:mr-plan-panel');
     } finally {
       view.desktop = false;
     }
@@ -143,7 +143,7 @@ describe('PlanPage', () => {
       // The same first node, Activity, before the plan.
       expect(a.indexOf('activity-beside')).toBeGreaterThan(-1);
       expect(p.indexOf('activity-beside')).toBeLessThan(p.indexOf('screen plan='));
-      expect(a).not.toContain('min-[1180px]:mr-[440px]');
+      expect(a).not.toContain('min-[1180px]:mr-plan-panel');
     } finally {
       view.desktop = false;
     }

@@ -22,7 +22,7 @@ export function PlanBesideLayout(props: { page: ReactElement; planPattern: strin
   return (
     <>
       {!plan || desktop ? (
-        <div data-plan-beside="" className={cn(plan && 'min-[1180px]:mr-[440px]')}>
+        <div data-plan-beside="" className={cn(plan && 'min-[1180px]:mr-plan-panel')}>
           {props.page}
         </div>
       ) : null}

@@ -309,7 +309,7 @@ import {
  * right on the first frame and a resize across 972px changes it with no
  * motion.
  */
-export const PLAN_PANEL_WIDTH = 'w-[360px] min-[972px]:w-[440px]';
+export const PLAN_PANEL_WIDTH = 'w-plan-narrow min-[972px]:w-plan-panel';
 
 /**
  * Anything other than a plan panel that owns an Escape pressed on the page
@@ -2870,7 +2870,7 @@ function AddRow(props: {
       data-plan-add-row=""
       className={cn(
         'flex min-h-11 items-center gap-2',
-        !props.empty && '-mb-3 -mt-2 pl-[68px]',
+        !props.empty && '-mb-3 -mt-2 pl-17',
       )}
     >
       {props.empty ? (

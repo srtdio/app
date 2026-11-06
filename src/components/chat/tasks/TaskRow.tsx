@@ -261,7 +261,7 @@ function PriorityMenu(props: {
 /** The inline failure line: "Not saved · Retry" (44px Retry). */
 export function NotSaved(props: { onRetry: () => void; message?: string }): ReactElement {
   return (
-    <div data-task-not-saved="" className="flex items-center gap-1 pl-[52px] pr-3 text-md">
+    <div data-task-not-saved="" className="flex items-center gap-1 pl-13 pr-3 text-md">
       <span className="text-bad">{props.message ?? NOT_SAVED} ·</span>
       <Button
         type="button"
@@ -682,7 +682,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
       {props.marks.length > 0 ? (
         <p
           data-task-mark=""
-          className="-mt-2 flex flex-wrap gap-x-2 pb-2 pl-[52px] pr-3 text-sm text-fg-3"
+          className="-mt-2 flex flex-wrap gap-x-2 pb-2 pl-13 pr-3 text-sm text-fg-3"
         >
           {props.marks.map((m, k) => (
             <MarkLine key={k} mark={m} />
@@ -690,7 +690,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
         </p>
       ) : null}
       {props.notice !== null ? (
-        <div data-task-conflict="" className="-mt-1 flex flex-col gap-1 pb-2 pl-[52px] pr-3">
+        <div data-task-conflict="" className="-mt-1 flex flex-col gap-1 pb-2 pl-13 pr-3">
           <p className="text-sm text-stage-review">{props.notice.text}</p>
           <div className="flex gap-2">
             <Button

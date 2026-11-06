@@ -41,7 +41,7 @@ describe('chatListPageScroll: the phone list alone on screen', () => {
 describe('chatListPaneClass', () => {
   it('locked (default) is the full-height pane as before', () => {
     expect(chatListPaneClass(false)).toBe(
-      'h-full w-full border-border md:w-72 md:border-r xl:w-[352px]',
+      'h-full w-full border-border md:w-72 md:border-r xl:w-chat-list',
     );
     expect(chatListPaneClass(false, false)).toBe(chatListPaneClass(false));
   });

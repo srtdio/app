@@ -204,7 +204,7 @@ export function ScheduleMenu(props: {
       aria-label={SCHEDULE_SHEET_TITLE}
       onKeyDown={keys.onKeyDown}
       data-schedule-menu=""
-      className="absolute bottom-full right-3 z-nav mb-2 flex w-[340px] max-w-[calc(100%-24px)] flex-col rounded-xl border bg-panel lit-overlay"
+      className="absolute bottom-full right-3 z-nav mb-2 flex w-schedule max-w-[calc(100%-24px)] flex-col rounded-xl border bg-panel lit-overlay"
     >
       <h2 className={textRole('heading', 'px-4 pb-1 pt-3 text-fg')}>{SCHEDULE_SHEET_TITLE}</h2>
       <div className="px-2 pb-2">

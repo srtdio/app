@@ -692,7 +692,7 @@ export function RailCurveGlyph(props: { turn: keyof typeof RAIL_CURVE_PATH; clas
       viewBox="0 0 13 13"
       fill="none"
       className={cn(
-        'absolute h-[13px] w-[13px] overflow-visible text-border-strong',
+        'absolute h-rail-glyph w-rail-glyph overflow-visible text-border-strong',
         props.className,
       )}
     >

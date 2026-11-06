@@ -52,7 +52,7 @@ describe('chat visual pass', () => {
   });
 
   it('the list column is 352px from 1280px (288px below, so the plan panel never covers it) and no chat is a tile', () => {
-    expect(read('../ChatConnected.tsx')).toContain('md:w-72 md:border-r xl:w-[352px]');
+    expect(read('../ChatConnected.tsx')).toContain('md:w-72 md:border-r xl:w-chat-list');
     // Every chat is a Row: its time is the title line's meta, the ⋯ the Row trailing slot.
     expect(read('../ChannelList.tsx')).not.toContain('<Tile');
   });
