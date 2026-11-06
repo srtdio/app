@@ -342,7 +342,7 @@ describe('group info full page', () => {
     );
     expect(className).toContain('h-11');
     expect(className).toContain('rounded-lg');
-    expect(className).not.toContain('min-h-[56px]');
+    expect(className).not.toContain('min-h-14');
     expect(className).toContain('w-full');
     expect(className).toContain('text-bad');
     expect(className).toContain('lit-btn-secondary');

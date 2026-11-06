@@ -55,9 +55,9 @@ describe('Plan screen buttons (design system)', () => {
     expect(compose).not.toContain('min-h-[50px]');
     expect(compose).not.toContain('rounded-[10px] text-fg-2');
     const card = read('PlanCard.tsx');
-    expect(card).not.toContain('min-h-[48px] flex-1 text-lg font-semibold');
+    expect(card).not.toContain('min-h-12 flex-1 text-lg font-semibold');
     const screen = read('PlanScreen.tsx');
     expect(screen).not.toContain('size="lg"');
-    expect(screen).not.toContain('min-h-[48px] w-full min-w-0');
+    expect(screen).not.toContain('min-h-12 w-full min-w-0');
   });
 });

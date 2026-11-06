@@ -131,7 +131,7 @@ describe('T5: UploadRing positioning and sizes', () => {
     expect(voice).toContain('width="16" height="16"');
     const image = renderToStaticMarkup(<UploadRing progress={0.5} variant="image" />);
     expect(image).toContain('viewBox="0 0 56 56"');
-    expect(ringClass(image)).toContain('h-14 min-w-[56px]');
+    expect(ringClass(image)).toContain('h-14 min-w-14');
     const fileRing = renderToStaticMarkup(<UploadRing progress={0.5} variant="file" />);
     expect(fileRing).toContain('viewBox="0 0 44 44"');
     expect(ringClass(fileRing)).toContain('h-11 min-w-11');

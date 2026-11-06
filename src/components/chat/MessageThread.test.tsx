@@ -1402,7 +1402,7 @@ describe('image album and viewer', () => {
       album: true,
     });
     expect(cls).toContain('p-[3px]');
-    expect(cls).toContain('min-w-[240px]');
+    expect(cls).toContain('min-w-60');
     expect(cls).not.toContain('px-3');
   });
 
@@ -3567,7 +3567,7 @@ describe('A3 "@all" renders bold, as a mention of me for recipients, and inert',
     expect(group).toContain('data-mention-option="all"');
     expect(group).toContain('@all');
     expect(group).toContain('Everyone in this group');
-    expect(group.match(/min-h-\[44px\]/g)).toHaveLength(2);
+    expect(group.match(/min-h-11/g)).toHaveLength(2);
     const dm = renderStrip(
       <MentionPicker
         members={mentionPickerRows(members, '', null, false)}

@@ -88,7 +88,7 @@ describe('AssetPicker grid', () => {
 
   it('tiles are 44px targets with a pressed state and a check when picked', () => {
     const html = grid({ selected: [pdf] });
-    expect(html.match(/min-h-\[44px\]/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(html.match(/min-h-11/g)?.length).toBeGreaterThanOrEqual(2);
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('aria-pressed="false"');
     expect(html.match(/bg-accent text-accent-fg/g)).toHaveLength(1);

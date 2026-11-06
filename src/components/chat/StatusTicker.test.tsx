@@ -526,7 +526,7 @@ describe('post rows never fail silently', () => {
     expect(busy).toContain('bg-panel-2');
     // No pulse: the busy row keeps its tint and aria-busy (motion never fades).
     expect(busy).not.toContain('animate-pulse');
-    expect(busy.match(/min-h-\[44px\]/g)?.length).toBe(idle.match(/min-h-\[44px\]/g)?.length);
+    expect(busy.match(/min-h-11/g)?.length).toBe(idle.match(/min-h-11/g)?.length);
   });
 
   it('post and brief rows name their titles only, never a KEY-N code', () => {

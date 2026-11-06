@@ -215,7 +215,7 @@ describe('FileBubble states', () => {
     const html = bubble(PDF);
     // A PressableRow: type, then class, then the passed attributes.
     expect(html).toMatch(/<button type="button" class="[^"]*" aria-label="Open deck.pdf"/);
-    expect(html).toContain('min-h-[56px]');
+    expect(html).toContain('min-h-14');
   });
 
   it('light and dark render the same token-only markup', () => {

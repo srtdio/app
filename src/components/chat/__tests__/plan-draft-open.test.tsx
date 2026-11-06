@@ -160,7 +160,7 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
     expect(both).toMatch(/<button(?=[^>]*data-plan-menu-delete="")(?=[^>]*class="[^"]*text-bad)/);
     expect(both).toContain('Change dates');
     expect(both).toContain('Delete plan');
-    expect(both.match(/min-h-\[44px\]/g)).toHaveLength(3);
+    expect(both.match(/min-h-11/g)).toHaveLength(3);
     // The menu grows from its trigger (growFromTrigger, a JS move): no CSS
     // transition, translate or rotate on the markup.
     expect(both).not.toMatch(/translate-x|rotate|transition/);
@@ -288,7 +288,7 @@ describe('item 4: footer', () => {
     );
     expect(open).toContain('Open for approvers');
     expect(open).toContain('data-plan-primary="open"');
-    expect(open.match(/min-h-\[44px\]/g)?.length).toBe(1);
+    expect(open.match(/min-h-11/g)?.length).toBe(1);
     expect(open.match(/<button/g)?.length).toBe(1);
     const toApprovers = renderToStaticMarkup(
       <PlanFooter

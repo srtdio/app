@@ -737,14 +737,14 @@ describe('first paint', () => {
     const received = render('fp-play-r');
     // A PressableRow: class renders before the passed attributes.
     expect(received).toMatch(
-      /class="[^"]*flex h-11 min-w-\[44px\][^"]*text-accent(?![-\w])[^"]*"[^>]*aria-label="Play voice note"/,
+      /class="[^"]*flex h-11 min-w-11[^"]*text-accent(?![-\w])[^"]*"[^>]*aria-label="Play voice note"/,
     );
     expect(received).not.toMatch(
       /class="[^"]*\bbg-accent\b[^"]*"[^>]*aria-label="Play voice note"/,
     );
     expect(received).toContain('width="20" height="20"');
     expect(render('fp-play-s', true)).toMatch(
-      /class="[^"]*flex h-11 min-w-\[44px\][^"]*text-accent-fg[^"]*"[^>]*aria-label="Play voice note"/,
+      /class="[^"]*flex h-11 min-w-11[^"]*text-accent-fg[^"]*"[^>]*aria-label="Play voice note"/,
     );
   });
 

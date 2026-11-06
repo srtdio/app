@@ -319,7 +319,7 @@ describe('E11 + T5: card footer and the failed card', () => {
     const card = CouldntLoadCard({ onRetry, icon: IconPipeline });
     expect(card.type).toBe(ChatCard);
     expect((card.props as { title: string }).title).toBe(CARD_LOAD_FAILED);
-    expect(renderToStaticMarkup(card)).toMatch(/<button[^>]*min-h-\[44px\]/);
+    expect(renderToStaticMarkup(card)).toMatch(/<button[^>]*min-h-11/);
     (card.props as { onOpen: () => void }).onOpen();
     expect(onRetry).toHaveBeenCalledTimes(1);
   });

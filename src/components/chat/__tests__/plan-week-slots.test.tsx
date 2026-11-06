@@ -417,7 +417,7 @@ describe('week list layout (L1-L4)', () => {
     expect(row).toMatch(/data-plan-line="plan"[\s\S]*?>PLAN<[\s\S]*?data-plan-control="pill"/);
     expect(row).toMatch(/data-plan-post-status="review"[\s\S]*?>Review</);
     expect(html).toMatch(
-      /data-plan-day-empty="" class="flex min-h-\[44px\] items-center text-md text-fg-3">Planned posts show up here\./,
+      /data-plan-day-empty="" class="flex min-h-11 items-center text-md text-fg-3">Planned posts show up here\./,
     );
     // Day block: the shared Card on the page edge, rows 16px apart.
     expect(html).toMatch(

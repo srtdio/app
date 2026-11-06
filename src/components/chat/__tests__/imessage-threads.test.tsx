@@ -169,7 +169,7 @@ describe('member rows on the rail', () => {
     const out = bubble(memberRow, { member: true, rail: railFor('middle', {}), selecting: true });
     expect(out).not.toContain('data-rail');
     expect(out).not.toContain('pl-[30px]');
-    expect(out).toContain('pl-[60px]');
+    expect(out).toContain('pl-15');
     expect(out).not.toContain('Quoted text');
   });
 
@@ -302,7 +302,7 @@ describe('thread controls', () => {
         onOpen={() => {}}
       />,
     );
-    expect(left).toContain('pl-[64px]');
+    expect(left).toContain('pl-16');
     expect(left).not.toContain('data-rail');
   });
 

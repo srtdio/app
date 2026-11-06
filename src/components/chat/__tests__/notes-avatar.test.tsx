@@ -84,7 +84,7 @@ describe('notes avatar', () => {
     expect(html).toContain('opacity-0');
     expect(html).toContain('absolute inset-0');
     expect(html).not.toContain('data-notes-badge');
-    expect(html.match(/h-\[72px\] w-\[72px\]/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(html.match(/h-18 w-18/g)?.length).toBeGreaterThanOrEqual(2);
   });
 });
 

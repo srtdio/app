@@ -125,7 +125,7 @@ describe('S3: the Schedule options', () => {
     expect(html).toContain('data-schedule-row="custom"');
     expect(html).toContain('Custom time');
     expect(html).toContain('font-mono');
-    expect(html).toContain('min-h-[56px]');
+    expect(html).toContain('min-h-14');
     expect(html).toContain('h-11 w-11');
     expect(html).toContain('To Ops: hello');
     expect(html).toMatch(/9:00 AM/);
