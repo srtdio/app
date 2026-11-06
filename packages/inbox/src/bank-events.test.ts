@@ -67,7 +67,7 @@ describe('bankEventLine: the shared Activity and email words', () => {
         expect(line.length).toBeGreaterThan(0);
         expect(line).not.toContain('undefined');
         expect(line).not.toContain('null');
-        expect(line).not.toContain('—');
+        expect(line).not.toContain(String.fromCharCode(0x2014));
       }
     }
     expect(bankEventLine('bank_idea_added', empty, null, 'team', day)).toBe(
