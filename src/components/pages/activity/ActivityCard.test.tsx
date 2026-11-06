@@ -117,7 +117,7 @@ describe('ActivityCard', () => {
     ]);
     // A single bordered, rounded card shell, laid out as a flex row with a rail.
     expect(html).toContain('rounded-xl');
-    expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
+    expect(html).toContain('w-1 shrink-0 bg-border-strong');
     // The title appears once, in the header; the stage line never repeats it or a KEY-N.
     expect(count(html, 'Q3 Launch')).toBe(1);
     expect(html).toContain('Someone sent for review');
@@ -155,14 +155,14 @@ describe('ActivityCard', () => {
       item({ id: 'a', actorName: null, eventType: 'stage_change', toStage: 'approved' }),
     ]);
     // stage_change is neutral now: stage no longer tints the rail.
-    expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
-    expect(html).not.toContain('w-[3px] shrink-0 bg-accent');
+    expect(html).toContain('w-1 shrink-0 bg-border-strong');
+    expect(html).not.toContain('w-1 shrink-0 bg-accent');
   });
 
-  // The lead rail: accent for the five accent events, neutral otherwise. The 3px
+  // The lead rail: accent for the five accent events, neutral otherwise. The 4px
   // rail is the card's first child and the two-state colour signal.
-  const ACCENT_RAIL = 'w-[3px] shrink-0 bg-accent';
-  const NEUTRAL_RAIL = 'w-[3px] shrink-0 bg-border-strong';
+  const ACCENT_RAIL = 'w-1 shrink-0 bg-accent';
+  const NEUTRAL_RAIL = 'w-1 shrink-0 bg-border-strong';
 
   const ALL_EVENT_TYPES = [
     'mention',
@@ -505,7 +505,7 @@ describe('ActivityCard actor rows', () => {
     expect(html).toContain('Love the hook');
     expect(html).toContain('data-activity-plan-icon');
     // The neutral rail: approvals are not accented, and neither are plan events.
-    expect(html).toContain('w-[3px] shrink-0 bg-border-strong');
+    expect(html).toContain('w-1 shrink-0 bg-border-strong');
     expect(html).not.toContain('undefined');
   });
 

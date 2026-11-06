@@ -33,7 +33,12 @@ export function TestSiteStart(): ReactElement | null {
         Test site: any new email signs in at once, no link. Test accounts are deleted after 24
         hours.
       </p>
-      <Button variant="primary" className="w-full md:w-full" disabled={busy} onClick={() => void start()}>
+      <Button
+        variant="primary"
+        className="w-full md:w-full"
+        disabled={busy}
+        onClick={() => void start()}
+      >
         {busy ? 'Starting' : 'Start fresh'}
       </Button>
       {error !== null ? <p className="text-legacy-sm text-bad">{error}</p> : null}

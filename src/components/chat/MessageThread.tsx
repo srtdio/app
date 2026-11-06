@@ -1302,7 +1302,7 @@ export function ThreadHeaderIdentity(props: {
           props.isGroup ? `Group info for ${props.title}` : `Contact info for ${props.title}`
         }
         onClick={props.onOpenContact}
-        className="flex min-w-0 flex-1 items-center gap-2.5"
+        className="flex min-w-0 flex-1 items-center gap-3"
       >
         {photo}
         {text}
@@ -2161,7 +2161,7 @@ export interface RowRail {
 /** How far a row's tick reaches up: through the row's own top padding. */
 function railTop(head: boolean, afterLabel: boolean): string {
   if (!head) return '-top-0.5';
-  return afterLabel ? 'top-0' : '-top-2.5';
+  return afterLabel ? 'top-0' : '-top-3';
 }
 
 /** The root's rail reaches down through the row's bottom padding (the reaction badge's room). */
@@ -2453,7 +2453,7 @@ export function MessageBubble(props: {
     'group flex items-start gap-2',
     railRowClass(rail, mine),
     NO_TOUCH_SELECT,
-    head ? (props.afterLabel === true ? 'pt-0' : 'pt-2.5') : 'pt-0.5',
+    head ? (props.afterLabel === true ? 'pt-0' : 'pt-3') : 'pt-0.5',
     mine ? 'flex-row-reverse' : 'flex-row',
     // Selection mode: a static 44px check column at the left of every row.
     selecting && SELECTION_ROW_OFFSET,
@@ -5064,7 +5064,7 @@ export function DayPill({ label, layout }: { label: string; layout: ChatLayout }
     <li role="separator" aria-label={label} className="flex justify-center">
       <span
         className={cn(
-          'self-center mb-1.5 mt-2 rounded-full border border-border-strong bg-panel px-2.5 py-0.5 text-fg-3 lit-pill',
+          'self-center mb-1.5 mt-2 rounded-full border border-border-strong bg-panel px-3 py-0.5 text-fg-3 lit-pill',
           sized(DATE_PILL_TYPE, layout),
         )}
       >
@@ -5175,7 +5175,7 @@ export function threadOpeningSkeleton(
       <ThreadTopStrip layout={layout} />
       <div
         className={cn(
-          'flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel lit-header',
+          'flex h-14 shrink-0 items-center gap-3 border-b bg-panel lit-header',
           sized(HEADER_PAD, layout),
         )}
       >
@@ -5185,7 +5185,7 @@ export function threadOpeningSkeleton(
           </IconButton>
         ) : null}
         <Bone lit="lit-avatar" as="div" className="h-9 w-9 shrink-0 rounded-full" />
-        <Bone lit="flat" as="div" className="h-3.5 w-32 rounded" />
+        <Bone lit="flat" as="div" className="h-3 w-32 rounded" />
       </div>
       {threadSkeleton()}
     </div>
@@ -7118,7 +7118,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       <ThreadTopStrip layout={layout} />
       <div
         className={cn(
-          'flex h-14 shrink-0 items-center gap-2.5 border-b bg-panel lit-header',
+          'flex h-14 shrink-0 items-center gap-3 border-b bg-panel lit-header',
           sized(HEADER_PAD, layout),
         )}
       >

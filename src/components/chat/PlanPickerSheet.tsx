@@ -129,7 +129,7 @@ export function PlanPickerSheet(props: {
                       props.onClose();
                       props.onOpenPlan(bundle.plan.id);
                     }}
-                    className="flex min-h-18 items-center gap-3 border bg-panel p-2.5 lit-card"
+                    className="flex min-h-18 items-center gap-3 border bg-panel p-3 lit-card"
                   >
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent lit-pill">
                       <IconPlan size={ICON_SIZE.control} />
@@ -170,7 +170,7 @@ export function PlanPickerSheet(props: {
                   props.onClose();
                   props.onNewPlan();
                 }}
-                className="flex min-h-12 items-center gap-3 border bg-panel p-2.5 text-lg font-semibold text-accent lit-card"
+                className="flex min-h-12 items-center gap-3 border bg-panel p-3 text-lg font-semibold text-accent lit-card"
               >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-2 lit-pill">
                   <IconPlus size={ICON_SIZE.control} />
@@ -193,7 +193,7 @@ function PickerSkeletonRow(): ReactElement {
   return (
     <div
       data-plan-pick-skeleton=""
-      className="flex min-h-18 w-full items-center gap-3 rounded-xl border bg-panel p-2.5 lit-card"
+      className="flex min-h-18 w-full items-center gap-3 rounded-xl border bg-panel p-3 lit-card"
     >
       <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />
       <span className="flex min-w-0 flex-1 flex-col gap-1">

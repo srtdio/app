@@ -465,10 +465,10 @@ describe('bubble shell', () => {
     expect(touchHead.filter((c) => c.startsWith('rounded-'))).toEqual(['rounded-[18px]']);
   });
 
-  it('caps rows at 76% and spaces rows 2px in a run, 10px between runs', () => {
+  it('caps rows at 76% and spaces rows 2px in a run, 12px between runs', () => {
     const headRow = renderBubble(makeMessage({}), { head: true });
     const tucked = renderBubble(makeMessage({}), { head: false });
-    expect(rootClass(headRow)).toContain('pt-2.5');
+    expect(rootClass(headRow)).toContain('pt-3');
     expect(rootClass(tucked)).toContain('pt-0.5');
     expect(rootClass(headRow)).not.toContain('py-2');
     let column = '';
@@ -1214,9 +1214,9 @@ describe('label spacing', () => {
   it('a head directly under a day pill gets no top padding', () => {
     const flush = rootClass(renderBubble(makeMessage({}), { head: true, afterLabel: true }));
     expect(flush).toContain('pt-0');
-    expect(flush).not.toContain('pt-2.5');
-    // Between runs with no label the gap stays 10px.
-    expect(rootClass(renderBubble(makeMessage({}), { head: true }))).toContain('pt-2.5');
+    expect(flush).not.toContain('pt-3');
+    // Between runs with no label the gap stays 12px.
+    expect(rootClass(renderBubble(makeMessage({}), { head: true }))).toContain('pt-3');
   });
 
   it('the day pill carries the 6px gap below it', () => {

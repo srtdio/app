@@ -645,7 +645,7 @@ export function MenuRow(props: {
     item.dot !== undefined ? (
       <span
         aria-hidden="true"
-        className={cn('h-2.5 w-2.5 rounded-full', DOT_CLASS[MARK_TONE[item.dot]])}
+        className={cn('h-2 w-2 rounded-full', DOT_CLASS[MARK_TONE[item.dot]])}
       />
     ) : (
       item.icon

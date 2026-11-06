@@ -91,7 +91,9 @@ function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number })
 }
 
 function TabLabel({ active, label }: { active: boolean; label: string }) {
-  return active ? <span className="shrink-0 whitespace-nowrap text-md font-semibold">{label}</span> : null;
+  return active ? (
+    <span className="shrink-0 whitespace-nowrap text-md font-semibold">{label}</span>
+  ) : null;
 }
 
 /**

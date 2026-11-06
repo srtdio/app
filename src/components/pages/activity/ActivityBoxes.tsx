@@ -10,10 +10,14 @@ import { LOADING_NOTIFICATIONS } from '@/components/pages/activity/data';
 /** Cards drawn: about one phone screen. */
 export const ACTIVITY_BOX_CARDS = 4;
 
+/** Stable keys for the fixed placeholder cards and Upcoming rows. */
+const CARD_KEYS = Array.from({ length: ACTIVITY_BOX_CARDS }, (_unused, n) => `card-${n}`);
+const UPCOMING_KEYS = ['upcoming-0', 'upcoming-1', 'upcoming-2'];
+
 function ActivityBoxCard(): ReactElement {
   return (
     <div data-activity-box="" className="lit-card flex overflow-hidden rounded-xl border bg-panel">
-      <div aria-hidden="true" className="w-[3px] shrink-0 bg-border-strong" />
+      <div aria-hidden="true" className="w-1 shrink-0 bg-border-strong" />
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-3 p-4">
           <div className="min-w-0 flex-1">
@@ -22,7 +26,7 @@ function ActivityBoxCard(): ReactElement {
               <Bone lit="flat" className="h-3 w-28 rounded" />
             </div>
             <div className="flex h-5 items-center">
-              <Bone lit="flat" className="h-3.5 w-3/4 rounded" />
+              <Bone lit="flat" className="h-4 w-3/4 rounded" />
             </div>
             <div className="mt-1 flex h-5 items-center">
               <Bone lit="flat" className="h-3 w-1/2 rounded" />
@@ -49,8 +53,8 @@ export function ActivityBoxes(): ReactElement {
           <Bone lit="flat" className="h-3 w-20 rounded" />
         </div>
         <div className="flex flex-col gap-2 px-4 md:px-6">
-          {Array.from({ length: ACTIVITY_BOX_CARDS }, (_unused, index) => (
-            <ActivityBoxCard key={index} />
+          {CARD_KEYS.map((key) => (
+            <ActivityBoxCard key={key} />
           ))}
         </div>
       </section>
@@ -67,13 +71,13 @@ export function UpcomingBoxes(): ReactElement {
       data-activity-boxes="upcoming"
       className="mt-4 flex flex-col gap-2 px-4 pb-6 md:px-6"
     >
-      {Array.from({ length: 3 }, (_unused, index) => (
+      {UPCOMING_KEYS.map((key) => (
         <div
-          key={index}
+          key={key}
           className="lit-card flex min-h-16 items-center gap-3 rounded-xl border bg-panel px-4"
         >
           <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <Bone lit="flat" className="h-3.5 w-2/3 rounded" />
+            <Bone lit="flat" className="h-4 w-2/3 rounded" />
             <Bone lit="flat" className="h-3 w-1/3 rounded" />
           </div>
         </div>

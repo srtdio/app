@@ -189,7 +189,11 @@ export function AcceptFailureView(props: {
     return (
       <>
         <ErrorNote>{RECOVERY_COPY.wrongAccount}</ErrorNote>
-        <Button variant="primary" className="w-full md:w-full" onClick={props.actions.switchAccount}>
+        <Button
+          variant="primary"
+          className="w-full md:w-full"
+          onClick={props.actions.switchAccount}
+        >
           {RECOVERY_COPY.differentEmail}
         </Button>
       </>

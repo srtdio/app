@@ -245,7 +245,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
           ) : null}
         </span>
       ) : null}
-      <span className="flex min-h-14 w-full items-center gap-2.5 px-3 py-2.5">
+      <span className="flex min-h-14 w-full items-center gap-3 px-3 py-3">
         {ratio === null ? (
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3 lit-media">
             <KindIcon kind={kind} size={ICON_SIZE.control} />

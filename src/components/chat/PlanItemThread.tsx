@@ -359,7 +359,7 @@ function PlanDayLine(props: { label: string }): ReactElement {
     <li role="separator" aria-label={props.label} data-plan-day="" className="flex justify-center">
       <span
         className={cn(
-          'mb-1.5 mt-2 self-center rounded-full border border-border bg-panel-2 px-2.5 py-0.5 text-fg-3 lit-pill',
+          'mb-1.5 mt-2 self-center rounded-full border border-border bg-panel-2 px-3 py-0.5 text-fg-3 lit-pill',
           sized(DATE_PILL_TYPE, layout),
         )}
       >

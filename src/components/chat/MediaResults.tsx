@@ -698,7 +698,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
           <li key={i} className="flex items-center gap-3 px-2 py-2">
             <Bone lit="lit-media" as="div" className="h-11 w-11 shrink-0 rounded-lg" />
             <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <Bone lit="flat" as="div" className="h-3.5 w-1/3 rounded" />
+              <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />
               <Bone lit="flat" as="div" className="h-3 w-3/4 rounded" />
             </div>
           </li>

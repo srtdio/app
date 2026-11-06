@@ -130,14 +130,14 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
         aria-labelledby="unsafe-link-title"
         // Follows the finger while dragged (and holds there until the exit takes over).
         style={drag > 0 ? { transform: `translateY(${drag}px)` } : undefined}
-        className="relative flex max-h-[90svh] w-full max-w-lg touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border bg-panel px-4 pb-[calc(16px+env(safe-area-inset-bottom))] pt-3 font-sans text-fg lit-overlay will-change-transform"
+        className="relative flex max-h-[90svh] w-full max-w-lg touch-pan-y flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl border bg-panel px-4 font-sans text-fg lit-overlay will-change-transform"
       >
         {/* The swipe-down handle: grabber, then the title left and the close X
             right (every sheet header). The rest of the sheet scrolls normally
             when it is taller than the screen. */}
         <div
           data-sheet-drag=""
-          className="flex touch-none flex-col gap-3"
+          className="flex touch-none flex-col gap-3 pt-3"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerEnd}
@@ -175,7 +175,8 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
             ))}
           </ul>
         ) : null}
-        <div className="mt-0.5 flex flex-col gap-2">
+        {/* The sheet's bottom inset (16 + the home bar) rides on its last block. */}
+        <div className="mt-0.5 flex flex-col gap-2 pb-[calc(16px+env(safe-area-inset-bottom))]">
           <button
             ref={primaryRef}
             type="button"

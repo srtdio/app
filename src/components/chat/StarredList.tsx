@@ -614,12 +614,12 @@ export function starredListView(props: StarredListViewProps): ReactElement {
     body = <StarredEmpty />;
   } else if (feed.status === 'loading' && feed.rows.length === 0) {
     body = (
-      <ul data-starred-loading="" className="flex flex-col gap-2.5">
+      <ul data-starred-loading="" className="flex flex-col gap-3">
         {Array.from({ length: LOADING_ROWS }, (_, i) => (
           <li key={i} className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card">
             <div className="flex items-center gap-2">
               <Bone as="div" lit="lit-avatar" className="h-5 w-5 shrink-0 rounded-full" />
-              <Bone as="div" lit="flat" className="h-3.5 w-1/3 rounded" />
+              <Bone as="div" lit="flat" className="h-3 w-1/3 rounded" />
             </div>
             <Bone as="div" lit="lit-bubble-other" className={cn('h-8 w-2/3', BUBBLE_SHAPE.touch)} />
           </li>
@@ -641,7 +641,7 @@ export function starredListView(props: StarredListViewProps): ReactElement {
       );
   } else {
     body = (
-      <ul data-starred-rows="" className="flex flex-col gap-2.5">
+      <ul data-starred-rows="" className="flex flex-col gap-3">
         {shown.map((row) => (
           <StarredRowView
             key={row.id}

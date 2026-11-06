@@ -1972,7 +1972,7 @@ export function PlanItemScreen(props: {
                 ) : null}
               </div>
             ) : null}
-            <section ref={commentsRef} className="flex flex-col gap-2.5" aria-label="Comments">
+            <section ref={commentsRef} className="flex flex-col gap-3" aria-label="Comments">
               <h4 className={SECTION_LABEL}>Comments</h4>
               {read.status === 'loading' ? (
                 <Bone lit="lit-card" as="div" className="h-18 rounded-xl" />
@@ -2300,7 +2300,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="failed"
-        className="flex min-h-18 items-center justify-between gap-3 rounded-xl border bg-panel px-3.5 lit-card"
+        className="flex min-h-18 items-center justify-between gap-3 rounded-xl border bg-panel px-4 lit-card"
       >
         <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
         <Button data-plan-media-retry="" onClick={props.onRetry}>
@@ -2412,7 +2412,7 @@ function PlanNotes(props: {
     <section
       data-plan-notes=""
       aria-label={PLAN_NOTES_LABEL}
-      className="flex flex-col gap-2.5 px-4 pb-2 pt-4"
+      className="flex flex-col gap-3 px-4 pb-2 pt-4"
     >
       <h4 className={SECTION_LABEL}>{PLAN_NOTES_LABEL}</h4>
       <PlanItemThread

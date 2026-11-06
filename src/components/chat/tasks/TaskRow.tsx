@@ -244,7 +244,7 @@ function PriorityMenu(props: {
           data-task-menu-p={p}
           onClick={() => props.onPick(p)}
           onContextMenu={(e) => e.preventDefault()}
-          className={cn('flex h-11 items-center gap-2 px-2.5 text-base text-fg', NO_TOUCH_SELECT)}
+          className={cn('flex h-11 items-center gap-2 px-3 text-base text-fg', NO_TOUCH_SELECT)}
         >
           <span className={cn('rounded-lg px-1.5 font-mono text-sm', P_TAG[p])}>P{p}</span>
           <span className="flex-1">{PRIORITY_LABEL[p]}</span>
@@ -356,7 +356,7 @@ function TitleCell(props: {
         e.preventDefault();
         onMenu();
       }}
-      className={cn('flex min-w-0 flex-1 flex-col items-start py-2.5', NO_TOUCH_SELECT)}
+      className={cn('flex min-w-0 flex-1 flex-col items-start py-3', NO_TOUCH_SELECT)}
     >
       <span
         className={cn('text-base font-medium', props.done ? 'text-fg-3 line-through' : 'text-fg')}

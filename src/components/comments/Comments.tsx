@@ -2429,7 +2429,10 @@ export function Comments({
           {formatRelative(comment.created_at)}
         </span>
         {opts.seq !== null ? (
-          <span data-checkpoint-seq="" className="shrink-0 whitespace-nowrap text-sm tabular-nums text-fg-3">
+          <span
+            data-checkpoint-seq=""
+            className="shrink-0 whitespace-nowrap text-sm tabular-nums text-fg-3"
+          >
             #{opts.seq}
           </span>
         ) : null}

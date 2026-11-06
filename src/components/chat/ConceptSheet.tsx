@@ -420,7 +420,7 @@ export function ConceptSheet(props: {
           ) : filesState === 'failed' ? (
             <div
               data-plan-concept-files-failed=""
-              className="flex min-h-18 items-center justify-between gap-3 rounded-xl border bg-panel px-3.5 lit-card"
+              className="flex min-h-18 items-center justify-between gap-3 rounded-xl border bg-panel px-4 lit-card"
             >
               <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
               <Button data-plan-concept-files-retry="" onClick={props.onRetryFiles}>

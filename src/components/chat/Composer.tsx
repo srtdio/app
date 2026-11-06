@@ -2152,8 +2152,8 @@ export function Composer(props: ComposerProps): ReactElement {
           'relative flex flex-col gap-2',
           // The open tray keeps lit-dock; the bar under it joins without a seam.
           trayShown
-            ? 'border-t bg-panel px-3 py-2.5 lit-dock-joined'
-            : 'border-t bg-panel px-3 py-2.5 lit-dock',
+            ? 'border-t bg-panel px-3 py-2 lit-dock-joined'
+            : 'border-t bg-panel px-3 py-2 lit-dock',
         )}
       >
         {/* The pickers slide up above the composer (edgeStrip), never a fade. */}

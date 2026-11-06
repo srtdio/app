@@ -634,7 +634,7 @@ export function AttachmentsFallback(props: {
         return (
           <div
             key={`${attachment.assetId}-${index}`}
-            className="flex min-w-0 items-center gap-2.5 rounded-xl border bg-panel px-3 py-2 lit-card"
+            className="flex min-w-0 items-center gap-3 rounded-xl border bg-panel px-3 py-2 lit-card"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3 lit-media">
               <IconFile size={ICON_SIZE.nav} />

@@ -778,7 +778,7 @@ const UNDER_WAVE = 'pl-12';
  * PressableRow is 44 tall (its min-h) and -14px margins top and bottom give
  * back the 28px, with the text centred.
  */
-const TALL_HIT = 'flex -my-3.5 items-center';
+const TALL_HIT = 'flex -my-4 items-center';
 
 /** Per side colours. Sent avoids the class names the own bubble restyles. */
 function sideTone(mine: boolean): {
@@ -1426,7 +1426,7 @@ export function VoiceNote({
             aria-hidden="true"
             data-voice-mic={mine ? 'own' : played ? 'played' : 'unplayed'}
             className={cn(
-              'absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2',
+              'absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2',
               tone.ring,
               mine
                 ? 'bg-on-bubble text-bubble-own'

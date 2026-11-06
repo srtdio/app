@@ -122,7 +122,7 @@ export function ThreadChipRow(props: {
   return (
     <li
       data-thread-chip=""
-      className={cn('relative flex min-w-0 pl-[30px] pr-4 pt-2.5', NO_TOUCH_SELECT)}
+      className={cn('relative flex min-w-0 pl-[30px] pr-4 pt-3', NO_TOUCH_SELECT)}
       {...guardProps(props.coarse)}
     >
       <span className="relative flex min-w-0 max-w-full">

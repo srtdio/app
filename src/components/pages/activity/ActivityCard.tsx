@@ -61,6 +61,7 @@ import { ONLY_YOU_LABEL, alertDisplayTime } from '@/lib/inbox/alerts';
 import { formatSendLabel } from '@/lib/chat/scheduled';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatRelative } from '@/lib/time';
+import { SECTION_LABEL_INK } from '@/components/ui/Text';
 
 interface ActivityCardProps {
   /** A digest group: one entry (solo) or several on the same entity (threaded). */
@@ -396,9 +397,9 @@ function TextTile({
     <div data-activity-text-tile={eyebrow} className="flex h-full w-full flex-col p-3">
       <span className="flex items-center gap-1 text-fg-3">
         {icon}
-        <span className="text-xs font-semibold uppercase tracking-[0.06em]">{eyebrow}</span>
+        <span className={SECTION_LABEL_INK}>{eyebrow}</span>
       </span>
-      <p className="mt-auto line-clamp-3 text-sm leading-snug text-fg-2 [overflow-wrap:anywhere]">
+      <p className="mt-auto line-clamp-3 text-sm text-fg-2 [overflow-wrap:anywhere]">
         {body}
       </p>
     </div>
@@ -607,7 +608,7 @@ export function ActivityCard({
     >
       <div
         aria-hidden="true"
-        className={cn('w-[3px] shrink-0', tone === 'accent' ? 'bg-accent' : 'bg-border-strong')}
+        className={cn('w-1 shrink-0', tone === 'accent' ? 'bg-accent' : 'bg-border-strong')}
       />
 
       <div className="min-w-0 flex-1">
@@ -855,7 +856,7 @@ export function UpcomingCard({
       data-upcoming-id={item.id}
       className="lit-card flex overflow-hidden rounded-xl border bg-panel mv-tint"
     >
-      <div aria-hidden="true" className="w-[3px] shrink-0 bg-border-strong" />
+      <div aria-hidden="true" className="w-1 shrink-0 bg-border-strong" />
 
       <div className="min-w-0 flex-1">
         <div

@@ -190,9 +190,11 @@ export function SectionHeader<S extends string = string>({
           stackSearchMd && 'md:h-auto md:flex-wrap md:gap-y-3',
         )}
       >
-        {title !== undefined ? <Text as="h2" role="title" className="shrink-0">
+        {title !== undefined ? (
+          <Text as="h2" role="title" className="shrink-0">
             {title}
-          </Text> : null}
+          </Text>
+        ) : null}
         {search !== undefined ? (
           <div
             data-search-group=""

@@ -390,7 +390,7 @@ interface SearchState {
  * the width, 44px minimum, left alignment and press; card gives the 12px corners.
  * Picked: lit-selected replaces lit-card.
  */
-const ROW_BASE = 'flex gap-3 border bg-panel p-2.5 mv-tint';
+const ROW_BASE = 'flex gap-3 border bg-panel p-3 mv-tint';
 
 function rowClass(active: boolean): string {
   return cn(ROW_BASE, 'items-start', active ? 'lit-selected' : 'lit-card');
@@ -928,11 +928,11 @@ export function PickerSkeleton(): ReactElement {
         <li
           key={i}
           data-skeleton-row=""
-          className="flex min-h-11 items-center gap-3 rounded-xl border bg-panel p-2.5 lit-card"
+          className="flex min-h-11 items-center gap-3 rounded-xl border bg-panel p-3 lit-card"
         >
           <span className="h-12 w-12 shrink-0 rounded-lg bg-panel-3" />
           <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <span className="h-3.5 w-2/3 rounded bg-panel-3" />
+            <span className="h-3 w-2/3 rounded bg-panel-3" />
             <span className="h-3 w-1/3 rounded bg-panel-2" />
           </span>
         </li>

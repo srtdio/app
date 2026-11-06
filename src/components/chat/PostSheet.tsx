@@ -375,7 +375,7 @@ export function PostSheetDetails(props: {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-start gap-3">
-        <h3 data-sheet-title="" className="min-w-0 flex-1 py-2.5 text-lg font-semibold text-fg">
+        <h3 data-sheet-title="" className="min-w-0 flex-1 py-3 text-lg font-semibold text-fg">
           {post.title}
         </h3>
         {props.aside !== undefined ? (

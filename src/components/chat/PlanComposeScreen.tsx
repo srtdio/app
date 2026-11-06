@@ -442,7 +442,7 @@ export function PlanComposeScreen(props: {
         <div
           role="alert"
           data-plan-share-error=""
-          className="rounded-xl bg-bad-soft px-3 py-2.5 text-md text-bad lit-tint"
+          className="rounded-xl bg-bad-soft px-3 py-3 text-md text-bad lit-tint"
         >
           <p className="font-semibold">{error.heading}</p>
           {error.list === true ? (
@@ -486,7 +486,7 @@ export function PlanComposeScreen(props: {
         closeLabel="Close"
         footer={footer}
       >
-        <div className="flex flex-col gap-3.5 p-3">
+        <div className="flex flex-col gap-3 p-3">
           <div className="flex flex-col gap-1.5">
             <Input
               id="plan-title"
@@ -712,11 +712,11 @@ export function ComposeItemRow(props: {
       data-plan-compose-item={item.kind}
       data-plan-compose-flag={need ? 'need' : 'ok'}
       className={cn(
-        'flex flex-col gap-2 rounded-xl border p-2.5 lit-card-muted',
+        'flex flex-col gap-2 rounded-xl border p-3 lit-card-muted',
         need ? 'border-warn bg-warn-soft' : 'bg-panel',
       )}
     >
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-3">
         {item.kind === 'concept' ? (
           <PressableRow
             type="button"
@@ -724,12 +724,12 @@ export function ComposeItemRow(props: {
             aria-label={`Edit ${item.title}`}
             onClick={props.onEdit}
             onContextMenu={(event) => event.preventDefault()}
-            className={cn('-m-1 flex min-w-0 flex-1 items-center gap-2.5 p-1', NO_TOUCH_SELECT)}
+            className={cn('-m-1 flex min-w-0 flex-1 items-center gap-3 p-1', NO_TOUCH_SELECT)}
           >
             {head}
           </PressableRow>
         ) : (
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">{head}</div>
+          <div className="flex min-w-0 flex-1 items-center gap-3">{head}</div>
         )}
         <IconButton
           type="button"
@@ -854,7 +854,7 @@ export function PlanSharedNotice(props: {
       {strip.rendered ? (
         <span
           ref={strip.ref}
-          className="rounded-lg border border-border-strong bg-panel px-3.5 py-2.5 text-base font-medium text-fg lit-float"
+          className="rounded-lg border border-border-strong bg-panel px-4 py-3 text-base font-medium text-fg lit-float"
         >
           {props.text}
         </span>

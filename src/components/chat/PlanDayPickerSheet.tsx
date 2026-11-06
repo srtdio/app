@@ -286,7 +286,7 @@ export function PlanDatesSheet(props: {
           ))}
         </div>
         {error !== null ? (
-          <p role="alert" className="rounded-xl bg-bad-soft px-3 py-2.5 text-md text-bad lit-tint">
+          <p role="alert" className="rounded-xl bg-bad-soft px-3 py-3 text-md text-bad lit-tint">
             {error}
           </p>
         ) : null}
