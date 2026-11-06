@@ -104,7 +104,7 @@ describe('onboarding and induction follow the design rules', () => {
     const flow = FILES.find(({ rel }) => rel === 'onboarding/OnboardingFlow.tsx')?.src ?? '';
     expect(flow).toContain('rounded-2xl border bg-panel p-6 lit-raised');
     // Preview cards take the card part's surface (radius 12, lit-card) and its 16 pad.
-    expect(flow).toContain("cn('w-full max-w-[340px]', cardSurface(), cardPad())");
+    expect(flow).toContain("cn('w-full max-w-xs', cardSurface(), cardPad())");
     expect(flow).not.toContain('p-3.5');
   });
 

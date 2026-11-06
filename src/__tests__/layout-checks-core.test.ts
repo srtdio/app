@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   boxText,
+  clipBox,
   distinctRoles,
   edgeHit,
   edgeViolations,
@@ -104,6 +105,58 @@ describe('tap targets', () => {
     ];
     expect(overlappingPairs(targets)).toEqual([]);
   });
+
+  it('targets in different fixed or sticky layers never pair', () => {
+    const targets: TapTarget[] = [
+      // A list row on the scrolling page under the floating nav pill.
+      { label: 'row', box: box(0, 549, 346, 72), related: [], layer: null },
+      { label: 'nav Plan', box: box(200, 600, 44, 44), related: [], layer: 0 },
+      // The decision bar is its own sticky layer.
+      { label: 'Approve', box: box(200, 608, 174, 44), related: [], layer: 1 },
+      // Two controls in the same nav layer still pair.
+      { label: 'nav stray', box: box(220, 610, 44, 44), related: [], layer: 0 },
+    ];
+    expect(overlappingPairs(targets)).toEqual([[1, 3]]);
+  });
+
+  it('absolute layering by design does not pair', () => {
+    const targets: TapTarget[] = [
+      { label: 'card press', box: box(17, 185, 169, 146), related: [], layeredWith: [1] },
+      { label: 'card ⋮', box: box(138, 199, 44, 44), related: [] },
+      { label: 'search', box: box(16, 68, 272, 44), related: [] },
+      { label: 'clear X', box: box(244, 68, 44, 44), related: [], layeredWith: [2] },
+    ];
+    expect(overlappingPairs(targets)).toEqual([]);
+  });
+
+  it('passive targets (pointer-events none, aria-hidden, inert) never pair', () => {
+    const targets: TapTarget[] = [
+      { label: 'a', box: box(0, 0, 44, 44), related: [] },
+      { label: 'b', box: box(10, 10, 44, 44), related: [], passive: true },
+    ];
+    expect(overlappingPairs(targets)).toEqual([]);
+  });
+
+  it('compares only what shows through each overflow clip', () => {
+    const scroller = box(0, 96, 390, 400);
+    const targets: TapTarget[] = [
+      // A chat card scrolled up under the header: clipped to the scroller.
+      { label: 'card', box: box(114, -31, 248, 448), related: [], clip: scroller },
+      { label: 'header btn', box: box(338, 5, 44, 44), related: [], clip: box(0, 0, 390, 664) },
+      // Clipped right out: never a target.
+      { label: 'gone', box: box(0, 520, 44, 44), related: [], clip: scroller },
+      { label: 'under gone', box: box(0, 520, 44, 44), related: [] },
+      // Still overlapping inside the clip: a real fault.
+      { label: 'in scroller', box: box(200, 200, 44, 44), related: [], clip: scroller },
+    ];
+    expect(overlappingPairs(targets)).toEqual([[0, 4]]);
+  });
+
+  it('clips a box to a rect', () => {
+    expect(clipBox(box(0, 0, 100, 100), box(50, 50, 100, 100))).toEqual(box(50, 50, 50, 50));
+    expect(clipBox(box(0, 0, 10, 10), box(20, 20, 10, 10))).toBeNull();
+    expect(clipBox(box(0, 0, 10, 10), null)).toEqual(box(0, 0, 10, 10));
+  });
 });
 
 describe('side edges', () => {
@@ -140,6 +193,51 @@ describe('side edges', () => {
       vw,
     );
     expect(found.map((f) => [f.item.label, f.side])).toEqual([['span "Hook"', 'left']]);
+  });
+
+  it('decorative (aria-hidden, inert) subtrees are not checked', () => {
+    const found = edgeViolations(
+      [
+        {
+          label: 'div "October 2026"',
+          box: box(10.6, 73, 102, 20),
+          fullBleed: false,
+          decorative: true,
+        },
+      ],
+      vw,
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('measures text cut to its overflow clip, not its unclipped run', () => {
+    const found = edgeViolations(
+      [
+        // A truncated line whose text run is 1298px wide; it shows only to 374.
+        {
+          label: 'span "Love the new cover"',
+          box: box(40, 454, 1298, 17),
+          fullBleed: false,
+          clip: box(16, 400, 358, 100),
+        },
+        // Clipped away entirely.
+        {
+          label: 'span "gone"',
+          box: box(2, 10, 50, 20),
+          fullBleed: false,
+          clip: box(16, 100, 358, 100),
+        },
+        // A real one: the clip itself reaches the edge.
+        {
+          label: 'span "near"',
+          box: box(300, 10, 86, 20),
+          fullBleed: false,
+          clip: box(0, 0, 390, 664),
+        },
+      ],
+      vw,
+    );
+    expect(found.map((f) => [f.item.label, f.side])).toEqual([['span "near"', 'right']]);
   });
 });
 
