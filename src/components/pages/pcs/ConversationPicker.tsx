@@ -141,8 +141,8 @@ export function ConversationPicker({
  */
 export const CONVERSATION_BODY_PX = 288;
 
-/** One ActionRow's box: py-2 plus the text-base and text-sm snug line boxes. */
-const CONVERSATION_ROW_PX = 16 + 14 * 1.375 + 12 * 1.375;
+/** One ActionRow's box: py-2 plus the text-base (20) and text-sm (16) line boxes. */
+const CONVERSATION_ROW_PX = 16 + 20 + 16;
 /** The gap-1 between rows. */
 const CONVERSATION_ROW_GAP_PX = 4;
 
@@ -153,7 +153,13 @@ export const CONVERSATION_SKELETON_ROWS = Math.ceil(
 );
 
 /** The fixed body box shared by all four states. */
-const BODY_BOX = 'h-[288px] overflow-y-auto';
+const BODY_BOX = 'h-72 overflow-y-auto';
+
+/** Stable keys for the fixed set of placeholder rows. */
+const SKELETON_KEYS = Array.from(
+  { length: CONVERSATION_SKELETON_ROWS },
+  (_, n) => `conversation-skeleton-${n}`,
+);
 
 /**
  * One placeholder with an ActionRow's box (padding, min height, the label and
@@ -165,13 +171,13 @@ function ConversationSkeletonRow(): ReactElement {
       data-conversation-skeleton=""
       className="flex w-full min-h-11 items-center gap-3 rounded-lg px-3 py-2"
     >
-      <span className="h-[18px] w-[18px] shrink-0 rounded bg-panel-2" />
+      <span className="h-5 w-5 shrink-0 rounded bg-panel-2" />
       <span className="flex min-w-0 flex-col">
-        <span className="text-base font-medium leading-snug">
+        <span className="text-base font-medium">
           <span className="inline-block h-3 w-32 rounded bg-panel-2 align-middle" />
         </span>
-        <span className="text-sm leading-snug">
-          <span className="inline-block h-2.5 w-20 rounded bg-panel-2 align-middle" />
+        <span className="text-sm">
+          <span className="inline-block h-3 w-20 rounded bg-panel-2 align-middle" />
         </span>
       </span>
     </div>
@@ -197,8 +203,8 @@ export function conversationPickerBody(
           aria-label="Loading conversations"
           className="flex h-full flex-col gap-1 overflow-hidden"
         >
-          {Array.from({ length: CONVERSATION_SKELETON_ROWS }).map((_, i) => (
-            <ConversationSkeletonRow key={i} />
+          {SKELETON_KEYS.map((key) => (
+            <ConversationSkeletonRow key={key} />
           ))}
         </div>
       </div>

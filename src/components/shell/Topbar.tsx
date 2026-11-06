@@ -77,7 +77,7 @@ export function Topbar({
           onClick={() => dispatchSorted('sorted:switch-workspace')}
           // L6: the tap area keeps the button's 16 inset; the name itself
           // starts on the 16 edge (the box is pulled out by its own inset).
-          className="md:hidden -ml-4 min-w-0 max-w-[190px] text-left"
+          className="md:hidden -ml-4 min-w-0 max-w-48 text-left"
         >
           {/* "<Brand> - <Platform>" can outgrow one line on a phone: wrap to two
               short lines at word breaks instead of clipping the platform. */}
@@ -93,11 +93,11 @@ export function Topbar({
           type="button"
           variant="secondary"
           onClick={onOpenPalette}
-          className="hidden md:flex min-w-[240px]"
+          className="hidden md:flex min-w-60"
         >
           <IconSearch size={ICON_SIZE.inline} className="text-fg-3" />
           <span className="flex-1 text-left text-fg-3">Search</span>
-          <kbd className="text-xs text-fg-3 border border-border rounded px-1.5 py-0.5 lit-pill">
+          <kbd className="text-xs text-fg-3 border border-border rounded px-1 py-0.5 lit-pill">
             ⌘K
           </kbd>
         </Button>

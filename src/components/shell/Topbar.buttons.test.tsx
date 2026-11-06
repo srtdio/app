@@ -64,7 +64,7 @@ describe('Topbar buttons follow the design system', () => {
 
   it('the desktop search trigger is 44 tall (was h-9)', () => {
     const found = buttons(Topbar({ ...base, workspaceName: 'Acme' }));
-    const search = found.find((el) => tokens(el).includes('min-w-[240px]'));
+    const search = found.find((el) => tokens(el).includes('min-w-60'));
     expect(search).toBeDefined();
     expect(tokens(search!)).toContain('h-11');
     expect(tokens(search!)).not.toContain('h-9');

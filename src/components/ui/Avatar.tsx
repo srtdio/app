@@ -125,6 +125,8 @@ function AvatarFace({
       <img
         src={src}
         alt={decorative ? '' : label}
+        width={px}
+        height={px}
         style={style}
         data-avatar-role={role}
         onError={() => setErrored(true)}
