@@ -351,7 +351,8 @@ describe('Use photo', () => {
     );
     expect(idle).toContain('Use photo');
     expect(idle).toContain('Cancel');
-    expect(idle.match(/h-11/g)).toHaveLength(2);
+    // The standalone h-11 (not the min-h-11 floor every Button also carries).
+    expect(idle.match(/(?<![\w-])h-11\b/g)).toHaveLength(2);
     expect(idle).not.toContain('disabled=""');
     const busy = renderToStaticMarkup(
       <PhotoPickActions busy onUse={() => {}} onCancel={() => {}} />,
