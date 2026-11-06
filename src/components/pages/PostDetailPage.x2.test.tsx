@@ -84,8 +84,9 @@ describe('2 / 5. comments header, stage section once, sticky bar', () => {
 
   it('the phone bar is the pcs PostDecisionBar, only off read-only, with room reserved under the page', () => {
     expect(PAGE).toContain('phoneLayout && !readOnly ? (');
-    expect(PAGE).toContain(
-      '<PostDecisionBar model={decisionModel} busy={decisionBusy} error={actionError} />',
+    // The running move's stage rides along (its button shows busy at its own width).
+    expect(PAGE).toMatch(
+      /<PostDecisionBar\s+model=\{decisionModel\}\s+busy=\{decisionBusy\}\s+pending=\{decisionPending\}\s+error=\{actionError\}\s+\/>/,
     );
     expect(PAGE).toContain('data-decision-bar-space=""');
     expect(PAGE).toContain(

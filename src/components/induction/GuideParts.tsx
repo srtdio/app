@@ -217,8 +217,9 @@ function dockStyle(dock: DockAt): { className: string; style: Record<string, num
     dock.side === 'top'
       ? { top: dock.insets.top + DOCK_GAP }
       : { bottom: dock.insets.bottom + DOCK_GAP };
-  if (dock.laptop) return { className: 'right-4 w-[340px]', style: vertical };
-  return { className: 'left-2 right-2', style: vertical };
+  // On the page edge (L2): 16 phone, 24 laptop.
+  if (dock.laptop) return { className: 'right-6 w-[340px]', style: vertical };
+  return { className: 'left-4 right-4', style: vertical };
 }
 
 /** Layout added to every guide control (each is a <Button>: 44 tall, 8px radius, 14 / 500). */
@@ -269,7 +270,7 @@ export const GuideBar = forwardRef<
           style={{ width: `${Math.round(progress * 1000) / 10}%` }}
         />
       </div>
-      <div className="flex items-center gap-2 px-3 py-1.5">
+      <div className="flex items-center gap-2 px-3 py-2">
         <div className="min-w-0 flex-1">
           <PhaseRow copy={copy} />
           {copy.why !== '' ? (
@@ -411,7 +412,7 @@ export function GuideCard({
           {copy.stats.map((stat) => (
             <div
               key={stat.label}
-              className="flex-1 rounded-xl border bg-panel-2 px-3 py-2.5 lit-card-muted"
+              className="flex-1 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
             >
               <p className="text-2xl font-semibold tabular-nums text-accent">{stat.value}</p>
               <p className="text-sm text-fg-2">{stat.label}</p>
@@ -420,11 +421,11 @@ export function GuideCard({
         </div>
       ) : null}
       {copy.pills.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="mt-3 flex flex-wrap gap-2">
           {copy.pills.map((pill) => (
             <span
               key={pill}
-              className="rounded-full bg-panel-2 px-2.5 py-1 text-sm font-semibold text-fg-2 lit-pill"
+              className="rounded-full bg-panel-2 px-3 py-1 text-sm font-semibold text-fg-2 lit-pill"
             >
               {pill}
             </span>
