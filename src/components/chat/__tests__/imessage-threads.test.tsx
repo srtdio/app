@@ -322,7 +322,7 @@ describe('thread controls', () => {
     const out = html(
       <>
         <RailThrough />
-        <RailTick reach="w-[15px]" top="-top-2.5" />
+        <RailTick reach="w-[15px]" top="-top-3" />
         <RailElbow reach="w-[15px]" bottom="bottom-0" />
       </>,
     );
