@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Type roles on the chat home list: the Groups / People section labels (12,
-// 600, uppercase, .06em, fg-2), the tile names as card titles (the chat list
-// keeps its chat sizes: 17/600 wide, 15/600 square), the time as meta (12,
-// tabular) and the no-match state (title lg/600, description base fg-2).
+// 600, uppercase, .06em, fg-2), group and person names as the Row heading
+// role (one row style for both), the time as meta (12, tabular) and the
+// no-match state (title lg/600, description base fg-2).
 // Pure renders; nothing reads.
 
 import { describe, expect, it, vi } from 'vitest';
@@ -76,7 +76,7 @@ describe('chat list type roles', () => {
     }
   });
 
-  it('titles: group row name heading (lg/600); person tile name secondary, full ink', () => {
+  it('titles: group and person rows both name in the Row heading role (lg/600)', () => {
     const wide = paint(list([group]), 'span', 'Launch').find((e) =>
       e.classList.contains('truncate'),
     );
@@ -87,7 +87,7 @@ describe('chat list type roles', () => {
       e.classList.contains('truncate'),
     );
     expect(classes(square as Element)).toEqual(
-      expect.arrayContaining(['truncate', 'text-fg', 'text-md', 'font-normal']),
+      expect.arrayContaining(['truncate', 'text-lg', 'font-semibold']),
     );
     for (const el of [wide, square]) {
       expect((el as Element).className).not.toMatch(/text-\[|leading-\[|font-bold/);
