@@ -307,7 +307,7 @@ describe('PlanTabPage', () => {
     expect(html.match(/data-plan-tab-today-cell=""/g)).toHaveLength(1);
     expect(html.match(/data-plan-tab-today-pill=""/g)).toHaveLength(1);
     // Thin 22px lines; no fixed 128px cells.
-    expect(html).toMatch(/<button[^>]*class="min-h-\[22px\][^"]*h-\[22px\][^"]*text-xs/);
+    expect(html).toMatch(/<button[^>]*class="h-dense [^"]*text-xs/);
     expect(html).not.toContain('h-[128px]');
   });
 
