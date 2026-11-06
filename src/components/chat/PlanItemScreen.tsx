@@ -718,7 +718,7 @@ export function PlanItemScreen(props: {
     });
     setBusy(false);
     if (!stillOn(forItem)) {
-      if (result.ok) planChanged();
+      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
       return false;
     }
     if (!result.ok) {
@@ -732,7 +732,7 @@ export function PlanItemScreen(props: {
     }
     setConfirmOpen(false);
     setOverrides((prev) => ({ ...prev, [reviewSide]: status }));
-    planChanged();
+    dispatchPlanChanged(window, bundle.plan.id);
     return true;
   };
   // "Ask changes": the composer first. The field takes focus (its keyboard
@@ -779,7 +779,7 @@ export function PlanItemScreen(props: {
     const result = await planConceptEdit(supabase, conceptEditArgs(forItem, edit, traceId));
     setEditBusy(false);
     if (!stillOn(forItem)) {
-      if (result.ok) planChanged();
+      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
       return;
     }
     if (!result.ok) {
@@ -794,7 +794,7 @@ export function PlanItemScreen(props: {
     setEditOpen(false);
     toast.show({ title: CONCEPT_UPDATED });
     reload();
-    planChanged();
+    dispatchPlanChanged(window, bundle.plan.id);
   };
 
   // The concept's linked post: the screen's own write first, else the read.
@@ -1071,7 +1071,7 @@ export function PlanItemScreen(props: {
     setPlanBusy(false);
     // Left this item (or closed) meanwhile: no toast; the list still refreshes.
     if (!stillOn(forItem)) {
-      if (result.ok) planChanged();
+      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
       return false;
     }
     if (!result.ok) {
@@ -1083,7 +1083,7 @@ export function PlanItemScreen(props: {
       toast.show({ title: planWriteErrorCopy(result.error.message, MOVE_FAILED) });
       return false;
     }
-    planChanged();
+    dispatchPlanChanged(window, bundle.plan.id);
     return true;
   };
   const moveItemTo = async (day: string | null, keep: boolean): Promise<void> => {
@@ -1116,7 +1116,7 @@ export function PlanItemScreen(props: {
     setPlanBusy(false);
     // Left this item (or closed) meanwhile: no close, no toast; the list still refreshes.
     if (!stillOn(forItem)) {
-      if (result.ok) planChanged();
+      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
       return;
     }
     if (!result.ok) {
@@ -1130,7 +1130,7 @@ export function PlanItemScreen(props: {
     }
     setRemoveOpen(false);
     toast.show({ title: REMOVED_TOAST });
-    planChanged();
+    dispatchPlanChanged(window, bundle.plan.id);
     // Back to the list (the entry item included), not out of the plan.
     (props.onRemoved ?? props.onClose)();
   };
