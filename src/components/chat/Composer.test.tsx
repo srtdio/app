@@ -890,7 +890,9 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
     const fn = body.slice(0, body.indexOf('\n  }\n') + 4);
     expect(fn).toContain("setText('');");
     // The Send button spreads the hold handlers, then the composed press.
-    expect(source).toMatch(/\{\.\.\.\(holdToSchedule \? sendHold\.handlers : \{\}\)\}\n\s*\{\.\.\.sendPress\}/);
+    expect(source).toMatch(
+      /\{\.\.\.\(holdToSchedule \? sendHold\.handlers : \{\}\)\}\n\s*\{\.\.\.sendPress\}/,
+    );
     expect(source).toContain('hold: holdToSchedule ? sendHold.handlers : null');
     t.hold.dispose();
   });
