@@ -110,7 +110,7 @@ export function PlanDayTiles(props: {
                   >
                     {civilWeekdayShort(day)}
                   </span>
-                  <span className="font-mono text-2xl font-medium leading-[1.15] tabular-nums">
+                  <span className="font-mono text-2xl font-medium tabular-nums">
                     {dayOfMonth(day)}
                   </span>
                   <span

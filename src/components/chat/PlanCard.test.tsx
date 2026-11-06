@@ -109,7 +109,7 @@ describe('PlanCardBody', () => {
       /class="text-lg font-semibold[^"]*\btruncate\b"><span data-plan-title="">/,
     );
     expect(html).not.toContain('text-xl');
-    expect(html).toMatch(/data-plan-progress="" class="truncate text-sm leading-4/);
+    expect(html).toMatch(/data-plan-progress="" class="truncate text-sm/);
     expect(html).toMatch(/data-plan-range="" class="font-mono text-sm[^"]*\btruncate\b/);
   });
 

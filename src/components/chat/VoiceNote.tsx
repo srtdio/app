@@ -1405,7 +1405,7 @@ export function VoiceNote({
         >
           <span
             className={cn(
-              'flex h-6 items-center rounded-full px-2 text-sm font-semibold leading-4 tabular-nums lit-pill',
+              'flex h-6 items-center rounded-full px-2 text-sm font-semibold tabular-nums lit-pill',
               tone.pill,
             )}
           >
@@ -1521,7 +1521,7 @@ export function VoiceNote({
       <div
         data-voice-foot=""
         className={cn(
-          'flex min-h-4 items-center gap-1 whitespace-nowrap text-sm leading-4',
+          'flex min-h-4 items-center gap-1 whitespace-nowrap text-sm',
           UNDER_WAVE,
           tone.ink,
         )}
@@ -1542,7 +1542,7 @@ export function VoiceNote({
           data-voice-error=""
           role="alert"
           className={cn(
-            'flex min-h-4 items-center gap-1 whitespace-nowrap text-sm leading-4',
+            'flex min-h-4 items-center gap-1 whitespace-nowrap text-sm',
             UNDER_WAVE,
             tone.ink,
           )}
@@ -1573,7 +1573,7 @@ export function VoiceNote({
         />
       ) : null}
       {spacer !== undefined ? (
-        <p className="h-3 text-sm leading-3" aria-hidden="true">
+        <p className="h-3 overflow-hidden text-sm" aria-hidden="true">
           {spacer}
         </p>
       ) : null}

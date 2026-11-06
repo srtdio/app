@@ -442,7 +442,7 @@ export function PlanComposeScreen(props: {
         <div
           role="alert"
           data-plan-share-error=""
-          className="rounded-xl bg-bad-soft px-3 py-2.5 text-md leading-[1.45] text-bad lit-tint"
+          className="rounded-xl bg-bad-soft px-3 py-2.5 text-md text-bad lit-tint"
         >
           <p className="font-semibold">{error.heading}</p>
           {error.list === true ? (
@@ -533,7 +533,7 @@ export function PlanComposeScreen(props: {
               Items · <span className="font-mono tabular-nums">{items.length}</span>
             </h3>
             {items.length === 0 ? (
-              <p className="px-0.5 text-sm leading-[1.4] text-fg-3">{COMPOSE_NO_ITEMS}</p>
+              <p className="px-0.5 text-sm text-fg-3">{COMPOSE_NO_ITEMS}</p>
             ) : null}
             {items.map((item) => (
               <ComposeItemRow
@@ -742,7 +742,7 @@ export function ComposeItemRow(props: {
         </IconButton>
       </div>
       {item.kind === 'concept' && item.description !== '' ? (
-        <p className="line-clamp-2 px-0.5 text-md leading-[1.45] text-fg-3">{item.description}</p>
+        <p className="line-clamp-2 px-0.5 text-md text-fg-3">{item.description}</p>
       ) : null}
       <Button
         type="button"
@@ -776,7 +776,7 @@ export function ComposeItemRow(props: {
         <p
           data-plan-compose-note={note.warn ? 'warn' : 'info'}
           className={cn(
-            'px-0.5 text-sm leading-[1.4]',
+            'px-0.5 text-sm',
             note.warn ? 'font-medium text-warn' : 'text-fg-3',
           )}
         >

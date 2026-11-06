@@ -2912,7 +2912,7 @@ export function ForwardedLabel(props: { mine?: boolean } = {}): ReactElement {
     <span
       data-forwarded=""
       className={cn(
-        'mb-1 flex items-center gap-1 text-sm leading-none',
+        'mb-1 flex items-center gap-1 text-sm',
         props.mine === true ? 'text-accent-fg' : 'text-fg-2',
       )}
     >

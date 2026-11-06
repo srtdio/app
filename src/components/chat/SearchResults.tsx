@@ -215,7 +215,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                   className={RESULT_ROW}
                 >
                   {resultAvatar(channel)}
-                  <span className="min-w-0 flex-1 truncate text-lg font-semibold leading-5 text-fg">
+                  <span className="min-w-0 flex-1 truncate text-lg font-semibold text-fg">
                     {highlightName(chatDisplayName(channel), query)}
                   </span>
                 </PressableRow>
@@ -276,7 +276,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                     {resultAvatar(channel)}
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="flex min-w-0 items-baseline gap-2">
-                        <span className="min-w-0 flex-1 truncate text-lg font-semibold leading-5 text-fg">
+                        <span className="min-w-0 flex-1 truncate text-lg font-semibold text-fg">
                           {chatDisplayName(channel)}
                         </span>
                         <span

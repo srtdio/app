@@ -3,6 +3,7 @@
 
 import type { ReactNode } from 'react';
 import { ErrorNote } from '@/components/ui/ErrorNote';
+import { Text } from '@/components/ui/Text';
 import { cn } from '@/lib/cn';
 import { countText } from '@/lib/cockpit/format';
 import type { DotLevel } from '@/lib/cockpit/types';
@@ -26,7 +27,9 @@ export function StatusDot({ level, small = false }: { level: DotLevel; small?: b
 
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{children}</h3>
+    <Text as="h3" role="section">
+      {children}
+    </Text>
   );
 }
 

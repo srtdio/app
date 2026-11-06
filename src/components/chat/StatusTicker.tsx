@@ -173,7 +173,7 @@ function TickerItem(props: {
     </>
   );
   const box = cn(
-    'flex items-center gap-1 whitespace-nowrap text-sm leading-4 text-fg-2',
+    'flex items-center gap-1 whitespace-nowrap text-sm text-fg-2',
     shrink ? 'min-w-0 shrink' : 'shrink-0',
   );
   if (props.measure === true) return <span className={cn(box, 'h-9')}>{parts}</span>;
@@ -321,7 +321,7 @@ export function StatusTickerBar(props: {
       <div
         data-loops-strip="empty"
         data-status-ticker="empty"
-        className={cn(BAR, 'gap-1 text-sm leading-4 text-fg-3', NO_CALLOUT)}
+        className={cn(BAR, 'gap-1 text-sm text-fg-3', NO_CALLOUT)}
       >
         <IconCheck size={ICON_SIZE.inline} className="shrink-0" />
         <span>{NOTHING_OPEN_LINE}</span>
@@ -381,7 +381,7 @@ export function StatusTickerBar(props: {
           ref={ellipsisRef}
           aria-hidden="true"
           data-status-measure="ellipsis"
-          className="pointer-events-none invisible absolute left-0 top-0 whitespace-pre text-sm leading-4"
+          className="pointer-events-none invisible absolute left-0 top-0 whitespace-pre text-sm"
         >
           {TITLE_ELLIPSIS}
         </span>

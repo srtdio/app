@@ -154,11 +154,11 @@ export interface StatusDrawerActions {
 const ROW_RULE = '[&+&]:border-t [&+&]:border-border';
 const ROW_BASE = 'flex items-center gap-3 py-1 mv-tint';
 const ROW = `${ROW_BASE} -mx-3 px-3 ${ROW_RULE}`;
-const DATE_COL = 'w-12 shrink-0 font-mono text-sm leading-4 tabular-nums text-fg-3';
-const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base leading-5 text-fg';
-const ROW_SUB = 'block truncate text-sm leading-4 text-fg-3';
+const DATE_COL = 'w-12 shrink-0 font-mono text-sm tabular-nums text-fg-3';
+const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base text-fg';
+const ROW_SUB = 'block truncate text-sm text-fg-3';
 const PILL =
-  'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold leading-4 lit-pill';
+  'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold lit-pill';
 
 const SEGMENT_CLASS: Record<PlanSegment, string> = {
   client: 'bg-accent',
@@ -326,7 +326,7 @@ export function PlanBlock(props: {
     >
       <PressableRow type="button" flat data-plan-open="" onClick={props.onOpen} className={ROW}>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-lg font-semibold leading-5 text-fg">
+          <span className="block truncate text-lg font-semibold text-fg">
             {bundle.plan.title}
           </span>
           <span className={ROW_SUB}>
@@ -347,7 +347,7 @@ export function PlanBlock(props: {
           );
         })}
       </div>
-      <p className="mb-1 mt-2 text-sm leading-4 text-fg-2">{progressLabel(progress, side)}</p>
+      <p className="mb-1 mt-2 text-sm text-fg-2">{progressLabel(progress, side)}</p>
       {rows.map((item) => {
         const seg = itemSegment(bundle, item, side);
         const date = itemDateLabel(bundle, item);

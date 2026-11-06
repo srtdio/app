@@ -95,7 +95,7 @@ export function PlanPickerSheet(props: {
           NO_TOUCH_SELECT,
         )}
       >
-        <p className="px-4 pb-1 pt-3 text-sm leading-4 text-fg-3">
+        <p className="px-4 pb-1 pt-3 text-sm text-fg-3">
           Upcoming plans in {props.workspaceName}
         </p>
         <div className={BODY_BOX}>
@@ -116,7 +116,7 @@ export function PlanPickerSheet(props: {
             <div className="flex flex-col gap-2 px-4 pb-4">
               {read.data.length === 0 ? (
                 <div data-plan-picker-empty="" className="pb-4 pt-6 text-center">
-                  <p className="text-base leading-5 text-fg-2">{PICKER_EMPTY}</p>
+                  <p className="text-base text-fg-2">{PICKER_EMPTY}</p>
                 </div>
               ) : (
                 pickerRows(read.data, inChat).map(({ bundle, chips }) => (
@@ -135,10 +135,10 @@ export function PlanPickerSheet(props: {
                       <IconPlan size={ICON_SIZE.control} />
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col gap-1">
-                      <span className="truncate text-lg font-semibold leading-5 text-fg">
+                      <span className="truncate text-lg font-semibold text-fg">
                         {bundle.plan.title}
                       </span>
-                      <span className="font-mono text-sm leading-4 text-fg-3">
+                      <span className="font-mono text-sm text-fg-3">
                         {planRangeLabel(bundle.plan.starts_on, bundle.plan.ends_on)}
                       </span>
                       <span className="flex flex-wrap gap-1">

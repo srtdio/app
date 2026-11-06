@@ -255,7 +255,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
           <span
             data-file-name=""
             title={props.name}
-            className="text-base font-medium leading-5 text-fg [overflow-wrap:anywhere]"
+            className="text-base font-medium text-fg [overflow-wrap:anywhere]"
           >
             {middleTruncate(props.name, BUBBLE_NAME_BUDGET)}
           </span>

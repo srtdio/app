@@ -140,7 +140,7 @@ export function ScheduledListSheet(
                       <p
                         data-scheduled-preview=""
                         className={cn(
-                          'max-w-[85%] whitespace-pre-wrap break-words bg-bubble-own px-3 py-2 text-lg leading-snug text-accent-fg lit-bubble-own',
+                          'max-w-[85%] whitespace-pre-wrap break-words bg-bubble-own px-3 py-2 text-lg text-accent-fg lit-bubble-own',
                           BUBBLE_SHAPE.touch,
                           BUBBLE_TAIL.mine,
                         )}

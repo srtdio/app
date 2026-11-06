@@ -9,6 +9,7 @@ import type {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -518,9 +519,9 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
         >
           {section.label === RECENT_LABEL ? (
             <div className="flex min-h-11 items-center justify-between">
-              <div className="px-2 py-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+              <Text as="div" role="section" className="px-2 py-1">
                 {section.label}
-              </div>
+              </Text>
               {props.onClearRecents !== undefined ? (
                 <Button
                   type="button"
@@ -534,9 +535,9 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
               ) : null}
             </div>
           ) : (
-            <div className="px-2 py-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+            <Text as="div" role="section" className="px-2 py-1">
               {section.label}
-            </div>
+            </Text>
           )}
           {section.items.map((item) => {
             const index = flat.indexOf(item);

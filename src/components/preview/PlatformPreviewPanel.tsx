@@ -500,9 +500,9 @@ function CropBox({
   const result = cropFor(dims, size);
   return (
     <section aria-label="Crop" className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+      <Text as="h3" role="section">
         Original · {dims.w} x {dims.h}
-      </h3>
+      </Text>
       <div
         className="relative mx-auto w-full max-w-xs overflow-hidden rounded-lg bg-panel-3 [&>img]:h-full [&>img]:w-full [&>img]:object-fill [&>video]:h-full [&>video]:w-full [&>video]:object-fill"
         style={{ aspectRatio: String(dims.w / dims.h) }}

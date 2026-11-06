@@ -2935,7 +2935,7 @@ export function DayColumn(props: {
           props.day === null
             ? 'whitespace-nowrap text-xs font-semibold text-fg-2'
             : cn(
-                'font-mono text-2xl font-medium leading-6 tabular-nums',
+                'font-mono text-2xl font-medium tabular-nums',
                 isToday ? 'text-accent-fg' : 'text-fg',
               ),
         )}

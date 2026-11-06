@@ -36,6 +36,7 @@ import { userProfileUpdate } from '@srtdio/rpc';
 import { AvatarCropper, type AvatarCropperHandle } from '@/components/onboarding/AvatarCropper';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -942,12 +943,9 @@ export function AlertsBlock(props: { userId: string | null }): React.ReactElemen
   const activeHours = paused ? prefs.pausedHours : null;
   return (
     <section data-alerts-block="" aria-labelledby="settings-alerts-label">
-      <h3
-        id="settings-alerts-label"
-        className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
-      >
+      <Text as="h3" role="section" id="settings-alerts-label">
         Alerts on this device
-      </h3>
+      </Text>
       <div className="mt-2 flex flex-col">
         <AlertSwitchRow
           label="Sound"

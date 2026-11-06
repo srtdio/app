@@ -391,7 +391,7 @@ export function ConceptSheet(props: {
                   const description = e.target.value;
                   onChange((f) => ({ ...f, description }));
                 }}
-                className={cn(FIELD, 'leading-[1.45]')}
+                className={FIELD}
                 style={{ minHeight: '104px' }}
               />
             </label>

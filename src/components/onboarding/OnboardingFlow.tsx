@@ -1411,7 +1411,11 @@ function PreviewCard({ label, children }: { label: string; children: ReactNode }
 }
 
 function PreviewLabel({ children }: { children: ReactNode }): ReactElement {
-  return <p className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{children}</p>;
+  return (
+    <Text as="p" role="section">
+      {children}
+    </Text>
+  );
 }
 
 function PersonPreview({

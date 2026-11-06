@@ -338,7 +338,7 @@ export function StarredRowView(props: StarredRowViewProps): ReactElement {
           <span
             data-starred-bubble={props.mine ? 'own' : 'peer'}
             className={cn(
-              'max-w-[92%] self-start whitespace-pre-wrap px-3 py-2 text-lg leading-5',
+              'max-w-[92%] self-start whitespace-pre-wrap px-3 py-2 text-lg',
               BUBBLE_SHAPE.touch,
               props.fullText === true
                 ? 'min-w-0 [overflow-wrap:anywhere]'

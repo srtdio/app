@@ -775,7 +775,7 @@ describe('first paint', () => {
 
   it('the duration is Inter 12px medium tabular; Transcribe semibold with a 44px hit area', () => {
     const html = render('fp-type');
-    expect(html).toMatch(/data-voice-foot=""[^>]*text-sm leading-4/);
+    expect(html).toMatch(/data-voice-foot=""[^>]*text-sm/);
     expect(html).toContain('data-voice-duration="" class="font-medium tabular-nums"');
     expect(html).toMatch(
       /class="[^"]*shrink-0 font-semibold flex -my-3\.5 items-center[^"]*"[^>]*data-voice-link="transcribe"/,
