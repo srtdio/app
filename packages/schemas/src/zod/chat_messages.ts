@@ -11,6 +11,7 @@ export const ChatMessageSchema = z.object({
   shared_post_ids: z.array(z.string().uuid()).nullable(),
   shared_brief_ids: z.array(z.string().uuid()).nullable(),
   shared_plan_ids: z.array(z.string().uuid()).nullable(),
+  shared_plan_item_ids: z.array(z.string().uuid()).nullable().optional(),
   reply_to_message_id: z.string().nullable(),
   thread_root_message_id: z.string().nullable(),
   forwarded_from_message_id: z.string().nullable(),

@@ -89,7 +89,7 @@ type ThreadReplyCountRow =
   Database['public']['Functions']['chat_thread_reply_counts']['Returns'][number];
 
 const MESSAGE_COLUMNS =
-  'id, channel_id, workspace_id, sender_user_id, body, mentions, attachment_asset_ids, shared_post_ids, shared_brief_ids, shared_plan_ids, reply_to_message_id, forwarded_from_message_id, attachment_meta, agora_event_id, created_at, edited_at, deleted_at, thread_root_message_id, removed_files, private_reply';
+  'id, channel_id, workspace_id, sender_user_id, body, mentions, attachment_asset_ids, shared_post_ids, shared_brief_ids, shared_plan_ids, shared_plan_item_ids, reply_to_message_id, forwarded_from_message_id, attachment_meta, agora_event_id, created_at, edited_at, deleted_at, thread_root_message_id, removed_files, private_reply';
 
 function fail<T>(message: string): Result<T> {
   return { ok: false, error: { code: 'unknown', message } };
@@ -647,6 +647,8 @@ export interface PreviewContent {
   sharedPostCount?: number;
   sharedBriefCount?: number;
   sharedPlanCount?: number;
+  /** Ideas (plan items) shared as idea cards (chat_plan_item_share). */
+  sharedIdeaCount?: number;
 }
 
 /** The columns a preview line reads from a chat_messages row. */
@@ -654,7 +656,7 @@ export type PreviewRow = Pick<
   ChatMessageRow,
   'body' | 'attachment_asset_ids' | 'attachment_meta' | 'shared_post_ids' | 'shared_brief_ids'
 > &
-  Partial<Pick<ChatMessageRow, 'shared_plan_ids'>>;
+  Partial<Pick<ChatMessageRow, 'shared_plan_ids' | 'shared_plan_item_ids'>>;
 
 const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'avif']);
 // No 'webm': a .webm with no mime and no recorded length may be a video; a
@@ -684,14 +686,20 @@ export function rowPreviewContent(row: PreviewRow): PreviewContent {
   const sharedPostCount = (row.shared_post_ids ?? []).length;
   const sharedBriefCount = (row.shared_brief_ids ?? []).length;
   const sharedPlanCount = (row.shared_plan_ids ?? []).length;
+  const sharedIdeaCount = (row.shared_plan_item_ids ?? []).length;
   return {
     body: row.body ?? '',
     hasAttachments:
-      assetIds.length > 0 || sharedPostCount > 0 || sharedBriefCount > 0 || sharedPlanCount > 0,
+      assetIds.length > 0 ||
+      sharedPostCount > 0 ||
+      sharedBriefCount > 0 ||
+      sharedPlanCount > 0 ||
+      sharedIdeaCount > 0,
     attachmentKinds: parseAttachmentMeta(row.attachment_meta, assetIds).map(attachmentPreviewKind),
     sharedPostCount,
     sharedBriefCount,
     ...(sharedPlanCount > 0 ? { sharedPlanCount } : {}),
+    ...(sharedIdeaCount > 0 ? { sharedIdeaCount } : {}),
   };
 }
 
@@ -705,7 +713,7 @@ export interface ConversationPreview extends PreviewContent {
 
 /** The columns the preview scan selects. */
 const PREVIEW_COLUMNS =
-  'id, channel_id, sender_user_id, body, attachment_asset_ids, attachment_meta, shared_post_ids, shared_brief_ids, shared_plan_ids, created_at';
+  'id, channel_id, sender_user_id, body, attachment_asset_ids, attachment_meta, shared_post_ids, shared_brief_ids, shared_plan_ids, shared_plan_item_ids, created_at';
 
 type PreviewScanRow = Pick<ChatMessageRow, 'id' | 'channel_id' | 'sender_user_id' | 'created_at'> &
   Partial<PreviewRow>;
@@ -728,6 +736,7 @@ export function latestPerChannel(rows: readonly PreviewScanRow[]): ConversationP
         shared_post_ids: row.shared_post_ids ?? null,
         shared_brief_ids: row.shared_brief_ids ?? null,
         shared_plan_ids: row.shared_plan_ids ?? null,
+        shared_plan_item_ids: row.shared_plan_item_ids ?? null,
       }),
       createdAt: row.created_at,
     });
@@ -919,6 +928,7 @@ function messageRow(value: unknown, at: string): ChatMessageRow {
     shared_post_ids: asStringsOrNull(o.shared_post_ids, `${at}.shared_post_ids`),
     shared_brief_ids: asStringsOrNull(o.shared_brief_ids, `${at}.shared_brief_ids`),
     shared_plan_ids: asStringsOrNull(o.shared_plan_ids, `${at}.shared_plan_ids`),
+    shared_plan_item_ids: asStringsOrNull(o.shared_plan_item_ids, `${at}.shared_plan_item_ids`),
     reply_to_message_id: asStringOrNull(o.reply_to_message_id, `${at}.reply_to_message_id`),
     forwarded_from_message_id: asStringOrNull(
       o.forwarded_from_message_id,
@@ -1162,4 +1172,11 @@ export async function readChatOpenBundle(
 /** Every plan id shared on these rows, in row order, deduped. Pure. */
 export function rowPlanIds(rows: readonly Pick<ChatMessageRow, 'shared_plan_ids'>[]): string[] {
   return [...new Set(rows.flatMap((row) => row.shared_plan_ids ?? []))];
+}
+
+/** Every idea (plan item) id shared on these rows, in row order, deduped. Pure. */
+export function rowIdeaIds(
+  rows: readonly Partial<Pick<ChatMessageRow, 'shared_plan_item_ids'>>[],
+): string[] {
+  return [...new Set(rows.flatMap((row) => row.shared_plan_item_ids ?? []))];
 }

@@ -45,6 +45,7 @@ export const PREVIEW_LABELS = {
   post: 'Post',
   brief: 'Brief',
   plan: 'Plan',
+  idea: 'Idea',
   photo: SUMMARY_LABELS.photo,
   file: SUMMARY_LABELS.file,
   voice: SUMMARY_LABELS.voice,
@@ -190,6 +191,7 @@ export function previewText(content: PreviewContent): string {
   if ((content.sharedPostCount ?? 0) > 0) return PREVIEW_LABELS.post;
   if ((content.sharedBriefCount ?? 0) > 0) return PREVIEW_LABELS.brief;
   if ((content.sharedPlanCount ?? 0) > 0) return PREVIEW_LABELS.plan;
+  if ((content.sharedIdeaCount ?? 0) > 0) return PREVIEW_LABELS.idea;
   const summary = attachmentSummary({
     attachments: (content.attachmentKinds ?? []).map((kind) => KIND_ATTACHMENT[kind]),
   });
@@ -200,20 +202,23 @@ export function previewText(content: PreviewContent): string {
 /** A thread message's preview content (own send, forward). Pure. */
 export function messagePreviewContent(
   message: Pick<ThreadMessage, 'body' | 'attachments' | 'sharedPostIds' | 'sharedBriefIds'> &
-    Partial<Pick<ThreadMessage, 'sharedPlanIds'>>,
+    Partial<Pick<ThreadMessage, 'sharedPlanIds' | 'sharedPlanItemIds'>>,
 ): PreviewContent {
   const sharedPlanCount = (message.sharedPlanIds ?? []).length;
+  const sharedIdeaCount = (message.sharedPlanItemIds ?? []).length;
   return {
     body: message.body,
     hasAttachments:
       message.attachments.length > 0 ||
       message.sharedPostIds.length > 0 ||
       message.sharedBriefIds.length > 0 ||
-      sharedPlanCount > 0,
+      sharedPlanCount > 0 ||
+      sharedIdeaCount > 0,
     attachmentKinds: message.attachments.map(attachmentPreviewKind),
     sharedPostCount: message.sharedPostIds.length,
     sharedBriefCount: message.sharedBriefIds.length,
     ...(sharedPlanCount > 0 ? { sharedPlanCount } : {}),
+    ...(sharedIdeaCount > 0 ? { sharedIdeaCount } : {}),
   };
 }
 
