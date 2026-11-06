@@ -2891,11 +2891,7 @@ export function Comments({
       ) : null}
 
       {!loading && !loadError && !moreError && hasMore ? (
-        <Button
-          className="self-start"
-          busy={loadingMore}
-          onClick={() => void loadPage(page + 1)}
-        >
+        <Button className="self-start" busy={loadingMore} onClick={() => void loadPage(page + 1)}>
           Load more
         </Button>
       ) : null}

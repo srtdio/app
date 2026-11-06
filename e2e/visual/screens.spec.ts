@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
+import { installHarnessNetwork, solidPng, type HarnessNetwork } from '../fixtures/harness-routes';
+import { assertSameWidth, checkLayout } from './layout-checks';
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
 import type { Row } from '../fixtures/postgrest';
 import {
@@ -16,6 +17,7 @@ import {
   PLAN_ID,
   PLAN_POST_ITEM,
   POST_IDS,
+  REFUSED_SEND,
   seedClientPlan,
   seedPlanTab,
   seedTeamAndHiddenPlans,
@@ -3048,6 +3050,332 @@ SCREENS.push(
   },
 );
 
+// ---------------------------------------------------------------------------
+// Moment states: each held still on purpose. A read or write that never
+// answers (holdRpc, holdUploads, a page route left pending) keeps the busy
+// state up for the whole test; the recorder is the page's MediaRecorder and
+// microphone stubbed in the test (no app hook). Busy controls also run
+// assertSameWidth (layout-checks.ts check 5): idle and busy are one width.
+
+/** Bytes in the stub recording: a blob of exactly this size never reads back. */
+const HELD_VOICE_BYTES = 4099;
+
+/**
+ * The page's microphone and MediaRecorder, stubbed: recording starts at once
+ * and stop hands back one chunk of HELD_VOICE_BYTES whose bytes never read, so
+ * the composer stays in its voice-sending state (the file is typed from its
+ * header before it is handed to the thread).
+ */
+async function stubRecorder(_network: HarnessNetwork, page: Page): Promise<void> {
+  await page.addInitScript((size: number) => {
+    const held = new WeakSet<Blob>();
+    const slice = Blob.prototype.slice;
+    Blob.prototype.slice = function (this: Blob, ...args: Parameters<Blob['slice']>): Blob {
+      const out = slice.apply(this, args);
+      if (this.size === size) held.add(out);
+      return out;
+    };
+    const arrayBuffer = Blob.prototype.arrayBuffer;
+    Blob.prototype.arrayBuffer = function (this: Blob): Promise<ArrayBuffer> {
+      if (held.has(this) || this.size === size) return new Promise<ArrayBuffer>(() => undefined);
+      return arrayBuffer.call(this);
+    };
+    class StubRecorder extends EventTarget {
+      state: 'inactive' | 'recording' = 'inactive';
+      readonly mimeType: string;
+      constructor(_stream: unknown, options?: { mimeType?: string }) {
+        super();
+        this.mimeType = options?.mimeType ?? 'audio/mp4';
+      }
+      static isTypeSupported(type: string): boolean {
+        return type === 'audio/mp4';
+      }
+      start(): void {
+        this.state = 'recording';
+      }
+      requestData(): void {
+        const event = new Event('dataavailable');
+        Object.defineProperty(event, 'data', {
+          value: new Blob([new Uint8Array(size)], { type: this.mimeType }),
+        });
+        this.dispatchEvent(event);
+      }
+      stop(): void {
+        if (this.state === 'inactive') return;
+        this.requestData();
+        this.state = 'inactive';
+        this.dispatchEvent(new Event('stop'));
+      }
+    }
+    Object.defineProperty(window, 'MediaRecorder', {
+      value: StubRecorder,
+      configurable: true,
+      writable: true,
+    });
+    const stream = { getTracks: () => [{ stop: () => undefined }] };
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: {
+        getUserMedia: () => Promise.resolve(stream),
+        enumerateDevices: () => Promise.resolve([]),
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      },
+      configurable: true,
+    });
+  }, HELD_VOICE_BYTES);
+}
+
+/** The DM's composer form. */
+const dmComposer = (page: Page): Locator => page.locator('form:has(textarea)').first();
+
+/** The composer row's last slot (send, mic, stop or the busy spinner). */
+const sendSlot = (page: Page): Locator =>
+  dmComposer(page).locator('[data-composer-row] > :last-child');
+
+/** The DM with a recording running (the stub microphone). */
+async function startRecording(page: Page): Promise<void> {
+  await openDm(page);
+  await tap([page.getByRole('button', { name: 'Record voice note', exact: true })], 'mic');
+  await waitFor([page.locator('[data-composer-state="recording"]')], 'recording composer');
+}
+
+/** Types a line into the DM composer and sends it. */
+async function sendInDm(page: Page, body: string): Promise<void> {
+  await openDm(page);
+  await dmComposer(page).locator('textarea').fill(body);
+  await tap([page.getByRole('button', { name: 'Send', exact: true })], 'Send');
+}
+
+/** Waits until an attribute holds one value across two reads 400ms apart. */
+async function attributeStill(target: Locator, name: string): Promise<void> {
+  let last = await target.getAttribute(name);
+  for (let i = 0; i < 20; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const now = await target.getAttribute(name);
+    if (now === last) return;
+    last = now;
+  }
+  throw new Error(`${name} never settled`);
+}
+
+/** A pending page route: requests to this path are never answered. */
+async function neverAnswerPath(page: Page, path: string): Promise<void> {
+  await page.route(
+    (url) => url.pathname === path,
+    () => undefined,
+  );
+}
+
+const PENDING_BODY = 'Sending the cut now';
+
+SCREENS.push(
+  {
+    // The composer while a voice note records: the bin in the leading slot,
+    // the red dot, "Recording" and the elapsed time (masked: it ticks), and
+    // Stop and send in the send slot.
+    name: 'chat-composer-recording',
+    seed: creator,
+    prepare: stubRecorder,
+    url: '/chat',
+    mask: (page) => [page.locator('[data-composer-field]').getByText(/^\d+:\d{2}$/)],
+    steps: startRecording,
+  },
+  {
+    // Stop and send: the voice note on its way, the spinner in the send slot
+    // at the stop button's width.
+    name: 'chat-voice-sending',
+    seed: creator,
+    prepare: stubRecorder,
+    url: '/chat',
+    steps: async (page) => {
+      await startRecording(page);
+      // Over MIN_VOICE_NOTE_MS, so the recording is sent and not dropped.
+      await page.waitForTimeout(1_100);
+      await assertSameWidth(sendSlot(page), async () => {
+        await tap(
+          [page.getByRole('button', { name: 'Stop and send voice note', exact: true })],
+          'Stop and send',
+        );
+        await expect(
+          page.getByRole('button', { name: 'Sending voice note', exact: true }),
+        ).toHaveAttribute('aria-busy', 'true');
+      });
+    },
+  },
+  {
+    // A typed draft scheduled for tomorrow, the write held: the field reads
+    // "Scheduling…" and the send slot spins at its own width.
+    name: 'chat-composer-scheduling',
+    seed: creator,
+    extra: (network) => {
+      network.holdRpc('chat_message_schedule');
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await dmComposer(page).locator('textarea').fill(SCHEDULE_DRAFT);
+      await pickTrayTile(page, 'schedule');
+      const sheet = page.getByRole('dialog', { name: 'Schedule message' });
+      await waitFor([sheet.locator('[data-schedule-row="tomorrow"]')], 'schedule options');
+      await assertSameWidth(sendSlot(page), async () => {
+        await tap([sheet.locator('[data-schedule-row="tomorrow"]')], 'Tomorrow');
+        await waitFor([page.locator('[data-composer-state="scheduling"]')], 'scheduling');
+      });
+    },
+  },
+  {
+    // One sheet saving: Rename file with a new name, the save held. Save
+    // spins at its own width and the sheet cannot close.
+    name: 'asset-rename-saving',
+    seed: creator,
+    prepare: (_network, page) => neverAnswerPath(page, '/rename'),
+    url: '/assets',
+    steps: async (page) => {
+      await assetsReady(page);
+      await tap(
+        [page.getByRole('button', { name: 'More actions for Hero banner.png', exact: true })],
+        'asset ⋯ trigger',
+      );
+      await tap(menuRow(page, /^Rename$/), 'Rename');
+      const sheet = page.getByRole('dialog', { name: 'Rename file' });
+      await waitFor([sheet], 'rename sheet');
+      await sheet.getByRole('textbox').first().fill('Hero banner final.png');
+      const save = sheet.getByRole('button', { name: 'Save', exact: true });
+      await assertSameWidth(save, async () => {
+        await save.click();
+        await expect(save).toHaveAttribute('aria-busy', 'true');
+      });
+    },
+  },
+  {
+    // Tasks: a tick autosaves, the save held: "Saving…" in the header's save
+    // slot (the slot holds its width).
+    name: 'chat-tasks-saving',
+    seed: creator,
+    extra: (network) => {
+      seedDatedTasks(network);
+      network.holdRpc('chat_task_save_batch');
+    },
+    url: '/chat',
+    steps: async (page) => {
+      const sheet = await openTasks(page);
+      const tick = sheet.locator('[data-task-tick][aria-checked="false"]').first();
+      const saved = page.waitForRequest((r) => r.url().includes('chat_task_save_batch'));
+      await assertSameWidth(sheet.locator('[data-task-save-slot]'), async () => {
+        await tick.click();
+        await saved;
+        await waitFor([sheet.locator('[data-task-save-state="saving"]')], 'Saving…');
+      });
+    },
+  },
+  {
+    // A photo sent with its upload held: the own bubble shows the local
+    // preview under the upload ring (Cancel upload).
+    name: 'chat-upload-progress',
+    seed: creator,
+    extra: (network) => {
+      network.holdUploads();
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await dmComposer(page)
+        .locator('input[type="file"]')
+        .first()
+        .setInputFiles({
+          name: 'moodboard.png',
+          mimeType: 'image/png',
+          buffer: solidPng(64, 48, [200, 120, 60]),
+        });
+      await waitFor([dmComposer(page).getByText('moodboard.png')], 'picked photo');
+      await tap([page.getByRole('button', { name: 'Send', exact: true })], 'Send');
+      const ring = await firstVisible([page.locator('[data-upload-ring]')], 'upload ring');
+      await attributeStill(ring, 'data-upload-progress');
+    },
+  },
+  {
+    // An own message whose record write is held: the clock in its meta.
+    name: 'chat-message-pending',
+    seed: creator,
+    extra: (network) => {
+      network.holdRpc('chat_message_send');
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await sendInDm(page, PENDING_BODY);
+      await waitFor(
+        [page.locator('[data-msg-id]', { hasText: PENDING_BODY }).locator('[data-status="sending"]')],
+        'pending clock',
+      );
+    },
+  },
+  {
+    // An own message the record refused: "Not sent" with the reason and Delete.
+    name: 'chat-message-not-sent',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await sendInDm(page, REFUSED_SEND);
+      await waitFor(
+        [page.locator('[data-msg-id]', { hasText: REFUSED_SEND }).locator('[data-failed-actions]')],
+        'Not sent line',
+      );
+    },
+  },
+  {
+    // The message menu's Select: one bubble's text selectable in place.
+    name: 'chat-select-mode',
+    seed: creator,
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await openDmMessageMenu(page);
+      await tap([page.locator('[data-menu-item="more"]')], 'More');
+      await tap([page.locator('[data-menu-item="select-text"]')], 'Select');
+      await waitFor([page.locator('[data-selecting-text]')], 'select mode');
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // Phone: the composer focused (the keyboard's state; WebKit here draws no
+    // keyboard): the field's focus line, the row as it sits above the keys.
+    name: 'chat-composer-keyboard',
+    seed: creator,
+    only: 'phone',
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      const field = dmComposer(page).locator('textarea');
+      await field.focus();
+      await expect(field).toBeFocused();
+    },
+  },
+  {
+    // The post screen: Approve confirmed, the stage write held. The confirm's
+    // Approve spins at its own width.
+    name: 'post-approve-busy',
+    seed: approver,
+    extra: (network) => {
+      network.holdRpc('stage_transition');
+    },
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      await tap([page.getByRole('button', { name: 'Approve', exact: true })], 'Approve');
+      const confirm = await firstVisible(
+        [page.getByRole('dialog', { name: /Approve this post/ }), page.getByRole('alertdialog')],
+        'approve confirm',
+      );
+      const approve = confirm.getByRole('button', { name: 'Approve', exact: true });
+      await assertSameWidth(approve, async () => {
+        await approve.click();
+        await expect(approve).toHaveAttribute('aria-busy', 'true');
+      });
+    },
+  },
+);
+
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
 
@@ -3135,6 +3463,8 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   await screen.steps(page);
   await stabilise(page, screen.hold === true);
   await settle(page);
+  // Layout checks (layout-checks.ts) on the state as it is shot.
+  await checkLayout(page, screen.name);
   await expect(page).toHaveScreenshot(`${screen.name}.png`, {
     maxDiffPixelRatio: 0.002,
     animations: 'disabled',
@@ -3161,6 +3491,17 @@ const LAPTOP_DARK_SCREENS = new Set([
   'post-picker',
   'chat-status-drawer',
   'chat-status-drawer-plan',
+  // Moment states: phone and laptop, light and dark.
+  'chat-composer-recording',
+  'chat-voice-sending',
+  'chat-composer-scheduling',
+  'asset-rename-saving',
+  'chat-tasks-saving',
+  'chat-upload-progress',
+  'chat-message-pending',
+  'chat-message-not-sent',
+  'chat-select-mode',
+  'post-approve-busy',
 ]);
 
 for (const screen of SCREENS) {
