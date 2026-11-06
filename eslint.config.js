@@ -64,16 +64,19 @@ const designRules = [
   },
 ];
 
-// Layout rules (CLAUDE.md): stacking, icon sizes and fixed-size images. These
-// patterns already exist in the code, so they warn (CI stays green) and
-// scripts/design-ratchet.ts blocks any new one. A rule with zero hits today
-// would be an error. Exempt only with eslint-disable-next-line plus a reason
-// after "--"; the ratchet counts every disable (designDisables).
-// design/warn-syntax is ESLint's own no-restricted-syntax under a second id so
-// it can warn while the design rules above stay errors.
+// Layout rules (CLAUDE.md): stacking, icon sizes and fixed-size images.
+// A rule with zero hits in src/** is an error (layoutErrors, typeErrors below,
+// guarded by src/__tests__/design-lint-errors.test.ts). Rules that still have
+// hits warn under design/warn-syntax (CI stays green) and
+// scripts/design-ratchet.ts blocks any new one. Exempt only with
+// eslint-disable-next-line plus a reason after "--"; the ratchet counts every
+// disable (designDisables). design/warn-syntax is ESLint's own
+// no-restricted-syntax under a second id so it can warn while the errors
+// above stay errors.
 const Z_ARBITRARY = '/(^|[\\s:])-?z-\\[/';
 const Z_MESSAGE = 'Use the stacking scale (CLAUDE.md Layout rules)';
-const layoutWarnings = [
+// Error: zero hits since the named stacking scale (tailwind.config.ts zIndex).
+const layoutErrors = [
   {
     selector: `JSXAttribute[name.name='className'] Literal[value=${Z_ARBITRARY}]`,
     message: Z_MESSAGE,
@@ -88,15 +91,14 @@ const layoutWarnings = [
     message: 'Use ICON_SIZE.*',
   },
 ];
-// B1 layout system (CLAUDE.md Layout rules). These patterns exist in code that
-// B2 migrates, so they warn here and scripts/design-ratchet.ts blocks new ones
-// (leading, tracking, arbitraryPx, handTap). ui/Text.tsx is the only place a
-// type override may live.
-// text-[Npx] / text-[Nrem] already error under DESIGN_CLASS; this warns on the rest.
+// B1 layout system (CLAUDE.md Layout rules). ui/Text.tsx is the only place a
+// type override may live; chat-type.ts holds the chat type table as constants.
+// Error: zero hits outside them.
+// text-[Npx] / text-[Nrem] already error under DESIGN_CLASS; this catches the rest.
 const TYPE_OVERRIDE = '/(^|[\\s:])(leading-|tracking-|text-\\[(?![0-9.]+(px|rem)\\]))/';
 const TYPE_MESSAGE = 'Use a text role from ui/Text.tsx (no leading-*, tracking-* or text-[..])';
 const PLACED_BUTTON = '/(^|[\\s:])(absolute|-m[trblxy]?-[0-9])/';
-const typeWarnings = [
+const typeErrors = [
   {
     selector: `JSXAttribute[name.name='className'] Literal[value=${TYPE_OVERRIDE}]`,
     message: TYPE_MESSAGE,
@@ -106,6 +108,8 @@ const typeWarnings = [
     message: TYPE_MESSAGE,
   },
 ];
+// Warn: these still have hits (placed IconButtons over media, raw inputs and
+// headings, click-catcher divs); the ratchet blocks new ones.
 const partWarnings = [
   // The trailing rule belongs to the part (ActionMenuTrigger, Row, HeaderBar,
   // Sheet), never an absolute or negative-margin IconButton at a call site.
@@ -215,28 +219,14 @@ export default tseslint.config(
     },
   },
   {
-    // Layout rules (CLAUDE.md): warn on z-[N] and icon size={N} in components.
-    files: ['src/components/**/*.{ts,tsx}', 'src/pages/**/*.{ts,tsx}'],
-    ignores: LAYOUT_IGNORES,
-    plugins: { design: designPlugin },
-    rules: {
-      'design/warn-syntax': ['warn', ...layoutWarnings, imgWarning],
-    },
-  },
-  {
-    // B1 type roles and part placement: warn in components (existing code goes
-    // red otherwise; the ratchet blocks new ones). ui/ owns the raw elements.
+    // Layout and type rules with zero hits are errors in components: stacking
+    // scale, ICON_SIZE, type roles. Raw <img> and part placement still warn.
     files: ['src/components/**/*.{ts,tsx}', 'src/pages/**/*.{ts,tsx}'],
     ignores: [...LAYOUT_IGNORES, 'src/components/ui/**'],
     plugins: { design: designPlugin },
     rules: {
-      'design/warn-syntax': [
-        'warn',
-        ...layoutWarnings,
-        imgWarning,
-        ...typeWarnings,
-        ...partWarnings,
-      ],
+      'no-restricted-syntax': ['error', rpcTraceId, ...designRules, ...layoutErrors, ...typeErrors],
+      'design/warn-syntax': ['warn', imgWarning, ...partWarnings],
     },
   },
   {
@@ -244,25 +234,38 @@ export default tseslint.config(
     files: ['src/components/chat/**/*.{ts,tsx}'],
     ignores: LAYOUT_IGNORES,
     rules: {
-      'no-restricted-syntax': ['error', rpcTraceId, ...designRules, chatCardFrame],
+      'no-restricted-syntax': [
+        'error',
+        rpcTraceId,
+        ...designRules,
+        ...layoutErrors,
+        ...typeErrors,
+        chatCardFrame,
+      ],
     },
   },
   {
-    // ui/ and media/ own the fixed-size image parts, so a raw <img> is theirs.
-    files: ['src/components/ui/**/*.{ts,tsx}', 'src/components/media/**/*.{ts,tsx}'],
+    // media/ owns the fixed-size image parts, so a raw <img> is its own.
+    files: ['src/components/media/**/*.{ts,tsx}'],
     ignores: LAYOUT_IGNORES,
     plugins: { design: designPlugin },
     rules: {
-      'design/warn-syntax': ['warn', ...layoutWarnings],
+      'design/warn-syntax': 'off',
     },
   },
   {
-    // ui/ (after the ui/ + media/ block so it wins): type overrides warn everywhere but Text.tsx (the role table).
+    // ui/ owns the raw elements and image parts; the stacking scale, ICON_SIZE
+    // and type roles are errors here too, except in Text.tsx (the role table).
     files: ['src/components/ui/**/*.{ts,tsx}'],
     ignores: [...LAYOUT_IGNORES, 'src/components/ui/Text.tsx'],
-    plugins: { design: designPlugin },
     rules: {
-      'design/warn-syntax': ['warn', ...layoutWarnings, ...typeWarnings],
+      'no-restricted-syntax': ['error', rpcTraceId, ...layoutErrors, ...typeErrors],
+    },
+  },
+  {
+    files: ['src/components/ui/Text.tsx'],
+    rules: {
+      'no-restricted-syntax': ['error', rpcTraceId, ...layoutErrors],
     },
   },
   {

@@ -3,8 +3,8 @@ import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
 // B1 lint guards (eslint.config.js): one fixture per rule, linted as if it
-// lived at the given path. Errors stay errors where today's code has zero
-// hits; the rest warn and scripts/design-ratchet.ts blocks new ones.
+// lived at the given path. A rule with zero hits in src/** is an error; the
+// rest warn and scripts/design-ratchet.ts blocks new ones.
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const eslint = new ESLint({ cwd: ROOT });
 
@@ -17,13 +17,13 @@ const PAGE = 'src/components/pages/B1Fixture.tsx';
 const CHAT = 'src/components/chat/B1Fixture.tsx';
 
 describe('B1 lint: type roles', () => {
-  it('leading-*, tracking-* and text-[..] warn outside ui/Text.tsx', async () => {
+  it('leading-*, tracking-* and text-[..] error outside ui/Text.tsx', async () => {
     const m = await messages(
       PAGE,
       'export const A = () => <span className="leading-5 tracking-wide text-[color:var(--x)]" />;\n',
     );
     expect(m.filter((x) => x.text.includes('text role')).length).toBeGreaterThan(0);
-    expect(m.every((x) => !x.text.includes('text role') || x.sev === 1)).toBe(true);
+    expect(m.every((x) => !x.text.includes('text role') || x.sev === 2)).toBe(true);
   });
 });
 
