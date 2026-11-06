@@ -135,6 +135,7 @@ describe('icon set', () => {
       nav: 18,
       control: 20,
       tray: 22,
+      picture: 24,
       status: 28,
     });
   });

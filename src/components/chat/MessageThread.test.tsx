@@ -129,7 +129,7 @@ import {
   sized,
   type ChatLayout,
 } from '@/components/chat/chat-type';
-import { formatTime } from '@/lib/time';
+import { formatTime, formatWhen } from '@/lib/time';
 import { Link } from 'react-router-dom';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { UploadRing } from '@/components/chat/UploadRing';
@@ -1427,8 +1427,9 @@ describe('image album and viewer', () => {
     expect(onOpenImage).toHaveBeenCalledWith(2);
   });
 
-  it('the viewer gets the image list only, with sender and the clock time', () => {
-    const { images, details } = threadLightbox(albumMessage, PROFILES, 'Asia/Kolkata');
+  it('the viewer gets the image list only, with sender and when it was sent (formatWhen)', () => {
+    const now = new Date('2026-11-06T12:00:00Z');
+    const { images, details } = threadLightbox(albumMessage, PROFILES, 'Asia/Kolkata', now);
     expect(images).toEqual([
       { assetId: 'v-1', name: 'p1.png' },
       { assetId: 'v-2', name: 'p2.png' },
@@ -1436,7 +1437,7 @@ describe('image album and viewer', () => {
     ]);
     expect(details).toEqual({
       sender: 'Alice',
-      time: formatTime(albumMessage.createdAt, 'Asia/Kolkata'),
+      time: formatWhen(albumMessage.createdAt, now, 'Asia/Kolkata'),
     });
   });
 

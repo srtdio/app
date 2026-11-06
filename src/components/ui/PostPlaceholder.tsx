@@ -23,6 +23,7 @@ const AA_SIZE: Record<GlyphSize, string> = {
   18: 'text-base',
   20: 'text-lg',
   22: 'text-xl',
+  24: 'text-2xl',
   28: 'text-2xl',
 };
 

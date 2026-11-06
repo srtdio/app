@@ -143,7 +143,7 @@ import {
   transcribeVoiceNote,
   useVoiceRecord,
 } from '@/lib/chat/transcript-store';
-import { civilDay, formatTime } from '@/lib/time';
+import { civilDay, formatTime, formatWhen } from '@/lib/time';
 import { getDraft, setDraft, strippedReply, type DraftReply } from '@/lib/chat/drafts';
 import {
   BUBBLE_BODY_TYPE,
@@ -929,13 +929,15 @@ export function hasAlbum(message: Pick<ThreadMessage, 'attachments'>): boolean {
 /**
  * What the thread's one image viewer shows for a message: its album images (a
  * local preview stands in for an own instant send still uploading), plus the
- * bottom bar's sender and the clock time ("2:05 PM", the viewer's clock;
- * `timeZone` is for tests). Pure.
+ * bottom bar's sender and when it was sent in the app's one past-time format
+ * (formatWhen: "2:05 PM" today, "Yesterday", "Mon", "19 Oct"; the viewer's
+ * clock; `timeZone` and `now` are for tests). Pure.
  */
 export function threadLightbox(
   message: ThreadMessage,
   profiles: Map<string, ChatProfile>,
   timeZone?: string,
+  now: Date = new Date(),
 ): { images: LightboxImage[]; details: LightboxDetails } {
   const images = splitAlbum(message.attachments).images.map((a) => {
     const src = a.local?.previewUrl;
@@ -945,7 +947,7 @@ export function threadLightbox(
     images,
     details: {
       sender: senderName(message, profiles),
-      time: formatTime(messageTimeSource(message), timeZone),
+      time: formatWhen(messageTimeSource(message), now, timeZone),
     },
   };
 }

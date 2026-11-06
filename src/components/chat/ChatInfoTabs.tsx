@@ -62,7 +62,7 @@ import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Result } from '@srtdio/rpc';
 import type { MessageCursor } from '@/lib/chat/thread';
-import { formatDate, formatTime } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 import { classifyFileKind } from '@/lib/chat/attachments';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { APP_ENTITY_ROUTES, currentOrigin, displayUrl } from '@/lib/chat/message-links';
@@ -444,9 +444,9 @@ const ROW = 'flex min-h-16 w-full items-center gap-3 border-b border-border py-2
 const ROW_ICON =
   'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-panel-2 text-fg-3 lit-media';
 
-/** "size · date" under a file name. Pure. */
+/** "size · when" under a file name (formatWhen). Pure but for the clock. */
 function fileMetaLine(item: ChannelAttachmentItem, timeZone?: string): string {
-  return `${humanizeSize(item.size)} · ${formatDate(item.createdAt, undefined, timeZone)}`;
+  return `${humanizeSize(item.size)} · ${formatWhen(item.createdAt, undefined, timeZone)}`;
 }
 
 /**
@@ -757,7 +757,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
               key={`${item.messageId}-${index}`}
               item={item}
               sender={props.senderName(item.senderUserId)}
-              date={formatDate(item.createdAt, undefined, props.timeZone)}
+              date={formatWhen(item.createdAt, undefined, props.timeZone)}
             />
           ))}
         </ul>
@@ -1138,7 +1138,7 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
           presignEnabled={props.presignEnabled}
           details={{
             sender: senderName(current.senderUserId),
-            time: formatTime(current.createdAt, props.timeZone),
+            time: formatWhen(current.createdAt, undefined, props.timeZone),
           }}
           onIndexChange={setViewer}
           onClose={() => setViewer(null)}

@@ -47,7 +47,7 @@ import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
 import { SPINNER_BUSY, useDelayedBusy } from '@/lib/useDelayedBusy';
 import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
 import { humanizeSize } from '@/lib/assets';
-import { formatDateTime } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 import { PresignError, type PresignCache } from '@/lib/asset-presign';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { attachmentLink, saveFromLink, type HeldLink } from '@/lib/files/download';
@@ -431,7 +431,7 @@ export function fileViewerDetails(
   now: Date = new Date(),
 ): { sender: string; time: string } | null {
   if (sender === undefined && sentAt === undefined) return null;
-  const time = sentAt !== undefined ? formatDateTime(sentAt, now) : '';
+  const time = sentAt !== undefined ? formatWhen(sentAt, now) : '';
   const name = sender ?? '';
   if (name === '' && time === '') return null;
   return { sender: name, time };

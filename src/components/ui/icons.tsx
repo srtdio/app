@@ -88,6 +88,8 @@ export const ICON_SIZE = {
   nav: 18,
   control: 20,
   tray: 22,
+  // The list card's icon picture (ui/ListCard): a 24 glyph on its 72 box.
+  picture: 24,
   status: 28,
 } as const;
 
