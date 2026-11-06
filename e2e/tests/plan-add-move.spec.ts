@@ -98,7 +98,8 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   const plan = await openPlan(page, PLAN_ID);
 
   // Header: range and audience; "+" then progress.
-  await expect(plan.getByText('12 to 18 Oct · Shared with approvers')).toBeVisible();
+  // One range formatter (lib/time formatDayRange): "12–18 Oct".
+  await expect(plan.getByText('12–18 Oct · Shared with approvers')).toBeVisible();
   const plus = plan.locator('[data-plan-add-header]');
   expectMinTouchTarget(await plus.boundingBox());
 

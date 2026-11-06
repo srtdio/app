@@ -459,10 +459,13 @@ test('H: the panel header keeps the phone layout: 28px title on line 1, boxed Ad
   for (const width of [1280, 950]) {
     await page.setViewportSize({ width, height: 800 });
     const box = await panel.boundingBox();
-    const add = await line2.locator('[data-plan-add-header] [data-plan-header-box]').boundingBox();
+    // B1: Add is the shared 44 Button on the 16px edge (within its 1px border).
+    const add = await line2.locator('[data-plan-add-header]').boundingBox();
     if (box === null || add === null) throw new Error('boxes');
-    expect(Math.round(box.x + box.width - (add.x + add.width))).toBe(16);
-    expect(Math.round(add.height)).toBe(34);
+    expect(Math.abs(Math.round(box.x + box.width - (add.x + add.width)) - 16)).toBeLessThanOrEqual(
+      1,
+    );
+    expect(Math.round(add.height)).toBe(44);
   }
   await expect(line2.locator('[data-plan-edit]')).toHaveCount(0);
   expectClean(network);

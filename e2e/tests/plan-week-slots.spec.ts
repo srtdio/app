@@ -507,9 +507,13 @@ test('header: agency sees the 28px title, then boxed Add on line 2 (no Edit); a 
   await expect(add).toHaveAccessibleName('Add to plan');
   await expect(add).toHaveText('Add');
   await expect(line2.locator('[data-plan-edit]')).toHaveCount(0);
-  const addBox = await boxOf(add.locator('[data-plan-header-box]'));
-  expect(Math.round(addBox.height)).toBe(34);
-  expect(Math.round(viewport.width - (addBox.x + addBox.width))).toBe(16);
+  // B1: Add is the shared 44 Button; its outer edge sits on the 16px line
+  // (within the 1px border).
+  const addBox = await boxOf(add);
+  expect(Math.round(addBox.height)).toBe(44);
+  expect(Math.abs(Math.round(viewport.width - (addBox.x + addBox.width)) - 16)).toBeLessThanOrEqual(
+    1,
+  );
   expectMinTouchTarget(await add.boundingBox());
 
   // Add opens the add sheet, as the header "+" did.
