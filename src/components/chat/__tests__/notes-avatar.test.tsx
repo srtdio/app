@@ -88,7 +88,7 @@ describe('notes avatar', () => {
   });
 });
 
-describe('the same notes avatar in all four places, no reads', () => {
+describe('the same notes avatar in the header, picker and search; the list card shows the notes icon', () => {
   const notes = notesSummary(WS, ME, PHOTO);
 
   it('tile, header, forward picker and search rows render it from the summary', () => {
@@ -141,14 +141,16 @@ describe('the same notes avatar in all four places, no reads', () => {
         onRetry: () => {},
       }),
     );
-    for (const html of [tile, header, picker, search]) {
+    for (const html of [header, picker, search]) {
       expect(html).toContain('data-notes-avatar');
       expect(html).toContain(`src="${PHOTO}"`);
     }
-    // The shared avatar roles, note kind: header 32 (the notes Row's 32
-    // leading column and the thread header), row 40 (picker, search).
-    expect(tile).toContain('h-8 w-8 rounded-lg');
-    expect(tile).toContain('data-row-leading');
+    // The chat list's Personal notes card is ui/ListCard: the notes icon on
+    // the panel-2 box at 72 (the 'icon' picture), never a photo.
+    expect(tile).toContain('data-list-card-picture="icon"');
+    expect(tile).toContain('data-notes-picture=""');
+    expect(tile).not.toContain(`src="${PHOTO}"`);
+    // The shared avatar roles, note kind: header 32 (the thread header), row 40 (picker, search).
     expect(header).toContain('h-8 w-8 rounded-lg');
     expect(picker).toContain('h-10 w-10 rounded-lg');
     expect(search).toContain('h-10 w-10 rounded-lg');
