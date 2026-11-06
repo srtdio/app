@@ -561,11 +561,19 @@ export function useBankBuckets(input: {
   useEffect(() => {
     if (!enabled || key === null || workspaceId === null) return;
     let live = true;
-    void sharedRead(key, () => listBuckets(supabase, workspaceId), { isOk: (r) => r.ok }).then(
-      (res) => {
-        if (live && res.ok) setState({ key, list: res.data });
-      },
-    );
+    void sharedRead(
+      key,
+      () =>
+        listBuckets(supabase, workspaceId).catch(
+          (error: unknown): Result<BucketOption[]> => ({
+            ok: false,
+            error: { code: 'unknown', message: String(error) },
+          }),
+        ),
+      { isOk: (r) => r.ok },
+    ).then((res) => {
+      if (live && res.ok) setState({ key, list: res.data });
+    });
     return () => {
       live = false;
     };

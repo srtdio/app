@@ -46,15 +46,7 @@ import { Highlight } from '@/components/ui/SearchHighlight';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { SidePanel } from '@/components/ui/SidePanel';
-import {
-  ICON_SIZE,
-  IconBank,
-  IconExpand,
-  IconFilterLines,
-  IconPlan,
-  IconPlus,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconBank, IconFilterLines, IconPlan, IconPlus } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { ComposeRange, PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import { queryWords } from '@/lib/chat/search';
@@ -116,7 +108,7 @@ import {
 import { usePlanTabData, warmPlanTabRead } from './plan-tab/use-plan-tab-data';
 import { BankAddSheet } from './plan-tab/BankAddSheet';
 import { BankFilterSheet } from './plan-tab/BankFilterSheet';
-import { BankFilterLine, BankSurface, type BankDropRequest } from './plan-tab/BankList';
+import { BankFilterLine, BankPanel, BankSurface, type BankDropRequest } from './plan-tab/BankList';
 import {
   BANK_FILTER_DEFAULT,
   bankCountText,
@@ -740,46 +732,22 @@ export function PlanTabPage(): ReactElement {
         {body}
       </div>
       {desktop && bankSurfaceProps !== null && showBank ? (
-        <SidePanel
+        <BankPanel
           open={bankOpen && !bankExpanded}
           onClose={() => setBankOpen(false)}
-          title={PLAN_BANK_CHIP_LABEL}
-          headerExtra={
-            <>
-              {bankCountText(bankTotal) !== null ? (
-                <span
-                  data-bank-panel-count=""
-                  className="text-lg font-semibold tabular-nums text-fg-3"
-                >
-                  {bankCountText(bankTotal)}
-                </span>
-              ) : null}
-              <IconButton
-                label="Expand"
-                data-bank-expand=""
-                className="ml-auto"
-                onClick={() => {
-                  setBankExpanded(true);
-                  setBankOpen(false);
-                }}
-              >
-                <IconExpand size={ICON_SIZE.control} />
-              </IconButton>
-            </>
+          count={bankCountText(bankTotal)}
+          onExpand={() => {
+            setBankExpanded(true);
+            setBankOpen(false);
+          }}
+          surface={{ ...bankSurfaceProps, drop: bankDrop }}
+          toolbar={
+            <div className="flex flex-col gap-1 px-4">
+              {laptopBankToolbar}
+              {bankLine}
+            </div>
           }
-        >
-          <BankSurface
-            layout="panel"
-            {...bankSurfaceProps}
-            drop={bankDrop}
-            toolbar={
-              <div className="flex flex-col gap-1 px-4">
-                {laptopBankToolbar}
-                {bankLine}
-              </div>
-            }
-          />
-        </SidePanel>
+        />
       ) : null}
       {workspaceId !== null ? (
         <BankFilterSheet

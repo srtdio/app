@@ -43,7 +43,7 @@ export function bankAddValid(title: string): boolean {
   return t.length > 0 && t.length <= BANK_TITLE_MAX;
 }
 
-export function BankAddSheet(props: {
+interface BankAddSheetProps {
   open: boolean;
   onClose: () => void;
   workspaceId: string;
@@ -51,7 +51,20 @@ export function BankAddSheet(props: {
   writes: BucketWrites;
   onBuckets: (next: BucketOption[]) => void;
   onAdded: (idea: BankIdea) => void;
-}): ReactElement {
+}
+
+/**
+ * Mounts the sheet (and its upload path) on its first open only, then keeps
+ * it so it closes with its own move: the Plan tab's paint never sets up the
+ * uploader.
+ */
+export function BankAddSheet(props: BankAddSheetProps): ReactElement | null {
+  const [opened, setOpened] = useState(props.open);
+  if (props.open && !opened) setOpened(true);
+  return opened ? <BankAddSheetBody {...props} /> : null;
+}
+
+function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
   const { uploadFile } = useCommentAttachments();
   const toast = useToast().show;
   const [title, setTitle] = useState('');

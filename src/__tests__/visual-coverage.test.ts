@@ -240,6 +240,8 @@ const LAPTOP_LIGHT_NAMES = [
   'cockpit-panel-needs',
   'cockpit-panel-users',
   'plan-tab-week',
+  'plan-tab-bank-panel',
+  'plan-tab-bank-table',
   'pipeline-drag-drop',
   'chip-row-hover',
 ];
