@@ -3,6 +3,7 @@ import importPlugin from 'eslint-plugin-import';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
+import { builtinRules } from 'eslint/use-at-your-own-risk';
 
 // Every Supabase .rpc() call must pass _trace_id (PRD section 24, Schema
 // section 1). Prefer callRpc() from src/lib/rpc.ts, which adds it. Shared so
@@ -55,6 +56,45 @@ const designRules = [
     selector: `JSXAttribute[name.name='className'] TemplateElement[value.raw=${RGBA_CLASS}]`,
     message: RGBA_MESSAGE,
   },
+];
+
+// Layout rules (CLAUDE.md): stacking, icon sizes and fixed-size images. These
+// patterns already exist in the code, so they warn (CI stays green) and
+// scripts/design-ratchet.ts blocks any new one. A rule with zero hits today
+// would be an error. Exempt only with eslint-disable-next-line plus a reason
+// after "--"; the ratchet counts every disable (designDisables).
+// design/warn-syntax is ESLint's own no-restricted-syntax under a second id so
+// it can warn while the design rules above stay errors.
+const Z_ARBITRARY = '/(^|[\\s:])-?z-\\[/';
+const Z_MESSAGE = 'Use the stacking scale (CLAUDE.md Layout rules)';
+const layoutWarnings = [
+  {
+    selector: `JSXAttribute[name.name='className'] Literal[value=${Z_ARBITRARY}]`,
+    message: Z_MESSAGE,
+  },
+  {
+    selector: `JSXAttribute[name.name='className'] TemplateElement[value.raw=${Z_ARBITRARY}]`,
+    message: Z_MESSAGE,
+  },
+  {
+    selector:
+      "JSXOpeningElement[name.name=/^Icon[A-Z]/] > JSXAttribute[name.name='size'] > JSXExpressionContainer > Literal[raw=/^[0-9]/]",
+    message: 'Use ICON_SIZE.*',
+  },
+];
+const imgWarning = {
+  selector: "JSXOpeningElement[name.name='img']",
+  message: 'Use Avatar / Thumbnail / ui image parts (fixed size)',
+};
+const designPlugin = {
+  rules: { 'warn-syntax': builtinRules.get('no-restricted-syntax') },
+};
+const LAYOUT_IGNORES = [
+  'src/components/home/**',
+  'src/components/test-site/**',
+  'src/components/dev/**',
+  'src/**/*.test.{ts,tsx}',
+  'src/**/__tests__/**',
 ];
 
 export default tseslint.config(
@@ -120,6 +160,24 @@ export default tseslint.config(
     ],
     rules: {
       'no-restricted-syntax': ['error', rpcTraceId, ...designRules],
+    },
+  },
+  {
+    // Layout rules (CLAUDE.md): warn on z-[N] and icon size={N} in components.
+    files: ['src/components/**/*.{ts,tsx}', 'src/pages/**/*.{ts,tsx}'],
+    ignores: LAYOUT_IGNORES,
+    plugins: { design: designPlugin },
+    rules: {
+      'design/warn-syntax': ['warn', ...layoutWarnings, imgWarning],
+    },
+  },
+  {
+    // ui/ and media/ own the fixed-size image parts, so a raw <img> is theirs.
+    files: ['src/components/ui/**/*.{ts,tsx}', 'src/components/media/**/*.{ts,tsx}'],
+    ignores: LAYOUT_IGNORES,
+    plugins: { design: designPlugin },
+    rules: {
+      'design/warn-syntax': ['warn', ...layoutWarnings],
     },
   },
   {

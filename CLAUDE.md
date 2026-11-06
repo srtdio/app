@@ -22,6 +22,8 @@ These commands are for GitHub CI. Claude Code does not run them (see Speed rule)
 
 Single unit test: `pnpm exec vitest run src/lib/foo.test.ts`.
 
+Design ratchet (CI: design-ratchet-ci.yml): `node --experimental-strip-types scripts/design-ratchet.ts [--verbose|--update]`.
+
 iPhone/WebKit visual checks: `pnpm test:e2e` (e2e/harness)
 
 Domain/DB suites live in `tests/<domain>/` and are NOT run by `pnpm test`. Each has its own config and CI workflow:
@@ -64,7 +66,6 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Assets are versioned; old versions are retained. R2 buckets are per-workspace (`assets-{workspace_id}`), created at runtime.
 - Briefs are read-only once created.
 - Approval is per-post; there is no bulk approve.
-- Touch targets are at least 44x44 px.
 - No connection-state UI anywhere (no Reconnecting/Connecting/Offline). Failures show per message only: clock while pending, 'Not sent' + retry on failure.
 - AI: voice note transcription only.
 
@@ -154,6 +155,25 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Speed: screens paint on the first frame from what the device or session already holds. No network read before first paint for data the device can keep (recents, titles, drafts, settings). Background refresh runs after paint, batched (one read per table, never per item), at most once per session per screen, and never repaints rows already on screen. Any unavoidable wait states its ceiling in ms and its reason in the PR body.
 - Recent lists (search) offer Clear all with UndoStrip and a per-row remove X; never a confirm dialog.
 - Auth sign-in uses a 6-digit email code on one input with autocomplete=one-time-code; never add a sign-in link.
+
+## Layout rules (locked 6 Nov 2026)
+
+- Guard: scripts/design-ratchet.ts counts drift; CI fails if a count rises. Never raise the baseline; fix the code. The Claude Code hook (.claude/settings.json) runs the same checks on every edit; exit 2 means fix it in this task.
+- L1 Spacing 4px scale only: 1,2,3,4,6,8,12 (4-48px); 0.5 (2px) only inside badges/pills. No `*-1.5/2.5/3.5`, no `[Npx]`.
+- L2 One edge: 16 phone (px-4), 24 laptop (md:px-6). Headers, search, chips, cards, sheets, section labels start on it.
+- L3 Inside <= outside: card padding <= gap between cards <= gap between sections.
+- L4 Pairs: icon to its text gap-2 (16px icons) or gap-3 (20+), centred. Arrow right after its label. Count 8px after its word.
+- L5 Rows with icons keep a fixed icon column so labels share one left edge.
+- L6 Text buttons may have a big tap area; the visible text sits on the edge.
+- L7 Tiles in a row: same height, title 1 line or 2 reserved, meta on one line.
+- L8 No orphans: hints and titles never wrap or cut.
+- L9 One page-title size; max 3 text roles per screen; no `leading-*` / `tracking-*` overrides.
+- L10 Optical nudges (1-3px) only inside ui/ parts.
+- B1 Every tap control is Button / IconButton / Chip / PressableRow at 44 (touch targets at least 44x44); nothing hand-built smaller. Read-only tags may be smaller.
+- B2 Two-button footers: phone = equal halves; laptop = right-aligned, main button on the right. Full-width buttons on phone only (md: back to normal width), except the sign-in card.
+- B3 Sibling buttons share one treatment (all circles, or all bare).
+- Exit: one exit per panel. X only for remove / clear / dismiss / cancel upload. (The back-vs-X rule is set in the next PR.)
+- Stacking: use the named scale (added next PR); never z-[N].
 
 ## Canonical living docs
 
