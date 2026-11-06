@@ -87,7 +87,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Card } from '@/components/ui/Card';
-import { Text, textRole } from '@/components/ui/Text';
+import { Text } from '@/components/ui/Text';
 import { CONTROL_IN_LINE, GUTTER } from '@/components/ui/layout';
 import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';

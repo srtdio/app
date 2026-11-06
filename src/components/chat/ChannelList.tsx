@@ -593,29 +593,34 @@ export function channelRowParts(props: {
   const time = hasMessage
     ? formatChatTime(summary.lastMessageTs, new Date(props.nowMs), props.timeZone)
     : '';
-  const preview = !wide ? null : draft !== null ? (
-    <span data-draft-preview="">
-      <span className={cn('text-accent', DRAFT_PREFIX_TYPE)}>{DRAFT_PREFIX}</span>
-      {boldAllMentions(draft)}
-    </span>
-  ) : (
-    <span {...(hasMessage ? {} : { className: 'text-fg-3' })}>
-      {previewIcon !== null && hasMessage ? (
-        <>
-          {summary.lastMessagePrefix !== undefined ? `${summary.lastMessagePrefix}: ` : ''}
-          <SummaryGlyph icon={previewIcon} className="mr-1" />
-          {summary.lastMessageText}
-        </>
-      ) : (
-        boldAllMentions(previewText)
-      )}
-    </span>
-  );
+  const preview =
+    draft !== null ? (
+      <span data-draft-preview="">
+        <span className={cn('text-accent', DRAFT_PREFIX_TYPE)}>{DRAFT_PREFIX}</span>
+        {boldAllMentions(draft)}
+      </span>
+    ) : !wide && !hasMessage ? (
+      <span data-preview-empty="" aria-hidden="true">
+        {EMPTY_PREVIEW}
+      </span>
+    ) : (
+      <span {...(hasMessage ? {} : { className: 'text-fg-3' })}>
+        {previewIcon !== null && hasMessage ? (
+          <>
+            {summary.lastMessagePrefix !== undefined ? `${summary.lastMessagePrefix}: ` : ''}
+            <SummaryGlyph icon={previewIcon} className="mr-1" />
+            {summary.lastMessageText}
+          </>
+        ) : (
+          boldAllMentions(previewText)
+        )}
+      </span>
+    );
   const avatar = (
     <Avatar
       name={name}
       {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
-      role={wide ? 'header' : 'profile'}
+      role="header"
       kind={wide ? 'group' : 'person'}
     />
   );
@@ -624,7 +629,7 @@ export function channelRowParts(props: {
   const photo = (
     <span
       {...(wide ? { 'data-group-photo': '' } : { 'data-person-photo': '' })}
-      className={wide ? GROUP_TILE_PHOTO : PERSON_TILE_PHOTO}
+      className={CHAT_ROW_PHOTO}
     >
       {avatar}
     </span>
@@ -640,13 +645,10 @@ export function channelRowParts(props: {
   };
 }
 
-/** A tile corner's inset: the badge or check sits 8 inside the square's corner. */
-const TILE_CORNER_INSET = 'flex p-2';
-
 /**
  * The ⋯ opener for a chat (H5): always visible, the trigger of the same
  * ActionMenu a long-press opens. ActionMenuTrigger owns the trailing rule, so
- * its glyph's visible edge sits on the row's (or the tile's) content edge.
+ * its glyph's visible edge sits on the row's content edge.
  * fg-3 at rest, full ink on hover, as before. Tokens only.
  */
 export const ROW_MORE_INK = 'text-fg-3 hover:text-fg';
@@ -657,10 +659,10 @@ export function chatRowMenuItems(onHide: () => void): ActionMenuItem[] {
 }
 
 /**
- * One conversation: a group is a ui/Row, a person a ui/Tile; either way the
+ * One conversation, group or person: a ui/Row (chat gutter, 72 tall) whose
  * whole surface is one button ("Open <name>"). A touch long-press (moving or
  * scrolling cancels it), right-click, Shift+F10, or the always-visible ⋯ (the
- * row's trailing slot, the tile's title line) opens the chat menu; the
+ * row's trailing slot) opens the chat menu; the
  * trailing click is swallowed so a long-press never also opens the chat. In
  * select mode a check shows and a tap toggles.
  */
@@ -677,7 +679,7 @@ export function ChannelCard(props: {
   onPressIn?: (channel: ChannelSummary) => void;
   /** The list's input (hover, coarse), read once by the list. */
   input: ChannelListInput;
-  /** A group row's divider (every row but the last in its section). */
+  /** The row's divider (every row but the last in its section). */
   divider?: boolean;
   /** Present in select mode: whether this tile is checked. */
   checked?: boolean;
