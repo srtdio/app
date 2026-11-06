@@ -8,7 +8,7 @@
 // one plan_item_from_bank. The plan: the one the Add came from; from the day
 // menu the plans covering the day (one places at once, several open the
 // Bank's plan picker, none offers Make plan). Into a shared plan an idea the
-// client cannot see asks first (#816's "{plan} is shared with approvers"
+// client cannot see asks first (PR 816's "{plan} is shared with approvers"
 // sheet). Done: "Planned in {plan}, {date}" with Undo (plan_item_to_bank).
 // A planned idea starts with no review ("Not checked yet"). Tokens only;
 // rows are lit-card cards, the sheet lit-overlay (ui/Sheet).

@@ -124,10 +124,8 @@ describe('Move to bank behind Undo', () => {
 
   it('the Plan screen offers Move to bank on concept rows only, before Remove from plan', async () => {
     const { readFileSync } = await import('node:fs');
-    const src = readFileSync(
-      new URL('../../components/chat/PlanScreen.tsx', import.meta.url),
-      'utf8',
-    );
+    const { resolve } = await import('node:path');
+    const src = readFileSync(resolve(process.cwd(), 'src/components/chat/PlanScreen.tsx'), 'utf8');
     expect(src).toMatch(
       /id: 'move',[\s\S]*?props\.item\.kind === 'concept' && menu\.onToBank !== undefined[\s\S]*?id: 'to-bank'[\s\S]*?id: 'remove'/,
     );

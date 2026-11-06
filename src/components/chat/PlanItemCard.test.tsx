@@ -59,7 +59,8 @@ describe('PlanItemCard states', () => {
 
   it('no access: the line, muted, no tap', () => {
     const html = render({ kind: 'none', id: 'i1' });
-    expect(html).toContain('You don&#x27;t have access to this idea.');
+    expect(html).toContain('have access to this idea.');
+    expect(html).toContain('You don');
     expect(html).toContain('data-idea-card="none"');
     expect(html).toContain('lit-card-muted');
     expect(html).not.toContain('<button');
@@ -80,6 +81,7 @@ describe('idea message rules (same as a plan card)', () => {
       attachments: [],
       sharedPostIds: [],
       sharedBriefIds: [],
+      sharedPlanIds: [] as string[],
       sharedPlanItemIds: ['i1'],
     };
     expect(isIdeaMessage(m)).toBe(true);

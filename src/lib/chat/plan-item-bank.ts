@@ -1,6 +1,6 @@
 // Bank meets Plan on the item screen (PlanItemScreen) and the Bank list:
 // the Buckets card's picks, the Who can see this card's copy, the item's More
-// menu per kind, the idea shape the #816 Plan it and Show sheets take, and an
+// menu per kind, the idea shape the PR 816 Plan it and Show sheets take, and an
 // Undo strip that outlives the screen (Move to bank and Delete close the
 // screen at once; the write goes when the strip ends, never after Undo).
 // Pure helpers plus one detached-undo runner; no reads before paint.
@@ -75,7 +75,7 @@ export function clientSeesLine(joinedNames: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// The idea shape the #816 sheets take
+// The idea shape the PR 816 sheets take
 // ---------------------------------------------------------------------------
 
 /** A plan item as a Bank idea (the Plan it and Show sheets read title and comments). Pure. */

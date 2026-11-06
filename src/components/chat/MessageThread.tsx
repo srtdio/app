@@ -207,13 +207,7 @@ import {
 import { useCancelUpload, useChatStore, useServerNow } from '@/components/chat/ChatStoreProvider';
 import { SharedBriefCards } from '@/components/chat/BriefCard';
 import { SharedPlanCards } from '@/components/chat/PlanCard';
-import {
-  SharedIdeaCards,
-  ideaTitleOf,
-  useMessageIdeaIds,
-  useMessageIdeasPending,
-  withIdeaIds,
-} from '@/components/chat/PlanItemCard';
+import { MessageIdeaCards, ideaTitleOf, withIdeaIds } from '@/components/chat/PlanItemCard';
 import { looksLikeBundleIdea } from '@/lib/chat/idea-cards';
 import { PaintLogOverlay, paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
@@ -2276,19 +2270,13 @@ export function MessageBubble(props: {
   const { message: own, profiles, cache, presignEnabled, showTicks, isGroup, head, tail } = props;
   const { onBadgeClick } = props;
   // Ideas: the row's own ids; a bundle row (the open bundle carries no idea
-  // ids yet) that reads empty asks for them in the idea cards' batch.
+  // ids yet) that reads empty asks for them in the idea cards' batch. The
+  // bubble stays hook-free: it reads what the batch already holds, and
+  // MessageIdeaCards subscribes and paints the cards when the read lands.
   const askIdeas = looksLikeBundleIdea(own);
-  const sharedIdeaIds = useMessageIdeaIds(own.id, own.sharedPlanItemIds ?? NO_PLAN_IDS, askIdeas);
-  const ideasPending = useMessageIdeasPending(own.id, askIdeas);
-  const message = useMemo(
-    () =>
-      sharedIdeaIds.length > 0 && (own.sharedPlanItemIds ?? []).length === 0
-        ? { ...own, sharedPlanItemIds: sharedIdeaIds }
-        : own,
-    // Keyed by the resolved ids.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [own, sharedIdeaIds.join(',')],
-  );
+  const message = askIdeas ? withIdeaIds(own) : own;
+  const sharedIdeaIds = message.sharedPlanItemIds ?? NO_PLAN_IDS;
+  const ideasPending = askIdeas && sharedIdeaIds.length === 0;
   // Notes: a saved copy names its source instead of "Forwarded".
   const savedFrom = props.savedFrom ?? null;
   const savedLine =
@@ -2661,7 +2649,7 @@ export function MessageBubble(props: {
                       <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                       <SharedBriefCards briefIds={message.sharedBriefIds} />
                       <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
-                      <SharedIdeaCards ideaIds={sharedIdeaIds} pending={ideasPending} />
+                      <MessageIdeaCards messageId={own.id} ideaIds={sharedIdeaIds} ask={askIdeas} />
                     </div>
                   ) : null}
                 </>
@@ -2680,7 +2668,7 @@ export function MessageBubble(props: {
                   <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                   <SharedBriefCards briefIds={message.sharedBriefIds} />
                   <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
-                  <SharedIdeaCards ideaIds={sharedIdeaIds} pending={ideasPending} />
+                  <MessageIdeaCards messageId={own.id} ideaIds={sharedIdeaIds} ask={askIdeas} />
                 </>
               )}
             </div>

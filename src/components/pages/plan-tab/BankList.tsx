@@ -450,7 +450,7 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
     });
   };
 
-  // Plan it (#816): the shared flow (usePlanIt); a placed idea leaves the list,
+  // Plan it (PR 816): the shared flow (usePlanIt); a placed idea leaves the list,
   // its Undo puts it back.
   const planIt = usePlanIt({
     workspaceId: props.workspaceId,
@@ -912,12 +912,12 @@ export interface PlanItFlow {
   start: (idea: BankIdea) => void;
   /** Run Plan it for a known day (a calendar drop): one plan, none, several, shared. */
   runFor: (idea: BankIdea, day: string) => Promise<void>;
-  /** The #816 sheets (date, no plan, pick a plan, shared warning); render once. */
+  /** The PR 816 sheets (date, no plan, pick a plan, shared warning); render once. */
   sheets: ReactElement;
 }
 
 /**
- * #816's Plan it, shared by the Bank (BankSurface) and a bank idea's item
+ * PR 816's Plan it, shared by the Bank (BankSurface) and a bank idea's item
  * screen: the open plans read on the tap (getPlans), one plan places at once,
  * none offers Make plan, several a picker, and a shared plan asks first when
  * the idea is team only; a past day says so (PAST_DAY_ERROR). A placed idea

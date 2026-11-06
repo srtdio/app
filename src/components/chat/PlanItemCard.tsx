@@ -117,6 +117,21 @@ export function ideaTitleOf(message: { sharedPlanItemIds?: string[] | undefined 
 }
 
 /** The idea cards of one message (`pending`: a bundle row whose ids are not read yet). */
+/**
+ * One message's idea cards: its own ids, or (an empty-looking bundle row) the
+ * ids the batch reads for it, with a skeleton while that read is out. The
+ * bubble itself stays hook-free; this is where the store is watched.
+ */
+export function MessageIdeaCards(props: {
+  messageId: string;
+  ideaIds: readonly string[];
+  ask: boolean;
+}): ReactElement {
+  const ids = useMessageIdeaIds(props.messageId, props.ideaIds, props.ask);
+  const pending = useMessageIdeasPending(props.messageId, props.ask);
+  return <SharedIdeaCards ideaIds={ids} pending={pending} />;
+}
+
 export function SharedIdeaCards(props: { ideaIds: string[]; pending?: boolean }): ReactElement {
   const store = ideaCardStore();
   const version = useIdeaStoreVersion(store);

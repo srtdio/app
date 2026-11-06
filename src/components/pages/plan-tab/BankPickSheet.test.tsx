@@ -3,6 +3,7 @@
 // shared warning / past), the header "+" day, the read on open only, the
 // laptop month's trace lines, and the Plan screen's Open and send sheet path.
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('agora-chat', () => ({ default: {} }));
@@ -10,6 +11,11 @@ vi.mock('agora-chat', () => ({ default: {} }));
 import type { PlanRow } from '@/lib/chat/plans';
 import { fromBankDay, fromBankQuery, fromBankStep } from './BankPickSheet';
 import { capWithTraces, traceDays } from './PlanCalendar';
+
+/** A source file next to this test (read as text). */
+function here(rel: string): string {
+  return resolve(process.cwd(), 'src/components/pages/plan-tab', rel);
+}
 
 const plan = (id: string, starts: string, ends: string, audience: 'team' | 'client'): PlanRow => ({
   id,
@@ -78,7 +84,7 @@ describe('From bank branches', () => {
   });
 
   it('reads when it opens, never before; 12 a page with Load more', () => {
-    const src = readFileSync(new URL('./BankPickSheet.tsx', import.meta.url), 'utf8');
+    const src = readFileSync(here('./BankPickSheet.tsx'), 'utf8');
     expect(src).toMatch(/useEffect\(\(\) => \{\s*if \(!open\) return;[\s\S]*?readFirst\(\);/);
     expect(src).toContain('PlanTabLoadMore');
     expect(src).toContain('tone="search"');
@@ -87,11 +93,11 @@ describe('From bank branches', () => {
   });
 
   it('From bank is the third Add entry after New concept and Pick a post', () => {
-    const add = readFileSync(new URL('../../chat/PlanAddSheet.tsx', import.meta.url), 'utf8');
+    const add = readFileSync(here('../../chat/PlanAddSheet.tsx'), 'utf8');
     expect(add).toMatch(/New concept[\s\S]*Pick a post[\s\S]*From bank/);
-    const tab = readFileSync(new URL('./PlanTabAdd.tsx', import.meta.url), 'utf8');
+    const tab = readFileSync(here('./PlanTabAdd.tsx'), 'utf8');
     expect(tab).toContain("onFromBank={() => setStage('bank')}");
-    const menu = readFileSync(new URL('./PlanDayMenu.tsx', import.meta.url), 'utf8');
+    const menu = readFileSync(here('./PlanDayMenu.tsx'), 'utf8');
     expect(menu).toContain('data-plan-tab-menu-bank');
   });
 });
@@ -139,7 +145,7 @@ describe('laptop month trace lines', () => {
   });
 
   it('the line is quiet: fg-3, dashed, the bank icon, never a button; agency month only', () => {
-    const src = readFileSync(new URL('./PlanCalendar.tsx', import.meta.url), 'utf8');
+    const src = readFileSync(here('./PlanCalendar.tsx'), 'utf8');
     expect(src).toMatch(/function MonthTrace[\s\S]*?<span\s+data-plan-tab-trace/);
     expect(src).toMatch(/data-plan-tab-trace[\s\S]*?border-dashed[\s\S]*?text-fg-3/);
     expect(src).toContain("enabled: side === 'agency' && props.data !== null && view === 'month'");
@@ -147,7 +153,7 @@ describe('laptop month trace lines', () => {
 });
 
 describe('Plan screen: a Draft plan refused for a chat with approvers', () => {
-  const src = readFileSync(new URL('../../chat/PlanScreen.tsx', import.meta.url), 'utf8');
+  const src = readFileSync(here('../../chat/PlanScreen.tsx'), 'utf8');
 
   it('opens "Open this plan for approvers?" instead of the old hint', () => {
     expect(src).toMatch(

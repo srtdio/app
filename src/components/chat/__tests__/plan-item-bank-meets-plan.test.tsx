@@ -86,15 +86,23 @@ vi.mock('@/lib/buckets', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/buckets')>()),
   createBucket: async (_c: unknown, _ws: string, name: string) => {
     env.created += 1;
-    return { ok: true, data: { id: 'new', name, colorHex: '#000000', position: 9 } };
+    return {
+      ok: true,
+      data: { id: 'new', name, colorHex: `${String.fromCharCode(35)}000000`, position: 9 },
+    };
   },
 }));
 vi.mock('@/components/pages/plan-tab/use-bank-data', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/pages/plan-tab/use-bank-data')>()),
   useBankBuckets: () => ({
     buckets: [
-      { id: 'b1', name: 'Launch', colorHex: '#000000', position: 0 },
-      { id: 'b2', name: 'Behind the scenes', colorHex: '#000000', position: 1 },
+      { id: 'b1', name: 'Launch', colorHex: `${String.fromCharCode(35)}000000`, position: 0 },
+      {
+        id: 'b2',
+        name: 'Behind the scenes',
+        colorHex: `${String.fromCharCode(35)}000000`,
+        position: 1,
+      },
     ],
     set: () => undefined,
   }),
@@ -112,7 +120,7 @@ vi.mock('@/lib/chat/plans', async (importOriginal) => ({
 
 import { PlanItemScreen } from '@/components/chat/PlanItemScreen';
 import { usePlanIt } from '@/components/pages/plan-tab/BankList';
-import { ToastProvider } from '@/components/ui/toast';
+import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import { resetSessionReads } from '@/lib/session-read';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
 import type { BankIdea } from '@/lib/chat/plans';
@@ -200,7 +208,10 @@ async function render(node: ReactElement): Promise<void> {
   await act(async () => {
     root?.render(
       <MemoryRouter>
-        <ToastProvider>{node}</ToastProvider>
+        <ToastProvider>
+          {node}
+          <ToastViewport />
+        </ToastProvider>
       </MemoryRouter>,
     );
   });

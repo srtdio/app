@@ -46,10 +46,10 @@
 // each change autosaves through plan_item_buckets_set with "Saving… / Saved";
 // a client reads Tags), and on a bank idea (agency) a Who can see this card
 // (Team only / Client can see, the approvers named, Show to client through
-// #816's warning sheet, Hide from client behind the Undo strip). More menu: a
+// PR 816's warning sheet, Hide from client behind the Undo strip). More menu: a
 // planned concept adds Send to chat and Move to bank (above Remove from plan;
 // the write waits for the Undo strip, the screen goes back at once); a bank
-// idea gets Plan it (#816's flow, usePlanIt), Send to chat, Show or Hide,
+// idea gets Plan it (PR 816's flow, usePlanIt), Send to chat, Show or Hide,
 // Star or Unstar, Archive or Unarchive, Delete last. Send to chat is
 // IdeaShareFlow (the chat picker, then chat_plan_item_share).
 
@@ -1407,7 +1407,7 @@ export function PlanItemScreen(props: {
 
   // Who can see this (a bank idea, agency only): Team only or Client can see,
   // the line naming the approvers (members read only while the card shows),
-  // Show to client (#816's warning sheet) or Hide from client (Undo strip).
+  // Show to client (PR 816's warning sheet) or Hide from client (Undo strip).
   const whoCard = bank && agency && concept;
   const members = useWorkspaceMembers(props.open && whoCard ? workspaceId : null);
   const approvers = useMemo(
@@ -1495,7 +1495,7 @@ export function PlanItemScreen(props: {
     });
     (props.onRemoved ?? props.onClose)();
   };
-  // Plan it (a bank idea): #816's flow (usePlanIt); placed, the screen closes.
+  // Plan it (a bank idea): PR 816's flow (usePlanIt); placed, the screen closes.
   const today = civilToday(new Date(), timeZone);
   const planIt = usePlanIt({
     workspaceId: workspaceId ?? '',

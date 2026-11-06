@@ -54,6 +54,7 @@ function row(key: ChatKey, i: number): ChatMessageRow {
     shared_post_ids: null,
     shared_brief_ids: null,
     shared_plan_ids: null,
+    shared_plan_item_ids: null,
     reply_to_message_id: null,
     thread_root_message_id: null,
     forwarded_from_message_id: null,
@@ -82,6 +83,7 @@ function bundleOf(rows: readonly ChatMessageRow[]): Record<string, unknown> {
     open_posts: [],
     open_post_count: 0,
     shared_plan_ids: [],
+    shared_plan_item_ids: null,
     open_briefs: [],
     open_brief_count: 0,
   };

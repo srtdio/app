@@ -137,7 +137,7 @@ describe('idea card store', () => {
     }));
     const messages = vi.fn(async (ids: string[]) => ({
       ok: true as const,
-      data: new Map(ids.filter((id) => id === 'm1').map((id) => [id, ['x']] as const)),
+      data: new Map(ids.filter((id) => id === 'm1').map((id): [string, string[]] => [id, ['x']])),
     }));
     const tick = manual();
     const store = createIdeaCardStore({ ideas, messages }, tick.schedule);

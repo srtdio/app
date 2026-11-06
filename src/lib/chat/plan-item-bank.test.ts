@@ -39,6 +39,7 @@ const ITEM: PlanItemRow = {
 };
 
 const noop = (): void => {};
+const NoIcon = (): null => null;
 const ids = (rows: ReadonlyArray<{ id: string }>): string[] => rows.map((r) => r.id);
 const labels = (rows: ReadonlyArray<{ label: string }>): string[] => rows.map((r) => r.label);
 
@@ -81,10 +82,10 @@ describe('More menu per kind', () => {
   it('a planned concept: Move, Edit, Send to chat, Move to bank, Remove last', () => {
     const rows = plannedConceptMenu(
       [
-        { id: 'move', label: 'Move to another day', onSelect: noop },
-        { id: 'edit', label: 'Edit concept', onSelect: noop },
+        { id: 'move', label: 'Move to another day', icon: NoIcon, onSelect: noop },
+        { id: 'edit', label: 'Edit concept', icon: NoIcon, onSelect: noop },
       ],
-      { id: 'remove', label: 'Remove from plan', tone: 'danger', onSelect: noop },
+      { id: 'remove', label: 'Remove from plan', icon: NoIcon, tone: 'danger', onSelect: noop },
       { onSendToChat: noop, onMoveToBank: noop },
     );
     expect(ids(rows)).toEqual(['move', 'edit', 'send-to-chat', 'move-to-bank', 'remove']);

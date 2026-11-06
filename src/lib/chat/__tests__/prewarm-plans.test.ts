@@ -47,6 +47,7 @@ function row(channelId: string, n: number, plans: string[] | null = null): ChatM
     shared_post_ids: null,
     shared_brief_ids: null,
     shared_plan_ids: plans,
+    shared_plan_item_ids: null,
     reply_to_message_id: null,
     forwarded_from_message_id: null,
     attachment_meta: null,

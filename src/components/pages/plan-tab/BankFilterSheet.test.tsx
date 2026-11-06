@@ -238,6 +238,7 @@ describe('phone: the bucket menu in place', () => {
   beforeEach(() => {
     h.laptop = false;
     picked = 'b1';
+    h.menus.clear();
     render();
   });
 

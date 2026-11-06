@@ -193,7 +193,9 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     const item = read('PlanItemScreen.tsx');
     expect(item).toContain("const planActions = side === 'agency' && !bank;");
     expect(item).toContain('{planActions ? (');
-    expect(item).toContain("{...(item.kind === 'concept' && planActions");
+    // The concept's ⋯ menu: planned rows only with plan actions (agency), else the bank menu.
+    expect(item).toContain('concept && planActions ? plannedMenu() : bankMenu');
+    expect(item).toContain('{...(conceptMenu !== null');
     // A client gets no plan rows in the post view's sheet.
     expect(item).toContain('<PostSheetPlanRowsContext.Provider value={planRows}>');
     expect(item).toMatch(/planActions \? \{ onMove: \(\) => setMoveOpen\(true\) \}/);
