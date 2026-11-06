@@ -22,13 +22,7 @@ import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { Switch } from '@/components/ui/Switch';
-import {
-  ICON_SIZE,
-  IconCheck,
-  IconEdit,
-  IconPlus,
-  IconTrash,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck, IconEdit, IconPlus, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import { BUCKET_NAME_MAX, type BucketOption } from '@/lib/buckets';
