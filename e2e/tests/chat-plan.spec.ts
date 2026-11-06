@@ -498,7 +498,8 @@ async function teamAndHidden(page: Page): Promise<void> {
   await openChat(page, GROUP_NAME);
   const hidden = page.locator('[data-plan-card="unavailable"]');
   await hidden.scrollIntoViewIfNeeded();
-  await expect(hidden).toHaveText('Plan deleted');
+  // ui/ChatCard: the card is the bubble, so the message time sits inside it too.
+  await expect(hidden.getByText('Plan deleted', { exact: true })).toBeVisible();
   const draftChip = page.locator('[data-plan-chip="warn"]');
   await expect(draftChip).toHaveText('Draft');
   await draftChip.scrollIntoViewIfNeeded();
