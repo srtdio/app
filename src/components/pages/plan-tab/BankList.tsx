@@ -187,7 +187,7 @@ export function BankFilterLine(props: {
   return (
     <div
       data-bank-filter-line=""
-      className="flex min-w-0 flex-wrap items-center gap-1.5 px-4 pb-1 pt-1 md:px-0"
+      className="flex min-w-0 flex-wrap items-center gap-2 px-4 pb-1 pt-1 md:px-0"
     >
       <span className="text-sm text-fg-3">Showing</span>
       <span aria-hidden="true" className="text-sm text-fg-3">
@@ -197,15 +197,15 @@ export function BankFilterLine(props: {
         <span
           key={pill.key}
           data-bank-filter-pill={pill.key}
-          className="lit-badge inline-flex h-6 items-center gap-0.5 rounded-sm border border-border-strong bg-panel pl-2 text-sm text-fg"
+          className="lit-badge inline-flex h-6 items-center gap-0.5 rounded-sm border border-border-strong bg-panel px-1 text-sm text-fg"
         >
-          {pill.label}
+          <span className="pl-1">{pill.label}</span>
           <IconButton
             label={`Remove ${pill.label}`}
-            className="-my-2.5"
+            className="-my-3"
             onClick={() => props.onFilter(withoutPill(props.filter, pill.key))}
           >
-            <IconX size={ICON_SIZE.text} />
+            <IconX size={ICON_SIZE.inline} />
           </IconButton>
         </span>
       ))}
@@ -265,7 +265,7 @@ function BankRow(props: RowProps): ReactElement {
       )}
     >
       {props.selecting ? (
-        <label className="flex min-h-[44px] min-w-[44px] shrink-0 cursor-pointer items-center justify-center self-center">
+        <label className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center self-center">
           <Checkbox
             checked={props.selected}
             onChange={props.onToggle}
@@ -285,12 +285,12 @@ function BankRow(props: RowProps): ReactElement {
         }}
         className={cn(
           'flex min-w-0 flex-1 items-start gap-3 py-3',
-          props.selecting ? 'pl-0' : 'pl-3.5',
+          props.selecting ? 'pl-0' : 'pl-4',
         )}
       >
         <BankThumb idea={idea} size={thumb} />
         <span className="flex min-w-0 flex-1 flex-col gap-1 text-left">
-          <span className="flex min-w-0 items-center gap-1.5">
+          <span className="flex min-w-0 items-center gap-2">
             {idea.starred_at != null ? (
               <span className="shrink-0 text-warn" aria-label="Starred">
                 <IconStarFilled size={ICON_SIZE.inline} />
@@ -304,7 +304,7 @@ function BankRow(props: RowProps): ReactElement {
         </span>
       </PressableRow>
       {props.canWrite && !props.selecting ? (
-        <span className="shrink-0 pr-1 pt-1.5">
+        <span className="shrink-0 pr-1 pt-2">
           <ActionMenu
             title={idea.title ?? 'Idea'}
             items={props.menuItems}
@@ -794,7 +794,7 @@ function BankBoxes(props: { layout: BankLayout }): ReactElement {
       {[0, 1, 2].map((k) => (
         <div
           key={k}
-          className="lit-card flex items-center gap-3 rounded-xl border bg-panel px-3.5 py-3"
+          className="lit-card flex items-center gap-3 rounded-xl border bg-panel px-4 py-3"
         >
           <Bone lit="lit-media" className={cn(size, 'shrink-0 rounded-lg')} />
           <span className="flex flex-1 flex-col gap-2">
@@ -823,7 +823,7 @@ function BankTable(props: {
   onStar: (idea: BankIdea) => void;
   menuFor: (idea: BankIdea) => ActionMenuItem[];
 }): ReactElement {
-  const th = 'px-3 py-2 text-left text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+  const th = 'px-3 py-2 text-left text-sm font-medium text-fg-2';
   return (
     <div data-bank-table="" className="lit-card overflow-x-auto rounded-xl border bg-panel">
       <table className="w-full border-collapse text-base">
@@ -863,7 +863,7 @@ function BankTable(props: {
               >
                 {props.canWrite ? (
                   <td className="px-1">
-                    <label className="flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center">
+                    <label className="flex h-11 w-11 cursor-pointer items-center justify-center">
                       <Checkbox
                         checked={on}
                         onChange={() => props.onToggle(idea.id)}
@@ -893,7 +893,7 @@ function BankTable(props: {
                     </span>
                   ) : null}
                 </td>
-                <td className="max-w-[320px] px-3 py-2">
+                <td className="max-w-xs px-3 py-2">
                   <PressableRow
                     type="button"
                     flat
@@ -926,7 +926,7 @@ function BankTable(props: {
                   )}
                 </td>
                 <td className="px-3 py-2 font-mono tabular-nums text-fg-2">{idea.comment_count}</td>
-                <td className="whitespace-nowrap px-3 py-2 font-mono text-sm tabular-nums text-fg-3">
+                <td className="shrink-0 whitespace-nowrap px-3 py-2 font-mono text-sm tabular-nums text-fg-3">
                   {formatRelative(idea.last_active_at ?? idea.created_at, props.now)}
                 </td>
                 <td className="px-2 py-1">
@@ -1046,7 +1046,7 @@ export function BankPlanItSheets(props: {
                   type="button"
                   data-bank-plan-option={plan.id}
                   onClick={() => props.onPickPlan(step.idea, plan, step.day)}
-                  className="lit-card flex items-center gap-2 border bg-panel px-3.5 py-3"
+                  className="lit-card flex items-center gap-2 border bg-panel px-4 py-3"
                 >
                   <span className="min-w-0 flex-1 truncate text-base font-medium text-fg">
                     {plan.title}

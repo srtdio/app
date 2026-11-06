@@ -24,7 +24,7 @@ export function BankSelectBar(props: {
       data-bank-select-bar=""
       role="toolbar"
       aria-label="Selected ideas"
-      className="lit-card mx-4 flex min-h-[44px] items-center gap-1 rounded-xl border bg-panel px-1 md:mx-0"
+      className="lit-card mx-4 flex items-center gap-1 rounded-xl border bg-panel px-1 md:mx-0"
     >
       <Button variant="ghost" type="button" data-bank-select-cancel="" onClick={props.onCancel}>
         Cancel

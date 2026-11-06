@@ -11,6 +11,7 @@ import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { DropZone } from '@/components/ui/DropZone';
 import { ErrorNote } from '@/components/ui/ErrorNote';
+import { Field } from '@/components/ui/Field';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
@@ -154,38 +155,38 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
       }
     >
       <div data-bank-add="" className="flex flex-col gap-3 bg-bg p-4">
-        <div className="lit-card flex flex-col gap-3 rounded-xl border bg-panel p-3.5">
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-              Title
-            </span>
-            <Input
-              autoFocus
-              data-bank-add-title=""
-              value={title}
-              maxLength={BANK_TITLE_MAX}
-              required
-              onChange={(e) => {
-                setTitle(e.target.value);
-                setError(null);
-              }}
-            />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-              Description
-            </span>
-            <Textarea
-              data-bank-add-description=""
-              value={description}
-              rows={3}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </label>
+        <div className="lit-card flex flex-col gap-3 rounded-xl border bg-panel p-4">
+          <Field label="Title" required>
+            {(id) => (
+              <Input
+                id={id}
+                autoFocus
+                data-bank-add-title=""
+                value={title}
+                maxLength={BANK_TITLE_MAX}
+                required
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  setError(null);
+                }}
+              />
+            )}
+          </Field>
+          <Field label="Description">
+            {(id) => (
+              <Textarea
+                id={id}
+                data-bank-add-description=""
+                value={description}
+                rows={3}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            )}
+          </Field>
           {error !== null ? <ErrorNote>{error}</ErrorNote> : null}
         </div>
-        <div className="lit-card flex flex-col gap-2 rounded-xl border bg-panel p-3.5">
-          <span className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">Files</span>
+        <div className="lit-card flex flex-col gap-2 rounded-xl border bg-panel p-4">
+          <span className="text-base font-medium text-fg">Files</span>
           <DropZone
             data-bank-add-files=""
             onClick={() => inputRef.current?.click()}
@@ -245,10 +246,8 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
             </ul>
           ) : null}
         </div>
-        <div className="lit-card flex flex-col gap-2 rounded-xl border bg-panel p-3.5">
-          <span className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-            Buckets
-          </span>
+        <div className="lit-card flex flex-col gap-2 rounded-xl border bg-panel p-4">
+          <span className="text-base font-medium text-fg">Buckets</span>
           <BucketChips
             buckets={props.buckets}
             picked={null}

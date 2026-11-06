@@ -48,8 +48,8 @@ export interface BucketWrites {
   countIn: (id: string) => number;
 }
 
-const CARD = 'lit-card flex flex-col gap-3 rounded-xl border bg-panel p-3.5';
-const LABEL = 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+const CARD = 'lit-card flex flex-col gap-3 rounded-xl border bg-panel p-4';
+const LABEL = 'text-base font-medium text-fg';
 
 export function BankFilterSheet(props: {
   open: boolean;
@@ -102,7 +102,7 @@ export function BankFilterSheet(props: {
           </div>
         </section>
         <section className={CARD}>
-          <div className="flex min-h-[44px] items-center justify-between">
+          <div className="flex items-center justify-between">
             <span className="text-base text-fg">Show archived ideas</span>
             <Switch
               checked={filter.archived}
@@ -110,7 +110,7 @@ export function BankFilterSheet(props: {
               onChange={(archived) => props.onFilter({ ...filter, archived, review: false })}
             />
           </div>
-          <div className="flex min-h-[44px] items-center justify-between">
+          <div className="flex items-center justify-between">
             <span className="text-base text-fg">{UNTOUCHED_LABEL}</span>
             <Switch
               checked={filter.review}
@@ -393,7 +393,7 @@ function InlineName(props: {
         className="w-40"
       />
       <IconButton label="Save" data-bank-bucket-save="" onClick={props.onDone}>
-        <IconCheck size={ICON_SIZE.control} />
+        <IconCheck size={ICON_SIZE.nav} />
       </IconButton>
     </span>
   );
