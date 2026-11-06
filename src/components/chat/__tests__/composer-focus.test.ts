@@ -54,9 +54,22 @@ describe('F7: composer input size by width, never under 16px on a phone', () => 
   });
 
   it('every phone width stays at 16px or more, with no width breakpoint', () => {
+    // The type scale in tailwind.config.ts (value lock): token -> px.
+    const SCALE_PX: Record<string, number> = {
+      xs: 11,
+      sm: 12,
+      md: 13,
+      base: 14,
+      lg: 15,
+      input: 16,
+      xl: 17,
+      '2xl': 20,
+      '3xl': 28,
+    };
     for (const widthPx of [320, 360, 390, 430, 767]) {
       const cls = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx }));
-      const px = Number(/!text-\[(\d+)px\]/.exec(cls)?.[1]);
+      const token = /!text-(xs|sm|md|base|lg|input|xl|2xl|3xl)\b/.exec(cls)?.[1] ?? '';
+      const px = SCALE_PX[token] ?? Number.NaN;
       expect(px).toBeGreaterThanOrEqual(16);
       expect(cls).not.toContain('md:');
     }
