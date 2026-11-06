@@ -191,7 +191,8 @@ function Picture({
  *   2. preview (secondary), 2 lines, always 2 lines tall;
  *   3. time (meta) + one grey Tag + space + ⋮ (the trailing rule).
  * Three roles (heading, secondary, meta) plus the tag. Every card is the same
- * height: 16 + max(72, 20 + 4 + 36 + 4 + 20) + 16 = 116.
+ * height: 1 + 16 + max(72, 20 + 4 + 36 + 4 + 20) + 16 + 1 = 118 (border, padding,
+ * the text column; the 72 picture never sets it).
  */
 export function ListCard({
   picture,

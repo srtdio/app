@@ -455,7 +455,11 @@ export function ActivityCard({
               onOpenGroup(group, openEntry);
             },
             press: {
-              'aria-label': [title, unread ? 'Unread' : null, previewText || null]
+              'aria-label': [
+                title,
+                unread ? 'Unread' : null,
+                previewText !== '' ? previewText : null,
+              ]
                 .filter((part): part is string => part !== null)
                 .join(', '),
               'data-activity-lead': '',
