@@ -113,7 +113,7 @@ describe('onboarding and induction follow the design rules', () => {
     expect(guide).toContain("kind === 'intro' ? 'rounded-2xl' : 'rounded-xl'");
     expect(guide).toContain('border bg-panel p-4 text-fg lit-overlay');
     expect(guide).not.toMatch(/bg-accent text-accent-fg|text-accent-fg/);
-    expect(guide).toContain('<Button variant="primary" onClick={onPress}>');
+    expect(guide).toContain('<Button variant="primary" busy={busy} onClick={onPress}>');
     // Skip tour is ghost (text-fg-2), which contrast.test holds at 4.5:1 on panel in both themes.
     expect(guide).not.toMatch(/variant=\{hero/);
   });
