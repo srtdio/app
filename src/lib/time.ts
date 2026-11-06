@@ -182,20 +182,44 @@ export function formatDate(value: DateInput, now: Date = new Date(), timeZone?: 
   return dayText(civil, civilOfInstant(now, zone).year);
 }
 
-/** Today "2:14 PM", yesterday "Yesterday", this year "20 Oct", older "20 Oct 2025". */
+const SHORT_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/** Whole civil days from `from` to `to` (calendar arithmetic, no zone involved). */
+function civilDaysBetween(from: Civil, to: Civil): number {
+  const a = Date.UTC(from.year, from.month - 1, from.day);
+  const b = Date.UTC(to.year, to.month - 1, to.day);
+  return Math.round((b - a) / DAY);
+}
+
+/**
+ * THE past-time format, app-wide (lists, chat day dividers, comments, history,
+ * Activity, Assets, Members...): today "10:27 AM"; yesterday "Yesterday";
+ * 2-6 days ago the weekday "Mon"; older "19 Oct"; another year "19 Oct 2025".
+ * Civil days on the given (workspace) zone. Never relative ("ago", "just now").
+ * A future instant reads as its day like any other ("Due" lives in formatDue).
+ */
+export function formatWhen(value: DateInput, now: Date = new Date(), timeZone?: string): string {
+  const zone = safeTimeZone(timeZone);
+  const civil = civilOf(value, zone);
+  if (civil === undefined) return '';
+  const today = civilOfInstant(now, zone);
+  const days = civilDaysBetween(civil, today);
+  if (days === 0) return formatTime(value, zone);
+  if (days === 1) return 'Yesterday';
+  if (days >= 2 && days <= 6) {
+    const weekday = new Date(Date.UTC(civil.year, civil.month - 1, civil.day)).getUTCDay();
+    return SHORT_WEEKDAYS[weekday] ?? '';
+  }
+  return dayText(civil, today.year);
+}
+
+/** Alias of formatWhen, kept for existing chat call sites. */
 export function formatChatTime(
   value: DateInput,
   now: Date = new Date(),
   timeZone?: string,
 ): string {
-  const zone = safeTimeZone(timeZone);
-  const civil = civilOf(value, zone);
-  if (civil === undefined) return '';
-  const today = civilOfInstant(now, zone);
-  const key = civilKey(civil);
-  if (key === civilKey(today)) return formatTime(value, zone);
-  if (key === civilKey(previousDay(today))) return 'Yesterday';
-  return dayText(civil, today.year);
+  return formatWhen(value, now, timeZone);
 }
 
 /**
