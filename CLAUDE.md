@@ -174,7 +174,6 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - B3 Sibling buttons share one treatment (all circles, or all bare).
 - Exit: one exit per panel. X only for remove / clear / dismiss / cancel upload. (The back-vs-X rule is set in the next PR.)
 - Stacking: use the named scale (added next PR); never z-[N].
-- cn() merges classes (tailwind-merge): a later class beats an earlier one in the same group, so a call site's className overrides a part's default.
 
 ## Canonical living docs
 
