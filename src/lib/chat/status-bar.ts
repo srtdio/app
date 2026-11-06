@@ -434,10 +434,10 @@ export const SEGMENT_PILL: Record<PlanSegment, string> = {
 };
 
 /**
- * The drawer's date column: "12 Oct" ("12 Oct 2025" off the current year). A
- * calendar date ("YYYY-MM-DD") reads as is; an instant reads on `timeZone`:
- * the workspace zone for a due date (a post's target_date), absent for a
- * moment (the viewer's device clock); '' when unparseable. Pure.
+ * The drawer's due-date column: "12 Oct" ("12 Oct 2025" off the current year).
+ * A calendar date ("YYYY-MM-DD") reads as is; an instant reads on `timeZone`,
+ * the workspace zone for a due date (a post's target_date); '' when
+ * unparseable. A past moment (a brief's created_at) uses time.ts formatWhen. Pure.
  */
 export function drawerDay(value: string | null, timeZone?: string | null): string {
   if (value === null || value === '') return '';
