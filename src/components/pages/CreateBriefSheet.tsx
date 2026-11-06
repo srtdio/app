@@ -248,9 +248,8 @@ export function firstBriefErrorField(errors: Record<string, string>): BriefError
   return null;
 }
 
-/** The Create button's label: in flight, uploading, or ready. Pure. */
-function createBriefLabel(submitting: boolean, pendingUploads: number): string {
-  if (submitting) return 'Create brief';
+/** The Create button's label: uploading, or ready (in flight is Button busy). Pure. */
+function createBriefLabel(pendingUploads: number): string {
   if (pendingUploads > 0) return `Uploading ${fileCount(pendingUploads)}…`;
   return 'Create brief';
 }
@@ -394,7 +393,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
       onClick={() => void handleSubmit()}
       busy={submitting}
     >
-      {createBriefLabel(submitting, pendingUploads)}
+      {createBriefLabel(pendingUploads)}
     </Button>
   );
 

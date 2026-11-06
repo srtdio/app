@@ -29,7 +29,7 @@ import { PLAN_WEEK_CHIP_ZERO, planCardMeta, planSections, type PlanWeekChip } fr
  * Load more's copy. It never swaps while the page is in flight: busy shows on
  * the button (Button busy), so the label keeps its width. Pure.
  */
-export function loadMoreLabel(_busy: boolean): string {
+export function loadMoreLabel(): string {
   return 'Load more';
 }
 
@@ -40,8 +40,8 @@ export interface PlanTabMore {
 }
 
 /**
- * Load more (the Comments pattern): the shared Button, 44 tall, disabled and
- * 'Loading' while the page is in flight. The phone list and the laptop
+ * Load more (the Comments pattern): the shared Button, 44 tall, busy (its
+ * label kept, the arc over it) while the page is in flight. The phone list and the laptop
  * calendar both end with it.
  */
 export function PlanTabLoadMore(props: { more: PlanTabMore }): ReactElement {
@@ -53,7 +53,7 @@ export function PlanTabLoadMore(props: { more: PlanTabMore }): ReactElement {
       busy={props.more.busy}
       onClick={props.more.onMore}
     >
-      {loadMoreLabel(props.more.busy)}
+      {loadMoreLabel()}
     </Button>
   );
 }
