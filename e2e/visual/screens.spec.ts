@@ -3125,8 +3125,11 @@ async function stubRecorder(_network: HarnessNetwork, page: Page): Promise<void>
   }, HELD_VOICE_BYTES);
 }
 
-/** The DM's composer form. */
-const dmComposer = (page: Page): Locator => page.locator('form:has(textarea)').first();
+/**
+ * The DM's composer form. Found by the composer row (ui/Composer), not its
+ * textarea: recording swaps the field's contents, so the textarea unmounts.
+ */
+const dmComposer = (page: Page): Locator => page.locator('form:has([data-composer-row])').first();
 
 /** The composer row's last slot (send, mic, stop or the busy spinner). */
 const sendSlot = (page: Page): Locator =>
@@ -3240,7 +3243,10 @@ SCREENS.push(
       const sheet = page.getByRole('dialog', { name: 'Rename file' });
       await waitFor([sheet], 'rename sheet');
       await sheet.getByRole('textbox').first().fill('Hero banner final.png');
-      const save = sheet.getByRole('button', { name: 'Save', exact: true });
+      // The footer's submit, found by its slot: busy (ui/Button) hides the
+      // label, so the button's name is empty while it spins.
+      const save = sheet.locator('[data-sheet-footer] button[type="submit"]');
+      await expect(save).toHaveAccessibleName('Save');
       await assertSameWidth(save, async () => {
         await save.click();
         await expect(save).toHaveAttribute('aria-busy', 'true');
@@ -3363,7 +3369,10 @@ SCREENS.push(
         [page.getByRole('dialog', { name: /Approve this post/ }), page.getByRole('alertdialog')],
         'approve confirm',
       );
-      const approve = confirm.getByRole('button', { name: 'Approve', exact: true });
+      // The confirm's Approve by its hook: busy (ui/Button) hides the label,
+      // so the button's name is empty while it spins.
+      const approve = confirm.locator('[data-approve-confirm-button]');
+      await expect(approve).toHaveAccessibleName('Approve');
       await assertSameWidth(approve, async () => {
         await approve.click();
         await expect(approve).toHaveAttribute('aria-busy', 'true');

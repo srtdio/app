@@ -177,21 +177,28 @@ async function readPage(page: Page): Promise<RawPage> {
     };
 
     /**
-     * Whether el is absolutely layered on other by design: el (or a wrapper
-     * of it below any fixed/sticky layer) is position:absolute, that wrapper
-     * does not hold other, and its containing block is or holds other.
+     * The position:absolute wrapper at or above el (below any fixed/sticky
+     * layer) and its containing block, or null when el is in flow.
      */
-    const layeredOn = (el: Element, other: Element): boolean => {
+    const absoluteOf = (el: Element): { wrapper: Element; block: Element } | null => {
       for (let at: Element | null = el; at !== null; at = at.parentElement) {
         const pos = getComputedStyle(at).position;
-        if (pos === 'fixed' || pos === 'sticky') return false;
+        if (pos === 'fixed' || pos === 'sticky') return null;
         if (pos !== 'absolute') continue;
-        if (at.contains(other)) return false;
-        const block = (at as HTMLElement).offsetParent ?? document.body;
-        return block === other || block.contains(other);
+        return { wrapper: at, block: (at as HTMLElement).offsetParent ?? document.body };
       }
-      return false;
+      return null;
     };
+
+    /**
+     * Whether a target is absolutely layered on other by design: its
+     * absolute wrapper does not hold other, and that wrapper's containing
+     * block is or holds other.
+     */
+    const layeredOn = (abs: { wrapper: Element; block: Element } | null, other: Element): boolean =>
+      abs !== null &&
+      !abs.wrapper.contains(other) &&
+      (abs.block === other || abs.block.contains(other));
 
     /** Inside an aria-hidden or inert subtree. */
     const hiddenFromUse = (el: Element): boolean =>
@@ -242,6 +249,7 @@ async function readPage(page: Page): Promise<RawPage> {
       if (!shown(el)) return false;
       return onTop(el, el.getBoundingClientRect());
     });
+    const absolutes = tapEls.map(absoluteOf);
     const targets: RawTarget[] = tapEls.map((el, i) => ({
       label: nameOf(el),
       box: toBox(el.getBoundingClientRect()),
@@ -250,7 +258,9 @@ async function readPage(page: Page): Promise<RawPage> {
       ),
       layer: layerOf(el),
       layeredWith: tapEls.flatMap((other, j) =>
-        j !== i && (layeredOn(el, other) || layeredOn(other, el)) ? [j] : [],
+        j !== i && (layeredOn(absolutes[i] ?? null, other) || layeredOn(absolutes[j] ?? null, el))
+          ? [j]
+          : [],
       ),
       clip: clipOf(el),
     }));
@@ -387,11 +397,9 @@ export async function assertSameWidth(
   locator: Locator,
   action: () => Promise<void>,
 ): Promise<void> {
-  const before = await locator.boundingBox();
-  if (before === null) throw new Error(`assertSameWidth: ${String(locator)} has no box at idle`);
+  const before = await boxWhenVisible(locator, 'at idle');
   await action();
-  const after = await locator.boundingBox();
-  if (after === null) throw new Error(`assertSameWidth: ${String(locator)} has no box when busy`);
+  const after = await boxWhenVisible(locator, 'when busy');
   if (sameWidth(before.width, after.width)) return;
   settleFindings(test.info().title, [
     {
@@ -399,4 +407,26 @@ export async function assertSameWidth(
       message: `${String(locator)} is ${before.width}px idle and ${after.width}px busy`,
     },
   ]);
+}
+
+/** How long assertSameWidth waits for its control to show before it fails. */
+const SAME_WIDTH_WAIT_MS = 10_000;
+
+/**
+ * The locator's box once it shows, waiting at most SAME_WIDTH_WAIT_MS; fails
+ * with the locator and the state named (never the test's whole timeout).
+ */
+async function boxWhenVisible(locator: Locator, state: string): Promise<Box> {
+  try {
+    await locator.waitFor({ state: 'visible', timeout: SAME_WIDTH_WAIT_MS });
+  } catch (error) {
+    const why = error instanceof Error ? error.message.split('\n')[0] : String(error);
+    throw new Error(
+      `assertSameWidth: ${String(locator)} did not show ${state} within ` +
+        `${SAME_WIDTH_WAIT_MS}ms (${why})`,
+    );
+  }
+  const box = await locator.boundingBox({ timeout: SAME_WIDTH_WAIT_MS });
+  if (box === null) throw new Error(`assertSameWidth: ${String(locator)} has no box ${state}`);
+  return box;
 }
