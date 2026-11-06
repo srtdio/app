@@ -503,7 +503,7 @@ export function PlanCalendar(props: {
 
 // A plan chip is the shared ui/Chip with its tone dot and, for a draft plan, the
 // Draft tag after the title; gap-2 keeps the spacing it had as a Button.
-const PLAN_CHIP = 'max-w-[260px] shrink-0 gap-2';
+const PLAN_CHIP = 'max-w-64 shrink-0 gap-2';
 
 /** The legend (plan item: round dot; post in no plan: square dot), for the page's top bar. */
 export function PlanTabLegend(): ReactElement {
@@ -515,11 +515,11 @@ export function PlanTabLegend(): ReactElement {
       data-plan-tab-legend=""
       className="hidden min-w-0 items-center gap-4 text-sm text-fg-2 min-[1100px]:flex"
     >
-      <span className="flex items-center gap-1.5 whitespace-nowrap">
+      <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">
         <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-accent" />
         {PLAN_ITEM_LEGEND}
       </span>
-      <span className="flex items-center gap-1.5 whitespace-nowrap">
+      <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">
         <span
           aria-hidden="true"
           className={cn('h-2 w-2 shrink-0 rounded-sm', LOOSE_POST_CLASSES.dot)}
@@ -568,7 +568,7 @@ function ChipRow(props: {
               <span
                 aria-hidden="true"
                 className={cn(
-                  'h-2.5 w-2.5 shrink-0 rounded-full',
+                  'h-2 w-2 shrink-0 rounded-full',
                   PLAN_TONE_CLASSES[props.tones.get(plan.id) ?? 'accent'].dot,
                 )}
               />
@@ -732,7 +732,7 @@ function MonthGrid(props: {
                 data-plan-tab-out={cell.inMonth ? undefined : ''}
                 data-plan-tab-today-cell={isToday ? '' : undefined}
                 className={cn(
-                  'flex h-full min-h-0 min-w-0 flex-col gap-0.5 overflow-hidden border-b border-r p-1.5 last:border-r-0',
+                  'flex h-full min-h-0 min-w-0 flex-col gap-0.5 overflow-hidden border-b border-r p-1 last:border-r-0',
                   cellLine(isToday, cp.over),
                   cell.inMonth ? 'bg-bg' : 'bg-panel-2',
                   isToday && TODAY_DAY,
@@ -740,7 +740,7 @@ function MonthGrid(props: {
                   cp.over && DROP,
                 )}
               >
-                <span className="flex h-6 shrink-0 items-center gap-1.5">
+                <span className="flex h-6 shrink-0 items-center gap-2">
                   <span
                     data-plan-tab-today={isToday ? '' : undefined}
                     className={cn(
@@ -766,7 +766,7 @@ function MonthGrid(props: {
                 {props.loading && cell.inMonth && (weekIndex * 7 + cellIndex) % 3 === 1 ? (
                   <Bone
                     lit="flat"
-                    className={cn('w-4/5 shrink-0 rounded-lg', props.coarse ? 'h-11' : 'h-[22px]')}
+                    className={cn('w-4/5 shrink-0 rounded-lg', props.coarse ? 'h-11' : 'h-6')}
                   />
                 ) : null}
                 {shown.map((entry) => (
@@ -782,7 +782,7 @@ function MonthGrid(props: {
                     type="button"
                     data-plan-tab-more={cell.day}
                     onClick={() => props.onMore(cell.day)}
-                    className="flex shrink-0 items-center self-start px-1.5 text-xs font-medium text-fg-2 hover:text-fg"
+                    className="flex shrink-0 items-center self-start px-2 text-xs font-medium text-fg-2 hover:text-fg"
                   >
                     {moreLabel(more)}
                   </PressableRow>
@@ -837,8 +837,7 @@ function MonthEntry(props: EntryProps): ReactElement {
       onClick={() => props.onOpen(props.entry)}
       {...holdAttrs(props)}
       className={cn(
-        'flex min-w-0 shrink-0 items-center gap-1.5 px-1.5',
-        !props.coarse && 'h-[22px]',
+        'flex min-w-0 shrink-0 items-center gap-2 px-2',
         'text-xs text-fg',
         look.soft,
         props.holdable && NO_TOUCH_SELECT,
@@ -891,7 +890,7 @@ function WeekGrid(props: {
               key={day}
               data-plan-tab-today-head={isToday ? '' : undefined}
               className={cn(
-                'flex min-w-0 items-center gap-1.5 px-2 py-1.5 text-sm font-semibold',
+                'flex min-w-0 items-center gap-2 px-2 py-2 text-sm font-semibold',
                 isToday ? 'bg-accent text-accent-fg' : 'text-fg-3',
               )}
             >
@@ -1003,7 +1002,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
           {entry.title}
         </span>
         {entry.kind === 'item' ? (
-          <span className="flex min-w-0 items-start gap-1.5 text-sm text-fg-2">
+          <span className="flex min-w-0 items-start gap-2 text-sm text-fg-2">
             <span aria-hidden="true" className={cn('mt-1 h-2 w-2 shrink-0', look.dot)} />
             <span className="line-clamp-2 [overflow-wrap:anywhere]">{entry.bundle.plan.title}</span>
           </span>
@@ -1012,7 +1011,7 @@ function WeekCard(props: EntryProps & { thumbs: PlanThumbs }): ReactElement {
           <span
             data-plan-tab-pill={pill.tone}
             className={cn(
-              'lit-pill inline-flex h-5 max-w-full items-center self-start truncate rounded-full px-2 text-xs font-semibold leading-5',
+              'lit-pill inline-flex h-5 max-w-full items-center self-start truncate rounded-full px-2 text-xs font-semibold',
               PILL_TONES[pill.tone],
             )}
           >
@@ -1046,11 +1045,11 @@ function LiftedEntry(props: { drag: Drag }): ReactElement {
       aria-hidden="true"
       style={{ left: drag.x - drag.offX, top: drag.y - drag.offY, width: drag.width }}
       className={cn(
-        'lit-float pointer-events-none fixed z-50 h-[26px] overflow-hidden rounded-lg bg-panel',
+        'lit-float pointer-events-none fixed z-50 h-7 overflow-hidden rounded-lg bg-panel',
         MOVE_CLASS.lift,
       )}
     >
-      <span className={cn('flex h-full items-center gap-1.5 px-2 text-sm text-fg', look.soft)}>
+      <span className={cn('flex h-full items-center gap-2 px-2 text-sm text-fg', look.soft)}>
         <span className={cn('h-2 w-2 shrink-0', look.dot)} />
         <span className="truncate">{drag.entry.title}</span>
       </span>

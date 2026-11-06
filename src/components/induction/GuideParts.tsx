@@ -171,7 +171,7 @@ export const GuideLabel = forwardRef<
       ref={setRef}
       data-induction-label=""
       data-guide-nudge={nudge > 0 ? 'on' : 'off'}
-      className={`pointer-events-none fixed ${GUIDE_Z} max-w-[min(280px,calc(100vw-32px))] rounded-full px-3 py-1.5 text-base font-semibold leading-tight ${LABEL_EDGE} lit-float ${AMBER_BG} ${AMBER_INK}`}
+      className={`pointer-events-none fixed ${GUIDE_Z} max-w-[min(280px,calc(100vw-32px))] rounded-full px-3 py-1 text-base font-semibold ${LABEL_EDGE} lit-float ${AMBER_BG} ${AMBER_INK}`}
       style={{ top: at.top, left: at.left }}
     >
       {text}
@@ -218,7 +218,7 @@ function dockStyle(dock: DockAt): { className: string; style: Record<string, num
       ? { top: dock.insets.top + DOCK_GAP }
       : { bottom: dock.insets.bottom + DOCK_GAP };
   // On the page edge (L2): 16 phone, 24 laptop.
-  if (dock.laptop) return { className: 'right-6 w-[340px]', style: vertical };
+  if (dock.laptop) return { className: 'right-6 w-80', style: vertical };
   return { className: 'left-4 right-4', style: vertical };
 }
 
@@ -274,7 +274,7 @@ export const GuideBar = forwardRef<
         <div className="min-w-0 flex-1">
           <PhaseRow copy={copy} />
           {copy.why !== '' ? (
-            <p className="text-base leading-snug text-fg [text-wrap:pretty]">{copy.why}</p>
+            <p className="text-base text-fg [text-wrap:pretty]">{copy.why}</p>
           ) : null}
         </div>
         <BarButtons copy={copy} actions={actions} />
@@ -289,13 +289,13 @@ function PhaseRow({ copy }: { copy: BarCopy }): ReactElement {
   }
   const { names, current } = copy.chapters;
   return (
-    <p className="flex items-center gap-1.5 text-sm text-fg-3">
+    <p className="flex items-center gap-1 text-sm text-fg-3">
       {names.map((name, i) => (
         <span
           key={name}
           aria-hidden="true"
           data-induction-chapter={i === current ? 'current' : i < current ? 'done' : 'upcoming'}
-          className={`h-1.5 w-1.5 rounded-full ${i === current ? AMBER_BG : i < current ? 'bg-good' : 'bg-border-strong'}`}
+          className={`h-2 w-2 rounded-full ${i === current ? AMBER_BG : i < current ? 'bg-good' : 'bg-border-strong'}`}
         />
       ))}
       <span className="font-semibold text-fg-2">{names[current] ?? ''}</span>
@@ -406,7 +406,7 @@ export function GuideCard({
     >
       {copy.eyebrow !== '' ? <p className="font-mono text-sm text-fg-3">{copy.eyebrow}</p> : null}
       <p className="mt-1 text-base font-medium [text-wrap:balance]">{copy.title}</p>
-      <p className="mt-1 text-base leading-snug text-fg-2 [text-wrap:pretty]">{copy.body}</p>
+      <p className="mt-1 text-base text-fg-2 [text-wrap:pretty]">{copy.body}</p>
       {copy.stats !== undefined && copy.stats.length > 0 ? (
         <div className="mt-3 flex gap-3">
           {copy.stats.map((stat) => (
