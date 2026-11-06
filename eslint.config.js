@@ -68,9 +68,9 @@ const designRules = [
 // A rule with zero hits in src/** is an error (layoutErrors, typeErrors below,
 // guarded by src/__tests__/design-lint-errors.test.ts). Rules that still have
 // hits warn under design/warn-syntax (CI stays green) and
-// scripts/design-ratchet.ts blocks any new one. Exempt only with
-// eslint-disable-next-line plus a reason after "--"; the ratchet counts every
-// disable (designDisables). design/warn-syntax is ESLint's own
+// scripts/design-ratchet.ts blocks any new one. Exempt only with a
+// next-line disable comment plus a reason after "--"; the ratchet counts
+// every disable (designDisables). design/warn-syntax is ESLint's own
 // no-restricted-syntax under a second id so it can warn while the errors
 // above stay errors.
 const Z_ARBITRARY = '/(^|[\\s:])-?z-\\[/';
