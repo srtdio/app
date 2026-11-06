@@ -182,13 +182,21 @@ export function activityCardTitle(
   if (alert !== null) return alertTitle(lead, alert, side);
   if (isWelcome(lead)) return welcomeTitle(lead);
   const actor = newestEntry(group) ?? lead;
-  return activityLine({
+  const line = activityLine({
     ...lead,
     actorId: actor.actorId,
     actorName: actor.actorName,
     actorAvatarUrl: actor.actorAvatarUrl,
   });
+  // A plan item row names its item (the old card's header) in place of "a plan item".
+  if (lead.entityType === PLAN_ITEM_ENTITY && lead.title !== null && lead.title !== '') {
+    return line.replace(PLAN_ITEM_PHRASE, lead.title);
+  }
+  return line;
 }
+
+/** How activityLine names a plan item when it does not name it. */
+const PLAN_ITEM_PHRASE = 'a plan item';
 
 /**
  * The card's preview text (line 2) when it is plain text: the comment, the
@@ -401,7 +409,11 @@ export function ActivityCard({
         },
       }}
       picture={activityPicture(lead, actor, cache, presignEnabled, title)}
-      {...(alert !== null ? { pictureHooks: { 'data-activity-alert-icon': alert.kind } } : {})}
+      {...(alert !== null
+        ? { pictureHooks: { 'data-activity-alert-icon': alert.kind } }
+        : lead.entityType === PLAN_ITEM_ENTITY
+          ? { pictureHooks: { 'data-activity-plan-icon': '' } }
+          : {})}
       // A failed send's lead and a missed due time read in bad.
       title={bad ? <span className="text-bad">{title}</span> : title}
       unread={unread}

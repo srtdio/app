@@ -49,9 +49,9 @@ function viewAsClient(network: HarnessNetwork): void {
 
 const planPage = (page: Page, id: string) => page.locator(`[data-plan-page="${id}"]`);
 
-/** The Notifications card whose header is `title`. */
+/** The Notifications card (ui/ListCard) that names `title`; a click lands on its one button. */
 function card(page: Page, title: string) {
-  return page.locator('[data-activity-lead]').filter({ hasText: title }).first();
+  return page.locator('[data-activity-id]').filter({ hasText: title }).first();
 }
 
 test('agency: a plan_comment row is a Notifications card (All and Plans) and opens the item', async ({
@@ -68,7 +68,7 @@ test('agency: a plan_comment row is a Notifications card (All and Plans) and ope
   await page.goto('/notifications');
   const row = card(page, PLAN_CONCEPT_TITLE);
   await expect(row).toBeVisible({ timeout: 15_000 });
-  await expect(row).toContainText(`${PEER_NAME} commented`);
+  await expect(row).toContainText(`${PEER_NAME} commented on ${PLAN_CONCEPT_TITLE}`);
   await expect(row).toContainText(ACTIVITY_PLAN_COMMENT_BODY);
   await expect(page.locator('[data-activity-plan-icon]')).toHaveCount(1);
 
@@ -111,7 +111,7 @@ test('client: a plan_review row is a Notifications card and opens the post item'
 
   await page.goto('/notifications');
   const row = card(page, POST_TITLE);
-  await expect(row).toContainText('Maya Chen approved a plan item', { timeout: 15_000 });
+  await expect(row).toContainText(`Maya Chen approved ${POST_TITLE}`, { timeout: 15_000 });
 
   await row.click();
   await expect(page).toHaveURL(new RegExp(`/plan/${PLAN_ID}\\?item=${PLAN_POST_ITEM}$`));

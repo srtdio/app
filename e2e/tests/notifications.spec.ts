@@ -210,13 +210,14 @@ test('a failed scheduled send: names the receiver, the reason, and Retry sends i
   await expect(failed.locator('[data-activity-scope-tag]')).toHaveCount(0);
   // The reason replaces the message preview on a failed card.
   await expect(failed).not.toContainText(FAILED_BODY);
-  const retry = failed.locator('[data-activity-action="retry"]');
-  const edit = failed.locator('[data-activity-action="edit"]');
-  await expect(retry).toHaveText('Retry');
-  await expect(edit).toHaveText('Edit');
+  // Edit and Retry live in the card's ⋯ (ui/ListCard keeps every card one height).
+  await expect(failed.locator('[data-activity-lead]')).toHaveCount(0);
+  const more = failed.getByRole('button', { name: 'Activity options' });
+  expectMinTouchTarget(await more.boundingBox());
+  await more.click();
+  await expect(page.getByRole('menuitem', { name: 'Edit', exact: true })).toBeVisible();
+  const retry = page.getByRole('menuitem', { name: 'Retry', exact: true });
   expectMinTouchTarget(await retry.boundingBox());
-  expectMinTouchTarget(await edit.boundingBox());
-
   await retry.click();
   await expect
     .poll(() => network.rpcCalls.filter((c) => c.name === 'chat_scheduled_send_now'))
@@ -424,12 +425,13 @@ test('Upcoming: a pending reminder and a scheduled message, soonest first; never
   await expect(page.getByRole('button', { name: 'Mark all read', exact: true })).toHaveCount(0);
 
   const reminder = page.locator('[data-upcoming-row="reminder"]');
-  const changeTime = reminder.locator('[data-upcoming-action="edit"]');
-  const cancel = reminder.locator('[data-upcoming-action="cancel"]');
-  await expect(changeTime).toHaveText('Change time');
-  expectMinTouchTarget(await changeTime.boundingBox());
+  // Change time and Cancel live in the card's ⋯ (ui/ListCard).
+  const more = reminder.locator('[data-upcoming-more]');
+  expectMinTouchTarget(await more.boundingBox());
+  await more.click();
+  await expect(page.getByRole('menuitem', { name: 'Change time', exact: true })).toBeVisible();
+  const cancel = page.getByRole('menuitem', { name: 'Cancel', exact: true });
   expectMinTouchTarget(await cancel.boundingBox());
-
   await cancel.click();
   await expect(page.getByRole('dialog', { name: 'Cancel this reminder?' })).toBeVisible();
   await page.locator('[data-confirm-cancel-upcoming]').click();
