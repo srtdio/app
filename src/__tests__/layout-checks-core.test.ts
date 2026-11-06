@@ -10,6 +10,7 @@ import {
   layoutMode,
   lineCount,
   lineHeightPx,
+  listCardViolations,
   overlappingPairs,
   overlaps,
   roleSignature,
@@ -18,6 +19,7 @@ import {
   tooManyRoles,
   wrapsPastOneLine,
   type Box,
+  type ListCardGeom,
   type TapTarget,
 } from '../../e2e/visual/layout-checks-core';
 
@@ -280,5 +282,49 @@ describe('messages', () => {
       '[chat-thread] edge: span "Hi" within 12px of the left edge (4,2 30x20)\n' +
         '[chat-thread] tap-overlap: button "A" overlaps button "B"',
     );
+  });
+});
+
+describe('list cards (ui/ListCard): equal heights, the 72 picture 16 inside, 12 to the text', () => {
+  // A card at x 16 with a 1px border: picture at 16 + 1 + 16 = 33, text at 33 + 72 + 12 = 117.
+  const good = (y: number, height = 118): ListCardGeom => ({
+    label: `card@${y}`,
+    card: { x: 16, y, width: 358, height },
+    borderLeft: 1,
+    borderTop: 1,
+    picture: { x: 33, y: y + 17, width: 72, height: 72 },
+    text: { x: 117, y: y + 17, width: 240, height: 84 },
+  });
+
+  it('passes cards of one height with the picture in place', () => {
+    expect(listCardViolations([good(0), good(130), good(260.6, 118.4)])).toEqual([]);
+  });
+
+  it('fails a card more than 1px taller than the first', () => {
+    const out = listCardViolations([good(0), good(130, 140)]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('cards differ');
+  });
+
+  it('fails a picture that is not 72x72', () => {
+    const card = good(0);
+    const out = listCardViolations([{ ...card, picture: { x: 33, y: 17, width: 40, height: 40 } }]);
+    expect(out.some((m) => m.includes('not 72x72'))).toBe(true);
+  });
+
+  it('fails a picture not 16 inside the card edge (left or top)', () => {
+    const card = good(0);
+    const out = listCardViolations([{ ...card, picture: { x: 29, y: 17, width: 72, height: 72 } }]);
+    expect(out.some((m) => m.includes('not 16,16'))).toBe(true);
+  });
+
+  it('fails text not 12 after the picture', () => {
+    const card = good(0);
+    const out = listCardViolations([{ ...card, text: { x: 125, y: 17, width: 200, height: 84 } }]);
+    expect(out.some((m) => m.includes('not 12'))).toBe(true);
+  });
+
+  it('fails a card with no picture slot', () => {
+    expect(listCardViolations([{ ...good(0), picture: null }])[0]).toContain('no picture slot');
   });
 });
