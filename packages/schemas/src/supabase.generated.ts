@@ -9569,6 +9569,16 @@ export type Database = {
         }
         Returns: string
       }
+      bank_idea_edit: {
+        Args: {
+          p_attachment_version_ids: string[]
+          p_description: string
+          p_item_id: string
+          p_title: string
+          p_trace_id: string
+        }
+        Returns: undefined
+      }
       bank_idea_set: {
         Args: {
           p_archived: boolean
