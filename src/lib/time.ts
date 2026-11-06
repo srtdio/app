@@ -133,12 +133,6 @@ function civilKey(civil: Civil): string {
   return `${civil.year}-${pad(civil.month)}-${pad(civil.day)}`;
 }
 
-/** The day before a civil day (calendar arithmetic, no zone involved). */
-function previousDay(civil: Civil): Civil {
-  const d = new Date(Date.UTC(civil.year, civil.month - 1, civil.day - 1));
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
-}
-
 function monthName(month: number): string {
   return SHORT_MONTHS[month - 1] ?? '';
 }
