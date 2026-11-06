@@ -31,13 +31,13 @@ describe('PhotoOptionsSheet rows', () => {
     expect(out).not.toContain('Remove photo');
   });
 
-  it('uses tokens only: danger token on Remove, no hex or dark: literals, 48px rows', () => {
+  it('uses tokens only: danger token on Remove, no hex or dark: literals, min-h-12 rows', () => {
     const out = renderToStaticMarkup(<PhotoOptionRows hasPhoto onSelect={() => {}} />);
     const remove = out.slice(out.indexOf('data-row="photo-remove"'));
     expect(remove).toContain('text-bad');
     expect(out).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(out).not.toContain('dark:');
-    expect(out.match(/min-h-\[48px\]/g)).toHaveLength(3);
+    expect(out.match(/min-h-12/g)).toHaveLength(3);
     expect(out).toContain('pb-[env(safe-area-inset-bottom)]');
   });
 
