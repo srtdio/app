@@ -11,9 +11,10 @@ import { loadRlsEnv } from '../../packages/test-utils/rls';
 
 const RPC_SUITE = process.env.RPC_SUITE === '1';
 
-/** The seven bank write procs, by their identity signatures. */
+/** The bank write procs, by their identity signatures. */
 const BANK_PROCS = [
   'public.bank_idea_create(uuid, text, text, uuid[], uuid[], uuid)',
+  'public.bank_idea_edit(uuid, text, text, uuid[], uuid)',
   'public.plan_item_to_bank(uuid, uuid)',
   'public.plan_item_from_bank(uuid, uuid, date, uuid)',
   'public.bank_idea_set(uuid, boolean, boolean, boolean, uuid)',

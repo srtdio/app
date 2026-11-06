@@ -91,9 +91,10 @@ describe('More menu per kind', () => {
     expect(ids(rows)).toEqual(['move', 'edit', 'send-to-chat', 'move-to-bank', 'remove']);
     expect(labels(rows)).toContain('Move to bank');
   });
-  it('a bank idea: Plan it, Send to chat, Show, Star, Archive, Delete last', () => {
+  it('a bank idea: Plan it, Edit idea, Send to chat, Show, Star, Archive, Delete last', () => {
     const on = {
       onPlanIt: noop,
+      onEdit: noop,
       onSendToChat: noop,
       onShow: noop,
       onHide: noop,
@@ -103,6 +104,7 @@ describe('More menu per kind', () => {
     };
     expect(labels(bankIdeaMenu(ITEM, on))).toEqual([
       'Plan it',
+      'Edit idea',
       'Send to chat',
       'Show to client',
       'Star',
@@ -111,7 +113,15 @@ describe('More menu per kind', () => {
     ]);
     expect(
       labels(bankIdeaMenu({ show_to_client: true, starred_at: 'x', archived_at: 'y' }, on)),
-    ).toEqual(['Plan it', 'Send to chat', 'Hide from client', 'Unstar', 'Unarchive', 'Delete']);
+    ).toEqual([
+      'Plan it',
+      'Edit idea',
+      'Send to chat',
+      'Hide from client',
+      'Unstar',
+      'Unarchive',
+      'Delete',
+    ]);
     expect(bankIdeaMenu(ITEM, on).at(-1)?.tone).toBe('danger');
   });
 });

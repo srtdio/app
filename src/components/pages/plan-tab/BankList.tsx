@@ -33,6 +33,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { IconButton } from '@/components/ui/IconButton';
 import { SidePanel } from '@/components/ui/SidePanel';
 import { useIsLaptop } from '@/lib/use-is-laptop';
+import { useInView } from '@/lib/use-in-view';
+import { PREVIEW_ROOT_MARGIN, previewClient, type LinkPreview } from '@/lib/links/preview';
 import { NoResults } from '@/components/ui/NoResults';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
@@ -110,30 +112,16 @@ export type BankLayout = 'phone' | 'panel' | 'table';
 // Small parts
 // ---------------------------------------------------------------------------
 
-/** The idea's first file (lit-media), a dashed placeholder when none, "+N" when more. */
+/** The idea's tile: first picture, else its first link's picture, else a file glyph, else a dashed box. */
 export function BankThumb(props: { idea: BankIdea; size: 56 | 44 }): ReactElement {
   const box = props.size === 56 ? 'h-14 w-14' : 'h-11 w-11';
-  const more = moreFilesLabel(props.idea.file_count);
   const thumb = props.idea.thumb;
-  if (thumb === null) {
-    return (
-      <span
-        aria-hidden="true"
-        data-bank-thumb="none"
-        className={cn(
-          box,
-          'flex shrink-0 items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel-2 text-fg-3 lit-well-soft',
-        )}
-      >
-        <IconBank size={ICON_SIZE.inline} />
-      </span>
-    );
+  if (thumb === null) return <EmptyThumb box={box} />;
+  if (thumb.kind === 'link') {
+    return <LinkThumb url={thumb.url} box={box} fileCount={props.idea.file_count} />;
   }
   return (
-    <span
-      data-bank-thumb=""
-      className={cn(box, 'relative shrink-0 overflow-hidden rounded-lg bg-panel-2 lit-media')}
-    >
+    <FilledThumb box={box} fileCount={props.idea.file_count}>
       {thumb.kind === 'image' ? (
         <Thumbnail
           assetVersionId={thumb.versionId}
@@ -143,10 +131,44 @@ export function BankThumb(props: { idea: BankIdea; size: 56 | 44 }): ReactElemen
           alt=""
         />
       ) : (
-        <span className="flex h-full w-full items-center justify-center text-fg-2">
-          <IconFile size={ICON_SIZE.control} />
-        </span>
+        <FileGlyph />
       )}
+    </FilledThumb>
+  );
+}
+
+function EmptyThumb(props: { box: string }): ReactElement {
+  return (
+    <span
+      aria-hidden="true"
+      data-bank-thumb="none"
+      className={cn(
+        props.box,
+        'flex shrink-0 items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel-2 text-fg-3 lit-well-soft',
+      )}
+    >
+      <IconBank size={ICON_SIZE.inline} />
+    </span>
+  );
+}
+
+function FileGlyph(): ReactElement {
+  return (
+    <span className="flex h-full w-full items-center justify-center text-fg-2">
+      <IconFile size={ICON_SIZE.control} />
+    </span>
+  );
+}
+
+/** The lit-media tile with the "+N" more-files badge. */
+function FilledThumb(props: { box: string; fileCount: number; children: ReactNode }): ReactElement {
+  const more = moreFilesLabel(props.fileCount);
+  return (
+    <span
+      data-bank-thumb=""
+      className={cn(props.box, 'relative shrink-0 overflow-hidden rounded-lg bg-panel-2 lit-media')}
+    >
+      {props.children}
       {more !== null ? (
         <span
           data-bank-thumb-more=""
@@ -155,6 +177,57 @@ export function BankThumb(props: { idea: BankIdea; size: 56 | 44 }): ReactElemen
           {more}
         </span>
       ) : null}
+    </span>
+  );
+}
+
+/**
+ * The picture of the idea's first link: asked once the row is in view (the
+ * chat cards' preview client and Worker cache, never before first paint), the
+ * cached og:image through /image. No picture, or one that fails: the file
+ * glyph when the idea holds files, else the dashed box. Never a per-row read
+ * for ideas off screen.
+ */
+function LinkThumb(props: { url: string; box: string; fileCount: number }): ReactElement {
+  const client = previewClient();
+  const { ref, inView } = useInView<HTMLSpanElement>(PREVIEW_ROOT_MARGIN);
+  const [preview, setPreview] = useState<LinkPreview | null>(() => client.peek(props.url));
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (preview !== null || !inView) return;
+    const controller = new AbortController();
+    client.request(props.url, controller.signal).then(setPreview, () => undefined);
+    return () => controller.abort();
+  }, [client, inView, preview, props.url]);
+  const src = preview?.type === 'full' && !failed ? client.imageUrl(props.url) : null;
+  const settled = preview !== null && (preview.type !== 'full' || failed);
+  if (settled && props.fileCount === 0) {
+    return (
+      <span ref={ref} className="contents">
+        <EmptyThumb box={props.box} />
+      </span>
+    );
+  }
+  return (
+    <span ref={ref} data-bank-thumb-link="" className="contents">
+      <FilledThumb box={props.box} fileCount={props.fileCount}>
+        {src !== null ? (
+          <img
+            src={src}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            draggable={false}
+            onError={() => setFailed(true)}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : settled ? (
+          <FileGlyph />
+        ) : (
+          <Bone lit="lit-media" as="span" className="absolute inset-0" />
+        )}
+      </FilledThumb>
     </span>
   );
 }
