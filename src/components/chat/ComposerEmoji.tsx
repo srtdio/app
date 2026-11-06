@@ -14,7 +14,7 @@ import { EMOJI_LIST, readRecents, rememberRecent } from '@/lib/chat/emoji-list';
 import { IconButton } from '@/components/ui/IconButton';
 import { centreOf, menuMoves, popoverClass } from '@/components/ui/popover-classes';
 import { usePresence } from '@/lib/motion';
-import type { ChatLayout } from '@/components/chat/chat-type';
+import { EMOJI_PICK_TYPE, type ChatLayout } from '@/components/chat/chat-type';
 
 /** The emoji button is a laptop (768px and up) control only; never on a phone. Pure. */
 export function showsEmojiButton(layout: ChatLayout): boolean {
@@ -108,7 +108,7 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
                     label={emoji}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => pick(emoji)}
-                    className="text-2xl leading-none"
+                    className={EMOJI_PICK_TYPE}
                   >
                     {emoji}
                   </IconButton>

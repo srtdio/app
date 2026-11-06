@@ -2,7 +2,7 @@
 // Type roles on Settings > Storage (design rules, 24 Oct 2026): the storage
 // figure is 3xl/600 (never bold), "of 1 GB" and the workspace line are sm fg-3
 // meta, WHAT'S USING IT and NEED MORE SPACE? are section labels (sm/600
-// uppercase tracking-[0.06em] fg-2), a usage row is base, and the need-more
+// uppercase tracking-label fg-2), a usage row is base, and the need-more
 // line is base fg-2 copy. Mocks mirror StoragePanel.test.tsx.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -80,7 +80,7 @@ function expectRole(el: Element, classes: string[]): void {
   for (const c of classes) expect(list).toContain(c);
 }
 
-const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2'];
+const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2'];
 
 afterEach(() => {
   act(() => root?.unmount());

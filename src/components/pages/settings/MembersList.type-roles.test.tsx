@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Type roles on Settings > Members (design rules, 24 Oct 2026): the group
 // headings (Approvers, Creators, Invited) are section labels (sm/600 uppercase
-// tracking-[0.06em] fg-2), a member name is the row title (base/500), and the
+// tracking-label fg-2), a member name is the row title (base/500), and the
 // email and joined date are sm fg-3 meta. Fixtures mirror MembersList.test.tsx.
 import type { ComponentProps } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -88,7 +88,7 @@ function expectRole(el: Element, classes: string[]): void {
   for (const c of classes) expect(list).toContain(c);
 }
 
-const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2'];
+const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2'];
 
 afterEach(() => {
   document.body.innerHTML = '';

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Type roles on the Briefs list (design rules, 24 Oct 2026): the time-group
-// heading is the section label (sm/600 uppercase tracking-[0.06em] fg-2), a
+// heading is the section label (sm/600 uppercase tracking-label fg-2), a
 // card title is the ui/Card heading role (15/600), the objective is base fg-2 secondary copy, and the
 // due line is sm fg-3 meta. Mocks mirror BriefsPage.w5-list.test.tsx.
 import { act } from 'react';
@@ -152,7 +152,7 @@ describe('Briefs list type roles', () => {
     await mount();
     const label = byText('This week');
     expect(label.tagName).toBe('H3');
-    expectRole(label, ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2']);
+    expectRole(label, ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2']);
   });
 
   it('the card title is the ui/Card heading role and the objective is base fg-2', async () => {

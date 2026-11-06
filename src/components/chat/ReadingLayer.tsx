@@ -26,7 +26,7 @@ import { cn } from '@/lib/cn';
 import { LANE_BOTTOM, LANE_TOP } from '@/components/ui/layout';
 import { civilDay, formatTime } from '@/lib/time';
 import { dayPillLabel } from '@/components/chat/day-separators';
-import { BUBBLE_META_TYPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import { BUBBLE_META_TYPE, EMOJI_PICK_TYPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { RailThrough } from '@/components/chat/ThreadRail';
 import { FORMER_MEMBER, type MentionMember } from '@/lib/chat/mentions';
 import type { ChatProfile } from '@/lib/chat-reads';
@@ -478,7 +478,7 @@ export function WhoReactedSheet(props: {
                       </span>
                       {row.mine ? <span className="text-sm text-fg-3">Tap to remove</span> : null}
                     </span>
-                    <span aria-hidden="true" className="text-2xl leading-none">
+                    <span aria-hidden="true" className={EMOJI_PICK_TYPE}>
                       {row.emoji}
                     </span>
                   </>

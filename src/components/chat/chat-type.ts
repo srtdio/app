@@ -138,7 +138,7 @@ export const DATE_PILL_TYPE: ChatSize = {
 export const TYPING_ROW_TYPE = 'text-md font-normal';
 
 /** The emoji in a reaction badge: 14 (base), no line box. */
-export const REACTION_EMOJI_TYPE = 'text-base leading-none';
+export const REACTION_EMOJI_TYPE = 'text-base leading-emoji';
 
 /** The "Draft:" prefix in a chat list preview: weight 500 (the accent comes from a token). */
 export const DRAFT_PREFIX_TYPE = 'font-medium';
@@ -174,7 +174,10 @@ export const BUBBLE_MAX: ChatSize = {
 };
 
 /** A glyph in the emoji picker grid and its group tabs: the 3xl size (28), no line box. */
-export const EMOJI_GLYPH_TYPE = 'text-3xl leading-none';
+export const EMOJI_GLYPH_TYPE = 'text-3xl leading-emoji';
+
+/** A quick-pick or reaction-list emoji: 20 (2xl), no line box. */
+export const EMOJI_PICK_TYPE = 'text-2xl leading-emoji';
 
 /** The emoji picker's search field: 17 (xl) touch (never under 16px, no iOS zoom), 14 (base) laptop. */
 export const EMOJI_SEARCH_TYPE: ChatSize = {

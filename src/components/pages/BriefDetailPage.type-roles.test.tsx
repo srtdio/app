@@ -2,7 +2,7 @@
 // Type roles on Brief detail (design rules, 24 Oct 2026): the brief title is
 // the page title (3xl/600 tracking-tight), the top bar status line is the
 // screen header (lg/600), section labels are sm/600 uppercase
-// tracking-[0.06em] fg-2, and the brief text is base fg body. Mocks mirror
+// tracking-label fg-2, and the brief text is base fg body. Mocks mirror
 // BriefDetailPage.w5-detail.test.tsx.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -130,7 +130,7 @@ function expectRole(el: Element, classes: string[]): void {
   for (const c of classes) expect(list).toContain(c);
 }
 
-const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2'];
+const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2'];
 
 beforeEach(() => {
   h.getBrief.mockReset().mockResolvedValue(detail());

@@ -83,7 +83,7 @@ function MarksStrip(): ReactElement {
           Hide
         </Button>
       </div>
-      <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-1 font-mono text-xs leading-4 tabular-nums">
+      <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-1 font-mono text-xs tabular-nums">
         {marks.map((m) => (
           <li key={m.name} className="flex gap-2">
             <span className="min-w-0 flex-1 break-all">{m.name}</span>

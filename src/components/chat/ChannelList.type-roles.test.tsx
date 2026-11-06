@@ -65,7 +65,7 @@ function paint(node: ReactElement, selector: string, text: string): HTMLElement[
 }
 
 const classes = (el: Element): string[] => el.className.split(/\s+/);
-const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2'];
+const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2'];
 
 describe('chat list type roles', () => {
   it('section labels: Groups and People are sm, 600, uppercase, .06em, fg-2', () => {

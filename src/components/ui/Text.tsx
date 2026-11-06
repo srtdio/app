@@ -34,17 +34,17 @@ export const TEXT_ROLE: Record<TextRole, string> = {
   secondary: 'truncate text-md font-normal text-fg-2',
   label: 'text-base font-medium',
   meta: 'font-mono text-sm font-normal tabular-nums text-fg-3',
-  section: 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2',
+  section: 'text-sm font-semibold uppercase tracking-label text-fg-2',
 };
 
 /**
- * The section label (CLAUDE.md Design rules: sm/600 uppercase tracking-[0.06em]
+ * The section label (CLAUDE.md Design rules: sm/600 uppercase tracking-label
  * fg-2), the same string as TEXT_ROLE.section, for call sites that compose a
  * class string. It is the one tracked style, kept here so no call site writes
  * tracking-*. SECTION_LABEL_INK is the same without the colour, for a label
  * that sets its own ink.
  */
-export const SECTION_LABEL_INK = 'text-sm font-semibold uppercase tracking-[0.06em]';
+export const SECTION_LABEL_INK = 'text-sm font-semibold uppercase tracking-label';
 export const SECTION_LABEL = `${SECTION_LABEL_INK} text-fg-2`;
 
 /** Body inside a text field: 16/22 on phone (iOS never zooms), 14/20 from md. */

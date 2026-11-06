@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Type roles on Notifications (design rules, 24 Oct 2026): the page has no visible
 // title (sr-only h1), a day bucket heading is the section label (sm/600
-// uppercase tracking-[0.06em] fg-2), a card title is base/500 and the card time
+// uppercase tracking-label fg-2), a card title is base/500 and the card time
 // and bucket count are sm fg-3 meta. Rendered for real in jsdom with the reads
 // mocked; the item fixture mirrors activity/ActivityCard.test.tsx.
 import { act } from 'react';
@@ -175,7 +175,7 @@ describe('Notifications type roles', () => {
     await mount();
     const label = byText('Today');
     expect(label.tagName).toBe('H2');
-    expectRole(label, ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2']);
+    expectRole(label, ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2']);
     expect(label.className).not.toContain('tracking-wide');
   });
 

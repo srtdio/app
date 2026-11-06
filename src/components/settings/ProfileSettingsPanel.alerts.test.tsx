@@ -75,7 +75,7 @@ describe('Alerts on this device', () => {
     const el = mount();
     expect(el.textContent).toContain('Alerts on this device');
     expect(el.querySelector('h3')?.className).toContain(
-      'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2',
+      'text-sm font-semibold uppercase tracking-label text-fg-2',
     );
     expect(el.querySelectorAll('[role="switch"]')).toHaveLength(2);
     switchFor(el, 'Sound');

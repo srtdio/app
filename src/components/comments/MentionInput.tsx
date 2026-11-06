@@ -28,7 +28,7 @@ import { useEscapeLayer } from '@/lib/escape-stack';
 // ui/Composer's field: the field draws the line, the well and the focus line;
 // 16px on phone so iOS never zooms, 14px from md.
 const FIELD_EDITOR =
-  'w-full whitespace-pre-wrap break-words rounded-lg border border-field bg-panel px-3 py-2.5 text-base text-fg outline-none lit-well focus:lit-focus min-h-11 empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3';
+  'w-full whitespace-pre-wrap break-words rounded-lg border border-field bg-panel px-3 py-field-y text-base text-fg outline-none lit-well focus:lit-focus min-h-11 empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3';
 const BARE_EDITOR =
   'w-full whitespace-pre-wrap break-words bg-transparent py-2 text-input text-fg outline-none md:text-base empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3';
 

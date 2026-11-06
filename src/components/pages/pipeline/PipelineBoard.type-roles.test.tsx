@@ -18,7 +18,7 @@ import type { PresignCache } from '@/lib/asset-presign';
 // Type roles on the Pipeline page (design rules, 24 Oct 2026): the board's
 // column header is a row title (base/500) with its count as meta (sm, fg-3),
 // cards carry a base/500 title, and the filter sheet's "Due date" / "Sort"
-// headings are section labels (sm/600 uppercase tracking-[0.06em] fg-2).
+// headings are section labels (sm/600 uppercase tracking-label fg-2).
 
 const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
 const cache = {} as unknown as PresignCache;
@@ -130,7 +130,7 @@ describe('Pipeline page type roles', () => {
           'text-sm',
           'font-semibold',
           'uppercase',
-          'tracking-[0.06em]',
+          'tracking-label',
           'text-fg-2',
         ]),
       );

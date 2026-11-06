@@ -145,7 +145,7 @@ describe('Plan screen type roles', () => {
         'text-sm',
         'font-semibold',
         'uppercase',
-        'tracking-[0.06em]',
+        'tracking-label',
         'text-fg-2',
       ]),
     );

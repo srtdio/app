@@ -160,7 +160,7 @@ describe('chat home sections', () => {
     expect(markup).toContain(
       `data-section-label="people" class="${SECTION_LABEL_TYPE} ${CHAT_HOME_EDGE} pt-3"`,
     );
-    for (const t of ['text-sm', 'font-semibold', 'uppercase', 'tracking-[0.06em]', 'text-fg-2']) {
+    for (const t of ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2']) {
       expect(SECTION_LABEL_TYPE.split(' ')).toContain(t);
     }
     expect(CHAT_HOME_EDGE).toBe('px-4');
