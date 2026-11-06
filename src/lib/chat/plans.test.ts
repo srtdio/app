@@ -742,7 +742,9 @@ describe('Forward into the open chat (G3)', () => {
       fileURLToPath(new URL('../../components/chat/PlanCard.tsx', import.meta.url)),
       'utf8',
     );
-    expect(src).toContain('!here && connection !== null && target !== null');
+    expect(src).toContain(
+      '!here && connection !== null && connection !== undefined && target !== null',
+    );
     expect(src).toContain('planCards.addRowHere(row, traceId);');
   });
 });

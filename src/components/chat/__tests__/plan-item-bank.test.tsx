@@ -60,6 +60,7 @@ vi.mock('@/lib/chat/use-chat-attachments', () => ({
   useCommentAttachments: () => ({ canAttach: false, uploadFile: undefined }),
 }));
 vi.mock('@/components/pages/PostDetailPage', () => ({ PostDetailPage: () => null }));
+vi.mock('@/components/chat/IdeaShareFlow', () => ({ IdeaShareFlow: () => null }));
 vi.mock('@/lib/chat/plans', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/chat/plans')>()),
   planItemRead: async () => {
@@ -182,7 +183,8 @@ describe('the Item screen with no bundle', () => {
     expect($('[data-plan-item-date]')?.getAttribute('data-plan-item-date')).toBe('none');
     expect(text()).not.toContain('Approvers');
     expect(text()).not.toContain('Creators');
-    expect($('[data-plan-item-more]')).toBeNull();
+    // The bank idea's own More menu (Plan it, Send to chat, ...), never Move or Remove.
+    expect($('[data-plan-item-more]')).not.toBeNull();
     expect($('[data-plan-remove-row]')).toBeNull();
     expect($('[data-plan-approve]')).toBeNull();
     expect($('[data-plan-ask]')).toBeNull();

@@ -198,6 +198,7 @@ import {
 import { PostRefChip, useChipBatch, type PostRefPost } from '@/components/chat/PostRefChip';
 import {
   MessageActionMenu,
+  isIdeaMessage,
   isPlanMessage,
   ownMessageActions,
   selectionForwardable,
@@ -206,6 +207,7 @@ import {
 import { useCancelUpload, useChatStore, useServerNow } from '@/components/chat/ChatStoreProvider';
 import { SharedBriefCards } from '@/components/chat/BriefCard';
 import { SharedPlanCards } from '@/components/chat/PlanCard';
+import { SharedIdeaCards, ideaTitleOf } from '@/components/chat/PlanItemCard';
 import { PaintLogOverlay, paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { MarkBadge, SelectCheckbox, SelectLock } from '@/components/chat/MarkBits';
@@ -2039,13 +2041,14 @@ export function bodyText(layout: ChatLayout): string {
  */
 export function metaPlacement(
   message: Pick<ThreadMessage, 'body' | 'attachments' | 'sharedPostIds' | 'sharedBriefIds'> &
-    Partial<Pick<ThreadMessage, 'sharedPlanIds'>>,
+    Partial<Pick<ThreadMessage, 'sharedPlanIds' | 'sharedPlanItemIds'>>,
 ): MetaPlacement {
   const hasBody = message.body.trim() !== '';
   const hasCards =
     message.sharedPostIds.length > 0 ||
     message.sharedBriefIds.length > 0 ||
-    (message.sharedPlanIds ?? []).length > 0;
+    (message.sharedPlanIds ?? []).length > 0 ||
+    (message.sharedPlanItemIds ?? []).length > 0;
   if (hasCards) return 'row';
   if (message.attachments.length === 0) return hasBody ? 'inline' : 'row';
   const { images, others } = splitAlbum(message.attachments);
@@ -2265,6 +2268,8 @@ export function MessageBubble(props: {
 }): ReactElement {
   const { message, profiles, cache, presignEnabled, showTicks, isGroup, head, tail } = props;
   const { onBadgeClick } = props;
+  // Ideas: the row's own ids (the open bundle's rows carry them too).
+  const sharedIdeaIds = message.sharedPlanItemIds ?? NO_PLAN_IDS;
   // Notes: a saved copy names its source instead of "Forwarded".
   const savedFrom = props.savedFrom ?? null;
   const savedLine =
@@ -2287,13 +2292,15 @@ export function MessageBubble(props: {
   const hasCards =
     message.sharedPostIds.length > 0 ||
     message.sharedBriefIds.length > 0 ||
-    sharedPlanIds.length > 0;
+    sharedPlanIds.length > 0 ||
+    sharedIdeaIds.length > 0;
   const textOnly =
     message.body.trim() !== '' &&
     message.attachments.length === 0 &&
     message.sharedPostIds.length === 0 &&
     message.sharedBriefIds.length === 0 &&
-    sharedPlanIds.length === 0;
+    sharedPlanIds.length === 0 &&
+    sharedIdeaIds.length === 0;
   const totalReactions = message.reactions.reduce((sum, r) => sum + r.count, 0);
   const distinctEmojis = message.reactions.map((r) => r.emoji).join('');
   const meta = props.meta ?? bubbleMeta(message, timeZone, { showTicks });
@@ -2634,6 +2641,7 @@ export function MessageBubble(props: {
                       <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                       <SharedBriefCards briefIds={message.sharedBriefIds} />
                       <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
+                      <SharedIdeaCards ideaIds={sharedIdeaIds} />
                     </div>
                   ) : null}
                 </>
@@ -2652,6 +2660,7 @@ export function MessageBubble(props: {
                   <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                   <SharedBriefCards briefIds={message.sharedBriefIds} />
                   <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
+                  <SharedIdeaCards ideaIds={sharedIdeaIds} />
                 </>
               )}
             </div>
@@ -4445,8 +4454,16 @@ function ThreadBody(
   }
   const nowMs = Date.now();
   // A plan card message: no Forward, Save to notes or Edit; Copy copies its title.
-  const menuPlan = menu !== null && isPlanMessage(menu.message);
-  const menuPlanTitle = menuPlan && menu !== null ? planTitleOf(planCards, menu.message) : null;
+  // An idea card message follows the same rules.
+  const menuPlan = menu !== null && (isPlanMessage(menu.message) || isIdeaMessage(menu.message));
+  const menuPlanTitle =
+    menu === null
+      ? null
+      : isPlanMessage(menu.message)
+        ? planTitleOf(planCards, menu.message)
+        : isIdeaMessage(menu.message)
+          ? ideaTitleOf(menu.message)
+          : null;
   const menuOwn =
     menu !== null
       ? ownMessageActions(
@@ -5879,7 +5896,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         message.attachments.length > 0 ||
         message.sharedPostIds.length > 0 ||
         message.sharedBriefIds.length > 0 ||
-        isPlanMessage(message),
+        isPlanMessage(message) ||
+        isIdeaMessage(message),
     });
   };
   const onForward = props.onForward;

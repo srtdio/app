@@ -100,13 +100,14 @@ describe('forward rule (item 4)', () => {
     expect(TEAM_PLAN_CLIENT_CHAT).toBe(OPEN_FOR_CLIENT_FIRST);
   });
 
-  it('Forward never opens a share-first confirm: PlanShareConfirm is gone', () => {
+  it('Forward never opens the old share-first confirm: a Draft into a client chat asks Open and send', () => {
     expect(existsSync(fileURLToPath(new URL('./PlanShareConfirm.tsx', import.meta.url)))).toBe(
       false,
     );
     const card = readFileSync(fileURLToPath(new URL('./PlanCard.tsx', import.meta.url)), 'utf8');
     expect(card).not.toMatch(/ShareFirstFlow|PlanShareConfirm|planShareWithClient/);
-    expect(card).toContain('toast.show({ title: OPEN_FOR_CLIENT_FIRST })');
+    expect(card).toContain('<PlanOpenSendSheet');
+    expect(card).toContain('openFirst(channel)');
   });
 
   it('a chat has a client when known from loaded data: a DM with a client', () => {

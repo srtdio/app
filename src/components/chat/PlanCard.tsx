@@ -3,9 +3,9 @@
 // the shown side's progress (Draft "Team X of N", Open "Client X of N", the
 // same for every viewer), and a footer with Open plan (and Forward: the agency
 // on every plan, a client on an Open plan). Forwarding a Draft plan into a
-// chat with a client sends nothing and says "Open the plan for client first."
-// (when the chat is known to have one, or when the server refuses it for that
-// reason). Ids resolve through the thread's
+// chat with a client (known from the list, or refused by the server for that
+// reason) asks "Open this plan for approvers?" first (PlanOpenSendSheet: Open
+// and send opens the plan, then shares it). Ids resolve through the thread's
 // plan card cache (PlanCardsProvider), so every plan across the loaded thread
 // comes back in one batch, never one read per bubble. A plan the viewer can no
 // longer read (deleted, RLS) renders the neutral box with "Plan deleted";
@@ -18,7 +18,7 @@
 
 import { Bone } from '@/lib/motion';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
@@ -29,7 +29,6 @@ import { usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { usePaintLogCommit } from '@/components/chat/PaintLog';
 import {
   HAS_CLIENT_TAG,
-  OPEN_FOR_CLIENT_FIRST,
   PLAN_DELETED,
   PLAN_EYEBROW,
   canForwardPlan,
@@ -43,6 +42,12 @@ import {
   summaryHasClient,
 } from '@/components/chat/plan-card';
 import { conversationPickerBody, type LoadState } from '@/components/pages/pcs/ConversationPicker';
+import {
+  PlanOpenSendSheet,
+  openPlanThenShare,
+  type PlanOpenSendAsk,
+} from '@/components/chat/PlanOpenSendSheet';
+import { errorText } from '@/lib/error-copy';
 import { useChat } from '@/lib/chat';
 import { listChannelSummaries, type ChannelSummary } from '@/lib/chat-reads';
 import { createTextMessage } from '@/lib/chat/message-factory';
@@ -190,16 +195,40 @@ function PlanCardItem(props: {
  * The title stays on one line (the chat card keeps its skeleton's height);
  * `wrapTitle` lets it wrap to two lines, then end on an ellipsis.
  */
+/**
+ * A shared card's eyebrow (the section label role: sm/600 uppercase): the
+ * plan card's "Plan" and the idea card's "Idea". `className` carries the
+ * caller's ink and gap.
+ */
+export function CardEyebrow(props: {
+  icon: ReactNode;
+  label: string;
+  className: string;
+}): ReactElement {
+  return (
+    <span
+      className={cn(
+        'flex h-4 items-center text-sm font-semibold uppercase tracking-[0.06em]',
+        props.className,
+      )}
+    >
+      {props.icon}
+      {props.label}
+    </span>
+  );
+}
+
 export function PlanCardTop(props: {
   plan: Pick<PlanBundle['plan'], 'title' | 'starts_on' | 'ends_on'>;
   wrapTitle?: boolean;
 }): ReactElement {
   return (
     <>
-      <span className="flex h-4 items-center gap-1.5 text-sm font-semibold uppercase tracking-[0.06em] text-accent">
-        <IconPlan size={ICON_SIZE.inline} />
-        {PLAN_EYEBROW}
-      </span>
+      <CardEyebrow
+        icon={<IconPlan size={ICON_SIZE.inline} />}
+        label={PLAN_EYEBROW}
+        className="gap-1.5 text-accent"
+      />
       <span
         data-plan-title=""
         className={cn(
@@ -346,6 +375,8 @@ function PlanForwardSheet(props: {
   const [load, setLoad] = useState<LoadState>({ status: 'loading' });
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [guard] = useState(createInFlightGuard);
+  const [ask, setAsk] = useState<PlanOpenSendAsk | null>(null);
+  const [askBusy, setAskBusy] = useState(false);
   const planCards = usePlanCards();
   const open = props.open;
   const planId = props.bundle.plan.id;
@@ -372,28 +403,7 @@ function PlanForwardSheet(props: {
   function publishOf(
     channel: ChannelSummary,
   ): ((liveIds: LiveMessageIds) => Promise<unknown>) | null {
-    let target: ChannelTarget | null = null;
-    try {
-      target = targetFromSummary(channel);
-    } catch {
-      target = null;
-    }
-    const connection = client;
-    const here =
-      planCards !== null && forwardLandsInOpenChat(channel.channelId, planCards.channelId);
-    return !here && connection !== null && target !== null
-      ? (liveIds) =>
-          sendText({
-            connection: connection as ThreadConnection,
-            target: target as ChannelTarget,
-            text: '',
-            attachments: [],
-            sharedPostIds: [],
-            reply: null,
-            createMessage: createTextMessage,
-            liveIds,
-          })
-      : null;
+    return livePublishFor(channel, client, planCards?.channelId ?? null);
   }
 
   function landed(
@@ -407,13 +417,57 @@ function PlanForwardSheet(props: {
     toast.show({ title: forwardedToast(channel.title) });
   }
 
-  function openFirst(): void {
-    toast.show({ title: OPEN_FOR_CLIENT_FIRST });
+  // A Draft plan into a chat with the client: ask first (opening cannot be undone).
+  function openFirst(channel: ChannelSummary): void {
+    props.onClose();
+    setAsk({
+      planId,
+      planTitle: props.bundle.plan.title,
+      channelId: channel.channelId,
+      chatName: channel.title,
+    });
+  }
+
+  async function openAndSend(next: PlanOpenSendAsk): Promise<void> {
+    if (askBusy) return;
+    setAskBusy(true);
+    const messageId = newMessageId();
+    const result = await openPlanThenShare({
+      planId: next.planId,
+      channelId: next.channelId,
+      messageId,
+    });
+    setAskBusy(false);
+    if (!result.ok) {
+      logger.warn('chat: plan open and send failed', {
+        channel_id: next.channelId,
+        plan_id: next.planId,
+        error: result.error.message,
+      });
+      toast.show({ title: errorText('send the plan', result.error.message), tone: 'error' });
+      return;
+    }
+    setAsk(null);
+    const channel =
+      load.status === 'ready'
+        ? load.channels.find((c) => c.channelId === next.channelId)
+        : undefined;
+    const publish = channel !== undefined ? publishOf(channel) : null;
+    if (publish !== null) {
+      void publish({ sorted_message_id: result.data.id, sorted_channel_id: next.channelId }).catch(
+        (error: unknown) =>
+          logger.warn('chat: opened plan live publish did not complete', {
+            message_id: result.data.id,
+            error: String(error),
+          }),
+      );
+    }
+    landed({ channelId: next.channelId, title: next.chatName }, result.data, generateTraceId());
   }
 
   async function forward(channel: ChannelSummary): Promise<void> {
     if (forwardBlocked(props.bundle.plan.audience, summaryHasClient(channel))) {
-      openFirst();
+      openFirst(channel);
       return;
     }
     const result = await sharePlanToChannel(
@@ -448,7 +502,7 @@ function PlanForwardSheet(props: {
       return;
     }
     if (refusedForClient(result.message)) {
-      openFirst();
+      openFirst(channel);
       return;
     }
     logger.error('chat: plan forward failed', {
@@ -460,20 +514,59 @@ function PlanForwardSheet(props: {
   }
 
   return (
-    <Sheet open={props.open} onClose={props.onClose} title="Forward plan">
-      {load.status === 'ready' && load.channels.length > 0
-        ? forwardList(load.channels, sendingId, agencyOnly, (channel) => void forward(channel))
-        : conversationPickerBody(load, sendingId, (channel) => void forward(channel))}
-    </Sheet>
+    <>
+      <Sheet open={props.open} onClose={props.onClose} title="Forward plan">
+        {load.status === 'ready' && load.channels.length > 0
+          ? chatPickList(load.channels, sendingId, agencyOnly, (channel) => void forward(channel))
+          : conversationPickerBody(load, sendingId, (channel) => void forward(channel))}
+      </Sheet>
+      <PlanOpenSendSheet
+        ask={ask}
+        busy={askBusy}
+        onClose={() => setAsk(null)}
+        onOpenAndSend={(next) => void openAndSend(next)}
+      />
+    </>
   );
 }
 
 /**
- * The Forward list: the conversation picker's rows (same box, same fixed body
+ * The live publish for a share into `channel`: none into the open chat (the
+ * thread adds the row and publishes it) or with no connection. Hook-free.
+ */
+export function livePublishFor(
+  channel: ChannelSummary,
+  connection: unknown,
+  openChannelId: string | null,
+): ((liveIds: LiveMessageIds) => Promise<unknown>) | null {
+  let target: ChannelTarget | null = null;
+  try {
+    target = targetFromSummary(channel);
+  } catch {
+    target = null;
+  }
+  const here = forwardLandsInOpenChat(channel.channelId, openChannelId);
+  return !here && connection !== null && connection !== undefined && target !== null
+    ? (liveIds) =>
+        sendText({
+          connection: connection as ThreadConnection,
+          target: target as ChannelTarget,
+          text: '',
+          attachments: [],
+          sharedPostIds: [],
+          reply: null,
+          createMessage: createTextMessage,
+          liveIds,
+        })
+    : null;
+}
+
+/**
+ * The chat pick list (Forward plan, Send idea to chat): the conversation picker's rows (same box, same fixed body
  * height), with "Has client" on chats known to have a client when the plan is
  * a Draft. Hook-free.
  */
-function forwardList(
+export function chatPickList(
   channels: readonly ChannelSummary[],
   sendingId: string | null,
   agencyOnly: boolean,

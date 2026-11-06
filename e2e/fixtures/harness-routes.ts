@@ -929,6 +929,53 @@ const PLAN_RPC: Record<string, RpcHandler> = {
     rows.push(row);
     return row;
   },
+  // One message carrying the idea (20261106090000_chat_plan_item_share): a
+  // concept the client cannot see never goes into a chat with a client.
+  chat_plan_item_share: (args, tables) => {
+    const rows = (tables.chat_messages ??= []);
+    const existing = rows.find((m) => m.id === args.p_id);
+    if (existing !== undefined) return existing;
+    const item = (tables.plan_items ?? []).find(
+      (i) => i.id === args.p_item_id && i.deleted_at === null && i.kind === 'concept',
+    );
+    if (item === undefined) throw new HarnessRpcError('idea not available');
+    const plan =
+      item.plan_id === null || item.plan_id === undefined
+        ? undefined
+        : (tables.plans ?? []).find((p) => p.id === item.plan_id);
+    const clientSees =
+      plan !== undefined
+        ? plan.shared_with_client_at !== null && plan.shared_with_client_at !== undefined
+        : item.show_to_client === true;
+    const channelId = String(args.p_channel_id);
+    const hasClient = channelMemberIds(tables, channelId).some(
+      (id) => id !== ME && roleOf(tables, id) === 'client',
+    );
+    if (!clientSees && hasClient) throw new HarnessRpcError('idea_not_shared_with_client');
+    const row: Row = {
+      id: args.p_id,
+      channel_id: channelId,
+      workspace_id: WORKSPACE_ID,
+      sender_user_id: ME,
+      body: typeof args.p_body === 'string' ? args.p_body : null,
+      mentions: null,
+      attachment_asset_ids: null,
+      shared_post_ids: null,
+      shared_brief_ids: null,
+      shared_plan_ids: null,
+      shared_plan_item_ids: [args.p_item_id],
+      reply_to_message_id: null,
+      forwarded_from_message_id: null,
+      attachment_meta: null,
+      agora_event_id: null,
+      created_at: new Date().toISOString(),
+      edited_at: null,
+      deleted_at: null,
+      thread_root_message_id: null,
+    };
+    rows.push(row);
+    return row;
+  },
 };
 
 /** Onboarding procs (20261014140000): just enough world for the onboarding spec. */

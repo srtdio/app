@@ -18,6 +18,9 @@ import {
   POST_IDS,
   seedClientPlan,
   seedPlanTab,
+  seedTeamAndHiddenPlans,
+  TEAM_PLAN_ID,
+  planMessage,
   TAB_OK_ITEM_TITLE,
   TAB_SHARED_PLAN_ID,
   WORKSPACE_ID,
@@ -398,6 +401,102 @@ function seedLibraryImage(network: HarnessNetwork): void {
   });
 }
 
+const CHAT_PLAN_BUCKETS = [
+  '0190d500-0000-7000-8000-00000000e6b1',
+  '0190d500-0000-7000-8000-00000000e6b2',
+] as const;
+const IDEA_MESSAGE_ID = '0190d500-0000-7000-8000-00000000e6c1';
+
+/** The bank idea sent into the DM as an idea card (chat_plan_item_share's row). */
+function seedIdeaCard(network: HarnessNetwork): void {
+  seedBankIdea(network);
+  (network.world.tables.chat_messages ??= []).push({
+    ...planMessage(IDEA_MESSAGE_ID, DM_CHANNEL, ME, [], NOW + 60_000),
+    shared_plan_ids: null,
+    shared_plan_item_ids: [PLAN_CONCEPT_ITEM],
+  });
+}
+
+const TRACE_ITEM = '0190d500-0000-7000-8000-00000000e6d1';
+const FROM_BANK_IDEAS = [
+  '0190d500-0000-7000-8000-00000000e6e1',
+  '0190d500-0000-7000-8000-00000000e6e2',
+] as const;
+
+/** A bank idea (no plan) for the visual fixtures. */
+function bankIdeaRow(id: string, title: string, extra: Partial<Row> = {}): Row {
+  return {
+    id,
+    workspace_id: WORKSPACE_ID,
+    plan_id: null,
+    kind: 'concept',
+    position: 0,
+    title,
+    description: null,
+    post_id: null,
+    target_date: null,
+    linked_post_id: null,
+    created_by: ME,
+    created_at: new Date(NOW - 3 * 86_400_000).toISOString(),
+    updated_at: new Date(NOW - 86_400_000).toISOString(),
+    last_active_at: new Date(NOW - 86_400_000).toISOString(),
+    show_to_client: false,
+    archived_at: null,
+    starred_at: null,
+    came_from_plan_title: null,
+    deleted_at: null,
+    ...extra,
+  };
+}
+
+/**
+ * A concept that left `planId` for the bank this morning: the idea row (no
+ * plan) and plan_item_to_bank's audit row. The flat payload key stands in for
+ * PostgREST's `payload->>from_plan_id` filter in the harness.
+ */
+function seedTrace(
+  network: HarnessNetwork,
+  planId: string,
+  title: string,
+  movedAt: number = NOW - 60 * 60_000,
+): void {
+  const t = network.world.tables;
+  (t.plan_items ??= []).push(bankIdeaRow(TRACE_ITEM, title, { came_from_plan_title: 'Plan' }));
+  (t.audit_log ??= []).push({
+    id: '0190d500-0000-7000-8000-00000000e6d2',
+    workspace_id: WORKSPACE_ID,
+    action: 'plan_item_to_bank',
+    entity_type: 'plan_item',
+    entity_id: TRACE_ITEM,
+    outcome: 'success',
+    created_at: new Date(movedAt).toISOString(),
+    payload: { from_plan_id: planId },
+    'payload->>from_plan_id': planId,
+  });
+}
+
+/** The chat plan plus one concept moved to the bank from it. */
+function seedChatPlanTrace(network: HarnessNetwork): void {
+  seedChatPlan(network);
+  seedTrace(network, PLAN_ID, 'Monsoon teaser');
+}
+
+/** The chat plan plus two bank ideas (one starred) for From bank. */
+function seedChatPlanBank(network: HarnessNetwork): void {
+  seedChatPlan(network);
+  (network.world.tables.plan_items ??= []).push(
+    bankIdeaRow(FROM_BANK_IDEAS[0], 'Founder story reel', {
+      starred_at: new Date(NOW - 86_400_000).toISOString(),
+    }),
+    bankIdeaRow(FROM_BANK_IDEAS[1], 'Diwali gifting guide'),
+  );
+}
+
+/** A team (Draft) plan carded into the group by ME, to forward into the client DM. */
+function seedDraftPlanCard(network: HarnessNetwork): void {
+  seedTeamAndHiddenPlans(network.world, { channelId: GROUP_CHANNEL, sender: ME, now: NOW });
+}
+
 /** A client plan (one concept with a library photo, one post) carded into the DM by ME. */
 function seedChatPlan(network: HarnessNetwork): void {
   seedLibraryImage(network);
@@ -408,6 +507,42 @@ function seedChatPlan(network: HarnessNetwork): void {
     fileVersionId: LIB_IMAGE_VERSION,
     now: NOW + 30_000,
   });
+  // Two buckets, the concept in both: the Plan row's line reads
+  // "{format} · Product, Festive" and the item screen's Buckets card picks them.
+  (network.world.tables.workspace_buckets ??= []).push(
+    {
+      id: CHAT_PLAN_BUCKETS[0],
+      workspace_id: WORKSPACE_ID,
+      name: 'Product',
+      color_hex: '#6b7280',
+      position: 1,
+      archived: false,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: CHAT_PLAN_BUCKETS[1],
+      workspace_id: WORKSPACE_ID,
+      name: 'Festive',
+      color_hex: '#6b7280',
+      position: 2,
+      archived: false,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+  );
+  (network.world.tables.plan_item_buckets ??= []).push(
+    {
+      item_id: PLAN_CONCEPT_ITEM,
+      bucket_id: CHAT_PLAN_BUCKETS[0],
+      workspace_id: WORKSPACE_ID,
+      workspace_buckets: { name: 'Product', position: 1 },
+    },
+    {
+      item_id: PLAN_CONCEPT_ITEM,
+      bucket_id: CHAT_PLAN_BUCKETS[1],
+      workspace_id: WORKSPACE_ID,
+      workspace_buckets: { name: 'Festive', position: 2 },
+    },
+  );
   // The concept files read embeds the version and the asset (one select), so
   // the item screen's tile shows the file's name under it.
   for (const link of network.world.tables.asset_attachments ?? []) {
@@ -1253,6 +1388,13 @@ const SCREENS: Screen[] = [
         .click();
       await waitFor([page.locator('[data-plan-page="item"]')], 'plan item');
       await waitFor([page.locator('[data-plan-file-name]')], 'plan item files');
+      // The Buckets card with both buckets picked (saved, so no signal).
+      const card = page.locator('[data-plan-page="item"] [data-plan-buckets]');
+      await waitFor(
+        [card.locator(`[data-plan-bucket="${CHAT_PLAN_BUCKETS[1]}"][aria-pressed="true"]`)],
+        'buckets card',
+      );
+      await card.scrollIntoViewIfNeeded();
     },
   },
   {
@@ -1286,6 +1428,62 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // The bank idea's ⋯ menu: Plan it, Send to chat, Show to client, Star,
+    // Archive, Delete last.
+    name: 'plan-item-bank-more-menu',
+    seed: creator,
+    extra: seedBankIdea,
+    url: `/plan/bank?item=${PLAN_CONCEPT_ITEM}`,
+    steps: async (page) => {
+      await waitFor([page.locator('[data-plan-page="item"] [data-plan-who-can-see]')], 'bank idea');
+      await tap([page.locator('[data-plan-item-more]')], 'item more');
+      await waitFor([page.getByRole('menuitem', { name: /Plan it/ })], 'more menu');
+    },
+  },
+  {
+    // A team only idea sent into the DM with the client: "Show this idea to
+    // the client?" with Cancel, Send in Team instead, Show and send.
+    name: 'chat-idea-share-sheet',
+    seed: creator,
+    extra: seedBankIdea,
+    url: `/plan/bank?item=${PLAN_CONCEPT_ITEM}`,
+    steps: async (page) => {
+      await waitFor([page.locator('[data-plan-page="item"] [data-plan-who-can-see]')], 'bank idea');
+      await tap([page.locator('[data-plan-item-more]')], 'item more');
+      await tap([page.getByRole('menuitem', { name: /Send to chat/ })], 'Send to chat');
+      await tap([page.locator(`[data-plan-forward-target="${DM_CHANNEL}"]`)], 'client DM');
+      await waitFor([page.locator('[data-idea-share-ask]')], 'idea share sheet');
+    },
+  },
+  {
+    // The idea card in the DM: eyebrow Idea, title, "Bank · 1 comments" line.
+    name: 'chat-idea-card',
+    seed: creator,
+    extra: seedIdeaCard,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, PEER_NAME);
+      const card = page.locator(`[data-idea-card="${PLAN_CONCEPT_ITEM}"]`).last();
+      await card.scrollIntoViewIfNeeded();
+      await waitFor([card], 'idea card');
+    },
+  },
+  {
+    // Forward a Draft plan into the client DM: "Open this plan for approvers?".
+    name: 'plan-share-draft-sheet',
+    seed: creator,
+    extra: seedDraftPlanCard,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, GROUP_NAME);
+      const card = page.locator(`[data-plan-card="${TEAM_PLAN_ID}"]`).last();
+      await card.scrollIntoViewIfNeeded();
+      await tap([card.locator('[data-plan-forward]')], 'Forward');
+      await tap([page.locator(`[data-plan-forward-target="${DM_CHANNEL}"]`)], 'client DM');
+      await waitFor([page.locator('[data-plan-open-send]')], 'open and send sheet');
+    },
+  },
+  {
     name: 'plan-item-mention-picker',
     seed: creator,
     extra: (network) => seedChatPlanThread(network, true),
@@ -1308,6 +1506,10 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await waitFor([page.locator('[data-plan-page="item"] [data-plan-came-from]')], 'bank idea');
       await waitFor([page.locator('[data-plan-file-name]')], 'bank idea files');
+      // The Who can see this card (agency, bank idea) below the details.
+      const who = page.locator('[data-plan-page="item"] [data-plan-who-can-see]');
+      await waitFor([who], 'who can see');
+      await who.scrollIntoViewIfNeeded();
     },
   },
   {
@@ -1332,6 +1534,51 @@ const SCREENS: Screen[] = [
     extra: seedChatPlan,
     url: '/chat',
     steps: openChatPlan,
+  },
+  {
+    // A concept moved to the bank leaves a quiet line on its day (agency).
+    name: 'plan-screen-trace',
+    seed: creator,
+    extra: seedChatPlanTrace,
+    url: '/chat',
+    steps: async (page) => {
+      await openChatPlan(page);
+      const trace = page.locator(`[data-plan-page="plan"] [data-plan-trace="${TRACE_ITEM}"]`);
+      await waitFor([trace], 'trace line');
+      await trace.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // The Plan screen's Add: From bank opens the bank picker (starred first).
+    name: 'plan-from-bank',
+    seed: creator,
+    extra: seedChatPlanBank,
+    url: '/chat',
+    steps: async (page) => {
+      await openChatPlan(page);
+      await tap([page.locator('[data-plan-add-header]')], 'Add');
+      await tap([page.locator('[data-plan-add-sheet]').getByText('From bank')], 'From bank');
+      await waitFor(
+        [page.locator(`[data-plan-from-bank-idea="${FROM_BANK_IDEAS[0]}"]`)],
+        'from bank list',
+      );
+    },
+  },
+  {
+    // Laptop month: the trace line in today's cell (dense, like item lines).
+    name: 'plan-tab-month-trace',
+    only: 'laptop',
+    seed: creator,
+    extra: (network) => {
+      seedTab(network);
+      // Moved on Monday: today's cell is full (its lines fold into "+N more").
+      seedTrace(network, TAB_SHARED_PLAN_ID, 'Monsoon teaser', NOW - 2 * 86_400_000);
+    },
+    url: '/plan',
+    steps: async (page) => {
+      await waitFor([page.locator('[data-plan-tab-month]')], 'plan tab month');
+      await waitFor([page.locator(`[data-plan-tab-trace="${TRACE_ITEM}"]`)], 'month trace');
+    },
   },
   {
     name: 'plan-tab',
@@ -1373,6 +1620,29 @@ const SCREENS: Screen[] = [
       await waitFor(
         [page.locator('[data-bank-filter-sheet] [data-bank-bucket]').first()],
         'filter sheet',
+      );
+    },
+  },
+  {
+    // A bucket's menu inside the Filter and sort sheet: phone swaps the
+    // Buckets card's body for Back, Rename, Delete bucket (no second Sheet);
+    // laptop opens the ActionMenu popover anchored to the chip.
+    name: 'plan-tab-bank-filter-bucket-menu',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankReady(page);
+      await tap([page.locator('[data-bank-filter-open]').first()], 'Filter and sort');
+      const chip = page.locator(`[data-bank-filter-sheet] [data-bank-bucket="${BANK_BUCKETS[0]}"]`);
+      await tap([chip], 'bucket chip');
+      await tap([chip], 'picked bucket chip again');
+      await waitFor(
+        [
+          page.locator(`[data-bank-bucket-menu="${BANK_BUCKETS[0]}"]`),
+          page.getByRole('menuitem', { name: /Rename/ }),
+        ],
+        'bucket menu',
       );
     },
   },

@@ -71,6 +71,7 @@ function row(i: number, over: Partial<ChatMessageRow> = {}): ChatMessageRow {
     shared_post_ids: null,
     shared_brief_ids: null,
     shared_plan_ids: null,
+    shared_plan_item_ids: null,
     // Every fifth row quotes a message older than the page.
     reply_to_message_id: i % 5 === 0 ? `old-${i}` : null,
     thread_root_message_id: null,
@@ -202,6 +203,7 @@ function recordingClient(
       open_posts: [],
       open_post_count: 0,
       shared_plan_ids: [],
+      shared_plan_item_ids: null,
       open_briefs: [],
       open_brief_count: 0,
     };

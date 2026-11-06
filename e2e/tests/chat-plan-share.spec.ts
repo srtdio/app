@@ -192,7 +192,9 @@ test('agency: Plans lists upcoming plans; a row opens the plan, never sends; sen
   expectClean(network);
 });
 
-test('agency: Forward a Draft plan into a client chat sends nothing', async ({ page }) => {
+test('agency: Forward a Draft plan into a client chat asks first; Cancel sends nothing', async ({
+  page,
+}) => {
   test.setTimeout(90_000);
   const network = await installHarnessNetwork(page);
   seedTeamAndHiddenPlans(network.world, { channelId: GROUP_CHANNEL, sender: ME });
@@ -210,8 +212,12 @@ test('agency: Forward a Draft plan into a client chat sends nothing', async ({ p
   ).toHaveCount(0);
   const from = network.rpcCalls.length;
   await target.click();
-  await expect(page.getByText('Open the plan for approvers first.')).toBeVisible();
-  await expect(page.getByRole('dialog', { name: 'Share with client first?' })).toHaveCount(0);
+  // "Open this plan for approvers?" (PlanOpenSendSheet); Cancel sends nothing.
+  const ask = page.getByRole('dialog', { name: 'Open this plan for approvers?' });
+  await expect(ask).toBeVisible();
+  await expect(ask.locator('[data-plan-open-send]')).toContainText('is a Draft.');
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(ask).toHaveCount(0);
   // No plan or share write (a read cursor may land meanwhile).
   expect(
     network.rpcCalls

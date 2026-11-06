@@ -213,6 +213,11 @@ export interface ThreadMessage {
    * absent or empty when there are none. Never sent live or from the outbox.
    */
   sharedPlanIds?: string[];
+  /**
+   * Shared idea (concept plan item) uuids (row `shared_plan_item_ids`, written
+   * only by chat_plan_item_share); absent or empty when there are none.
+   */
+  sharedPlanItemIds?: string[];
   /** The quoted message when this is a reply; null otherwise. */
   reply: ReplyQuote | null;
   /**
@@ -597,6 +602,7 @@ export function rowToThreadMessage(
   const sharedBriefIds =
     localBriefs.length > 0 ? [...localBriefs] : [...(row.shared_brief_ids ?? [])];
   const sharedPlanIds = [...(row.shared_plan_ids ?? [])];
+  const sharedPlanItemIds = [...(row.shared_plan_item_ids ?? [])];
   const reply =
     local?.reply ??
     (row.reply_to_message_id !== null && row.reply_to_message_id !== ''
@@ -621,6 +627,7 @@ export function rowToThreadMessage(
     sharedPostIds,
     sharedBriefIds,
     ...(sharedPlanIds.length > 0 ? { sharedPlanIds } : {}),
+    ...(sharedPlanItemIds.length > 0 ? { sharedPlanItemIds } : {}),
     reply,
     state: 'sent',
     status: 'sent',
@@ -796,12 +803,19 @@ export function summaryIconOfLine(line: string): AttachmentSummaryIcon | null {
 
 /** A merge keeps the non-empty plan ids (the row's, else what the list held). */
 function keptPlanIds(
-  existing: Pick<ThreadMessage, 'sharedPlanIds'>,
-  incoming: Pick<ThreadMessage, 'sharedPlanIds'>,
-): Pick<ThreadMessage, 'sharedPlanIds'> {
+  existing: Pick<ThreadMessage, 'sharedPlanIds' | 'sharedPlanItemIds'>,
+  incoming: Pick<ThreadMessage, 'sharedPlanIds' | 'sharedPlanItemIds'>,
+): Pick<ThreadMessage, 'sharedPlanIds' | 'sharedPlanItemIds'> {
   const kept =
     (existing.sharedPlanIds ?? []).length > 0 ? existing.sharedPlanIds : incoming.sharedPlanIds;
-  return kept !== undefined && kept.length > 0 ? { sharedPlanIds: kept } : {};
+  const ideas =
+    (existing.sharedPlanItemIds ?? []).length > 0
+      ? existing.sharedPlanItemIds
+      : incoming.sharedPlanItemIds;
+  return {
+    ...(kept !== undefined && kept.length > 0 ? { sharedPlanIds: kept } : {}),
+    ...(ideas !== undefined && ideas.length > 0 ? { sharedPlanItemIds: ideas } : {}),
+  };
 }
 
 /** Longest body snapshot a reply quote carries. */
@@ -810,7 +824,7 @@ const REPLY_PREVIEW_LIMIT = 120;
 /** The quote line for a message: its body (clipped), else a label for its content. */
 export function replyPreview(
   message: Pick<ThreadMessage, 'body' | 'attachments' | 'sharedPostIds'> &
-    Partial<Pick<ThreadMessage, 'sharedBriefIds' | 'sharedPlanIds'>>,
+    Partial<Pick<ThreadMessage, 'sharedBriefIds' | 'sharedPlanIds' | 'sharedPlanItemIds'>>,
 ): string {
   const body = message.body.trim();
   // Never cut through an @[uuid] token: the quote resolves it to "@Name" at render.
@@ -820,6 +834,7 @@ export function replyPreview(
   if (message.sharedPostIds.length > 0) return 'Shared post';
   if ((message.sharedBriefIds ?? []).length > 0) return 'Shared brief';
   if ((message.sharedPlanIds ?? []).length > 0) return 'Shared plan';
+  if ((message.sharedPlanItemIds ?? []).length > 0) return 'Shared idea';
   return 'Message';
 }
 
@@ -1185,7 +1200,8 @@ export function applyFilesRemoved(
       m.body.trim() === '' &&
       m.sharedPostIds.length === 0 &&
       m.sharedBriefIds.length === 0 &&
-      (m.sharedPlanIds ?? []).length === 0
+      (m.sharedPlanIds ?? []).length === 0 &&
+      (m.sharedPlanItemIds ?? []).length === 0
     ) {
       emptied.push(m.id);
     }

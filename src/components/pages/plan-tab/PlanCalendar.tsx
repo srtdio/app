@@ -23,7 +23,12 @@
 // the month lines and "+N more" are 44px (fewer lines fit, the rest go to
 // "+N more"), and a creator's long-press (the shared LONG_PRESS_MS, no drift) on a plan item opens
 // the day picker (its plan days and No date): a pick moves it the way a drop
-// does. A tap still opens it; approvers see no change. Tokens only.
+// does. A tap still opens it; approvers see no change. Bank meets Plan: the
+// agency's month cells add a quiet "{title} moved to bank" line (dashed edge,
+// the bank icon, 22px dense like the item lines, never tappable) where a
+// concept left a plan, read after the grid paints (one audit_log read and one
+// plan_items read for the plans in range); the empty-day menu offers From
+// bank (BankPickSheet). Tokens only.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Bone, MOVE_CLASS, slideX } from '@/lib/motion';
@@ -45,9 +50,14 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { ICON_SIZE, IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
+import { ICON_SIZE, IconBank, IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
+import { movedToBankLine } from '@/lib/chat/bank-plan-copy';
+import { useBankTraces } from '@/lib/chat/plan-bank-extras';
+import { supabase } from '@/lib/supabase';
+import { getPrefetchContext } from '@/lib/prefetch-context';
+import { BankPickSheet } from './BankPickSheet';
 import { cn } from '@/lib/cn';
-import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
+import type { BankTrace, PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import {
   ALL_LABEL,
@@ -88,6 +98,45 @@ import { DraftTag, PlanTabLoadMore, type PlanTabMore } from './PlanTabList';
 import type { AddTarget } from './PlanTabAdd';
 import { usePlanTabMove } from './use-plan-tab-move';
 import { monthCellCapFor, useLongPress } from './plan-calendar-touch';
+
+/**
+ * A month cell's lines: its entries first, then the moved-to-bank traces in
+ * the room left; "+N more" counts whatever did not fit. Pure.
+ */
+export function capWithTraces<E, T>(
+  entries: readonly E[],
+  traces: readonly T[],
+  cap: number | undefined,
+): { shown: E[]; traces: T[]; more: number } {
+  const { shown, more } = capEntries(entries, cap);
+  if (cap === undefined) return { shown, traces: [...traces], more };
+  const room = Math.max(0, cap - shown.length);
+  const fit = more > 0 ? [] : traces.slice(0, room);
+  return { shown, traces: fit, more: more + (traces.length - fit.length) };
+}
+
+/**
+ * The traces on each day across these plans, minus items back in their plan
+ * and, under a chip, other plans' traces. Pure.
+ */
+export function traceDays(
+  traces: ReadonlyMap<string, BankTrace[]>,
+  bundles: readonly PlanBundle[],
+  filter: string | null,
+): Map<string, BankTrace[]> {
+  const out = new Map<string, BankTrace[]>();
+  for (const bundle of bundles) {
+    if (filter !== null && bundle.plan.id !== filter) continue;
+    const live = new Set(bundle.items.map((i) => i.id));
+    for (const trace of traces.get(bundle.plan.id) ?? []) {
+      if (live.has(trace.itemId)) continue;
+      const list = out.get(trace.day) ?? [];
+      list.push(trace);
+      out.set(trace.day, list);
+    }
+  }
+  return out;
+}
 
 /** Pointer travel (px) that lifts an entry into a drag. */
 const DRAG_SLOP_PX = 4;
@@ -180,6 +229,23 @@ export function PlanCalendar(props: {
     [bundles, data.posts, tones, timeZone, shownFilter, mover.overrides],
   );
   const [menu, setMenu] = useState<{ day: string; anchor: HTMLElement } | null>(null);
+  // From bank (the empty-day menu): the day the picked idea goes on.
+  const [bankDay, setBankDay] = useState<string | null>(null);
+  // The workspace: the plans' own, else the shell's (no provider read here).
+  const workspaceId = bundles[0]?.plan.workspace_id ?? getPrefetchContext()?.workspaceId ?? null;
+  // After the grid paints: where a concept left a plan (agency only).
+  const tracePlans = useMemo(() => bundles.map((b) => b.plan), [bundles]);
+  const traces = useBankTraces({
+    client: supabase,
+    enabled: side === 'agency' && props.data !== null && view === 'month',
+    workspaceId,
+    plans: tracePlans,
+    timeZone,
+  });
+  const dayTraces = useMemo(
+    () => traceDays(traces, bundles, shownFilter),
+    [traces, bundles, shownFilter],
+  );
   const draggable = canDragEntries(side);
   const drag = useEntryDrag({ enabled: draggable, onDrop: mover.move });
   const coarse = useCoarsePointer();
@@ -338,6 +404,7 @@ export function PlanCalendar(props: {
             loading={loading}
             height={fit}
             entries={entries}
+            traces={dayTraces}
             cellProps={cellProps}
             entryProps={entryProps}
             coarse={coarse}
@@ -370,7 +437,21 @@ export function PlanCalendar(props: {
             setMenu(null);
             props.onNewPlan(weekRangeOf(menu.day));
           }}
+          onFromBank={() => {
+            setMenu(null);
+            setBankDay(menu.day);
+          }}
           onClose={() => setMenu(null)}
+        />
+      ) : null}
+      {canOpenDayMenu(side) ? (
+        <BankPickSheet
+          open={bankDay !== null}
+          workspaceId={workspaceId}
+          day={bankDay ?? ''}
+          today={today}
+          plans={bankDay !== null ? plansCovering(bundles, bankDay).map((b) => b.plan) : []}
+          onClose={() => setBankDay(null)}
         />
       ) : null}
       {draggable ? (
@@ -584,6 +665,8 @@ function MonthGrid(props: {
   /** The fitted grid height (px); null before the first measure. */
   height: number | null;
   entries: ReadonlyMap<string, CalendarEntry[]>;
+  /** Agency: the moved-to-bank lines by day (after paint). */
+  traces: ReadonlyMap<string, BankTrace[]>;
   cellProps: (day: string) => CellProps;
   entryProps: (entry: CalendarEntry) => EntryProps;
   /** A coarse pointer: 44px lines and "+N more", so fewer lines fit. */
@@ -615,10 +698,20 @@ function MonthGrid(props: {
           {week.map((cell, cellIndex) => {
             const cp = props.cellProps(cell.day);
             const all = props.entries.get(cell.day) ?? [];
-            const { shown, more } = capEntries(
+            const gone = props.traces.get(cell.day) ?? [];
+            const {
+              shown,
+              traces: shownTraces,
+              more,
+            } = capWithTraces(
               all,
+              gone,
               rowHeight !== null
-                ? monthCellCapFor({ rowHeight, count: all.length, coarse: props.coarse })
+                ? monthCellCapFor({
+                    rowHeight,
+                    count: all.length + gone.length,
+                    coarse: props.coarse,
+                  })
                 : undefined,
             );
             const isToday = cell.day === cp.today;
@@ -668,6 +761,9 @@ function MonthGrid(props: {
                 ) : null}
                 {shown.map((entry) => (
                   <MonthEntry key={entry.key} {...props.entryProps(entry)} />
+                ))}
+                {shownTraces.map((trace) => (
+                  <MonthTrace key={`${trace.planId}:${trace.itemId}`} trace={trace} />
                 ))}
                 {more > 0 ? (
                   <PressableRow
@@ -745,6 +841,19 @@ function MonthEntry(props: EntryProps): ReactElement {
       <span className="sr-only">, {entryPlanName(props.entry)}</span>
       <PlanCommentCount count={entryCommentCount(props.entry)} {...entryUnreadProps(props.entry)} />
     </PressableRow>
+  );
+}
+
+/** A moved-to-bank line in a month cell: 22px like an item line, dashed, never tappable. */
+function MonthTrace(props: { trace: BankTrace }): ReactElement {
+  return (
+    <span
+      data-plan-tab-trace={props.trace.itemId}
+      className="box-content flex h-5 min-w-0 shrink-0 items-center gap-1 rounded-lg border border-dashed border-border px-1 text-xs text-fg-3"
+    >
+      <IconBank size={ICON_SIZE.inline} className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{movedToBankLine(props.trace.title)}</span>
+    </span>
   );
 }
 

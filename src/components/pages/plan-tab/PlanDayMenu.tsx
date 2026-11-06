@@ -1,7 +1,9 @@
 // The empty-day menu (creators, laptop): anchored to the clicked day cell and
 // kept on screen near the edges. Header "Add on <day> to", then only the
 // plans whose dates hold that day (dot in the plan's colour, title on up to
-// two lines, mono date range, Draft tag), a divider and "+ New plan". Escape
+// two lines, mono date range, Draft tag), a divider, "From bank" (an idea
+// from the bank onto that day: BankPickSheet, placed in the plan covering it)
+// and "+ New plan". Escape
 // or a click outside closes it and focus goes back to the cell; it opens with
 // focus on its first row and grows from the cell (growFromTrigger, scale only).
 // Tokens only.
@@ -15,6 +17,7 @@ import { useEscapeLayer } from '@/lib/escape-stack';
 import { growFromTrigger } from '@/lib/motion';
 import { viewportSize } from '@/lib/use-is-laptop';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { ICON_SIZE, IconBank } from '@/components/ui/icons';
 import type { PlanBundle } from '@/lib/chat/plans';
 import {
   NEW_PLAN_ROW_LABEL,
@@ -53,6 +56,8 @@ export function PlanDayMenu(props: {
   tones: ReadonlyMap<string, PlanTone>;
   onPick: (bundle: PlanBundle) => void;
   onNewPlan: () => void;
+  /** From bank: an idea from the bank onto this day; absent hides the row. */
+  onFromBank?: () => void;
   onClose: () => void;
 }): ReactElement {
   const ref = useRef<HTMLDivElement>(null);
@@ -133,6 +138,18 @@ export function PlanDayMenu(props: {
           </PressableRow>
         ))}
         <div className="my-1 border-t border-border" />
+        {props.onFromBank !== undefined ? (
+          <PressableRow
+            type="button"
+            role="menuitem"
+            data-plan-tab-menu-bank=""
+            onClick={props.onFromBank}
+            className="flex items-center gap-2 px-3 text-base font-medium text-fg mv-tint"
+          >
+            <IconBank size={ICON_SIZE.inline} className="shrink-0" />
+            From bank
+          </PressableRow>
+        ) : null}
         <PressableRow
           type="button"
           role="menuitem"

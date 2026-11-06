@@ -343,7 +343,7 @@ const MARK_ROW_SNIPPET = 80;
 export function markRowText(
   message:
     | (Pick<ThreadMessage, 'body' | 'attachments' | 'sharedPostIds' | 'sharedBriefIds'> &
-        Partial<Pick<ThreadMessage, 'sharedPlanIds'>>)
+        Partial<Pick<ThreadMessage, 'sharedPlanIds' | 'sharedPlanItemIds'>>)
     | undefined,
   cardTitle: string | undefined,
 ): string {
@@ -355,6 +355,7 @@ export function markRowText(
   if (message.sharedPostIds.length > 0) return 'Shared post';
   if (message.sharedBriefIds.length > 0) return 'Shared brief';
   if ((message.sharedPlanIds ?? []).length > 0) return 'Shared plan';
+  if ((message.sharedPlanItemIds ?? []).length > 0) return 'Shared idea';
   const summary = attachmentSummary(message);
   if (summary !== null) return attachmentSummaryText(summary);
   return 'Message';

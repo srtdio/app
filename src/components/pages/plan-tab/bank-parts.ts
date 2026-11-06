@@ -334,9 +334,13 @@ export function bankItemHref(itemId: string): string {
   return `/plan/bank?${new URLSearchParams({ item: itemId }).toString()}`;
 }
 
-/** A bucket delete's line: "{n} ideas keep their other buckets". Pure. */
-export function bucketDeleteLine(n: number): string {
-  return `${n} ${n === 1 ? 'idea keeps its' : 'ideas keep their'} other buckets`;
+/**
+ * A bucket delete's second line: none for an empty bucket, "1 idea keeps its
+ * other buckets", "{n} ideas keep their other buckets". Pure.
+ */
+export function bucketDeleteLine(n: number): string | null {
+  if (n <= 0) return null;
+  return n === 1 ? '1 idea keeps its other buckets' : `${n} ideas keep their other buckets`;
 }
 
 /** The ideas a bucket holds, from the loaded ideas. Pure. */

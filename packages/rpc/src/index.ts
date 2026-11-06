@@ -658,6 +658,14 @@ export function chatPlanShare(
   return callProc(client, 'chat_plan_share', args);
 }
 
+export type ChatPlanItemShareArgs = ProcArgs<'chat_plan_item_share'>;
+export function chatPlanItemShare(
+  client: Client,
+  args: ChatPlanItemShareArgs,
+): Promise<Result<ProcReturns<'chat_plan_item_share'>>> {
+  return callProc(client, 'chat_plan_item_share', args);
+}
+
 // --- Workspace rules: storage, Recently deleted, delete workspace -----------
 
 export type AssetRestoreArgs = ProcArgs<'asset_restore'>;
