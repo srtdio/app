@@ -1066,6 +1066,15 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
                   >
                     {SAVING_LABEL}
                   </span>
+                  {/* Retry's width is held too (ghost Button: 16 each side,
+                      base/500), so a failed save never widens the slot. */}
+                  <span
+                    aria-hidden="true"
+                    data-task-save-reserve="retry"
+                    className="invisible col-start-1 row-start-1 px-4 text-base font-medium"
+                  >
+                    {RETRY_LABEL}
+                  </span>
                   <span className="col-start-1 row-start-1 flex items-center">
                     {saveFailed ? (
                       <Button
