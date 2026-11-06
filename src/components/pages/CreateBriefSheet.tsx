@@ -250,7 +250,7 @@ export function firstBriefErrorField(errors: Record<string, string>): BriefError
 
 /** The Create button's label: in flight, uploading, or ready. Pure. */
 function createBriefLabel(submitting: boolean, pendingUploads: number): string {
-  if (submitting) return 'Creating…';
+  if (submitting) return 'Create brief';
   if (pendingUploads > 0) return `Uploading ${fileCount(pendingUploads)}…`;
   return 'Create brief';
 }
@@ -392,8 +392,7 @@ export function CreateBriefSheet({ open, workspaceId, onClose, onCreated }: Crea
       className="shrink-0"
       data-induction={INDUCTION_KEYS.briefSheetCreate}
       onClick={() => void handleSubmit()}
-      disabled={submitting}
-      aria-busy={submitting}
+      busy={submitting}
     >
       {createBriefLabel(submitting, pendingUploads)}
     </Button>

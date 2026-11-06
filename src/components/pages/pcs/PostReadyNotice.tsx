@@ -239,10 +239,11 @@ export function PostReadyNotice({
         <div className="flex flex-col gap-2">
           <Button
             variant="primary"
-            disabled={openCount > 0 || sending}
+            busy={sending}
+            disabled={openCount > 0}
             onClick={() => void handleNotify()}
           >
-            {sending ? 'Sending…' : NOTIFY_LABEL}
+            {NOTIFY_LABEL}
           </Button>
           {openCount > 0 ? (
             <p className="text-sm text-fg-3">{notifyDisabledReason(openCount)}</p>

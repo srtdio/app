@@ -179,8 +179,9 @@ export function presetPrimaryLabel(input: {
   submitting: boolean;
   savedDraft: boolean;
 }): string {
-  if (input.preset.primary === 'save_draft') return input.submitting ? 'Saving…' : 'Save as draft';
-  if (input.submitting) return 'Sending…';
+  // Busy shows on the button (Button busy), never as a label swap: the label
+  // keeps its width while the save runs.
+  if (input.preset.primary === 'save_draft') return 'Save as draft';
   return input.savedDraft ? 'Send for review again' : 'Send for review';
 }
 
@@ -1291,8 +1292,8 @@ export function CreatePostSheet({
           variant="primary"
           data-induction={INDUCTION_KEYS.postSheetPrimary}
           onClick={() => void handleSubmit()}
+          busy={submitting}
           disabled={!canSubmit}
-          aria-busy={false}
         >
           {preset !== undefined
             ? presetPrimaryLabel({ preset, submitting, savedDraft: savedDraftId !== null })
@@ -1309,12 +1310,11 @@ export function CreatePostSheet({
         className="shrink-0"
         data-submit="draft"
         onClick={() => void handleSubmit('draft')}
+        busy={submitMode === 'draft'}
         disabled={!canSubmit}
-        aria-busy={pendingUploads > 0}
+        aria-busy={submitMode === 'draft' || pendingUploads > 0}
       >
-        {submitMode === 'draft' ? (
-          'Saving…'
-        ) : pendingUploads > 0 ? (
+        {pendingUploads > 0 ? (
           <>
             <span
               aria-hidden="true"
@@ -1331,9 +1331,10 @@ export function CreatePostSheet({
         className="shrink-0"
         data-submit="review"
         onClick={() => void handleSubmit('review')}
+        busy={submitMode === 'review'}
         disabled={!canSubmit}
       >
-        {submitMode === 'review' ? 'Saving…' : SEND_FOR_REVIEW_LABEL}
+        {SEND_FOR_REVIEW_LABEL}
       </Button>
     </>
   );
@@ -1580,10 +1581,10 @@ export function CreatePostSheet({
                           <Button
                             type="button"
                             variant="primary"
-                            disabled={newBucketBusy}
+                            busy={newBucketBusy}
                             onClick={() => void submitNewBucket()}
                           >
-                            {newBucketBusy ? 'Creating…' : 'Create'}
+                            Create
                           </Button>
                           <Button
                             type="button"

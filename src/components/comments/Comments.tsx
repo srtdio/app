@@ -2663,12 +2663,12 @@ export function Comments({
                   data-comment-resolve=""
                   variant="ghost"
                   className={ROW_ACTION_CLASS}
-                  disabled={isResolving}
+                  busy={isResolving}
                   onClick={() =>
                     isResolved ? void handleResolve(comment, false) : handleOneTapResolve(comment)
                   }
                 >
-                  {isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}
+                  {isResolved ? 'Reopen' : 'Resolve'}
                 </Button>
               ),
               replyButton: rootReplyButton(comment),
@@ -2882,10 +2882,10 @@ export function Comments({
           <Button
             variant="ghost"
             className="ml-auto min-w-[44px]"
-            disabled={loadingMore}
+            busy={loadingMore}
             onClick={() => void loadPage(page + 1)}
           >
-            {loadingMore ? 'Loading' : 'Retry'}
+            Retry
           </Button>
         </ErrorNote>
       ) : null}
@@ -2893,10 +2893,10 @@ export function Comments({
       {!loading && !loadError && !moreError && hasMore ? (
         <Button
           className="self-start"
-          disabled={loadingMore}
+          busy={loadingMore}
           onClick={() => void loadPage(page + 1)}
         >
-          {loadingMore ? 'Loading' : 'Load more'}
+          Load more
         </Button>
       ) : null}
 

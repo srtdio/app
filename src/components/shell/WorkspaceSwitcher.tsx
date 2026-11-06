@@ -503,9 +503,9 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                 variant="primary"
                 data-induction={INDUCTION_KEYS.workspaceCreateSubmit}
                 onClick={() => void submitCreate()}
-                disabled={submitting}
+                busy={submitting}
               >
-                {submitting ? 'Creating...' : 'Create'}
+                Create
               </Button>
             </div>
           </div>

@@ -25,9 +25,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
 import { PLAN_WEEK_CHIP_ZERO, planCardMeta, planSections, type PlanWeekChip } from '@/lib/plan-tab';
 
-/** Load more's copy: 'Loading' while the page is in flight. Pure. */
-export function loadMoreLabel(busy: boolean): string {
-  return busy ? 'Loading' : 'Load more';
+/**
+ * Load more's copy. It never swaps while the page is in flight: busy shows on
+ * the button (Button busy), so the label keeps its width. Pure.
+ */
+export function loadMoreLabel(_busy: boolean): string {
+  return 'Load more';
 }
 
 /** What Load more needs: busy while a page is in flight, and the tap. Null: every plan is in. */
@@ -47,7 +50,7 @@ export function PlanTabLoadMore(props: { more: PlanTabMore }): ReactElement {
       type="button"
       data-plan-tab-load-more=""
       className="self-start"
-      disabled={props.more.busy}
+      busy={props.more.busy}
       onClick={props.more.onMore}
     >
       {loadMoreLabel(props.more.busy)}

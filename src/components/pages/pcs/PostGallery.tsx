@@ -919,10 +919,11 @@ export function reorderView(model: ReorderModel): ReactElement {
           type="button"
           variant="primary"
           data-reorder-save=""
-          disabled={saving || !changed}
+          busy={saving}
+          disabled={!changed}
           onClick={model.onSave}
         >
-          {saving ? 'Saving…' : 'Save order'}
+          Save order
         </Button>
       </div>
       {error !== null ? (

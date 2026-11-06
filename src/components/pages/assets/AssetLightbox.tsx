@@ -720,10 +720,11 @@ export function AssetLightbox({
                       <Button
                         variant="primary"
                         className="flex-1"
+                        busy={savingName}
                         disabled={!canSaveName}
                         onClick={() => void saveName()}
                       >
-                        {savingName ? 'Saving' : 'Save'}
+                        Save
                       </Button>
                     </div>
                   </div>

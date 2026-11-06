@@ -1266,8 +1266,8 @@ export function NotificationsPage() {
 
           {hasMore ? (
             <div className="mt-4 flex justify-center px-4 md:px-6">
-              <Button variant="ghost" onClick={() => void loadMore()} disabled={loadingMore}>
-                {loadingMore ? 'Loading' : 'Load more'}
+              <Button variant="ghost" onClick={() => void loadMore()} busy={loadingMore}>
+                Load more
               </Button>
             </div>
           ) : null}

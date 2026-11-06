@@ -192,9 +192,9 @@ export function AuthCallbackPage() {
         variant="primary"
         className="w-full"
         onClick={handleSignIn}
-        disabled={phase === 'signing'}
+        busy={phase === 'signing'}
       >
-        {phase === 'signing' ? 'Signing in' : copy.button}
+        {copy.button}
       </Button>
     </AuthShell>
   );

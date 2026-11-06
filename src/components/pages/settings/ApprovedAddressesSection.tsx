@@ -146,8 +146,8 @@ export function ApprovedAddressesSection({
             </p>
           ) : null}
           <div>
-            <Button type="submit" disabled={adding || draft.trim() === ''}>
-              {adding ? 'Adding' : 'Add address'}
+            <Button type="submit" busy={adding} disabled={draft.trim() === ''}>
+              Add address
             </Button>
           </div>
         </form>

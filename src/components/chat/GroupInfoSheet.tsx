@@ -810,8 +810,8 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
             <Button variant="ghost" disabled={busy} onClick={() => setName(props.groupName)}>
               Cancel
             </Button>
-            <Button variant="primary" disabled={busy} onClick={() => void submitRename()}>
-              {busy ? 'Saving' : 'Save'}
+            <Button variant="primary" busy={busy} onClick={() => void submitRename()}>
+              Save
             </Button>
           </div>
         ) : null}
@@ -898,10 +898,11 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
             <Button
               variant="primary"
               className="mt-2"
-              disabled={addId === null || busy}
+              busy={busy}
+              disabled={addId === null}
               onClick={() => void submitAdd()}
             >
-              {busy ? 'Adding' : 'Add to group'}
+              Add to group
             </Button>
           </div>
         ) : null}

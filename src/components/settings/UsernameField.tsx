@@ -124,8 +124,8 @@ export function UsernameField({
           />
         </div>
         {!unchanged ? (
-          <Button variant="primary" disabled={!canSave} onClick={() => void save()}>
-            {saving ? 'Saving' : 'Save'}
+          <Button variant="primary" busy={saving} disabled={!canSave} onClick={() => void save()}>
+            Save
           </Button>
         ) : null}
       </div>

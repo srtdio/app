@@ -1005,10 +1005,11 @@ export function AttachmentsField({
             <Button
               type="button"
               variant="primary"
-              disabled={!linkValid || linkBusy}
+              busy={linkBusy}
+              disabled={!linkValid}
               onClick={() => void submitLink()}
             >
-              {linkBusy ? 'Adding' : 'Add link'}
+              Add link
             </Button>
             <Button type="button" variant="ghost" onClick={() => setLinkOpen(false)}>
               Cancel

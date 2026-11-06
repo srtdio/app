@@ -352,9 +352,9 @@ export function AcceptInvitePage() {
               variant="primary"
               className="w-full"
               onClick={() => void handleJoin()}
-              disabled={submitting}
+              busy={submitting}
             >
-              {submitting ? 'Joining' : joinLabel(workspaceName)}
+              {joinLabel(workspaceName)}
             </Button>
           )}
         </div>

@@ -807,9 +807,10 @@ export function MembersInviteForm({
             variant="primary"
             type="submit"
             data-induction={INDUCTION_KEYS.membersInvite}
-            disabled={submitting || sendCount === 0}
+            busy={submitting}
+            disabled={sendCount === 0}
           >
-            {submitting ? 'Sending' : sendCount > 1 ? `Send ${sendCount} invites` : 'Send invite'}
+            {sendCount > 1 ? `Send ${sendCount} invites` : 'Send invite'}
           </Button>
         </div>
         {showRoleMissing ? (
