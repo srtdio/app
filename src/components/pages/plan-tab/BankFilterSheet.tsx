@@ -26,7 +26,6 @@ import {
   ICON_SIZE,
   IconCheck,
   IconEdit,
-  IconMore,
   IconPlus,
   IconTrash,
 } from '@/components/ui/icons';
