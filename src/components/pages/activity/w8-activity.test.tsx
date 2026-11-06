@@ -96,18 +96,19 @@ describe('W8 fix 3: the card shows a visible 44px ⋯ menu', () => {
   });
 });
 
-describe('W8 fix 4: a card is highlighted when any entry is unread', () => {
-  it('highlights a group whose lead is read but a later entry is not', () => {
+describe('W8 fix 4: a card shows the unread dot when any entry is unread', () => {
+  it('dots a group whose lead is read but a later entry is not', () => {
     const group = [item({ id: 'a', readAt: READ }), item({ id: 'b', readAt: null })];
     expect(groupHasUnread(group)).toBe(true);
     const html = renderCard(group);
-    expect(html).toContain('lit-selected');
+    expect(html).toContain('data-list-card-unread');
     expect(html).toContain('aria-label="Unread"');
   });
 
   it('is plain once every entry is read', () => {
     const group = [item({ id: 'a', readAt: READ }), item({ id: 'b', readAt: READ })];
     expect(groupHasUnread(group)).toBe(false);
+    expect(renderCard(group)).not.toContain('data-list-card-unread');
     expect(renderCard(group)).not.toContain('lit-selected');
   });
 });

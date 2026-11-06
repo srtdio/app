@@ -93,36 +93,32 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('ActivityCard type roles', () => {
-  it('the card title is base/500, never 15px semibold', () => {
+describe('ActivityCard type roles (ui/ListCard: heading, secondary, meta + one tag)', () => {
+  it('the card title is the heading role, one truncated line', () => {
     mount([item({ title: 'Q3 Launch', body: 'Looks good to me', actorName: 'Asha Rao' })]);
-    const title = byText('Q3 Launch');
-    expectRole(title, ['text-base', 'font-medium', 'text-fg']);
-    expect(title.className).not.toContain('text-lg');
-    expect(title.className).not.toContain('font-semibold');
-    expect(title.className).not.toMatch(/leading-\[/);
+    const title = document.querySelector('[data-list-card-title]');
+    expect(title?.textContent).toBe('Asha Rao commented on Q3 Launch');
+    expectRole(title as HTMLElement, ['text-lg', 'font-semibold', 'truncate']);
+    expect(title?.className).not.toMatch(/leading-\[/);
   });
 
-  it('the body line is base fg-2 secondary copy', () => {
+  it('the preview is the secondary role, 2 lines, always 2 lines tall', () => {
     mount([item({ title: 'Q3 Launch', body: 'Looks good to me', actorName: 'Asha Rao' })]);
-    const p = [...document.querySelectorAll('p')].find((el) =>
-      el.textContent?.includes('Looks good to me'),
-    );
-    expect(p).toBeDefined();
-    expectRole(p as HTMLElement, ['text-base', 'text-fg-2']);
+    const preview = byText('Looks good to me');
+    expectRole(preview, ['text-md', 'text-fg-2', 'line-clamp-2', 'min-h-9']);
   });
 
-  it('the time is sm fg-3 meta in sans tabular figures', () => {
+  it('the time is the meta role: mono, tabular, fg-3', () => {
     mount([item({ title: 'Q3 Launch' })]);
     const time = document.querySelector('[data-activity-time]');
     expect(time).not.toBeNull();
-    expectRole(time as HTMLElement, ['text-sm', 'tabular-nums', 'text-fg-3']);
-    expect(time?.className).not.toContain('font-mono');
+    expectRole(time as HTMLElement, ['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']);
   });
 
-  it('the scope tag stays the xs chip', () => {
+  it('the scope tag is the one grey xs Tag', () => {
     mount([item({ title: 'Q3 Launch', scope: 'posts' })]);
-    expectRole(byText('Posts'), ['text-xs', 'font-medium', 'text-fg-2']);
+    expectRole(byText('Posts'), ['text-xs', 'font-medium', 'bg-panel-2', 'text-fg-2']);
+    expect(document.querySelectorAll('[data-list-card-tag]')).toHaveLength(1);
   });
 
   it('renders no arbitrary pixel sizes or bold weights', () => {
