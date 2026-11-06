@@ -39,11 +39,13 @@ describe('composer buttons', () => {
     expect(task).toContain('aria-label="Tasks, new"');
   });
 
-  it('emoji: 44x44, 8px radius, ghost', () => {
+  it("emoji: a bare 44 circle (the composer row's side treatment)", () => {
     const [emoji] = buttons(renderToStaticMarkup(<ComposerEmoji onPick={() => {}} />));
     expectOnSystem(emoji ?? '');
-    expect(emoji).toContain('rounded-lg');
+    expect(emoji).toContain('rounded-full');
+    expect(emoji).not.toContain('rounded-lg');
     expect(emoji).toContain('w-11');
+    expect(emoji).not.toContain('lit-btn-');
   });
 
   it('voice draft: play and delete 44x44, send round primary', () => {
@@ -69,10 +71,12 @@ describe('composer buttons', () => {
     const src = readFileSync(fileURLToPath(new URL('./Composer.tsx', import.meta.url)), 'utf8');
     expect(src).toMatch(/variant="primary"\s+shape="round"\s+aria-label="Record voice note"/);
     expect(src).toMatch(/variant="primary"\s+shape="round"\s+aria-label="Schedule options"/);
-    expect(src).toMatch(/variant="primary"\s+shape=\{scheduleBusy \? 'default' : 'round'\}/);
+    // Send stays round in every state (scheduling spins in place, ui/Composer).
+    expect(src).toMatch(/type="submit"\s+variant="primary"\s+shape="round"/);
+    expect(src).not.toContain("scheduleBusy ? 'default' : 'round'");
     expect(src).toContain("showChevron && 'rounded-r-none'");
     // Split send/schedule: one lit primary on the shared wrapper.
-    expect(src).toMatch(/showChevron &&\s+cn\(\s*'lit-btn-primary'/);
+    expect(src).toContain("showChevron && 'lit-btn-primary rounded-full'");
     // The composer dock is lit, its neutral top border colour dropped.
     expect(src).toContain('border-t bg-panel px-3 py-2.5 lit-dock');
     expect(src).not.toMatch(/size="lg"/);

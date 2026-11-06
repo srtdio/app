@@ -299,10 +299,17 @@ test.describe('phone: photos and files (UI-3)', () => {
     await expect(sheet).toBeVisible();
     await expect(sheet.locator('[data-schedule-preview]')).toHaveText(`To ${PEER_NAME}: 1 photo`);
 
-    // S2: the upload runs first; the composer locks and Send reads "Scheduling…".
+    // S2: the upload runs first; the composer locks and its field reads
+    // "Scheduling…" (ui/Composer's scheduling state; Send stays round and spins).
     const gate = network.holdUploads();
     await sheet.locator('[data-schedule-row="tomorrow"]').click();
-    await expect(page.locator('[data-scheduling]')).toHaveText('Scheduling…');
+    await expect(
+      page.locator('[data-composer-state="scheduling"] [data-composer-field]'),
+    ).toHaveText('Scheduling…');
+    await expect(page.getByRole('button', { name: 'Scheduling', exact: true })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
     await expect(composer(page).locator('[data-schedule-upload-bar]')).toBeVisible();
     gate.release();
 

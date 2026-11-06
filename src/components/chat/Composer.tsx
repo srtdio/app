@@ -19,6 +19,7 @@ import type {
 } from 'react';
 import { logger } from '@/lib/logger';
 import { Button } from '@/components/ui/Button';
+import { ComposerFrame, composerHint } from '@/components/ui/Composer';
 import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
 import {
@@ -483,20 +484,19 @@ export function EditingBar(props: { text: string; onCancel: () => void }): React
   );
 }
 
-/** The hash picker's trigger, assembled so chat stays free of the raw literal. */
 /** Wait after a chat opens before warming Share a post: its first paint goes first. */
 const PICKER_WARM_DELAY_MS = 600;
 
-const HASH = String.fromCharCode(35);
-
 /**
- * The composer placeholder: "Message about this post" while About is up, else a
- * nudge towards the hash post picker ("Reply, ..." while a reply draft is up).
+ * The composer placeholder: ui/Composer's one hint, "Message" ("Reply" while a
+ * reply draft is up), so it fits one line at 375 beside the row's buttons;
+ * "Edit message" while editing. About is named by its strip, not the hint.
  */
 export function composerPlaceholder(about: boolean, replying = false, editing = false): string {
   if (editing) return EDIT_PLACEHOLDER;
-  if (about) return 'Message about this post';
-  return `${replying ? 'Reply' : 'Message'}, or ${HASH} for a post`;
+  // About is named by its strip above the row; the hint stays the one hint.
+  void about;
+  return composerHint(replying);
 }
 
 /**
@@ -832,12 +832,15 @@ export function shouldShowMic(input: {
   );
 }
 
-/** Format a non-negative second count as mm:ss; 0 for non-finite input. */
-function formatMmSs(s: number): string {
+/**
+ * The recording's elapsed time for the composer row: m:ss (0:07, 12:30); 0:00
+ * for non-finite or negative input. Pure.
+ */
+export function recordingElapsed(s: number): string {
   const safe = Number.isFinite(s) && s > 0 ? Math.floor(s) : 0;
-  const mm = Math.floor(safe / 60);
+  const m = Math.floor(safe / 60);
   const ss = safe % 60;
-  return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+  return `${m}:${String(ss).padStart(2, '0')}`;
 }
 
 /**
@@ -1079,7 +1082,11 @@ function PendingThumb(props: {
   );
 }
 
-/** The Send button while a schedule uploads and writes. */
+/**
+ * What the composer reads while a schedule uploads and writes: ui/Composer's
+ * scheduling state shows it in the field, the round Send keeps its shape and
+ * spins.
+ */
 export const SCHEDULING_LABEL = 'Scheduling…';
 
 /** The toast after a draft was scheduled: "Scheduled for tomorrow 9:00 AM". Pure. */
@@ -2184,46 +2191,6 @@ export function Composer(props: ComposerProps): ReactElement {
           </ComposerStrip>
         ) : null}
 
-        {bars.editing && editing !== undefined ? (
-          <EditingBar
-            text={resolveMentionText(editing.initialText, nameOf)}
-            onCancel={() => props.onCancelEdit?.()}
-          />
-        ) : null}
-
-        {bars.about && props.about !== undefined ? (
-          <AboutBar post={props.about} onCancel={() => props.onCancelAbout?.()} />
-        ) : null}
-
-        {/* The reply quote slides up as it is set and back down as it goes. */}
-        <ComposerStrip open={bars.reply && props.reply != null} data-reply-strip="">
-          {props.reply != null ? (
-            <ReplyBar
-              reply={{
-                ...props.reply,
-                quote: {
-                  ...props.reply.quote,
-                  preview: resolveMentionText(stripFormat(props.reply.quote.preview), nameOf),
-                },
-              }}
-              viewerUserId={props.viewerUserId}
-              onCancel={() => props.onCancelReply?.()}
-              media={props.replyMedia}
-              thumbSource={props.replyThumbSource}
-            />
-          ) : null}
-        </ComposerStrip>
-
-        {!bars.editing && privateReply !== null ? (
-          <PrivateReplyBar
-            quote={privateReply}
-            preview={resolveMentionText(privateReplyPreview(privateReply.excerpt), nameOf)}
-            onRemove={() => {
-              if (channelId !== undefined) setPrivateReplyDraft(channelId, null);
-            }}
-          />
-        ) : null}
-
         {editing === undefined &&
         (pending.length > 0 ||
           library.length > 0 ||
@@ -2329,24 +2296,159 @@ export function Composer(props: ComposerProps): ReactElement {
           />
         ) : null}
 
-        <div className="flex items-end gap-2">
-          {recorder.recording ? (
+        {/* ui/Composer: [plus] [field] [emoji, tasks] [send / mic] on one 44
+            row in every state; the reply, About, editing and Reply privately
+            bars stack in its strip above the row. */}
+        <ComposerFrame
+          strip={
             <>
-              <IconButton
-                label="Cancel recording"
-                className="shrink-0 text-bad hover:bg-bad-soft hover:text-bad"
-                onClick={cancel}
-              >
-                <IconTrash size={ICON_SIZE.control} />
-              </IconButton>
-              <div className="flex h-11 flex-1 items-center gap-2 rounded-lg border border-border-strong bg-panel-2 px-3 lit-tint">
-                {/* The recording dot is still (motion never pulses or fades). */}
-                <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full bg-bad" />
-                <span className="text-base text-fg-2">Recording</span>
-                <span className="ml-auto font-mono text-sm tabular-nums text-fg-2">
-                  {formatMmSs(recorder.seconds)}
-                </span>
-              </div>
+              {bars.editing && editing !== undefined ? (
+                <EditingBar
+                  text={resolveMentionText(editing.initialText, nameOf)}
+                  onCancel={() => props.onCancelEdit?.()}
+                />
+              ) : null}
+
+              {bars.about && props.about !== undefined ? (
+                <AboutBar post={props.about} onCancel={() => props.onCancelAbout?.()} />
+              ) : null}
+
+              {/* The reply quote slides up as it is set and back down as it goes. */}
+              <ComposerStrip open={bars.reply && props.reply != null} data-reply-strip="">
+                {props.reply != null ? (
+                  <ReplyBar
+                    reply={{
+                      ...props.reply,
+                      quote: {
+                        ...props.reply.quote,
+                        preview: resolveMentionText(stripFormat(props.reply.quote.preview), nameOf),
+                      },
+                    }}
+                    viewerUserId={props.viewerUserId}
+                    onCancel={() => props.onCancelReply?.()}
+                    media={props.replyMedia}
+                    thumbSource={props.replyThumbSource}
+                  />
+                ) : null}
+              </ComposerStrip>
+
+              {!bars.editing && privateReply !== null ? (
+                <PrivateReplyBar
+                  quote={privateReply}
+                  preview={resolveMentionText(privateReplyPreview(privateReply.excerpt), nameOf)}
+                  onRemove={() => {
+                    if (channelId !== undefined) setPrivateReplyDraft(channelId, null);
+                  }}
+                />
+              ) : null}
+            </>
+          }
+          state={
+            recorder.recording
+              ? { kind: 'recording', elapsed: recordingElapsed(recorder.seconds) }
+              : scheduleBusy
+                ? { kind: 'scheduling' }
+                : voiceBusy || editBusy
+                  ? { kind: 'sending' }
+                  : { kind: 'idle' }
+          }
+          discard={
+            <Button
+              type="button"
+              variant="danger"
+              shape="round"
+              aria-label="Cancel recording"
+              className="shrink-0"
+              onClick={cancel}
+            >
+              <IconTrash size={ICON_SIZE.control} />
+            </Button>
+          }
+          leading={
+            canAttach ? (
+              <ComposerTray
+                layout={layout}
+                schedule={scheduleOfferedFor({
+                  wired: props.noSchedule !== true,
+                  quoteAttached: privateReply !== null,
+                })}
+                draft={draftEnabled}
+                plan={planEnabled}
+                onShownChange={setTrayShown}
+                onPick={(id) => {
+                  // A schedule or a voice note on its way: the tray opens nothing.
+                  if (scheduleBusy || voiceBusy) return;
+                  switch (id) {
+                    case 'photos':
+                      photoInputRef.current?.click();
+                      return;
+                    case 'file':
+                      fileInputRef.current?.click();
+                      return;
+                    case 'assets':
+                      openPicker('assets');
+                      return;
+                    case 'brief':
+                      openPicker('briefs');
+                      return;
+                    case 'post':
+                      openPicker('posts');
+                      return;
+                    case 'draft':
+                      if (draftEnabled) openPicker('drafts');
+                      return;
+                    case 'plan':
+                      if (planEnabled) props.onOpenPlanCompose?.();
+                      return;
+                    case 'schedule':
+                      openSchedule();
+                      return;
+                  }
+                }}
+              />
+            ) : undefined
+          }
+          input={
+            <Textarea
+              formatting
+              ref={setTextarea}
+              aria-label="Message"
+              {...mentionComboboxProps(mentionListId, mentionRows.length, activeRow)}
+              data-induction={INDUCTION_KEYS.chatHash}
+              // A chat message, not an AutoFill target: off stops the iOS AutoFill bar.
+              autoComplete="off"
+              value={held ? resolveMentionText(text, nameOf) : text}
+              readOnly={held || scheduleBusy || voiceBusy}
+              onChange={(event) => {
+                setText(event.target.value);
+                setMentionActive(0);
+                trackCaret(event);
+                props.onTyping?.();
+              }}
+              onSelect={trackCaret}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                props.placeholder !== undefined && editing === undefined
+                  ? props.placeholder
+                  : composerPlaceholder(
+                      props.about != null,
+                      props.reply != null,
+                      editing !== undefined,
+                    )
+              }
+              rows={1}
+              compact
+              className={cn('min-w-0 flex-1 self-center', sized(COMPOSER_INPUT_TYPE, layout))}
+            />
+          }
+          side={
+            <>
+              {showsEmojiButton(layout) && !held ? <ComposerEmoji onPick={insertEmoji} /> : null}
+              {props.taskButton ?? null}
+            </>
+          }
+          send={
+            recorder.recording ? (
               <Button
                 type="button"
                 variant="primary"
@@ -2357,194 +2459,103 @@ export function Composer(props: ComposerProps): ReactElement {
               >
                 <IconSend size={ICON_SIZE.control} />
               </Button>
-            </>
-          ) : voiceBusy ? (
-            <div className="flex h-11 flex-1 items-center gap-2 px-1">
-              <span
-                aria-hidden="true"
-                className="h-4 w-4 shrink-0 mv-spin rounded-full border-2 border-border border-t-accent"
-              />
-              <span className="text-base text-fg-2">Sending voice note…</span>
-            </div>
-          ) : (
-            <>
-              {canAttach ? (
-                <ComposerTray
-                  layout={layout}
-                  schedule={scheduleOfferedFor({
-                    wired: props.noSchedule !== true,
-                    quoteAttached: privateReply !== null,
-                  })}
-                  draft={draftEnabled}
-                  plan={planEnabled}
-                  onShownChange={setTrayShown}
-                  onPick={(id) => {
-                    if (scheduleBusy) return;
-                    switch (id) {
-                      case 'photos':
-                        photoInputRef.current?.click();
-                        return;
-                      case 'file':
-                        fileInputRef.current?.click();
-                        return;
-                      case 'assets':
-                        openPicker('assets');
-                        return;
-                      case 'brief':
-                        openPicker('briefs');
-                        return;
-                      case 'post':
-                        openPicker('posts');
-                        return;
-                      case 'draft':
-                        if (draftEnabled) openPicker('drafts');
-                        return;
-                      case 'plan':
-                        if (planEnabled) props.onOpenPlanCompose?.();
-                        return;
-                      case 'schedule':
-                        openSchedule();
-                        return;
-                    }
-                  }}
-                />
-              ) : null}
-
-              <Textarea
-                formatting
-                ref={setTextarea}
-                aria-label="Message"
-                {...mentionComboboxProps(mentionListId, mentionRows.length, activeRow)}
-                data-induction={INDUCTION_KEYS.chatHash}
-                // A chat message, not an AutoFill target: off stops the iOS AutoFill bar.
-                autoComplete="off"
-                value={held ? resolveMentionText(text, nameOf) : text}
-                readOnly={held || scheduleBusy}
-                onChange={(event) => {
-                  setText(event.target.value);
-                  setMentionActive(0);
-                  trackCaret(event);
-                  props.onTyping?.();
-                }}
-                onSelect={trackCaret}
-                onKeyDown={handleKeyDown}
-                placeholder={
-                  // Locked while scheduling: the wider "Scheduling…" never wraps it.
-                  scheduleBusy
-                    ? ''
-                    : props.placeholder !== undefined && editing === undefined
-                      ? props.placeholder
-                      : composerPlaceholder(
-                          props.about != null,
-                          props.reply != null,
-                          editing !== undefined,
-                        )
-                }
-                rows={1}
-                compact
-                className={sized(COMPOSER_INPUT_TYPE, layout)}
-              />
-              {showsEmojiButton(layout) && !held ? <ComposerEmoji onPick={insertEmoji} /> : null}
-              {props.taskButton ?? null}
-              {showMic ? (
+            ) : voiceBusy ? (
+              // The voice note is on its way: the spinner sits in the send slot.
+              <Button
+                type="button"
+                variant="primary"
+                shape="round"
+                aria-label="Sending voice note"
+                className="shrink-0"
+                busy
+              >
+                <IconMic size={ICON_SIZE.control} />
+              </Button>
+            ) : showMic ? (
+              <Button
+                type="button"
+                variant="primary"
+                shape="round"
+                aria-label="Record voice note"
+                data-induction={INDUCTION_KEYS.chatMic}
+                className="shrink-0"
+                onClick={() => void start()}
+              >
+                <IconMic size={ICON_SIZE.control} />
+              </Button>
+            ) : (
+              <div
+                className={cn(
+                  'flex shrink-0',
+                  // Split send/schedule: one lit button on the shared wrapper.
+                  showChevron && 'lit-btn-primary rounded-full',
+                )}
+              >
                 <Button
-                  type="button"
+                  type="submit"
                   variant="primary"
                   shape="round"
-                  aria-label="Record voice note"
-                  data-induction={INDUCTION_KEYS.chatMic}
-                  className="shrink-0"
-                  onClick={() => void start()}
-                >
-                  <IconMic size={ICON_SIZE.control} />
-                </Button>
-              ) : (
-                <div
+                  aria-label={
+                    editing !== undefined
+                      ? 'Save edit'
+                      : scheduleBusy
+                        ? 'Scheduling'
+                        : scheduling
+                          ? 'Schedule message'
+                          : 'Send'
+                  }
+                  // Saving an edit or scheduling: the spinner in the send slot.
+                  busy={editBusy || scheduleBusy}
                   className={cn(
-                    'flex shrink-0',
-                    // Split send/schedule: one lit button on the shared wrapper.
-                    showChevron &&
-                      cn(
-                        'lit-btn-primary',
-                        scheduleBusy ? 'rounded-l-lg rounded-r-full' : 'rounded-full',
-                      ),
+                    'shrink-0',
+                    showChevron && 'rounded-r-none',
+                    holdToSchedule && NO_TOUCH_SELECT,
                   )}
-                >
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    shape={scheduleBusy ? 'default' : 'round'}
-                    aria-label={
-                      editing !== undefined
-                        ? 'Save edit'
-                        : scheduleBusy
-                          ? 'Scheduling'
-                          : scheduling
-                            ? 'Schedule message'
-                            : 'Send'
+                  disabled={!canSend || (scheduling && !schedulable)}
+                  {...(holdToSchedule ? sendHold.handlers : {})}
+                  {...sendPress}
+                  onClick={(event) => {
+                    const keptAtPress = sendKeptFocusRef.current;
+                    sendKeptFocusRef.current = false;
+                    if (sendHold.consumeClickSuppression()) event.preventDefault();
+                    else if (layout === 'touch') {
+                      refocusComposer(textareaRef.current, keptAtPress, document.activeElement);
                     }
-                    aria-busy={editBusy || scheduleBusy || undefined}
-                    className={cn(
-                      scheduleBusy ? 'shrink-0 whitespace-nowrap' : 'shrink-0',
-                      showChevron && 'rounded-r-none',
-                      holdToSchedule && NO_TOUCH_SELECT,
-                    )}
-                    disabled={!canSend || (scheduling && !schedulable)}
-                    {...(holdToSchedule ? sendHold.handlers : {})}
-                    {...sendPress}
-                    onClick={(event) => {
-                      const keptAtPress = sendKeptFocusRef.current;
-                      sendKeptFocusRef.current = false;
-                      if (sendHold.consumeClickSuppression()) event.preventDefault();
-                      else if (layout === 'touch') {
-                        refocusComposer(textareaRef.current, keptAtPress, document.activeElement);
-                      }
-                    }}
-                    onContextMenu={holdToSchedule ? (event) => event.preventDefault() : undefined}
-                  >
-                    {editBusy ? (
-                      <span
-                        aria-hidden="true"
-                        data-edit-spinner=""
-                        className="h-4 w-4 mv-spin rounded-full border-2 border-current border-t-transparent"
-                      />
-                    ) : scheduleBusy ? (
-                      <span data-scheduling="" className="text-base font-medium">
-                        {SCHEDULING_LABEL}
-                      </span>
-                    ) : scheduling ? (
-                      <IconCalendarClock size={ICON_SIZE.control} />
-                    ) : (
-                      <IconSend size={ICON_SIZE.control} />
-                    )}
-                  </Button>
-                  {showChevron ? (
-                    <>
-                      <span aria-hidden="true" className="w-px shrink-0 self-stretch bg-panel" />
-                      <span ref={chevronRef} className="flex">
-                        <Button
-                          type="button"
-                          variant="primary"
-                          shape="round"
-                          aria-label="Schedule options"
-                          aria-haspopup="dialog"
-                          aria-expanded={scheduleOpen !== null}
-                          data-schedule-chevron=""
-                          className="shrink-0 rounded-l-none"
-                          onClick={() =>
-                            scheduleOpen !== null ? setScheduleOpen(null) : openSchedule()
-                          }
-                        >
-                          <IconChevronDown size={ICON_SIZE.control} />
-                        </Button>
-                      </span>
-                    </>
-                  ) : null}
-                </div>
-              )}
-            </>
-          )}
-        </div>
+                  }}
+                  onContextMenu={holdToSchedule ? (event) => event.preventDefault() : undefined}
+                >
+                  {scheduling ? (
+                    <IconCalendarClock size={ICON_SIZE.control} />
+                  ) : (
+                    <IconSend size={ICON_SIZE.control} />
+                  )}
+                </Button>
+                {showChevron ? (
+                  <>
+                    <span aria-hidden="true" className="w-px shrink-0 self-stretch bg-panel" />
+                    <span ref={chevronRef} className="flex">
+                      <Button
+                        type="button"
+                        variant="primary"
+                        shape="round"
+                        aria-label="Schedule options"
+                        aria-haspopup="dialog"
+                        aria-expanded={scheduleOpen !== null}
+                        data-schedule-chevron=""
+                        className="shrink-0 rounded-l-none"
+                        onClick={() =>
+                          scheduleOpen !== null ? setScheduleOpen(null) : openSchedule()
+                        }
+                      >
+                        <IconChevronDown size={ICON_SIZE.control} />
+                      </Button>
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            )
+          }
+        />
 
         <input
           ref={photoInputRef}

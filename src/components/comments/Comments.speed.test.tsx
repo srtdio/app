@@ -255,8 +255,9 @@ describe('writes update in place; the refetch is silent', () => {
     await settle();
 
     holdRefetch();
+    // The reply composer's round Send, named "Reply".
     const submit = Array.from(host?.querySelectorAll('button') ?? [])
-      .filter((b) => b.textContent?.trim() === 'Reply')
+      .filter((b) => b.getAttribute('aria-label') === 'Reply')
       .pop();
     act(() => submit?.click());
     await settle();

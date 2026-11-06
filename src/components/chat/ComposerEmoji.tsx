@@ -78,8 +78,9 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => setOpen((o) => !o)}
         // buttonRef returns focus on Escape. Accent while open (aria-expanded
-        // outranks the base text-fg-2 without an important override).
-        className="aria-expanded:text-accent"
+        // outranks the base text-fg-2 without an important override). A bare
+        // 44 circle: the composer row's side buttons share one treatment (B3).
+        className="rounded-full aria-expanded:text-accent"
       >
         <IconSmile size={ICON_SIZE.control} />
       </IconButton>

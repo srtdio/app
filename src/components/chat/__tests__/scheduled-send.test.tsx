@@ -315,9 +315,11 @@ describe('UI-3 S2 / S3: upload first, all or nothing', () => {
     expect(composer).toContain('...attachmentArgs,');
     expect(composer).toContain('scheduleWithFiles<');
   });
-  it('the composer locks and Send reads "Scheduling…"', () => {
+  it('the composer locks and its field reads "Scheduling…"; Send stays round and spins', () => {
     expect(SCHEDULING_LABEL).toBe('Scheduling…');
-    expect(composer).toContain('readOnly={held || scheduleBusy}');
+    expect(composer).toContain('readOnly={held || scheduleBusy || voiceBusy}');
+    expect(composer).toContain("? { kind: 'scheduling' }");
+    expect(composer).toContain('busy={editBusy || scheduleBusy}');
     expect(composer).toMatch(/function removePending[\s\S]{0,120}if \(scheduleBusy\) return;/);
   });
   it('a chip dims and shows a thin progress bar while it uploads', () => {

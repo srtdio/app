@@ -189,9 +189,9 @@ function checkpointReply(id: string): HTMLButtonElement | undefined {
     (b) => b.textContent?.trim() === 'Reply' && !b.hasAttribute('data-reply-to-reply'),
   );
 }
-/** The open reply composer's submit (labelled "Reply"; the last such button). */
+/** The open reply composer's submit: the round Send named "Reply" (the last such button). */
 function composerSubmit(): HTMLButtonElement | undefined {
-  const all = buttons().filter((b) => b.textContent?.trim() === 'Reply');
+  const all = buttons().filter((b) => b.getAttribute('aria-label') === 'Reply');
   return all[all.length - 1];
 }
 function editor(): HTMLElement | null {

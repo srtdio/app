@@ -362,14 +362,14 @@ describe('About bar', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it('the placeholder follows About, and mentions the hash otherwise', () => {
+  it('the placeholder is ui/Composer\'s one hint: "Message", "Reply" while replying', () => {
     // default
-    expect(composerPlaceholder(false)).toBe(`Message, or ${HASH} for a post`);
+    expect(composerPlaceholder(false)).toBe('Message');
     // reply draft, no About
-    expect(composerPlaceholder(false, true)).toBe(`Reply, or ${HASH} for a post`);
-    // About visible (with or without a reply draft): never a KEY-N code
-    expect(composerPlaceholder(true)).toBe('Message about this post');
-    expect(composerPlaceholder(true, true)).toBe('Message about this post');
+    expect(composerPlaceholder(false, true)).toBe('Reply');
+    // About visible: the strip names the post, the hint stays the hint (never a KEY-N code)
+    expect(composerPlaceholder(true)).toBe('Message');
+    expect(composerPlaceholder(true, true)).toBe('Reply');
   });
 });
 
