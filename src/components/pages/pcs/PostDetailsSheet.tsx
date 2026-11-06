@@ -103,7 +103,7 @@ function DetailRow({
         <span className="w-24 shrink-0 text-sm text-fg-3">{label}</span>
         <span className="flex min-w-0 flex-1 items-center gap-2 text-base text-fg">{value}</span>
         <span className="ml-auto shrink-0 text-fg-3">
-          <IconChevronRight size={ICON_SIZE.nav} />
+          <IconChevronRight />
         </span>
       </PressableRow>
     );
