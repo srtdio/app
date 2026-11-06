@@ -339,7 +339,7 @@ function BucketChip(props: {
         trailing={
           props.picked && props.canEdit ? (
             <span aria-hidden="true" className="shrink-0">
-              <IconMore size={ICON_SIZE.inline} />
+              {'\u22EF'}
             </span>
           ) : undefined
         }
