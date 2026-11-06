@@ -110,7 +110,7 @@ describe('#26 gallery tools row', () => {
     );
     expect(order.every((at) => at > -1)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(html.match(/min-h-\[44px\]/g)?.length).toBe(5);
+    expect(html.match(/min-h-11/g)?.length).toBe(5);
     // The left group wraps inside its own column; v{n} never wraps away from the right.
     expect(html).toContain('min-w-0 flex-1 flex-wrap');
     expect(html).toContain('shrink-0 tabular-nums');

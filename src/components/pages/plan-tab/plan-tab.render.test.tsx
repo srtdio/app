@@ -210,10 +210,10 @@ describe('PlanTabPage', () => {
       html.lastIndexOf('data-plan-tab-card'),
     );
     // The shared Button: 44 tall, tokens only.
-    expect(html).toMatch(/<button class="[^"]*min-h-\[44px\][^"]*"[^>]*data-plan-tab-load-more=""/);
+    expect(html).toMatch(/<button class="[^"]*min-h-11[^"]*"[^>]*data-plan-tab-load-more=""/);
     env.moreBusy = true;
     html = render();
-    expect(html).toContain('>Loading</button>');
+    expect(html).toMatch(/data-plan-tab-load-more="" disabled="" aria-busy="true"[^]*?Load more/);
     expect(html).toContain('data-plan-tab-load-more="" disabled=""');
     env.moreBusy = false;
     env.data = DATA;
@@ -234,7 +234,7 @@ describe('PlanTabPage', () => {
     let html = render();
     expect(html.match(/data-plan-tab-chip="p\d\d"/g)).toHaveLength(12);
     expect(html).toContain('>Load more</button>');
-    expect(html).toMatch(/<button class="[^"]*min-h-\[44px\][^"]*"[^>]*data-plan-tab-load-more=""/);
+    expect(html).toMatch(/<button class="[^"]*min-h-11[^"]*"[^>]*data-plan-tab-load-more=""/);
     // At the end of the chip row, after the last chip and above the grid.
     const chips = chipRow(html);
     expect(chips).toContain('data-plan-tab-load-more');
@@ -247,7 +247,7 @@ describe('PlanTabPage', () => {
     env.moreBusy = true;
     html = render();
     expect(html).toContain('data-plan-tab-load-more="" disabled=""');
-    expect(html).toContain('>Loading</button>');
+    expect(html).toMatch(/data-plan-tab-load-more="" disabled="" aria-busy="true"[^]*?Load more/);
     // The tap's page landed: every plan, no cursor, no control.
     Object.assign(env, {
       moreBusy: false,
@@ -401,7 +401,7 @@ describe('Plan search results', () => {
     expect(html).toMatch(/<mark[^>]*data-search-mark=""[^>]*>Open<\/mark>/);
     // A matched item row is a full-height (44px) tappable row.
     expect(html).toMatch(
-      /<button[^>]*min-h-\[44px\][^>]*data-plan-tab-match="i2"|data-plan-tab-match="i2"[^>]*min-h-\[44px\]/,
+      /<button[^>]*min-h-11[^>]*data-plan-tab-match="i2"|data-plan-tab-match="i2"[^>]*min-h-11/,
     );
   });
 
