@@ -23,6 +23,7 @@ import { CountBadge } from '@/components/ui/CountBadge';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconArrowUp, IconChevronDown } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { LANE_BOTTOM, LANE_TOP } from '@/components/ui/layout';
 import { civilDay, formatTime } from '@/lib/time';
 import { dayPillLabel } from '@/components/chat/day-separators';
 import { BUBBLE_META_TYPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
@@ -92,10 +93,10 @@ export function UnreadPill(props: {
   return (
     // Shown or hidden at once on the wrapper; the pill pops as it appears.
     <div
-      className={cn(
-        'pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center',
-        props.visible ? 'opacity-100' : 'opacity-0',
-      )}
+      // Its own lane (ui/layout LANE_TOP): top centre, clear of the latest
+      // button's and the tip strip's lanes.
+      data-lane="top"
+      className={cn(LANE_TOP, props.visible ? 'opacity-100' : 'opacity-0')}
     >
       <span ref={popRef} className="flex">
         <Button
@@ -130,10 +131,9 @@ export function LatestButton(props: {
     // Position and visibility sit on the wrapper (shown at once); it pops as it appears.
     <span
       ref={popRef}
-      className={cn(
-        'absolute bottom-3 right-3 z-10 flex',
-        props.visible ? 'opacity-100' : 'pointer-events-none opacity-0',
-      )}
+      // Its own lane (ui/layout LANE_BOTTOM): trailing edge, above the composer.
+      data-lane="bottom"
+      className={cn(LANE_BOTTOM, props.visible ? 'opacity-100' : 'pointer-events-none opacity-0')}
     >
       <IconButton
         type="button"
