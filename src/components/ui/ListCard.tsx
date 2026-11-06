@@ -7,7 +7,7 @@ import type {
   Ref,
 } from 'react';
 import { cn } from '@/lib/cn';
-import { MOVE_CLASS } from '@/lib/motion';
+import { Bone, MOVE_CLASS } from '@/lib/motion';
 import { TEXT_ROLE, textRole } from '@/components/ui/Text';
 import { Tag } from '@/components/ui/Tag';
 import { Avatar } from '@/components/ui/Avatar';
@@ -294,5 +294,38 @@ export function ListCard({
         </div>
       </div>
     </Root>
+  );
+}
+
+/**
+ * A loading box in ListCard's own frame and slots (the 72 picture, the title
+ * line, two preview lines, the meta line), so nothing moves when the cards
+ * land. Pure render; the screen's BoxSkeleton decides when it shows.
+ */
+export function ListCardBox({
+  round = false,
+  ...hooks
+}: { round?: boolean } & ListCardHooks): ReactElement {
+  return (
+    <div {...hooks} data-list-card-box="" className={listCardFrame()}>
+      <div className={LIST_CARD_BODY}>
+        <Bone
+          lit={round ? 'lit-avatar' : 'flat'}
+          className={cn(LIST_CARD_PICTURE, round ? 'rounded-full' : PICTURE_BOX)}
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className={LIST_CARD_LINE1}>
+            <Bone lit="flat" className="h-4 w-1/2 rounded" />
+          </div>
+          <div className="flex min-h-9 flex-col justify-center gap-2">
+            <Bone lit="flat" className="h-3 w-full rounded" />
+            <Bone lit="flat" className="h-3 w-2/3 rounded" />
+          </div>
+          <div className={LIST_CARD_LINE3}>
+            <Bone lit="flat" className="h-3 w-16 rounded" />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

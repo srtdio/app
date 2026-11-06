@@ -145,6 +145,52 @@ const imgWarning = {
 const designPlugin = {
   rules: { 'warn-syntax': builtinRules.get('no-restricted-syntax') },
 };
+// Time format rule (CLAUDE.md Words: dates via src/lib/time.ts): every visible
+// date or time reads through src/lib/time.ts (formatWhen, formatTime,
+// formatDue, formatDayRange ...), never a locale formatter or a relative
+// reading ("ago", "just now"). Its own rule id (time/no-date-format) so it
+// stacks on the no-restricted-syntax blocks above without replacing them.
+// toLocaleString is banned on anything: counts use Intl.NumberFormat.
+const TIME_MESSAGE =
+  'Time format: format dates and times only through src/lib/time.ts (formatWhen; see CLAUDE.md)';
+const timeFormatRules = [
+  {
+    selector: 'CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]',
+    message: TIME_MESSAGE,
+  },
+  {
+    selector:
+      "NewExpression[callee.object.name='Intl'][callee.property.name=/^(DateTimeFormat|RelativeTimeFormat)$/]",
+    message: TIME_MESSAGE,
+  },
+  {
+    selector:
+      "CallExpression[callee.object.name='Intl'][callee.property.name=/^(DateTimeFormat|RelativeTimeFormat)$/]",
+    message: TIME_MESSAGE,
+  },
+];
+const DATE_FNS_FORMATS = ['format', 'formatDistance', 'formatDistanceToNow', 'formatRelative'];
+const timeFormatImports = {
+  paths: [
+    { name: 'date-fns', importNames: DATE_FNS_FORMATS, message: TIME_MESSAGE },
+    { name: 'date-fns-tz', importNames: ['format', 'formatInTimeZone'], message: TIME_MESSAGE },
+  ],
+  patterns: [{ group: ['date-fns/format*', 'date-fns/*/format*'], message: TIME_MESSAGE }],
+};
+const timePlugin = {
+  rules: { 'no-date-format': builtinRules.get('no-restricted-syntax') },
+};
+const TIME_IGNORES = [
+  // The one date and time module.
+  'src/lib/time.ts',
+  // The marketing site's demo clock (owned outside the app; zone maths only).
+  'src/components/home/**',
+  // The catch-up cron's zone maths: an unknown zone must read as null, not degrade.
+  'src/server/cron/catchup-schedule.ts',
+  'src/**/*.test.{ts,tsx}',
+  'src/**/__tests__/**',
+];
+
 const LAYOUT_IGNORES = [
   'src/components/home/**',
   'src/components/test-site/**',
@@ -266,6 +312,16 @@ export default tseslint.config(
     files: ['src/components/ui/Text.tsx'],
     rules: {
       'no-restricted-syntax': ['error', rpcTraceId, ...layoutErrors],
+    },
+  },
+  {
+    // Time format rule: dates and times only through src/lib/time.ts.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: TIME_IGNORES,
+    plugins: { time: timePlugin },
+    rules: {
+      'time/no-date-format': ['error', ...timeFormatRules],
+      'no-restricted-imports': ['error', timeFormatImports],
     },
   },
   {
