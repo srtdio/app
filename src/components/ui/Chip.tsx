@@ -44,8 +44,8 @@ interface ChipProps extends Omit<
 }
 
 const sizes: Record<NonNullable<ChipProps['size']>, string> = {
-  sm: 'min-h-[44px] px-4',
-  tap: 'min-h-[44px] px-4 justify-center',
+  sm: 'min-h-11 px-4',
+  tap: 'min-h-11 px-4 justify-center',
 };
 
 /**

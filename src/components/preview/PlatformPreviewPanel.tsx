@@ -257,7 +257,7 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
   if (kind === 'document') {
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex min-h-[44px] items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted">
+        <div className="flex min-h-11 items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted">
           <IconFile size={ICON_SIZE.inline} />
           <span className="min-w-0 flex-1 truncate text-base text-fg">{firstMedia?.filename}</span>
         </div>

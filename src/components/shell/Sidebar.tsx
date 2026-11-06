@@ -93,7 +93,7 @@ function SideNavItem(props: {
       {...(item.showChatBadge === true ? { 'data-induction': INDUCTION_KEYS.chatTab } : {})}
       className={() =>
         cn(
-          'flex items-center gap-3 min-h-[44px] px-3 rounded-lg border text-base font-medium mv-tint focus-visible:lit-focus',
+          'flex items-center gap-3 min-h-11 px-3 rounded-lg border text-base font-medium mv-tint focus-visible:lit-focus',
           active
             ? 'border-transparent bg-accent text-accent-fg lit-pill'
             : 'border-transparent text-fg-2 lit-hover hover:text-fg',

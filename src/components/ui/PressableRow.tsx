@@ -36,7 +36,7 @@ interface PressableRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const FOCUS = 'focus-visible:lit-focus';
 const FOCUS_INSET = 'focus-visible:lit-focus-inset';
 const PRESSABLE_ROW_LOOK = `${MOVE_CLASS.press} lit-hover ${FOCUS} disabled:text-fg-3 disabled:pointer-events-none disabled:cursor-default`;
-export const PRESSABLE_ROW_BASE = `min-h-[44px] ${PRESSABLE_ROW_LOOK}`;
+export const PRESSABLE_ROW_BASE = `min-h-11 ${PRESSABLE_ROW_LOOK}`;
 const PRESSABLE_ROW_DENSE = `min-h-[22px] ${PRESSABLE_ROW_LOOK}`;
 
 export function PressableRow({

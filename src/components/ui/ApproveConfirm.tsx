@@ -109,7 +109,7 @@ export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
           data-approve-back=""
           disabled={props.busy}
           onClick={props.onBack}
-          className="min-w-[44px] flex-1"
+          className="min-w-11 flex-1"
         >
           {APPROVE_BACK_LABEL}
         </Button>
@@ -121,7 +121,7 @@ export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
           busy={props.busy}
           disabled={props.busy}
           onClick={props.onConfirm}
-          className="min-w-[44px] flex-1"
+          className="min-w-11 flex-1"
         >
           {APPROVE_LABEL}
         </Button>

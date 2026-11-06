@@ -270,7 +270,7 @@ export function UnsafeLinkButton(props: {
       url={props.url}
       reasons={props.reasons}
       className={cn(
-        'inline-flex h-11 min-h-[44px] max-w-full items-center gap-2 rounded-lg border border-warn-line bg-warn-soft lit-tint px-4 text-base font-medium text-warn-ink focus-visible:lit-focus',
+        'inline-flex h-11 min-h-11 max-w-full items-center gap-2 rounded-lg border border-warn-line bg-warn-soft lit-tint px-4 text-base font-medium text-warn-ink focus-visible:lit-focus',
         props.className,
       )}
     >

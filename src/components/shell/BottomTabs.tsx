@@ -51,7 +51,7 @@ export function chatTabLabel(unread: number): string {
  */
 function tabClass(active: boolean): string {
   return cn(
-    'relative flex h-11 min-w-[44px] shrink-0 items-center justify-center rounded-full focus-visible:lit-focus mv-tint',
+    'relative flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full focus-visible:lit-focus mv-tint',
     active ? 'gap-1.5 bg-accent pl-3 pr-2.5 text-accent-fg lit-pill' : 'w-11 text-fg',
   );
 }

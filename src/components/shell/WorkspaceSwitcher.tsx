@@ -422,7 +422,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                       aria-checked={selected}
                       onClick={() => setPlatform(value)}
                       className={cn(
-                        'flex min-w-[44px] items-center gap-2 px-3 text-base font-medium',
+                        'flex min-w-11 items-center gap-2 px-3 text-base font-medium',
                         selected
                           ? 'bg-accent text-accent-fg lit-pill'
                           : 'bg-panel-3 text-fg lit-well-soft',

@@ -288,7 +288,7 @@ export function FormatStrip({ field, open }: FormatStripProps): ReactNode {
             type="button"
             variant="ghost"
             data-format={b.style}
-            className={cn('min-w-[44px] px-3', b.className)}
+            className={cn('min-w-11 px-3', b.className)}
             onPointerDown={(e) => e.preventDefault()}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {

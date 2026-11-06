@@ -341,7 +341,7 @@ const TONES: Record<ViewerTone, ToneClasses> = {
       'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
       'focus-visible:ring-overlay-fg disabled:text-overlay-fg-dim disabled:pointer-events-none',
     text:
-      'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
+      'inline-flex h-11 min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
       'text-overlay-fg bg-overlay-surface lit-media hover:bg-overlay-line focus-visible:outline-none ' +
       'focus-visible:ring-2 focus-visible:ring-overlay-fg',
   },
@@ -354,7 +354,7 @@ const TONES: Record<ViewerTone, ToneClasses> = {
       'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-fg ' +
       'lit-hover focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none',
     text:
-      'inline-flex h-11 min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
+      'inline-flex h-11 min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-base font-medium ' +
       'text-fg bg-panel border lit-btn-secondary focus-visible:lit-focus',
   },
 };
@@ -723,7 +723,7 @@ function PdfPage(props: {
           data-pdf-page-error=""
           onClick={() => setAttempt((n) => n + 1)}
           className={cn(
-            'absolute inset-0 flex min-h-[44px] items-center justify-center bg-panel text-base text-fg',
+            'absolute inset-0 flex min-h-11 items-center justify-center bg-panel text-base text-fg',
             'focus-visible:lit-focus focus-visible:-outline-offset-2',
             NO_SELECT,
           )}

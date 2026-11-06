@@ -28,7 +28,7 @@ export function Switch({ checked, onChange, label }: SwitchProps): ReactElement 
       // The 44px hit row: no look of its own; the focus line is drawn on the
       // pill (group-focus-visible:lit-focus), so the row drops the UA outline.
       className={cn(
-        'group inline-flex h-11 min-h-[44px] w-auto shrink-0 items-center rounded-full outline-none',
+        'group inline-flex h-11 min-h-11 w-auto shrink-0 items-center rounded-full outline-none',
         MOVE_CLASS.press,
       )}
     >

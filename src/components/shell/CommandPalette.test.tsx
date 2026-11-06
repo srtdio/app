@@ -598,7 +598,7 @@ describe('CommandPalette', () => {
   it('every row is at least 44px tall', () => {
     const search = ready('diwali', [wsHit('post', 1)], [], { post: 9 });
     for (const el of findAll(body('diwali', search), 'data-palette-item')) {
-      expect((el.props as { className: string }).className).toContain('min-h-[44px]');
+      expect((el.props as { className: string }).className).toContain('min-h-11');
     }
   });
 

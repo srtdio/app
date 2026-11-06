@@ -517,7 +517,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
           className="px-2 pb-1"
         >
           {section.label === RECENT_LABEL ? (
-            <div className="flex min-h-[44px] items-center justify-between">
+            <div className="flex min-h-11 items-center justify-between">
               <div className="px-2 py-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
                 {section.label}
               </div>

@@ -18,7 +18,7 @@ import { clearMarks, readMarks } from '@/lib/perf-marks';
 /** How often the list re-reads while open. */
 const MARKS_REFRESH_MS = 500;
 
-const BUTTON = 'min-w-[44px] shrink-0';
+const BUTTON = 'min-w-11 shrink-0';
 
 /** The panel, portalled to the body; nothing at all when the paint log is off. */
 export function MarksPanel(): ReactElement | null {

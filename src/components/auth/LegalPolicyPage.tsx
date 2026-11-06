@@ -263,7 +263,7 @@ export function LegalPolicyPage() {
       footer={
         <Link
           to="/signup"
-          className="inline-flex min-h-[44px] items-center justify-center text-accent hover:underline focus-visible:lit-focus"
+          className="inline-flex min-h-11 items-center justify-center text-accent hover:underline focus-visible:lit-focus"
         >
           Back to sign up
         </Link>

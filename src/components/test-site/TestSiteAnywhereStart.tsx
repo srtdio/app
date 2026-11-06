@@ -58,7 +58,7 @@ export function TestSiteAnywhereStart({
       disabled={busy}
       aria-label="Start fresh with a new test account"
       className={cn(
-        'flex min-h-[44px] shrink-0 items-center',
+        'flex min-h-11 shrink-0 items-center',
         inline
           ? 'px-0.5'
           : 'fixed left-1/2 top-[calc(env(safe-area-inset-top)+2px)] z-[2147483000] -translate-x-1/2 px-2',

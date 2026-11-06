@@ -380,7 +380,7 @@ export function PendingChip({
         <Button
           type="button"
           variant="link"
-          className="min-w-[44px] shrink-0"
+          className="min-w-11 shrink-0"
           aria-label={`Retry ${item.file.name}`}
           onClick={onRetry}
         >

@@ -152,7 +152,7 @@ describe('X8 I approve posts instead', () => {
     expect(document.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe(
       'Create workspace',
     );
-    expect(button(WORKSPACE_CREATE_COPY.approveInstead).className).toContain('min-h-[44px]');
+    expect(button(WORKSPACE_CREATE_COPY.approveInstead).className).toContain('min-h-11');
   });
 
   it('asks before switching, with Keep as Creator and Switch', async () => {

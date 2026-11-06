@@ -263,7 +263,7 @@ describe('X8 waiting screen keeps its four actions', () => {
       ONBOARDING_COPY.differentEmail,
       ONBOARDING_COPY.signOut,
     ]) {
-      expect(button(label).className).toContain('min-h-[44px]');
+      expect(button(label).className).toContain('min-h-11');
     }
   });
 });

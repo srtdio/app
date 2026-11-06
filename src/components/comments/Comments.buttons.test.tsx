@@ -32,8 +32,8 @@ describe('Comments row actions', () => {
     const t = tokens(buttonClass('ghost', 'default', ROW_ACTION_CLASS));
     for (const want of [
       'h-11',
-      'min-h-[44px]',
-      'min-w-[44px]',
+      'min-h-11',
+      'min-w-11',
       'rounded-lg',
       'text-base',
       'font-medium',
@@ -50,7 +50,7 @@ describe('Comments row actions', () => {
 
   it('the passive checkbox matches the button box', () => {
     const t = tokens(ROW_ACTION_STATIC_CLASS);
-    for (const want of ['h-11', 'min-h-[44px]', 'px-3', 'text-base', 'font-medium']) {
+    for (const want of ['h-11', 'min-h-11', 'px-3', 'text-base', 'font-medium']) {
       expect(t).toContain(want);
     }
   });

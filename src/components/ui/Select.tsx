@@ -58,7 +58,7 @@ export function selectOptionRows(
         aria-selected={selected}
         onClick={() => onPick(option.value)}
         className={cn(
-          'flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-3 text-left text-base mv-tint focus-visible:lit-focus',
+          'flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left text-base mv-tint focus-visible:lit-focus',
           selected ? 'lit-selected text-fg' : 'lit-hover text-fg-2',
         )}
       >

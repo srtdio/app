@@ -84,7 +84,7 @@ describe('Alerts on this device', () => {
     const all = chips(el);
     expect(all.map((c) => c.textContent)).toEqual(LABELS);
     for (const chip of all) {
-      expect(chip.className).toContain('min-h-[44px]');
+      expect(chip.className).toContain('min-h-11');
       expect(chip.className).toContain('w-full');
       expect(chip.getAttribute('aria-pressed')).toBe('false');
     }

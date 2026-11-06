@@ -259,12 +259,12 @@ export function emptyListText(entityType: CommentEntityType, filter: CommentFilt
  * IconButtons with the same overlay. The row's 12px side padding comes from
  * COMMENT_ACTIONS_ROW_CLASS.
  */
-export const ROW_ACTION_CLASS = 'min-w-[44px]';
+export const ROW_ACTION_CLASS = 'min-w-11';
 
 /** The passive (non-interactive) checkbox: the same box, height and padding as
  *  a ghost row-action Button without the hover or focus treatment. */
 export const ROW_ACTION_STATIC_CLASS =
-  'inline-flex h-11 min-h-[44px] min-w-[44px] items-center justify-center gap-2 px-3 text-base font-medium';
+  'inline-flex h-11 min-h-11 min-w-11 items-center justify-center gap-2 px-3 text-base font-medium';
 
 /**
  * Extra classes for the icon-only row actions (Reply privately, Copy): none,
@@ -2336,7 +2336,7 @@ export function Comments({
         <div className="flex items-center gap-2">
           <Button
             variant="primary"
-            className="min-w-[44px]"
+            className="min-w-11"
             disabled={editBody.trim() === ''}
             busy={editSaving}
             onClick={() => void handleSaveEdit(commentId)}
@@ -2345,7 +2345,7 @@ export function Comments({
           </Button>
           <Button
             variant="ghost"
-            className="min-w-[44px]"
+            className="min-w-11"
             disabled={editSaving}
             onClick={() => {
               setEditingId(null);
@@ -2813,7 +2813,7 @@ export function Comments({
       variant={filter === value ? 'secondary' : 'ghost'}
       aria-pressed={filter === value}
       onClick={() => setFilter(value)}
-      className="min-w-[44px]"
+      className="min-w-11"
     >
       {label}
     </Button>
@@ -2881,7 +2881,7 @@ export function Comments({
           <span>Couldn&apos;t load older comments.</span>
           <Button
             variant="ghost"
-            className="ml-auto min-w-[44px]"
+            className="ml-auto min-w-11"
             busy={loadingMore}
             onClick={() => void loadPage(page + 1)}
           >

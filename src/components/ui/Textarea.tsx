@@ -229,7 +229,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       className={cn(
         // 16px text below md so iOS Safari does not zoom on focus; 14px from md up.
         'lit-well w-full px-3 rounded-lg border border-field bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus disabled:text-fg-3 py-2.5 h-auto',
-        compact ? 'min-h-[44px] max-h-[120px]' : 'min-h-[74px]',
+        compact ? 'min-h-11 max-h-[120px]' : 'min-h-[74px]',
         split !== null ? split.box : className,
         // Live styling: the mirror draws the glyphs; the box keeps the caret
         // (fg), the selection and the placeholder.

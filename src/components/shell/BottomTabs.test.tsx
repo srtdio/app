@@ -190,12 +190,12 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     expect(pillLinks(container).filter((a) => (a.textContent ?? '') !== '')).toHaveLength(1);
   });
 
-  it('every target is at least 44x44: pill tabs h-11 with w-11 or min-w-[44px], Chat 60x60', () => {
+  it('every target is at least 44x44: pill tabs h-11 with w-11 or min-w-11, Chat 60x60', () => {
     const container = render('/pipeline');
     for (const a of pillLinks(container)) {
       const cls = classes(a);
       expect(cls).toContain('h-11');
-      expect(cls).toContain('min-w-[44px]');
+      expect(cls).toContain('min-w-11');
     }
     const chat = classes(chatLink(container));
     expect(chat).toEqual(expect.arrayContaining(['h-[60px]', 'w-[60px]', 'rounded-full']));

@@ -44,7 +44,7 @@ export function TestSiteStart(): ReactElement | null {
             <Link
               key={invitee.email}
               to={testInviteePath(invitee.email)}
-              className="inline-flex min-h-[44px] items-center text-legacy-sm font-medium text-accent hover:underline"
+              className="inline-flex min-h-11 items-center text-legacy-sm font-medium text-accent hover:underline"
             >
               Open as {invitee.email}
             </Link>

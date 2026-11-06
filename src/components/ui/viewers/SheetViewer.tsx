@@ -299,7 +299,7 @@ export function SheetViewer(props: {
               data-sheet-tab={s.name}
               onClick={() => setActive(i)}
               className={cn(
-                'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 text-base',
+                'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 text-base',
                 'focus-visible:lit-focus',
                 selected
                   ? 'bg-accent font-medium text-accent-fg lit-pill'
