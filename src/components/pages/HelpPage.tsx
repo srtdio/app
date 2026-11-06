@@ -5,6 +5,7 @@ import { Chip } from '@/components/ui/Chip';
 import { ICON_SIZE, IconChevronDown } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { NoResults } from '@/components/ui/NoResults';
+import { Text } from '@/components/ui/Text';
 
 const CATEGORIES = [
   'All topics',
@@ -192,12 +193,11 @@ export function HelpPage() {
 
         <section className="mt-8" aria-labelledby="help-articles-heading">
           <div className="flex flex-col gap-1">
-            <h2
+            <Text as="h2" role="section"
               id="help-articles-heading"
-              className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
             >
               Help articles
-            </h2>
+            </Text>
             <p className="text-sm text-fg-3">
               {articles.length} {articles.length === 1 ? 'article' : 'articles'}
             </p>

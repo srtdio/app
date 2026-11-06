@@ -38,6 +38,7 @@ import {
   workspaceDeleteErrorMessage,
   workspaceUpdateErrorMessage,
 } from './workspace-settings-data';
+import { Text } from '@/components/ui/Text';
 
 export const CLIENT_NAME_FIXED_LINE =
   'Fixed when the workspace was created. To change it, delete this workspace and create a new one.';
@@ -236,12 +237,11 @@ export function WorkspaceSettingsPanel() {
 
       {/* The label on the page edge, its card under it. */}
       <section aria-labelledby="workspace-danger-title" className="flex flex-col gap-2">
-        <h3
+        <Text as="h3" role="section"
           id="workspace-danger-title"
-          className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
         >
           Danger
-        </h3>
+        </Text>
         <div data-workspace-danger="" className={cn(cardSurface(), cardPad())}>
           {isOwner && session !== null ? (
             <div className="flex items-center gap-3">

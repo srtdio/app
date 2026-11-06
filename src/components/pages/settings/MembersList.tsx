@@ -35,6 +35,7 @@ import type { InviteRole, RoleChoice } from './MembersInviteForm';
 import { canChangeMemberRole } from './MemberActionSheet';
 import { formatJoined, isUndelivered, memberEmailTag, roleLabel } from './members-data';
 import type { DerivedMembers, InviteDeliveryStatus, MemberEntry } from './members-data';
+import { Text } from '@/components/ui/Text';
 
 const OWNER_LOCK_TITLE = 'Transfer ownership before the owner can be removed';
 
@@ -412,7 +413,7 @@ function Group({
     <section aria-label={title} className="flex flex-col gap-2">
       <div>
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{title}</h3>
+          <Text as="h3" role="section">{title}</Text>
           <span className="text-sm text-fg-3">{count}</span>
         </div>
         {subtitle !== undefined && subtitle !== '' ? (

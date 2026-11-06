@@ -30,6 +30,7 @@ import {
   testInviteePath,
 } from '@/lib/test-site';
 import { errorText } from '@/lib/error-copy';
+import { Text } from '@/components/ui/Text';
 
 export type InviteRole = 'admin' | 'agency' | 'client';
 
@@ -668,12 +669,11 @@ export function MembersInviteForm({
   return (
     <section aria-labelledby="invite-people-title" className="flex flex-col gap-4">
       <div>
-        <h3
+        <Text as="h3" role="section"
           id="invite-people-title"
-          className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
         >
           Invite people
-        </h3>
+        </Text>
         <p className="mt-0.5 text-base text-fg-2">
           Add one email or many. Press Enter, or paste a list.
         </p>

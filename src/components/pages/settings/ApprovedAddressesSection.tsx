@@ -24,6 +24,7 @@ import {
   removeClientDomain,
 } from './workspace-settings-data';
 import { errorText } from '@/lib/error-copy';
+import { Text } from '@/components/ui/Text';
 
 export function ApprovedAddressesSection({
   workspaceId,
@@ -92,12 +93,11 @@ export function ApprovedAddressesSection({
   return (
     // The label on the page edge, its card under it.
     <section aria-labelledby="approved-addresses-title" className="flex flex-col gap-2">
-      <h3
+      <Text as="h3" role="section"
         id="approved-addresses-title"
-        className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
       >
         Approved approver addresses
-      </h3>
+      </Text>
       <div
         data-approved-addresses=""
         className={cn('flex flex-col gap-3', cardSurface(), cardPad())}

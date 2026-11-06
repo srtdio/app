@@ -20,7 +20,7 @@ import {
 import { ActivityCard, UpcomingCard } from '@/components/pages/activity/ActivityCard';
 import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
 import { cn } from '@/lib/cn';
-import { textRole } from '@/components/ui/Text';
+import { SECTION_LABEL, textRole } from '@/components/ui/Text';
 import { GUTTER } from '@/components/ui/layout';
 import { REMINDER_CANCELLED_COPY, createReminderActions } from '@/components/chat/ReminderContext';
 import { CANCEL_REMINDER_LABEL, ReminderSheet } from '@/components/chat/ReminderSheet';
@@ -1205,7 +1205,7 @@ export function NotificationsPage() {
                   data-activity-bucket-head=""
                   className={cn('flex h-11 min-w-0 items-center gap-2', GUTTER)}
                 >
-                  <h2 className="shrink-0 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+                  <h2 className={cn(SECTION_LABEL, 'shrink-0')}>
                     {bucket.label}
                   </h2>
                   <span aria-hidden="true" className={textRole('meta', 'shrink-0')}>

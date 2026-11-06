@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { SnapshotThumbs } from '@/components/pages/pcs/PostGallery';
 import { snapshotItems } from '@/components/pages/pcs/gallery-transforms';
 import type { VersionThumbs } from '@/components/pages/pcs/VersionHistorySheet';
+import { SECTION_LABEL } from '@/components/ui/Text';
 
 /** "1 image" / "3 images" / "No images". Pure. */
 export function imageCountLabel(count: number): string {
@@ -62,7 +63,7 @@ export function ReadOnlyVersionView({
       </div>
 
       <section>
-        <div className="mb-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        <div className={cn(SECTION_LABEL, 'mb-2')}>
           Gallery
         </div>
         {showPictures && thumbs !== undefined ? (
@@ -81,7 +82,7 @@ export function ReadOnlyVersionView({
       </section>
 
       <section>
-        <div className="mb-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        <div className={cn(SECTION_LABEL, 'mb-2')}>
           Caption
         </div>
         {hasCaption ? (

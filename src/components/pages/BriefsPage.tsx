@@ -75,6 +75,7 @@ import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { errorText } from '@/lib/error-copy';
+import { Text } from '@/components/ui/Text';
 
 // Filter chips: All shows everything; Open/Closed key off brief.status. The
 // status keys come from the @srtdio/briefs type, never inline literals.
@@ -398,9 +399,9 @@ export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
     <section key={group.key}>
       {/* No count here: counts live on the chips only. */}
       <div className={SECTION_HEADER_CLASS}>
-        <h3 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        <Text as="h3" role="section">
           {group.label}
-        </h3>
+        </Text>
       </div>
       {groupBriefsByDay(group.items, timeZone, now).flatMap((day) => [
         <div key={`${day.key}-label`} className={DAY_HEADING_CLASS}>

@@ -24,6 +24,7 @@ import { GUTTER } from '@/components/ui/layout';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
 import { PLAN_WEEK_CHIP_ZERO, planCardMeta, planSections, type PlanWeekChip } from '@/lib/plan-tab';
+import { Text } from '@/components/ui/Text';
 
 /**
  * Load more's copy. It never swaps while the page is in flight: busy shows on
@@ -121,9 +122,9 @@ export function PlanTabList(props: {
           className="flex flex-col gap-4"
         >
           {chip === 'all' ? (
-            <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+            <Text as="h2" role="section">
               {section.label}
-            </h2>
+            </Text>
           ) : null}
           {section.bundles.map((bundle) => {
             const id = bundle.plan.id;
