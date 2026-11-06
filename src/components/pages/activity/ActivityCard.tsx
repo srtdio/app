@@ -401,6 +401,7 @@ export function ActivityCard({
         },
       }}
       picture={activityPicture(lead, actor, cache, presignEnabled, title)}
+      {...(alert !== null ? { pictureHooks: { 'data-activity-alert-icon': alert.kind } } : {})}
       // A failed send's lead and a missed due time read in bad.
       title={bad ? <span className="text-bad">{title}</span> : title}
       unread={unread}

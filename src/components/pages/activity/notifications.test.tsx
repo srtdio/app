@@ -511,22 +511,22 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
     );
   }
 
-  it('a failed send: the lead in bad, the reason, Retry and Edit, and no tap', () => {
+  it('a failed send: the lead in bad, the reason, Retry and Edit in its ⋯, and no tap', () => {
     const html = card([failed()], { onRetry: () => {}, onEdit: () => {} });
     expect(html).toContain('data-activity-event="scheduled_failed"');
     expect(html).toMatch(
       /class="text-bad">Couldn&#x27;t send your scheduled message to Direct message\.</,
     );
     expect(html).not.toContain('Not sent');
-    // The reason is the body line, below the title, exactly once.
+    // The reason is the preview line, below the title, exactly once.
     expect(html).toMatch(
-      /<p class="mt-1 line-clamp-2 text-base text-fg-2 \[overflow-wrap:anywhere\]">You&#x27;re no longer in this chat<\/p>/,
+      /data-list-card-preview="" data-activity-preview="" class="[^"]*line-clamp-2[^"]*">You&#x27;re no longer in this chat</,
     );
     expect(html.split('no longer in this chat')).toHaveLength(2);
-    expect(html).toContain('data-activity-action="retry"');
-    expect(html).toContain('data-activity-action="edit"');
-    expect(html).toMatch(/class="[^"]*h-11[^"]*"[^>]*data-activity-action="retry"/);
-    expect(html).not.toMatch(/role="button"[^>]*data-activity-lead/);
+    // Edit and Retry are rows of the card's ⋯ (failedSendItems), never buttons on the card,
+    // so every card keeps the one ListCard height.
+    expect(html).not.toContain('data-activity-action');
+    expect(html).not.toContain('data-activity-lead');
     expect(html).toContain('data-activity-alert-icon="failed"');
   });
 
@@ -545,22 +545,18 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
     expect(sentHtml).not.toContain('no longer in this chat');
   });
 
-  it('scheduled sends: the title names the receiver and wraps to two lines', () => {
+  it('scheduled sends: the title names the receiver on the one title line', () => {
     const named = (i: ActivityItem): ActivityItem =>
       i.alert == null ? i : { ...i, alert: { ...i.alert, chatType: 'dm', chatName: 'Priya Shah' } };
     const sentHtml = card([named(sent())]);
     const failedHtml = card([named(failed())]);
     expect(sentHtml).toContain('Your scheduled message was sent to Priya Shah');
     expect(failedHtml).toContain('Couldn&#x27;t send your scheduled message to Priya Shah.');
-    for (const html of [sentHtml, failedHtml]) {
-      expect(html).toContain(
-        '<p class="text-base font-medium text-fg line-clamp-2 [overflow-wrap:anywhere]">',
-      );
+    for (const html of [sentHtml, failedHtml, card([reminder()])]) {
+      expect(html).toMatch(/data-list-card-title="" class="[^"]*truncate/);
       expect(html).not.toContain('Sent in');
       expect(html).not.toMatch(/sent to Chat\b|message to Chat\b/);
     }
-    // Every other card keeps its single-line title.
-    expect(card([reminder()])).toContain('<p class="text-base font-medium text-fg truncate">');
   });
 
   it('scheduled sends never read "Sent in Chat" or name the bare "Chat", read or unread', () => {
@@ -579,8 +575,6 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
       expect(html).not.toContain('data-activity-scope-tag');
       expect(html).not.toContain('>People<');
       expect(html).not.toContain('>Groups<');
-      // The icon is decoration; the text carries the meaning.
-      expect(html).toMatch(/data-activity-only-you=""[^>]*><svg[^>]*aria-hidden="true"/);
     }
   });
 
@@ -602,13 +596,15 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
     }
   });
 
-  it('a reminder: the card frame, the menu, the unread highlight and its icon', () => {
+  it('a reminder: the card frame, the menu, the unread dot and its icon', () => {
     const html = card([reminder()]);
     expect(html).toContain('data-activity-event="reminder"');
+    expect(html).toContain('data-list-card=""');
     expect(html).toContain('data-activity-menu');
-    expect(html).toContain('lit-selected');
+    expect(html).toContain('data-list-card-unread');
     expect(html).toContain('data-activity-alert-icon="reminder"');
-    expect(html).toContain('>Reminder<');
+    // The one tag is the type chip's name (a chat alert reads People).
+    expect(html).toContain('>People<');
     expect(html).not.toContain('data-activity-action');
   });
 
