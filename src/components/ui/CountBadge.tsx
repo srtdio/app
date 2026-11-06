@@ -21,7 +21,7 @@ type CountBadgeProps =
     };
 
 const UNREAD_CLASS =
-  'lit-badge inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent px-1 text-xs font-semibold leading-none text-accent-fg';
+  'lit-badge inline-flex h-5 min-w-5 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent px-1 text-xs font-semibold text-accent-fg';
 const SECTION_CLASS =
   'lit-pill inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border border-border-strong bg-panel-2 px-2 text-center font-mono text-sm font-medium tabular-nums text-fg';
 

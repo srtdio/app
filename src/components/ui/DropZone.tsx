@@ -10,8 +10,8 @@ interface DropZoneProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const MIN_HEIGHT: Record<NonNullable<DropZoneProps['minHeight']>, string> = {
   touch: 'min-h-11',
-  tile: 'min-h-[120px]',
-  panel: 'min-h-[160px]',
+  tile: 'min-h-32',
+  panel: 'min-h-40',
 };
 
 // The dashed upload target: a tappable surface (drag and drop handlers pass
