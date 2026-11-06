@@ -12,6 +12,15 @@
 // abort in flight). The hook never reads before the Plan tab's own paint: the
 // read starts in an effect.
 //
+// Own writes made elsewhere (Move to bank from the Plan or item screen, Plan
+// it, From bank, Delete, Archive, Show / Hide, Star) ride PLAN_CHANGED_EVENT
+// with a BankChange: every kept Bank page patches in place with no read
+// (applyBankChange), so the phone list, the side panel and the table show it
+// on return. Anyone else's change arrives on the live topic bank:<workspace>
+// (src/lib/plan-tab/bank-live.ts) while the Bank is open: one page read per
+// burst, merged so rows already on screen keep their objects and never
+// repaint (mergeLivePage).
+//
 // useBankActions: the writes (star, archive, show to client, delete, bulk,
 // Plan it, buckets), each optimistic over the kept value; a deferred write
 // sits behind the Undo strip (useUndoableAction) before it fires.
@@ -38,6 +47,7 @@ import {
 import { withReadTimeout } from '@/lib/chat-reads';
 import {
   PLAN_CHANGED_EVENT,
+  bankChangeOf,
   bankReadWhat,
   bankStaleBefore,
   dispatchPlanChanged,
@@ -45,6 +55,7 @@ import {
   readBankPage,
   readOpenPlanRows,
   searchBank,
+  type BankChange,
   type BankIdea,
   type BankPage,
   type BankQuery,
@@ -59,6 +70,7 @@ import { weekRangeOf } from '@/lib/plan-tab';
 import { useServerSearch, type ServerSearch } from '@/lib/search/server-search';
 import { invalidateReads, peekKept, primeRead, readKey, sharedRead } from '@/lib/session-read';
 import { supabase } from '@/lib/supabase';
+import { subscribeBankLive } from '@/lib/plan-tab/bank-live';
 import { generateTraceId } from '@/lib/trace';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { sortBankIdeas, type BankFilter } from './bank-parts';
@@ -103,6 +115,108 @@ export function mergeBankPages(shown: BankPage, next: BankPage): BankPage {
   };
 }
 
+/**
+ * A kept page with an own write's bank change applied, for one filter:
+ * `in` goes to the top of a live page it belongs on (not archived, the
+ * picked bucket if any, never the Untouched review, which holds only old
+ * ideas); `out` leaves; `flags` updates the idea, and an archive or restore
+ * moves it off the page that no longer holds it. Never a duplicate. Pure.
+ */
+export function applyBankChange(
+  ideas: readonly BankIdea[],
+  change: BankChange,
+  filter: Pick<BankFilter, 'bucketId' | 'archived' | 'review'>,
+): BankIdea[] {
+  switch (change.kind) {
+    case 'in': {
+      const rest = ideas.filter((i) => i.id !== change.idea.id);
+      const fits =
+        !filter.archived &&
+        !filter.review &&
+        change.idea.archived_at == null &&
+        (filter.bucketId === null || (change.idea.bucket_ids ?? []).includes(filter.bucketId));
+      return fits ? [change.idea, ...rest] : rest;
+    }
+    case 'out':
+      return ideas.filter((i) => i.id !== change.itemId);
+    case 'flags': {
+      const out: BankIdea[] = [];
+      for (const idea of ideas) {
+        if (idea.id !== change.itemId) {
+          out.push(idea);
+          continue;
+        }
+        const next: BankIdea = { ...idea, ...change.flags };
+        // An archive leaves the live page; a restore leaves the archived one.
+        if ((next.archived_at != null) !== filter.archived) continue;
+        out.push(next);
+      }
+      return out;
+    }
+  }
+}
+
+/** Every Bank page key this session showed, with the filter it holds (for kept patches). */
+const keptBankFilters = new Map<string, BankFilter>();
+let keptListenerOn = false;
+
+/** Patch every kept Bank page for one own write. No read. */
+function patchKeptBankPages(change: BankChange): void {
+  for (const [key, filter] of keptBankFilters) {
+    const kept = peekKept<Result<BankPage>>(key);
+    if (kept?.ok !== true) continue;
+    const ideas = applyBankChange(kept.data.ideas, change, filter);
+    const page: BankPage = {
+      ...kept.data,
+      ideas: change.kind === 'in' ? ideas : sortBankIdeas(ideas, filter.sort),
+    };
+    primeRead<Result<BankPage>>(key, { ok: true, data: page }, Number.POSITIVE_INFINITY);
+  }
+}
+
+/**
+ * The one window listener that patches kept Bank pages on an own write, so a
+ * return paints the change even when no Bank was mounted. Installed on the
+ * first Bank mount, before the hook's own listener (so the hook reads the
+ * patched page).
+ */
+function ensureKeptBankListener(): void {
+  if (keptListenerOn || typeof window === 'undefined') return;
+  keptListenerOn = true;
+  window.addEventListener(PLAN_CHANGED_EVENT, (event) => {
+    const change = bankChangeOf(event);
+    if (change !== null) patchKeptBankPages(change);
+  });
+}
+
+/** Test seam: forget the kept filters (the listener stays). */
+export function resetKeptBankFilters(): void {
+  keptBankFilters.clear();
+}
+
+/**
+ * A live re-read merged over what is shown: the fresh first page in its
+ * order, each unchanged idea keeping the object already on screen (so its
+ * row never repaints), then the rows Load more had added beyond it. Pure.
+ */
+export function mergeLivePage(shown: BankPage, fresh: BankPage): BankPage {
+  const before = new Map(shown.ideas.map((i) => [i.id, i]));
+  const same = (a: BankIdea, b: BankIdea): boolean => JSON.stringify(a) === JSON.stringify(b);
+  const head = fresh.ideas.map((idea) => {
+    const old = before.get(idea.id);
+    return old !== undefined && same(old, idea) ? old : idea;
+  });
+  const freshIds = new Set(fresh.ideas.map((i) => i.id));
+  const tail =
+    shown.ideas.length > fresh.ideas.length
+      ? shown.ideas.slice(fresh.ideas.length).filter((i) => !freshIds.has(i.id))
+      : [];
+  return {
+    ideas: [...head, ...tail],
+    nextCursor: tail.length > 0 ? shown.nextCursor : fresh.nextCursor,
+  };
+}
+
 /** One first-page read, bounded at 5s; kept for the session once ok. */
 function readFirstPage(key: string, q: BankQuery): Promise<Result<BankPage>> {
   return sharedRead(
@@ -141,8 +255,14 @@ export function useBankData(input: {
   enabled: boolean;
   filter: BankFilter;
   searchText: string;
+  /**
+   * The Bank is open and painted, on the agency side: subscribe to its live
+   * topic. False closes the subscription (the chip, panel or table closed).
+   */
+  live?: boolean;
 }): BankData {
   const { workspaceId, userId, enabled, filter } = input;
+  ensureKeptBankListener();
   const key =
     enabled && workspaceId !== null && userId !== null
       ? bankKeyOf(userId, workspaceId, filter)
@@ -167,6 +287,7 @@ export function useBankData(input: {
   }
   const loadRef = useRef(load);
   loadRef.current = load;
+  if (key !== null) keptBankFilters.set(key, filter);
   const untouched = useUntouched();
   const seq = useRef(0);
   const [moreBusy, setMoreBusy] = useState(false);
@@ -216,10 +337,51 @@ export function useBankData(input: {
     void read(true);
   }, [read, userId, workspaceId]);
   useWorkspaceDataChanged(reload);
+  // An own write elsewhere: the kept page was patched (patchKeptBankPages);
+  // show it with no read. Any other plan change re-reads behind what is shown.
+  const searchRef = useRef<ServerSearch<BankIdea[]> | null>(null);
   useEffect(() => {
-    window.addEventListener(PLAN_CHANGED_EVENT, reload);
-    return () => window.removeEventListener(PLAN_CHANGED_EVENT, reload);
-  }, [reload]);
+    const onPlan = (event: Event): void => {
+      const change = bankChangeOf(event);
+      if (change === null) {
+        reload();
+        return;
+      }
+      searchRef.current?.update((ideas) => applyBankChange(ideas, change, filterRef.current));
+      if (key === null) return;
+      const kept = peekKept<Result<BankPage>>(key);
+      if (kept?.ok === true) setState({ key, load: { status: 'ready', page: kept.data } });
+    };
+    window.addEventListener(PLAN_CHANGED_EVENT, onPlan);
+    return () => window.removeEventListener(PLAN_CHANGED_EVENT, onPlan);
+  }, [reload, key]);
+
+  // Live: anyone's change re-reads this page once per burst and merges it in
+  // place. Starts only once the Bank is open and painted (input.live).
+  const live = input.live === true && enabled;
+  useEffect(() => {
+    if (!live || workspaceId === null || key === null) return;
+    return subscribeBankLive(supabase, workspaceId, () => {
+      seq.current += 1;
+      const mine = seq.current;
+      void withReadTimeout((signal) =>
+        readBankPage(
+          supabase,
+          bankQueryOf(workspaceId, filterRef.current, new Date()),
+          null,
+          signal,
+        ),
+      ).then((fresh) => {
+        if (mine !== seq.current || !fresh.ok) return;
+        setState((prev) => {
+          if (prev.key !== key || prev.load.status !== 'ready') return prev;
+          const page = mergeLivePage(prev.load.page, fresh.data);
+          primeRead<Result<BankPage>>(key, { ok: true, data: page }, Number.POSITIVE_INFINITY);
+          return { key, load: { status: 'ready', page } };
+        });
+      });
+    });
+  }, [live, workspaceId, key]);
 
   const onMore = useCallback(() => {
     const shown = loadRef.current;
@@ -260,6 +422,7 @@ export function useBankData(input: {
           ),
     `${workspaceId ?? ''}:${key ?? ''}`,
   );
+  searchRef.current = search;
 
   const patch = useCallback<BankData['patch']>(
     (edit) => {
@@ -355,12 +518,23 @@ export async function setBankFlags(
 ): Promise<void> {
   const res = await bankIdeaSet(client, bankSetArgs(idea, change, generateTraceId()));
   if (!res.ok) throw new Error(res.error.message);
+  const next = withFlags(idea, change, new Date().toISOString());
+  dispatchPlanChanged(window, '', {
+    kind: 'flags',
+    itemId: idea.id,
+    flags: {
+      show_to_client: next.show_to_client === true,
+      archived_at: next.archived_at ?? null,
+      starred_at: next.starred_at ?? null,
+    },
+  });
 }
 
 /** Delete one idea (plan_item_remove); throws on failure. */
 export async function removeBankIdea(client: Client, itemId: string): Promise<void> {
   const res = await planItemRemove(client, { p_item_id: itemId, p_trace_id: generateTraceId() });
   if (!res.ok) throw new Error(res.error.message);
+  dispatchPlanChanged(window, '', { kind: 'out', itemId });
 }
 
 /** Put an idea into a plan on a day (plan_item_from_bank). Never throws. */
@@ -377,14 +551,23 @@ export async function placeBankIdea(
     p_trace_id: generateTraceId(),
   });
   if (!res.ok) return res;
-  dispatchPlanChanged(window, planId);
+  dispatchPlanChanged(window, planId, { kind: 'out', itemId });
   return { ok: true, data: null };
 }
 
-/** Send a planned idea back to the bank (plan_item_to_bank; Plan it's Undo). Never throws. */
-export async function unplanBankIdea(client: Client, itemId: string): Promise<Result<null>> {
+/**
+ * Send a planned idea back to the bank (plan_item_to_bank; Plan it's Undo).
+ * With the idea, every kept Bank page gets it back at once. Never throws.
+ */
+export async function unplanBankIdea(
+  client: Client,
+  itemId: string,
+  idea?: BankIdea,
+): Promise<Result<null>> {
   const res = await planItemToBank(client, { p_item_id: itemId, p_trace_id: generateTraceId() });
-  return res.ok ? { ok: true, data: null } : res;
+  if (!res.ok) return res;
+  if (idea !== undefined) dispatchPlanChanged(window, '', { kind: 'in', idea });
+  return { ok: true, data: null };
 }
 
 type PlanCreateArgs = Database['public']['Functions']['plan_create']['Args'];

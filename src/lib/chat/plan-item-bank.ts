@@ -89,6 +89,30 @@ export function bankIdeaOf(item: PlanItemRow, commentCount: number): BankIdea {
   };
 }
 
+/**
+ * The Bank row a concept becomes when it moves to the bank (plan_item_to_bank
+ * clears plan_id and target_date and keeps the plan it came from), for the
+ * kept Bank page's own-write patch. Pure.
+ */
+export function bankIdeaMovedIn(
+  item: PlanItemRow,
+  fromPlanTitle: string | null,
+  nowIso: string,
+): BankIdea {
+  return bankIdeaOf(
+    {
+      ...item,
+      plan_id: null,
+      target_date: null,
+      came_from_plan_title: fromPlanTitle,
+      archived_at: null,
+      last_active_at: nowIso,
+      updated_at: nowIso,
+    } as PlanItemRow,
+    0,
+  );
+}
+
 /** The item with its flag overrides applied (what the server will hold). Pure. */
 export interface IdeaFlags {
   show_to_client?: boolean;

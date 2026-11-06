@@ -225,3 +225,12 @@ BEGIN
     p_workspace_id=>v_ws, p_entity_type=>'plan_item', p_entity_id=>p_item_id::text,
     p_payload=>jsonb_build_object('show_to_client', p_show_to_client, 'archived', p_archived, 'starred', p_starred));
 END $function$;
+
+-- Applied out of band 6 Nov 2026; the seven bank procs were revoked in 20261106010000_plan_bank.sql without a grant back, so every bank write returned 403 until this
+GRANT EXECUTE ON FUNCTION public.bank_idea_create(uuid, text, text, uuid[], uuid[], uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.plan_item_to_bank(uuid, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.plan_item_from_bank(uuid, uuid, date, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.bank_idea_set(uuid, boolean, boolean, boolean, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.plan_item_buckets_set(uuid, uuid[], uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.workspace_bucket_rename(uuid, text, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.workspace_bucket_delete(uuid, uuid) TO authenticated;

@@ -96,6 +96,7 @@ import {
   TEAM_ONLY_LINE,
   WHO_CAN_SEE_LABEL,
   bankIdeaMenu,
+  bankIdeaMovedIn,
   bankIdeaOf,
   bucketSaveLabel,
   clientSeesLine,
@@ -1427,9 +1428,9 @@ export function PlanItemScreen(props: {
     setShowAsk(false);
     const before = flags;
     setFlags((f) => ({ ...f, show_to_client: true }));
-    void writeFlags({ show: true }).catch(() => {
+    void writeFlags({ show: true }).catch((error: unknown) => {
       setFlags(before);
-      toast.show({ title: errorText('show it to the client', null), tone: 'error' });
+      toast.show({ title: errorText('show it to the client', error), tone: 'error' });
     });
   };
   const hideFromClient = (): void => {
@@ -1444,9 +1445,9 @@ export function PlanItemScreen(props: {
   const starIdea = (on: boolean): void => {
     const before = flags;
     setFlags((f) => ({ ...f, starred_at: on ? new Date().toISOString() : null }));
-    void writeFlags({ starred: on }).catch(() => {
+    void writeFlags({ starred: on }).catch((error: unknown) => {
       setFlags(before);
-      toast.show({ title: errorText(on ? 'star' : 'unstar', null), tone: 'error' });
+      toast.show({ title: errorText(on ? 'star' : 'unstar', error), tone: 'error' });
     });
   };
   const archiveIdea = (on: boolean): void => {
@@ -1472,6 +1473,8 @@ export function PlanItemScreen(props: {
     if (!planActions || !concept) return;
     const forItem = props.item.id;
     const planId = bundle.plan.id;
+    const planTitle = bundle.plan.title;
+    const movedItem = item;
     // The Plan screen's row leaves at once; Undo or a failure brings it back.
     dispatchRowToBank(window, { itemId: forItem, back: false });
     runDetachedUndo(toast.show, {
@@ -1490,7 +1493,10 @@ export function PlanItemScreen(props: {
           toast.show({ title: moveToBankError(res.error.message), tone: 'error' });
           return;
         }
-        dispatchPlanChanged(window, planId);
+        dispatchPlanChanged(window, planId, {
+          kind: 'in',
+          idea: bankIdeaMovedIn(movedItem, planTitle, new Date().toISOString()),
+        });
       },
     });
     (props.onRemoved ?? props.onClose)();

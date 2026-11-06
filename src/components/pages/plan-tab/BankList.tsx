@@ -393,16 +393,16 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
   // Star and Show to client land at once; Archive, Hide and Delete wait behind Undo.
   const star = (idea: BankIdea, on: boolean): void => {
     replaceIdea(withFlags(idea, { starred: on }, new Date().toISOString()));
-    void setBankFlags(supabase, idea, { starred: on }).catch(() => {
+    void setBankFlags(supabase, idea, { starred: on }).catch((error: unknown) => {
       replaceIdea(idea);
-      showToast({ title: errorText(on ? 'star' : 'unstar', null), tone: 'error' });
+      showToast({ title: errorText(on ? 'star' : 'unstar', error), tone: 'error' });
     });
   };
   const showToClient = (idea: BankIdea): void => {
     replaceIdea(withFlags(idea, { show: true }, new Date().toISOString()));
-    void setBankFlags(supabase, idea, { show: true }).catch(() => {
+    void setBankFlags(supabase, idea, { show: true }).catch((error: unknown) => {
       replaceIdea(idea);
-      showToast({ title: errorText('show it to the client', null), tone: 'error' });
+      showToast({ title: errorText('show it to the client', error), tone: 'error' });
     });
   };
   const hide = (idea: BankIdea): void => {
@@ -958,7 +958,7 @@ export function usePlanIt(input: {
         action: {
           label: 'Undo',
           onPress: () => {
-            void unplanBankIdea(supabase, idea.id).then((back) => {
+            void unplanBankIdea(supabase, idea.id, idea).then((back) => {
               if (back.ok) inputRef.current.onUnplaced(idea);
               else showToast({ title: errorText('undo', back.error.message), tone: 'error' });
             });

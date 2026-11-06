@@ -227,6 +227,7 @@ import { useModalFocus } from '@/lib/modal-focus';
 import { useSession } from '@/lib/session-context';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { subscribePlanLive } from '@/lib/chat/plan-live';
+import { bankIdeaMovedIn } from '@/lib/chat/plan-item-bank';
 import {
   PLAN_CHANGED_EVENT,
   dispatchPlanChanged,
@@ -1753,7 +1754,24 @@ export function PlanScreen(props: {
           else void out.done.then(hide);
         },
         show,
-        onMoved: () => dispatchPlanChanged(window, planId),
+        onMoved: () => {
+          // The Bank's kept page gets the idea at once (no read).
+          const moved = bundle?.items.find((i) => i.id === id);
+          dispatchPlanChanged(
+            window,
+            planId,
+            moved !== undefined
+              ? {
+                  kind: 'in',
+                  idea: bankIdeaMovedIn(
+                    moved,
+                    bundle?.plan.title ?? null,
+                    new Date().toISOString(),
+                  ),
+                }
+              : undefined,
+          );
+        },
         onError: (copy) => toast.show({ title: copy, tone: 'error' }),
       }),
     );
