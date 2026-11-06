@@ -775,10 +775,7 @@ export function ComposeItemRow(props: {
       {note !== null ? (
         <p
           data-plan-compose-note={note.warn ? 'warn' : 'info'}
-          className={cn(
-            'px-0.5 text-sm',
-            note.warn ? 'font-medium text-warn' : 'text-fg-3',
-          )}
+          className={cn('px-0.5 text-sm', note.warn ? 'font-medium text-warn' : 'text-fg-3')}
         >
           {note.text}
         </p>

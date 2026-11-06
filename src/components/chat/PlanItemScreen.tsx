@@ -1917,10 +1917,7 @@ export function PlanItemScreen(props: {
                 </span>
               </div>
               {(bank ? [] : statusRows(bundle, item, side, overrides)).map((row) => (
-                <div
-                  key={row.label}
-                  className="flex min-h-7 items-center justify-between gap-2"
-                >
+                <div key={row.label} className="flex min-h-7 items-center justify-between gap-2">
                   <span className="text-base text-fg-3">{row.label}</span>
                   <PlanPill
                     pill={{

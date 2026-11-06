@@ -440,8 +440,7 @@ function MediaTile(props: {
   );
 }
 
-const ROW =
-  'flex min-h-16 w-full items-center gap-3 border-b border-border py-2 last:border-b-0';
+const ROW = 'flex min-h-16 w-full items-center gap-3 border-b border-border py-2 last:border-b-0';
 const ROW_ICON =
   'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-panel-2 text-fg-3 lit-media';
 

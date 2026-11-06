@@ -44,7 +44,9 @@ describe('design tokens: type and radius scales', () => {
 
   it('spacing is the 4px grid plus px, 0.5 and 1.5; no 2.5 or 3.5', () => {
     const keys = Object.keys(theme.spacing);
-    expect(keys).toEqual(expect.arrayContaining(['px', '0', '0.5', '1.5', '11', '13', '15', '17', '18']));
+    expect(keys).toEqual(
+      expect.arrayContaining(['px', '0', '0.5', '1.5', '11', '13', '15', '17', '18']),
+    );
     expect(keys).not.toContain('2.5');
     expect(keys).not.toContain('3.5');
     for (const [key, value] of Object.entries(theme.spacing)) {

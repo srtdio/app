@@ -484,11 +484,7 @@ export function groupInfoPage(props: {
 
 /** A section heading: small caps label over its rows, on the page's 16 edge (L2). */
 function SectionLabel(props: { children: string }): ReactElement {
-  return (
-    <p className={`mb-1 ${TEXT_ROLE.section}`}>
-      {props.children}
-    </p>
-  );
+  return <p className={`mb-1 ${TEXT_ROLE.section}`}>{props.children}</p>;
 }
 
 export interface MembersState {

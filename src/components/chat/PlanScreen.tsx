@@ -777,9 +777,7 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }
           data-plan-screen-progress={box.key}
           className="flex min-w-0 flex-col gap-1.5 rounded-xl bg-panel-2 p-3 lit-card-muted"
         >
-          <span className={TEXT_ROLE.section}>
-            {box.label}
-          </span>
+          <span className={TEXT_ROLE.section}>{box.label}</span>
           <span className="truncate font-mono text-md text-fg">{box.text}</span>
           <span className="block h-1 overflow-hidden rounded-full bg-panel-3 lit-well">
             <span
@@ -2757,10 +2755,7 @@ export function PlanBody(props: {
             {week.label !== null ? (
               <h3
                 data-plan-week-header=""
-                className={cn(
-                  `sticky top-0 z-raised bg-bg py-2 ${TEXT_ROLE.section}`,
-                  GUTTER,
-                )}
+                className={cn(`sticky top-0 z-raised bg-bg py-2 ${TEXT_ROLE.section}`, GUTTER)}
               >
                 {week.label}
               </h3>
@@ -2868,10 +2863,7 @@ function AddRow(props: {
   return (
     <div
       data-plan-add-row=""
-      className={cn(
-        'flex min-h-11 items-center gap-2',
-        !props.empty && '-mb-3 -mt-2 pl-17',
-      )}
+      className={cn('flex min-h-11 items-center gap-2', !props.empty && '-mb-3 -mt-2 pl-17')}
     >
       {props.empty ? (
         <p data-plan-day-empty="" className="flex-1 text-md text-fg-3">
@@ -3214,10 +3206,7 @@ function PairedPostRow(props: {
           aria-disabled="true"
           data-plan-pair-row="locked"
           onContextMenu={(event) => event.preventDefault()}
-          className={cn(
-            'flex min-h-11 min-w-0 cursor-default items-start gap-3',
-            NO_TOUCH_SELECT,
-          )}
+          className={cn('flex min-h-11 min-w-0 cursor-default items-start gap-3', NO_TOUCH_SELECT)}
         >
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             {label}

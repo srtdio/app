@@ -57,11 +57,7 @@ describe('pages: value lock', () => {
     expect(offenders(/key=\{(i|index|idx)\}/)).toEqual([]);
   });
 
-  it('no z-[N]: the 60 layer is the only one left and is listed for a named token', () => {
-    const files = new Set(offenders(/["'`\s:]z-\[/).map((at) => at.split(':')[0]));
-    expect([...files].sort()).toEqual([
-      'create/FilePromptSheet.tsx',
-      'pipeline/PipelineDateRangeCalendar.tsx',
-    ]);
+  it('no z-[N] or numeric z-N: every layer is a named stacking token', () => {
+    expect(offenders(/["'`\s:]-?z-(\[|\d)/)).toEqual([]);
   });
 });

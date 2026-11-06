@@ -302,9 +302,7 @@ export function ActionMenu({
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate text-base font-medium">{item.label}</span>
                   {item.description !== undefined ? (
-                    <span className="truncate text-sm text-fg-3">
-                      {item.description}
-                    </span>
+                    <span className="truncate text-sm text-fg-3">{item.description}</span>
                   ) : null}
                 </span>
               </PressableRow>

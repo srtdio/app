@@ -764,10 +764,8 @@ const STOP_POINTER = {
  * when nothing (a reply quote, a forwarded label, a mark) sits above the note.
  */
 const BUBBLE_INSET: ChatSize = {
-  touch:
-    'w-64 -mx-3 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-2',
-  laptop:
-    'w-64 -mx-2 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-2',
+  touch: 'w-64 -mx-3 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-2',
+  laptop: 'w-64 -mx-2 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-2',
 };
 
 /** Row 2 and the error row start under the wave: 44px play + 4px gap. */

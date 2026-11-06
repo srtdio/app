@@ -45,12 +45,16 @@ describe('design lint: rules at zero hits are errors', () => {
     });
   }
 
-  it('ui/Text.tsx (the role table) may track, but z-[N] still errors', { timeout: 60_000 }, async () => {
-    expect(await severities(TEXT, TYPE, 'text role')).toEqual([]);
-    const sev = await severities(TEXT, Z, 'stacking scale');
-    expect(sev.length).toBeGreaterThan(0);
-    expect(sev.every((s) => s === 2)).toBe(true);
-  });
+  it(
+    'ui/Text.tsx (the role table) may track, but z-[N] still errors',
+    { timeout: 60_000 },
+    async () => {
+      expect(await severities(TEXT, TYPE, 'text role')).toEqual([]);
+      const sev = await severities(TEXT, Z, 'stacking scale');
+      expect(sev.length).toBeGreaterThan(0);
+      expect(sev.every((s) => s === 2)).toBe(true);
+    },
+  );
 
   it('named stacking and type tokens pass', { timeout: 60_000 }, async () => {
     const [result] = await eslint.lintText(
@@ -60,16 +64,20 @@ describe('design lint: rules at zero hits are errors', () => {
     expect(result?.messages ?? []).toEqual([]);
   });
 
-  it('rules that still have hits stay warnings (raw <img>, placed IconButton, raw input)', {
-    timeout: 60_000,
-  }, async () => {
-    expect(await severities(PAGE, 'export const A = () => <img alt="" />;\n', 'Avatar')).toEqual([
-      1,
-    ]);
-    expect(
-      await severities(PAGE, 'export const A = () => <input />;\n', 'ui/Input'),
-    ).toEqual([1]);
-  });
+  it(
+    'rules that still have hits stay warnings (raw <img>, placed IconButton, raw input)',
+    {
+      timeout: 60_000,
+    },
+    async () => {
+      expect(await severities(PAGE, 'export const A = () => <img alt="" />;\n', 'Avatar')).toEqual([
+        1,
+      ]);
+      expect(await severities(PAGE, 'export const A = () => <input />;\n', 'ui/Input')).toEqual([
+        1,
+      ]);
+    },
+  );
 
   it('the config source names the error lists', () => {
     // Static half of the guard: the lists exist and are spread into an error rule.

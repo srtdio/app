@@ -1820,7 +1820,8 @@ export const SELECTION_ROW_OFFSET = 'relative pl-15';
 export const SELECTION_CHECK_SLOT = 'absolute left-4 top-1/2 flex -translate-y-1/2';
 
 /** A checked row's layer: the one selected look (lit-selected) across the full row, never opacity. */
-export const SELECTED_ROW_TINT = 'pointer-events-none absolute inset-0 -z-raised border-y lit-selected';
+export const SELECTED_ROW_TINT =
+  'pointer-events-none absolute inset-0 -z-raised border-y lit-selected';
 
 /**
  * Own-bubble inner content (reply quote, file chips, shared cards, voice note)

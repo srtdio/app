@@ -157,8 +157,7 @@ const ROW = `${ROW_BASE} -mx-3 px-3 ${ROW_RULE}`;
 const DATE_COL = 'w-12 shrink-0 font-mono text-sm tabular-nums text-fg-3';
 const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base text-fg';
 const ROW_SUB = 'block truncate text-sm text-fg-3';
-const PILL =
-  'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold lit-pill';
+const PILL = 'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold lit-pill';
 
 const SEGMENT_CLASS: Record<PlanSegment, string> = {
   client: 'bg-accent',
@@ -203,9 +202,7 @@ function SectionHeader(props: {
   return (
     <div className="mb-2 flex h-6 items-center gap-2 text-fg-2">
       <Icon size={ICON_SIZE.inline} className="shrink-0" />
-      <h3 className={`min-w-0 flex-1 truncate ${SECTION_LABEL_INK}`}>
-        {props.label}
-      </h3>
+      <h3 className={`min-w-0 flex-1 truncate ${SECTION_LABEL_INK}`}>{props.label}</h3>
       <CountBadge tone="section" count={props.count} />
     </div>
   );
@@ -326,9 +323,7 @@ export function PlanBlock(props: {
     >
       <PressableRow type="button" flat data-plan-open="" onClick={props.onOpen} className={ROW}>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-lg font-semibold text-fg">
-            {bundle.plan.title}
-          </span>
+          <span className="block truncate text-lg font-semibold text-fg">{bundle.plan.title}</span>
           <span className={ROW_SUB}>
             {planRangeLabel(bundle.plan.starts_on, bundle.plan.ends_on)}
           </span>

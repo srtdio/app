@@ -116,7 +116,8 @@ const ICON_TONE: Record<StatusTone, string> = {
 /** Room full mode keeps between the last item and the chevron (px). */
 const FULL_CHEVRON_GAP = 12;
 
-const BAR = 'relative z-raised flex h-9 w-full shrink-0 items-center border-b bg-panel px-4 lit-header';
+const BAR =
+  'relative z-raised flex h-9 w-full shrink-0 items-center border-b bg-panel px-4 lit-header';
 
 /**
  * One bar item; compact drops the word and the "+K" (a plan keeps its lead).
@@ -157,10 +158,7 @@ function TickerItem(props: {
       {lead}
       <span
         data-status-number=""
-        className={cn(
-          'shrink-0 font-mono font-medium tabular-nums',
-          NUMBER_TONE[item.tone],
-        )}
+        className={cn('shrink-0 font-mono font-medium tabular-nums', NUMBER_TONE[item.tone])}
       >
         {item.number}
       </span>

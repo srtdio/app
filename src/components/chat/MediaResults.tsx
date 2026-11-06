@@ -413,10 +413,7 @@ function LinkRowItem(props: {
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span
-            className={cn(
-              'truncate text-base font-medium',
-              unsafe ? 'text-warn-ink' : 'text-fg',
-            )}
+            className={cn('truncate text-base font-medium', unsafe ? 'text-warn-ink' : 'text-fg')}
           >
             {title}
           </span>

@@ -252,13 +252,7 @@ describe('OnboardingFlow type roles', () => {
   it('the preview heading is the section label', async () => {
     await render({});
     const label = classesOf('How you will appear');
-    for (const want of [
-      'text-sm',
-      'font-semibold',
-      'uppercase',
-      'tracking-label',
-      'text-fg-2',
-    ]) {
+    for (const want of ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2']) {
       expect(label).toContain(want);
     }
   });

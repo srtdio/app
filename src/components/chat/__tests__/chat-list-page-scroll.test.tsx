@@ -83,7 +83,11 @@ describe('channelListClasses', () => {
   it('page scroll: the select bar pins above the tab bar room <main> keeps', () => {
     const bar = classes(channelListClasses(true).selectBar);
     expect(bar).toEqual(
-      expect.arrayContaining(['sticky', 'z-sticky', 'bottom-[calc(84px+env(safe-area-inset-bottom))]']),
+      expect.arrayContaining([
+        'sticky',
+        'z-sticky',
+        'bottom-[calc(84px+env(safe-area-inset-bottom))]',
+      ]),
     );
     // The same room AppLayout's shellChrome leaves for BottomTabs.
     expect(read('../../shell/AppLayout.tsx')).toContain(
