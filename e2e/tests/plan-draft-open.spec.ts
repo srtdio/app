@@ -139,7 +139,8 @@ test('agency: title menu, inline rename, delete (Open plan copy), the card reads
     .toBe(true);
   const card = page.locator('[data-plan-card="unavailable"]');
   await card.scrollIntoViewIfNeeded();
-  await expect(card).toHaveText('Plan deleted');
+  // ui/ChatCard: the card is the bubble, so the message time sits inside it too.
+  await expect(card.getByText('Plan deleted', { exact: true })).toBeVisible();
   expectClean(network);
 });
 
