@@ -1,8 +1,9 @@
-// The plan shared into a message, as a card (modelled on BriefCard): eyebrow
-// PLAN, title, the date range in mono, count chips ("Draft" on a Draft plan),
-// the shown side's progress (Draft "Team X of N", Open "Client X of N", the
-// same for every viewer), and a footer with Open plan (and Forward: the agency
-// on every plan, a client on an Open plan). Forwarding a Draft plan into a
+// The plan shared into a message, as a ui/ChatCard (the card is the bubble,
+// like BriefCard): the plan glyph and title, the date range in mono, count
+// chips ("Draft" on a Draft plan), the shown side's progress (Draft "Team X of
+// N", Open "Client X of N", the same for every viewer), and the action row:
+// Forward left (the agency on every plan, a client on an Open plan), Open plan
+// right. Forwarding a Draft plan into a
 // chat with a client (known from the list, or refused by the server for that
 // reason) asks "Open this plan for approvers?" first (PlanOpenSendSheet: Open
 // and send opens the plan, then shares it). Ids resolve through the thread's
@@ -24,7 +25,14 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
 import { ICON_SIZE, IconChat, IconPlan } from '@/components/ui/icons';
-import { CouldntLoadCard, SHARED_CARD_MUTED } from '@/components/chat/PostCard';
+import {
+  CouldntLoadCard,
+  cardGroupClass,
+  metaForLast,
+  type CardPlacement,
+} from '@/components/chat/PostCard';
+import { ChatCard } from '@/components/ui/ChatCard';
+import { textRole } from '@/components/ui/Text';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { usePaintLogCommit } from '@/components/chat/PaintLog';
 import {
@@ -77,24 +85,16 @@ import { chatPlanShare } from '@srtdio/rpc';
 /** What one card shows. */
 export type PlanCardView = { kind: 'plan'; bundle: PlanBundle } | { kind: 'unavailable' };
 
-/**
- * The plan card frame (same width as the prototype's card, tokens only). Its
- * height is fixed and every line inside is one line (explicit line heights,
- * truncated text, chips that never wrap), so the card is always exactly the
- * skeleton's height: the swap from skeleton to card never moves the thread.
- */
-export const PLAN_CARD =
-  'flex h-[217px] w-[284px] max-w-full flex-col overflow-hidden rounded-xl border bg-panel text-left lit-card';
-
-/** A loading plan card: exactly the card's height. */
-export const PLAN_CARD_SKELETON =
-  'h-[217px] w-[284px] max-w-full rounded-xl border border-border bg-panel-2';
+/** The plan card's rows under line 2: the count chips, the bar and the progress line. */
+const PLAN_CARD_ROWS = 'flex flex-col gap-2';
 
 const NO_SUBSCRIBE = (): (() => void) => () => {};
 const NO_VERSION = (): number => 0;
 
 /** The plan cards of one message. */
-export function SharedPlanCards(props: { planIds: string[]; senderName: string }): ReactElement {
+export function SharedPlanCards(
+  props: { planIds: string[]; senderName: string } & CardPlacement,
+): ReactElement {
   const ctx = usePlanCards();
   const cache = ctx?.cache ?? null;
   const { workspaceId } = useWorkspace();
@@ -124,28 +124,34 @@ export function SharedPlanCards(props: { planIds: string[]; senderName: string }
     `plan cards ${key}`,
     skeleton ? `skeleton (loading ${snapshot.loading}, side ready ${ready})` : `cards v${version}`,
   );
-  if (props.planIds.length === 0) return <></>;
+  const inBubble = props.inBubble ?? true;
+  const count = props.planIds.length;
+  if (count === 0) return <></>;
   if (skeleton) {
-    // Same box as the card (PLAN_CARD_SKELETON). A tap while the open still
-    // waits for the chat bundle starts this card's read now (plan-fire.ts).
+    // The card's own rows (PlanCardSkeleton), so the card fills in place. A
+    // tap while the open still waits for the chat bundle starts this card's
+    // read now (plan-fire.ts).
     return (
-      <div
-        className="mt-1.5 flex flex-col items-start gap-1.5 text-fg"
-        onPointerDown={() => ctx?.tapPlans(props.planIds)}
-      >
-        {props.planIds.map((id) => (
-          <div key={id} data-plan-skeleton="">
-            <Bone lit="lit-card" as="div" className={PLAN_CARD_SKELETON} />
-          </div>
+      <div className={cardGroupClass(inBubble)} onPointerDown={() => ctx?.tapPlans(props.planIds)}>
+        {props.planIds.map((id, i) => (
+          <PlanCardSkeleton key={id} cardMeta={metaForLast(i, count, props.cardMeta)} />
         ))}
       </div>
     );
   }
   return (
-    <div className="mt-1.5 flex flex-col items-start gap-1.5 text-fg">
-      {props.planIds.map((id) => {
+    <div className={cardGroupClass(inBubble)}>
+      {props.planIds.map((id, i) => {
+        const cardMeta = metaForLast(i, count, props.cardMeta);
         if (snapshot.failed.includes(id)) {
-          return <CouldntLoadCard key={id} onRetry={() => cache?.retry([id])} />;
+          return (
+            <CouldntLoadCard
+              key={id}
+              icon={IconPlan}
+              onRetry={() => cache?.retry([id])}
+              cardMeta={cardMeta}
+            />
+          );
         }
         const bundle = snapshot.bundles.get(id);
         return (
@@ -154,10 +160,35 @@ export function SharedPlanCards(props: { planIds: string[]; senderName: string }
             view={bundle !== undefined ? { kind: 'plan', bundle } : { kind: 'unavailable' }}
             side={side}
             onOpen={() => ctx?.openPlan({ planId: id, senderName: props.senderName })}
+            cardMeta={cardMeta}
           />
         );
       })}
     </div>
+  );
+}
+
+/**
+ * A loading plan card: ui/ChatCard with the card's own rows (bones for the
+ * title, the range, the chips and the progress line, the empty bar, the 44
+ * action row), so it is exactly the card's height and the card fills in place.
+ */
+export function PlanCardSkeleton(props: { cardMeta?: ReactNode }): ReactElement {
+  return (
+    <ChatCard
+      icon={IconPlan}
+      title={<Bone lit="flat" as="span" className="h-5 w-40 rounded" />}
+      meta={<Bone lit="flat" as="span" className="h-4 w-24 rounded" />}
+      primaryAction={<span aria-hidden="true" className="h-11" />}
+      time={props.cardMeta}
+      rootProps={{ 'aria-hidden': true, 'data-plan-skeleton': '' }}
+    >
+      <span className={PLAN_CARD_ROWS}>
+        <Bone lit="flat" as="span" className="h-6 w-32 rounded" />
+        <PlanCardBar label="" value={0} max={0} percent={0} side="team" />
+        <Bone lit="flat" as="span" className="h-4 w-28 rounded" />
+      </span>
+    </ChatCard>
   );
 }
 
@@ -166,6 +197,7 @@ function PlanCardItem(props: {
   view: PlanCardView;
   side: ViewerSide;
   onOpen: () => void;
+  cardMeta?: ReactNode;
 }): ReactElement {
   const [forwardOpen, setForwardOpen] = useState(false);
   const bundle = props.view.kind === 'plan' ? props.view.bundle : null;
@@ -177,6 +209,7 @@ function PlanCardItem(props: {
         side={props.side}
         onOpen={props.onOpen}
         onForward={() => setForwardOpen(true)}
+        cardMeta={props.cardMeta}
       />
       {bundle !== null ? (
         <PlanForwardSheet
@@ -271,21 +304,29 @@ export function PlanCardBar(props: {
   );
 }
 
-/** The card itself: a pure render (no reads), so both sides are tested statically. */
+/**
+ * The card itself: a pure render (no reads), so both sides are tested
+ * statically. ui/ChatCard (the card is the bubble): the plan glyph and title
+ * (heading) on line 1, the mono date range on line 2, the count chips, the
+ * shown side's bar and progress line, then the 44 action row: Forward (when
+ * offered) left, Open plan right. `cardMeta` is the message's time and tick.
+ */
 export function PlanCardBody(props: {
   view: PlanCardView;
   side: ViewerSide;
   onOpen: () => void;
   onForward: () => void;
+  cardMeta?: ReactNode;
 }): ReactElement {
   if (props.view.kind === 'unavailable') {
     return (
-      <div data-plan-card="unavailable" className={cn(SHARED_CARD_MUTED, 'text-fg-2')}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3">
-          <IconPlan size={ICON_SIZE.nav} />
-        </span>
-        <span className="truncate text-base font-medium">{PLAN_DELETED}</span>
-      </div>
+      <ChatCard
+        icon={IconPlan}
+        title={PLAN_DELETED}
+        muted
+        time={props.cardMeta}
+        rootProps={{ 'data-plan-card': 'unavailable' }}
+      />
     );
   }
   const { bundle } = props.view;
@@ -293,9 +334,36 @@ export function PlanCardBody(props: {
   const forward = canForwardPlan(props.side, bundle.plan.audience);
   const draft = progress.side === 'team';
   return (
-    <div data-plan-card={bundle.plan.id} className={PLAN_CARD}>
-      <div className="flex min-h-0 flex-1 flex-col gap-2 px-3.5 pb-2.5 pt-3">
-        <PlanCardTop plan={bundle.plan} />
+    <ChatCard
+      icon={IconPlan}
+      title={<span data-plan-title="">{bundle.plan.title}</span>}
+      meta={
+        <span data-plan-range="" className={textRole('meta', 'truncate')}>
+          {planRangeLabel(bundle.plan.starts_on, bundle.plan.ends_on)}
+        </span>
+      }
+      secondaryAction={
+        forward ? (
+          <Button type="button" variant="link" data-plan-forward="" onClick={props.onForward}>
+            Forward
+          </Button>
+        ) : undefined
+      }
+      primaryAction={
+        <Button
+          type="button"
+          variant="link"
+          data-plan-open=""
+          data-induction={INDUCTION_KEYS.briefOpenPlan}
+          onClick={props.onOpen}
+        >
+          Open plan
+        </Button>
+      }
+      time={props.cardMeta}
+      rootProps={{ 'data-plan-card': bundle.plan.id }}
+    >
+      <span className={PLAN_CARD_ROWS}>
         <span className="flex h-6 gap-1.5 overflow-hidden">
           {planChips(bundle).map((chip) => (
             <span
@@ -322,34 +390,8 @@ export function PlanCardBody(props: {
         <span data-plan-progress="" className="truncate text-sm leading-4 text-fg-3">
           {progressLabel(progress)}
         </span>
-      </div>
-      <div className="flex shrink-0 items-center gap-1 border-t border-border p-1">
-        <Button
-          type="button"
-          variant="link"
-          data-plan-open=""
-          data-induction={INDUCTION_KEYS.briefOpenPlan}
-          onClick={props.onOpen}
-          className="flex-1"
-        >
-          Open plan
-        </Button>
-        {forward ? (
-          <>
-            <span aria-hidden="true" className="h-6 w-px shrink-0 bg-border" />
-            <Button
-              type="button"
-              variant="link"
-              data-plan-forward=""
-              onClick={props.onForward}
-              className="flex-1"
-            >
-              Forward
-            </Button>
-          </>
-        ) : null}
-      </div>
-    </div>
+      </span>
+    </ChatCard>
   );
 }
 

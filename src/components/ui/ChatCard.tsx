@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType, HTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { textRole } from '@/components/ui/Text';
 import { ICON_SIZE } from '@/components/ui/icons';
@@ -32,7 +32,22 @@ export interface ChatCardProps {
   className?: string;
   /** Extra rows (a progress bar) between the meta and the actions. */
   children?: ReactNode;
+  /**
+   * The root's own attributes: its data-* test hooks, aria, a ref, and for a
+   * card that is one press target as a whole (the shared post card: tap opens
+   * its sheet, a hold talks about it) role="button" with its handlers. A
+   * role="button" root takes the card's press look (hover fill, focus line).
+   */
+  rootProps?: ChatCardRootProps;
 }
+
+/** ChatCard's root attributes (className and children stay the card's own). */
+export type ChatCardRootProps = Omit<HTMLAttributes<HTMLDivElement>, 'className' | 'children'> & {
+  ref?: Ref<HTMLDivElement>;
+} & { [hook: `data-${string}`]: string | undefined };
+
+/** A whole-card press target's look: the hover / press overlay and the one focus line. */
+const CHAT_CARD_PRESS = 'cursor-pointer lit-hover mv-tint focus-visible:lit-focus';
 
 /** The width every chat card takes: 288, never past the bubble column. */
 export const CHAT_CARD_WIDTH = 'w-72 max-w-full';
@@ -67,6 +82,7 @@ export function ChatCard({
   muted = false,
   className,
   children,
+  rootProps,
 }: ChatCardProps) {
   const layout = useChatLayout();
   const head = (
@@ -89,11 +105,13 @@ export function ChatCard({
   const hasActions = secondaryAction !== undefined || primaryAction !== undefined;
   return (
     <div
+      {...rootProps}
       data-chat-card=""
       className={cn(
         'flex flex-col gap-2 p-3',
         CHAT_CARD_WIDTH,
         chatCardSurface(layout, own),
+        rootProps?.role === 'button' && CHAT_CARD_PRESS,
         className,
       )}
     >

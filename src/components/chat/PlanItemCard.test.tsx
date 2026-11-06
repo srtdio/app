@@ -38,13 +38,16 @@ const render = (view: IdeaCardView): string =>
   renderToStaticMarkup(<PlanItemCardBody view={view} onOpen={() => undefined} />);
 
 describe('PlanItemCard states', () => {
-  it('bank: eyebrow Idea, title, "Bank · 2 comments", lit-card, tappable', () => {
+  it('bank: ChatCard with the bank glyph, title, "Bank · 2 comments", tappable', () => {
     const html = render(idea());
-    expect(html).toContain('Idea');
+    expect(html).toContain('data-chat-card=""');
     expect(html).toContain('Behind the scenes reel');
     expect(html).toContain('Bank · 2 comments');
-    expect(html).toContain('lit-card');
+    // The card is the bubble: the peer bubble surface, not a lit-card frame.
+    expect(html).toContain('lit-bubble-other');
+    expect(html).not.toContain('lit-card');
     expect(html).toContain('<button');
+    expect(html).toContain('aria-label="Open idea Behind the scenes reel"');
     expect(html).toContain('data-idea-card="i1"');
   });
 
@@ -62,14 +65,16 @@ describe('PlanItemCard states', () => {
     expect(html).toContain('have access to this idea.');
     expect(html).toContain('You don');
     expect(html).toContain('data-idea-card="none"');
-    expect(html).toContain('lit-card-muted');
+    // Muted ChatCard: fg-3 ink.
+    expect(html).toContain('text-fg-3');
     expect(html).not.toContain('<button');
   });
 
-  it('loading: the card frame with bones', () => {
+  it('loading: the ChatCard with bones', () => {
     const html = renderToStaticMarkup(<IdeaCardSkeleton />);
     expect(html).toContain('data-idea-skeleton');
-    expect(html).toContain('lit-card-muted');
+    expect(html).toContain('data-chat-card=""');
+    expect(html).toContain('data-bone');
   });
 });
 

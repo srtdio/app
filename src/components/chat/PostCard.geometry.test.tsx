@@ -19,11 +19,11 @@ import {
   postCardHeight,
 } from '@/components/chat/post-card-geometry';
 
-// One fixed shape (28 Oct): the loading box and the loaded card have the same
-// outer height on the first frame, whatever the post holds, so a card filling
-// in never moves a row. Every part of the box is a fixed size: the media box
-// (the workspace platform's frame), the two-line title area, the meta row and
-// the 44px footer.
+// One fixed shape (28 Oct), on ui/ChatCard: the loading box and the loaded
+// card render the same rows, every one a fixed size, whatever the post holds,
+// so a card filling in never moves a row: the one-line title (heading role),
+// the meta row (h-5), the media box (the workspace platform's frame) and the
+// 44 action row. postCardHeight adds them up.
 
 afterEach(() => {
   laptop.on = false;
@@ -94,11 +94,18 @@ function cases(platform: string): Array<[string, PostCardRow]> {
   ];
 }
 
-/** The outer height (px) of a markup's first element carrying a height style. */
-function outerHeight(html: string): number {
-  const match = /style="height:([\d.]+)px/.exec(html);
-  if (match === null) throw new Error(`no fixed height in ${html.slice(0, 200)}`);
-  return Number(match[1]);
+/**
+ * The fixed rows a card's markup paints, in order: the media box's px height,
+ * the h-5 meta row, the 44 action row, the time row. Equal shapes = equal
+ * outer heights (ChatCard's inset and gaps are the same on every card).
+ */
+function shape(html: string): string {
+  const media = /data-card-media=""[^>]*height:([\d.]+)px/.exec(html)?.[1] ?? 'none';
+  const meta = /data-chat-card-meta=""[^>]*><span class="[^"]*\bh-5\b/.test(html);
+  const actions = /data-chat-card-actions=""[^>]*min-h-11/.test(html);
+  const time = html.includes('data-chat-card-time');
+  if (!html.includes('data-chat-card=""')) throw new Error(`no ChatCard in ${html.slice(0, 200)}`);
+  return `media ${media} / meta-row ${String(meta)} / actions ${String(actions)} / time ${String(time)}`;
 }
 
 function loaded(post: PostCardRow, platform: string, sideKnown = true): string {
@@ -126,36 +133,32 @@ describe('chat post card: one fixed shape, loaded or not', () => {
     for (const platform of ['instagram', 'linkedin', 'x', 'threads', 'tiktok']) {
       it(`${layout}, ${platform}: the loading box and every loaded case match`, () => {
         laptop.on = layout === 'laptop';
-        const expected = postCardHeight(chatCardFrame(platform), layout);
-        expect(outerHeight(skeleton(platform))).toBe(expected);
+        const expected = shape(skeleton(platform));
+        expect(expected).toBe(
+          `media ${cardMediaHeight(chatCardFrame(platform))} / meta-row true / actions true / time false`,
+        );
         for (const [name, post] of cases(platform)) {
           const html = loaded(post, platform);
-          expect(outerHeight(html), name).toBe(expected);
-          // The title area is always two lines tall, whatever the title's length.
-          expect(html, name).toContain(`height:${cardTitleHeight(layout)}px`);
-          expect(html, name).toContain('line-clamp-2');
-          // The media box is the platform frame's height, cover or not.
-          expect(html, name).toMatch(
-            new RegExp(
-              `data-card-media=""[^>]*height:${cardMediaHeight(chatCardFrame(platform))}px`,
-            ),
-          );
+          expect(shape(html), name).toBe(expected);
+          // The title is one heading line (truncated), whatever its length.
+          expect(html, name).toMatch(/text-lg font-semibold[^"]*truncate/);
+          expect(html, name).not.toContain('line-clamp-2');
         }
       });
     }
   }
 
-  it('the side not known yet keeps the 44px footer row (no wording), same height', () => {
+  it('the side not known yet keeps the 44 action row (no wording), same shape', () => {
     const post = cases('instagram')[0]![1];
     const known = loaded(post, 'instagram', true);
     const unknown = loaded(post, 'instagram', false);
-    expect(outerHeight(unknown)).toBe(outerHeight(known));
+    expect(shape(unknown)).toBe(shape(known));
     expect(unknown).not.toContain('data-card-footer');
-    expect(unknown).toContain('h-[44px]');
+    expect(unknown).toMatch(/data-chat-card-actions=""[^>]*min-h-11/);
   });
 
   it('a not-visible card and a couldn’t-load card take the same box', () => {
-    const expected = outerHeight(skeleton('instagram'));
+    const expected = shape(skeleton('instagram'));
     const hidden = renderToStaticMarkup(
       <MemoryRouter>
         <SharedPostCardList
@@ -165,7 +168,7 @@ describe('chat post card: one fixed shape, loaded or not', () => {
         />
       </MemoryRouter>,
     );
-    expect(outerHeight(hidden)).toBe(expected);
+    expect(shape(hidden)).toBe(expected);
     const failed = renderToStaticMarkup(
       <MemoryRouter>
         <SharedPostCardList
@@ -179,21 +182,45 @@ describe('chat post card: one fixed shape, loaded or not', () => {
     expect(failed).toContain('data-card-failed');
     expect(failed).toMatch(/Couldn.{1,6}t load this post\./);
     expect(failed).toMatch(/<button[^>]*>Retry<\/button>/);
-    expect(outerHeight(failed)).toBe(expected);
+    expect(shape(failed)).toBe(expected);
   });
 
-  it('the loading box takes the card fill and light, and no pulse', () => {
+  it('the time row goes in the last card only, the skeleton and the card alike', () => {
+    const post = cases('instagram')[0]![1];
+    const views = sharedPostViews([post.id], indexPostsById([post]), new Map());
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <SharedPostCardList
+          views={views}
+          side="agency"
+          platform="instagram"
+          inBubble={false}
+          cardMeta={<span>2:14 PM</span>}
+        />
+      </MemoryRouter>,
+    );
+    const box = renderToStaticMarkup(
+      <PostCardSkeleton platform="instagram" cardMeta={<span>2:14 PM</span>} />,
+    );
+    expect(shape(html)).toBe(shape(box));
+    expect(shape(html)).toContain('time true');
+  });
+
+  it('the loading box is the card surface, with bones and no pulse', () => {
     const html = skeleton('instagram');
-    expect(html).toContain('bg-panel lit-card');
+    expect(html).toContain('lit-bubble-other');
+    expect(html).toContain('data-bone');
     expect(html).not.toContain('animate-pulse');
   });
 
-  it('the fixed parts add up: border, media box, padded two-line body, meta row, footer', () => {
+  it('the fixed parts add up: inset, title, meta row, media box, action row (and time)', () => {
     const frame = chatCardFrame('instagram');
-    // 4:5 at the 238px inner width is 297.5, whole px 298.
-    expect(cardMediaHeight(frame)).toBe(298);
-    expect(postCardHeight(frame, 'touch')).toBe(2 + 298 + 20 + 40 + 6 + 20 + 44);
-    expect(postCardHeight(frame, 'laptop')).toBe(2 + 298 + 20 + 38 + 6 + 20 + 44);
+    // 4:5 at the 264px inner width (288 less the 12 inset twice) is 330: capped.
+    expect(cardMediaHeight(frame)).toBe(320);
+    expect(postCardHeight(frame, 'touch')).toBe(24 + 20 + 4 + 20 + 8 + 320 + 8 + 44);
+    expect(postCardHeight(frame, 'laptop')).toBe(postCardHeight(frame, 'touch'));
+    expect(postCardHeight(frame, 'touch', true)).toBe(postCardHeight(frame, 'touch') + 8 + 15);
+    expect(cardTitleHeight('touch')).toBe(20);
     // 9:16 platforms hit the 320px cap.
     expect(cardMediaHeight(chatCardFrame('tiktok'))).toBe(320);
     expect(cardMediaHeight(chatCardFrame('youtube_shorts'))).toBe(320);

@@ -28,7 +28,9 @@ import {
   watchCardRetries,
 } from '@/components/chat/PostCard';
 import { Button } from '@/components/ui/Button';
+import { ChatCard } from '@/components/ui/ChatCard';
 import { IconButton } from '@/components/ui/IconButton';
+import { IconPipeline } from '@/components/ui/icons';
 import { READ_TIMEOUT_MS, type ChannelSummary, type MentionProfile } from '@/lib/chat-reads';
 import {
   applyEditedPreview,
@@ -313,9 +315,12 @@ describe('E11 + T5: card footer and the failed card', () => {
     expect(html).toMatch(/Couldn.{1,6}t load/);
     expect(CARD_LOAD_FAILED).toBe("Couldn't load");
     expect(html).not.toContain('not visible');
-    const card = CouldntLoadCard({ onRetry });
-    expect(String((card.props as { className: string }).className)).toContain('min-h-[44px]');
-    (card.props as { onClick: () => void }).onClick();
+    // ui/ChatCard: the whole head is its one 44px tap (PressableRow), which re-reads.
+    const card = CouldntLoadCard({ onRetry, icon: IconPipeline });
+    expect(card.type).toBe(ChatCard);
+    expect((card.props as { title: string }).title).toBe(CARD_LOAD_FAILED);
+    expect(renderToStaticMarkup(card)).toMatch(/<button[^>]*min-h-\[44px\]/);
+    (card.props as { onOpen: () => void }).onOpen();
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 

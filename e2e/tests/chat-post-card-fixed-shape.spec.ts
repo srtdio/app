@@ -98,15 +98,20 @@ test('an unseen shared post card fills its fixed box in place: 0 px row shift @t
     Math.round(el.getBoundingClientRect().height),
   );
 
-  const card = page.locator('[data-card-footer]').first().locator('..');
+  // ui/ChatCard: the footer words sit in the card's action row.
+  const card = page
+    .locator('[data-chat-card]')
+    .filter({ has: page.locator('[data-card-footer]') })
+    .first();
   await expect(card).toBeAttached({ timeout: 10_000 });
   await expect(page.locator('[data-card-skeleton]')).toHaveCount(0);
   await page.waitForTimeout(1_000);
   const after = await rowOffsets(page);
   const cardHeight = await card.evaluate((el) => Math.round(el.getBoundingClientRect().height));
-  // The long title is clamped to its two-line area, never grows the card.
+  // The long title is one truncated heading line, never grows the card.
   const titleLines = await card
     .locator('[data-card-title]')
+    .locator('..')
     .evaluate((el) => Math.round(el.getBoundingClientRect().height));
 
   const log = await page.evaluate(() => window.__cardShape);
@@ -119,8 +124,8 @@ test('an unseen shared post card fills its fixed box in place: 0 px row shift @t
   });
 
   expect(cardHeight, 'the placeholder is the card height').toBe(skeletonHeight);
-  // Two title lines: 20px each on touch, 19px on a laptop project.
-  expect([38, 40], 'two title lines, clamped').toContain(titleLines);
+  // One heading line (15/20) on every project.
+  expect(titleLines, 'one title line, truncated').toBe(20);
   expect(after.tops, 'row offsets before and after the card landed').toEqual(before.tops);
   expect(moves, 'no row on screen moved while it landed').toEqual([]);
   expect(Math.abs(before.gap), 'pinned to the bottom before the card landed').toBeLessThanOrEqual(
