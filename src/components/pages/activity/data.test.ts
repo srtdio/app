@@ -1337,7 +1337,7 @@ describe('fetchActivityEntries query composition', () => {
     expect(calls.some((c) => c.method === 'or')).toBe(false);
   });
 
-  it('filters the Plans chip server-side to the six plan alert types', async () => {
+  it('filters the Plans chip server-side to the plan alert and idea bank types', async () => {
     const { client, calls } = recordingClient([]);
     await fetchActivityEntries(client, 'w1', { state: 'plans' });
     expect(
@@ -1350,6 +1350,11 @@ describe('fetchActivityEntries query composition', () => {
           'plan_updated',
           'plan_review',
           'plan_comment',
+          'bank_idea_added',
+          'bank_idea_moved',
+          'bank_idea_planned',
+          'bank_idea_shown',
+          'bank_idea_hidden',
         ],
       ]),
     ).toBe(true);
@@ -1802,10 +1807,12 @@ describe('plan comments and approvals', () => {
     expect(entityHref(review)).toBe(`/plan/${PLAN}?item=${ITEM}`);
     // A review never carries &comment= even if a comment id leaked in.
     expect(entityHref({ ...review, commentId: COMMENT })).toBe(`/plan/${PLAN}?item=${ITEM}`);
-    expect(entityHref({ ...comment, planId: null })).toBeNull();
+    // A plan-less item is a bank idea: it opens on the bank route, at the comment.
+    const bankHref = `/plan/bank?item=${ITEM}&comment=${COMMENT}`;
+    expect(entityHref({ ...comment, planId: null })).toBe(bankHref);
     const noPlanField: ActivityItem = { ...comment };
     delete noPlanField.planId;
-    expect(entityHref(noPlanField)).toBeNull();
+    expect(entityHref(noPlanField)).toBe(bankHref);
     expect(entityHref({ ...comment, entityId: null })).toBeNull();
   });
 

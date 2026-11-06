@@ -1698,7 +1698,7 @@ describe('runCatchup: idea bank (Plans section)', () => {
     };
   }
 
-  it('lists every bank event and bank comment for the team under Plans, with bank links', async () => {
+  it('lists bank events and bank comments for the team under Plans, newest first, capped', async () => {
     const { w, plan, idea, planned } = bankWorld();
     const e = mixedSet(w, A, { plan, idea, planned });
     const out = await run(w);
@@ -1706,23 +1706,48 @@ describe('runCatchup: idea bank (Plans section)', () => {
     const text = req.email.rendered.text;
     const bank = `${ENV.APP_BASE_URL}/plan/bank?w=${W1}&item=${idea}`;
     expect(text).toContain('\nPlans\n');
-    expect(text).toContain(`- Yash Team added ${Q('Reels week')} to the bank: ${bank}\n`);
-    expect(text).toContain(
-      `- Yash Team moved ${Q('Reels week')} from November plan to the bank: ${bank}\n`,
-    );
+    // Seven lines: the five newest show, the rest are "+2 more in Sorted".
+    expect(text).toContain(`- Yash Team commented on ${Q('Reels week')}: ${bank}&comment=bc2\n`);
+    expect(text).toContain(`- Yash Team commented on ${Q('Reels week')}: ${bank}&comment=bc1\n`);
+    expect(text).toContain(`- Yash Team hid ${Q('Reels week')} from the client: ${bank}\n`);
+    expect(text).toContain(`- Yash Team showed ${Q('Reels week')} to the client: ${bank}\n`);
     expect(text).toContain(
       `- Yash Team planned ${Q('Diwali reel')} in November plan, 20 Oct: ${ENV.APP_BASE_URL}/plans/${plan}?w=${W1}&item=${planned}\n`,
     );
-    expect(text).toContain(`- Yash Team showed ${Q('Reels week')} to the client: ${bank}\n`);
-    expect(text).toContain(`- Yash Team hid ${Q('Reels week')} from the client: ${bank}\n`);
-    expect(text).toContain(`- Yash Team commented on ${Q('Reels week')}: ${bank}&comment=bc1\n`);
-    expect(text).toContain(`- Yash Team commented on ${Q('Reels week')}: ${bank}&comment=bc2\n`);
+    expect(text).toContain(`+2 more in Sorted: ${ENV.APP_BASE_URL}/activity?w=${W1}`);
     // Bank comments are Plans lines, not Comments rows.
     expect(text).not.toContain('Client feedback to address');
     expect([...req.entryIds].sort()).toEqual(Object.values(e).sort());
     // The HTML part carries the same section, drawn with borders (no shadows).
     expect(req.email.rendered.html).toContain('>Plans<');
     expect(req.email.rendered.html).not.toMatch(/box-shadow/);
+  });
+
+  it('words an added and a moved idea for the team, linking the bank idea', async () => {
+    const { w, plan, idea } = bankWorld();
+    const ref = { type: 'plan_item' as const, id: idea };
+    w.entry(A, W1, 'bank_idea_added', ref, {
+      actor: Y,
+      payload: { title: 'Reels week', plan_id: null },
+    });
+    w.entry(A, W1, 'bank_idea_moved', ref, {
+      actor: Y,
+      createdAt: IN_WINDOW_LATER,
+      payload: {
+        title: 'Reels week',
+        from_plan_id: plan,
+        from_plan_title: 'November plan',
+        target_date: '2026-10-20',
+        plan_id: plan,
+      },
+    });
+    const out = await run(w);
+    const text = only(out, A, W1).email.rendered.text;
+    const bank = `${ENV.APP_BASE_URL}/plan/bank?w=${W1}&item=${idea}`;
+    expect(text).toContain(`- Yash Team added ${Q('Reels week')} to the bank: ${bank}\n`);
+    expect(text).toContain(
+      `- Yash Team moved ${Q('Reels week')} from November plan to the bank: ${bank}\n`,
+    );
   });
 
   it('never puts a team-only row in a client email, and words the rest for the client', async () => {
