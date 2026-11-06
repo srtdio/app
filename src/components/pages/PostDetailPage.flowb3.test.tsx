@@ -551,14 +551,14 @@ describe('A3. the title is the edit target', () => {
     const h1 = document.querySelector('h1');
     expect(h1?.querySelector('svg')).toBeNull();
     const title = h1?.querySelector<HTMLButtonElement>('[data-title-edit]');
-    expect(title?.className).toContain('min-h-[44px]');
+    expect(title?.className).toContain('min-h-11');
     expect(title?.className).toContain('focus-visible:lit-focus');
     expect(title?.className).toContain('tracking-tight');
     expect(title?.className).not.toContain('leading-');
     await click(title ?? null);
     const input = document.querySelector<HTMLInputElement>('input[aria-label="Post title"]');
     expect(input).not.toBeNull();
-    expect(input?.className).toContain('min-h-[44px]');
+    expect(input?.className).toContain('min-h-11');
     expect(input?.className).toContain('text-3xl');
     expect(input?.className).not.toContain('leading-');
   });

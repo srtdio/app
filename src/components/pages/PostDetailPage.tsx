@@ -1580,7 +1580,7 @@ export function PostDetailPage({
         <div aria-busy="true" data-post-skeleton="" className={grid.page}>
           <div aria-hidden className={cn(grid.head, 'flex flex-col gap-3')}>
             <Bone lit="flat" as="div" className="h-8 w-3/4 rounded" />
-            <div className="flex min-h-[44px] items-center gap-2">
+            <div className="flex min-h-11 items-center gap-2">
               <Bone lit="lit-avatar" as="div" className="h-5 w-5 rounded-full" />
               <Bone lit="flat" as="div" className="h-3 w-24 rounded" />
               <Bone lit="flat" as="div" className="h-3 w-16 rounded" />
@@ -1720,17 +1720,17 @@ export function PostDetailPage({
       <Link
         data-detail="brief"
         to={briefRoute(post.brief_id)}
-        className="inline-flex min-h-[44px] min-w-0 items-center rounded-lg font-medium text-accent hover:underline focus-visible:lit-focus"
+        className="inline-flex min-h-11 min-w-0 items-center rounded-lg font-medium text-accent hover:underline focus-visible:lit-focus"
       >
         <span className="min-w-0 truncate">{fromBriefLabel(briefName)}</span>
       </Link>
     ) : null;
-  const metaHeadClass = 'flex min-h-[44px] min-w-0 shrink items-center gap-2 rounded-lg';
+  const metaHeadClass = 'flex min-h-11 min-w-0 shrink items-center gap-2 rounded-lg';
   const metaLine =
     metaHead.length > 0 || briefLink !== null ? (
       <div
         data-post-details=""
-        className="flex min-h-[44px] min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-hidden text-sm text-fg-3"
+        className="flex min-h-11 min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-hidden text-sm text-fg-3"
       >
         {metaHead.length > 0 ? (
           detailsEditable ? (
@@ -1965,7 +1965,7 @@ export function PostDetailPage({
                     // entering edit never shifts the page.
                     className={textRole(
                       'display',
-                      '-mx-2 block min-h-[44px] w-[calc(100%+1rem)] rounded-lg border border-field bg-panel-2 px-[7px] py-[3px] text-fg lit-well outline-none focus:lit-focus',
+                      '-mx-2 block min-h-11 w-[calc(100%+1rem)] rounded-lg border border-field bg-panel-2 px-[7px] py-[3px] text-fg lit-well outline-none focus:lit-focus',
                     )}
                   />
                   {isTouchDevice() ? (

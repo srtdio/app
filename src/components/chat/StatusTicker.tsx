@@ -159,7 +159,6 @@ function TickerItem(props: {
         data-status-number=""
         className={cn(
           'shrink-0 font-mono font-medium tabular-nums',
-          compact && 'tracking-tighter',
           NUMBER_TONE[item.tone],
         )}
       >

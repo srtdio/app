@@ -130,7 +130,7 @@ export function PersonMessageInput(props: PersonMessageInputProps): ReactElement
                 }
               }}
               // 16px below md so iOS never zooms on focus; 14px from md up.
-              className="max-h-[120px] min-w-0 flex-1 resize-none self-center overflow-y-auto bg-transparent py-2.5 text-input leading-snug text-fg outline-none placeholder:text-fg-3 md:text-base"
+              className="max-h-32 min-w-0 flex-1 resize-none self-center overflow-y-auto bg-transparent py-2 text-input text-fg outline-none placeholder:text-fg-3 md:text-base"
             />
             {controls.reactions ? (
               <span className="flex shrink-0 items-center" data-person-reactions="">

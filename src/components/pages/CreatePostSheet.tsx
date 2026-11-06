@@ -1512,7 +1512,7 @@ export function CreatePostSheet({
           {/* Below lg the preview opens from a chip after the caption; its row is
               reserved from the first paint so nothing jumps when the platform
               resolves. At lg the frame itself is the preview. */}
-          <div data-preview-chip-slot="" className="-my-2 flex min-h-[44px] items-center lg:hidden">
+          <div data-preview-chip-slot="" className="-my-2 flex min-h-11 items-center lg:hidden">
             {preview !== null ? (
               <PreviewChip platform={preview.platform} onClick={() => setPreviewOpen(true)} />
             ) : null}
@@ -1708,7 +1708,7 @@ export function FormatRow({
 
   const name = platform !== null && format !== '' ? postFormatLabel(format, platform) : '';
   return (
-    <div data-format-row="" className="relative flex min-h-[44px] min-w-0 items-center gap-3">
+    <div data-format-row="" className="relative flex min-h-11 min-w-0 items-center gap-3">
       <span className="shrink-0 text-base font-medium text-fg">Format</span>
       {/* Read-only: the format is changed with "Change format", so the pill
           is ui/Tag (its neutral fill, the pill's own full ink kept). */}
@@ -1905,7 +1905,7 @@ function ShareToggle({
   onChange: (value: boolean) => void;
 }): ReactElement {
   return (
-    <div className="flex min-h-[44px] items-center justify-between gap-3 text-base">
+    <div className="flex min-h-11 items-center justify-between gap-3 text-base">
       <span className="[text-wrap:pretty]">{label}</span>
       <Switch checked={checked} onChange={onChange} label={label} />
     </div>

@@ -1095,7 +1095,7 @@ export function AssetsPage() {
             <div className="flex items-center gap-2">
               <Button
                 variant="danger"
-                className="min-w-[44px] flex-1"
+                className="min-w-11 flex-1"
                 disabled={selected.size === 0 || selectingAll}
                 onClick={deleteSelected}
               >

@@ -205,7 +205,7 @@ function TallBody(props: {
         <LetterTile
           letter={props.letter}
           tone={props.tone}
-          className="h-4 w-4 rounded text-xs"
+          className="size-4 rounded text-xs"
         />
         <span className="min-w-0 truncate">{props.site}</span>
       </div>

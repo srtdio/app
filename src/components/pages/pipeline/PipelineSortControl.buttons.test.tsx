@@ -82,7 +82,7 @@ describe('Pipeline controls buttons', () => {
     const tags = buttonTags(html);
     expect(tags).toHaveLength(3);
     for (const tag of tags) {
-      expect(classOf(tag)).toContain('min-h-[44px]');
+      expect(classOf(tag)).toContain('min-h-11');
       expect(classOf(tag)).toContain('rounded-lg');
     }
     const active = tags.find((tag) => tag.includes('aria-current="true"'));

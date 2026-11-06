@@ -129,7 +129,7 @@ describe('plan titles: two lines, then an ellipsis', () => {
     expect(title).toContain('line-clamp-2');
     expect(title).not.toContain('truncate');
     const row = html.match(/<button[^>]*data-plan-tab-menu-plan="p1"[^>]*>/)?.[0] ?? '';
-    expect(row).toContain('min-h-[44px]');
+    expect(row).toContain('min-h-11');
   });
 });
 

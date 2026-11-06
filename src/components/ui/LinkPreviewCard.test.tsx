@@ -134,7 +134,7 @@ function boxSignature(el: Element): string[] {
   const out: string[] = [];
   for (const node of el.querySelectorAll('[class]')) {
     for (const cls of (node.getAttribute('class') ?? '').split(/\s+/)) {
-      if (/^(aspect-\[1\.91\/1\]|h-4|h-8|h-9|h-16)$/.test(cls)) out.push(cls);
+      if (/^(aspect-\[1\.91\/1\]|h-4|h-8|h-10|h-16)$/.test(cls)) out.push(cls);
     }
   }
   return out;

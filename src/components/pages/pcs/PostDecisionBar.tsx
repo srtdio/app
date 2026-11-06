@@ -117,7 +117,7 @@ function approverButtons(
             onClick={() => model.onPick(action.to)}
             {...(approve ? { 'data-induction': INDUCTION_KEYS.postApprove } : {})}
             className={
-              action.to === 'rejected' ? 'min-w-[44px] flex-1 text-bad' : 'min-w-[44px] flex-1'
+              action.to === 'rejected' ? 'min-w-11 flex-1 text-bad' : 'min-w-11 flex-1'
             }
           >
             {action.label}

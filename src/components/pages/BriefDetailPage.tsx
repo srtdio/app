@@ -798,7 +798,7 @@ export function BriefDetailPage({
                 <Link
                   to={`/posts/${post.id}`}
                   data-linked-post=""
-                  className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-lg px-2 text-base text-fg mv-tint lit-hover focus-visible:lit-focus"
+                  className="-mx-2 flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-2 text-base text-fg mv-tint lit-hover focus-visible:lit-focus"
                 >
                   <StatusDot stage={linkedDotStage(post.stage)} />
                   <span className="min-w-0 flex-1 truncate">{post.title}</span>
@@ -812,7 +812,7 @@ export function BriefDetailPage({
           <Link
             to="/pipeline"
             data-linked-posts-count=""
-            className="-mx-2 inline-flex min-h-[44px] min-w-[44px] items-center rounded-lg px-2 text-base tabular-nums text-accent mv-tint lit-hover focus-visible:lit-focus"
+            className="-mx-2 inline-flex min-h-11 min-w-11 items-center rounded-lg px-2 text-base tabular-nums text-accent mv-tint lit-hover focus-visible:lit-focus"
           >
             {linkedCount}
           </Link>

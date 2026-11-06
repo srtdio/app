@@ -394,7 +394,7 @@ export function RolePicker({
   return (
     <label
       className={cn(
-        'relative flex min-h-[44px] items-center gap-1 rounded-lg border bg-panel lit-well px-2.5 py-1 text-base mv-tint focus-within:lit-focus',
+        'relative flex min-h-11 items-center gap-1 rounded-lg border bg-panel lit-well px-2.5 py-1 text-base mv-tint focus-within:lit-focus',
         invalid ? 'border-bad lit-bad bg-bad-soft' : 'border-field',
         current === undefined ? 'text-fg-3' : 'text-fg',
         fill ? 'min-w-0 flex-1' : 'max-w-[45%] shrink-0',

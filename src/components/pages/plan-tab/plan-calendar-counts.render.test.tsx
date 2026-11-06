@@ -143,7 +143,7 @@ describe('coarse pointer (U6, U7)', () => {
     env.coarse = true;
     const html = render('month', 'agency');
     const line = entry(html, 'item:c1');
-    expect(line).toContain('min-h-[44px]');
+    expect(line).toContain('min-h-11');
     expect(line).not.toContain('h-[22px]');
     expect(line).toContain('data-plan-tab-holdable');
     expect(line).toContain('select-none');
@@ -154,7 +154,7 @@ describe('coarse pointer (U6, U7)', () => {
   it('coarse pointer, approvers: 44px lines, no long-press', () => {
     env.coarse = true;
     const line = entry(render('month', 'client'), 'item:c1');
-    expect(line).toContain('min-h-[44px]');
+    expect(line).toContain('min-h-11');
     expect(line).not.toContain('data-plan-tab-holdable');
     env.coarse = false;
   });

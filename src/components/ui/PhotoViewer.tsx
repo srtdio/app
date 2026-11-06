@@ -128,7 +128,7 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
       </IconButton>
       <div
         ref={contentRef}
-        className="flex flex-col items-center gap-[88px]"
+        className="flex flex-col items-center gap-24"
         onClick={(event) => {
           if (event.target === event.currentTarget) onClose();
         }}

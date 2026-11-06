@@ -456,7 +456,7 @@ describe('CreatePostSheet flow A', () => {
     const slot = (): HTMLElement | null =>
       document.querySelector<HTMLElement>('[data-preview-chip-slot]');
     expect(slot()).not.toBeNull();
-    expect(slot()!.className).toContain('min-h-[44px]');
+    expect(slot()!.className).toContain('min-h-11');
     expect(slot()!.querySelector('button')).toBeNull();
     act(() => root?.unmount());
     root = null;

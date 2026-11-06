@@ -179,7 +179,7 @@ export function attachmentItemList(
     return (
       <li
         key={`${item.versionId}-${index}`}
-        className="flex min-h-[44px] w-full items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
+        className="flex min-h-11 w-full items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
       >
         <span className="shrink-0 text-fg-3">
           {item.kind === 'link' ? (
@@ -1140,6 +1140,6 @@ export function firstMedia(
 
 function cnPending(error: string | null): string {
   return error !== null
-    ? 'flex min-h-[44px] w-full items-center gap-2 rounded-xl border border-bad lit-bad bg-panel-2 px-3 py-2 lit-card-muted'
-    : 'flex min-h-[44px] w-full items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted';
+    ? 'flex min-h-11 w-full items-center gap-2 rounded-xl border border-bad lit-bad bg-panel-2 px-3 py-2 lit-card-muted'
+    : 'flex min-h-11 w-full items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted';
 }

@@ -861,7 +861,7 @@ export function reorderView(model: ReorderModel): ReactElement {
                     : { aspectRatio: `${ratio}` }
                 }
                 className={cn(
-                  'relative flex h-24 min-w-[44px] touch-none cursor-grab items-center justify-center overflow-hidden border-2 bg-panel-2 mv-tint',
+                  'relative flex h-24 min-w-11 touch-none cursor-grab items-center justify-center overflow-hidden border-2 bg-panel-2 mv-tint',
                   SLIDE_PRESS_CLASS,
                   slideEdge(selected),
                   dragging && 'z-10 cursor-grabbing lit-float',

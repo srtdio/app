@@ -245,7 +245,7 @@ describe('ActivityCard', () => {
     expect(html).toMatch(
       /<button[^>]*class="[^"]*h-11[^"]*rounded-lg[^"]*ml-auto"[^>]*aria-expanded/,
     );
-    expect(html).not.toContain('min-h-[44px] w-full');
+    expect(html).not.toContain('min-h-11 w-full');
   });
 
   it('places the scope tag and snoozed chip in the footer, not the content column', () => {

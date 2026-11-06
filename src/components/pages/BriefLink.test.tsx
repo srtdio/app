@@ -48,7 +48,7 @@ describe('BriefLink', () => {
       <BriefLink url={URL_} domain="figma.com" client={client({ type: 'bare', ...base }, null)} />,
     );
     expect(out).toContain('aria-label="Open figma.com in a new tab"');
-    expect(out).toContain('min-h-[44px]');
+    expect(out).toContain('min-h-11');
     expect(out).not.toContain('data-link-card');
     expect(out).not.toContain('data-brief-link-probe');
   });

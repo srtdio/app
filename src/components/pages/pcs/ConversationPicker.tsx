@@ -163,7 +163,7 @@ function ConversationSkeletonRow(): ReactElement {
   return (
     <div
       data-conversation-skeleton=""
-      className="flex w-full min-h-[44px] items-center gap-3 rounded-lg px-3 py-2"
+      className="flex w-full min-h-11 items-center gap-3 rounded-lg px-3 py-2"
     >
       <span className="h-[18px] w-[18px] shrink-0 rounded bg-panel-2" />
       <span className="flex min-w-0 flex-col">

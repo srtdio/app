@@ -359,7 +359,7 @@ describe('Brief detail ⋯ menu rows', () => {
     await mount();
     await openMenu();
     for (const el of document.querySelectorAll<HTMLElement>('[role="menuitem"]')) {
-      expect(el.className).toContain('min-h-[44px]');
+      expect(el.className).toContain('min-h-11');
     }
     await act(async () => menuRow('brief-menu-copy-link')?.click());
     // The phone Sheet stays mounted through its exit transition, then unmounts.
@@ -903,7 +903,7 @@ describe('Brief detail linked posts', () => {
       ),
     ];
     expect(rows.map((a) => a.getAttribute('href'))).toEqual(['/posts/p2', '/posts/p1']);
-    expect(rows[0]?.className).toContain('min-h-[44px]');
+    expect(rows[0]?.className).toContain('min-h-11');
     // The stage dot's word rides in the row name (sr-only).
     expect(rows[0]?.textContent).toBe('Post p2, Review');
   });

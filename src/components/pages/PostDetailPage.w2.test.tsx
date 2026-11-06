@@ -212,7 +212,7 @@ describe('7. small copy and hit areas', () => {
   });
 
   it('the meta line button that opens the details sheet is at least 44px tall', () => {
-    expect(PAGE).toContain("const metaHeadClass = 'flex min-h-[44px]");
+    expect(PAGE).toContain("const metaHeadClass = 'flex min-h-11");
     const start = PAGE.indexOf('data-post-details-edit=""');
     expect(PAGE.slice(start, start + 200)).toContain('metaHeadClass');
   });
