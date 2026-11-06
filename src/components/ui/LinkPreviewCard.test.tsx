@@ -133,7 +133,11 @@ afterEach(() => {
 function boxSignature(el: Element): string[] {
   const out: string[] = [];
   for (const node of el.querySelectorAll('[class]')) {
-    for (const cls of (node.getAttribute('class') ?? '').split(/\s+/)) {
+    const classes = (node.getAttribute('class') ?? '').split(/\s+/);
+    // The compact row's 40px letter tile (h-10 w-10) is not a slot of the box;
+    // the full card's title slot shares its height (h-10) but is never square.
+    if (classes.includes('w-10')) continue;
+    for (const cls of classes) {
       if (/^(aspect-\[1\.91\/1\]|h-4|h-8|h-10|h-16)$/.test(cls)) out.push(cls);
     }
   }
