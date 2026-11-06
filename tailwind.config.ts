@@ -9,6 +9,142 @@ export default {
     hoverOnlyWhenSupported: true,
   },
   theme: {
+    // Value lock (CLAUDE.md Design and Layout rules). These keys REPLACE
+    // Tailwind's defaults, so only the listed values exist as classes.
+    //
+    // Type scale. Each size carries its line height; no leading-* overrides.
+    fontSize: {
+      xs: ['11px', '14px'],
+      sm: ['12px', '16px'],
+      md: ['13px', '18px'],
+      base: ['14px', '20px'],
+      lg: ['15px', '20px'],
+      xl: ['17px', '22px'],
+      '2xl': ['20px', '26px'],
+      '3xl': ['28px', '34px'],
+      // Inputs below md: 16px so iOS never zooms on focus (md:text-base above).
+      input: ['16px', '22px'],
+    },
+    // Spacing: the 4px grid (step N = 4N px) as used in src, plus px (hairline),
+    // 0.5 (2px, inside badges and pills) and 1.5 (6px). 2.5 and 3.5 are gone.
+    spacing: {
+      px: '1px',
+      0: '0px',
+      0.5: '0.125rem',
+      1: '0.25rem',
+      1.5: '0.375rem',
+      2: '0.5rem',
+      3: '0.75rem',
+      4: '1rem',
+      5: '1.25rem',
+      6: '1.5rem',
+      7: '1.75rem',
+      8: '2rem',
+      9: '2.25rem',
+      10: '2.5rem',
+      11: '2.75rem',
+      12: '3rem',
+      // 52: the task / media text column (40 glyph column + 12 gap).
+      13: '3.25rem',
+      14: '3.5rem',
+      // 60: the row text edge and divider inset (16 gutter + 32 avatar + 12 gap).
+      15: '3.75rem',
+      16: '4rem',
+      // 68: the plan day text column.
+      17: '4.25rem',
+      // 72: the two-line row.
+      18: '4.5rem',
+      20: '5rem',
+      24: '6rem',
+      28: '7rem',
+      32: '8rem',
+      36: '9rem',
+      40: '10rem',
+      44: '11rem',
+      48: '12rem',
+      52: '13rem',
+      56: '14rem',
+      60: '15rem',
+      64: '16rem',
+      72: '18rem',
+      80: '20rem',
+    },
+    // Radius roles (CLAUDE.md). Rendered values are unchanged by the lock.
+    borderRadius: {
+      // rounded: controls and fields (8).
+      DEFAULT: '8px',
+      none: '0',
+      // rounded-sm: badges (ui/Tag), checkbox, highlights, dots, grabbers (6).
+      sm: '6px',
+      // rounded-md / rounded-lg: controls, fields, cards (8).
+      md: '8px',
+      lg: '8px',
+      // rounded-xl: cards, popovers, menus (12).
+      xl: '12px',
+      // rounded-2xl: sheets and dialogs (16), the same as rounded-sheet.
+      '2xl': '16px',
+      full: '9999px',
+      // rounded-card: the card role (8).
+      card: '8px',
+      // rounded-sheet: sheet tops and dialogs (16).
+      sheet: '16px',
+      // rounded-pill: pills (full).
+      pill: '9999px',
+      // A picture inset inside a card (ui/Card media inset).
+      inset: '4px',
+    },
+    // Edges: 1 (DEFAULT) and 2; 0 removes a side. The named widths are the only
+    // thicker lines.
+    borderWidth: {
+      DEFAULT: '1px',
+      0: '0px',
+      2: '2px',
+      // The ring that cuts a small badge out of a profile-size avatar (NotesBits).
+      cutout: '3px',
+      // The ring that cuts the camera badge out of the group photo (GroupInfoSheet).
+      'cutout-lg': '4px',
+      // The quote rail on an annotation draft (Pin / Caption annotation composers).
+      rail: '4px',
+    },
+    // No line-height utilities: font sizes carry theirs (CLAUDE.md L9).
+    // leading-emoji: an emoji glyph with no line box (chat-type.ts emoji roles).
+    lineHeight: {
+      emoji: '1',
+    },
+    // Only the type roles track (ui/Text.tsx): display (tight), section (label).
+    letterSpacing: {
+      tight: '-0.025em',
+      label: '0.06em',
+    },
+    // Stacking scale (CLAUDE.md Stacking). Never z-[N]; values keep the old order.
+    zIndex: {
+      // In-flow base layer (the safe-area fill under a sticky header).
+      base: '0',
+      // A part lifted over its siblings (media overlays, press surfaces);
+      // -z-raised sinks a selection tint under its row.
+      raised: '10',
+      // Sticky section heads, composer trays, in-page popovers, the side panel.
+      sticky: '20',
+      // Top bar, phone nav, in-screen panels over a sticky head.
+      nav: '30',
+      // Fixed docks and full-screen panels over the nav; menu click-catchers.
+      dock: '40',
+      // Menus, popovers, sheets, dialogs, modal pages (the overlay height).
+      sheet: '50',
+      // The induction guide, above sheets.
+      guide: '55',
+      // A date picker over a sheet or the guide: its click-catcher, then the picker.
+      'picker-catch': '56',
+      picker: '57',
+      // A sheet or popover opened from a sheet (file prompt, range calendar, emoji).
+      dialog: '60',
+      // Toasts and the undo strip.
+      toast: '70',
+      // Full-screen viewers (file viewer, image lightbox).
+      viewer: '80',
+      // The test-site badge, above everything.
+      top: '2147483000',
+    },
     extend: {
       // Hex tokens read their --x-rgb triplet so /opacity works (bg-bad/10,
       // text-accent/80). rgba tokens are already translucent and stay var().
