@@ -11,6 +11,7 @@ import { GUTTER } from '@/components/ui/layout';
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
+import { SECTION_LABEL } from '@/components/ui/Text';
 import { formatDateTime } from '@/lib/time';
 import { diffSegments, type DiffKind, type DiffResult, type DiffSegment } from '@/lib/text-diff';
 
@@ -75,24 +76,28 @@ function renderMarked(
   include: (kind: DiffKind) => boolean,
 ): ReactNode[] {
   const out: ReactNode[] = [];
-  segs.forEach((seg, i) => {
+  // Keyed by where the run starts in the caption (stable for a given diff).
+  let at = 0;
+  segs.forEach((seg) => {
+    const key = `${seg.kind}:${at}`;
+    at += seg.text.length;
     if (!include(seg.kind)) return;
     if (seg.kind === 'add') {
       out.push(
-        <span key={i} className="rounded-sm bg-good-soft text-good underline">
+        <span key={key} className="rounded-sm bg-good-soft text-good underline">
           <span className="sr-only">added </span>
           {seg.text}
         </span>,
       );
     } else if (seg.kind === 'del') {
       out.push(
-        <span key={i} className="rounded-sm bg-bad-soft text-bad line-through">
+        <span key={key} className="rounded-sm bg-bad-soft text-bad line-through">
           <span className="sr-only">removed </span>
           {seg.text}
         </span>,
       );
     } else {
-      out.push(<span key={i}>{seg.text}</span>);
+      out.push(<span key={key}>{seg.text}</span>);
     }
   });
   return out;
@@ -100,13 +105,13 @@ function renderMarked(
 
 function Panel({ label, children }: { label?: string; children: ReactNode }): ReactNode {
   return (
-    <div className="rounded-xl border bg-panel p-[18px] lit-card">
+    <div className="rounded-xl border bg-panel p-4 lit-card">
       {label !== undefined ? (
-        <div className="mb-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        <div className={cn(SECTION_LABEL, 'mb-2')}>
           {label}
         </div>
       ) : null}
-      <p className="whitespace-pre-wrap text-base leading-relaxed text-fg">{children}</p>
+      <p className="whitespace-pre-wrap text-base text-fg">{children}</p>
     </div>
   );
 }
@@ -183,7 +188,7 @@ export function compareVersionsView({
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="inline-flex rounded-lg border border-border bg-panel-2 p-[3px] lit-well">
+            <div className="inline-flex rounded-lg border border-border bg-panel-2 p-1 lit-well">
               {MODES.map((option) => {
                 const active = mode === option.value;
                 return (
@@ -208,11 +213,11 @@ export function compareVersionsView({
           </div>
 
           <div className="flex items-center gap-4 text-sm text-fg-3">
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-2">
               <span aria-hidden className="h-3 w-3 rounded-sm bg-good-soft" />
               Added
             </span>
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-2">
               <span aria-hidden className="h-3 w-3 rounded-sm bg-bad-soft" />
               Removed
             </span>

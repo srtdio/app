@@ -770,7 +770,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
   );
 
   return (
-    <div data-media-results={kind} className="flex flex-col gap-2 px-[14px] pb-4">
+    <div data-media-results={kind} className="flex flex-col gap-2 px-4 pb-4">
       <SettleLanding boxes={loading} selector="[data-media-tile], [data-media-row]">
         {body}
       </SettleLanding>

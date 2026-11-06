@@ -801,7 +801,7 @@ function ScreenSkeleton(): ReactElement {
       <Bone lit="lit-well" className="h-1.5 w-full rounded-full" />
       <Bone lit="lit-well" className="h-10 w-48 rounded-full" />
       {[0, 1, 2].map((i) => (
-        <Bone lit="lit-card" key={i} className="h-[104px] w-full rounded-xl" />
+        <Bone lit="lit-card" key={i} className="h-24 w-full rounded-xl" />
       ))}
     </BoxSkeleton>
   );
@@ -2975,7 +2975,7 @@ export function PlanSwitch(props: {
   onOk: () => void;
   onNotOk: () => void;
 }): ReactElement {
-  const segment = 'min-w-[84px] border';
+  const segment = 'min-w-20 border';
   return (
     <span
       role="group"

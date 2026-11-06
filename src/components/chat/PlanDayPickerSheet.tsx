@@ -94,7 +94,7 @@ export function PlanDayTiles(props: {
                   disabled={props.disabled === true}
                   onClick={() => props.onPick(day)}
                   className={cn(
-                    'relative flex min-h-[62px] flex-col items-center justify-center gap-px',
+                    'relative flex min-h-16 flex-col items-center justify-center gap-px',
                     // The pick is the ink fill (slides within the week); idle
                     // days rest on the grey fill like every chip.
                     on

@@ -765,13 +765,13 @@ const STOP_POINTER = {
  */
 const BUBBLE_INSET: ChatSize = {
   touch:
-    'w-[264px] -mx-3 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-2',
+    'w-64 -mx-3 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-2',
   laptop:
-    'w-[264px] -ml-[9px] -mr-[7px] -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-[6px]',
+    'w-64 -mx-2 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-1.5',
 };
 
-/** Row 2 and the error row start under the wave: 44px play + 2px gap. */
-const UNDER_WAVE = 'pl-[46px]';
+/** Row 2 and the error row start under the wave: 44px play + 4px gap. */
+const UNDER_WAVE = 'pl-12';
 
 /**
  * A 44px tall text control on a 16px row, without growing the row: the
@@ -1454,7 +1454,7 @@ export function VoiceNote({
       )}
     >
       <audio ref={audioRef} preload="metadata" className="hidden" />
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-1">
         {playButton}
         <div
           ref={waveRef}
@@ -1508,7 +1508,7 @@ export function VoiceNote({
             aria-hidden="true"
             data-voice-dot=""
             className={cn(
-              'pointer-events-none absolute top-1/2 -ml-[5px] -mt-[5px] h-2.5 w-2.5 rounded-full',
+              'pointer-events-none absolute top-1/2 -ml-1 -mt-1 h-2 w-2 rounded-full',
               tone.played,
               uploading && 'opacity-0',
             )}

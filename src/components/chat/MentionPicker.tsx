@@ -98,7 +98,7 @@ export function MentionPicker(props: MentionPickerProps): ReactElement | null {
               <>
                 <span
                   aria-hidden="true"
-                  className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent-hover"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent-hover"
                 >
                   @
                 </span>

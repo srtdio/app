@@ -99,12 +99,12 @@ export function PlanDayMenu(props: {
         data-plan-tab-day-menu={props.day}
         style={pos !== null ? { left: pos.left, top: pos.top } : { left: 0, top: 0 }}
         className={cn(
-          'fixed z-50 w-[300px] max-w-[calc(100vw-16px)]',
+          'fixed z-50 w-72 max-w-[calc(100vw-16px)]',
           popoverClass(),
           pos === null && 'invisible',
         )}
       >
-        <p className="px-2.5 pb-1.5 pt-1 text-sm font-semibold text-fg-3">
+        <p className="px-3 pb-2 pt-1 text-sm font-semibold text-fg-3">
           {addOnLabel(props.day)}
         </p>
         {props.plans.map((bundle) => (
@@ -114,12 +114,12 @@ export function PlanDayMenu(props: {
             role="menuitem"
             data-plan-tab-menu-plan={bundle.plan.id}
             onClick={() => props.onPick(bundle)}
-            className="flex items-center gap-2.5 px-2.5 py-1.5 mv-tint focus-visible:bg-panel-2"
+            className="flex items-center gap-2 px-3 py-2 mv-tint focus-visible:bg-panel-2"
           >
             <span
               aria-hidden="true"
               className={cn(
-                'h-2.5 w-2.5 shrink-0 rounded-full',
+                'h-2 w-2 shrink-0 rounded-full',
                 PLAN_TONE_CLASSES[props.tones.get(bundle.plan.id) ?? 'accent'].dot,
               )}
             />
@@ -155,7 +155,7 @@ export function PlanDayMenu(props: {
           role="menuitem"
           data-plan-tab-menu-new=""
           onClick={props.onNewPlan}
-          className="flex items-center px-2.5 text-base font-medium text-accent mv-tint focus-visible:bg-panel-2"
+          className="flex items-center px-3 text-base font-medium text-accent mv-tint focus-visible:bg-panel-2"
         >
           {NEW_PLAN_ROW_LABEL}
         </PressableRow>

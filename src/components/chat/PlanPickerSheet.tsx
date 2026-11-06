@@ -91,29 +91,29 @@ export function PlanPickerSheet(props: {
       <div
         data-plan-picker=""
         className={cn(
-          '-mx-[18px] -my-4 bg-bg sm:flex sm:min-h-0 sm:flex-1 sm:flex-col',
+          '-mx-4 -my-4 bg-bg sm:flex sm:min-h-0 sm:flex-1 sm:flex-col',
           NO_TOUCH_SELECT,
         )}
       >
-        <p className="px-[18px] pb-1 pt-3 text-sm leading-4 text-fg-3">
+        <p className="px-4 pb-1 pt-3 text-sm leading-4 text-fg-3">
           Upcoming plans in {props.workspaceName}
         </p>
         <div className={BODY_BOX}>
           {read.status === 'loading' ? (
-            <BoxSkeleton lit="flat" label="Loading plans" className="flex flex-col gap-2 px-[18px]">
+            <BoxSkeleton lit="flat" label="Loading plans" className="flex flex-col gap-2 px-4">
               {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
                 <PickerSkeletonRow key={i} />
               ))}
             </BoxSkeleton>
           ) : read.status === 'error' ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-[18px] text-center">
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
               <p className="text-base text-fg-2">{errorText('load', null)}</p>
               <Button type="button" variant="link" onClick={reload}>
                 Retry
               </Button>
             </div>
           ) : (
-            <div className="flex flex-col gap-2 px-[18px] pb-4">
+            <div className="flex flex-col gap-2 px-4 pb-4">
               {read.data.length === 0 ? (
                 <div data-plan-picker-empty="" className="pb-4 pt-6 text-center">
                   <p className="text-base leading-5 text-fg-2">{PICKER_EMPTY}</p>

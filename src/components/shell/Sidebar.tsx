@@ -36,7 +36,7 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
     // surface (--shell-safe-top, 0 everywhere else). In the locked 100svh
     // shell (laptop, Chat) this is the same box as before: the full shell
     // height, nothing scrolls past it, padding 0.
-    <aside className="hidden md:flex md:flex-col md:sticky md:top-0 md:h-[100svh] md:self-start pt-[var(--shell-safe-top,0px)] w-[244px] shrink-0 border-r bg-panel lit-side">
+    <aside className="hidden md:flex md:flex-col md:sticky md:top-0 md:h-[100svh] md:self-start pt-[var(--shell-safe-top,0px)] w-60 shrink-0 border-r bg-panel lit-side">
       <div className="p-3">
         <PressableRow
           type="button"
@@ -107,13 +107,13 @@ function SideNavItem(props: {
         {item.showChatBadge === true && chatUnread > 0 ? (
           <CountBadge
             count={chatUnread}
-            className="absolute -right-2 -top-1.5 border-2 border-panel"
+            className="absolute -right-2 -top-2 border-2 border-panel"
           />
         ) : null}
         {item.showPlanBadge === true && planUnread > 0 ? (
           <CountBadge
             count={planUnread}
-            className="absolute -right-2 -top-1.5 border-2 border-panel"
+            className="absolute -right-2 -top-2 border-2 border-panel"
           />
         ) : null}
       </span>

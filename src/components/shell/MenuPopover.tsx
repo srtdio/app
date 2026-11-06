@@ -63,7 +63,7 @@ export function MenuPopover({
         onKeyDown={keys.onKeyDown}
         className={cn(
           // Rendered at rest; the grow from the trigger is laid over it.
-          'absolute z-50 mt-2 min-w-[220px] rounded-xl border bg-panel p-1.5 lit-overlay will-change-transform',
+          'absolute z-50 mt-2 min-w-56 rounded-xl border bg-panel p-1 lit-overlay will-change-transform',
           align === 'right' ? 'right-0' : 'left-0',
         )}
       >

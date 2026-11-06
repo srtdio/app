@@ -280,7 +280,7 @@ import type { Result } from '@srtdio/rpc';
 function ConceptLinkCard(props: { text: string }): ReactElement | null {
   const url = firstExternalUrl(props.text);
   return url !== null ? (
-    <LinkPreviewCard key={url} url={url} className="mt-1 w-full max-w-[420px]" />
+    <LinkPreviewCard key={url} url={url} className="mt-1 w-full max-w-md" />
   ) : null;
 }
 
@@ -1821,7 +1821,7 @@ export function PlanItemScreen(props: {
             {item.post_id !== null ? (
               <PostSheetPlanRowsContext.Provider value={planRows}>
                 <Suspense
-                  fallback={<Bone lit="lit-card" as="div" className="m-4 h-[170px] rounded-xl" />}
+                  fallback={<Bone lit="lit-card" as="div" className="m-4 h-44 rounded-xl" />}
                 >
                   <PostDetailPage
                     postId={item.post_id}
@@ -2260,7 +2260,7 @@ export function LinkedPostPage(props: {
         />
       }
     >
-      <Suspense fallback={<Bone lit="lit-card" as="div" className="m-4 h-[170px] rounded-xl" />}>
+      <Suspense fallback={<Bone lit="lit-card" as="div" className="m-4 h-44 rounded-xl" />}>
         <PostDetailPage
           postId={props.postId}
           embedded
@@ -2312,7 +2312,7 @@ function ItemMedia(props: {
   if (read.status !== 'ready') {
     return (
       <div data-plan-media="loading">
-        <Bone lit="lit-media" as="div" className="h-[170px] rounded-lg" />
+        <Bone lit="lit-media" as="div" className="h-44 rounded-lg" />
       </div>
     );
   }
@@ -2320,7 +2320,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="empty"
-        className="flex h-[120px] items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel-2 text-md text-fg-3 lit-well"
+        className="flex h-28 items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel-2 text-md text-fg-3 lit-well"
       >
         No files
       </div>

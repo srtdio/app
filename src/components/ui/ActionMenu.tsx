@@ -300,9 +300,9 @@ export function ActionMenu({
                   <Icon size={ICON_SIZE.tray} />
                 </span>
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-base font-medium leading-snug">{item.label}</span>
+                  <span className="truncate text-base font-medium">{item.label}</span>
                   {item.description !== undefined ? (
-                    <span className="truncate text-sm leading-snug text-fg-3">
+                    <span className="truncate text-sm text-fg-3">
                       {item.description}
                     </span>
                   ) : null}

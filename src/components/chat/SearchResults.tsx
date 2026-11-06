@@ -198,7 +198,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
   });
   const retryRow = searchRetryRow(props.onRetry);
   return (
-    <div data-search-results="" className="flex flex-col gap-2 px-[14px] pb-4">
+    <div data-search-results="" className="flex flex-col gap-2 px-4 pb-4">
       {props.chats.length > 0 && kind === null ? (
         <>
           <h3 data-section-label="chats" className={RESULT_LABEL}>

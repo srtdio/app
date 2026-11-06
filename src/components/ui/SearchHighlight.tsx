@@ -16,15 +16,19 @@ export const SEARCH_MARK_CLASS = 'rounded-sm bg-search-mark [color:var(--search-
 /** Text with every searched word wrapped in a <mark>. Pure. */
 export function highlightNodes(text: string, words: readonly string[]): ReactNode[] {
   if (words.length === 0) return text === '' ? [] : [text];
-  return matchRuns(text, words).map((run, i) =>
-    run.hit ? (
-      <mark key={i} data-search-mark="" className={SEARCH_MARK_CLASS}>
+  // Each run is keyed by its character offset in the text (stable per text).
+  let at = 0;
+  return matchRuns(text, words).map((run) => {
+    const start = at;
+    at += run.text.length;
+    return run.hit ? (
+      <mark key={start} data-search-mark="" className={SEARCH_MARK_CLASS}>
         {run.text}
       </mark>
     ) : (
       run.text
-    ),
-  );
+    );
+  });
 }
 
 /** The words a jump destination colours; empty outside a search jump. */

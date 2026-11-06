@@ -6,7 +6,7 @@
 // divider inset to the text. A DM with no message keeps line 2 reserved, so
 // the row stays 72. No ui/Tile anywhere in the list.
 import { readFileSync } from 'node:fs';
-import { fileURLToPath, URL } from 'node:url';
+import { resolve } from 'node:path';
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -178,7 +178,7 @@ describe('notes, groups and people: one row style', () => {
   });
 
   it('ChannelList never imports ui/Tile', () => {
-    const path = fileURLToPath(new URL('../ChannelList.tsx', import.meta.url));
+    const path = resolve(process.cwd(), 'src/components/chat/ChannelList.tsx');
     const src = readFileSync(path, 'utf8');
     expect(src).not.toContain("from '@/components/ui/Tile'");
   });

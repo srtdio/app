@@ -81,10 +81,10 @@ export type SheetGallery = { status: 'loading' } | { status: 'ready'; items: Gal
  * sheet body's padding; auto width then spans them), for a format with no
  * platform frame. The skeleton is the same box.
  */
-export const STRIP_BOX = 'relative -mx-[18px] -mt-4 aspect-[4/5] overflow-hidden bg-panel-3';
+export const STRIP_BOX = 'relative -mx-4 -mt-4 aspect-[4/5] overflow-hidden bg-panel-3';
 
 /** The bled rail a platform frame sits centred in. */
-const STRIP_RAIL = 'relative -mx-[18px] -mt-4 flex justify-center bg-panel-3';
+const STRIP_RAIL = 'relative -mx-4 -mt-4 flex justify-center bg-panel-3';
 
 /**
  * The strip's platform frame: the post's platform + format and its first slide

@@ -277,7 +277,7 @@ export function SheetViewer(props: {
       {note !== null ? (
         <p
           data-sheet-cap=""
-          className="shrink-0 border-t border-border px-3 py-2 text-sm leading-snug text-fg-2"
+          className="shrink-0 border-t border-border px-3 py-2 text-sm text-fg-2"
         >
           {note}
         </p>
@@ -291,7 +291,7 @@ export function SheetViewer(props: {
           const selected = s === sheet;
           return (
             <button
-              key={i}
+              key={s.name}
               type="button"
               role="tab"
               aria-selected={selected}

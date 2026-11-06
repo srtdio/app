@@ -918,7 +918,7 @@ export interface PostRowContext {
 }
 
 const LIST_CLASS =
-  '-mx-[18px] flex max-h-[50dvh] flex-col gap-2 overflow-y-auto bg-bg px-[18px] py-2 sm:max-h-none sm:min-h-0 sm:flex-1';
+  '-mx-4 flex max-h-[50dvh] flex-col gap-2 overflow-y-auto bg-bg px-4 py-2 sm:max-h-none sm:min-h-0 sm:flex-1';
 
 /** Loading state: three static placeholder rows (no motion). */
 export function PickerSkeleton(): ReactElement {

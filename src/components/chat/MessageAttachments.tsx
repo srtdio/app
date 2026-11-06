@@ -330,7 +330,7 @@ function AttachmentItem({
             alt={view.alt}
             draggable={false}
             className={cn(
-              'block max-h-48 max-w-[260px] object-cover',
+              'block max-h-48 max-w-64 object-cover',
               view.progress !== null && 'brightness-75',
             )}
           />
@@ -720,7 +720,7 @@ function MessageAttachmentsBody({
             {...(albumCorners !== undefined ? { corners: albumCorners } : {})}
           />
           {hasBelow ? (
-            <div className="flex flex-col items-start gap-1.5 px-[9px] pb-[5px] pt-1.5">
+            <div className="flex flex-col items-start gap-1.5 px-2 pb-1 pt-1.5">
               {caption}
               {others.map((attachment, index) => (
                 <AttachmentItem

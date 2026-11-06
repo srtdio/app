@@ -142,7 +142,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     const container = render('/pipeline');
     const pill = container.querySelector('[data-tab-pill]');
     if (pill === null) throw new Error('no pill');
-    for (const c of ['h-[60px]', 'rounded-full', 'bg-panel', 'border', 'p-1', 'lit-raised']) {
+    for (const c of ['h-15', 'rounded-full', 'bg-panel', 'border', 'p-1', 'lit-raised']) {
       expect(classes(pill)).toContain(c);
     }
     expect(classes(pill)).not.toContain('border-border');
@@ -198,7 +198,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
       expect(cls).toContain('min-w-11');
     }
     const chat = classes(chatLink(container));
-    expect(chat).toEqual(expect.arrayContaining(['h-[60px]', 'w-[60px]', 'rounded-full']));
+    expect(chat).toEqual(expect.arrayContaining(['h-15', 'w-15', 'rounded-full']));
   });
 
   it('Activity badge: the inbox unread count with the lit surface-top ring and the "Activity, N unread" name', () => {
@@ -281,7 +281,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
         'pointer-events-none',
         'fixed',
         'bottom-0',
-        'h-[120px]',
+        'h-32',
         'bg-gradient-to-t',
         'from-bg',
         'to-bg/0',

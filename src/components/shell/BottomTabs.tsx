@@ -52,7 +52,7 @@ export function chatTabLabel(unread: number): string {
 function tabClass(active: boolean): string {
   return cn(
     'relative flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full focus-visible:lit-focus mv-tint',
-    active ? 'gap-1.5 bg-accent pl-3 pr-2.5 text-accent-fg lit-pill' : 'w-11 text-fg',
+    active ? 'gap-2 bg-accent pl-3 pr-3 text-accent-fg lit-pill' : 'w-11 text-fg',
   );
 }
 
@@ -78,7 +78,7 @@ function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number })
           {planUnread > 0 ? (
             <CountBadge
               count={planUnread}
-              className="absolute -right-2 -top-1.5 border-2 border-surface-top"
+              className="absolute -right-2 -top-2 border-2 border-surface-top"
             />
           ) : null}
         </span>
@@ -91,7 +91,7 @@ function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number })
 }
 
 function TabLabel({ active, label }: { active: boolean; label: string }) {
-  return active ? <span className="whitespace-nowrap text-md font-semibold">{label}</span> : null;
+  return active ? <span className="shrink-0 whitespace-nowrap text-md font-semibold">{label}</span> : null;
 }
 
 /**
@@ -114,7 +114,7 @@ export function BottomTabs() {
     <>
       <div
         aria-hidden
-        className="md:hidden pointer-events-none fixed inset-x-0 bottom-0 z-20 h-[120px] bg-gradient-to-t from-bg to-bg/0"
+        className="md:hidden pointer-events-none fixed inset-x-0 bottom-0 z-20 h-32 bg-gradient-to-t from-bg to-bg/0"
       />
       <nav
         {...bottomAnchorProps}
@@ -126,7 +126,7 @@ export function BottomTabs() {
       >
         <div
           data-tab-pill=""
-          className="flex h-[60px] min-w-0 flex-1 items-center justify-between rounded-full border bg-panel p-1 lit-raised"
+          className="flex h-15 min-w-0 flex-1 items-center justify-between rounded-full border bg-panel p-1 lit-raised"
         >
           {PILL_NAV.map((item) => (
             <PillTab key={item.to} item={item} planUnread={planUnread} />
@@ -149,7 +149,7 @@ export function BottomTabs() {
               {unreadCount > 0 ? (
                 <CountBadge
                   count={unreadCount}
-                  className="absolute -right-2 -top-1.5 border-2 border-surface-top"
+                  className="absolute -right-2 -top-2 border-2 border-surface-top"
                 />
               ) : null}
             </span>
@@ -167,7 +167,7 @@ export function BottomTabs() {
             // circle on /chat. Active is the one picked look: the solid ink fill.
             className={({ isActive }) =>
               cn(
-                'relative flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border focus-visible:lit-focus mv-tint',
+                'relative flex h-15 w-15 shrink-0 items-center justify-center rounded-full border focus-visible:lit-focus mv-tint',
                 isActive
                   ? 'border-transparent bg-accent text-accent-fg lit-pill'
                   : 'bg-panel lit-raised text-fg',

@@ -90,15 +90,19 @@ export function mirrorClass(run: FormatRun): string {
 
 /** The mirror's children for a value. Pure. */
 export function mirrorNodes(value: string): ReactNode[] {
-  const nodes: ReactNode[] = parseFormatRuns(value).map((run, i) =>
-    run.kind === 'text' && run.styles.length === 0 ? (
+  // Each run is keyed by its character offset in the value (stable per value).
+  let at = 0;
+  const nodes: ReactNode[] = parseFormatRuns(value).map((run) => {
+    const start = at;
+    at += run.text.length;
+    return run.kind === 'text' && run.styles.length === 0 ? (
       run.text
     ) : (
-      <span key={i} className={mirrorClass(run)}>
+      <span key={start} className={mirrorClass(run)}>
         {run.text}
       </span>
-    ),
-  );
+    );
+  });
   // A trailing newline needs a glyph after it to take its line.
   nodes.push('\u200b');
   return nodes;

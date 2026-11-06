@@ -287,7 +287,7 @@ export function MessageInfoSheet(props: {
         </h3>
         <ul>
           {props.read.map((pos) => (
-            <li key={pos.userId} className="flex min-h-[52px] items-center gap-3 py-1">
+            <li key={pos.userId} className="flex min-h-14 items-center gap-3 py-1">
               <PersonTrigger
                 userId={pos.userId}
                 name={nameOf(pos.userId)}
@@ -322,7 +322,7 @@ export function MessageInfoSheet(props: {
         </h3>
         <ul>
           {props.unread.map((id) => (
-            <li key={id} className="flex min-h-[52px] items-center gap-3 py-1">
+            <li key={id} className="flex min-h-14 items-center gap-3 py-1">
               <PersonTrigger
                 userId={id}
                 name={nameOf(id)}
@@ -494,12 +494,12 @@ export function WhoReactedSheet(props: {
                           props.onRemove(messageId, row.emoji);
                           props.onClose();
                         }}
-                        className="flex h-[52px] items-center gap-3 py-1"
+                        className="flex h-14 items-center gap-3 py-1"
                       >
                         {body}
                       </PressableRow>
                     ) : (
-                      <div className="flex min-h-[52px] items-center gap-3 py-1">{body}</div>
+                      <div className="flex min-h-14 items-center gap-3 py-1">{body}</div>
                     )}
                   </li>
                 );

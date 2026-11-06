@@ -110,7 +110,7 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
           role="menu"
           aria-label="Account"
           onKeyDown={keys.onKeyDown}
-          className="fixed top-[56px] right-3 z-50 w-[244px] rounded-xl border bg-panel p-1.5 lit-overlay"
+          className="fixed top-14 right-3 z-50 w-60 rounded-xl border bg-panel p-1 lit-overlay"
         >
           {rows}
         </div>

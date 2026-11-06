@@ -26,7 +26,7 @@ export function PendingChip(props: {
       <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3 lit-media">
         {props.thumb}
       </span>
-      <span className="flex min-w-0 max-w-[180px] flex-col">
+      <span className="flex min-w-0 max-w-44 flex-col">
         <span className="truncate text-sm font-medium text-fg" title={props.title}>
           {props.title}
         </span>

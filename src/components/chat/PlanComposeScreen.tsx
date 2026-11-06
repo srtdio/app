@@ -446,7 +446,7 @@ export function PlanComposeScreen(props: {
         >
           <p className="font-semibold">{error.heading}</p>
           {error.list === true ? (
-            <ul className="mt-1 list-disc pl-[18px]">
+            <ul className="mt-1 list-disc pl-4">
               {error.lines.map((line, at) => (
                 <li key={at}>{line}</li>
               ))}

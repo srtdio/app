@@ -1553,7 +1553,7 @@ function metaInk(mine: boolean): string {
 
 /** Each placement's position: two overlays at the bottom-right, the row in flow. */
 const META_POSITION: Record<MetaPlacement, string> = {
-  inline: 'pointer-events-none absolute bottom-[3px] right-2 inline-flex',
+  inline: 'pointer-events-none absolute bottom-1 right-2 inline-flex',
   pill: 'pointer-events-none absolute bottom-2 right-2 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-[color:var(--media-meta-fg)] lit-media',
   row: 'pointer-events-none mt-1 flex justify-end',
   // Inside ui/ChatCard's bottom-trailing time slot, which places and inks it.
@@ -1771,8 +1771,8 @@ export function bubbleClass(
     'group/bubble relative min-w-0 max-w-full focus-visible:lit-focus',
     NO_TOUCH_SELECT,
     bubbleCorners(state),
-    state.album === true ? 'min-w-60 p-[3px]' : sized(BUBBLE_PAD, state.layout),
-    state.voiceOnly && 'min-w-[220px]',
+    state.album === true ? 'min-w-60 p-1' : sized(BUBBLE_PAD, state.layout),
+    state.voiceOnly && 'min-w-56',
     state.mine
       ? 'bg-bubble-own text-accent-fg lit-bubble-own'
       : 'bg-panel-2 text-fg lit-bubble-other',
@@ -1800,8 +1800,8 @@ export function tombstoneClass(shape: BubbleShape): string {
  * pulls out of BUBBLE_PAD; its 264px width widens a short message's bubble.
  */
 const LINK_CARD_INSET: ChatSize = {
-  touch: '-mx-2 -mt-1 mb-1.5 w-[264px] max-w-[calc(100%+16px)]',
-  laptop: '-ml-[5px] -mr-[3px] -mt-0.5 mb-1.5 w-[264px] max-w-[calc(100%+8px)]',
+  touch: '-mx-2 -mt-1 mb-1.5 w-64 max-w-[calc(100%+16px)]',
+  laptop: '-mx-1 -mt-0.5 mb-1.5 w-64 max-w-[calc(100%+8px)]',
 };
 
 /** Cancel the native default (the touch contextmenu on rows). */
@@ -1924,7 +1924,7 @@ export function mentionClass(mine: boolean, self: boolean): string {
   return cn(
     'whitespace-nowrap font-semibold',
     mine ? 'text-accent-fg' : 'text-accent-hover',
-    self && cn('rounded-sm px-[3px]', mine ? MENTION_ME_OWN : MENTION_ME_PEER),
+    self && cn('rounded-sm px-1', mine ? MENTION_ME_OWN : MENTION_ME_PEER),
   );
 }
 
@@ -1935,7 +1935,7 @@ export function mentionClass(mine: boolean, self: boolean): string {
  * and 22px body lines); the pseudo element keeps the 44px width floor.
  */
 const MENTION_HIT =
-  "relative inline-flex -my-[13px] items-center before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-full before:min-w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']";
+  "relative inline-flex -my-3 items-center before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-full before:min-w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']";
 
 /**
  * The thread's mention name lookup: the batched profiles, then this
@@ -2357,7 +2357,7 @@ export function MessageBubble(props: {
   const voiceOnly = isVoiceOnly(message);
   const album = hasAlbum(message);
   // Album bubbles pad 3px around the album; the rest keeps the text inset.
-  const albumInset = 'px-[9px] pt-[5px]';
+  const albumInset = 'px-2 pt-1';
   const hasBody = message.body.trim() !== '';
   const sharedPlanIds = message.sharedPlanIds ?? NO_PLAN_IDS;
   const hasCards =
@@ -2649,7 +2649,7 @@ export function MessageBubble(props: {
                   <PostRefChip
                     post={chip.post}
                     onTap={chip.onTap}
-                    className={album ? 'mx-[9px]' : '-mb-1.5 -mt-2'}
+                    className={album ? 'mx-2' : '-mb-1.5 -mt-2'}
                   />
                 ) : (chip === undefined || parentDeleted) && reply !== null ? (
                   <ReplyQuoteBox
@@ -2671,7 +2671,7 @@ export function MessageBubble(props: {
                     media={parentDeleted ? null : quoteMedia(props.quoted)}
                     thumbSource={{ cache, presignEnabled }}
                     onJump={() => props.onJumpToMessage?.(reply.id)}
-                    className={album ? 'mx-[9px] mb-1 mt-[5px]' : 'mb-1'}
+                    className={album ? 'mx-2 mb-1 mt-1' : 'mb-1'}
                   />
                 ) : null}
                 {message.privateReply != null ? (
@@ -2681,7 +2681,7 @@ export function MessageBubble(props: {
                     workspaceId={props.workspaceId ?? null}
                     layout={layout}
                     onOpen={props.onOpenPrivateReply}
-                    className={album ? 'mx-[9px] mb-1 mt-[5px]' : 'mb-1'}
+                    className={album ? 'mx-2 mb-1 mt-1' : 'mb-1'}
                   />
                 ) : null}
                 {textOnly ? (
@@ -2731,7 +2731,7 @@ export function MessageBubble(props: {
                       onImageClick={(_attachment, index) => props.onOpenImage?.(index)}
                     />
                     {hasCards ? (
-                      <div className="flex flex-col px-[9px] pb-[5px]">
+                      <div className="flex flex-col px-2 pb-1">
                         <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                         <SharedBriefCards briefIds={message.sharedBriefIds} />
                         <SharedPlanCards planIds={sharedPlanIds} senderName={name} />

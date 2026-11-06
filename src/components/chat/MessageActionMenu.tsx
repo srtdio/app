@@ -616,8 +616,8 @@ export function focusFirstMenuItem(root: MenuRoot | null): boolean {
   return true;
 }
 
-/** A row's box: full-bleed, at least 44px, 16px side padding, 14px to the label. */
-export const MENU_ROW = 'flex min-h-11 w-full items-center gap-[14px] px-4';
+/** A row's box: full-bleed, at least 44px, 16px side padding, 12px to the label. */
+export const MENU_ROW = 'flex min-h-11 w-full items-center gap-3 px-4';
 
 /**
  * One row, ActionMenu's row look: base text, the icon (or dot) left in the
@@ -636,7 +636,7 @@ export function MenuRow(props: {
         data-menu-note={item.key}
         className={cn(MENU_ROW, 'text-base text-fg-3')}
       >
-        <span className="flex w-[22px] shrink-0 justify-center">{item.icon}</span>
+        <span className="flex w-6 shrink-0 justify-center">{item.icon}</span>
         <span className="min-w-0">{item.label}</span>
       </div>
     );
@@ -663,7 +663,7 @@ export function MenuRow(props: {
         item.danger === true ? 'text-bad' : 'text-fg',
       )}
     >
-      <span data-menu-icon="" className="flex w-[22px] shrink-0 items-center justify-center">
+      <span data-menu-icon="" className="flex w-6 shrink-0 items-center justify-center">
         {icon}
       </span>
       <span className="min-w-0 flex-1 truncate">
@@ -727,9 +727,9 @@ export function ReactionsRow(props: {
   return (
     <div
       data-menu-reactions=""
-      // 8px 10px around six 44x44 cells; one hairline under it (the menu's only divider).
+      // 8px around six 44x44 cells; one hairline under it (the menu's only divider).
       className={cn(
-        'flex items-center justify-between px-[10px] py-2',
+        'flex items-center justify-between px-2 py-2',
         !reactionsOnly && 'border-b border-border',
       )}
     >
