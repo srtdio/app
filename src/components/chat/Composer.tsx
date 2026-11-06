@@ -1893,7 +1893,8 @@ export function Composer(props: ComposerProps): ReactElement {
     openSchedule();
   });
   const holdToSchedule = layout === 'touch' && schedulable;
-  const showChevron = layout === 'laptop' && schedulable;
+  // Scheduling keeps the chevron (disabled) so the send slot keeps its width.
+  const showChevron = layout === 'laptop' && (schedulable || scheduleBusy);
   // Phone: Send keeps the keyboard up; see sendPressHandlers.
   const sendKeptFocusRef = useRef(false);
   const sendPress = sendPressHandlers({
@@ -2542,6 +2543,7 @@ export function Composer(props: ComposerProps): ReactElement {
                         aria-haspopup="dialog"
                         aria-expanded={scheduleOpen !== null}
                         data-schedule-chevron=""
+                        disabled={scheduleBusy}
                         className="shrink-0 rounded-l-none"
                         onClick={() =>
                           scheduleOpen !== null ? setScheduleOpen(null) : openSchedule()

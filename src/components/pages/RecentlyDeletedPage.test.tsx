@@ -73,7 +73,8 @@ describe('RecentlyDeletedView', () => {
 
   it('keeps every action at 44px', () => {
     const out = render(true);
-    expect(out.match(/h-11/g)?.length).toBe(items.length * 2 + 1);
+    // The standalone h-11 (not the min-h-11 floor every Button also carries).
+    expect(out.match(/(?<![\w-])h-11\b/g)?.length).toBe(items.length * 2 + 1);
   });
 
   it('shows only the load failure line and a 44px Retry when the read fails', () => {
