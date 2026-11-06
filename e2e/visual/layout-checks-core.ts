@@ -218,7 +218,7 @@ export function sameWidth(before: number, after: number, tolerance = WIDTH_TOLER
 
 /** One check's finding, named by screen and element. */
 export interface LayoutViolation {
-  check: 'one-line' | 'tap-overlap' | 'edge' | 'part-roles' | 'busy-width';
+  check: 'one-line' | 'tap-overlap' | 'edge' | 'part-roles' | 'busy-width' | 'list-card';
   message: string;
 }
 
@@ -231,4 +231,69 @@ export function formatViolations(screen: string, violations: readonly LayoutViol
 export function boxText(box: Box): string {
   const r = (n: number): number => Math.round(n * 10) / 10;
   return `${r(box.x)},${r(box.y)} ${r(box.width)}x${r(box.height)}`;
+}
+
+/** ui/ListCard's geometry (src/components/ui/ListCard.tsx). */
+export const LIST_CARD_PICTURE_PX = 72;
+/** The card's inner padding: the picture sits this far inside the border. */
+export const LIST_CARD_INSET_PX = 16;
+/** Picture to text column. */
+export const LIST_CARD_GAP_PX = 12;
+/** Cards on one screen are the same height within this many px. */
+export const LIST_CARD_HEIGHT_TOLERANCE_PX = 1;
+/** Sizes and offsets within this many px are equal (sub-pixel layout rounding). */
+const LIST_CARD_PX_TOLERANCE = 0.5;
+
+/** One ui/ListCard as measured: its box, its border, its picture and its text column. */
+export interface ListCardGeom {
+  label: string;
+  card: Box;
+  /** The card's left and top border widths (the box includes them). */
+  borderLeft: number;
+  borderTop: number;
+  picture: Box | null;
+  text: Box | null;
+}
+
+const near = (a: number, b: number, tolerance = LIST_CARD_PX_TOLERANCE): boolean =>
+  Math.abs(a - b) <= tolerance;
+
+/**
+ * The list card rule: every card on a screen has the same height (within 1px),
+ * and each card's picture is 72x72, on the left, 16 inside the card's border
+ * (left and top), with the text column 12 after it. Pure.
+ */
+export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
+  const out: string[] = [];
+  const first = cards[0];
+  for (const c of cards) {
+    if (
+      first !== undefined &&
+      Math.abs(c.card.height - first.card.height) > LIST_CARD_HEIGHT_TOLERANCE_PX
+    ) {
+      out.push(
+        `${c.label} is ${c.card.height}px tall, ${first.label} is ${first.card.height}px (cards differ)`,
+      );
+    }
+    if (c.picture === null) {
+      out.push(`${c.label} has no picture slot`);
+      continue;
+    }
+    const p = c.picture;
+    if (!near(p.width, LIST_CARD_PICTURE_PX) || !near(p.height, LIST_CARD_PICTURE_PX)) {
+      out.push(`${c.label} picture is ${p.width}x${p.height}, not 72x72`);
+    }
+    const left = p.x - c.card.x - c.borderLeft;
+    const top = p.y - c.card.y - c.borderTop;
+    if (!near(left, LIST_CARD_INSET_PX) || !near(top, LIST_CARD_INSET_PX)) {
+      out.push(`${c.label} picture sits ${left},${top} inside the card, not 16,16 (left, top)`);
+    }
+    if (c.text !== null) {
+      const gap = c.text.x - (p.x + p.width);
+      if (!near(gap, LIST_CARD_GAP_PX)) {
+        out.push(`${c.label} text starts ${gap}px after the picture, not 12`);
+      }
+    }
+  }
+  return out;
 }

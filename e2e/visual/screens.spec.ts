@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork, solidPng, type HarnessNetwork } from '../fixtures/harness-routes';
-import { assertSameWidth, checkLayout } from './layout-checks';
+import { assertListCards, assertSameWidth, checkLayout } from './layout-checks';
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
 import type { Row } from '../fixtures/postgrest';
 import {
@@ -3468,7 +3468,10 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   await screen.steps(page);
   await stabilise(page, screen.hold === true);
   await settle(page);
-  // Layout checks (layout-checks.ts) on the state as it is shot.
+  // Layout checks (layout-checks.ts) on the state as it is shot. A list
+  // screen must show its ui/ListCards, so the list-card rule (equal heights,
+  // the 72 picture 16 inside the edge and 12 to the text) runs on it.
+  if (LIST_CARD_SCREENS.has(screen.name)) await assertListCards(page, screen.name);
   await checkLayout(page, screen.name);
   await expect(page).toHaveScreenshot(`${screen.name}.png`, {
     maxDiffPixelRatio: 0.002,
@@ -3478,6 +3481,16 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   });
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 }
+
+// The screens that list ui/ListCards (Briefs, Activity, the Chat list):
+// checkLayout's list-card rule runs on every screen; these must show cards.
+const LIST_CARD_SCREENS = new Set([
+  'chat-list',
+  'chat-actions-menu',
+  'briefs-approver',
+  'notifications',
+  'activity-bank',
+]);
 
 // Laptop dark: these screens also run in the laptop-dark project
 // (playwright.visual.config.ts greps @laptop-dark there). The tag rides on the

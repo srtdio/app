@@ -7,6 +7,7 @@ import {
   formatViolations,
   layoutMode,
   lineHeightPx,
+  listCardViolations,
   MAX_ROLES_PER_PART,
   overlappingPairs,
   roleSignature,
@@ -16,6 +17,7 @@ import {
   type Box,
   type EdgeItem,
   type LayoutViolation,
+  type ListCardGeom,
   type TapTarget,
 } from './layout-checks-core';
 
@@ -35,7 +37,10 @@ import {
 //   4 no part ([data-part]) holds more than 3 distinct text roles (computed
 //     font size + weight + family);
 //   5 busy-state screens: a control keeps its width from idle to busy
-//     (assertSameWidth).
+//     (assertSameWidth);
+//   6 list cards (ui/ListCard, [data-list-card]: Briefs, Activity, Chat list):
+//     every card on the screen is the same height (within 1px), and each
+//     picture is 72x72, left, 16 inside the card edge, 12 to the text.
 // LAYOUT_CHECKS=strict (the default) fails the screen; LAYOUT_CHECKS=report
 // records every finding as a test annotation and in the log, and passes.
 // The geometry is pure and unit tested: layout-checks-core.ts.
@@ -80,6 +85,7 @@ interface RawPage {
   targets: RawTarget[];
   edges: EdgeItem[];
   parts: RawPart[];
+  listCards: ListCardGeom[];
 }
 
 /** Reads every box the checks need in one pass over the page. */
@@ -330,7 +336,24 @@ async function readPage(page: Page): Promise<RawPage> {
       parts.push({ label: `[data-part="${part.getAttribute('data-part') ?? ''}"]`, styles });
     }
 
-    return { viewportWidth: vw, lines, targets, edges, parts };
+    // 6 List cards: every shown ui/ListCard (never its loading box).
+    const listCards: ListCardGeom[] = [];
+    for (const card of Array.from(document.querySelectorAll('[data-list-card]'))) {
+      if (!shown(card)) continue;
+      const style = getComputedStyle(card);
+      const picture = card.querySelector('[data-list-card-picture]');
+      const text = picture?.nextElementSibling ?? null;
+      listCards.push({
+        label: nameOf(card),
+        card: toBox(card.getBoundingClientRect()),
+        borderLeft: parseFloat(style.borderLeftWidth) || 0,
+        borderTop: parseFloat(style.borderTopWidth) || 0,
+        picture: picture !== null ? toBox(picture.getBoundingClientRect()) : null,
+        text: text !== null ? toBox(text.getBoundingClientRect()) : null,
+      });
+    }
+
+    return { viewportWidth: vw, lines, targets, edges, parts, listCards };
   });
 }
 
@@ -384,7 +407,24 @@ export async function checkLayout(page: Page, screenName: string): Promise<void>
     }
   }
 
+  for (const message of listCardViolations(raw.listCards)) {
+    violations.push({ check: 'list-card', message });
+  }
+
   settleFindings(screenName, violations);
+}
+
+/**
+ * Check 6 wiring: a screen that shows a list of ListCards must render at
+ * least one, so the list-card rule runs on it (a list that slips back to a
+ * hand-built row fails here, not silently).
+ */
+export async function assertListCards(page: Page, screenName: string): Promise<void> {
+  const count = await page.locator('[data-list-card]:visible').count();
+  if (count > 0) return;
+  settleFindings(screenName, [
+    { check: 'list-card', message: 'no [data-list-card] on a list-card screen' },
+  ]);
 }
 
 /**
