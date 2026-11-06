@@ -563,7 +563,9 @@ export function channelRowClass(state: ChannelRowState): string {
   const open = state.selected && !state.selecting;
   return cn(
     tileBoxClass(state.kind, state.more === true),
-    CHANNEL_ROW_BUTTON,
+    // A square tile keeps its centred column: cn() lets a later text-left
+    // beat the box's text-center, so only the wide tile takes the button's.
+    state.kind === 'wide' ? CHANNEL_ROW_BUTTON : CHANNEL_ROW_BUTTON.replace('text-left ', ''),
     checked || open ? 'lit-selected bg-panel' : 'lit-card bg-panel',
   );
 }

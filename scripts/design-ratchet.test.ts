@@ -48,7 +48,9 @@ const EXPECTED: Record<Metric, number> = {
 describe('design ratchet: per-metric counts', () => {
   for (const metric of METRIC_NAMES) {
     it(`${metric}`, () => {
-      expect(countsOf(metric)[metric]).toBe(EXPECTED[metric]);
+      // zArbitrary shares the zValues fixture (z-[60] is both).
+      const fixture = metric === 'zArbitrary' ? 'zValues' : metric;
+      expect(countsOf(fixture)[metric]).toBe(EXPECTED[metric]);
     });
   }
 
