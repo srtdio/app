@@ -72,6 +72,7 @@ import {
   useChatLayout,
   type ChatLayout,
 } from '@/components/chat/chat-type';
+import { SECTION_LABEL } from '@/components/ui/Text';
 
 /** Per-channel draft text lookup ('' when the chat has no draft). */
 type DraftLookup = (channelId: string) => string;
@@ -485,7 +486,7 @@ export const CHAT_HOME_EDGE = 'px-4';
 export const CHAT_ROW_LIST = 'flex flex-col';
 
 /** Section label: 12/600 uppercase, 0.06em tracking, secondary ink. */
-export const SECTION_LABEL_TYPE = 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+export const SECTION_LABEL_TYPE = `${SECTION_LABEL}`;
 
 /**
  * The label's padding: 4px top for the first section, 12px after, on the

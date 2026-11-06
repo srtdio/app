@@ -31,6 +31,7 @@ import {
 } from '@/lib/chat/search';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { NotesAvatar } from '@/components/chat/NotesBits';
+import { SECTION_LABEL } from '@/components/ui/Text';
 
 /**
  * The search runner for one surface (chat home, or one chat's bar): created per
@@ -72,7 +73,7 @@ export function useMessageSearch(params: {
 }
 
 /** Section label, matching the chat home's Groups / People labels. */
-export const RESULT_LABEL = 'px-1 pt-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+export const RESULT_LABEL = `px-1 pt-1 ${SECTION_LABEL}`;
 
 /** A result row: one 64px tap target, no text selection and no iOS callout on hold. */
 const RESULT_ROW = cn(

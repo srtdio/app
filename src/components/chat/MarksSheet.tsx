@@ -55,6 +55,7 @@ import {
 } from '@/lib/chat/marks';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
+import { SECTION_LABEL } from '@/components/ui/Text';
 
 /** The marks section body when posts are listed but no mark is open. */
 export const NO_OPEN_MARKS = 'Open marks show up here.';
@@ -159,7 +160,7 @@ export function OpenPostsList(props: OpenPostsSection): ReactElement | null {
   if (props.posts === null || props.posts.length === 0) return null;
   return (
     <section data-open-posts="" className="flex flex-col gap-1">
-      <h3 className="px-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+      <h3 className={`px-2 ${SECTION_LABEL}`}>
         {props.heading}
       </h3>
       <ul className="flex max-h-[40dvh] flex-col overflow-y-auto">

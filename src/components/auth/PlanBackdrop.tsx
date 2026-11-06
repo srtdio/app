@@ -62,7 +62,7 @@ function Thumb({ thumb, className }: { thumb: string; className: string }): Reac
       decoding="async"
       {...LOW_FETCH_PRIORITY}
       draggable={false}
-      className={cn('object-cover rounded-sm border border-border', className)}
+      className={cn('h-full w-full object-cover rounded-sm border border-border', className)}
     />
   );
 }
@@ -118,7 +118,7 @@ function LaptopPlan({ weeks, weekdays, monthLabel }: PlanProps): ReactElement {
       <div className="mx-10 mb-10 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
         <div className="grid shrink-0 grid-cols-7 border-b border-border bg-panel-2">
           {weekdays.map((label) => (
-            <span key={label} className="px-2 py-1.5 text-sm font-semibold text-fg-3">
+            <span key={label} className="px-2 py-2 text-sm font-semibold text-fg-3">
               {label}
             </span>
           ))}
@@ -129,12 +129,12 @@ function LaptopPlan({ weeks, weekdays, monthLabel }: PlanProps): ReactElement {
               <div
                 key={col}
                 className={cn(
-                  'flex min-w-0 flex-col gap-1 overflow-hidden border-b border-r border-border p-1.5 last:border-r-0',
+                  'flex min-w-0 flex-col gap-1 overflow-hidden border-b border-r border-border p-1 last:border-r-0',
                   cell.inMonth ? 'bg-panel' : 'bg-panel-2',
                 )}
               >
                 <DayNumber cell={cell} className="h-6 w-6 text-sm" />
-                <Thumb thumb={cell.thumb} className="h-[50px] w-full" />
+                <Thumb thumb={cell.thumb} className="h-12 w-full" />
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
                   <Bar className="h-2 w-3/4" />
@@ -179,7 +179,7 @@ function PhonePlan({ weeks, weekdays, monthLabel }: PlanProps): ReactElement {
                   cell.inMonth ? 'bg-panel' : 'bg-panel-2',
                 )}
               >
-                <DayNumber cell={cell} className="h-[18px] w-[18px] text-xs" />
+                <DayNumber cell={cell} className="h-5 w-5 text-xs" />
                 <Thumb thumb={cell.thumb} className="h-10 w-full" />
               </div>
             ))}
@@ -187,10 +187,10 @@ function PhonePlan({ weeks, weekdays, monthLabel }: PlanProps): ReactElement {
         ))}
       </div>
       <div className="mx-12 mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-        {listThumbs.map((cell, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-xl border bg-panel p-2 lit-card">
+        {listThumbs.map((cell) => (
+          <div key={`${cell.day}-${cell.inMonth ? 'in' : 'out'}`} className="flex items-center gap-3 rounded-xl border bg-panel p-2 lit-card">
             <Thumb thumb={cell.thumb} className="h-10 w-10 shrink-0" />
-            <Bar className="h-2.5 w-1/2" />
+            <Bar className="h-3 w-1/2" />
           </div>
         ))}
       </div>

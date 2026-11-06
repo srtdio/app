@@ -41,6 +41,7 @@ import {
 } from '@/lib/chat/reactors';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
+import { SECTION_LABEL } from '@/components/ui/Text';
 
 /** A sheet read that failed or timed out. */
 const SHEET_LOAD_FAILED = "Couldn't load";
@@ -281,7 +282,7 @@ export function MessageInfoSheet(props: {
         <p className="pb-3 text-base text-fg-2">
           {sentLine(props.createdAt, props.timeZone, props.nowMs)}
         </p>
-        <h3 className="py-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        <h3 className={`py-2 ${SECTION_LABEL}`}>
           Read by <span className="font-mono">{props.read.length}</span>
         </h3>
         <ul>
@@ -316,7 +317,7 @@ export function MessageInfoSheet(props: {
           ))}
         </ul>
         <div className="my-2 h-px bg-border" aria-hidden="true" />
-        <h3 className="py-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+        <h3 className={`py-2 ${SECTION_LABEL}`}>
           Not read yet <span className="font-mono">{props.unread.length}</span>
         </h3>
         <ul>

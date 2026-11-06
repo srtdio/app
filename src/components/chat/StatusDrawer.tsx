@@ -95,6 +95,7 @@ import type { ThreadMessage } from '@/lib/chat/thread';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { OpenBriefRow } from '@/lib/chat/use-status-counts';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
+import { SECTION_LABEL_INK } from '@/components/ui/Text';
 
 /** Each section's icon, shared with the bar. */
 export const STATUS_ICON: Record<
@@ -202,7 +203,7 @@ function SectionHeader(props: {
   return (
     <div className="mb-2 flex h-6 items-center gap-2 text-fg-2">
       <Icon size={ICON_SIZE.inline} className="shrink-0" />
-      <h3 className="min-w-0 flex-1 truncate text-sm font-semibold uppercase tracking-[0.06em]">
+      <h3 className={`min-w-0 flex-1 truncate ${SECTION_LABEL_INK}`}>
         {props.label}
       </h3>
       <CountBadge tone="section" count={props.count} />

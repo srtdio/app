@@ -21,8 +21,8 @@ describe('CountBadge', () => {
   it('uses the accent pill and appends caller classes', () => {
     const html = renderToStaticMarkup(<CountBadge count={3} className="border-2 border-panel" />);
     for (const token of [
-      'h-[18px]',
-      'min-w-[18px]',
+      'h-5',
+      'min-w-5',
       'bg-accent',
       'text-accent-fg',
       'border-panel',

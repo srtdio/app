@@ -32,7 +32,7 @@ import {
   type CardPlacement,
 } from '@/components/chat/PostCard';
 import { ChatCard } from '@/components/ui/ChatCard';
-import { textRole } from '@/components/ui/Text';
+import { SECTION_LABEL_INK, textRole } from '@/components/ui/Text';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { usePaintLogCommit } from '@/components/chat/PaintLog';
 import {
@@ -241,7 +241,7 @@ export function CardEyebrow(props: {
   return (
     <span
       className={cn(
-        'flex h-4 items-center text-sm font-semibold uppercase tracking-[0.06em]',
+        `flex h-4 items-center ${SECTION_LABEL_INK}`,
         props.className,
       )}
     >

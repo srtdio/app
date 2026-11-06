@@ -23,10 +23,11 @@ const html = (node: Parameters<typeof renderToStaticMarkup>[0]): string =>
   renderToStaticMarkup(node);
 
 describe('Text roles', () => {
-  it('seven roles on the existing scale', () => {
+  it('eight roles on the existing scale', () => {
     expect(Object.keys(TEXT_ROLE).sort()).toEqual(
-      ['body', 'display', 'heading', 'label', 'meta', 'secondary', 'title'].sort(),
+      ['body', 'display', 'heading', 'label', 'meta', 'secondary', 'section', 'title'].sort(),
     );
+    expect(TEXT_ROLE.section).toBe('text-sm font-semibold uppercase tracking-[0.06em] text-fg-2');
     expect(TEXT_ROLE.display).toContain('text-3xl');
     expect(TEXT_ROLE.title).toBe('text-lg font-semibold');
     expect(TEXT_ROLE.heading).toBe('text-lg font-semibold');

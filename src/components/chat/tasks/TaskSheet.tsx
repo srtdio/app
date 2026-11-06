@@ -159,6 +159,7 @@ import {
 import { errorText } from '@/lib/error-copy';
 import { createPausableTimer } from '@/lib/pausable-timer';
 import { UNDO_MS } from '@/lib/undo';
+import { SECTION_LABEL } from '@/components/ui/Text';
 
 export const TASK_SHEET_TITLE = 'Tasks';
 const SHARE_LABEL = 'Share to chat';
@@ -178,7 +179,7 @@ const FULL_LABEL = 'Full screen';
 const HALF_LABEL = 'Half screen';
 const PAST_OPEN_LABEL = 'Not done';
 const PAST_DONE_LABEL = 'Done';
-const SECTION_LABEL = 'px-4 pb-1 pt-3 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
+const SECTION_LABEL = `px-4 pb-1 pt-3 ${SECTION_LABEL}`;
 
 /** One positive line per chip when it holds nothing. */
 const CHIP_ZERO: Readonly<Record<TaskWhen, string>> = {
