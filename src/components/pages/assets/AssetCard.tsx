@@ -48,7 +48,7 @@ function assetFallback(item: AssetListItem): ThumbnailFallback {
 }
 
 /** An empty select box over media: overlay ink edge on the media badge fill, lit as media. */
-export const SELECT_BOX_EMPTY = 'border-[1.5px] border-overlay-fg bg-overlay-badge lit-media';
+export const SELECT_BOX_EMPTY = 'border border-overlay-fg bg-overlay-badge lit-media';
 
 export function AssetCard({
   item,

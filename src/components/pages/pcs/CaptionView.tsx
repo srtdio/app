@@ -263,7 +263,7 @@ export function CaptionView({
         ref={containerRef}
         onMouseUp={captureSelection}
         onTouchEnd={captureSelection}
-        className="text-base leading-relaxed whitespace-pre-wrap break-words text-fg [overflow-wrap:anywhere]"
+        className="text-base whitespace-pre-wrap break-words text-fg [overflow-wrap:anywhere]"
       >
         {captionView({ caption, annotations, onHighlightClick, searchWords })}
       </div>

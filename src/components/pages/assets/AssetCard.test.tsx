@@ -170,7 +170,7 @@ describe('AssetCard select mode', () => {
     const out = renderSelect(false);
     expect(out).toContain('aria-pressed="false"');
     expect(out).toContain('h-4 w-4');
-    expect(out).toContain('border-[1.5px] border-overlay-fg');
+    expect(out).toContain('border border-overlay-fg');
     expect(out).toContain('bg-overlay-badge');
     expect(out).not.toContain('border-white');
     expect(out).not.toContain('bg-black/');

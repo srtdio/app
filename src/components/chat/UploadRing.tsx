@@ -121,7 +121,7 @@ export function UploadRing({
           trackClass="text-overlay-dot"
           arcClass="text-overlay-fg"
         />
-        <IconX size={UPLOAD_RING_X} className={LAYER} />
+        <IconX size={ICON_SIZE.inline} className={LAYER} />
       </PressableRow>
       {/* The progress for screen readers: a button's children are not read, so
           the progressbar sits beside it, sr-only (out of flow, nothing paints). */}

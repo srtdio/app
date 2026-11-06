@@ -746,6 +746,6 @@ describe('E: drag and drop', () => {
     const agency = renderToStaticMarkup(<>{columns('agency', [])}</>);
     expect(agency).not.toContain('>New post<');
     // The kanban empty column drops EmptyState's 320px min-height.
-    expect(agency).not.toContain('min-h-[320px]');
+    expect(agency).not.toContain('min-h-80');
   });
 });

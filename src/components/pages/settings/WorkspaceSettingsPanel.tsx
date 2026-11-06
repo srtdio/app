@@ -131,7 +131,7 @@ function DeleteWorkspaceSheet({
       }
     >
       <div className="flex flex-col gap-4">
-        <p className="text-base leading-snug text-fg-2">{deleteWorkspaceBody(name)}</p>
+        <p className="text-base text-fg-2">{deleteWorkspaceBody(name)}</p>
         <Field label={deleteWorkspaceHint(name)} htmlFor="delete-workspace-name">
           <Input
             id="delete-workspace-name"

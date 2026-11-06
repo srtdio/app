@@ -575,8 +575,8 @@ describe('Catch-up emails tick', () => {
     expect(on).toContain('type="checkbox"');
     expect(on).toContain('checked=""');
     expect(on).toContain('min-h-11');
-    // ui/Checkbox: 18px field box, accent fill when ticked.
-    expect(on).toContain('h-[18px] w-[18px]');
+    // ui/Checkbox: 20px field box, accent fill when ticked.
+    expect(on).toContain('h-5 w-5');
     expect(on).toContain('border-field');
     expect(on).toContain('checked:bg-accent');
     expect(on).not.toContain('accent-accent');

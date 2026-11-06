@@ -372,10 +372,10 @@ describe('ui rules: one checkbox', () => {
     ).toEqual([]);
   });
 
-  it('ui/Checkbox is the 18px field box with the accent tick', () => {
+  it('ui/Checkbox is the 20px field box with the accent tick', () => {
     const src = bySrc('ui/Checkbox.tsx');
     expect(src).toContain('type="checkbox"');
-    const look = ['h-[18px]', 'border-field', 'lit-well', 'checked:bg-accent', 'text-accent-fg'];
+    const look = ['h-5 w-5', 'border-field', 'lit-well', 'checked:bg-accent', 'text-accent-fg'];
     for (const c of look) expect(src).toContain(c);
   });
 });
