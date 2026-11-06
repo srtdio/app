@@ -2,7 +2,7 @@
 
 exports[`F10: the admin-only notice > uses the chat sheet notice size (13/18/400), not text-base 1`] = `
 {
-  "className": "mt-1.5 text-fg-2 text-[13px] leading-[18px] font-normal",
+  "className": "mt-1.5 text-fg-2 text-md font-normal",
   "text": "Only the group's creator or an admin can edit this group's info",
 }
 `;
