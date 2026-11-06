@@ -29,6 +29,8 @@ import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
 // The proc enforces a body length of 1..10000; mirror it client-side so submit
 // disables and a friendly message shows before the request runs.
 const MAX_BODY = 10000;
+/** "10,000": a number format, never a date one (dates live in src/lib/time.ts). */
+const MAX_BODY_TEXT = new Intl.NumberFormat('en-US').format(MAX_BODY);
 
 interface CommentSubmitOptions {
   /** Asset VERSION ids of the completed uploads, passed to createComment. */
@@ -304,7 +306,7 @@ export function CommentComposer({
 
       {tooLong ? (
         <p role="alert" className="text-sm text-bad">
-          Comments must be at most {MAX_BODY.toLocaleString('en-US')} characters.
+          Comments must be at most {MAX_BODY_TEXT} characters.
         </p>
       ) : null}
 

@@ -36,7 +36,9 @@ export function columnLabel(index: number): string {
   return out;
 }
 
-const fmt = (n: number): string => n.toLocaleString('en-US');
+// Counts ("1,234"): a number format, never a date one (dates live in src/lib/time.ts).
+const COUNT_FORMAT = new Intl.NumberFormat('en-US');
+const fmt = (n: number): string => COUNT_FORMAT.format(n);
 
 /** "Calendar · 31 rows". Pure. */
 export function sheetTitle(sheet: SheetView): string {
