@@ -133,10 +133,7 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone, now }:
                   aspect="square"
                   fallback={{ kind: 'glyph' }}
                   fallbackTile={
-                    <span
-                      data-brief-tile="icon"
-                      className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2"
-                    >
+                    <span className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2">
                       <IconBriefs size={ICON_SIZE.picture} />
                     </span>
                   }
