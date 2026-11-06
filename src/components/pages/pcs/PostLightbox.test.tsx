@@ -339,8 +339,10 @@ describe('lightboxView', () => {
     // Download now lives in the bottom bar next to add and delete.
     expect(byLabel(tree, 'Download')).toBeDefined();
     expect(byLabel(tree, 'Delete image')).toBeDefined();
-    // Add keeps the accent token; delete hovers to the destructive token.
-    expect(className(byLabel(tree, 'Add image')!)).toContain('text-accent');
+    // Add keeps the overlay ink it always rendered with (text-accent lost to it
+    // by CSS order; cn() now merges, so it is gone); delete hovers to bad.
+    expect(className(byLabel(tree, 'Add image')!)).toContain('text-overlay-fg');
+    expect(className(byLabel(tree, 'Add image')!)).not.toContain('text-accent');
     expect(className(byLabel(tree, 'Delete image')!)).toContain('hover:text-bad');
     // #26: no per-tap reorder (each tap saved a version); Reorder mode in the
     // gallery is the one way to reorder.
