@@ -3,13 +3,14 @@ import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button, buttonClass } from '@/components/ui/Button';
 import { IconCheck, ICON_SIZE } from '@/components/ui/icons';
+import { Text } from '@/components/ui/Text';
 import { fetchUnsubscribeStatus, postUnsubscribeAction } from './api';
 
 type PageState = 'loading' | 'subscribed' | 'unsubscribed' | 'invalid';
 
 function Card({ children }: { children: ReactNode }) {
   return (
-    <div className="w-full max-w-[420px] rounded-2xl border bg-panel p-6 lit-raised">
+    <div className="w-full max-w-md rounded-2xl border bg-panel p-6 lit-raised">
       {children}
     </div>
   );
@@ -59,8 +60,10 @@ export function UnsubscribePage() {
     >
       {state === 'subscribed' && (
         <Card>
-          <h1 className="text-lg font-semibold tracking-tight text-fg">Stop catch-up emails?</h1>
-          <div className="mt-3 space-y-3 text-base leading-6 text-fg-2">
+          <Text as="h1" role="title" className="text-fg">
+            Stop catch-up emails?
+          </Text>
+          <div className="mt-3 space-y-3 text-base text-fg-2">
             <p>
               {
                 "You won't get catch-ups from any of your Sorted workspaces. Everything stays in Sorted; you'll just check it yourself."
@@ -74,7 +77,7 @@ export function UnsubscribePage() {
             <Button
               type="button"
               variant="primary"
-              className="w-full"
+              className="w-full md:w-full"
               disabled={busy}
               onClick={() => void submit('unsubscribe')}
             >
@@ -90,10 +93,12 @@ export function UnsubscribePage() {
       {state === 'unsubscribed' && (
         <Card>
           <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-good-soft text-good">
-            <IconCheck size={ICON_SIZE.tray} />
+            <IconCheck size={ICON_SIZE.control} />
           </div>
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{"You're unsubscribed"}</h1>
-          <div className="mt-3 space-y-3 text-base leading-6 text-fg-2">
+          <Text as="h1" role="title" className="text-fg">
+            {"You're unsubscribed"}
+          </Text>
+          <div className="mt-3 space-y-3 text-base text-fg-2">
             <p>No more catch-up emails from any Sorted workspace, starting now.</p>
             <p>
               {
@@ -105,7 +110,7 @@ export function UnsubscribePage() {
             <Button
               type="button"
               variant="secondary"
-              className="w-full"
+              className="w-full md:w-full"
               disabled={busy}
               onClick={() => void submit('resubscribe')}
             >
@@ -119,7 +124,7 @@ export function UnsubscribePage() {
       )}
       {state === 'invalid' && (
         <Card>
-          <p className="text-base leading-6 text-fg">{"This link isn't valid."}</p>
+          <p className="text-base text-fg">{"This link isn't valid."}</p>
         </Card>
       )}
     </div>

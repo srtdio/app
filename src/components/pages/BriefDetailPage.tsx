@@ -16,7 +16,7 @@ import { renderFormatted } from '@/components/chat/message-body';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { STATUS_DOT_TONE, StatusDot, type StatusDotStage } from '@/components/ui/StatusDot';
-import { textRole } from '@/components/ui/Text';
+import { SECTION_LABEL, textRole } from '@/components/ui/Text';
 import { GUTTER } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
 import { LoadError } from '@/components/ui/LoadError';
@@ -104,7 +104,7 @@ export function BriefDetailSkeleton(): ReactElement {
     >
       <div className="md:col-span-2 flex flex-col gap-6">
         <Bone lit="flat" as="div" className="h-8 w-3/4 rounded" />
-        <div className="flex flex-col gap-1.5 md:hidden">
+        <div className="flex flex-col gap-2 md:hidden">
           <Bone lit="flat" as="div" className="h-4 w-52 rounded" />
           <Bone lit="flat" as="div" className="h-4 w-28 rounded" />
         </div>
@@ -289,8 +289,6 @@ export function briefAuthorLabel(
   if (legacyAuthorName !== null) return legacyAuthorName;
   return hasCreator && !membersLoaded ? '' : FORMER_MEMBER;
 }
-
-const SECTION_LABEL = 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /**
  * A failed reopen in plain words: invalid_payload means the brief is no longer
@@ -890,7 +888,7 @@ export function BriefDetailPage({
 
           <section className="min-w-0">
             <div className={`${SECTION_LABEL} mb-1`}>Objective</div>
-            <p className="text-base leading-relaxed whitespace-pre-wrap break-words text-fg">
+            <p className="text-base whitespace-pre-wrap break-words text-fg">
               {renderFormatted(brief.objective, (text) => [<Highlight key="h" text={text} />])}
             </p>
           </section>
@@ -898,7 +896,7 @@ export function BriefDetailPage({
           {hasBrand ? (
             <section className="min-w-0">
               <div className={`${SECTION_LABEL} mb-1`}>Brand requirements</div>
-              <p className="text-base leading-relaxed whitespace-pre-wrap break-words text-fg">
+              <p className="text-base whitespace-pre-wrap break-words text-fg">
                 {renderFormatted(brief.brand_requirements ?? '', (text) => [text])}
               </p>
             </section>
@@ -964,7 +962,7 @@ export function BriefDetailPage({
           top bar instead. */}
       {showNewPost && !isLaptop ? (
         <>
-          <div aria-hidden="true" data-brief-action-space="" className="h-[76px]" />
+          <div aria-hidden="true" data-brief-action-space="" className="h-20" />
           <div
             data-brief-action-bar=""
             {...bottomAnchorProps}
