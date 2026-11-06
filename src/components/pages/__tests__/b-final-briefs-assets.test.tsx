@@ -168,7 +168,7 @@ describe('Assets tile is ui/Tile', () => {
   });
 });
 
-describe('Brief card is ui/Card', () => {
+describe('Brief card is ui/ListCard', () => {
   function card(overrides: Partial<BriefWithThumbnail> = {}): string {
     return renderToStaticMarkup(
       <MemoryRouter>
@@ -177,11 +177,11 @@ describe('Brief card is ui/Card', () => {
     );
   }
 
-  it('fills the slots: header title, body objective, footer status and Due', () => {
+  it('fills the slots: line 1 title, line 2 objective, line 3 Due and the status tag', () => {
     const out = card();
-    expect(out).toMatch(/^<div data-brief-card=""[^>]*data-card=""/);
-    expect(out).toMatch(/data-card-header=""[^]*data-card-title=""[^]*Spring launch/);
-    expect(out).toMatch(/data-card-footer=""[^]*data-brief-status="open"[^]*Due 1 Jul/);
+    expect(out).toMatch(/^<div data-brief-card=""[^>]*data-list-card=""/);
+    expect(out).toMatch(/data-list-card-line="1"[^]*data-list-card-title=""[^]*Spring launch/);
+    expect(out).toMatch(/data-list-card-line="3"[^]*Due 1 Jul[^]*data-brief-status="open"/);
     expect(out).not.toContain('Target');
     // The cover link is the card's one link, at its corners.
     expect(out.match(/<a /g) ?? []).toHaveLength(1);

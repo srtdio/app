@@ -40,7 +40,7 @@ import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { cn } from '@/lib/cn';
 import { Bone, GlideItem, itemIn, itemOut } from '@/lib/motion';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { formatDateTime, formatRelative } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { UNDO_MS } from '@/lib/undo';
 import { useBackGuard } from '@/lib/back-guard';
@@ -378,13 +378,14 @@ export function annotationChip(
   );
 }
 
-// Format a stored timestamp with the app formatter ("23 Oct, 2:14 PM", the
-// viewer's clock). Falls back to the raw value if it is
+// Format a stored timestamp in the app's one past-time format (formatWhen:
+// "2:14 PM" today, "Yesterday", "Mon", "23 Oct"; the viewer's clock). Falls
+// back to the raw value if it is
 // somehow unparseable so nothing is silently dropped.
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatDateTime(value);
+  return formatWhen(value);
 }
 
 // ---------------------------------------------------------------------------
@@ -904,10 +905,11 @@ export function pointActions(
   return base;
 }
 
-/** When an edit happened, via the app formatter: "1 Mar, 2:14 PM" (the
- *  viewer's clock). Unparseable input yields '' so nothing raw is shown. */
+/** When an edit happened, in the app's one past-time format (formatWhen:
+ *  "2:14 PM" today, "Yesterday", "Mon", "1 Mar"; the viewer's clock).
+ *  Unparseable input yields '' so nothing raw is shown. */
 export function editedTime(ts: string, now: Date): string {
-  return formatDateTime(ts, now);
+  return formatWhen(ts, now);
 }
 
 /** The "edited <time>" marker shared by comments and ledger points, or null when
@@ -2426,7 +2428,7 @@ export function Comments({
           </span>
         ) : null}
         <span data-comment-time="" className={ROW_TIME_CLASS}>
-          {formatRelative(comment.created_at)}
+          {formatWhen(comment.created_at)}
         </span>
         {opts.seq !== null ? (
           <span

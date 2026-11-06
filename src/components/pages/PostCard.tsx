@@ -501,8 +501,8 @@ export function PostCard({
         </p>
       ) : null}
       {status !== null ? (
-        // A creator's line shows the dot and the time in stage only ("2 days
-        // ago"); the full phrase stays as its title and aria-label.
+        // A creator's line shows the dot and when it entered review only
+        // ("Mon", formatWhen); the full phrase stays as its title and aria-label.
         <div
           data-post-card-status={status.tone}
           {...(status.tone === 'with' ? { title: status.text, 'aria-label': status.text } : {})}
@@ -516,7 +516,7 @@ export function PostCard({
           ) : inColumn ? null : (
             <StatusDot stage={stage} />
           )}
-          <span className="truncate">{status.tone === 'with' ? status.ago : status.text}</span>
+          <span className="truncate">{status.tone === 'with' ? status.when : status.text}</span>
         </div>
       ) : reserveStatus ? (
         // The role is still loading: hold the status line's height.

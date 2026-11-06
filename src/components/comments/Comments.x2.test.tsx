@@ -172,7 +172,8 @@ describe('caption quote inside the comment (item 3)', () => {
     expect(quote).toBeGreaterThan(-1);
     expect(quote).toBeLessThan(body);
     expect(SRC).toContain('data-comment-role=""');
-    expect(SRC).toContain('formatRelative(comment.created_at)');
+    expect(SRC).toContain('formatWhen(comment.created_at)');
+    expect(SRC).not.toContain('formatRelative');
   });
 });
 
