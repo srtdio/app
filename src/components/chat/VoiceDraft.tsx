@@ -61,7 +61,7 @@ export function voiceDraftView(props: {
         shape="round"
         data-voice-draft-send=""
         aria-label="Send voice note"
-        disabled={props.busy}
+        busy={props.busy}
         onClick={props.onSend}
         className="shrink-0"
       >

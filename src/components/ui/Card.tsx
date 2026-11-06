@@ -121,6 +121,7 @@ export function Card({
   footerTrailing,
   dense = false,
   muted = false,
+  selected = false,
   as: Tag = 'div',
   press,
   cover,
@@ -140,10 +141,11 @@ export function Card({
       {...surface}
       // A Ref<HTMLElement> fits every root tag; the cast only widens the tag union.
       ref={rootRef as Ref<never> | undefined}
+      {...rest}
       data-card={rest['data-card'] ?? ''}
       className={cn(
         'flex min-w-0 flex-col self-start overflow-hidden',
-        cardSurface(muted),
+        cardSurface(muted, selected),
         tapped && 'relative',
         className,
       )}
