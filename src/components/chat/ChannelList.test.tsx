@@ -415,11 +415,10 @@ describe('load status', () => {
           'animate-pulse',
         );
       }
-      if (kind === 'row') {
-        // The 32 avatar placeholder in the Row's leading column.
-        const lead = (part[0]!.props as { leading: ReactElement }).leading;
-        expect((lead.props as { className: string }).className).toContain('h-8 w-8');
-      }
+      // The 32 avatar placeholder in the Row's leading column; rows on the 12 chat edge.
+      const lead = (part[0]!.props as { leading: ReactElement }).leading;
+      expect((lead.props as { className: string }).className).toContain('h-8 w-8');
+      expect((part[0]!.props as { gutter?: string }).gutter).toBe('chat');
     }
     expect(
       findAll(withStatus('loading'), (el) =>
