@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { HeaderBar } from '@/components/ui/HeaderBar';
+import { Text } from '@/components/ui/Text';
 
 interface PageHeadProps {
   title: string;
@@ -19,9 +20,9 @@ interface PageHeadProps {
 export function PageHead({ title, actions, hidden = false }: PageHeadProps) {
   if (hidden) {
     return (
-      <h1 tabIndex={-1} className="sr-only">
+      <Text as="h1" role="title" tabIndex={-1} className="sr-only">
         {title}
-      </h1>
+      </Text>
     );
   }
   // The one header bar (ui/HeaderBar): title role, gutter 16/24, 56 tall,

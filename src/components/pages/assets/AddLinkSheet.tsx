@@ -141,7 +141,7 @@ export function AddLinkSheet({ open, onClose, onSubmit, onToast, onAdded }: AddL
             inputMode="url"
             spellCheck={false}
             autoCapitalize="none"
-            placeholder="https://..."
+            placeholder="https://…"
             value={url}
             autoFocus
             aria-invalid={showUrlError}

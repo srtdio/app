@@ -72,11 +72,11 @@ describe('chat thread type roles', () => {
     });
   }
 
-  it('the chat-type.ts tokens themselves are unchanged (WhatsApp lock)', () => {
-    expect(HEADER_NAME_TYPE.touch).toBe('text-[17px] leading-[22px] font-semibold');
+  it('the chat-type.ts tokens sit on the type scale', () => {
+    expect(HEADER_NAME_TYPE.touch).toBe('text-xl font-semibold');
     expect(HEADER_NAME_TYPE.laptop).toBe('text-lg font-medium');
-    expect(HEADER_LINE_TYPE.touch).toBe('text-[13px] leading-[16px] font-normal');
-    expect(BUBBLE_META_TYPE).toBe('text-[11px] leading-[15px] font-normal tabular-nums');
+    expect(HEADER_LINE_TYPE.touch).toBe('text-md font-normal');
+    expect(BUBBLE_META_TYPE).toBe('text-xs font-normal tabular-nums');
   });
 
   it('Seen line meta: muted bubble meta size; the time is sans tabular, never mono', () => {

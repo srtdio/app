@@ -4,6 +4,7 @@ import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
+import { SECTION_LABEL } from '@/components/ui/Text';
 import {
   ICON_SIZE,
   IconChevronLeft,
@@ -202,7 +203,7 @@ export function viewerName(items: readonly AssetListItem[], asset: AssetListItem
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <dt className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">{label}</dt>
+      <dt className={SECTION_LABEL}>{label}</dt>
       <dd className="text-base text-fg break-words">{value}</dd>
     </div>
   );
@@ -642,7 +643,7 @@ export function AssetLightbox({
             data-file-card=""
             className="lit-overlay m-4 flex max-w-sm flex-col items-center gap-4 rounded-2xl bg-panel p-8 text-center text-fg"
           >
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-panel-2 text-base font-semibold tracking-[0.06em] text-fg-2">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-panel-2 text-base font-semibold text-fg-2">
               {typeLabel(kind)}
             </div>
             <div className="min-w-0">
@@ -696,7 +697,7 @@ export function AssetLightbox({
 
             <dl className="mt-3 flex flex-col gap-3">
               <div className="flex flex-col gap-0.5">
-                <dt className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+                <dt className={SECTION_LABEL}>
                   Name
                 </dt>
                 {editingName ? (

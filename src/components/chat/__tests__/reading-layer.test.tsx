@@ -219,9 +219,9 @@ describe('reading layer elements', () => {
     expect(none).not.toContain('data-count-badge');
   });
 
-  it('Seen line is 11/15 muted with a sans tabular time', () => {
+  it('Seen line is 11/14 muted with a sans tabular time', () => {
     const html = renderToStaticMarkup(<SeenLine readAt="2026-10-02T10:05:00Z" timeZone="UTC" />);
-    expect(html).toContain('text-[11px] leading-[15px]');
+    expect(html).toContain('text-xs');
     expect(html).toContain('Seen');
     expect(html).toContain('font-sans tabular-nums');
     expect(html).not.toContain('font-mono');

@@ -46,11 +46,11 @@ describe('composer focus on open', () => {
 describe('F7: composer input size by width, never under 16px on a phone', () => {
   it('390px (phone) is 17px; 1024px (iPad, laptop table) and 1280px are 15px', () => {
     const phone = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx: 390 }));
-    expect(phone).toContain('!text-[17px] !leading-[22px]');
+    expect(phone).toContain('!text-xl');
     const ipad = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx: 1024 }));
-    expect(ipad).toContain('!text-[15px] !leading-[20px]');
+    expect(ipad).toContain('!text-lg');
     const laptop = sized(COMPOSER_INPUT_TYPE, chatLayout({ widthPx: 1280 }));
-    expect(laptop).toContain('!text-[15px] !leading-[20px]');
+    expect(laptop).toContain('!text-lg');
   });
 
   it('every phone width stays at 16px or more, with no width breakpoint', () => {

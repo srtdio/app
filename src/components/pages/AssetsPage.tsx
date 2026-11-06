@@ -103,6 +103,8 @@ import { useServerSearch } from '@/lib/search/server-search';
 import { errorText } from '@/lib/error-copy';
 
 const SKELETON_COUNT = 12;
+/** Stable keys for the fixed set of placeholder tiles. */
+const SKELETON_KEYS = Array.from({ length: SKELETON_COUNT }, (_, n) => `skeleton-${n}`);
 
 /** The list search's URL param (?q=), as on every list screen. */
 const SEARCH_PARAM = 'q';
@@ -995,8 +997,8 @@ export function AssetsPage() {
           </div>
         ) : listLoading ? (
           <BoxSkeleton lit="flat" label="Loading files" className={cn(GUTTER, 'py-4', TILE_GRID)}>
-            {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
-              <div key={i} data-skeleton-tile="" className="min-w-0">
+            {SKELETON_KEYS.map((key) => (
+              <div key={key} data-skeleton-tile="" className="min-w-0">
                 <Tile
                   aspect="landscape"
                   thumbnail={<Bone lit="lit-card" as="span" className="h-full w-full" />}
@@ -1080,7 +1082,7 @@ export function AssetsPage() {
           spacer keeps the last row uncovered. */}
       {selectMode ? (
         <>
-          <div aria-hidden="true" className="h-[76px] md:hidden" />
+          <div aria-hidden="true" className="h-20 md:hidden" />
           <div
             ref={selectBarRef}
             data-select-actions=""

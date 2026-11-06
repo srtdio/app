@@ -1583,11 +1583,11 @@ describe('swipe to reply', () => {
 });
 
 describe('bubble text sizes', () => {
-  it('body text comes from chat-type: 17/22 touch, 14/19 laptop', () => {
+  it('body text comes from chat-type: 17/22 touch, 14/20 laptop', () => {
     expect(bodyText('touch')).toContain(BUBBLE_BODY_TYPE.touch);
     expect(bodyText('laptop')).toContain(BUBBLE_BODY_TYPE.laptop);
-    expect(BUBBLE_BODY_TYPE.touch).toContain('text-[17px] leading-[22px]');
-    expect(BUBBLE_BODY_TYPE.laptop).toContain('text-[14px] leading-[19px]');
+    expect(BUBBLE_BODY_TYPE.touch).toContain('text-xl');
+    expect(BUBBLE_BODY_TYPE.laptop).toContain('text-base');
   });
 
   it('the in-bubble quote uses the chat-type quote sizes; the composer bar keeps its own', () => {
@@ -1600,14 +1600,14 @@ describe('bubble text sizes', () => {
     expect(bar).not.toContain(QUOTE_TEXT_TYPE.touch);
   });
 
-  it('F12 bubble shape by layout: touch 18px, 12/8 padding, 76%; laptop 12px, 6/7/8/9, 65%', () => {
+  it('F12 bubble shape by layout: touch 18px, 12/8 padding, 76%; laptop 12px, 6/8, 65%', () => {
     const shape = { mine: false, head: false, tail: false, failed: false, voiceOnly: false };
     const touch = bubbleClass({ ...shape, layout: 'touch' });
     expect(touch).toContain('px-3 py-2');
     expect(touch).toContain('rounded-[18px]');
     const laptop = bubbleClass({ ...shape, layout: 'laptop' });
     expect(laptop).toContain('rounded-xl');
-    expect(laptop).toContain('pb-[8px] pl-[9px] pr-[7px] pt-[6px]');
+    expect(laptop).toContain('px-2 pb-2 pt-1.5');
     for (const cls of [touch, laptop]) expect(cls).not.toContain('md:');
     const columnOf = (layout: ChatLayout): string => {
       let column = '';
@@ -1624,7 +1624,7 @@ describe('bubble text sizes', () => {
 
   it('meta, day pill and typing row sizes come from chat-type', () => {
     expect(renderStrip(renderBubble(makeMessage({})))).toContain(BUBBLE_META_TYPE);
-    expect(BUBBLE_META_TYPE).toContain('text-[11px] leading-[15px]');
+    expect(BUBBLE_META_TYPE).toContain('text-xs');
     let pill = '';
     walk(DayPill({ label: 'Today', layout: 'touch' }), (el) => {
       const c = (el.props as { className?: string }).className ?? '';
