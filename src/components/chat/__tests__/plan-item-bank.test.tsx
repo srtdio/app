@@ -188,7 +188,8 @@ describe('the Item screen with no bundle', () => {
     expect($('[data-plan-remove-row]')).toBeNull();
     expect($('[data-plan-approve]')).toBeNull();
     expect($('[data-plan-ask]')).toBeNull();
-    expect($('[data-plan-edit-concept]')).toBeNull();
+    // Edit idea (bank_idea_edit) stays: title, description, files, no date.
+    expect($('[data-plan-edit-concept]')).not.toBeNull();
     expect($('[data-plan-edit-date]')).toBeNull();
     expect(text()).not.toContain('Back to plan');
     // What stays.

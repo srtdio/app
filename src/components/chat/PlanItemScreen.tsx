@@ -1907,7 +1907,7 @@ export function PlanItemScreen(props: {
                   >
                     {bank ? NO_DATE_LABEL : date.label}
                   </span>
-                  {editable ? (
+                  {editable && !bank ? (
                     <Button
                       type="button"
                       variant="link"
@@ -2096,13 +2096,10 @@ export function PlanItemScreen(props: {
           note={!bank && editResets ? CONCEPT_EDIT_RESET_HINT : null}
           filesState={editFiles !== null ? 'ready' : filesRead.state}
           onRetryFiles={filesRead.retry}
-          {...(bank
-            ? { noDate: true }
-            : {
-                range: { startsOn: bundle.plan.starts_on, endsOn: bundle.plan.ends_on },
-                today: civilToday(new Date(), timeZone),
-                dayCounts,
-              })}
+          range={{ startsOn: bundle.plan.starts_on, endsOn: bundle.plan.ends_on }}
+          today={civilToday(new Date(), timeZone)}
+          dayCounts={dayCounts}
+          noDate={bank}
           {...(canAttach ? { uploadFile } : {})}
         />
       ) : null}
