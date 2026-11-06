@@ -3,11 +3,16 @@ import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode }
 import { stripFormat } from '@srtdio/comments';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { Row } from '@/components/ui/Row';
 import { createPressIntent, type PressIntent } from '@/lib/chat/press-intent';
 import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { CountBadge, countBadgeText } from '@/components/ui/CountBadge';
+import { countBadgeText } from '@/components/ui/CountBadge';
+import {
+  LIST_CARD_STACK,
+  ListCard,
+  ListCardBox,
+  type ListCardPicture,
+} from '@/components/ui/ListCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { SelectCheck } from '@/components/ui/SelectCheck';
@@ -15,7 +20,14 @@ import { SectionHeader } from '@/components/shell/SectionHeader';
 import { useLongPress } from '@/components/ui';
 import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { Chip } from '@/components/ui/Chip';
-import { ICON_SIZE, IconChat, IconCheckCircle, IconEyeOff, IconPlus } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconChat,
+  IconCheckCircle,
+  IconEyeOff,
+  IconFile,
+  IconPlus,
+} from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { SHELL_STICKY_TOP_CLASS } from '@/lib/scroll-mode';
@@ -33,7 +45,7 @@ import {
 } from '@/lib/chat/chat-store';
 import { deleteChatFailedMessage, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { sortChannelsByRecency } from '@/lib/chat/sort-conversations';
-import { formatChatTime } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 import { draftText, draftsVersion, subscribeDrafts } from '@/lib/chat/drafts';
 import { mentionNamesIn, resolveMentionPreview, splitAllMentions } from '@/lib/chat/mentions';
 import { leaveSelectionThen } from '@/lib/chat/forward';
@@ -63,7 +75,6 @@ import {
 } from '@/lib/chat/search';
 import { NOTES_TILE_LINE } from '@/lib/chat/notes';
 import { chatDisplayName } from '@/lib/chat/chat-name';
-import { NotesAvatar } from '@/components/chat/NotesBits';
 import { useSession } from '@/lib/session-context';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import {
@@ -267,11 +278,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
     'data-induction-channel': channel.channelId,
   });
   const { groups, people } = splitSections(props.channels);
-  const renderCard = (
-    channel: ChannelSummary,
-    anchored: boolean,
-    divider: boolean,
-  ): ReactElement => (
+  const renderCard = (channel: ChannelSummary, anchored: boolean): ReactElement => (
     // Glide: a reorder (new message lifts a chat) moves rows to their new
     // place; group and people rows both list on Y.
     <GlideItem
@@ -292,7 +299,6 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
         nowMs={nowMs}
         timeZone={timeZone}
         onSelect={props.onSelect}
-        divider={divider}
         {...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {})}
         input={props.input ?? DEFAULT_LIST_INPUT}
         {...(props.selecting !== undefined
@@ -320,7 +326,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
             Groups
           </h3>
           <ul data-section="groups" className={CHAT_ROW_LIST}>
-            {groups.map((channel, i) => renderCard(channel, true, i < groups.length - 1))}
+            {groups.map((channel) => renderCard(channel, true))}
           </ul>
         </>
       ) : null}
@@ -330,7 +336,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
             People
           </h3>
           <ul data-section="people" className={CHAT_ROW_LIST}>
-            {people.map((channel, i) => renderCard(channel, false, i < people.length - 1))}
+            {people.map((channel) => renderCard(channel, false))}
           </ul>
         </>
       ) : null}
@@ -341,21 +347,15 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
 /** Skeleton tiles shown while the list loads; enough to fill a phone screen. */
 export const SKELETON_ROWS = 6;
 
-/** The skeleton's sections: two group rows, then four people rows. */
+/** The skeleton's sections: two group cards, then four people cards. */
 const SKELETON_GROUPS = 2;
 const SKELETON_PEOPLE = SKELETON_ROWS - SKELETON_GROUPS;
 
-/** One loading row: the real chat Row (72, 32 avatar, two lines) with Bones in its slots. */
-function skeletonRow(i: number, count: number): ReactElement {
+/** One loading card: ui/ListCardBox, the ListCard's own frame and slots. */
+function skeletonRow(i: number, round: boolean): ReactElement {
   return (
-    <li key={`bone-${i}`} data-skeleton-row="row" className="min-w-0">
-      <Row
-        gutter="chat"
-        leading={<Bone lit="lit-avatar" as="span" className="h-8 w-8 rounded-lg" />}
-        title={<Bone lit="flat" as="span" className="my-1 h-3 w-1/2 rounded" />}
-        secondary={<Bone lit="flat" as="span" className="my-1 h-3 w-3/4 rounded" />}
-        divider={i < count - 1}
-      />
+    <li key={`bone-${i}`} data-skeleton-row="card" className="min-w-0">
+      <ListCardBox round={round} />
     </li>
   );
 }
@@ -370,22 +370,22 @@ function skeletonLabel(first: boolean): ReactElement {
 }
 
 /**
- * The loading body: the real sections' shapes, drawn by the same part (label,
- * group Rows, label, people Rows; every row 72 tall with a 32 avatar and two
- * lines), so swapping in the list shifts nothing. Each box is a motion Bone
- * (top-lit sweep, never a pulse); no spinner. Shown only when the device holds
- * no list (the store paints a saved list at once).
+ * The loading body: the real sections' shapes, drawn in the same frame (label,
+ * group cards, label, people cards; every card the ListCard's one height with
+ * its 72 picture), so swapping in the list shifts nothing. Each box is a motion
+ * Bone (top-lit sweep, never a pulse); no spinner. Shown only when the device
+ * holds no list (the store paints a saved list at once).
  */
 export function channelListSkeleton(): ReactElement {
   return (
     <BoxSkeleton lit="flat" className={CHAT_HOME_STACK} label="Loading conversations">
       {skeletonLabel(true)}
       <ul className={CHAT_ROW_LIST}>
-        {Array.from({ length: SKELETON_GROUPS }, (_, i) => skeletonRow(i, SKELETON_GROUPS))}
+        {Array.from({ length: SKELETON_GROUPS }, (_, i) => skeletonRow(i, false))}
       </ul>
       {skeletonLabel(false)}
       <ul className={CHAT_ROW_LIST}>
-        {Array.from({ length: SKELETON_PEOPLE }, (_, i) => skeletonRow(i, SKELETON_PEOPLE))}
+        {Array.from({ length: SKELETON_PEOPLE }, (_, i) => skeletonRow(i, true))}
       </ul>
     </BoxSkeleton>
   );
@@ -470,9 +470,9 @@ export function unreadPillText(unread: number): string | null {
 }
 
 /**
- * The home stack inside the one scroll container, 8px between blocks. Rows
- * bleed to the pane's sides and draw their own 12 chat edge (Row gutter
- * 'chat'); labels sit on the 16 edge (CHAT_HOME_EDGE), like the search box above.
+ * The home stack inside the one scroll container, 8px between blocks. Labels
+ * and the card lists sit on the 16 edge (CHAT_HOME_EDGE), like the search box
+ * above.
  */
 export const CHAT_HOME_STACK = 'flex flex-col gap-2';
 
@@ -480,10 +480,10 @@ export const CHAT_HOME_STACK = 'flex flex-col gap-2';
 export const CHAT_HOME_EDGE = 'px-4';
 
 /**
- * Groups and People: one ui/Row per chat, stacked, a divider (inset to the
- * text) between rows. Personal notes, groups and people are one row style.
+ * Groups and People: one ui/ListCard per chat, 12 between cards, on the
+ * home's 16 edge. Personal notes, groups and people are one card style.
  */
-export const CHAT_ROW_LIST = 'flex flex-col';
+export const CHAT_ROW_LIST = cn(LIST_CARD_STACK, CHAT_HOME_EDGE);
 
 /** Section label: 12/600 uppercase, 0.06em tracking, secondary ink. */
 export const SECTION_LABEL_TYPE = TEXT_ROLE.section;
@@ -497,18 +497,17 @@ export function sectionLabelClass(first: boolean): string {
 }
 
 /**
- * A chat row's photo slot: the shared Avatar at its header role (32), a group
- * rounded square or a person circle, in the Row's fixed 32 column, so the box
- * is final on first paint.
+ * A chat card's photo slot (ListCard's 72 picture): a person's photo circle
+ * (initials on their colour when none) or a group's photo or mark in the radius
+ * 8 box, so the box is final on first paint.
  */
 export const CHAT_ROW_PHOTO = 'flex shrink-0';
 
 /**
- * A person row's second line when the DM has no message yet: one reserved
- * line (a no-break space in the secondary role), so the row stays 72 and its
- * name sits where every other row's does.
+ * A person card's preview when the DM has no message yet: a no-break space,
+ * so the line is never collapsed (ListCard reserves its two lines anyway).
  */
-export const EMPTY_PREVIEW = ' ';
+export const EMPTY_PREVIEW = '\u00a0';
 
 /** Row state that picks the row's selected look. */
 export interface ChannelRowState {
@@ -521,8 +520,8 @@ export interface ChannelRowState {
 }
 
 /**
- * Whether the row or tile takes the one selected look (lit-selected): a
- * checked chat in select mode, or the chat open on desktop. Pure.
+ * Whether the card takes the one selected look (lit-selected): a checked chat
+ * in select mode, or the chat open on desktop. Pure.
  */
 export function channelRowSelected(state: ChannelRowState): boolean {
   return state.selecting ? state.checked : state.selected;
@@ -539,36 +538,40 @@ export function chatRowContextMenu(
   return coarsePointer ? (event) => event.preventDefault() : undefined;
 }
 
-/** The unread count (the shared CountBadge), or nothing when the count is 0. */
-function unreadPill(unread: number): ReactElement | null {
-  return unreadPillText(unread) === null ? null : <CountBadge count={unread} />;
+/** The unread tag on line 3: "3 new" ("99+ new"), or null when nothing is unread. Pure. */
+export function unreadTagText(unread: number): string | null {
+  const count = unreadPillText(unread);
+  return count === null ? null : `${count} new`;
 }
 
-/** What a chat shows: the parts' slot contents, built once. Hook-free and pure. */
+/** What a chat shows: the card's slot contents, built once. Hook-free and pure. */
 export interface ChannelRowParts {
-  /** Group (the Groups section) or person (the People section); both are a Row. */
+  /** Group (the Groups section) or person (the People section); both are a ListCard. */
   kind: TileKind;
   /** The chat's display name (chatDisplayName). */
   name: string;
-  /** The last message time ('' when there is none). */
+  /** The last message time ('' when there is none): line 3. */
   time: string;
-  /** The photo, in its slot (data-group-photo / data-person-photo). */
-  photo: ReactElement;
-  /** The second line: the preview or "Draft: ..." (a DM with no message: a reserved empty line). */
+  /** The 72 picture: a person circle, or the group's photo or mark. */
+  picture: ListCardPicture;
+  /** The picture slot's hook (data-group-photo / data-person-photo). */
+  pictureHooks: { 'data-group-photo': string } | { 'data-person-photo': string };
+  /** Line 2: the preview or "Draft: ..." (a DM with no message: a reserved empty line). */
   preview: ReactElement;
-  /** The unread CountBadge, or null. */
-  pill: ReactElement | null;
-  /** The select-mode check, or null. */
+  /** Something unread: the dot on line 1. */
+  unread: boolean;
+  /** Line 3's tag: "3 new", or null. */
+  tag: string | null;
+  /** The select-mode check (where the ⋮ sits), or null. */
   check: ReactElement | null;
 }
 
 /**
- * The slot contents of one chat. Group and person are the same Row: a 32 photo
- * (group rounded square, person circle), name + time, a one-line preview (or
- * "Draft: ..."), the unread badge on the second line's end. A person with no
- * message yet keeps an empty reserved second line (the row stays 72). The
- * avatar URL is on the summary before the row mounts (one batched list read),
- * so a photo paints first, never the initials.
+ * The slot contents of one chat. Group and person are the same ListCard: the
+ * 72 picture (a person circle, a group's photo or mark), the name and the
+ * unread dot, the 2-line preview (or "Draft: ..."), then the time and the
+ * "3 new" tag. The avatar URL is on the summary before the card mounts (one
+ * batched list read), so a photo paints first, never the initials.
  */
 export function channelRowParts(props: {
   channel: ChannelSummary;
@@ -591,7 +594,7 @@ export function channelRowParts(props: {
   const previewIcon = hasMessage ? summaryIconOfLine(summary.lastMessageText) : null;
   const draft = props.draft ?? null;
   const time = hasMessage
-    ? formatChatTime(summary.lastMessageTs, new Date(props.nowMs), props.timeZone)
+    ? formatWhen(summary.lastMessageTs, new Date(props.nowMs), props.timeZone)
     : '';
   const preview =
     draft !== null ? (
@@ -616,31 +619,31 @@ export function channelRowParts(props: {
         )}
       </span>
     );
-  const avatar = (
-    <Avatar
-      name={name}
-      {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
-      role="header"
-      kind={wide ? 'group' : 'person'}
-    />
-  );
   // The photo is part of the tap surface: a tap on it opens the chat (or
   // toggles it while selecting). The enlarged photo lives only inside a DM.
-  const photo = (
-    <span
-      {...(wide ? { 'data-group-photo': '' } : { 'data-person-photo': '' })}
-      className={CHAT_ROW_PHOTO}
-    >
-      {avatar}
-    </span>
-  );
+  const picture: ListCardPicture = wide
+    ? {
+        kind: 'image',
+        node: (
+          <Avatar
+            name={name}
+            {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
+            role="profile"
+            kind="group"
+            decorative
+          />
+        ),
+      }
+    : { kind: 'person', name, src: channel.avatarUrl };
   return {
     kind,
     name,
     time,
-    photo,
+    picture,
+    pictureHooks: wide ? { 'data-group-photo': '' } : { 'data-person-photo': '' },
     preview,
-    pill: unreadPill(unread),
+    unread: unread > 0,
+    tag: unreadTagText(unread),
     check: props.selecting ? <SelectCheck checked={props.checked} /> : null,
   };
 }
@@ -648,7 +651,7 @@ export function channelRowParts(props: {
 /**
  * The ⋯ opener for a chat (H5): always visible, the trigger of the same
  * ActionMenu a long-press opens. ActionMenuTrigger owns the trailing rule, so
- * its glyph's visible edge sits on the row's content edge.
+ * its glyph's visible edge sits on the card's content edge.
  * fg-3 at rest, full ink on hover, as before. Tokens only.
  */
 export const ROW_MORE_INK = 'text-fg-3 hover:text-fg';
@@ -659,12 +662,12 @@ export function chatRowMenuItems(onHide: () => void): ActionMenuItem[] {
 }
 
 /**
- * One conversation, group or person: a ui/Row (chat gutter, 72 tall) whose
- * whole surface is one button ("Open <name>"). A touch long-press (moving or
- * scrolling cancels it), right-click, Shift+F10, or the always-visible ⋯ (the
- * row's trailing slot) opens the chat menu; the
- * trailing click is swallowed so a long-press never also opens the chat. In
- * select mode a check shows and a tap toggles.
+ * One conversation, group or person: a ui/ListCard whose whole surface is one
+ * button ("Open <name>"). A touch long-press (moving or scrolling cancels it),
+ * right-click, Shift+F10, or the always-visible ⋯ (line 3's trailing slot)
+ * opens the chat menu; the trailing click is swallowed so a long-press never
+ * also opens the chat. In select mode a check sits where the ⋯ sits and a tap
+ * toggles.
  */
 export function ChannelCard(props: {
   channel: ChannelSummary;
@@ -679,7 +682,7 @@ export function ChannelCard(props: {
   onPressIn?: (channel: ChannelSummary) => void;
   /** The list's input (hover, coarse), read once by the list. */
   input: ChannelListInput;
-  /** The row's divider (every row but the last in its section). */
+  /** Kept for callers: cards are 12 apart, no divider. */
   divider?: boolean;
   /** Present in select mode: whether this tile is checked. */
   checked?: boolean;
@@ -755,7 +758,6 @@ export function ChannelCard(props: {
   // The tap surface's behaviour (the part draws it): long-press, press-in,
   // right-click, Shift+F10, its name and its pressed state while selecting.
   const surface = {
-    buttonRef: rowRef,
     ...(menuEnabled
       ? {
           onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {
@@ -777,7 +779,7 @@ export function ChannelCard(props: {
           },
         }
       : { ...pressHandlers, onPointerDown: pressDown }),
-    onContextMenu: (e: MouseEvent) => {
+    onContextMenu: (e: MouseEvent<HTMLButtonElement>) => {
       if (coarsePointer) e.preventDefault();
       if (!menuEnabled) return;
       e.preventDefault();
@@ -824,39 +826,38 @@ export function ChannelCard(props: {
   ) : null;
   return (
     <div
-      data-chat-list-item="row"
+      data-chat-list-item="card"
       data-chat-kind={parts.kind === 'wide' ? 'group' : 'person'}
-      className={cn('h-full', NO_TOUCH_SELECT)}
+      className={NO_TOUCH_SELECT}
       // Touch-first: the native menu and callout never show on a chat.
       onContextMenu={chatRowContextMenu(coarsePointer)}
     >
-      <Row
-        {...surface}
-        gutter="chat"
-        leading={parts.photo}
+      <ListCard
+        picture={parts.picture}
+        pictureHooks={parts.pictureHooks}
         title={parts.name}
-        {...(parts.time !== '' ? { time: parts.time } : {})}
-        secondary={parts.preview}
-        badge={parts.pill}
-        {...(menu !== null
-          ? { trailing: { kind: 'more' as const, menu } }
-          : parts.check !== null
-            ? { trailing: { kind: 'node' as const, node: parts.check } }
-            : {})}
-        divider={props.divider === true}
+        unread={parts.unread}
+        preview={parts.preview}
+        time={parts.time}
+        {...(parts.tag !== null ? { tag: parts.tag, tagHooks: { 'data-unread-tag': '' } } : {})}
+        {...(menu !== null ? { menu } : {})}
+        {...(parts.check !== null ? { check: parts.check } : {})}
         selected={isSelected}
         onPress={onTap}
+        press={surface}
+        pressRef={rowRef}
       />
     </div>
   );
 }
 
 /**
- * The Personal notes row: a ui/Row above Groups, the notebook (or own photo)
- * at the header role, "Personal notes" over "Only you can see this". Paints
- * the same in every list state (loading, error, ready) from the session alone,
- * so the first paint is final. No motion. Not selectable in Select mode
- * (inert). Hook-free so it is unit tested.
+ * The Personal notes card: a ui/ListCard above Groups, the notebook icon as
+ * its picture, "Personal notes" over the last note (or "Only you can see
+ * this"), the last-edited date on line 3. Paints the same in every list state
+ * (loading, error, ready) from the session alone, so the first paint is
+ * final. No motion. Not selectable in Select mode (inert). Hook-free so it is
+ * unit tested.
  */
 export function notesTile(props: {
   notes: ChannelSummary;
@@ -871,22 +872,22 @@ export function notesTile(props: {
 }): ReactElement {
   const { notes, summary } = props;
   const last = notesLastLine(summary, props.nowMs ?? 0, props.timeZone);
+  const name = chatDisplayName(notes);
   return (
-    <div className={cn('pb-2', NO_TOUCH_SELECT)}>
-      <Row
-        gutter="chat"
-        data-notes-tile=""
-        aria-label={`Open ${chatDisplayName(notes)}`}
-        leading={<NotesAvatar role="header" src={notes.avatarUrl} surface="panel" />}
-        title={chatDisplayName(notes)}
-        {...(last !== null && last.time !== ''
-          ? { time: <span data-notes-time="">{last.time}</span> }
-          : {})}
-        secondary={
+    <div className={cn('pb-2', CHAT_HOME_EDGE, NO_TOUCH_SELECT)}>
+      <ListCard
+        picture={{ kind: 'icon', icon: IconFile }}
+        pictureHooks={{ 'data-notes-picture': '' }}
+        title={name}
+        preview={
           <span data-notes-preview="">{last !== null ? last.preview : NOTES_TILE_LINE}</span>
         }
+        {...(last !== null && last.time !== ''
+          ? { time: last.time, timeHooks: { 'data-notes-time': '' } }
+          : {})}
         disabled={props.selecting}
         selected={props.selected && !props.selecting}
+        press={{ 'aria-label': `Open ${name}`, 'data-notes-tile': '' }}
         onPress={() => {
           if (props.selecting) return;
           // A thread selecting messages exits that first (history.back()).
@@ -909,7 +910,7 @@ export function notesLastLine(
   if (summary === undefined || summary.lastMessageTs <= 0) return null;
   const preview = stripFormat(summary.lastMessageText);
   if (preview === '') return null;
-  return { preview, time: formatChatTime(summary.lastMessageTs, new Date(nowMs), timeZone) };
+  return { preview, time: formatWhen(summary.lastMessageTs, new Date(nowMs), timeZone) };
 }
 
 /** A chat home chip: Starred, or one of the message search kinds. */
