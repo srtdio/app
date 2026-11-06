@@ -1060,6 +1060,7 @@ export function BankPlanItSheets(props: {
               variant="primary"
               type="button"
               data-bank-plan-it-go=""
+              busy={props.busy}
               disabled={day === '' || day < props.today}
               onClick={() => {
                 if (step !== null && day !== '') props.onDay(step.idea, day);
@@ -1095,6 +1096,7 @@ export function BankPlanItSheets(props: {
               variant="primary"
               type="button"
               data-bank-make-plan=""
+              busy={props.busy}
               onClick={() => {
                 if (step?.kind === 'none') props.onMakePlan(step.idea, step.day);
               }}
@@ -1146,6 +1148,7 @@ export function BankPlanItSheets(props: {
               variant="primary"
               type="button"
               data-bank-shared-go=""
+              busy={props.busy}
               onClick={() => {
                 if (step?.kind === 'shared') props.onConfirmShared(step.idea, step.plan, step.day);
               }}

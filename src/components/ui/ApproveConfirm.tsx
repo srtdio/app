@@ -118,6 +118,7 @@ export function ApproveConfirm(props: ApproveConfirmProps): ReactElement {
           variant="success"
           data-approve-confirm-button=""
           {...(props.induction !== undefined ? { 'data-induction': props.induction } : {})}
+          busy={props.busy}
           disabled={props.busy}
           onClick={props.onConfirm}
           className="min-w-[44px] flex-1"

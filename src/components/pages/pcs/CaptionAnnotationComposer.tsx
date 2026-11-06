@@ -66,7 +66,6 @@ export function CaptionAnnotationComposer({
       dirty={body.trim() !== ''}
       discard={COMMENT_DISCARD}
       busy={submitting}
-      busyLabel="Posting…"
       footer={
         <>
           <Button disabled={submitting} onClick={onCancel}>
@@ -82,10 +81,11 @@ export function CaptionAnnotationComposer({
             variant="primary"
             className="ml-auto"
             data-induction={INDUCTION_KEYS.postCommentPost}
+            busy={submitting}
             disabled={!canPost}
             onClick={() => void onSubmit(body)}
           >
-            {submitting ? 'Posting…' : 'Post'}
+            Post
           </Button>
         </>
       }

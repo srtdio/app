@@ -149,7 +149,13 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
           <Button variant="ghost" type="button" onClick={props.onClose}>
             Cancel
           </Button>
-          <Button variant="primary" type="button" data-bank-add-go="" onClick={() => void submit()}>
+          <Button
+            variant="primary"
+            type="button"
+            data-bank-add-go=""
+            busy={busy}
+            onClick={() => void submit()}
+          >
             Add to bank
           </Button>
         </div>
