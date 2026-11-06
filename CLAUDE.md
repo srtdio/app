@@ -92,18 +92,18 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Speed ratchet: no PR may make a paint or tap path slower. Do not add an await, hold, gate or network read on a paint or tap path without Shubham's approval. The PR body lists the paths touched, their before/after ?paintlog marks, and what this PR made faster.
 - Activity and chat arrive live by push; polling is only a safety net. No PR may make either wait for a poll.
 
-## Design and layout (locked 6 Nov 2026; guards in src/__tests__, eslint designRules, scripts/design-ratchet.ts)
+## Design and layout (locked 6 Nov 2026; guards in src/**tests**, eslint designRules, scripts/design-ratchet.ts)
 
 - Use a part or add a slot to it; never hand-build its frame or fork it. If no part fits, stop and ask.
 - Parts (src/components/ui): Text, layout.ts, Card, Row, Tile, ChatCard, Composer, HeaderBar, Toolbar, StatusDot, Sheet + SheetActions, ActionMenu + ActionMenuTrigger, Button / IconButton / Chip / PressableRow (44 tall), Tag, CountBadge, Avatar, PersonTrigger, NoResults, ErrorNote, SidePanel, PostPlaceholder.
-- Type roles (ui/Text only): display (post title only), title (bar titles), heading, body, secondary, label, meta (mono, tabular), section. Max 3 roles per part. leading-*, tracking-*, text-[..] live only in ui/Text (lint error).
+- Type roles (ui/Text only): display (post title only), title (bar titles), heading, body, secondary, label, meta (mono, tabular), section. Max 3 roles per part. leading-_, tracking-_, text-[..] live only in ui/Text (lint error).
 - Values: tailwind.config.ts holds only the allowed scale (type xs..3xl + input; 4px spacing grid plus 0.5 and 1.5; radius roles; border 1/2 + named cut-out/rail; named z layers base..top; named panel widths). New exception = named token + one-line comment. No [Npx], no z-[N].
 - Edges (L2): page 16 phone / 24 laptop (GUTTER), chat 12 (CHAT_GUTTER), sheets 16. Inside <= outside spacing.
 - Trailing rule: a trailing ⋮, chevron or X is a 44 box pulled out 12 (TRAILING_PULL) so its glyph sits on the content edge; leading back/close mirrors it (LEADING_PULL). Parts apply it, never call sites.
-- Lanes (ui/layout LANE_*): unread pill top centre, jump-to-latest bottom trailing above the composer, tip strip in flow above the composer; they never cover a title, a time or each other.
+- Lanes (ui/layout LANE\_\*): unread pill top centre, jump-to-latest bottom trailing above the composer, tip strip in flow above the composer; they never cover a title, a time or each other.
 - Exit: "<" for anything opening over the app; X only for remove / clear / dismiss / cancel upload. One exit per panel.
 - States keep their footprint: Button busy keeps width; Sheet busy is on its button; Composer, upload, pending, Not sent and select mode keep row height and slots.
-- Lighting: one lit-* height per surface (no shadow-*, drop-shadow, backdrop-blur, dark:); outlines lit-selected/lit-focus/lit-bad/lit-drop/lit-today only.
+- Lighting: one lit-_ height per surface (no shadow-_, drop-shadow, backdrop-blur, dark:); outlines lit-selected/lit-focus/lit-bad/lit-drop/lit-today only.
 - Colour: token classes only; greys + amber Review, green Approved, red errors/Reject; no violet/blue, no hex, no text-white. Contrast 4.5:1 text, 3:1 edges.
 - Motion: src/lib/motion only; never fade; instant under Reduce Motion.
 - Icons: ui/icons.tsx only; ICON_SIZE; stroke follows size (strokeFor). One icon per concept.
