@@ -21,6 +21,7 @@ import type { LinkBundle } from '@/components/chat/plan-card';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { addCivilDays } from '@/lib/list-sort';
 import { civilMondayOf, formatCivilDayHeader, PLAN_WEEK_DAYS } from '@/lib/plan-week';
+import { formatDayRange } from '@/lib/time';
 import type { PrefetchContext } from '@/lib/prefetch-context';
 
 // ---------------------------------------------------------------------------
@@ -118,21 +119,6 @@ const MONTH_NAMES = [
   'December',
 ];
 
-const MONTH_SHORT = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
 /** The first day of the month holding `day` ("2026-10-01"). Pure. */
 function monthStartOf(day: string): string {
   return `${day.slice(0, 7)}-01`;
@@ -199,30 +185,19 @@ export function monthLabel(anchor: string): string {
   return `${MONTH_NAMES[Number(m) - 1] ?? ''} ${Number(y)}`;
 }
 
-function dayMonth(day: string): string {
-  const [, m, d] = day.split('-');
-  return `${Number(d)} ${MONTH_SHORT[Number(m) - 1] ?? ''}`;
-}
-
 /**
- * The week's range with a spaced hyphen: "19 - 25 Oct 2026" in one month,
- * "28 Sep - 4 Oct 2026" across two, "29 Dec 2025 - 4 Jan 2026" across years. Pure.
+ * The week's range through the one formatter (lib/time formatDayRange):
+ * "19–25 Oct" in one month, "28 Sep – 4 Oct" across two, the year only
+ * when it is not the current one ("28 Dec 2026 – 3 Jan 2027"). Pure.
  */
-export function weekRangeLabel(anchor: string): string {
+export function weekRangeLabel(anchor: string, now: Date = new Date()): string {
   const { startsOn, endsOn } = weekRangeOf(anchor);
-  const endYear = Number(endsOn.slice(0, 4));
-  if (startsOn.slice(0, 4) !== endsOn.slice(0, 4)) {
-    return `${dayMonth(startsOn)} ${Number(startsOn.slice(0, 4))} - ${dayMonth(endsOn)} ${endYear}`;
-  }
-  if (startsOn.slice(0, 7) !== endsOn.slice(0, 7)) {
-    return `${dayMonth(startsOn)} - ${dayMonth(endsOn)} ${endYear}`;
-  }
-  return `${Number(startsOn.slice(8, 10))} - ${dayMonth(endsOn)} ${endYear}`;
+  return formatDayRange(startsOn, endsOn, null, now);
 }
 
 /** The toolbar's label for a view. Pure. */
-export function rangeLabel(view: PlanTabView, anchor: string): string {
-  return view === 'month' ? monthLabel(anchor) : weekRangeLabel(anchor);
+export function rangeLabel(view: PlanTabView, anchor: string, now: Date = new Date()): string {
+  return view === 'month' ? monthLabel(anchor) : weekRangeLabel(anchor, now);
 }
 
 // ---------------------------------------------------------------------------

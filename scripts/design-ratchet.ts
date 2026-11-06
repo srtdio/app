@@ -106,7 +106,7 @@ export const METRICS = {
   },
   exitMix: {
     distinct: false,
-    what: 'files with a tap control holding IconX and one holding IconChevronLeft (any label)',
+    what: 'files with an X exit and a < exit (any label but remove/clear/previous)',
     fix: 'One exit per panel: Back (IconChevronLeft) on pages, X only for remove/clear/dismiss.',
   },
   handTap: {
@@ -383,11 +383,18 @@ export function scanSource(file: string, src: string): Hit[] {
       const mdWidth = toks.some((t) => /^(md|lg):(w|max-w)-/.test(t));
       if (!mdWidth) add('fullWidthButton', node, '<Button w-full>');
     }
-    // q. exits: any tap control holding IconX or IconChevronLeft, whatever
-    // its label ("Close", "Done", "Cancel" and "Back" are all exits).
+    // q. exits: a tap control holding IconX or IconChevronLeft is an exit
+    // whatever its label says ("Close", "Done", "Cancel", "Back"), except the
+    // X's the Exit rule allows (remove / clear / dismiss / delete / cancel
+    // upload / stop) and chevrons that step through content (previous, move).
     if (clickable) {
-      const isX = containsIcon(full, /^IconX$/);
-      const isBack = containsIcon(full, /^IconChevronLeft$/);
+      const label = `${attrString(attrs, 'aria-label') ?? ''} ${attrString(attrs, 'label') ?? ''}`;
+      const text = full.getText(sf);
+      const allowedX = /\b(remove|clear|dismiss|delete|stop|cancel upload|unpin|discard)\b/i;
+      const stepBack = /\b(previous|prev|earlier|move|left|calendar|month)\b/i;
+      const isX = containsIcon(full, /^IconX$/) && !allowedX.test(label) && !allowedX.test(text);
+      const isBack =
+        containsIcon(full, /^IconChevronLeft$/) && !stepBack.test(label) && !stepBack.test(text);
       if (isX) exitX++;
       if (isBack) exitBack++;
       if ((isX || isBack) && firstExit < 0) firstExit = node.getStart(sf);

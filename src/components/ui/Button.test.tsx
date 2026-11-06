@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ReactElement } from 'react';
@@ -61,12 +63,11 @@ describe('Button design system', () => {
       expect(t).toContain('px-4');
       expect(t).toContain('text-base');
     }
-    expect(classOf({ size: 'sm' })).toBe(classOf({ size: 'lg' }));
   });
 
-  it('does not forward size to the DOM', () => {
-    const el = Button({ size: 'sm', children: 'Go' }) as ReactElement<Record<string, unknown>>;
-    expect(el.props['size']).toBeUndefined();
+  it('has no size prop: every button is 44 (B1)', () => {
+    const src = readFileSync(fileURLToPath(new URL('./Button.tsx', import.meta.url)), 'utf8');
+    expect(src).not.toMatch(/size\?: 'sm'/);
   });
 
   it('maps each variant to its tokens', () => {

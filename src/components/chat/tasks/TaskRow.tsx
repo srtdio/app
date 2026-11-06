@@ -126,7 +126,10 @@ export function PriorityChip(props: {
     <span
       data-task-p={props.priority}
       className={cn(
-        'inline-flex h-[22px] items-center gap-0.5 rounded-lg px-1.5 font-mono text-sm lit-pill',
+        // B1: the picker is a 44 control; the read-only tag stays 24.
+        pick !== undefined
+          ? 'inline-flex min-h-11 items-center gap-1 rounded-lg px-3 font-mono text-sm lit-pill'
+          : 'inline-flex h-6 items-center gap-0.5 rounded-sm px-2 font-mono text-sm lit-badge',
         P_TAG[props.priority],
         props.ringed === true && 'lit-today',
       )}

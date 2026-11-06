@@ -1,12 +1,12 @@
 {
-  "arbitraryPx": 468,
-  "offGrid": 594,
+  "arbitraryPx": 465,
+  "offGrid": 586,
   "zValues": 13,
   "zArbitrary": 17,
-  "leading": 134,
+  "leading": 133,
   "tracking": 57,
   "borderWidth": 35,
-  "cardPadding": 34,
+  "cardPadding": 33,
   "dotSizes": 4,
   "iconSizes": 30,
   "iconSizeLiteral": 14,
@@ -15,8 +15,8 @@
   "keyIndex": 49,
   "outlineNone": 25,
   "nowrap": 14,
-  "exitMix": 7,
-  "handTap": 16,
+  "exitMix": 1,
+  "handTap": 14,
   "fullWidthButton": 14,
   "designDisables": 1
 }

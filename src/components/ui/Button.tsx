@@ -15,11 +15,6 @@ export type ButtonVariant =
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
-  /**
-   * Accepted so call sites compile; has no visual effect. Every button is 44
-   * tall (the design system has one height).
-   */
-  size?: 'sm' | 'md' | 'lg';
   /** 'round' renders a 44x44 circle (composer actions); default is the 8px-radius rectangle. */
   shape?: 'default' | 'round';
   /** Ref to the rendered <button>; a plain prop so Button stays a callable function. */
@@ -84,7 +79,6 @@ export function buttonClass(
 
 export function Button({
   variant = 'secondary',
-  size,
   shape = 'default',
   className,
   buttonRef,
@@ -93,7 +87,6 @@ export function Button({
   children,
   ...props
 }: ButtonProps) {
-  void size;
   // Busy keeps the width: the label (and icon) stay in place, invisible, and
   // the arc sits in the same grid cell over their centre, so a busy button
   // never grows or jumps. The button's own classes never change.

@@ -82,16 +82,22 @@ describe('design ratchet: per-metric counts', () => {
     expect(fine.handTap).toBe(0);
   });
 
-  it('exitMix counts IconX + IconChevronLeft exits whatever their labels say', () => {
-    const src = [
+  it('exitMix counts X + < exits whatever their labels say, not remove/clear X or previous <', () => {
+    const exits = [
       '<div>',
       '  <IconButton label="Done"><IconX /></IconButton>',
-      '  <IconButton label="Previous"><IconChevronLeft /></IconButton>',
+      '  <IconButton label="Go up"><IconChevronLeft /></IconButton>',
       '</div>',
     ].join('\n');
-    expect(countHits(scanSource('src/a.tsx', src)).exitMix).toBe(1);
-    const one = '<IconButton label="Back"><IconChevronLeft /></IconButton>';
-    expect(countHits(scanSource('src/a.tsx', one)).exitMix).toBe(0);
+    expect(countHits(scanSource('src/a.tsx', exits)).exitMix).toBe(1);
+    const allowed = [
+      '<div>',
+      '  <IconButton label="Clear search"><IconX /></IconButton>',
+      '  <IconButton label="Previous image"><IconChevronLeft /></IconButton>',
+      '  <IconButton label="Back"><IconChevronLeft /></IconButton>',
+      '</div>',
+    ].join('\n');
+    expect(countHits(scanSource('src/a.tsx', allowed)).exitMix).toBe(0);
   });
 
   it('ui/Text.tsx is the role table: its leading/tracking are not counted', () => {

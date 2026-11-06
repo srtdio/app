@@ -14,10 +14,10 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, Ref } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ComposerFrame } from '@/components/ui/Composer';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconSend } from '@/components/ui/icons';
 import { QUICK_REACTIONS } from '@/components/chat/MessageActionMenu';
-import { cn } from '@/lib/cn';
 import { getDraft, setDraft } from '@/lib/chat/drafts';
 import { isSendKeydown } from '@/lib/chat/send-key';
 import { messagePlaceholder } from '@/lib/person-card';
@@ -96,76 +96,78 @@ export function PersonMessageInput(props: PersonMessageInputProps): ReactElement
   return (
     <form
       data-person-message=""
-      className="flex items-end gap-2"
       onSubmit={(event) => {
         event.preventDefault();
         send(text);
       }}
     >
-      <div
-        className={cn(
-          'lit-well flex min-h-[44px] min-w-0 flex-1 items-end rounded-lg border border-field bg-panel-2 pl-4 mv-tint focus-within:lit-focus',
-          controls.reactions ? 'pr-0' : 'pr-4',
-        )}
-      >
-        <textarea
-          ref={setRefs}
-          data-person-message-input=""
-          // A chat message, not an AutoFill target.
-          autoComplete="off"
-          rows={1}
-          value={text}
-          placeholder={messagePlaceholder(props.firstName)}
-          aria-label={messagePlaceholder(props.firstName)}
-          onChange={(event) => change(event.target.value, event.target.selectionStart)}
-          onKeyDown={(event) => {
-            if (
-              isSendKeydown({
-                key: event.key,
-                shiftKey: event.shiftKey,
-                isComposing: event.nativeEvent.isComposing,
-                coarsePointer: props.layout !== 'laptop',
-              })
-            ) {
-              event.preventDefault();
-              send(text);
-            }
-          }}
-          // 16px below md so iOS never zooms on focus; 14px from md up.
-          className="max-h-[120px] min-w-0 flex-1 resize-none self-center overflow-y-auto bg-transparent py-2.5 text-input leading-snug text-fg outline-none placeholder:text-fg-3 md:text-base"
-        />
-        {controls.reactions ? (
-          <span className="flex shrink-0 items-center" data-person-reactions="">
-            {CARD_REACTIONS.map((emoji) => (
-              <IconButton
-                key={emoji}
-                type="button"
-                label={`Send ${emoji}`}
-                data-person-reaction={emoji}
-                // Keep the keyboard up: the press never takes focus from the box.
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={() => send(emoji)}
-                className="shrink-0 text-2xl"
-              >
-                <span aria-hidden="true">{emoji}</span>
-              </IconButton>
-            ))}
-          </span>
-        ) : null}
-      </div>
-      {controls.send ? (
-        <Button
-          type="submit"
-          variant="primary"
-          shape="round"
-          aria-label="Send"
-          data-person-send=""
-          onPointerDown={(event) => event.preventDefault()}
-          className="shrink-0"
-        >
-          <IconSend size={ICON_SIZE.control} />
-        </Button>
-      ) : null}
+      {/* ui/Composer: field, in-field reactions, then the round send (B1). */}
+      <ComposerFrame
+        flushEnd={controls.reactions}
+        input={
+          <>
+            <textarea
+              ref={setRefs}
+              data-person-message-input=""
+              // A chat message, not an AutoFill target.
+              autoComplete="off"
+              rows={1}
+              value={text}
+              placeholder={messagePlaceholder(props.firstName)}
+              aria-label={messagePlaceholder(props.firstName)}
+              onChange={(event) => change(event.target.value, event.target.selectionStart)}
+              onKeyDown={(event) => {
+                if (
+                  isSendKeydown({
+                    key: event.key,
+                    shiftKey: event.shiftKey,
+                    isComposing: event.nativeEvent.isComposing,
+                    coarsePointer: props.layout !== 'laptop',
+                  })
+                ) {
+                  event.preventDefault();
+                  send(text);
+                }
+              }}
+              // 16px below md so iOS never zooms on focus; 14px from md up.
+              className="max-h-[120px] min-w-0 flex-1 resize-none self-center overflow-y-auto bg-transparent py-2.5 text-input leading-snug text-fg outline-none placeholder:text-fg-3 md:text-base"
+            />
+            {controls.reactions ? (
+              <span className="flex shrink-0 items-center" data-person-reactions="">
+                {CARD_REACTIONS.map((emoji) => (
+                  <IconButton
+                    key={emoji}
+                    type="button"
+                    label={`Send ${emoji}`}
+                    data-person-reaction={emoji}
+                    // Keep the keyboard up: the press never takes focus from the box.
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={() => send(emoji)}
+                    className="shrink-0 text-2xl"
+                  >
+                    <span aria-hidden="true">{emoji}</span>
+                  </IconButton>
+                ))}
+              </span>
+            ) : null}
+          </>
+        }
+        send={
+          controls.send ? (
+            <Button
+              type="submit"
+              variant="primary"
+              shape="round"
+              aria-label="Send"
+              data-person-send=""
+              onPointerDown={(event) => event.preventDefault()}
+              className="shrink-0"
+            >
+              <IconSend size={ICON_SIZE.control} />
+            </Button>
+          ) : null
+        }
+      />
     </form>
   );
 }

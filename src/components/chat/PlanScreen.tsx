@@ -2104,26 +2104,23 @@ export function PlanScreen(props: {
         onPress={onPrimary}
       />
     ) : undefined;
-  // Line 2's box: Add (accent soft), 34px in a 44px tap target, its right
-  // edge on the 16px line. No Edit: every change saves itself.
+  // Line 2's Add: the shared Button at 44 with IconPlus (B1: no hand-built
+  // 34px box), its right edge on the 16px line. No Edit: every change saves itself.
   const viewActions = (
     <span data-plan-header-actions="" className="flex shrink-0 items-center gap-2">
-      <PressableRow
+      <Button
         type="button"
-        inline
+        variant="secondary"
         aria-label="Add to plan"
         data-plan-add-header=""
         onClick={openHeaderAdd}
-        className="group flex h-11 shrink-0 items-center"
+        className="shrink-0"
       >
-        <span
-          data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-lg border px-3 text-base font-semibold leading-5 text-accent lit-selected group-hover:brightness-95 group-focus-visible:lit-focus"
-        >
+        <span data-plan-header-box="" className="inline-flex items-center gap-2">
           <IconPlus size={ICON_SIZE.inline} />
           Add
         </span>
-      </PressableRow>
+      </Button>
     </span>
   );
   return (

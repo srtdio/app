@@ -399,14 +399,13 @@ export function DatePicker({
                   <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
                     <Button
                       type="button"
-                      size="lg"
                       variant="ghost"
                       disabled={value === ''}
                       onClick={() => pick('')}
                     >
                       Clear date
                     </Button>
-                    <Button type="button" size="lg" onClick={() => setOpen(false)}>
+                    <Button type="button" onClick={() => setOpen(false)}>
                       Done
                     </Button>
                   </div>
