@@ -69,6 +69,7 @@ const NotificationsPage = lazyRoute(loadNotifications, (m) => m.NotificationsPag
 const PlanTabPage = lazyRoute(loadPlanTab, (m) => m.PlanTabPage);
 const PlanBesideLayout = lazyRoute(loadPlanBeside, (m) => m.PlanBesideLayout);
 const PlanPage = lazyRoute(loadPlan, (m) => m.PlanPage);
+const PlanBankItemPage = lazyRoute(loadPlan, (m) => m.PlanBankItemPage);
 const ActivityRedirect = lazyRoute(
   () => import('@/components/shell/ActivityRedirect'),
   (m) => m.ActivityRedirect,
@@ -203,6 +204,8 @@ export default function App() {
                 )}
               >
                 <Route path="/plan" />
+                {/* A bank idea (no plan); static, so it wins over /plan/:planId. */}
+                <Route path="/plan/bank" element={page(<PlanBankItemPage />)} />
                 <Route path="/plan/:planId" element={page(<PlanPage fallback="/plan" />)} />
               </Route>
               <Route path="/assets" element={page(<AssetsPage />)} />

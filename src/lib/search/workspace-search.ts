@@ -281,7 +281,11 @@ export function workspaceHitTarget(
       return jump(planHref(hit.id, null));
     case 'plan_item':
     case 'plan_item_comment':
-      return jump(planHref(hit.parentId ?? '', null), hit.id);
+      // A bank idea (no plan) opens on its own route (PlanPage.tsx PLAN_BANK_PATH).
+      if (hit.parentId === null || hit.parentId === '') {
+        return jump(`/plan/bank?item=${encodeURIComponent(hit.id)}`);
+      }
+      return jump(planHref(hit.parentId, null), hit.id);
     case 'activity':
       return jump(activityHitPath(hit, workspaceKey));
     case 'task':

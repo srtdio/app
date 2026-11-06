@@ -22,6 +22,7 @@ export interface FetchOptions {
  * Until each gets server idempotency they wait as before. Supabase RPC names.
  */
 export const NO_LIMIT_RPCS: ReadonlySet<string> = new Set([
+  'bank_idea_create',
   'brief_create',
   'chat_message_schedule',
   'chat_plan_share',

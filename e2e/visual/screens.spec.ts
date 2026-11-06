@@ -417,6 +417,24 @@ function seedChatPlan(network: HarnessNetwork): void {
   }
 }
 
+/**
+ * The chat plan's concept moved to the idea bank (plan_item_to_bank's result):
+ * no plan, no date, the plan it came from by title, team only.
+ */
+function seedBankIdea(network: HarnessNetwork): void {
+  seedChatPlan(network);
+  for (const row of network.world.tables.plan_items ?? []) {
+    if (row.id !== PLAN_CONCEPT_ITEM) continue;
+    row.plan_id = null;
+    row.target_date = null;
+    row.came_from_plan_title = 'Week of 12 Oct';
+    row.show_to_client = false;
+    row.archived_at = null;
+    row.starred_at = null;
+    row.last_active_at = '2026-10-09T10:00:00Z';
+  }
+}
+
 /** The chat plan plus a Not OK note on its post item (the item's Plan notes). */
 function seedChatPlanNote(network: HarnessNetwork): void {
   seedChatPlan(network);
@@ -1147,6 +1165,18 @@ const SCREENS: Screen[] = [
       await box.click();
       await box.fill('@');
       await waitFor([page.locator('[data-mention-picker]')], 'mention picker');
+    },
+  },
+  {
+    // A bank idea (no plan) on its own route: header Idea, subline Bank, the
+    // Came from line, Date "No date", no Approvers row or plan menu.
+    name: 'plan-item-bank',
+    seed: creator,
+    extra: seedBankIdea,
+    url: `/plan/bank?item=${PLAN_CONCEPT_ITEM}`,
+    steps: async (page) => {
+      await waitFor([page.locator('[data-plan-page="item"] [data-plan-came-from]')], 'bank idea');
+      await waitFor([page.locator('[data-plan-file-name]')], 'bank idea files');
     },
   },
   {

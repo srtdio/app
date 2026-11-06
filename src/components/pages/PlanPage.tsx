@@ -14,9 +14,13 @@
 // as the same docked panel as in a chat, and closing returns to it without a
 // remount. A plan opened from a plan replaces that entry, so Close is always
 // one step back to the page. Phone: the plan alone, full page, as before.
+// /plan/bank?item=:itemId[&comment=:commentId] opens a bank idea (a concept
+// with no plan) in the Item screen with no bundle: the kept idea paints first,
+// then one shared planItemRead runs after paint. Back goes to the Plan tab with
+// the Bank chip picked (/plan?week=bank).
 
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
   useLocation,
@@ -30,6 +34,20 @@ import { SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { readSearchJump } from '@/lib/search/jump';
 import { PLAN_NOT_AVAILABLE } from '@/components/chat/plan-card';
 import { PlanScreen, PlanPage as PlanFrame } from '@/components/chat/PlanScreen';
+import {
+  BANK_BACK_LABEL,
+  BANK_ITEM_TITLE,
+  BANK_LABEL,
+  PlanItemScreen,
+  sharedBankItemRead,
+} from '@/components/chat/PlanItemScreen';
+import { bankItemReadWhat, type PlanItemRead } from '@/lib/chat/plans';
+import { useViewerSide } from '@/lib/chat/viewer-role';
+import { PLAN_BANK_CHIP, PLAN_WEEK_PARAM } from '@/lib/plan-tab';
+import { Bone } from '@/lib/motion';
+import { peekKept, readKey } from '@/lib/session-read';
+import { useSession } from '@/lib/session-context';
+import type { Result } from '@srtdio/rpc';
 import { hasPreviousEntry } from '@/lib/chat/use-history-step';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import { useWorkspace } from '@/lib/workspace-context';
@@ -152,5 +170,104 @@ export function PlanPage(props: { fallback: string }): ReactElement {
         onClose={close}
       />
     </SearchWordsContext.Provider>
+  );
+}
+
+/** The bank idea route's path (?item= names the idea). */
+export const PLAN_BANK_PATH = '/plan/bank';
+
+/** A bank idea's route, with the comment to land on when given. Pure. */
+export function planBankItemRoute(itemId: string, commentId?: string | null): string {
+  const q = new URLSearchParams({ item: itemId });
+  if (commentId !== null && commentId !== undefined) q.set('comment', commentId);
+  return `${PLAN_BANK_PATH}?${q.toString()}`;
+}
+
+/** Where a bank idea's Back goes: the Plan tab, Bank chip picked. Pure. */
+export function planBankBack(): string {
+  return `/plan?${new URLSearchParams({ [PLAN_WEEK_PARAM]: PLAN_BANK_CHIP }).toString()}`;
+}
+
+/**
+ * /plan/bank?item=: one bank idea. Paints the kept read at once (session or
+ * device), else the frame with one box; the read starts after paint (an
+ * effect) and the screen joins it (sharedRead, one network read).
+ */
+export function PlanBankItemPage(): ReactElement {
+  const [search] = useSearchParams();
+  const navigate = useNavigate();
+  const { workspaceId } = useWorkspace();
+  const { session } = useSession();
+  const me = session?.user.id ?? null;
+  const { side } = useViewerSide(workspaceId);
+  const rawItem = search.get('item');
+  const itemId = isPlanId(rawItem) ? rawItem : null;
+  const rawComment = search.get('comment');
+  const commentId = isPlanId(rawComment) ? rawComment : null;
+  const key =
+    me !== null && workspaceId !== null && itemId !== null
+      ? readKey(me, workspaceId, bankItemReadWhat(itemId))
+      : null;
+  // What this route last settled, by its key; the kept read paints until then.
+  const [settled, setSettled] = useState<{ key: string; result: Result<PlanItemRead> } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (key === null || me === null || workspaceId === null || itemId === null) return;
+    let live = true;
+    void sharedBankItemRead(me, workspaceId, itemId).then((result) => {
+      if (live) setSettled({ key, result });
+    });
+    return () => {
+      live = false;
+    };
+  }, [key, me, workspaceId, itemId]);
+  const kept = key !== null ? peekKept<Result<PlanItemRead>>(key) : undefined;
+  const fresh = settled !== null && settled.key === key ? settled.result : null;
+  // A failed refresh keeps the kept idea on screen.
+  const read = fresh !== null && fresh.ok ? fresh : (kept ?? fresh);
+  const bankLink = useMemo(
+    () =>
+      read !== null && read.ok
+        ? { postStages: read.data.postStages, postInfo: read.data.postInfo }
+        : undefined,
+    [read],
+  );
+  const close = useCallback(() => navigate(planBankBack(), { replace: true }), [navigate]);
+
+  if (read !== null && read.ok) {
+    return (
+      <PlanItemScreen
+        open
+        item={read.data.item}
+        {...(bankLink !== undefined ? { bankLink } : {})}
+        side={side}
+        {...(commentId !== null ? { highlightCommentId: commentId } : {})}
+        onClose={close}
+      />
+    );
+  }
+  const missing = itemId === null || (read !== null && !read.ok);
+  return (
+    <PlanFrame
+      open
+      testId="item"
+      title={missing ? PLAN_NOT_AVAILABLE : BANK_ITEM_TITLE}
+      {...(missing ? {} : { subtitle: BANK_LABEL })}
+      backLabel={BANK_BACK_LABEL}
+      closeLabel="Close plan"
+      onBack={close}
+    >
+      {missing ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-fg-2">
+          <IconPlan size={ICON_SIZE.tray} />
+          <p className="text-base">{PLAN_NOT_AVAILABLE}</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3.5 p-4">
+          <Bone lit="lit-card" as="div" className="h-[120px] rounded-xl" />
+        </div>
+      )}
+    </PlanFrame>
   );
 }

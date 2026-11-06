@@ -37,6 +37,10 @@
 // is the shared Textarea (1 to 4 lines): Enter sends on a fine pointer,
 // Shift+Enter (and Return on touch) adds a line; while the @ picker is open
 // Enter or Tab picks. Tokens only.
+// A bank idea (no plan: opened with an item and no bundle, /plan/bank) reads
+// through planItemRead (one shared session read, the kept idea paints first):
+// header "Idea", subline "Bank" ("Bank · archived"), a "Came from" line when it
+// left a plan, Date "No date"; no Approvers row, plan actions, reviews or Edit.
 
 import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
@@ -112,6 +116,7 @@ import {
   DRAFT_NOT_READY,
   LINK_POST_LABEL,
   MOVE_FAILED,
+  NO_DATE_LABEL,
   PAIR_POST_LABEL,
   POST_NOT_MADE_LABEL,
   STATUS_POST_ROW,
@@ -155,12 +160,15 @@ import {
 import { readProfiles } from '@/lib/chat-reads';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import {
+  bankItemReadWhat,
   conceptEditArgs,
   conceptEditUnchanged,
   dispatchPlanChanged,
+  planItemRead,
   readConceptFiles,
   readItemScreen,
   type CommentVisibility,
+  type PlanItemRead,
   type ItemScreenData,
   type PlanBundle,
   type PlanCommentRow,
@@ -200,6 +208,8 @@ import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { firstExternalUrl } from '@/lib/chat/message-links';
 import { errorText } from '@/lib/error-copy';
 import { markEntityReadOnOpen } from '@/lib/inbox/unread-entities';
+import { invalidateReads, readKey, sharedRead } from '@/lib/session-read';
+import type { Result } from '@srtdio/rpc';
 
 /** The preview card for the first external link in a concept's description. */
 function ConceptLinkCard(props: { text: string }): ReactElement | null {
@@ -407,10 +417,70 @@ export function planItemMenuItems(props: {
 /** The comment box placeholder: one chat per item, so no audience in it. */
 export const COMMENT_PLACEHOLDER = 'Add a comment';
 
+/** A bank idea's header: the title, its subline and the back label. */
+export const BANK_ITEM_TITLE = 'Idea';
+export const BANK_LABEL = 'Bank';
+export const BANK_BACK_LABEL = 'Back to Bank';
+
+/** A bank idea's subline: "Bank", or "Bank · archived". Pure. */
+export function bankSubline(item: Pick<PlanItemRow, 'archived_at'>): string {
+  return item.archived_at !== null && item.archived_at !== undefined
+    ? `${BANK_LABEL} · archived`
+    : BANK_LABEL;
+}
+
+/** The line under a bank idea's subline when it left a plan; null when made in the bank. Pure. */
+export function cameFromLine(item: Pick<PlanItemRow, 'came_from_plan_title'>): string | null {
+  const title = item.came_from_plan_title?.trim() ?? '';
+  return title !== '' ? `Came from ${title}` : null;
+}
+
+/**
+ * The bundle a bank idea stands in (no plan): the idea alone, no reviews, its
+ * linked post's stage and info. The audience follows Who can see (team-only
+ * ideas tag only the agency side). Never written or dispatched. Pure.
+ */
+export function bankBundleOf(
+  item: PlanItemRow,
+  link: Pick<PlanBundle, 'postStages' | 'postInfo'> = { postStages: {}, postInfo: {} },
+): PlanBundle {
+  return {
+    plan: {
+      id: '',
+      workspace_id: '',
+      title: BANK_LABEL,
+      starts_on: '',
+      ends_on: '',
+      audience: item.show_to_client === true ? 'client' : 'team',
+      created_by: null,
+    },
+    items: [item],
+    reviews: [],
+    postStages: link.postStages,
+    postInfo: link.postInfo,
+  };
+}
+
+/** One bank idea through the shared session read (the route and the screen join it). */
+export function sharedBankItemRead(
+  userId: string,
+  workspaceId: string,
+  itemId: string,
+): Promise<Result<PlanItemRead>> {
+  return sharedRead(
+    readKey(userId, workspaceId, bankItemReadWhat(itemId)),
+    () => planItemRead(supabase, itemId, (ids, s) => readProfiles(supabase, ids, s)),
+    { isOk: (r) => r.ok },
+  );
+}
+
 export function PlanItemScreen(props: {
   open: boolean;
-  bundle: PlanBundle;
+  /** The item's plan; absent for a bank idea (no plan). */
+  bundle?: PlanBundle;
   item: PlanItemRow;
+  /** A bank idea's linked post stage and info (planItemRead); ignored with a bundle. */
+  bankLink?: Pick<PlanBundle, 'postStages' | 'postInfo'>;
   side: ViewerSide;
   /** The header back label; "Back to plan" when absent (the chat). */
   backLabel?: string;
@@ -431,7 +501,13 @@ export function PlanItemScreen(props: {
    */
   onOpenLinkedPost?: (postId: string) => void;
 }): ReactElement | null {
-  const { bundle, item, side } = props;
+  const { item, side } = props;
+  const bank = props.bundle === undefined;
+  const bankLink = props.bankLink;
+  const bundle = useMemo(
+    () => props.bundle ?? bankBundleOf(item, bankLink),
+    [props.bundle, item, bankLink],
+  );
   const { workspaces, workspaceId } = useWorkspace();
   // The workspace civil clock the plan days read on (device zone when unset).
   const timeZone = safeTimeZone(workspaces.find((w) => w.id === workspaceId)?.timezone);
@@ -441,9 +517,33 @@ export function PlanItemScreen(props: {
   // A concept reads its comments and files; a post item its comments only (the
   // Plan notes), in parallel with the embedded post view's own reads, so the
   // post never waits for it.
-  const { read, reload } = useScreenRead<ItemScreenData>(props.open, item.id, (signal) =>
-    readItemScreen(supabase, item, (ids, s) => readProfiles(supabase, ids, s), signal),
+  // A bank idea joins the route's shared planItemRead (one read per open).
+  const bankKey =
+    bank && me !== null && workspaceId !== null
+      ? readKey(me, workspaceId, bankItemReadWhat(item.id))
+      : null;
+  const { read, reload: reloadScreen } = useScreenRead<ItemScreenData>(
+    props.open,
+    item.id,
+    (signal) =>
+      bank && me !== null && workspaceId !== null
+        ? sharedBankItemRead(me, workspaceId, item.id).then(
+            (r): Result<ItemScreenData> => (r.ok ? { ok: true, data: r.data.screen } : r),
+          )
+        : readItemScreen(supabase, item, (ids, s) => readProfiles(supabase, ids, s), signal),
   );
+  const reload = (): void => {
+    if (bankKey !== null) invalidateReads(bankKey);
+    reloadScreen();
+  };
+  // A landed write: the plan's screens re-read; a bank idea's kept read goes stale.
+  const planChanged = (): void => {
+    if (bank) {
+      if (bankKey !== null) invalidateReads(bankKey);
+      return;
+    }
+    dispatchPlanChanged(window, bundle.plan.id);
+  };
   // Hand-typed mention tokens resolve through the shared batched name read
   // (users + workspace_members, one .in() each); the tick re-renders once it lands.
   const [, setNamesTick] = useState(0);
@@ -582,20 +682,24 @@ export function PlanItemScreen(props: {
     if (askingChanges) commentRef.current?.focus();
   }, [askingChanges]);
 
-  const actions = itemActions(side, item, bundle.plan.audience);
+  // A bank idea has no reviews: no actions.
+  const actions: ItemActions = bank
+    ? { kind: 'none' }
+    : itemActions(side, item, bundle.plan.audience);
   // The side a changes review writes: the item's own review actions, else
   // (Not OK on a row, a post item too) the viewer's PLAN side.
   const reviewSide =
     actions.kind === 'review'
       ? actions.side
-      : props.askChanges === true
+      : props.askChanges === true && !bank
         ? slotSide(side, bundle.plan.audience)
         : null;
   const title = rowTitle(bundle, item);
   // Reply privately on others' comments points at this item (held data only).
-  const replyPrivately = useMemo<PlanReplyPrivatelyTarget>(
-    () => ({ planId: bundle.plan.id, itemId: item.id, whereLabel: title }),
-    [bundle.plan.id, item.id, title],
+  // A bank idea has no plan to point at: no Reply privately.
+  const replyPrivately = useMemo<PlanReplyPrivatelyTarget | null>(
+    () => (bank ? null : { planId: bundle.plan.id, itemId: item.id, whereLabel: title }),
+    [bank, bundle.plan.id, item.id, title],
   );
   const description = item.kind === 'concept' ? (item.description ?? '') : '';
 
@@ -614,7 +718,7 @@ export function PlanItemScreen(props: {
     });
     setBusy(false);
     if (!stillOn(forItem)) {
-      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
+      if (result.ok) planChanged();
       return false;
     }
     if (!result.ok) {
@@ -628,7 +732,7 @@ export function PlanItemScreen(props: {
     }
     setConfirmOpen(false);
     setOverrides((prev) => ({ ...prev, [reviewSide]: status }));
-    dispatchPlanChanged(window, bundle.plan.id);
+    planChanged();
     return true;
   };
   // "Ask changes": the composer first. The field takes focus (its keyboard
@@ -643,7 +747,9 @@ export function PlanItemScreen(props: {
   // row's Edit opens it too. Save sends the full title, description and date;
   // files go as null unless they changed. An unchanged form sends nothing.
   const date = itemDateLabel(bundle, item, timeZone);
-  const editable = canEditConcept(side, item);
+  // plan_concept_edit edits a plan's concept (its date sits in the plan):
+  // a bank idea has no Edit yet.
+  const editable = !bank && canEditConcept(side, item);
   const editResets = conceptEditResets(
     overrides.team ?? reviewStatus(bundle, item.id, 'team'),
     overrides.client ?? reviewStatus(bundle, item.id, 'client'),
@@ -673,7 +779,7 @@ export function PlanItemScreen(props: {
     const result = await planConceptEdit(supabase, conceptEditArgs(forItem, edit, traceId));
     setEditBusy(false);
     if (!stillOn(forItem)) {
-      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
+      if (result.ok) planChanged();
       return;
     }
     if (!result.ok) {
@@ -688,7 +794,7 @@ export function PlanItemScreen(props: {
     setEditOpen(false);
     toast.show({ title: CONCEPT_UPDATED });
     reload();
-    dispatchPlanChanged(window, bundle.plan.id);
+    planChanged();
   };
 
   // The concept's linked post: the screen's own write first, else the read.
@@ -715,7 +821,7 @@ export function PlanItemScreen(props: {
     });
     setLinkBusy(false);
     if (!stillOn(forItem)) {
-      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
+      if (result.ok) planChanged();
       return;
     }
     if (!result.ok) {
@@ -732,7 +838,7 @@ export function PlanItemScreen(props: {
       return;
     }
     // The re-read brings the Plan list's pair (and drops this screen's own link).
-    dispatchPlanChanged(window, bundle.plan.id);
+    planChanged();
   };
   // "Link this post": the pick, unless it is the post already linked (a no-op).
   const confirmLink = (): void => {
@@ -800,7 +906,7 @@ export function PlanItemScreen(props: {
     });
     setSending(false);
     if (!stillOn(forItem)) {
-      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
+      if (result.ok) planChanged();
       return false;
     }
     if (!result.ok) {
@@ -825,7 +931,7 @@ export function PlanItemScreen(props: {
       prev.map((p) => (p.id === localId ? { ...p, id: result.data, pending: false } : p)),
     );
     reload();
-    dispatchPlanChanged(window, bundle.plan.id);
+    planChanged();
     return true;
   };
   // @ tags. Only the agency side can be tagged on a creators-only note or a
@@ -924,7 +1030,7 @@ export function PlanItemScreen(props: {
   // slot asks "Keep the approval?" first, cancelling cancels the move);
   // Remove: plan_item_remove, then back to the list. Clients never reach
   // these (no rows render for them).
-  const planActions = side === 'agency';
+  const planActions = side === 'agency' && !bank;
   const groups = planListGroups(bundle, timeZone, side);
   const currentDay = groups
     .flatMap((w) => w.days)
@@ -965,7 +1071,7 @@ export function PlanItemScreen(props: {
     setPlanBusy(false);
     // Left this item (or closed) meanwhile: no toast; the list still refreshes.
     if (!stillOn(forItem)) {
-      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
+      if (result.ok) planChanged();
       return false;
     }
     if (!result.ok) {
@@ -977,7 +1083,7 @@ export function PlanItemScreen(props: {
       toast.show({ title: planWriteErrorCopy(result.error.message, MOVE_FAILED) });
       return false;
     }
-    dispatchPlanChanged(window, bundle.plan.id);
+    planChanged();
     return true;
   };
   const moveItemTo = async (day: string | null, keep: boolean): Promise<void> => {
@@ -1010,7 +1116,7 @@ export function PlanItemScreen(props: {
     setPlanBusy(false);
     // Left this item (or closed) meanwhile: no close, no toast; the list still refreshes.
     if (!stillOn(forItem)) {
-      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
+      if (result.ok) planChanged();
       return;
     }
     if (!result.ok) {
@@ -1024,7 +1130,7 @@ export function PlanItemScreen(props: {
     }
     setRemoveOpen(false);
     toast.show({ title: REMOVED_TOAST });
-    dispatchPlanChanged(window, bundle.plan.id);
+    planChanged();
     // Back to the list (the entry item included), not out of the plan.
     (props.onRemoved ?? props.onClose)();
   };
@@ -1103,9 +1209,11 @@ export function PlanItemScreen(props: {
       <PlanPage
         open={props.open}
         testId="item"
-        title={itemKindLabel(bundle.items, item)}
-        subtitle={itemSlotSubtitle(bundle, item, side) ?? bundle.plan.title}
-        backLabel={props.backLabel ?? 'Back to plan'}
+        title={bank ? BANK_ITEM_TITLE : itemKindLabel(bundle.items, item)}
+        subtitle={
+          bank ? bankSubline(item) : (itemSlotSubtitle(bundle, item, side) ?? bundle.plan.title)
+        }
+        backLabel={props.backLabel ?? (bank ? BANK_BACK_LABEL : 'Back to plan')}
         onBack={props.onClose}
         desktopBack
         closeLabel="Close plan"
@@ -1295,6 +1403,11 @@ export function PlanItemScreen(props: {
           </>
         ) : (
           <div className="flex flex-col gap-3.5 p-4">
+            {bank && cameFromLine(item) !== null ? (
+              <p data-plan-came-from="" className="-mt-1 text-sm text-fg-3">
+                {cameFromLine(item)}
+              </p>
+            ) : null}
             <section data-plan-files="" aria-label="Files" className="flex flex-col gap-2">
               <h4 className={SECTION_LABEL}>Files</h4>
               <ItemMedia read={read} onRetry={reload} />
@@ -1337,10 +1450,13 @@ export function PlanItemScreen(props: {
                 <span className="text-base text-fg-3">Date</span>
                 <span className="flex items-center gap-1">
                   <span
-                    data-plan-item-date={date.dated ? 'dated' : 'none'}
-                    className={cn('text-md', date.dated ? 'font-mono text-fg-2' : 'text-fg-3')}
+                    data-plan-item-date={!bank && date.dated ? 'dated' : 'none'}
+                    className={cn(
+                      'text-md',
+                      !bank && date.dated ? 'font-mono text-fg-2' : 'text-fg-3',
+                    )}
                   >
-                    {date.label}
+                    {bank ? NO_DATE_LABEL : date.label}
                   </span>
                   {editable ? (
                     <Button
@@ -1356,7 +1472,7 @@ export function PlanItemScreen(props: {
                   ) : null}
                 </span>
               </div>
-              {statusRows(bundle, item, side, overrides).map((row) => (
+              {(bank ? [] : statusRows(bundle, item, side, overrides)).map((row) => (
                 <div
                   key={row.label}
                   className="flex min-h-[28px] items-center justify-between gap-2"

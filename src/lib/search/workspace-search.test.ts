@@ -217,6 +217,14 @@ describe('workspaceHitTarget', () => {
     expect(workspaceHitTarget(comment, 'GBL', 'reel')).toEqual({ path: '/plan/pl1?q=reel&at=i1' });
   });
 
+  it('a plan item or its comment with no plan (a bank idea) opens the bank route', () => {
+    for (const kind of ['plan_item', 'plan_item_comment'] as const) {
+      expect(workspaceHitTarget(hit({ kind, id: 'i1', parentId: null }), 'GBL')).toEqual({
+        path: '/plan/bank?item=i1',
+      });
+    }
+  });
+
   it('an activity hit opens its subject through the existing routes', () => {
     const event = (extra: Partial<WorkspaceHit>): WorkspaceHit =>
       hit({ kind: 'activity', id: 'e1', parentId: null, channelId: null, number: null, ...extra });

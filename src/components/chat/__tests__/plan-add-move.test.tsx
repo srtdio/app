@@ -191,7 +191,7 @@ describe('add (A2) and move (A3, A4) copy and calls', () => {
     expect(src).not.toContain('editMode');
     expect(src).toMatch(/\{agency \? \(\s*<>\s*<PlanConfirmSheet[\s\S]*<PlanAddSheet/);
     const item = read('PlanItemScreen.tsx');
-    expect(item).toContain("const planActions = side === 'agency';");
+    expect(item).toContain("const planActions = side === 'agency' && !bank;");
     expect(item).toContain('{planActions ? (');
     expect(item).toContain("{...(item.kind === 'concept' && planActions");
     // A client gets no plan rows in the post view's sheet.
