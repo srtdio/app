@@ -16,10 +16,9 @@ import {
   CHAT_HOME_STACK,
   ChannelCard,
   DEFAULT_LIST_INPUT,
-  GROUP_ROW_LIST,
-  GROUP_TILE_PHOTO,
-  PEOPLE_TILE_GRID,
-  PERSON_TILE_PHOTO,
+  CHAT_ROW_LIST,
+  CHAT_ROW_PHOTO,
+  EMPTY_PREVIEW,
   SECTION_LABEL_TYPE,
   channelListView,
   channelRowSelected,
@@ -33,7 +32,7 @@ import type { ChannelSummary } from '@/lib/chat-reads';
 import type { ConversationSummary } from '@/lib/chat/chat-store';
 import { formatChatTime } from '@/lib/time';
 
-// The row and the tile are token-only: every colour is a CSS variable the
+// The rows are token-only: every colour is a CSS variable the
 // .dark class swaps, so one class set serves light and dark.
 const NOW = Date.parse('2026-09-28T10:00:00Z');
 
@@ -115,7 +114,7 @@ const group2: ChannelSummary = { ...group, channelId: 'g2', title: 'Brand' };
 const esc = (cls: string): string => cls.replaceAll('&', '&amp;').replaceAll('>', '&gt;');
 
 describe('chat home sections', () => {
-  it('group channel -> a Row in Groups; DM channel -> a Tile in People', () => {
+  it('group channel -> a Row in Groups; DM channel -> a Row in People', () => {
     expect(tileKind(group)).toBe('wide');
     expect(tileKind(dm)).toBe('square');
     const markup = html(view([dm, group, dm2, group2]));
@@ -123,8 +122,9 @@ describe('chat home sections', () => {
     expect(sectionIds(markup, 'people')).toEqual(['Asha Rao', 'Ravi Menon']);
     // Groups first, then People; labels in that order.
     expect(markup.indexOf('>Groups<')).toBeLessThan(markup.indexOf('>People<'));
-    expect(markup).toContain(`data-section="groups" class="${GROUP_ROW_LIST}"`);
-    expect(markup).toContain(`data-section="people" class="${PEOPLE_TILE_GRID}"`);
+    expect(markup).toContain(`data-section="groups" class="${CHAT_ROW_LIST}"`);
+    expect(markup).toContain(`data-section="people" class="${CHAT_ROW_LIST}"`);
+    expect(markup).not.toContain('data-tile');
     expect((view([group, dm]).props as { className: string }).className).toBe(CHAT_HOME_STACK);
   });
 
@@ -167,20 +167,20 @@ describe('chat home sections', () => {
     tokenOnly(markup);
   });
 
-  it('People grid: 2 fluid columns on the 4px scale, no dense packing or spans', () => {
-    expect(PEOPLE_TILE_GRID).toBe('grid grid-cols-2 gap-3 px-4');
-    // An odd count leaves the last cell empty: nothing spans or stretches.
+  it('People: a stacked list of Rows like Groups, no grid', () => {
+    expect(CHAT_ROW_LIST).toBe('flex flex-col');
     const markup = html(view([dm, dm2, { ...dm, channelId: 'c3', title: 'Neha' }]));
-    expect(markup).not.toContain('col-span');
-    expect(markup).not.toContain('grid-flow');
-    // Rows draw their own 16 edge, so the stack itself has none.
+    expect(markup).not.toContain('grid-cols');
+    // Rows draw their own 12 chat edge, so the stack itself has none.
     expect(CHAT_HOME_STACK).toBe('flex flex-col gap-2');
   });
 
-  it('group rows: a divider under every row but the last (inset 60)', () => {
+  it('group and people rows: a divider under every row but the last (inset 56, the text edge)', () => {
     const markup = html(view([group, group2, { ...group, channelId: 'g3', title: 'Ops' }]));
     expect(markup.match(/data-row-divider=""/g)).toHaveLength(2);
-    expect(markup).toMatch(/data-row-divider=""[^>]*left-15/);
+    expect(markup).toMatch(/data-row-divider=""[^>]*left-14/);
+    const people = html(view([dm, dm2, { ...dm, channelId: 'c3', title: 'Neha' }]));
+    expect(people.match(/data-row-divider=""/g)).toHaveLength(2);
   });
 
   it('unread 0 -> no badge, unread 3 -> badge "3"', () => {
@@ -194,18 +194,19 @@ describe('chat home sections', () => {
 });
 
 describe('group chat: ui/Row', () => {
-  it('72 tall, 32 avatar column, text at 60, time meta, one-line preview, badge on line 2', () => {
+  it('72 tall, 32 avatar column at the 12 chat edge, time meta, one-line preview, badge on line 2', () => {
     const h = card(group, { ...read, unread: 3 });
     expect(h).toContain('data-chat-list-item="row"');
     expect(h).toContain('data-row=""');
     expect(h).toContain('min-h-18');
     expect(h).toMatch(/data-row-leading=""[^>]*w-8/);
-    expect(h).toContain(`data-group-photo="" class="${esc(GROUP_TILE_PHOTO)}"`);
+    expect(h).toMatch(/class="[^"]*rounded-none[^"]*\bpx-3\b[^"]*min-h-18/);
+    expect(h).toContain(`data-group-photo="" class="${esc(CHAT_ROW_PHOTO)}"`);
     // The shared Avatar at its header role, group kind: a 32px rounded square.
     expect(h).toContain('data-avatar-role="header"');
     expect(h).toContain('width:32px;height:32px');
     expect(h).toContain('rounded-lg lit-avatar inline-flex');
-    expect(GROUP_TILE_PHOTO).not.toContain('!');
+    expect(CHAT_ROW_PHOTO).not.toContain('!');
     // Time in the meta role; the preview one line (no clamp).
     const time = formatChatTime(read.lastMessageTs, new Date(NOW), 'UTC');
     expect(h).toMatch(new RegExp(`font-mono[^"]*">${time}<`));
@@ -218,7 +219,7 @@ describe('group chat: ui/Row', () => {
 
   it('the ⋯ is the Row trailing (ActionMenuTrigger, the trailing rule), never inside the tap surface', () => {
     const h = card(group, read, { menu: true });
-    expect(h).toMatch(/data-row-more=""[^>]*pr-4/);
+    expect(h).toMatch(/data-row-more=""[^>]*pr-3/);
     expect(h).toMatch(/aria-label="Actions for Launch"[^>]*-mr-3/);
     // The tap surface closes before the ⋯ opens: buttons never nest.
     const tap = h.indexOf('aria-label="Open Launch');
@@ -232,40 +233,40 @@ describe('group chat: ui/Row', () => {
   });
 });
 
-describe('person chat: ui/Tile', () => {
-  it('square thumbnail with the 72 disc, name, time in meta, no preview line, badge top-right', () => {
+describe('person chat: ui/Row, the same row as a group', () => {
+  it('72 tall, 32 circle, name + time, one-line preview, badge on line 2', () => {
     const h = card(dm, { ...read, unread: 120 });
-    expect(h).toContain('data-chat-list-item="tile"');
-    expect(h).toContain('data-tile=""');
-    expect(h).toContain('aspect-square');
-    expect(h).toContain(`data-person-photo="" class="${esc(PERSON_TILE_PHOTO)}"`);
-    expect(h).toContain('data-avatar-role="profile"');
-    expect(h).toContain('width:72px;height:72px');
-    expect(PERSON_TILE_PHOTO).not.toContain('!');
+    expect(h).toContain('data-chat-list-item="row"');
+    expect(h).toContain('data-chat-kind="person"');
+    expect(h).not.toContain('data-tile');
+    expect(h).toContain('min-h-18');
+    expect(h).toContain(`data-person-photo="" class="${esc(CHAT_ROW_PHOTO)}"`);
+    expect(h).toContain('data-avatar-role="header"');
+    expect(h).toContain('width:32px;height:32px');
     expect(h).toContain('>Asha Rao<');
-    expect(h).toContain('data-tile-time=""');
-    // No preview line on a person tile.
-    expect(h).not.toContain('See you then<');
-    expect(h).toMatch(/data-tile-corner="tr"[^>]*>.*data-count-badge/);
+    const time = formatChatTime(read.lastMessageTs, new Date(NOW), 'UTC');
+    expect(h).toMatch(new RegExp(`font-mono[^"]*">${time}<`));
+    expect(h).toContain('See you then<');
+    expect(h.indexOf('data-count-badge')).toBeGreaterThan(h.indexOf('See you then'));
     expect(h).toContain('>99+<');
     tokenOnly(h);
   });
 
-  it('⋯ on the title line, outside the one tap surface that holds the photo and caption', () => {
+  it('the ⋯ is the Row trailing, outside the one tap surface that holds the photo', () => {
     const h = card(dm, read, { menu: true });
-    const press = h.indexOf('data-tile-press');
-    const close = h.indexOf('</button>', press);
-    expect(press).toBeGreaterThan(-1);
-    expect(h.indexOf('data-person-photo')).toBeGreaterThan(press);
+    const tap = h.indexOf('aria-label="Open Asha Rao');
+    const close = h.indexOf('</button>', tap);
+    expect(h.indexOf('data-person-photo')).toBeGreaterThan(tap);
     expect(h.indexOf('data-person-photo')).toBeLessThan(close);
-    expect(h.indexOf('data-tile-more')).toBeGreaterThan(close);
+    expect(h.indexOf('data-row-more')).toBeGreaterThan(close);
     expect(h).toMatch(/aria-label="Actions for Asha Rao"[^>]*-mr-3/);
   });
 
-  it('no time: the meta slot is kept (tiles share height)', () => {
+  it('no message yet: line 2 is reserved and empty, the row stays 72', () => {
     const h = card(dm, undefined);
-    expect(h).not.toContain('data-tile-time');
-    expect(h).toContain('font-mono');
+    expect(h).toContain('min-h-18');
+    expect(h).toContain(`data-preview-empty="" aria-hidden="true">${EMPTY_PREVIEW}<`);
+    expect(h).not.toContain('No messages yet');
   });
 });
 
@@ -368,10 +369,10 @@ describe('G1: one layout listener per ChannelList, not one per tile', () => {
   });
 });
 
-// 5 Nov 2026: on the chat list the whole People tile, photo included, opens
+// 5 Nov 2026: on the chat list the whole People row, photo included, opens
 // the chat. The enlarged photo lives only inside a DM (header photo). The
-// photo sits inside the tile's one tap surface.
-describe('People tile photo opens the chat (no photo popup)', () => {
+// photo sits inside the row's one tap surface.
+describe('People row photo opens the chat (no photo popup)', () => {
   function mount(props: { onSelect: () => void; onToggle?: (id: string) => void }): {
     host: HTMLDivElement;
     unmount: () => void;
@@ -403,13 +404,13 @@ describe('People tile photo opens the chat (no photo popup)', () => {
     };
   }
 
-  it('a DM tile: no button inside the photo slot; the photo sits inside the tile surface', () => {
+  it('a DM row: no button inside the photo slot; the photo sits inside the row surface', () => {
     const { host, unmount } = mount({ onSelect: () => {} });
     const slot = host.querySelector('[data-person-photo]');
     expect(slot).not.toBeNull();
-    expect(slot?.className).toBe(PERSON_TILE_PHOTO);
+    expect(slot?.className).toBe(CHAT_ROW_PHOTO);
     expect(slot?.querySelector('[role="button"], button, [tabindex]')).toBeNull();
-    const press = host.querySelector('[data-tile-press]');
+    const press = host.querySelector('button[aria-label^="Open "]');
     expect(press?.contains(slot ?? null)).toBe(true);
     expect(press?.getAttribute('aria-label')).toMatch(/^Open Asha Rao/);
     unmount();
@@ -418,7 +419,7 @@ describe('People tile photo opens the chat (no photo popup)', () => {
   it('a click on the photo calls the same open handler as the tile body', () => {
     const onSelect = vi.fn();
     const { host, unmount } = mount({ onSelect });
-    const photo = host.querySelector('[data-person-photo] [data-avatar-role="profile"]');
+    const photo = host.querySelector('[data-person-photo] [data-avatar-role="header"]');
     expect(photo).not.toBeNull();
     act(() => {
       (photo as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -438,7 +439,7 @@ describe('People tile photo opens the chat (no photo popup)', () => {
     const onSelect = vi.fn();
     const onToggle = vi.fn();
     const { host, unmount } = mount({ onSelect, onToggle });
-    const photo = host.querySelector('[data-person-photo] [data-avatar-role="profile"]');
+    const photo = host.querySelector('[data-person-photo] [data-avatar-role="header"]');
     act(() => {
       (photo as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });

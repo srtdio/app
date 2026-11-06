@@ -243,7 +243,7 @@ export interface FileTileProps {
   pageCount?: number | null | undefined;
   cache: PresignCache;
   presignEnabled: boolean;
-  layout?: 'fill' | 'card' | undefined;
+  layout?: 'fill' | 'card' | 'thumb' | undefined;
 }
 
 /**
