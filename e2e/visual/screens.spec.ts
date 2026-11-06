@@ -1377,6 +1377,29 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // A bucket's menu inside the Filter and sort sheet: phone swaps the
+    // Buckets card's body for Back, Rename, Delete bucket (no second Sheet);
+    // laptop opens the ActionMenu popover anchored to the chip.
+    name: 'plan-tab-bank-filter-bucket-menu',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankReady(page);
+      await tap([page.locator('[data-bank-filter-open]').first()], 'Filter and sort');
+      const chip = page.locator(`[data-bank-filter-sheet] [data-bank-bucket="${BANK_BUCKETS[0]}"]`);
+      await tap([chip], 'bucket chip');
+      await tap([chip], 'picked bucket chip again');
+      await waitFor(
+        [
+          page.locator(`[data-bank-bucket-menu="${BANK_BUCKETS[0]}"]`),
+          page.getByRole('menuitem', { name: /Rename/ }),
+        ],
+        'bucket menu',
+      );
+    },
+  },
+  {
     name: 'plan-tab-bank-select',
     seed: creator,
     extra: seedBank,

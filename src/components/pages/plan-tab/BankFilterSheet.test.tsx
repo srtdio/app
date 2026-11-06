@@ -16,12 +16,14 @@ interface UndoAction {
 }
 
 const h = vi.hoisted(() => ({
+  laptop: true,
   toasts: [] as string[],
   undo: [] as UndoAction[],
   menus: new Map<string, { open: boolean; items: Array<{ id: string; onSelect: () => void }> }>(),
 }));
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+vi.mock('@/lib/use-is-laptop', () => ({ useIsLaptop: () => h.laptop }));
 vi.mock('@/components/ui/toast', () => ({
   useToast: () => ({ show: (t: { title: string }) => h.toasts.push(t.title), dismiss: () => {} }),
 }));
@@ -102,6 +104,7 @@ beforeEach(() => {
   h.toasts = [];
   h.undo = [];
   h.menus.clear();
+  h.laptop = true;
   writes = {
     create: vi.fn(async (name: string) => ({
       ok: true as const,
@@ -194,5 +197,94 @@ describe('bucket chips', () => {
       await h.undo[1]?.commit();
     });
     expect(writes.remove).toHaveBeenCalledWith('b1');
+  });
+});
+
+describe('bucket delete line', () => {
+  it('reads none, one and many', async () => {
+    const { bucketDeleteLine } = await import('./bank-parts');
+    expect(bucketDeleteLine(0)).toBeNull();
+    expect(bucketDeleteLine(1)).toBe('1 idea keeps its other buckets');
+    expect(bucketDeleteLine(3)).toBe('3 ideas keep their other buckets');
+  });
+
+  it('gives the laptop menu no second line for an empty bucket', () => {
+    writes.countIn = () => 0;
+    render();
+    const del = h.menus.get('Product')?.items.find((i) => i.id === 'delete-bucket') as
+      | { description?: string }
+      | undefined;
+    expect(del?.description).toBeUndefined();
+  });
+});
+
+describe('picked chip', () => {
+  it('shows the name only, no menu glyph', () => {
+    picked = 'b1';
+    render();
+    const chip = host.querySelector('[data-bank-bucket="b1"]');
+    expect(chip?.textContent).toBe('Product');
+    expect(chip?.textContent).not.toContain('\u22EF');
+  });
+});
+
+describe('phone: the bucket menu in place', () => {
+  function chip(): HTMLButtonElement {
+    const el = host.querySelector<HTMLButtonElement>('[data-bank-bucket="b1"]');
+    if (el === null) throw new Error('no chip');
+    return el;
+  }
+
+  beforeEach(() => {
+    h.laptop = false;
+    picked = 'b1';
+    render();
+  });
+
+  it('opens in the card (no ActionMenu, no second sheet) on a second tap', () => {
+    act(() => chip().click());
+    expect(host.querySelector('[data-bank-bucket-menu="b1"]')).not.toBeNull();
+    expect(host.querySelector('[data-bank-buckets]')).toBeNull();
+    expect(h.menus.size).toBe(0);
+    expect(host.querySelector('[data-bank-bucket-delete-line]')?.textContent).toBe(
+      '2 ideas keep their other buckets',
+    );
+  });
+
+  it('Back returns to the chips with focus on the chip', () => {
+    act(() => chip().click());
+    act(() => host.querySelector<HTMLButtonElement>('[data-bank-bucket-menu-back]')?.click());
+    expect(host.querySelector('[data-bank-bucket-menu]')).toBeNull();
+    expect(document.activeElement).toBe(chip());
+  });
+
+  it('Esc returns to the chips', () => {
+    act(() => chip().click());
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(host.querySelector('[data-bank-bucket-menu]')).toBeNull();
+    expect(host.querySelector('[data-bank-buckets]')).not.toBeNull();
+  });
+
+  it('Rename puts the inline field back among the chips', () => {
+    act(() => chip().click());
+    act(() => host.querySelector<HTMLButtonElement>('[data-bank-bucket-menu-rename]')?.click());
+    expect(input().value).toBe('Product');
+  });
+
+  it('Delete hides the chip behind the Undo strip', () => {
+    act(() => chip().click());
+    act(() => host.querySelector<HTMLButtonElement>('[data-bank-bucket-menu-delete]')?.click());
+    expect(host.querySelector('[data-bank-bucket="b1"]')).toBeNull();
+    expect(h.undo).toHaveLength(1);
+    expect(writes.remove).not.toHaveBeenCalled();
+  });
+
+  it('an empty bucket shows Delete bucket with no second line', () => {
+    writes.countIn = () => 0;
+    render();
+    act(() => chip().click());
+    expect(host.querySelector('[data-bank-bucket-delete-line]')).toBeNull();
   });
 });

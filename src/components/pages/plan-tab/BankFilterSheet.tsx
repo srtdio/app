@@ -3,17 +3,21 @@
 // - Buckets: All buckets, then each bucket (single pick, the pick is the ink
 //   fill), then the add chip (dashed +) that turns into an inline Input
 //   (Enter or the tick adds through createBucket and picks it; Esc cancels).
-//   The picked chip shows ⋯; a second tap, or a long-press / right-click on
-//   any bucket chip, opens its ActionMenu: Rename (inline in place,
-//   workspace_bucket_rename), Delete bucket last ("{n} ideas keep their other
-//   buckets"); a delete hides the chip behind the Undo strip for UNDO_MS and
+//   A chip shows its name only. A second tap on the picked chip, or a
+//   long-press / right-click on any bucket chip, opens its menu: Rename
+//   (inline in place, workspace_bucket_rename), Delete bucket last (a second
+//   line "{n} ideas keep their other buckets" only when ideas use it). Phone:
+//   the menu replaces the Buckets card's body in place (Back, then the two
+//   rows), never a second Sheet over this one (one sheet, one dim); Esc or
+//   Back returns to the chips. Laptop: ui/ActionMenu's popover anchored to
+//   the chip. A delete hides the chip behind the Undo strip for UNDO_MS and
 //   workspace_bucket_delete fires when the strip ends.
 // - Sort: the four sorts, a tick on the current.
 // - Show archived ideas: a switch (archived ideas only).
 // - Untouched for 90 days: a switch (live ideas last active over 90 days ago).
 // Footer: Done. A client never opens it with writes (no add, rename or delete).
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { Button } from '@/components/ui/Button';
@@ -23,10 +27,19 @@ import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { Switch } from '@/components/ui/Switch';
-import { ICON_SIZE, IconCheck, IconEdit, IconPlus, IconTrash } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconCheck,
+  IconChevronLeft,
+  IconEdit,
+  IconPlus,
+  IconTrash,
+} from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import { BUCKET_NAME_MAX, type BucketOption } from '@/lib/buckets';
+import { useEscapeLayer } from '@/lib/escape-stack';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import type { BankSort } from '@/lib/chat/plans';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import {
@@ -158,6 +171,8 @@ export function BucketChips(props: {
 }): ReactElement {
   const toast = useToast().show;
   const undoable = useUndoableAction();
+  const laptop = useIsLaptop();
+  const chipsRef = useRef<HTMLDivElement>(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -234,28 +249,59 @@ export function BucketChips(props: {
       cancel();
     }
   };
-  const menuItems = (bucket: BucketOption): ActionMenuItem[] => [
-    {
-      id: 'rename',
-      label: 'Rename',
-      icon: IconEdit,
-      onSelect: () => {
-        setDraft(bucket.name);
-        setRenaming(bucket.id);
+  const startRename = (bucket: BucketOption): void => {
+    setMenuFor(null);
+    setDraft(bucket.name);
+    setRenaming(bucket.id);
+  };
+  const startDelete = (bucket: BucketOption): void => {
+    setMenuFor(null);
+    remove(bucket);
+  };
+  const menuItems = (bucket: BucketOption): ActionMenuItem[] => {
+    const line = bucketDeleteLine(props.writes?.countIn(bucket.id) ?? 0);
+    return [
+      { id: 'rename', label: 'Rename', icon: IconEdit, onSelect: () => startRename(bucket) },
+      {
+        id: 'delete-bucket',
+        label: 'Delete bucket',
+        icon: IconTrash,
+        tone: 'danger',
+        ...(line !== null ? { description: line } : {}),
+        onSelect: () => startDelete(bucket),
       },
-    },
-    {
-      id: 'delete-bucket',
-      label: 'Delete bucket',
-      icon: IconTrash,
-      tone: 'danger',
-      description: bucketDeleteLine(props.writes?.countIn(bucket.id) ?? 0),
-      onSelect: () => remove(bucket),
-    },
-  ];
+    ];
+  };
+
+  // Phone: the open menu takes the card's body in place (no second Sheet).
+  const inPlace = laptop ? null : (shown.find((b) => b.id === menuFor) ?? null);
+  const backTo = useRef<string | null>(null);
+  const closeInPlace = (): void => {
+    backTo.current = menuFor;
+    setMenuFor(null);
+  };
+  useEffect(() => {
+    if (inPlace !== null || backTo.current === null) return;
+    const id = backTo.current;
+    backTo.current = null;
+    chipsRef.current
+      ?.querySelector<HTMLElement>(`[data-bank-bucket="${CSS.escape(id)}"]`)
+      ?.focus();
+  }, [inPlace]);
+  if (inPlace !== null) {
+    return (
+      <BucketMenuInPlace
+        bucket={inPlace}
+        line={bucketDeleteLine(props.writes?.countIn(inPlace.id) ?? 0)}
+        onBack={closeInPlace}
+        onRename={() => startRename(inPlace)}
+        onDelete={() => startDelete(inPlace)}
+      />
+    );
+  }
 
   return (
-    <div data-bank-buckets="" className="flex flex-wrap items-center gap-2">
+    <div ref={chipsRef} data-bank-buckets="" className="flex flex-wrap items-center gap-2">
       {multi === undefined ? (
         <Chip
           label="All buckets"
@@ -286,6 +332,7 @@ export function BucketChips(props: {
             bucket={bucket}
             picked={multi !== undefined ? multi.has(bucket.id) : props.picked === bucket.id}
             canEdit={props.writes !== null && multi === undefined}
+            laptop={laptop}
             menuOpen={menuFor === bucket.id}
             onMenu={(open) => setMenuFor(open ? bucket.id : null)}
             items={menuItems(bucket)}
@@ -330,6 +377,7 @@ function BucketChip(props: {
   bucket: BucketOption;
   picked: boolean;
   canEdit: boolean;
+  laptop: boolean;
   menuOpen: boolean;
   onMenu: (open: boolean) => void;
   items: ActionMenuItem[];
@@ -339,19 +387,12 @@ function BucketChip(props: {
     if (props.canEdit) props.onMenu(true);
   });
   return (
-    <span className="inline-flex">
+    <span className="relative inline-flex">
       <Chip
         label={props.bucket.name}
         selected={props.picked}
         data-bank-bucket={props.bucket.id}
         {...(props.canEdit ? gesture.handlers : {})}
-        trailing={
-          props.picked && props.canEdit ? (
-            <span aria-hidden="true" className="shrink-0">
-              {'\u22EF'}
-            </span>
-          ) : undefined
-        }
         onClick={() => {
           if (gesture.consumeClickSuppression()) return;
           // A second tap on the picked chip opens its menu.
@@ -359,16 +400,85 @@ function BucketChip(props: {
           else props.onPick();
         }}
       />
-      {props.canEdit ? (
-        <ActionMenu
-          title={props.bucket.name}
-          items={props.items}
-          trigger={null}
-          open={props.menuOpen}
-          onOpenChange={props.onMenu}
-        />
+      {props.canEdit && props.laptop ? (
+        // The popover measures this zero-height edge along the chip's bottom,
+        // so it drops from the chip itself.
+        <span aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 flex">
+          <ActionMenu
+            title={props.bucket.name}
+            items={props.items}
+            trigger={null}
+            align="left"
+            open={props.menuOpen}
+            onOpenChange={props.onMenu}
+          />
+        </span>
       ) : null}
     </span>
+  );
+}
+
+/**
+ * Phone: the bucket's menu in the Buckets card's place (Back, Rename, Delete
+ * bucket). Esc or Back returns to the chips, focus back on the chip.
+ */
+function BucketMenuInPlace(props: {
+  bucket: BucketOption;
+  line: string | null;
+  onBack: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+}): ReactElement {
+  const box = useRef<HTMLDivElement>(null);
+  useEscapeLayer(true, props.onBack);
+  useEffect(() => {
+    box.current?.querySelector<HTMLElement>('[data-bank-bucket-menu-back]')?.focus();
+  }, []);
+  return (
+    <div
+      ref={box}
+      data-bank-bucket-menu={props.bucket.id}
+      role="group"
+      aria-label={props.bucket.name}
+      className="flex flex-col"
+    >
+      <div className="flex items-center gap-2">
+        <Button variant="link" type="button" data-bank-bucket-menu-back="" onClick={props.onBack}>
+          <IconChevronLeft size={ICON_SIZE.inline} />
+          Back
+        </Button>
+        <span className="min-w-0 flex-1 truncate text-right text-sm text-fg-2">
+          {props.bucket.name}
+        </span>
+      </div>
+      <PressableRow
+        type="button"
+        flat
+        data-bank-bucket-menu-rename=""
+        onClick={props.onRename}
+        className="flex items-center gap-2 px-1 text-base text-fg"
+      >
+        <IconEdit size={ICON_SIZE.inline} />
+        Rename
+      </PressableRow>
+      <PressableRow
+        type="button"
+        flat
+        data-bank-bucket-menu-delete=""
+        onClick={props.onDelete}
+        className="flex items-center gap-2 px-1 py-2 text-base text-bad"
+      >
+        <IconTrash size={ICON_SIZE.inline} />
+        <span className="flex min-w-0 flex-col text-left">
+          <span>Delete bucket</span>
+          {props.line !== null ? (
+            <span data-bank-bucket-delete-line="" className="truncate text-sm text-fg-3">
+              {props.line}
+            </span>
+          ) : null}
+        </span>
+      </PressableRow>
+    </div>
   );
 }
 
