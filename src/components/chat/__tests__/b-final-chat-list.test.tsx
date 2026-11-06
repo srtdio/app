@@ -178,7 +178,8 @@ describe('notes, groups and people: one row style', () => {
   });
 
   it('ChannelList never imports ui/Tile', () => {
-    const src = readFileSync(fileURLToPath(new URL('../ChannelList.tsx', import.meta.url)), 'utf8');
+    const path = fileURLToPath(new URL('../ChannelList.tsx', import.meta.url));
+    const src = readFileSync(path, 'utf8');
     expect(src).not.toContain("from '@/components/ui/Tile'");
   });
 });

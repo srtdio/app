@@ -160,7 +160,8 @@ describe('11g phone chat list edges', () => {
     expect(classes(CHAT_HOME_STACK).some((c) => /^(px|pl|pr)-/.test(c))).toBe(false);
     expect(CHAT_HOME_EDGE).toBe('px-4');
     expect(read('../../ui/Row.tsx')).toContain("chat ? CHAT_GUTTER : 'px-4'");
-    expect(read('../ChannelList.tsx').match(/gutter="chat"/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+    const chatRows = read('../ChannelList.tsx').match(/gutter="chat"/g) ?? [];
+    expect(chatRows.length).toBeGreaterThanOrEqual(3);
     for (const first of [true, false]) {
       const label = classes(sectionLabelClass(first));
       expect(label).toContain('px-4');

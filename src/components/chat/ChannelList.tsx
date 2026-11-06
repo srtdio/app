@@ -442,7 +442,7 @@ export function rowMenuKey(event: { key: string; shiftKey: boolean }): boolean {
   return event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10');
 }
 
-/** A chat's section: a group channel is 'wide' (Groups), a DM 'square' (People); both render as a Row. */
+/** A chat's section: a group is 'wide' (Groups), a DM 'square' (People); both are a Row. */
 export type TileKind = 'wide' | 'square';
 
 /** The section a channel lists in: group -> wide (Groups), DM -> square (People). Pure. */
@@ -553,7 +553,7 @@ export interface ChannelRowParts {
   time: string;
   /** The photo, in its slot (data-group-photo / data-person-photo). */
   photo: ReactElement;
-  /** The row's second line: the preview or "Draft: ..." (a person with no message: a reserved empty line). */
+  /** The second line: the preview or "Draft: ..." (a DM with no message: a reserved empty line). */
   preview: ReactElement;
   /** The unread CountBadge, or null. */
   pill: ReactElement | null;
