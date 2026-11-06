@@ -1,8 +1,10 @@
 // The one date and time module for the whole app. Every visible date or time
 // reads through here so the register never drifts between surfaces:
-//   formatTime        "2:14 PM"
-//   formatChatTime    "2:14 PM" today, "Yesterday", "20 Oct", "20 Oct 2025"
-//   formatRelative    "just now", "5 min ago", "3 hours ago" ... "2 years ago"
+//   formatTime        "2:14 PM" (clock inside a message bubble)
+//   formatWhen        THE past-time format: "2:14 PM" today, "Yesterday",
+//                     "Mon" 2-6 days back, "20 Oct", "20 Oct 2025"
+//   formatChatTime    alias of formatWhen
+//   formatDayLabel    day dividers/headings: "Today", else as formatWhen
 //   formatDateTime    "23 Oct, 2:14 PM"; "23 Oct 2025, 2:14 PM" off the current year
 //   formatDate        "23 Oct"; "23 Oct 2025" off the current year
 //   formatDayRange    "19 - 25 Oct"; "28 Oct - 3 Nov"
@@ -65,11 +67,7 @@ const LONG_WEEKDAYS = [
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-const MINUTE = 60 * 1000;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
-const MONTH = 30 * DAY;
-const YEAR = 365 * DAY;
+const DAY = 24 * 60 * 60 * 1000;
 
 interface Civil {
   year: number;
@@ -223,20 +221,20 @@ export function formatChatTime(
 }
 
 /**
- * Spoken elapsed time: "just now" under a minute (and for a future instant),
- * then "5 min ago", "3 hours ago", "2 days ago" (under 30 days), "4 months ago"
- * (under a year), "2 years ago". Singular and plural agree.
+ * A day divider or day heading (chat day pills, grouped lists): "Today" for
+ * today (a clock time makes no sense for a whole day), else formatWhen:
+ * "Yesterday", "Mon", "19 Oct", "19 Oct 2025". Never relative.
  */
-export function formatRelative(value: DateInput, now: Date = new Date()): string {
-  const instant = instantOf(value);
-  if (instant === undefined) return '';
-  const diff = now.getTime() - instant.getTime();
-  if (diff < MINUTE) return 'just now';
-  if (diff < HOUR) return `${Math.floor(diff / MINUTE)} min ago`;
-  if (diff < DAY) return `${plural(Math.floor(diff / HOUR), 'hour')} ago`;
-  if (diff < MONTH) return `${plural(Math.floor(diff / DAY), 'day')} ago`;
-  if (diff < YEAR) return `${plural(Math.min(11, Math.floor(diff / MONTH)), 'month')} ago`;
-  return `${plural(Math.floor(diff / YEAR), 'year')} ago`;
+export function formatDayLabel(
+  value: DateInput,
+  now: Date = new Date(),
+  timeZone?: string,
+): string {
+  const zone = safeTimeZone(timeZone);
+  const civil = civilOf(value, zone);
+  if (civil === undefined) return '';
+  if (civilDaysBetween(civil, civilOfInstant(now, zone)) === 0) return 'Today';
+  return formatWhen(value, now, zone);
 }
 
 /** "23 Oct, 2:14 PM"; "23 Oct 2025, 2:14 PM" off the current year. */
