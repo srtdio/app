@@ -972,7 +972,7 @@ function seedMemberEmailOffByOwner(network: HarnessNetwork): void {
 
 /** Members panel, Ana's row ⋯, Change role: the member sheet. */
 async function openMemberSheet(page: Page): Promise<void> {
-  await waitFor([page.getByText('Emails off', { exact: true }).first()], 'settings members');
+  await waitFor([page.locator('[data-member-email-mark="off"]').first()], 'settings members');
   await tap(
     [page.getByRole('button', { name: 'Actions for Ana Silva', exact: true })],
     'member actions',
@@ -1832,8 +1832,8 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // Owner viewer: every active row carries the catch-up email tag; Ana has
-    // opted out, so both "On" and "Emails off" paint.
+    // Owner viewer: every active row carries the catch-up email mark; Ana has
+    // opted out, so both the on and the off (struck) mail glyph paint.
     name: 'members',
     seed: creator,
     extra: (network) => {
@@ -1843,7 +1843,7 @@ const SCREENS: Screen[] = [
     },
     url: '/settings?panel=members',
     steps: async (page) =>
-      waitFor([page.getByText('Emails off', { exact: true }).first()], 'settings members'),
+      waitFor([page.locator('[data-member-email-mark="off"]').first()], 'settings members'),
   },
   {
     // Owner viewer: Ana's member sheet (row ⋯, Change role) with the Catch-up
