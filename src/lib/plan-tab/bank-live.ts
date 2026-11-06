@@ -9,12 +9,16 @@
 // the Bank paints first and the subscription starts after.
 
 import type { PushChannel } from '@/lib/inbox/inbox-push';
-import { PLAN_LIVE_EVENT, PLAN_LIVE_SETTLE_MS, type PlanLiveClient } from '@/lib/chat/plan-live';
+import type { PlanLiveClient } from '@/lib/chat/plan-live';
 
-/** One call per burst, as the Plan's live ping. */
-export const BANK_LIVE_SETTLE_MS = PLAN_LIVE_SETTLE_MS;
-/** The broadcast event the bank triggers send. */
-export const BANK_LIVE_EVENT = PLAN_LIVE_EVENT;
+/**
+ * One call per burst, the Plan's PLAN_LIVE_SETTLE_MS (bank-live.test.ts keeps
+ * them equal). Own values, not imports: specs that mock plan-live still load
+ * the Bank.
+ */
+export const BANK_LIVE_SETTLE_MS = 300;
+/** The broadcast event the bank triggers send (the Plan's PLAN_LIVE_EVENT). */
+export const BANK_LIVE_EVENT = 'changed';
 
 /** The workspace bank's private topic. Pure. */
 export function bankLiveTopic(workspaceId: string): string {
