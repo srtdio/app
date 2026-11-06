@@ -23,7 +23,7 @@ import type {
   TrafficData,
   UsersData,
 } from '@/lib/cockpit/types';
-import { formatRelative } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 import { Bone, BoxSkeleton } from '@/lib/motion';
 
 export const AGORA_CONSOLE_URL = 'https://console.agora.io';
@@ -192,7 +192,7 @@ export function ErrorsTab({ source }: { source: Source<{ issues: SentryIssue[] }
                     </span>
                     <span className="truncate text-sm text-fg-3">
                       {issue.culprit} · {countText(issue.count)} times ·{' '}
-                      {formatRelative(issue.lastSeen)}
+                      {formatWhen(issue.lastSeen)}
                     </span>
                   </PressableRow>
                 </li>

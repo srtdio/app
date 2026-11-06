@@ -8,7 +8,7 @@ import type {
 } from 'react';
 import { cn } from '@/lib/cn';
 import { MOVE_CLASS } from '@/lib/motion';
-import { textRole } from '@/components/ui/Text';
+import { TEXT_ROLE, textRole } from '@/components/ui/Text';
 import { Tag } from '@/components/ui/Tag';
 import { Avatar } from '@/components/ui/Avatar';
 import { PostPlaceholder, type PostPlaceholderKind } from '@/components/ui/PostPlaceholder';
@@ -122,9 +122,9 @@ export const LIST_CARD_LINE1 = 'flex h-5 min-w-0 items-center gap-2';
  * Line 2: two lines, always two lines tall (min-h-9 = 36 = 2 x 18), so every
  * card is the same height. The secondary role's truncate is undone so it wraps.
  */
-export const LIST_CARD_PREVIEW = textRole(
-  'secondary',
-  'line-clamp-2 min-h-9 whitespace-normal break-words [overflow-wrap:anywhere]',
+export const LIST_CARD_PREVIEW = cn(
+  TEXT_ROLE.secondary.replace('truncate', ''),
+  'line-clamp-2 min-h-9 break-words [overflow-wrap:anywhere]',
 );
 
 /** Line 3: time, tag, space, ⋮; one 20 line (the 44 ⋮ keeps its box, CONTROL_IN_LINE). */

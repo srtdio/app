@@ -43,10 +43,10 @@ export function BriefStatusPill({ status }: { status: string }): ReactElement {
 }
 
 /**
- * The one external link a card may show, or null for none. An image brief keeps the
- * card exactly as it was: the thumbnail already carries the visual, so no button is
- * added. Only a brief with no image attachment falls through to its first reference
- * link, and never to more than one. Pure, so the precedence is unit-tested.
+ * A brief's first usable reference link, or null for none (an image brief: the
+ * picture already carries the visual). The list card (ui/ListCard) shows no
+ * link of its own; the detail page lists them. Pure, so the precedence is
+ * unit-tested.
  */
 export function briefCardLink(brief: BriefWithThumbnail): ExternalLink | null {
   if (brief.thumbnailAssetVersionId !== null) return null;

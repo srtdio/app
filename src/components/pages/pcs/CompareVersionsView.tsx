@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { SECTION_LABEL } from '@/components/ui/Text';
-import { formatDateTime } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 import { diffSegments, type DiffKind, type DiffResult, type DiffSegment } from '@/lib/text-diff';
 
 export type CompareViewMode = 'auto' | 'inline' | 'side';
@@ -58,12 +58,13 @@ function isEmptyCaption(caption: string | null): boolean {
   return caption === null || caption.trim() === '';
 }
 
-// "23 Oct, 2:14 PM" via the app formatter, on the viewer's clock. Falls back
+// The app's one past-time format (formatWhen: "2:14 PM" today, "Yesterday",
+// "Mon", "23 Oct"), on the viewer's clock. Falls back
 // to the raw value if unparseable.
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatDateTime(value);
+  return formatWhen(value);
 }
 
 const NO_CAPTION = <span className="text-fg-3">No caption in this version.</span>;

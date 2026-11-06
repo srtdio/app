@@ -24,7 +24,7 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 import { SnapshotThumbs } from '@/components/pages/pcs/PostGallery';
 import { snapshotItems } from '@/components/pages/pcs/gallery-transforms';
-import { formatDate } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 
 interface VersionHistorySheetProps {
   open: boolean;
@@ -78,13 +78,14 @@ export const VERSION_THUMBS_CLASS = 'min-w-0 shrink overflow-hidden';
 /** The text column: fills the row and never squeezes below 128px. */
 export const VERSION_TEXT_CLASS = 'flex min-w-32 flex-1 flex-col';
 
-// The app's day formatter (FN7): "11 Jun", with the year once it differs from
-// now's, on the viewer's clock.
+// The app's one past-time format (formatWhen): the clock today, "Yesterday",
+// "Mon", then "11 Jun", with the year once it differs from now's, on the
+// viewer's clock.
 // Falls back to the raw value if unparseable.
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatDate(value);
+  return formatWhen(value);
 }
 
 /** Toggle an id in the compare selection, a max-two queue: re-picking a selected
