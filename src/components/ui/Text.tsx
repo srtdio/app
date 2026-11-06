@@ -38,7 +38,7 @@ export const TEXT_ROLE: Record<TextRole, string> = {
 };
 
 /**
- * The section label (CLAUDE.md Design rules: sm/600 uppercase tracking-label
+ * The section label (CLAUDE.md Design rules: sm/600 uppercase tracking-label, 0.06em
  * fg-2), the same string as TEXT_ROLE.section, for call sites that compose a
  * class string. It is the one tracked style, kept here so no call site writes
  * tracking-*. SECTION_LABEL_INK is the same without the colour, for a label

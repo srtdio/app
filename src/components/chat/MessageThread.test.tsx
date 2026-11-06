@@ -1646,7 +1646,7 @@ describe('header online dot', () => {
     expect(headerAvatarPresence(undefined)).toBeUndefined();
   });
 
-  it('the dot is a 10px good circle with a 2px panel outline at the bottom-right, lit', () => {
+  it('the dot is a 12px good circle with a 2px panel outline at the bottom-right, lit', () => {
     const dots: string[] = [];
     walk(Avatar({ name: 'Alice', role: 'header', presence: 'online' }), (el) => {
       const props = el.props as Record<string, unknown>;
@@ -1654,8 +1654,8 @@ describe('header online dot', () => {
     });
     expect(dots).toHaveLength(1);
     for (const token of [
-      'h-2.5',
-      'w-2.5',
+      'h-3',
+      'w-3',
       'rounded-full',
       'bg-good',
       'outline-2',
