@@ -87,7 +87,7 @@ describe('Topbar mobile workspace switcher', () => {
     expect(className(button)).toContain('min-h-11');
     expect(texts(button)).toContain('Acme');
     // The name is bounded so search / avatar stay on a 375px screen.
-    expect(className(button)).toMatch(/max-w-\[\d+px\]/);
+    expect(className(button)).toMatch(/\bmax-w-48\b/);
   });
 
   it('dispatches the sorted:switch-workspace window event when clicked', () => {

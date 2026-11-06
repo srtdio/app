@@ -103,7 +103,7 @@ describe('trailing rule: the part applies it, never the call site', () => {
     expect(out).toContain('data-selection-count=""');
     expect(out).toContain('2 selected');
     const cancel = /<button[^>]*data-selection-cancel=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(cancel).not.toMatch(/\bw-11\b/);
+    expect(cancel).not.toMatch(/(^|\s)w-11(\s|$)/);
     // Same bar height as the browse mode's header.
     expect(out).toContain('h-14');
     expect(html(<HeaderBar compact title="Contact info" onBack={noop} />)).toContain('h-14');
