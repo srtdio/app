@@ -1,0 +1,105 @@
+name: Design Ratchet
+
+# Counts one-off layout values in src/ (scripts/design-ratchet.ts) and fails
+# when any count rises above scripts/design-ratchet.baseline.json. Counts may
+# only go down. Pure: no database, no network, no build. Mirrors
+# scripts-typecheck-ci.yml structure.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  # changes: on a PR, diffs against the merge base with the PR's base branch and
+  # sets run=true only when a changed file matches PATTERNS below. A push to main
+  # always runs.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect relevant changes
+        id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          # One extended regex per line, matched against each changed path.
+          PATTERNS: |
+            ^src/
+            ^scripts/design-ratchet
+            ^tailwind\.config\.ts$
+            ^\.github/workflows/design-ratchet-ci\.yml$
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "push: whole check"
+            exit 0
+          fi
+          git fetch --no-tags origin "$BASE_REF"
+          base=$(git merge-base "origin/$BASE_REF" HEAD)
+          files=$(git diff --name-only "$base" HEAD)
+          echo "$files"
+          printf '%s\n' "$PATTERNS" | sed '/^[[:space:]]*$/d' > "$RUNNER_TEMP/patterns"
+          if hits=$(grep -E -f "$RUNNER_TEMP/patterns" <<< "$files"); then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "relevant:"
+            echo "$hits"
+          else
+            rc=$?
+            if [ "$rc" -ne 1 ]; then exit "$rc"; fi
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  design-ratchet:
+    needs: changes
+    # Always reports, so a required check never waits on a skipped job.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RUN: ${{ needs.changes.outputs.run }}
+    steps:
+      - name: Check change detection
+        if: needs.changes.result != 'success'
+        run: |
+          set -euo pipefail
+          echo "changes job: ${{ needs.changes.result }}"
+          exit 1
+
+      - name: Skip note
+        if: env.RUN != 'true'
+        run: |
+          echo "skipped: no relevant files changed"
+
+      - uses: actions/checkout@v4
+        if: env.RUN == 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        if: env.RUN == 'true'
+
+      - uses: actions/setup-node@v4
+        if: env.RUN == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: env.RUN == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Design ratchet
+        if: env.RUN == 'true'
+        env:
+          # New hits are listed for files changed since this base.
+          DESIGN_RATCHET_BASE: origin/${{ github.base_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${GITHUB_BASE_REF:-main}"
+          node --experimental-strip-types --no-warnings scripts/design-ratchet.ts
