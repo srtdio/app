@@ -92,7 +92,7 @@ import { logger } from '@/lib/logger';
 import { civilDaysBetween, civilToday, formatCivilDayHeader } from '@/lib/plan-week';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
-import { SECTION_LABEL } from '@/components/ui/Text';
+import { TEXT_ROLE } from '@/components/ui/Text';
 
 export { DATE_FIELD, DATE_FIT } from '@/components/chat/PlanDayPickerSheet';
 
@@ -529,7 +529,7 @@ export function PlanComposeScreen(props: {
           </div>
 
           <section className="flex flex-col gap-2" aria-label="Items">
-            <h3 className={`mx-1 ${SECTION_LABEL}`}>
+            <h3 className={`mx-1 ${TEXT_ROLE.section}`}>
               Items · <span className="font-mono tabular-nums">{items.length}</span>
             </h3>
             {items.length === 0 ? (

@@ -87,7 +87,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Card } from '@/components/ui/Card';
-import { SECTION_LABEL, SECTION_LABEL_INK, Text } from '@/components/ui/Text';
+import { SECTION_LABEL_INK, Text, TEXT_ROLE } from '@/components/ui/Text';
 import { CONTROL_IN_LINE, GUTTER } from '@/components/ui/layout';
 import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -777,7 +777,7 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }
           data-plan-screen-progress={box.key}
           className="flex min-w-0 flex-col gap-1.5 rounded-xl bg-panel-2 p-3 lit-card-muted"
         >
-          <span className={`${SECTION_LABEL}`}>
+          <span className={TEXT_ROLE.section}>
             {box.label}
           </span>
           <span className="truncate font-mono text-md text-fg">{box.text}</span>
@@ -2758,7 +2758,7 @@ export function PlanBody(props: {
               <h3
                 data-plan-week-header=""
                 className={cn(
-                  `sticky top-0 z-10 bg-bg py-2 ${SECTION_LABEL}`,
+                  `sticky top-0 z-10 bg-bg py-2 ${TEXT_ROLE.section}`,
                   GUTTER,
                 )}
               >
@@ -2959,7 +2959,7 @@ export function DayColumn(props: {
 }
 
 /** The PLAN / POST line label: 36px column, the section label (12/16, 600, uppercase). */
-const LINE_LABEL = `w-9 shrink-0 ${SECTION_LABEL}`;
+const LINE_LABEL = `w-9 shrink-0 ${TEXT_ROLE.section}`;
 
 /**
  * The PLAN switch: "OK" and "Not OK" joined, each the shared 44px Button

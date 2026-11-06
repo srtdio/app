@@ -8,6 +8,8 @@ import { supabase } from '@/lib/supabase';
 
 /** Digits in an email code; matches supabase/config.toml otp_length. */
 export const CODE_LENGTH = 6;
+/** The box positions 0..5: a box's slot is its identity (keys, active box). */
+const CODE_SLOTS: readonly number[] = Array.from({ length: CODE_LENGTH }, (_, slot) => slot);
 
 /** Seconds before Resend code can be tapped again. */
 export const RESEND_COOLDOWN_SECONDS = 60;
@@ -188,18 +190,18 @@ export function CodeStep({
           data-code-boxes=""
           className="grid grid-cols-6 gap-2"
         >
-          {Array.from({ length: CODE_LENGTH }, (_, i) => (
+          {CODE_SLOTS.map((slot) => (
             <div
-              key={i}
+              key={slot}
               data-code-box=""
               className={cn(
                 'flex h-14 items-center justify-center rounded-lg border bg-panel-2 lit-well font-mono text-2xl font-medium tabular-nums text-fg mv-tint',
                 // Invalid boxes keep the focus line on the active box.
                 invalid ? 'border-bad lit-bad' : 'border-field',
-                i === active && 'lit-focus',
+                slot === active && 'lit-focus',
               )}
             >
-              {code[i] ?? ''}
+              {code[slot] ?? ''}
             </div>
           ))}
         </div>
@@ -240,7 +242,7 @@ export function CodeStep({
       {error?.kind === 'expired' ? null : (
         <Button
           variant="ghost"
-          className="w-full"
+          className="w-full md:w-full"
           onClick={() => void handleResend()}
           disabled={cooldown > 0 || resending}
         >
@@ -251,7 +253,7 @@ export function CodeStep({
           )}
         </Button>
       )}
-      <Button type="button" onClick={onDifferentEmail} variant="link" className="w-full">
+      <Button type="button" onClick={onDifferentEmail} variant="link" className="w-full md:w-full">
         {CHECK_EMAIL_COPY.differentEmail}
       </Button>
     </div>

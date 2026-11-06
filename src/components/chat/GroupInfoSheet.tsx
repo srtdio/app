@@ -50,7 +50,7 @@ import { SHEET_NOTICE_TYPE } from '@/components/chat/chat-type';
 import { MODAL_HEADER_SAFE, ModalPanel } from '@/components/chat/ModalPanel';
 import { listSkeleton } from '@/components/chat/ListSkeleton';
 import { errorText } from '@/lib/error-copy';
-import { SECTION_LABEL } from '@/components/ui/Text';
+import { TEXT_ROLE } from '@/components/ui/Text';
 
 /**
  * The inline line a member who cannot rename the group sees. It names the
@@ -485,7 +485,7 @@ export function groupInfoPage(props: {
 /** A section heading: small caps label over its rows, on the page's 16 edge (L2). */
 function SectionLabel(props: { children: string }): ReactElement {
   return (
-    <p className={`mb-1 ${SECTION_LABEL}`}>
+    <p className={`mb-1 ${TEXT_ROLE.section}`}>
       {props.children}
     </p>
   );

@@ -200,17 +200,17 @@ function TallBody(props: {
   detail: ReactNode;
 }): ReactElement {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 px-2.5 pb-[9px] pt-2">
-      <div className="flex h-4 min-w-0 items-center gap-1.5 text-sm leading-4 text-fg-3">
+    <div className="flex min-w-0 flex-col gap-0.5 px-3 pb-2 pt-2">
+      <div className="flex h-4 min-w-0 items-center gap-2 text-sm text-fg-3">
         <LetterTile
           letter={props.letter}
           tone={props.tone}
-          className="h-3.5 w-3.5 rounded text-xs"
+          className="h-4 w-4 rounded text-xs"
         />
         <span className="min-w-0 truncate">{props.site}</span>
       </div>
-      <div className="line-clamp-2 h-9 text-base font-medium leading-tight">{props.title}</div>
-      <div className="line-clamp-2 h-8 text-sm leading-4 text-fg-2">{props.detail}</div>
+      <div className="line-clamp-2 h-10 text-base font-medium">{props.title}</div>
+      <div className="line-clamp-2 h-8 text-sm text-fg-2">{props.detail}</div>
     </div>
   );
 }
@@ -228,16 +228,16 @@ function TallSkeleton(props: { tone: CardTone }): ReactElement {
       className={cn('rounded-xl border lit-card', CARD_SURFACE[props.tone])}
     >
       <Bone lit="flat" as="div" className="aspect-[1.91/1] w-full rounded-t-xl" />
-      <div className="flex flex-col gap-0.5 px-2.5 pb-[9px] pt-2">
+      <div className="flex flex-col gap-0.5 px-3 pb-2 pt-2">
         <div className="flex h-4 items-center">
-          <SkeletonBar className="h-2.5 w-24" />
+          <SkeletonBar className="h-2 w-24" />
         </div>
-        <div className="flex h-9 flex-col justify-center gap-1.5">
+        <div className="flex h-10 flex-col justify-center gap-2">
           <SkeletonBar className="h-3 w-full" />
           <SkeletonBar className="h-3 w-2/3" />
         </div>
         <div className="flex h-8 flex-col justify-center">
-          <SkeletonBar className="h-2.5 w-4/5" />
+          <SkeletonBar className="h-2 w-4/5" />
         </div>
       </div>
     </div>
@@ -250,14 +250,14 @@ function CompactSkeleton(props: { tone: CardTone }): ReactElement {
       data-card-type="skeleton"
       aria-hidden="true"
       className={cn(
-        'flex h-16 items-center gap-2.5 rounded-xl border px-2.5 lit-card',
+        'flex h-16 items-center gap-3 rounded-xl border px-3 lit-card',
         CARD_SURFACE[props.tone],
       )}
     >
       <SkeletonBar className="h-10 w-10 shrink-0 rounded-xl" />
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
         <SkeletonBar className="h-3 w-2/3" />
-        <SkeletonBar className="h-2.5 w-1/2" />
+        <SkeletonBar className="h-2 w-1/2" />
       </div>
     </div>
   );
@@ -394,7 +394,7 @@ function Compact(props: {
         aria-label={cardLabel(preview)}
         data-card-type="unsafe"
         className={cn(
-          'flex h-16 w-full items-center gap-2.5 rounded-xl border px-2.5 text-left lit-card',
+          'flex h-16 w-full items-center gap-3 rounded-xl border px-3 text-left lit-card',
           WARN,
           NO_CALLOUT,
           FOCUS,
@@ -403,7 +403,7 @@ function Compact(props: {
         <IconAlertTriangle size={ICON_SIZE.control} className="shrink-0" />
         <span className="flex min-w-0 flex-col">
           <span className="truncate text-base font-medium">This link may be unsafe</span>
-          <span className="truncate text-sm leading-4">{`${preview.domain} · tap to check`}</span>
+          <span className="truncate text-sm">{`${preview.domain} · tap to check`}</span>
         </span>
       </button>
     );
@@ -415,7 +415,7 @@ function Compact(props: {
       url={props.url}
       label={cardLabel(preview)}
       type={preview.type}
-      className={cn('flex h-16 items-center gap-2.5 px-2.5', CARD_SURFACE[tone])}
+      className={cn('flex h-16 items-center gap-3 px-3', CARD_SURFACE[tone])}
     >
       <LetterTile letter={preview.letter} tone={tone} className="h-10 w-10 rounded-xl text-base" />
       <span className="flex min-w-0 flex-col">
@@ -449,23 +449,23 @@ function Draft(props: {
   let thumb: ReactNode;
   let lines: ReactNode;
   if (preview === null) {
-    thumb = <SkeletonBar className="h-[52px] w-[52px] shrink-0 rounded-lg" />;
+    thumb = <SkeletonBar className="h-12 w-12 shrink-0 rounded-lg" />;
     lines = (
-      <span className="flex flex-col gap-1.5">
-        <SkeletonBar className="h-2.5 w-24" />
+      <span className="flex flex-col gap-2">
+        <SkeletonBar className="h-2 w-24" />
         <SkeletonBar className="h-3 w-40" />
       </span>
     );
   } else if (preview.type === 'unsafe') {
     thumb = (
-      <span className="grid h-[52px] w-[52px] shrink-0 place-items-center">
+      <span className="grid h-12 w-12 shrink-0 place-items-center">
         <IconAlertTriangle size={ICON_SIZE.tray} />
       </span>
     );
     lines = (
       <>
         <span className="block truncate text-base font-medium">This link may be unsafe</span>
-        <span className="block truncate text-sm leading-4">{preview.domain}</span>
+        <span className="block truncate text-sm">{preview.domain}</span>
       </>
     );
   } else {
@@ -480,20 +480,20 @@ function Draft(props: {
           referrerPolicy="no-referrer"
           draggable={false}
           onError={() => setFailed(true)}
-          className="h-[52px] w-[52px] shrink-0 rounded-lg bg-panel-3 object-cover"
+          className="h-12 w-12 shrink-0 rounded-lg bg-panel-3 object-cover"
         />
       ) : (
         <LetterTile
           letter={preview.letter}
           tone="plain"
-          className="h-[52px] w-[52px] rounded-lg text-lg"
+          className="h-12 w-12 rounded-lg text-lg"
         />
       );
     const titled = preview.type === 'full' || preview.type === 'text';
     lines = (
       <>
-        <span className="block truncate text-sm leading-4 text-fg-3">{siteText(preview)}</span>
-        <span className="line-clamp-2 text-base font-medium leading-tight">
+        <span className="block truncate text-sm text-fg-3">{siteText(preview)}</span>
+        <span className="line-clamp-2 text-base font-medium">
           {titled
             ? preview.title
             : preview.type === 'login'
@@ -508,7 +508,7 @@ function Draft(props: {
       data-card-type={preview === null ? 'skeleton' : preview.type}
       data-card-size="draft"
       className={cn(
-        'flex h-16 items-center gap-2 rounded-xl border py-1.5 pl-2 pr-0',
+        'flex h-16 items-center gap-2 rounded-xl border py-1 pl-2 pr-0',
         warn ? `${WARN} lit-tint` : 'bg-panel-2 text-fg lit-card-muted',
         NO_CALLOUT,
       )}
@@ -523,7 +523,7 @@ function Draft(props: {
           onClick={props.onRemove}
           className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-xl text-fg-2', FOCUS)}
         >
-          <IconX size={ICON_SIZE.nav} />
+          <IconX size={ICON_SIZE.control} />
         </button>
       ) : null}
     </div>

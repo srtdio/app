@@ -132,7 +132,7 @@ import {
 } from '@/components/ui/icons';
 import { Tag, isTagDot } from '@/components/ui/Tag';
 import { Card } from '@/components/ui/Card';
-import { SECTION_LABEL, Text } from '@/components/ui/Text';
+import { Text, TEXT_ROLE } from '@/components/ui/Text';
 import { GUTTER } from '@/components/ui/layout';
 import { PostPicker } from '@/components/chat/PostPicker';
 import type { PostCardFields } from '@srtdio/posts';
@@ -2275,7 +2275,7 @@ export function LinkedPostPage(props: {
 }
 
 /** The section label style (design rules: sm/600 uppercase, fg-2). */
-const SECTION_LABEL = `${SECTION_LABEL}`;
+const SECTION_LABEL = TEXT_ROLE.section;
 
 /** The comment box's tallest: 4 lines (16px at 1.4) plus its padding; then it scrolls. */
 const COMMENT_BOX_MAX_PX = 110;

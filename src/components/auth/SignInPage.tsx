@@ -286,7 +286,7 @@ export function SignInPage() {
           </p>
         ) : null}
 
-        <Button variant="primary" type="submit" className="w-full" busy={busy}>
+        <Button variant="primary" type="submit" className="w-full md:w-full" busy={busy}>
           {CHECK_EMAIL_COPY.sendCode}
         </Button>
       </form>

@@ -190,7 +190,7 @@ export function AuthCallbackPage() {
     <AuthShell title={copy.title} subtitle={copy.subtitle} footer={backToSignIn}>
       <Button
         variant="primary"
-        className="w-full"
+        className="w-full md:w-full"
         onClick={handleSignIn}
         busy={phase === 'signing'}
       >

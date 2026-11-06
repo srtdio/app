@@ -102,7 +102,7 @@ import {
 } from '@/components/chat/post-picker';
 import { listSkeleton } from '@/components/chat/ListSkeleton';
 import { errorText } from '@/lib/error-copy';
-import { SECTION_LABEL } from '@/components/ui/Text';
+import { TEXT_ROLE } from '@/components/ui/Text';
 
 /** Search debounce, in milliseconds. */
 const SEARCH_DEBOUNCE_MS = 200;
@@ -956,7 +956,7 @@ function SectionHeading({ label, mono }: { label: string; mono?: boolean }): Rea
   return (
     <li
       className={cn(
-        `px-1 pt-2 ${SECTION_LABEL}`,
+        `px-1 pt-2 ${TEXT_ROLE.section}`,
         // A date heading (link mode's day section): font-mono like every date.
         mono === true && 'font-mono tabular-nums',
       )}

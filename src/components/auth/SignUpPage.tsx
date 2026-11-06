@@ -342,7 +342,7 @@ export function SignUpPage(): ReactElement {
           </p>
         ) : null}
 
-        <Button variant="primary" className="w-full" type="submit" busy={submitting}>
+        <Button variant="primary" className="w-full md:w-full" type="submit" busy={submitting}>
           {CHECK_EMAIL_COPY.sendCode}
         </Button>
       </form>

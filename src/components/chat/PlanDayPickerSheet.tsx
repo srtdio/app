@@ -25,7 +25,7 @@ import {
   formatCivilDayHeader,
   formatCivilShort,
 } from '@/lib/plan-week';
-import { SECTION_LABEL, SECTION_LABEL_INK } from '@/components/ui/Text';
+import { SECTION_LABEL_INK, TEXT_ROLE } from '@/components/ui/Text';
 
 /** The tile's last line: "{n} items" when the day holds any, else the month. Pure. */
 export function tileCaption(day: string, count: number): string {
@@ -74,7 +74,7 @@ export function PlanDayTiles(props: {
       {dayTileWeeks(props.range).map((week) => (
         <div key={week.days[0]} className="flex flex-col gap-2">
           {week.label !== null ? (
-            <p className={`mt-0.5 ${SECTION_LABEL}`}>
+            <p className={`mt-0.5 ${TEXT_ROLE.section}`}>
               {week.label}
             </p>
           ) : null}
@@ -104,7 +104,7 @@ export function PlanDayTiles(props: {
                 >
                   <span
                     className={cn(
-                      `${SECTION_LABEL_INK}`,
+                      SECTION_LABEL_INK,
                       on ? 'text-accent-fg' : day === props.today ? 'text-accent' : 'text-fg-2',
                     )}
                   >

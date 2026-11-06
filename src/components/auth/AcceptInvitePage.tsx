@@ -189,7 +189,7 @@ export function AcceptFailureView(props: {
     return (
       <>
         <ErrorNote>{RECOVERY_COPY.wrongAccount}</ErrorNote>
-        <Button variant="primary" className="w-full" onClick={props.actions.switchAccount}>
+        <Button variant="primary" className="w-full md:w-full" onClick={props.actions.switchAccount}>
           {RECOVERY_COPY.differentEmail}
         </Button>
       </>
@@ -201,14 +201,14 @@ export function AcceptFailureView(props: {
       {/* Retry reuses the same accept path the mount effect runs. */}
       <Button
         variant="primary"
-        className="w-full"
+        className="w-full md:w-full"
         onClick={props.actions.retry}
         busy={props.submitting}
       >
         Retry
       </Button>
       {/* Secondary path so an already-joined user is never stuck. */}
-      <Button variant="default" className="w-full" onClick={props.actions.goToWorkspace}>
+      <Button variant="default" className="w-full md:w-full" onClick={props.actions.goToWorkspace}>
         Go to your workspace
       </Button>
     </>
@@ -351,7 +351,7 @@ export function AcceptInvitePage() {
           {failureView ?? (
             <Button
               variant="primary"
-              className="w-full"
+              className="w-full md:w-full"
               onClick={() => void handleJoin()}
               busy={submitting}
             >
