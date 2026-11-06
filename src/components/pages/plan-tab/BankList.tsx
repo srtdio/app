@@ -745,14 +745,13 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
 
 /**
  * The laptop Bank: ui/SidePanel on the right (380px, nothing dims, Esc
- * closes), header "Bank" with its count, Expand, X. Laptop only
+ * closes), header "Bank", Expand, X (no count). Laptop only
  * (useIsLaptop); the phone shows the same rows under the Bank chip, and its
  * Plan it, Filter and Add flows are Sheets.
  */
 export function BankPanel(props: {
   open: boolean;
   onClose: () => void;
-  count: string | null;
   onExpand: () => void;
   surface: Omit<BankSurfaceProps, 'layout' | 'toolbar'>;
   toolbar: ReactNode;
@@ -766,11 +765,6 @@ export function BankPanel(props: {
       title="Bank"
       headerExtra={
         <>
-          {props.count !== null ? (
-            <span data-bank-panel-count="" className="text-lg font-semibold tabular-nums text-fg-3">
-              {props.count}
-            </span>
-          ) : null}
           <IconButton
             label="Expand"
             data-bank-expand=""
