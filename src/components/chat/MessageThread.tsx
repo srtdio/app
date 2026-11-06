@@ -1801,7 +1801,7 @@ export function tombstoneClass(shape: BubbleShape): string {
  */
 const LINK_CARD_INSET: ChatSize = {
   touch: '-mx-2 -mt-1 mb-1.5 w-64 max-w-[calc(100%+16px)]',
-  laptop: '-mx-1 -mt-0.5 mb-1.5 w-64 max-w-[calc(100%+8px)]',
+  laptop: '-mx-1 -mt-1 mb-1.5 w-64 max-w-[calc(100%+8px)]',
 };
 
 /** Cancel the native default (the touch contextmenu on rows). */

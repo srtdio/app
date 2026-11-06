@@ -35,6 +35,7 @@ import type { InviteRole, RoleChoice } from './MembersInviteForm';
 import { canChangeMemberRole } from './MemberActionSheet';
 import { formatJoined, isUndelivered, memberEmailTag, roleLabel } from './members-data';
 import type { DerivedMembers, InviteDeliveryStatus, MemberEntry } from './members-data';
+import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
 
 const OWNER_LOCK_TITLE = 'Transfer ownership before the owner can be removed';
@@ -343,7 +344,7 @@ function PendingEditFields({
       }}
     >
       <div className="flex items-center gap-2">
-        <input
+        <Input
           ref={inputRef}
           type="text"
           inputMode="email"
@@ -359,7 +360,7 @@ function PendingEditFields({
             setEmail(event.target.value);
             setError(null);
           }}
-          className="h-11 min-w-0 flex-1 rounded-lg border border-field bg-panel-2 lit-well px-3 text-input text-fg outline-none placeholder:text-fg-3 focus:lit-focus md:text-base"
+          className="min-w-0 flex-1"
         />
         <RolePicker
           label={`Role for ${trimmed}`}
