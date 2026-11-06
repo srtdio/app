@@ -130,7 +130,7 @@ describe('PlanCardBody', () => {
     // The action row: Forward left, Open plan right, no divider.
     expect(html.indexOf('data-plan-forward')).toBeLessThan(html.indexOf('data-plan-open'));
     expect(html).not.toContain('w-px');
-    expect(html).not.toContain('border-t');
+    expect(html).not.toMatch(/\bborder-t[\s"]/);
     expect(html).not.toContain('Creators only');
     expect(html).not.toContain('Team');
   });

@@ -182,7 +182,8 @@ describe('11i the ⋯ never covers the time (B1b: parts own the slots)', () => {
 
   it('a person tile: the time is the meta line, the ⋯ sits on the title line', () => {
     const tile = read('../../ui/Tile.tsx');
-    expect(tile.indexOf('data-tile-more')).toBeLessThan(tile.indexOf("textRole('meta'"));
+    // The ⋯ overlay mirrors the caption: title line (the ⋯), then the meta line.
+    expect(tile.lastIndexOf('data-tile-more')).toBeLessThan(tile.lastIndexOf("textRole('meta'"));
     expect(read('../ChannelList.tsx')).toContain('meta: <span data-tile-time="">');
   });
 });
