@@ -6,8 +6,10 @@
 //   rows draggable onto a month day, "Drag a card onto a day to plan it.");
 // - table: Expand's full-width table in place of the calendar.
 // A row taps open its idea (/plan/bank?item=); its ⋯ menu (ui/ActionMenu,
-// right-click on laptop) holds Open, Select, Plan it, Show to client or Hide
-// from client, Star or Unstar, Archive or Unarchive, Delete last. Long-press
+// right-click on laptop) holds Open, Select, Plan it, Send to chat (the chat
+// picker, then chat_plan_item_share; IdeaShareFlow), Show to client or Hide
+// from client, Star or Unstar, Archive or Unarchive, Delete last. Plan it is
+// usePlanIt (shared with a bank idea's item screen). Long-press
 // enters select mode (ui/Checkbox per row, the picked rows lit-selected; the
 // select bar sits above the rows). Writes are optimistic over the kept page;
 // Delete, Archive, Hide and every bulk write sit behind the Undo strip first.
@@ -46,6 +48,7 @@ import {
   IconExpand,
   IconEyeOff,
   IconFile,
+  IconForward,
   IconStar,
   IconStarFilled,
   IconTrash,
@@ -53,6 +56,7 @@ import {
   IconX,
 } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
+import { IdeaShareFlow, type IdeaShareTarget } from '@/components/chat/IdeaShareFlow';
 import { useLongPress } from '@/components/ui/useLongPress';
 import type { BucketOption } from '@/lib/buckets';
 import type { BankIdea, PlanRow } from '@/lib/chat/plans';
@@ -365,9 +369,8 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
   const undoable = useUndoableAction();
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
-  const [planIt, setPlanIt] = useState<PlanItStep | null>(null);
   const [showAsk, setShowAsk] = useState<BankIdea | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [sendIdea, setSendIdea] = useState<IdeaShareTarget | null>(null);
   const ideas = data.ideas;
 
   const leaveSelect = useCallback(() => {
@@ -447,79 +450,16 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
     });
   };
 
-  // Plan it: one plan places at once; none offers Make plan; several a picker;
-  // a shared plan asks first when the idea is team only.
-  const place = useCallback(
-    async (idea: BankIdea, plan: PlanRow, day: string): Promise<void> => {
-      setBusy(true);
-      const res = await placeBankIdea(supabase, idea.id, plan.id, day);
-      setBusy(false);
-      setPlanIt(null);
-      if (!res.ok) {
-        showToast({ title: planItError(res.error.message), tone: 'error' });
-        return;
-      }
-      dropIdeas(new Set([idea.id]));
-      showToast({
-        title: plannedToast(plan.title, day),
-        kind: 'undo',
-        action: {
-          label: 'Undo',
-          onPress: () => {
-            void unplanBankIdea(supabase, idea.id).then((back) => {
-              if (back.ok) data.patch((cur) => [idea, ...cur]);
-              else showToast({ title: errorText('undo', back.error.message), tone: 'error' });
-            });
-          },
-        },
-      });
-    },
-    [data, dropIdeas, showToast],
-  );
-  const choosePlan = useCallback(
-    (idea: BankIdea, plan: PlanRow, day: string): void => {
-      if (needsSharedWarning(plan, idea)) setPlanIt({ kind: 'shared', idea, day, plan });
-      else void place(idea, plan, day);
-    },
-    [place],
-  );
-  const runPlanIt = useCallback(
-    async (idea: BankIdea, day: string): Promise<void> => {
-      const plans = await props.getPlans();
-      if (!plans.ok) {
-        setPlanIt(null);
-        showToast({ title: planItError(plans.error.message), tone: 'error' });
-        return;
-      }
-      const choice = planItChoice(plans.data, day, props.today);
-      switch (choice.kind) {
-        case 'past':
-          setPlanIt(null);
-          showToast({ title: planItError('past_date'), tone: 'error' });
-          return;
-        case 'one':
-          choosePlan(idea, choice.plan, day);
-          return;
-        case 'none':
-          setPlanIt({ kind: 'none', idea, day });
-          return;
-        default:
-          setPlanIt({ kind: 'several', idea, day, plans: choice.plans });
-      }
-    },
-    [props, showToast, choosePlan],
-  );
-  const makePlan = async (idea: BankIdea, day: string): Promise<void> => {
-    setBusy(true);
-    const made = await makeWeekPlan(supabase, props.workspaceId, day);
-    setBusy(false);
-    if (!made.ok) {
-      setPlanIt(null);
-      showToast({ title: errorText('make the plan', made.error.message), tone: 'error' });
-      return;
-    }
-    void place(idea, made.data, day);
-  };
+  // Plan it (#816): the shared flow (usePlanIt); a placed idea leaves the list,
+  // its Undo puts it back.
+  const planIt = usePlanIt({
+    workspaceId: props.workspaceId,
+    today: props.today,
+    getPlans: props.getPlans,
+    onPlaced: (idea) => dropIdeas(new Set([idea.id])),
+    onUnplaced: (idea) => data.patch((cur) => [idea, ...cur]),
+  });
+  const runPlanIt = planIt.runFor;
 
   // A drop from the calendar runs Plan it for that day.
   const lastDrop = useRef<number | null>(null);
@@ -551,7 +491,14 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
       id: 'plan-it',
       label: 'Plan it',
       icon: IconCalendar,
-      onSelect: () => setPlanIt({ kind: 'date', idea, day: '' }),
+      onSelect: () => planIt.start(idea),
+    },
+    {
+      id: 'send-to-chat',
+      label: 'Send to chat',
+      icon: IconForward,
+      onSelect: () =>
+        setSendIdea({ id: idea.id, title: idea.title ?? '', commentCount: idea.comment_count }),
     },
     idea.show_to_client === true
       ? { id: 'hide', label: 'Hide from client', icon: IconEyeOff, onSelect: () => hide(idea) }
@@ -646,7 +593,7 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
           toggle(id);
         }}
         onOpen={props.onOpenIdea}
-        onPlanIt={(idea) => setPlanIt({ kind: 'date', idea, day: '' })}
+        onPlanIt={(idea) => planIt.start(idea)}
         menuFor={menuFor}
         onStar={(idea) => star(idea, idea.starred_at == null)}
       />
@@ -718,15 +665,16 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
       ) : null}
       {canWrite ? (
         <>
-          <BankPlanItSheets
-            step={planIt}
-            busy={busy}
-            today={props.today}
-            onClose={() => setPlanIt(null)}
-            onDay={(idea, day) => void runPlanIt(idea, day)}
-            onMakePlan={(idea, day) => void makePlan(idea, day)}
-            onPickPlan={(idea, plan, day) => choosePlan(idea, plan, day)}
-            onConfirmShared={(idea, plan, day) => void place(idea, plan, day)}
+          {planIt.sheets}
+          <IdeaShareFlow
+            idea={sendIdea}
+            onClose={() => setSendIdea(null)}
+            onShown={() => {
+              const shown = sendIdea !== null ? ideas?.find((i) => i.id === sendIdea.id) : undefined;
+              if (shown !== undefined) {
+                replaceIdea(withFlags(shown, { show: true }, new Date().toISOString()));
+              }
+            }}
           />
           <BankShowSheet
             idea={showAsk}
@@ -957,6 +905,124 @@ function BankTable(props: {
 // ---------------------------------------------------------------------------
 
 /** Plan it's sheets: the date, No plan covers, the plan picker, the shared warning. */
+/** Plan it as a flow: open it for an idea, or run it for a dropped day; its sheets. */
+export interface PlanItFlow {
+  /** Open the day sheet for this idea. */
+  start: (idea: BankIdea) => void;
+  /** Run Plan it for a known day (a calendar drop): one plan, none, several, shared. */
+  runFor: (idea: BankIdea, day: string) => Promise<void>;
+  /** The #816 sheets (date, no plan, pick a plan, shared warning); render once. */
+  sheets: ReactElement;
+}
+
+/**
+ * #816's Plan it, shared by the Bank (BankSurface) and a bank idea's item
+ * screen: the open plans read on the tap (getPlans), one plan places at once,
+ * none offers Make plan, several a picker, and a shared plan asks first when
+ * the idea is team only; a past day says so (PAST_DAY_ERROR). A placed idea
+ * toasts "Planned in {plan}, {date}" with Undo (plan_item_to_bank).
+ */
+export function usePlanIt(input: {
+  workspaceId: string;
+  today: string;
+  getPlans: BankSurfaceProps['getPlans'];
+  onPlaced: (idea: BankIdea, plan: PlanRow, day: string) => void;
+  onUnplaced: (idea: BankIdea) => void;
+}): PlanItFlow {
+  const showToast = useToast().show;
+  const [step, setStep] = useState<PlanItStep | null>(null);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef(input);
+  inputRef.current = input;
+
+  const place = useCallback(
+    async (idea: BankIdea, plan: PlanRow, day: string): Promise<void> => {
+      setBusy(true);
+      const res = await placeBankIdea(supabase, idea.id, plan.id, day);
+      setBusy(false);
+      setStep(null);
+      if (!res.ok) {
+        showToast({ title: planItError(res.error.message), tone: 'error' });
+        return;
+      }
+      inputRef.current.onPlaced(idea, plan, day);
+      showToast({
+        title: plannedToast(plan.title, day),
+        kind: 'undo',
+        action: {
+          label: 'Undo',
+          onPress: () => {
+            void unplanBankIdea(supabase, idea.id).then((back) => {
+              if (back.ok) inputRef.current.onUnplaced(idea);
+              else showToast({ title: errorText('undo', back.error.message), tone: 'error' });
+            });
+          },
+        },
+      });
+    },
+    [showToast],
+  );
+  const choosePlan = useCallback(
+    (idea: BankIdea, plan: PlanRow, day: string): void => {
+      if (needsSharedWarning(plan, idea)) setStep({ kind: 'shared', idea, day, plan });
+      else void place(idea, plan, day);
+    },
+    [place],
+  );
+  const runFor = useCallback(
+    async (idea: BankIdea, day: string): Promise<void> => {
+      const { getPlans, today } = inputRef.current;
+      const plans = await getPlans();
+      if (!plans.ok) {
+        setStep(null);
+        showToast({ title: planItError(plans.error.message), tone: 'error' });
+        return;
+      }
+      const choice = planItChoice(plans.data, day, today);
+      switch (choice.kind) {
+        case 'past':
+          setStep(null);
+          showToast({ title: planItError('past_date'), tone: 'error' });
+          return;
+        case 'one':
+          choosePlan(idea, choice.plan, day);
+          return;
+        case 'none':
+          setStep({ kind: 'none', idea, day });
+          return;
+        default:
+          setStep({ kind: 'several', idea, day, plans: choice.plans });
+      }
+    },
+    [showToast, choosePlan],
+  );
+  const makePlan = async (idea: BankIdea, day: string): Promise<void> => {
+    setBusy(true);
+    const made = await makeWeekPlan(supabase, inputRef.current.workspaceId, day);
+    setBusy(false);
+    if (!made.ok) {
+      setStep(null);
+      showToast({ title: errorText('make the plan', made.error.message), tone: 'error' });
+      return;
+    }
+    void place(idea, made.data, day);
+  };
+  const start = useCallback((idea: BankIdea) => setStep({ kind: 'date', idea, day: '' }), []);
+  const sheets = (
+    <BankPlanItSheets
+      step={step}
+      busy={busy}
+      today={input.today}
+      onClose={() => setStep(null)}
+      onDay={(idea, day) => void runFor(idea, day)}
+      onMakePlan={(idea, day) => void makePlan(idea, day)}
+      onPickPlan={(idea, plan, day) => choosePlan(idea, plan, day)}
+      onConfirmShared={(idea, plan, day) => void place(idea, plan, day)}
+    />
+  );
+  return { start, runFor, sheets };
+}
+
 export function BankPlanItSheets(props: {
   step: PlanItStep | null;
   busy: boolean;
@@ -1094,7 +1160,7 @@ export function BankPlanItSheets(props: {
 }
 
 /** Show to client: the warning naming the workspace's approvers (never a ConfirmDialog). */
-function BankShowSheet(props: {
+export function BankShowSheet(props: {
   idea: BankIdea | null;
   workspaceId: string;
   onClose: () => void;

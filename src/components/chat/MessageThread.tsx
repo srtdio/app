@@ -198,6 +198,7 @@ import {
 import { PostRefChip, useChipBatch, type PostRefPost } from '@/components/chat/PostRefChip';
 import {
   MessageActionMenu,
+  isIdeaMessage,
   isPlanMessage,
   ownMessageActions,
   selectionForwardable,
@@ -206,6 +207,14 @@ import {
 import { useCancelUpload, useChatStore, useServerNow } from '@/components/chat/ChatStoreProvider';
 import { SharedBriefCards } from '@/components/chat/BriefCard';
 import { SharedPlanCards } from '@/components/chat/PlanCard';
+import {
+  SharedIdeaCards,
+  ideaTitleOf,
+  useMessageIdeaIds,
+  useMessageIdeasPending,
+  withIdeaIds,
+} from '@/components/chat/PlanItemCard';
+import { looksLikeBundleIdea } from '@/lib/chat/idea-cards';
 import { PaintLogOverlay, paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { MarkBadge, SelectCheckbox, SelectLock } from '@/components/chat/MarkBits';
@@ -2039,13 +2048,14 @@ export function bodyText(layout: ChatLayout): string {
  */
 export function metaPlacement(
   message: Pick<ThreadMessage, 'body' | 'attachments' | 'sharedPostIds' | 'sharedBriefIds'> &
-    Partial<Pick<ThreadMessage, 'sharedPlanIds'>>,
+    Partial<Pick<ThreadMessage, 'sharedPlanIds' | 'sharedPlanItemIds'>>,
 ): MetaPlacement {
   const hasBody = message.body.trim() !== '';
   const hasCards =
     message.sharedPostIds.length > 0 ||
     message.sharedBriefIds.length > 0 ||
-    (message.sharedPlanIds ?? []).length > 0;
+    (message.sharedPlanIds ?? []).length > 0 ||
+    (message.sharedPlanItemIds ?? []).length > 0;
   if (hasCards) return 'row';
   if (message.attachments.length === 0) return hasBody ? 'inline' : 'row';
   const { images, others } = splitAlbum(message.attachments);
@@ -2263,8 +2273,22 @@ export function MessageBubble(props: {
     onReact?: () => void;
   };
 }): ReactElement {
-  const { message, profiles, cache, presignEnabled, showTicks, isGroup, head, tail } = props;
+  const { message: own, profiles, cache, presignEnabled, showTicks, isGroup, head, tail } = props;
   const { onBadgeClick } = props;
+  // Ideas: the row's own ids; a bundle row (the open bundle carries no idea
+  // ids yet) that reads empty asks for them in the idea cards' batch.
+  const askIdeas = looksLikeBundleIdea(own);
+  const sharedIdeaIds = useMessageIdeaIds(own.id, own.sharedPlanItemIds ?? NO_PLAN_IDS, askIdeas);
+  const ideasPending = useMessageIdeasPending(own.id, askIdeas);
+  const message = useMemo(
+    () =>
+      sharedIdeaIds.length > 0 && (own.sharedPlanItemIds ?? []).length === 0
+        ? { ...own, sharedPlanItemIds: sharedIdeaIds }
+        : own,
+    // Keyed by the resolved ids.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [own, sharedIdeaIds.join(',')],
+  );
   // Notes: a saved copy names its source instead of "Forwarded".
   const savedFrom = props.savedFrom ?? null;
   const savedLine =
@@ -2287,13 +2311,16 @@ export function MessageBubble(props: {
   const hasCards =
     message.sharedPostIds.length > 0 ||
     message.sharedBriefIds.length > 0 ||
-    sharedPlanIds.length > 0;
+    sharedPlanIds.length > 0 ||
+    sharedIdeaIds.length > 0 ||
+    ideasPending;
   const textOnly =
     message.body.trim() !== '' &&
     message.attachments.length === 0 &&
     message.sharedPostIds.length === 0 &&
     message.sharedBriefIds.length === 0 &&
-    sharedPlanIds.length === 0;
+    sharedPlanIds.length === 0 &&
+    sharedIdeaIds.length === 0;
   const totalReactions = message.reactions.reduce((sum, r) => sum + r.count, 0);
   const distinctEmojis = message.reactions.map((r) => r.emoji).join('');
   const meta = props.meta ?? bubbleMeta(message, timeZone, { showTicks });
@@ -2634,6 +2661,7 @@ export function MessageBubble(props: {
                       <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                       <SharedBriefCards briefIds={message.sharedBriefIds} />
                       <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
+                      <SharedIdeaCards ideaIds={sharedIdeaIds} pending={ideasPending} />
                     </div>
                   ) : null}
                 </>
@@ -2652,6 +2680,7 @@ export function MessageBubble(props: {
                   <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                   <SharedBriefCards briefIds={message.sharedBriefIds} />
                   <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
+                  <SharedIdeaCards ideaIds={sharedIdeaIds} pending={ideasPending} />
                 </>
               )}
             </div>
@@ -4445,8 +4474,18 @@ function ThreadBody(
   }
   const nowMs = Date.now();
   // A plan card message: no Forward, Save to notes or Edit; Copy copies its title.
-  const menuPlan = menu !== null && isPlanMessage(menu.message);
-  const menuPlanTitle = menuPlan && menu !== null ? planTitleOf(planCards, menu.message) : null;
+  // An idea card message follows the same rules (a bundle row's ids come from the batch).
+  const menuIdeas = menu !== null ? withIdeaIds(menu.message) : null;
+  const menuPlan =
+    menu !== null && (isPlanMessage(menu.message) || (menuIdeas !== null && isIdeaMessage(menuIdeas)));
+  const menuPlanTitle =
+    menu === null
+      ? null
+      : isPlanMessage(menu.message)
+        ? planTitleOf(planCards, menu.message)
+        : menuIdeas !== null && isIdeaMessage(menuIdeas)
+          ? ideaTitleOf(menuIdeas)
+          : null;
   const menuOwn =
     menu !== null
       ? ownMessageActions(
@@ -5879,7 +5918,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         message.attachments.length > 0 ||
         message.sharedPostIds.length > 0 ||
         message.sharedBriefIds.length > 0 ||
-        isPlanMessage(message),
+        isPlanMessage(message) ||
+        isIdeaMessage(message),
     });
   };
   const onForward = props.onForward;
@@ -6803,7 +6843,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         count={selected.size}
         block={deleteBlock}
         canDelete={selected.size > 0 && deleteBlock === null}
-        {...(canForwardHere && selectionForwardable(selected, selectable)
+        {...(canForwardHere && selectionForwardable(selected, selectable.map(withIdeaIds))
           ? { onForward: () => setForwardFor(selectedForForward(selected, selectable)) }
           : {})}
         {...(selectionStar !== null ? { star: selectionStar } : {})}

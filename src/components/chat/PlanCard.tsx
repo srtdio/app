@@ -29,7 +29,6 @@ import { usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { usePaintLogCommit } from '@/components/chat/PaintLog';
 import {
   HAS_CLIENT_TAG,
-  OPEN_FOR_CLIENT_FIRST,
   PLAN_DELETED,
   PLAN_EYEBROW,
   canForwardPlan,
@@ -43,6 +42,12 @@ import {
   summaryHasClient,
 } from '@/components/chat/plan-card';
 import { conversationPickerBody, type LoadState } from '@/components/pages/pcs/ConversationPicker';
+import {
+  PlanOpenSendSheet,
+  openPlanThenShare,
+  type PlanOpenSendAsk,
+} from '@/components/chat/PlanOpenSendSheet';
+import { errorText } from '@/lib/error-copy';
 import { useChat } from '@/lib/chat';
 import { listChannelSummaries, type ChannelSummary } from '@/lib/chat-reads';
 import { createTextMessage } from '@/lib/chat/message-factory';
@@ -346,6 +351,8 @@ function PlanForwardSheet(props: {
   const [load, setLoad] = useState<LoadState>({ status: 'loading' });
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [guard] = useState(createInFlightGuard);
+  const [ask, setAsk] = useState<PlanOpenSendAsk | null>(null);
+  const [askBusy, setAskBusy] = useState(false);
   const planCards = usePlanCards();
   const open = props.open;
   const planId = props.bundle.plan.id;
@@ -372,28 +379,7 @@ function PlanForwardSheet(props: {
   function publishOf(
     channel: ChannelSummary,
   ): ((liveIds: LiveMessageIds) => Promise<unknown>) | null {
-    let target: ChannelTarget | null = null;
-    try {
-      target = targetFromSummary(channel);
-    } catch {
-      target = null;
-    }
-    const connection = client;
-    const here =
-      planCards !== null && forwardLandsInOpenChat(channel.channelId, planCards.channelId);
-    return !here && connection !== null && target !== null
-      ? (liveIds) =>
-          sendText({
-            connection: connection as ThreadConnection,
-            target: target as ChannelTarget,
-            text: '',
-            attachments: [],
-            sharedPostIds: [],
-            reply: null,
-            createMessage: createTextMessage,
-            liveIds,
-          })
-      : null;
+    return livePublishFor(channel, client, planCards?.channelId ?? null);
   }
 
   function landed(
@@ -407,13 +393,56 @@ function PlanForwardSheet(props: {
     toast.show({ title: forwardedToast(channel.title) });
   }
 
-  function openFirst(): void {
-    toast.show({ title: OPEN_FOR_CLIENT_FIRST });
+  // A Draft plan into a chat with the client: ask first (opening cannot be undone).
+  function openFirst(channel: ChannelSummary): void {
+    props.onClose();
+    setAsk({
+      planId,
+      planTitle: props.bundle.plan.title,
+      channelId: channel.channelId,
+      chatName: channel.title,
+    });
+  }
+
+  async function openAndSend(next: PlanOpenSendAsk): Promise<void> {
+    if (askBusy) return;
+    setAskBusy(true);
+    const messageId = newMessageId();
+    const result = await openPlanThenShare({
+      planId: next.planId,
+      channelId: next.channelId,
+      messageId,
+    });
+    setAskBusy(false);
+    if (!result.ok) {
+      logger.warn('chat: plan open and send failed', {
+        channel_id: next.channelId,
+        plan_id: next.planId,
+        error: result.error.message,
+      });
+      toast.show({ title: errorText('send the plan', result.error.message), tone: 'error' });
+      return;
+    }
+    setAsk(null);
+    const channel = load.status === 'ready'
+      ? load.channels.find((c) => c.channelId === next.channelId)
+      : undefined;
+    const publish = channel !== undefined ? publishOf(channel) : null;
+    if (publish !== null) {
+      void publish({ sorted_message_id: result.data.id, sorted_channel_id: next.channelId }).catch(
+        (error: unknown) =>
+          logger.warn('chat: opened plan live publish did not complete', {
+            message_id: result.data.id,
+            error: String(error),
+          }),
+      );
+    }
+    landed({ channelId: next.channelId, title: next.chatName }, result.data, generateTraceId());
   }
 
   async function forward(channel: ChannelSummary): Promise<void> {
     if (forwardBlocked(props.bundle.plan.audience, summaryHasClient(channel))) {
-      openFirst();
+      openFirst(channel);
       return;
     }
     const result = await sharePlanToChannel(
@@ -448,7 +477,7 @@ function PlanForwardSheet(props: {
       return;
     }
     if (refusedForClient(result.message)) {
-      openFirst();
+      openFirst(channel);
       return;
     }
     logger.error('chat: plan forward failed', {
@@ -460,12 +489,51 @@ function PlanForwardSheet(props: {
   }
 
   return (
-    <Sheet open={props.open} onClose={props.onClose} title="Forward plan">
-      {load.status === 'ready' && load.channels.length > 0
-        ? forwardList(load.channels, sendingId, agencyOnly, (channel) => void forward(channel))
-        : conversationPickerBody(load, sendingId, (channel) => void forward(channel))}
-    </Sheet>
+    <>
+      <Sheet open={props.open} onClose={props.onClose} title="Forward plan">
+        {load.status === 'ready' && load.channels.length > 0
+          ? chatPickList(load.channels, sendingId, agencyOnly, (channel) => void forward(channel))
+          : conversationPickerBody(load, sendingId, (channel) => void forward(channel))}
+      </Sheet>
+      <PlanOpenSendSheet
+        ask={ask}
+        busy={askBusy}
+        onClose={() => setAsk(null)}
+        onOpenAndSend={(next) => void openAndSend(next)}
+      />
+    </>
   );
+}
+
+/**
+ * The live publish for a share into `channel`: none into the open chat (the
+ * thread adds the row and publishes it) or with no connection. Hook-free.
+ */
+export function livePublishFor(
+  channel: ChannelSummary,
+  connection: unknown,
+  openChannelId: string | null,
+): ((liveIds: LiveMessageIds) => Promise<unknown>) | null {
+  let target: ChannelTarget | null = null;
+  try {
+    target = targetFromSummary(channel);
+  } catch {
+    target = null;
+  }
+  const here = forwardLandsInOpenChat(channel.channelId, openChannelId);
+  return !here && connection !== null && connection !== undefined && target !== null
+    ? (liveIds) =>
+        sendText({
+          connection: connection as ThreadConnection,
+          target: target as ChannelTarget,
+          text: '',
+          attachments: [],
+          sharedPostIds: [],
+          reply: null,
+          createMessage: createTextMessage,
+          liveIds,
+        })
+    : null;
 }
 
 /**
@@ -473,7 +541,7 @@ function PlanForwardSheet(props: {
  * height), with "Has client" on chats known to have a client when the plan is
  * a Draft. Hook-free.
  */
-function forwardList(
+export function chatPickList(
   channels: readonly ChannelSummary[],
   sendingId: string | null,
   agencyOnly: boolean,

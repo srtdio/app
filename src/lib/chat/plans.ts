@@ -2670,3 +2670,255 @@ export function groupPostsByDay(
 export function skippedOutsideNote(title: string): string {
   return `${title} was not added: its date is outside this plan.`;
 }
+
+// ---------------------------------------------------------------------------
+// Bank meets Plan: the rows' buckets and the moved-to-bank traces
+// ---------------------------------------------------------------------------
+
+/** A bucket as the rows' read embeds it (workspace_buckets name and order). */
+interface EmbeddedBucket {
+  name: string;
+  position?: number | null;
+}
+
+function oneBucket(value: EmbeddedBucket | EmbeddedBucket[] | null | undefined): EmbeddedBucket | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+/** One plan_item_buckets row with its bucket's name embedded. */
+export interface ItemBucketRow {
+  item_id: string;
+  bucket_id: string;
+  workspace_buckets: EmbeddedBucket | EmbeddedBucket[] | null;
+}
+
+/** One posts row with its one bucket's name embedded. */
+export interface PostBucketRow {
+  id: string;
+  bucket_id: string | null;
+  workspace_buckets: EmbeddedBucket | EmbeddedBucket[] | null;
+}
+
+/** The bucket names on the Plan screen's rows: concepts by item id, posts by post id. */
+export interface RowBuckets {
+  items: Record<string, string[]>;
+  posts: Record<string, string[]>;
+}
+
+/** Rows to names: a concept's buckets in bucket order, a post's one bucket. Pure. */
+export function rowBucketsOf(
+  itemRows: readonly ItemBucketRow[],
+  postRows: readonly PostBucketRow[],
+): RowBuckets {
+  const byItem = new Map<string, Array<{ name: string; position: number }>>();
+  for (const row of itemRows) {
+    const bucket = oneBucket(row.workspace_buckets);
+    if (bucket === null || bucket.name.trim() === '') continue;
+    const list = byItem.get(row.item_id) ?? [];
+    list.push({ name: bucket.name, position: bucket.position ?? 0 });
+    byItem.set(row.item_id, list);
+  }
+  const items: Record<string, string[]> = {};
+  for (const [id, list] of byItem) {
+    items[id] = list.sort((a, b) => a.position - b.position).map((b) => b.name);
+  }
+  const posts: Record<string, string[]> = {};
+  for (const row of postRows) {
+    const bucket = row.bucket_id !== null ? oneBucket(row.workspace_buckets) : null;
+    if (bucket !== null && bucket.name.trim() !== '') posts[row.id] = [bucket.name];
+  }
+  return { items, posts };
+}
+
+/**
+ * The rows' buckets in one read per table, never per row: one
+ * plan_item_buckets select for the concepts and one posts select for the post
+ * rows, each with the bucket's name embedded (chunked at 100 ids). Runs after
+ * the Plan screen paints (plan_bundle_read does not carry buckets). Never throws.
+ */
+export async function readRowBuckets(
+  client: Client,
+  conceptIds: readonly string[],
+  postIds: readonly string[],
+  signal?: AbortSignal,
+): Promise<Result<RowBuckets>> {
+  try {
+    const [items, posts] = await Promise.all([
+      selectIn<ItemBucketRow>(
+        client,
+        'plan_item_buckets',
+        'item_id, bucket_id, workspace_buckets!plan_item_buckets_bucket_id_fkey(name, position)',
+        'item_id',
+        conceptIds,
+        signal,
+      ),
+      selectIn<PostBucketRow>(
+        client,
+        'posts',
+        'id, bucket_id, workspace_buckets!posts_bucket_id_fkey(name, position)',
+        'id',
+        postIds,
+        signal,
+      ),
+    ]);
+    if (!items.ok) return items;
+    if (!posts.ok) return posts;
+    return { ok: true, data: rowBucketsOf(items.data, posts.data) };
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
+/** The row's format line: "{format} · {bucket, bucket}"; either part alone; '' for none. Pure. */
+export function bucketLine(format: string | null | undefined, buckets: readonly string[]): string {
+  const names = buckets.map((b) => b.trim()).filter((b) => b !== '');
+  const head = (format ?? '').trim();
+  const tail = names.join(', ');
+  if (head === '') return tail;
+  return tail === '' ? head : `${head} · ${tail}`;
+}
+
+/** The audit action plan_item_to_bank writes (payload: { from_plan_id }). */
+export const TO_BANK_ACTION = 'plan_item_to_bank';
+
+/** Traces the one audit read returns at most. */
+export const TRACE_READ_LIMIT = 300;
+
+/** One audit_log row as the trace read selects it. */
+export interface TraceAuditRow {
+  entity_id: string | null;
+  created_at: string;
+  payload: unknown;
+}
+
+/** The moved item as it is now (one plan_items select by the traces' ids). */
+export interface TraceItemRow {
+  id: string;
+  plan_id: string | null;
+  title: string | null;
+}
+
+/** "{title} moved to bank" on a day of the plan it left. */
+export interface BankTrace {
+  itemId: string;
+  planId: string;
+  title: string | null;
+  /** The plan day the line sits on: the move's day (workspace zone), held inside the plan's range. */
+  day: string;
+  movedAt: string;
+}
+
+function fromPlanOf(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
+  const value = (payload as Record<string, unknown>).from_plan_id;
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/** A day held inside [start, end]. Pure. */
+function clampDay(day: string, start: string, end: string): string {
+  if (day < start) return start;
+  if (day > end) return end;
+  return day;
+}
+
+/**
+ * The traces per plan: the newest move per item (a later move of the same
+ * item wins wherever it went), kept only for the plans asked for, dropped when
+ * the item is gone (deleted or unreadable) or back in the plan it left. The
+ * audit row carries no day, so the line sits on the move's day in the
+ * workspace zone, held inside the plan's range. Newest first per plan. Pure.
+ */
+export function reduceBankTraces(
+  rows: readonly TraceAuditRow[],
+  items: readonly TraceItemRow[],
+  plans: ReadonlyArray<Pick<PlanRow, 'id' | 'starts_on' | 'ends_on'>>,
+  timeZone: string,
+): Map<string, BankTrace[]> {
+  const planById = new Map(plans.map((p) => [p.id, p]));
+  const itemById = new Map(items.map((i) => [i.id, i]));
+  const newest = new Map<string, TraceAuditRow & { planId: string }>();
+  for (const row of rows) {
+    const planId = fromPlanOf(row.payload);
+    if (row.entity_id === null || planId === null) continue;
+    const have = newest.get(row.entity_id);
+    if (have !== undefined && Date.parse(have.created_at) >= Date.parse(row.created_at)) continue;
+    newest.set(row.entity_id, { ...row, planId });
+  }
+  const out = new Map<string, BankTrace[]>();
+  for (const [itemId, row] of newest) {
+    const plan = planById.get(row.planId);
+    const item = itemById.get(itemId);
+    if (plan === undefined || item === undefined) continue;
+    if (item.plan_id === row.planId) continue;
+    const moved = civilDayOf(row.created_at, timeZone);
+    if (moved === null) continue;
+    const list = out.get(row.planId) ?? [];
+    list.push({
+      itemId,
+      planId: row.planId,
+      title: item.title,
+      day: clampDay(moved, plan.starts_on, plan.ends_on),
+      movedAt: row.created_at,
+    });
+    out.set(row.planId, list);
+  }
+  for (const list of out.values()) list.sort((a, b) => Date.parse(b.movedAt) - Date.parse(a.movedAt));
+  return out;
+}
+
+/** Traces grouped by day (newest first in a day). Pure. */
+export function tracesByDay(traces: readonly BankTrace[]): Map<string, BankTrace[]> {
+  const out = new Map<string, BankTrace[]>();
+  for (const trace of traces) {
+    const list = out.get(trace.day) ?? [];
+    list.push(trace);
+    out.set(trace.day, list);
+  }
+  return out;
+}
+
+/**
+ * The moved-to-bank traces of these plans: ONE audit_log select (action
+ * plan_item_to_bank, the workspace, from_plan_id among the plans, newest
+ * first, at most TRACE_READ_LIMIT), then one plan_items select for the moved
+ * items' titles and where they are now. Agency only (the caller decides);
+ * after paint. Never throws.
+ */
+export async function readBankTraces(
+  client: Client,
+  workspaceId: string,
+  plans: ReadonlyArray<Pick<PlanRow, 'id' | 'starts_on' | 'ends_on'>>,
+  timeZone: string,
+  signal?: AbortSignal,
+): Promise<Result<Map<string, BankTrace[]>>> {
+  try {
+    const planIds = [...new Set(plans.map((p) => p.id))];
+    if (planIds.length === 0) return { ok: true, data: new Map() };
+    const audit = (client.from('audit_log') as unknown as PlanTable)
+      .select('entity_id, created_at, payload')
+      .eq('workspace_id', workspaceId)
+      .eq('action', TO_BANK_ACTION)
+      .eq('entity_type', 'plan_item')
+      .in('payload->>from_plan_id', planIds)
+      .order('created_at', { ascending: false })
+      .limit(TRACE_READ_LIMIT);
+    const res = (await abortable(audit, signal)) as SelectResult;
+    if (res.error !== null) return fail(`audit_log: ${res.error.message}`);
+    const rows = (res.data ?? []) as TraceAuditRow[];
+    const ids = [...new Set(rows.flatMap((r) => (r.entity_id !== null ? [r.entity_id] : [])))];
+    const items = await selectIn<TraceItemRow>(
+      client,
+      'plan_items',
+      'id, plan_id, title',
+      'id',
+      ids,
+      signal,
+      (q) => q.is('deleted_at', null),
+    );
+    if (!items.ok) return items;
+    return { ok: true, data: reduceBankTraces(rows, items.data, plans, timeZone) };
+  } catch (error) {
+    return fail(String(error));
+  }
+}

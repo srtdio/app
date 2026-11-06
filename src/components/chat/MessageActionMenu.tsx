@@ -144,14 +144,23 @@ export function isPlanMessage(message: Pick<ThreadMessage, 'sharedPlanIds'>): bo
 }
 
 /**
- * Whether a selection can be forwarded: never when it holds a plan card (a
- * plan is shared with chat_plan_share, not forwarded as a message). Pure.
+ * An idea card message (chat_plan_item_share): the same menu rules as a plan
+ * card (no Forward, Save to notes or Edit; Copy copies the idea's title). Pure.
+ */
+export function isIdeaMessage(message: Pick<ThreadMessage, 'sharedPlanItemIds'>): boolean {
+  return (message.sharedPlanItemIds ?? []).length > 0;
+}
+
+/**
+ * Whether a selection can be forwarded: never when it holds a plan or idea
+ * card (shared with chat_plan_share / chat_plan_item_share, not forwarded as
+ * a message). Pure.
  */
 export function selectionForwardable(
   selected: ReadonlySet<string>,
-  messages: ReadonlyArray<Pick<ThreadMessage, 'id' | 'sharedPlanIds'>>,
+  messages: ReadonlyArray<Pick<ThreadMessage, 'id' | 'sharedPlanIds' | 'sharedPlanItemIds'>>,
 ): boolean {
-  return !messages.some((m) => selected.has(m.id) && isPlanMessage(m));
+  return !messages.some((m) => selected.has(m.id) && (isPlanMessage(m) || isIdeaMessage(m)));
 }
 
 interface MessageActionMenuProps {

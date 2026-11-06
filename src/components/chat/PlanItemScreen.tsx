@@ -51,8 +51,50 @@ import {
   planItemCommentCreate,
   planItemMove,
   planItemRemove,
+  planItemBucketsSet,
   planItemReview,
+  planItemToBank,
 } from '@srtdio/rpc';
+import { Chip } from '@/components/ui/Chip';
+import { ErrorNote } from '@/components/ui/ErrorNote';
+import { Input } from '@/components/ui/Input';
+import { IdeaShareFlow, type IdeaShareTarget } from '@/components/chat/IdeaShareFlow';
+import { BankShowSheet, usePlanIt } from '@/components/pages/plan-tab/BankList';
+import {
+  CLIENT_CAN_SEE,
+  TEAM_ONLY,
+  approverNames,
+  joinNames,
+} from '@/components/pages/plan-tab/bank-parts';
+import {
+  readPlansForPlanIt,
+  removeBankIdea,
+  setBankFlags,
+  useBankBuckets,
+} from '@/components/pages/plan-tab/use-bank-data';
+import { createBucket, type BucketOption } from '@/lib/buckets';
+import { MOVED_TO_BANK_LABEL, moveToBankError } from '@/lib/chat/bank-plan-copy';
+import {
+  ADD_BUCKET_LABEL,
+  BUCKETS_LABEL,
+  HIDE_FROM_CLIENT_LABEL,
+  IDEA_HIDDEN_LABEL,
+  NEW_BUCKET_PLACEHOLDER,
+  SHOW_TO_CLIENT_LABEL,
+  TEAM_ONLY_LINE,
+  WHO_CAN_SEE_LABEL,
+  bankIdeaMenu,
+  bankIdeaOf,
+  bucketSaveLabel,
+  clientSeesLine,
+  plannedConceptMenu,
+  runDetachedUndo,
+  toggleBucket,
+  withIdeaFlags,
+  withNewBucket,
+  type IdeaFlags,
+} from '@/lib/chat/plan-item-bank';
+import { useWorkspaceMembers } from '@/lib/workspace-members';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -64,9 +106,13 @@ import { Bone, DUR_SLOW_MS } from '@/lib/motion';
 import {
   ICON_SIZE,
   IconArrowUp,
+  IconCheck,
   IconChevronRight,
+  IconEye,
+  IconEyeOff,
   IconLink,
   IconMore,
+  IconPlus,
   IconTrash,
   IconX,
 } from '@/components/ui/icons';
@@ -166,6 +212,7 @@ import {
   dispatchPlanChanged,
   planItemRead,
   readConceptFiles,
+  readItemBuckets,
   readItemScreen,
   type CommentVisibility,
   type PlanItemRead,
@@ -501,7 +548,10 @@ export function PlanItemScreen(props: {
    */
   onOpenLinkedPost?: (postId: string) => void;
 }): ReactElement | null {
-  const { item, side } = props;
+  const { side } = props;
+  // A bank idea's flags changed here (Show, Hide, Star, Archive) ahead of the re-read.
+  const [flags, setFlags] = useState<IdeaFlags>({});
+  const item = useMemo(() => withIdeaFlags(props.item, flags), [props.item, flags]);
   const bank = props.bundle === undefined;
   const bankLink = props.bankLink;
   const bundle = useMemo(
@@ -623,6 +673,8 @@ export function PlanItemScreen(props: {
     },
   );
 
+  // Another item drops the flags changed here.
+  useEffect(() => setFlags({}), [props.item.id]);
   // A new item (or a fresh bundle) drops the local overrides and drafts.
   useEffect(() => {
     setOverrides({});
@@ -1144,6 +1196,356 @@ export function PlanItemScreen(props: {
     </div>
   ) : null;
 
+  // Bank meets Plan (concepts). Buckets: the picks autosave (plan_item_buckets_set
+  // per change, queued so they land in order; "Saving… / Saved"); a client
+  // reads them as Tags. The ids ride on the item when its read carried them
+  // (a bank idea's planItemRead, the plan bundle); else one plan_item_buckets
+  // select after paint. Bucket names: the Bank's session read (after paint).
+  const concept = item.kind === 'concept';
+  const agency = side === 'agency';
+  const commentCount = read.status === 'ready' ? read.data.comments.length : 0;
+  const bankBuckets = useBankBuckets({
+    workspaceId,
+    userId: me,
+    enabled: props.open && concept,
+  });
+  const [picked, setPicked] = useState<string[] | null>(props.item.bucket_ids ?? null);
+  const savedPicks = useRef<string[]>(props.item.bucket_ids ?? []);
+  const [bucketsSaving, setBucketsSaving] = useState(0);
+  const [bucketsSaved, setBucketsSaved] = useState(false);
+  const bucketChain = useRef<Promise<void>>(Promise.resolve());
+  const [addingBucket, setAddingBucket] = useState(false);
+  const [bucketName, setBucketName] = useState('');
+  const [bucketError, setBucketError] = useState<string | null>(null);
+  const [bucketBusy, setBucketBusy] = useState(false);
+  useEffect(() => {
+    setPicked(props.item.bucket_ids ?? null);
+    savedPicks.current = props.item.bucket_ids ?? [];
+    setBucketsSaved(false);
+    setAddingBucket(false);
+    setBucketName('');
+    setBucketError(null);
+  }, [props.item.id, props.item.bucket_ids]);
+  const needBucketRead = props.open && concept && picked === null;
+  useEffect(() => {
+    if (!needBucketRead) return;
+    let live = true;
+    void readItemBuckets(supabase, [props.item.id]).then((res) => {
+      if (!live) return;
+      const ids = res.ok ? (res.data[props.item.id] ?? []) : [];
+      savedPicks.current = ids;
+      setPicked(ids);
+    });
+    return () => {
+      live = false;
+    };
+  }, [needBucketRead, props.item.id]);
+  const writeBuckets = (next: string[]): void => {
+    setPicked(next);
+    setBucketsSaving((n) => n + 1);
+    const forItem = props.item.id;
+    bucketChain.current = bucketChain.current.then(async () => {
+      const traceId = generateTraceId();
+      const res = await planItemBucketsSet(supabase, {
+        p_item_id: forItem,
+        p_bucket_ids: next,
+        p_trace_id: traceId,
+      });
+      setBucketsSaving((n) => n - 1);
+      if (!res.ok) {
+        logger.warn('chat: plan item buckets save failed', {
+          trace_id: traceId,
+          item_id: forItem,
+          error: res.error.message,
+        });
+        setPicked(savedPicks.current);
+        toast.show({ title: errorText('save the buckets', res.error.message), tone: 'error' });
+        return;
+      }
+      savedPicks.current = next;
+      setBucketsSaved(true);
+      planChanged();
+    });
+  };
+  const bucketOrder = bankBuckets.buckets.map((b) => b.id);
+  const pickBucket = (id: string): void => {
+    if (!agency || picked === null) return;
+    writeBuckets(toggleBucket(picked, id, bucketOrder));
+  };
+  const addBucket = async (): Promise<void> => {
+    const name = bucketName.trim();
+    if (name === '' || bucketBusy || workspaceId === null || picked === null) return;
+    setBucketBusy(true);
+    setBucketError(null);
+    const res = await createBucket(supabase, workspaceId, name, generateTraceId());
+    setBucketBusy(false);
+    if (!res.ok) {
+      setBucketError(res.error.message);
+      return;
+    }
+    const made: BucketOption = res.data;
+    bankBuckets.set([...bankBuckets.buckets.filter((b) => b.id !== made.id), made]);
+    setBucketName('');
+    setAddingBucket(false);
+    writeBuckets(withNewBucket(picked, made.id));
+  };
+  const saveLabel = bucketSaveLabel({ saving: bucketsSaving > 0, savedOnce: bucketsSaved });
+  const pickedBuckets = bankBuckets.buckets.filter((b) => (picked ?? []).includes(b.id));
+  const bucketsCard =
+    concept && (agency || pickedBuckets.length > 0) ? (
+      <section
+        data-plan-buckets=""
+        aria-label={BUCKETS_LABEL}
+        className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card"
+      >
+        <div className="flex min-h-[28px] items-center justify-between gap-2">
+          <h4 className={SECTION_LABEL}>{BUCKETS_LABEL}</h4>
+          {agency && saveLabel !== null ? (
+            <span
+              data-plan-buckets-save={bucketsSaving > 0 ? 'saving' : 'saved'}
+              aria-live="polite"
+              className="text-sm text-fg-3"
+            >
+              {saveLabel}
+            </span>
+          ) : null}
+        </div>
+        {agency ? (
+          <div className="flex flex-wrap gap-2">
+            {bankBuckets.buckets.map((b) => (
+              <Chip
+                key={b.id}
+                label={b.name}
+                data-plan-bucket={b.id}
+                selected={(picked ?? []).includes(b.id)}
+                disabled={picked === null}
+                onClick={() => pickBucket(b.id)}
+              />
+            ))}
+            {addingBucket ? (
+              <form
+                data-plan-bucket-new=""
+                className="flex min-w-0 flex-1 items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void addBucket();
+                }}
+              >
+                <Input
+                  autoFocus
+                  value={bucketName}
+                  maxLength={40}
+                  aria-label={NEW_BUCKET_PLACEHOLDER}
+                  placeholder={NEW_BUCKET_PLACEHOLDER}
+                  onChange={(e) => {
+                    setBucketName(e.target.value);
+                    setBucketError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.stopPropagation();
+                      setAddingBucket(false);
+                      setBucketName('');
+                    }
+                  }}
+                  className="min-w-0 flex-1"
+                />
+                <IconButton
+                  type="submit"
+                  label="Add"
+                  data-plan-bucket-add-go=""
+                  disabled={bucketName.trim() === '' || bucketBusy}
+                >
+                  <IconCheck size={ICON_SIZE.control} />
+                </IconButton>
+              </form>
+            ) : (
+              <Chip
+                variant="add"
+                label={ADD_BUCKET_LABEL}
+                data-plan-bucket-add=""
+                dot={<IconPlus size={ICON_SIZE.inline} />}
+                disabled={picked === null}
+                onClick={() => setAddingBucket(true)}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {pickedBuckets.map((b) => (
+              <Tag key={b.id} label={b.name} />
+            ))}
+          </div>
+        )}
+        {bucketError !== null ? <ErrorNote>{bucketError}</ErrorNote> : null}
+      </section>
+    ) : null;
+
+  // Who can see this (a bank idea, agency only): Team only or Client can see,
+  // the line naming the approvers (members read only while the card shows),
+  // Show to client (#816's warning sheet) or Hide from client (Undo strip).
+  const whoCard = bank && agency && concept;
+  const members = useWorkspaceMembers(props.open && whoCard ? workspaceId : null);
+  const approvers = useMemo(
+    () => approverNames(members.rows, members.profiles),
+    [members.rows, members.profiles],
+  );
+  const shownToClient = item.show_to_client === true;
+  const [showAsk, setShowAsk] = useState(false);
+  const ideaNow = bankIdeaOf(props.item, commentCount);
+  const markBankChanged = (): void => {
+    if (bankKey !== null) invalidateReads(bankKey);
+    dispatchPlanChanged(window, '');
+  };
+  const writeFlags = (change: { show?: boolean; archived?: boolean; starred?: boolean }) =>
+    setBankFlags(supabase, bankIdeaOf(item, commentCount), change).then(markBankChanged);
+  const showToClient = (): void => {
+    setShowAsk(false);
+    const before = flags;
+    setFlags((f) => ({ ...f, show_to_client: true }));
+    void writeFlags({ show: true }).catch(() => {
+      setFlags(before);
+      toast.show({ title: errorText('show it to the client', null), tone: 'error' });
+    });
+  };
+  const hideFromClient = (): void => {
+    const before = flags;
+    setFlags((f) => ({ ...f, show_to_client: false }));
+    undoable.run({
+      label: IDEA_HIDDEN_LABEL,
+      commit: () => writeFlags({ show: false }),
+      revert: () => setFlags(before),
+    });
+  };
+  const starIdea = (on: boolean): void => {
+    const before = flags;
+    setFlags((f) => ({ ...f, starred_at: on ? new Date().toISOString() : null }));
+    void writeFlags({ starred: on }).catch(() => {
+      setFlags(before);
+      toast.show({ title: errorText(on ? 'star' : 'unstar', null), tone: 'error' });
+    });
+  };
+  const archiveIdea = (on: boolean): void => {
+    const before = flags;
+    setFlags((f) => ({ ...f, archived_at: on ? new Date().toISOString() : null }));
+    undoable.run({
+      label: on ? 'Idea archived' : 'Idea restored',
+      commit: () => writeFlags({ archived: on }),
+      revert: () => setFlags(before),
+    });
+  };
+  // Delete and Move to bank close the screen at once; their write waits for
+  // the Undo strip held by the toast provider (runDetachedUndo), never after Undo.
+  const deleteIdea = (): void => {
+    const forItem = props.item.id;
+    runDetachedUndo(toast.show, {
+      label: 'Idea deleted',
+      commit: () => removeBankIdea(supabase, forItem).then(markBankChanged),
+    });
+    props.onClose();
+  };
+  const moveToBank = (): void => {
+    if (!planActions || !concept) return;
+    const forItem = props.item.id;
+    const planId = bundle.plan.id;
+    runDetachedUndo(toast.show, {
+      label: MOVED_TO_BANK_LABEL,
+      commit: async () => {
+        const traceId = generateTraceId();
+        const res = await planItemToBank(supabase, { p_item_id: forItem, p_trace_id: traceId });
+        if (!res.ok) {
+          logger.warn('chat: plan item move to bank failed', {
+            trace_id: traceId,
+            item_id: forItem,
+            error: res.error.message,
+          });
+          toast.show({ title: moveToBankError(res.error.message), tone: 'error' });
+          return;
+        }
+        dispatchPlanChanged(window, planId);
+      },
+    });
+    (props.onRemoved ?? props.onClose)();
+  };
+  // Plan it (a bank idea): #816's flow (usePlanIt); placed, the screen closes.
+  const today = civilToday(new Date(), timeZone);
+  const planIt = usePlanIt({
+    workspaceId: workspaceId ?? '',
+    today,
+    getPlans: () =>
+      workspaceId === null
+        ? Promise.resolve({ ok: false as const, error: { message: 'no workspace' } })
+        : readPlansForPlanIt(workspaceId, today),
+    onPlaced: () => {
+      markBankChanged();
+      props.onClose();
+    },
+    onUnplaced: markBankChanged,
+  });
+  // Send to chat: the chat picker, then chat_plan_item_share (IdeaShareFlow).
+  const [sendIdea, setSendIdea] = useState<IdeaShareTarget | null>(null);
+  const sendToChat = (): void =>
+    setSendIdea({ id: item.id, title: rowTitle(bundle, item), commentCount });
+  const whoCanSeeCard = whoCard ? (
+    <section
+      data-plan-who-can-see=""
+      aria-label={WHO_CAN_SEE_LABEL}
+      className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card"
+    >
+      <h4 className={SECTION_LABEL}>{WHO_CAN_SEE_LABEL}</h4>
+      <div className="flex min-h-[28px] items-center">
+        <Tag
+          label={shownToClient ? CLIENT_CAN_SEE : TEAM_ONLY}
+          tone={shownToClient ? 'good' : 'neutral'}
+        />
+      </div>
+      <p data-plan-who-line="" className="text-base text-fg-2">
+        {shownToClient ? clientSeesLine(joinNames(approvers)) : TEAM_ONLY_LINE}
+      </p>
+      <div>
+        {shownToClient ? (
+          <Button type="button" data-plan-who-hide="" onClick={hideFromClient}>
+            <IconEyeOff size={ICON_SIZE.inline} />
+            {HIDE_FROM_CLIENT_LABEL}
+          </Button>
+        ) : (
+          <Button type="button" data-plan-who-show="" onClick={() => setShowAsk(true)}>
+            <IconEye size={ICON_SIZE.inline} />
+            {SHOW_TO_CLIENT_LABEL}
+          </Button>
+        )}
+      </div>
+    </section>
+  ) : null;
+  const plannedMenu = (): ActionMenuItem[] => {
+    const rows = planItemMenuItems({
+      onMove: () => setMoveOpen(true),
+      onEdit: openEdit,
+      onRemove: () => setRemoveOpen(true),
+    });
+    const remove = rows[rows.length - 1];
+    return remove === undefined
+      ? rows
+      : plannedConceptMenu(rows.slice(0, -1), remove, {
+          onSendToChat: sendToChat,
+          onMoveToBank: moveToBank,
+        });
+  };
+  const bankMenu =
+    bank && agency && concept
+      ? bankIdeaMenu(item, {
+          onPlanIt: () => planIt.start(ideaNow),
+          onSendToChat: sendToChat,
+          onShow: () => setShowAsk(true),
+          onHide: hideFromClient,
+          onStar: starIdea,
+          onArchive: archiveIdea,
+          onDelete: deleteIdea,
+        })
+      : null;
+  const conceptMenu: ActionMenuItem[] | null =
+    concept && planActions ? plannedMenu() : bankMenu;
+
   // The linked comment (concept items; a post item's comments land inside the
   // embedded post page): once its row renders, scroll to it and ring it briefly
   // (useFocusTarget, keyed by id, so a second link on this open item lands too).
@@ -1218,16 +1620,12 @@ export function PlanItemScreen(props: {
         desktopBack
         closeLabel="Close plan"
         {...(props.onDismiss !== undefined ? { onDismiss: props.onDismiss } : {})}
-        {...(item.kind === 'concept' && planActions
+        {...(conceptMenu !== null
           ? {
               action: (
                 <ActionMenu
                   title={title}
-                  items={planItemMenuItems({
-                    onMove: () => setMoveOpen(true),
-                    onEdit: openEdit,
-                    onRemove: () => setRemoveOpen(true),
-                  })}
+                  items={conceptMenu}
                   open={props.open && conceptMenuOpen}
                   onOpenChange={setConceptMenuOpen}
                   trigger={
@@ -1442,6 +1840,8 @@ export function PlanItemScreen(props: {
               ) : null}
               <ConceptLinkCard text={description} />
             </div>
+            {bucketsCard}
+            {whoCanSeeCard}
             <div
               data-plan-status=""
               className="flex flex-col gap-1.5 rounded-xl border bg-panel p-3 lit-card"
@@ -1610,6 +2010,27 @@ export function PlanItemScreen(props: {
           }}
           onLinkConfirm={confirmLink}
         />
+      ) : null}
+      {agency && concept ? (
+        <IdeaShareFlow
+          idea={sendIdea}
+          onClose={() => setSendIdea(null)}
+          onShown={() => {
+            setFlags((f) => ({ ...f, show_to_client: true }));
+            markBankChanged();
+          }}
+        />
+      ) : null}
+      {bank && agency && concept ? (
+        <>
+          {planIt.sheets}
+          <BankShowSheet
+            idea={showAsk ? bankIdeaOf(item, commentCount) : null}
+            workspaceId={workspaceId ?? ''}
+            onClose={() => setShowAsk(false)}
+            onShow={showToClient}
+          />
+        </>
       ) : null}
       {editable ? (
         <ConceptSheet

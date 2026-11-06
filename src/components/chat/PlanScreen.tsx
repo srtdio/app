@@ -44,6 +44,14 @@
 // (440px from 972px, 360px below; translateX in).
 
 import { mark } from '@/lib/perf-marks';
+import { itemOut } from '@/lib/motion';
+import { PlanOpenSendSheet, type PlanOpenSendAsk } from '@/components/chat/PlanOpenSendSheet';
+import { movedToBankLine } from '@/lib/chat/bank-plan-copy';
+import {
+  moveToBankAction,
+  useBankTraces,
+  usePlanRowBuckets,
+} from '@/lib/chat/plan-bank-extras';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   KeyboardEvent as ReactKeyboardEvent,
@@ -82,6 +90,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconEdit,
+  IconBank,
   IconFile,
   IconLink,
   IconPlan,
@@ -220,6 +229,9 @@ import {
   readPlanBundles,
   readPlanScreen,
   refusedForClient,
+  bucketLine,
+  tracesByDay,
+  type BankTrace,
   type ComposeRange,
   type ConceptThumb,
   type PlanBundle,
@@ -1105,6 +1117,10 @@ export function PlanScreen(props: {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [dayFor, setDayFor] = useState<string | null>(null);
   const [datesOpen, setDatesOpen] = useState(false);
+  // Move to bank: rows that left at once (itemOut), their write behind Undo.
+  const [bankHidden, setBankHidden] = useState<ReadonlySet<string>>(new Set());
+  // The Open and send sheet (a Draft plan refused for a chat with approvers).
+  const [openSendAsk, setOpenSendAsk] = useState<PlanOpenSendAsk | null>(null);
   useHistoryStep(
     itemId !== null && itemId !== entryItemId && props.open,
     HISTORY_STEP_KEYS.planItem,
@@ -1142,6 +1158,8 @@ export function PlanScreen(props: {
     setMenuFor(null);
     setDayFor(null);
     setDatesOpen(false);
+    setBankHidden(new Set());
+    setOpenSendAsk(null);
   }, [props.open]);
 
   // A write anywhere re-reads this plan (keeping what is shown meanwhile).
@@ -1214,8 +1232,9 @@ export function PlanScreen(props: {
     if (shownBundle === null) return null;
     const ticked =
       slot !== null ? withReviewOverrides(shownBundle, slot, slotOverrides) : shownBundle;
-    return ops.length > 0 ? applyPlanOps(ticked, ops, timeZone) : ticked;
-  }, [shownBundle, slot, slotOverrides, ops, timeZone]);
+    const moved = withoutItems(ticked, bankHidden);
+    return ops.length > 0 ? applyPlanOps(moved, ops, timeZone) : moved;
+  }, [shownBundle, slot, slotOverrides, ops, timeZone, bankHidden]);
   // A search jump's item: scrolled to and tinted once, when its row is on screen.
   const jumpItemId = props.jumpItemId ?? null;
   const jumpedRef = useRef<string | null>(null);
@@ -1282,6 +1301,30 @@ export function PlanScreen(props: {
   const subtitle =
     bundle !== null && side !== 'unknown' ? planHeaderSubtitle(bundle.plan) : undefined;
   const agency = side === 'agency' && bundle !== null;
+  // After paint: the rows' buckets (everyone) and the moved-to-bank traces
+  // (agency only). One read per table, never before the list paints.
+  const rowBuckets = usePlanRowBuckets({
+    client: supabase,
+    enabled: props.open && shownBundle !== null,
+    bundle: shownBundle,
+  });
+  const tracePlans = useMemo(
+    () => (shownBundle !== null ? [shownBundle.plan] : []),
+    [shownBundle],
+  );
+  const traces = useBankTraces({
+    client: supabase,
+    enabled: props.open && side === 'agency' && shownBundle !== null,
+    workspaceId: shownBundle?.plan.workspace_id ?? null,
+    plans: tracePlans,
+    timeZone,
+  });
+  const dayTraces = useMemo(() => {
+    const live = new Set((bundle?.items ?? []).map((i) => i.id));
+    return tracesByDay(
+      (traces.get(planId) ?? []).filter((t) => !live.has(t.itemId) && !bankHidden.has(t.itemId)),
+    );
+  }, [traces, planId, bundle, bankHidden]);
   // Delete is for the plan's creator or a workspace owner/admin: one role read
   // per open, agency side only.
   const [role, setRole] = useState<string | null>(null);
@@ -1393,6 +1436,16 @@ export function PlanScreen(props: {
         plan_id: planId,
         error: result.message,
       });
+      if (!afterOpen && refusedForClient(result.message) && bundle !== null) {
+        // A Draft plan into a chat with approvers: ask to open it first.
+        setOpenSendAsk({
+          planId,
+          planTitle: bundle.plan.title,
+          channelId: chat.channelId,
+          chatName: chat.name,
+        });
+        return;
+      }
       setSendError(
         afterOpen
           ? SEND_AFTER_OPEN_FAILED
@@ -1422,9 +1475,15 @@ export function PlanScreen(props: {
         error: result.error.message,
       });
       setOpenError(errorText('open for approvers', result.error));
+      // From the Open and send sheet the error has no confirm sheet to sit in.
+      if (openSendAsk !== null) {
+        setOpenSendAsk(null);
+        toast.show({ title: errorText('open for approvers', result.error), tone: 'error' });
+      }
       return;
     }
     setOpenConfirm(false);
+    setOpenSendAsk(null);
     toast.show({ title: OPEN_FOR_CLIENT_TOAST });
     dispatchPlanChanged(window, planId);
     if (thenSend) await sendHere(true);
@@ -1631,6 +1690,39 @@ export function PlanScreen(props: {
     if (!agency) return;
     setDayFor(null);
     autosave({ op: 'remove', item_id: id }, REMOVED_TOAST);
+  };
+  // Move to bank (concepts, agency): the row closes upward at once (itemOut)
+  // and leaves the list; plan_item_to_bank fires when the Undo strip ends.
+  const moveRowToBank = (id: string): void => {
+    if (!agency) return;
+    setMenuFor(null);
+    const row =
+      bodyRef.current?.querySelector<HTMLElement>(`[data-plan-row-wrap="${CSS.escape(id)}"]`) ??
+      null;
+    const show = (): void => {
+      for (const move of row?.getAnimations() ?? []) move.cancel();
+      setBankHidden((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    };
+    undoable.run(
+      moveToBankAction({
+        client: supabase,
+        itemId: id,
+        hide: () => {
+          const out = itemOut(row);
+          const hide = (): void => setBankHidden((prev) => new Set(prev).add(id));
+          if (out.instant) hide();
+          else void out.done.then(hide);
+        },
+        show,
+        onMoved: () => dispatchPlanChanged(window, planId),
+        onError: (copy) => toast.show({ title: copy, tone: 'error' }),
+      }),
+    );
   };
   const openItem = (id: string): void => {
     mark('plan:item:open');
@@ -2070,6 +2162,8 @@ export function PlanScreen(props: {
               conceptThumbs={read.status === 'ready' ? (read.data.conceptThumbs ?? {}) : {}}
               commentCounts={read.status === 'ready' ? read.data.commentCounts : {}}
               alsoIn={read.status === 'ready' ? (read.data.alsoIn ?? {}) : {}}
+              buckets={rowBuckets}
+              {...(agency ? { traces: dayTraces } : {})}
               onOpenItem={openItem}
               onOpenLinkedPost={openLinkedPost}
               onPlanOk={planOk}
@@ -2081,6 +2175,7 @@ export function PlanScreen(props: {
                       openId: menuFor,
                       onOpenChange: (id: string, open: boolean) => setMenuFor(open ? id : null),
                       onMove: (id: string) => setDayFor(id),
+                      onToBank: moveRowToBank,
                       onRemove: removeRow,
                     },
                   }
@@ -2147,6 +2242,17 @@ export function PlanScreen(props: {
             onConfirm={() => void openForClient(primary.kind === 'send-approvers')}
             onCancel={() => {
               if (!openBusy) setOpenConfirm(false);
+            }}
+          />
+          <PlanOpenSendSheet
+            ask={props.open ? openSendAsk : null}
+            busy={openBusy || sendBusy}
+            onClose={() => {
+              if (!openBusy) setOpenSendAsk(null);
+            }}
+            onOpenAndSend={() => {
+              sendKindRef.current = 'send-approvers';
+              void openForClient(true);
             }}
           />
           <PlanDayPickerSheet
