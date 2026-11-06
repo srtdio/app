@@ -352,7 +352,7 @@ export interface BankSurfaceProps {
 }
 
 /** What Plan it is showing. */
-type PlanItStep =
+export type PlanItStep =
   | { kind: 'date'; idea: BankIdea; day: string }
   | { kind: 'none'; idea: BankIdea; day: string }
   | { kind: 'several'; idea: BankIdea; day: string; plans: PlanRow[] }
