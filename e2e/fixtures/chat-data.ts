@@ -566,6 +566,9 @@ export function buildWorld(now: number = Date.now()): ChatWorld {
     plan_items: [],
     plan_item_reviews: [],
     plan_item_comments: [],
+    // Bank meets Plan: bucket lines and moved-to-bank traces read these after paint.
+    plan_item_buckets: [],
+    audit_log: [],
     folders: [],
     workspace_buckets: [
       {

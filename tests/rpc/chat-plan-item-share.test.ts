@@ -112,19 +112,19 @@ describe.runIf(RPC_SUITE)('chat_plan_item_share (authenticated role)', () => {
     agencyClientDm = await seedDmChannel(g, ws.id, agency, client);
     clientClientDm = await seedDmChannel(g, ws.id, client, client2);
     agencyGroup = await seedGroupChannel([agency, agency2]);
-    const args: Rpc['bank_idea_create']['Args'] = {
-      p_workspace_id: ws.id,
-      p_title: `Idea ${randomSuffix()}`,
-      p_description: '',
-      p_bucket_ids: [],
-      p_attachment_version_ids: [],
-      p_trace_id: uuidv7(),
-    };
-    const created = await clientFor(agency.id).rpc('bank_idea_create', args);
-    if (created.error !== null || created.data === null) {
-      throw new Error(`bank_idea_create failed: ${created.error?.message ?? 'no data'}`);
-    }
-    ideaId = created.data;
+    // The idea itself is seeded as a row (a team-only bank concept): this
+    // spec is about chat_plan_item_share and chat_message_delete, not
+    // bank_idea_create.
+    const idea = await insertRow(g, 'plan_items', {
+      workspace_id: ws.id,
+      plan_id: null,
+      kind: 'concept',
+      position: 0,
+      title: `Idea ${randomSuffix()}`,
+      created_by: agency.id,
+      show_to_client: false,
+    });
+    ideaId = String(idea.id);
   });
 
   it('a team-only idea into an agency-only group: one row carrying the idea', async () => {

@@ -454,7 +454,12 @@ function bankIdeaRow(id: string, title: string, extra: Partial<Row> = {}): Row {
  * plan) and plan_item_to_bank's audit row. The flat payload key stands in for
  * PostgREST's `payload->>from_plan_id` filter in the harness.
  */
-function seedTrace(network: HarnessNetwork, planId: string, title: string): void {
+function seedTrace(
+  network: HarnessNetwork,
+  planId: string,
+  title: string,
+  movedAt: number = NOW - 60 * 60_000,
+): void {
   const t = network.world.tables;
   (t.plan_items ??= []).push(bankIdeaRow(TRACE_ITEM, title, { came_from_plan_title: 'Plan' }));
   (t.audit_log ??= []).push({
@@ -464,7 +469,7 @@ function seedTrace(network: HarnessNetwork, planId: string, title: string): void
     entity_type: 'plan_item',
     entity_id: TRACE_ITEM,
     outcome: 'success',
-    created_at: new Date(NOW - 60 * 60_000).toISOString(),
+    created_at: new Date(movedAt).toISOString(),
     payload: { from_plan_id: planId },
     'payload->>from_plan_id': planId,
   });
@@ -1566,7 +1571,8 @@ const SCREENS: Screen[] = [
     seed: creator,
     extra: (network) => {
       seedTab(network);
-      seedTrace(network, TAB_SHARED_PLAN_ID, 'Monsoon teaser');
+      // Moved on Monday: today's cell is full (its lines fold into "+N more").
+      seedTrace(network, TAB_SHARED_PLAN_ID, 'Monsoon teaser', NOW - 2 * 86_400_000);
     },
     url: '/plan',
     steps: async (page) => {

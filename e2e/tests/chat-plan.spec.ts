@@ -503,16 +503,19 @@ async function teamAndHidden(page: Page): Promise<void> {
   await expect(draftChip).toHaveText('Draft');
   await draftChip.scrollIntoViewIfNeeded();
 
-  // Forward the Draft card into a chat with a client: nothing is sent.
+  // Forward the Draft card into a chat with a client: it asks first; Cancel sends nothing.
   const draftCard = page.locator('[data-plan-card]').filter({ has: draftChip }).first();
   await draftCard.locator('[data-plan-forward]').click();
   const picker = page.getByRole('dialog', { name: 'Forward plan' });
   await expect(picker).toBeVisible();
   const messagesBefore = (network.world.tables.chat_messages ?? []).length;
   await picker.getByRole('button', { name: new RegExp(PEER_NAME) }).click();
-  await expect(page.getByText('Open the plan for approvers first.')).toBeVisible();
+  // "Open this plan for approvers?" asks first; Cancel sends nothing.
+  const ask = page.getByRole('dialog', { name: 'Open this plan for approvers?' });
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(ask).toHaveCount(0);
   expect(network.world.tables.chat_messages ?? []).toHaveLength(messagesBefore);
-  await expect(page.getByRole('dialog', { name: 'Share with client first?' })).toHaveCount(0);
   await page.keyboard.press('Escape');
 
   // An agency-only group: Create plan, then the one footer button, "Send to
