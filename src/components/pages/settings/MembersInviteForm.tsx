@@ -669,9 +669,7 @@ export function MembersInviteForm({
   return (
     <section aria-labelledby="invite-people-title" className="flex flex-col gap-4">
       <div>
-        <Text as="h3" role="section"
-          id="invite-people-title"
-        >
+        <Text as="h3" role="section" id="invite-people-title">
           Invite people
         </Text>
         <p className="mt-0.5 text-base text-fg-2">

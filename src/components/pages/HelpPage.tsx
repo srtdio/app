@@ -195,9 +195,7 @@ export function HelpPage() {
 
         <section className="mt-8" aria-labelledby="help-articles-heading">
           <div className="flex flex-col gap-1">
-            <Text as="h2" role="section"
-              id="help-articles-heading"
-            >
+            <Text as="h2" role="section" id="help-articles-heading">
               Help articles
             </Text>
             <p className="text-sm text-fg-3">

@@ -106,11 +106,7 @@ function renderMarked(
 function Panel({ label, children }: { label?: string; children: ReactNode }): ReactNode {
   return (
     <div className="rounded-xl border bg-panel p-4 lit-card">
-      {label !== undefined ? (
-        <div className={cn(SECTION_LABEL, 'mb-2')}>
-          {label}
-        </div>
-      ) : null}
+      {label !== undefined ? <div className={cn(SECTION_LABEL, 'mb-2')}>{label}</div> : null}
       <p className="whitespace-pre-wrap text-base text-fg">{children}</p>
     </div>
   );

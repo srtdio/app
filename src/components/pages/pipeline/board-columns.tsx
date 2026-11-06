@@ -81,7 +81,11 @@ export function BoardColumns({
     <div ref={ref} className={cn('flex items-start gap-4', className)} {...rest}>
       {before}
       {columns.map((column, index) => (
-        <div key={`column-${index}`} data-board-column="" className="flex min-w-0 flex-1 flex-col gap-4">
+        <div
+          key={`column-${index}`}
+          data-board-column=""
+          className="flex min-w-0 flex-1 flex-col gap-4"
+        >
           {column}
         </div>
       ))}

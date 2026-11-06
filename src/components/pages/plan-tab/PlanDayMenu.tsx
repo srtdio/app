@@ -104,9 +104,7 @@ export function PlanDayMenu(props: {
           pos === null && 'invisible',
         )}
       >
-        <p className="px-3 pb-2 pt-1 text-sm font-semibold text-fg-3">
-          {addOnLabel(props.day)}
-        </p>
+        <p className="px-3 pb-2 pt-1 text-sm font-semibold text-fg-3">{addOnLabel(props.day)}</p>
         {props.plans.map((bundle) => (
           <PressableRow
             key={bundle.plan.id}

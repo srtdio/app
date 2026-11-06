@@ -699,9 +699,7 @@ export function AssetLightbox({
 
             <dl className="mt-3 flex flex-col gap-3">
               <div className="flex flex-col gap-0.5">
-                <dt className={SECTION_LABEL}>
-                  Name
-                </dt>
+                <dt className={SECTION_LABEL}>Name</dt>
                 {editingName ? (
                   <div className="mt-1 flex flex-col gap-2">
                     <Input

@@ -400,9 +400,7 @@ function TextTile({
         {icon}
         <span className={SECTION_LABEL_INK}>{eyebrow}</span>
       </span>
-      <p className="mt-auto line-clamp-3 text-sm text-fg-2 [overflow-wrap:anywhere]">
-        {body}
-      </p>
+      <p className="mt-auto line-clamp-3 text-sm text-fg-2 [overflow-wrap:anywhere]">{body}</p>
     </div>
   );
 }

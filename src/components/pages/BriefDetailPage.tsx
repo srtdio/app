@@ -66,7 +66,6 @@ import { currentEntryState } from '@/lib/focus-target';
 // The line under a closed brief's title (and in the Close confirm).
 export const CLOSED_BRIEF_LINE = 'Closed briefs stay readable and open to comments.';
 
-
 /**
  * The comment box inside the Comments section, for "Add note" (the note failed
  * to post on create). Comments renders it after its own read, so the caller

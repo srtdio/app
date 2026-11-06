@@ -360,9 +360,7 @@ export function filterControlBody(props: {
 }): ReactElement {
   return (
     <div data-filter-body="" className="flex flex-col">
-      <p className={cn(SECTION_LABEL, 'px-3 pb-1 pt-2')}>
-        Due date
-      </p>
+      <p className={cn(SECTION_LABEL, 'px-3 pb-1 pt-2')}>Due date</p>
       {dateControlBody({
         dateWindow: props.dateWindow,
         onDateWindowChange: props.onDateWindowChange,
@@ -370,9 +368,7 @@ export function filterControlBody(props: {
         onCustomOpen: props.onCustomOpen,
       })}
       <div className="my-2 border-t border-border" aria-hidden="true" />
-      <p className={cn(SECTION_LABEL, 'px-3 pb-1 pt-2')}>
-        Sort
-      </p>
+      <p className={cn(SECTION_LABEL, 'px-3 pb-1 pt-2')}>Sort</p>
       {sortControlBody({ order: props.order, onOrderChange: props.onOrderChange })}
     </div>
   );

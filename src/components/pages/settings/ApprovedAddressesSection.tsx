@@ -93,9 +93,7 @@ export function ApprovedAddressesSection({
   return (
     // The label on the page edge, its card under it.
     <section aria-labelledby="approved-addresses-title" className="flex flex-col gap-2">
-      <Text as="h3" role="section"
-        id="approved-addresses-title"
-      >
+      <Text as="h3" role="section" id="approved-addresses-title">
         Approved approver addresses
       </Text>
       <div

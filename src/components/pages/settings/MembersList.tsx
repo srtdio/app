@@ -414,7 +414,9 @@ function Group({
     <section aria-label={title} className="flex flex-col gap-2">
       <div>
         <div className="flex items-center gap-2">
-          <Text as="h3" role="section">{title}</Text>
+          <Text as="h3" role="section">
+            {title}
+          </Text>
           <span className="text-sm text-fg-3">{count}</span>
         </div>
         {subtitle !== undefined && subtitle !== '' ? (

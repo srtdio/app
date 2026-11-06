@@ -237,9 +237,7 @@ export function WorkspaceSettingsPanel() {
 
       {/* The label on the page edge, its card under it. */}
       <section aria-labelledby="workspace-danger-title" className="flex flex-col gap-2">
-        <Text as="h3" role="section"
-          id="workspace-danger-title"
-        >
+        <Text as="h3" role="section" id="workspace-danger-title">
           Danger
         </Text>
         <div data-workspace-danger="" className={cn(cardSurface(), cardPad())}>

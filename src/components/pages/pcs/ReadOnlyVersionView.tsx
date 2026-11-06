@@ -63,9 +63,7 @@ export function ReadOnlyVersionView({
       </div>
 
       <section>
-        <div className={cn(SECTION_LABEL, 'mb-2')}>
-          Gallery
-        </div>
+        <div className={cn(SECTION_LABEL, 'mb-2')}>Gallery</div>
         {showPictures && thumbs !== undefined ? (
           <SnapshotThumbs
             items={snapshotItems(galleryVersionIds, thumbs.gallery)}
@@ -82,9 +80,7 @@ export function ReadOnlyVersionView({
       </section>
 
       <section>
-        <div className={cn(SECTION_LABEL, 'mb-2')}>
-          Caption
-        </div>
+        <div className={cn(SECTION_LABEL, 'mb-2')}>Caption</div>
         {hasCaption ? (
           <p className="whitespace-pre-wrap text-base text-fg">{caption}</p>
         ) : (

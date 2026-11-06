@@ -2017,8 +2017,11 @@ export function PostDetailPage({
                 </Text>
               )
             ) : (
-              <Text as="h1" role="display"
-                data-post-title="" className="break-words [overflow-wrap:anywhere]"
+              <Text
+                as="h1"
+                role="display"
+                data-post-title=""
+                className="break-words [overflow-wrap:anywhere]"
               >
                 <Highlight text={post.title} />
                 {approvedLocked && agencySide ? (

@@ -68,14 +68,7 @@ describe('R12: the conversation picker is never connection-gated', () => {
       conversationPickerBody({ status: 'loading' }, null, vi.fn()),
     );
     const rows = renderToStaticMarkup(conversationPickerBody(READY, null, vi.fn()));
-    for (const cls of [
-      'min-h-11',
-      'px-3',
-      'py-2',
-      'gap-3',
-      'text-base font-medium',
-      'text-sm',
-    ]) {
+    for (const cls of ['min-h-11', 'px-3', 'py-2', 'gap-3', 'text-base font-medium', 'text-sm']) {
       expect(skeleton).toContain(cls);
       expect(rows).toContain(cls);
     }
