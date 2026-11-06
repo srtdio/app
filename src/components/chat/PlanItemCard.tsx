@@ -18,6 +18,7 @@ import { Bone } from '@/lib/motion';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconBank } from '@/components/ui/icons';
 import { CouldntLoadCard } from '@/components/chat/PostCard';
+import { CardEyebrow } from '@/components/chat/PlanCard';
 import {
   IDEA_EYEBROW,
   IDEA_NO_ACCESS,
@@ -176,10 +177,11 @@ export function PlanItemCardBody(props: {
 }): ReactElement {
   const { view } = props;
   const eyebrow = (
-    <span className="flex h-4 items-center gap-2 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
-      <IconBank size={ICON_SIZE.inline} />
-      {IDEA_EYEBROW}
-    </span>
+    <CardEyebrow
+      icon={<IconBank size={ICON_SIZE.inline} />}
+      label={IDEA_EYEBROW}
+      className="gap-2 text-fg-2"
+    />
   );
   if (view.kind === 'none') {
     return (

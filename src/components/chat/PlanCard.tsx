@@ -18,7 +18,7 @@
 
 import { Bone } from '@/lib/motion';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
@@ -195,16 +195,40 @@ function PlanCardItem(props: {
  * The title stays on one line (the chat card keeps its skeleton's height);
  * `wrapTitle` lets it wrap to two lines, then end on an ellipsis.
  */
+/**
+ * A shared card's eyebrow (the section label role: sm/600 uppercase): the
+ * plan card's "Plan" and the idea card's "Idea". `className` carries the
+ * caller's ink and gap.
+ */
+export function CardEyebrow(props: {
+  icon: ReactNode;
+  label: string;
+  className: string;
+}): ReactElement {
+  return (
+    <span
+      className={cn(
+        'flex h-4 items-center text-sm font-semibold uppercase tracking-[0.06em]',
+        props.className,
+      )}
+    >
+      {props.icon}
+      {props.label}
+    </span>
+  );
+}
+
 export function PlanCardTop(props: {
   plan: Pick<PlanBundle['plan'], 'title' | 'starts_on' | 'ends_on'>;
   wrapTitle?: boolean;
 }): ReactElement {
   return (
     <>
-      <span className="flex h-4 items-center gap-1.5 text-sm font-semibold uppercase tracking-[0.06em] text-accent">
-        <IconPlan size={ICON_SIZE.inline} />
-        {PLAN_EYEBROW}
-      </span>
+      <CardEyebrow
+        icon={<IconPlan size={ICON_SIZE.inline} />}
+        label={PLAN_EYEBROW}
+        className="gap-1.5 text-accent"
+      />
       <span
         data-plan-title=""
         className={cn(

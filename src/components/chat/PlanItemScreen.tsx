@@ -1380,7 +1380,7 @@ export function PlanItemScreen(props: {
                   data-plan-bucket-add-go=""
                   disabled={bucketName.trim() === '' || bucketBusy}
                 >
-                  <IconCheck size={ICON_SIZE.control} />
+                  <IconCheck size={ICON_SIZE.nav} />
                 </IconButton>
               </form>
             ) : (
