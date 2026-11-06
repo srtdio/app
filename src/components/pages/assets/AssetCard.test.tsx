@@ -256,7 +256,7 @@ describe('AssetCard ⋯ on the name line, smaller select box', () => {
         onStartSelect={vi.fn()}
       />,
     );
-    expect(out).toMatch(/data-card-select=""[^]*h-4 w-4 rounded border-\[1\.5px\]/);
+    expect(out).toMatch(/data-card-select=""[^]*h-4 w-4 rounded border /);
   });
 });
 
