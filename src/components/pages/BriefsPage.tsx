@@ -369,13 +369,13 @@ interface BriefSectionsDeps extends Omit<BriefCardListDeps, 'briefs'> {
 
 // Sticky per-section header: pinned to the top of the scroll area (below the app
 // top bar) on a solid bg-bg, lit as a header (lit-header) so cards slide under
-// its shade. var(--bg) flips with the theme, so light/dark parity is automatic; z-20 sits
+// its shade. var(--bg) flips with the theme, so light/dark parity is automatic; z-sticky sits
 // above the card grid, matching SectionHeader's sticky choice. Positioning only:
 // no transforms, no transitions.
 // In page mode on a phone or a touch tablet the window scrolls, so it pins
 // below the sticky Topbar instead (SHELL_STICKY_TOP_CLASS; 0 in <main> and on laptop).
 const SECTION_HEADER_CLASS = cn(
-  'sticky z-20 -mx-4 md:-mx-6 px-4 md:px-6 py-2 flex items-center justify-between',
+  'sticky z-sticky -mx-4 md:-mx-6 px-4 md:px-6 py-2 flex items-center justify-between',
   SHELL_STICKY_TOP_CLASS,
   'bg-bg lit-header',
 );

@@ -129,7 +129,7 @@ export function ComposerSheet({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center"
+      className="fixed inset-0 z-sheet flex items-end sm:items-center sm:justify-center"
       onClick={onOverlayClick}
     >
       {/* The dim: its own layer (so it never dims the panel), tracking the

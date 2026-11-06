@@ -74,7 +74,7 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
         // Fixed, so it never scrolls with the page in page mode on a touch
         // tablet; there the top bar also covers the status bar strip, so its
         // top is --shell-sticky-top (unset everywhere else: 3.5rem, the old top-14).
-        'lit-overlay fixed bottom-0 right-0 top-[var(--shell-sticky-top,3.5rem)] z-20 overflow-hidden border-l bg-panel focus:outline-none',
+        'lit-overlay fixed bottom-0 right-0 top-[var(--shell-sticky-top,3.5rem)] z-sticky overflow-hidden border-l bg-panel focus:outline-none',
         SIDE_PANEL_WIDTH_CLASS,
       )}
     >

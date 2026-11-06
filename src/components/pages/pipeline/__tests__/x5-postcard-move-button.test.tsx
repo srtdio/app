@@ -71,8 +71,8 @@ describe('X5 PostCard move button placement (the ⋯ at the right end of the tit
     expect(button).toContain('h-11');
     expect(button).toContain('w-11');
     // The Card more slot keeps the 44px target in the line (-my-3) above the
-    // press surface (z-10); the trigger takes the trailing rule (-mr-3).
-    expect(out).toMatch(/data-card-more="" class="[^"]*-my-3[^"]*z-10/);
+    // press surface (z-raised); the trigger takes the trailing rule (-mr-3).
+    expect(out).toMatch(/data-card-more="" class="[^"]*-my-3[^"]*z-raised/);
     expect(button).toContain('-mr-3');
     expect(button).toContain('text-fg-3');
     // No resting fill (the shared IconButton only tints on hover).

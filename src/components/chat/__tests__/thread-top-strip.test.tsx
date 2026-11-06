@@ -34,7 +34,7 @@ describe('ThreadTopStrip', () => {
       'fixed',
       'inset-x-0',
       'top-0',
-      'z-0',
+      'z-base',
       'h-[env(safe-area-inset-top,0px)]',
       'bg-panel',
     ])

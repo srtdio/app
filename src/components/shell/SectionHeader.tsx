@@ -159,11 +159,11 @@ export function SectionHeader<S extends string = string>({
   // so top 0 pins to just below the app top bar; in page mode on a phone or a
   // touch tablet the window scrolls and SHELL_STICKY_TOP_CLASS pins it below
   // the sticky Topbar.
-  // z-20 sits above the grid (z-0) and below the top bar (z-30).
+  // z-sticky sits above the grid (z-base) and below the top bar (z-nav).
   const childRowClass = cn(
     'px-4 md:px-6 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
     stickyChildren
-      ? cn('sticky z-20 border-b bg-bg py-3 lit-header', SHELL_STICKY_TOP_CLASS)
+      ? cn('sticky z-sticky border-b bg-bg py-3 lit-header', SHELL_STICKY_TOP_CLASS)
       : 'mt-3',
   );
   // Phone: with text the search keeps the row (controls aside, Cancel shown);

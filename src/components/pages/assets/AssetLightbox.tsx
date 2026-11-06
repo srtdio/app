@@ -572,7 +572,7 @@ export function AssetLightbox({
       aria-modal="true"
       aria-label={`Viewing ${name}`}
       tabIndex={-1}
-      className="fixed inset-0 z-50 flex flex-col bg-overlay focus:outline-none"
+      className="fixed inset-0 z-sheet flex flex-col bg-overlay focus:outline-none"
     >
       {/* One top bar: close on the left, the name and its type line in the
           centre, then Download, Copy link, Info and Delete. It clears the notch. */}
@@ -676,7 +676,7 @@ export function AssetLightbox({
 
       {/* Info: bottom sheet sliding up inside the lightbox. */}
       {infoOpen ? (
-        <div className="absolute inset-0 z-10 flex items-end">
+        <div className="absolute inset-0 z-raised flex items-end">
           <Backdrop
             aria-label="Close details"
             onClick={() => setInfoOpen(false)}

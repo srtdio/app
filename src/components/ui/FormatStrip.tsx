@@ -266,7 +266,7 @@ export function FormatStrip({ field, open }: FormatStripProps): ReactNode {
   if (!open || pos === undefined || typeof document === 'undefined') return null;
   return createPortal(
     <div
-      className="pointer-events-none fixed z-50 flex justify-center px-4"
+      className="pointer-events-none fixed z-sheet flex justify-center px-4"
       style={{
         left: pos.left,
         width: pos.width,

@@ -1045,7 +1045,7 @@ function LiftedEntry(props: { drag: Drag }): ReactElement {
       aria-hidden="true"
       style={{ left: drag.x - drag.offX, top: drag.y - drag.offY, width: drag.width }}
       className={cn(
-        'lit-float pointer-events-none fixed z-50 h-7 overflow-hidden rounded-lg bg-panel',
+        'lit-float pointer-events-none fixed z-sheet h-7 overflow-hidden rounded-lg bg-panel',
         MOVE_CLASS.lift,
       )}
     >

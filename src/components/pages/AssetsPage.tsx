@@ -1089,7 +1089,7 @@ export function AssetsPage() {
             {...bottomAnchorProps}
             style={{ bottom: selectBarInset }}
             className={cn(
-              'lit-dock fixed inset-x-0 z-40 border-t bg-panel pt-3 md:hidden',
+              'lit-dock fixed inset-x-0 z-dock border-t bg-panel pt-3 md:hidden',
               'pl-[calc(1rem+env(safe-area-inset-left))] pr-[calc(1rem+env(safe-area-inset-right))]',
               selectBarInset > 0 ? 'pb-3' : 'pb-[max(12px,env(safe-area-inset-bottom))]',
             )}

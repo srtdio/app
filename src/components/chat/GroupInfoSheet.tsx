@@ -433,7 +433,7 @@ export function groupInfoPage(props: {
     <ModalPanel
       aria-label={GROUP_INFO_HEADING}
       data-group-page=""
-      className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
+      className="fixed inset-0 z-sheet flex flex-col bg-bg outline-none"
     >
       {select?.selecting === true && select.selectHeader !== null ? (
         // Select mode: the same HeaderBar holds "n selected" and Cancel, so

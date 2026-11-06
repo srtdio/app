@@ -849,7 +849,7 @@ export function PlanSharedNotice(props: {
       aria-live="polite"
       data-plan-shared-notice={shown ? 'shown' : 'hidden'}
       style={{ bottom: bottom ?? 96 }}
-      className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-3"
+      className="pointer-events-none absolute inset-x-0 z-nav flex justify-center px-3"
     >
       {strip.rendered ? (
         <span

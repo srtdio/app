@@ -342,7 +342,7 @@ export function DatePicker({
             <>
               {open ? (
                 <div
-                  className="fixed inset-0 z-[56]"
+                  className="fixed inset-0 z-picker-catch"
                   aria-hidden="true"
                   onClick={() => setOpen(false)}
                 />
@@ -351,7 +351,7 @@ export function DatePicker({
                 ref={panelRef}
                 role="dialog"
                 aria-label="Choose a date"
-                className="lit-overlay fixed z-[57] rounded-xl border bg-panel p-2"
+                className="lit-overlay fixed z-picker rounded-xl border bg-panel p-2"
                 style={popoverPlacement(triggerRef.current.getBoundingClientRect(), viewportSize())}
               >
                 <div className="mb-1 flex items-center justify-between">

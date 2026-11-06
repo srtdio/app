@@ -104,13 +104,13 @@ export function AvatarMenu({ open, onClose }: AvatarMenuProps) {
   if (isDesktop) {
     return (
       <>
-        <div className="fixed inset-0 z-40" aria-hidden="true" onClick={onClose} />
+        <div className="fixed inset-0 z-dock" aria-hidden="true" onClick={onClose} />
         <div
           ref={panelRef}
           role="menu"
           aria-label="Account"
           onKeyDown={keys.onKeyDown}
-          className="fixed top-14 right-3 z-50 w-60 rounded-xl border bg-panel p-1 lit-overlay"
+          className="fixed top-14 right-3 z-sheet w-60 rounded-xl border bg-panel p-1 lit-overlay"
         >
           {rows}
         </div>

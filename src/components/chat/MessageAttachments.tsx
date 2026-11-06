@@ -154,7 +154,7 @@ export function useAttachmentUrl(
  * layout space. The container clips (overflow-hidden), so the 56px ring never
  * leaves the bubble.
  */
-export const RING_CENTRE = 'absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2';
+export const RING_CENTRE = 'absolute left-1/2 top-1/2 z-raised -translate-x-1/2 -translate-y-1/2';
 
 /**
  * The ring for these attachments while the send can still be cancelled: null

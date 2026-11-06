@@ -170,7 +170,7 @@ describe('T5: UploadRing positioning and sizes', () => {
     expect(ringParent(html)).toContain('data-voice-play-slot="upload"');
     expect(ringParent(html)).toContain('relative h-11 w-11 shrink-0');
     expect(ringClass(html)).toContain(
-      'absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2',
+      'absolute left-1/2 top-1/2 z-raised -translate-x-1/2 -translate-y-1/2',
     );
     expect(html).toContain('data-ring-variant="voice"');
   });

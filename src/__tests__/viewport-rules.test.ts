@@ -141,7 +141,7 @@ describe('viewport rules', () => {
     expect(src('chat/ModalPanel.tsx')).toMatch(/MODAL_HEADER_SAFE\s*=\s*SAFE_TOP_BAR_CLASS/);
     for (const { rel, src: text } of TSX) {
       if (rel === 'chat/ModalPanel.tsx') continue;
-      if (!/<ModalPanel\b|\bMODAL_PAGE_CLASS\b|fixed inset-0 z-50 flex flex-col bg-bg/.test(text)) {
+      if (!/<ModalPanel\b|\bMODAL_PAGE_CLASS\b|fixed inset-0 z-sheet flex flex-col bg-bg/.test(text)) {
         continue;
       }
       expect(text, `${rel}: modal page header`).toMatch(SAFE_TOP);

@@ -48,7 +48,7 @@ export function Topbar({
       className={cn(
         // The page edge (GUTTER): 16 phone, 24 laptop, the same edge as the
         // search row under it.
-        'sticky top-0 z-30 flex items-center gap-2 border-b bg-panel lit-header',
+        'sticky top-0 z-nav flex items-center gap-2 border-b bg-panel lit-header',
         GUTTER,
         SAFE_TOP_BAR_CLASS,
       )}

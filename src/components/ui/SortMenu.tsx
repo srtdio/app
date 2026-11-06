@@ -111,14 +111,14 @@ export function SortMenu<T extends string>({
           <>
             {open ? (
               <div
-                className="fixed inset-0 z-40"
+                className="fixed inset-0 z-dock"
                 aria-hidden="true"
                 onClick={() => setOpen(false)}
               />
             ) : null}
             <div
               ref={panelRef}
-              className="absolute right-0 top-full z-50 mt-2 w-44 rounded-xl border bg-panel p-1 lit-overlay"
+              className="absolute right-0 top-full z-sheet mt-2 w-44 rounded-xl border bg-panel p-1 lit-overlay"
             >
               {list}
             </div>

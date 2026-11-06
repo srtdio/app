@@ -2160,7 +2160,7 @@ export function Composer(props: ComposerProps): ReactElement {
         <ComposerStrip
           open={mentionRows.length > 0}
           data-mention-anchor=""
-          className="absolute inset-x-3 bottom-full z-20 mb-2"
+          className="absolute inset-x-3 bottom-full z-sticky mb-2"
         >
           <MentionPicker
             members={mentionRows}
@@ -2174,7 +2174,7 @@ export function Composer(props: ComposerProps): ReactElement {
           <ComposerStrip
             open
             data-hash-picker=""
-            className="absolute inset-x-3 bottom-full z-20 mb-2"
+            className="absolute inset-x-3 bottom-full z-sticky mb-2"
           >
             <PostPicker
               inline

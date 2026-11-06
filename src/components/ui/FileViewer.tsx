@@ -1140,7 +1140,7 @@ function TopBar(props: {
     <div
       data-viewer-bar=""
       className={cn(
-        'relative z-10 flex shrink-0 items-center gap-1 px-1 pb-1 pt-[max(env(safe-area-inset-top),4px)]',
+        'relative z-raised flex shrink-0 items-center gap-1 px-1 pb-1 pt-[max(env(safe-area-inset-top),4px)]',
         NO_SELECT,
       )}
     >
@@ -1342,7 +1342,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
       aria-label={name}
       data-file-viewer={kind}
       data-viewer-tone={viewerTone(kind)}
-      className="fixed inset-0 z-[80] flex flex-col overflow-hidden"
+      className="fixed inset-0 z-viewer flex flex-col overflow-hidden"
     >
       <div
         aria-hidden="true"
@@ -1367,7 +1367,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
           line={actions !== undefined ? viewerBarLine(null, subtitle) : null}
         />
         {details !== null ? (
-          <div className="relative z-10 flex shrink-0 justify-center px-14 pb-1">
+          <div className="relative z-raised flex shrink-0 justify-center px-14 pb-1">
             <ViewerDetails
               sender={details.sender}
               time={details.time}
@@ -1392,7 +1392,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
           <div
             data-viewer-bottom-bar=""
             className={cn(
-              'relative z-10 flex h-16 shrink-0 items-center px-4 pb-[env(safe-area-inset-bottom)]',
+              'relative z-raised flex h-16 shrink-0 items-center px-4 pb-[env(safe-area-inset-bottom)]',
               NO_SELECT,
             )}
           >
@@ -1459,7 +1459,7 @@ export function FileViewerFallback(props: {
       aria-modal="true"
       aria-label={props.name}
       data-file-viewer-fallback=""
-      className={cn('fixed inset-0 z-[80] flex flex-col', tone.backdrop, NO_SELECT)}
+      className={cn('fixed inset-0 z-viewer flex flex-col', tone.backdrop, NO_SELECT)}
     >
       <div className="flex shrink-0 items-center px-1 pt-[max(env(safe-area-inset-top),4px)]">
         <button

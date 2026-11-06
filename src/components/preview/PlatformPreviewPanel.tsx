@@ -134,7 +134,7 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
   const title = isPostPlatform(props.platform) ? previewChipLabel(props.platform) : 'Preview';
 
   return createPortal(
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-0 z-sheet">
       <Backdrop ref={dimRef} position="absolute" aria-label="Close preview" onClick={onClose} />
       <div
         ref={panelRef}

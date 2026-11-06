@@ -1062,7 +1062,7 @@ export function OnboardingFlow({
       (index > 0 && (step === 'name' || step === 'role') && previous !== 'welcome'));
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg md:grid md:grid-cols-2 md:overflow-hidden">
+    <div className="fixed inset-0 z-sheet overflow-y-auto bg-bg md:grid md:grid-cols-2 md:overflow-hidden">
       <div
         className="flex min-h-full flex-col md:h-full md:overflow-y-auto"
         style={{

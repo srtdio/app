@@ -40,7 +40,7 @@ export function AuthShell({
       {backdrop ? <PlanBackdrop /> : null}
       <div
         data-auth-card=""
-        className={`relative z-10 flex w-full flex-col gap-6 rounded-2xl border bg-panel p-6 lit-raised md:p-10 ${wide ? 'max-w-3xl' : 'max-w-md'}`}
+        className={`relative z-raised flex w-full flex-col gap-6 rounded-2xl border bg-panel p-6 lit-raised md:p-10 ${wide ? 'max-w-3xl' : 'max-w-md'}`}
       >
         <div className="flex flex-col items-center text-center">
           <Link

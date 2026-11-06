@@ -202,7 +202,7 @@ export function Card({
                   'flex shrink-0 [&>button]:-mr-3',
                   CONTROL_IN_LINE,
                   // Above the press surface, live inside the pass-through body.
-                  tapped && 'pointer-events-auto relative z-10',
+                  tapped && 'pointer-events-auto relative z-raised',
                 )}
               >
                 {more}

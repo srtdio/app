@@ -959,7 +959,7 @@ export function CommandPalette({
   return (
     <div
       data-palette-overlay=""
-      className="fixed inset-0 z-50 bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12svh] sm:px-4"
+      className="fixed inset-0 z-sheet bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12svh] sm:px-4"
       onClick={onOverlayClick}
     >
       <div

@@ -377,7 +377,7 @@ export function ToastViewport() {
       <div
         role="status"
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex flex-col items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:inset-x-auto md:right-4 md:items-end"
+        className="pointer-events-none fixed inset-x-0 top-0 z-toast flex flex-col items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:inset-x-auto md:right-4 md:items-end"
       >
         {cards.map((toast) => (
           <ToastSlot

@@ -864,7 +864,7 @@ export function reorderView(model: ReorderModel): ReactElement {
                   'relative flex h-24 min-w-11 touch-none cursor-grab items-center justify-center overflow-hidden border bg-panel-2 mv-tint',
                   SLIDE_PRESS_CLASS,
                   slideEdge(selected),
-                  dragging && 'z-10 cursor-grabbing lit-float',
+                  dragging && 'z-raised cursor-grabbing lit-float',
                 )}
               >
                 <GalleryThumb
@@ -1153,7 +1153,7 @@ export function galleryView({
         {pinArmedIndex !== null ? (
           <div
             role="status"
-            className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-2 text-sm font-medium text-overlay-fg lit-media"
+            className="pointer-events-none absolute left-1/2 top-3 z-raised -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-2 text-sm font-medium text-overlay-fg lit-media"
           >
             Tap the image to place a pin
           </div>

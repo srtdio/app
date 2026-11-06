@@ -232,7 +232,7 @@ function PriorityMenu(props: {
       aria-label="Priority"
       data-task-menu=""
       style={{ top: pos.top, left: pos.left, width: MENU_W }}
-      className="fixed z-[60] rounded-xl border bg-panel p-1 lit-overlay"
+      className="fixed z-dialog rounded-xl border bg-panel p-1 lit-overlay"
     >
       {TASK_PRIORITIES.map((p) => (
         <PressableRow

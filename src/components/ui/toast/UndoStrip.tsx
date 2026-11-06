@@ -162,7 +162,7 @@ export function UndoStrip({ toast, leaving = false, onAccept, onAction, onHold }
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
       className={cn(
-        'pointer-events-auto fixed inset-x-4 bottom-[var(--strip-bottom,calc(env(safe-area-inset-bottom)_+_16px))] z-[70] flex min-h-12 touch-none select-none items-center gap-3 rounded-xl border border-strip bg-strip py-0 pl-4 pr-1 lit-strip md:inset-x-0 md:bottom-6 md:mx-auto md:w-full md:max-w-lg',
+        'pointer-events-auto fixed inset-x-4 bottom-[var(--strip-bottom,calc(env(safe-area-inset-bottom)_+_16px))] z-toast flex min-h-12 touch-none select-none items-center gap-3 rounded-xl border border-strip bg-strip py-0 pl-4 pr-1 lit-strip md:inset-x-0 md:bottom-6 md:mx-auto md:w-full md:max-w-lg',
         // Motion off: a leaving strip goes at once (no exit to wait for).
         leaving && off && 'invisible',
       )}

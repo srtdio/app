@@ -238,7 +238,7 @@ describe('group info full page', () => {
   it('is a full-screen page with a back button and safe-area bottom padding, no vh', () => {
     const html = page(true);
     expect(html).toContain('role="dialog"');
-    expect(html).toContain('fixed inset-0 z-50');
+    expect(html).toContain('fixed inset-0 z-sheet');
     expect(html).toContain('bg-bg');
     // ui/HeaderBar: one exit, the back "<" on the 16 edge (pulled 12), no X.
     expect(html).toContain('data-header-bar=""');

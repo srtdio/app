@@ -303,7 +303,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
   const title = switcherTitle(mode);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-sheet flex items-center justify-center p-4">
       <Backdrop position="absolute" aria-label="Close" onClick={requestClose} />
       <div
         ref={panelRef}

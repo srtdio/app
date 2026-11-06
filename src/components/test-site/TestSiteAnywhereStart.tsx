@@ -61,7 +61,7 @@ export function TestSiteAnywhereStart({
         'flex min-h-11 shrink-0 items-center',
         inline
           ? 'px-0.5'
-          : 'fixed left-1/2 top-[calc(env(safe-area-inset-top)+2px)] z-[2147483000] -translate-x-1/2 px-2',
+          : 'fixed left-1/2 top-[calc(env(safe-area-inset-top)+2px)] z-top -translate-x-1/2 px-2',
       )}
     >
       <span className="shrink-0 whitespace-nowrap rounded-full border border-dashed border-border-strong bg-panel px-3 py-1 text-[11px] font-medium text-accent lit-pill">

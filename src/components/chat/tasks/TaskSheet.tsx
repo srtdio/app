@@ -1007,7 +1007,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
 
   const side = props.side;
   const sheet = createPortal(
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center">
+    <div className="fixed inset-0 z-sheet flex items-end sm:items-center sm:justify-center">
       <Backdrop ref={dimRef} aria-label="Close tasks" position="absolute" onClick={requestClose} />
       <div
         ref={panelRef}

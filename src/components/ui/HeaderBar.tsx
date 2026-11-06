@@ -83,7 +83,7 @@ export function HeaderBar({
         'flex min-w-0 shrink-0 items-center gap-2 border-b bg-panel lit-header',
         compact ? 'h-14' : 'h-14 md:h-16',
         GUTTER,
-        overlay !== undefined && 'relative z-20',
+        overlay !== undefined && 'relative z-sticky',
         className,
       )}
     >

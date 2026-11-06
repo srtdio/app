@@ -111,7 +111,7 @@ describe('the docked panel', () => {
     expect(PLAN_PANEL_WIDTH).toBe('w-[360px] min-[972px]:w-[440px]');
     const src = read('PlanScreen.tsx');
     expect(src).not.toContain('PLAN_PANEL_PX');
-    expect(src).toContain("'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel");
+    expect(src).toContain("'fixed inset-y-0 right-0 z-dock flex flex-col border-l bg-panel");
     // Laptop pane switches are instant (docs/motion.md): no slide, no fade.
     expect(src).not.toContain('translate-x-6 opacity-0');
     expect(src).toContain("{ role: 'complementary' }");
@@ -129,7 +129,7 @@ describe('the docked panel', () => {
     expect(src).not.toContain('usePlanDesktop');
     // The phone page pushes in from the right (pushIn), its edge a 1px ring.
     expect(src).toContain(
-      "'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] ring-1 ring-border'",
+      "'fixed inset-0 z-dock flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] ring-1 ring-border'",
     );
     expect(src).toContain('pushIn(el)');
   });

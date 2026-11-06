@@ -50,7 +50,7 @@ describe('HeaderBar slots (additive)', () => {
   it('overlay draws inside the bar, which stacks above the body', () => {
     const out = html(<HeaderBar title="Plan" overlay={<div data-menu="" />} />);
     expect(barClass(out)).toContain('relative');
-    expect(barClass(out)).toContain('z-20');
+    expect(barClass(out)).toContain('z-sticky');
     expect(out.indexOf('data-menu')).toBeGreaterThan(-1);
     expect(out.indexOf('data-menu')).toBeLessThan(out.indexOf('</header>'));
   });

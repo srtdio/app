@@ -92,7 +92,7 @@ export function ComposerEmoji(props: { onPick: (emoji: string) => void }): React
           data-emoji-popover=""
           className={cn(
             // 8 columns of 44px cells plus the 8px padding each side (desktop only).
-            'absolute bottom-full right-0 z-20 mb-2 max-h-80 w-[368px] origin-bottom-right overflow-y-auto p-2',
+            'absolute bottom-full right-0 z-sticky mb-2 max-h-80 w-[368px] origin-bottom-right overflow-y-auto p-2',
             popoverClass(),
           )}
         >

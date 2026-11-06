@@ -356,7 +356,7 @@ export function isTextField(target: EventTarget | null): boolean {
  * own layer (`onEscape`), a text field next (it is left), else Back. On the
  * page itself (focus on body) it closes the topmost panel only when no other
  * surface is open. Both: a scrolling body and an optional footer, rendered
- * into the body so no ancestor clips it; sheets (z-50) stack above it.
+ * into the body so no ancestor clips it; sheets (z-sheet) stack above it.
  */
 export function PlanPage(props: {
   open: boolean;
@@ -529,11 +529,11 @@ export function PlanPage(props: {
         desktop
           ? // Laptop: the box is final on its first frame and appears at once.
             cn(
-              'fixed inset-y-0 right-0 z-40 flex flex-col border-l bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] max-[1179px]:lit-overlay min-[1180px]:border-border',
+              'fixed inset-y-0 right-0 z-dock flex flex-col border-l bg-panel pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] max-[1179px]:lit-overlay min-[1180px]:border-border',
               PLAN_PANEL_WIDTH,
             )
           : // Phone: the push's incoming edge is a 1px ring, no shadow.
-            'fixed inset-0 z-40 flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] ring-1 ring-border',
+            'fixed inset-0 z-dock flex flex-col bg-bg pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] ring-1 ring-border',
         'focus:outline-none',
       )}
     >
@@ -2468,7 +2468,7 @@ export function PlanHeaderMenu(props: {
       data-plan-header-menu=""
       onKeyDown={onKeyDown}
       className={cn(
-        'absolute left-12 top-full z-20 mt-1 flex w-56 flex-col overflow-hidden rounded-xl border bg-panel py-1 lit-overlay',
+        'absolute left-12 top-full z-sticky mt-1 flex w-56 flex-col overflow-hidden rounded-xl border bg-panel py-1 lit-overlay',
         NO_TOUCH_SELECT,
       )}
     >
@@ -2758,7 +2758,7 @@ export function PlanBody(props: {
               <h3
                 data-plan-week-header=""
                 className={cn(
-                  `sticky top-0 z-10 bg-bg py-2 ${TEXT_ROLE.section}`,
+                  `sticky top-0 z-raised bg-bg py-2 ${TEXT_ROLE.section}`,
                   GUTTER,
                 )}
               >

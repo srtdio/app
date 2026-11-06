@@ -964,7 +964,7 @@ export function BriefDetailPage({
           <div
             data-brief-action-bar=""
             {...bottomAnchorProps}
-            className="lit-dock fixed inset-x-0 bottom-0 z-40 border-t bg-panel pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))] pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
+            className="lit-dock fixed inset-x-0 bottom-0 z-dock border-t bg-panel pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))] pt-3 pb-[max(12px,env(safe-area-inset-bottom))]"
           >
             <Button
               variant="primary"

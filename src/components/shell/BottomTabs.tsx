@@ -116,13 +116,13 @@ export function BottomTabs() {
     <>
       <div
         aria-hidden
-        className="md:hidden pointer-events-none fixed inset-x-0 bottom-0 z-20 h-32 bg-gradient-to-t from-bg to-bg/0"
+        className="md:hidden pointer-events-none fixed inset-x-0 bottom-0 z-sticky h-32 bg-gradient-to-t from-bg to-bg/0"
       />
       <nav
         {...bottomAnchorProps}
         aria-label="Primary"
         className={cn(
-          'md:hidden fixed z-30 flex items-center gap-2 select-none [-webkit-touch-callout:none]',
+          'md:hidden fixed z-nav flex items-center gap-2 select-none [-webkit-touch-callout:none]',
           PHONE_BAR_OFFSETS,
         )}
       >

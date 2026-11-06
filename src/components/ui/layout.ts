@@ -37,12 +37,12 @@ export const CONTROL_IN_LINE = '-my-3';
  * Pure classes: no wait, no measure. The pill and the button stay overlays
  * (they never move the rows); the clear classes go on the scroll box.
  */
-export const LANE_TOP = 'pointer-events-none absolute inset-x-0 top-2 z-10 flex justify-center';
+export const LANE_TOP = 'pointer-events-none absolute inset-x-0 top-2 z-raised flex justify-center';
 
 /** The list's scroll padding under LANE_TOP: rows land below the pill's lane. */
 export const LANE_TOP_CLEAR = 'scroll-pt-16';
 
-export const LANE_BOTTOM = 'absolute bottom-3 right-3 z-10 flex';
+export const LANE_BOTTOM = 'absolute bottom-3 right-3 z-raised flex';
 
 /** The list's scroll padding over LANE_BOTTOM: rows land above the button's lane. */
 export const LANE_BOTTOM_CLEAR = 'scroll-pb-16';

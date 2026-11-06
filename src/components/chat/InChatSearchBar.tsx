@@ -263,14 +263,14 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
           data-search-retry=""
           onClick={() => runner?.retry()}
           flat
-          className="absolute left-0 right-0 top-full z-10 mt-px flex items-center justify-center border-b bg-panel lit-overlay px-3 text-base text-fg-2"
+          className="absolute left-0 right-0 top-full z-raised mt-px flex items-center justify-center border-b bg-panel lit-overlay px-3 text-base text-fg-2"
         >
           {SEARCH_FAILED_COPY}
         </PressableRow>
       ) : none ? (
         <div
           data-search-none=""
-          className="absolute left-0 right-0 top-full z-10 mt-px border-b bg-panel lit-overlay"
+          className="absolute left-0 right-0 top-full z-raised mt-px border-b bg-panel lit-overlay"
         >
           <NoResults query={query} filtersActive={false} onClear={() => setQuery('')} />
         </div>

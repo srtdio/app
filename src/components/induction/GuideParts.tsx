@@ -27,8 +27,8 @@ import { MOVE_CLASS, stepX } from '@/lib/motion';
 import { GUIDE_RIPPLE_REST_SCALE, guideNudge, handPress, handRipple } from '@/lib/motion/touches';
 import { CHROME_ATTR } from './guide-dom';
 
-/** Above page content and Sheet (z-50); below toasts (z-60/70) and the lightbox (z-80). */
-const GUIDE_Z = 'z-[55]';
+/** Above page content and Sheet (z-sheet); below toasts (z-dialog/70) and the lightbox (z-viewer). */
+const GUIDE_Z = 'z-guide';
 
 /**
  * The guide tokens (src/index.css): amber fill and ink, the deep fill, the light

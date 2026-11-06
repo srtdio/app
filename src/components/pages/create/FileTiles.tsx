@@ -235,7 +235,7 @@ export function FileTiles({
             style={dx !== 0 ? { transform: `translateX(${dx}px)` } : undefined}
             className={cn(
               'relative h-16 w-16 shrink-0 touch-pan-x select-none [-webkit-touch-callout:none]',
-              dragging ? 'z-20 cursor-grabbing lit-float' : 'mv-slide',
+              dragging ? 'z-sticky cursor-grabbing lit-float' : 'mv-slide',
               count > 1 && !dragging && 'cursor-grab',
             )}
           >

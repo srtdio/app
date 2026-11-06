@@ -1097,11 +1097,11 @@ export function EmojiPickerShell(props: {
     const position = props.anchor !== null ? popoverPosition(props.anchor, viewportSize()) : null;
     return createPortal(
       <>
-        <div data-emoji-dismiss="" className="fixed inset-0 z-[60]" onClick={onClose} />
+        <div data-emoji-dismiss="" className="fixed inset-0 z-dialog" onClick={onClose} />
         <div
           {...dialogProps}
           data-emoji-picker="laptop"
-          className="fixed z-[60] flex h-[400px] w-[352px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay focus:outline-none"
+          className="fixed z-dialog flex h-[400px] w-[352px] max-w-[calc(100vw-16px)] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay focus:outline-none"
           style={{ top: position?.top ?? 8, left: position?.left ?? 8 }}
         >
           {body}
@@ -1111,7 +1111,7 @@ export function EmojiPickerShell(props: {
     );
   }
   return createPortal(
-    <div data-emoji-dismiss="" className="fixed inset-0 z-[60]">
+    <div data-emoji-dismiss="" className="fixed inset-0 z-dialog">
       <Backdrop
         ref={dimRef}
         aria-label="Close emoji picker"
@@ -1368,7 +1368,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     <>
       <span
         data-menu-anchor=""
-        className="fixed z-50"
+        className="fixed z-sheet"
         style={{ top: anchor.bottom - lift, left: mine ? anchor.right : anchor.left }}
       >
         <span className="relative block">

@@ -752,7 +752,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
         ? createPortal(
             <div
               data-post-sheet-viewer=""
-              className="fixed inset-0 z-[60] flex flex-col items-center overflow-y-auto bg-overlay pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]"
+              className="fixed inset-0 z-dialog flex flex-col items-center overflow-y-auto bg-overlay pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]"
             >
               {/* Centred when it fits; a very tall slide scrolls rather than crops.
                   The width cap keeps a 4:5 slide plus its bar inside a wide screen. */}

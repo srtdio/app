@@ -319,7 +319,7 @@ describe('Plan shared notice (F6)', () => {
   it('sits in the chat (absolute, below plan pages), opacity only, hidden until a share', () => {
     const html = renderToStaticMarkup(<PlanSharedNotice shareCount={0} text="Plan shared" />);
     expect(html).toContain('absolute');
-    expect(html).toContain('z-30');
+    expect(html).toContain('z-nav');
     expect(html).not.toContain('fixed');
     expect(html).not.toContain('translate');
     expect(html).toContain('data-plan-shared-notice="hidden"');

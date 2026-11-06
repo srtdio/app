@@ -151,7 +151,7 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: Brie
 
       {/* Above the card link, so a tap follows this link only. */}
       {link !== null ? (
-        <div className="pointer-events-auto relative z-10 flex min-w-0">
+        <div className="pointer-events-auto relative z-raised flex min-w-0">
           {/* Compact: the list card has no room for a picture. */}
           <LinkPreviewCard url={link.href} size="compact" className="w-full max-w-xs" />
         </div>

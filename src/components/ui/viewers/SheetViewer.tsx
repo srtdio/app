@@ -196,7 +196,7 @@ function SheetGrid(props: {
   for (let r = start; r < end; r++) {
     rows.push(
       <tr key={r} data-row={r + 1}>
-        <th scope="row" className={cn(HEAD, 'sticky left-0 z-10 h-7 font-mono tabular-nums')}>
+        <th scope="row" className={cn(HEAD, 'sticky left-0 z-raised h-7 font-mono tabular-nums')}>
           {r + 1}
         </th>
         {rowCells(sheet, index, r, start, end)}
@@ -227,9 +227,9 @@ function SheetGrid(props: {
         </colgroup>
         <thead>
           <tr>
-            <th aria-hidden="true" className={cn(HEAD, 'sticky left-0 top-0 z-30 h-7')} />
+            <th aria-hidden="true" className={cn(HEAD, 'sticky left-0 top-0 z-nav h-7')} />
             {sheet.colWidths.map((_, c) => (
-              <th key={c} scope="col" className={cn(HEAD, 'sticky top-0 z-20 h-7')}>
+              <th key={c} scope="col" className={cn(HEAD, 'sticky top-0 z-sticky h-7')}>
                 {columnLabel(c)}
               </th>
             ))}

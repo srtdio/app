@@ -750,7 +750,7 @@ export function ImageLightbox({
       aria-modal="true"
       aria-label="Image viewer"
       data-motion-axis="x"
-      className="fixed inset-0 z-[80] flex flex-col overflow-hidden"
+      className="fixed inset-0 z-viewer flex flex-col overflow-hidden"
     >
       {/* The dim tracks the image while a swipe down is in progress (never a timed fade). */}
       <div
@@ -796,7 +796,7 @@ export function ImageLightbox({
               type="button"
               aria-label="Previous image"
               onClick={() => go(-1)}
-              className={cn(ARROW_BUTTON, 'left-2 z-10')}
+              className={cn(ARROW_BUTTON, 'left-2 z-raised')}
             >
               <IconChevronLeft size={ICON_SIZE.control} />
             </button>
@@ -804,7 +804,7 @@ export function ImageLightbox({
               type="button"
               aria-label="Next image"
               onClick={() => go(1)}
-              className={cn(ARROW_BUTTON, 'right-2 z-10')}
+              className={cn(ARROW_BUTTON, 'right-2 z-raised')}
             >
               <IconChevronRight size={ICON_SIZE.control} />
             </button>

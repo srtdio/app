@@ -403,7 +403,7 @@ describe('instant send tile (local preview + upload progress)', () => {
     expect(html).toContain('brightness-75');
     expect(html).toContain('aria-label="Cancel upload"');
     expect(html).toContain('data-upload-progress="40"');
-    expect(html).toContain('absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2');
+    expect(html).toContain('absolute left-1/2 top-1/2 z-raised -translate-x-1/2 -translate-y-1/2');
     expect(html).toMatch(/role="progressbar"[^>]*class="sr-only"/);
     // The local preview never presigns.
     expect(fetcher).not.toHaveBeenCalled();

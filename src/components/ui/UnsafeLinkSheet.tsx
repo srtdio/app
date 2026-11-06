@@ -104,7 +104,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
   return createPortal(
     <div
       data-unsafe-sheet=""
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-sheet flex items-end justify-center"
       onClick={(event) => {
         // React events from a portal still bubble through the card's parents
         // (a chat bubble's long-press, a clickable brief card): stop them here.

@@ -221,7 +221,7 @@ export function ComposerTray(props: {
           aria-label="Attach"
           data-tray=""
           data-induction={INDUCTION_KEYS.chatAttachTray}
-          className="absolute inset-x-0 bottom-full z-20 border-t bg-panel lit-dock px-3 pb-2 pt-3"
+          className="absolute inset-x-0 bottom-full z-sticky border-t bg-panel lit-dock px-3 pb-2 pt-3"
         >
           <TrayGrid
             tiles={tiles}

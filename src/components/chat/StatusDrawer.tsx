@@ -712,7 +712,7 @@ export function StatusDrawerPanel(props: {
     <div
       data-status-drawer={props.open ? 'open' : 'moving'}
       className={cn(
-        'absolute inset-x-0 bottom-0 z-30 overflow-hidden',
+        'absolute inset-x-0 bottom-0 z-nav overflow-hidden',
         !props.open && 'pointer-events-none',
         NO_CALLOUT,
       )}

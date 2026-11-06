@@ -1057,9 +1057,9 @@ export function channelListClasses(pageScroll: boolean): {
         column: 'flex flex-col',
         // A flex item, so the header row's top margin stays inside the
         // pinned box: no rows show through a gap above it while it is stuck.
-        header: cn('sticky z-20 bg-bg', SHELL_STICKY_TOP_CLASS),
+        header: cn('sticky z-sticky bg-bg', SHELL_STICKY_TOP_CLASS),
         body: 'flex-1',
-        selectBar: 'sticky bottom-[calc(84px+env(safe-area-inset-bottom))] z-20',
+        selectBar: 'sticky bottom-[calc(84px+env(safe-area-inset-bottom))] z-sticky',
       }
     : {
         column: 'flex h-full flex-col',

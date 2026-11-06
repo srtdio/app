@@ -911,7 +911,7 @@ function TranscriptDrop(props: {
 }
 
 /** The voice ring's place: absolutely centred inside the (relative, 44px) play slot. */
-const VOICE_RING_POSITION = 'absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2';
+const VOICE_RING_POSITION = 'absolute left-1/2 top-1/2 z-raised -translate-x-1/2 -translate-y-1/2';
 
 /** An own note's upload: the ring (active) or, once done, play in its place. */
 interface VoiceUpload {

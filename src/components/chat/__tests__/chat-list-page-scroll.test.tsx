@@ -73,7 +73,7 @@ describe('channelListClasses', () => {
   it('page scroll: the header pins below the sticky Topbar on the same page background', () => {
     const header = classes(channelListClasses(true).header);
     expect(header).toEqual(
-      expect.arrayContaining(['sticky', 'z-20', 'bg-bg', SHELL_STICKY_TOP_CLASS]),
+      expect.arrayContaining(['sticky', 'z-sticky', 'bg-bg', SHELL_STICKY_TOP_CLASS]),
     );
     // No new lighting or border: the row keeps its own border-b and no lit-*.
     expect(header.some((c) => c.startsWith('lit-') || c.startsWith('shadow'))).toBe(false);
@@ -83,7 +83,7 @@ describe('channelListClasses', () => {
   it('page scroll: the select bar pins above the tab bar room <main> keeps', () => {
     const bar = classes(channelListClasses(true).selectBar);
     expect(bar).toEqual(
-      expect.arrayContaining(['sticky', 'z-20', 'bottom-[calc(84px+env(safe-area-inset-bottom))]']),
+      expect.arrayContaining(['sticky', 'z-sticky', 'bottom-[calc(84px+env(safe-area-inset-bottom))]']),
     );
     // The same room AppLayout's shellChrome leaves for BottomTabs.
     expect(read('../../shell/AppLayout.tsx')).toContain(

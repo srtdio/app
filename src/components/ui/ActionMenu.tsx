@@ -224,7 +224,7 @@ export function ActionMenu({
         {opener}
         {anchor !== null
           ? createPortal(
-              <div className="z-50" style={anchor.style}>
+              <div className="z-sheet" style={anchor.style}>
                 <MenuPopover
                   open={open}
                   onClose={() => setOpen(false)}

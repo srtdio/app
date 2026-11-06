@@ -91,7 +91,7 @@ export function PlanDayMenu(props: {
 
   return (
     <>
-      <div className="fixed inset-0 z-40" aria-hidden="true" onClick={close} />
+      <div className="fixed inset-0 z-dock" aria-hidden="true" onClick={close} />
       <div
         ref={ref}
         role="menu"
@@ -99,7 +99,7 @@ export function PlanDayMenu(props: {
         data-plan-tab-day-menu={props.day}
         style={pos !== null ? { left: pos.left, top: pos.top } : { left: 0, top: 0 }}
         className={cn(
-          'fixed z-50 w-72 max-w-[calc(100vw-16px)]',
+          'fixed z-sheet w-72 max-w-[calc(100vw-16px)]',
           popoverClass(),
           pos === null && 'invisible',
         )}

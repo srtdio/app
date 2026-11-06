@@ -1717,7 +1717,7 @@ export function PlanItemScreen(props: {
               {mentionRows.length > 0 || picker.hiddenApprovers ? (
                 <div
                   data-mention-anchor=""
-                  className="absolute inset-x-0 bottom-full z-20 mb-2 flex flex-col gap-1"
+                  className="absolute inset-x-0 bottom-full z-sticky mb-2 flex flex-col gap-1"
                 >
                   <MentionPicker
                     members={mentionRows}

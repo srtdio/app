@@ -489,14 +489,14 @@ function PersonPopover({
   const pos = personPopoverPosition(request.anchor, viewportSize());
   return createPortal(
     <>
-      <div className="fixed inset-0 z-40" aria-hidden="true" onClick={onClose} />
+      <div className="fixed inset-0 z-dock" aria-hidden="true" onClick={onClose} />
       <div
         ref={panelRef}
         role="dialog"
         aria-label={data.name}
         tabIndex={-1}
         style={{ top: pos.top, left: pos.left, width: PERSON_POPOVER_W }}
-        className={cn('fixed z-50 p-4 focus:outline-none', popoverClass())}
+        className={cn('fixed z-sheet p-4 focus:outline-none', popoverClass())}
       >
         {children}
       </div>

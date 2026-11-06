@@ -250,7 +250,7 @@ describe('W4 PostCard fixes', () => {
     expect(button).toContain('h-11');
     expect(button).toContain('w-11');
     // Card more slot: above the press surface.
-    expect(out).toMatch(/data-card-more="" class="[^"]*z-10/);
+    expect(out).toMatch(/data-card-more="" class="[^"]*z-raised/);
     // No onMove, no button.
     expect(renderWith({ post: makePost({}) })).not.toContain('data-post-card-move');
   });
@@ -525,7 +525,7 @@ describe('PostCard hover keeps the content visible', () => {
 
   it('the ⋯ menu wrapper and trigger take pointer events back', () => {
     const src = readFileSync(fileURLToPath(new URL('./PostCard.tsx', import.meta.url)), 'utf8');
-    // The Card more slot lifts the ⋯ above the press surface (pointer-events-auto z-10).
+    // The Card more slot lifts the ⋯ above the press surface (pointer-events-auto z-raised).
     expect(src).toContain('{...(menu !== undefined ? { more: menu } : {})}');
     // The trailing pull (-mr-3) comes from ActionMenuTrigger, the in-line box from Card.
     expect(src).not.toMatch(/-mr-3|-my-3/);

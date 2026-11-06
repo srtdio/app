@@ -199,11 +199,11 @@ function MenuShell(props: {
         {props.trigger}
         {props.open ? (
           <>
-            <div className="fixed inset-0 z-40" aria-hidden="true" onClick={props.onClose} />
+            <div className="fixed inset-0 z-dock" aria-hidden="true" onClick={props.onClose} />
             <div
               ref={panelRef}
               onKeyDown={keys.onKeyDown}
-              className={cn('absolute right-0 top-full z-50 mt-2 w-64', popoverClass())}
+              className={cn('absolute right-0 top-full z-sheet mt-2 w-64', popoverClass())}
             >
               {props.body}
             </div>

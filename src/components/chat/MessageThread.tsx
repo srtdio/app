@@ -1820,7 +1820,7 @@ export const SELECTION_ROW_OFFSET = 'relative pl-15';
 export const SELECTION_CHECK_SLOT = 'absolute left-4 top-1/2 flex -translate-y-1/2';
 
 /** A checked row's layer: the one selected look (lit-selected) across the full row, never opacity. */
-export const SELECTED_ROW_TINT = 'pointer-events-none absolute inset-0 -z-10 border-y lit-selected';
+export const SELECTED_ROW_TINT = 'pointer-events-none absolute inset-0 -z-raised border-y lit-selected';
 
 /**
  * Own-bubble inner content (reply quote, file chips, shared cards, voice note)
@@ -2805,7 +2805,7 @@ export function MessageBubble(props: {
                   onMore();
                 }}
                 className={cn(
-                  'pointer-events-none absolute right-0 top-0 z-10 flex h-11 min-w-11 items-start justify-end rounded-tr-[inherit] opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100',
+                  'pointer-events-none absolute right-0 top-0 z-raised flex h-11 min-w-11 items-start justify-end rounded-tr-[inherit] opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100',
                 )}
               >
                 <span
@@ -5156,7 +5156,7 @@ export function ThreadTopStrip({ layout }: { layout: ChatLayout }): ReactElement
     <div
       aria-hidden="true"
       data-thread-top-strip=""
-      className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[env(safe-area-inset-top,0px)] bg-panel"
+      className="pointer-events-none fixed inset-x-0 top-0 z-base h-[env(safe-area-inset-top,0px)] bg-panel"
     />
   );
 }

@@ -174,7 +174,7 @@ describe('Topbar scroll modes', () => {
       expect.arrayContaining([
         'sticky',
         'top-0',
-        'z-30',
+        'z-nav',
         'border-b',
         'bg-panel',
         'lit-header',
