@@ -26,12 +26,7 @@ import {
 } from '@/lib/chat/tasks';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isBellTaskEvent } from '@/lib/inbox/bell-types';
-import {
-  bankEventLine,
-  isBankEvent,
-  type BankEventFields,
-  type BankViewer,
-} from '@srtdio/inbox';
+import { bankEventLine, isBankEvent, type BankEventFields, type BankViewer } from '@srtdio/inbox';
 import { formatDate } from '@/lib/time';
 import { formatCivilDayHeader } from '@/lib/plan-week';
 import { errorText } from '@/lib/error-copy';

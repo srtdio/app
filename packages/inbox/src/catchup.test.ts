@@ -670,9 +670,7 @@ describe('the Plans section (idea bank lines)', () => {
 
   it('is left out when there are no plan lines, and absent reads as empty', () => {
     expect(renderCatchupEmail(makeDigest()).text).not.toContain('\nPlans\n');
-    expect(renderCatchupEmail(makeDigest({ plans: section([]) })).text).not.toContain(
-      '\nPlans\n',
-    );
+    expect(renderCatchupEmail(makeDigest({ plans: section([]) })).text).not.toContain('\nPlans\n');
   });
 
   it('a digest with only plan lines heads with the plan update count', () => {

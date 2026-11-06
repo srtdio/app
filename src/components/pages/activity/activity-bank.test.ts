@@ -107,9 +107,7 @@ describe('idea bank rows: copy for team and client viewers', () => {
     expect(title(moved(), 'agency')).toBe(
       `Asha moved ${Q('Reels week')} from October plan to the bank`,
     );
-    expect(title(moved(), 'client')).toBe(
-      `${Q('Reels week')} was moved to the agency's idea bank`,
-    );
+    expect(title(moved(), 'client')).toBe(`${Q('Reels week')} was moved to the agency's idea bank`);
   });
 
   it('bank_idea_planned names the plan and the day (no year in the current year)', () => {
