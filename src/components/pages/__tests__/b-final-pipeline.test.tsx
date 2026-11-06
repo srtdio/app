@@ -152,9 +152,9 @@ describe('Post screen decision keeps its width while busy', () => {
   const model: DecisionModel = {
     kind: 'approver',
     actions: [
-      { to: 'rejected', label: 'Reject' },
-      { to: 'approved', label: 'Approve' },
-    ] as unknown as Extract<DecisionModel, { kind: 'approver' }>['actions'],
+      { to: 'rejected', label: 'Reject', variant: 'default' },
+      { to: 'approved', label: 'Approve', variant: 'primary' },
+    ],
     onPick: () => {},
   };
   it('the running move shows Button busy; the other is only disabled', () => {

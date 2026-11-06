@@ -370,39 +370,22 @@ function skeletonLabel(first: boolean): ReactElement {
 }
 
 /**
- * The loading body: the real sections' shapes, drawn by the same parts (label,
- * group Rows 72 tall with a 32 avatar and two lines, label, a 2-column grid of
- * square Tiles with a caption), so swapping in the list shifts nothing. Each
- * box is a motion Bone (top-lit sweep, never a pulse); no spinner. Shown only
- * when the device holds no list (the store paints a saved list at once).
+ * The loading body: the real sections' shapes, drawn by the same part (label,
+ * group Rows, label, people Rows; every row 72 tall with a 32 avatar and two
+ * lines), so swapping in the list shifts nothing. Each box is a motion Bone
+ * (top-lit sweep, never a pulse); no spinner. Shown only when the device holds
+ * no list (the store paints a saved list at once).
  */
 export function channelListSkeleton(): ReactElement {
   return (
     <BoxSkeleton lit="flat" className={CHAT_HOME_STACK} label="Loading conversations">
       {skeletonLabel(true)}
-      <ul className={GROUP_ROW_LIST}>
-        {Array.from({ length: SKELETON_GROUPS }, (_, i) => (
-          <li key={i} data-skeleton-row="row" className="min-w-0">
-            <Row
-              leading={<Bone lit="lit-avatar" as="span" className="h-8 w-8 rounded-lg" />}
-              title={<Bone lit="flat" as="span" className="my-1 h-3 w-1/2 rounded" />}
-              secondary={<Bone lit="flat" as="span" className="my-1 h-3 w-3/4 rounded" />}
-              divider={i < SKELETON_GROUPS - 1}
-            />
-          </li>
-        ))}
+      <ul className={CHAT_ROW_LIST}>
+        {Array.from({ length: SKELETON_GROUPS }, (_, i) => skeletonRow(i, SKELETON_GROUPS))}
       </ul>
       {skeletonLabel(false)}
-      <ul className={PEOPLE_TILE_GRID}>
-        {Array.from({ length: SKELETON_PEOPLE }, (_, i) => (
-          <li key={i} data-skeleton-row="tile" className="min-w-0">
-            <Tile
-              thumbnail={<Bone lit="lit-card" as="span" className="h-full w-full" />}
-              title={<Bone lit="flat" as="span" className="my-1 h-3 w-2/3 rounded" />}
-              meta={<Bone lit="flat" as="span" className="my-1 h-2 w-1/3 rounded" />}
-            />
-          </li>
-        ))}
+      <ul className={CHAT_ROW_LIST}>
+        {Array.from({ length: SKELETON_PEOPLE }, (_, i) => skeletonRow(i, SKELETON_PEOPLE))}
       </ul>
     </BoxSkeleton>
   );
@@ -488,19 +471,19 @@ export function unreadPillText(unread: number): string | null {
 
 /**
  * The home stack inside the one scroll container, 8px between blocks. Rows
- * bleed to the pane's sides and draw their own 16 edge; labels and the people
- * grid sit on the same 16 edge (CHAT_HOME_EDGE), like the search box above.
+ * bleed to the pane's sides and draw their own 12 chat edge (Row gutter
+ * 'chat'); labels sit on the 16 edge (CHAT_HOME_EDGE), like the search box above.
  */
 export const CHAT_HOME_STACK = 'flex flex-col gap-2';
 
-/** The home's 16 edge for the parts that do not draw their own (labels, the grid). */
+/** The home's 16 edge for the parts that do not draw their own (the labels). */
 export const CHAT_HOME_EDGE = 'px-4';
 
-/** Groups: one ui/Row per chat, stacked, a divider (inset 60) between rows. */
-export const GROUP_ROW_LIST = 'flex flex-col';
-
-/** People: two fluid columns of ui/Tile, 12 apart; an odd last cell stays empty. */
-export const PEOPLE_TILE_GRID = cn('grid grid-cols-2 gap-3', CHAT_HOME_EDGE);
+/**
+ * Groups and People: one ui/Row per chat, stacked, a divider (inset to the
+ * text) between rows. Personal notes, groups and people are one row style.
+ */
+export const CHAT_ROW_LIST = 'flex flex-col';
 
 /** Section label: 12/600 uppercase, 0.06em tracking, secondary ink. */
 export const SECTION_LABEL_TYPE = 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
@@ -514,17 +497,18 @@ export function sectionLabelClass(first: boolean): string {
 }
 
 /**
- * A group row's photo slot: the shared Avatar at its header role (32), group
- * kind (rounded square), in the Row's fixed 32 column, so the box is final on
- * first paint.
+ * A chat row's photo slot: the shared Avatar at its header role (32), a group
+ * rounded square or a person circle, in the Row's fixed 32 column, so the box
+ * is final on first paint.
  */
-export const GROUP_TILE_PHOTO = 'flex shrink-0';
+export const CHAT_ROW_PHOTO = 'flex shrink-0';
 
 /**
- * A person tile's thumbnail: the shared Avatar at its profile role (72 circle)
- * centred on the tile's lit square (radius 8 from ui/Tile).
+ * A person row's second line when the DM has no message yet: one reserved
+ * line (a no-break space in the secondary role), so the row stays 72 and its
+ * name sits where every other row's does.
  */
-export const PERSON_TILE_PHOTO = 'flex h-full w-full items-center justify-center bg-panel lit-card';
+export const EMPTY_PREVIEW = ' ';
 
 /** Tile state that picks the tile's selected look. */
 export interface ChannelRowState {
@@ -562,7 +546,7 @@ function unreadPill(unread: number): ReactElement | null {
 
 /** What a chat shows: the parts' slot contents, built once. Hook-free and pure. */
 export interface ChannelRowParts {
-  /** Group (a Row) or person (a Tile). */
+  /** Group (the Groups section) or person (the People section); both are a Row. */
   kind: TileKind;
   /** The chat's display name (chatDisplayName). */
   name: string;
@@ -570,8 +554,8 @@ export interface ChannelRowParts {
   time: string;
   /** The photo, in its slot (data-group-photo / data-person-photo). */
   photo: ReactElement;
-  /** The group row's second line: the preview or "Draft: ..."; null for a person tile. */
-  preview: ReactElement | null;
+  /** The row's second line: the preview or "Draft: ..." (a person with no message: a reserved empty line). */
+  preview: ReactElement;
   /** The unread CountBadge, or null. */
   pill: ReactElement | null;
   /** The select-mode check, or null. */
@@ -579,12 +563,12 @@ export interface ChannelRowParts {
 }
 
 /**
- * The slot contents of one chat. A group is a Row: 32 rounded-square photo,
- * name + time, a one-line preview (or "Draft: ..."), the unread badge on the
- * second line's end. A person is a Tile: the 72 disc on the tile square, the
- * name, the time in the meta slot (no preview line), the unread badge in the
- * top-right corner. The avatar URL is on the summary before the tile mounts
- * (one batched list read), so a photo paints first, never the initials.
+ * The slot contents of one chat. Group and person are the same Row: a 32 photo
+ * (group rounded square, person circle), name + time, a one-line preview (or
+ * "Draft: ..."), the unread badge on the second line's end. A person with no
+ * message yet keeps an empty reserved second line (the row stays 72). The
+ * avatar URL is on the summary before the row mounts (one batched list read),
+ * so a photo paints first, never the initials.
  */
 export function channelRowParts(props: {
   channel: ChannelSummary;

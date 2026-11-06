@@ -51,7 +51,8 @@ describe('HeaderBar slots (additive)', () => {
     const out = html(<HeaderBar title="Plan" overlay={<div data-menu="" />} />);
     expect(barClass(out)).toContain('relative');
     expect(barClass(out)).toContain('z-20');
-    expect(out.indexOf('data-menu')).toBeGreaterThan(out.indexOf('data-header-actions') - 1);
+    expect(out.indexOf('data-menu')).toBeGreaterThan(-1);
+    expect(out.indexOf('data-menu')).toBeLessThan(out.indexOf('</header>'));
   });
 
   it('row height kept across states: h-14 with a subtitle, a title control or neither', () => {
@@ -168,9 +169,9 @@ describe('words and icons', () => {
 
   it('Edit is the pencil and "Edit"; compose day rows drop the repeated calendar', () => {
     const item = read('chat/PlanItemScreen.tsx');
-    expect(item.match(/<IconEdit size=\{ICON_SIZE\.inline\} \/>\s*Edit\s*<\/Button>/g)).toHaveLength(
-      2,
-    );
+    expect(
+      item.match(/<IconEdit size=\{ICON_SIZE\.inline\} \/>\s*Edit\s*<\/Button>/g),
+    ).toHaveLength(2);
     const compose = read('chat/PlanComposeScreen.tsx');
     expect(compose).not.toContain('IconCalendar');
   });

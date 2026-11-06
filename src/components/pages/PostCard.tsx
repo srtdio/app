@@ -254,22 +254,17 @@ export function cardMenuItems(actions: CardMenuActions): ActionMenuItem[] {
 }
 
 /**
- * A pipeline board card: a full-bleed picture in the workspace platform's one
- * fixed cover box (4:5 for Instagram, object-cover), a play glyph in that box
- * for a video with no poster, or no box for a text-only post, above the title, the
- * review status line, and one quiet meta line (the stage in the phone All
- * view, the due or overdue reading, and the ⋯). The picture is the shared
- * Thumbnail tile, so an image post, an imageless post, and a glyph post share
- * ONE tile background by state. The format shows once: the carousel badge or
- * play badge on the picture, never a glyph on the meta line. The card fills
- * its grid cell (h-full) and the title holds two lines, so every card in a row
- * ends on the same line. The whole card navigates to the post detail (PCS)
- * view; when the board passes onMove, a plain ⋯ at the right end of the meta
- * line (44x44 tap area, negative margins so the row keeps its height) opens
- * the shared ActionMenu: Open, Copy link (toast "Link copied") and, when the
- * viewer has an allowed move, Move (the move sheet). A long-press on touch or
- * a right-click on laptop opens the same menu (useMenuGesture). Navigation is
- * a full-bleed overlay button laid behind the card content.
+ * A pipeline board card, rendered by ui/Card: the picture bleeds at the top in
+ * the workspace platform's one fixed cover box (4:5 for Instagram), the post
+ * placeholder (play glyph) for a video with no poster, or no box for a
+ * text-only post. The title (two lines at most) and the ⋯ share the header
+ * (Card more: the trailing rule puts the glyph on the content edge); the due
+ * or overdue reading is the meta line; the caption and the review status line
+ * are the body; the stage Tag (phone All view) and the unread comments are the
+ * footer. The card is as tall as its content (Card self-start). The whole card
+ * opens the post (Card press); the ⋯ opens the shared ActionMenu: Open, Copy
+ * link and the viewer's moves. A long-press on touch or a right-click on laptop
+ * opens the same menu (useMenuGesture).
  */
 export function PostCard({
   post,
