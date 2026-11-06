@@ -68,120 +68,28 @@ function render(brief: BriefWithThumbnail, cache: PresignCache, presignEnabled =
   );
 }
 
-describe('BriefCard thumbnail tile', () => {
-  it('renders the small copy when thumbnailAssetVersionId is present', () => {
+describe('BriefCard on ui/ListCard', () => {
+  it('renders through ListCard (data-list-card) with the brief hooks kept', () => {
+    const { cache } = makeCache(null);
+    const out = render(makeBrief({}), cache);
+    expect(out).toContain('data-list-card=""');
+    expect(out).toContain('data-brief-card=""');
+    expect(out).toContain('data-brief-card-link=""');
+    // The old Card frame is gone.
+    expect(out).not.toContain('data-card-title');
+  });
+
+  it('renders the small copy as the 72 picture when thumbnailAssetVersionId is present', () => {
     const { cache, peekThumbnail } = makeCache('https://cdn.example/thumb.jpg');
     const out = render(makeBrief({ thumbnailAssetVersionId: 'av1' }), cache);
     expect(out).toContain('<img');
     expect(out).toContain('https://cdn.example/thumb.jpg');
     expect(out).toContain('object-cover');
+    expect(out).toContain('data-list-card-picture="image"');
     expect(peekThumbnail).toHaveBeenCalledWith('av1');
   });
 
-  // One case per known reference_links shape: bare string[], [{ url }], and the ETL
-  // object { drive_link, images }. Each must surface the same domain link BUTTON
-  // (the dead link tile is gone), while the tile itself falls through to text.
-  it('renders a link button for a string[] reference_links', () => {
-    const { cache } = makeCache(null);
-    const out = render(
-      makeBrief({
-        thumbnailAssetVersionId: null,
-        reference_links: [
-          'https://www.figma.com/file/abc',
-        ] as unknown as BriefWithThumbnail['reference_links'],
-      }),
-      cache,
-    );
-    expect(out).not.toContain('<img');
-    expect(out).toContain('href="https://www.figma.com/file/abc"');
-    expect(out).toContain('>figma.com<');
-    expect(out).not.toContain('>https://www.figma.com/file/abc<');
-  });
-
-  it('renders a link button for an array of { url } objects', () => {
-    const { cache } = makeCache(null);
-    const out = render(
-      makeBrief({
-        thumbnailAssetVersionId: null,
-        reference_links: [
-          { url: 'https://notion.so/spring-brief' },
-        ] as unknown as BriefWithThumbnail['reference_links'],
-      }),
-      cache,
-    );
-    expect(out).not.toContain('<img');
-    expect(out).toContain('href="https://notion.so/spring-brief"');
-    expect(out).toContain('>notion.so<');
-  });
-
-  it('renders a link button for the ETL { drive_link, images } object', () => {
-    const { cache } = makeCache(null);
-    const out = render(
-      makeBrief({
-        thumbnailAssetVersionId: null,
-        reference_links: {
-          drive_link: 'https://drive.google.com/folder/xyz',
-          images: ['key/one.png'],
-        } as unknown as BriefWithThumbnail['reference_links'],
-      }),
-      cache,
-    );
-    expect(out).not.toContain('<img');
-    expect(out).toContain('href="https://drive.google.com/folder/xyz"');
-    expect(out).toContain('>drive.google.com<');
-  });
-
-  it('renders at most one link button, for the first usable link', () => {
-    const { cache } = makeCache(null);
-    const out = render(
-      makeBrief({
-        thumbnailAssetVersionId: null,
-        reference_links: [
-          'https://first.example/a',
-          'https://second.example/b',
-        ] as unknown as BriefWithThumbnail['reference_links'],
-      }),
-      cache,
-    );
-    // The title link plus exactly one reference link.
-    expect(out.match(/<a /g) ?? []).toHaveLength(2);
-    expect(out).toContain('>first.example<');
-    expect(out).not.toContain('second.example');
-  });
-
-  it('renders no link button when the brief has an image, leaving the card unchanged', () => {
-    const { cache } = makeCache('https://cdn.example/thumb.jpg');
-    const out = render(
-      makeBrief({
-        thumbnailAssetVersionId: 'av1',
-        reference_links: [
-          'https://www.figma.com/file/abc',
-        ] as unknown as BriefWithThumbnail['reference_links'],
-      }),
-      cache,
-    );
-    expect(out).toContain('<img');
-    expect(out.match(/<a /g) ?? []).toHaveLength(1);
-    expect(out).not.toContain('figma.com');
-  });
-
-  it('renders no link button for a reference_links value with nothing usable', () => {
-    const { cache } = makeCache(null);
-    const out = render(
-      makeBrief({
-        thumbnailAssetVersionId: null,
-        reference_links: [
-          'javascript:alert(1)',
-          'not-a-url',
-        ] as unknown as BriefWithThumbnail['reference_links'],
-      }),
-      cache,
-    );
-    expect(out.match(/<a /g) ?? []).toHaveLength(1);
-    expect(out).not.toContain('javascript:');
-  });
-
-  it('shows the brief icon tile, never the objective text, when there is no image', () => {
+  it('shows the brief icon picture, never the objective text, when there is no image', () => {
     const { cache } = makeCache(null);
     const out = render(
       makeBrief({
@@ -194,9 +102,25 @@ describe('BriefCard thumbnail tile', () => {
     expect(out).not.toContain('<img');
     expect(out).not.toContain('italic');
     expect(out).toContain('data-brief-tile="icon"');
+    expect(out).toContain('data-list-card-picture="icon"');
   });
 
-  it('keeps the card fields (title, status, due date) after the thumbnail', () => {
+  it('the list card carries no reference link: the card link is the only link', () => {
+    const { cache } = makeCache(null);
+    const out = render(
+      makeBrief({
+        thumbnailAssetVersionId: null,
+        reference_links: [
+          'https://www.figma.com/file/abc',
+        ] as unknown as BriefWithThumbnail['reference_links'],
+      }),
+      cache,
+    );
+    expect(out.match(/<a /g) ?? []).toHaveLength(1);
+    expect(out).not.toContain('figma.com');
+  });
+
+  it('keeps the card fields (title, status, due date)', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({ status: 'open', target_date: '2026-07-01' }), cache);
     expect(out).toContain('Spring launch');
@@ -204,44 +128,53 @@ describe('BriefCard thumbnail tile', () => {
     expect(out).toContain('Due 1 Jul');
   });
 
-  it('shows the Closed marker for a closed brief', () => {
+  it('a brief with no due date shows the day it was raised (formatWhen), never "ago"', () => {
+    const { cache } = makeCache(null);
+    const out = renderToStaticMarkup(
+      <MemoryRouter>
+        <BriefCard
+          brief={makeBrief({ target_date: null, created_at: '2025-10-19T10:00:00Z' })}
+          cache={cache}
+          presignEnabled
+          href="/briefs/b1"
+          timeZone="UTC"
+          now={new Date('2026-11-06T12:00:00Z')}
+        />
+      </MemoryRouter>,
+    );
+    expect(out).toContain('data-brief-date=""');
+    expect(out).toContain('19 Oct 2025');
+    expect(out).not.toContain('ago');
+  });
+
+  it('shows the Closed tag for a closed brief', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({ status: 'closed' }), cache);
     expect(out).toContain('Closed');
   });
 
-  it('Open is the accent Tag, text only', () => {
+  it('Open and Closed are the one grey (neutral) Tag on line 3', () => {
     const { cache } = makeCache(null);
-    const out = render(makeBrief({ status: 'open' }), cache);
-    expect(out).toContain('data-brief-status="open"');
-    expect(out).toContain(tagClass('accent'));
-    expect(out).not.toContain('bg-good');
-    expect(out).not.toContain('rounded-full bg-accent');
-  });
-
-  it('Closed is the neutral Tag with no lock', () => {
-    const { cache } = makeCache(null);
-    const out = render(makeBrief({ status: 'closed' }), cache);
-    expect(out).toContain('data-brief-status="closed"');
-    expect(out).toContain(tagClass('neutral'));
-    expect(out).not.toContain('bg-accent-soft');
-    expect(out).not.toContain('M16.5 10.5V6.75');
+    for (const status of ['open', 'closed'] as const) {
+      const out = render(makeBrief({ status }), cache);
+      expect(out).toContain(`data-brief-status="${status}"`);
+      expect(out).toContain(tagClass('neutral'));
+      expect(out).not.toContain('bg-accent-soft');
+      expect(out).not.toContain('M16.5 10.5V6.75');
+    }
   });
 
   it('the due date renders mono with tabular figures', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({ target_date: '2026-07-01' }), cache);
-    // The Card footer's trailing meta role: mono, tabular figures.
-    expect(out).toMatch(
-      /class="font-mono[^"]*tabular-nums[^"]*"><span data-brief-due="">Due 1 Jul</,
-    );
+    expect(out).toMatch(/data-brief-due="" class="font-mono[^"]*tabular-nums[^"]*">Due 1 Jul</);
   });
 
-  it('the title is the Card heading on one line; the objective wraps instead of scrolling sideways', () => {
+  it('the title is one truncated heading line; the objective clamps to 2 lines', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({}), cache);
-    expect(out).toMatch(/data-card-title="" class="[^"]*truncate/);
-    expect(out).toContain('min-w-0 break-words text-base text-fg-2');
+    expect(out).toMatch(/data-list-card-title="" class="[^"]*truncate/);
+    expect(out).toMatch(/data-list-card-preview="" class="[^"]*line-clamp-2[^"]*min-h-9/);
   });
 });
 

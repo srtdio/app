@@ -42,7 +42,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { entityUrlPath } from '@/lib/entityRef';
 import { dispatchWorkspaceDataChanged } from '@/lib/events';
-import { civilDay, formatDate, formatDue, formatDueDate, formatOverdue } from '@/lib/time';
+import { civilDay, formatDue, formatDueDate, formatOverdue, formatWhen } from '@/lib/time';
 import { postFormatLabel } from '@/lib/post-format';
 import { copyText, COPY_FAILED } from '@/lib/clipboard';
 import { errorText } from '@/lib/error-copy';
@@ -231,17 +231,17 @@ export function briefBackTarget(historyState: unknown): 'pop' | '/briefs' {
 }
 
 /**
- * The day this brief was raised, read on the viewer's clock (`timeZone` is for
- * tests) with the app day format: "22 Sep", or "22 Sep 2025" outside now's
- * year. An unparseable created_at is returned unchanged, and an unknown zone
- * never throws.
+ * When this brief was raised, read on the viewer's clock (`timeZone` is for
+ * tests) in the app's one past-time format (formatWhen): "10:27 AM" today,
+ * "Yesterday", "Mon", "22 Sep", or "22 Sep 2025" outside now's year. An
+ * unparseable created_at is returned unchanged, and an unknown zone never throws.
  */
 export function briefRaisedLabel(
   createdAt: string,
   timeZone?: string,
   now: Date = new Date(),
 ): string {
-  return formatDate(createdAt, now, timeZone) || createdAt;
+  return formatWhen(createdAt, now, timeZone) || createdAt;
 }
 
 /**

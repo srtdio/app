@@ -77,7 +77,7 @@ import {
   type BriefFilter,
   type BriefPickerRow,
 } from '@/lib/chat/briefs';
-import { civilDay, formatDate, formatDueDate } from '@/lib/time';
+import { civilDay, formatDueDate, formatWhen } from '@/lib/time';
 import { formatCivilDayHeader } from '@/lib/plan-week';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import {
@@ -1184,7 +1184,7 @@ export function BriefPickerList(props: {
                   ) : null}
                   <span className="flex-1" />
                   <span className="text-sm text-fg-2">
-                    {`${briefPostCountLabel(brief.postCount)} · Raised ${formatDate(brief.createdAt, undefined, props.timeZone)}`}
+                    {`${briefPostCountLabel(brief.postCount)} · Raised ${formatWhen(brief.createdAt, undefined, props.timeZone)}`}
                   </span>
                 </span>
               </span>

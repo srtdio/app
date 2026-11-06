@@ -8,12 +8,19 @@ import {
 import type { BriefGalleryItem } from '@srtdio/briefs';
 
 // The Details "Raised" row: the day the brief was raised in the WORKSPACE zone,
-// in the app day format ("22 Sep", the year only outside now's year).
+// in the app's one past-time format (formatWhen: the clock today, "Yesterday",
+// the weekday 2-6 days back, then "22 Sep", the year only outside now's year).
 describe('briefRaisedLabel', () => {
   const now = new Date('2026-10-23T12:00:00Z');
 
   it('renders the raised day in the given zone, no year in the current year', () => {
     expect(briefRaisedLabel('2026-09-22T12:00:00Z', 'Asia/Kolkata', now)).toBe('22 Sep');
+  });
+
+  it('today is the clock, then Yesterday, then the weekday', () => {
+    expect(briefRaisedLabel('2026-10-23T04:57:00Z', 'Asia/Kolkata', now)).toBe('10:27 AM');
+    expect(briefRaisedLabel('2026-10-22T06:00:00Z', 'Asia/Kolkata', now)).toBe('Yesterday');
+    expect(briefRaisedLabel('2026-10-19T06:00:00Z', 'Asia/Kolkata', now)).toBe('Mon');
   });
 
   it('reads day AND year from the same zoned reading', () => {
