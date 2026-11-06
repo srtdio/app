@@ -1036,7 +1036,10 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
               className="mx-auto mt-1.5 h-1 w-9 rounded-sm bg-border-strong"
             />
           )}
-          <div className="flex items-center gap-1 py-1.5 pl-1.5 pr-1.5">
+          {/* pr-3: the ⋯'s 44 box is pulled 12 to the edge (the trailing rule);
+              a smaller pad let it overflow and scroll the sheet sideways,
+              which closed its menu. */}
+          <div className="flex items-center gap-1 py-1.5 pl-1.5 pr-3">
             <IconButton label={BACK_LABEL} data-task-back="" onClick={requestClose}>
               <IconChevronLeft size={ICON_SIZE.control} />
             </IconButton>
