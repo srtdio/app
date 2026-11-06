@@ -66,8 +66,9 @@ describe('ListCard frame', () => {
       expect(root).toContain(cls);
     }
     expect(radius.xl).toBe('12px');
-    // The same border token the Briefs cards (ui/Card) use: the plain `border` edge.
-    expect(listCardFrame()).not.toMatch(/border-(?!$)\w/);
+    // The same border token the Briefs cards (ui/Card cardSurface) used: the plain `border` edge.
+    expect(listCardFrame().split(' ')).toContain('border');
+    expect(listCardFrame()).not.toMatch(/\bborder-/);
   });
 
   it('padding 16, picture then text 12 apart, top-aligned', () => {
@@ -95,7 +96,9 @@ describe('ListCard frame', () => {
   it('selected is lit-selected; muted is lit-card-muted; no tap means no press motion', () => {
     expect(classOf(render({ selected: true }), 'data-list-card=""')).toContain('lit-selected');
     expect(classOf(render({ muted: true }), 'data-list-card=""')).toContain('lit-card-muted');
-    const still = render({ onPress: undefined });
+    const still = renderToStaticMarkup(
+      <ListCard picture={{ kind: 'icon', icon: IconBriefs }} title="Still" />,
+    );
     expect(classOf(still, 'data-list-card=""')).not.toContain(MOVE_CLASS.press);
     expect(still).not.toContain('data-list-card-press');
   });
