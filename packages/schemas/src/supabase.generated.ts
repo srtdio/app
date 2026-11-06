@@ -7995,6 +7995,46 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_item_buckets: {
+        Row: {
+          bucket_id: string
+          item_id: string
+          workspace_id: string
+        }
+        Insert: {
+          bucket_id: string
+          item_id: string
+          workspace_id: string
+        }
+        Update: {
+          bucket_id?: string
+          item_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_item_buckets_bucket_id_fkey"
+            columns: ["bucket_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_buckets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_item_buckets_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "plan_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_item_buckets_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_item_comments: {
         Row: {
           author_user_id: string | null
@@ -8104,48 +8144,63 @@ export type Database = {
       }
       plan_items: {
         Row: {
+          archived_at: string | null
+          came_from_plan_title: string | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
           description: string | null
           id: string
           kind: string
+          last_active_at: string
           linked_post_id: string | null
-          plan_id: string
+          plan_id: string | null
           position: number
           post_id: string | null
+          show_to_client: boolean
+          starred_at: string | null
           target_date: string | null
           title: string | null
           updated_at: string
           workspace_id: string
         }
         Insert: {
+          archived_at?: string | null
+          came_from_plan_title?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           id?: string
           kind: string
+          last_active_at?: string
           linked_post_id?: string | null
-          plan_id: string
+          plan_id?: string | null
           position?: number
           post_id?: string | null
+          show_to_client?: boolean
+          starred_at?: string | null
           target_date?: string | null
           title?: string | null
           updated_at?: string
           workspace_id: string
         }
         Update: {
+          archived_at?: string | null
+          came_from_plan_title?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           id?: string
           kind?: string
+          last_active_at?: string
           linked_post_id?: string | null
-          plan_id?: string
+          plan_id?: string | null
           position?: number
           post_id?: string | null
+          show_to_client?: boolean
+          starred_at?: string | null
           target_date?: string | null
           title?: string | null
           updated_at?: string
@@ -9401,6 +9456,27 @@ export type Database = {
         Returns: string
       }
       auth_user_id_by_email: { Args: { p_email: string }; Returns: string }
+      bank_idea_create: {
+        Args: {
+          p_attachment_version_ids: string[]
+          p_bucket_ids: string[]
+          p_description: string
+          p_title: string
+          p_trace_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
+      bank_idea_set: {
+        Args: {
+          p_archived: boolean
+          p_item_id: string
+          p_show_to_client: boolean
+          p_starred: boolean
+          p_trace_id: string
+        }
+        Returns: undefined
+      }
       brand_agency_request: {
         Args: {
           p_agency_email: string
@@ -10333,6 +10409,10 @@ export type Database = {
           title: string
         }[]
       }
+      plan_item_buckets_set: {
+        Args: { p_bucket_ids: string[]; p_item_id: string; p_trace_id: string }
+        Returns: undefined
+      }
       plan_item_comment_create: {
         Args: {
           p_body: string
@@ -10341,6 +10421,15 @@ export type Database = {
           p_visibility: string
         }
         Returns: string
+      }
+      plan_item_from_bank: {
+        Args: {
+          p_item_id: string
+          p_plan_id: string
+          p_target_date: string
+          p_trace_id: string
+        }
+        Returns: undefined
       }
       plan_item_move: {
         Args: {
@@ -10363,6 +10452,10 @@ export type Database = {
           p_status: string
           p_trace_id: string
         }
+        Returns: undefined
+      }
+      plan_item_to_bank: {
+        Args: { p_item_id: string; p_trace_id: string }
         Returns: undefined
       }
       plan_items_reorder: {
@@ -10607,6 +10700,14 @@ export type Database = {
       workspace_bucket_create: {
         Args: { p_name: string; p_trace_id: string; p_workspace_id: string }
         Returns: string
+      }
+      workspace_bucket_delete: {
+        Args: { p_bucket_id: string; p_trace_id: string }
+        Returns: undefined
+      }
+      workspace_bucket_rename: {
+        Args: { p_bucket_id: string; p_name: string; p_trace_id: string }
+        Returns: undefined
       }
       workspace_bytes_used: {
         Args: { p_workspace_id: string }

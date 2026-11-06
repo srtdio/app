@@ -203,6 +203,8 @@ PK id. Fields: workspace_id FK, name, color_hex ^#[0-9A-Fa-f]{6}$, position defa
 
 RPC `workspace_bucket_create(p_workspace_id uuid, p_name text, p_trace_id uuid) returns uuid` (SECURITY DEFINER, search_path ''). Execute: authenticated only (revoked from public). Caller (auth.uid()) must be an active member of p_workspace_id whose role has capability post.create allowed. Name is btrimmed, 1 to 40 chars; case-insensitive unique among non-archived buckets. color_hex auto-picked from an 8-colour list by non-archived bucket count; position = that count. Sets app.trace_id via set_config. Returns the new bucket id. Errors: 'not authenticated', 'forbidden_role', 'invalid_name', 'name_taken'.
 
+RPCs `workspace_bucket_rename(p_bucket_id, p_name, p_trace_id)` and `workspace_bucket_delete(p_bucket_id, p_trace_id)` (6 Nov, 20261106010000_plan_bank; SECURITY DEFINER, search_path '', agency side only, audit row). Rename: live bucket, name btrimmed 1 to 40 ('invalid_name'), case-insensitive unique among live buckets ('name_taken'). Delete: archives the bucket (archived = true) and removes its plan_item_buckets links (audit payload {ideas_unlinked}); posts.bucket_id is not touched, so posts keep their bucket. EXECUTE revoked from PUBLIC and anon; live, only postgres holds EXECUTE (no grant to authenticated yet).
+
 ### posts
 
 The approval unit. stage is the only workflow state. No publish_status.
@@ -366,7 +368,7 @@ Applied 9 Oct 2026 (step 3a plans), restated in migration 20261009110000_plans_c
 | --- | --- | --- |
 | id | uuid | PK, default uuidv7() |
 | workspace_id | uuid | FK workspaces.id, CASCADE |
-| plan_id | uuid | FK plans.id, CASCADE |
+| plan_id | uuid | nullable (6 Nov, 20261106010000_plan_bank): null = an idea in the workspace's idea bank (concepts only). FK plans.id, CASCADE |
 | kind | text | concept / post |
 | position | int | default 0 |
 | title | text | concept only, 1 to 200 |
@@ -375,7 +377,13 @@ Applied 9 Oct 2026 (step 3a plans), restated in migration 20261009110000_plans_c
 | target_date | date | nullable (null = No date). Concepts only: the concept's plan day. Post items carry no day of their own (null, plan_items_target_date_concept_only); a post slot's day is posts.target_date in the workspace zone (part 2b, 20261012190000_plan_part_2b) |
 | created_by | uuid | nullable, FK users.id, SET NULL |
 | created_at / updated_at / deleted_at | timestamptz | deleted_at nullable |
+| show_to_client | boolean | default false; bank ideas only (clients see a bank idea only when true) |
+| archived_at | timestamptz | nullable; bank ideas only |
+| starred_at | timestamptz | nullable |
+| last_active_at | timestamptz | default now(); bumped by bank procs and by plan_item_comments_touch |
+| came_from_plan_title | text | nullable; the plan title when a concept was moved to the bank |
 
+- Idea bank (6 Nov, 20261106010000_plan_bank): plan_items_bank_concept_only CHECK (plan_id IS NOT NULL OR kind = 'concept'); plan_items_bank_flags_only CHECK (plan_id IS NULL OR (archived_at IS NULL AND show_to_client = false)). Index plan_items_bank_idx (workspace_id, last_active_at desc) where plan_id is null and not deleted. Trigger plan_item_comments_touch AFTER INSERT ON plan_item_comments runs _plan_item_touch() (sets the item's last_active_at = now(); SECURITY INVOKER, EXECUTE not revoked).
 - plan_items_shape: a concept has a title and no post_id; a post item has post_id and no title or description.
 - plan_items_target_date_concept_only: CHECK (kind = 'concept' OR target_date IS NULL). Dropped 12 Oct (20261012120000_plan_item_days), re-added in part 2b (20261012190000_plan_part_2b) after clearing every post item's target_date: post slots carry no day.
 - One date per post (12 Oct, 20261012161000_plan_one_date_per_post): a post slot's day is posts.target_date, stored at 12:00 in the workspace zone. The backfill copied each live post slot's plan day onto its post.
@@ -383,7 +391,7 @@ Applied 9 Oct 2026 (step 3a plans), restated in migration 20261009110000_plans_c
 - plan_items_change_notify: AFTER INSERT OR UPDATE OF deleted_at, title, description ON plan_items FOR EACH ROW, runs _plan_items_change_notify() (internal, no EXECUTE for anyone). Sends plan_updated via _plan_notify: kind slot_added {item_id} on insert; kind slot_removed {item_id, post_id, title} on soft delete unless app.plan_day_sync = 'on'; kind concept_changed {item_id} when a live concept's title or description changes.
 - plans_rename_notify: AFTER UPDATE OF title ON plans FOR EACH ROW WHEN the title changed and the plan is not deleted, runs _plans_rename_notify() (internal, no EXECUTE for anyone). Sends plan_updated kind renamed {from, to}.
 - plan_items_post_once: a post appears at most once per plan among live post items (partial unique on plan_id, post_id).
-- plan_items_select_member: not deleted, its plan readable, and for a post item its post readable (so a draft post item stays hidden from a client, via posts_select_member).
+- plan_items_select_member: not deleted, and for a post item its post readable (so a draft post item stays hidden from a client, via posts_select_member); then either plan_id set and its plan readable, or plan_id null (bank idea) and the caller is an active member of the workspace and (show_to_client or is_agency_side_member). Bank branch added 6 Nov (20261106010000_plan_bank).
 - Concept files: asset_attachments rows with entity_type plan_item; asset_attachments_select_member checks the plan item is readable.
 
 ### plan_item_reviews
@@ -398,6 +406,19 @@ Applied 9 Oct 2026 (step 3a plans), restated in migration 20261009110000_plans_c
 | reviewed_at | timestamptz | default now() |
 
 - plan_item_reviews_select_member: its item readable; team reviews only for owner/admin/agency, client reviews for every member who can read the item.
+
+### plan_item_buckets
+
+Applied 6 Nov 2026 (idea bank), migration 20261106010000_plan_bank.sql. Links an item to workspace buckets. RLS on; authenticated has SELECT only (anon, service_role and authenticated revoked, then SELECT granted to authenticated); writes go through bank_idea_create and plan_item_buckets_set.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| item_id | uuid | PK part, FK plan_items.id, CASCADE |
+| bucket_id | uuid | PK part, FK workspace_buckets.id, CASCADE |
+| workspace_id | uuid | FK workspaces.id, CASCADE |
+
+- plan_item_buckets_select_member: its item readable (via plan_items_select_member).
+- Index plan_item_buckets_bucket_idx (workspace_id, bucket_id).
 
 ### plan_item_comments
 
@@ -432,6 +453,12 @@ All SECURITY DEFINER, search_path '', EXECUTE to authenticated, each takes p_tra
 - plan_item_comment_create(p_item_id, p_body, p_visibility, p_trace_id) returns uuid: any active member; a client only on a client plan and only 'everyone' (forbidden_role otherwise); invalid_payload for a missing item, a bad visibility or an empty or over-5000 body; writes plan_comment inbox rows via _plan_item_notify ('team' to owner/admin/agency only).
 - plan_draft_rows(p_plan_ids) returns table(plan_id, item_id, item_position, post_number, title, target_date): batched read-only helper, STABLE, no p_trace_id, no audit; EXECUTE to authenticated only (not anon). Lists the live post items whose post is stage 'draft' (not deleted) across the given plans. target_date is the post's own posts.target_date (timestamptz, 12:00 workspace zone; read it in the workspace zone), part 2b; before 2b it was plan_items.target_date at UTC midnight. Empty or null list returns nothing; more than 100 ids is invalid_payload. Per plan: not deleted, the caller is an active member of its workspace, and the plan is 'client' or the caller is agency-side; unknown or invisible ids return nothing. So a client sees draft rows in a client plan without posts SELECT on the draft.
 - plan_bundle_read(p_trace_id, p_workspace_id, p_plan_ids default null, p_range_start, p_range_end, p_only_shared default false, p_channel_id, p_before_starts_on, p_before_id) returns jsonb (20261026120000_speedy_b): plpgsql STABLE SECURITY INVOKER (RLS applies), no audit. One round trip for the Plan screen: up to 12 plans per page (keyset on starts_on, id) or the listed ids (max 200) with their items, drafts, loose posts, any_plan and last_sent_at. Raises 'workspace_member_only' when the workspace is not visible to the caller.
+- Idea bank procs (6 Nov, 20261106010000_plan_bank): agency side only (forbidden_role otherwise), audit row named after the proc. EXECUTE revoked from PUBLIC and anon; live, only postgres holds EXECUTE (no grant to authenticated yet).
+  - bank_idea_create(p_workspace_id, p_title, p_description, p_attachment_version_ids, p_bucket_ids, p_trace_id) returns uuid: a concept with plan_id null, library files as plan_concept_add, and links to live (non-archived) buckets of the workspace; check or not-null failure is invalid_payload.
+  - plan_item_to_bank(p_item_id, p_trace_id): a live concept in a plan moves to the bank (plan_id and target_date cleared, came_from_plan_title set, reviews deleted); post_approved when its linked post is approved; invalid_payload for a post item or a bank idea. Audit payload {from_plan_id}.
+  - plan_item_from_bank(p_item_id, p_plan_id, p_target_date, p_trace_id): a bank idea joins a live plan of the same workspace at the end, on p_target_date (past_date before today in the workspace zone); archived_at and show_to_client reset. Audit payload {plan_id, target_date}.
+  - bank_idea_set(p_item_id, p_show_to_client, p_archived, p_starred, p_trace_id): set bank flags; null leaves a flag as is; archived/starred keep the first timestamp. Bank ideas only.
+  - plan_item_buckets_set(p_item_id, p_bucket_ids, p_trace_id): replace a concept's bucket links with the live buckets of its workspace in the list; bumps last_active_at.
 - plan_draft_items(p_plan_id): retired 11 Oct, no EXECUTE for anyone, drop pending. Its target_date is also the item's plan day (plan_items.target_date at UTC midnight).
 - Live only: schema retired holds an unexposed old plan_posts_add pending drop.
 - Internal, no EXECUTE for anyone: _plan_notify(p_plan_id, p_event_type, p_payload) (20261012160000_plan_notify_plumbing): one inbox row per other active member of the plan's workspace, owner/admin/agency always and clients too on a client plan; entity_type plan, entity_id = scope_key = plan id, scope posts, tier active, payload gains plan_id and plan_title (the plan's title at send time), actor_user_id auth.uid(). Used for plan_opened, plan_deleted, plan_date_changed and plan_updated. Part 2b (20261012190000_plan_part_2b, applied after the screens PR merged) restored the body: alerts go out only for plans open to the client (audience client); on a Draft (team) plan only plan_deleted is sent. Before 2b the live body was silent (20261012161000). Since 20261105180000_plan_team_edit_alerts a Draft (team) plan also sends plan_updated and plan_date_changed, merged into one edited card per editor per hour, to agency-side members only.
