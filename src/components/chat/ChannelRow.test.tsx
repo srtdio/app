@@ -17,7 +17,6 @@ import {
   ChannelCard,
   DEFAULT_LIST_INPUT,
   CHAT_ROW_LIST,
-  CHAT_ROW_PHOTO,
   EMPTY_PREVIEW,
   SECTION_LABEL_TYPE,
   channelListView,
@@ -26,11 +25,13 @@ import {
   splitSections,
   tileKind,
   unreadPillText,
+  unreadTagText,
   type ChannelListInput,
 } from '@/components/chat/ChannelList';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import type { ConversationSummary } from '@/lib/chat/chat-store';
-import { formatChatTime } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
+import { LIST_CARD_STACK } from '@/components/ui/ListCard';
 
 // The rows are token-only: every colour is a CSS variable the
 // .dark class swaps, so one class set serves light and dark.
@@ -111,10 +112,8 @@ function sectionIds(markup: string, section: 'groups' | 'people'): string[] {
 const dm2: ChannelSummary = { ...dm, channelId: 'c2', title: 'Ravi Menon' };
 const group2: ChannelSummary = { ...group, channelId: 'g2', title: 'Brand' };
 
-const esc = (cls: string): string => cls.replaceAll('&', '&amp;').replaceAll('>', '&gt;');
-
 describe('chat home sections', () => {
-  it('group channel -> a Row in Groups; DM channel -> a Row in People', () => {
+  it('group channel -> a ListCard in Groups; DM channel -> a ListCard in People', () => {
     expect(tileKind(group)).toBe('wide');
     expect(tileKind(dm)).toBe('square');
     const markup = html(view([dm, group, dm2, group2]));
@@ -167,59 +166,60 @@ describe('chat home sections', () => {
     tokenOnly(markup);
   });
 
-  it('People: a stacked list of Rows like Groups, no grid', () => {
-    expect(CHAT_ROW_LIST).toBe('flex flex-col');
+  it('People: a stacked list of cards like Groups, 12 apart on the 16 edge, no grid', () => {
+    expect(CHAT_ROW_LIST.split(' ')).toEqual(expect.arrayContaining(LIST_CARD_STACK.split(' ')));
+    expect(CHAT_ROW_LIST.split(' ')).toContain('gap-3');
+    expect(CHAT_ROW_LIST.split(' ')).toContain(CHAT_HOME_EDGE);
     const markup = html(view([dm, dm2, { ...dm, channelId: 'c3', title: 'Neha' }]));
     expect(markup).not.toContain('grid-cols');
-    // Rows draw their own 12 chat edge, so the stack itself has none.
     expect(CHAT_HOME_STACK).toBe('flex flex-col gap-2');
   });
 
-  it('group and people rows: a divider under every row but the last (inset 56, the text edge)', () => {
-    const markup = html(view([group, group2, { ...group, channelId: 'g3', title: 'Ops' }]));
-    expect(markup.match(/data-row-divider=""/g)).toHaveLength(2);
-    expect(markup).toMatch(/data-row-divider=""[^>]*left-14/);
-    const people = html(view([dm, dm2, { ...dm, channelId: 'c3', title: 'Neha' }]));
-    expect(people.match(/data-row-divider=""/g)).toHaveLength(2);
+  it('cards never draw a divider (12 between cards)', () => {
+    const markup = html(view([group, group2, dm, dm2]));
+    expect(markup).not.toContain('data-row-divider');
+    expect(markup.match(/data-list-card=""/g)).toHaveLength(4);
   });
 
-  it('unread 0 -> no badge, unread 3 -> badge "3"', () => {
+  it('unread 0 -> no tag and no dot; unread 3 -> the grey "3 new" tag and the dot', () => {
     expect(unreadPillText(0)).toBeNull();
     expect(unreadPillText(3)).toBe('3');
-    expect(card(dm, read)).not.toContain('data-count-badge');
-    expect(card(dm, { ...read, unread: 3 })).toMatch(/data-count-badge="[^"]*"[^>]*>3</);
-    expect(card(group, read)).not.toContain('data-count-badge');
-    expect(card(group, { ...read, unread: 3 })).toMatch(/data-count-badge="[^"]*"[^>]*>3</);
+    expect(unreadTagText(0)).toBeNull();
+    expect(unreadTagText(3)).toBe('3 new');
+    for (const c of [dm, group]) {
+      const quiet = card(c, read);
+      expect(quiet).not.toContain('data-unread-tag');
+      expect(quiet).not.toContain('data-list-card-unread');
+      const loud = card(c, { ...read, unread: 3 });
+      expect(loud).toMatch(/data-unread-tag=""[^>]*>[^]*?>3 new</);
+      expect(loud).toContain('data-list-card-unread');
+      // No black CountBadge anywhere on the list.
+      expect(loud).not.toContain('data-count-badge');
+    }
   });
 });
 
-describe('group chat: ui/Row', () => {
-  it('72 tall, 32 avatar column at the 12 chat edge, time meta, one-line preview, badge on line 2', () => {
+describe('group chat: ui/ListCard', () => {
+  it('72 picture (group photo or mark), name, 2-line preview, time + "3 new" on line 3', () => {
     const h = card(group, { ...read, unread: 3 });
-    expect(h).toContain('data-chat-list-item="row"');
-    expect(h).toContain('data-row=""');
-    expect(h).toContain('min-h-18');
-    expect(h).toMatch(/data-row-leading=""[^>]*w-8/);
-    expect(h).toMatch(/class="[^"]*rounded-none[^"]*\bpx-3\b[^"]*min-h-18/);
-    expect(h).toContain(`data-group-photo="" class="${esc(CHAT_ROW_PHOTO)}"`);
-    // The shared Avatar at its header role, group kind: a 32px rounded square.
-    expect(h).toContain('data-avatar-role="header"');
-    expect(h).toContain('width:32px;height:32px');
-    expect(h).toContain('rounded-lg lit-avatar inline-flex');
-    expect(CHAT_ROW_PHOTO).not.toContain('!');
-    // Time in the meta role; the preview one line (no clamp).
-    const time = formatChatTime(read.lastMessageTs, new Date(NOW), 'UTC');
-    expect(h).toMatch(new RegExp(`font-mono[^"]*">${time}<`));
-    expect(h).not.toContain('line-clamp');
-    // The badge sits on the second line, after the preview.
-    expect(h).toContain('data-row-badge');
-    expect(h.indexOf('data-count-badge')).toBeGreaterThan(h.indexOf('See you then'));
+    expect(h).toContain('data-chat-list-item="card"');
+    expect(h).toContain('data-list-card=""');
+    expect(h).toMatch(/data-list-card-picture="image"[^>]*data-group-photo=""/);
+    // The shared Avatar at its profile role (72), group kind, clipped to radius 8.
+    expect(h).toContain('data-avatar-role="profile"');
+    expect(h).toContain('width:72px;height:72px');
+    expect(h).toMatch(/data-list-card-picture="image"[^>]*class="[^"]*h-18 w-18[^"]*rounded-lg/);
+    // Time in the meta role on line 3; the preview clamps to two lines.
+    const time = formatWhen(read.lastMessageTs, new Date(NOW), 'UTC');
+    expect(h).toMatch(new RegExp(`data-list-card-line="3"[^]*font-mono[^"]*">${time}<`));
+    expect(h).toContain('line-clamp-2');
+    expect(h.indexOf('3 new')).toBeGreaterThan(h.indexOf('See you then'));
     tokenOnly(h);
   });
 
-  it('the ⋯ is the Row trailing (ActionMenuTrigger, the trailing rule), never inside the tap surface', () => {
+  it('the ⋯ is line 3 trailing (ActionMenuTrigger, the trailing rule), never inside the tap surface', () => {
     const h = card(group, read, { menu: true });
-    expect(h).toMatch(/data-row-more=""[^>]*pr-3/);
+    expect(h).toContain('data-list-card-more=""');
     expect(h).toMatch(/aria-label="Actions for Launch"[^>]*-mr-3/);
     // The tap surface closes before the ⋯ opens: buttons never nest.
     const tap = h.indexOf('aria-label="Open Launch');
@@ -227,44 +227,41 @@ describe('group chat: ui/Row', () => {
     expect(h.slice(tap, more)).toContain('</button>');
   });
 
-  it('divider only when asked', () => {
+  it('no divider, asked or not', () => {
     expect(card(group, read)).not.toContain('data-row-divider');
-    expect(card(group, read, { divider: true })).toContain('data-row-divider');
+    expect(card(group, read, { divider: true })).not.toContain('data-row-divider');
   });
 });
 
-describe('person chat: ui/Row, the same row as a group', () => {
-  it('72 tall, 32 circle, name + time, one-line preview, badge on line 2', () => {
+describe('person chat: ui/ListCard, the same card as a group', () => {
+  it('72 circle, name, preview, time + "99+ new"', () => {
     const h = card(dm, { ...read, unread: 120 });
-    expect(h).toContain('data-chat-list-item="row"');
+    expect(h).toContain('data-chat-list-item="card"');
     expect(h).toContain('data-chat-kind="person"');
     expect(h).not.toContain('data-tile');
-    expect(h).toContain('min-h-18');
-    expect(h).toContain(`data-person-photo="" class="${esc(CHAT_ROW_PHOTO)}"`);
-    expect(h).toContain('data-avatar-role="header"');
-    expect(h).toContain('width:32px;height:32px');
+    expect(h).toMatch(/data-list-card-picture="person"[^>]*data-person-photo=""/);
+    expect(h).toContain('data-avatar-role="profile"');
+    expect(h).toContain('width:72px;height:72px');
+    expect(h).toContain('rounded-full');
     expect(h).toContain('>Asha Rao<');
-    const time = formatChatTime(read.lastMessageTs, new Date(NOW), 'UTC');
+    const time = formatWhen(read.lastMessageTs, new Date(NOW), 'UTC');
     expect(h).toMatch(new RegExp(`font-mono[^"]*">${time}<`));
     expect(h).toContain('See you then<');
-    expect(h.indexOf('data-count-badge')).toBeGreaterThan(h.indexOf('See you then'));
-    expect(h).toContain('>99+<');
+    expect(h).toContain('>99+ new<');
     tokenOnly(h);
   });
 
-  it('the ⋯ is the Row trailing, outside the one tap surface that holds the photo', () => {
+  it('the ⋯ sits outside the one tap surface', () => {
     const h = card(dm, read, { menu: true });
     const tap = h.indexOf('aria-label="Open Asha Rao');
     const close = h.indexOf('</button>', tap);
-    expect(h.indexOf('data-person-photo')).toBeGreaterThan(tap);
-    expect(h.indexOf('data-person-photo')).toBeLessThan(close);
-    expect(h.indexOf('data-row-more')).toBeGreaterThan(close);
+    expect(h.indexOf('data-list-card-more')).toBeGreaterThan(close);
     expect(h).toMatch(/aria-label="Actions for Asha Rao"[^>]*-mr-3/);
   });
 
-  it('no message yet: line 2 is reserved and empty, the row stays 72', () => {
+  it('no message yet: line 2 is reserved and empty, the card keeps its height', () => {
     const h = card(dm, undefined);
-    expect(h).toContain('min-h-18');
+    expect(h).toContain('min-h-9');
     expect(h).toContain(`data-preview-empty="" aria-hidden="true">${EMPTY_PREVIEW}<`);
     expect(h).not.toContain('No messages yet');
   });
@@ -309,7 +306,7 @@ describe('selected and select mode', () => {
 });
 
 describe('D7: chat rows and tiles never select text or show the callout', () => {
-  it('the card carries select-none and the no-callout class', () => {
+  it('the card wrapper carries select-none and the no-callout class', () => {
     for (const c of [dm, group]) {
       const h = card(c, read);
       for (const cls of ['select-none', '[-webkit-touch-callout:none]']) expect(h).toContain(cls);
@@ -404,44 +401,38 @@ describe('People row photo opens the chat (no photo popup)', () => {
     };
   }
 
-  it('a DM row: no button inside the photo slot; the photo sits inside the row surface', () => {
+  it('a DM card: no control in the photo slot; the photo lets taps through to the card button', () => {
     const { host, unmount } = mount({ onSelect: () => {} });
     const slot = host.querySelector('[data-person-photo]');
     expect(slot).not.toBeNull();
-    expect(slot?.className).toBe(CHAT_ROW_PHOTO);
     expect(slot?.querySelector('[role="button"], button, [tabindex]')).toBeNull();
+    // The picture lives in the pass-through body laid over the one card button.
+    expect(slot?.closest('[data-list-card-body]')?.className).toContain('pointer-events-none');
     const press = host.querySelector('button[aria-label^="Open "]');
-    expect(press?.contains(slot ?? null)).toBe(true);
+    expect(press?.hasAttribute('data-list-card-press')).toBe(true);
     expect(press?.getAttribute('aria-label')).toMatch(/^Open Asha Rao/);
     unmount();
   });
 
-  it('a click on the photo calls the same open handler as the tile body', () => {
+  it('a tap anywhere on the card (the card button) opens the chat', () => {
     const onSelect = vi.fn();
     const { host, unmount } = mount({ onSelect });
-    const photo = host.querySelector('[data-person-photo] [data-avatar-role="header"]');
-    expect(photo).not.toBeNull();
-    act(() => {
-      (photo as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(onSelect).toHaveBeenCalledTimes(1);
-    expect(onSelect).toHaveBeenCalledWith(dm);
     const body = host.querySelector('button[aria-label^="Open "]');
     act(() => {
       (body as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenLastCalledWith(dm);
     unmount();
   });
 
-  it('selecting: a click on the photo toggles the tile, never opens it', () => {
+  it('selecting: a tap on the card toggles it, never opens it', () => {
     const onSelect = vi.fn();
     const onToggle = vi.fn();
     const { host, unmount } = mount({ onSelect, onToggle });
-    const photo = host.querySelector('[data-person-photo] [data-avatar-role="header"]');
+    const body = host.querySelector('button[aria-label^="Open "]');
     act(() => {
-      (photo as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      (body as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onToggle).toHaveBeenCalledWith(dm.channelId);
     expect(onSelect).not.toHaveBeenCalled();

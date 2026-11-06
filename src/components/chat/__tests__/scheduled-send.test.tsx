@@ -98,7 +98,10 @@ describe('S2: phone hold and laptop chevron wiring', () => {
   });
 
   it('the chevron is laptop only, 44px, labelled', () => {
-    expect(composer).toContain("const showChevron = layout === 'laptop' && schedulable;");
+    // Laptop only; it stays (disabled) while scheduling so the send slot keeps its width.
+    expect(composer).toContain(
+      "const showChevron = layout === 'laptop' && (schedulable || scheduleBusy);",
+    );
     expect(composer).toContain('aria-label="Schedule options"');
     expect(composer).toContain('className="shrink-0 rounded-l-none"');
     expect(composer).toMatch(/shape="round"\s+aria-label="Schedule options"/);
