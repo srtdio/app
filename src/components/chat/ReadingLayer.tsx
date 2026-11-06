@@ -146,7 +146,7 @@ export function LatestButton(props: {
         onContextMenu={(e) => e.preventDefault()}
         className={cn('lit-float', FLOAT_SURFACE_CLASS, NO_TOUCH_SELECT)}
       >
-        <IconChevronDown size={ICON_SIZE.control} />
+        <IconChevronDown size={ICON_SIZE.nav} />
         <CountBadge count={props.count} className="absolute -right-1 -top-1" />
       </IconButton>
     </span>

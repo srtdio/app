@@ -2547,7 +2547,7 @@ export function Composer(props: ComposerProps): ReactElement {
                           scheduleOpen !== null ? setScheduleOpen(null) : openSchedule()
                         }
                       >
-                        <IconChevronDown size={ICON_SIZE.control} />
+                        <IconChevronDown size={ICON_SIZE.nav} />
                       </Button>
                     </span>
                   </>
