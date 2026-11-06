@@ -25,9 +25,10 @@ function editorText(): string {
   return host?.querySelector('[contenteditable="true"]')?.textContent ?? '';
 }
 
+// The round Send carries its name ("Post") as its label (ui/Composer's send slot).
 function postButton(): HTMLButtonElement | undefined {
   return Array.from(host?.querySelectorAll('button') ?? []).find(
-    (b) => b.textContent?.trim() === 'Post',
+    (b) => b.getAttribute('aria-label') === 'Post',
   );
 }
 

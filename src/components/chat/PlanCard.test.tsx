@@ -10,12 +10,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { renderToStaticMarkup } from 'react-dom/server';
-import {
-  PLAN_CARD,
-  PLAN_CARD_SKELETON,
-  PlanCardBody,
-  type PlanCardView,
-} from '@/components/chat/PlanCard';
+import { PlanCardBody, PlanCardSkeleton, type PlanCardView } from '@/components/chat/PlanCard';
 import {
   actionLabels,
   isLiveItem,
@@ -90,10 +85,16 @@ function render(view: PlanCardView, side: 'agency' | 'client' | 'unknown'): stri
 }
 
 describe('PlanCardBody', () => {
-  it('the skeleton is exactly the card height; every card line is one line', () => {
-    const height = (cls: string): string | undefined => /(?:^| )(h-\[\d+px\])/.exec(cls)?.[1];
-    expect(height(PLAN_CARD)).toBeDefined();
-    expect(height(PLAN_CARD_SKELETON)).toBe(height(PLAN_CARD));
+  it('the skeleton is the card rows (ChatCard); every card line is one line', () => {
+    // The skeleton renders the card's own rows at their fixed heights: the
+    // title line, the range line, the chips (h-6), the bar, the progress line
+    // and the 44 action row, so the card fills in place.
+    const box = renderToStaticMarkup(<PlanCardSkeleton />);
+    expect(box).toContain('data-plan-skeleton=""');
+    expect(box).toContain('data-chat-card=""');
+    expect(box).toMatch(/data-bone=""[^>]*class="[^"]*\bh-6\b/);
+    expect(box).toContain('data-plan-card-bar="team"');
+    expect(box).toMatch(/data-chat-card-actions=""[^>]*min-h-11/);
     const long = bundle('team');
     const html = render(
       {
@@ -103,14 +104,18 @@ describe('PlanCardBody', () => {
       'agency',
     );
     expect(html).not.toContain('flex-wrap');
-    expect(html).toMatch(/data-plan-title="" class="text-xl font-semibold[^"]*\btruncate\b/);
+    // The title is ChatCard's heading line (15, truncated), never text-xl.
+    expect(html).toMatch(
+      /class="text-lg font-semibold[^"]*\btruncate\b"><span data-plan-title="">/,
+    );
+    expect(html).not.toContain('text-xl');
     expect(html).toMatch(/data-plan-progress="" class="truncate text-sm leading-4/);
-    expect(html).toMatch(/data-plan-range="" class="truncate font-mono text-md leading-5/);
+    expect(html).toMatch(/data-plan-range="" class="font-mono text-sm[^"]*\btruncate\b/);
   });
 
-  it('agency: eyebrow, title, mono range, counts, progress, Open plan and Forward', () => {
+  it('agency: plan glyph, title, mono range, counts, progress, Open plan and Forward', () => {
     const html = render({ kind: 'plan', bundle: bundle('client') }, 'agency');
-    expect(html).toContain('PLAN');
+    expect(html).toContain('data-plan-card="plan1"');
     expect(html).toContain('Week of 12 Oct');
     expect(html).toContain('12\u201318 Oct');
     expect(html).toContain('1 concept');
@@ -122,6 +127,10 @@ describe('PlanCardBody', () => {
     expect(html).toContain('data-plan-card-bar="client"');
     expect(html).toContain('Open plan');
     expect(html).toContain('data-plan-forward');
+    // The action row: Forward left, Open plan right, no divider.
+    expect(html.indexOf('data-plan-forward')).toBeLessThan(html.indexOf('data-plan-open'));
+    expect(html).not.toContain('w-px');
+    expect(html).not.toMatch(/\bborder-t[\s"]/);
     expect(html).not.toContain('Creators only');
     expect(html).not.toContain('Team');
   });
@@ -151,7 +160,9 @@ describe('PlanCardBody', () => {
     expect(html).toContain('Plan deleted');
     expect(html).not.toContain('Plan not available');
     expect(html).toContain('data-plan-card="unavailable"');
+    // The muted ChatCard on the peer bubble fill.
     expect(html).toContain('bg-panel-2');
+    expect(html).toContain('text-fg-3');
     expect(html).not.toContain('Open plan');
   });
 });

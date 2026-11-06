@@ -9,7 +9,11 @@ vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 
 import type { Database } from '@srtdio/schemas';
 import { shapeChannelSummaries, type ChannelSummary } from '@/lib/chat-reads';
-import { channelRowBody, GROUP_TILE_PHOTO, PERSON_TILE_PHOTO } from '@/components/chat/ChannelList';
+import {
+  channelRowParts,
+  GROUP_TILE_PHOTO,
+  PERSON_TILE_PHOTO,
+} from '@/components/chat/ChannelList';
 import { GroupHero, groupInfoSections, groupInfoSubtitle } from '@/components/chat/GroupInfoSheet';
 import { centerSquare, GROUP_AVATAR_EXPORT_PX } from '@/lib/chat/group-avatar';
 
@@ -58,14 +62,14 @@ const [withPhoto, withoutPhoto, dm] = shapeChannelSummaries(
 
 function rowHtml(summary: ChannelSummary): string {
   return renderToStaticMarkup(
-    channelRowBody({
+    channelRowParts({
       channel: summary,
       summary: undefined,
       nowMs: Date.parse('2026-09-29T10:00:00Z'),
       timeZone: 'UTC',
       selecting: false,
       checked: false,
-    }),
+    }).photo,
   );
 }
 
@@ -77,7 +81,7 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     expect(html).toContain(`src="${PHOTO}"`);
     // First paint is the photo: no initials fallback rendered alongside it.
     expect(html).not.toContain('>LA<');
-    // A group is a wide tile: a 72px rounded-square photo (profile role, group kind).
+    // A group is a Row: a 32px rounded-square photo (header role, group kind).
     expect(html).toContain(
       `data-group-photo="" class="${GROUP_TILE_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
     );
@@ -98,7 +102,7 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     expect(dm.avatarUrl).toBe(PEER_PHOTO);
     const html = rowHtml(dm);
     expect(html).toContain(`src="${PEER_PHOTO}"`);
-    // A DM is a square tile: a 72px circular photo.
+    // A DM is a Tile: a 72px circular photo on the tile square.
     expect(html).toContain(
       `data-person-photo="" class="${PERSON_TILE_PHOTO.replaceAll('&', '&amp;').replaceAll('>', '&gt;')}"`,
     );

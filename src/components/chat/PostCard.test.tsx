@@ -19,19 +19,17 @@ import { PostSheetExtras, talkAboutLabel } from '@/components/chat/PostSheet';
 import { agencyWaitingHint } from '@/components/chat/post-sheet';
 import {
   CARD_HOLD,
-  CARD_SKELETON,
   NotVisibleCard,
+  PostCardSkeleton,
   cardTapHandlers,
   leaveEndsPress,
-  POST_CARD,
-  SHARED_CARD,
   SharedPostCardList,
-  cardBoxStyle,
   cardFrame,
   loadPostCardBatch,
   readApproverRoles,
   type CardContext,
 } from '@/components/chat/PostCard';
+import { cardMediaHeight, chatCardFrame } from '@/components/chat/post-card-geometry';
 import {
   NOT_VISIBLE_BODY,
   NOT_VISIBLE_TITLE,
@@ -64,22 +62,36 @@ describe('NotVisibleCard', () => {
     expect(html).toContain(NOT_VISIBLE_BODY);
   });
 
-  it('has no link, button or thumbnail, and uses neutral tokens', () => {
-    expect(html).not.toMatch(/<a\b|<button\b|<svg\b|<img\b/);
+  it('has no link, button or thumbnail; the muted ChatCard (only its kind glyph)', () => {
+    expect(html).not.toMatch(/<a\b|<button\b|<img\b/);
+    // The one svg is ChatCard's kind glyph (aria-hidden), never a thumbnail.
+    expect(html.match(/<svg\b/g)).toHaveLength(1);
+    expect(html).toContain('data-chat-card=""');
+    // The peer bubble surface (the card is the bubble), muted title ink.
     expect(html).toContain('bg-panel-2');
-    // Neutral lit card: lit-card-muted draws the edges (no border-border).
-    expect(html).toContain('lit-card-muted');
-    expect(html).not.toContain('border-border bg-panel-2');
+    expect(html).toContain('lit-bubble-other');
+    expect(html).toContain('text-fg-3');
     expect(html).toContain('text-fg-2');
   });
 
-  it('keeps the visible card box size: the one fixed post card box', () => {
-    expect(html).toContain('w-[240px]');
-    expect(html).toContain(`height:${String(cardBoxStyle(null, 'touch').height)}px`);
+  it('keeps the visible card box: the same rows as a live card', () => {
+    expect(html).toContain('w-72');
     expect(html).toContain('data-card-media');
-    expect(SHARED_CARD).toContain('bg-panel');
-    expect(SHARED_CARD).toContain('lit-card');
-    expect(SHARED_CARD).not.toContain('border-border');
+    expect(html).toContain(`height:${String(cardMediaHeight(chatCardFrame(null)))}px`);
+    // The empty 44 action row, as on a live card.
+    expect(html).toMatch(/data-chat-card-actions=""[^>]*min-h-11/);
+  });
+});
+
+describe('PostCardSkeleton', () => {
+  it('is a ChatCard with the card rows: bones, the media box, the 44 action row', () => {
+    const html = renderToStaticMarkup(<PostCardSkeleton platform="instagram" />);
+    expect(html).toContain('data-card-skeleton=""');
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).toContain('data-chat-card=""');
+    expect(html).toContain('data-bone');
+    expect(html).toContain(`height:${String(cardMediaHeight(chatCardFrame('instagram')))}px`);
+    expect(html).toMatch(/data-chat-card-actions=""[^>]*min-h-11/);
   });
 });
 
@@ -148,8 +160,8 @@ describe('SharedPostCardList', () => {
     expect(html).toContain('data-card-media');
     // Instagram carousel before any size is known: the 4:5 portrait default.
     expect(html).toContain('data-frame-ratio="0.8"');
-    // The 238px inner width at 4:5 is a 298px box (whole px).
-    expect(html).toContain('width:min(100%, calc(298px * 0.8))');
+    // The 264px inner width (288 card, 12 inset) at 4:5 is 330: capped at 320.
+    expect(html).toContain('width:min(100%, calc(320px * 0.8))');
     expect(html).not.toContain('data-card-pill-ref');
     expect(html).not.toContain('data-card-ref');
     expect(visibleText(html)).not.toMatch(CODE);
@@ -183,9 +195,11 @@ describe('SharedPostCardList', () => {
     expect(html).not.toMatch(/<a\b|href=/);
     expect(html).toContain('data-msg-link=""');
     expect(html).toContain('tabindex="0"');
-    expect(POST_CARD).toContain('bg-panel');
-    expect(POST_CARD).toContain('lit-card');
-    expect(POST_CARD).not.toContain('border-border');
+    // The card is the bubble (ui/ChatCard) and one press target as a whole.
+    expect(html).toMatch(/data-chat-card=""[^>]*class="[^"]*lit-bubble-other/);
+    expect(html).toMatch(
+      /role="button"[^>]*data-chat-card=""[^>]*class="[^"]*focus-visible:lit-focus/,
+    );
   });
 
   it('renders no sheet until tapped, and never reaches for the router', () => {
@@ -257,10 +271,13 @@ describe('SharedPostCardList', () => {
     expect(p1).toBeLessThan(hidden);
   });
 
-  it('the footer is a 44px row with a hairline top border', () => {
+  it('the footer is the ChatCard 44 action row: state left, action right, no divider', () => {
     const html = render(['p1'], [cardRow('p1')]);
-    expect(html).toMatch(/data-card-footer=""[^>]*h-\[44px\][^>]*border-t border-border/);
-    expect(CARD_SKELETON).toContain('w-[240px]');
+    expect(html).toMatch(/data-chat-card-actions=""[^>]*min-h-11/);
+    expect(html).not.toMatch(/data-chat-card-actions=""[^>]*border-t/);
+    expect(html.indexOf('data-card-footer')).toBeGreaterThan(
+      html.indexOf('data-chat-card-actions'),
+    );
   });
 });
 
@@ -494,8 +511,8 @@ describe('chat post card platform frame', () => {
     );
     // An Instagram workspace's box is 4:5 for every post, a Reel included.
     expect(reel).toContain('data-frame-ratio="0.8"');
-    expect(reel).toContain('width:min(100%, calc(298px * 0.8))');
-    expect(reel).toContain('w-[240px]');
+    expect(reel).toContain('width:min(100%, calc(320px * 0.8))');
+    expect(reel).toContain('w-72');
     const shorts = render(
       ['p1'],
       [
@@ -508,7 +525,7 @@ describe('chat post card platform frame', () => {
         }),
       ],
     );
-    // 9:16 hits the 320px cap: 320 x 0.5625 = 180px wide inside the 240px card.
+    // 9:16 hits the 320px cap: 320 x 0.5625 = 180px wide inside the 264px card inset.
     expect(shorts).toContain('width:min(100%, calc(320px * 0.5625))');
     // Before the cover lands the frame is the neutral surface, never black bands.
     expect(shorts).toContain('data-frame-bands="none"');

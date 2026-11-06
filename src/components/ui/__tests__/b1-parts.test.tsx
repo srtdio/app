@@ -114,6 +114,36 @@ describe('Row', () => {
   });
 });
 
+describe('Row badge slot and tap surface (B1b)', () => {
+  it('the badge sits on the second line after the secondary text, never a control', () => {
+    const out = html(
+      <Row title="Launch" secondary="See you" badge={<span>3</span>} onPress={() => {}} />,
+    );
+    expect(out).toContain('data-row-badge');
+    expect(out.indexOf('See you')).toBeLessThan(out.indexOf('data-row-badge'));
+    // Without a second line the badge follows the time on the title line.
+    const one = html(<Row title="Launch" time="09:00" badge={<span>3</span>} onPress={() => {}} />);
+    expect(one.indexOf('09:00')).toBeLessThan(one.indexOf('data-row-badge'));
+    expect(one).toContain('min-h-14');
+    // No badge, no slot.
+    expect(html(<Row title="Launch" onPress={() => {}} />)).not.toContain('data-row-badge');
+  });
+  it('forwards the tap surface attributes (name, pressed, hooks), never its classes', () => {
+    const out = html(
+      <Row
+        title="Launch"
+        onPress={() => {}}
+        aria-label="Open Launch"
+        aria-pressed={true}
+        data-notes-tile=""
+      />,
+    );
+    expect(out).toMatch(/<button[^>]*aria-label="Open Launch"/);
+    expect(out).toMatch(/<button[^>]*aria-pressed="true"/);
+    expect(out).toMatch(/<button[^>]*data-notes-tile=""/);
+  });
+});
+
 describe('ChatCard', () => {
   it('the card is the bubble: bubble radius, no wrapper, time bottom-trailing', () => {
     const out = html(<ChatCard icon={IconBriefs} title="Brief" meta="Open" time="2:14 PM" />);
@@ -215,6 +245,54 @@ describe('Tile', () => {
     );
     expect(out).toContain('data-tile-corner="tr"');
     expect(out).toContain('right-0 top-0');
+  });
+});
+
+describe('Tile press slot (B1b)', () => {
+  it('the whole tile is one tap surface around thumbnail and caption; the ⋯ stays outside it', () => {
+    const out = html(
+      <Tile
+        thumbnail={<img alt="thumb" />}
+        title="Ana"
+        meta="09:00"
+        more={<ActionMenuTrigger />}
+        press={{ 'aria-label': 'Open Ana', onClick: () => {}, selected: true }}
+      />,
+    );
+    expect(out).toMatch(/data-tile=""[^>]*relative/);
+    expect(out).toMatch(/<button[^>]*class="[^"]*lit-selected[^"]*"[^>]*data-tile-press=""/);
+    expect(out).toMatch(/<button[^>]*aria-label="Open Ana"/);
+    // Thumbnail and caption inside the surface (a text tap is a surface tap).
+    const close = out.indexOf('</button>');
+    expect(out.indexOf('alt="thumb"')).toBeLessThan(close);
+    expect(out.indexOf('>Ana<')).toBeLessThan(close);
+    // Buttons never nest: the ⋯ comes after the surface closes, its box kept free.
+    expect(out.indexOf('data-tile-more')).toBeGreaterThan(close);
+    expect(out).toMatch(/data-tile-more=""[^>]*pointer-events-auto -my-3/);
+    expect(out).toContain('-my-3 h-11 w-8 shrink-0');
+  });
+  it('no press: no surface, the tile stays static', () => {
+    const out = html(<Tile thumbnail={<img alt="" />} title="Ana" />);
+    expect(out).not.toContain('data-tile-press');
+    expect(out).not.toContain('<button');
+  });
+});
+
+describe('HeaderBar backProps (B1b)', () => {
+  it("names the back and carries its hooks; the look, glyph and pull stay the part's", () => {
+    const out = html(
+      <HeaderBar
+        title="Thread"
+        onBack={() => {}}
+        backProps={{ label: 'Close thread', 'data-thread-view-close': '' }}
+      />,
+    );
+    expect(out).toContain('aria-label="Close thread"');
+    expect(out).toContain('data-thread-view-close=""');
+    expect(out).toContain('-ml-3');
+    expect(out.match(/<button/g)).toHaveLength(1);
+    // Default label stays Back.
+    expect(html(<HeaderBar title="x" onBack={() => {}} />)).toContain('aria-label="Back"');
   });
 });
 

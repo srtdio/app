@@ -7,20 +7,25 @@
 // its own after 5s), up to 3 tries, then shows "Couldn't load" with a tap to
 // retry. Tapping a card opens the brief in the app. Every state (loading,
 // loaded, unavailable, couldn't load) is one fixed 72px box (BRIEF_CARD_HEIGHT),
-// so a card fills in place and never moves a row.
+// so a card fills in place and never moves a row; the last card of a
+// card-only message also holds its time row, and there every state takes the
+// same rows' height instead (ui/ChatCard: the card is the bubble).
 
 import { useEffect, useMemo, useRef } from 'react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CouldntLoadCard,
+  cardGroupClass,
+  metaForLast,
   useRetryInView,
   useThreadCardCache,
+  type CardPlacement,
   type ThreadCardCache,
 } from '@/components/chat/PostCard';
 import { IconBriefs } from '@/components/ui/icons';
-import { ChatCard, CHAT_CARD_WIDTH, chatCardSurface } from '@/components/ui/ChatCard';
-import { useChatLayout } from '@/components/chat/chat-type';
+import { ChatCard } from '@/components/ui/ChatCard';
+import { Bone } from '@/lib/motion';
 import { BriefStatusPill } from '@/components/pages/BriefCard';
 import { briefRoute, sharedBriefViews, type SharedBriefView } from '@/lib/chat/briefs';
 
@@ -60,48 +65,86 @@ function useSharedBriefs(briefIds: string[]): {
   return { views, loading: snapshot.loading, failed: snapshot.failed, cache };
 }
 
-export function SharedBriefCards({ briefIds }: { briefIds: string[] }): ReactElement {
+export function SharedBriefCards({
+  briefIds,
+  inBubble = true,
+  cardMeta,
+}: { briefIds: string[] } & CardPlacement): ReactElement {
   const { views, loading, failed, cache } = useSharedBriefs(briefIds);
-  const layout = useChatLayout();
   const retryInView = useRetryInView(cache, { briefIds }, loading);
   if (briefIds.length === 0) return <></>;
   if (loading) {
     // A read that failed keeps this skeleton and retries (tab visible, online,
     // connected, or scrolled into view); "Brief unavailable" is only for RLS.
+    // The skeleton is the card's own rows (bones), so the card fills in place.
     return (
-      <div ref={retryInView} className="mt-1.5 flex flex-col items-start gap-1.5 text-fg">
-        {briefIds.map((id) => (
-          <div
-            key={id}
-            data-brief-skeleton=""
-            className={`${BRIEF_CARD_HEIGHT} ${CHAT_CARD_WIDTH} ${chatCardSurface(layout, false)}`}
-          />
-        ))}
+      <div ref={retryInView} className={cardGroupClass(inBubble)}>
+        {briefIds.map((id, i) => {
+          const meta = metaForLast(i, briefIds.length, cardMeta);
+          return (
+            <ChatCard
+              key={id}
+              icon={IconBriefs}
+              title={<Bone lit="flat" as="span" className="h-5 w-32 rounded" />}
+              meta={<Bone lit="flat" as="span" className="h-5 w-12 rounded" />}
+              time={meta}
+              rootProps={{ 'aria-hidden': true, 'data-brief-skeleton': '' }}
+              {...briefHeight(meta)}
+            />
+          );
+        })}
       </div>
     );
   }
   return (
-    <div className="mt-1.5 flex flex-col items-start gap-1.5 text-fg">
-      {views.map((view) =>
-        failed.includes(view.briefId) ? (
+    <div className={cardGroupClass(inBubble)}>
+      {views.map((view, i) => {
+        const meta = metaForLast(i, views.length, cardMeta);
+        return failed.includes(view.briefId) ? (
           <CouldntLoadCard
             key={view.briefId}
+            icon={IconBriefs}
             onRetry={() => cache?.retry({ briefIds: [view.briefId] })}
-            className={BRIEF_CARD_HEIGHT}
+            cardMeta={meta}
+            {...briefHeight(meta)}
           />
         ) : (
-          <BriefCardItem key={view.briefId} view={view} />
-        ),
-      )}
+          <BriefCardItem key={view.briefId} view={view} cardMeta={meta} />
+        );
+      })}
     </div>
   );
 }
 
-export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement {
+/**
+ * The fixed brief box (BRIEF_CARD_HEIGHT), or none on the card that carries
+ * the message's time: every state then takes its rows' own height (the same
+ * title line, line 2 and time row), so the swap still never moves a row.
+ */
+function briefHeight(cardMeta: ReactNode): { className?: string } {
+  return cardMeta === undefined ? { className: BRIEF_CARD_HEIGHT } : {};
+}
+
+export function BriefCardItem({
+  view,
+  cardMeta,
+}: {
+  view: SharedBriefView;
+  cardMeta?: ReactNode;
+}): ReactElement {
   const navigate = useNavigate();
   if (view.kind === 'unavailable') {
     return (
-      <ChatCard icon={IconBriefs} title="Brief unavailable" muted className={BRIEF_CARD_HEIGHT} />
+      <ChatCard
+        icon={IconBriefs}
+        title="Brief unavailable"
+        // With the time row the box is its rows' height: an empty line 2
+        // keeps it the skeleton's height.
+        meta={cardMeta !== undefined ? <span className="h-5" /> : undefined}
+        muted
+        time={cardMeta}
+        {...briefHeight(cardMeta)}
+      />
     );
   }
   // ui/ChatCard: kind icon + title on line 1, the status Tag on line 2 (the
@@ -113,7 +156,8 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
       meta={<BriefStatusPill status={view.status} />}
       onOpen={() => navigate(briefRoute(view.briefId))}
       openLabel={`Open brief ${view.title}`}
-      className={BRIEF_CARD_HEIGHT}
+      time={cardMeta}
+      {...briefHeight(cardMeta)}
     />
   );
 }

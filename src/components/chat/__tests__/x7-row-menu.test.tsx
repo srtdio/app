@@ -23,11 +23,9 @@ vi.mock('@/lib/logger', () => ({
 import {
   ChannelCard,
   DEFAULT_LIST_INPUT,
-  ROW_MORE_BUTTON,
-  channelRowClass,
+  ROW_MORE_INK,
   chatRowMenuItems,
   channelTileLabel,
-  rowMoreClass,
 } from '@/components/chat/ChannelList';
 import { deleteChatFailedMessage } from '@/lib/chat/clear-flow';
 import { IconEyeOff } from '@/components/ui/icons';
@@ -56,13 +54,13 @@ describe('X7 H5: the row ⋯', () => {
         onLongPress={() => {}}
       />,
     );
+    // The Row's trailing slot holds the ActionMenuTrigger (a 44 IconButton).
     expect(out).toContain('data-row-more=""');
     expect(out).toContain('aria-label="Actions for Launch"');
     expect(out).toContain('aria-haspopup="menu"');
-    expect(rowMoreClass('wide')).toContain('absolute right-1');
-    expect(ROW_MORE_BUTTON).toContain('h-11 w-11');
-    expect(ROW_MORE_BUTTON).toContain('text-fg-3');
-    expect(ROW_MORE_BUTTON).not.toContain('opacity-0');
+    expect(out).toMatch(/aria-label="Actions for Launch"[^>]*h-11 w-11/);
+    expect(ROW_MORE_INK).toContain('text-fg-3');
+    expect(ROW_MORE_INK).not.toContain('opacity-0');
   });
 
   it('no menu wiring (no hide action): no ⋯', () => {
@@ -80,11 +78,22 @@ describe('X7 H5: the row ⋯', () => {
     expect(out).not.toContain('data-row-more');
   });
 
-  it('a wide tile leaves room at its right for the ⋯', () => {
-    const base = { kind: 'wide' as const, selected: false, selecting: false, checked: false };
-    expect(channelRowClass(base)).toContain('pr-4');
-    expect(channelRowClass({ ...base, more: true })).toContain('pr-14');
-    expect(channelRowClass({ ...base, more: true })).not.toContain('pr-4');
+  it('the ⋯ is a sibling of the tap surface, its glyph on the 16 edge (the trailing rule)', () => {
+    const out = renderToStaticMarkup(
+      <ChannelCard
+        channel={group}
+        selected={false}
+        summary={undefined}
+        nowMs={0}
+        timeZone="UTC"
+        onSelect={() => {}}
+        input={DEFAULT_LIST_INPUT}
+        onLongPress={() => {}}
+      />,
+    );
+    // Row slot pr-4, trigger pulled -mr-3: the 20 glyph's edge sits on 16.
+    expect(out).toMatch(/data-row-more=""[^>]*pr-4/);
+    expect(out).toMatch(/aria-label="Actions for Launch"[^>]*-mr-3/);
   });
 });
 

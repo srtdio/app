@@ -15,14 +15,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PhotoOptionsSheet, type PhotoOptionsSheetProps } from '@/components/ui/PhotoOptionsSheet';
-import {
-  ICON_SIZE,
-  IconCamera,
-  IconChevronLeft,
-  IconPlus,
-  IconSignOut,
-  IconX,
-} from '@/components/ui/icons';
+import { HeaderBar } from '@/components/ui/HeaderBar';
+import { ICON_SIZE, IconCamera, IconPlus, IconSignOut, IconX } from '@/components/ui/icons';
 import { env } from '@/lib/env';
 import { fetchWithTrace } from '@/lib/fetch';
 import { supabase } from '@/lib/supabase';
@@ -440,21 +434,25 @@ export function groupInfoPage(props: {
       data-group-page=""
       className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
     >
-      <div
-        className={`flex shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header ${MODAL_HEADER_SAFE}`}
-      >
-        {select?.selecting === true ? (
-          select.header
-        ) : (
-          <>
-            <IconButton label="Back" onClick={props.onClose}>
-              <IconChevronLeft size={ICON_SIZE.control} />
-            </IconButton>
-            <h2 className="truncate text-lg font-semibold text-fg">{GROUP_INFO_HEADING}</h2>
-            {select?.header ?? null}
-          </>
-        )}
-      </div>
+      {select?.selecting === true ? (
+        // Select mode: "n selected" and Cancel (SelectionHeader) take the bar.
+        <div
+          className={`flex shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header ${MODAL_HEADER_SAFE}`}
+        >
+          {select.header}
+        </div>
+      ) : (
+        // A modal page: Back left, the title, Select (when offered) right. One exit.
+        <HeaderBar
+          compact
+          className={MODAL_HEADER_SAFE}
+          title={GROUP_INFO_HEADING}
+          onBack={props.onClose}
+          {...(select?.header !== null && select?.header !== undefined
+            ? { actions: select.header }
+            : {})}
+        />
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-6">
           {props.error !== null ? (

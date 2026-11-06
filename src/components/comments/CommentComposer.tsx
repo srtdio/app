@@ -14,13 +14,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { itemIn, useFreshKeys } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ComposerFrame } from '@/components/ui/Composer';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { IconButton } from '@/components/ui/IconButton';
 import { MentionInput } from '@/components/comments/MentionInput';
 import type { MentionInputHandle } from '@/components/comments/MentionInput';
 import { CommentEmojiButton } from '@/components/comments/CommentEmojiButton';
 import type { MentionCandidate } from '@/lib/workspace-members';
-import { IconFile, IconPaperclip, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconFile, IconPaperclip, IconSend, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { fileExtension } from '@/lib/assets';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
@@ -94,6 +95,9 @@ export function canRetryPending(item: Pick<Pending, 'status' | 'retryable'>): bo
 }
 
 let pendingSeq = 0;
+
+/** A side button in the composer row: a bare 44 circle (one treatment, B3). */
+export const COMPOSER_SIDE = 'shrink-0 rounded-full';
 
 export function doneVersionIds(pending: readonly Pending[]): string[] {
   const ids: string[] = [];
@@ -244,18 +248,58 @@ export function CommentComposer({
 
   return (
     <div className="flex flex-col gap-2">
-      <MentionInput
-        formatting
-        key={composerKey}
-        ref={editorRef}
-        members={members}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        onChange={(next) => {
-          setBody(next);
-          onBodyChange?.(next);
-        }}
-        initialBody={initialBody}
+      {/* ui/Composer: field, emoji, clip, then the round Send on one row (B1). */}
+      <ComposerFrame
+        state={submitting ? { kind: 'sending' } : { kind: 'idle' }}
+        input={
+          <MentionInput
+            bare
+            formatting
+            key={composerKey}
+            ref={editorRef}
+            members={members}
+            placeholder={placeholder}
+            autoFocus={autoFocus}
+            onChange={(next) => {
+              setBody(next);
+              onBodyChange?.(next);
+            }}
+            initialBody={initialBody}
+          />
+        }
+        side={
+          <>
+            <CommentEmojiButton
+              disabled={submitting}
+              className={COMPOSER_SIDE}
+              onPick={(char) => editorRef.current?.insertText(char)}
+            />
+            {attachEnabled ? (
+              <IconButton
+                label="Attach a file"
+                className={COMPOSER_SIDE}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={submitting}
+              >
+                <IconPaperclip size={ICON_SIZE.control} />
+              </IconButton>
+            ) : null}
+          </>
+        }
+        send={
+          <Button
+            variant="primary"
+            shape="round"
+            aria-label={submitLabel}
+            className="shrink-0"
+            data-induction={submitAnchor}
+            disabled={!canSubmit}
+            busy={submitting}
+            onClick={() => void submit()}
+          >
+            <IconSend size={ICON_SIZE.control} />
+          </Button>
+        }
       />
 
       {tooLong ? (
@@ -276,33 +320,6 @@ export function CommentComposer({
           ))}
         </ul>
       ) : null}
-
-      <div className="flex items-center gap-3 flex-wrap">
-        {attachEnabled ? (
-          <IconButton
-            label="Attach a file"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={submitting}
-          >
-            <IconPaperclip size={ICON_SIZE.control} />
-          </IconButton>
-        ) : null}
-
-        <CommentEmojiButton
-          disabled={submitting}
-          onPick={(char) => editorRef.current?.insertText(char)}
-        />
-
-        <Button
-          variant="primary"
-          className="ml-auto min-w-[44px]"
-          data-induction={submitAnchor}
-          disabled={!canSubmit}
-          onClick={() => void submit()}
-        >
-          {submitting ? 'Posting…' : submitLabel}
-        </Button>
-      </div>
 
       {error !== null ? <ErrorNote>{error}</ErrorNote> : null}
 

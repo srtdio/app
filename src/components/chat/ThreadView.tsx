@@ -1,7 +1,7 @@
 // The thread view's frame: full screen over the chat on the opaque canvas
-// token (no blur, no translucency), a 56px header with "Close" on the left and
-// the thread's post title centred on one line, then the thread's list and its
-// composer (the caller's). Close and Escape (while the view has focus) close
+// token (no blur, no translucency), the 56px ui/HeaderBar with "Close thread"
+// (the back "<") on the left and the thread's post title on one line, then the
+// thread's list and its composer (the caller's). Close and Escape (while the view has focus) close
 // it. Motion (docs/motion.md, push): on a phone the view enters from the
 // right (280 ms) and goes back the same way (240 ms); a drag from the left
 // 28 px follows the finger and closes past 130 px or on a flick, else springs
@@ -16,8 +16,7 @@ import { cn } from '@/lib/cn';
 import { useCoarsePointer, useIsLaptop } from '@/lib/use-is-laptop';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { useModalFocus } from '@/lib/modal-focus';
-import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
-import { IconButton } from '@/components/ui/IconButton';
+import { HeaderBar } from '@/components/ui/HeaderBar';
 import {
   EDGE_BACK_CLOSE_PX,
   EDGE_BACK_ZONE_PX,
@@ -137,37 +136,25 @@ export function ThreadViewFrame(props: {
       // The incoming edge: the card height's lit edge, no ring.
       className="absolute inset-0 z-30 flex flex-col bg-bg lit-card"
     >
+      {/* The header carries the rows' long-press guard (no callout on touch). */}
       <div
         data-thread-view-header=""
-        className={cn(
-          'grid h-14 shrink-0 grid-cols-[88px_minmax(0,1fr)_88px] items-center border-b bg-panel lit-header',
-          NO_TOUCH_SELECT,
-        )}
+        className={cn('shrink-0', NO_TOUCH_SELECT)}
         {...(coarse
           ? { onContextMenu: (e: { preventDefault: () => void }) => e.preventDefault() }
           : {})}
       >
-        <IconButton
-          buttonRef={closeRef}
-          type="button"
-          data-thread-view-close=""
-          label="Close thread"
-          onClick={() => close()}
-          className={cn(
-            // FN23: the dismiss is a chevron, like every other chat layer's back.
-            'ml-1 justify-self-start',
-            NO_TOUCH_SELECT,
-          )}
-        >
-          <IconChevronLeft size={ICON_SIZE.control} />
-        </IconButton>
-        <span
-          data-thread-view-title=""
-          className="truncate text-center text-base font-semibold text-fg"
-        >
-          {props.title}
-        </span>
-        <span aria-hidden="true" />
+        {/* FN23: the dismiss is a chevron, like every other chat layer's back. */}
+        <HeaderBar
+          compact
+          title={<span data-thread-view-title="">{props.title}</span>}
+          onBack={() => close()}
+          backProps={{
+            label: 'Close thread',
+            buttonRef: closeRef,
+            'data-thread-view-close': '',
+          }}
+        />
       </div>
       {props.children}
     </div>

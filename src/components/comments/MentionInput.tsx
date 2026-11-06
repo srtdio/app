@@ -24,6 +24,14 @@ import {
 import type { MentionCandidate } from '@/lib/workspace-members';
 import { useEscapeLayer } from '@/lib/escape-stack';
 
+// The editor's own field look (a standalone field), and the bare editor inside
+// ui/Composer's field: the field draws the line, the well and the focus line;
+// 16px on phone so iOS never zooms, 14px from md.
+const FIELD_EDITOR =
+  'w-full whitespace-pre-wrap break-words rounded-lg border border-field bg-panel px-3 py-2.5 text-base text-fg outline-none lit-well focus:lit-focus min-h-[44px] empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3';
+const BARE_EDITOR =
+  'w-full whitespace-pre-wrap break-words bg-transparent py-2 text-input text-fg outline-none md:text-base empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3';
+
 const TEXT_NODE = 3;
 const ELEMENT_NODE = 1;
 
@@ -294,6 +302,9 @@ interface MentionInputProps {
   /** Opt-in WhatsApp-style formatting: live styling, the format strip and the
    *  Cmd/Ctrl shortcuts. Off, the editor is exactly as before. */
   formatting?: boolean;
+  /** Inside ui/Composer's field (ComposerFrame): the editor draws no line, well
+   *  or focus line of its own (the field owns the one look) and fills the field. */
+  bare?: boolean;
 }
 
 /** The text from the start of the editable to the caret, or null if unavailable. */
@@ -309,7 +320,15 @@ function textBeforeCaret(root: HTMLElement): string | null {
 }
 
 export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(function MentionInput(
-  { members, placeholder, autoFocus = false, onChange, initialBody, formatting = false },
+  {
+    members,
+    placeholder,
+    autoFocus = false,
+    onChange,
+    initialBody,
+    formatting = false,
+    bare = false,
+  },
   ref,
 ) {
   const editorRef = useRef<HTMLDivElement>(null);
@@ -501,7 +520,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
   }
 
   return (
-    <div className="relative">
+    <div className={bare ? 'relative min-w-0 flex-1 self-center' : 'relative'}>
       <div
         ref={editorRef}
         role="textbox"
@@ -528,7 +547,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
           fmt.onBlur();
         }}
         onKeyDown={onKeyDown}
-        className="w-full whitespace-pre-wrap break-words rounded-lg border border-field bg-panel px-3 py-2.5 text-base text-fg outline-none lit-well focus:lit-focus min-h-[44px] empty:before:content-[attr(data-placeholder)] before:pointer-events-none before:text-fg-3"
+        className={bare ? BARE_EDITOR : FIELD_EDITOR}
       />
 
       {open ? (

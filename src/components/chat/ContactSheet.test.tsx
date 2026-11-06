@@ -8,7 +8,7 @@ vi.mock('agora-chat', () => ({
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconButton } from '@/components/ui/IconButton';
+import { HeaderBar } from '@/components/ui/HeaderBar';
 import {
   appendPage,
   CONTACT_EMPTY,
@@ -121,12 +121,17 @@ describe('ContactSheetView page', () => {
     expect(ContactSheetView(props({ open: false }))).toBeNull();
   });
 
-  it('the 44px back button closes the page', () => {
+  it('the header is ui/HeaderBar: one exit, the 44px back "<" closes the page', () => {
     const onClose = vi.fn();
-    const [back] = findAll(view(props({ onClose })), (el) => el.type === IconButton);
-    expect(back?.props.label).toBe('Close contact info');
-    (back?.props.onClick as () => void)();
+    const bars = findAll(view(props({ onClose })), (el) => el.type === HeaderBar);
+    expect(bars).toHaveLength(1);
+    const bar = bars[0]!;
+    expect((bar.props.backProps as { label: string }).label).toBe('Close contact info');
+    (bar.props.onBack as () => void)();
     expect(onClose).toHaveBeenCalledTimes(1);
+    // A modal page: Back left, never an X; the bar sits below the notch.
+    expect(String(bar.props.className)).toContain('pt-[var(--shell-safe-top,0px)]');
+    expect(bar.props.compact).toBe(true);
   });
 
   it('heading defaults to Contact info and drives the title, aria-label and back label', () => {
@@ -134,10 +139,9 @@ describe('ContactSheetView page', () => {
     expect(tree.props['aria-label']).toBe('Contact info');
     const custom = view(props({ heading: 'Group info' }));
     expect(custom.props['aria-label']).toBe('Group info');
-    const [back] = findAll(custom, (el) => el.type === IconButton);
-    expect(back?.props.label).toBe('Close group info');
-    const titles = findAll(custom, (el) => el.type === 'h2').map((el) => el.props.children);
-    expect(titles).toEqual(['Group info']);
+    const [bar] = findAll(custom, (el) => el.type === HeaderBar);
+    expect((bar?.props.backProps as { label: string }).label).toBe('Close group info');
+    expect(bar?.props.title).toBe('Group info');
   });
 });
 

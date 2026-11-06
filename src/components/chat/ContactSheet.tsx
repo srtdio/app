@@ -5,9 +5,8 @@
 
 import { createPortal } from 'react-dom';
 import type { ReactElement } from 'react';
-import { IconButton } from '@/components/ui/IconButton';
 import { Avatar } from '@/components/ui/Avatar';
-import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
+import { HeaderBar } from '@/components/ui/HeaderBar';
 import {
   ChatInfoTabs,
   ChatInfoTabsView,
@@ -66,21 +65,26 @@ function contactPage(props: {
   const select = props.select;
   return (
     <ModalPanel aria-label={props.heading} data-contact-page="" className={MODAL_PAGE_CLASS}>
-      <div
-        className={`flex shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header ${MODAL_HEADER_SAFE}`}
-      >
-        {select?.selecting === true ? (
-          select.header
-        ) : (
-          <>
-            <IconButton label={`Close ${props.heading.toLowerCase()}`} onClick={props.onClose}>
-              <IconChevronLeft size={ICON_SIZE.control} />
-            </IconButton>
-            <h2 className="truncate text-lg font-semibold text-fg">{props.heading}</h2>
-            {select?.header ?? null}
-          </>
-        )}
-      </div>
+      {select?.selecting === true ? (
+        // Select mode: "n selected" and Cancel (SelectionHeader) take the bar.
+        <div
+          className={`flex shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header ${MODAL_HEADER_SAFE}`}
+        >
+          {select.header}
+        </div>
+      ) : (
+        // A modal page: Back left, the title, Select (when offered) right. One exit.
+        <HeaderBar
+          compact
+          className={MODAL_HEADER_SAFE}
+          title={props.heading}
+          onBack={props.onClose}
+          backProps={{ label: `Close ${props.heading.toLowerCase()}` }}
+          {...(select?.header !== null && select?.header !== undefined
+            ? { actions: select.header }
+            : {})}
+        />
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6">
           <div className="flex flex-col items-center gap-1 text-center">

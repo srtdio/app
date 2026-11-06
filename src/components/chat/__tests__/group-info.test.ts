@@ -240,8 +240,12 @@ describe('group info full page', () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('fixed inset-0 z-50');
     expect(html).toContain('bg-bg');
-    expect(html).toContain('aria-label="Back"');
-    expect(html).toContain('>Group info</h2>');
+    // ui/HeaderBar: one exit, the back "<" on the 16 edge (pulled 12), no X.
+    expect(html).toContain('data-header-bar=""');
+    expect(html.match(/aria-label="Back"/g)).toHaveLength(1);
+    expect(html).toMatch(/aria-label="Back"[^>]*-ml-3/);
+    expect(html).not.toContain('aria-label="Close"');
+    expect(html).toContain('>Group info</h1>');
     expect(html).toContain('env(safe-area-inset-bottom)');
     expect(html).not.toMatch(/\d+vh|h-screen/);
   });

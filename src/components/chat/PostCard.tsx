@@ -16,7 +16,7 @@
 // ends the hold is swallowed, so the sheet does not open. No card shows a
 // KEY-N code.
 
-import { rememberCard } from '@/lib/motion';
+import { Bone, rememberCard } from '@/lib/motion';
 import {
   createContext,
   useCallback,
@@ -28,6 +28,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import type {
+  ComponentType,
   CSSProperties,
   KeyboardEvent,
   MouseEvent,
@@ -39,7 +40,9 @@ import type {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Tag, isTagDot } from '@/components/ui/Tag';
-import { ICON_SIZE, IconCheck, IconPlay } from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck, IconPipeline, IconPlay } from '@/components/ui/icons';
+import type { IconProps } from '@/components/ui/icons';
+import { ChatCard, type ChatCardRootProps } from '@/components/ui/ChatCard';
 import { useLongPress } from '@/components/ui';
 import { LONG_PRESS_MS, MOVE_CANCEL_PX } from '@/components/ui/useLongPress';
 import { useThumbnail } from '@/components/media/use-thumbnail';
@@ -57,23 +60,15 @@ import {
 } from '@/lib/chat/shared-cards';
 import { formatDateTime, formatDueDate } from '@/lib/time';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
-import { PressableRow } from '@/components/ui/PressableRow';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import {
   cardMediaHeight,
   cardTextLines,
-  cardTitleHeight,
   chatCardFrame,
   postCardHeight,
 } from '@/components/chat/post-card-geometry';
-import {
-  POST_CARD_META_TYPE,
-  POST_CARD_TITLE_TYPE,
-  sized,
-  useChatLayout,
-  type ChatLayout,
-} from '@/components/chat/chat-type';
+import { POST_CARD_META_TYPE, useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
 import { env } from '@/lib/env';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { supabase } from '@/lib/supabase';
@@ -344,31 +339,57 @@ export const CARD_LOAD_FAILED = "Couldn't load";
 /** A post card's own failure line; Retry beside it re-runs the read. */
 export const POST_LOAD_FAILED = "Couldn't load this post.";
 
+/** A failed card's second line, under "Couldn't load". */
+export const CARD_LOAD_FAILED_HINT = 'Tap to try again';
+
 /**
- * A card whose reads failed every try: neutral, one 44px tap re-reads it.
- * `className` sets a fixed height to match its card's own box (the brief card).
+ * A card whose reads failed every try: ui/ChatCard (the card is the bubble)
+ * with its kind glyph, "Couldn't load" over the hint; its one 44px tap
+ * re-reads it. `className` sets a fixed height to match its card's own box
+ * (the brief card); `cardMeta` is the message's time and tick (last card).
  */
-export function CouldntLoadCard(props: { onRetry: () => void; className?: string }): ReactElement {
+export function CouldntLoadCard(props: {
+  onRetry: () => void;
+  icon: ComponentType<IconProps>;
+  className?: string;
+  cardMeta?: ReactNode;
+}): ReactElement {
   return (
-    <PressableRow
-      inline
-      card
-      type="button"
-      data-card-failed=""
-      onClick={props.onRetry}
-      // inline (w-auto) plus a fixed min/max of 240: the shared card's width
-      // without a w-* class against PressableRow's own.
-      className={cn(
-        `${SHARED_CARD_BODY} min-w-[240px] max-w-[240px] bg-panel-2 text-fg-2 lit-card-muted`,
-        props.className,
-      )}
-    >
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate text-base font-medium">{CARD_LOAD_FAILED}</span>
-        <span className="truncate text-sm">Tap to try again</span>
-      </span>
-    </PressableRow>
+    <ChatCard
+      icon={props.icon}
+      title={CARD_LOAD_FAILED}
+      meta={
+        <span className={CARD_META_ROW}>
+          <span className="truncate text-sm text-fg-2">{CARD_LOAD_FAILED_HINT}</span>
+        </span>
+      }
+      onOpen={props.onRetry}
+      time={props.cardMeta}
+      rootProps={{ 'data-card-failed': '' }}
+      {...(props.className !== undefined ? { className: props.className } : {})}
+    />
   );
+}
+
+/**
+ * A message's card group: under the bubble's other content (inBubble: text,
+ * files, a quote above it), or alone, where each card is the bubble itself.
+ */
+export function cardGroupClass(inBubble: boolean): string {
+  return cn('flex flex-col items-start text-fg', inBubble ? 'mt-2 gap-2' : 'gap-1');
+}
+
+/** What a thread hands a message's cards: where they sit, and the time for the last one. */
+export interface CardPlacement {
+  /** The cards sit under other bubble content; false: each card is the bubble (default true). */
+  inBubble?: boolean | undefined;
+  /** The message's time and tick, drawn bottom-trailing inside its last card. */
+  cardMeta?: ReactNode;
+}
+
+/** The card meta for item `index` of `count`: only the last card carries it. */
+export function metaForLast(index: number, count: number, cardMeta: ReactNode): ReactNode {
+  return index === count - 1 ? cardMeta : undefined;
 }
 
 const NO_SUBSCRIBE = (): (() => void) => () => {};
@@ -504,13 +525,15 @@ export function SharedPostCards({
   messageId,
   onTalkAbout,
   onTalkAboutFocus,
+  inBubble = true,
+  cardMeta,
 }: {
   postIds: string[];
   /** The card message's id, handed to onTalkAbout. */
   messageId?: string;
   onTalkAbout?: ((postId: string, messageId: string) => void) | undefined;
   onTalkAboutFocus?: (() => void) | undefined;
-}): ReactElement | null {
+} & CardPlacement): ReactElement | null {
   const { workspaceId, workspaces, workspaceName } = useWorkspace();
   const { side, ready, known } = useSettledViewerSide(workspaceId);
   // Due dates are calendar days on the workspace zone (src/lib/time.ts).
@@ -524,15 +547,21 @@ export function SharedPostCards({
   if (postIds.length === 0) return null;
   if (loading || !ready) {
     return (
-      <div ref={retryInView} className="mt-1.5 flex flex-col items-start gap-1.5 text-fg">
-        {postIds.map((id) => (
-          <PostCardSkeleton key={id} platform={platform} />
+      <div ref={retryInView} className={cardGroupClass(inBubble)}>
+        {postIds.map((id, i) => (
+          <PostCardSkeleton
+            key={id}
+            platform={platform}
+            cardMeta={metaForLast(i, postIds.length, cardMeta)}
+          />
         ))}
       </div>
     );
   }
   return (
     <SharedPostCardList
+      inBubble={inBubble}
+      cardMeta={cardMeta}
       views={views}
       platform={platform}
       failed={failed}
@@ -596,101 +625,71 @@ export function SharedPostCardList(
     failed?: readonly string[];
     onRetry?: (postIds: string[]) => void;
   } & CardContext &
-    CardRefActions,
+    CardRefActions &
+    CardPlacement,
 ): ReactElement {
-  const { views, onTalkAbout, onTalkAboutFocus, failed = [], onRetry, ...context } = props;
+  const {
+    views,
+    onTalkAbout,
+    onTalkAboutFocus,
+    failed = [],
+    onRetry,
+    inBubble = true,
+    cardMeta,
+    ...context
+  } = props;
   const failedIds = new Set(failed);
   return (
-    <div
-      data-induction={INDUCTION_KEYS.chatPostCard}
-      className="mt-1.5 flex flex-col items-start gap-1.5 text-fg"
-    >
-      {views.map((view) =>
-        failedIds.has(view.postId) ? (
+    <div data-induction={INDUCTION_KEYS.chatPostCard} className={cardGroupClass(inBubble)}>
+      {views.map((view, i) => {
+        const meta = metaForLast(i, views.length, cardMeta);
+        return failedIds.has(view.postId) ? (
           <PostCouldntLoadCard
             key={view.postId}
             platform={context.platform ?? null}
             onRetry={() => onRetry?.([view.postId])}
+            cardMeta={meta}
           />
         ) : view.kind === 'not_visible' ? (
-          <NotVisibleCard key={view.postId} platform={context.platform ?? null} />
+          <NotVisibleCard key={view.postId} platform={context.platform ?? null} cardMeta={meta} />
         ) : (
           <PostCardItem
             key={view.postId}
             view={view}
             {...context}
+            cardMeta={meta}
             {...(onTalkAbout !== undefined ? { onTalkAbout: () => onTalkAbout(view.postId) } : {})}
             {...(onTalkAboutFocus !== undefined ? { onTalkAboutFocus } : {})}
           />
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }
 
 /**
- * The shared card box: one tappable row, thumb + title over meta. No border
- * colour: the lit class draws the edges (lit-card live, lit-card-muted neutral).
+ * The card's line 2: the stage Tag's height, never taller (h-5,
+ * CARD_META_ROW_PX), in every state, so each state is the same box.
  */
-const SHARED_CARD_BODY = 'flex items-center gap-2.5 rounded-xl border px-2.5 py-2 min-h-[44px]';
-const SHARED_CARD_BOX = `w-[240px] ${SHARED_CARD_BODY}`;
-export const SHARED_CARD = `${SHARED_CARD_BOX} bg-panel lit-card`;
-/** The same box on the neutral fill (unavailable, not visible): lit-card-muted. */
-export const SHARED_CARD_MUTED = `${SHARED_CARD_BOX} bg-panel-2 lit-card-muted`;
+const CARD_META_ROW = 'flex h-5 min-w-0 items-center gap-2 overflow-hidden';
 
 /**
- * The live post card frame: media box, body, footer stacked, at the one fixed
- * outer height (cardBoxStyle). Every child keeps its own size (shrink-0).
+ * Every card state's outer height: ChatCard's rows around the platform frame's
+ * media box. Each state renders the same rows, so this is also what they
+ * measure; kept for the geometry tests and the thread's height reasoning. Pure.
  */
-export const POST_CARD =
-  'flex w-[240px] flex-col overflow-hidden rounded-xl border bg-panel text-left lit-card';
-/** POST_CARD's box on the neutral fill (not visible to this viewer). */
-export const POST_CARD_MUTED =
-  'flex w-[240px] flex-col overflow-hidden rounded-xl border bg-panel-2 text-left lit-card-muted';
-
-/** A loading card's frame: POST_CARD's box and light, so nothing changes light when the card lands. */
-export const CARD_SKELETON =
-  'flex w-[240px] flex-col overflow-hidden rounded-xl border bg-panel lit-card';
-
-/** The card body: two-line title area over the fixed meta row. */
-const CARD_BODY = 'flex shrink-0 flex-col gap-1.5 px-3 py-2.5';
-/** The meta row: the stage Tag's height, never taller (h-5, CARD_META_ROW_PX). */
-const CARD_META_ROW = 'flex h-5 shrink-0 items-center gap-1.5 overflow-hidden';
-/** The footer row: 44px with a hairline top border (CARD_FOOTER_PX). */
-const CARD_FOOTER =
-  'flex h-[44px] shrink-0 items-center justify-between gap-2 border-t border-border px-3 text-sm';
-
-/** Every card state's outer height: the platform frame plus fixed text rows. Pure. */
-export function cardBoxStyle(platform: string | null, layout: ChatLayout): CSSProperties {
-  return { height: postCardHeight(chatCardFrame(platform), layout) };
-}
-
-/** The title area: always two lines tall, clamped with an ellipsis. */
-function CardTitleArea(props: {
-  layout: ChatLayout;
-  className?: string;
-  title?: string;
-  children: ReactNode;
-}): ReactElement {
-  return (
-    <span
-      data-card-title=""
-      style={{ height: cardTitleHeight(props.layout) }}
-      className={cn(
-        'line-clamp-2 shrink-0',
-        sized(POST_CARD_TITLE_TYPE, props.layout),
-        props.className,
-      )}
-      {...(props.title !== undefined ? { title: props.title } : {})}
-    >
-      {props.children}
-    </span>
-  );
+export function cardBoxStyle(
+  platform: string | null,
+  layout: ChatLayout,
+  withMeta = false,
+): CSSProperties {
+  return { height: postCardHeight(chatCardFrame(platform), layout, withMeta) };
 }
 
 /**
- * The media box slot: the platform frame's fixed height on a neutral fill, so
- * it is the same box with no cover, before a cover lands, and while loading.
+ * The media box slot (the card's preview): the platform frame's fixed height
+ * on a neutral fill, so it is the same box with no cover, before a cover
+ * lands, and while loading. A picture inset inside the card (rounded-inset).
  */
 function CardMediaSlot(props: {
   platform: string | null;
@@ -702,34 +701,41 @@ function CardMediaSlot(props: {
       ref={props.boxRef}
       data-card-media=""
       style={{ height: cardMediaHeight(chatCardFrame(props.platform)) }}
-      className="relative flex w-full shrink-0 justify-center overflow-hidden bg-panel-3"
+      className="relative flex w-full shrink-0 justify-center overflow-hidden rounded-inset bg-panel-3"
     >
       {props.children}
     </div>
   );
 }
 
+/** An action row's 44 placeholder (no words yet, or none for this state). */
+function FooterSpace(): ReactElement {
+  return <span aria-hidden="true" className="h-11" />;
+}
+
 /**
- * A post card's placeholder: the card's own fixed box (the workspace platform's
- * media box, the two-line title area, the meta row, the footer) on a neutral
- * fill, so the card fills in place and never moves a row. No reads, no pulse.
+ * A post card's placeholder: ui/ChatCard with the card's own rows (bones for
+ * the title and the meta row, the workspace platform's media box, the 44
+ * action row), so the card fills in place and never moves a row. No reads.
  */
-export function PostCardSkeleton(props: { platform: string | null }): ReactElement {
-  const layout = useChatLayout();
+export function PostCardSkeleton(props: {
+  platform: string | null;
+  cardMeta?: ReactNode;
+}): ReactElement {
   return (
-    <div
-      aria-hidden="true"
-      data-card-skeleton=""
-      style={cardBoxStyle(props.platform, layout)}
-      className={CARD_SKELETON}
-    >
-      <CardMediaSlot platform={props.platform} />
-      <div className={CARD_BODY}>
-        <CardTitleArea layout={layout}>{'\u00a0'}</CardTitleArea>
-        <span className={CARD_META_ROW} />
-      </div>
-      <div className={CARD_FOOTER} />
-    </div>
+    <ChatCard
+      icon={IconPipeline}
+      title={<Bone lit="flat" as="span" className="h-5 w-40 rounded" />}
+      meta={
+        <span className={CARD_META_ROW}>
+          <Bone lit="flat" as="span" className="h-5 w-16 rounded" />
+        </span>
+      }
+      preview={<CardMediaSlot platform={props.platform} />}
+      primaryAction={<FooterSpace />}
+      time={props.cardMeta}
+      rootProps={{ 'aria-hidden': true, 'data-card-skeleton': '' }}
+    />
   );
 }
 
@@ -840,6 +846,7 @@ function PostCardItem(
   props: { view: Extract<SharedPostView, { kind: 'post' }> } & CardContext & {
       onTalkAbout?: () => void;
       onTalkAboutFocus?: () => void;
+      cardMeta?: ReactNode;
     },
 ): ReactElement {
   const { view, side, timeZone } = props;
@@ -890,77 +897,75 @@ function PostCardItem(
     setSheetMounted(true);
     setSheetOpen(true);
   }, hold.consumeClickSuppression);
+  const press: ChatCardRootProps = {
+    ref: cardRef,
+    role: 'button',
+    tabIndex: 0,
+    'data-msg-link': '',
+    'aria-haspopup': 'dialog',
+    'aria-label': `Open post ${post.title}`,
+    ...(onTalkAbout !== undefined
+      ? {
+          ...hold.handlers,
+          onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+            touchPress.current = e.pointerType !== 'mouse';
+            pressPointer.current = e.pointerType;
+            pressId.current = e.pointerId;
+            talk.reset();
+            // A hold released off the card left its click guard set: a new
+            // press is never the tail of that hold.
+            hold.clearClickSuppression();
+            hold.handlers.onPointerDown(e);
+          },
+          // The hold fired on a timer, where iOS opens no keyboard: the
+          // composer takes focus here, inside the release.
+          onPointerUp: () => {
+            hold.handlers.onPointerUp();
+            talk.release(props.onTalkAboutFocus);
+          },
+          onPointerCancel: () => {
+            hold.handlers.onPointerCancel();
+            talk.reset();
+          },
+          // Released off the card: that press never focuses later. Only the
+          // pressing pointer counts: WebKit sends the mouse cursor's leave
+          // when the thread scrolls under it (Talk about re-pins the
+          // thread), which must not end a touch hold.
+          onPointerLeave: (e: PointerEvent<HTMLDivElement>) => {
+            if (leaveEndsPress(pressId.current, e.pointerId)) talk.reset();
+          },
+          // A mouse press on the card is the hold's alone: no native press
+          // handling (WebKit's moves the caret the hold just put in the
+          // composer on release). Touch presses are left as they were.
+          onMouseDown: (e: MouseEvent<HTMLDivElement>) => {
+            if (e.button === 0 && pressPointer.current === 'mouse') e.preventDefault();
+          },
+          onContextMenu: (e: MouseEvent<HTMLDivElement>) => {
+            if (!touchPress.current) return;
+            e.preventDefault();
+            e.stopPropagation();
+          },
+        }
+      : {}),
+    onClick: tap.onClick,
+    onKeyDown: tap.onKeyDown,
+  };
+  // The footer row is always there (its 44px are the box's); its words only
+  // once the viewer's side is known, never a wording that flips.
+  const known = props.sideKnown !== false;
   return (
     <>
-      <div
-        ref={cardRef}
-        role="button"
-        tabIndex={0}
-        data-msg-link=""
-        aria-haspopup="dialog"
-        aria-label={`Open post ${post.title}`}
-        {...(onTalkAbout !== undefined
-          ? {
-              ...hold.handlers,
-              onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
-                touchPress.current = e.pointerType !== 'mouse';
-                pressPointer.current = e.pointerType;
-                pressId.current = e.pointerId;
-                talk.reset();
-                // A hold released off the card left its click guard set: a new
-                // press is never the tail of that hold.
-                hold.clearClickSuppression();
-                hold.handlers.onPointerDown(e);
-              },
-              // The hold fired on a timer, where iOS opens no keyboard: the
-              // composer takes focus here, inside the release.
-              onPointerUp: () => {
-                hold.handlers.onPointerUp();
-                talk.release(props.onTalkAboutFocus);
-              },
-              onPointerCancel: () => {
-                hold.handlers.onPointerCancel();
-                talk.reset();
-              },
-              // Released off the card: that press never focuses later. Only the
-              // pressing pointer counts: WebKit sends the mouse cursor's leave
-              // when the thread scrolls under it (Talk about re-pins the
-              // thread), which must not end a touch hold.
-              onPointerLeave: (e: PointerEvent<HTMLDivElement>) => {
-                if (leaveEndsPress(pressId.current, e.pointerId)) talk.reset();
-              },
-              // A mouse press on the card is the hold's alone: no native press
-              // handling (WebKit's moves the caret the hold just put in the
-              // composer on release). Touch presses are left as they were.
-              onMouseDown: (e: MouseEvent<HTMLDivElement>) => {
-                if (e.button === 0 && pressPointer.current === 'mouse') e.preventDefault();
-              },
-              onContextMenu: (e: MouseEvent<HTMLDivElement>) => {
-                if (!touchPress.current) return;
-                e.preventDefault();
-                e.stopPropagation();
-              },
-            }
-          : {})}
-        onClick={tap.onClick}
-        onKeyDown={tap.onKeyDown}
-        style={cardBoxStyle(platform, layout)}
-        // Hover/press: the lit-card overlay on [role=button] (index.css).
-        className={cn(POST_CARD, 'cursor-pointer mv-tint focus-visible:lit-focus')}
-      >
-        {textOnly ? (
-          <CardText platform={platform} text={cardText(post)} />
-        ) : media !== null ? (
-          <CardMedia post={post} platform={platform} frame={boxFrame} media={media} />
-        ) : (
-          <CardMediaSlot platform={platform}>
-            <CardPills post={post} />
-          </CardMediaSlot>
-        )}
-        <div className={CARD_BODY}>
-          <CardTitleArea layout={layout} className="text-fg" title={post.title}>
+      {/* ui/ChatCard: the card is the bubble and one press target as a whole
+          (tap opens the sheet, a hold talks about the post; role="button"
+          takes the card's hover and focus line). */}
+      <ChatCard
+        icon={IconPipeline}
+        title={
+          <span data-card-title="" title={post.title}>
             {post.title}
-          </CardTitleArea>
+          </span>
+        }
+        meta={
           <span className={cn(CARD_META_ROW, 'text-fg-3', POST_CARD_META_TYPE)}>
             <Tag
               label={stageLabel(post.stage)}
@@ -968,14 +973,24 @@ function PostCardItem(
             />
             {target !== '' ? <span data-card-target="">{target}</span> : null}
           </span>
-        </div>
-        {/* The footer row is always there (its 44px are the box's); its words
-            only once the viewer's side is known, never a wording that flips. */}
-        {props.sideKnown !== false ? (
-          <div data-card-footer="" className={CARD_FOOTER}>
+        }
+        preview={
+          textOnly ? (
+            <CardText platform={platform} text={cardText(post)} />
+          ) : media !== null ? (
+            <CardMedia post={post} platform={platform} frame={boxFrame} media={media} />
+          ) : (
+            <CardMediaSlot platform={platform}>
+              <CardPills post={post} />
+            </CardMediaSlot>
+          )
+        }
+        secondaryAction={
+          known ? (
             <span
+              data-card-footer=""
               className={cn(
-                'flex min-w-0 items-center gap-1',
+                'flex min-w-0 items-center gap-1 text-sm',
                 footer.accent ? 'font-medium text-accent' : 'text-fg-2',
               )}
             >
@@ -984,12 +999,18 @@ function PostCardItem(
               ) : null}
               <span className="truncate">{footer.state}</span>
             </span>
-            <span className="shrink-0 font-medium text-accent">{footer.action}</span>
-          </div>
-        ) : (
-          <div className={CARD_FOOTER} />
-        )}
-      </div>
+          ) : undefined
+        }
+        primaryAction={
+          known ? (
+            <span className="shrink-0 text-sm font-medium text-accent">{footer.action}</span>
+          ) : (
+            <FooterSpace />
+          )
+        }
+        time={props.cardMeta}
+        rootProps={press}
+      />
       {sheetMounted ? (
         <SheetBoundary>
           <PostSheet
@@ -1277,55 +1298,55 @@ function CardText(props: { platform: string | null; text: string }): ReactElemen
 
 /**
  * The reader's RLS hid this post (e.g. a client receiving a draft). The same
- * fixed box as a visible card (neutral media box, title area, meta row, empty
- * footer), but no thumbnail and no link; never probes why it is hidden.
+ * rows as a visible card (neutral media box, title, meta row, the empty 44
+ * action row) on a muted ChatCard, but no thumbnail and no tap; never probes
+ * why it is hidden.
  */
-export function NotVisibleCard(props: { platform?: string | null }): ReactElement {
+export function NotVisibleCard(props: {
+  platform?: string | null;
+  cardMeta?: ReactNode;
+}): ReactElement {
   const platform = props.platform ?? null;
-  const layout = useChatLayout();
   return (
-    <div
-      data-card-not-visible=""
-      style={cardBoxStyle(platform, layout)}
-      className={cn(POST_CARD_MUTED, 'text-fg-2')}
-    >
-      <CardMediaSlot platform={platform} />
-      <div className={CARD_BODY}>
-        <CardTitleArea layout={layout}>{NOT_VISIBLE_TITLE}</CardTitleArea>
-        <span className={cn(CARD_META_ROW, 'text-sm')}>
+    <ChatCard
+      icon={IconPipeline}
+      title={<span data-card-title="">{NOT_VISIBLE_TITLE}</span>}
+      meta={
+        <span className={cn(CARD_META_ROW, 'text-sm text-fg-2')}>
           <span className="truncate">{NOT_VISIBLE_BODY}</span>
         </span>
-      </div>
-      <div className={CARD_FOOTER} />
-    </div>
+      }
+      preview={<CardMediaSlot platform={platform} />}
+      primaryAction={<FooterSpace />}
+      time={props.cardMeta}
+      muted
+      rootProps={{ 'data-card-not-visible': '' }}
+    />
   );
 }
 
 /**
- * A post card whose reads failed every try: the same fixed box, neutral,
- * "Couldn't load this post." and a Retry in the footer that re-reads it.
+ * A post card whose reads failed every try: the same rows, "Couldn't load
+ * this post." and a Retry in the action row that re-reads it.
  */
 export function PostCouldntLoadCard(props: {
   platform: string | null;
   onRetry: () => void;
+  cardMeta?: ReactNode;
 }): ReactElement {
-  const layout = useChatLayout();
   return (
-    <div
-      data-card-failed=""
-      style={cardBoxStyle(props.platform, layout)}
-      className="flex min-w-[240px] max-w-[240px] flex-col overflow-hidden rounded-xl border bg-panel-2 text-fg-2 lit-card-muted"
-    >
-      <CardMediaSlot platform={props.platform} />
-      <span className={CARD_BODY}>
-        <CardTitleArea layout={layout}>{POST_LOAD_FAILED}</CardTitleArea>
-        <span className={CARD_META_ROW} />
-      </span>
-      <span className={cn(CARD_FOOTER, 'w-full')}>
+    <ChatCard
+      icon={IconPipeline}
+      title={<span data-card-title="">{POST_LOAD_FAILED}</span>}
+      meta={<span className={CARD_META_ROW} />}
+      preview={<CardMediaSlot platform={props.platform} />}
+      primaryAction={
         <Button variant="ghost" onClick={props.onRetry}>
           Retry
         </Button>
-      </span>
-    </div>
+      }
+      time={props.cardMeta}
+      rootProps={{ 'data-card-failed': '' }}
+    />
   );
 }

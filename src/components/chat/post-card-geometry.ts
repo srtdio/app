@@ -1,31 +1,32 @@
-// The one fixed shape of a shared post card in chat. Every card (loading,
-// loaded, text only, no cover, not visible, couldn't load) paints this exact
-// box on its first frame: a media box in the workspace platform's frame (one
-// workspace = one platform, so the shape is known before any post read), a
-// title area two lines tall, a fixed meta row and the 44px footer. Nothing in
-// the box is sized by its content, so a card fills in place and never moves a
+// The one fixed shape of a shared post card in chat (ui/ChatCard). Every card
+// (loading, loaded, text only, no cover, not visible, couldn't load) paints
+// these rows on its first frame: the title line, a fixed meta row, a media box
+// in the workspace platform's frame (one workspace = one platform, so the
+// shape is known before any post read) and the 44px action row. Nothing in the
+// box is sized by its content, so a card fills in place and never moves a
 // row. Pure: no reads, no layout reads.
 
 import { FORMATS_BY_PLATFORM, isPostPlatform } from '@srtdio/posts';
 import { frameFor, type Frame } from '@/lib/platform-specs';
 import type { ChatLayout } from '@/components/chat/chat-type';
 
-/** The card's outer width; its 1px border sits inside it (border-box). */
-export const CARD_WIDTH_PX = 240;
-const CARD_BORDER_PX = 1;
+/** The card's outer width: ui/ChatCard's CHAT_CARD_WIDTH (w-72). */
+export const CARD_WIDTH_PX = 288;
+/** ChatCard's inset (p-3): the media box sits inside it. */
+const CARD_PAD_PX = 12;
 /** The media box's height cap (a tall frame narrows to keep its ratio). */
 export const CARD_MEDIA_MAX_PX = 320;
-/** The body's vertical padding (py-2.5) and the title-to-meta gap (gap-1.5). */
-const BODY_PAD_Y_PX = 10;
-const BODY_GAP_PX = 6;
+/** ChatCard's row gaps: title to meta (gap-1), rows (gap-2). */
+const HEAD_GAP_PX = 4;
+const ROW_GAP_PX = 8;
 /** The meta row (h-5): the stage Tag's own height. */
 export const CARD_META_ROW_PX = 20;
-/** The footer row (h-[44px]): the touch target. */
+/** The action row (min-h-11): the touch target. */
 export const CARD_FOOTER_PX = 44;
-/** The title's line height per layout (POST_CARD_TITLE_TYPE's leading). */
-const TITLE_LINE_PX: Readonly<Record<ChatLayout, number>> = { touch: 20, laptop: 19 };
-/** The title area is always two lines tall (2-line clamp). */
-const TITLE_LINES = 2;
+/** The title line: the heading role (15/20), one line, the same on both layouts. */
+const TITLE_LINE_PX: Readonly<Record<ChatLayout, number>> = { touch: 20, laptop: 20 };
+/** The time and tick row inside the last card of a card-only message (11/15). */
+export const CARD_META_LINE_PX = 15;
 /** The text-only post's text inside the media box: base (20px lines), p-3. */
 const TEXT_LINE_PX = 20;
 const TEXT_PAD_PX = 12;
@@ -49,13 +50,13 @@ export function chatCardFrame(platform: string | null): Frame {
 
 /** The media box's whole-px height: the frame at the card's inner width, capped. Pure. */
 export function cardMediaHeight(frame: Frame): number {
-  const inner = CARD_WIDTH_PX - 2 * CARD_BORDER_PX;
+  const inner = CARD_WIDTH_PX - 2 * CARD_PAD_PX;
   return Math.min(CARD_MEDIA_MAX_PX, Math.round(inner / frame.ratio));
 }
 
-/** The title area's height in a layout: two title lines. Pure. */
+/** The title's height: one heading line, the same on both layouts. Pure. */
 export function cardTitleHeight(layout: ChatLayout): number {
-  return TITLE_LINES * TITLE_LINE_PX[layout];
+  return TITLE_LINE_PX[layout];
 }
 
 /** How many lines of a text-only post fit inside the media box. Pure. */
@@ -63,15 +64,21 @@ export function cardTextLines(frame: Frame): number {
   return Math.max(1, Math.floor((cardMediaHeight(frame) - 2 * TEXT_PAD_PX) / TEXT_LINE_PX));
 }
 
-/** The card's outer height (border-box) in a layout. Every card state uses it. Pure. */
-export function postCardHeight(frame: Frame, layout: ChatLayout): number {
+/**
+ * The card's outer height in a layout: ChatCard's inset, the title and meta
+ * lines, the media box, the action row and, on the last card of a card-only
+ * message, the time row. Every card state renders these rows. Pure.
+ */
+export function postCardHeight(frame: Frame, layout: ChatLayout, withMeta = false): number {
   return (
-    2 * CARD_BORDER_PX +
-    cardMediaHeight(frame) +
-    2 * BODY_PAD_Y_PX +
+    2 * CARD_PAD_PX +
     cardTitleHeight(layout) +
-    BODY_GAP_PX +
+    HEAD_GAP_PX +
     CARD_META_ROW_PX +
-    CARD_FOOTER_PX
+    ROW_GAP_PX +
+    cardMediaHeight(frame) +
+    ROW_GAP_PX +
+    CARD_FOOTER_PX +
+    (withMeta ? ROW_GAP_PX + CARD_META_LINE_PX : 0)
   );
 }

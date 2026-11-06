@@ -145,8 +145,10 @@ describe('the same notes avatar in all four places, no reads', () => {
       expect(html).toContain('data-notes-avatar');
       expect(html).toContain(`src="${PHOTO}"`);
     }
-    // The shared avatar roles, note kind: profile 72, header 32, row 40.
-    expect(tile).toContain('h-[72px] w-[72px] rounded-xl');
+    // The shared avatar roles, note kind: header 32 (the notes Row's 32
+    // leading column and the thread header), row 40 (picker, search).
+    expect(tile).toContain('h-8 w-8 rounded-lg');
+    expect(tile).toContain('data-row-leading');
     expect(header).toContain('h-8 w-8 rounded-lg');
     expect(picker).toContain('h-10 w-10 rounded-lg');
     expect(search).toContain('h-10 w-10 rounded-lg');

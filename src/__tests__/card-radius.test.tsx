@@ -19,8 +19,14 @@ import { PostCard as PipelineCard } from '@/components/pages/PostCard';
 import { BriefCard } from '@/components/pages/BriefCard';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { BriefCardItem } from '@/components/chat/BriefCard';
-import { CARD_SKELETON, CouldntLoadCard, POST_CARD, SHARED_CARD } from '@/components/chat/PostCard';
-import { PLAN_CARD, PLAN_CARD_SKELETON } from '@/components/chat/PlanCard';
+import {
+  CouldntLoadCard,
+  NotVisibleCard,
+  PostCardSkeleton,
+  SharedPostCardList,
+} from '@/components/chat/PostCard';
+import { PlanCardBody, PlanCardSkeleton } from '@/components/chat/PlanCard';
+import { IconPipeline } from '@/components/ui/icons';
 
 // Radius roles (CLAUDE.md): every card's outer box is 12px (rounded-xl);
 // thumbnails inside a card stay 8px (rounded-lg).
@@ -180,20 +186,67 @@ describe('cards use the 12px card radius', () => {
     expect(outer(gone)).toContain('rounded-xl');
   });
 
-  it('chat post card: the frame, the shared row, the skeleton and the retry card', () => {
-    for (const cls of [POST_CARD, SHARED_CARD, CARD_SKELETON]) {
-      expect(cls.split(' ')).toContain('rounded-xl');
-      expect(cls.split(' ')).not.toContain('rounded-lg');
+  // Chat cards are ui/ChatCard: the card is the bubble, so it takes the
+  // bubble radius (12 on laptop, mocked above; 18 on touch, chat-type).
+  it('chat post card: the live card, not visible, the skeleton and the retry card', () => {
+    const live = renderToStaticMarkup(
+      <MemoryRouter>
+        <SharedPostCardList
+          views={[
+            {
+              kind: 'post',
+              postId: 'p1',
+              post: {
+                id: 'p1',
+                number: 1,
+                title: 'Monsoon drop',
+                platform: 'instagram',
+                format: 'single_image',
+                stage: 'review',
+                target_date: null,
+                stage_entered_at: '2026-01-01T00:00:00Z',
+                approved_by: null,
+                approved_at: null,
+                thumbnailAssetVersionId: null,
+                firstMedia: null,
+                mediaCount: 0,
+                hasVideo: false,
+              } as never,
+              approverName: null,
+            },
+          ]}
+          side="agency"
+          timeZone="UTC"
+        />
+      </MemoryRouter>,
+    );
+    const cards = [
+      // The list's first element is its group; the card is its first child.
+      live.replace(/^<div[^>]*>/, ''),
+      renderToStaticMarkup(<NotVisibleCard />),
+      renderToStaticMarkup(<PostCardSkeleton platform="instagram" />),
+      renderToStaticMarkup(<CouldntLoadCard onRetry={() => {}} icon={IconPipeline} />),
+    ];
+    for (const html of cards) {
+      expect(html).toContain('data-chat-card=""');
+      expect(outer(html)).toContain('rounded-xl');
+      expect(outer(html)).not.toContain('rounded-lg');
     }
-    const retry = renderToStaticMarkup(<CouldntLoadCard onRetry={() => {}} />);
-    expect(outer(retry)).toContain('rounded-xl');
-    expect(outer(retry)).not.toContain('rounded-lg');
   });
 
   it('chat plan card and its skeleton', () => {
-    for (const cls of [PLAN_CARD, PLAN_CARD_SKELETON]) {
-      expect(cls.split(' ')).toContain('rounded-xl');
-      expect(cls.split(' ')).not.toContain('rounded-lg');
+    const plan = renderToStaticMarkup(
+      <PlanCardBody
+        view={{ kind: 'unavailable' }}
+        side="agency"
+        onOpen={() => {}}
+        onForward={() => {}}
+      />,
+    );
+    const box = renderToStaticMarkup(<PlanCardSkeleton />);
+    for (const html of [plan, box]) {
+      expect(outer(html)).toContain('rounded-xl');
+      expect(outer(html)).not.toContain('rounded-lg');
     }
   });
 });

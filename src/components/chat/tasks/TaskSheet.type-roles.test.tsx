@@ -66,10 +66,10 @@ afterEach(() => {
 });
 
 describe('Tasks sheet type roles', () => {
-  it('sheet title: lg, 600', () => {
+  it('sheet title: lg, 600 (the HeaderBar title role)', () => {
     show();
-    const title = byText('h2', TASK_SHEET_TITLE);
-    expect(classes(title)).toEqual(expect.arrayContaining(['text-lg', 'font-semibold', 'text-fg']));
+    const title = byText('[data-header-bar] h1', TASK_SHEET_TITLE);
+    expect(classes(title)).toEqual(expect.arrayContaining(['text-lg', 'font-semibold']));
   });
 
   it('row title: base, 500 (was 16px)', () => {

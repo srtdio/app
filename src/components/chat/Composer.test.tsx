@@ -362,14 +362,14 @@ describe('About bar', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it('the placeholder follows About, and mentions the hash otherwise', () => {
+  it('the placeholder is ui/Composer\'s one hint: "Message", "Reply" while replying', () => {
     // default
-    expect(composerPlaceholder(false)).toBe(`Message, or ${HASH} for a post`);
+    expect(composerPlaceholder(false)).toBe('Message');
     // reply draft, no About
-    expect(composerPlaceholder(false, true)).toBe(`Reply, or ${HASH} for a post`);
-    // About visible (with or without a reply draft): never a KEY-N code
-    expect(composerPlaceholder(true)).toBe('Message about this post');
-    expect(composerPlaceholder(true, true)).toBe('Message about this post');
+    expect(composerPlaceholder(false, true)).toBe('Reply');
+    // About visible: the strip names the post, the hint stays the hint (never a KEY-N code)
+    expect(composerPlaceholder(true)).toBe('Message');
+    expect(composerPlaceholder(true, true)).toBe('Reply');
   });
 });
 
@@ -890,8 +890,8 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
     const fn = body.slice(0, body.indexOf('\n  }\n') + 4);
     expect(fn).toContain("setText('');");
     // The Send button spreads the hold handlers, then the composed press.
-    expect(source).toContain(
-      '{...(holdToSchedule ? sendHold.handlers : {})}\n                    {...sendPress}',
+    expect(source).toMatch(
+      /\{\.\.\.\(holdToSchedule \? sendHold\.handlers : \{\}\)\}\n\s*\{\.\.\.sendPress\}/,
     );
     expect(source).toContain('hold: holdToSchedule ? sendHold.handlers : null');
     t.hold.dispose();

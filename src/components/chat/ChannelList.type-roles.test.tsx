@@ -76,33 +76,36 @@ describe('chat list type roles', () => {
     }
   });
 
-  it('card titles: the wide tile name is xl/600, the square tile name lg/600', () => {
+  it('titles: group row name heading (lg/600); person tile name secondary, full ink', () => {
     const wide = paint(list([group]), 'span', 'Launch').find((e) =>
       e.classList.contains('truncate'),
     );
     expect(classes(wide as Element)).toEqual(
-      expect.arrayContaining(['truncate', 'text-fg', 'text-xl', 'font-semibold']),
+      expect.arrayContaining(['truncate', 'text-lg', 'font-semibold']),
     );
     const square = paint(list([dm]), 'span', 'Asha Rao').find((e) =>
       e.classList.contains('truncate'),
     );
     expect(classes(square as Element)).toEqual(
-      expect.arrayContaining(['truncate', 'text-fg', 'text-lg', 'font-semibold']),
+      expect.arrayContaining(['truncate', 'text-fg', 'text-md', 'font-normal']),
     );
     for (const el of [wide, square]) {
       expect((el as Element).className).not.toMatch(/text-\[|leading-\[|font-bold/);
     }
   });
 
-  it('meta: the tile time is sm with tabular figures; the preview is secondary ink', () => {
+  it('meta: the row time is the meta role (sm, mono, tabular); the preview is secondary', () => {
     const time = formatChatTime(SENT, new Date(NOW), 'UTC');
     const [stamp] = paint(list([group]), 'span', time);
     expect(classes(stamp as Element)).toEqual(
-      expect.arrayContaining(['text-sm', 'tabular-nums', 'text-fg-2']),
+      expect.arrayContaining(['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']),
     );
-    const [preview] = paint(list([group]), 'span', 'See you then');
+    // Line 2 is a flex wrapper (preview + badge slot); the preview is its text span.
+    const preview = paint(list([group]), 'span', 'See you then').find((e) =>
+      e.classList.contains('text-md'),
+    );
     expect(classes(preview as Element)).toEqual(
-      expect.arrayContaining(['text-base', 'font-normal', 'text-fg-2']),
+      expect.arrayContaining(['text-md', 'font-normal', 'text-fg-2']),
     );
   });
 

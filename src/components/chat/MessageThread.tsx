@@ -1539,9 +1539,10 @@ function metaParts(meta: BubbleMeta, mine = true, spacer = false): ReactElement 
 /**
  * Where a bubble's meta sits: after its text (inline), on a pill over a bare
  * image album (pill), or in its own right-aligned row under everything else
- * (row: voice, files, cards, and media with a caption).
+ * (row: voice, files, cards, and media with a caption). A card-only message
+ * (the card is the bubble) draws it inside its last card's time slot (card).
  */
-export type MetaPlacement = 'inline' | 'pill' | 'row';
+export type MetaPlacement = 'inline' | 'pill' | 'row' | 'card';
 
 /** The meta's ink on the bubble: the own or peer meta token, at full strength. */
 function metaInk(mine: boolean): string {
@@ -1553,6 +1554,8 @@ const META_POSITION: Record<MetaPlacement, string> = {
   inline: 'pointer-events-none absolute bottom-[3px] right-2 inline-flex',
   pill: 'pointer-events-none absolute bottom-2 right-2 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-[color:var(--media-meta-fg)] lit-media',
   row: 'pointer-events-none mt-1 flex justify-end',
+  // Inside ui/ChatCard's bottom-trailing time slot, which places and inks it.
+  card: 'pointer-events-none inline-flex',
 };
 
 /**
@@ -1576,11 +1579,15 @@ export function BubbleMetaView(props: {
         'items-center gap-1 whitespace-nowrap',
         BUBBLE_META_TYPE,
         META_POSITION[props.placement],
-        props.placement !== 'pill' && metaInk(props.mine),
+        // A card's time slot inks it (the card fill is the peer bubble's).
+        props.placement !== 'pill' && props.placement !== 'card' && metaInk(props.mine),
         props.className,
       )}
     >
-      {metaParts(props.meta, props.mine || props.placement === 'pill')}
+      {metaParts(
+        props.meta,
+        props.placement === 'card' ? false : props.mine || props.placement === 'pill',
+      )}
     </span>
   );
 }
@@ -1740,8 +1747,23 @@ export function bubbleClass(
     voiceOnly: boolean;
     /** Image album: 3px padding around the album, at least 240px wide. */
     album?: boolean;
+    /**
+     * A card-only message: the card IS the bubble (ui/ChatCard draws the fill,
+     * radius and light), so this shell keeps only the bubble's behaviour (the
+     * press, the focus line on the card's radius, the menu and reactions): no
+     * padding, no fill, no light, no tail.
+     */
+    card?: boolean;
   },
 ): string {
+  if (state.card === true) {
+    return cn(
+      'group/bubble relative min-w-0 max-w-full focus-visible:lit-focus',
+      NO_TOUCH_SELECT,
+      sized(BUBBLE_SHAPE, state.layout),
+      state.failed && 'border border-bad lit-bad',
+    );
+  }
   return cn(
     // max-w-full: an own bubble is fit-content in an items-end column, so a
     // nowrap line (the Reply privately quote) would push its min-content past
@@ -2055,6 +2077,56 @@ export function metaPlacement(
   return !hasBody && images.length > 0 && others.length === 0 ? 'pill' : 'row';
 }
 
+/** The kinds of shared card a message carries, in the order the bubble draws them. */
+export type CardKind = 'post' | 'brief' | 'plan' | 'idea';
+
+/** The last card kind a message draws (its time goes in that group's last card); null for none. Pure. */
+export function lastCardKind(
+  message: Pick<ThreadMessage, 'sharedPostIds' | 'sharedBriefIds'> &
+    Partial<Pick<ThreadMessage, 'sharedPlanIds' | 'sharedPlanItemIds'>>,
+): CardKind | null {
+  if ((message.sharedPlanItemIds ?? []).length > 0) return 'idea';
+  if ((message.sharedPlanIds ?? []).length > 0) return 'plan';
+  if (message.sharedBriefIds.length > 0) return 'brief';
+  if (message.sharedPostIds.length > 0) return 'post';
+  return null;
+}
+
+/**
+ * A card-only message: shared cards and nothing else the bubble would draw
+ * around them (no text, files, reply or private-reply quote, Forwarded or
+ * saved-from line, removed-files line, mark badge, or post chip). Its card IS
+ * the bubble: no wrapper bubble fill, and its time and tick sit inside the
+ * last card (ui/ChatCard's time slot). Pure.
+ */
+export function isCardOnly(
+  message: Pick<
+    ThreadMessage,
+    | 'body'
+    | 'attachments'
+    | 'sharedPostIds'
+    | 'sharedBriefIds'
+    | 'reply'
+    | 'forwarded'
+    | 'privateReply'
+    | 'removedFiles'
+  > &
+    Partial<Pick<ThreadMessage, 'sharedPlanIds' | 'sharedPlanItemIds'>>,
+  around: { marked: boolean; chip: boolean },
+): boolean {
+  return (
+    lastCardKind(message) !== null &&
+    message.body.trim() === '' &&
+    message.attachments.length === 0 &&
+    message.reply === null &&
+    message.privateReply == null &&
+    message.forwarded !== true &&
+    message.removedFiles === undefined &&
+    !around.marked &&
+    !around.chip
+  );
+}
+
 /** The small chevron in a bubble's top-right corner (laptop hover). */
 function ChevronGlyph(): ReactElement {
   return <IconChevronDown size={ICON_SIZE.inline} />;
@@ -2314,6 +2386,22 @@ export function MessageBubble(props: {
   const swipe = pressOn && message.state === 'sent' ? props.swipe : undefined;
   const chip = props.postRefs?.chip;
   const cardRefs = cardRefsFor(message.id, selection, props.postRefs);
+  // A card-only message: the card IS the bubble (the shell below keeps only
+  // the bubble's behaviour), and the time and tick sit inside its last card.
+  const cardOnly = isCardOnly(message, {
+    marked: props.mark !== undefined,
+    chip: props.threadMember !== true && chip?.kind === 'chip' && message.parentDeleted !== true,
+  });
+  const lastCard = cardOnly ? lastCardKind(message) : null;
+  const cardPlace = (kind: CardKind): { inBubble: boolean; cardMeta?: ReactNode } =>
+    !cardOnly
+      ? { inBubble: true }
+      : kind === lastCard
+        ? {
+            inBubble: false,
+            cardMeta: <BubbleMetaView meta={meta} mine={mine} placement="card" />,
+          }
+        : { inBubble: false };
   // An own send still uploading can be cancelled with the ring's X; once
   // recorded, refused or missing its files it cannot.
   const onCancelUpload = props.onCancelUpload;
@@ -2527,7 +2615,7 @@ export function MessageBubble(props: {
               }
             }}
             className={cn(
-              bubbleClass({ ...shape, failed, voiceOnly, album }),
+              bubbleClass({ ...shape, failed, voiceOnly, album, card: cardOnly }),
               // The browser keeps vertical pans (the list scrolls); a horizontal
               // move is left to the swipe controller.
               swipe !== undefined && 'touch-pan-y touch-pinch-zoom',
@@ -2550,7 +2638,11 @@ export function MessageBubble(props: {
                 )
               ) : null}
             </div>
-            <div data-bubble-content="" className={cn('contents', mine && OWN_BUBBLE_CONTENT)}>
+            <div
+              data-bubble-content=""
+              // A card-only message's card is the bubble, never inside the own fill.
+              className={cn('contents', mine && !cardOnly && OWN_BUBBLE_CONTENT)}
+            >
               {threadMember ? null : chip?.kind === 'chip' && !parentDeleted ? (
                 <PostRefChip
                   post={chip.post}
@@ -2657,14 +2749,22 @@ export function MessageBubble(props: {
                     presignEnabled={presignEnabled}
                     onCancelUpload={cancelUpload}
                   />
-                  <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
-                  <SharedBriefCards briefIds={message.sharedBriefIds} />
-                  <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
-                  <SharedIdeaCards ideaIds={sharedIdeaIds} />
+                  <SharedPostCards
+                    postIds={message.sharedPostIds}
+                    {...cardRefs}
+                    {...cardPlace('post')}
+                  />
+                  <SharedBriefCards briefIds={message.sharedBriefIds} {...cardPlace('brief')} />
+                  <SharedPlanCards
+                    planIds={sharedPlanIds}
+                    senderName={name}
+                    {...cardPlace('plan')}
+                  />
+                  <SharedIdeaCards ideaIds={sharedIdeaIds} {...cardPlace('idea')} />
                 </>
               )}
             </div>
-            {voiceOnly ? null : (
+            {voiceOnly || cardOnly ? null : (
               <BubbleMetaView
                 meta={meta}
                 mine={mine}
@@ -2709,8 +2809,11 @@ export function MessageBubble(props: {
                   aria-hidden="true"
                   data-more-glyph=""
                   className={cn(
-                    'flex h-[18px] w-10 items-start justify-end rounded-tr-[inherit] bg-gradient-to-l from-50% pr-1',
-                    mine
+                    'flex h-[18px] w-10 items-start justify-end rounded-tr-[inherit] bg-gradient-to-l from-50%',
+                    // On a card (the card is the bubble) the glyph's visible
+                    // edge comes in to the card's 12px content edge.
+                    cardOnly ? 'pr-2' : 'pr-1',
+                    mine && !cardOnly
                       ? 'from-bubble-own text-[color:var(--bubble-meta-own)]'
                       : 'from-panel-2 text-[color:var(--bubble-meta)]',
                   )}

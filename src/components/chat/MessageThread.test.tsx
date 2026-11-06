@@ -307,6 +307,11 @@ function metaOf(root: ReactElement): Parameters<typeof BubbleMetaView>[0] | null
   let meta: Parameters<typeof BubbleMetaView>[0] | null = null;
   walk(root, (el) => {
     if (el.type === BubbleMetaView) meta = el.props as Parameters<typeof BubbleMetaView>[0];
+    // A card-only message hands the time to its last card (ui/ChatCard's slot).
+    const cardMeta = (el.props as { cardMeta?: ReactNode }).cardMeta;
+    if (isValidElement(cardMeta) && cardMeta.type === BubbleMetaView) {
+      meta = cardMeta.props as Parameters<typeof BubbleMetaView>[0];
+    }
     // A voice note draws the time inside its own last row.
     const voiceMeta = (el.props as { voice?: { meta?: ReactNode } }).voice?.meta;
     if (isValidElement(voiceMeta) && voiceMeta.type === BubbleMetaView) {
@@ -635,7 +640,9 @@ describe('in-bubble meta and ticks', () => {
     for (const [message, placement] of expected) {
       expect(metaPlacement(message)).toBe(placement);
       const root = renderBubble(message);
-      expect(metaOf(root)?.placement).toBe(placement);
+      // A card-only message: the card is the bubble, its time sits in the card.
+      const cardOnly = message === card || message === brief;
+      expect(metaOf(root)?.placement).toBe(cardOnly ? 'card' : placement);
       let spacers = 0;
       walk(root, (el) => {
         if (el.type === MetaSpacer) spacers += 1;

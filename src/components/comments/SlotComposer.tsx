@@ -1,7 +1,7 @@
 // The client checkpoint composer: single-line slots that grow as typed (numbered
 // only once there are two or more), one point per slot, added with the small
-// "+ Another" ghost in the composer row, all sent in ONE comment_batch_create
-// call ("Send" for one, "Send N checkpoints" for more). It
+// "+ Another" ghost under the slots, all sent in ONE comment_batch_create
+// call (the round Send, named "Send" for one, "Send N checkpoints" for more). It
 // replaces only the CLIENT-role TOP-LEVEL composer on posts; replies (any
 // role), the agency composer, and brief comments keep the free-text
 // CommentComposer untouched. Checkpoints carry no mentions, so a slot is a
@@ -15,14 +15,16 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { itemIn, useFreshKeys } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ComposerFrame } from '@/components/ui/Composer';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/cn';
-import { IconPaperclip, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconPaperclip, IconSend, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
 import {
+  COMPOSER_SIDE,
   PendingChip,
   canRetryPending,
   doneVersionIds,
@@ -99,7 +101,7 @@ export function sendLabel(count: number): string {
   return count <= 1 ? 'Send' : `Send ${count} checkpoints`;
 }
 
-/** The small ghost button inside the composer row that adds another slot. */
+/** The small ghost button under the slots that adds another slot. */
 export const ADD_SLOT_LABEL = '+ Another';
 
 /** Slot numbers show only once there is more than one slot. Pure. */
@@ -293,6 +295,20 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
     setSubmitting(false);
   }
 
+  const sendButton = (
+    <Button
+      variant="primary"
+      shape="round"
+      aria-label={sendLabel(Math.max(1, filledCount(slots.map((slot) => slot.body))))}
+      className="shrink-0"
+      disabled={!canSend}
+      busy={submitting}
+      onClick={() => void submit()}
+    >
+      <IconSend size={ICON_SIZE.control} />
+    </Button>
+  );
+
   return (
     <div className="flex flex-col gap-2">
       <ol className="flex flex-col gap-2">
@@ -306,67 +322,85 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                 if (el === null) slotEls.current.delete(slot.id);
                 else slotEls.current.set(slot.id, el);
               }}
-              className="flex flex-col gap-1.5"
+              className="flex flex-col gap-2"
             >
-              <div className="flex items-start gap-2">
-                {numbered ? (
-                  <span
-                    aria-hidden
-                    data-slot-number=""
-                    className="flex h-11 w-5 shrink-0 items-center justify-center text-sm font-medium tabular-nums text-fg-3"
-                  >
-                    {index + 1}
-                  </span>
-                ) : null}
-                <Textarea
-                  formatting
-                  autoGrow
-                  rows={1}
-                  aria-label={`Checkpoint ${index + 1}`}
-                  placeholder={index === 0 ? 'Add a checkpoint' : 'Add another checkpoint'}
-                  value={slot.body}
-                  disabled={submitting}
-                  ref={(el) => {
-                    if (el !== null) textareas.current.set(slot.id, el);
-                    else textareas.current.delete(slot.id);
-                  }}
-                  onChange={(event) => updateBody(slot.id, event.target.value)}
-                  className="min-w-0 flex-1"
-                  style={{ minHeight: '44px' }}
-                />
-                <CommentEmojiButton
-                  disabled={submitting}
-                  onPick={(char) =>
-                    insertIntoTextarea(
-                      () => textareas.current.get(slot.id) ?? null,
-                      slot.body,
-                      char,
-                      (next) => updateBody(slot.id, next),
-                    )
-                  }
-                />
-                {attachEnabled ? (
-                  <IconButton
-                    label={`Attach a file to checkpoint ${index + 1}`}
+              {/* ui/Composer: field, emoji, clip, then Send on one row (the
+                  comment composer's layout). A later slot holds its remove X
+                  in the send column, so every field keeps one width. */}
+              <ComposerFrame
+                state={submitting && index === 0 ? { kind: 'sending' } : { kind: 'idle' }}
+                leading={
+                  numbered ? (
+                    <span
+                      aria-hidden
+                      data-slot-number=""
+                      className="flex h-11 w-5 shrink-0 items-center justify-center text-sm font-medium tabular-nums text-fg-3"
+                    >
+                      {index + 1}
+                    </span>
+                  ) : undefined
+                }
+                input={
+                  <Textarea
+                    formatting
+                    compact
+                    rows={1}
+                    aria-label={`Checkpoint ${index + 1}`}
+                    placeholder={index === 0 ? 'Add a checkpoint' : 'Add another checkpoint'}
+                    value={slot.body}
                     disabled={submitting}
-                    onClick={() => {
-                      attachSlotId.current = slot.id;
-                      fileInputRef.current?.click();
+                    ref={(el) => {
+                      if (el !== null) textareas.current.set(slot.id, el);
+                      else textareas.current.delete(slot.id);
                     }}
-                  >
-                    <IconPaperclip size={ICON_SIZE.control} />
-                  </IconButton>
-                ) : null}
-                {index > 0 ? (
-                  <IconButton
-                    label={`Remove checkpoint ${index + 1}`}
-                    disabled={submitting}
-                    onClick={() => removeSlot(slot.id)}
-                  >
-                    <IconX size={ICON_SIZE.control} />
-                  </IconButton>
-                ) : null}
-              </div>
+                    onChange={(event) => updateBody(slot.id, event.target.value)}
+                    className="min-w-0 flex-1 self-center"
+                  />
+                }
+                side={
+                  <>
+                    <CommentEmojiButton
+                      disabled={submitting}
+                      className={COMPOSER_SIDE}
+                      onPick={(char) =>
+                        insertIntoTextarea(
+                          () => textareas.current.get(slot.id) ?? null,
+                          slot.body,
+                          char,
+                          (next) => updateBody(slot.id, next),
+                        )
+                      }
+                    />
+                    {attachEnabled ? (
+                      <IconButton
+                        label={`Attach a file to checkpoint ${index + 1}`}
+                        className={COMPOSER_SIDE}
+                        disabled={submitting}
+                        onClick={() => {
+                          attachSlotId.current = slot.id;
+                          fileInputRef.current?.click();
+                        }}
+                      >
+                        <IconPaperclip size={ICON_SIZE.control} />
+                      </IconButton>
+                    ) : null}
+                  </>
+                }
+                send={
+                  index === 0 ? (
+                    sendButton
+                  ) : (
+                    <IconButton
+                      label={`Remove checkpoint ${index + 1}`}
+                      className={COMPOSER_SIDE}
+                      disabled={submitting}
+                      onClick={() => removeSlot(slot.id)}
+                    >
+                      <IconX size={ICON_SIZE.control} />
+                    </IconButton>
+                  )
+                }
+              />
               {tone !== 'hidden' ? (
                 <span
                   className={cn(
@@ -399,9 +433,8 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
         })}
       </ol>
 
-      {/* The composer row: the small "+ Another" ghost on the left, the one
-          primary on the right; both 44px tall, like the agency composer's row. */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* "+ Another" adds a slot under the last one: a 44 ghost on its own line. */}
+      <div className="flex">
         <Button
           variant="ghost"
           className="min-h-[44px] min-w-[44px]"
@@ -410,16 +443,6 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
           onClick={addSlot}
         >
           {ADD_SLOT_LABEL}
-        </Button>
-        <Button
-          variant="primary"
-          className="ml-auto min-w-[44px]"
-          disabled={!canSend}
-          onClick={() => void submit()}
-        >
-          {submitting
-            ? 'Sending…'
-            : sendLabel(Math.max(1, filledCount(slots.map((slot) => slot.body))))}
         </Button>
       </div>
 
