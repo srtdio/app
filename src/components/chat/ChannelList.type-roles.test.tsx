@@ -100,7 +100,10 @@ describe('chat list type roles', () => {
     expect(classes(stamp as Element)).toEqual(
       expect.arrayContaining(['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']),
     );
-    const [preview] = paint(list([group]), 'span', 'See you then');
+    // Line 2 is a flex wrapper (preview + badge slot); the preview is its text span.
+    const preview = paint(list([group]), 'span', 'See you then').find((e) =>
+      e.classList.contains('text-md'),
+    );
     expect(classes(preview as Element)).toEqual(
       expect.arrayContaining(['text-md', 'font-normal', 'text-fg-2']),
     );
