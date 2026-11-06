@@ -69,7 +69,8 @@ import {
   type BriefGroup,
 } from '@/lib/brief-groups';
 import { cn } from '@/lib/cn';
-import { CARD_GRID, Card } from '@/components/ui/Card';
+import { CARD_GRID } from '@/components/ui/Card';
+import { ListCardBox } from '@/components/ui/ListCard';
 import { GUTTER } from '@/components/ui/layout';
 import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
@@ -296,8 +297,8 @@ export function briefsLoadMore(
 
 /**
  * The loading state: a static skeleton in the real list's shape (a section
- * header bar, a day label, then ui/Card blocks with the leading tile, title,
- * objective and status pill lines), in the same container and grid, so nothing
+ * header bar, a day label, then ui/ListCardBox: the ListCard's frame, 72
+ * picture and three lines), in the same container and grid, so nothing
  * jumps when the cards arrive. Shared Bone boxes (a top-lit sweep, never a pulse).
  */
 export function BriefsListSkeleton(): ReactElement {
@@ -317,15 +318,7 @@ export function BriefsListSkeleton(): ReactElement {
         </div>
         <div className={GRID_CLASS}>
           {[0, 1, 2].map((key) => (
-            <Card
-              key={key}
-              surface={{ 'data-brief-card-skeleton': '' }}
-              leading={<Bone lit="lit-media" as="span" className="block h-8 w-8 rounded-lg" />}
-              title={<Bone lit="flat" as="span" className="my-1 block h-3 w-2/3 rounded" />}
-              badge={<Bone lit="lit-badge" as="span" className="block h-6 w-14 rounded-full" />}
-            >
-              <Bone lit="flat" as="div" className="h-4 w-4/5 rounded" />
-            </Card>
+            <ListCardBox key={key} data-brief-card-skeleton="" />
           ))}
         </div>
       </section>
