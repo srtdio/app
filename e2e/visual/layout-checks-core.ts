@@ -69,6 +69,20 @@ export function overlaps(a: Box, b: Box, tolerance = OVERLAP_TOLERANCE_PX): bool
   return over.width > tolerance && over.height > tolerance;
 }
 
+/**
+ * A box cut to a clip rect (the viewport and every overflow-clipping
+ * ancestor), or null when nothing of it is left.
+ */
+export function clipBox(box: Box, clip: Box | null | undefined): Box | null {
+  if (clip === null || clip === undefined) return box;
+  const x = Math.max(box.x, clip.x);
+  const y = Math.max(box.y, clip.y);
+  const right = Math.min(box.x + box.width, clip.x + clip.width);
+  const bottom = Math.min(box.y + box.height, clip.y + clip.height);
+  if (right - x <= 0 || bottom - y <= 0) return null;
+  return { x, y, width: right - x, height: bottom - y };
+}
+
 /** One visible tap target as the page reported it. */
 export interface TapTarget {
   /** A selector or text that names it in a failure message. */
@@ -79,6 +93,24 @@ export interface TapTarget {
    * holds: an ancestor or descendant never counts as an overlap.
    */
   related: readonly number[];
+  /**
+   * The position:fixed or position:sticky layer it sits in (an id shared by
+   * every target in that layer), or null for the scrolling page. Targets in
+   * different layers float over each other by design (nav pill, decision
+   * bar, composer tray, sheet over its backdrop) and are never paired.
+   */
+  layer?: number | null;
+  /**
+   * Indexes of targets it is layered on by design: it (or an absolute
+   * wrapper of it) is position:absolute and its containing block is, or
+   * holds, the other target (a ⋮ over a card's press surface, a clear X in
+   * a search field, a back button over a header image).
+   */
+  layeredWith?: readonly number[];
+  /** pointer-events:none, or inside an aria-hidden / inert subtree: never a target. */
+  passive?: boolean;
+  /** The rect it shows through (viewport and overflow-clipping ancestors); null = no clip. */
+  clip?: Box | null;
 }
 
 /** Every pair of unrelated tap targets that overlap: [i, j] with i < j. */
@@ -86,12 +118,18 @@ export function overlappingPairs(targets: readonly TapTarget[]): Array<[number, 
   const out: Array<[number, number]> = [];
   for (let i = 0; i < targets.length; i += 1) {
     const a = targets[i];
-    if (a === undefined) continue;
+    if (a === undefined || a.passive === true) continue;
+    const aBox = clipBox(a.box, a.clip);
+    if (aBox === null) continue;
     for (let j = i + 1; j < targets.length; j += 1) {
       const b = targets[j];
-      if (b === undefined) continue;
+      if (b === undefined || b.passive === true) continue;
       if (a.related.includes(j) || b.related.includes(i)) continue;
-      if (overlaps(a.box, b.box)) out.push([i, j]);
+      if ((a.layer ?? null) !== (b.layer ?? null)) continue;
+      if (a.layeredWith?.includes(j) === true || b.layeredWith?.includes(i) === true) continue;
+      const bBox = clipBox(b.box, b.clip);
+      if (bBox === null) continue;
+      if (overlaps(aBox, bBox)) out.push([i, j]);
     }
   }
   return out;
@@ -103,6 +141,10 @@ export interface EdgeItem {
   box: Box;
   /** img, video or inside [data-full-bleed]: allowed to the edge. */
   fullBleed: boolean;
+  /** Inside an aria-hidden or inert subtree (a decorative backdrop): never checked. */
+  decorative?: boolean;
+  /** The rect it shows through (viewport and overflow-clipping ancestors); null = no clip. */
+  clip?: Box | null;
 }
 
 /** Whether a box spans the viewport's full width (a bar: header, nav, dock). */
@@ -136,8 +178,10 @@ export function edgeViolations(
 ): Array<{ item: EdgeItem; side: 'left' | 'right' }> {
   const out: Array<{ item: EdgeItem; side: 'left' | 'right' }> = [];
   for (const item of items) {
-    if (item.fullBleed) continue;
-    const side = edgeHit(item.box, viewportWidth, min);
+    if (item.fullBleed || item.decorative === true) continue;
+    const shown = clipBox(item.box, item.clip);
+    if (shown === null) continue;
+    const side = edgeHit(shown, viewportWidth, min);
     if (side !== null) out.push({ item, side });
   }
   return out;
