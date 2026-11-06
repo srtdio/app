@@ -193,7 +193,8 @@ test('a pre-warmed chat paints its rows in the first frame, never skeleton bubbl
     Math.round(el.getBoundingClientRect().height),
   );
   // The slow post card read lands (the card fills in place); the plan card is in.
-  const postCard = page.locator('[data-card-footer]').first().locator('..');
+  // ui/ChatCard: the post card is the [data-chat-card] that holds the footer row.
+  const postCard = page.locator('[data-chat-card]:has([data-card-footer])').first();
   await expect(postCard).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('[data-plan-card]').first()).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(1_000);
