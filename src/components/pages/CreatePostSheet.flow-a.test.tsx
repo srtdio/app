@@ -385,12 +385,13 @@ describe('CreatePostSheet flow A', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('fix 19: the pressed button says "Saving…" while the save runs', async () => {
+  it('fix 19: the pressed button is busy (label kept) while the save runs', async () => {
     h.postCreate.mockImplementation(() => new Promise(() => {}));
     await renderSheet();
     await fillRequired('Launch day');
     await act(async () => draftButton().click());
-    expect(draftButton().textContent).toBe('Saving…');
+    expect(draftButton().getAttribute('aria-busy')).toBe('true');
+    expect(draftButton().querySelector('[data-busy-label]')).not.toBeNull();
     expect(draftButton().disabled).toBe(true);
     expect(reviewButton().disabled).toBe(true);
   });

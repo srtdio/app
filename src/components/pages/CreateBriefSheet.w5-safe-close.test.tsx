@@ -201,7 +201,8 @@ describe('CreateBriefSheet: every close path is blocked while submitting', () =>
     await fillRequired();
     await act(async () => createButton()?.click());
     expect(briefCreate).toHaveBeenCalledTimes(1);
-    expect(createButton()?.textContent).toContain('Creating…');
+    expect(createButton()?.getAttribute('aria-busy')).toBe('true');
+    expect(createButton()?.textContent).toContain('Create brief');
 
     await press('Escape');
     await act(async () =>

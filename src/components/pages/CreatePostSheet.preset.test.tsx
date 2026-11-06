@@ -395,8 +395,9 @@ describe('preset helpers', () => {
         savedDraft: false,
       }),
     ).toBe('Save as draft');
+    // In flight keeps the label (Button busy shows the state).
     expect(presetPrimaryLabel({ preset: SEND, submitting: true, savedDraft: false })).toBe(
-      'Sending…',
+      'Send for review',
     );
   });
 

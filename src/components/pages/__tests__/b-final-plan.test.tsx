@@ -84,7 +84,7 @@ describe('trailing rule on the Plan bar actions', () => {
       />,
     );
     // The bar's rule: the last 44 icon box takes -mr-3 (its glyph on the edge).
-    expect(close).toContain('[&amp;>button.w-11:last-child]:-mr-3');
+    expect(close).toContain('[&amp;&gt;button.w-11:last-child]:-mr-3');
     expect(close).toContain('data-plan-close=""');
   });
 

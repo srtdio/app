@@ -261,17 +261,18 @@ describe('PlanTabPage', () => {
   it("Load more: the tap is the hook's loadMore; its label follows busy", () => {
     const onMore = vi.fn();
     const el = PlanTabLoadMore({ more: { busy: false, onMore } });
-    const props = el.props as { onClick: () => void; disabled: boolean; children: string };
+    const props = el.props as { onClick: () => void; busy: boolean; children: string };
     props.onClick();
     expect(onMore).toHaveBeenCalledTimes(1);
-    expect(props.disabled).toBe(false);
+    expect(props.busy).toBe(false);
     expect(props.children).toBe('Load more');
+    // Busy keeps the label (Button busy), never a 'Loading' swap.
     const busy = PlanTabLoadMore({ more: { busy: true, onMore } }).props as {
-      disabled: boolean;
+      busy: boolean;
       children: string;
     };
-    expect(busy.disabled).toBe(true);
-    expect(busy.children).toBe('Loading');
+    expect(busy.busy).toBe(true);
+    expect(busy.children).toBe('Load more');
   });
 
   it('the zero state: line 2 until onboarding is done; no create button of its own', () => {

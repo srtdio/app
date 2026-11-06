@@ -193,7 +193,9 @@ describe('section title, empty states and the top pill', () => {
 describe('action row and composer (items 3, 4)', () => {
   it('Resolve/Reopen, Reply and Copy are visible on every thread; the kebab holds only Edit / Delete', () => {
     expect(SRC).toContain('{opts.actions.canCopy ? copyControl(comment) : null}');
-    expect(SRC).toContain("{isResolving ? 'Saving…' : isResolved ? 'Reopen' : 'Resolve'}");
+    // Busy shows on the button (Button busy); the label never swaps.
+    expect(SRC).toContain('busy={isResolving}');
+    expect(SRC).toContain("{isResolved ? 'Reopen' : 'Resolve'}");
     // Copy is icon-only: clipboard, a tick for 2000 ms after a copy, failure as a toast.
     expect(SRC).toContain('<IconCopy size={ICON_SIZE.nav} />');
     expect(SRC).toContain("toast?.show({ title: COPY_FAILED, tone: 'error' })");
