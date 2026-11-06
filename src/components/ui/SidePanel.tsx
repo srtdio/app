@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconX } from '@/components/ui/icons';
+import { TRAILING_PULL } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 
@@ -78,11 +79,12 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
       )}
     >
       <div className="flex h-full flex-col">
-        <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-1.5">
+        {/* Header 56 on the 16 edge; the X is pulled out by 12 (the trailing rule). */}
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
           <h2 className="min-w-0 truncate text-lg font-semibold">{title}</h2>
           {headerExtra}
           <span className="ml-auto flex items-center">
-            <IconButton label="Close" onClick={onClose}>
+            <IconButton label="Close" onClick={onClose} className={TRAILING_PULL}>
               <IconX size={ICON_SIZE.control} />
             </IconButton>
           </span>
