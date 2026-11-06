@@ -451,6 +451,65 @@ export function planConceptAdd(
   return callProc(client, 'plan_concept_add', args);
 }
 
+// Plan idea bank (migration 20261106010000_plan_bank.sql). An idea in the bank
+// is a concept plan_item with plan_id null.
+
+export type BankIdeaCreateArgs = ProcArgs<'bank_idea_create'>;
+export function bankIdeaCreate(
+  client: Client,
+  args: BankIdeaCreateArgs,
+): Promise<Result<ProcReturns<'bank_idea_create'>>> {
+  return callProc(client, 'bank_idea_create', args);
+}
+
+export type BankIdeaSetArgs = ProcArgs<'bank_idea_set'>;
+export function bankIdeaSet(
+  client: Client,
+  args: BankIdeaSetArgs,
+): Promise<Result<ProcReturns<'bank_idea_set'>>> {
+  return callProc(client, 'bank_idea_set', args);
+}
+
+export type PlanItemBucketsSetArgs = ProcArgs<'plan_item_buckets_set'>;
+export function planItemBucketsSet(
+  client: Client,
+  args: PlanItemBucketsSetArgs,
+): Promise<Result<ProcReturns<'plan_item_buckets_set'>>> {
+  return callProc(client, 'plan_item_buckets_set', args);
+}
+
+export type PlanItemToBankArgs = ProcArgs<'plan_item_to_bank'>;
+export function planItemToBank(
+  client: Client,
+  args: PlanItemToBankArgs,
+): Promise<Result<ProcReturns<'plan_item_to_bank'>>> {
+  return callProc(client, 'plan_item_to_bank', args);
+}
+
+export type PlanItemFromBankArgs = ProcArgs<'plan_item_from_bank'>;
+export function planItemFromBank(
+  client: Client,
+  args: PlanItemFromBankArgs,
+): Promise<Result<ProcReturns<'plan_item_from_bank'>>> {
+  return callProc(client, 'plan_item_from_bank', args);
+}
+
+export type WorkspaceBucketRenameArgs = ProcArgs<'workspace_bucket_rename'>;
+export function workspaceBucketRename(
+  client: Client,
+  args: WorkspaceBucketRenameArgs,
+): Promise<Result<ProcReturns<'workspace_bucket_rename'>>> {
+  return callProc(client, 'workspace_bucket_rename', args);
+}
+
+export type WorkspaceBucketDeleteArgs = ProcArgs<'workspace_bucket_delete'>;
+export function workspaceBucketDelete(
+  client: Client,
+  args: WorkspaceBucketDeleteArgs,
+): Promise<Result<ProcReturns<'workspace_bucket_delete'>>> {
+  return callProc(client, 'workspace_bucket_delete', args);
+}
+
 /**
  * plan_concept_edit always writes the date, so it is always sent: null clears
  * it. Files: null keeps the concept's links as they are; an array replaces

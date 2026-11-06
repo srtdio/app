@@ -153,7 +153,7 @@ describe('Change and Unlink', () => {
     expect(write).toMatch(
       /toast\.show\(\{\s*title: linkErrorCopy\(result\.error\.message, CONCEPT_SAVE_FAILED\),\s*tone: 'error',?\s*\}\)/,
     );
-    expect(write).toContain('dispatchPlanChanged(window, bundle.plan.id);');
+    expect(write).toContain('planChanged();');
     // Unlink takes effect at once: no confirm dialog.
     expect(source()).toContain('onUnlink={() => void writeLink(null)}');
   });

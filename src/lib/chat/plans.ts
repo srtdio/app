@@ -86,7 +86,8 @@ export interface PlanRow {
 
 export interface PlanItemRow {
   id: string;
-  plan_id: string;
+  /** The plan; null for an idea in the bank (a concept outside any plan). */
+  plan_id: string | null;
   kind: PlanItemKind;
   position: number;
   title: string | null;
@@ -114,6 +115,18 @@ export interface PlanItemRow {
    * Null or absent when none; always null on a post item.
    */
   linked_post_id?: string | null;
+  /** A bank idea the approvers can see (always false on a plan item). */
+  show_to_client?: boolean;
+  /** When a bank idea was archived; null when not. */
+  archived_at?: string | null;
+  /** When a bank idea was starred; null when not. */
+  starred_at?: string | null;
+  /** Bumped by edits, comments and moves (the bank's sort). */
+  last_active_at?: string;
+  /** The plan an idea left for the bank, by title; null when made in the bank. */
+  came_from_plan_title?: string | null;
+  /** The idea's bucket ids (plan_item_buckets), when the read carried them. */
+  bucket_ids?: string[];
 }
 
 /** One row of plan_draft_rows: a draft post item the caller may see by name. */
@@ -180,7 +193,8 @@ export interface PlanPostInfo {
 export const PLAN_COLUMNS =
   'id, workspace_id, title, starts_on, ends_on, audience, created_by, updated_at';
 const ITEM_COLUMNS =
-  'id, plan_id, kind, position, title, description, post_id, created_at, updated_at, target_date, linked_post_id';
+  'id, plan_id, kind, position, title, description, post_id, created_at, updated_at, target_date, linked_post_id, show_to_client, archived_at, starred_at, last_active_at, came_from_plan_title';
+const BUCKET_COLUMNS = 'item_id, bucket_id';
 const REVIEW_COLUMNS = 'item_id, side, status, reviewed_by, reviewed_at';
 const COMMENT_COLUMNS = 'id, item_id, author_user_id, body, visibility, created_at';
 
@@ -211,6 +225,7 @@ async function selectIn<T>(
     | 'plan_items'
     | 'plan_item_reviews'
     | 'plan_item_comments'
+    | 'plan_item_buckets'
     | 'posts'
     | 'asset_attachments',
   columns: string,
@@ -1576,6 +1591,115 @@ export async function readItemScreen(
     if (read.ok) for (const row of read.data) names[row.userId] = row.displayName;
   }
   return { ok: true, data: { comments: comments.data, files: files.data, names } };
+}
+
+/**
+ * The bucket ids of every item in `itemIds`: one plan_item_buckets select per
+ * 100 ids (never per item). Items with none are absent. Never throws.
+ */
+export async function readItemBuckets(
+  client: Client,
+  itemIds: readonly string[],
+  signal?: AbortSignal,
+): Promise<Result<Record<string, string[]>>> {
+  try {
+    const rows = await selectIn<{ item_id: string; bucket_id: string }>(
+      client,
+      'plan_item_buckets',
+      BUCKET_COLUMNS,
+      'item_id',
+      itemIds,
+      signal,
+    );
+    if (!rows.ok) return rows;
+    const out: Record<string, string[]> = {};
+    for (const row of rows.data) (out[row.item_id] ??= []).push(row.bucket_id);
+    return { ok: true, data: out };
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
+/** Items with their bucket ids set (none: an empty list). Pure. */
+export function withBucketIds(
+  items: readonly PlanItemRow[],
+  buckets: Record<string, string[]>,
+): PlanItemRow[] {
+  return items.map((i) => ({ ...i, bucket_ids: buckets[i.id] ?? [] }));
+}
+
+/** Copy when an item is gone (deleted, or the viewer cannot read it). */
+export const PLAN_ITEM_NOT_FOUND = 'plan_item_not_found';
+
+/** One item read with no bundle (a bank idea): the row, its screen and its linked post. */
+export interface PlanItemRead {
+  item: PlanItemRow;
+  screen: ItemScreenData;
+  /** The linked post's stage and info, by post id (empty when none or unreadable). */
+  postStages: Record<string, string>;
+  postInfo: Record<string, PlanPostInfo>;
+}
+
+/**
+ * One item with its files, comments, author names, buckets and linked post,
+ * for a screen that holds no plan bundle (a bank idea). The row first, then
+ * one select per table in parallel. Never throws.
+ */
+export async function planItemRead(
+  client: Client,
+  itemId: string,
+  readNames: (userIds: string[], signal?: AbortSignal) => Promise<Result<NameRow[]>>,
+  signal?: AbortSignal,
+): Promise<Result<PlanItemRead>> {
+  try {
+    const rows = await selectIn<PlanItemRow>(
+      client,
+      'plan_items',
+      ITEM_COLUMNS,
+      'id',
+      [itemId],
+      signal,
+    );
+    if (!rows.ok) return rows;
+    const row = rows.data[0];
+    if (row === undefined) return fail(PLAN_ITEM_NOT_FOUND);
+    const linkedId = row.kind === 'concept' ? (row.linked_post_id ?? null) : null;
+    const [screen, buckets, posts] = await Promise.all([
+      readItemScreen(client, row, readNames, signal),
+      readItemBuckets(client, [row.id], signal),
+      selectIn<PlanPostRow>(
+        client,
+        'posts',
+        'id, stage, title, format, target_date',
+        'id',
+        linkedId !== null ? [linkedId] : [],
+        signal,
+      ),
+    ]);
+    if (!screen.ok) return screen;
+    if (!buckets.ok) return buckets;
+    if (!posts.ok) return posts;
+    const postStages: Record<string, string> = {};
+    const postInfo: Record<string, PlanPostInfo> = {};
+    for (const p of posts.data) {
+      if (p.deleted === true) continue;
+      postStages[p.id] = p.stage;
+      postInfo[p.id] = {
+        title: p.title ?? '',
+        format: p.format ?? null,
+        target_date: p.target_date ?? null,
+      };
+    }
+    const [item] = withBucketIds([row], buckets.data);
+    return { ok: true, data: { item: item ?? row, screen: screen.data, postStages, postInfo } };
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
+/** The session read key of one bank idea (user and workspace first). */
+export function bankItemReadWhat(itemId: string): string {
+  return `bank-item:${itemId}`;
 }
 
 /** One author's name row (readProfiles). */

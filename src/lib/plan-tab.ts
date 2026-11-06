@@ -474,15 +474,21 @@ export const SECTION_ORDER: readonly PlanSectionKey[] = ['this', 'next', 'later'
  * then the four week groups (Upcoming and Past named 5 Nov 2026). One pick;
  * This week by default.
  */
-export type PlanWeekChip = 'all' | PlanSectionKey;
+export type PlanWeekChip = 'all' | PlanSectionKey | 'bank';
+// 'bank' (the idea bank) is in the type only; the Bank list adds it to the row.
 export const PLAN_WEEK_CHIPS: readonly PlanWeekChip[] = ['all', ...SECTION_ORDER];
+/** The idea bank's chip id and label. */
+export const PLAN_BANK_CHIP = 'bank' satisfies PlanWeekChip;
+export const PLAN_BANK_CHIP_LABEL = 'Bank';
 export const PLAN_WEEK_CHIP_DEFAULT: PlanWeekChip = 'this';
 /** The chip's URL param (?week=), so Back lands on the same chip. */
 export const PLAN_WEEK_PARAM = 'week';
 
 /** A chip's label: All, or its week group's heading. Pure. */
 export function planWeekChipLabel(chip: PlanWeekChip): string {
-  return chip === 'all' ? 'All' : PLAN_SECTION_LABELS[chip];
+  if (chip === 'all') return 'All';
+  if (chip === 'bank') return PLAN_BANK_CHIP_LABEL;
+  return PLAN_SECTION_LABELS[chip];
 }
 
 /** A URL value as a chip, or null when it names none. Pure. */

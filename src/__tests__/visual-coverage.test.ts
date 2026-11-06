@@ -153,6 +153,7 @@ const REQUIRED: readonly string[] = [
   'pipeline-search-focused',
   'pipeline-search-typed',
   'plan-item',
+  'plan-item-bank',
   'plan-item-mention-picker',
   'plan-item-more-menu',
   'plan-item-notes',
