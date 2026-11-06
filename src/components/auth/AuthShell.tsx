@@ -32,8 +32,8 @@ export function AuthShell({
     <main
       className={
         backdrop
-          ? 'relative min-h-full w-full grid place-items-center overflow-hidden px-4 py-10 bg-bg'
-          : 'min-h-full w-full grid place-items-center px-4 py-10 bg-bg bg-[radial-gradient(circle_at_50%_-10%,var(--accent-soft),transparent_55%)]'
+          ? 'relative min-h-full w-full grid place-items-center overflow-hidden px-4 py-10 bg-bg md:px-6'
+          : 'min-h-full w-full grid place-items-center px-4 py-10 bg-bg md:px-6 bg-[radial-gradient(circle_at_50%_-10%,var(--accent-soft),transparent_55%)]'
       }
     >
       {backdrop ? <PlanBackdrop /> : null}

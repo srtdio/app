@@ -255,12 +255,16 @@ describe('8. one upload summary toast; failures stay', () => {
 });
 
 describe('9. small fixes', () => {
-  it('the library is All files and names wrap to 2 lines', () => {
+  it('the library is All files; a name is the ui/Tile one-line title with the full name kept', () => {
     expect(ROOT_LABEL).toBe('All files');
     expect(read('src/components/pages/assets/AssetUploadSheet.tsx')).toContain('{ROOT_LABEL}');
+    const item = asset();
     const card = renderToStaticMarkup(
-      <AssetCard item={asset()} cache={cache} presignEnabled={false} onOpen={() => {}} />,
+      <AssetCard item={item} cache={cache} presignEnabled={false} onOpen={() => {}} />,
     );
-    expect(card).toContain('line-clamp-2');
+    // Tiles in a row share height (L7): the title is one line, the meta line under it.
+    expect(card).toContain('data-tile=""');
+    expect(card).toMatch(/class="[^"]*truncate[^"]*"><span data-asset-name="" title="/);
+    expect(card).toContain('data-asset-meta=""');
   });
 });

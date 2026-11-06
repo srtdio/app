@@ -6,6 +6,7 @@ import { ExpiredLinkView } from '@/components/auth/AuthCallbackPage';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { withNext } from '@/components/auth/next-param';
 import { Button, buttonClass } from '@/components/ui/Button';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import { dispatchSorted, SIGNOUT_EVENT } from '@/lib/events';
 import { RECOVERY_COPY } from '@/lib/induction-copy';
 import { logger } from '@/lib/logger';
@@ -187,7 +188,7 @@ export function AcceptFailureView(props: {
   if (props.failure === 'wrong-account') {
     return (
       <>
-        <p className="text-base text-bad">{RECOVERY_COPY.wrongAccount}</p>
+        <ErrorNote>{RECOVERY_COPY.wrongAccount}</ErrorNote>
         <Button variant="primary" className="w-full" onClick={props.actions.switchAccount}>
           {RECOVERY_COPY.differentEmail}
         </Button>
@@ -196,13 +197,13 @@ export function AcceptFailureView(props: {
   }
   return (
     <>
-      <p className="text-base text-bad">{ACCEPT_ERROR_MESSAGE}</p>
+      <ErrorNote>{ACCEPT_ERROR_MESSAGE}</ErrorNote>
       {/* Retry reuses the same accept path the mount effect runs. */}
       <Button
         variant="primary"
         className="w-full"
         onClick={props.actions.retry}
-        disabled={props.submitting}
+        busy={props.submitting}
       >
         Retry
       </Button>
@@ -298,7 +299,7 @@ export function AcceptInvitePage() {
     return (
       <AuthShell title="Invite link" subtitle="Couldn't read this invitation." footer={null}>
         <div className="flex flex-col gap-4">
-          <p className="text-base text-bad">This invite link is invalid.</p>
+          <ErrorNote>This invite link is invalid.</ErrorNote>
           <Link to="/signin" className={buttonClass('primary', 'default', 'w-full')}>
             Go to sign in
           </Link>
