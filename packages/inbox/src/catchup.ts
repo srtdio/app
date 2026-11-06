@@ -10,6 +10,7 @@ import {
   type CommentItem,
   type DigestRenderer,
   type DmItem,
+  type PlanLineItem,
   type PostItem,
   type RecipientDigest,
   type Section,
@@ -38,6 +39,8 @@ export interface CatchupUrlBuilders {
   comment: (entityType: 'post' | 'brief', entityId: string, commentId: string) => string;
   /** A plan with one item open; with a comment id it also scrolls to that comment. */
   planItem: (planId: string, itemId: string, commentId?: string) => string;
+  /** A bank idea (no plan); with a comment id it also scrolls to that comment. */
+  bankItem: (itemId: string, commentId?: string) => string;
   asset: (id: string) => string;
   chat: (channelId: string) => string;
   activity: () => string;
@@ -57,6 +60,10 @@ export function buildCatchupUrls(baseUrl: string, workspaceId: string): CatchupU
       `${base}/${entityType === 'post' ? 'posts' : 'briefs'}/${enc(entityId)}?w=${ws}&comment=${enc(commentId)}`,
     planItem: (planId, itemId, commentId) =>
       `${base}/plans/${enc(planId)}?w=${ws}&item=${enc(itemId)}${
+        commentId !== undefined ? `&comment=${enc(commentId)}` : ''
+      }`,
+    bankItem: (itemId, commentId) =>
+      `${base}/plan/bank?w=${ws}&item=${enc(itemId)}${
         commentId !== undefined ? `&comment=${enc(commentId)}` : ''
       }`,
     asset: (id) => `${base}/assets?w=${ws}&asset=${enc(id)}`,
@@ -203,6 +210,9 @@ function headline(d: RecipientDigest): string {
     if (clauses.length === 0 && c.newBriefs > 0)
       clauses.push(`${spell(c.newBriefs)} new ${plural(c.newBriefs, 'brief', 'briefs')}`);
   }
+  const planCount = d.plans?.total ?? 0;
+  if (clauses.length === 0 && planCount > 0)
+    clauses.push(`${spell(planCount)} plan ${plural(planCount, 'update', 'updates')}`);
   return clauses.length === 0 ? "You're all caught up." : sentence(clauses);
 }
 
@@ -281,6 +291,11 @@ function commentRow(c: CommentItem): RenderRow {
   return { lead: c.actorName, text: `${verb} ${c.targetTitle}`, url: c.url };
 }
 
+/** A Plans line: the Activity row's sentence, plain (no lead, no meta). */
+function planRow(p: PlanLineItem): RenderRow {
+  return { text: p.line, url: p.url };
+}
+
 function approvedRow(s: StageItem): RenderRow {
   return { text: s.title, url: s.url };
 }
@@ -333,6 +348,10 @@ function buildSections(d: RecipientDigest): { sections: RenderSection[]; summary
       moreUrl: urls.pipeline(),
     };
   };
+  const plans = (): RenderSection => {
+    const { shown, more } = capSection(d.plans ?? { items: [], total: 0 }, always);
+    return { title: 'Plans', rows: shown.map(planRow), more, moreUrl: urls.activity() };
+  };
   const dms = (): RenderSection => {
     const { shown, more } = capSection(d.dms, always);
     return {
@@ -348,6 +367,7 @@ function buildSections(d: RecipientDigest): { sections: RenderSection[]; summary
     sections.push(review('Waiting for your review', false));
     sections.push(dms());
     sections.push(comments('New comments on your posts'));
+    sections.push(plans());
     const parts: string[] = [];
     if (c.approved > 0)
       parts.push(`${spell(c.approved)} ${plural(c.approved, 'post', 'posts')} approved`);
@@ -360,6 +380,7 @@ function buildSections(d: RecipientDigest): { sections: RenderSection[]; summary
     if (parts.length > 0) summary.push({ text: sentence(parts), url: urls.pipeline() });
   } else {
     sections.push(comments('Client feedback to address'));
+    sections.push(plans());
     sections.push(approved());
     sections.push(review('Still waiting on the client', true));
     sections.push(dms());

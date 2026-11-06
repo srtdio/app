@@ -788,12 +788,12 @@ export function NotificationsPage() {
   const handleOpenEntry = useCallback(
     (entry: ActivityItem) => {
       if (workspaceId === null) return;
-      const open = openAction(entry, workspaceKey);
+      const open = openAction(entry, workspaceKey, side);
       if (open.markRead && entry.readAt === null) markEntriesRead([entry]);
       if (open.toast !== null) toast?.show({ title: open.toast });
       if (open.href !== null) navigate(open.href);
     },
-    [workspaceId, workspaceKey, navigate, markEntriesRead, toast],
+    [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
   );
 
   // Open a thread: every unread entry in the group is marked read in one batch
@@ -802,13 +802,15 @@ export function NotificationsPage() {
   const handleOpenGroup = useCallback(
     (group: ActivityItem[], entry: ActivityItem) => {
       if (workspaceId === null) return;
-      const open = openAction(entry, workspaceKey);
-      const unread = group.filter((e) => e.readAt === null && openAction(e, workspaceKey).markRead);
+      const open = openAction(entry, workspaceKey, side);
+      const unread = group.filter(
+        (e) => e.readAt === null && openAction(e, workspaceKey, side).markRead,
+      );
       markEntriesRead(unread);
       if (open.toast !== null) toast?.show({ title: open.toast });
       if (open.href !== null) navigate(open.href);
     },
-    [workspaceId, workspaceKey, navigate, markEntriesRead, toast],
+    [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
   );
 
   const handleMarkRead = useCallback(

@@ -123,6 +123,31 @@ const EMAILS: readonly (readonly [string, () => string])[] = [
         review: { items: [], total: 0 },
       }).html,
   ],
+  [
+    // The Plans section: idea bank lines for a client (team-only rows never reach one).
+    'email-catchup-plans',
+    () =>
+      renderCatchupEmail({
+        ...digest,
+        plans: {
+          items: [
+            {
+              line: 'Priya Shah shared an idea with you: \u201cReels week\u201d',
+              itemId: 'i1',
+              url: 'https://app.test/plan/bank?w=w1&item=i1',
+              createdAt: '2026-10-19T04:00:00Z',
+            },
+            {
+              line: "\u201cMonsoon teaser\u201d was moved to the agency's idea bank",
+              itemId: 'i2',
+              url: 'https://app.test/activity?w=w1',
+              createdAt: '2026-10-18T09:00:00Z',
+            },
+          ],
+          total: 2,
+        },
+      }).html,
+  ],
   ['email-magic-link', () => template('magic-link')],
   ['email-confirm-signup', () => template('confirm-signup')],
 ];

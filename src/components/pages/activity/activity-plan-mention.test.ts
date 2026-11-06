@@ -64,7 +64,10 @@ describe('plan item mentions in Activity', () => {
     const comment = mapEntry(row({ event_type: 'plan_comment' }));
     expect(entityHref(comment)).toBe(entityHref(item));
     expect(entityHref({ ...item, commentId: null })).toBe(`/plan/${PLAN}?item=${ITEM}`);
-    expect(entityHref({ ...item, planId: null })).toBeNull();
+    // A mention on a bank idea (no plan) opens the idea on the bank route.
+    expect(entityHref({ ...item, planId: null })).toBe(
+      `/plan/bank?item=${ITEM}&comment=${COMMENT}`,
+    );
   });
 
   it('counts under the Mentions chip, as post mentions do', () => {

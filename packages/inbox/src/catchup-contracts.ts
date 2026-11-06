@@ -84,6 +84,21 @@ export interface CommentItem {
   review?: 'approved' | 'changes';
 }
 
+/**
+ * One Plans section line: an idea bank event, or a comment or mention on a
+ * bank idea. `line` is the whole sentence in the Activity row's own words
+ * (bankEventLine), already worded for the recipient's side.
+ */
+export interface PlanLineItem {
+  line: string;
+  /** The bank idea (or the plan item it became). */
+  itemId: string;
+  /** Deep link: buildCatchupUrls(...).bankItem or .planItem; .activity when it opens nothing. */
+  url: string;
+  /** inbox_entries.created_at (ISO). */
+  createdAt: string;
+}
+
 export interface StageItem {
   postId: string;
   title: string;
@@ -154,6 +169,12 @@ export interface RecipientDigest {
   /** stage_change to approved in the window, newest first. */
   approved: Section<StageItem>;
   dms: Section<DmItem>;
+  /**
+   * Idea bank events and comments on bank ideas in the window, newest first:
+   * the Plans section. Optional: absent reads as empty. Team-only rows never
+   * reach a client digest.
+   */
+  plans?: Section<PlanLineItem>;
 }
 
 export interface RenderedEmail {

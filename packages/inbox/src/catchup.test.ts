@@ -634,3 +634,51 @@ describe('plan rows in the comments list', () => {
     expect(text).toContain(`Priya asked changes on Diwali reel: ${urls.planItem('pl1', 'i1')}`);
   });
 });
+
+describe('the Plans section (idea bank lines)', () => {
+  const plans = section([
+    {
+      line: 'Priya added “Reels week” to the bank',
+      itemId: 'i1',
+      url: urls.bankItem('i1'),
+      createdAt: '2026-10-19T04:00:00Z',
+    },
+    {
+      line: 'Priya commented on “Reels week”',
+      itemId: 'i1',
+      url: urls.bankItem('i1', 'c1'),
+      createdAt: '2026-10-19T03:00:00Z',
+    },
+  ]);
+
+  it('renders each line plain under Plans, in text and HTML, for both audiences', () => {
+    for (const digest of [makeDigest({ plans }), agencyDigest({ plans })]) {
+      const email = renderCatchupEmail(digest);
+      expect(email.text).toContain('\nPlans\n');
+      expect(email.text).toContain(
+        `- Priya added “Reels week” to the bank: ${BASE}/plan/bank?w=${WS}&item=i1\n`,
+      );
+      expect(email.text).toContain(
+        `- Priya commented on “Reels week”: ${BASE}/plan/bank?w=${WS}&item=i1&comment=c1`,
+      );
+      const html = decodeEntities(visible(email.html));
+      expect(html).toContain('Plans');
+      expect(html).toContain('Priya added “Reels week” to the bank');
+      expect(email.html).not.toMatch(/box-shadow/);
+    }
+  });
+
+  it('is left out when there are no plan lines, and absent reads as empty', () => {
+    expect(renderCatchupEmail(makeDigest()).text).not.toContain('\nPlans\n');
+    expect(renderCatchupEmail(makeDigest({ plans: section([]) })).text).not.toContain('\nPlans\n');
+  });
+
+  it('a digest with only plan lines heads with the plan update count', () => {
+    expect(renderCatchupEmail(agencyDigest({ plans })).text).toContain('Two plan updates.');
+  });
+
+  it('the bank link opens the bank idea, with the comment when there is one', () => {
+    expect(urls.bankItem('i 1')).toBe(`${BASE}/plan/bank?w=${WS}&item=i%201`);
+    expect(urls.bankItem('i1', 'c1')).toBe(`${BASE}/plan/bank?w=${WS}&item=i1&comment=c1`);
+  });
+});

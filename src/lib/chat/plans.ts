@@ -46,16 +46,49 @@ export const PLAN_RETRY_DELAY_MS = 5_000;
 /** The window event a plan write dispatches; open cards and screens re-read the plan. */
 export const PLAN_CHANGED_EVENT = 'sorted:plan-changed';
 
+/**
+ * An own write's effect on the Bank, carried on PLAN_CHANGED_EVENT so the
+ * Bank's kept page patches in place with no read: an idea that joined the
+ * bank (`in`, inserted at the top), one that left it (`out`: planned or
+ * deleted), or a flag change (`flags`).
+ */
+export type BankChange =
+  | { kind: 'in'; idea: BankIdea }
+  | { kind: 'out'; itemId: string }
+  | {
+      kind: 'flags';
+      itemId: string;
+      flags: { show_to_client?: boolean; archived_at?: string | null; starred_at?: string | null };
+    };
+
 /** The detail a PLAN_CHANGED_EVENT carries. */
 export interface PlanChangedDetail {
   planId: string;
+  /** Set when the write moved an idea into or out of the bank, or changed its flags. */
+  bank?: BankChange;
 }
 
-/** Tell every open card and screen that this plan changed. */
-export function dispatchPlanChanged(target: Pick<Window, 'dispatchEvent'>, planId: string): void {
+/** Tell every open card and screen that this plan changed (and the Bank, when `bank` is given). */
+export function dispatchPlanChanged(
+  target: Pick<Window, 'dispatchEvent'>,
+  planId: string,
+  bank?: BankChange,
+): void {
   target.dispatchEvent(
-    new CustomEvent<PlanChangedDetail>(PLAN_CHANGED_EVENT, { detail: { planId } }),
+    new CustomEvent<PlanChangedDetail>(PLAN_CHANGED_EVENT, {
+      detail: bank !== undefined ? { planId, bank } : { planId },
+    }),
   );
+}
+
+/** The bank change a PLAN_CHANGED_EVENT carries, or null. Pure. */
+export function bankChangeOf(event: Event): BankChange | null {
+  const detail = (event as CustomEvent<unknown>).detail;
+  if (typeof detail !== 'object' || detail === null) return null;
+  const bank = (detail as Record<string, unknown>).bank;
+  if (typeof bank !== 'object' || bank === null) return null;
+  const kind = (bank as Record<string, unknown>).kind;
+  return kind === 'in' || kind === 'out' || kind === 'flags' ? (bank as BankChange) : null;
 }
 
 /** The plan id a PLAN_CHANGED_EVENT names, or null. Pure. */

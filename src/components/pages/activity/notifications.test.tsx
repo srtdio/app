@@ -927,10 +927,9 @@ describe('notifications fixes: page and provider wiring', () => {
   });
 
   it('fix 9: opening a group marks every unread entry in it, not only the lead', () => {
-    expect(page).toContain(
-      'const unread = group.filter((e) => e.readAt === null && openAction(e, workspaceKey).markRead);',
+    expect(page).toMatch(
+      /const unread = group\.filter\(\s*\(e\) => e\.readAt === null && openAction\(e, workspaceKey, side\)\.markRead,?\s*\);\s*markEntriesRead\(unread\);/,
     );
-    expect(page).toMatch(/const unread = group\.filter[^\n]*\n\s*markEntriesRead\(unread\);/);
     expect(page).not.toContain('if (lead !== undefined) handleOpenEntry(lead);');
   });
 

@@ -11,8 +11,12 @@ export const UNDO_WINDOW_MS = UNDO_MS;
 export interface UndoableAction {
   /** Toast title, e.g. "Post deleted". Also forms the default failure copy. */
   label: string;
-  /** The failure toast's title when the commit fails. Default: undoFailureTitle(label). */
-  failure?: string;
+  /**
+   * The failure toast's title when the commit fails, or a function of the
+   * commit's error (for a commit that already holds its "Couldn't ..." copy).
+   * Default: undoFailureTitle(label, error).
+   */
+  failure?: string | ((error: unknown) => string);
   /** The real write. Runs at most once: on expire, swipe, replace, or flush; never after Undo. */
   commit: () => Promise<void> | void;
   /** Put the optimistic UI back. Runs on Undo and when commit fails. */
@@ -99,7 +103,9 @@ export function useUndoableAction(): {
     const fail = (err: unknown): void => {
       logger.warn('undoable action commit failed', { label, error: String(err) });
       revert?.();
-      toastRef.current?.show({ title: failure ?? undoFailureTitle(label, err) });
+      const title =
+        typeof failure === 'function' ? failure(err) : (failure ?? undoFailureTitle(label, err));
+      toastRef.current?.show({ title, tone: 'error' });
     };
     try {
       void Promise.resolve(entry.action.commit()).catch(fail);

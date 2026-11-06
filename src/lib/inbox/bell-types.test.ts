@@ -60,6 +60,11 @@ describe('isBellEntry: the rows the live layer toasts apart', () => {
       'plan_updated',
       'plan_review',
       'plan_comment',
+      'bank_idea_added',
+      'bank_idea_moved',
+      'bank_idea_planned',
+      'bank_idea_shown',
+      'bank_idea_hidden',
     ]);
     for (const eventType of BELL_PLAN_EVENT_TYPES) {
       expect(isBellPlanEvent(eventType)).toBe(true);
@@ -87,7 +92,15 @@ describe('isBellEntry: the rows the live layer toasts apart', () => {
   });
 
   it('plan comments, plan reviews and plan mentions toast as activity; plan edits stay silent', () => {
-    expect([...LIVE_PLAN_EVENT_TYPES]).toEqual(['plan_comment', 'plan_review']);
+    expect([...LIVE_PLAN_EVENT_TYPES]).toEqual([
+      'plan_comment',
+      'plan_review',
+      'bank_idea_added',
+      'bank_idea_moved',
+      'bank_idea_planned',
+      'bank_idea_shown',
+      'bank_idea_hidden',
+    ]);
     expect(isLiveActivityRow({ event_type: 'plan_comment', entity_type: 'plan_item' })).toBe(true);
     expect(isLiveActivityRow({ event_type: 'plan_review', entity_type: 'plan_item' })).toBe(true);
     expect(isLiveActivityRow({ event_type: 'mention', entity_type: 'plan_item' })).toBe(true);

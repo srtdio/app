@@ -3,7 +3,9 @@
 // scheduled sends (sent and failed), the plan alerts that name a plan
 // (plan_opened, plan_deleted, plan_date_changed, plan_updated) and the task
 // alerts (task_changed, task_due) map here into the fields their Notifications
-// card reads; chat mentions, plan_review and plan_comment keep the Activity
+// card reads, and so do the five idea bank events (bank_idea_*, worded by
+// @srtdio/inbox bankEventLine so Activity and the catch-up email agree); chat
+// mentions, plan_review and plan_comment keep the Activity
 // row they always had.
 //
 // Pure: the payload mappers and the wording (the bell's lines, unchanged).
@@ -24,6 +26,8 @@ import {
 } from '@/lib/chat/tasks';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isBellTaskEvent } from '@/lib/inbox/bell-types';
+import { bankEventLine, isBankEvent, type BankEventFields, type BankViewer } from '@srtdio/inbox';
+import { formatDate } from '@/lib/time';
 import { formatCivilDayHeader } from '@/lib/plan-week';
 import { errorText } from '@/lib/error-copy';
 
@@ -44,7 +48,7 @@ export const PLAN_ALERT_EVENT_TYPES = [
 const PLAN_ALERT = new Set<string>(PLAN_ALERT_EVENT_TYPES);
 
 /** What an alert row is: the card's icon, its top line and its tap follow from it. */
-export type AlertKind = 'reminder' | 'sent' | 'failed' | 'plan' | 'task';
+export type AlertKind = 'reminder' | 'sent' | 'failed' | 'plan' | 'task' | 'bank';
 
 /** The alert kind of an event type; null for every other row. Pure. */
 export function alertKindOf(eventType: string): AlertKind | null {
@@ -53,6 +57,7 @@ export function alertKindOf(eventType: string): AlertKind | null {
   if (eventType === 'scheduled_failed') return 'failed';
   if (PLAN_ALERT.has(eventType)) return 'plan';
   if (isBellTaskEvent(eventType)) return 'task';
+  if (isBankEvent(eventType)) return 'bank';
   return null;
 }
 
@@ -293,6 +298,39 @@ export const SCHEDULED_LABEL = 'Scheduled';
 
 /** A plan alert's top line when no actor resolved. */
 export const PLAN_LABEL = 'Plan';
+
+/** An idea bank alert's top line when no actor resolved. */
+export const BANK_LABEL = 'Idea bank';
+
+/** The bank copy's viewer from the viewer's side: a client reads the client words. Pure. */
+export function bankViewerOf(side: ViewerSide): BankViewer {
+  return side === 'client' ? 'client' : 'team';
+}
+
+/**
+ * An idea bank alert's line (bank_idea_added .. bank_idea_hidden), in the
+ * shared words of @srtdio/inbox bankEventLine; the planned day reads as
+ * src/lib/time.ts formatDate (day month, the year only off the current year).
+ * Pure but for `now` (defaults to the clock).
+ */
+export function bankAlertLine(
+  eventType: string,
+  f: BankEventFields | undefined,
+  who: string | null,
+  side: ViewerSide,
+  now: Date = new Date(),
+): string {
+  if (!isBankEvent(eventType)) return who ?? BANK_LABEL;
+  const fields: BankEventFields = f ?? {
+    title: null,
+    planTitle: null,
+    fromPlanTitle: null,
+    targetDate: null,
+  };
+  return bankEventLine(eventType, fields, who, bankViewerOf(side), (civil) =>
+    formatDate(civil, now),
+  );
+}
 
 /** A chat row's chat when its name did not resolve (a direct chat, or a failed read). */
 export const CHAT_LABEL = 'Chat';

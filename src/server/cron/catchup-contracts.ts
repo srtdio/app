@@ -31,6 +31,7 @@ export type {
   DigestRenderer,
   DmItem,
   LocalSlotDate,
+  PlanLineItem,
   PostItem,
   PreviousSlot,
   RecipientDigest,

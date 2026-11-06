@@ -32,6 +32,7 @@ vi.mock('@/components/ui/toast', async (importOriginal) => {
 });
 
 import { ToastProvider } from '@/components/ui/toast';
+import { bucketDeleteFailure, withBucketBack } from '@/components/pages/plan-tab/BankFilterSheet';
 import {
   UNDO_WINDOW_MS,
   undoFailureTitle,
@@ -201,6 +202,44 @@ describe('useUndoableAction', () => {
     await flushPromises();
     expect(commit).not.toHaveBeenCalled();
   });
+  it('a rejected bank commit (a 403 bucket delete) shows "Couldn\'t delete the bucket. {reason}" in the bad tone and reverts', async () => {
+    const buckets = [
+      { id: 'b1', name: 'Product' },
+      { id: 'b2', name: 'Festive' },
+    ] as unknown as Parameters<typeof withBucketBack>[0];
+    // The Bank's list without the chip (the optimistic hide), as the sheet leaves it.
+    let list = buckets.filter((b) => b.id !== 'b2');
+    const toast = run({
+      label: 'Bucket deleted',
+      failure: bucketDeleteFailure,
+      commit: async () => {
+        throw new Error("Couldn't delete the bucket. You don't have access to do this.");
+      },
+      revert: () => {
+        list = withBucketBack(list, buckets[1]!, 1);
+      },
+    });
+    toast.onExpire?.();
+    await flushPromises();
+    const last = shown[shown.length - 1]!;
+    expect(last.title).toBe("Couldn't delete the bucket. You don't have access to do this.");
+    expect(last.tone).toBe('error');
+    expect(list.map((b) => b.id)).toEqual(['b1', 'b2']);
+  });
+
+  it('every failure toast is in the bad tone', async () => {
+    const toast = run({
+      label: 'Idea archived',
+      commit: async () => {
+        throw new Error('permission denied for function bank_idea_set');
+      },
+    });
+    toast.onExpire?.();
+    await flushPromises();
+    const last = shown[shown.length - 1]!;
+    expect(last.title).toBe("Couldn't archive the idea. You don't have access to do this.");
+    expect(last.tone).toBe('error');
+  });
 });
 
 describe('useUndoableAction with the real toast store', () => {
@@ -267,5 +306,23 @@ describe('useUndoableAction with the real toast store', () => {
     await flushPromises();
     expect(second).toHaveBeenCalledTimes(1);
     expect(first).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('withBucketBack', () => {
+  it('puts a reverted bucket back where it was, never twice', () => {
+    const a = { id: 'a', name: 'A' } as unknown as Parameters<typeof withBucketBack>[1];
+    const b = { id: 'b', name: 'B' } as unknown as Parameters<typeof withBucketBack>[1];
+    const c = { id: 'c', name: 'C' } as unknown as Parameters<typeof withBucketBack>[1];
+    expect(withBucketBack([a, c], b, 1).map((x) => x.id)).toEqual(['a', 'b', 'c']);
+    expect(withBucketBack([a, b], b, 1).map((x) => x.id)).toEqual(['a', 'b']);
+    expect(withBucketBack([a], b, 9).map((x) => x.id)).toEqual(['a', 'b']);
+  });
+
+  it("bucketDeleteFailure keeps the commit's own copy, else the default", () => {
+    expect(bucketDeleteFailure(new Error("Couldn't delete the bucket. It was deleted."))).toBe(
+      "Couldn't delete the bucket. It was deleted.",
+    );
+    expect(bucketDeleteFailure(new Error('boom'))).toBe("Couldn't delete the bucket. Try again.");
   });
 });

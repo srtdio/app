@@ -47,6 +47,11 @@ export const INBOX_EVENT_TYPES = [
   'task_changed',
   'task_due',
   'brief_post_created',
+  'bank_idea_added',
+  'bank_idea_moved',
+  'bank_idea_planned',
+  'bank_idea_shown',
+  'bank_idea_hidden',
 ] as const;
 
 /** One inbox_entries.event_type value, derived from the canonical list. */

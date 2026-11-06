@@ -41,7 +41,7 @@ import { BUCKET_NAME_MAX, type BucketOption } from '@/lib/buckets';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import type { BankSort } from '@/lib/chat/plans';
-import { useUndoableAction } from '@/lib/use-undoable-action';
+import { undoFailureTitle, useUndoableAction } from '@/lib/use-undoable-action';
 import {
   BANK_SORT_OPTIONS,
   UNTOUCHED_LABEL,
@@ -180,6 +180,9 @@ export function BucketChips(props: {
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   const busy = useRef(false);
   const shown = props.buckets.filter((b) => !hidden.has(b.id));
+  // The list a late revert puts the chip back into (the sheet may have re-rendered).
+  const latestBuckets = useRef(props.buckets);
+  latestBuckets.current = props.buckets;
   const multi = props.multi;
 
   const add = async (): Promise<void> => {
@@ -216,23 +219,29 @@ export function BucketChips(props: {
     setRenaming(null);
     setDraft('');
   };
+  // The chip leaves the Bank's own bucket list (onBuckets) at once, so a revert
+  // brings it back even after this sheet has closed; a failed commit shows
+  // "Couldn't delete the bucket. {reason}" and puts the chip back.
   const remove = (bucket: BucketOption): void => {
     const writes = props.writes;
     if (writes === null) return;
+    const before = props.buckets;
+    const index = before.findIndex((b) => b.id === bucket.id);
     setHidden((prev) => new Set([...prev, bucket.id]));
+    props.onBuckets(before.filter((b) => b.id !== bucket.id));
     if (props.picked === bucket.id) props.onPick(null);
     undoable.run({
       label: 'Bucket deleted',
-      commit: async () => {
-        await writes.remove(bucket.id);
-        props.onBuckets(props.buckets.filter((b) => b.id !== bucket.id));
-      },
-      revert: () =>
+      failure: bucketDeleteFailure,
+      commit: () => writes.remove(bucket.id),
+      revert: () => {
         setHidden((prev) => {
           const next = new Set(prev);
           next.delete(bucket.id);
           return next;
-        }),
+        });
+        props.onBuckets(withBucketBack(latestBuckets.current, bucket, index));
+      },
     });
   };
   const keys = (
@@ -505,4 +514,25 @@ function InlineName(props: {
       </IconButton>
     </span>
   );
+}
+
+/**
+ * A bucket delete's failure copy: the commit's own "Couldn't delete the
+ * bucket. {reason}" (bucketWritesFor's remove throws it), else the default
+ * form. Pure.
+ */
+export function bucketDeleteFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  return message.startsWith("Couldn't ") ? message : undoFailureTitle('Bucket deleted', error);
+}
+
+/** The list with a deleted bucket put back where it was (never twice). Pure. */
+export function withBucketBack(
+  list: readonly BucketOption[],
+  bucket: BucketOption,
+  index: number,
+): BucketOption[] {
+  if (list.some((b) => b.id === bucket.id)) return [...list];
+  const at = index < 0 || index > list.length ? list.length : index;
+  return [...list.slice(0, at), bucket, ...list.slice(at)];
 }

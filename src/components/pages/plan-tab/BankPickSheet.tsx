@@ -214,7 +214,7 @@ export function BankPickSheet(props: {
       action: {
         label: 'Undo',
         onPress: () => {
-          void unplanBankIdea(supabase, idea.id).then((back) => {
+          void unplanBankIdea(supabase, idea.id, idea).then((back) => {
             if (back.ok) dispatchPlanChanged(window, plan.id);
             else showToast({ title: errorText('undo', back.error.message), tone: 'error' });
           });

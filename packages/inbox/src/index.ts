@@ -23,6 +23,7 @@ export type {
   CatchupAudience,
   PostItem,
   CommentItem,
+  PlanLineItem,
   StageItem,
   DmItem,
   Section,
@@ -39,3 +40,15 @@ export type { Role } from './types';
 export { AGENCY_ROLES } from './types';
 
 export type { CatchupUrlBuilders } from './catchup';
+
+export {
+  BANK_EVENT_TYPES,
+  BANK_TEAM_ONLY_EVENT_TYPES,
+  bankEventInBank,
+  bankEventLine,
+  bankEventOpens,
+  bankFieldsOf,
+  isBankEvent,
+  isTeamOnlyBankEvent,
+} from './bank-events';
+export type { BankEventFields, BankEventType, BankViewer } from './bank-events';

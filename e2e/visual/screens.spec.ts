@@ -570,6 +570,50 @@ function seedBankIdea(network: HarnessNetwork): void {
   }
 }
 
+/**
+ * Activity's idea bank rows: one of each bank event from Priya, newest first
+ * (added, shown, hidden, moved, planned). Each row renders from its payload
+ * alone (title, plan_title, target_date): no item read.
+ */
+function seedBankActivity(network: HarnessNetwork): void {
+  const entry = (n: number, eventType: string, payload: Row): Row => ({
+    id: `0190f1b0-0000-7000-8000-00000000b00${n}`,
+    user_id: ME,
+    actor_user_id: PEER,
+    workspace_id: WORKSPACE_ID,
+    event_type: eventType,
+    entity_type: 'plan_item',
+    entity_id: PLAN_CONCEPT_ITEM,
+    scope: 'posts',
+    scope_key: eventType === 'bank_idea_planned' ? PLAN_ID : 'bank',
+    tier: 'active',
+    payload,
+    read_at: n > 2 ? new Date(NOW - n * 60_000).toISOString() : null,
+    snoozed_until: null,
+    email_sent_at: null,
+    deleted_at: null,
+    created_at: new Date(NOW - n * 600_000).toISOString(),
+  });
+  network.world.tables.inbox_entries = [
+    entry(1, 'bank_idea_added', { title: 'Reels week', plan_id: null }),
+    entry(2, 'bank_idea_shown', { title: 'Reels week', plan_id: null }),
+    entry(3, 'bank_idea_hidden', { title: 'Reels week', plan_id: null }),
+    entry(4, 'bank_idea_moved', {
+      title: 'Monsoon teaser',
+      from_plan_id: PLAN_ID,
+      from_plan_title: 'Week of 12 Oct',
+      target_date: '2026-10-14',
+      plan_id: PLAN_ID,
+    }),
+    entry(5, 'bank_idea_planned', {
+      title: 'Festive carousel',
+      plan_title: 'Week of 19 Oct',
+      target_date: '2026-10-21',
+      plan_id: PLAN_ID,
+    }),
+  ];
+}
+
 /** The chat plan plus a Not OK note on its post item (the item's Plan notes). */
 function seedChatPlanNote(network: HarnessNetwork): void {
   seedChatPlan(network);
@@ -1280,6 +1324,15 @@ const SCREENS: Screen[] = [
     seed: creator,
     url: '/activity',
     steps: async (page) => waitFor([page.getByText('Priya Raman mentioned you')], 'activity'),
+  },
+  {
+    // The idea bank's Activity rows (team viewer): added, shown, hidden, moved, planned.
+    name: 'activity-bank',
+    seed: creator,
+    extra: seedBankActivity,
+    url: '/activity',
+    steps: async (page) =>
+      waitFor([page.locator('[data-activity-event="bank_idea_planned"]')], 'bank activity'),
   },
   // Loading boxes (sweepBoxes): each read below never answers, and a fresh
   // browser holds nothing for the screen, so its boxes are what paints.

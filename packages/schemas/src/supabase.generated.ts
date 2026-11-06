@@ -9579,6 +9579,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      bank_live_can_receive: {
+        Args: { p_workspace_id: string }
+        Returns: boolean
+      }
       brand_agency_request: {
         Args: {
           p_agency_email: string

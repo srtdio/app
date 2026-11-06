@@ -27,13 +27,22 @@ import { createClient } from '@supabase/supabase-js';
 import { stripFormat } from '@srtdio/comments';
 import {
   AGENCY_ROLES,
+  BANK_EVENT_TYPES,
+  bankEventInBank,
+  bankEventLine,
+  bankEventOpens,
+  bankFieldsOf,
   buildCatchupUrls,
+  isBankEvent,
+  isTeamOnlyBankEvent,
   buildOneClickUrl,
   buildUnsubscribePageUrl,
   renderCatchupEmail,
   signUnsubscribeToken,
+  type BankViewer,
   type Role,
 } from '@srtdio/inbox';
+import { formatDate } from '@/lib/time';
 import { TRACE_ID_HEADER, withTraceLogger } from '@/server/trace';
 import { decideSlot } from './catchup-schedule';
 import {
@@ -49,6 +58,7 @@ import type {
   CatchupTickResult,
   CommentItem,
   DmItem,
+  PlanLineItem,
   PostItem,
   RecipientDigest,
   RunCatchupDeps,
@@ -59,8 +69,10 @@ import type {
 // inbox_entries event types that can trigger a catch-up. Each maps to a
 // rendered section or summary count: comment and mention (post, brief or plan
 // item), plan_comment and plan_review (OK / Not OK) to Comments, stage_change to
-// Approved / the parked count, brief_created to the new briefs count. Must stay
-// a subset of INBOX_EVENT_TYPES (event-types.test.ts).
+// Approved / the parked count, brief_created to the new briefs count. The five
+// idea bank events, and comments and mentions on a bank idea (no plan), go to
+// Plans as plain lines in the Activity row's words. Must stay a subset of
+// INBOX_EVENT_TYPES (event-types.test.ts).
 export const CATCHUP_EVENT_TYPES = [
   'comment',
   'mention',
@@ -68,6 +80,7 @@ export const CATCHUP_EVENT_TYPES = [
   'brief_created',
   'plan_comment',
   'plan_review',
+  ...BANK_EVENT_TYPES,
 ] as const;
 
 /** The entity_type of a plan comment, review or mention row (entity_id the item). */
@@ -146,7 +159,8 @@ interface BriefRow {
 interface PlanItemRow {
   id: string;
   workspace_id: string;
-  plan_id: string;
+  /** Null for a bank idea. */
+  plan_id: string | null;
   title: string | null;
 }
 interface PlanRow {
@@ -371,7 +385,7 @@ interface Lookups {
   names: Map<string, string>;
   posts: Map<string, PostRow>;
   briefs: Map<string, BriefRow>;
-  /** Live plan items (item and plan both not deleted), by item id. */
+  /** Live plan items (item and plan both not deleted; a bank idea has no plan), by item id. */
   planItems: Map<string, PlanItemRow>;
   reviewByWorkspace: Map<string, PostRow[]>;
   messagesByChannel: Map<string, MessageRow[]>;
@@ -403,17 +417,56 @@ function assembleDigest(c: DueCandidate, look: Lookups, appBaseUrl: string): Ass
   };
 
   const comments: CommentItem[] = [];
+  const plans: PlanLineItem[] = [];
+  // Team-only rows never reach a client address (the server never writes
+  // them for a client; this is the second guard).
+  const viewer: BankViewer = isAgency(c.role) ? 'team' : 'client';
+  const now = new Date(window.end);
+  const day = (civil: string): string => formatDate(civil, now);
   const approved: StageItem[] = [];
   let parked = 0;
   let newBriefs = 0;
   const entryIds: string[] = [];
 
   for (const e of c.entries) {
-    if (isPlanItemEntry(e)) {
+    if (isBankEvent(e.event_type)) {
+      if (viewer === 'client' && isTeamOnlyBankEvent(e.event_type)) continue;
+      if (e.entity_id === null) continue;
+      const f = bankFieldsOf(e.payload);
+      const planId = payloadString(e.payload, 'plan_id');
+      const url = !bankEventOpens(e.event_type, viewer)
+        ? urls.activity()
+        : bankEventInBank(e.event_type) || planId === undefined
+          ? urls.bankItem(e.entity_id)
+          : urls.planItem(planId, e.entity_id);
+      plans.push({
+        line: bankEventLine(e.event_type, f, name(e.actor_user_id), viewer, day),
+        itemId: e.entity_id,
+        url,
+        createdAt: e.created_at,
+      });
+      entryIds.push(e.id);
+    } else if (isPlanItemEntry(e)) {
       const item = planItemIn(e.entity_id);
       const title = item?.title?.trim() ?? '';
       // The item or its plan is gone (or has no title): skipped, like a deleted post.
       if (item === undefined || title === '') continue;
+      if (item.plan_id === null) {
+        // A comment or mention on a bank idea: a Plans line. A team-only
+        // comment never reaches a client address.
+        if (e.event_type === 'plan_review') continue;
+        if (viewer === 'client' && payloadString(e.payload, 'visibility') === 'team') continue;
+        const commentId = payloadString(e.payload, 'comment_id');
+        const verb = e.event_type === 'mention' ? 'mentioned you on' : 'commented on';
+        plans.push({
+          line: `${name(commentActorId(e))} ${verb} \u201c${title}\u201d`,
+          itemId: item.id,
+          url: urls.bankItem(item.id, commentId),
+          createdAt: e.created_at,
+        });
+        entryIds.push(e.id);
+        continue;
+      }
       const review = e.event_type === 'plan_review' ? planReviewOutcome(e.payload) : undefined;
       // A withdrawn or unknown review outcome is not news.
       if (e.event_type === 'plan_review' && review === undefined) continue;
@@ -511,6 +564,7 @@ function assembleDigest(c: DueCandidate, look: Lookups, appBaseUrl: string): Ass
   if (entryIds.length === 0 && !dmInWindow) return null;
 
   newestFirst(comments, (i) => i.createdAt);
+  newestFirst(plans, (i) => i.createdAt);
   newestFirst(approved, (i) => i.createdAt);
   newestFirst(dms, (d) => latestAt.get(d.channelId) ?? window.start);
 
@@ -563,6 +617,7 @@ function assembleDigest(c: DueCandidate, look: Lookups, appBaseUrl: string): Ass
       comments: { items: comments, total: comments.length },
       approved: { items: approved, total: approved.length },
       dms: { items: dms, total: dms.length },
+      plans: { items: plans, total: plans.length },
     },
   };
 }
@@ -787,7 +842,7 @@ export async function runCatchup(deps: RunCatchupDeps): Promise<CatchupTickResul
   const livePlans = new Set<string>();
   for (const p of await readByIdPairs<PlanRow>(
     'plans',
-    [...new Set(itemRows.map((i) => i.plan_id))],
+    [...new Set(itemRows.flatMap((i) => (i.plan_id !== null ? [i.plan_id] : [])))],
     dueWorkspaceIds,
     (idChunk, wsChunk, from, to) =>
       client
@@ -802,7 +857,10 @@ export async function runCatchup(deps: RunCatchupDeps): Promise<CatchupTickResul
     livePlans.add(p.id);
   }
   const planItems = new Map<string, PlanItemRow>();
-  for (const i of itemRows) if (livePlans.has(i.plan_id)) planItems.set(i.id, i);
+  // A bank idea (no plan) is live on its own; a plan item needs its plan live.
+  for (const i of itemRows) {
+    if (i.plan_id === null || livePlans.has(i.plan_id)) planItems.set(i.id, i);
+  }
 
   const reviewByWorkspace = new Map<string, PostRow[]>();
   for (const p of await readByIds<PostRow>('review posts', dueWorkspaceIds, (chunk, from, to) =>

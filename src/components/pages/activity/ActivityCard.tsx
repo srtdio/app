@@ -306,7 +306,7 @@ function AlertIcon({ item, alert }: { item: ActivityItem; alert: AlertInfo }): R
       <IconTickSingle size={ICON_SIZE.status} />
     ) : alert.kind === 'failed' ? (
       <IconCalendarClock size={ICON_SIZE.status} />
-    ) : alert.kind === 'plan' ? (
+    ) : alert.kind === 'plan' || alert.kind === 'bank' ? (
       <IconPlan size={ICON_SIZE.status} />
     ) : (
       <IconTaskSquare size={ICON_SIZE.status} />
@@ -507,7 +507,9 @@ export function ActivityCard({
 
   const unread = groupHasUnread(group);
   const snoozed = isSnoozed(lead, nowMs);
-  const planItem = lead.entityType === PLAN_ITEM_ENTITY;
+  // An idea bank alert is a plan_item row too, but it reads as an alert (its
+  // line, no body), never as a plan comment card.
+  const planItem = lead.entityType === PLAN_ITEM_ENTITY && alert === null;
   const hasEntity = lead.entityType === 'post' || lead.entityType === 'brief' || planItem;
   // An assets_deleted card has no entity: a short title, and the who-did-what
   // line in the body so it is never cut off.
@@ -526,7 +528,7 @@ export function ActivityCard({
       : assetsDeleted
         ? (lead.filenames?.[0] ?? 'Files')
         : activityLine(lead);
-  const leadTappable = !opensNothing(lead);
+  const leadTappable = !opensNothing(lead, side);
   // A scheduled send's alert went to its sender alone: the footer says so in
   // place of the scope tag, and its title (it names the receiver) may wrap.
   const onlyYou = alert !== null && (alert.kind === 'sent' || alert.kind === 'failed');
@@ -756,7 +758,7 @@ export function ActivityCard({
             {rest.map((entry) => (
               <li
                 key={entry.id}
-                {...(opensNothing(entry)
+                {...(opensNothing(entry, side)
                   ? {}
                   : {
                       role: 'button',
@@ -771,7 +773,7 @@ export function ActivityCard({
                     })}
                 className={cn(
                   'flex min-h-[44px] items-center gap-2 py-2 pl-[14px] pr-3',
-                  !opensNothing(entry) &&
+                  !opensNothing(entry, side) &&
                     'cursor-pointer mv-tint lit-hover focus-visible:lit-focus-inset',
                 )}
               >

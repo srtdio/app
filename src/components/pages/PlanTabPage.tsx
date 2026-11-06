@@ -341,6 +341,9 @@ export function PlanTabPage(): ReactElement {
     enabled: ready,
     filter: bankFilter,
     searchText: desktop ? bankSearchLaptop : onPhoneBank ? search : '',
+    // Live only while the Bank (chip, panel or table) is open, agency side; the
+    // subscription starts in an effect, after the Bank paints.
+    live: onBank && creator,
   });
   const bankBuckets = useBankBuckets({ workspaceId, userId, enabled: ready });
   // A client sees the Bank only when their bank read holds an idea.

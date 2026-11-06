@@ -127,7 +127,8 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
     });
     setBusy(false);
     if (!res.ok) {
-      setError(errorText('add the idea', res.error.message));
+      // The sheet stays open with what was typed; the toast says why.
+      toast({ title: errorText('add the idea', res.error.message), tone: 'error' });
       return;
     }
     props.onAdded(res.data);

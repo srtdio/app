@@ -76,6 +76,20 @@ interface VerbSource {
 }
 
 /**
+ * The idea bank events' toast verbs: side-neutral, since the live toast does
+ * not know the viewer's side (the Activity row then reads the full line).
+ */
+const BANK_VERBS = {
+  bank_idea_added: 'added an idea to the bank',
+  bank_idea_moved: 'moved an idea to the bank',
+  bank_idea_planned: 'planned an idea',
+  bank_idea_shown: 'shared an idea',
+  bank_idea_hidden: 'hid an idea from the client',
+} as const;
+
+const BANK_VERB_SET = new Set<string>(Object.values(BANK_VERBS));
+
+/**
  * The event's existing verb, as its Activity line already says it: "commented",
  * "approved", "resolved a thread". Null for an event whose line has no actor
  * verb (the ready ping, the welcome row, anything unknown). Pure.
@@ -126,6 +140,12 @@ export function eventVerb(item: VerbSource): string | null {
       return 'added a file version';
     case 'invite':
       return 'invited a new member';
+    case 'bank_idea_added':
+    case 'bank_idea_moved':
+    case 'bank_idea_planned':
+    case 'bank_idea_shown':
+    case 'bank_idea_hidden':
+      return BANK_VERBS[item.eventType];
     case 'plan_review':
       if (item.reviewWithdrawn === true) {
         return item.reviewPrevious === 'changes'
@@ -163,6 +183,8 @@ export const REOPEN_VERB = 'reopened';
  */
 function verbOnTitle(verb: string, title: string, times?: number): string {
   const repeat = times !== undefined ? ` ${times} times` : '';
+  // A bank verb names the idea after a colon: "Asha added an idea to the bank: “Reels week”".
+  if (BANK_VERB_SET.has(verb)) return `${verb}${repeat}: \u201c${title}\u201d`;
   if (verb === REVIEW_VERB) return `sent ${title} for review${repeat}`;
   if (verb === REOPEN_VERB) return `reopened ${title}${repeat}`;
   return `${verb}${repeat} on ${title}`;
@@ -317,6 +339,12 @@ export function eventLabel(
       return 'New plan comment';
     case 'plan_review':
       return 'Plan item reviewed';
+    case 'bank_idea_added':
+    case 'bank_idea_moved':
+    case 'bank_idea_planned':
+    case 'bank_idea_shown':
+    case 'bank_idea_hidden':
+      return 'Idea bank';
     default:
       return 'New activity';
   }

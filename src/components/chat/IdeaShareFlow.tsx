@@ -27,6 +27,7 @@ import { conversationPickerBody, type LoadState } from '@/components/pages/pcs/C
 import { useChat } from '@/lib/chat';
 import { listChannelSummaries, type ChannelSummary } from '@/lib/chat-reads';
 import { newMessageId } from '@/lib/chat/message-id';
+import { dispatchPlanChanged } from '@/lib/chat/plans';
 import type { ChatMessageRow } from '@/lib/chat/thread';
 import { errorText } from '@/lib/error-copy';
 import { logger } from '@/lib/logger';
@@ -309,7 +310,15 @@ export function IdeaShareFlow(props: {
           p_trace_id: generateTraceId(),
         }),
       share: () => shareIdea({ messageId, channelId: channel.channelId, itemId: idea.id }),
-      onShown: () => props.onShown?.(),
+      onShown: () => {
+        // The Bank's kept page shows it as shown to the client at once (no read).
+        dispatchPlanChanged(window, '', {
+          kind: 'flags',
+          itemId: idea.id,
+          flags: { show_to_client: true },
+        });
+        props.onShown?.();
+      },
     });
     setBusy(false);
     if (!result.ok) {
