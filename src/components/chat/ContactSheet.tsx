@@ -29,6 +29,7 @@ export {
   type Feed,
 } from '@/components/chat/ChatInfoTabs';
 import { MODAL_HEADER_SAFE, MODAL_PAGE_CLASS, ModalPanel } from '@/components/chat/ModalPanel';
+import { textRole } from '@/components/ui/Text';
 
 /** The page title when no `heading` is given. */
 const CONTACT_HEADING = 'Contact info';
@@ -65,13 +66,15 @@ function contactPage(props: {
   const select = props.select;
   return (
     <ModalPanel aria-label={props.heading} data-contact-page="" className={MODAL_PAGE_CLASS}>
-      {select?.selecting === true ? (
-        // Select mode: "n selected" and Cancel (SelectionHeader) take the bar.
-        <div
-          className={`flex shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header ${MODAL_HEADER_SAFE}`}
-        >
-          {select.header}
-        </div>
+      {select?.selecting === true && select.selectHeader !== null ? (
+        // Select mode: the same HeaderBar holds "n selected" and Cancel, so
+        // the title sits on the one edge in both modes.
+        <HeaderBar
+          compact
+          className={MODAL_HEADER_SAFE}
+          title={select.selectHeader.title}
+          actions={select.selectHeader.cancel}
+        />
       ) : (
         // A modal page: Back left, the title, Select (when offered) right. One exit.
         <HeaderBar
@@ -89,7 +92,7 @@ function contactPage(props: {
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-6">
           <div className="flex flex-col items-center gap-1 text-center">
             <ContactPhoto name={props.title} avatarUrl={props.avatarUrl} />
-            <span className="mt-2 max-w-full truncate text-lg font-semibold text-fg">
+            <span className={textRole('heading', 'mt-2 max-w-full truncate text-fg')}>
               {props.title}
             </span>
             {props.roleLine !== null ? (

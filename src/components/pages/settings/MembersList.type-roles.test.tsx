@@ -18,6 +18,7 @@ vi.mock('@/lib/trace-context', () => ({ useNewTrace: () => () => 't-1' }));
 
 import { getInviteRoleOptions } from './MembersInviteForm';
 import { MembersList } from './MembersList';
+import { TEXT_ROLE } from '@/components/ui/Text';
 import type { PendingEditHandler } from './MembersList';
 import type { DerivedMembers, MemberEntry } from './members-data';
 
@@ -113,17 +114,18 @@ describe('MembersList type roles', () => {
     expectRole(count, ['text-sm', 'text-fg-3']);
   });
 
-  it('a member name is the row title: base/500', () => {
+  it('a member name is the ui/Row title (heading role)', () => {
     mount();
-    // The name sits in its person-card trigger; the title span wraps it.
+    // The name sits in its person-card trigger inside the Row's title.
     const name = byText('Ada Agency');
     expect(name.hasAttribute('data-person-trigger')).toBe(true);
-    expectRole(name.parentElement as HTMLElement, ['text-base', 'font-medium', 'text-fg']);
+    const title = name.closest('[data-member-name]')?.parentElement?.parentElement as HTMLElement;
+    expectRole(title, TEXT_ROLE.heading.split(' '));
   });
 
-  it('the member email is sm fg-3 meta', () => {
+  it('the member email is the Row second line (secondary role)', () => {
     mount();
-    expectRole(byText('ada@agency.test'), ['text-sm', 'text-fg-3']);
+    expectRole(byText('ada@agency.test'), TEXT_ROLE.secondary.split(' '));
   });
 
   it('an empty group line is base fg-2 copy', () => {

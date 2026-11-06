@@ -6,7 +6,7 @@ import { useSearchJump } from '@/lib/search/jump';
 import { Highlight, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import { leaveIntoCard, useGrowFromCard } from '@/lib/motion/pages';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
@@ -14,14 +14,17 @@ import { Button } from '@/components/ui/Button';
 import { Comments } from '@/components/comments/Comments';
 import { renderFormatted } from '@/components/chat/message-body';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { IconButton } from '@/components/ui/IconButton';
+import { HeaderBar } from '@/components/ui/HeaderBar';
+import { StatusDot } from '@/components/ui/StatusDot';
+import { textRole } from '@/components/ui/Text';
+import { GUTTER } from '@/components/ui/layout';
+import { cn } from '@/lib/cn';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import {
   ICON_SIZE,
   IconBriefs,
   IconCheck,
-  IconChevronLeft,
   IconCopy,
   IconLink,
   IconPlus,
@@ -65,8 +68,7 @@ export const CLOSED_BRIEF_LINE = 'Closed briefs stay readable and open to commen
 
 // The brief title matches the post title on the same screen size (Post detail
 // uses this exact size on phone and desktop). It wraps, never scrolls sideways.
-export const BRIEF_TITLE_CLASS =
-  'min-w-0 break-words text-3xl font-semibold tracking-tight text-fg';
+export const BRIEF_TITLE_CLASS = textRole('display', 'min-w-0 break-words text-fg');
 
 /**
  * The comment box inside the Comments section, for "Add note" (the note failed
@@ -98,7 +100,7 @@ export function BriefDetailSkeleton(): ReactElement {
       lit="flat"
       label="Loading brief"
       data-testid="brief-detail-skeleton"
-      className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6"
+      className={cn(GUTTER, 'py-6 grid grid-cols-1 md:grid-cols-3 gap-6')}
     >
       <div className="md:col-span-2 flex flex-col gap-6">
         <Bone lit="flat" as="div" className="h-8 w-3/4 rounded" />
@@ -380,7 +382,7 @@ export function BriefDetailPage({
   // growFromCard (kept on laptop): opened from a card tap, the page grows out
   // of that card on its first frame (layout effect, no wait); Back grows it
   // back into the card. Never on a kept-view tab return.
-  const pageAnchorRef = useRef<HTMLDivElement>(null);
+  const pageAnchorRef = useRef<HTMLElement>(null);
   useGrowFromCard(briefId, pageAnchorRef);
   const newTrace = useNewTrace();
   const { workspaceId, workspaceKey, workspaces } = useWorkspace();
@@ -658,21 +660,22 @@ export function BriefDetailPage({
     } else navigate(target);
   }
 
-  // The same chevron as Post detail.
-  const backButton = (
-    <IconButton label="Back" className="shrink-0" onClick={goBack}>
-      <IconChevronLeft size={ICON_SIZE.control} />
-    </IconButton>
+  // The brief screen's top bar is ui/HeaderBar (Back "<" with the leading
+  // pull, the status line in the title slot, the ⋯ last), as Post detail. The
+  // brief title is the page's one h1 (below), so the bar's title is never an h1.
+  const topBar = (title: ReactNode, actions?: ReactNode): ReactElement => (
+    <HeaderBar
+      barRef={pageAnchorRef}
+      compact
+      onBack={goBack}
+      title={title}
+      titleSlot={<span className={textRole('title', 'truncate')}>{title}</span>}
+      {...(actions !== undefined ? { actions } : {})}
+      className={SAFE_TOP_BAR_CLASS}
+    />
   );
 
-  const bareHeader = (
-    <div
-      ref={pageAnchorRef}
-      className={`lit-header flex items-center gap-3 px-4 md:px-6 border-b ${SAFE_TOP_BAR_CLASS}`}
-    >
-      {backButton}
-    </div>
-  );
+  const bareHeader = topBar(null);
 
   // The page settles once when it lands after the boxes (never on a kept read).
   const showingBoxes = loading || (linkedPending && !loadFailed && !notFound);
@@ -693,7 +696,7 @@ export function BriefDetailPage({
     return (
       <>
         {bareHeader}
-        <div className="px-4 md:px-6 mt-4">
+        <div className={cn(GUTTER, 'mt-4')}>
           <LoadError title="this brief" onRetry={() => void load()} />
         </div>
       </>
@@ -826,18 +829,11 @@ export function BriefDetailPage({
 
   return (
     <SearchWordsContext.Provider value={searchJump.words}>
-      <div
-        ref={pageAnchorRef}
-        className={`lit-header flex items-center gap-3 px-4 md:px-6 border-b ${SAFE_TOP_BAR_CLASS}`}
-      >
-        {backButton}
-        {/* The status line, as the post screen's: a 7px dot and 15px semibold. */}
-        <div data-brief-status-line="" className="flex min-w-0 flex-1 items-center gap-2">
-          <span
-            aria-hidden="true"
-            className={`h-[7px] w-[7px] shrink-0 rounded-full ${closed ? 'bg-fg-3' : 'bg-accent'}`}
-          />
-          <span className="truncate text-lg font-semibold text-fg">
+      {topBar(
+        // The status line, as the post screen's: the status dot and the title role.
+        <span data-brief-status-line="" className="flex min-w-0 items-center gap-2">
+          <StatusDot stage={closed ? 'closed' : 'open'} />
+          <span className="truncate">
             <span data-brief-status={closed ? BRIEF_STATUS.closed : BRIEF_STATUS.open}>
               {statusLine.status}
             </span>
@@ -854,33 +850,35 @@ export function BriefDetailPage({
               </>
             ) : null}
           </span>
-        </div>
-        {showNewPost && isLaptop ? (
-          <Button
-            variant="primary"
-            data-new-post-from-brief="top"
-            className="shrink-0"
-            onClick={startPost}
-          >
-            {newPostLabel}
-          </Button>
-        ) : null}
-        <div data-brief-more="" className="shrink-0">
-          <ActionMenu
-            title="Brief actions"
-            items={briefMenuItems({
-              closed,
-              canClose,
-              onCopyLink: copyLink,
-              onCopyBrief: copyBrief,
-              onCloseBrief: closeWithUndo,
-              onReopenBrief: reopenWithUndo,
-            })}
-          />
-        </div>
-      </div>
+        </span>,
+        <>
+          {showNewPost && isLaptop ? (
+            <Button
+              variant="primary"
+              data-new-post-from-brief="top"
+              className="shrink-0"
+              onClick={startPost}
+            >
+              {newPostLabel}
+            </Button>
+          ) : null}
+          <span data-brief-more="" className="flex shrink-0">
+            <ActionMenu
+              title="Brief actions"
+              items={briefMenuItems({
+                closed,
+                canClose,
+                onCopyLink: copyLink,
+                onCopyBrief: copyBrief,
+                onCloseBrief: closeWithUndo,
+                onReopenBrief: reopenWithUndo,
+              })}
+            />
+          </span>
+        </>,
+      )}
 
-      <div ref={landedRef} className="px-4 md:px-6 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div ref={landedRef} className={cn(GUTTER, 'py-6 grid grid-cols-1 md:grid-cols-3 gap-6')}>
         {/* One order on phone and desktop: title (details lines under it on
             phone), Objective, Brand requirements, Attachments, Reference links,
             Comments. Desktop's side column holds the details and linked posts. */}

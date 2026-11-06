@@ -1,3 +1,5 @@
+import { cn } from '@/lib/cn';
+import { GUTTER } from '@/components/ui/layout';
 import { useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -45,7 +47,7 @@ interface PipelineFeedProps {
  */
 function FeedCard({ post, children }: { post: PipelinePost; children: ReactNode }): ReactElement {
   return (
-    <div data-post-id={post.id} className="h-full min-w-0 rounded-lg">
+    <div data-post-id={post.id} className="min-w-0 rounded-lg">
       {children}
     </div>
   );
@@ -68,7 +70,7 @@ function cardGrid(
   covers: CoverLookup | undefined,
 ): ReactElement {
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-2 items-start gap-4">
       {posts.map((post) => (
         <FeedCard key={post.id} post={post}>
           <PostCard
@@ -126,7 +128,7 @@ export function PipelineFeed({
   const view = list.slice(0, shown);
 
   return (
-    <div className="px-4 py-4">
+    <div className={cn('py-4', GUTTER)}>
       {list.length === 0 ? (
         activeStage === 'all' ? (
           <EmptyState icon={<IconPipeline size={ICON_SIZE.tray} />} title="Posts show up here." />

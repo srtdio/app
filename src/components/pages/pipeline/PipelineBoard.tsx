@@ -1,3 +1,5 @@
+import { cn } from '@/lib/cn';
+import { GUTTER } from '@/components/ui/layout';
 import { useEffect, useState } from 'react';
 import type { DragEvent, ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -295,7 +297,7 @@ export function PipelineBoardView({
     // overflow-y-hidden + min-h-0 keep vertical scrolling owned by the page.
     <div
       data-board-scroll
-      className="flex min-h-0 gap-3 overflow-x-auto overflow-y-hidden px-4 py-4 md:px-6"
+      className={cn('flex min-h-0 gap-3 overflow-x-auto overflow-y-hidden py-4', GUTTER)}
     >
       {stages.map((stage) => {
         const all = grouped[stage];
@@ -319,7 +321,7 @@ export function PipelineBoardView({
             {all.length === 0 ? (
               <div data-column-empty="">{StageEmpty({ stage, compact: true })}</div>
             ) : (
-              <div className="flex flex-col gap-2 p-2">
+              <div className="flex flex-col gap-4 p-2">
                 {shown.map((post) => {
                   // No drag until the role is known, and none for a card this
                   // role cannot move anywhere.
@@ -400,7 +402,7 @@ function SingleStageGrid({
 }): ReactElement {
   if (posts.length === 0) {
     return (
-      <div data-board-grid data-stage={stage} className="px-4 md:px-6">
+      <div data-board-grid data-stage={stage} className={GUTTER}>
         {StageEmpty({ stage })}
       </div>
     );
@@ -408,7 +410,7 @@ function SingleStageGrid({
   // N independent column stacks in reading order (card i in column i % N), so
   // each card is as tall as its own content; N follows the board's width.
   return (
-    <BoardColumns data-board-grid data-stage={stage} className="px-4 py-4 md:px-6">
+    <BoardColumns data-board-grid data-stage={stage} className={cn('py-4', GUTTER)}>
       {posts.map((post) => (
         <div key={post.id} data-post-id={post.id} className="min-w-0 rounded-lg">
           <PostCard

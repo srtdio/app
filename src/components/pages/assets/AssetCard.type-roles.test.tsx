@@ -74,20 +74,17 @@ afterEach(() => {
 });
 
 describe('AssetCard type roles', () => {
-  it('the name is the card title: base/500', () => {
-    // Image and link cards carry the name row; file cards are a FileTile.
+  it('the name is the tile title (ui/Tile secondary role in full ink), below the picture', () => {
     mount(makeAsset({ kind: 'image', filename: 'report.pdf', mimeType: 'image/png' }));
     const title = document.querySelector<HTMLElement>('span[title="report.pdf"]');
     expect(title).not.toBeNull();
-    expectRole(title as HTMLElement, ['text-base', 'font-medium']);
-    expect(title?.className).not.toContain('text-xs');
+    expectRole(title?.parentElement as HTMLElement, ['text-md', 'text-fg', 'truncate']);
   });
 
-  it('the size line is sm fg-3 meta', () => {
+  it('the size line is the meta role, with the picture type', () => {
     mount(makeAsset({ kind: 'image', mimeType: 'image/png' }));
-    const meta = byText(humanizeSize(2048)).parentElement as HTMLElement;
+    const meta = byText(`PNG · ${humanizeSize(2048)}`).parentElement as HTMLElement;
     expectRole(meta, ['text-sm', 'tabular-nums', 'text-fg-3']);
-    expect(meta.className).not.toContain('text-xs');
   });
 
   it('a link card shows its domain as sm fg-3 meta', () => {
@@ -100,19 +97,14 @@ describe('AssetCard type roles', () => {
       }),
     );
     // The tile's fallback shows the domain too; the meta line is the one under the name.
-    const line = [...document.querySelectorAll<HTMLElement>('div.pr-8')].find(
-      (el) => el.textContent?.trim() === 'example.com',
-    );
-    expect(line).toBeDefined();
+    const line = document.querySelector<HTMLElement>('[data-asset-meta]')?.parentElement;
+    expect(line?.textContent?.trim()).toBe('example.com');
     expectRole(line as HTMLElement, ['text-sm', 'text-fg-3']);
   });
 
-  it('the mime badge on an image is the xs chip', () => {
+  it('the picture type rides on the meta line (no chip over the caption)', () => {
     mount(makeAsset({ kind: 'image', filename: 'photo.png', mimeType: 'image/png' }));
-    const badge = [...document.querySelectorAll<HTMLElement>('span.shrink-0')].find(
-      (el) => el.textContent?.trim() === mimeBadge('image/png'),
-    );
-    expect(badge).toBeDefined();
-    expectRole(badge as HTMLElement, ['text-xs', 'font-medium', 'text-fg-3']);
+    const meta = document.querySelector<HTMLElement>('[data-asset-meta]');
+    expect(meta?.textContent?.startsWith(mimeBadge('image/png'))).toBe(true);
   });
 });

@@ -8,7 +8,8 @@ import { Sheet } from '@/components/ui/Sheet';
 import { IconButton } from '@/components/ui/IconButton';
 import { DropZone } from '@/components/ui/DropZone';
 import { ICON_SIZE, IconCheck, IconFile, IconPlus, IconUpload, IconX } from '@/components/ui/icons';
-import { fileExtension, humanizeSize } from '@/lib/assets';
+import { Card } from '@/components/ui/Card';
+import { humanizeSize } from '@/lib/assets';
 import {
   UPLOAD_ACCEPT,
   nextUploadNames,
@@ -633,7 +634,7 @@ export function AssetUploadSheet({
           </span>
         </DropZone>
       ) : (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-3">
           {/* One file takes one name; several share one base name. */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor={`${inputId}-name`} className="text-base font-medium text-fg-2">
@@ -656,39 +657,38 @@ export function AssetUploadSheet({
           {uploads.map((item) => {
             const status = statuses[item.id] ?? { state: 'queued' };
             return (
-              <div
+              <Card
                 key={item.id}
-                className="lit-card-muted flex items-center gap-3 rounded-xl border bg-panel-2 p-2.5"
-              >
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3">
-                  {item.previewUrl !== null ? (
-                    <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex flex-col items-center gap-0.5">
+                dense
+                muted
+                leading={
+                  <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3 lit-media">
+                    {item.previewUrl !== null ? (
+                      <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
                       <IconFile size={ICON_SIZE.control} />
-                      {fileExtension(item.file.name) !== '' ? (
-                        <span className="text-xs font-medium">{fileExtension(item.file.name)}</span>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="truncate text-base text-fg">{item.file.name}</span>
-                  <span className="truncate text-sm text-fg-3">{humanizeSize(item.file.size)}</span>
-                  <UploadStatusRow
-                    status={status}
-                    onRetry={() => void startRun([item])}
+                    )}
+                  </span>
+                }
+                title={<span className="text-fg">{item.file.name}</span>}
+                meta={humanizeSize(item.file.size)}
+                more={
+                  <IconButton
+                    label={`Remove ${item.file.name}`}
+                    onClick={() => remove(item.id)}
                     disabled={running}
-                  />
-                </div>
-                <IconButton
-                  label={`Remove ${item.file.name}`}
-                  onClick={() => remove(item.id)}
+                  >
+                    <IconX size={ICON_SIZE.nav} />
+                  </IconButton>
+                }
+                className="self-stretch"
+              >
+                <UploadStatusRow
+                  status={status}
+                  onRetry={() => void startRun([item])}
                   disabled={running}
-                >
-                  <IconX size={ICON_SIZE.nav} />
-                </IconButton>
-              </div>
+                />
+              </Card>
             );
           })}
 

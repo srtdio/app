@@ -15,23 +15,23 @@ function ActivityBoxCard(): ReactElement {
     <div data-activity-box="" className="lit-card flex overflow-hidden rounded-xl border bg-panel">
       <div aria-hidden="true" className="w-[3px] shrink-0 bg-border-strong" />
       <div className="min-w-0 flex-1">
-        <div className="flex items-start gap-3 p-[14px]">
+        <div className="flex items-start gap-3 p-4">
           <div className="min-w-0 flex-1">
-            <div className="mb-1.5 flex h-5 items-center gap-[7px]">
+            <div className="mb-1 flex h-5 items-center gap-2">
               <Bone lit="lit-avatar" className="h-5 w-5 shrink-0 rounded-full" />
               <Bone lit="flat" className="h-3 w-28 rounded" />
             </div>
             <div className="flex h-5 items-center">
               <Bone lit="flat" className="h-3.5 w-3/4 rounded" />
             </div>
-            <div className="mt-[3px] flex h-5 items-center">
+            <div className="mt-1 flex h-5 items-center">
               <Bone lit="flat" className="h-3 w-1/2 rounded" />
             </div>
           </div>
           <Bone lit="lit-media" className="aspect-square w-24 shrink-0 rounded-lg" />
         </div>
         <div className="h-px bg-border" />
-        <div className="flex min-h-[44px] items-center px-[14px]">
+        <div className="flex min-h-11 items-center px-4">
           <Bone lit="flat" className="h-3 w-16 rounded" />
         </div>
       </div>
@@ -43,11 +43,12 @@ function ActivityBoxCard(): ReactElement {
 export function ActivityBoxes(): ReactElement {
   return (
     <BoxSkeleton lit="flat" label={LOADING_NOTIFICATIONS} data-activity-boxes="" className="pb-6">
-      <section className="mt-4">
-        <div className="flex h-5 items-center px-4 md:px-6">
+      <section className="mt-2">
+        {/* The day line's own 44 (NotificationsPage), so nothing moves when the cards land. */}
+        <div className="flex h-11 items-center px-4 md:px-6">
           <Bone lit="flat" className="h-3 w-20 rounded" />
         </div>
-        <div className="mt-2 flex flex-col gap-2 px-4 md:px-6">
+        <div className="flex flex-col gap-2 px-4 md:px-6">
           {Array.from({ length: ACTIVITY_BOX_CARDS }, (_unused, index) => (
             <ActivityBoxCard key={index} />
           ))}
@@ -69,7 +70,7 @@ export function UpcomingBoxes(): ReactElement {
       {Array.from({ length: 3 }, (_unused, index) => (
         <div
           key={index}
-          className="lit-card flex min-h-[64px] items-center gap-3 rounded-xl border bg-panel px-[14px]"
+          className="lit-card flex min-h-16 items-center gap-3 rounded-xl border bg-panel px-4"
         >
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <Bone lit="flat" className="h-3.5 w-2/3 rounded" />

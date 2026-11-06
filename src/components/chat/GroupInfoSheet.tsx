@@ -190,7 +190,7 @@ export function MembersRefreshNotice(props: { onRetry: () => void }): ReactEleme
       role="status"
       data-members-refresh=""
       onClick={props.onRetry}
-      className={`mt-1 flex items-center px-1 text-fg-2 underline-offset-2 hover:underline ${SHEET_NOTICE_TYPE}`}
+      className={`mt-1 flex items-center text-fg-2 underline-offset-2 hover:underline ${SHEET_NOTICE_TYPE}`}
     >
       {MEMBERS_REFRESH_FAILED}
     </PressableRow>
@@ -434,13 +434,15 @@ export function groupInfoPage(props: {
       data-group-page=""
       className="fixed inset-0 z-50 flex flex-col bg-bg outline-none"
     >
-      {select?.selecting === true ? (
-        // Select mode: "n selected" and Cancel (SelectionHeader) take the bar.
-        <div
-          className={`flex shrink-0 items-center gap-2.5 border-b bg-panel px-2 md:px-4 lit-header ${MODAL_HEADER_SAFE}`}
-        >
-          {select.header}
-        </div>
+      {select?.selecting === true && select.selectHeader !== null ? (
+        // Select mode: the same HeaderBar holds "n selected" and Cancel, so
+        // the title sits on the one edge in both modes.
+        <HeaderBar
+          compact
+          className={MODAL_HEADER_SAFE}
+          title={select.selectHeader.title}
+          actions={select.selectHeader.cancel}
+        />
       ) : (
         // A modal page: Back left, the title, Select (when offered) right. One exit.
         <HeaderBar
@@ -479,10 +481,10 @@ export function groupInfoPage(props: {
   );
 }
 
-/** A section heading: small caps label over its rows. */
+/** A section heading: small caps label over its rows, on the page's 16 edge (L2). */
 function SectionLabel(props: { children: string }): ReactElement {
   return (
-    <p className="mb-1 px-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
+    <p className="mb-1 text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
       {props.children}
     </p>
   );
@@ -830,7 +832,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
         ) : (
           <ul className="flex flex-col">
             {members.options.map((member) => (
-              <li key={member.userId} className="flex items-center gap-3 px-1 min-h-[44px]">
+              <li key={member.userId} className="flex min-h-[44px] items-center gap-3">
                 <PersonTrigger
                   userId={member.userId}
                   name={member.displayName}

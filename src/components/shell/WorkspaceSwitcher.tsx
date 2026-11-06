@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field } from '@/components/ui/Field';
 import { Backdrop } from '@/components/ui/Backdrop';
+import { HeaderBar } from '@/components/ui/HeaderBar';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PlatformMark } from '@/components/ui/PlatformMark';
@@ -312,14 +313,17 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
         aria-label={title}
         className="relative flex w-full max-w-[420px] max-h-[84svh] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay outline-none"
       >
-        <div className="flex items-center gap-2.5 border-b border-border px-[18px] py-[15px]">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <span className="ml-auto">
+        {/* The one header bar (ui/HeaderBar, 56): title, the X a 44 box under
+            the trailing rule, glyph 20. */}
+        <HeaderBar
+          compact
+          title={title}
+          actions={
             <IconButton label="Close" onClick={requestClose}>
-              <IconX />
+              <IconX size={ICON_SIZE.control} />
             </IconButton>
-          </span>
-        </div>
+          }
+        />
 
         {mode === 'list' ? (
           <div className="flex flex-col overflow-y-auto p-1.5">
@@ -339,7 +343,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
                     onClick={() => selectWorkspace(ws.id)}
                     aria-current={isActive}
                     className={cn(
-                      'flex items-center gap-2.5 px-2.5 mv-tint',
+                      'flex items-center gap-3 px-3 mv-tint',
                       isActive ? 'bg-accent-soft text-accent lit-active' : 'text-fg-2',
                     )}
                   >
@@ -383,7 +387,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
             ) : null}
           </div>
         ) : mode === 'create' ? (
-          <form onSubmit={submitDetails} className="flex flex-col gap-4 overflow-y-auto p-[18px]">
+          <form onSubmit={submitDetails} className="flex flex-col gap-4 overflow-y-auto p-4">
             {deletedWorkspace !== null ? (
               <p className="text-base leading-snug text-fg-2">
                 {deletedWorkspace.name} is gone. Start a new one.
@@ -438,7 +442,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
               </p>
             ) : null}
             {formError !== null ? <p className="text-base text-bad">{formError}</p> : null}
-            <div className="flex items-center justify-end gap-2.5">
+            <div className="flex items-center justify-end gap-2">
               <Button
                 type="button"
                 variant="ghost"
@@ -475,14 +479,14 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
             ) : null}
           </form>
         ) : (
-          <div className="flex flex-col gap-4 p-[18px]">
+          <div className="flex flex-col gap-4 p-4">
             <p className="text-base leading-relaxed text-fg-2">
               Check the spelling: <span className="font-semibold text-fg">{preview}</span>{' '}
               can&apos;t be changed later. To change it, you delete this workspace and create a new
               one.
             </p>
             {formError !== null ? <p className="text-base text-bad">{formError}</p> : null}
-            <div className="flex items-center justify-end gap-2.5">
+            <div className="flex items-center justify-end gap-2">
               <Button
                 type="button"
                 variant="ghost"

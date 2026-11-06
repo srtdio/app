@@ -62,7 +62,7 @@ function mb(bytes: number): string {
 
 function UsageLine(props: { label: string; bytes: number }) {
   return (
-    <div className="flex min-h-[44px] items-center gap-3 px-3 text-base">
+    <div className="flex min-h-11 items-center gap-3 px-3 text-base">
       <span className="min-w-0 flex-1 truncate text-fg">{props.label}</span>
       <span className="shrink-0 tabular-nums text-fg-2">{mb(props.bytes)}</span>
     </div>
@@ -110,8 +110,8 @@ export function StoragePanel({ usage }: { usage: StorageUsage | null }) {
   const fill = Math.min(usedBytes / ALLOWANCE_BYTES, 1);
 
   return (
-    <div className="flex max-w-[520px] flex-col gap-6">
-      <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
         <p className="flex items-baseline gap-2">
           <span className="text-3xl font-semibold tabular-nums text-fg">{mb(usedBytes)}</span>
           <span className="text-sm text-fg-3">of 1 GB</span>

@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn';
 import { Avatar, avatarFillFor } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Button } from '@/components/ui/Button';
+import { Row } from '@/components/ui/Row';
 import { tagClass } from '@/components/ui/Tag';
 import { FORMER_MEMBER, splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
@@ -267,24 +268,63 @@ function asActor(
   );
 }
 
-/** One expanded row's author: their photo and full name above the row's text. */
-function EntryAuthor({ entry }: { entry: ActivityItem }) {
-  if (entry.actorName === null) return null;
+/**
+ * One expanded thread entry on ui/Row: the author's photo, their name (or, with
+ * no actor, the line itself) and the time on top, the line under it (it never
+ * repeats the name), the unread dot at the end. A tap opens that entry.
+ */
+function ThreadRow({
+  entry,
+  nowMs,
+  side,
+  divider,
+  onOpenEntry,
+}: {
+  entry: ActivityItem;
+  nowMs: number;
+  side: ViewerSide;
+  divider: boolean;
+  onOpenEntry: (entry: ActivityItem) => void;
+}): ReactElement {
+  const named = entry.actorName !== null;
+  const line = cardBodyLine(entry, { name: !named });
+  const time = formatRelative(
+    alertDisplayTime(entry.eventType, entry.createdAt, entry.alert?.plan),
+    new Date(nowMs),
+  );
   return (
-    <div data-activity-entry-author="" className="mb-0.5 flex items-center gap-1.5">
-      {asActor(
-        entry,
-        <Avatar
-          name={entry.actorName}
-          {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
-          role="inline"
-        />,
-        'block',
-      )}
-      <span className="truncate text-sm font-medium text-fg-3">
-        {asActor(entry, <>{entry.actorName}</>, 'inline')}
-      </span>
-    </div>
+    <Row
+      data-activity-thread-row={entry.id}
+      leading={
+        named && entry.actorName !== null
+          ? asActor(
+              entry,
+              <Avatar
+                name={entry.actorName}
+                {...(entry.actorAvatarUrl !== null ? { src: entry.actorAvatarUrl } : {})}
+                role="header"
+              />,
+              'block',
+            )
+          : undefined
+      }
+      title={
+        named && entry.actorName !== null ? (
+          <span data-activity-entry-author="">
+            {asActor(entry, <>{entry.actorName}</>, 'inline')}
+          </span>
+        ) : (
+          line
+        )
+      }
+      time={time}
+      {...(named ? { secondary: line } : {})}
+      {...(entry.readAt === null
+        ? { badge: <span className={UNREAD_DOT_CLASS} aria-label="Unread" role="status" /> }
+        : {})}
+      divider={divider}
+      {...(opensNothing(entry, side) ? {} : { onPress: () => onOpenEntry(entry) })}
+    />
   );
 }
 
@@ -426,7 +466,7 @@ function DeletedFilesTile({
       {extra > 0 ? (
         <span
           data-activity-files-badge=""
-          className="absolute bottom-1.5 right-1.5 inline-flex h-5 items-center rounded-lg bg-panel px-1.5 text-xs font-medium tabular-nums text-fg-2 lit-pill"
+          className="absolute bottom-2 right-2 inline-flex h-5 items-center rounded-lg bg-panel px-2 text-xs font-medium tabular-nums text-fg-2 lit-pill"
         >
           +{extra}
         </span>
@@ -585,13 +625,13 @@ export function ActivityCard({
             : {})}
           data-activity-lead=""
           className={cn(
-            'flex items-start gap-3 p-[14px]',
+            'flex items-start gap-3 p-4',
             // Inside the overflow-hidden card: the inset focus line, the lit-hover overlay.
             leadTappable && 'cursor-pointer mv-tint lit-hover focus-visible:lit-focus-inset',
           )}
         >
           <div className="min-w-0 flex-1">
-            <div className="mb-1.5 flex items-center gap-[7px]">
+            <div className="mb-1 flex items-center gap-2">
               {actorName !== null
                 ? asActor(
                     actorEntry,
@@ -623,25 +663,25 @@ export function ActivityCard({
             </p>
 
             {alertLine !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-1 line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {alertLine}
               </p>
             ) : null}
 
             {showsBody ? (
-              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-1 line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {stripFormat(cardBodyLine(lead))}
               </p>
             ) : null}
 
             {filesBody !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-1 line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {filesBody}
               </p>
             ) : null}
 
             {lead.eventType === MENTION_EVENT_TYPE && lead.body !== null ? (
-              <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
+              <p className="mt-1 line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
                 {mentionPreview(lead.body, selfName, isChatMention(lead))}
               </p>
             ) : null}
@@ -683,7 +723,7 @@ export function ActivityCard({
         </div>
 
         {alert?.kind === 'failed' && (onEdit !== undefined || onRetry !== undefined) ? (
-          <div data-activity-failed-actions="" className="flex justify-end gap-2 px-[14px] pb-3">
+          <div data-activity-failed-actions="" className="flex justify-end gap-2 px-4 pb-4">
             {onEdit !== undefined ? (
               <Button type="button" data-activity-action="edit" onClick={() => onEdit(lead)}>
                 Edit
@@ -703,7 +743,7 @@ export function ActivityCard({
         ) : null}
 
         <div className="h-px bg-border" />
-        <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
+        <div className="flex min-h-11 items-center gap-2 px-4">
           <span data-activity-time="" className="text-sm tabular-nums text-fg-3">
             {formatRelative(
               alertDisplayTime(lead.eventType, lead.createdAt, lead.alert?.plan),
@@ -738,7 +778,8 @@ export function ActivityCard({
               {expanded ? 'Show less' : `+${rest.length} more`}
             </Button>
           ) : null}
-          <div data-activity-menu="" className={cn('-mr-2', rest.length === 0 && 'ml-auto')}>
+          {/* The trigger owns the trailing rule: its glyph ends on the 16 content edge. */}
+          <div data-activity-menu="" className={cn('flex', rest.length === 0 && 'ml-auto')}>
             <ActivityRowMenu
               open={menuOpen}
               onOpenChange={setMenuOpen}
@@ -754,50 +795,16 @@ export function ActivityCard({
           </div>
         </div>
         {rest.length > 0 && expanded ? (
-          <ul className="border-t border-border">
-            {rest.map((entry) => (
-              <li
-                key={entry.id}
-                {...(opensNothing(entry, side)
-                  ? {}
-                  : {
-                      role: 'button',
-                      tabIndex: 0,
-                      onClick: () => onOpenEntry(entry),
-                      onKeyDown: (event: KeyboardEvent<HTMLLIElement>) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          onOpenEntry(entry);
-                        }
-                      },
-                    })}
-                className={cn(
-                  'flex min-h-[44px] items-center gap-2 py-2 pl-[14px] pr-3',
-                  !opensNothing(entry, side) &&
-                    'cursor-pointer mv-tint lit-hover focus-visible:lit-focus-inset',
-                )}
-              >
-                <div className="min-w-0 flex-1">
-                  <EntryAuthor entry={entry} />
-                  <p
-                    className={cn(
-                      'line-clamp-2 text-base',
-                      entry.readAt === null ? 'font-medium text-fg' : 'text-fg-2',
-                    )}
-                  >
-                    {/* The author line above already names who: the text never repeats it. */}
-                    {cardBodyLine(entry, { name: entry.actorName === null })}
-                  </p>
-                  <p className="mt-0.5 text-sm text-fg-3">
-                    {formatRelative(
-                      alertDisplayTime(entry.eventType, entry.createdAt, entry.alert?.plan),
-                      new Date(nowMs),
-                    )}
-                  </p>
-                </div>
-                {entry.readAt === null ? (
-                  <span className={UNREAD_DOT_CLASS} aria-label="Unread" role="status" />
-                ) : null}
+          <ul data-activity-thread="" className="border-t border-border">
+            {rest.map((entry, index) => (
+              <li key={entry.id}>
+                <ThreadRow
+                  entry={entry}
+                  nowMs={nowMs}
+                  side={side}
+                  divider={index < rest.length - 1}
+                  onOpenEntry={onOpenEntry}
+                />
               </li>
             ))}
           </ul>
@@ -857,16 +864,16 @@ export function UpcomingCard({
           onClick={() => onOpen(item)}
           onKeyDown={onKeyDown}
           data-upcoming-open=""
-          className="flex cursor-pointer items-start gap-3 p-[14px] mv-tint lit-hover focus-visible:lit-focus-inset"
+          className="flex cursor-pointer items-start gap-3 p-4 mv-tint lit-hover focus-visible:lit-focus-inset"
         >
           <div className="min-w-0 flex-1">
-            <div className="mb-1.5 flex items-center gap-[7px]">
+            <div className="mb-1 flex items-center gap-2">
               <span data-upcoming-tag="" className="truncate text-sm font-medium text-fg-3">
                 {upcomingTag(item)}
               </span>
             </div>
             <p className="truncate text-base font-medium text-fg">{upcomingChat(item)}</p>
-            <p className="mt-[3px] line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
+            <p className="mt-1 line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
               {stripFormat(item.preview)}
             </p>
           </div>
@@ -885,7 +892,7 @@ export function UpcomingCard({
           </div>
         </div>
 
-        <div data-upcoming-actions="" className="flex justify-end gap-2 px-[14px] pb-3">
+        <div data-upcoming-actions="" className="flex justify-end gap-2 px-4 pb-4">
           <Button type="button" data-upcoming-action="edit" onClick={() => onEdit(item)}>
             {upcomingEditLabel(item)}
           </Button>
@@ -901,7 +908,7 @@ export function UpcomingCard({
         </div>
 
         <div className="h-px bg-border" />
-        <div className="flex min-h-[44px] items-center gap-1.5 px-[14px]">
+        <div className="flex min-h-11 items-center gap-2 px-4">
           <span data-upcoming-due="" className="font-mono text-sm tabular-nums text-fg-3">
             {formatSendLabel(new Date(item.dueAt), now)}
           </span>

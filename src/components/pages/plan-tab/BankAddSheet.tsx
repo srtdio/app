@@ -14,7 +14,8 @@ import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Field } from '@/components/ui/Field';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { Sheet } from '@/components/ui/Sheet';
+import { Sheet, SheetActions } from '@/components/ui/Sheet';
+import { Card } from '@/components/ui/Card';
 import { Textarea } from '@/components/ui/Textarea';
 import { ICON_SIZE, IconPaperclip, IconX } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
@@ -145,54 +146,60 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
       busy={busy}
       busyLabel="Adding…"
       footer={
-        <div className="grid w-full grid-cols-2 gap-2">
-          <Button variant="ghost" type="button" onClick={props.onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            type="button"
-            data-bank-add-go=""
-            busy={busy}
-            onClick={() => void submit()}
-          >
-            Add to bank
-          </Button>
-        </div>
+        <SheetActions
+          cancel={
+            <Button variant="ghost" type="button" onClick={props.onClose}>
+              Cancel
+            </Button>
+          }
+          primary={
+            <Button
+              variant="primary"
+              type="button"
+              data-bank-add-go=""
+              busy={busy}
+              onClick={() => void submit()}
+            >
+              Add to bank
+            </Button>
+          }
+        />
       }
     >
-      <div data-bank-add="" className="flex flex-col gap-3 bg-bg p-4">
-        <div className="lit-card flex flex-col gap-3 rounded-xl border bg-panel p-4">
-          <Field label="Title" required>
-            {(id) => (
-              <Input
-                id={id}
-                autoFocus
-                data-bank-add-title=""
-                value={title}
-                maxLength={BANK_TITLE_MAX}
-                required
-                onChange={(e) => {
-                  setTitle(e.target.value);
-                  setError(null);
-                }}
-              />
-            )}
-          </Field>
-          <Field label="Description">
-            {(id) => (
-              <Textarea
-                id={id}
-                data-bank-add-description=""
-                value={description}
-                rows={3}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            )}
-          </Field>
-          {error !== null ? <ErrorNote>{error}</ErrorNote> : null}
-        </div>
-        <div className="lit-card flex flex-col gap-2 rounded-xl border bg-panel p-4">
+      <div data-bank-add="" className="flex flex-col gap-4 bg-bg p-4">
+        <Card className="self-stretch">
+          <div className="flex flex-col gap-3">
+            <Field label="Title" required>
+              {(id) => (
+                <Input
+                  id={id}
+                  autoFocus
+                  data-bank-add-title=""
+                  value={title}
+                  maxLength={BANK_TITLE_MAX}
+                  required
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    setError(null);
+                  }}
+                />
+              )}
+            </Field>
+            <Field label="Description">
+              {(id) => (
+                <Textarea
+                  id={id}
+                  data-bank-add-description=""
+                  value={description}
+                  rows={3}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              )}
+            </Field>
+            {error !== null ? <ErrorNote>{error}</ErrorNote> : null}
+          </div>
+        </Card>
+        <Card className="self-stretch">
           <span className="text-base font-medium text-fg">Files</span>
           <DropZone
             data-bank-add-files=""
@@ -252,8 +259,8 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
               ))}
             </ul>
           ) : null}
-        </div>
-        <div className="lit-card flex flex-col gap-2 rounded-xl border bg-panel p-4">
+        </Card>
+        <Card className="self-stretch">
           <span className="text-base font-medium text-fg">Buckets</span>
           <BucketChips
             buckets={props.buckets}
@@ -271,7 +278,7 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
             writes={props.writes}
             onBuckets={props.onBuckets}
           />
-        </div>
+        </Card>
       </div>
     </Sheet>
   );

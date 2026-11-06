@@ -5,6 +5,7 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 import { AssetCard } from '@/components/pages/assets/AssetCard';
 import { GlideItem } from '@/lib/motion';
+import { TILE_GRID } from '@/components/ui/Tile';
 
 /** Cards drawn first, and added each time the reader nears the end. */
 export const ASSET_GRID_PAGE = 60;
@@ -63,7 +64,7 @@ function useGrowingCount(total: number): {
   return { count, sentinelRef };
 }
 
-/** Responsive asset grid: two columns on mobile, ~158px auto-fill on desktop. */
+/** Responsive asset grid: ui/Tile's grid (two columns on phone, 158 auto-fill columns filling the laptop width). */
 export function AssetGrid({
   items,
   presignEnabled,
@@ -79,7 +80,7 @@ export function AssetGrid({
   const shown = count >= items.length ? items : items.slice(0, count);
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]">
+      <div data-asset-grid="" className={TILE_GRID}>
         {/* Grid reflow (a delete, a new file, a column change) glides on X and Y. */}
         {shown.map((item) => (
           <GlideItem key={item.id} axis="xy" className="min-w-0">

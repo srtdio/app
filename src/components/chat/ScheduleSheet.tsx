@@ -11,21 +11,15 @@ import { useEffect, useState } from 'react';
 import type { ReactElement, RefObject } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { PressableRow } from '@/components/ui/PressableRow';
-import { ICON_SIZE, IconCalendarClock, IconChevronRight } from '@/components/ui/icons';
-import { cn } from '@/lib/cn';
-import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import { IconCalendarClock } from '@/components/ui/icons';
+import { WhenOptions } from '@/components/chat/WhenOptions';
+import { textRole } from '@/components/ui/Text';
 import {
   customSummary,
-  dateInputValue,
   formatDayTime,
-  fromInputs,
   isWithinScheduleWindow,
-  MAX_LEAD_MS,
   presetTimes,
   shortZoneName,
-  timeInputValue,
 } from '@/lib/chat/scheduled';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
@@ -72,113 +66,49 @@ interface OptionsProps {
   onPick: (sendAt: Date) => void;
 }
 
-/** The rows and the Custom step; shared by the sheet and the laptop menu. */
+/**
+ * The rows and the Custom step; shared by the sheet and the laptop menu. The
+ * frame is the one chat time pick (WhenOptions), shared with Remind me.
+ */
 export function ScheduleOptions(props: OptionsProps): ReactElement {
-  const [step, setStep] = useState<'presets' | 'custom'>('presets');
   const now = new Date();
   const presets = presetTimes(now);
-  const [date, setDate] = useState(() => dateInputValue(presets.tomorrow));
-  const [time, setTime] = useState(() => timeInputValue(presets.tomorrow));
-  const chosen = fromInputs(date, time);
-  const valid = chosen !== null && isWithinScheduleWindow(chosen, now);
-
   return (
-    <div data-schedule-options={step} className={cn('flex flex-col', NO_TOUCH_SELECT)}>
-      {props.preview !== null ? (
-        <p data-schedule-preview="" className="mb-2 truncate px-2 text-base text-fg-2">
-          {props.preview}
-        </p>
-      ) : null}
-      {step === 'presets' ? (
-        <ul role="menu" aria-label={SCHEDULE_SHEET_TITLE} className="flex flex-col">
-          <PresetRow
-            id="tomorrow"
-            label="Tomorrow"
-            detail={formatDayTime(presets.tomorrow, now)}
-            onClick={() => props.onPick(presets.tomorrow)}
-          />
-          <PresetRow
-            id="monday"
-            label="Monday"
-            detail={formatDayTime(presets.monday, now)}
-            onClick={() => props.onPick(presets.monday)}
-          />
-          <PresetRow id="custom" label="Custom time" onClick={() => setStep('custom')} />
-        </ul>
-      ) : (
-        <div data-schedule-custom="" className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-sm font-medium text-fg-2">
-              Date
-              <Input
-                type="date"
-                aria-label="Date"
-                value={date}
-                min={dateInputValue(now)}
-                max={dateInputValue(new Date(now.getTime() + MAX_LEAD_MS))}
-                onChange={(event) => setDate(event.target.value)}
-                className="min-w-0 font-mono"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-fg-2">
-              Time
-              <Input
-                type="time"
-                aria-label="Time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-                className="min-w-0 font-mono"
-              />
-            </label>
-          </div>
-          <p data-schedule-summary="" className="min-h-5 text-base font-medium text-fg">
-            {chosen !== null ? customSummary(chosen, now) : ''}
+    <WhenOptions
+      hook="schedule"
+      preview={
+        props.preview !== null ? (
+          <p data-schedule-preview="" className="mb-2 truncate px-2 text-base text-fg-2">
+            {props.preview}
           </p>
-          <p className="text-sm text-fg-3">{SCHEDULE_HELPER}</p>
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!valid}
-            onClick={() => {
-              if (chosen !== null && isWithinScheduleWindow(chosen, new Date())) {
-                props.onPick(chosen);
-              }
-            }}
-          >
-            Schedule
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PresetRow(props: {
-  id: string;
-  label: string;
-  detail?: string;
-  onClick: () => void;
-}): ReactElement {
-  return (
-    <li role="none">
-      <PressableRow
-        type="button"
-        role="menuitem"
-        data-schedule-row={props.id}
-        onClick={props.onClick}
-        className="flex min-h-[56px] items-center gap-3 px-2 text-fg"
-      >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-panel-2 text-fg-2 lit-btn-secondary">
-          <IconCalendarClock size={ICON_SIZE.control} />
-        </span>
-        <span className="flex-1 text-lg font-medium">{props.label}</span>
-        {props.detail !== undefined ? (
-          <span className="font-mono text-sm tabular-nums text-fg-2">{props.detail}</span>
-        ) : (
-          <IconChevronRight size={ICON_SIZE.inline} className="text-fg-3" />
-        )}
-      </PressableRow>
-    </li>
+        ) : null
+      }
+      icon={IconCalendarClock}
+      menuLabel={SCHEDULE_SHEET_TITLE}
+      presets={[
+        {
+          id: 'tomorrow',
+          label: 'Tomorrow',
+          detail: formatDayTime(presets.tomorrow, now),
+          onPick: () => props.onPick(presets.tomorrow),
+        },
+        {
+          id: 'monday',
+          label: 'Monday',
+          detail: formatDayTime(presets.monday, now),
+          onPick: () => props.onPick(presets.monday),
+        },
+      ]}
+      customLabel="Custom time"
+      custom={{
+        initial: presets.tomorrow,
+        summary: customSummary,
+        allowed: isWithinScheduleWindow,
+        helper: SCHEDULE_HELPER,
+        confirmLabel: 'Schedule',
+        onPick: props.onPick,
+      }}
+    />
   );
 }
 
@@ -276,7 +206,7 @@ export function ScheduleMenu(props: {
       data-schedule-menu=""
       className="absolute bottom-full right-3 z-30 mb-2 flex w-[340px] max-w-[calc(100%-24px)] flex-col rounded-xl border bg-panel lit-overlay"
     >
-      <h2 className="px-4 pb-1 pt-3 text-lg font-semibold text-fg">{SCHEDULE_SHEET_TITLE}</h2>
+      <h2 className={textRole('heading', 'px-4 pb-1 pt-3 text-fg')}>{SCHEDULE_SHEET_TITLE}</h2>
       <div className="px-2 pb-2">
         <ScheduleOptions preview={props.preview} onPick={props.onPick} />
       </div>

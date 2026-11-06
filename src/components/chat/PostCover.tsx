@@ -9,9 +9,10 @@
 // a glyph never paints and then swaps for a picture. Tokens only, so light and
 // dark follow the theme.
 
+import { PostPlaceholder } from '@/components/ui/PostPlaceholder';
 import { useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { ICON_SIZE, IconPipeline, IconPlay } from '@/components/ui/icons';
+import { ICON_SIZE, IconPlay } from '@/components/ui/icons';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import { useNearViewport, useStoredThumbnail } from '@/components/ui/FileTile';
 import { PRESIGN_ENABLED, firstFrameSrc, sharedCardPresignCache } from '@/components/chat/PostCard';
@@ -50,7 +51,10 @@ export function PostCoverContent(props: {
 }): ReactElement | null {
   const { cover } = props;
   if (cover === undefined) return null;
-  const glyph = props.fallback ?? <IconPipeline size={ICON_SIZE.nav} />;
+  // No picture: the one post placeholder ("Aa", or the play glyph for a video).
+  const glyph = props.fallback ?? (
+    <PostPlaceholder kind={cover?.kind === 'video' ? 'video' : 'text'} size={ICON_SIZE.nav} />
+  );
   if (cover === null) return <>{glyph}</>;
   return (
     <CoverMedia

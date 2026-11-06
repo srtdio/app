@@ -61,6 +61,16 @@ interface SheetProps {
   headerAction?: ReactNode;
 }
 
+/**
+ * The one sheet frame at the height of what it holds: full width on phone,
+ * rising from the bottom (rounded top, capped at 90% of the visible
+ * viewport), a centred 540 box from sm (capped at 84svh). Shared with the
+ * sheets that own their own shell (chat Tasks), so a sheet's size is built
+ * one way.
+ */
+export const SHEET_FRAME =
+  'w-full max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] rounded-t-2xl border bg-panel lit-overlay sm:w-[540px] sm:max-w-[92%] sm:max-h-[84svh] sm:rounded-xl';
+
 const DEFAULT_DISCARD = { title: 'Discard changes?', message: 'Your changes will be lost.' };
 
 export function Sheet({
@@ -258,7 +268,8 @@ export function Sheet({
           // Phone height caps at 90dvh (the visible viewport under Safari's
           // bars and the keyboard); 90svh stays as the static fallback where
           // dvh is unknown.
-          'relative flex w-full max-h-[90svh] supports-[height:1dvh]:max-h-[90dvh] flex-col overflow-hidden rounded-t-2xl focus:outline-none border bg-panel lit-overlay will-change-transform sm:w-[540px] sm:max-w-[92%] sm:max-h-[84svh] sm:rounded-xl',
+          'relative flex flex-col overflow-hidden focus:outline-none will-change-transform',
+          SHEET_FRAME,
           fixedHeight === true && 'sm:h-[min(640px,84svh)]',
           wide === true && 'lg:w-[960px]',
         )}

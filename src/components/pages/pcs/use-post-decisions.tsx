@@ -443,6 +443,8 @@ interface PostDecisions {
   stage: Stage | null;
   model: DecisionModel | null;
   busy: boolean;
+  /** The stage the running move goes to (its button shows busy), else null. */
+  pending: Stage | null;
   /** A failed tap's plain-words error, shown once in the row or bar. */
   error: string | null;
   /** The approver's quiet line in review, or null. */
@@ -466,6 +468,8 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
   toastRef.current = toastApi;
 
   const [transitioning, setTransitioning] = useState(false);
+  // The stage the running move goes to: its button shows busy (keeps its width).
+  const [pendingTo, setPendingTo] = useState<Stage | null>(null);
   // Flow B 41: a failed move shows once, where it was tapped. actionError
   // belongs to the decision row / bar (and the reject / park commit); a failed
   // approve shows only inside the approve confirm (approveError).
@@ -572,6 +576,7 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     const id = postIdRef.current;
     if (id === undefined) return false;
     setTransitioning(true);
+    setPendingTo(to);
     setActionError(null);
     setApproveError(null);
     mark('decision:rpc:start');
@@ -870,6 +875,7 @@ export function usePostDecisions(input: PostDecisionsInput): PostDecisions {
     stage,
     model,
     busy: transitioning || notifying,
+    pending: transitioning ? pendingTo : null,
     error: actionError,
     note,
     moveRows,

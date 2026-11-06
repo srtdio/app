@@ -5,10 +5,11 @@ import { useMenuGesture } from '@/components/ui/useLongPress';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
 import { ICON_SIZE, IconCheck } from '@/components/ui/icons';
 import { IconButton } from '@/components/ui/IconButton';
-import { PressableRow } from '@/components/ui/PressableRow';
+import { Tile } from '@/components/ui/Tile';
 import type { PresignCache } from '@/lib/asset-presign';
-import { FileTile } from '@/components/ui/FileTile';
+import { FileTile, fileTileMeta, storedThumbnailMeta } from '@/components/ui/FileTile';
 import { classifyFileKind } from '@/lib/chat/attachments';
+import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import {
   displayLabel,
   fileExtension,
@@ -82,37 +83,35 @@ export function AssetCard({
         'aria-label': item.kind === 'link' ? `Open ${name}` : `View ${name}`,
       };
 
-  return (
-    <div className="relative">
-      <PressableRow
-        card
-        type="button"
-        {...interaction}
-        style={{ touchAction: 'manipulation' }}
-        className={cn(
-          'group relative flex h-full flex-col overflow-hidden border bg-panel mv-tint',
-          selectMode && selected ? 'lit-selected' : 'lit-card',
-        )}
-      >
-        {selectMode ? (
-          <span
-            aria-hidden="true"
-            className={cn(
-              'absolute left-3.5 top-3.5 z-10 flex h-4 w-4 items-center justify-center rounded',
-              selected ? 'bg-accent text-accent-fg' : SELECT_BOX_EMPTY,
-            )}
-          >
-            {selected ? <IconCheck size={ICON_SIZE.text} /> : null}
-          </span>
-        ) : null}
+  const isFile = item.kind !== 'image' && item.kind !== 'link';
+  const fileMime = item.mimeType ?? '';
+  // The caption below the picture: the name, then one meta line (a file's
+  // kind, pages and size; a picture's type and size; a link's domain).
+  const meta = isFile
+    ? fileTileMeta(
+        fileMime,
+        item.pageCount ?? storedThumbnailMeta(item.currentVersionId ?? '', fileMime)?.pageCount,
+        item.sizeBytes,
+      )
+        .map((part) => part.text)
+        .join(' · ')
+    : item.kind === 'link'
+      ? linkDomain(item.externalUrl)
+      : item.sizeBytes !== null && item.sizeBytes > 0
+        ? `${mimeBadge(item.mimeType)} · ${humanizeSize(item.sizeBytes)}`
+        : mimeBadge(item.mimeType);
 
-        {item.kind !== 'image' && item.kind !== 'link' ? (
+  return (
+    <Tile
+      aspect="landscape"
+      thumbnail={
+        isFile ? (
           // PDF, video, Office and other files: the stored thumbnail (PDF and
-          // video) or the icon card, the name on two lines and kind, pages, size.
+          // video) or the icon card.
           <FileTile
-            layout="card"
-            kind={classifyFileKind(item.mimeType ?? '')}
-            mime={item.mimeType ?? ''}
+            layout="thumb"
+            kind={classifyFileKind(fileMime)}
+            mime={fileMime}
             name={name}
             versionId={item.currentVersionId}
             size={item.sizeBytes}
@@ -121,44 +120,81 @@ export function AssetCard({
             presignEnabled={presignEnabled}
           />
         ) : (
-          <AssetMedia item={item} name={name} cache={cache} presignEnabled={presignEnabled} />
-        )}
-      </PressableRow>
-      {selectMode ? null : (
-        // The ⋯ sits in the card's bottom-right corner (a tile overlay lives
-        // only at a corner), on the size line. The laptop popover anchors under it.
-        <div className="absolute bottom-0 right-0 z-10">
+          <Thumbnail
+            assetVersionId={item.kind === 'image' ? item.currentVersionId : null}
+            cache={cache}
+            presignEnabled={presignEnabled}
+            aspect="4/3"
+            fallback={assetFallback(item)}
+            alt={name}
+          />
+        )
+      }
+      title={
+        <span data-asset-name="" title={name}>
+          {isFile ? middleTruncate(name, VIEWER_NAME_BUDGET) : name}
+        </span>
+      }
+      meta={<span data-asset-meta="">{meta}</span>}
+      corners={
+        selectMode
+          ? {
+              tl: (
+                <span
+                  aria-hidden="true"
+                  data-card-tick=""
+                  className="flex h-11 w-11 items-center justify-center"
+                >
+                  <span
+                    className={cn(
+                      'flex h-4 w-4 items-center justify-center rounded',
+                      selected ? 'bg-accent text-accent-fg' : SELECT_BOX_EMPTY,
+                    )}
+                  >
+                    {selected ? <IconCheck size={ICON_SIZE.text} /> : null}
+                  </span>
+                </span>
+              ),
+            }
+          : undefined
+      }
+      {...(selectMode || onStartSelect === undefined
+        ? {}
+        : { cornerActions: { tl: <CardSelectBox name={name} onPress={onStartSelect} /> } })}
+      more={
+        selectMode ? null : (
+          // The ⋯ on the name line, a sibling of the tile's tap surface
+          // (buttons never nest); its trigger takes the trailing rule, so the
+          // dots end on the tile's edge. The laptop popover anchors under it.
           <ActionMenu
             title={name}
             items={menuItems}
             open={menuOpen}
             onOpenChange={setMenuOpen}
-            // The visible ⋯: a 44px hit area, a sibling of the card button
-            // (buttons never nest); the bare dots line up with the kind label
-            // above and sit centred on the size line. ActionMenu toggles it.
             trigger={
               <ActionMenuTrigger
                 type="button"
                 label={`More actions for ${name}`}
                 aria-expanded={menuOpen}
                 data-card-menu=""
-                edge="free"
               />
             }
           />
-        </div>
-      )}
-      {selectMode || onStartSelect === undefined ? null : (
-        <CardSelectBox name={name} onPress={onStartSelect} />
-      )}
-    </div>
+        )
+      }
+      press={{
+        ...interaction,
+        selected: selectMode && selected,
+        style: { touchAction: 'manipulation' },
+      }}
+    />
   );
 }
 
 /**
  * The round select box on a card: a 44px hit area in the top-left corner
- * holding an empty 16px square, a sibling of the card button (buttons never
- * nest). One tap starts selecting with this card ticked. The square sits in the
+ * holding an empty 16px square, a ui/Tile corner action (outside the tile's
+ * tap surface: buttons never nest). One tap starts selecting with this card ticked. The square sits in the
  * same spot as the select-mode tick, so the tap lands where the tick appears.
  */
 export function CardSelectBox({ name, onPress }: { name: string; onPress: () => void }) {
@@ -168,54 +204,8 @@ export function CardSelectBox({ name, onPress }: { name: string; onPress: () => 
       label={`Select ${name}`}
       data-card-select=""
       onClick={onPress}
-      className="absolute left-0 top-0 z-10"
     >
       <span className={cn('h-4 w-4 rounded', SELECT_BOX_EMPTY)} />
     </IconButton>
-  );
-}
-
-/** An image or link card's thumbnail, name row and size or domain line (unchanged). */
-function AssetMedia({
-  item,
-  name,
-  cache,
-  presignEnabled,
-}: {
-  item: AssetListItem;
-  name: string;
-  cache: PresignCache;
-  presignEnabled: boolean;
-}) {
-  return (
-    <>
-      <Thumbnail
-        assetVersionId={item.kind === 'image' ? item.currentVersionId : null}
-        cache={cache}
-        presignEnabled={presignEnabled}
-        aspect="4/3"
-        fallback={assetFallback(item)}
-        alt={name}
-      />
-
-      <div className="flex flex-col gap-1.5 border-t border-border p-2.5">
-        <div className="flex items-start gap-2">
-          <span className="line-clamp-2 flex-1 break-words text-base font-medium" title={name}>
-            {name}
-          </span>
-          {item.kind === 'image' ? (
-            <span className="lit-pill shrink-0 rounded bg-panel-2 px-1.5 py-px text-xs font-medium text-fg-3">
-              {mimeBadge(item.mimeType)}
-            </span>
-          ) : null}
-        </div>
-        {/* One 20px line, room on the right for the card's ⋯. */}
-        <div className="flex h-5 items-center pr-8 text-sm tabular-nums text-fg-3">
-          <span className="truncate">
-            {item.kind === 'link' ? linkDomain(item.externalUrl) : humanizeSize(item.sizeBytes)}
-          </span>
-        </div>
-      </div>
-    </>
   );
 }

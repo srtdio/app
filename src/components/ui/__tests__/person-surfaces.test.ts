@@ -37,8 +37,10 @@ describe('person surfaces open the shared person card', () => {
     });
   }
 
-  it('the Activity page hands the stack its people', () => {
-    expect(source('pages/NotificationsPage.tsx')).toContain('people={bucketActors(entries)}');
+  it('the Activity day label has no avatar beside it (people open from each card)', () => {
+    const page = source('pages/NotificationsPage.tsx');
+    expect(page).not.toContain('AvatarStack');
+    expect(page).not.toContain('bucketActors(');
   });
 
   it('a chat @mention tap no longer opens a DM directly: photo in a DM, card elsewhere', () => {

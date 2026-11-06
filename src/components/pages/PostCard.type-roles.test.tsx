@@ -78,25 +78,26 @@ function classes(el: Element | null): string[] {
 }
 
 describe('PostCard type roles', () => {
-  it('card title: text-base font-medium', () => {
+  it('card title: the Card heading role (text-lg font-semibold)', () => {
     const host = paint(makePost());
-    const title = classes(byText(host, 'Monsoon drop: linen in rain'));
-    expect(title).toEqual(expect.arrayContaining(['text-base', 'font-medium']));
-    expect(title).not.toContain('font-semibold');
+    const title = classes(host.querySelector('[data-card-title]'));
+    expect(title).toEqual(expect.arrayContaining(['text-lg', 'font-semibold']));
   });
 
-  it('caption preview is meta: text-sm text-fg-3', () => {
+  it('caption preview is the secondary role: text-md text-fg-2, one line', () => {
     const host = paint(makePost());
     expect(classes(byText(host, 'Linen that breathes.'))).toEqual(
-      expect.arrayContaining(['text-sm', 'text-fg-3']),
+      expect.arrayContaining(['text-md', 'text-fg-2', 'truncate']),
     );
   });
 
-  it('due line is meta: text-sm text-fg-3', () => {
+  it('due line is the Card meta line: text-sm text-fg-3 mono', () => {
     const host = paint(makePost());
     const due = host.querySelector('[data-post-card-due]');
     expect(due?.textContent).toContain('Due');
-    expect(classes(due)).toEqual(expect.arrayContaining(['text-sm', 'text-fg-3']));
+    expect(classes(due?.parentElement ?? null)).toEqual(
+      expect.arrayContaining(['text-sm', 'text-fg-3', 'font-mono']),
+    );
   });
 
   it('renders no off-scale type classes', () => {

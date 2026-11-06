@@ -11,6 +11,8 @@ import { useState } from 'react';
 import { platformLabel } from '@srtdio/posts';
 import { workspaceDelete } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
+import { cardPad, cardSurface } from '@/components/ui/Card';
+import { cn } from '@/lib/cn';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { PlatformMark } from '@/components/ui/PlatformMark';
@@ -44,7 +46,7 @@ export const PLATFORM_FIXED_LINE =
   'Fixed when the workspace was created. Another platform means another workspace.';
 
 function ReadOnlyValue({ children }: { children: string }) {
-  return <p className="min-h-[44px] py-2.5 text-base text-fg">{children}</p>;
+  return <p className="min-h-11 py-3 text-base text-fg">{children}</p>;
 }
 
 /** The type-the-name sheet; Delete permanently runs workspace_delete. */
@@ -194,13 +196,13 @@ export function WorkspaceSettingsPanel() {
   const timezones = timezoneOptions(row.timezone).map((zone) => ({ value: zone, label: zone }));
 
   return (
-    <div className="flex max-w-[520px] flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <Field label="Brand name" hint={CLIENT_NAME_FIXED_LINE}>
         <ReadOnlyValue>{row.name}</ReadOnlyValue>
       </Field>
 
       <Field label="Platform" hint={PLATFORM_FIXED_LINE}>
-        <div className="flex min-h-[44px] items-center gap-2 text-base text-fg">
+        <div className="flex min-h-11 items-center gap-2 text-base text-fg">
           <PlatformMark platform={row.platform} />
           <span>{platformLabel(row.platform)}</span>
         </div>
@@ -232,17 +234,16 @@ export function WorkspaceSettingsPanel() {
         <ApprovedAddressesSection workspaceId={activeId} clientDomain={row.client_domain} />
       ) : null}
 
-      <section
-        aria-labelledby="workspace-danger-title"
-        className="flex flex-col gap-3 rounded-xl border bg-panel lit-card p-4"
-      >
+      {/* The label on the page edge, its card under it. */}
+      <section aria-labelledby="workspace-danger-title" className="flex flex-col gap-2">
         <h3
           id="workspace-danger-title"
           className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
         >
           Danger
         </h3>
-        {isOwner && session !== null ? (
+        <div data-workspace-danger="" className={cn(cardSurface(), cardPad())}>
+          {isOwner && session !== null ? (
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-base text-fg">Delete workspace</p>
@@ -259,9 +260,10 @@ export function WorkspaceSettingsPanel() {
               onClose={() => setDeleteOpen(false)}
             />
           </div>
-        ) : (
-          <p className="text-base text-fg-2">{DELETE_OWNER_ONLY_LINE}</p>
-        )}
+          ) : (
+            <p className="text-base text-fg-2">{DELETE_OWNER_ONLY_LINE}</p>
+          )}
+        </div>
       </section>
     </div>
   );

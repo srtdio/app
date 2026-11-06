@@ -118,14 +118,69 @@ export interface FileTileBodyProps {
    * 'fill' (default): the tile fills a box its parent sizes (gallery tiles).
    * 'card': the thumbnail area is a fixed 4/3 box and the name always holds
    * two lines (Assets grid), so the card's height never changes.
+   * 'thumb': the picture only, filling the box its parent sizes (a ui/Tile
+   * thumbnail; the tile's caption carries the name and meta).
    */
-  layout?: 'fill' | 'card' | undefined;
+  layout?: 'fill' | 'card' | 'thumb' | undefined;
+}
+
+/** The picture area's content: the stored thumbnail, or the kind icon card, plus a video's play mark. */
+function FileTileThumb(props: {
+  kind: FileKind;
+  thumbUrl: string | null;
+  onImageError?: (() => void) | undefined;
+}): ReactElement {
+  const { kind, thumbUrl } = props;
+  return (
+    <>
+    {thumbUrl !== null ? (
+      <img
+        data-file-tile-thumb=""
+        src={thumbUrl}
+        alt=""
+        draggable={false}
+        onError={props.onImageError}
+        className={cn(
+          'absolute inset-0 h-full w-full',
+          // A document page thumbnail is softened in dark (lit-page); a video frame is not.
+          kind === 'video' ? 'object-cover' : 'object-cover object-top lit-page',
+        )}
+      />
+    ) : (
+      <span
+        data-file-tile-icon=""
+        className="absolute inset-0 flex items-center justify-center text-fg-3"
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-panel-2">
+          <KindIcon kind={kind} size={ICON_SIZE.control} />
+        </span>
+      </span>
+    )}
+    {kind === 'video' && thumbUrl !== null ? (
+      <span className="absolute inset-0 flex items-center justify-center">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-overlay text-overlay-fg lit-media">
+          <IconPlay size={ICON_SIZE.inline} />
+        </span>
+      </span>
+    ) : null}
+    </>
+  );
 }
 
 /** The tile's content, hook-free so tests render every state directly. */
 export function FileTileBody(props: FileTileBodyProps): ReactElement {
   const { kind, thumbUrl } = props;
   const card = props.layout === 'card';
+  if (props.layout === 'thumb') {
+    return (
+      <span
+        data-file-tile={kind}
+        className="relative block h-full w-full overflow-hidden bg-panel-3 lit-media"
+      >
+        <FileTileThumb kind={kind} thumbUrl={thumbUrl} onImageError={props.onImageError} />
+      </span>
+    );
+  }
   return (
     <span
       data-file-tile={kind}
@@ -137,36 +192,7 @@ export function FileTileBody(props: FileTileBodyProps): ReactElement {
           card ? 'aspect-[4/3]' : 'min-h-0 flex-1',
         )}
       >
-        {thumbUrl !== null ? (
-          <img
-            data-file-tile-thumb=""
-            src={thumbUrl}
-            alt=""
-            draggable={false}
-            onError={props.onImageError}
-            className={cn(
-              'absolute inset-0 h-full w-full',
-              // A document page thumbnail is softened in dark (lit-page); a video frame is not.
-              kind === 'video' ? 'object-cover' : 'object-cover object-top lit-page',
-            )}
-          />
-        ) : (
-          <span
-            data-file-tile-icon=""
-            className="absolute inset-0 flex items-center justify-center text-fg-3"
-          >
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-panel-2">
-              <KindIcon kind={kind} size={ICON_SIZE.control} />
-            </span>
-          </span>
-        )}
-        {kind === 'video' && thumbUrl !== null ? (
-          <span className="absolute inset-0 flex items-center justify-center">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-overlay text-overlay-fg lit-media">
-              <IconPlay size={ICON_SIZE.inline} />
-            </span>
-          </span>
-        ) : null}
+        <FileTileThumb kind={kind} thumbUrl={thumbUrl} onImageError={props.onImageError} />
       </span>
       <span
         className={cn(

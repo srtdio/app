@@ -39,7 +39,11 @@ import { FileViewer, remoteFileSource } from '@/components/ui/FileViewer';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { MarksList, type MarksListProps } from '@/components/chat/MarksSheet';
 import { StarredList } from '@/components/chat/StarredList';
-import { RemoveSelectionBarView, SelectionHeader } from '@/components/chat/SelectionBar';
+import {
+  RemoveSelectionBarView,
+  SelectionHeader,
+  selectionHeaderSlots,
+} from '@/components/chat/SelectionBar';
 import { useChatLayout } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
@@ -247,6 +251,12 @@ export interface InfoSelectChrome {
   selecting: boolean;
   /** Select (top right) or the selection header; null when neither shows. */
   header: ReactElement | null;
+  /**
+   * While selecting: the same header as ui/HeaderBar slots (the "n selected"
+   * title and Cancel), so a host on HeaderBar keeps one bar in both modes.
+   * Null outside select mode.
+   */
+  selectHeader: { title: ReactElement; cancel: ReactElement } | null;
   /** The Remove bar under the page while selecting, else null. */
   bar: ReactElement | null;
 }
@@ -1097,6 +1107,9 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
         {SELECT_LABEL}
       </Button>
     ) : null,
+    selectHeader: selecting
+      ? selectionHeaderSlots({ count: selectedFiles.length, onCancel: leaveSelect })
+      : null,
     bar: selecting ? (
       <RemoveSelectionBarView
         count={selectedFiles.length}

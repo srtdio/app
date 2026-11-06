@@ -42,6 +42,11 @@ export interface RowProps extends RowSurfaceProps {
   selected?: boolean;
   /** Ref to the tap surface's <button> (a menu anchors to it). */
   buttonRef?: Ref<HTMLButtonElement> | undefined;
+  /**
+   * Drop the row's own 16 inset (the row sits inside a padded surface, such as
+   * a sheet body, whose padding is already the content edge). Default false.
+   */
+  flush?: boolean;
   className?: string;
 }
 
@@ -63,9 +68,12 @@ export function Row({
   disabled,
   selected = false,
   buttonRef,
+  flush = false,
   className,
   ...surface
 }: RowProps) {
+  const inset = flush ? 'px-0' : 'px-4';
+  const trailingInset = flush ? 'pr-0' : 'pr-4';
   const badgeNode =
     badge !== undefined && badge !== null ? (
       <span data-row-badge="" className="flex shrink-0">
@@ -109,7 +117,8 @@ export function Row({
           onClick={onPress}
           disabled={disabled}
           className={cn(
-            'flex min-w-0 flex-1 items-center gap-3 rounded-none px-4',
+            'flex min-w-0 flex-1 items-center gap-3 rounded-none',
+            inset,
             height,
             selected && 'lit-selected',
           )}
@@ -117,16 +126,19 @@ export function Row({
           {body}
         </PressableRow>
       ) : (
-        <div className={cn('flex min-w-0 flex-1 items-center gap-3 px-4', height)}>{body}</div>
+        <div className={cn('flex min-w-0 flex-1 items-center gap-3', inset, height)}>{body}</div>
       )}
       {trailing?.kind === 'more' ? (
-        <span data-row-more="" className="flex shrink-0 pr-4">
+        <span data-row-more="" className={cn('flex shrink-0', trailingInset)}>
           {trailing.menu}
         </span>
       ) : null}
       {trailing?.kind === 'node' ? (
         // The trailing rule for a caller's IconButton (a 44 box, pulled out by 12).
-        <span data-row-trailing="" className="flex shrink-0 pr-4 [&>button]:-mr-3">
+        <span
+          data-row-trailing=""
+          className={cn('flex shrink-0 [&>button]:-mr-3', trailingInset)}
+        >
           {trailing.node}
         </span>
       ) : null}
@@ -134,7 +146,10 @@ export function Row({
         <span
           aria-hidden="true"
           data-row-divider=""
-          className="pointer-events-none absolute bottom-0 left-15 right-0 h-px bg-border"
+          className={cn(
+            'pointer-events-none absolute bottom-0 right-0 h-px bg-border',
+            flush ? 'left-11' : 'left-15',
+          )}
         />
       ) : null}
     </div>

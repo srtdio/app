@@ -156,9 +156,9 @@ describe('Brief detail type roles', () => {
     expect(title.className).not.toContain('font-bold');
   });
 
-  it('the top bar status line is the screen header (lg/600)', async () => {
+  it('the top bar status line is the screen header (lg/600, ui/HeaderBar title role)', async () => {
     await mount();
-    const status = document.querySelector('[data-brief-status]')?.parentElement;
+    const status = document.querySelector('[data-brief-status]')?.closest('.text-lg');
     expect(status).toBeTruthy();
     expectRole(status as HTMLElement, ['text-lg', 'font-semibold']);
   });

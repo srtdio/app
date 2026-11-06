@@ -731,17 +731,20 @@ export function AssetLightbox({
                   <dd className="flex items-center gap-1">
                     <span className="min-w-0 flex-1 break-words text-base text-fg">{name}</span>
                     {canRename ? (
-                      <IconButton
+                      // Edit = pencil + "Edit" (the one edit control); it renames the file.
+                      <Button
+                        variant="ghost"
                         type="button"
-                        label="Rename file"
+                        data-rename-file=""
                         onClick={() => {
                           setNameDraft(name);
                           setEditingName(true);
                         }}
                         className="shrink-0"
                       >
-                        <IconEdit size={ICON_SIZE.control} />
-                      </IconButton>
+                        <IconEdit size={ICON_SIZE.inline} />
+                        Edit
+                      </Button>
                     ) : null}
                   </dd>
                 )}

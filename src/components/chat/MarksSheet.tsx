@@ -11,6 +11,7 @@
 // The Open tab lists the posts waiting in review above the marks, each with
 // Jump (a card is in this chat) or Share here.
 
+import { PostPlaceholder } from '@/components/ui/PostPlaceholder';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -22,7 +23,6 @@ import {
   ICON_SIZE,
   IconBookmark,
   IconCheck,
-  IconPipeline,
   IconRotateCcw,
 } from '@/components/ui/icons';
 import { Tag } from '@/components/ui/Tag';
@@ -87,7 +87,7 @@ function OpenPostThumb(props: { assetVersionId: string | null }) {
           className="h-full w-full object-cover"
         />
       ) : (
-        <IconPipeline size={ICON_SIZE.inline} />
+        <PostPlaceholder kind="text" size={ICON_SIZE.inline} />
       )}
     </span>
   );

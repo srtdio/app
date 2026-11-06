@@ -675,7 +675,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
     // Boxes in the panel's own shape (the 72px photo, then the fields), only
     // while nothing is held for the profile; a kept profile paints at once.
     return (
-      <BoxSkeleton lit="flat" label="Loading profile" className="max-w-[520px] flex flex-col gap-4">
+      <BoxSkeleton lit="flat" label="Loading profile" className="flex flex-col gap-4">
         <Bone lit="lit-avatar" className="h-[72px] w-[72px] rounded-full" />
         {[0, 1].map((key) => (
           <div key={key}>
@@ -691,7 +691,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
 
   if (mode === 'error' || profile === null) {
     return (
-      <div className="max-w-[520px] flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
         <p className="text-base text-bad">{errorText('load your profile', null)}</p>
         <div>
           <Button onClick={refetch}>Retry</Button>
@@ -703,7 +703,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
   const photoSrc = shownPhoto(profile.avatar_url, photoView);
 
   return (
-    <div className="max-w-[520px] flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col items-start gap-3">
         <div className="relative h-[72px] w-[72px]">
           <Avatar
@@ -764,7 +764,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
           }}
         />
         {nameError !== null ? (
-          <ErrorNote className="mt-1.5">
+          <ErrorNote className="mt-2">
             <span id="settings-display-name-error">{nameError}</span>
           </ErrorNote>
         ) : null}

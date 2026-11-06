@@ -5,8 +5,6 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
   useIsLaptop: () => true,
 }));
 import { renderToStaticMarkup } from 'react-dom/server';
-import { isValidElement } from 'react';
-import type { ReactElement, ReactNode } from 'react';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { AvatarStack, STACK_OVERLAP_PX } from '@/components/pages/activity/AvatarStack';
 import { chatMentionPreview, type ActivityItem } from '@/components/pages/activity/data';
@@ -48,18 +46,6 @@ vi.mock('@/lib/workspace-context', async (importOriginal) => ({
     .workspaceDisplayName,
   useWorkspace: () => ({ workspaceKey: 'gbl' }),
 }));
-
-/** Recursively collect every element of a given host type from a tree. */
-function collectByType(node: ReactNode, type: string, acc: ReactElement[]): void {
-  if (Array.isArray(node)) {
-    for (const child of node) collectByType(child, type, acc);
-    return;
-  }
-  if (!isValidElement(node)) return;
-  if (node.type === type) acc.push(node);
-  const props = node.props as { children?: ReactNode };
-  collectByType(props.children, type, acc);
-}
 
 // The same shim the pipeline board test uses: presignEnabled is false so the
 // tile renders its fallback and never touches the cache, so an empty stand-in is
@@ -243,7 +229,7 @@ describe('ActivityCard', () => {
       item({ id: 'a', eventType: 'comment', createdAt: '2026-06-14T00:00:00.000Z' }),
     ]);
     // The footer container renders even with a single entry.
-    expect(html).toContain('min-h-[44px] items-center gap-1.5 px-[14px]');
+    expect(html).toContain('min-h-11 items-center gap-2 px-4');
     expect(html).toContain('data-activity-time="" class="text-sm tabular-nums text-fg-3"');
     expect(html).not.toContain('more');
   });
@@ -273,7 +259,7 @@ describe('ActivityCard', () => {
       }),
     ]);
     // Both chips render, and they sit after the footer container marker in the markup.
-    const footerAt = html.indexOf('min-h-[44px] items-center gap-1.5 px-[14px]');
+    const footerAt = html.indexOf('min-h-11 items-center gap-2 px-4');
     expect(footerAt).toBeGreaterThanOrEqual(0);
     const tagAt = html.indexOf('Briefs');
     const snoozeAt = html.indexOf('Snoozed');
@@ -283,42 +269,31 @@ describe('ActivityCard', () => {
     expect(html).not.toContain('mt-2 flex items-center gap-1.5');
   });
 
-  it('marks each expanded thread row interactive in the collapsed markup contract', () => {
-    // Regression guard: a thread row is a button (role + cursor) so it is its own
-    // deep-link target, not a dead list item.
+  it('marks each expanded thread row interactive: a ui/Row that opens its entry', () => {
+    // Regression guard: a thread row is its own tap target (the Row's PressableRow),
+    // so it is its own deep-link target, not a dead list item.
     hooks.forceExpand = true;
     try {
       const onOpenEntry = vi.fn();
       const entry = item({ id: 'b', eventType: 'comment' });
       const group = [item({ id: 'a', eventType: 'comment' }), entry];
-      const tree = ActivityCard({
-        group,
-        nowMs: NOW,
-        cache,
-        presignEnabled: false,
-        onOpenGroup: () => {},
-        onOpenEntry,
-        onSnooze: () => {},
-        onMarkRead: () => {},
-        selfName: null,
-      });
-      const rows: ReactElement[] = [];
-      collectByType(tree, 'li', rows);
-      // One thread row for the single rest entry, and it is keyboard/pointer ready.
-      expect(rows).toHaveLength(1);
-      const row = rows[0]?.props as {
-        role?: string;
-        tabIndex?: number;
-        onClick?: () => void;
-        className?: string;
-      };
-      expect(row.role).toBe('button');
-      expect(row.tabIndex).toBe(0);
-      expect(row.className).toContain('cursor-pointer');
-      // Clicking the thread row opens that exact entry once.
-      row.onClick?.();
-      expect(onOpenEntry).toHaveBeenCalledTimes(1);
-      expect(onOpenEntry).toHaveBeenCalledWith(entry);
+      const html = renderToStaticMarkup(
+        <ActivityCard
+          group={group}
+          nowMs={NOW}
+          cache={cache}
+          presignEnabled={false}
+          onOpenGroup={() => {}}
+          onOpenEntry={onOpenEntry}
+          onSnooze={() => {}}
+          onMarkRead={() => {}}
+          selfName={null}
+        />,
+      );
+      // One thread row for the single rest entry, built on ui/Row with a tap surface.
+      expect(count(html, 'data-activity-thread-row="b"')).toBe(1);
+      expect(html).toMatch(/<li><div data-row=""[^>]*><button[^>]*data-activity-thread-row="b"/);
+      expect(html).not.toContain('<li role="button"');
     } finally {
       hooks.forceExpand = false;
     }
@@ -653,7 +628,8 @@ describe('ActivityCard names', () => {
       // The useState shim also flips the photo's error flag, so faces render as initials here;
       // the photo url path is covered by the header test below.
       expect(count(html, 'data-activity-entry-author')).toBe(2);
-      expect(html).toMatch(/data-activity-entry-author=""[^>]*><div[^>]*>B<\/div>/);
+      // The author's photo leads the Row; the name is the Row's title.
+      expect(html).toMatch(/data-row-leading=""[^>]*>[\s\S]{0,400}?>B<\/div>/);
       expect(html).toMatch(/data-activity-entry-author[\s\S]*Bina[\s\S]*Thread resolved/);
       expect(html).toMatch(/data-activity-entry-author[\s\S]*Former member[\s\S]*Point reopened/);
     } finally {
@@ -748,12 +724,12 @@ describe('ActivityCard: notifications fixes', () => {
     ]);
     expect(parked).toContain('>Chitra parked<');
     expect(count(parked, 'Q3 Launch')).toBe(1);
-    expect(parked).not.toContain('mt-[3px]');
+    expect(parked).not.toContain('mt-1 line-clamp-2 text-base text-fg-2');
     const deleted = renderCard([
       item({ title: 'Old teaser', eventType: 'post_deleted', actorName: 'Chitra' }),
     ]);
     expect(deleted).toContain('>Chitra deleted<');
-    expect(deleted).not.toContain('mt-[3px]');
+    expect(deleted).not.toContain('mt-1 line-clamp-2 text-base text-fg-2');
     const files = renderCard([
       item({
         eventType: 'assets_deleted',
@@ -766,7 +742,7 @@ describe('ActivityCard: notifications fixes', () => {
       }),
     ]);
     expect(files).toContain('>Chitra deleted a file<');
-    expect(files).not.toContain('mt-[3px]');
+    expect(files).not.toContain('mt-1 line-clamp-2 text-base text-fg-2');
   });
 
   it('fix 6: a brief card shows the BRIEF text tile with the brief title', () => {

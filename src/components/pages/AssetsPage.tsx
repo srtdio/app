@@ -47,6 +47,8 @@ import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/ke
 import { logger } from '@/lib/logger';
 import { bottomAnchorProps, useBottomInset } from '@/lib/bottom-inset';
 import { cn } from '@/lib/cn';
+import { TILE_GRID, Tile } from '@/components/ui/Tile';
+import { GUTTER } from '@/components/ui/layout';
 import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import {
   addAssetLink,
@@ -980,7 +982,7 @@ export function AssetsPage() {
         aria-labelledby={selectMode ? undefined : assetTabId(tab)}
       >
         {searchFailed ? (
-          <div className="px-4 md:px-6 mt-4">
+          <div className={cn(GUTTER, 'mt-4')}>
             <LoadError
               title="your files"
               onRetry={() => assetSearch.refresh()}
@@ -988,25 +990,19 @@ export function AssetsPage() {
             />
           </div>
         ) : assetsFailed ? (
-          <div className="px-4 md:px-6 mt-4">
+          <div className={cn(GUTTER, 'mt-4')}>
             <LoadError title="your files" onRetry={() => void retryLoad()} retrying={retrying} />
           </div>
         ) : listLoading ? (
-          <BoxSkeleton
-            lit="flat"
-            label="Loading files"
-            className="px-4 md:px-6 py-4 grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fill,minmax(158px,1fr))]"
-          >
+          <BoxSkeleton lit="flat" label="Loading files" className={cn(GUTTER, 'py-4', TILE_GRID)}>
             {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
-              <div
-                key={i}
-                data-skeleton-tile=""
-                className="lit-card rounded-xl border bg-panel overflow-hidden"
-              >
-                <Bone lit="flat" as="div" className="aspect-[4/3] w-full" />
-                <div className="flex h-9 items-center border-t border-border px-3">
-                  <Bone lit="flat" className="h-3 w-2/3 rounded" />
-                </div>
+              <div key={i} data-skeleton-tile="" className="min-w-0">
+                <Tile
+                  aspect="landscape"
+                  thumbnail={<Bone lit="lit-card" as="span" className="h-full w-full" />}
+                  title={<Bone lit="flat" as="span" className="my-1 h-3 w-2/3 rounded" />}
+                  meta={<Bone lit="flat" as="span" className="my-1 h-2 w-1/3 rounded" />}
+                />
               </div>
             ))}
           </BoxSkeleton>
@@ -1024,12 +1020,12 @@ export function AssetsPage() {
               }}
             />
           ) : tab !== 'all' ? (
-            <div data-asset-tab-empty={tab} className="px-4 md:px-6 py-10 text-base text-fg-2">
+            <div data-asset-tab-empty={tab} className={cn(GUTTER, 'py-10 text-base text-fg-2')}>
               {TAB_EMPTY[tab]}
             </div>
           ) : null
         ) : (
-          <div ref={gridRef} className="px-4 md:px-6 py-4">
+          <div ref={gridRef} className={cn(GUTTER, 'py-4')}>
             <AssetGrid
               items={visible}
               presignEnabled={presignEnabled}
@@ -1046,7 +1042,7 @@ export function AssetsPage() {
         {/* Older files load a page at a time; search, tabs and sort work over
             what is loaded. Shown only while another page exists. */}
         {!assetsFailed && !searchFailed && !listLoading && !shownNext.done ? (
-          <div className="px-4 md:px-6 pb-4 flex justify-center">
+          <div className={cn(GUTTER, 'pb-4 flex justify-center')}>
             <Button
               variant="secondary"
               type="button"

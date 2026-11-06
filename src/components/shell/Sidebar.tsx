@@ -13,6 +13,7 @@ import {
 } from '@/lib/inbox/unread-entities';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
+import { textRole } from '@/components/ui/Text';
 import { navPrefetchProps } from '@/lib/route-prefetch';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { Bone, useNudgeOnRise } from '@/lib/motion';
@@ -36,12 +37,12 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
     // shell (laptop, Chat) this is the same box as before: the full shell
     // height, nothing scrolls past it, padding 0.
     <aside className="hidden md:flex md:flex-col md:sticky md:top-0 md:h-[100svh] md:self-start pt-[var(--shell-safe-top,0px)] w-[244px] shrink-0 border-r bg-panel lit-side">
-      <div className="p-2.5">
+      <div className="p-3">
         <PressableRow
           type="button"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={() => dispatchSorted('sorted:switch-workspace')}
-          className="flex items-center gap-2.5 px-2 mv-tint"
+          className="flex items-center gap-3 px-3 mv-tint"
         >
           {workspaceName !== null ? (
             <Avatar name={clientName ?? workspaceName} role="header" kind="group" />
@@ -52,14 +53,14 @@ export function Sidebar({ workspaceName, clientName = null }: SidebarProps) {
             <Bone lit="flat" className="flex-1 h-4 rounded" />
           ) : (
             // "<Brand> - <Platform>": wrap (up to three lines) rather than clip the platform.
-            <span className="flex-1 min-w-0 font-semibold text-base leading-tight line-clamp-3 break-words">
+            <span className={textRole('title', 'min-w-0 flex-1 line-clamp-3 break-words')}>
               {workspaceName}
             </span>
           )}
           <IconChevronDown size={ICON_SIZE.inline} className="text-fg-3 shrink-0" />
         </PressableRow>
       </div>
-      <nav aria-label="Primary" className="flex flex-col gap-0.5 px-2.5">
+      <nav aria-label="Primary" className="flex flex-col gap-1 px-3">
         {PRIMARY_NAV.map((item) => (
           <SideNavItem key={item.to} item={item} chatUnread={total} planUnread={planUnread} />
         ))}

@@ -666,7 +666,7 @@ export function MembersInviteForm({
   }
 
   return (
-    <section aria-labelledby="invite-people-title" className="flex max-w-[520px] flex-col gap-4">
+    <section aria-labelledby="invite-people-title" className="flex flex-col gap-4">
       <div>
         <h3
           id="invite-people-title"
@@ -697,7 +697,7 @@ export function MembersInviteForm({
             disabled={submitting}
           />
           {duplicate ? (
-            <p id="invite-email-duplicate" role="alert" className="mt-1.5 text-sm text-bad">
+            <p id="invite-email-duplicate" role="alert" className="mt-2 text-sm text-bad">
               {INVITE_DUPLICATE_MESSAGE}
             </p>
           ) : null}

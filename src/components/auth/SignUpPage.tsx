@@ -281,7 +281,7 @@ export function SignUpPage(): ReactElement {
             onBlur={() => setEmailError(emailFieldError(email))}
           />
           {emailError !== null ? (
-            <p id="signup-email-error" role="alert" className="mt-1.5 text-base text-bad">
+            <p id="signup-email-error" role="alert" className="mt-2 text-base text-bad">
               {emailError}
             </p>
           ) : null}

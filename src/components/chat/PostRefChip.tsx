@@ -8,10 +8,11 @@
 // the message keeps its plain quote. Tokens only; the own bubble's overrides
 // (OWN_BUBBLE_CONTENT) restyle the chip the way they restyle the quote.
 
+import { PostPlaceholder } from '@/components/ui/PostPlaceholder';
 import { mark } from '@/lib/perf-marks';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
+import { ICON_SIZE } from '@/components/ui/icons';
 import { useThumbnail } from '@/components/media/use-thumbnail';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -167,7 +168,7 @@ export function PostRefThumb(props: {
           className="h-full w-full object-cover"
         />
       ) : (
-        <IconPipeline size={props.size <= 20 ? 12 : ICON_SIZE.inline} />
+        <PostPlaceholder kind="text" size={props.size <= 20 ? ICON_SIZE.text : ICON_SIZE.inline} />
       )}
     </span>
   );

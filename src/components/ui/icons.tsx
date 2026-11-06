@@ -91,6 +91,18 @@ export const ICON_SIZE = {
   status: 28,
 } as const;
 
+/**
+ * The stroke for a glyph drawn at `size` px (24 grid): heavier when small so
+ * a 16 glyph keeps its weight beside text, lighter when large so a 22-28 tray
+ * or status glyph does not read bold. 2.0 at 12-16, 1.85 at 18-20, 1.6 at
+ * 22-28. Computed inside the icon base (Svg, Hero); call sites never set it.
+ */
+export function strokeFor(size: number): number {
+  if (size <= 16) return 2;
+  if (size <= 20) return 1.85;
+  return 1.6;
+}
+
 export interface IconProps {
   className?: string;
   size?: number;
@@ -121,7 +133,8 @@ function Svg({ className, size = ICON_SIZE.nav, inline = false, box, children }:
       viewBox={box !== undefined ? `0 0 ${box.width} ${box.height}` : '0 0 24 24'}
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.85}
+      // A fixed-box glyph (the message ticks) is drawn 1:1, so it keeps the 18-20 weight.
+      strokeWidth={box !== undefined ? strokeFor(ICON_SIZE.control) : strokeFor(size)}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -135,8 +148,8 @@ type HeroIcon = typeof ViewColumnsIcon;
 
 /**
  * A Heroicons glyph on the same contract as Svg: size (default 18), decorative,
- * and the same inline layout. 24/outline gets stroke 1.85 over Heroicons' own
- * 1.5; `solid` (24/solid, filled states only) has no stroke.
+ * and the same inline layout. 24/outline takes strokeFor(size) over Heroicons'
+ * own 1.5; `solid` (24/solid, filled states only) has no stroke.
  */
 function Hero({
   icon: C,
@@ -153,7 +166,7 @@ function Hero({
       width={size}
       height={size}
       style={style}
-      strokeWidth={solid ? undefined : 1.85}
+      strokeWidth={solid ? undefined : strokeFor(size)}
       className={className}
       aria-hidden="true"
     />

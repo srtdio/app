@@ -20,6 +20,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { tagClass } from '@/components/ui/Tag';
 import type { PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
+import { GUTTER } from '@/components/ui/layout';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
 import { PLAN_WEEK_CHIP_ZERO, planCardMeta, planSections, type PlanWeekChip } from '@/lib/plan-tab';
@@ -104,7 +105,7 @@ export function PlanTabList(props: {
   // Keyed on every read plan, not the shown ones: a chip pick switches instantly (no rise).
   const rise = useAppendedRise(props.bundles.map((b) => b.plan.id));
   return (
-    <div data-plan-tab-list="" className="flex flex-col gap-5 px-4 pb-8 pt-4">
+    <div data-plan-tab-list="" className={cn('flex flex-col gap-6 pb-8 pt-4', GUTTER)}>
       {sections.length === 0 ? (
         <div data-plan-tab-chip-zero="">
           <EmptyState icon={<IconPlan size={ICON_SIZE.tray} />} title={PLAN_WEEK_CHIP_ZERO} />
@@ -114,7 +115,7 @@ export function PlanTabList(props: {
         <section
           key={section.key}
           data-plan-tab-section={section.key}
-          className="flex flex-col gap-2"
+          className="flex flex-col gap-4"
         >
           {chip === 'all' ? (
             <h2 className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2">
@@ -157,7 +158,7 @@ export function PlanTabCard(props: {
         rememberCard(props.bundle.plan.id, event.currentTarget);
         props.onOpen();
       }}
-      className="lit-card flex flex-col gap-2 border bg-panel px-3.5 pb-3 pt-3 mv-tint"
+      className="lit-card flex flex-col gap-2 border bg-panel p-4 mv-tint"
     >
       <PlanCardTop plan={props.bundle.plan} wrapTitle />
       {props.covers.length > 0 ? (
@@ -188,14 +189,14 @@ export function PlanTabCard(props: {
             percent={meta.percent}
             side="client"
           />
-          <span data-plan-tab-progress="" className="truncate text-sm leading-4 text-fg-3">
+          <span data-plan-tab-progress="" className="truncate text-sm text-fg-3">
             {meta.label}
           </span>
         </>
       ) : (
         <span className="flex min-w-0 items-center gap-2">
           <DraftTag />
-          <span data-plan-tab-progress="" className="truncate text-sm leading-4 text-fg-3">
+          <span data-plan-tab-progress="" className="truncate text-sm text-fg-3">
             {meta.label}
           </span>
         </span>
@@ -226,9 +227,9 @@ export function PlanTabBoxes(props: { heading?: boolean } = {}): ReactElement {
       lit="flat"
       label="Loading plans"
       data-plan-tab-loading=""
-      className="flex flex-col gap-5 px-4 pb-8 pt-4"
+      className={cn('flex flex-col gap-6 pb-8 pt-4', GUTTER)}
     >
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-4">
         {heading ? (
           <div className="flex h-4 items-center">
             <Bone lit="flat" className="h-3 w-20 rounded" />
@@ -238,7 +239,7 @@ export function PlanTabBoxes(props: { heading?: boolean } = {}): ReactElement {
           <div
             key={key}
             data-plan-tab-box=""
-            className="lit-card flex flex-col gap-2 rounded-xl border bg-panel px-3.5 pb-3 pt-3"
+            className="lit-card flex flex-col gap-2 rounded-xl border bg-panel p-4"
           >
             <div className="flex h-4 items-center">
               <Bone lit="flat" className="h-3 w-12 rounded" />

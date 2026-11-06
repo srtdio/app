@@ -11,15 +11,31 @@ export const STATUS_DOT_TONE: Record<StatusDotStage, string> = {
   parked: 'bg-stage-parked',
 };
 
+/** A brief's status (not a post stage): Open reads accent, Closed fg-3. */
+export type StatusDotBrief = 'open' | 'closed';
+
+const BRIEF_DOT_TONE: Record<StatusDotBrief, string> = {
+  open: 'bg-accent',
+  closed: 'bg-fg-3',
+};
+
 /** The one status dot: 8px, round, one colour per stage. Decorative (the label carries the word). */
-export function StatusDot({ stage, className }: { stage: StatusDotStage; className?: string }) {
+export function StatusDot({
+  stage,
+  className,
+}: {
+  stage: StatusDotStage | StatusDotBrief;
+  className?: string;
+}) {
+  const tone =
+    stage === 'open' || stage === 'closed' ? BRIEF_DOT_TONE[stage] : STATUS_DOT_TONE[stage];
   return (
     <span
       aria-hidden="true"
       data-status-dot={stage}
       className={cn(
         'inline-block h-2 w-2 shrink-0 rounded-full',
-        STATUS_DOT_TONE[stage],
+        tone,
         className,
       )}
     />

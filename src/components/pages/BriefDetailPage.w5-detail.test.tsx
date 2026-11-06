@@ -759,15 +759,16 @@ describe('Brief detail polish', () => {
     expect(briefFormatLabel('single_image')).toBe('Single image');
   });
 
-  it('the top bar reads the status and due day with a 7px dot at 15px semibold', async () => {
+  it('the top bar (ui/HeaderBar) reads the status and due day with the status dot in the title role', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-08-01T09:00:00Z'));
     h.getBrief.mockResolvedValue(detail({ target_date: '2026-08-14' }));
     await mount();
     const line = document.querySelector<HTMLElement>('[data-brief-status-line]');
     expect(line?.textContent).toBe('Open · Due 14 Aug');
-    expect(line?.querySelector('[aria-hidden="true"]')?.className).toContain('h-[7px] w-[7px]');
-    expect(line?.querySelector('.text-lg')?.className).toContain('font-semibold');
+    expect(line?.querySelector('[data-status-dot="open"]')?.className).toContain('h-2 w-2');
+    expect(line?.closest('[data-header-bar]')).not.toBeNull();
+    expect(line?.closest('.text-lg')?.className).toContain('font-semibold');
     expect(line?.querySelector('[data-brief-due]')?.className ?? '').not.toContain('text-bad');
   });
 

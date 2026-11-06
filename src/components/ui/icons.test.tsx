@@ -119,6 +119,15 @@ describe('icon set', () => {
     expect(iconEntries.map(([name]) => name).sort()).toEqual([...DOCUMENTED].sort());
   });
 
+  it('strokeFor: 2 at 12-16, 1.85 at 18-20, 1.6 at 22-28; ICON_SIZE unchanged', () => {
+    expect(Icons.strokeFor(ICON_SIZE.text)).toBe(2);
+    expect(Icons.strokeFor(ICON_SIZE.inline)).toBe(2);
+    expect(Icons.strokeFor(ICON_SIZE.nav)).toBe(1.85);
+    expect(Icons.strokeFor(ICON_SIZE.control)).toBe(1.85);
+    expect(Icons.strokeFor(ICON_SIZE.tray)).toBe(1.6);
+    expect(Icons.strokeFor(ICON_SIZE.status)).toBe(1.6);
+  });
+
   it('exports the one size scale', () => {
     expect(ICON_SIZE).toEqual({
       text: 12,
@@ -150,13 +159,23 @@ describe('icon set', () => {
         expect(svg.getAttribute('class')).toContain('text-accent');
       });
 
-      it(SOLID.has(name) ? 'is solid, no stroke width' : 'strokes at 1.85', () => {
+      it(SOLID.has(name) ? 'is solid, no stroke width' : 'strokes per size (2 / 1.85 / 1.6)', () => {
         const svg = svgOf(Icon);
         if (SOLID.has(name)) {
           expect(svg.getAttribute('stroke-width')).toBeNull();
           expect(svg.getAttribute('fill')).toBe('currentColor');
         } else {
           expect(svg.getAttribute('stroke-width')).toBe('1.85');
+          if (FIXED_BOX[name] === undefined) {
+            expect(svgOf(Icon, { size: ICON_SIZE.inline }).getAttribute('stroke-width')).toBe('2');
+            expect(svgOf(Icon, { size: ICON_SIZE.control }).getAttribute('stroke-width')).toBe(
+              '1.85',
+            );
+            expect(svgOf(Icon, { size: ICON_SIZE.tray }).getAttribute('stroke-width')).toBe('1.6');
+            expect(svgOf(Icon, { size: ICON_SIZE.status }).getAttribute('stroke-width')).toBe(
+              '1.6',
+            );
+          }
         }
       });
 
@@ -189,7 +208,7 @@ describe('non-icon glyphs drawn in the icon file', () => {
     expect(tick).toContain('d="m4.5 12.75 6 6 9-13.5"');
     expect(tick).toContain('pathLength="1"');
     expect(tick).toContain('stroke-dasharray="1"');
-    expect(tick).toContain('stroke-width="1.85"');
+    expect(tick).toContain('stroke-width="2"');
     expect(tick).toContain('width="16"');
     expect(tick).toContain('class="text-good"');
     // Final state first: no offset at rest, so it shows fully drawn with motion off.

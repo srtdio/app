@@ -1,5 +1,6 @@
 import type { FocusEvent, ReactNode, SyntheticEvent } from 'react';
 import { cn } from '@/lib/cn';
+import { textRole } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
@@ -190,7 +191,7 @@ export function SectionHeader<S extends string = string>({
         )}
       >
         {title !== undefined ? (
-          <h2 className="shrink-0 text-lg font-semibold text-fg">{title}</h2>
+          <h2 className={textRole('title', 'shrink-0')}>{title}</h2>
         ) : null}
         {search !== undefined ? (
           <div

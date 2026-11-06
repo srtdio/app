@@ -443,7 +443,7 @@ test('E: phone (iPhone 13): full page; no Edit mode; the row menu removes behind
   expectClean(network);
 });
 
-test('H: the panel header keeps the phone layout: 28px title on line 1, boxed Add on line 2 on the 16px edge, at 440 and 360 @desktop', async ({
+test('H: the panel header is the one HeaderBar: title role, Add, then the X last on the trailing rule, at 440 and 360 @desktop', async ({
   page,
 }) => {
   laptopOnly(page);
@@ -452,21 +452,25 @@ test('H: the panel header keeps the phone layout: 28px title on line 1, boxed Ad
   seedDatedPlan(network.world, { channelId: DM_CHANNEL, sender: ME });
   await openChat(page);
   const { panel } = await openPanel(page);
-  const line1 = panel.locator('[data-plan-header-line="1"]');
-  const line2 = panel.locator('[data-plan-header-line="2"]');
-  await expect(line1.locator('[data-plan-title-menu] h2')).toHaveCSS('font-size', '28px');
-  await expect(line1.locator('[data-plan-add-header], [data-plan-edit]')).toHaveCount(0);
+  const bar = panel.locator('[data-header-bar]');
+  await expect(bar.locator('[data-plan-title-menu] [data-plan-title-text]')).toHaveCSS(
+    'font-size',
+    '15px',
+  );
   for (const width of [1280, 950]) {
     await page.setViewportSize({ width, height: 800 });
     const box = await panel.boundingBox();
-    // B1: Add is the shared 44 Button on the 16px edge (within its 1px border).
-    const add = await line2.locator('[data-plan-add-header]').boundingBox();
-    if (box === null || add === null) throw new Error('boxes');
-    expect(Math.abs(Math.round(box.x + box.width - (add.x + add.width)) - 16)).toBeLessThanOrEqual(
-      1,
-    );
+    // B1: Add is the shared 44 Button; the X follows it, its 44 box pulled out
+    // by 12 so its glyph sits on the 24 laptop edge.
+    const add = await bar.locator('[data-plan-add-header]').boundingBox();
+    const close = await bar.locator('[data-plan-close]').boundingBox();
+    if (box === null || add === null || close === null) throw new Error('boxes');
     expect(Math.round(add.height)).toBe(44);
+    expect(add.x + add.width).toBeLessThanOrEqual(close.x + 1);
+    expect(
+      Math.abs(Math.round(box.x + box.width - (close.x + close.width)) - 12),
+    ).toBeLessThanOrEqual(1);
   }
-  await expect(line2.locator('[data-plan-edit]')).toHaveCount(0);
+  await expect(bar.locator('[data-plan-edit]')).toHaveCount(0);
   expectClean(network);
 });

@@ -6,6 +6,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '@/components/ui/Button';
+import { cardPad, cardSurface } from '@/components/ui/Card';
+import { cn } from '@/lib/cn';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -88,19 +90,19 @@ export function ApprovedAddressesSection({
   }
 
   return (
-    <section
-      aria-labelledby="approved-addresses-title"
-      className="flex flex-col gap-3 rounded-xl border bg-panel lit-card p-4"
-    >
-      <div>
-        <h3
-          id="approved-addresses-title"
-          className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
-        >
-          Approved approver addresses
-        </h3>
-        <p className="mt-1 text-base text-fg-2">{approverAddressIntro(clientDomain)}</p>
-      </div>
+    // The label on the page edge, its card under it.
+    <section aria-labelledby="approved-addresses-title" className="flex flex-col gap-2">
+      <h3
+        id="approved-addresses-title"
+        className="text-sm font-semibold uppercase tracking-[0.06em] text-fg-2"
+      >
+        Approved approver addresses
+      </h3>
+      <div
+        data-approved-addresses=""
+        className={cn('flex flex-col gap-3', cardSurface(), cardPad())}
+      >
+      <p className="text-base text-fg-2">{approverAddressIntro(clientDomain)}</p>
 
       {loadError ? (
         <p className="text-base text-bad">{errorText('load addresses', null)}</p>
@@ -162,6 +164,7 @@ export function ApprovedAddressesSection({
           onCancel={() => setConfirmFor(null)}
         />
       ) : null}
+      </div>
     </section>
   );
 }

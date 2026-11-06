@@ -6,6 +6,7 @@ import type { ReactElement } from 'react';
 import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
 import { tagClass } from '@/components/ui/Tag';
 import { cn } from '@/lib/cn';
+import { CARD_COVER, Card } from '@/components/ui/Card';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { Thumbnail } from '@/components/media';
 import { formatDue } from '@/lib/time';
@@ -79,93 +80,82 @@ interface BriefCardProps {
 }
 
 /**
- * A brief card: a leading square tile (the first image attachment, else a brief
- * icon), then title, truncated objective, status, and the due date. The card's
- * one real link is laid over the whole card (inset-0, named by the title), so
- * the link itself is the full card tap target, and nothing interactive is nested
- * inside a link. The optional reference link sits above it. Closing a brief
- * lives in the detail page's menu, never on the card.
+ * A brief card on ui/Card: the header holds a leading square tile (the first
+ * image attachment, else a brief icon) and the title; the body the truncated
+ * objective and the optional reference link; the footer the status tag and the
+ * due date. The card's one real link is the Card cover (laid over the whole
+ * card, named by the title), so nothing interactive is nested inside a link.
+ * The optional reference link sits above it. Closing a brief lives in the
+ * detail page's menu, never on the card.
  */
 export function BriefCard({ brief, cache, presignEnabled, href, timeZone }: BriefCardProps) {
   const closed = isBriefClosed(brief);
   const link = briefCardLink(brief);
   // growFromCard: the brief's page grows out of this card; Back grows it back.
-  const cardRef = useGrowBackIntoCard<HTMLDivElement>(brief.id);
+  const cardRef = useGrowBackIntoCard<HTMLElement>(brief.id);
 
   return (
-    <div
-      ref={cardRef}
-      data-brief-card=""
-      // Hover/press: the lit-hover overlay over the card's light. A closed brief
-      // is the muted card with an fg-2 title and its status tag, never dimmed.
-      className={`lit-hover relative rounded-xl border p-4 flex gap-3 min-w-0 overflow-hidden min-h-[44px] mv-tint focus-within:lit-focus ${
-        closed ? 'lit-card-muted bg-panel-2' : 'lit-card bg-panel'
-      }`}
-    >
-      <Link
-        to={href}
-        aria-label={brief.title}
-        onClick={() => rememberCard(brief.id, cardRef.current)}
-        data-brief-card-link=""
-        className="absolute inset-0 rounded-xl focus:outline-none"
-      />
-
-      {/* Leading square visual. The wrapper supplies the radius + overflow-hidden so
-          the shared tile (which adds none of its own) clips edge-to-edge. 64px keeps
-          it comfortably above the 44px touch floor without crowding a ~360px card. */}
-      <div className="pointer-events-none w-16 shrink-0 overflow-hidden rounded-lg">
-        {brief.thumbnailAssetVersionId !== null ? (
-          <Thumbnail
-            assetVersionId={brief.thumbnailAssetVersionId}
-            cache={cache}
-            presignEnabled={presignEnabled}
-            aspect="square"
-            fallback={{ kind: 'glyph' }}
-            alt={brief.title}
-          />
-        ) : (
-          <div
-            data-brief-tile="icon"
-            className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
-          >
-            <IconBriefs size={ICON_SIZE.tray} />
-          </div>
-        )}
-      </div>
-
-      <div className="pointer-events-none flex min-w-0 flex-1 flex-col gap-2.5">
-        <div className="flex min-w-0 items-start gap-3">
-          <span
-            aria-hidden="true"
-            className={`min-w-0 flex-1 break-words text-base font-medium leading-snug line-clamp-2 ${
-              closed ? 'text-fg-2' : 'text-fg'
-            }`}
-          >
-            {brief.title}
-          </span>
-          <BriefStatusPill status={brief.status} />
-        </div>
-
-        <p className="min-w-0 break-words text-base text-fg-2 line-clamp-2">
-          {stripFormat(brief.objective)}
-        </p>
-
-        {/* Above the card link, so a tap follows this link only. */}
-        {link !== null ? (
-          <div className="pointer-events-auto relative z-10 flex min-w-0">
-            {/* Compact: the list card has no room for a picture. */}
-            <LinkPreviewCard url={link.href} size="compact" className="w-full max-w-[320px]" />
-          </div>
-        ) : null}
-
-        {brief.target_date !== null ? (
-          <div className="text-sm text-fg-3">
-            <span data-brief-due="" className="font-mono tabular-nums">
-              {briefDueLabel(brief.target_date, timeZone)}
+    <Card
+      rootRef={cardRef}
+      surface={{ 'data-brief-card': '' }}
+      // A closed brief is the muted card with an fg-2 title and its status tag, never dimmed.
+      muted={closed}
+      cover={
+        <Link
+          to={href}
+          aria-label={brief.title}
+          onClick={() => rememberCard(brief.id, cardRef.current)}
+          data-brief-card-link=""
+          className={CARD_COVER}
+        />
+      }
+      leading={
+        // The leading square visual (32, the header's leading size).
+        <span className="block w-8 overflow-hidden rounded-lg">
+          {brief.thumbnailAssetVersionId !== null ? (
+            <Thumbnail
+              assetVersionId={brief.thumbnailAssetVersionId}
+              cache={cache}
+              presignEnabled={presignEnabled}
+              aspect="square"
+              fallback={{ kind: 'glyph' }}
+              alt={brief.title}
+            />
+          ) : (
+            <span
+              data-brief-tile="icon"
+              className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3 lit-media"
+            >
+              <IconBriefs size={ICON_SIZE.control} />
             </span>
-          </div>
-        ) : null}
-      </div>
-    </div>
+          )}
+        </span>
+      }
+      title={
+        <span aria-hidden="true" className={closed ? 'text-fg-2' : 'text-fg'}>
+          {brief.title}
+        </span>
+      }
+      badge={<BriefStatusPill status={brief.status} />}
+      {...(brief.target_date !== null
+        ? {
+            footerTrailing: (
+              <span data-brief-due="">{briefDueLabel(brief.target_date, timeZone)}</span>
+            ),
+          }
+        : {})}
+    >
+      <p className="min-w-0 break-words text-base text-fg-2 line-clamp-2">
+        {stripFormat(brief.objective)}
+      </p>
+
+      {/* Above the card link, so a tap follows this link only. */}
+      {link !== null ? (
+        <div className="pointer-events-auto relative z-10 flex min-w-0">
+          {/* Compact: the list card has no room for a picture. */}
+          <LinkPreviewCard url={link.href} size="compact" className="w-full max-w-[320px]" />
+        </div>
+      ) : null}
+    </Card>
   );
 }

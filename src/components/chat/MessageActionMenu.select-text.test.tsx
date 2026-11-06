@@ -296,7 +296,7 @@ describe('menu style', () => {
     expect(html).not.toContain(HASH);
   });
 
-  it('icons: 22px, stroke 1.85, inherit the row ink; Delete in bad', () => {
+  it('icons: 22px, stroke 1.6 (strokeFor 22), inherit the row ink; Delete in bad', () => {
     for (const item of items) {
       let sizes: unknown[] = [];
       walk(item.icon, (el) => {
@@ -308,7 +308,7 @@ describe('menu style', () => {
     const html = renderToStaticMarkup(
       <MenuRow item={items.find((i) => i.key === 'copy') as MessageMenuItem} onRun={() => {}} />,
     );
-    expect(html).toContain('stroke-width="1.85"');
+    expect(html).toContain('stroke-width="1.6"');
     expect(html).toContain('width="22"');
     expect(html).toMatch(/class="[^"]*text-fg[ "]/);
     const del = renderToStaticMarkup(

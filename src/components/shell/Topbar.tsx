@@ -10,6 +10,7 @@ import { dispatchSorted } from '@/lib/events';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { Bone } from '@/lib/motion';
 import { cn } from '@/lib/cn';
+import { textRole } from '@/components/ui/Text';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
 
 interface TopbarProps {
@@ -74,7 +75,7 @@ export function Topbar({
         >
           {/* "<Brand> - <Platform>" can outgrow one line on a phone: wrap to two
               short lines at word breaks instead of clipping the platform. */}
-          <span className="min-w-0 text-fg leading-tight line-clamp-2 break-words">
+          <span className={textRole('title', 'min-w-0 line-clamp-2 break-words')}>
             {workspaceName}
           </span>
           <IconChevronDown size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />

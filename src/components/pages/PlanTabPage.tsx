@@ -46,6 +46,7 @@ import { Highlight } from '@/components/ui/SearchHighlight';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
+import { Toolbar } from '@/components/ui/Toolbar';
 import { ICON_SIZE, IconBank, IconFilterLines, IconPlan, IconPlus } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { ComposeRange, PlanBundle, PlanThumbs } from '@/lib/chat/plans';
@@ -552,29 +553,40 @@ export function PlanTabPage(): ReactElement {
           epoch: `${chip}:${String(bankExpanded)}`,
         }
       : null;
+  // The laptop bank's toolbar: the one Toolbar (search | the filter icon | Add idea).
   const laptopBankToolbar = (
-    <div data-bank-toolbar="" className="flex items-center gap-2 px-4 pt-2 md:px-0">
-      <Input
-        tone="search"
-        type="search"
-        aria-label="Search ideas"
-        placeholder="Search ideas"
-        value={bankSearchLaptop}
-        onChange={(e) => setBankSearchLaptop(e.target.value)}
-        className="min-w-0 flex-1"
-      />
-      {filterButton}
-      {creator ? (
-        <IconButton
-          label="Add idea"
-          data-bank-add-open=""
-          onClick={() => setBankSheet('add')}
-          className="shrink-0 bg-accent text-accent-fg lit-pill hover:text-accent-fg"
-        >
-          <IconPlus size={ICON_SIZE.control} />
-        </IconButton>
-      ) : null}
-    </div>
+    <Toolbar
+      flush
+      data-bank-toolbar=""
+      context={
+        <Input
+          tone="search"
+          type="search"
+          aria-label="Search ideas"
+          placeholder="Search ideas"
+          value={bankSearchLaptop}
+          onChange={(e) => setBankSearchLaptop(e.target.value)}
+          className="min-w-0 flex-1"
+        />
+      }
+      icons={filterButton}
+      {...(creator
+        ? {
+            primary: (
+              <Button
+                variant="primary"
+                type="button"
+                data-bank-add-open=""
+                onClick={() => setBankSheet('add')}
+                className="shrink-0 whitespace-nowrap"
+              >
+                <IconPlus size={ICON_SIZE.inline} />
+                Add idea
+              </Button>
+            ),
+          }
+        : {})}
+    />
   );
   const bankLine = (
     <BankFilterLine

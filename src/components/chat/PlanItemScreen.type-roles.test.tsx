@@ -133,9 +133,9 @@ afterEach(async () => {
 });
 
 describe('Plan item screen type roles', () => {
-  it('screen header: lg, 600', async () => {
+  it('screen header: the HeaderBar title role (lg, 600)', async () => {
     await mount();
-    const header = document.querySelector('[data-plan-page-titles] h2');
+    const header = document.querySelector('[data-header-bar] [data-plan-page-titles] h1');
     expect(header).not.toBeNull();
     expect(classes(header as Element)).toEqual(
       expect.arrayContaining(['text-lg', 'font-semibold']),
@@ -146,7 +146,7 @@ describe('Plan item screen type roles', () => {
   it('item title: lg, 600 (was 20px)', async () => {
     await mount();
     const title = byText('h3', 'Plant tour reel');
-    expect(classes(title)).toEqual(expect.arrayContaining(['text-lg', 'font-semibold', 'text-fg']));
+    expect(classes(title)).toEqual(expect.arrayContaining(['text-lg', 'font-semibold']));
     expect(classes(title)).not.toContain('text-2xl');
   });
 
@@ -178,7 +178,8 @@ describe('Plan item screen type roles', () => {
 
   it('meta: the subtitle and the comment time are sm fg-3; the time is mono tabular', async () => {
     await mount();
-    const subtitle = document.querySelector('[data-plan-page-subtitle]');
+    // The HeaderBar's subtitle line (meta role) holds it.
+    const subtitle = document.querySelector('[data-plan-page-subtitle]')?.parentElement ?? null;
     expect(subtitle).not.toBeNull();
     expect(classes(subtitle as Element)).toEqual(expect.arrayContaining(['text-sm', 'text-fg-3']));
     const time = document.querySelector('time');

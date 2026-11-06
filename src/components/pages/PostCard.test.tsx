@@ -129,10 +129,12 @@ describe('PostCard thumbnail frame', () => {
         presignEnabled: true,
       });
       const box = /<div[^>]*data-post-card-play=""[^>]*>/.exec(out)?.[0] ?? '';
-      expect(box).toContain('bg-panel-3');
-      expect(box).toContain('items-center justify-center');
       // Instagram's one fixed box (4:5), the same for a reel as for a photo.
       expect(box).toContain('aspect-ratio:0.8');
+      // The one post placeholder (ui/PostPlaceholder): the play glyph, filled.
+      const glyph = /<span[^>]*data-post-placeholder="video"[^>]*>/.exec(out)?.[0] ?? '';
+      expect(glyph).toContain('bg-panel-3');
+      expect(glyph).toContain('items-center justify-center');
       expect(out).toContain('aria-label="Video"');
       expect(out).not.toContain('<img');
     }
@@ -148,7 +150,8 @@ describe('PostCard thumbnail frame', () => {
     expect(resolve).not.toHaveBeenCalled();
     expect(peek).not.toHaveBeenCalled();
     expect(out).not.toContain('<img');
-    expect(out).toContain('<svg');
+    // The one post placeholder stands in for the picture ("Aa" for a photo post).
+    expect(out).toContain('data-post-placeholder="text"');
   });
 
   it('(structural) the meta line is a single fixed-height row with no format glyph and no platform mark', () => {
@@ -158,19 +161,16 @@ describe('PostCard thumbnail frame', () => {
       cache,
       presignEnabled: true,
     });
-    // One non-wrapping meta row replaces the old two-chip stack.
-    const meta = /<div[^>]*data-post-card-meta=""[^>]*>(.*?)<\/div>/.exec(out);
-    expect(meta?.[0]).toContain('flex h-5 min-w-0 items-center gap-1.5');
+    // ui/Card: no footer when there is nothing for it (no stage, no unread).
+    expect(out).not.toContain('data-card-footer');
     expect(out).not.toContain('flex-wrap');
     expect(out).not.toContain('min-w-0 shrink truncate');
     // The workspace has one platform: the card carries no platform mark.
     expect(out).not.toContain('aria-label="instagram"');
-    // The format shows once, on the picture: the meta row holds no glyph.
-    expect(meta?.[1] ?? '').not.toContain('<svg');
-    // The card root can shrink to its track. It does not clip (the laptop ⋯
-    // popover opens past its edge); the picture clips to the top corners itself.
-    expect(out).toContain('min-w-0');
-    expect(out).toContain('class="relative flex h-full min-w-0 flex-col rounded-xl');
+    // The card root is ui/Card: content height (self-start), never h-full.
+    expect(out).toContain('data-card=""');
+    expect(out).toContain('self-start');
+    expect(out).not.toContain('h-full min-w-0 flex-col rounded-xl');
   });
 
   it('renders the target date on the meta line when present', () => {
@@ -186,8 +186,8 @@ describe('PostCard thumbnail frame', () => {
       </MemoryRouter>,
     );
     expect(out).toContain('tabular-nums');
-    // Dates render mono, like the chat list times.
-    expect(out).toMatch(/data-post-card-due=""[^>]*class="[^"]*font-mono[^"]*tabular-nums/);
+    // Dates render mono, like the chat list times (the Card meta line).
+    expect(out).toMatch(/class="[^"]*font-mono[^"]*tabular-nums[^"]*"><span data-post-card-due=""/);
     // The due line reads "Due {d MMM}", day first, no year.
     expect(out).toContain('Due 15 Mar');
     expect(out).toContain('data-post-card-due');
@@ -210,10 +210,10 @@ describe('PostCard thumbnail frame', () => {
       cache,
       presignEnabled: true,
     });
-    // The relative tile sits inside a pointer-events-none wrapper, after the
-    // full-bleed absolute button, so the button still takes the tap.
-    expect(out).toContain(
-      '<div data-post-card-thumb="" class="pointer-events-none relative overflow-hidden rounded-t-xl"><div',
+    // The Card's bleed media wrapper is pointer-events-none, after the
+    // full-bleed absolute press surface, so the surface still takes the tap.
+    expect(out).toMatch(
+      /data-card-media="bleed" class="[^"]*pointer-events-none[^"]*"><div data-post-card-thumb=""/,
     );
     expect(out.indexOf('aria-label="Open post Post title"')).toBeLessThan(
       out.indexOf('data-post-card-thumb'),
@@ -249,12 +249,13 @@ describe('W4 PostCard fixes', () => {
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(button).toContain('h-11');
     expect(button).toContain('w-11');
-    expect(button).toContain('z-10');
+    // Card more slot: above the press surface.
+    expect(out).toMatch(/data-card-more="" class="[^"]*z-10/);
     // No onMove, no button.
     expect(renderWith({ post: makePost({}) })).not.toContain('data-post-card-move');
   });
 
-  it('fix 5: showStage leads the meta line with the stage dot and label', () => {
+  it('fix 5: showStage puts the stage Tag (dot and label) in the card footer', () => {
     const out = renderWith({ post: makePost({ stage: 'review' }), showStage: true });
     expect(out).toContain('data-post-card-stage');
     expect(out).toContain('bg-stage-review');
@@ -266,7 +267,7 @@ describe('W4 PostCard fixes', () => {
 
   it('fix 9: the title wraps to two lines instead of truncating', () => {
     const out = renderWith({ post: makePost({}) });
-    const title = /<div[^>]*data-post-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
+    const title = /<span[^>]*data-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(title).toContain('line-clamp-2');
     expect(title).not.toContain('truncate');
   });
@@ -309,7 +310,7 @@ describe('E: Pipeline card polish', () => {
   }
   const NOW = new Date('2026-10-23T12:00:00Z');
 
-  it('the ⋯ is a plain glyph at the right end of the due row, never on the picture', () => {
+  it('the ⋯ is a plain glyph at the right end of the title line (Card more), never on the picture', () => {
     const out = renderWith({
       post: makePost({
         target_date: '2026-11-02',
@@ -319,26 +320,23 @@ describe('E: Pipeline card polish', () => {
       onMove: () => {},
       now: NOW,
     });
-    const metaAt = out.indexOf('data-post-card-meta');
+    const titleAt = out.indexOf('data-card-title');
     const dueAt = out.indexOf('data-post-card-due');
     const moveAt = out.indexOf('data-post-card-move');
-    expect(metaAt).toBeGreaterThan(-1);
-    expect(dueAt).toBeGreaterThan(metaAt);
-    // The ⋯ comes after the due text, pushed to the row's right end.
-    expect(moveAt).toBeGreaterThan(dueAt);
+    expect(titleAt).toBeGreaterThan(-1);
+    // The ⋯ ends the title line (Card more), before the due meta line.
+    expect(moveAt).toBeGreaterThan(titleAt);
+    expect(dueAt).toBeGreaterThan(moveAt);
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
-    const menu = /<div[^>]*data-post-card-menu=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(menu).toContain('ml-auto');
+    expect(out).toMatch(/data-card-more="" class="[^"]*-my-3/);
     expect(button).toContain('h-11 w-11');
-    expect(button).toContain('-my-3');
+    // The trailing rule: the glyph sits on the card's content edge.
+    expect(button).toContain('-mr-3');
     expect(button).toContain('text-fg-3');
     // No resting fill (the shared IconButton only tints on hover).
     expect(button).not.toMatch(/[\s"]bg-/);
     // Nothing of it on the picture; the carousel badge stays there.
-    const thumb = out.slice(
-      out.indexOf('data-post-card-thumb'),
-      out.indexOf('data-post-card-body'),
-    );
+    const thumb = out.slice(out.indexOf('data-post-card-thumb'), out.indexOf('data-card-header'));
     expect(thumb).not.toContain('data-post-card-move');
     expect(thumb).toContain('aria-label="Carousel"');
   });
@@ -370,8 +368,8 @@ describe('E: Pipeline card polish', () => {
     const due = /<span[^>]*data-post-card-due="overdue"[^>]*>([^<]*)<\/span>/.exec(out);
     expect(due?.[1]).toBe('Overdue · 12 Oct');
     expect(due?.[0]).toContain('text-bad');
-    expect(due?.[0]).toContain('truncate');
-    expect(due?.[0]).toContain('whitespace-nowrap');
+    // One line: the Card meta line truncates.
+    expect(out).toMatch(/class="[^"]*truncate[^"]*"><span data-post-card-due="overdue"/);
     const upcoming = renderWith({ post: makePost({ target_date: '2026-11-02' }), now: NOW });
     expect(upcoming).not.toContain('text-bad');
   });
@@ -390,14 +388,13 @@ describe('E: Pipeline card polish', () => {
     expect(line?.[1]).not.toContain('With approvers');
   });
 
-  it('every card fills its grid cell and the title holds two lines', () => {
+  it('every card is content-tall (Card self-start) and the title holds at most two lines', () => {
     const out = renderWith({ post: makePost({}) });
-    expect(out).toContain('relative flex h-full min-w-0 flex-col');
-    const title = /<div[^>]*data-post-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
+    expect(out).toContain('self-start');
+    expect(out).not.toContain('h-full min-w-0 flex-col');
+    const title = /<span[^>]*data-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(title).toContain('line-clamp-2');
-    expect(title).toContain('min-h-[2.75em]');
-    const body = /<div[^>]*data-post-card-body=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(body).toContain('flex-1');
+    expect(title).not.toContain('min-h-[2.75em]');
   });
 
   it('in a kanban column the card never repeats the stage name or its dot', () => {
@@ -487,13 +484,13 @@ describe('PostCard hover keeps the content visible', () => {
   // The Open post button is absolute inset-0 and fills panel-2 on hover; the
   // cover and the body must be positioned so they paint above it, and pass
   // taps through to it. Only the ⋯ menu takes pointer events back.
-  const tag = (out: string, attr: string) =>
-    new RegExp(`<div[^>]*${attr}=""[^>]*>`).exec(out)?.[0] ?? '';
+  const media = (out: string): string =>
+    /<div[^>]*data-card-media="bleed"[^>]*>/.exec(out)?.[0] ?? '';
 
   it('the body is relative and pointer-events-none', () => {
     const { cache } = makeCache(null);
     const out = render({ post: makePost({ caption: 'Hello' }), cache, presignEnabled: true });
-    const body = tag(out, 'data-post-card-body');
+    const body = /<div class="([^"]*)"><div data-card-header=""/.exec(out)?.[1] ?? '';
     expect(body).toMatch(/\brelative\b/);
     expect(body).toContain('pointer-events-none');
   });
@@ -505,21 +502,19 @@ describe('PostCard hover keeps the content visible', () => {
       expiresAt: Date.now() + 3_600_000,
     }));
     const cache = { ...base, peekThumbnail } as unknown as PresignCache;
-    const image = tag(
+    const image = media(
       render({
         post: makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
         cache,
         presignEnabled: true,
       }),
-      'data-post-card-thumb',
     );
-    const video = tag(
+    const video = media(
       render({
         post: makePost({ thumbnailAssetVersionId: null, format: 'video' }),
         cache: makeCache(null).cache,
         presignEnabled: true,
       }),
-      'data-post-card-thumb',
     );
     for (const wrapper of [image, video]) {
       expect(wrapper).not.toBe('');
@@ -530,10 +525,10 @@ describe('PostCard hover keeps the content visible', () => {
 
   it('the ⋯ menu wrapper and trigger take pointer events back', () => {
     const src = readFileSync(fileURLToPath(new URL('./PostCard.tsx', import.meta.url)), 'utf8');
-    expect(src).toContain('className="pointer-events-auto ml-auto flex shrink-0"');
-    // The trailing pull (-mr-3) and in-line box (-my-3) come from ActionMenuTrigger.
-    expect(src).toContain('className="pointer-events-auto relative z-10 text-fg-3"');
-    expect(src).not.toMatch(/-mr-3/);
+    // The Card more slot lifts the ⋯ above the press surface (pointer-events-auto z-10).
+    expect(src).toContain('{...(menu !== undefined ? { more: menu } : {})}');
+    // The trailing pull (-mr-3) comes from ActionMenuTrigger, the in-line box from Card.
+    expect(src).not.toMatch(/-mr-3|-my-3/);
   });
 });
 

@@ -76,7 +76,7 @@ function render(map: UnreadEntities, p: PipelinePost = post()): string {
 }
 
 const meta = (html: string): string => {
-  const at = html.indexOf('data-post-card-meta');
+  const at = html.indexOf('data-card-header');
   return at < 0 ? '' : html.slice(at);
 };
 
@@ -86,13 +86,14 @@ afterEach(() => {
 });
 
 describe('PostCard unread comment marker', () => {
-  it('shows the glyph and the count pill in the foot line, after the due and before the menu', () => {
+  it('shows the glyph and the count pill in the Card footer, after the ⋯ and the due', () => {
     const line = meta(render({ 'post:p1': 3 }));
     expect(line).toContain('data-post-card-unread="3"');
     expect(line).toContain('aria-label="3 unread comments"');
     expect(line).toContain('data-count-badge=""');
     expect(line.indexOf('data-post-card-due')).toBeLessThan(line.indexOf('data-post-card-unread'));
-    expect(line.indexOf('data-post-card-unread')).toBeLessThan(line.indexOf('data-post-card-move'));
+    expect(line.indexOf('data-post-card-move')).toBeLessThan(line.indexOf('data-post-card-due'));
+    expect(line.indexOf('data-card-footer')).toBeLessThan(line.indexOf('data-post-card-unread'));
   });
 
   it('nothing renders with no unread comments, or for another post', () => {
@@ -113,11 +114,9 @@ describe('PostCard unread comment marker', () => {
     expect(html).toContain('aria-label="1 unread comment"');
   });
 
-  it('the foot line never wraps and the marker never shrinks', () => {
+  it('the marker sits in the Card footer trailing slot (never shrinks)', () => {
     const src = readFileSync(fileURLToPath(new URL('./PostCard.tsx', import.meta.url)), 'utf8');
-    expect(src).toContain(
-      'data-post-card-meta="" className="mt-auto flex h-5 min-w-0 items-center gap-1.5"',
-    );
-    expect(src).toContain('className="inline-flex shrink-0 items-center gap-1 text-fg"');
+    expect(src).toContain('footerTrailing: unread');
+    expect(src).toContain('className="inline-flex items-center gap-1 text-fg"');
   });
 });

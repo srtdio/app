@@ -11,21 +11,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Sheet } from '@/components/ui/Sheet';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { PressableRow } from '@/components/ui/PressableRow';
-import { ICON_SIZE, IconAlarmClock, IconChevronRight, IconX } from '@/components/ui/icons';
-import { cn } from '@/lib/cn';
-import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
+import { ICON_SIZE, IconAlarmClock, IconX } from '@/components/ui/icons';
 import { useReminderOptional } from '@/components/chat/ReminderContext';
 import { zoneLine } from '@/components/chat/ScheduleSheet';
-import {
-  dateInputValue,
-  formatDayTime,
-  fromInputs,
-  MAX_LEAD_MS,
-  timeInputValue,
-} from '@/lib/chat/scheduled';
+import { WhenOptions, WhenRow } from '@/components/chat/WhenOptions';
+import { formatDayTime } from '@/lib/chat/scheduled';
 import {
   isWithinReminderWindow,
   reminderPresets,
@@ -58,137 +48,64 @@ export function ReminderOptions(props: {
   /** Change mode: a "Cancel reminder" row after the presets. */
   onCancelReminder?: (() => void) | undefined;
 }): ReactElement {
-  const [step, setStep] = useState<'presets' | 'custom'>('presets');
   const now = new Date();
   const presets = reminderPresets(now);
   const tomorrow = presets.find((p) => p.id === 'tomorrow')?.at ?? now;
-  const [date, setDate] = useState(() => dateInputValue(tomorrow));
-  const [time, setTime] = useState(() => timeInputValue(tomorrow));
-  const chosen = fromInputs(date, time);
-  const valid = chosen !== null && isWithinReminderWindow(chosen, now);
-
+  const onCancelReminder = props.onCancelReminder;
+  // The one time-pick frame (WhenOptions), shared with the Schedule sheet.
   return (
-    <div data-reminder-options={step} className={cn('flex flex-col', NO_TOUCH_SELECT)}>
-      {props.preview !== null ? (
-        <p
-          data-reminder-preview=""
-          className="mb-2 truncate rounded-xl border bg-panel-2 px-3 py-2 text-base text-fg-2 lit-card-muted"
-        >
-          {props.preview}
-        </p>
-      ) : null}
-      {step === 'presets' ? (
-        <ul className="flex flex-col">
-          {presets.map((preset) => (
-            <PresetRow
-              key={preset.id}
-              id={preset.id}
-              label={preset.label}
-              detail={presetDetail(preset, now)}
-              onClick={() =>
-                props.onPick(
-                  reminderPresets(new Date()).find((p) => p.id === preset.id)?.at ?? preset.at,
-                )
-              }
-            />
-          ))}
-          <PresetRow id="custom" label="Custom" onClick={() => setStep('custom')} />
-          {props.onCancelReminder !== undefined ? (
-            <CancelReminderRow onClick={props.onCancelReminder} />
-          ) : null}
-        </ul>
-      ) : (
-        <div data-reminder-custom="" className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1 text-sm font-medium text-fg-2">
-              Date
-              <Input
-                type="date"
-                aria-label="Date"
-                value={date}
-                min={dateInputValue(now)}
-                max={dateInputValue(new Date(now.getTime() + MAX_LEAD_MS))}
-                onChange={(event) => setDate(event.target.value)}
-                className="min-w-0 font-mono"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-fg-2">
-              Time
-              <Input
-                type="time"
-                aria-label="Time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-                className="min-w-0 font-mono"
-              />
-            </label>
-          </div>
-          <p data-reminder-summary="" className="min-h-5 text-base font-medium text-fg">
-            {chosen !== null ? reminderSummary(chosen, now) : ''}
-          </p>
-          <p className="text-sm text-fg-3">{REMINDER_HELPER}</p>
-          <Button
-            type="button"
-            variant="primary"
-            data-reminder-confirm=""
-            disabled={!valid}
-            onClick={() => {
-              if (chosen !== null && isWithinReminderWindow(chosen, new Date()))
-                props.onPick(chosen);
-            }}
+    <WhenOptions
+      hook="reminder"
+      preview={
+        props.preview !== null ? (
+          <p
+            data-reminder-preview=""
+            className="mb-2 truncate rounded-xl border bg-panel-2 px-3 py-2 text-base text-fg-2 lit-card-muted"
           >
-            Set reminder
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PresetRow(props: {
-  id: string;
-  label: string;
-  detail?: string;
-  onClick: () => void;
-}): ReactElement {
-  return (
-    <li>
-      <PressableRow
-        type="button"
-        data-reminder-row={props.id}
-        onClick={props.onClick}
-        className="flex min-h-[56px] items-center gap-3 px-2 text-fg"
-      >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-panel-2 text-fg-2 lit-btn-secondary">
-          <IconAlarmClock size={ICON_SIZE.control} />
-        </span>
-        <span className="flex-1 text-lg font-medium">{props.label}</span>
-        {props.detail !== undefined ? (
-          <span className="font-mono text-sm tabular-nums text-fg-2">{props.detail}</span>
-        ) : (
-          <IconChevronRight size={ICON_SIZE.inline} className="text-fg-3" />
-        )}
-      </PressableRow>
-    </li>
+            {props.preview}
+          </p>
+        ) : null
+      }
+      icon={IconAlarmClock}
+      presets={presets.map((preset) => ({
+        id: preset.id,
+        label: preset.label,
+        detail: presetDetail(preset, now),
+        onPick: () =>
+          props.onPick(
+            reminderPresets(new Date()).find((p) => p.id === preset.id)?.at ?? preset.at,
+          ),
+      }))}
+      customLabel="Custom"
+      extraRows={
+        onCancelReminder !== undefined ? (
+          <CancelReminderRow onClick={onCancelReminder} />
+        ) : undefined
+      }
+      custom={{
+        initial: tomorrow,
+        summary: reminderSummary,
+        allowed: isWithinReminderWindow,
+        helper: REMINDER_HELPER,
+        confirmLabel: 'Set reminder',
+        onPick: props.onPick,
+      }}
+    />
   );
 }
 
 /** Change mode's last row: cancels the pending reminder, in the danger token. */
 function CancelReminderRow(props: { onClick: () => void }): ReactElement {
   return (
-    <li className="mt-1 border-t border-border pt-1">
-      <PressableRow
-        type="button"
-        data-reminder-row="cancel"
-        onClick={props.onClick}
-        className="flex min-h-[56px] items-center gap-3 px-2 text-bad hover:bg-bad-soft"
-      >
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-bad-soft text-bad lit-tint">
-          <IconX size={ICON_SIZE.control} />
-        </span>
-        <span className="flex-1 text-lg font-medium">{CANCEL_REMINDER_LABEL}</span>
-      </PressableRow>
-    </li>
+    <WhenRow
+      hook="reminder"
+      id="cancel"
+      icon={<IconX size={ICON_SIZE.control} />}
+      label={CANCEL_REMINDER_LABEL}
+      tone="danger"
+      divided
+      onClick={props.onClick}
+    />
   );
 }
 

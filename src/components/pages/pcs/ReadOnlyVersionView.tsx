@@ -8,6 +8,8 @@
 // owns entering/leaving this mode; Back returns to the live, editable current
 // version.
 
+import { cn } from '@/lib/cn';
+import { GUTTER } from '@/components/ui/layout';
 import { Button } from '@/components/ui/Button';
 import { SnapshotThumbs } from '@/components/pages/pcs/PostGallery';
 import { snapshotItems } from '@/components/pages/pcs/gallery-transforms';
@@ -45,7 +47,7 @@ export function ReadOnlyVersionView({
   const showPictures = thumbs !== undefined && galleryVersionIds.length > 0;
 
   return (
-    <div className="px-4 md:px-6 py-6 flex flex-col gap-6">
+    <div className={cn('flex flex-col gap-6 py-6', GUTTER)}>
       <div
         role="status"
         data-version-banner=""

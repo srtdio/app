@@ -99,16 +99,20 @@ export function decisionBarSpace(model: DecisionModel | null, error: string | nu
 function approverButtons(
   model: Extract<DecisionModel, { kind: 'approver' }>,
   busy: boolean,
+  pending: Stage | null,
 ): ReactNode {
   const ordered = decisionBarOrder(model.actions);
   return (
     <div className="flex items-center gap-2">
       {ordered.map((action) => {
         const approve = action.to === 'approved';
+        // The running move's button shows busy (Button busy keeps its width).
+        const running = busy && pending === action.to;
         return (
           <Button
             key={action.to}
             variant={approve ? 'success' : 'secondary'}
+            busy={running}
             disabled={busy}
             onClick={() => model.onPick(action.to)}
             {...(approve ? { 'data-induction': INDUCTION_KEYS.postApprove } : {})}
@@ -133,6 +137,7 @@ function creatorButton(
       <Button
         variant="primary"
         data-decision-main=""
+        busy={busy && !model.disabled}
         disabled={model.disabled || busy}
         onClick={model.onPress}
         className="w-full md:w-auto"
@@ -179,6 +184,7 @@ function decisionContent(
   model: DecisionModel | null,
   busy: boolean,
   error: string | null,
+  pending: Stage | null = null,
 ): ReactNode {
   const mark = landedMark(model);
   return (
@@ -195,7 +201,7 @@ function decisionContent(
       {model === null
         ? null
         : model.kind === 'approver'
-          ? approverButtons(model, busy)
+          ? approverButtons(model, busy, pending)
           : creatorButton(model, busy)}
     </>
   );
@@ -220,12 +226,14 @@ export function PostDecisionBar(props: {
   busy: boolean;
   error: string | null;
   placement?: 'fixed' | 'footer';
+  /** The stage the running move goes to: that button shows busy at its own width. */
+  pending?: Stage | null;
 }): ReactElement | null {
   if (!hasDecisionContent(props.model, props.error)) return null;
   if (props.placement === 'footer') {
     return (
       <div data-decision-bar="" className="w-full">
-        {decisionContent(props.model, props.busy, props.error)}
+        {decisionContent(props.model, props.busy, props.error, props.pending ?? null)}
       </div>
     );
   }
@@ -235,7 +243,7 @@ export function PostDecisionBar(props: {
       {...bottomAnchorProps}
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-panel lit-dock pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))] pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden"
     >
-      {decisionContent(props.model, props.busy, props.error)}
+      {decisionContent(props.model, props.busy, props.error, props.pending ?? null)}
     </div>
   );
 }
@@ -247,13 +255,15 @@ export function PostDecisionRow(props: {
   error: string | null;
   /** A quiet line above the buttons (the approver's review note), or null. */
   note?: string | null;
+  /** The stage the running move goes to: that button shows busy at its own width. */
+  pending?: Stage | null;
 }): ReactElement | null {
   const note = props.note ?? null;
   if (!hasDecisionContent(props.model, props.error) && note === null) return null;
   return (
     <div data-decision-row="" className="flex flex-col">
       {note !== null ? <p className="mb-3 text-base text-fg-2">{note}</p> : null}
-      {decisionContent(props.model, props.busy, props.error)}
+      {decisionContent(props.model, props.busy, props.error, props.pending ?? null)}
     </div>
   );
 }

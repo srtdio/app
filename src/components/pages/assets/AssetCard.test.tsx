@@ -105,20 +105,23 @@ describe('AssetCard thumbnail', () => {
       true,
     );
     expect(pdf).toContain('data-file-tile="pdf"');
-    expect(pdf).toMatch(/data-file-meta[^>]*><span><span>PDF</);
+    expect(pdf).toMatch(/data-asset-meta="">PDF · /);
     // First paint, before the tile nears the viewport: the icon card, no request.
     expect(pdf).toContain('data-file-tile-icon');
     expect(pdf).not.toContain('<img');
     const unknown = render(makeAsset({ filename: 'spec.PDF', mimeType: null }), cache, true);
     expect(unknown).toContain('data-file-tile="file"');
-    expect(unknown).toMatch(/data-file-meta[^>]*><span><span>File</);
+    expect(unknown).toMatch(/data-asset-meta="">File · /);
   });
 
-  it('a file card keeps a fixed height: a 4/3 thumbnail box and two name lines', () => {
+  it('a file tile keeps a fixed height: a 4/3 thumbnail box, then a one-line name and meta', () => {
     const { cache } = makeCache(null);
     const out = render(makeAsset({ mimeType: 'video/mp4' }), cache, true);
     expect(out).toContain('aspect-[4/3]');
-    expect(out).toContain('h-8');
+    expect(out).toContain('data-tile=""');
+    expect(out).toContain('data-file-tile="video"');
+    // The caption sits below the picture, outside FileTile's own footer.
+    expect(out).not.toContain('data-file-name');
   });
 
   it('shows the fallback and never touches the cache when presign is disabled', () => {
@@ -223,8 +226,8 @@ describe('AssetCard select box', () => {
   });
 });
 
-describe('AssetCard ⋯ at the bottom, smaller select box', () => {
-  it('puts the ⋯ in the bottom-right corner as bare dots, with a 44px hit area', () => {
+describe('AssetCard ⋯ on the name line, smaller select box', () => {
+  it('puts the ⋯ on the name line under the picture, ending on the tile edge (trailing rule)', () => {
     const { cache } = makeCache(null);
     const out = renderToStaticMarkup(
       <AssetCard
@@ -234,13 +237,12 @@ describe('AssetCard ⋯ at the bottom, smaller select box', () => {
         onOpen={vi.fn()}
       />,
     );
-    // The ⋯ is ActionMenu's trigger; its corner box holds the position.
-    expect(out).toMatch(/class="absolute bottom-0 right-0 z-10"[^]*?data-card-menu=""/);
-    expect(out).toMatch(/class="[^"]*h-11 w-11[^"]*rounded-lg[^"]*"[^>]*data-card-menu=""/);
+    // The ⋯ is ActionMenu's trigger in ui/Tile's more slot, pulled out by 12.
+    expect(out).toMatch(/data-tile-more=""[^]*?data-card-menu=""/);
+    expect(out).toMatch(/class="[^"]*h-11 w-11[^"]*-mr-3[^"]*"[^>]*data-card-menu=""/);
     expect(out).toContain('aria-haspopup="menu"');
-    expect(out).not.toMatch(/class="[^"]*top-0[^"]*"[^>]*data-card-menu=""/);
-    // The size line keeps room on the right so text never runs under the ⋯.
-    expect(out).toContain('flex h-5 items-center pr-8');
+    // The caption is not inside a corner overlay.
+    expect(out).not.toMatch(/data-tile-corner="[^"]*"[^>]*>[^]*?data-card-menu/);
   });
 
   it('draws a 16px select box', () => {

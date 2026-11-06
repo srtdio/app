@@ -140,6 +140,11 @@ export default {
         '15': '3.75rem',
         '18': '4.5rem',
       },
+      // Auto-fill grids that fill the laptop width (ui/Tile TILE_GRID, ui/Card CARD_GRID).
+      gridTemplateColumns: {
+        tiles: 'repeat(auto-fill, minmax(158px, 1fr))',
+        cards: 'repeat(auto-fill, minmax(320px, 1fr))',
+      },
       fontFamily: {
         sans: [
           'Inter',

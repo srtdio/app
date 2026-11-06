@@ -95,12 +95,15 @@ describe('CreatePostSheet type roles', () => {
     }
   });
 
-  it('meta: the More options hint and the format pill sit at text-sm', async () => {
+  it('meta: the More options hint sits at text-sm; the format pill is ui/Tag', async () => {
     await renderSheet();
     expect(classes(byText(MORE_OPTIONS_HINT))).toEqual(
       expect.arrayContaining(['text-sm', 'text-fg-3']),
     );
-    expect(classes(document.querySelector('[data-format-pill]'))).toContain('text-sm');
+    // The read-only format pill renders ui/Tag (text-xs, the badge radius).
+    expect(classes(document.querySelector('[data-format-pill] > span'))).toEqual(
+      expect.arrayContaining(['text-xs', 'rounded-md', 'text-fg']),
+    );
     expect(classes(document.querySelector('[data-format-source]'))).toEqual(
       expect.arrayContaining(['text-sm', 'text-fg-3']),
     );

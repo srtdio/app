@@ -52,6 +52,7 @@ import { Select } from '@/components/ui/Select';
 import { Sheet } from '@/components/ui/Sheet';
 import { fireAvatarCleanup, makeAvatarCleanup, uploadAvatarFile } from '@/lib/avatar-upload';
 import { cn } from '@/lib/cn';
+import { cardPad, cardSurface } from '@/components/ui/Card';
 import { env } from '@/lib/env';
 import { errorText } from '@/lib/error-copy';
 import { SIGNOUT_EVENT, dispatchSorted } from '@/lib/events';
@@ -770,7 +771,7 @@ export function OnboardingFlow({
               aria-checked={side === tile.side}
               onClick={() => setSide(tile.side)}
               className={cn(
-                'flex flex-col items-start justify-center gap-0.5 px-3.5 py-2.5',
+                'flex flex-col items-start justify-center gap-0.5 px-4 py-3',
                 side === tile.side
                   ? 'bg-accent text-accent-fg lit-pill'
                   : 'bg-panel-3 text-fg lit-well-soft',
@@ -870,7 +871,7 @@ export function OnboardingFlow({
           <FieldErrorNote errors={fieldErrors} field="name" />
         </Labeled>
         <div>
-          <label htmlFor="ob-username" className="mb-1.5 block text-base font-medium">
+          <label htmlFor="ob-username" className="mb-2 block text-base font-medium">
             Username
           </label>
           <div className="flex items-center gap-2">
@@ -894,7 +895,7 @@ export function OnboardingFlow({
             />
           </div>
           <FieldErrorNote errors={fieldErrors} field="username" />
-          <p className={cn('mt-1.5 text-sm', hintTone)} aria-live="polite">
+          <p className={cn('mt-2 text-sm', hintTone)} aria-live="polite">
             {hint}
           </p>
         </div>
@@ -922,7 +923,7 @@ export function OnboardingFlow({
       <>
         <Heading title="Your title" lead="It shows under your name, so people know who to ask." />
         <div>
-          <p className="mb-1.5 block text-base font-medium">{ONBOARDING_COPY.jobTitleLabel}</p>
+          <p className="mb-2 block text-base font-medium">{ONBOARDING_COPY.jobTitleLabel}</p>
           <Select
             label="Job title"
             value={role}
@@ -1070,7 +1071,7 @@ export function OnboardingFlow({
         }}
       >
         <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col px-6">
-          <header className="flex min-h-[56px] items-center justify-between pt-2">
+          <header className="flex min-h-14 items-center justify-between pt-2">
             {canGoBack ? (
               <IconButton type="button" onClick={back} label="Back" className="-ml-3">
                 <IconChevronLeft size={ICON_SIZE.control} className="text-fg" />
@@ -1111,7 +1112,7 @@ export function OnboardingFlow({
         </div>
       </div>
 
-      <aside className="hidden h-full flex-col items-center justify-center gap-3.5 border-l border-border bg-panel-2 p-8 md:flex">
+      <aside className="hidden h-full flex-col items-center justify-center gap-3 border-l border-border bg-panel-2 p-8 md:flex">
         {preview ?? <WaitingPreview />}
       </aside>
 
@@ -1183,11 +1184,11 @@ function Labeled({
 }): ReactElement {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-1.5 block text-base font-medium">
+      <label htmlFor={htmlFor} className="mb-2 block text-base font-medium">
         {label}
       </label>
       {children}
-      {hint !== undefined ? <p className="mt-1.5 text-base text-fg">{hint}</p> : null}
+      {hint !== undefined ? <p className="mt-2 text-base text-fg">{hint}</p> : null}
     </div>
   );
 }
@@ -1264,7 +1265,7 @@ function FieldErrorNote({
   const line = errors[field];
   if (line === undefined) return null;
   return (
-    <ErrorNote className="mt-1.5">
+    <ErrorNote className="mt-2">
       <span id={`${ONBOARDING_FIELD_IDS[field]}-error`}>{line}</span>
     </ErrorNote>
   );
@@ -1328,7 +1329,7 @@ function TextAction({
 function PlatformTag({ platform }: { platform: string }): ReactElement {
   const label = isPostPlatform(platform) ? PLATFORM_LABELS[platform] : platform;
   return (
-    <span className="inline-flex items-center gap-1.5 text-base font-medium text-fg-2">
+    <span className="inline-flex items-center gap-2 text-base font-medium text-fg-2">
       <PlatformMark platform={platform} />
       <span>{label}</span>
     </span>
@@ -1352,7 +1353,7 @@ function WelcomeBody({
         {heading}
       </h1>
       {platform !== '' ? <PlatformTag platform={platform} /> : null}
-      <p className="min-h-[20px] text-base text-fg-2 [text-wrap:balance]" aria-live="polite">
+      <p className="min-h-5 text-base text-fg-2 [text-wrap:balance]" aria-live="polite">
         {subline}
       </p>
       <p className="rounded-xl border bg-panel lit-card px-4 py-3 text-base text-fg">{joiningAs}</p>
@@ -1381,7 +1382,7 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
         {WAITING_LINES.map((line, i) => (
           <li
             key={line}
-            className="flex items-center gap-3 rounded-xl border bg-panel lit-card p-3.5"
+            className={cn('flex items-center gap-3', cardSurface(), cardPad())}
           >
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft lit-pill font-mono text-base font-medium text-accent">
               {i + 1}
@@ -1401,7 +1402,7 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
 
 function PreviewCard({ label, children }: { label: string; children: ReactNode }): ReactElement {
   return (
-    <div className="w-full max-w-[340px] rounded-xl border bg-panel lit-card p-3.5">
+    <div className={cn('w-full max-w-[340px]', cardSurface(), cardPad())}>
       <p className="mb-2 text-sm text-fg-3">{label}</p>
       {children}
     </div>
@@ -1437,7 +1438,7 @@ function PersonPreview({
     <>
       <PreviewLabel>How you will appear</PreviewLabel>
       <PreviewCard label="Comment on a post">
-        <div className="flex gap-2.5">
+        <div className="flex gap-3">
           {avatar}
           <div className="min-w-0">
             <p className="text-base font-semibold text-fg">

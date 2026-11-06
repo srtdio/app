@@ -1,7 +1,7 @@
 import { mark } from '@/lib/perf-marks';
 import { useState, type ComponentType, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Thumbnail, type ThumbnailFallback } from '@/components/media';
+import { Thumbnail } from '@/components/media';
 import {
   ICON_SIZE,
   IconArrowUpRight,
@@ -15,13 +15,11 @@ import {
   IconX,
   type IconProps,
 } from '@/components/ui/icons';
-import { type FormatGlyphToken } from '@/components/ui/format-icon';
-import { postFormatLabel } from '@/lib/post-format';
 import type { PresignCache } from '@/lib/asset-presign';
 import { entityUrlPath, refOpenState } from '@/lib/entityRef';
 import { confirmPostOpen, prefetchPostOpen } from '@/lib/post-prefetch';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
-import { StageDot, stageLabel } from '@/components/pages/pipeline/stage-meta';
+import { stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { moveActions } from '@/components/pages/pipeline/MoveSheet';
 import {
   hasAllowedMove,
@@ -33,7 +31,11 @@ import { civilDay, formatDue, formatOverdue } from '@/lib/time';
 import { frameFor } from '@/lib/platform-specs';
 import { cn } from '@/lib/cn';
 import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
-import { PressableRow } from '@/components/ui/PressableRow';
+import { Card } from '@/components/ui/Card';
+import { Tag } from '@/components/ui/Tag';
+import { StatusDot } from '@/components/ui/StatusDot';
+import { textRole } from '@/components/ui/Text';
+import { PostPlaceholder, postPlaceholderKind } from '@/components/ui/PostPlaceholder';
 import { CountBadge } from '@/components/ui/CountBadge';
 import {
   unreadCommentsLabel,
@@ -176,44 +178,12 @@ export function captionPreview(post: PipelinePost): string | null {
   return post.caption !== null && post.caption.trim() !== '' ? post.caption : null;
 }
 
-/**
- * Map the DB post format to a glyph token: single_image folds into 'image'; every
- * other format value is already a FormatGlyphToken ('text' | 'carousel' | 'video'
- * | 'link'). Used by the fallback tile.
- */
-function formatToken(format: string): FormatGlyphToken {
-  return format === 'single_image' ? 'image' : (format as FormatGlyphToken);
-}
-
-/**
- * The format-aware fallback tile for a post with no usable image: a plain
- * panel tile carrying the format icon plus a clamped body snippet (the
- * caption when present, else the title). Video/link posts use the centred 'media'
- * layout; everything else uses the text-forward layout. When the post has a
- * thumbnail this is only used if the presign fails or is disabled.
- */
-function postFallback(post: PipelinePost): ThumbnailFallback {
-  const token = formatToken(post.format);
-  // A no-media card shows its caption under the title, so the tile does not
-  // repeat it; a media post whose presign fails keeps it.
-  const hasCaption = post.caption !== null && post.caption.trim() !== '';
-  const body = captionPreview(post) !== null ? null : hasCaption ? post.caption : post.title;
-  const layout = token === 'video' || token === 'link' ? 'media' : 'text';
-  return {
-    kind: 'post',
-    glyph: token,
-    label: postFormatLabel(post.format, post.platform),
-    body,
-    layout,
-  };
-}
-
 /** A small "multiple images" badge (stacked squares) shown on carousel posts. */
 function CarouselBadge() {
   return (
     <span
       aria-label="Carousel"
-      className="pointer-events-none absolute left-1.5 top-1.5 inline-flex h-6 min-w-[24px] items-center justify-center rounded-lg bg-overlay-badge text-overlay-fg lit-media"
+      className="pointer-events-none absolute left-2 top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-lg bg-overlay-badge text-overlay-fg lit-media"
     >
       <IconCarousel size={ICON_SIZE.inline} />
     </span>
@@ -329,7 +299,7 @@ export function PostCard({
   // only the click that follows lets the page join them.
   const pressPrefetch = (): void => prefetchPostOpen(post.id);
   // growFromCard: the page grows out of this card; Back grows it back in.
-  const cardRef = useGrowBackIntoCard<HTMLDivElement>(post.id);
+  const cardRef = useGrowBackIntoCard<HTMLElement>(post.id);
   // The newest unread comment on this post: the card's open lands on it.
   const latestUnread = useEntityUnreadComment('post', post.id);
   const open = (): void => {
@@ -368,215 +338,195 @@ export function PostCard({
   // The viewer's unread comments on this post (the same rows Activity shows).
   const unreadComments = useEntityUnread('post', post.id);
 
+  const menu =
+    onMove !== undefined ? (
+      // Pointer down and right-click stop here (the menu rows included, through
+      // the React tree) so the card's own menu gesture never arms under it.
+      <span
+        data-post-card-menu=""
+        onPointerDown={(event) => event.stopPropagation()}
+        onContextMenu={(event) => event.stopPropagation()}
+        className="flex"
+      >
+        <ActionMenu
+          title={post.title}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          items={cardMenuItems({
+            // Opens with the id (no ref lookup) but reads afresh: no press to join.
+            onOpen: () => {
+              rememberCard(post.id, cardRef.current);
+              navigate(
+                withCommentTarget(href, latestUnread),
+                openState === undefined ? undefined : { state: openState },
+              );
+            },
+            onCopyLink: copyLink,
+            ...(canMove && directMoves.length > 0
+              ? {
+                  moves: directMoves.map((move) => ({
+                    ...move,
+                    onSelect: () => onMove(post, move.to),
+                  })),
+                }
+              : canMove
+                ? { onMove: () => onMove(post) }
+                : {}),
+          })}
+          trigger={
+            // The Card's more slot holds it in the title line; its trailing
+            // rule puts the glyph on the card's content edge.
+            <ActionMenuTrigger
+              type="button"
+              label={`More actions for ${post.title}`}
+              data-post-card-move=""
+              draggable={false}
+              className="text-fg-3"
+            />
+          }
+        />
+      </span>
+    ) : undefined;
+
+  // The picture: the workspace platform's one fixed cover box, or the post
+  // placeholder (play glyph) for a video with no poster; none for a text post.
+  const media =
+    coverKind === 'image' ? (
+      <div data-post-card-thumb="" className="relative">
+        <Thumbnail
+          assetVersionId={post.thumbnailAssetVersionId}
+          cache={cache}
+          presignEnabled={presignEnabled}
+          aspect="square"
+          {...(ratio !== null ? { ratio } : {})}
+          fallback={{ kind: 'glyph' }}
+          fallbackTile={
+            <PostPlaceholder kind={postPlaceholderKind(post.format)} size={ICON_SIZE.status} />
+          }
+          alt={post.title}
+        >
+          {post.format === 'carousel' ? (
+            <CarouselBadge />
+          ) : post.format === 'video' && hasPoster ? (
+            <PlayBadge />
+          ) : null}
+        </Thumbnail>
+      </div>
+    ) : coverKind === 'video' ? (
+      <div
+        data-post-card-thumb=""
+        data-post-card-play=""
+        className={cn('flex w-full', ratio === null && 'aspect-square')}
+        {...(ratio !== null ? { style: { aspectRatio: String(ratio) } } : {})}
+      >
+        <PostPlaceholder kind="video" fill size={ICON_SIZE.status} label="Video" />
+      </div>
+    ) : undefined;
+
+  const stageBadge =
+    showStage && !inColumn && status === null ? (
+      <span data-post-card-stage="" className="flex">
+        <Tag label={stageLabel(stage)} dot={stage} />
+      </span>
+    ) : undefined;
+
+  const unread =
+    unreadComments > 0 ? (
+      // Unread comments: the comment glyph and the shared count pill.
+      <span
+        data-post-card-unread={unreadComments}
+        role="img"
+        aria-label={unreadCommentsLabel(unreadComments)}
+        className="inline-flex items-center gap-1 text-fg"
+      >
+        <IconChat size={ICON_SIZE.inline} />
+        <CountBadge count={unreadComments} />
+      </span>
+    ) : undefined;
+
+  // ui/Card: the picture bleeds at the top, the title (two lines at most) with
+  // the ⋯ in the header, the due reading as the meta line, the caption and the
+  // review status in the body, the stage badge and unread count in the footer.
+  // Its height is its content (self-start): a text-only card is short. The
+  // whole card is one tap surface (Card press) that opens the post.
   return (
-    <div
-      ref={cardRef}
-      data-induction={INDUCTION_KEYS.pipelinePostRow}
-      data-induction-post={post.id}
-      {...(hasMenu
+    <Card
+      rootRef={cardRef}
+      surface={{
+        'data-induction': INDUCTION_KEYS.pipelinePostRow,
+        'data-induction-post': post.id,
+        ...(hasMenu
+          ? {
+              ...gesture.handlers,
+              // A hold released with no click left its click guard set: a new
+              // press is never the tail of that hold. Capture, so menu rows
+              // (whose wrapper stops pointerdown) clear it too.
+              onPointerDownCapture: () => {
+                gesture.consumeClickSuppression();
+              },
+              // The click that trails a long-press never reaches Open post.
+              onClickCapture: (event: MouseEvent) => {
+                if (gesture.consumeClickSuppression()) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
+              },
+            }
+          : {}),
+      }}
+      press={{
+        'aria-label': `Open post ${post.title}`,
+        onPointerDown: pressPrefetch,
+        onTouchStart: pressPrefetch,
+        onClick: open,
+      }}
+      title={<span data-post-card-title="">{post.title}</span>}
+      titleLines={2}
+      {...(menu !== undefined ? { more: menu } : {})}
+      {...(due !== null
         ? {
-            ...gesture.handlers,
-            // A hold released with no click left its click guard set: a new
-            // press is never the tail of that hold. Capture, so menu rows
-            // (whose wrapper stops pointerdown) clear it too.
-            onPointerDownCapture: () => {
-              gesture.consumeClickSuppression();
-            },
-            // The click that trails a long-press never reaches Open post.
-            onClickCapture: (event: MouseEvent) => {
-              if (gesture.consumeClickSuppression()) {
-                event.preventDefault();
-                event.stopPropagation();
-              }
-            },
+            meta: (
+              <span
+                data-post-card-due={due.overdue ? 'overdue' : ''}
+                className={due.overdue ? 'text-bad' : undefined}
+              >
+                {due.text}
+              </span>
+            ),
           }
         : {})}
-      className="relative flex h-full min-w-0 flex-col rounded-xl border bg-panel lit-card mv-tint"
+      {...(media !== undefined ? { media } : {})}
+      {...(stageBadge !== undefined ? { badge: stageBadge } : {})}
+      {...(unread !== undefined ? { footerTrailing: unread } : {})}
+      className="mv-tint"
     >
-      {/* Hover and press: the Open post row's lit-hover overlay, card corners. */}
-      <PressableRow
-        type="button"
-        card
-        aria-label={`Open post ${post.title}`}
-        onPointerDown={pressPrefetch}
-        onTouchStart={pressPrefetch}
-        onClick={open}
-        className="absolute inset-0"
-      />
-      {/* The cover and the body are relative so they paint above the absolute
-          Open post button (whose hover fill would otherwise cover the text);
-          pointer-events-none lets a tap on them reach the button. The
-          picture clips to the card's top corners itself: the card root does not
-          clip, so the laptop ⋯ popover can open past the card's edge. */}
-      {coverKind === 'image' ? (
-        <div
-          data-post-card-thumb=""
-          className="pointer-events-none relative overflow-hidden rounded-t-xl"
-        >
-          <Thumbnail
-            assetVersionId={post.thumbnailAssetVersionId}
-            cache={cache}
-            presignEnabled={presignEnabled}
-            aspect="square"
-            {...(ratio !== null ? { ratio } : {})}
-            fallback={postFallback(post)}
-            alt={post.title}
-          >
-            {post.format === 'carousel' ? (
-              <CarouselBadge />
-            ) : post.format === 'video' && hasPoster ? (
-              <PlayBadge />
-            ) : null}
-          </Thumbnail>
-        </div>
-      ) : coverKind === 'video' ? (
-        <div
-          data-post-card-thumb=""
-          className="pointer-events-none relative overflow-hidden rounded-t-xl"
-        >
-          <div
-            data-post-card-play=""
-            className={cn(
-              'flex w-full items-center justify-center bg-panel-3 text-fg-3',
-              ratio === null ? 'aspect-square' : null,
-            )}
-            {...(ratio !== null ? { style: { aspectRatio: String(ratio) } } : {})}
-          >
-            <span role="img" aria-label="Video" className="inline-flex">
-              <IconPlay size={ICON_SIZE.status} />
-            </span>
-          </div>
-        </div>
+      {caption !== null ? (
+        <p data-post-card-caption="" className={textRole('secondary', '[overflow-wrap:anywhere]')}>
+          {caption}
+        </p>
       ) : null}
-      <div
-        data-post-card-body=""
-        className="pointer-events-none relative flex min-w-0 flex-1 flex-col gap-1.5 p-3"
-      >
+      {status !== null ? (
+        // A creator's line shows the dot and the time in stage only ("2 days
+        // ago"); the full phrase stays as its title and aria-label.
         <div
-          data-post-card-title=""
-          className="line-clamp-2 min-h-[2.75em] text-base font-medium leading-snug [overflow-wrap:anywhere]"
+          data-post-card-status={status.tone}
+          {...(status.tone === 'with' ? { title: status.text, 'aria-label': status.text } : {})}
+          className={cn(
+            'flex h-4 min-w-0 items-center gap-2 text-sm',
+            status.tone === 'you' ? 'font-semibold text-accent' : 'text-fg-2',
+          )}
         >
-          {post.title}
+          {status.tone === 'you' ? (
+            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-accent" />
+          ) : inColumn ? null : (
+            <StatusDot stage={stage} />
+          )}
+          <span className="truncate">{status.tone === 'with' ? status.ago : status.text}</span>
         </div>
-        {caption !== null ? (
-          <p
-            data-post-card-caption=""
-            className="line-clamp-2 text-sm leading-snug text-fg-3 [overflow-wrap:anywhere]"
-          >
-            {caption}
-          </p>
-        ) : null}
-        {status !== null ? (
-          // A creator's line shows the dot and the time in stage only ("2 days
-          // ago"); the full phrase stays as its title and aria-label.
-          <div
-            data-post-card-status={status.tone}
-            {...(status.tone === 'with' ? { title: status.text, 'aria-label': status.text } : {})}
-            className={cn(
-              'flex h-4 min-w-0 items-center gap-1.5 text-sm',
-              status.tone === 'you' ? 'font-semibold text-accent' : 'text-fg-2',
-            )}
-          >
-            {status.tone === 'you' ? (
-              <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-accent" />
-            ) : inColumn ? null : (
-              <StageDot stage={stage} />
-            )}
-            <span className="truncate">{status.tone === 'with' ? status.ago : status.text}</span>
-          </div>
-        ) : reserveStatus ? (
-          // The role is still loading: hold the status line's height.
-          <div aria-hidden data-post-card-status-pending="" className="h-4" />
-        ) : null}
-        {/* One quiet meta line, pinned to the card's foot: the stage (phone All
-          view only, when no status line names it), the due or overdue reading,
-          and the ⋯. The row never wraps and keeps its height. */}
-        <div data-post-card-meta="" className="mt-auto flex h-5 min-w-0 items-center gap-1.5">
-          {showStage && !inColumn && status === null ? (
-            <span
-              data-post-card-stage=""
-              className="inline-flex shrink-0 items-center gap-1.5 text-sm text-fg-2"
-            >
-              <StageDot stage={stage} />
-              {stageLabel(stage)}
-            </span>
-          ) : null}
-          {due !== null ? (
-            <span
-              data-post-card-due={due.overdue ? 'overdue' : ''}
-              className={cn(
-                'min-w-0 truncate whitespace-nowrap font-mono text-sm tabular-nums',
-                due.overdue ? 'text-bad' : 'text-fg-3',
-              )}
-            >
-              {due.text}
-            </span>
-          ) : null}
-          {unreadComments > 0 ? (
-            // Unread comments: the comment glyph and the shared count pill, after
-            // the due reading. The due text truncates first; this never shrinks.
-            <span
-              data-post-card-unread={unreadComments}
-              role="img"
-              aria-label={unreadCommentsLabel(unreadComments)}
-              className="inline-flex shrink-0 items-center gap-1 text-fg"
-            >
-              <IconChat size={ICON_SIZE.inline} />
-              <CountBadge count={unreadComments} />
-            </span>
-          ) : null}
-          {onMove !== undefined ? (
-            // Above the Open post overlay (z-10) so a tap opens the menu, not
-            // the post; pointer-events-auto re-enables it inside the body. Pointer down and right-click stop here (the menu rows
-            // included, through the React tree) so the card's own menu gesture
-            // never arms under it. The negative margins keep the 44px target
-            // from growing the row.
-            <div
-              data-post-card-menu=""
-              onPointerDown={(event) => event.stopPropagation()}
-              onContextMenu={(event) => event.stopPropagation()}
-              className="pointer-events-auto ml-auto flex shrink-0"
-            >
-              <ActionMenu
-                title={post.title}
-                open={menuOpen}
-                onOpenChange={setMenuOpen}
-                items={cardMenuItems({
-                  // Opens with the id (no ref lookup) but reads afresh: no press to join.
-                  onOpen: () => {
-                    rememberCard(post.id, cardRef.current);
-                    navigate(
-                      withCommentTarget(href, latestUnread),
-                      openState === undefined ? undefined : { state: openState },
-                    );
-                  },
-                  onCopyLink: copyLink,
-                  ...(canMove && directMoves.length > 0
-                    ? {
-                        moves: directMoves.map((move) => ({
-                          ...move,
-                          onSelect: () => onMove(post, move.to),
-                        })),
-                      }
-                    : canMove
-                      ? { onMove: () => onMove(post) }
-                      : {}),
-                })}
-                trigger={
-                  <ActionMenuTrigger
-                    type="button"
-                    label={`More actions for ${post.title}`}
-                    data-post-card-move=""
-                    draggable={false}
-                    inLine
-                    className="pointer-events-auto relative z-10 text-fg-3"
-                  />
-                }
-              />
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </div>
+      ) : reserveStatus ? (
+        // The role is still loading: hold the status line's height.
+        <div aria-hidden data-post-card-status-pending="" className="h-4" />
+      ) : null}
+    </Card>
   );
 }

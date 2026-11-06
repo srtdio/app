@@ -87,6 +87,7 @@ import { sharePostToChannel } from '@/lib/chat/share-post';
 import { createInFlightGuard } from '@/lib/chat/thread-actions';
 import { cn } from '@/lib/cn';
 import { postFormatLabel } from '@/lib/post-format';
+import { Tag } from '@/components/ui/Tag';
 import {
   FORMATS_BY_PLATFORM,
   PostCreatePayloadSchema,
@@ -1708,11 +1709,10 @@ export function FormatRow({
   return (
     <div data-format-row="" className="relative flex min-h-[44px] min-w-0 items-center gap-3">
       <span className="shrink-0 text-base font-medium text-fg">Format</span>
-      <span
-        data-format-pill=""
-        className="inline-flex h-7 shrink-0 items-center rounded-full border border-border bg-panel-2 px-3 text-sm font-medium text-fg lit-pill"
-      >
-        {name}
+      {/* Read-only: the format is changed with "Change format", so the pill
+          is ui/Tag (its neutral fill, the pill's own full ink kept). */}
+      <span data-format-pill="" className="flex shrink-0">
+        <Tag label={name} className="text-fg" />
       </span>
       <span data-format-source="" className="min-w-0 flex-1 truncate text-sm text-fg-3">
         {source !== null ? formatSourceLine(source) : ''}

@@ -272,14 +272,15 @@ describe('Mark all read', () => {
     expect(page).not.toMatch(/markAllPerRow|inbox_mark_read_events|inboxMarkReadEvents/);
   });
 
-  it('Mark all read is a right-aligned link above the list, not in the toolbar', () => {
+  it('Mark all read is a right-aligned link on the first day line, not in the toolbar', () => {
     const page = readFileSync(
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    // Shown only with something unread, right-aligned; no count text (the Unread chip has it).
+    // Shown only with something unread, on the first day's line, right-aligned; no count
+    // text (the Unread chip has it).
     expect(page).toMatch(
-      /\{chipUnread > 0 \? \(\s*<div data-activity-mark-all="" className="[^"]*justify-end/,
+      /\{bucketIndex === 0 && chipUnread > 0 \? \([\s\S]{0,200}?<div\s+data-activity-mark-all=""\s+className="[^"]*justify-end/,
     );
     expect(page).not.toContain('{chipUnread} unread');
     expect(page).toMatch(/<Button variant="link" onClick=\{handleMarkAll\}>\s*Mark all read/);

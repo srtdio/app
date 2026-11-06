@@ -5,6 +5,8 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { ReactElement, ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
+import { cardPad, cardSurface } from '@/components/ui/Card';
+import { GUTTER } from '@/components/ui/layout';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
@@ -152,7 +154,7 @@ export function stageChipItems(
 }
 
 /** The New post button's classes: one row on every screen, never wraps or shrinks. */
-const NEW_POST_CLASS = 'shrink-0 gap-1.5 whitespace-nowrap pl-3 pr-3.5';
+const NEW_POST_CLASS = 'shrink-0 whitespace-nowrap';
 
 /**
  * The Pipeline header chrome: the shared SectionHeader with, on ONE row at
@@ -344,7 +346,7 @@ export function viewFiltered(query: PipelineQuery): boolean {
 /** The board's load failure: the shared plain line and a Retry that re-reads. */
 export function postsLoadError(onRetry: () => void, retrying: boolean): ReactElement {
   return (
-    <div data-posts-load-error="" className="mt-4 px-4 md:px-6">
+    <div data-posts-load-error="" className={cn('mt-4', GUTTER)}>
       <LoadError title="posts" onRetry={onRetry} retrying={retrying} />
     </div>
   );
@@ -407,7 +409,7 @@ function skeletonCard(index: number, ratio: number | null): ReactElement {
       key={index}
       aria-hidden="true"
       data-skeleton-card=""
-      className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border bg-panel lit-card"
+      className={cn('flex min-w-0 flex-col self-start overflow-hidden', cardSurface())}
     >
       <Bone
         lit="flat"
@@ -415,14 +417,12 @@ function skeletonCard(index: number, ratio: number | null): ReactElement {
         className={cn(ratio === null && 'aspect-square')}
         {...(ratio !== null ? { style: { aspectRatio: String(ratio) } } : {})}
       />
-      <div className="flex flex-col gap-1.5 p-3">
-        <div className="flex min-h-[2.75em] flex-col justify-center gap-1.5 text-base leading-snug">
-          <Bone lit="flat" as="div" className="h-3.5 w-3/4 rounded" />
-          <Bone lit="flat" as="div" className="h-3.5 w-1/2 rounded" />
+      <div className={cn('flex flex-col gap-2', cardPad())}>
+        <div className="flex flex-col gap-2">
+          <Bone lit="flat" as="div" className="h-4 w-3/4 rounded" />
+          <Bone lit="flat" as="div" className="h-4 w-1/2 rounded" />
         </div>
-        <div className="flex h-5 items-center">
-          <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />
-        </div>
+        <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />
       </div>
     </div>
   );
@@ -445,7 +445,7 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
         data-posts-skeleton="kanban"
         role="status"
         aria-busy="true"
-        className="flex min-h-0 gap-3 overflow-x-hidden px-4 py-4 md:px-6"
+        className={cn('flex min-h-0 gap-3 overflow-x-hidden py-4', GUTTER)}
       >
         <span className="sr-only">Loading posts</span>
         {Array.from({ length: columns }, (_unused, column) => (
@@ -457,7 +457,7 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
             <div className="flex h-11 items-center gap-2 border-b px-3 lit-header">
               <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />
             </div>
-            <div className="flex flex-col gap-2 p-2">
+            <div className="flex flex-col gap-4 p-2">
               {Array.from({ length: SKELETON_COLUMN_CARDS }, (_card, index) =>
                 skeletonCard(index, ratio),
               )}
@@ -476,7 +476,7 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
         data-posts-skeleton=""
         role="status"
         aria-busy="true"
-        className="px-4 py-4 md:px-6"
+        className={cn('py-4', GUTTER)}
         before={<span className="sr-only">Loading posts</span>}
       >
         {Array.from({ length: SKELETON_CARDS }, (_unused, index) => skeletonCard(index, ratio))}
@@ -489,7 +489,7 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
       data-posts-skeleton=""
       role="status"
       aria-busy="true"
-      className="grid grid-cols-2 gap-2 px-4 py-4"
+      className={cn('grid grid-cols-2 items-start gap-4 py-4', GUTTER)}
     >
       <span className="sr-only">Loading posts</span>
       {Array.from({ length: SKELETON_CARDS }, (_unused, index) => skeletonCard(index, ratio))}
@@ -504,7 +504,7 @@ export function postsSkeleton(isDesktop: boolean, view: SkeletonView = {}): Reac
  */
 export function emptyPipeline(): ReactElement {
   return (
-    <div data-pipeline-empty="" className="px-4 md:px-6">
+    <div data-pipeline-empty="" className={GUTTER}>
       <EmptyState icon={<IconPipeline size={ICON_SIZE.tray} />} title="Posts show up here." />
     </div>
   );
@@ -615,7 +615,7 @@ export function filteredEmpty(
   onClear: () => void,
 ): ReactElement {
   return (
-    <div data-filtered-empty="" className="px-4 md:px-6">
+    <div data-filtered-empty="" className={GUTTER}>
       <NoResults query={search} filtersActive={dateActive} onClear={onClear} />
     </div>
   );
@@ -1316,7 +1316,7 @@ export function PipelinePage() {
           view: the honest "{shown} of {total} posts", and the undated posts the
           date filter hides with "Show them". */}
       {narrowed && !boardLoading && !postsFailed ? (
-        <div className="flex flex-col gap-1 px-4 pt-3 md:px-6">
+        <div className={cn('flex flex-col gap-1 pt-3', GUTTER)}>
           <span data-posts-count="" className="text-base text-fg-3">
             {countLabel}
           </span>

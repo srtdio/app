@@ -67,6 +67,36 @@ export function SelectionHeader(props: {
   );
 }
 
+/**
+ * The selection header as ui/HeaderBar slots, for a host whose bar is the
+ * shared HeaderBar (Contact, Group info): the live "N selected" title and the
+ * Cancel text action (it keeps its text on the edge, L6). Same hooks as
+ * SelectionHeader (data-selection-count, data-selection-cancel). Hook-free.
+ */
+export function selectionHeaderSlots(props: { count: number; onCancel: () => void }): {
+  title: ReactElement;
+  cancel: ReactElement;
+} {
+  return {
+    title: (
+      <span data-selection-count="" aria-live="polite">
+        {selectedCountLabel(props.count)}
+      </span>
+    ),
+    cancel: (
+      <Button
+        type="button"
+        variant="link"
+        data-selection-cancel=""
+        onClick={props.onCancel}
+        className="min-w-[44px] shrink-0"
+      >
+        Cancel
+      </Button>
+    ),
+  };
+}
+
 /** The selection bar's Star action: which way it goes, and the run. */
 interface SelectionStar {
   /** 'unstar' when every selected message is already starred. */

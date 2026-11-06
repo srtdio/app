@@ -157,7 +157,7 @@ export function PlanPickerSheet(props: {
                       </span>
                     </span>
                     <span className="shrink-0 text-fg-3">
-                      <IconChevronRight />
+                      <IconChevronRight size={ICON_SIZE.control} />
                     </span>
                   </PressableRow>
                 ))
@@ -177,7 +177,7 @@ export function PlanPickerSheet(props: {
                 </span>
                 <span className="flex-1">{NEW_PLAN_LABEL}</span>
                 <span className="shrink-0 text-fg-3">
-                  <IconChevronRight />
+                  <IconChevronRight size={ICON_SIZE.control} />
                 </span>
               </PressableRow>
             </div>

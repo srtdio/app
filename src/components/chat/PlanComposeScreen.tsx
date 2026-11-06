@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/Input';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { ICON_SIZE, IconCalendar, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import {
   ConceptSheet,
@@ -762,13 +762,14 @@ export function ComposeItemRow(props: {
             </>
           ) : (
             <>
+              {/* The day reads alone: no calendar glyph repeated on every row. */}
               {item.day === 'none' ? (
                 <span className="font-medium text-fg-3">{NO_DATE_LABEL}</span>
               ) : (
                 <span>{formatCivilDayHeader(item.day as string)}</span>
               )}
-              <span className="text-fg-3">
-                <IconCalendar size={ICON_SIZE.inline} />
+              <span aria-hidden="true" className="text-fg-3">
+                <IconChevronRight size={ICON_SIZE.inline} />
               </span>
             </>
           )}

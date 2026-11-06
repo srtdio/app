@@ -69,6 +69,8 @@ import {
   type BriefGroup,
 } from '@/lib/brief-groups';
 import { cn } from '@/lib/cn';
+import { CARD_GRID, Card } from '@/components/ui/Card';
+import { GUTTER } from '@/components/ui/layout';
 import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { INDUCTION_KEYS } from '@/lib/induction';
@@ -243,8 +245,9 @@ export function deriveSortedBriefs(
   return sortBriefs(narrowed, sort);
 }
 
-const LIST_CLASS = 'px-4 md:px-6 py-4 flex flex-col gap-6';
-const GRID_CLASS = 'pt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3';
+const LIST_CLASS = cn(GUTTER, 'py-4 flex flex-col gap-6');
+// ui/Card's grid: one column on phone, auto-fill columns that fill the laptop width.
+const GRID_CLASS = cn('pt-3', CARD_GRID);
 
 /**
  * One search answer (2+ characters): the first page of matches (title or
@@ -275,7 +278,7 @@ export function briefsLoadMore(
 ): ReactElement[] {
   if (next.done) return [];
   return [
-    <div key="load-more" className="px-4 md:px-6 pb-6 flex justify-center">
+    <div key="load-more" className={cn(GUTTER, 'pb-6 flex justify-center')}>
       <Button
         variant="secondary"
         type="button"
@@ -292,7 +295,7 @@ export function briefsLoadMore(
 
 /**
  * The loading state: a static skeleton in the real list's shape (a section
- * header bar, a day label, then card-shaped blocks with the 64px tile, title,
+ * header bar, a day label, then ui/Card blocks with the leading tile, title,
  * objective and status pill lines), in the same container and grid, so nothing
  * jumps when the cards arrive. Shared Bone boxes (a top-lit sweep, never a pulse).
  */
@@ -313,21 +316,15 @@ export function BriefsListSkeleton(): ReactElement {
         </div>
         <div className={GRID_CLASS}>
           {[0, 1, 2].map((key) => (
-            <div
+            <Card
               key={key}
-              data-brief-card-skeleton=""
-              className="lit-card rounded-xl border bg-panel p-4 flex gap-3 min-w-0"
+              surface={{ 'data-brief-card-skeleton': '' }}
+              leading={<Bone lit="lit-media" as="span" className="block h-8 w-8 rounded-lg" />}
+              title={<Bone lit="flat" as="span" className="my-1 block h-3 w-2/3 rounded" />}
+              badge={<Bone lit="lit-badge" as="span" className="block h-6 w-14 rounded-full" />}
             >
-              <Bone lit="lit-media" as="div" className="w-16 shrink-0 aspect-square rounded-lg" />
-              <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-                <div className="flex items-start gap-3">
-                  <Bone lit="flat" as="div" className="h-4 flex-1 rounded" />
-                  <Bone lit="lit-badge" as="div" className="h-6 w-14 shrink-0 rounded-full" />
-                </div>
-                <Bone lit="flat" as="div" className="h-4 w-4/5 rounded" />
-                <Bone lit="flat" as="div" className="h-3 w-16 rounded" />
-              </div>
-            </div>
+              <Bone lit="flat" as="div" className="h-4 w-4/5 rounded" />
+            </Card>
           ))}
         </div>
       </section>
@@ -910,7 +907,7 @@ export function BriefsPage() {
       })}
 
       {listFailed ? (
-        <div className="px-4 md:px-6 mt-4">
+        <div className={cn(GUTTER, 'mt-4')}>
           <LoadError
             title="briefs"
             onRetry={() => (searchActive ? briefSearch.refresh() : void loadBriefs())}
