@@ -60,31 +60,28 @@ function list(): string {
   );
 }
 
-describe('ChannelList on ui/Row', () => {
-  it('group and people chats render [data-row] with the 32 avatar column and the inset divider', () => {
+describe('ChannelList on ui/ListCard', () => {
+  it('group and people chats render [data-list-card] with the 72 picture, no dividers', () => {
     const out = list();
-    expect(out.match(/data-row=""/g)).toHaveLength(3);
-    expect(out).toMatch(/data-row-leading=""[^>]*w-8/);
-    expect(out).toContain('width:32px;height:32px');
-    // Every row but the last in its section, inset 56 (the text edge).
-    expect(out.match(/data-row-divider=""/g)).toHaveLength(1);
-    expect(out).toMatch(/data-row-divider=""[^>]*left-14/);
+    expect(out.match(/data-list-card=""/g)).toHaveLength(3);
+    expect(out).toMatch(/data-list-card-picture="[a-z]+"[^>]*class="[^"]*h-18 w-18/);
+    expect(out).toContain('width:72px;height:72px');
+    expect(out).not.toContain('data-row-divider');
   });
 
-  it('the ⋯ ends on the row edge: Row slot pr-3, trigger pulled 12 (the trailing rule)', () => {
+  it('the ⋯ ends on the card content edge: trigger pulled 12 (the trailing rule)', () => {
     const out = list();
-    expect(out).toMatch(/data-row-more=""[^>]*pr-3/);
     expect(out).toMatch(/aria-label="Actions for Launch"[^>]*-mr-3/);
     expect(out).toMatch(/aria-label="Actions for Asha Rao"[^>]*-mr-3/);
   });
 
-  it('people render [data-row] like groups, never [data-tile]', () => {
+  it('people render [data-list-card] like groups, never [data-tile]', () => {
     const out = list();
     expect(out).not.toContain('data-tile');
     expect(out).toContain('>Asha Rao<');
   });
 
-  it('the onboarding tour still finds the default group row (data-induction on the li)', () => {
+  it('the onboarding tour still finds the default group card (data-induction on the li)', () => {
     expect(list()).toContain('data-induction-channel="g1"');
   });
 });

@@ -13,7 +13,12 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { CHAT_HOME_EDGE, CHAT_HOME_STACK, sectionLabelClass } from '@/components/chat/ChannelList';
+import {
+  CHAT_HOME_EDGE,
+  CHAT_HOME_STACK,
+  CHAT_ROW_LIST,
+  sectionLabelClass,
+} from '@/components/chat/ChannelList';
 import { chatListPaneClass } from '@/components/chat/ChatConnected';
 import { OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
 import { SelectionHeader } from '@/components/chat/SelectionBar';
@@ -151,13 +156,12 @@ describe('11f "1 selected" on the 16px edge', () => {
 });
 
 describe('11g phone chat list edges', () => {
-  it('rows draw the 12 chat edge; section labels sit on the 16px edge with search and chips', () => {
-    // Rows (ui/Row gutter "chat") draw their own px-3; the stack has no side padding.
+  it('cards and section labels sit on the 16px edge with search and chips', () => {
+    // The stack has no side padding; the card lists and the labels carry the 16 edge.
     expect(classes(CHAT_HOME_STACK).some((c) => /^(px|pl|pr)-/.test(c))).toBe(false);
     expect(CHAT_HOME_EDGE).toBe('px-4');
-    expect(read('../../ui/Row.tsx')).toContain("chat ? CHAT_GUTTER : 'px-4'");
-    const chatRows = read('../ChannelList.tsx').match(/gutter="chat"/g) ?? [];
-    expect(chatRows.length).toBeGreaterThanOrEqual(3);
+    expect(classes(CHAT_ROW_LIST)).toContain('px-4');
+    expect(read('../ChannelList.tsx')).toContain('<ListCard');
     for (const first of [true, false]) {
       const label = classes(sectionLabelClass(first));
       expect(label).toContain('px-4');
@@ -170,10 +174,12 @@ describe('11g phone chat list edges', () => {
 });
 
 describe('11i the ⋯ never covers the time (B1b: parts own the slots)', () => {
-  it('a group row: the ⋯ is the Row trailing slot, after the text column, never over it', () => {
-    const row = read('../../ui/Row.tsx');
-    expect(row.indexOf('data-row-more')).toBeGreaterThan(row.indexOf("textRole('meta'"));
-    expect(row).not.toMatch(/data-row-more=""[^\n]*absolute/);
+  it('a chat card: the ⋯ is line 3 trailing, after the time, never over it', () => {
+    const card = read('../../ui/ListCard.tsx');
+    expect(card.indexOf('data-list-card-more')).toBeGreaterThan(
+      card.indexOf('data-list-card-time'),
+    );
+    expect(card).not.toMatch(/data-list-card-more=""[^\n]*absolute/);
   });
 
   it('a person is the same Row: no Tile in the chat list', () => {
