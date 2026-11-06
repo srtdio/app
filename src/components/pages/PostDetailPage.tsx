@@ -237,7 +237,7 @@ export function postPageGrid(embedded: boolean): {
     };
   }
   return {
-    page: `mx-auto grid w-full max-w-[1120px] grid-cols-1 gap-4 ${GUTTER} pt-4 pb-6 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr] lg:gap-x-8`,
+    page: `mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 ${GUTTER} pt-4 pb-6 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:grid-rows-[auto_auto_1fr] lg:gap-x-8`,
     head: 'min-w-0 lg:col-start-1 lg:row-start-1',
     media: 'min-w-0 lg:col-start-1 lg:row-start-2',
     body: 'min-w-0 lg:col-start-1 lg:row-start-3 lg:self-start',
@@ -1687,7 +1687,7 @@ export function PostDetailPage({
   const metaHead: React.ReactNode[] = [];
   if (ownerKnown) {
     metaHead.push(
-      <span key="owner" data-detail="owner" className="inline-flex min-w-0 items-center gap-1.5">
+      <span key="owner" data-detail="owner" className="inline-flex min-w-0 items-center gap-2">
         {asOwner(
           <Avatar
             name={ownerInfo.name}
@@ -1840,7 +1840,7 @@ export function PostDetailPage({
     approvedLocked && !readOnly ? (
       <div
         data-approved-banner=""
-        className="flex flex-wrap items-center gap-x-2.5 gap-y-2 rounded-xl bg-good-soft px-3.5 py-2 text-base text-fg lit-tint"
+        className="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-xl bg-good-soft px-3 py-2 text-base text-fg lit-tint"
       >
         <span aria-hidden className="shrink-0 text-good">
           <IconLock size={ICON_SIZE.nav} />
@@ -2010,7 +2010,7 @@ export function PostDetailPage({
                     type="button"
                     data-title-edit=""
                     onClick={openTitleEditor}
-                    className="-mx-2 block px-2 py-1 font-semibold tracking-tight mv-tint"
+                    className={textRole('display', '-mx-2 block px-2 py-1 mv-tint')}
                   >
                     <Highlight text={post.title} />
                   </PressableRow>
@@ -2114,7 +2114,7 @@ export function PostDetailPage({
                 />
               )}
               {gallerySaving ? (
-                <p aria-live="polite" className="mt-2.5 text-sm text-fg-3">
+                <p aria-live="polite" className="mt-2 text-sm text-fg-3">
                   Saving…
                 </p>
               ) : null}

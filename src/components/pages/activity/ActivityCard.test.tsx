@@ -709,7 +709,7 @@ describe('ActivityCard: notifications fixes', () => {
     const html = renderCard([
       item({ title: 'Q3', format: 'text', caption: 'A long caption for the launch post' }),
     ]);
-    expect(html).toContain('mt-auto line-clamp-3 text-sm leading-snug text-fg-2');
+    expect(html).toContain('mt-auto line-clamp-3 text-sm text-fg-2');
     expect(html).not.toContain('line-clamp-4');
   });
 
