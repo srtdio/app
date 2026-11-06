@@ -6,7 +6,7 @@
 // every value is derived from the PR 2 card row.
 
 import type { PostCardRow } from '../../../packages/posts/src/reads';
-import { formatDate, formatDateTime, formatDueDate } from '@/lib/time';
+import { formatDueDate, formatWhen } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { errorText } from '@/lib/error-copy';
@@ -28,7 +28,7 @@ export function agencyWaitingHint(
   timeZone?: string,
 ): string | null {
   if (side !== 'agency' || post.stage !== 'review') return null;
-  const since = formatDate(post.stage_entered_at, undefined, timeZone);
+  const since = formatWhen(post.stage_entered_at, undefined, timeZone);
   return since === '' ? 'Waiting on approvers' : `Waiting on approvers since ${since}`;
 }
 
@@ -201,14 +201,13 @@ export function detailRows(
     value: post.mediaCount > 1 ? `${format} · ${post.mediaCount} slides` : format,
   });
   if (post.approved_by !== null) {
-    const at =
-      post.approved_at !== null ? formatDateTime(post.approved_at, undefined, timeZone) : '';
+    const at = post.approved_at !== null ? formatWhen(post.approved_at, undefined, timeZone) : '';
     const who =
       approverName !== null ? `${approverName}${onBehalfSuffix(approverRole, brand)}` : '';
     const value = [who, at].filter((part) => part !== '').join(' · ');
     if (value !== '') rows.push({ key: 'approved', label: 'Approved', value });
   } else if (post.stage === 'approved') {
-    const on = formatDate(post.stage_entered_at, undefined, timeZone);
+    const on = formatWhen(post.stage_entered_at, undefined, timeZone);
     if (on !== '') rows.push({ key: 'approved', label: 'Approved', value: on });
   }
   return rows;

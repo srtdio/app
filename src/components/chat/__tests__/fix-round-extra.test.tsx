@@ -184,14 +184,14 @@ describe('draggable attributes on chat media', () => {
 });
 
 describe('E11: approved card with no loaded approver name', () => {
-  it('reads "Approved · <date time>" from approved_at', () => {
+  it('reads "Approved · <when>" (formatWhen) from approved_at', () => {
     const footer = approvedWithoutName(
       { state: 'Approved · Sep 29', action: 'Open' },
       { stage: 'approved', approved_at: '2026-09-30T10:05:00Z' },
       null,
       'UTC',
     );
-    expect(footer.state).toBe('Approved · 30 Sep, 10:05 AM');
+    expect(footer.state).toBe('Approved · 30 Sep');
     const named = { state: 'Approved by Ana', action: 'Open' };
     expect(approvedWithoutName(named, { stage: 'approved', approved_at: 'x' }, 'Ana', 'UTC')).toBe(
       named,

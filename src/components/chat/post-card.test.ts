@@ -125,7 +125,7 @@ describe('cardFooter', () => {
 
   it('approved with a name: check, name and date + time, Open', () => {
     expect(cardFooter(approved, 'Asha', 'agency', TZ)).toEqual({
-      state: 'Approved by Asha · 21 Sep, 2:05 PM',
+      state: 'Approved by Asha · 21 Sep',
       action: 'Open',
       accent: false,
       check: true,
@@ -134,14 +134,10 @@ describe('cardFooter', () => {
 
   it('the approval time is one 12-hour register whatever the device locale', () => {
     deviceLocale('en-IN');
-    expect(cardFooter(approved, 'Asha', 'agency', TZ).state).toBe(
-      'Approved by Asha · 21 Sep, 2:05 PM',
-    );
+    expect(cardFooter(approved, 'Asha', 'agency', TZ).state).toBe('Approved by Asha · 21 Sep');
     vi.restoreAllMocks();
     deviceLocale('en-GB');
-    expect(cardFooter(approved, 'Asha', 'agency', TZ).state).toBe(
-      'Approved by Asha · 21 Sep, 2:05 PM',
-    );
+    expect(cardFooter(approved, 'Asha', 'agency', TZ).state).toBe('Approved by Asha · 21 Sep');
   });
 
   it('approved without an approver falls back to the stage_entered_at date', () => {
@@ -287,7 +283,7 @@ describe('approver label (on behalf of the approvers)', () => {
     deviceLocale('en-GB');
     const approved = cardRow('p1', { approved_by: 'u1', approved_at: '2026-09-21T14:05:00Z' });
     expect(cardFooter(approved, approverLabel('Chitra', 'agency'), 'client', TZ).state).toBe(
-      'Approved by Chitra on behalf of the approvers · 21 Sep, 2:05 PM',
+      'Approved by Chitra on behalf of the approvers · 21 Sep',
     );
   });
 });

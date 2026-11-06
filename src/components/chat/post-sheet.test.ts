@@ -219,7 +219,7 @@ describe('detailRows', () => {
     ]);
   });
 
-  it('approved with an approver: name · date time', () => {
+  it('approved with an approver: name · when (formatWhen)', () => {
     const rows = detailRows(
       row({ stage: 'approved', approved_by: 'u1', approved_at: '2026-10-01T09:05:00Z' }),
       'Asha',
@@ -228,7 +228,7 @@ describe('detailRows', () => {
     );
     const approved = rows.find((r) => r.key === 'approved');
     expect(approved?.label).toBe('Approved');
-    expect(approved?.value).toBe('Asha · 1 Oct, 9:05 AM');
+    expect(approved?.value).toBe('Asha · 1 Oct');
   });
 
   it('approved with no approver: the date it entered approved', () => {

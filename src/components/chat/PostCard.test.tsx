@@ -237,10 +237,10 @@ describe('SharedPostCardList', () => {
         new Map([['u1', 'Asha Rao']]),
       );
     deviceLocale('en-IN');
-    expect(named()).toContain('Approved by Asha · 21 Sep, 2:05 PM');
+    expect(named()).toContain('Approved by Asha · 21 Sep');
     vi.restoreAllMocks();
     deviceLocale('en-GB');
-    expect(named()).toContain('Approved by Asha · 21 Sep, 2:05 PM');
+    expect(named()).toContain('Approved by Asha · 21 Sep');
     const fallback = render(['p1'], [cardRow('p1', { stage: 'approved' })]);
     expect(fallback).toContain('Approved · 20 Sep');
   });

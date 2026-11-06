@@ -58,7 +58,7 @@ import {
   type SharedCardCache,
   type SharedCardReaders,
 } from '@/lib/chat/shared-cards';
-import { formatDateTime, formatDueDate } from '@/lib/time';
+import { formatDueDate, formatWhen } from '@/lib/time';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
@@ -582,7 +582,7 @@ export function SharedPostCards({
 
 /**
  * An approved card whose approver name is not loaded (none on record, or the
- * name read failed) reads "Approved · <date time>" from approved_at, never a
+ * name read failed) reads "Approved · <when>" (formatWhen) from approved_at, never a
  * blank name. Other footers pass through. `timeZone` is for tests. Pure.
  */
 export function approvedWithoutName<F extends { state: string }>(
@@ -594,7 +594,7 @@ export function approvedWithoutName<F extends { state: string }>(
   if (post.stage !== 'approved' || approverName !== null || post.approved_at === null) {
     return footer;
   }
-  const at = formatDateTime(post.approved_at, undefined, timeZone);
+  const at = formatWhen(post.approved_at, undefined, timeZone);
   if (at === '') return footer;
   return { ...footer, state: `Approved · ${at}` };
 }
