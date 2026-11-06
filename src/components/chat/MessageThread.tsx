@@ -90,6 +90,7 @@ import {
   renderMessageBody,
 } from '@/components/chat/message-body';
 import { Avatar } from '@/components/ui/Avatar';
+import { LANE_BOTTOM_CLEAR, LANE_TOP_CLEAR } from '@/components/ui/layout';
 import { LinkPreviewCard } from '@/components/ui/LinkPreviewCard';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -3053,7 +3054,18 @@ export function threadRows(
  * slack above the first message and a short thread pins to the bottom. Never
  * justify-end on the scroll container; the spacer collapses to 0 on overflow.
  */
-export const THREAD_LIST_CLASS = cn('flex flex-1 flex-col overflow-y-auto py-2', NO_TOUCH_SELECT);
+/**
+ * The thread's scroll box. Its scroll padding keeps the floating lanes clear
+ * (ui/layout LANE_TOP_CLEAR, LANE_BOTTOM_CLEAR): a row it lands on (a jump, a
+ * quote) never parks its title or time under the unread pill or the latest
+ * button.
+ */
+export const THREAD_LIST_CLASS = cn(
+  'flex flex-1 flex-col overflow-y-auto py-2',
+  LANE_TOP_CLEAR,
+  LANE_BOTTOM_CLEAR,
+  NO_TOUCH_SELECT,
+);
 
 /**
  * The list's children in order: the bottom-pin spacer, the older-page row, then

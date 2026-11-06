@@ -122,7 +122,19 @@ export function ComposerFrame({
             input
           )}
         </div>
-        {recording ? null : side}
+        {/* The side buttons keep their slot in every state: while recording
+            they stay in place, invisible and inert, so the field never widens
+            and the send / stop button never moves. */}
+        {side !== undefined && side !== null ? (
+          <span
+            data-composer-side=""
+            aria-hidden={recording ? true : undefined}
+            inert={recording ? true : undefined}
+            className={cn('flex shrink-0 items-end gap-2 empty:hidden', recording && 'invisible')}
+          >
+            {side}
+          </span>
+        ) : null}
         {send}
       </div>
     </div>
