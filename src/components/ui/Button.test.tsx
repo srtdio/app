@@ -56,13 +56,11 @@ describe('Button design system', () => {
     }
   });
 
-  it('sm, md and lg all render 44', () => {
-    for (const size of ['sm', 'md', 'lg'] as const) {
-      const t = tokens(classOf({ size }));
-      expect(t).toContain('h-11');
-      expect(t).toContain('px-4');
-      expect(t).toContain('text-base');
-    }
+  it('one size: every button renders 44', () => {
+    const t = tokens(classOf({}));
+    expect(t).toContain('h-11');
+    expect(t).toContain('px-4');
+    expect(t).toContain('text-base');
   });
 
   it('has no size prop: every button is 44 (B1)', () => {
