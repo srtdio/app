@@ -671,7 +671,7 @@ export function PlanTabPage(): ReactElement {
                   type="button"
                   label={PLAN_BANK_CHIP_LABEL}
                   selected={bankOpen}
-                  data-plan-tab-chip="bank"
+                  data-plan-tab-bank-chip=""
                   dot={<IconBank size={ICON_SIZE.inline} />}
                   onClick={() => setBankOpen(!bankOpen)}
                   className="shrink-0"
