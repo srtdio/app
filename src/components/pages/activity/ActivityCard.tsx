@@ -213,7 +213,11 @@ export function activityPreviewText(group: readonly ActivityItem[]): string {
   if (isWelcome(lead)) return WELCOME_BODY;
   if (lead.eventType === MENTION_EVENT_TYPE && lead.body !== null) return stripFormat(lead.body);
   if (lead.eventType === 'assets_deleted') {
-    return deletedFilesBody(lead) ?? lead.filenames?.[0] ?? more;
+    // The first file by name, then the others ("deck.pdf · Also hero.png and teaser.mov").
+    const first = lead.filenames?.[0];
+    const others = deletedFilesBody(lead);
+    if (first === undefined) return others ?? more;
+    return others !== null ? `${first} · ${others}` : first;
   }
   const hasBody =
     lead.eventType === 'comment' ||

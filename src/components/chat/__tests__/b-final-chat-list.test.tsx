@@ -189,7 +189,8 @@ describe('notes, groups and people: one card style', () => {
       expect(classOf(h, attr)).toEqual(classOf(chat, attr));
     }
     expect(h).toContain('data-list-card-picture="icon"');
-    expect(h).toMatch(/<button[^>]*data-notes-tile=""/);
+    expect(h).toMatch(/data-notes-tile=""[^>]*data-list-card=""/);
+    expect(h).toMatch(/<button[^>]*aria-label="Open Personal notes"/);
   });
 
   it('the loading shell is ListCardBox only (no Tile, no Row)', () => {

@@ -373,7 +373,7 @@ describe('ActivityCard titles and previews', () => {
       }),
     ];
     expect(activityCardTitle(group)).toBe('Asha deleted 3 files');
-    expect(activityPreviewText(group)).toBe('Also hero.png and teaser.mov');
+    expect(activityPreviewText(group)).toBe('deck.pdf · Also hero.png and teaser.mov');
   });
 
   it('post_deleted opens nothing: no card button', () => {

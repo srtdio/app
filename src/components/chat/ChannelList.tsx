@@ -876,6 +876,7 @@ export function notesTile(props: {
   return (
     <div className={cn('pb-2', CHAT_HOME_EDGE, NO_TOUCH_SELECT)}>
       <ListCard
+        data-notes-tile=""
         picture={{ kind: 'icon', icon: IconFile }}
         pictureHooks={{ 'data-notes-picture': '' }}
         title={name}
@@ -887,7 +888,7 @@ export function notesTile(props: {
           : {})}
         disabled={props.selecting}
         selected={props.selected && !props.selecting}
-        press={{ 'aria-label': `Open ${name}`, 'data-notes-tile': '' }}
+        press={{ 'aria-label': `Open ${name}` }}
         onPress={() => {
           if (props.selecting) return;
           // A thread selecting messages exits that first (history.back()).
