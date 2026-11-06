@@ -4,7 +4,6 @@ import { stripFormat } from '@srtdio/comments';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Row } from '@/components/ui/Row';
-import { Tile } from '@/components/ui/Tile';
 import { createPressIntent, type PressIntent } from '@/lib/chat/press-intent';
 import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -443,10 +442,10 @@ export function rowMenuKey(event: { key: string; shiftKey: boolean }): boolean {
   return event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10');
 }
 
-/** A home tile's shape: a group channel is wide (Groups), a DM is square (People). */
+/** A chat's section: a group channel is 'wide' (Groups), a DM 'square' (People); both render as a Row. */
 export type TileKind = 'wide' | 'square';
 
-/** The tile a channel renders as: group -> wide, DM -> square. Pure. */
+/** The section a channel lists in: group -> wide (Groups), DM -> square (People). Pure. */
 export function tileKind(channel: Pick<ChannelSummary, 'channelType'>): TileKind {
   return channel.channelType === 'group' ? 'wide' : 'square';
 }
@@ -510,7 +509,7 @@ export const CHAT_ROW_PHOTO = 'flex shrink-0';
  */
 export const EMPTY_PREVIEW = ' ';
 
-/** Tile state that picks the tile's selected look. */
+/** Row state that picks the row's selected look. */
 export interface ChannelRowState {
   /** Desktop: this chat is open in the thread pane. */
   selected: boolean;
@@ -824,45 +823,29 @@ export function ChannelCard(props: {
   ) : null;
   return (
     <div
-      data-chat-list-item={parts.kind === 'wide' ? 'row' : 'tile'}
+      data-chat-list-item="row"
+      data-chat-kind={parts.kind === 'wide' ? 'group' : 'person'}
       className={cn('h-full', NO_TOUCH_SELECT)}
       // Touch-first: the native menu and callout never show on a chat.
       onContextMenu={chatRowContextMenu(coarsePointer)}
     >
-      {parts.kind === 'wide' ? (
-        <Row
-          {...surface}
-          leading={parts.photo}
-          title={parts.name}
-          {...(parts.time !== '' ? { time: parts.time } : {})}
-          secondary={parts.preview}
-          badge={parts.pill}
-          {...(menu !== null
-            ? { trailing: { kind: 'more' as const, menu } }
-            : parts.check !== null
-              ? { trailing: { kind: 'node' as const, node: parts.check } }
-              : {})}
-          divider={props.divider === true}
-          selected={isSelected}
-          onPress={onTap}
-        />
-      ) : (
-        <Tile
-          thumbnail={parts.photo}
-          title={parts.name}
-          {...(parts.time !== '' ? { meta: <span data-tile-time="">{parts.time}</span> } : {})}
-          {...(menu !== null ? { more: menu } : {})}
-          corners={{
-            ...(parts.check !== null
-              ? { tl: <span className={TILE_CORNER_INSET}>{parts.check}</span> }
-              : {}),
-            ...(parts.pill !== null
-              ? { tr: <span className={TILE_CORNER_INSET}>{parts.pill}</span> }
-              : {}),
-          }}
-          press={{ ...surface, selected: isSelected, onClick: onTap }}
-        />
-      )}
+      <Row
+        {...surface}
+        gutter="chat"
+        leading={parts.photo}
+        title={parts.name}
+        {...(parts.time !== '' ? { time: parts.time } : {})}
+        secondary={parts.preview}
+        badge={parts.pill}
+        {...(menu !== null
+          ? { trailing: { kind: 'more' as const, menu } }
+          : parts.check !== null
+            ? { trailing: { kind: 'node' as const, node: parts.check } }
+            : {})}
+        divider={props.divider === true}
+        selected={isSelected}
+        onPress={onTap}
+      />
     </div>
   );
 }
@@ -890,6 +873,7 @@ export function notesTile(props: {
   return (
     <div className={cn('pb-2', NO_TOUCH_SELECT)}>
       <Row
+        gutter="chat"
         data-notes-tile=""
         aria-label={`Open ${chatDisplayName(notes)}`}
         leading={<NotesAvatar role="header" src={notes.avatarUrl} surface="panel" />}
