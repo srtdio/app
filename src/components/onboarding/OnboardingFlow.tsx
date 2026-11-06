@@ -50,6 +50,8 @@ import { PlatformMark } from '@/components/ui/PlatformMark';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Select } from '@/components/ui/Select';
 import { Sheet } from '@/components/ui/Sheet';
+import { LEADING_PULL } from '@/components/ui/layout';
+import { Text } from '@/components/ui/Text';
 import { fireAvatarCleanup, makeAvatarCleanup, uploadAvatarFile } from '@/lib/avatar-upload';
 import { cn } from '@/lib/cn';
 import { cardPad, cardSurface } from '@/components/ui/Card';
@@ -808,7 +810,7 @@ export function OnboardingFlow({
           : format === 'reserved'
             ? `@${shownUsername} is reserved. Try another.`
             : nameCheck === 'checking'
-              ? 'Checking...'
+              ? 'Checking…'
               : nameCheck === 'taken'
                 ? `@${shownUsername} is taken. Try another.`
                 : nameCheck === 'error'
@@ -1070,10 +1072,10 @@ export function OnboardingFlow({
           paddingRight: 'env(safe-area-inset-right)',
         }}
       >
-        <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col px-6">
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6">
           <header className="flex min-h-14 items-center justify-between pt-2">
             {canGoBack ? (
-              <IconButton type="button" onClick={back} label="Back" className="-ml-3">
+              <IconButton type="button" onClick={back} label="Back" className={LEADING_PULL}>
                 <IconChevronLeft size={ICON_SIZE.control} className="text-fg" />
               </IconButton>
             ) : (
@@ -1160,7 +1162,9 @@ function Heading({ title, lead }: { title: string; lead: string }): ReactElement
   const stepLabel = useContext(StepLabel);
   return (
     <div>
-      <h1 className="text-lg font-semibold tracking-tight text-fg [text-wrap:balance]">{title}</h1>
+      <Text as="h1" role="title" className="text-fg [text-wrap:balance]">
+        {title}
+      </Text>
       {stepLabel !== null ? (
         <p data-onboarding-step="" className="mt-1 text-sm text-fg-3">
           {stepLabel}
@@ -1295,7 +1299,7 @@ function Primary({
       disabled={disabled}
       busy={busy}
       onClick={onClick}
-      className="w-full"
+      className="w-full md:w-full"
     >
       {children}
     </Button>
@@ -1318,7 +1322,7 @@ function TextAction({
       variant="link"
       disabled={disabled}
       onClick={onClick}
-      className="w-full hover:underline"
+      className="w-full hover:underline md:w-full"
     >
       {children}
     </Button>
@@ -1349,9 +1353,9 @@ function WelcomeBody({
 }): ReactElement {
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold tracking-tight text-fg [text-wrap:balance]">
+      <Text as="h1" role="title" className="text-fg [text-wrap:balance]">
         {heading}
-      </h1>
+      </Text>
       {platform !== '' ? <PlatformTag platform={platform} /> : null}
       <p className="min-h-5 text-base text-fg-2 [text-wrap:balance]" aria-live="polite">
         {subline}
@@ -1399,7 +1403,7 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
 
 function PreviewCard({ label, children }: { label: string; children: ReactNode }): ReactElement {
   return (
-    <div className={cn('w-full max-w-[340px]', cardSurface(), cardPad())}>
+    <div className={cn('w-full max-w-xs', cardSurface(), cardPad())}>
       <p className="mb-2 text-sm text-fg-3">{label}</p>
       {children}
     </div>

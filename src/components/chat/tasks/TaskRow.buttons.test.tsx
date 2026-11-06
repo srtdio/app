@@ -114,7 +114,7 @@ describe('task row buttons', () => {
   it('the title is a 44px PressableRow; the date line sits under it, mono, bad when overdue', () => {
     const none = renderToStaticMarkup(<TaskRow {...props()} />);
     const title = tag(none, 'data-task-title=""');
-    expect(title).toContain('min-h-[44px]');
+    expect(title).toContain('min-h-11');
     expect(title).toContain('rounded-lg');
     expect(none).not.toContain('data-task-when');
     const late = renderToStaticMarkup(

@@ -221,7 +221,7 @@ describe('E4: history failure with pending sends', () => {
     const root = threadLoadErrorRow(retry);
     const html = renderToStaticMarkup(<ul>{root}</ul>);
     expect(html).toMatch(/Couldn.{1,6}t load messages/);
-    expect(html).toContain('min-w-[44px]');
+    expect(html).toContain('min-w-11');
     expect(html).toContain('h-11');
     let button: ReactElement<{ onClick: () => void }> | undefined;
     walk(root, (el) => {

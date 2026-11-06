@@ -103,8 +103,8 @@ describe('UndoStrip', () => {
     expect(undo.hasAttribute('data-toast-action')).toBe(true);
     expect(undo.getAttribute('type')).toBe('button');
     // 44px touch target.
-    expect(undo.className).toContain('min-h-[44px]');
-    expect(undo.className).toContain('min-w-[44px]');
+    expect(undo.className).toContain('min-h-11');
+    expect(undo.className).toContain('min-w-11');
     // No X, no countdown bar, no icon.
     expect(el.querySelector('[aria-label="Dismiss notification"]')).toBeNull();
     expect(el.querySelector('[data-toast-countdown]')).toBeNull();

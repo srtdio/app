@@ -263,7 +263,7 @@ describe('thread controls', () => {
     expect(out).toContain('bg-panel');
     expect(out).toContain('h-5 w-5');
     expect(out).toContain('rounded-lg');
-    expect(out).toContain('min-h-[44px]');
+    expect(out).toContain('min-h-11');
     expect(out).toContain('Monday carousel');
     expect(out).not.toContain('GBL-12');
     expect(out).toContain('aria-label="Open the thread about Monday carousel"');
@@ -288,7 +288,7 @@ describe('thread controls', () => {
       />,
     );
     expect(own).toContain('justify-end');
-    expect(own).toContain('min-h-[44px]');
+    expect(own).toContain('min-h-11');
     expect(own).toContain('text-md font-semibold text-accent');
     expect(own).toContain('data-rail="through"');
     const left = html(

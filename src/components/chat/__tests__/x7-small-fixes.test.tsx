@@ -137,7 +137,7 @@ describe('X7 FN22-FN24: copy, inputs and skeletons', () => {
     // Boxes sweep (motion Bone); never a pulse.
     expect(out).toContain('mv-bone');
     expect(out).not.toContain('animate-pulse');
-    expect(out).toContain('min-h-[44px]');
+    expect(out).toContain('min-h-11');
     expect(source('../MemberPicker.tsx')).not.toContain('>Loading members<');
     expect(source('../PostPicker.tsx')).not.toContain('>Loading briefs<');
     expect(source('../GroupInfoSheet.tsx')).not.toContain('>Loading members<');

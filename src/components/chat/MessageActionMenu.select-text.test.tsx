@@ -280,7 +280,7 @@ describe('menu style', () => {
 
   it('rows: full-bleed, >= 44px, 16px sides, 14px gap, base fg text', () => {
     const cls = MENU_ROW.split(' ');
-    expect(cls).toEqual(expect.arrayContaining(['min-h-[44px]', 'px-4', 'gap-[14px]']));
+    expect(cls).toEqual(expect.arrayContaining(['min-h-11', 'px-4', 'gap-[14px]']));
     const html = renderToStaticMarkup(
       <>
         {items.map((item) => (

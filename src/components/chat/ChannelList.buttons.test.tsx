@@ -19,7 +19,7 @@ describe('ChannelList buttons (design system)', () => {
     const tags = buttonTags(renderToStaticMarkup(searchChips({ kind: 'photo', onChange: noop })));
     expect(tags.length).toBeGreaterThan(0);
     for (const tag of tags) {
-      expect(tag).toContain('min-h-[44px]');
+      expect(tag).toContain('min-h-11');
       expect(tag).toContain('rounded-lg');
       expect(tag).not.toContain('rounded-full');
       expect(tag).not.toMatch(/\bh-8\b|\bh-9\b|\bh-12\b|rounded-md|font-semibold/);

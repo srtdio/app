@@ -82,7 +82,7 @@ describe('P2: thread history failure shows Retry', () => {
     const html = renderToStaticMarkup(root);
     expect(html).toMatch(/Couldn.{1,6}t load messages/);
     expect(html).not.toContain('No messages yet');
-    expect(html).toContain('min-w-[44px]');
+    expect(html).toContain('min-w-11');
     // Tokens only (chat-tokens.test.ts scans for literals); no connection wording.
     expect(html).not.toMatch(/offline|connecting|reconnecting/i);
     findButton(root)?.props.onClick();

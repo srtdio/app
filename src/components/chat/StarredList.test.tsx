@@ -134,7 +134,7 @@ describe('StarredRowView', () => {
     expect(out).toContain('line-clamp-3');
     // No iOS callout, no text selection; at least 44px tall.
     expect(out).toContain('select-none [-webkit-touch-callout:none]');
-    expect(out).toContain('min-h-[44px]');
+    expect(out).toContain('min-h-11');
   });
 
   it('chat home (fullText): a 600-char body renders whole, no clamp, no ellipsis', () => {

@@ -551,7 +551,7 @@ describe('in-bubble meta and ticks', () => {
         'top-1/2',
         '-translate-y-1/2',
         'h-11',
-        'min-w-[44px]',
+        'min-w-11',
         'text-bad',
       ]),
     );
@@ -959,7 +959,7 @@ describe('MessageBubble keyboard and hover actions', () => {
     const cls = String(button?.props.className);
     expect(button?.props['aria-label']).toBe('Message options');
     // A PressableRow (inline): 44 tall with a 44px width floor.
-    expect(cls).toContain('h-11 min-w-[44px]');
+    expect(cls).toContain('h-11 min-w-11');
     expect(cls).toContain('absolute right-0 top-0');
     expect(cls).toContain('group-hover/bubble:opacity-100');
     expect(cls).toContain('focus-visible:opacity-100');
@@ -3334,7 +3334,7 @@ describe('@mentions in bubbles', () => {
     const me = els.find((el) => el.props['data-mention'] === ME);
     const gone = els.find((el) => el.props['data-mention'] === GONE);
     expect(ben?.type).toBe(PressableRow);
-    expect(String(ben?.props.className)).toContain('before:h-[44px]');
+    expect(String(ben?.props.className)).toContain('before:h-11');
     const target = {} as HTMLElement;
     const event = { stopPropagation: vi.fn(), currentTarget: target };
     (ben?.props.onClick as (e: typeof event) => void)(event);

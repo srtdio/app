@@ -611,7 +611,7 @@ describe('item 10: Remove from plan', () => {
     );
     expect(html).toContain('Remove from plan');
     expect(html).toContain('data-plan-remove=""');
-    expect(html).toContain('min-h-[44px]');
+    expect(html).toContain('min-h-11');
     const sheet = read('PlanMoveSheet.tsx');
     const concept = sheet.slice(
       sheet.indexOf('export function planConceptMenuItems'),

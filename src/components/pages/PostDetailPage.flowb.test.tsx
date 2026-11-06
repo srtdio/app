@@ -453,7 +453,7 @@ describe('34. laptop two columns, one grid for skeleton and page', () => {
     const grid = postPageGrid(false);
     expect(grid.page).toContain('grid-cols-1');
     expect(grid.page).toContain('lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]');
-    expect(grid.page).toContain('max-w-[1120px]');
+    expect(grid.page).toContain('max-w-6xl');
     expect(grid.page).toContain('mx-auto');
     expect(grid.head).toContain('lg:col-start-1');
     expect(grid.media).toContain('lg:col-start-1');

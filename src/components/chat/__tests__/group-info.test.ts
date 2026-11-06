@@ -203,7 +203,7 @@ describe('G4: a failed member refresh after an add or remove', () => {
     expect(el.props.children).toBe(MEMBERS_REFRESH_FAILED);
     // PressableRow supplies the 44px minimum.
     expect(el.type).toBe(PressableRow);
-    expect(PRESSABLE_ROW_BASE).toContain('min-h-[44px]');
+    expect(PRESSABLE_ROW_BASE).toContain('min-h-11');
     (el.props.onClick as () => void)();
     expect(onRetry).toHaveBeenCalledOnce();
   });

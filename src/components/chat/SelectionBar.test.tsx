@@ -88,7 +88,7 @@ describe('SelectionHeader (D8)', () => {
     // The shared Button (44 tall, 8px radius) as a link, at least 44 wide.
     expect(cancel?.type).toBe(Button);
     expect(cancel?.props.variant).toBe('link');
-    expect(String(cancel?.props.className)).toContain('min-w-[44px]');
+    expect(String(cancel?.props.className)).toContain('min-w-11');
     (cancel?.props.onClick as () => void)();
     expect(onCancel).toHaveBeenCalledOnce();
   });

@@ -350,7 +350,7 @@ describe('chat home chips', () => {
     expect(out).toContain('overflow-x-auto');
     expect(out).toContain('[scrollbar-width:none]');
     expect(out).toContain('touch-pan-x');
-    expect(out).toContain('min-h-[44px]');
+    expect(out).toContain('min-h-11');
     expect(out).toContain('shrink-0');
     expect(out).toContain('whitespace-nowrap');
   });

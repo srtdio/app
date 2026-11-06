@@ -53,7 +53,7 @@ describe('MarkBadge', () => {
     expect(props.children.type).toBe(Tag);
     expect(props.children.props).toMatchObject({ label: 'Pending P1', tone: 'warn' });
     expect(String((props.children.props as { className: string }).className)).toContain(
-      'min-w-[44px]',
+      'min-w-11',
     );
     expect(props.inline).toBe(true);
     expect(props.className).toContain('-mt-3');

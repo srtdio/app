@@ -90,7 +90,7 @@ describe('MarkSheetRow (Open)', () => {
       // 44x44 minimum hit area: the shared Button (always h-11, no size prop).
       expect(actions[0]?.type).toBe(Button);
       expect(actions[0]?.props.size).toBeUndefined();
-      expect(String(actions[0]?.props.className)).toContain('min-w-[44px]');
+      expect(String(actions[0]?.props.className)).toContain('min-w-11');
       expect(text(el)).not.toContain('Resolve');
     }
   });

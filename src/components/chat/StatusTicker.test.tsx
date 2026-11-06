@@ -316,7 +316,7 @@ describe('the drawer list', () => {
     expect(html.match(/data-status-mark="/g)?.length).toBe(6);
     expect(html).toContain('See all 6');
     expect(html).toContain('data-priority="P1"');
-    expect(html).toContain('min-h-[44px]');
+    expect(html).toContain('min-h-11');
     expect(html).toContain('line-clamp-2');
   });
 
