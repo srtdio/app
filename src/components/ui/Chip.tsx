@@ -89,7 +89,7 @@ export function Chip({
         // At rest a quiet grey fill (no edge); the pick is the solid ink fill
         // (bg-accent, lit-pill), the same look as a picked day. Hover/press: the
         // lit-hover overlay, no flat swap. Disabled: fg-3 ink, never a fade.
-        'inline-flex items-center gap-1.5 rounded-lg border text-base font-medium focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none disabled:cursor-default',
+        'inline-flex items-center gap-2 rounded-lg border text-base font-medium focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none disabled:cursor-default',
         MOVE_CLASS.press,
         sizes[size],
         variant === 'add'

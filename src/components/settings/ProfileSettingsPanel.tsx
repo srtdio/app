@@ -676,11 +676,11 @@ export function ProfileSettingsPanel(): React.ReactElement {
     // while nothing is held for the profile; a kept profile paints at once.
     return (
       <BoxSkeleton lit="flat" label="Loading profile" className="flex flex-col gap-4">
-        <Bone lit="lit-avatar" className="h-[72px] w-[72px] rounded-full" />
+        <Bone lit="lit-avatar" className="h-18 w-18 rounded-full" />
         {[0, 1].map((key) => (
           <div key={key}>
             <div className="mb-2 flex h-5 items-center">
-              <Bone lit="flat" className="h-3.5 w-28 rounded" />
+              <Bone lit="flat" className="h-3 w-28 rounded" />
             </div>
             <Bone lit="lit-well" className="h-11 w-full rounded-lg" />
           </div>
@@ -705,7 +705,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col items-start gap-3">
-        <div className="relative h-[72px] w-[72px]">
+        <div className="relative h-18 w-18">
           <Avatar
             key={photoSrc ?? 'none'}
             role="profile"

@@ -6,7 +6,7 @@ import { growFromTrigger, originFrom, shrinkToTrigger, type PresenceMoves } from
  * renders at rest; motion (docs/motion.md, growFromTrigger) is laid over it by
  * the caller with growFromTrigger / shrinkToTrigger. Never a fade.
  */
-const POPOVER_PANEL = 'lit-overlay rounded-xl border bg-panel p-1.5';
+const POPOVER_PANEL = 'lit-overlay rounded-xl border bg-panel p-1';
 
 /**
  * The panel classes. The argument is kept for callers that still pass their

@@ -39,13 +39,13 @@ export function Field({ label, htmlFor, id, required = false, hint, children }: 
     <div>
       <label
         {...(linked ? { htmlFor: controlId } : {})}
-        className="block text-base font-medium mb-1.5"
+        className="block text-base font-medium mb-2"
       >
         {label}
         {required ? <span className="text-bad ml-0.5">*</span> : null}
       </label>
       {typeof children === 'function' ? children(controlId) : children}
-      {hint !== undefined ? <p className="text-sm text-fg-3 mt-1.5">{hint}</p> : null}
+      {hint !== undefined ? <p className="text-sm text-fg-3 mt-2">{hint}</p> : null}
     </div>
   );
 }

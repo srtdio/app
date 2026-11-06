@@ -89,7 +89,7 @@ export function OnBehalfApproveView(props: OnBehalfApproveViewProps): ReactEleme
         </div>
       }
     >
-      <div data-on-behalf-sheet="" className="flex flex-col gap-1.5">
+      <div data-on-behalf-sheet="" className="flex flex-col gap-2">
         <span className="block text-base font-medium text-fg">{ON_BEHALF_FIELD}</span>
         <Select
           value={props.selected}

@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Backdrop } from '@/components/ui/Backdrop';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { Text } from '@/components/ui/Text';
 import { ICON_SIZE, IconEye, IconFile, IconX } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -141,17 +142,19 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
         aria-modal="true"
         aria-label={title}
         onKeyDown={onKeyDown}
-        className="absolute inset-y-0 right-0 flex w-full max-w-[460px] flex-col border-l bg-panel lit-overlay will-change-transform"
+        className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l bg-panel lit-overlay will-change-transform"
       >
-        <div className="flex items-center gap-2.5 border-b border-border px-[18px] pb-2 pt-[calc(0.5rem+env(safe-area-inset-top,0px))]">
-          <h2 className="text-lg font-semibold">{title}</h2>
+        <div className="flex items-center gap-2 border-b border-border px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top,0px))]">
+          <Text as="h2" role="title">
+            {title}
+          </Text>
           <div ref={closeRef} className="ml-auto">
             <IconButton label="Close preview" onClick={onClose}>
               <IconX />
             </IconButton>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-[18px] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-4">
           {isPostPlatform(props.platform) ? <PreviewBody {...props} /> : null}
         </div>
       </div>
@@ -297,6 +300,7 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
       <img
         src={url}
         alt=""
+        className="h-full w-full"
         // An image already decoded (cached, or loaded before a reset) fires no
         // load event: measure it as it mounts.
         ref={(el) => {
@@ -431,7 +435,7 @@ function LayoutMock({
   return (
     <figure
       aria-label={size.layout === 'story' ? 'Story preview' : 'Full-screen preview'}
-      className="relative mx-auto w-full max-w-[280px] overflow-hidden rounded-2xl bg-black"
+      className="relative mx-auto w-full max-w-72 overflow-hidden rounded-2xl bg-black"
       style={{ aspectRatio: String(ratio) }}
     >
       {size.layout === 'bands' && media !== null ? (
@@ -500,7 +504,7 @@ function CropBox({
         Original · {dims.w} x {dims.h}
       </h3>
       <div
-        className="relative mx-auto w-full max-w-[320px] overflow-hidden rounded-lg bg-panel-3 [&>img]:h-full [&>img]:w-full [&>img]:object-fill [&>video]:h-full [&>video]:w-full [&>video]:object-fill"
+        className="relative mx-auto w-full max-w-xs overflow-hidden rounded-lg bg-panel-3 [&>img]:h-full [&>img]:w-full [&>img]:object-fill [&>video]:h-full [&>video]:w-full [&>video]:object-fill"
         style={{ aspectRatio: String(dims.w / dims.h) }}
       >
         {media}
@@ -518,7 +522,7 @@ function ShownWindow({ window: win }: { window: CropWindow }): ReactElement {
       className="absolute rounded-sm border-2 border-field lit-spotlight"
       style={{ left: pct(win.x), top: pct(win.y), width: pct(win.w), height: pct(win.h) }}
     >
-      <span className="absolute left-1 top-1 rounded bg-accent lit-badge px-1.5 py-0.5 text-xs font-semibold text-accent-fg">
+      <span className="absolute left-1 top-1 rounded bg-accent lit-badge px-1 py-0.5 text-xs font-semibold text-accent-fg">
         Shown
       </span>
     </div>
@@ -539,7 +543,7 @@ function SizeOption(props: {
       aria-checked={props.selected}
       onClick={props.onPick}
       className={cn(
-        'flex flex-col items-start justify-center border px-3 py-1.5 mv-tint',
+        'flex flex-col items-start justify-center border px-3 py-2 mv-tint',
         props.selected
           ? 'border-transparent bg-accent text-accent-fg lit-pill'
           : 'border-transparent bg-panel-3 font-medium text-fg lit-well-soft lit-hover',
