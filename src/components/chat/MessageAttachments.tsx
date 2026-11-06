@@ -569,7 +569,7 @@ export function FilesRemovedLine(props: {
       data-testid="files-removed-line"
       className={cn(
         'flex min-w-0 items-center gap-1.5 italic',
-        props.mine ? 'text-[color:var(--bubble-meta-own)]' : 'text-[color:var(--bubble-meta)]',
+        props.mine ? 'text-bubble-meta-own' : 'text-bubble-meta',
         sized(BUBBLE_BODY_TYPE, props.layout),
         props.className,
       )}

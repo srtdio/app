@@ -392,7 +392,7 @@ export function GroupHero(props: {
             <span
               data-camera-badge=""
               aria-hidden="true"
-              className="absolute -bottom-2 -right-2 flex h-12 w-12 items-center justify-center rounded-full border-4 border-bg bg-accent text-accent-fg lit-btn-primary"
+              className="absolute -bottom-2 -right-2 flex h-12 w-12 items-center justify-center rounded-full border-cutout-lg border-bg bg-accent text-accent-fg lit-btn-primary"
             >
               <IconCamera size={ICON_SIZE.control} />
             </span>

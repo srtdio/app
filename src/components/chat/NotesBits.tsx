@@ -38,7 +38,7 @@ const NOTES_GLYPH_SIZE: Record<NotesAvatarRole, number> = {
 /** The badge: 32px, -4px, 3px ring on the profile tile; 20px, -4px, 2px ring on the smaller roles. */
 const NOTES_BADGE: Record<NotesAvatarRole, { box: string; glyph: number }> = {
   profile: {
-    box: 'h-8 w-8 -bottom-1 -right-1 border-[3px]',
+    box: 'h-8 w-8 -bottom-1 -right-1 border-cutout',
     glyph: ICON_SIZE.inline,
   },
   header: { box: 'h-5 w-5 -bottom-1 -right-1 border-2', glyph: ICON_SIZE.text },

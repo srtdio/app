@@ -522,11 +522,11 @@ export function LinkRow(props: {
           reasons={verdict.reasons}
           className={cn(ROW, 'w-full rounded-lg text-left lit-hover')}
         >
-          <span className={cn(ROW_ICON, 'text-[color:var(--warn-ink)]')}>
+          <span className={cn(ROW_ICON, 'text-warn-ink')}>
             <IconAlertTriangle size={ICON_SIZE.control} />
           </span>
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="truncate text-base font-medium text-[color:var(--warn-ink)]">
+            <span className="truncate text-base font-medium text-warn-ink">
               {displayUrl(props.item.url)}
             </span>
             <span className="truncate text-sm text-fg-2">{`${props.sender} · ${props.date}`}</span>

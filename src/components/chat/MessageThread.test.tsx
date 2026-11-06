@@ -497,7 +497,7 @@ describe('in-bubble meta and ticks', () => {
     const delivered = renderStrip(renderBubble(own({ status: 'sent' }), { showTicks: true }));
     expect(delivered).toContain('data-tick="delivered"');
     expect(delivered).toContain('aria-label="Delivered"');
-    expect(delivered).toContain('text-[color:var(--bubble-meta-own)]');
+    expect(delivered).toContain('text-bubble-meta-own');
     const read = renderStrip(renderBubble(own({ status: 'read' }), { showTicks: true }));
     expect(read).toMatch(
       /data-tick="read"[^>]*text-\[color:var\(--tick-read\)\]|text-\[color:var\(--tick-read\)\][^>]*data-tick="read"/,
@@ -509,7 +509,7 @@ describe('in-bubble meta and ticks', () => {
 
   it('peer meta takes the peer meta token; no tick', () => {
     const html = renderStrip(renderBubble(makeMessage({}), { showTicks: true }));
-    expect(html).toContain('text-[color:var(--bubble-meta)]');
+    expect(html).toContain('text-bubble-meta');
     expect(html).not.toContain('data-tick');
   });
 
@@ -518,7 +518,7 @@ describe('in-bubble meta and ticks', () => {
     expect(metaOf(root)?.meta.status).toBe('sending');
     const html = renderStrip(root);
     expect(html).toContain('data-tick="sending"');
-    expect(html).toContain('text-[color:var(--bubble-meta-own)]');
+    expect(html).toContain('text-bubble-meta-own');
     let bubble = '';
     walk(root, (el) => {
       const props = el.props as Record<string, unknown>;
@@ -671,7 +671,7 @@ describe('in-bubble meta and ticks', () => {
       }),
     );
     expect(pill).toContain('bg-[color:var(--media-meta-bg)]');
-    expect(pill).toContain('text-[color:var(--media-meta-fg)]');
+    expect(pill).toContain('text-media-meta');
     // Media with a caption, or with cards or other files, takes the row.
     expect(metaPlacement({ ...image, body: 'look', sharedPostIds: ['p'] })).toBe('row');
     expect(

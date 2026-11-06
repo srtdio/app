@@ -1491,7 +1491,7 @@ export function MetaGlyph({ status }: { status: MetaTick }): ReactElement {
       className={cn(
         TICK_ICON_BOX,
         'inline-flex items-center justify-center',
-        status === 'read' && 'text-[color:var(--tick-read)]',
+        status === 'read' && 'text-tick-read',
       )}
     >
       {status === 'sending' ? <IconClock size={ICON_SIZE.text} /> : null}
@@ -1548,13 +1548,13 @@ export type MetaPlacement = 'inline' | 'pill' | 'row' | 'card';
 
 /** The meta's ink on the bubble: the own or peer meta token, at full strength. */
 function metaInk(mine: boolean): string {
-  return mine ? 'text-[color:var(--bubble-meta-own)]' : 'text-[color:var(--bubble-meta)]';
+  return mine ? 'text-bubble-meta-own' : 'text-bubble-meta';
 }
 
 /** Each placement's position: two overlays at the bottom-right, the row in flow. */
 const META_POSITION: Record<MetaPlacement, string> = {
   inline: 'pointer-events-none absolute bottom-1 right-2 inline-flex',
-  pill: 'pointer-events-none absolute bottom-2 right-2 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-[color:var(--media-meta-fg)] lit-media',
+  pill: 'pointer-events-none absolute bottom-2 right-2 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-media-meta lit-media',
   row: 'pointer-events-none mt-1 flex justify-end',
   // Inside ui/ChatCard's bottom-trailing time slot, which places and inks it.
   card: 'pointer-events-none inline-flex',
@@ -2817,8 +2817,8 @@ export function MessageBubble(props: {
                     // edge comes in to the card's 12px content edge.
                     cardOnly ? 'pr-2' : 'pr-1',
                     mine && !cardOnly
-                      ? 'from-bubble-own text-[color:var(--bubble-meta-own)]'
-                      : 'from-panel-2 text-[color:var(--bubble-meta)]',
+                      ? 'from-bubble-own text-bubble-meta-own'
+                      : 'from-panel-2 text-bubble-meta',
                   )}
                 >
                   <ChevronGlyph />

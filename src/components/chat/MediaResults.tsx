@@ -253,7 +253,7 @@ function VideoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement
           <IconPlay size={ICON_SIZE.control} />
         </span>
       ) : null}
-      <span className="pointer-events-none absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-xs text-[color:var(--media-meta-fg)] lit-media">
+      <span className="pointer-events-none absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-xs text-media-meta lit-media">
         <IconPlay size={ICON_SIZE.text} />
         {item.durationMs !== null ? (
           <span data-media-duration="" className="font-mono tabular-nums">
@@ -404,7 +404,7 @@ function LinkRowItem(props: {
         }}
         className={ROW}
       >
-        <span className={cn(ROW_ICON, unsafe && 'bg-warn-soft text-[color:var(--warn-ink)]')}>
+        <span className={cn(ROW_ICON, unsafe && 'bg-warn-soft text-warn-ink')}>
           {unsafe ? (
             <IconAlertTriangle size={ICON_SIZE.control} />
           ) : (
@@ -415,7 +415,7 @@ function LinkRowItem(props: {
           <span
             className={cn(
               'truncate text-base font-medium',
-              unsafe ? 'text-[color:var(--warn-ink)]' : 'text-fg',
+              unsafe ? 'text-warn-ink' : 'text-fg',
             )}
           >
             {title}
