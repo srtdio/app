@@ -1513,7 +1513,13 @@ export function PlanItemScreen(props: {
   // Send to chat: the chat picker, then chat_plan_item_share (IdeaShareFlow).
   const [sendIdea, setSendIdea] = useState<IdeaShareTarget | null>(null);
   const sendToChat = (): void =>
-    setSendIdea({ id: item.id, title: rowTitle(bundle, item), commentCount });
+    setSendIdea({
+      id: item.id,
+      title: rowTitle(bundle, item),
+      commentCount,
+      // A planned concept refused for the client opens its plan, never bank_idea_set.
+      plan: bank ? null : { id: bundle.plan.id, title: bundle.plan.title },
+    });
   const whoCanSeeCard = whoCard ? (
     <section
       data-plan-who-can-see=""

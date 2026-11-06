@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bucketLine,
   reduceBankTraces,
+  traceDayOf,
   rowBucketsOf,
   tracesByDay,
   type PlanBundle,
@@ -89,6 +90,33 @@ describe('moved-to-bank traces', () => {
     );
     expect(out.get('plan-a')).toBeUndefined();
     expect(out.get('plan-b')?.map((t) => t.itemId)).toEqual(['moved']);
+  });
+
+  it('the day the concept sat on (payload target_date) wins over the move day', () => {
+    const out = reduceBankTraces(
+      [
+        {
+          entity_id: 'sat',
+          created_at: '2026-11-20T10:00:00Z',
+          payload: { from_plan_id: 'plan-a', target_date: '2026-11-04' },
+        },
+        // An older row (no target_date) or a concept with no day: the clamp.
+        {
+          entity_id: 'old',
+          created_at: '2026-11-20T10:00:00Z',
+          payload: { from_plan_id: 'plan-a', target_date: null },
+        },
+      ],
+      [item('sat', null), item('old', null)],
+      [plan],
+      'UTC',
+    );
+    const list = out.get('plan-a') ?? [];
+    expect(list.find((t) => t.itemId === 'sat')?.day).toBe('2026-11-04');
+    expect(list.find((t) => t.itemId === 'old')?.day).toBe('2026-11-08');
+    expect(traceDayOf({ target_date: '2026-11-04' })).toBe('2026-11-04');
+    expect(traceDayOf({ target_date: 'nope' })).toBeNull();
+    expect(traceDayOf(null)).toBeNull();
   });
 
   it('a move outside the range sits on the nearest plan day', () => {

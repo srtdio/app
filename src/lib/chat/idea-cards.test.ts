@@ -6,7 +6,6 @@ import {
   ideaLine,
   ideaViews,
   ideaWhere,
-  looksLikeBundleIdea,
   type IdeaCardView,
 } from '@/lib/chat/idea-cards';
 
@@ -76,24 +75,6 @@ describe('ideaViews', () => {
   });
 });
 
-describe('looksLikeBundleIdea', () => {
-  const base = {
-    body: '',
-    attachments: [],
-    sharedPostIds: [],
-    sharedBriefIds: [],
-    state: 'sent',
-  };
-  it('an empty recorded row asks; anything with content, a tombstone or a pending send does not', () => {
-    expect(looksLikeBundleIdea(base)).toBe(true);
-    expect(looksLikeBundleIdea({ ...base, body: 'hi' })).toBe(false);
-    expect(looksLikeBundleIdea({ ...base, sharedPlanIds: ['p'] })).toBe(false);
-    expect(looksLikeBundleIdea({ ...base, sharedPlanItemIds: ['i'] })).toBe(false);
-    expect(looksLikeBundleIdea({ ...base, deleted: true })).toBe(false);
-    expect(looksLikeBundleIdea({ ...base, state: 'pending' })).toBe(false);
-  });
-});
-
 describe('idea card store', () => {
   function manual(): { run: () => void; schedule: (r: () => void) => void } {
     let queued: (() => void) | null = null;
@@ -114,42 +95,18 @@ describe('idea card store', () => {
       ok: true as const,
       data: new Map(ids.map((id) => [id, idea({ id })] as const)),
     }));
-    const messages = vi.fn(async () => ({ ok: true as const, data: new Map<string, string[]>() }));
     const tick = manual();
-    const store = createIdeaCardStore({ ideas, messages }, tick.schedule);
+    const store = createIdeaCardStore({ ideas }, tick.schedule);
     store.request(['a']);
     store.request(['b', 'a']);
     tick.run();
     await vi.waitFor(() => expect(store.get('b')).toBeDefined());
     expect(ideas).toHaveBeenCalledTimes(1);
     expect(ideas.mock.calls[0]?.[0]).toEqual(['a', 'b']);
-    expect(messages).not.toHaveBeenCalled();
     // Held ids are never read again on a later ask.
     store.request(['a']);
     tick.run();
     expect(ideas).toHaveBeenCalledTimes(1);
-  });
-
-  it('empty-looking bundle rows: one chat_messages read, then one idea read for all ids', async () => {
-    const ideas = vi.fn(async (ids: string[]) => ({
-      ok: true as const,
-      data: new Map(ids.map((id) => [id, idea({ id })] as const)),
-    }));
-    const messages = vi.fn(async (ids: string[]) => ({
-      ok: true as const,
-      data: new Map(ids.filter((id) => id === 'm1').map((id): [string, string[]] => [id, ['x']])),
-    }));
-    const tick = manual();
-    const store = createIdeaCardStore({ ideas, messages }, tick.schedule);
-    store.requestMessages(['m1', 'm2']);
-    store.request(['a']);
-    tick.run();
-    await vi.waitFor(() => expect(store.get('x')).toBeDefined());
-    expect(messages).toHaveBeenCalledTimes(1);
-    expect(ideas).toHaveBeenCalledTimes(1);
-    expect(new Set(ideas.mock.calls[0]?.[0])).toEqual(new Set(['a', 'x']));
-    expect(store.messageIdeas('m1')).toEqual(['x']);
-    expect(store.messageIdeas('m2')).toEqual([]);
   });
 
   it('a failed read marks the ids failed; refresh reads them again', async () => {
@@ -160,10 +117,7 @@ describe('idea card store', () => {
         : { ok: true as const, data: new Map(ids.map((id) => [id, idea({ id })] as const)) },
     );
     const tick = manual();
-    const store = createIdeaCardStore(
-      { ideas, messages: async () => ({ ok: true as const, data: new Map() }) },
-      tick.schedule,
-    );
+    const store = createIdeaCardStore({ ideas }, tick.schedule);
     store.request(['a']);
     tick.run();
     await vi.waitFor(() => expect(store.get('a')).toBe('failed'));

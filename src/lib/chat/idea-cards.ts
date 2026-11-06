@@ -189,106 +189,12 @@ export function ideaViews(
 }
 
 // ---------------------------------------------------------------------------
-// Messages the open bundle carried without their idea ids
-// ---------------------------------------------------------------------------
-
-/**
- * Whether a recorded message reads as empty: no body, files, shared posts,
- * briefs, plans or ideas, and not deleted. The chat open bundle (and search)
- * rows do not carry shared_plan_item_ids yet, so an idea message from the
- * bundle arrives like this; its ids are read in the cards' batch. Pure.
- */
-export function looksLikeBundleIdea(message: {
-  body: string;
-  attachments: readonly unknown[];
-  sharedPostIds: readonly string[];
-  sharedBriefIds: readonly string[];
-  sharedPlanIds?: readonly string[] | undefined;
-  sharedPlanItemIds?: readonly string[] | undefined;
-  deleted?: boolean | undefined;
-  state?: string | undefined;
-}): boolean {
-  return (
-    message.deleted !== true &&
-    message.state !== 'pending' &&
-    message.state !== 'failed' &&
-    message.body.trim() === '' &&
-    message.attachments.length === 0 &&
-    message.sharedPostIds.length === 0 &&
-    message.sharedBriefIds.length === 0 &&
-    (message.sharedPlanIds ?? []).length === 0 &&
-    (message.sharedPlanItemIds ?? []).length === 0
-  );
-}
-
-/** chat_messages by id: each message's shared idea ids (rows without any are skipped). Never throws. */
-export async function readMessageIdeaIds(
-  client: Client,
-  messageIds: readonly string[],
-  signal?: AbortSignal,
-): Promise<Result<Map<string, string[]>>> {
-  try {
-    const unique = [...new Set(messageIds)];
-    const out = new Map<string, string[]>();
-    if (unique.length === 0) return { ok: true, data: out };
-    const results = await Promise.all(
-      planChunks(unique).map((chunk) => {
-        const q = (
-          client.from('chat_messages') as unknown as {
-            select: (c: string) => {
-              in: (
-                column: string,
-                values: readonly string[],
-              ) => {
-                not: (
-                  column: string,
-                  op: string,
-                  value: null,
-                ) => PromiseLike<{
-                  data: unknown;
-                  error: { message: string } | null;
-                }>;
-              };
-            };
-          }
-        )
-          .select('id, shared_plan_item_ids')
-          .in('id', chunk)
-          .not('shared_plan_item_ids', 'is', null);
-        return abortable(q, signal) as unknown as Promise<{
-          data: unknown;
-          error: { message: string } | null;
-        }>;
-      }),
-    );
-    for (const r of results) {
-      if (r.error !== null)
-        return { ok: false, error: { code: 'unknown', message: r.error.message } };
-      for (const row of (r.data as Array<{
-        id: string;
-        shared_plan_item_ids: string[] | null;
-      }> | null) ?? []) {
-        if ((row.shared_plan_item_ids ?? []).length > 0)
-          out.set(row.id, row.shared_plan_item_ids ?? []);
-      }
-    }
-    return { ok: true, data: out };
-  } catch (error) {
-    return { ok: false, error: { code: 'unknown', message: String(error) } };
-  }
-}
-
-// ---------------------------------------------------------------------------
 // The batched store (one read per tick of asks)
 // ---------------------------------------------------------------------------
 
 export interface IdeaCardStore {
   /** Ask for these ids; ids not yet held are read in the next batch. */
   request: (ids: readonly string[]) => void;
-  /** Ask which ideas these (empty-looking) messages carry, in the next batch. */
-  requestMessages: (messageIds: readonly string[]) => void;
-  /** A message's idea ids: undefined while unknown, [] when it carries none. */
-  messageIdeas: (messageId: string) => readonly string[] | undefined;
   /** Read these ids again (a plan change). */
   refresh: (ids: readonly string[]) => void;
   /** The held view, or undefined while it loads; 'failed' when its read failed. */
@@ -301,24 +207,20 @@ export interface IdeaCardStore {
 
 export interface IdeaCardReads {
   ideas: (ids: string[]) => Promise<Result<Map<string, IdeaCardView>>>;
-  messages: (messageIds: string[]) => Promise<Result<Map<string, string[]>>>;
 }
 
 /**
- * A store whose asks in one tick become one pass: at most one chat_messages
- * read (empty-looking bundle rows), then one idea read for every id asked
- * plus the ones those messages carry. `schedule` defaults to a microtask.
+ * A store whose asks in one tick become one pass: one idea read for every id
+ * asked (message rows, the open bundle's included, carry their idea ids).
+ * `schedule` defaults to a microtask.
  */
 export function createIdeaCardStore(
   reads: IdeaCardReads,
   schedule: (run: () => void) => void = (run) => queueMicrotask(run),
 ): IdeaCardStore {
   const views = new Map<string, IdeaCardView | 'failed'>();
-  const byMessage = new Map<string, readonly string[]>();
   const pending = new Set<string>();
-  const pendingMessages = new Set<string>();
   const inFlight = new Set<string>();
-  const messagesInFlight = new Set<string>();
   const listeners = new Set<() => void>();
   let v = 0;
   let scheduled = false;
@@ -328,28 +230,9 @@ export function createIdeaCardStore(
   };
   const flush = async (): Promise<void> => {
     scheduled = false;
-    const messageIds = [...pendingMessages];
-    pendingMessages.clear();
     const ids = new Set(pending);
     pending.clear();
-    for (const id of messageIds) messagesInFlight.add(id);
     for (const id of ids) inFlight.add(id);
-    if (messageIds.length > 0) {
-      const found = await reads.messages(messageIds);
-      for (const id of messageIds) {
-        messagesInFlight.delete(id);
-        // A failed read leaves the message as it is (no card, no retry loop).
-        const carried = found.ok ? (found.data.get(id) ?? []) : [];
-        byMessage.set(id, carried);
-        for (const ideaId of carried) {
-          if (!views.has(ideaId) && !inFlight.has(ideaId)) {
-            ids.add(ideaId);
-            inFlight.add(ideaId);
-          }
-        }
-      }
-      emit();
-    }
     const list = [...ids];
     if (list.length === 0) return;
     const result = await reads.ideas(list);
@@ -360,7 +243,7 @@ export function createIdeaCardStore(
     emit();
   };
   const kick = (): void => {
-    if (!scheduled && (pending.size > 0 || pendingMessages.size > 0)) {
+    if (!scheduled && pending.size > 0) {
       scheduled = true;
       schedule(() => void flush());
     }
@@ -372,13 +255,6 @@ export function createIdeaCardStore(
   return {
     request: (ids) =>
       enqueue(ids.filter((id) => !views.has(id) && !inFlight.has(id) && !pending.has(id))),
-    requestMessages: (messageIds) => {
-      for (const id of messageIds) {
-        if (!byMessage.has(id) && !messagesInFlight.has(id)) pendingMessages.add(id);
-      }
-      kick();
-    },
-    messageIdeas: (messageId) => byMessage.get(messageId),
     refresh: (ids) => enqueue(ids.filter((id) => !inFlight.has(id))),
     get: (id) => views.get(id),
     subscribe: (listener) => {

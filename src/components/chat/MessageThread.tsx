@@ -207,8 +207,7 @@ import {
 import { useCancelUpload, useChatStore, useServerNow } from '@/components/chat/ChatStoreProvider';
 import { SharedBriefCards } from '@/components/chat/BriefCard';
 import { SharedPlanCards } from '@/components/chat/PlanCard';
-import { MessageIdeaCards, ideaTitleOf, withIdeaIds } from '@/components/chat/PlanItemCard';
-import { looksLikeBundleIdea } from '@/lib/chat/idea-cards';
+import { SharedIdeaCards, ideaTitleOf } from '@/components/chat/PlanItemCard';
 import { PaintLogOverlay, paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
 import { MarkBadge, SelectCheckbox, SelectLock } from '@/components/chat/MarkBits';
@@ -2267,16 +2266,10 @@ export function MessageBubble(props: {
     onReact?: () => void;
   };
 }): ReactElement {
-  const { message: own, profiles, cache, presignEnabled, showTicks, isGroup, head, tail } = props;
+  const { message, profiles, cache, presignEnabled, showTicks, isGroup, head, tail } = props;
   const { onBadgeClick } = props;
-  // Ideas: the row's own ids; a bundle row (the open bundle carries no idea
-  // ids yet) that reads empty asks for them in the idea cards' batch. The
-  // bubble stays hook-free: it reads what the batch already holds, and
-  // MessageIdeaCards subscribes and paints the cards when the read lands.
-  const askIdeas = looksLikeBundleIdea(own);
-  const message = askIdeas ? withIdeaIds(own) : own;
+  // Ideas: the row's own ids (the open bundle's rows carry them too).
   const sharedIdeaIds = message.sharedPlanItemIds ?? NO_PLAN_IDS;
-  const ideasPending = askIdeas && sharedIdeaIds.length === 0;
   // Notes: a saved copy names its source instead of "Forwarded".
   const savedFrom = props.savedFrom ?? null;
   const savedLine =
@@ -2300,8 +2293,7 @@ export function MessageBubble(props: {
     message.sharedPostIds.length > 0 ||
     message.sharedBriefIds.length > 0 ||
     sharedPlanIds.length > 0 ||
-    sharedIdeaIds.length > 0 ||
-    ideasPending;
+    sharedIdeaIds.length > 0;
   const textOnly =
     message.body.trim() !== '' &&
     message.attachments.length === 0 &&
@@ -2649,7 +2641,7 @@ export function MessageBubble(props: {
                       <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                       <SharedBriefCards briefIds={message.sharedBriefIds} />
                       <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
-                      <MessageIdeaCards messageId={own.id} ideaIds={sharedIdeaIds} ask={askIdeas} />
+                      <SharedIdeaCards ideaIds={sharedIdeaIds} />
                     </div>
                   ) : null}
                 </>
@@ -2668,7 +2660,7 @@ export function MessageBubble(props: {
                   <SharedPostCards postIds={message.sharedPostIds} {...cardRefs} />
                   <SharedBriefCards briefIds={message.sharedBriefIds} />
                   <SharedPlanCards planIds={sharedPlanIds} senderName={name} />
-                  <MessageIdeaCards messageId={own.id} ideaIds={sharedIdeaIds} ask={askIdeas} />
+                  <SharedIdeaCards ideaIds={sharedIdeaIds} />
                 </>
               )}
             </div>
@@ -4462,18 +4454,15 @@ function ThreadBody(
   }
   const nowMs = Date.now();
   // A plan card message: no Forward, Save to notes or Edit; Copy copies its title.
-  // An idea card message follows the same rules (a bundle row's ids come from the batch).
-  const menuIdeas = menu !== null ? withIdeaIds(menu.message) : null;
-  const menuPlan =
-    menu !== null &&
-    (isPlanMessage(menu.message) || (menuIdeas !== null && isIdeaMessage(menuIdeas)));
+  // An idea card message follows the same rules.
+  const menuPlan = menu !== null && (isPlanMessage(menu.message) || isIdeaMessage(menu.message));
   const menuPlanTitle =
     menu === null
       ? null
       : isPlanMessage(menu.message)
         ? planTitleOf(planCards, menu.message)
-        : menuIdeas !== null && isIdeaMessage(menuIdeas)
-          ? ideaTitleOf(menuIdeas)
+        : isIdeaMessage(menu.message)
+          ? ideaTitleOf(menu.message)
           : null;
   const menuOwn =
     menu !== null
@@ -6832,7 +6821,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         count={selected.size}
         block={deleteBlock}
         canDelete={selected.size > 0 && deleteBlock === null}
-        {...(canForwardHere && selectionForwardable(selected, selectable.map(withIdeaIds))
+        {...(canForwardHere && selectionForwardable(selected, selectable)
           ? { onForward: () => setForwardFor(selectedForForward(selected, selectable)) }
           : {})}
         {...(selectionStar !== null ? { star: selectionStar } : {})}

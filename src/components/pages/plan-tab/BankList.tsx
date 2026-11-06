@@ -498,7 +498,12 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
       label: 'Send to chat',
       icon: IconForward,
       onSelect: () =>
-        setSendIdea({ id: idea.id, title: idea.title ?? '', commentCount: idea.comment_count }),
+        setSendIdea({
+          id: idea.id,
+          title: idea.title ?? '',
+          commentCount: idea.comment_count,
+          plan: null,
+        }),
     },
     idea.show_to_client === true
       ? { id: 'hide', label: 'Hide from client', icon: IconEyeOff, onSelect: () => hide(idea) }

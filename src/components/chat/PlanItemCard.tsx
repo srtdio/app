@@ -26,7 +26,6 @@ import {
   ideaHref,
   ideaLine,
   readIdeaCards,
-  readMessageIdeaIds,
   type IdeaCardStore,
   type IdeaCardView,
 } from '@/lib/chat/idea-cards';
@@ -48,7 +47,6 @@ export function ideaCardStore(): IdeaCardStore {
   if (shared === null) {
     shared = createIdeaCardStore({
       ideas: (ids) => readIdeaCards(supabase, ids),
-      messages: (ids) => readMessageIdeaIds(supabase, ids),
     });
     if (typeof window !== 'undefined') {
       const store = shared;
@@ -69,43 +67,6 @@ function useIdeaStoreVersion(store: IdeaCardStore): number {
   return useSyncExternalStore(store.subscribe, store.version, store.version);
 }
 
-/** A message's idea ids: its own, else (an empty-looking bundle row) the ones read for it. */
-export function useMessageIdeaIds(
-  messageId: string,
-  own: readonly string[],
-  ask: boolean,
-): string[] {
-  const store = ideaCardStore();
-  useIdeaStoreVersion(store);
-  useEffect(() => {
-    if (ask && own.length === 0) store.requestMessages([messageId]);
-  }, [store, ask, messageId, own.length]);
-  if (own.length > 0) return [...own];
-  return ask ? [...(store.messageIdeas(messageId) ?? [])] : [];
-}
-
-/** Whether an empty-looking message is still waiting for its idea ids. */
-export function useMessageIdeasPending(messageId: string, ask: boolean): boolean {
-  const store = ideaCardStore();
-  useIdeaStoreVersion(store);
-  return ask && store.messageIdeas(messageId) === undefined;
-}
-
-/**
- * The message with its idea ids: its own, else the ones the batch read for an
- * empty-looking bundle row (so menus treat it as an idea message). Pure over
- * the store's current values.
- */
-export function withIdeaIds<M extends { id: string; sharedPlanItemIds?: string[] | undefined }>(
-  message: M,
-): M {
-  if ((message.sharedPlanItemIds ?? []).length > 0) return message;
-  const read = ideaCardStore().messageIdeas(message.id);
-  return read !== undefined && read.length > 0
-    ? { ...message, sharedPlanItemIds: [...read] }
-    : message;
-}
-
 /** The first readable idea's title (the menu's Copy), or null. */
 export function ideaTitleOf(message: { sharedPlanItemIds?: string[] | undefined }): string | null {
   const store = ideaCardStore();
@@ -116,23 +77,8 @@ export function ideaTitleOf(message: { sharedPlanItemIds?: string[] | undefined 
   return null;
 }
 
-/** The idea cards of one message (`pending`: a bundle row whose ids are not read yet). */
-/**
- * One message's idea cards: its own ids, or (an empty-looking bundle row) the
- * ids the batch reads for it, with a skeleton while that read is out. The
- * bubble itself stays hook-free; this is where the store is watched.
- */
-export function MessageIdeaCards(props: {
-  messageId: string;
-  ideaIds: readonly string[];
-  ask: boolean;
-}): ReactElement {
-  const ids = useMessageIdeaIds(props.messageId, props.ideaIds, props.ask);
-  const pending = useMessageIdeasPending(props.messageId, props.ask);
-  return <SharedIdeaCards ideaIds={ids} pending={pending} />;
-}
-
-export function SharedIdeaCards(props: { ideaIds: string[]; pending?: boolean }): ReactElement {
+/** The idea cards of one message (ids from its row), one batched read per thread page. */
+export function SharedIdeaCards(props: { ideaIds: readonly string[] }): ReactElement {
   const store = ideaCardStore();
   const version = useIdeaStoreVersion(store);
   const key = props.ideaIds.join(',');
@@ -147,13 +93,6 @@ export function SharedIdeaCards(props: { ideaIds: string[]; pending?: boolean })
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [store, key, version],
   );
-  if (props.pending === true && props.ideaIds.length === 0) {
-    return (
-      <div className="mt-1 flex flex-col items-start gap-1 text-fg">
-        <IdeaCardSkeleton />
-      </div>
-    );
-  }
   if (props.ideaIds.length === 0) return <></>;
   return (
     <div className="mt-1 flex flex-col items-start gap-1 text-fg">

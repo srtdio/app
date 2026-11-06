@@ -327,9 +327,7 @@ describe('round 3 fixes', () => {
       fileURLToPath(new URL('./MessageThread.tsx', import.meta.url)),
       'utf8',
     );
-    expect(src).toContain(
-      'canForwardHere && selectionForwardable(selected, selectable.map(withIdeaIds))',
-    );
+    expect(src).toContain('canForwardHere && selectionForwardable(selected, selectable)');
   });
 
   it('MAJ-2: the notice hides at once in another chat (count 0) and after its time', () => {

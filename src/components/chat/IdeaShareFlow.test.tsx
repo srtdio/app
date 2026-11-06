@@ -32,6 +32,8 @@ import {
   ideaPickChannels,
   ideaShowLine,
   isIdeaNotSharedWithClient,
+  openPlanThenShareIdea,
+  refusedPath,
   showThenShare,
 } from '@/components/chat/IdeaShareFlow';
 import {
@@ -175,5 +177,39 @@ describe('plan_not_shared_with_client sheet path', () => {
     const res = await openPlanThenShare({ planId: 'p1', channelId: 'c1', messageId: 'msg1' });
     expect(res.ok).toBe(false);
     expect(rpc.chatPlanShare).not.toHaveBeenCalled();
+  });
+});
+
+describe('a refused idea inside a Draft plan takes the plan path', () => {
+  it('a planned idea opens its plan; a bank idea asks to show it', () => {
+    expect(refusedPath({ plan: { id: 'p1', title: 'Week of 2 Nov' } })).toBe('open-plan');
+    expect(refusedPath({ plan: null })).toBe('show-idea');
+    expect(refusedPath({})).toBe('show-idea');
+  });
+
+  it('Open and send: plan_share_with_client, then the share again; never bank_idea_set', async () => {
+    const calls: string[] = [];
+    const result = await openPlanThenShareIdea({
+      openPlan: async () => {
+        calls.push('open');
+        return { ok: true, data: null };
+      },
+      share: async () => {
+        calls.push('share');
+        return { ok: true, data: row };
+      },
+    });
+    expect(result).toEqual({ ok: true, row });
+    expect(calls).toEqual(['open', 'share']);
+  });
+
+  it('a failed open sends nothing and names the step', async () => {
+    const share = vi.fn();
+    const result = await openPlanThenShareIdea({
+      openPlan: async () => ({ ok: false, error: { code: 'unknown', message: 'forbidden_role' } }),
+      share,
+    });
+    expect(result).toEqual({ ok: false, step: 'open', message: 'forbidden_role' });
+    expect(share).not.toHaveBeenCalled();
   });
 });

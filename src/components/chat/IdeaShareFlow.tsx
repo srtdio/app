@@ -4,19 +4,23 @@
 // (chat_plan_item_share, a fresh message id; published live when the chat is
 // not the open one, added to the open thread when it is). A team-only idea
 // into a chat with the client in it is refused (idea_not_shared_with_client):
-// "Show this idea to the client?" offers Cancel, Send in Team instead (the
-// picker again, chats known to have a client left out) and Show and send
-// (bank_idea_set show_to_client true keeping its other flags, then the share
-// again with the same message id). Works outside a chat (the Plan tab, the
-// bank idea route): the open-chat parts are optional.
+// a bank idea gets "Show this idea to the client?" (Cancel, Send in Team
+// instead: the picker again, chats known to have a client left out; Show and
+// send: bank_idea_set show_to_client true keeping its other flags, then the
+// share again with the same message id). An idea inside a Draft plan gets the
+// plan path instead: "Open this plan for approvers?" (plan_share_with_client,
+// then the share again); bank_idea_set is never called for a planned idea.
+// Works outside a chat (the Plan tab, the bank idea route): the open-chat
+// parts are optional.
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
-import { bankIdeaSet, chatPlanItemShare, type Result } from '@srtdio/rpc';
+import { bankIdeaSet, chatPlanItemShare, planShareWithClient, type Result } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { useToast } from '@/components/ui/toast';
 import { usePlanCards } from '@/components/chat/PlanCardsProvider';
+import { PlanOpenSendSheet } from '@/components/chat/PlanOpenSendSheet';
 import { chatPickList, livePublishFor } from '@/components/chat/PlanCard';
 import { forwardedToast, summaryHasClient } from '@/components/chat/plan-card';
 import { conversationPickerBody, type LoadState } from '@/components/pages/pcs/ConversationPicker';
@@ -37,6 +41,35 @@ export interface IdeaShareTarget {
   commentCount: number;
   /** The idea's other flags, kept by Show and send; read on that tap when absent. */
   flags?: { archived: boolean; starred: boolean };
+  /** The plan the idea sits in (a planned concept); null or absent for a bank idea. */
+  plan?: { id: string; title: string } | null;
+}
+
+/** Which sheet a refused share opens: the plan path for a planned idea, else Show to client. Pure. */
+export function refusedPath(idea: Pick<IdeaShareTarget, 'plan'>): 'open-plan' | 'show-idea' {
+  return idea.plan !== undefined && idea.plan !== null ? 'open-plan' : 'show-idea';
+}
+
+/**
+ * Open and send (an idea inside a Draft plan): plan_share_with_client, then
+ * the share again with the same message id. Never calls bank_idea_set.
+ * Stops at the first failure and names its step. Never throws.
+ */
+export async function openPlanThenShareIdea(deps: {
+  openPlan: () => Promise<Result<unknown>>;
+  share: () => Promise<Result<ChatMessageRow>>;
+}): Promise<
+  { ok: true; row: ChatMessageRow } | { ok: false; step: 'open' | 'send'; message: string }
+> {
+  try {
+    const opened = await deps.openPlan();
+    if (!opened.ok) return { ok: false, step: 'open', message: opened.error.message };
+    const shared = await deps.share();
+    if (!shared.ok) return { ok: false, step: 'send', message: shared.error.message };
+    return { ok: true, row: shared.data };
+  } catch (error) {
+    return { ok: false, step: 'send', message: String(error) };
+  }
 }
 
 export const IDEA_SHOW_TITLE = 'Show this idea to the client?';
@@ -161,6 +194,12 @@ function useOptionalChatClient(): unknown {
 type Step =
   | { kind: 'pick'; teamOnly: boolean; skip: string | null }
   | { kind: 'ask'; channel: ChannelSummary; messageId: string }
+  | {
+      kind: 'open';
+      channel: ChannelSummary;
+      messageId: string;
+      plan: { id: string; title: string };
+    }
   | null;
 
 export function IdeaShareFlow(props: {
@@ -237,7 +276,12 @@ export function IdeaShareFlow(props: {
       return;
     }
     if (isIdeaNotSharedWithClient(result.error.message)) {
-      setStep({ kind: 'ask', channel, messageId });
+      const plan = idea.plan ?? null;
+      setStep(
+        refusedPath(idea) === 'open-plan' && plan !== null
+          ? { kind: 'open', channel, messageId, plan }
+          : { kind: 'ask', channel, messageId },
+      );
       return;
     }
     logger.warn('chat: idea share failed', {
@@ -281,12 +325,39 @@ export function IdeaShareFlow(props: {
     landed(channel, result.row);
   }
 
+  async function openAndSend(
+    channel: ChannelSummary,
+    messageId: string,
+    plan: { id: string; title: string },
+  ): Promise<void> {
+    if (idea === null || busy) return;
+    setBusy(true);
+    const result = await openPlanThenShareIdea({
+      openPlan: () =>
+        planShareWithClient(supabase, { p_plan_id: plan.id, p_trace_id: generateTraceId() }),
+      share: () => shareIdea({ messageId, channelId: channel.channelId, itemId: idea.id }),
+    });
+    setBusy(false);
+    if (!result.ok) {
+      toast.show({
+        title: errorText(
+          result.step === 'open' ? 'open the plan for approvers' : 'send it',
+          result.message,
+        ),
+        tone: 'error',
+      });
+      return;
+    }
+    landed(channel, result.row);
+  }
+
   if (idea === null) return null;
   const channels =
     load.status === 'ready' && step?.kind === 'pick'
       ? ideaPickChannels(load.channels, step.teamOnly, step.skip)
       : [];
   const ask = step?.kind === 'ask' ? step : null;
+  const openStep = step?.kind === 'open' ? step : null;
   return (
     <>
       <Sheet open={step?.kind === 'pick'} onClose={close} title="Send to chat">
@@ -344,6 +415,24 @@ export function IdeaShareFlow(props: {
           {ask !== null ? ideaShowLine(ask.channel.title, idea.commentCount) : ''}
         </p>
       </Sheet>
+      <PlanOpenSendSheet
+        ask={
+          openStep !== null
+            ? {
+                planId: openStep.plan.id,
+                planTitle: openStep.plan.title,
+                channelId: openStep.channel.channelId,
+                chatName: openStep.channel.title,
+              }
+            : null
+        }
+        busy={busy}
+        onClose={close}
+        onOpenAndSend={() => {
+          if (openStep !== null)
+            void openAndSend(openStep.channel, openStep.messageId, openStep.plan);
+        }}
+      />
     </>
   );
 }

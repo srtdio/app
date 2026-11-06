@@ -2806,7 +2806,11 @@ export interface BankTrace {
   itemId: string;
   planId: string;
   title: string | null;
-  /** The plan day the line sits on: the move's day (workspace zone), held inside the plan's range. */
+  /**
+   * The plan day the line sits on: the day the concept sat on (the audit
+   * payload's target_date); an older row without it falls back to the move's
+   * day (workspace zone), held inside the plan's range.
+   */
   day: string;
   movedAt: string;
 }
@@ -2815,6 +2819,13 @@ function fromPlanOf(payload: unknown): string | null {
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
   const value = (payload as Record<string, unknown>).from_plan_id;
   return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/** The day the concept sat on when it left (payload target_date), or null. Pure. */
+export function traceDayOf(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
+  const value = (payload as Record<string, unknown>).target_date;
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
 }
 
 /** A day held inside [start, end]. Pure. */
@@ -2828,8 +2839,9 @@ function clampDay(day: string, start: string, end: string): string {
  * The traces per plan: the newest move per item (a later move of the same
  * item wins wherever it went), kept only for the plans asked for, dropped when
  * the item is gone (deleted or unreadable) or back in the plan it left. The
- * audit row carries no day, so the line sits on the move's day in the
- * workspace zone, held inside the plan's range. Newest first per plan. Pure.
+ * line sits on the day the concept sat on (payload target_date); an older
+ * row without one falls back to the move's day in the workspace zone, held
+ * inside the plan's range. Newest first per plan. Pure.
  */
 export function reduceBankTraces(
   rows: readonly TraceAuditRow[],
@@ -2853,14 +2865,15 @@ export function reduceBankTraces(
     const item = itemById.get(itemId);
     if (plan === undefined || item === undefined) continue;
     if (item.plan_id === row.planId) continue;
-    const moved = civilDayOf(row.created_at, timeZone);
+    const sat = traceDayOf(row.payload);
+    const moved = sat ?? civilDayOf(row.created_at, timeZone);
     if (moved === null) continue;
     const list = out.get(row.planId) ?? [];
     list.push({
       itemId,
       planId: row.planId,
       title: item.title,
-      day: clampDay(moved, plan.starts_on, plan.ends_on),
+      day: sat ?? clampDay(moved, plan.starts_on, plan.ends_on),
       movedAt: row.created_at,
     });
     out.set(row.planId, list);
