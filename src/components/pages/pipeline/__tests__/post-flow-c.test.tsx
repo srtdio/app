@@ -81,6 +81,7 @@ import { reasonFailureTitle } from '@/components/pages/pcs/stage-move-commit';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { filterByFields, filterByWindow, isUndated, sortPosts } from '@/lib/list-sort';
 import type { UndoableAction } from '@/lib/use-undoable-action';
+import { formatWhen } from '@/lib/time';
 import type { PresignCache } from '@/lib/asset-presign';
 import { stageTransition } from '@srtdio/posts';
 import type { Client, DomainErrorCode, PipelinePost, Result, Stage } from '@srtdio/posts';
@@ -134,6 +135,9 @@ function text(node: ReactNode): string {
 
 const T0 = '2026-01-01T00:00:00Z';
 const TWO_HOURS_LATER = new Date('2026-01-01T02:00:00Z');
+// The status time is formatWhen on the device clock (the clock time, since T0
+// and TWO_HOURS_LATER fall on one day in every zone but a few near midnight).
+const WHEN = formatWhen(T0, TWO_HOURS_LATER);
 
 describe('post flow C: Pipeline card', () => {
   it('fix 1: one fixed cover box per workspace platform (4:5 on Instagram), none for a text-only post', () => {
@@ -168,17 +172,18 @@ describe('post flow C: Pipeline card', () => {
     });
     expect(reviewStatus('review', T0, viewer('agency', ['Meera']), TWO_HOURS_LATER)).toEqual({
       tone: 'with',
-      text: 'With Meera · 2 hours ago',
-      ago: '2 hours ago',
+      text: `With Meera · ${WHEN}`,
+      when: WHEN,
     });
     for (const role of ['owner', 'admin', 'agency']) {
       expect(reviewStatus('review', T0, viewer(role, ['Meera', 'Arjun']), TWO_HOURS_LATER)).toEqual(
-        { tone: 'with', text: 'With approvers · 2 hours ago', ago: '2 hours ago' },
+        { tone: 'with', text: `With approvers · ${WHEN}`, when: WHEN },
       );
     }
     expect(reviewStatus('review', T0, viewer('owner'), TWO_HOURS_LATER)?.text).toBe(
-      'With approvers · 2 hours ago',
+      `With approvers · ${WHEN}`,
     );
+    expect(WHEN).not.toMatch(/ago|just now/);
     // Only Review has a status line; an unknown role gets none.
     expect(reviewStatus('approved', T0, viewer('client'), TWO_HOURS_LATER)).toBeNull();
     expect(reviewStatus('draft', T0, viewer('agency', ['Meera']), TWO_HOURS_LATER)).toBeNull();
@@ -202,9 +207,9 @@ describe('post flow C: Pipeline card', () => {
     });
     expect(theirs).toContain('data-post-card-status="with"');
     // The line shows the time only; the full phrase is its title and aria-label.
-    expect(theirs).toContain('aria-label="With Meera · 2 hours ago"');
-    expect(theirs).toContain('title="With Meera · 2 hours ago"');
-    expect(theirs).toContain('>2 hours ago</span>');
+    expect(theirs).toContain(`aria-label="With Meera · ${WHEN}"`);
+    expect(theirs).toContain(`title="With Meera · ${WHEN}"`);
+    expect(theirs).toContain(`>${WHEN}</span>`);
     const draft = card({
       post: x5Post({ stage: 'draft' }),
       viewer: viewer('agency'),

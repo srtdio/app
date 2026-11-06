@@ -374,17 +374,18 @@ describe('E: Pipeline card polish', () => {
     expect(upcoming).not.toContain('text-bad');
   });
 
-  it('the review status line shows the dot and "4 months ago" only; the full phrase is its title and aria-label', () => {
+  it('the review status line shows the dot and "15 Jun" (formatWhen) only; the full phrase is its title and aria-label', () => {
     const out = renderWith({
       post: makePost({ stage: 'review', stage_entered_at: '2026-06-15T12:00:00Z' }),
       viewer: { role: 'agency', approverFirstNames: ['Meera', 'Arjun'] },
       now: NOW,
     });
     const line = /<div[^>]*data-post-card-status="with"[^>]*>(.*?)<\/div>/.exec(out);
-    expect(line?.[0]).toContain('title="With approvers · 4 months ago"');
-    expect(line?.[0]).toContain('aria-label="With approvers · 4 months ago"');
+    expect(line?.[0]).toContain('title="With approvers · 15 Jun"');
+    expect(line?.[0]).toContain('aria-label="With approvers · 15 Jun"');
     expect(line?.[1]).toContain('bg-stage-review');
-    expect(line?.[1]).toContain('>4 months ago</span>');
+    expect(line?.[1]).toContain('>15 Jun</span>');
+    expect(line?.[1]).not.toContain('ago');
     expect(line?.[1]).not.toContain('With approvers');
   });
 
