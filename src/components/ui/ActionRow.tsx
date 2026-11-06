@@ -51,9 +51,7 @@ export function ActionRow({
       </span>
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-base font-medium">{label}</span>
-        {sub !== undefined ? (
-          <span className="truncate text-sm text-fg-3">{sub}</span>
-        ) : null}
+        {sub !== undefined ? <span className="truncate text-sm text-fg-3">{sub}</span> : null}
       </span>
       {chevron ? (
         <span className="ml-auto shrink-0 text-fg-3">

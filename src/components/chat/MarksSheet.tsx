@@ -160,9 +160,7 @@ export function OpenPostsList(props: OpenPostsSection): ReactElement | null {
   if (props.posts === null || props.posts.length === 0) return null;
   return (
     <section data-open-posts="" className="flex flex-col gap-1">
-      <h3 className={`px-2 ${TEXT_ROLE.section}`}>
-        {props.heading}
-      </h3>
+      <h3 className={`px-2 ${TEXT_ROLE.section}`}>{props.heading}</h3>
       <ul className="flex max-h-[40dvh] flex-col overflow-y-auto">
         {props.posts.map((post) => (
           <OpenPostSheetRow

@@ -95,9 +95,7 @@ export function PlanPickerSheet(props: {
           NO_TOUCH_SELECT,
         )}
       >
-        <p className="px-4 pb-1 pt-3 text-sm text-fg-3">
-          Upcoming plans in {props.workspaceName}
-        </p>
+        <p className="px-4 pb-1 pt-3 text-sm text-fg-3">Upcoming plans in {props.workspaceName}</p>
         <div className={BODY_BOX}>
           {read.status === 'loading' ? (
             <BoxSkeleton lit="flat" label="Loading plans" className="flex flex-col gap-2 px-4">

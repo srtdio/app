@@ -214,10 +214,7 @@ export function FileTileBody(props: FileTileBodyProps): ReactElement {
         </span>
         <span
           data-file-meta=""
-          className={cn(
-            'truncate text-xs text-fg-3',
-            card && 'flex h-5 items-center pr-8',
-          )}
+          className={cn('truncate text-xs text-fg-3', card && 'flex h-5 items-center pr-8')}
         >
           {props.meta.map((part, i) => (
             <span key={part.text}>

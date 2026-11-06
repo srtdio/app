@@ -239,12 +239,7 @@ export function CardEyebrow(props: {
   className: string;
 }): ReactElement {
   return (
-    <span
-      className={cn(
-        `flex h-4 items-center ${SECTION_LABEL_INK}`,
-        props.className,
-      )}
-    >
+    <span className={cn(`flex h-4 items-center ${SECTION_LABEL_INK}`, props.className)}>
       {props.icon}
       {props.label}
     </span>

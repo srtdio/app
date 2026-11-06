@@ -332,7 +332,8 @@ function mentionNodes(text: string, ownTone: boolean, workspaceId: string | null
       </span>
     );
     // "@all" names no one; every person's pill opens the person card.
-    if (segment.userId.toLowerCase() === ALL_MENTION) return <Fragment key={`part-${i}`}>{pill}</Fragment>;
+    if (segment.userId.toLowerCase() === ALL_MENTION)
+      return <Fragment key={`part-${i}`}>{pill}</Fragment>;
     return (
       <PersonTrigger
         key={`part-${i}`}

@@ -231,7 +231,11 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
         <ul data-section="messages" className="flex flex-col">
           {loading ? (
             Array.from({ length: LOADING_ROWS }, (_, i) => (
-              <li key={`bone-${i}`} data-search-skeleton="" className="flex items-center gap-3 px-2 py-2">
+              <li
+                key={`bone-${i}`}
+                data-search-skeleton=""
+                className="flex items-center gap-3 px-2 py-2"
+              >
                 <Bone lit="lit-avatar" as="div" className="h-12 w-12 shrink-0 rounded-full" />
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <Bone lit="flat" as="div" className="h-3 w-1/3 rounded" />

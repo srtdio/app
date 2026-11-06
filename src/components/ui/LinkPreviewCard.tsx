@@ -202,11 +202,7 @@ function TallBody(props: {
   return (
     <div className="flex min-w-0 flex-col gap-0.5 px-3 pb-2 pt-2">
       <div className="flex h-4 min-w-0 items-center gap-2 text-sm text-fg-3">
-        <LetterTile
-          letter={props.letter}
-          tone={props.tone}
-          className="size-4 rounded text-xs"
-        />
+        <LetterTile letter={props.letter} tone={props.tone} className="size-4 rounded text-xs" />
         <span className="min-w-0 truncate">{props.site}</span>
       </div>
       <div className="line-clamp-2 h-10 text-base font-medium">{props.title}</div>
@@ -483,11 +479,7 @@ function Draft(props: {
           className="h-12 w-12 shrink-0 rounded-lg bg-panel-3 object-cover"
         />
       ) : (
-        <LetterTile
-          letter={preview.letter}
-          tone="plain"
-          className="h-12 w-12 rounded-lg text-lg"
-        />
+        <LetterTile letter={preview.letter} tone="plain" className="h-12 w-12 rounded-lg text-lg" />
       );
     const titled = preview.type === 'full' || preview.type === 'text';
     lines = (
