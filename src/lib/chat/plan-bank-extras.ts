@@ -218,3 +218,31 @@ export function moveToBankAction(deps: MoveToBankDeps): UndoableAction {
     },
   };
 }
+
+/**
+ * A concept leaving its plan for the bank from the item screen: the Plan
+ * screen holding it hides the row at once (`back` false) and brings it back
+ * on Undo or a failed write (`back` true). Window event; no read.
+ */
+export const PLAN_ROW_TO_BANK_EVENT = 'sorted:plan-row-to-bank';
+
+export interface PlanRowToBankDetail {
+  itemId: string;
+  back: boolean;
+}
+
+export function dispatchRowToBank(target: Window, detail: PlanRowToBankDetail): void {
+  target.dispatchEvent(new CustomEvent<PlanRowToBankDetail>(PLAN_ROW_TO_BANK_EVENT, { detail }));
+}
+
+/** Apply one row-to-bank event to the hidden set. Pure. */
+export function withRowToBank(
+  hidden: ReadonlySet<string>,
+  detail: PlanRowToBankDetail,
+): ReadonlySet<string> {
+  if (detail.back ? !hidden.has(detail.itemId) : hidden.has(detail.itemId)) return hidden;
+  const next = new Set(hidden);
+  if (detail.back) next.delete(detail.itemId);
+  else next.add(detail.itemId);
+  return next;
+}

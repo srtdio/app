@@ -284,9 +284,7 @@ export function BucketChips(props: {
     if (inPlace !== null || backTo.current === null) return;
     const id = backTo.current;
     backTo.current = null;
-    chipsRef.current
-      ?.querySelector<HTMLElement>(`[data-bank-bucket="${CSS.escape(id)}"]`)
-      ?.focus();
+    chipsRef.current?.querySelector<HTMLElement>(`[data-bank-bucket="${CSS.escape(id)}"]`)?.focus();
   }, [inPlace]);
   if (inPlace !== null) {
     return (

@@ -93,7 +93,10 @@ describe('moved-to-bank traces', () => {
 
   it('a move outside the range sits on the nearest plan day', () => {
     const out = reduceBankTraces(
-      [row('late', '2026-11-20T10:00:00Z', 'plan-a'), row('early', '2026-10-01T10:00:00Z', 'plan-a')],
+      [
+        row('late', '2026-11-20T10:00:00Z', 'plan-a'),
+        row('early', '2026-10-01T10:00:00Z', 'plan-a'),
+      ],
       [item('late', null), item('early', null)],
       [plan],
       'UTC',
@@ -105,7 +108,11 @@ describe('moved-to-bank traces', () => {
   it('rows without an item id or a from_plan_id are skipped', () => {
     const out = reduceBankTraces(
       [
-        { entity_id: null, created_at: '2026-11-03T10:00:00Z', payload: { from_plan_id: 'plan-a' } },
+        {
+          entity_id: null,
+          created_at: '2026-11-03T10:00:00Z',
+          payload: { from_plan_id: 'plan-a' },
+        },
         { entity_id: 'x', created_at: '2026-11-03T10:00:00Z', payload: null },
       ],
       [item('x', null)],

@@ -106,7 +106,10 @@ describe('Move to bank behind Undo', () => {
   });
 
   it('post_approved: the row comes back with the locked copy', async () => {
-    rpc.toBank.mockResolvedValue({ ok: false, error: { code: 'unknown', message: 'post_approved' } });
+    rpc.toBank.mockResolvedValue({
+      ok: false,
+      error: { code: 'unknown', message: 'post_approved' },
+    });
     const d = deps();
     act(() => api?.run(moveToBankAction(d)));
     await act(async () => {

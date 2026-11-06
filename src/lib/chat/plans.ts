@@ -2681,7 +2681,9 @@ interface EmbeddedBucket {
   position?: number | null;
 }
 
-function oneBucket(value: EmbeddedBucket | EmbeddedBucket[] | null | undefined): EmbeddedBucket | null {
+function oneBucket(
+  value: EmbeddedBucket | EmbeddedBucket[] | null | undefined,
+): EmbeddedBucket | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
 }
@@ -2863,7 +2865,8 @@ export function reduceBankTraces(
     });
     out.set(row.planId, list);
   }
-  for (const list of out.values()) list.sort((a, b) => Date.parse(b.movedAt) - Date.parse(a.movedAt));
+  for (const list of out.values())
+    list.sort((a, b) => Date.parse(b.movedAt) - Date.parse(a.movedAt));
   return out;
 }
 

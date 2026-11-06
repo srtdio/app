@@ -85,6 +85,7 @@ import {
 } from '@/components/pages/plan-tab/use-bank-data';
 import { createBucket, type BucketOption } from '@/lib/buckets';
 import { MOVED_TO_BANK_LABEL, moveToBankError } from '@/lib/chat/bank-plan-copy';
+import { dispatchRowToBank } from '@/lib/chat/plan-bank-extras';
 import {
   ADD_BUCKET_LABEL,
   BUCKETS_LABEL,
@@ -1471,8 +1472,11 @@ export function PlanItemScreen(props: {
     if (!planActions || !concept) return;
     const forItem = props.item.id;
     const planId = bundle.plan.id;
+    // The Plan screen's row leaves at once; Undo or a failure brings it back.
+    dispatchRowToBank(window, { itemId: forItem, back: false });
     runDetachedUndo(toast.show, {
       label: MOVED_TO_BANK_LABEL,
+      revert: () => dispatchRowToBank(window, { itemId: forItem, back: true }),
       commit: async () => {
         const traceId = generateTraceId();
         const res = await planItemToBank(supabase, { p_item_id: forItem, p_trace_id: traceId });
@@ -1482,6 +1486,7 @@ export function PlanItemScreen(props: {
             item_id: forItem,
             error: res.error.message,
           });
+          dispatchRowToBank(window, { itemId: forItem, back: true });
           toast.show({ title: moveToBankError(res.error.message), tone: 'error' });
           return;
         }

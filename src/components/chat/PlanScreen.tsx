@@ -18,9 +18,15 @@
 // opens the Item screen.
 //
 // No Edit mode: every change saves itself. Creators get the title menu
-// (Rename, Change dates, Delete plan), Add under each day and in the header,
-// and a ⋯ menu on each row (Open, Move to another day, Remove from plan;
-// long-press on touch and right-click on laptop open it too). A move or a
+// (Rename, Change dates, Delete plan), Add under each day and in the header
+// (New concept, Pick a post, From bank), and a ⋯ menu on each row (Open, Move
+// to another day, Move to bank on a concept, Remove from plan; long-press on
+// touch and right-click on laptop open it too). Move to bank: the row closes
+// upward at once (itemOut); plan_item_to_bank goes when its Undo strip ends.
+// After the list paints (never before): the rows' buckets ("{format} ·
+// {bucket, bucket}", one plan_item_buckets and one posts read) and, for the
+// agency, where a concept left this plan ("{title} moved to bank", one
+// audit_log and one plan_items read). A move or a
 // remove paints at once and is written when its Undo strip ends (one
 // plan_save with that one op); Undo takes it back and nothing is written.
 // Moving an Open plan's client-approved slot still asks "Keep the approval?"
@@ -49,9 +55,12 @@ import { PlanOpenSendSheet, type PlanOpenSendAsk } from '@/components/chat/PlanO
 import { BankPickSheet, fromBankDay } from '@/components/pages/plan-tab/BankPickSheet';
 import { movedToBankLine } from '@/lib/chat/bank-plan-copy';
 import {
+  PLAN_ROW_TO_BANK_EVENT,
   moveToBankAction,
   useBankTraces,
   usePlanRowBuckets,
+  withRowToBank,
+  type PlanRowToBankDetail,
 } from '@/lib/chat/plan-bank-extras';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -1123,6 +1132,15 @@ export function PlanScreen(props: {
   const [datesOpen, setDatesOpen] = useState(false);
   // Move to bank: rows that left at once (itemOut), their write behind Undo.
   const [bankHidden, setBankHidden] = useState<ReadonlySet<string>>(new Set());
+  // Move to bank from the item screen: the row leaves here at once too.
+  useEffect(() => {
+    const on = (event: Event): void => {
+      const detail = (event as CustomEvent<PlanRowToBankDetail>).detail;
+      if (detail !== undefined) setBankHidden((prev) => withRowToBank(prev, detail));
+    };
+    window.addEventListener(PLAN_ROW_TO_BANK_EVENT, on);
+    return () => window.removeEventListener(PLAN_ROW_TO_BANK_EVENT, on);
+  }, []);
   // The Open and send sheet (a Draft plan refused for a chat with approvers).
   const [openSendAsk, setOpenSendAsk] = useState<PlanOpenSendAsk | null>(null);
   useHistoryStep(
@@ -1313,10 +1331,7 @@ export function PlanScreen(props: {
     enabled: props.open && shownBundle !== null,
     bundle: shownBundle,
   });
-  const tracePlans = useMemo(
-    () => (shownBundle !== null ? [shownBundle.plan] : []),
-    [shownBundle],
-  );
+  const tracePlans = useMemo(() => (shownBundle !== null ? [shownBundle.plan] : []), [shownBundle]);
   const traces = useBankTraces({
     client: supabase,
     enabled: props.open && side === 'agency' && shownBundle !== null,
@@ -1326,10 +1341,19 @@ export function PlanScreen(props: {
   });
   const dayTraces = useMemo(() => {
     const live = new Set((bundle?.items ?? []).map((i) => i.id));
-    return tracesByDay(
-      (traces.get(planId) ?? []).filter((t) => !live.has(t.itemId) && !bankHidden.has(t.itemId)),
-    );
-  }, [traces, planId, bundle, bankHidden]);
+    return tracesByDay((traces.get(planId) ?? []).filter((t) => !live.has(t.itemId)));
+  }, [traces, planId, bundle]);
+  // A moved row stays hidden until the re-read no longer holds it, then the
+  // id is let go (so the idea can come back into this plan later).
+  useEffect(() => {
+    if (shownBundle === null) return;
+    setBankHidden((prev) => {
+      if (prev.size === 0) return prev;
+      const present = new Set(shownBundle.items.map((i) => i.id));
+      const next = new Set([...prev].filter((id) => present.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [shownBundle]);
   // Delete is for the plan's creator or a workspace owner/admin: one role read
   // per open, agency side only.
   const [role, setRole] = useState<string | null>(null);
@@ -1704,7 +1728,10 @@ export function PlanScreen(props: {
     const row =
       bodyRef.current?.querySelector<HTMLElement>(`[data-plan-row-wrap="${CSS.escape(id)}"]`) ??
       null;
+    // Undo while the row is still closing: it never hides.
+    let back = false;
     const show = (): void => {
+      back = true;
       for (const move of row?.getAnimations() ?? []) move.cancel();
       setBankHidden((prev) => {
         if (!prev.has(id)) return prev;
@@ -1719,7 +1746,9 @@ export function PlanScreen(props: {
         itemId: id,
         hide: () => {
           const out = itemOut(row);
-          const hide = (): void => setBankHidden((prev) => new Set(prev).add(id));
+          const hide = (): void => {
+            if (!back) setBankHidden((prev) => new Set(prev).add(id));
+          };
           if (out.instant) hide();
           else void out.done.then(hide);
         },

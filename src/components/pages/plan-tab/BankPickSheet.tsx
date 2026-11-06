@@ -47,12 +47,7 @@ import {
   plannedToast,
 } from './bank-parts';
 import { PlanTabLoadMore } from './PlanTabList';
-import {
-  makeWeekPlan,
-  placeBankIdea,
-  readPlansForPlanIt,
-  unplanBankIdea,
-} from './use-bank-data';
+import { makeWeekPlan, placeBankIdea, readPlansForPlanIt, unplanBankIdea } from './use-bank-data';
 
 /** The sheet's title. */
 export const FROM_BANK_LABEL = 'From bank';

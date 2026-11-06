@@ -417,6 +417,76 @@ function seedIdeaCard(network: HarnessNetwork): void {
   });
 }
 
+const TRACE_ITEM = '0190d500-0000-7000-8000-00000000e6d1';
+const FROM_BANK_IDEAS = [
+  '0190d500-0000-7000-8000-00000000e6e1',
+  '0190d500-0000-7000-8000-00000000e6e2',
+] as const;
+
+/** A bank idea (no plan) for the visual fixtures. */
+function bankIdeaRow(id: string, title: string, extra: Partial<Row> = {}): Row {
+  return {
+    id,
+    workspace_id: WORKSPACE_ID,
+    plan_id: null,
+    kind: 'concept',
+    position: 0,
+    title,
+    description: null,
+    post_id: null,
+    target_date: null,
+    linked_post_id: null,
+    created_by: ME,
+    created_at: new Date(NOW - 3 * 86_400_000).toISOString(),
+    updated_at: new Date(NOW - 86_400_000).toISOString(),
+    last_active_at: new Date(NOW - 86_400_000).toISOString(),
+    show_to_client: false,
+    archived_at: null,
+    starred_at: null,
+    came_from_plan_title: null,
+    deleted_at: null,
+    ...extra,
+  };
+}
+
+/**
+ * A concept that left `planId` for the bank this morning: the idea row (no
+ * plan) and plan_item_to_bank's audit row. The flat payload key stands in for
+ * PostgREST's `payload->>from_plan_id` filter in the harness.
+ */
+function seedTrace(network: HarnessNetwork, planId: string, title: string): void {
+  const t = network.world.tables;
+  (t.plan_items ??= []).push(bankIdeaRow(TRACE_ITEM, title, { came_from_plan_title: 'Plan' }));
+  (t.audit_log ??= []).push({
+    id: '0190d500-0000-7000-8000-00000000e6d2',
+    workspace_id: WORKSPACE_ID,
+    action: 'plan_item_to_bank',
+    entity_type: 'plan_item',
+    entity_id: TRACE_ITEM,
+    outcome: 'success',
+    created_at: new Date(NOW - 60 * 60_000).toISOString(),
+    payload: { from_plan_id: planId },
+    'payload->>from_plan_id': planId,
+  });
+}
+
+/** The chat plan plus one concept moved to the bank from it. */
+function seedChatPlanTrace(network: HarnessNetwork): void {
+  seedChatPlan(network);
+  seedTrace(network, PLAN_ID, 'Monsoon teaser');
+}
+
+/** The chat plan plus two bank ideas (one starred) for From bank. */
+function seedChatPlanBank(network: HarnessNetwork): void {
+  seedChatPlan(network);
+  (network.world.tables.plan_items ??= []).push(
+    bankIdeaRow(FROM_BANK_IDEAS[0], 'Founder story reel', {
+      starred_at: new Date(NOW - 86_400_000).toISOString(),
+    }),
+    bankIdeaRow(FROM_BANK_IDEAS[1], 'Diwali gifting guide'),
+  );
+}
+
 /** A team (Draft) plan carded into the group by ME, to forward into the client DM. */
 function seedDraftPlanCard(network: HarnessNetwork): void {
   seedTeamAndHiddenPlans(network.world, { channelId: GROUP_CHANNEL, sender: ME, now: NOW });
@@ -455,8 +525,18 @@ function seedChatPlan(network: HarnessNetwork): void {
     },
   );
   (network.world.tables.plan_item_buckets ??= []).push(
-    { item_id: PLAN_CONCEPT_ITEM, bucket_id: CHAT_PLAN_BUCKETS[0], workspace_id: WORKSPACE_ID },
-    { item_id: PLAN_CONCEPT_ITEM, bucket_id: CHAT_PLAN_BUCKETS[1], workspace_id: WORKSPACE_ID },
+    {
+      item_id: PLAN_CONCEPT_ITEM,
+      bucket_id: CHAT_PLAN_BUCKETS[0],
+      workspace_id: WORKSPACE_ID,
+      workspace_buckets: { name: 'Product', position: 1 },
+    },
+    {
+      item_id: PLAN_CONCEPT_ITEM,
+      bucket_id: CHAT_PLAN_BUCKETS[1],
+      workspace_id: WORKSPACE_ID,
+      workspace_buckets: { name: 'Festive', position: 2 },
+    },
   );
   // The concept files read embeds the version and the asset (one select), so
   // the item screen's tile shows the file's name under it.
@@ -1449,6 +1529,50 @@ const SCREENS: Screen[] = [
     extra: seedChatPlan,
     url: '/chat',
     steps: openChatPlan,
+  },
+  {
+    // A concept moved to the bank leaves a quiet line on its day (agency).
+    name: 'plan-screen-trace',
+    seed: creator,
+    extra: seedChatPlanTrace,
+    url: '/chat',
+    steps: async (page) => {
+      await openChatPlan(page);
+      const trace = page.locator(`[data-plan-page="plan"] [data-plan-trace="${TRACE_ITEM}"]`);
+      await waitFor([trace], 'trace line');
+      await trace.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // The Plan screen's Add: From bank opens the bank picker (starred first).
+    name: 'plan-from-bank',
+    seed: creator,
+    extra: seedChatPlanBank,
+    url: '/chat',
+    steps: async (page) => {
+      await openChatPlan(page);
+      await tap([page.locator('[data-plan-add-header]')], 'Add');
+      await tap([page.locator('[data-plan-add-sheet]').getByText('From bank')], 'From bank');
+      await waitFor(
+        [page.locator(`[data-plan-from-bank-idea="${FROM_BANK_IDEAS[0]}"]`)],
+        'from bank list',
+      );
+    },
+  },
+  {
+    // Laptop month: the trace line in today's cell (dense, like item lines).
+    name: 'plan-tab-month-trace',
+    only: 'laptop',
+    seed: creator,
+    extra: (network) => {
+      seedTab(network);
+      seedTrace(network, TAB_SHARED_PLAN_ID, 'Monsoon teaser');
+    },
+    url: '/plan',
+    steps: async (page) => {
+      await waitFor([page.locator('[data-plan-tab-month]')], 'plan tab month');
+      await waitFor([page.locator(`[data-plan-tab-trace="${TRACE_ITEM}"]`)], 'month trace');
+    },
   },
   {
     name: 'plan-tab',
