@@ -191,7 +191,8 @@ describe('Item screen rules', () => {
     expect(src).toContain('<PostDetailPage');
     expect(src).toMatch(/postId=\{item\.post_id\}\s+embedded/);
     expect(src).toContain('onNavigateAway={props.onClose}');
-    expect(src).toContain('<IconMore');
+    // The ⋯ is ActionMenuTrigger (it owns IconMore and the trailing rule).
+    expect(src).toContain('<ActionMenuTrigger');
     expect(src).toContain('actionsOpen={props.open && moreOpen}');
     expect(src).toContain('onActionsOpenChange={setMoreOpen}');
     expect(src).toContain('onOpenInPipeline={() => {');
