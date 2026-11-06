@@ -87,7 +87,7 @@ describe('searchResultsView', () => {
     expect(html).toContain('Priya: ');
     expect(html).toContain('You: ');
     expect(html).toContain('<b data-search-match="" class="font-semibold text-fg">Shoot</b>');
-    expect(html).toContain('20/09/26');
+    expect(html).toContain('20 Sep');
     expect(html).toContain('Yesterday');
     // DM peer: no prefix before the snippet.
     expect(html).toMatch(

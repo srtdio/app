@@ -269,11 +269,12 @@ describe('searchDateLabel', () => {
   it('yesterday is "Yesterday"', () => {
     expect(searchDateLabel('2026-10-02T23:00:00Z', now, tz)).toBe('Yesterday');
   });
-  it('the last 7 days are the weekday', () => {
-    expect(searchDateLabel('2026-09-29T10:00:00Z', now, tz)).toBe('Tuesday');
+  it('2 to 6 days back is the short weekday', () => {
+    expect(searchDateLabel('2026-09-29T10:00:00Z', now, tz)).toBe('Tue');
   });
-  it('older is DD/MM/YY', () => {
-    expect(searchDateLabel('2026-09-20T10:00:00Z', now, tz)).toBe('20/09/26');
+  it('older is the day and month, the year only off the current year', () => {
+    expect(searchDateLabel('2026-09-20T10:00:00Z', now, tz)).toBe('20 Sep');
+    expect(searchDateLabel('2025-09-20T10:00:00Z', now, tz)).toBe('20 Sep 2025');
   });
 });
 
