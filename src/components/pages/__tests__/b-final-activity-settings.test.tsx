@@ -165,8 +165,9 @@ describe('Activity: the day line and the card trailing rule', () => {
     );
     expect(classOf(html, 'aria-label="Activity options"').split(' ')).toContain(TRAILING_PULL);
     expect(classOf(html, 'data-activity-menu=""')).not.toMatch(/-mr-/);
-    // The footer and the lead share the 16 inset (no 14px one-offs left).
-    expect(html).toContain('flex min-h-11 items-center gap-2 px-4');
+    // The ListCard body is the 16 inset (no 14px one-offs left).
+    expect(html).toContain('data-list-card=""');
+    expect(html).toMatch(/data-list-card-body="" class="[^"]*\bp-4\b/);
     expect(html).not.toContain('[14px]');
   });
 });
