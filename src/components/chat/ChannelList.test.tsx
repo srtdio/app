@@ -25,9 +25,9 @@ import { SectionHeader } from '@/components/shell/SectionHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { IconPlus } from '@/components/ui/icons';
-import { Row } from '@/components/ui/Row';
+import { ListCardBox } from '@/components/ui/ListCard';
 import type { ChannelSummary } from '@/lib/chat-reads';
-import { Bone } from '@/lib/motion';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 function summary(over: Partial<ChannelSummary>): ChannelSummary {
   return {
@@ -393,33 +393,29 @@ describe('load status', () => {
     expect(texts(tree)).not.toContain('Chats with your team show up here.');
   });
 
-  it('skeleton shapes are the real part (2 group Rows, 4 people Rows) drawn with Bones', () => {
+  it('skeleton shapes are the real part (2 group cards, 4 people cards): ListCardBox', () => {
     const shells = findAll(
       withStatus('loading'),
       (el) => (el.props as Record<string, unknown>)['data-skeleton-row'] !== undefined,
     );
     const kinds = shells.map((t) => (t.props as Record<string, unknown>)['data-skeleton-row']);
-    expect(kinds).toEqual(['row', 'row', 'row', 'row', 'row', 'row']);
-    for (const shell of shells) {
-      // The shell is the part it becomes, so swapping in the list shifts nothing.
-      const part = findAll(shell, (el) => el.type === Row);
-      expect(part).toHaveLength(1);
-      // Boxes sweep (motion Bone, in the part's slots); never a pulse or fade.
-      const slots = Object.values(part[0]!.props as Record<string, unknown>).filter(
-        (v): v is ReactElement => isElement(v as ReactNode),
-      );
-      const bones = slots.filter((el) => el.type === Bone);
-      expect(bones.length).toBeGreaterThan(0);
-      for (const bone of bones) {
-        expect((bone.props as { className?: string }).className ?? '').not.toContain(
-          'animate-pulse',
-        );
-      }
-      // The 32 avatar placeholder in the Row's leading column; rows on the 12 chat edge.
-      const lead = (part[0]!.props as { leading: ReactElement }).leading;
-      expect((lead.props as { className: string }).className).toContain('h-8 w-8');
-      expect((part[0]!.props as { gutter?: string }).gutter).toBe('chat');
-    }
+    expect(kinds).toEqual(['card', 'card', 'card', 'card', 'card', 'card']);
+    const boxes = shells.map((shell) => findAll(shell, (el) => el.type === ListCardBox));
+    for (const box of boxes) expect(box).toHaveLength(1);
+    // Groups are radius 8 picture boxes, people round, as the cards they become.
+    expect(boxes.map((b) => (b[0]!.props as { round?: boolean }).round === true)).toEqual([
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+    ]);
+    // Boxes sweep (motion Bone, in the card's slots); never a pulse, fade or spinner.
+    const html = renderToStaticMarkup(<ListCardBox />);
+    expect(html).toContain('data-list-card-box=""');
+    expect(html).toContain('h-18 w-18');
+    expect(html).not.toContain('animate-pulse');
     expect(
       findAll(withStatus('loading'), (el) =>
         /animate-spin|mv-spin/.test((el.props as { className?: string }).className ?? ''),

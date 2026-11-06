@@ -15,7 +15,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { channelListView } from '@/components/chat/ChannelList';
-import { formatChatTime } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import type { ConversationSummary } from '@/lib/chat/chat-store';
 
@@ -95,12 +95,12 @@ describe('chat list type roles', () => {
   });
 
   it('meta: the row time is the meta role (sm, mono, tabular); the preview is secondary', () => {
-    const time = formatChatTime(SENT, new Date(NOW), 'UTC');
+    const time = formatWhen(SENT, new Date(NOW), 'UTC');
     const [stamp] = paint(list([group]), 'span', time);
     expect(classes(stamp as Element)).toEqual(
       expect.arrayContaining(['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']),
     );
-    // Line 2 is a flex wrapper (preview + badge slot); the preview is its text span.
+    // Line 2 is the ListCard preview (secondary role, two lines).
     const preview = paint(list([group]), 'span', 'See you then').find((e) =>
       e.classList.contains('text-md'),
     );
