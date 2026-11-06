@@ -385,7 +385,7 @@ export function PostSheetDetails(props: {
         ) : null}
       </div>
       <dl className="flex flex-col text-base">
-        <div className="flex min-h-[36px] items-center justify-between gap-3 border-b border-border">
+        <div className="flex min-h-9 items-center justify-between gap-3 border-b border-border">
           <dt className="text-fg-3">Stage</dt>
           <dd>
             <Tag label={stageTagLabel(stage)} {...(isTagDot(stage) ? { dot: stage } : {})} />
@@ -395,7 +395,7 @@ export function PostSheetDetails(props: {
           <div
             key={row.key}
             data-sheet-row={row.key}
-            className="flex min-h-[36px] items-center justify-between gap-3 border-b border-border last:border-b-0"
+            className="flex min-h-9 items-center justify-between gap-3 border-b border-border last:border-b-0"
           >
             <dt className="shrink-0 text-fg-3">{row.label}</dt>
             <dd className="min-w-0 truncate text-right text-fg">{row.value}</dd>

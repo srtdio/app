@@ -72,7 +72,7 @@ export function PlanMoveSheet(props: {
                 disabled={props.busy}
                 onClick={() => props.onPick(d.day)}
                 className={cn(
-                  'flex min-h-[48px] items-center justify-between px-3 text-lg',
+                  'flex min-h-12 items-center justify-between px-3 text-lg',
                   current ? 'text-fg-3' : 'text-fg',
                 )}
               >

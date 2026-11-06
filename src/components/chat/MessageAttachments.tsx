@@ -402,7 +402,7 @@ export function albumGridClass(count: number): string {
  */
 export function albumTiles(count: number): AlbumTile[] {
   if (count <= 0) return [];
-  if (count === 1) return [{ index: 0, className: 'aspect-[4/3] max-h-[320px]', more: 0 }];
+  if (count === 1) return [{ index: 0, className: 'aspect-[4/3] max-h-80', more: 0 }];
   if (count === 2) {
     return [0, 1].map((index) => ({ index, className: 'aspect-square', more: 0 }));
   }
@@ -514,7 +514,7 @@ export function AlbumGrid({
       data-album={count}
       className={cn(
         albumGridClass(count),
-        'relative w-[320px] max-w-full gap-[2px] overflow-hidden',
+        'relative w-80 max-w-full gap-0.5 overflow-hidden',
         corners,
       )}
     >

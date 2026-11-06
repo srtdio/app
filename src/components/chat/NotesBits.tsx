@@ -20,7 +20,7 @@ import { avatarShapeClass, type AvatarRole } from '@/components/ui/Avatar';
 type NotesAvatarRole = Extract<AvatarRole, 'profile' | 'header' | 'row'>;
 
 const NOTES_AVATAR_SIZE: Record<NotesAvatarRole, string> = {
-  profile: 'h-[72px] w-[72px]',
+  profile: 'h-18 w-18',
   header: 'h-8 w-8',
   row: 'h-10 w-10',
 };

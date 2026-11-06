@@ -591,7 +591,7 @@ export function CommentLinkCard(props: { body: string; url?: string | null }): R
   // The row passes the url it already found for the body (one scan per row).
   const url = props.url !== undefined ? props.url : firstExternalUrl(props.body);
   return url !== null ? (
-    <LinkPreviewCard key={url} url={url} className="mt-1.5 w-full max-w-[360px]" />
+    <LinkPreviewCard key={url} url={url} className="mt-2 w-full max-w-sm" />
   ) : null;
 }
 
@@ -2429,7 +2429,7 @@ export function Comments({
           {formatRelative(comment.created_at)}
         </span>
         {opts.seq !== null ? (
-          <span data-checkpoint-seq="" className="whitespace-nowrap text-sm tabular-nums text-fg-3">
+          <span data-checkpoint-seq="" className="shrink-0 whitespace-nowrap text-sm tabular-nums text-fg-3">
             #{opts.seq}
           </span>
         ) : null}
@@ -2472,7 +2472,7 @@ export function Comments({
     return (
       <div
         data-comment-row={opts.reply ? 'reply' : 'root'}
-        className="flex min-w-0 items-start gap-2.5"
+        className="flex min-w-0 items-start gap-3"
       >
         <span className="flex shrink-0">
           {asPerson(
@@ -2491,10 +2491,10 @@ export function Comments({
             {opts.reply ? (
               <div className="min-w-0 flex-1">
                 {name}
-                <div className="flex flex-wrap items-center gap-x-1.5">{meta}</div>
+                <div className="flex flex-wrap items-center gap-x-2">{meta}</div>
               </div>
             ) : (
-              <div className="flex min-h-8 min-w-0 flex-1 flex-wrap items-center gap-x-1.5">
+              <div className="flex min-h-8 min-w-0 flex-1 flex-wrap items-center gap-x-2">
                 {name}
                 {meta}
               </div>
@@ -2514,7 +2514,7 @@ export function Comments({
               {comment.body.trim() !== '' ? (
                 <p
                   className={cn(
-                    'text-base leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]',
+                    'text-base whitespace-pre-wrap [overflow-wrap:anywhere]',
                     opts.muted === true ? 'text-fg-2' : 'text-fg',
                   )}
                 >

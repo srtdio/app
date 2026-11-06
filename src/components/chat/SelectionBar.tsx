@@ -59,7 +59,7 @@ export function SelectionHeader(props: {
         variant="link"
         data-selection-cancel=""
         onClick={props.onCancel}
-        className="min-w-[44px] shrink-0"
+        className="min-w-11 shrink-0"
       >
         Cancel
       </Button>
@@ -89,7 +89,7 @@ export function selectionHeaderSlots(props: { count: number; onCancel: () => voi
         variant="link"
         data-selection-cancel=""
         onClick={props.onCancel}
-        className="min-w-[44px] shrink-0"
+        className="min-w-11 shrink-0"
       >
         Cancel
       </Button>

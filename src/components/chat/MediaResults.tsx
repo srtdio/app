@@ -115,10 +115,10 @@ const LOADING_TILES = 12;
 const LOADING_ROWS = 3;
 
 /** The square grid: 4 across, 6 from 1180px, 2px gaps. */
-const GRID = 'grid grid-cols-4 gap-[2px] min-[1180px]:grid-cols-6';
+const GRID = 'grid grid-cols-4 gap-0.5 min-[1180px]:grid-cols-6';
 
 /** A list row: one 64px tap target, no text selection and no iOS callout on hold. */
-const ROW = cn('flex min-h-[64px] min-w-0 items-center gap-3 px-2 py-2', NO_TOUCH_SELECT);
+const ROW = cn('flex min-h-16 min-w-0 items-center gap-3 px-2 py-2', NO_TOUCH_SELECT);
 
 /** The 44px leading box of a file or link row (the chat info Files and Links rows). */
 const ROW_ICON =
@@ -479,7 +479,7 @@ function VoiceRowItem(props: {
       className={cn('flex min-w-0 flex-col gap-1 px-2 py-2', NO_TOUCH_SELECT)}
       onContextMenu={noCallout}
     >
-      <div className="flex min-h-[44px] min-w-0 items-center gap-3">
+      <div className="flex min-h-11 min-w-0 items-center gap-3">
         {item.senderId !== null ? (
           <PersonTrigger
             display="block"

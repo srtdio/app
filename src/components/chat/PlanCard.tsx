@@ -615,7 +615,7 @@ export function chatPickList(
   onPick: (channel: ChannelSummary) => void,
 ): ReactElement {
   return (
-    <div className="h-[288px] overflow-y-auto">
+    <div className="h-72 overflow-y-auto">
       <div className={cn('flex flex-col gap-1', NO_TOUCH_SELECT)}>
         {channels.map((channel) => (
           <PressableRow

@@ -445,7 +445,7 @@ export function StatusMarkRow(props: {
             aria-expanded={props.confirming}
             disabled={props.busy}
             onClick={props.onAsk}
-            className="min-w-[44px] shrink-0"
+            className="min-w-11 shrink-0"
           >
             <IconCheck size={ICON_SIZE.inline} />
             <span>{STAMP_WORD[mark.type]}</span>

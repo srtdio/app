@@ -153,7 +153,7 @@ export function PriorityChip(props: {
         disabled={props.disabled}
         onClick={() => setOpen((v) => !v)}
         onContextMenu={(e) => e.preventDefault()}
-        className={cn('flex min-w-[44px] shrink-0 items-center justify-center', NO_TOUCH_SELECT)}
+        className={cn('flex min-w-11 shrink-0 items-center justify-center', NO_TOUCH_SELECT)}
       >
         {chip}
       </PressableRow>
@@ -338,7 +338,7 @@ function TitleCell(props: {
             inputRef.current?.blur();
           }
         }}
-        className="min-h-[44px] min-w-0 flex-1 bg-transparent text-input font-medium text-fg focus:outline-none md:text-base"
+        className="min-h-11 min-w-0 flex-1 bg-transparent text-input font-medium text-fg focus:outline-none md:text-base"
       />
     );
   }
@@ -609,7 +609,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
         {...swipe.handlers}
         onClickCapture={swipe.onClickCapture}
         // Vertical scroll stays the list's; a horizontal move is the swipe's.
-        className="relative flex min-h-[44px] touch-pan-y touch-pinch-zoom items-start gap-1 pl-1 pr-1"
+        className="relative flex min-h-11 touch-pan-y touch-pinch-zoom items-start gap-1 pl-1 pr-1"
       >
         <IconButton
           buttonRef={tickRef}
@@ -626,7 +626,7 @@ export function TaskRow(props: TaskRowProps): ReactElement {
           <TaskGlyph status={props.done ? 'done' : 'todo'} />
         </IconButton>
         {props.queuedDelete ? (
-          <span className="min-h-[44px] min-w-0 flex-1 py-3 text-base font-medium text-fg-3 line-through">
+          <span className="min-h-11 min-w-0 flex-1 py-3 text-base font-medium text-fg-3 line-through">
             {props.title}
           </span>
         ) : (

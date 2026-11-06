@@ -1889,7 +1889,7 @@ export function PlanItemScreen(props: {
             {bucketsCard}
             {whoCanSeeCard}
             <Card data-plan-status="" className="self-stretch">
-              <div className="flex min-h-[28px] items-center justify-between gap-2">
+              <div className="flex min-h-7 items-center justify-between gap-2">
                 <span className="text-base text-fg-3">Date</span>
                 <span className="flex items-center gap-1">
                   <span
@@ -1919,7 +1919,7 @@ export function PlanItemScreen(props: {
               {(bank ? [] : statusRows(bundle, item, side, overrides)).map((row) => (
                 <div
                   key={row.label}
-                  className="flex min-h-[28px] items-center justify-between gap-2"
+                  className="flex min-h-7 items-center justify-between gap-2"
                 >
                   <span className="text-base text-fg-3">{row.label}</span>
                   <PlanPill
@@ -1975,7 +1975,7 @@ export function PlanItemScreen(props: {
             <section ref={commentsRef} className="flex flex-col gap-2.5" aria-label="Comments">
               <h4 className={SECTION_LABEL}>Comments</h4>
               {read.status === 'loading' ? (
-                <Bone lit="lit-card" as="div" className="h-[72px] rounded-xl" />
+                <Bone lit="lit-card" as="div" className="h-18 rounded-xl" />
               ) : read.status === 'error' ? (
                 <ScreenFailed onRetry={reload} />
               ) : shown.length === 0 ? (
@@ -2136,7 +2136,7 @@ export function PostStatusRow(props: {
     return (
       <div
         data-plan-status-post={link.kind}
-        className="flex min-h-[28px] items-center justify-between gap-2"
+        className="flex min-h-7 items-center justify-between gap-2"
       >
         <span className="text-base text-fg-3">{STATUS_POST_ROW}</span>
         <span className="text-md text-fg-3">
@@ -2300,7 +2300,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="failed"
-        className="flex min-h-[72px] items-center justify-between gap-3 rounded-xl border bg-panel px-3.5 lit-card"
+        className="flex min-h-18 items-center justify-between gap-3 rounded-xl border bg-panel px-3.5 lit-card"
       >
         <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
         <Button data-plan-media-retry="" onClick={props.onRetry}>

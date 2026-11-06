@@ -243,7 +243,7 @@ export function InChatSearchBar(props: InChatSearchBarProps): ReactElement {
       <span
         data-search-counter=""
         aria-live="polite"
-        className="min-w-[44px] shrink-0 text-center font-mono text-sm tabular-nums text-fg-2"
+        className="min-w-11 shrink-0 text-center font-mono text-sm tabular-nums text-fg-2"
       >
         {counter ?? ''}
       </span>

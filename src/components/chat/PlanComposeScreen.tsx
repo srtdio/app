@@ -507,7 +507,7 @@ export function PlanComposeScreen(props: {
 
           <div
             data-plan-dates-row=""
-            className="flex min-h-[48px] items-center justify-between gap-2 rounded-xl bg-panel-2 pl-3 pr-1 lit-card-muted"
+            className="flex min-h-12 items-center justify-between gap-2 rounded-xl bg-panel-2 pl-3 pr-1 lit-card-muted"
           >
             <div className="flex min-w-0 flex-col">
               <span className="text-base text-fg">

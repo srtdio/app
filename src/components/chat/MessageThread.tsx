@@ -1646,7 +1646,7 @@ export function canRetryFailed(message: Pick<ThreadMessage, 'refusal'>): boolean
 }
 
 /** The failed line's text actions: the shared 44px Button, the bad token for Delete. */
-const FAILED_ACTION_CLASS = 'min-w-[44px]';
+const FAILED_ACTION_CLASS = 'min-w-11';
 
 /**
  * The line under a failed own text send: "Not sent" (announced), then Retry
@@ -1771,7 +1771,7 @@ export function bubbleClass(
     'group/bubble relative min-w-0 max-w-full focus-visible:lit-focus',
     NO_TOUCH_SELECT,
     bubbleCorners(state),
-    state.album === true ? 'min-w-[240px] p-[3px]' : sized(BUBBLE_PAD, state.layout),
+    state.album === true ? 'min-w-60 p-[3px]' : sized(BUBBLE_PAD, state.layout),
     state.voiceOnly && 'min-w-[220px]',
     state.mine
       ? 'bg-bubble-own text-accent-fg lit-bubble-own'
@@ -1801,7 +1801,7 @@ export function tombstoneClass(shape: BubbleShape): string {
  */
 const LINK_CARD_INSET: ChatSize = {
   touch: '-mx-2 -mt-1 mb-1.5 w-[264px] max-w-[calc(100%+16px)]',
-  laptop: '-ml-[5px] -mr-[3px] -mt-[2px] mb-1.5 w-[264px] max-w-[calc(100%+8px)]',
+  laptop: '-ml-[5px] -mr-[3px] -mt-0.5 mb-1.5 w-[264px] max-w-[calc(100%+8px)]',
 };
 
 /** Cancel the native default (the touch contextmenu on rows). */
@@ -1814,7 +1814,7 @@ function preventDefault(event: { preventDefault: () => void }): void {
  * the sides stay aligned) makes room for the 44px circle at its left. No
  * transition: the column appears at once.
  */
-export const SELECTION_ROW_OFFSET = 'relative pl-[60px]';
+export const SELECTION_ROW_OFFSET = 'relative pl-15';
 
 /** Where the check circle (or lock) sits: the row's left column, vertically centred. */
 export const SELECTION_CHECK_SLOT = 'absolute left-4 top-1/2 flex -translate-y-1/2';
@@ -1935,7 +1935,7 @@ export function mentionClass(mine: boolean, self: boolean): string {
  * and 22px body lines); the pseudo element keeps the 44px width floor.
  */
 const MENTION_HIT =
-  "relative inline-flex -my-[13px] items-center before:absolute before:left-1/2 before:top-1/2 before:h-[44px] before:w-full before:min-w-[44px] before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']";
+  "relative inline-flex -my-[13px] items-center before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-full before:min-w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']";
 
 /**
  * The thread's mention name lookup: the batched profiles, then this
@@ -2146,7 +2146,7 @@ export const REACTION_ROW_SPACE = 'mb-5';
  */
 /** On a PressableRow (inline): 44 tall, a 44px width floor, the glyph centred in bad. */
 export const FAILED_RETRY_CLASS =
-  'absolute right-full top-1/2 mr-1 flex h-11 min-w-[44px] -translate-y-1/2 items-center justify-center text-bad';
+  'absolute right-full top-1/2 mr-1 flex h-11 min-w-11 -translate-y-1/2 items-center justify-center text-bad';
 
 /**
  * A row's piece of the rail (none for a left root card no member follows yet,
@@ -2805,7 +2805,7 @@ export function MessageBubble(props: {
                   onMore();
                 }}
                 className={cn(
-                  'pointer-events-none absolute right-0 top-0 z-10 flex h-11 min-w-[44px] items-start justify-end rounded-tr-[inherit] opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100',
+                  'pointer-events-none absolute right-0 top-0 z-10 flex h-11 min-w-11 items-start justify-end rounded-tr-[inherit] opacity-0 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/bubble:pointer-events-auto group-hover/bubble:opacity-100',
                 )}
               >
                 <span
@@ -5084,7 +5084,7 @@ export function threadLoadError(onRetry: (() => void) | undefined): ReactElement
         {...(onRetry !== undefined
           ? {
               action: (
-                <Button variant="primary" className="min-w-[44px]" onClick={onRetry}>
+                <Button variant="primary" className="min-w-11" onClick={onRetry}>
                   Retry
                 </Button>
               ),
@@ -5108,7 +5108,7 @@ export function threadLoadErrorRow(onRetry: (() => void) | undefined): ReactElem
     >
       <span>Couldn&apos;t load messages</span>
       {onRetry !== undefined ? (
-        <Button variant="secondary" className="min-w-[44px]" onClick={onRetry}>
+        <Button variant="secondary" className="min-w-11" onClick={onRetry}>
           Retry
         </Button>
       ) : null}
@@ -5133,7 +5133,7 @@ export function olderLoadErrorRow(onRetry: () => void): ReactElement {
       className="flex items-center justify-center gap-3 px-4 py-2 text-base text-fg-2"
     >
       <span>{OLDER_LOAD_FAILED}</span>
-      <Button variant="secondary" className="min-w-[44px]" onClick={onRetry}>
+      <Button variant="secondary" className="min-w-11" onClick={onRetry}>
         Retry
       </Button>
     </li>

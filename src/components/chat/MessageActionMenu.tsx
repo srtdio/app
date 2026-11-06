@@ -617,7 +617,7 @@ export function focusFirstMenuItem(root: MenuRoot | null): boolean {
 }
 
 /** A row's box: full-bleed, at least 44px, 16px side padding, 14px to the label. */
-export const MENU_ROW = 'flex min-h-[44px] w-full items-center gap-[14px] px-4';
+export const MENU_ROW = 'flex min-h-11 w-full items-center gap-[14px] px-4';
 
 /**
  * One row, ActionMenu's row look: base text, the icon (or dot) left in the
@@ -938,7 +938,7 @@ export function EmojiPickerLoadFailed(props: { onRetry: () => void }): ReactElem
       className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-center"
     >
       <p className="text-base text-fg-3">{EMOJI_LOAD_FAILED}</p>
-      <Button type="button" data-emoji-retry="" className="min-w-[44px]" onClick={props.onRetry}>
+      <Button type="button" data-emoji-retry="" className="min-w-11" onClick={props.onRetry}>
         Retry
       </Button>
     </div>

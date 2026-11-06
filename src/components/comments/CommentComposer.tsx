@@ -364,7 +364,7 @@ export function PendingChip({
           <IconFile size={ICON_SIZE.inline} />
         )}
       </span>
-      <span className="flex min-w-0 max-w-[180px] flex-col">
+      <span className="flex min-w-0 max-w-44 flex-col">
         <span className="truncate text-sm font-medium text-fg" title={item.file.name}>
           {item.file.name}
         </span>

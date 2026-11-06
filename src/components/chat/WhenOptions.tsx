@@ -178,7 +178,7 @@ export function WhenRow(props: {
         {...hookAttr(props.hook, 'row', props.id)}
         onClick={props.onClick}
         className={cn(
-          'flex min-h-[56px] items-center gap-3 px-2',
+          'flex min-h-14 items-center gap-3 px-2',
           danger ? 'text-bad hover:bg-bad-soft' : 'text-fg',
         )}
       >

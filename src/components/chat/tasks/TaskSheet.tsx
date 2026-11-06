@@ -283,7 +283,7 @@ function AddRow(props: {
     <li className="flex flex-col px-3 pt-3">
       {/* The well and, like the chat composer's send, a round add button beside it: Enter adds too. */}
       <form data-task-add="" onSubmit={submit} className="flex items-center gap-2">
-        <div className="flex min-h-[44px] min-w-0 flex-1 items-center gap-1 rounded-lg border border-field bg-panel-2 pl-3 pr-1 lit-well focus-within:lit-focus">
+        <div className="flex min-h-11 min-w-0 flex-1 items-center gap-1 rounded-lg border border-field bg-panel-2 pl-3 pr-1 lit-well focus-within:lit-focus">
           <input
             ref={inputRef}
             type="text"
@@ -295,7 +295,7 @@ function AddRow(props: {
             maxLength={TASK_TITLE_MAX}
             placeholder={ADD_PLACEHOLDER}
             onChange={(e) => setText(e.target.value)}
-            className="min-h-[44px] min-w-0 flex-1 bg-transparent text-input text-fg placeholder:text-fg-3 outline-none md:text-base"
+            className="min-h-11 min-w-0 flex-1 bg-transparent text-input text-fg placeholder:text-fg-3 outline-none md:text-base"
           />
           <PriorityChip
             priority={priority}

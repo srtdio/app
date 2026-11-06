@@ -28,7 +28,7 @@ export function holdTipView(onDismiss: () => void, layout: ChatLayout = 'touch')
       )}
     >
       <p className="min-w-0 flex-1">{layout === 'laptop' ? HOLD_TIP_TEXT_LAPTOP : HOLD_TIP_TEXT}</p>
-      <Button type="button" variant="link" onClick={onDismiss} className="min-w-[44px] shrink-0">
+      <Button type="button" variant="link" onClick={onDismiss} className="min-w-11 shrink-0">
         {HOLD_TIP_DISMISS}
       </Button>
     </div>

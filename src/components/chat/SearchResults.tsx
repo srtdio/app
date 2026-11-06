@@ -77,7 +77,7 @@ export const RESULT_LABEL = `px-1 pt-1 ${TEXT_ROLE.section}`;
 
 /** A result row: one 64px tap target, no text selection and no iOS callout on hold. */
 const RESULT_ROW = cn(
-  'group/notes-row flex min-h-[64px] min-w-0 items-center gap-3 px-2 py-2',
+  'group/notes-row flex min-h-16 min-w-0 items-center gap-3 px-2 py-2',
   NO_TOUCH_SELECT,
 );
 

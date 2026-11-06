@@ -379,7 +379,7 @@ export function GroupHero(props: {
   return (
     <div className="flex flex-col items-center gap-1 text-center">
       {props.canEdit ? (
-        <div className="h-[72px] w-[72px]">
+        <div className="h-18 w-18">
           <PressableRow
             type="button"
             data-group-photo=""
@@ -833,7 +833,7 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
         ) : (
           <ul className="flex flex-col">
             {members.options.map((member) => (
-              <li key={member.userId} className="flex min-h-[44px] items-center gap-3">
+              <li key={member.userId} className="flex min-h-11 items-center gap-3">
                 <PersonTrigger
                   userId={member.userId}
                   name={member.displayName}

@@ -724,7 +724,7 @@ export function PlanPill(props: { pill: StatusPill }): ReactElement {
     <span
       data-plan-pill={props.pill.side}
       className={cn(
-        'inline-flex min-h-[24px] items-center rounded-lg px-2 text-md lit-pill',
+        'inline-flex min-h-6 items-center rounded-lg px-2 text-md lit-pill',
         PILL_TONES[props.pill.tone],
       )}
     >
@@ -2777,7 +2777,7 @@ export function PlanBody(props: {
                 ) : (
                   <p
                     data-plan-day-empty=""
-                    className="flex min-h-[44px] items-center text-md text-fg-3"
+                    className="flex min-h-11 items-center text-md text-fg-3"
                   >
                     Planned posts show up here.
                   </p>
@@ -2869,7 +2869,7 @@ function AddRow(props: {
     <div
       data-plan-add-row=""
       className={cn(
-        'flex min-h-[44px] items-center gap-2',
+        'flex min-h-11 items-center gap-2',
         !props.empty && '-mb-3 -mt-2 pl-[68px]',
       )}
     >
@@ -3136,7 +3136,7 @@ function PlanStatusLines(props: {
   return (
     <div data-plan-row-lines="" className="mt-1 flex flex-col">
       {plan !== null ? (
-        <div data-plan-line="plan" className="flex min-h-[44px] items-center gap-3">
+        <div data-plan-line="plan" className="flex min-h-11 items-center gap-3">
           <span className={LINE_LABEL}>{PLAN_LINE_LABEL}</span>
           {plan}
         </div>
@@ -3157,7 +3157,7 @@ function PlanStatusLines(props: {
 function PostStatusLine(props: { post: { label: string; tone: PostLineTone } }): ReactElement {
   const { post } = props;
   return (
-    <div data-plan-line="post" className="flex min-h-[24px] items-center gap-3">
+    <div data-plan-line="post" className="flex min-h-6 items-center gap-3">
       <span className={LINE_LABEL}>{POST_LINE_LABEL}</span>
       <span
         data-plan-post-status={post.tone}
@@ -3215,7 +3215,7 @@ function PairedPostRow(props: {
           data-plan-pair-row="locked"
           onContextMenu={(event) => event.preventDefault()}
           className={cn(
-            'flex min-h-[44px] min-w-0 cursor-default items-start gap-3',
+            'flex min-h-11 min-w-0 cursor-default items-start gap-3',
             NO_TOUCH_SELECT,
           )}
         >

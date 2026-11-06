@@ -26,7 +26,7 @@ interface PressableRowProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 // The tappable-surface primitive: list rows, menu rows, tiles, cards and
-// calendar cells. Full width, at least 44 tall (22 when dense), 8px radius,
+// calendar cells. Full width, at least 44 tall (exactly 22 when dense), 8px radius,
 // left aligned, the lit-hover overlay (hover and press keep the light), a
 // focus-visible line and a solid fg-3 disabled look (never a fade). No other
 // visual classes: callers add layout (flex, gap, padding) and colour through
@@ -37,7 +37,7 @@ const FOCUS = 'focus-visible:lit-focus';
 const FOCUS_INSET = 'focus-visible:lit-focus-inset';
 const PRESSABLE_ROW_LOOK = `${MOVE_CLASS.press} lit-hover ${FOCUS} disabled:text-fg-3 disabled:pointer-events-none disabled:cursor-default`;
 export const PRESSABLE_ROW_BASE = `min-h-11 ${PRESSABLE_ROW_LOOK}`;
-const PRESSABLE_ROW_DENSE = `min-h-[22px] ${PRESSABLE_ROW_LOOK}`;
+const PRESSABLE_ROW_DENSE = `h-[22px] ${PRESSABLE_ROW_LOOK}`;
 
 export function PressableRow({
   className,

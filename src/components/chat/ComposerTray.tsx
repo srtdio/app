@@ -261,7 +261,7 @@ export function TrayGrid(props: {
             if (tile.disabled === true) return;
             props.onPick(tile.id);
           }}
-          className="flex h-[72px] min-w-[44px] flex-col items-center justify-center gap-1.5 text-fg-2 hover:text-fg"
+          className="flex h-18 min-w-11 flex-col items-center justify-center gap-1.5 text-fg-2 hover:text-fg"
         >
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-panel-2 text-fg lit-btn-secondary">
             <tile.Icon size={ICON_SIZE.tray} />

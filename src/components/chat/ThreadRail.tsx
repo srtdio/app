@@ -26,7 +26,7 @@ export function RailThrough(): ReactElement {
     <span
       aria-hidden="true"
       data-rail="through"
-      className={cn('pointer-events-none absolute bottom-0 left-[15px] top-0 w-[2px]', RAIL_INK)}
+      className={cn('pointer-events-none absolute bottom-0 left-[15px] top-0 w-0.5', RAIL_INK)}
     />
   );
 }
@@ -48,9 +48,9 @@ export function RailTick(props: { reach: string; top: string }): ReactElement {
         props.top,
       )}
     >
-      <span className={cn('absolute bottom-3 left-0 top-0 w-[2px]', RAIL_INK)} />
+      <span className={cn('absolute bottom-3 left-0 top-0 w-0.5', RAIL_INK)} />
       <RailCurveGlyph turn="tick" className="bottom-0 left-0" />
-      <span className={cn('absolute bottom-0 left-[13px] right-0 h-[2px]', RAIL_INK)} />
+      <span className={cn('absolute bottom-0 left-[13px] right-0 h-0.5', RAIL_INK)} />
     </span>
   );
 }
@@ -71,9 +71,9 @@ export function RailElbow(props: { reach: string; bottom: string }): ReactElemen
         props.bottom,
       )}
     >
-      <span className={cn('absolute left-[13px] right-0 top-0 h-[2px]', RAIL_INK)} />
+      <span className={cn('absolute left-[13px] right-0 top-0 h-0.5', RAIL_INK)} />
       <RailCurveGlyph turn="elbow" className="left-0 top-0" />
-      <span className={cn('absolute bottom-0 left-0 top-3 w-[2px]', RAIL_INK)} />
+      <span className={cn('absolute bottom-0 left-0 top-3 w-0.5', RAIL_INK)} />
     </span>
   );
 }
@@ -153,7 +153,7 @@ export function ThreadChipRow(props: {
 /** Where "N replies" sits under a card: the card's left edge (16 plus the shift, past a photo in groups). */
 const REPLIES_INDENT: Record<'dm' | 'group', Record<0 | 14, string>> = {
   dm: { 0: 'pl-4', 14: 'pl-[30px]' },
-  group: { 0: 'pl-[50px]', 14: 'pl-[64px]' },
+  group: { 0: 'pl-[50px]', 14: 'pl-16' },
 };
 
 /**

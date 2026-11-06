@@ -257,7 +257,7 @@ export async function confirmMarkTransition(params: {
 }
 
 /** 44x44 minimum, right-aligned row action (stamp or Reopen): a default lg Button. */
-const ROW_ACTION = 'min-w-[44px] shrink-0';
+const ROW_ACTION = 'min-w-11 shrink-0';
 
 /**
  * One pin board row. Hook-free so the stamp word, confirm copy and History

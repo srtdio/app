@@ -422,7 +422,7 @@ export function WhoReactedSheet(props: {
         {state.kind === 'failed' ? (
           <div className="flex flex-col items-center gap-3 py-6">
             <p className="text-base text-fg-2">{SHEET_LOAD_FAILED}</p>
-            <Button variant="primary" className="min-w-[44px]" onClick={retry}>
+            <Button variant="primary" className="min-w-11" onClick={retry}>
               Retry
             </Button>
           </div>

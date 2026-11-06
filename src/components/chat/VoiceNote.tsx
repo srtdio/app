@@ -767,7 +767,7 @@ const BUBBLE_INSET: ChatSize = {
   touch:
     'w-[264px] -mx-3 -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-2',
   laptop:
-    'w-[264px] -ml-[9px] -mr-[7px] -mb-[8px] [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-[6px]',
+    'w-[264px] -ml-[9px] -mr-[7px] -mb-2 [[data-bubble]>:empty+[data-bubble-content]>:first-child>*>&]:-mt-[6px]',
 };
 
 /** Row 2 and the error row start under the wave: 44px play + 2px gap. */
@@ -1349,7 +1349,7 @@ export function VoiceNote({
       aria-label={active ? 'Pause voice note' : 'Play voice note'}
       {...(uploading ? { 'aria-hidden': true, tabIndex: -1 } : {})}
       className={cn(
-        'flex h-11 min-w-[44px] shrink-0 items-center justify-center disabled:cursor-default',
+        'flex h-11 min-w-11 shrink-0 items-center justify-center disabled:cursor-default',
         controlFocus,
         tone.glyph,
         upload === undefined
@@ -1401,7 +1401,7 @@ export function VoiceNote({
           data-voice-speed=""
           onClick={cycleSpeed}
           aria-label={`Playback speed ${speedLabel(rate)}`}
-          className={cn('flex h-11 min-w-[44px] items-center justify-center', controlFocus)}
+          className={cn('flex h-11 min-w-11 items-center justify-center', controlFocus)}
         >
           <span
             className={cn(

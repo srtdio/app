@@ -928,7 +928,7 @@ export function PickerSkeleton(): ReactElement {
         <li
           key={i}
           data-skeleton-row=""
-          className="flex min-h-[44px] items-center gap-3 rounded-xl border bg-panel p-2.5 lit-card"
+          className="flex min-h-11 items-center gap-3 rounded-xl border bg-panel p-2.5 lit-card"
         >
           <span className="h-12 w-12 shrink-0 rounded-lg bg-panel-3" />
           <span className="flex min-w-0 flex-1 flex-col gap-1.5">
