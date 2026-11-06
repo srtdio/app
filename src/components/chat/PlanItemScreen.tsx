@@ -1940,7 +1940,7 @@ function PlanNotes(props: {
   notes: ShownComment[];
   workspaceId: string | null;
   me: string | null;
-  replyPrivately: PlanReplyPrivatelyTarget;
+  replyPrivately: PlanReplyPrivatelyTarget | null;
 }): ReactElement | null {
   if (props.notes.length === 0) return null;
   return (
