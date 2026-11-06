@@ -18,7 +18,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { StatusDot } from '@/components/ui/StatusDot';
-import { textRole } from '@/components/ui/Text';
+import { Text, textRole } from '@/components/ui/Text';
 import { GUTTER } from '@/components/ui/layout';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Avatar } from '@/components/ui/Avatar';
@@ -1918,9 +1918,9 @@ export function PostDetailPage({
       {readOnly ? (
         <div className={cn(grid.page, 'pb-0')}>
           <div className={grid.head}>
-            <h1 className={textRole('display', 'break-words [overflow-wrap:anywhere]')}>
+            <Text as="h1" role="display" className="break-words [overflow-wrap:anywhere]">
               <Highlight text={post.title} />
-            </h1>
+            </Text>
           </div>
         </div>
       ) : null}
@@ -2002,7 +2002,7 @@ export function PostDetailPage({
                 // Spec A3: the title itself is the edit target (no pencil
                 // tile): at least 44px tall, a visible focus ring, and the
                 // same padding as the editor so tapping never shifts the page.
-                <h1 className={textRole('display', 'break-words [overflow-wrap:anywhere]')}>
+                <Text as="h1" role="display" className="break-words [overflow-wrap:anywhere]">
                   {/* inline (w-auto) on a block: the -mx-2 bleed widens it to the
                       full title column plus the padding, no width calc needed. */}
                   <PressableRow
@@ -2014,12 +2014,11 @@ export function PostDetailPage({
                   >
                     <Highlight text={post.title} />
                   </PressableRow>
-                </h1>
+                </Text>
               )
             ) : (
-              <h1
-                data-post-title=""
-                className={textRole('display', 'break-words [overflow-wrap:anywhere]')}
+              <Text as="h1" role="display"
+                data-post-title="" className="break-words [overflow-wrap:anywhere]"
               >
                 <Highlight text={post.title} />
                 {approvedLocked && agencySide ? (
@@ -2031,7 +2030,7 @@ export function PostDetailPage({
                     <IconLock size={ICON_SIZE.inline} />
                   </span>
                 ) : null}
-              </h1>
+              </Text>
             )}
 
             {/* Spec A1: one meta line (owner, due, brief); agency roles tap

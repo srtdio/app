@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MouseEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Text } from '@/components/ui/Text';
 import { IconButton } from '@/components/ui/IconButton';
 import { SHEET_FRAME, SHEET_WIDE } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconX } from '@/components/ui/icons';
@@ -156,7 +157,9 @@ export function ComposerSheet({
           data-composer-header=""
           className="flex min-w-0 items-center gap-2 border-b border-border py-2 pl-4 pr-1 sm:gap-3"
         >
-          <h2 className="min-w-0 flex-1 truncate text-lg font-semibold text-fg">{title}</h2>
+          <Text as="h2" role="title" className="min-w-0 flex-1 truncate text-fg">
+            {title}
+          </Text>
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">{actions}</div>
           <IconButton
             label="Close"

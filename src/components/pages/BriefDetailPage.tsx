@@ -16,7 +16,7 @@ import { renderFormatted } from '@/components/chat/message-body';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { STATUS_DOT_TONE, StatusDot, type StatusDotStage } from '@/components/ui/StatusDot';
-import { SECTION_LABEL, textRole } from '@/components/ui/Text';
+import { SECTION_LABEL, Text, textRole } from '@/components/ui/Text';
 import { GUTTER } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
 import { LoadError } from '@/components/ui/LoadError';
@@ -66,9 +66,6 @@ import { currentEntryState } from '@/lib/focus-target';
 // The line under a closed brief's title (and in the Close confirm).
 export const CLOSED_BRIEF_LINE = 'Closed briefs stay readable and open to comments.';
 
-// The brief title matches the post title on the same screen size (Post detail
-// uses this exact size on phone and desktop). It wraps, never scrolls sideways.
-export const BRIEF_TITLE_CLASS = textRole('display', 'min-w-0 break-words text-fg');
 
 /**
  * The comment box inside the Comments section, for "Add note" (the note failed
@@ -875,9 +872,11 @@ export function BriefDetailPage({
             Comments. Desktop's side column holds the details and linked posts. */}
         <div className="md:col-span-2 flex min-w-0 flex-col gap-6">
           <div className="flex min-w-0 flex-col gap-2">
-            <h1 className={BRIEF_TITLE_CLASS}>
+            {/* The brief title matches the post title (display role); it wraps,
+                never scrolls sideways. */}
+            <Text as="h1" role="display" className="min-w-0 break-words text-fg">
               <Highlight text={brief.title} />
-            </h1>
+            </Text>
             {closed ? <p className="text-base text-fg-2">{CLOSED_BRIEF_LINE}</p> : null}
             <div data-brief-details="phone" className="md:hidden">
               {detailsLines}

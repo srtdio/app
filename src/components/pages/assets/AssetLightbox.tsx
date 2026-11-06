@@ -4,7 +4,7 @@ import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { SECTION_LABEL } from '@/components/ui/Text';
+import { SECTION_LABEL, Text } from '@/components/ui/Text';
 import {
   ICON_SIZE,
   IconChevronLeft,
@@ -689,7 +689,9 @@ export function AssetLightbox({
             className="lit-overlay relative max-h-[80%] w-full overflow-y-auto rounded-t-2xl border-t bg-panel p-4 text-fg md:mx-auto md:mb-4 md:max-w-md md:rounded-2xl md:border"
           >
             <div className="flex items-center gap-2">
-              <h2 className="min-w-0 flex-1 truncate text-lg font-semibold">{name}</h2>
+              <Text as="h2" role="title" className="min-w-0 flex-1 truncate">
+                {name}
+              </Text>
               <IconButton label="Close" onClick={() => setInfoOpen(false)}>
                 <IconX size={ICON_SIZE.control} />
               </IconButton>

@@ -162,7 +162,9 @@ export function HelpPage() {
       <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
         <section className="rounded-xl border bg-panel-2 lit-card-muted p-4 md:p-6">
           <p className="text-base font-medium text-accent">Sorted Help Center</p>
-          <h2 className="mt-2 text-lg font-semibold">Find your way through the workflow</h2>
+          <Text as="h2" role="title" className="mt-2">
+            Find your way through the workflow
+          </Text>
           <p className="mt-2 max-w-2xl text-base text-fg-2">
             Quick answers about pipeline, briefs, posts, approvals, files, and chat with your team.
           </p>
