@@ -1,6 +1,7 @@
 import { test, type Locator, type Page } from '@playwright/test';
 import {
   boxText,
+  clipBox,
   distinctRoles,
   edgeViolations,
   formatViolations,
@@ -22,10 +23,15 @@ import {
 // runs checkLayout right before toHaveScreenshot):
 //   1 one-line parts (.truncate, [data-lines="1"]) never wrap onto a 2nd line;
 //   2 no two visible tap targets (button, a, [role=button], input) overlap by
-//     more than 1px, ancestors and descendants aside;
+//     more than 1px, each cut to its overflow clip; ancestors and
+//     descendants, targets in different fixed/sticky layers, absolute
+//     layering by design (a control whose containing block holds the other)
+//     and pointer-events:none / aria-hidden / inert targets aside;
 //   3 nothing painted (text runs, icons, fields) within 12px of a side edge,
-//     except full-bleed media (img, video, [data-full-bleed]), full-width bars
-//     and content that scrolls under the edge (a horizontal scroller);
+//     measured on what shows through its overflow clip, except full-bleed
+//     media (img, video, [data-full-bleed]), full-width bars, content that
+//     scrolls under the edge (a horizontal scroller) and aria-hidden /
+//     inert decoration;
 //   4 no part ([data-part]) holds more than 3 distinct text roles (computed
 //     font size + weight + family);
 //   5 busy-state screens: a control keeps its width from idle to busy
@@ -58,6 +64,9 @@ interface RawTarget {
   label: string;
   box: Box;
   related: number[];
+  layer: number | null;
+  layeredWith: number[];
+  clip: Box;
 }
 
 interface RawPart {
@@ -117,6 +126,77 @@ async function readPage(page: Page): Promise<RawPage> {
       return hit !== null && (hit === el || el.contains(hit) || hit.contains(el));
     };
 
+    /**
+     * The rect an element shows through: the viewport cut by every ancestor
+     * (itself included) that clips overflow. A fixed element escapes the
+     * clips above it.
+     */
+    const clipOf = (el: Element): Box => {
+      let left = 0;
+      let top = 0;
+      let right = vw;
+      let bottom = vh;
+      for (let at: Element | null = el; at !== null; at = at.parentElement) {
+        const s = getComputedStyle(at);
+        if (s.overflowX !== 'visible' || s.overflowY !== 'visible') {
+          const r = at.getBoundingClientRect();
+          if (at !== document.documentElement && at !== document.body) {
+            left = Math.max(left, r.left);
+            top = Math.max(top, r.top);
+            right = Math.min(right, r.right);
+            bottom = Math.min(bottom, r.bottom);
+          }
+        }
+        if (s.position === 'fixed') break;
+      }
+      return {
+        x: left,
+        y: top,
+        width: Math.max(0, right - left),
+        height: Math.max(0, bottom - top),
+      };
+    };
+
+    /** The nearest position:fixed or sticky element at or above el, or null. */
+    const layerRootOf = (el: Element): Element | null => {
+      for (let at: Element | null = el; at !== null; at = at.parentElement) {
+        const pos = getComputedStyle(at).position;
+        if (pos === 'fixed' || pos === 'sticky') return at;
+      }
+      return null;
+    };
+    const layerIds = new Map<Element, number>();
+    const layerOf = (el: Element): number | null => {
+      const root = layerRootOf(el);
+      if (root === null) return null;
+      const known = layerIds.get(root);
+      if (known !== undefined) return known;
+      const id = layerIds.size;
+      layerIds.set(root, id);
+      return id;
+    };
+
+    /**
+     * Whether el is absolutely layered on other by design: el (or a wrapper
+     * of it below any fixed/sticky layer) is position:absolute, that wrapper
+     * does not hold other, and its containing block is or holds other.
+     */
+    const layeredOn = (el: Element, other: Element): boolean => {
+      for (let at: Element | null = el; at !== null; at = at.parentElement) {
+        const pos = getComputedStyle(at).position;
+        if (pos === 'fixed' || pos === 'sticky') return false;
+        if (pos !== 'absolute') continue;
+        if (at.contains(other)) return false;
+        const block = (at as HTMLElement).offsetParent ?? document.body;
+        return block === other || block.contains(other);
+      }
+      return false;
+    };
+
+    /** Inside an aria-hidden or inert subtree. */
+    const hiddenFromUse = (el: Element): boolean =>
+      el.closest('[inert], [aria-hidden="true"]') !== null;
+
     const textNodesOf = (root: Element): Text[] => {
       const out: Text[] = [];
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -157,7 +237,8 @@ async function readPage(page: Page): Promise<RawPage> {
         'button, a[href], [role="button"], input:not([type="hidden"]):not([type="file"])',
       ),
     ).filter((el) => {
-      if (el.closest('[inert], [aria-hidden="true"]') !== null) return false;
+      if (hiddenFromUse(el)) return false;
+      if (getComputedStyle(el).pointerEvents === 'none') return false;
       if (!shown(el)) return false;
       return onTop(el, el.getBoundingClientRect());
     });
@@ -167,6 +248,11 @@ async function readPage(page: Page): Promise<RawPage> {
       related: tapEls.flatMap((other, j) =>
         j !== i && (el.contains(other) || other.contains(el)) ? [j] : [],
       ),
+      layer: layerOf(el),
+      layeredWith: tapEls.flatMap((other, j) =>
+        j !== i && (layeredOn(el, other) || layeredOn(other, el)) ? [j] : [],
+      ),
+      clip: clipOf(el),
     }));
 
     // 3 Painted things near the side edges.
@@ -189,7 +275,13 @@ async function readPage(page: Page): Promise<RawPage> {
       const r = range.getBoundingClientRect();
       if (r.width <= 1 || r.height <= 1) continue;
       if (!onTop(parent, r)) continue;
-      edges.push({ label: nameOf(parent), box: toBox(r), fullBleed: bleeds(parent) });
+      edges.push({
+        label: nameOf(parent),
+        box: toBox(r),
+        fullBleed: bleeds(parent),
+        decorative: hiddenFromUse(parent),
+        clip: clipOf(parent),
+      });
     }
     for (const el of Array.from(document.querySelectorAll('svg, input, textarea, select'))) {
       // The outermost svg only (an icon's parts are not separate things).
@@ -198,7 +290,13 @@ async function readPage(page: Page): Promise<RawPage> {
       if (!shown(el)) continue;
       const r = el.getBoundingClientRect();
       if (!onTop(el, r)) continue;
-      edges.push({ label: nameOf(el), box: toBox(r), fullBleed: bleeds(el) });
+      edges.push({
+        label: nameOf(el),
+        box: toBox(r),
+        fullBleed: bleeds(el),
+        decorative: hiddenFromUse(el),
+        clip: clipOf(el),
+      });
     }
 
     // 4 Text roles per part.
@@ -256,9 +354,10 @@ export async function checkLayout(page: Page, screenName: string): Promise<void>
   }
 
   for (const { item, side } of edgeViolations(raw.edges, raw.viewportWidth)) {
+    const shownBox = clipBox(item.box, item.clip) ?? item.box;
     violations.push({
       check: 'edge',
-      message: `${item.label} within 12px of the ${side} edge (${boxText(item.box)})`,
+      message: `${item.label} within 12px of the ${side} edge (${boxText(shownBox)})`,
     });
   }
 
