@@ -227,6 +227,9 @@ export function formatDateTime(
   return `${formatDate(instant, now, zone)}, ${formatTime(instant, zone)}`;
 }
 
+/** The range dash: an en dash, tight between day numbers, spaced between full dates. */
+const RANGE_DASH = '\u2013';
+
 /**
  * The one date-range formatter: "12–18 Oct" in one month, "28 Mar – 3 Apr"
  * across months (spaced en dash), "12 Oct" for one day; the year appears only
@@ -245,20 +248,15 @@ export function formatDayRange(
   const b = civilOf(end, zone);
   if (a === undefined || b === undefined) return '';
   const nowYear = civilOfInstant(now, zone).year;
-  if (a.year !== b.year) return `${dayText(a, -1)} ${RANGE_SPACED} ${dayText(b, -1)}`;
+  if (a.year !== b.year) return `${dayText(a, -1)} ${RANGE_DASH} ${dayText(b, -1)}`;
   const year = a.year === nowYear ? '' : ` ${a.year}`;
   if (a.month === b.month) {
     return a.day === b.day
       ? `${a.day} ${monthName(a.month)}${year}`
-      : `${a.day}${RANGE_TIGHT}${b.day} ${monthName(a.month)}${year}`;
+      : `${a.day}${RANGE_DASH}${b.day} ${monthName(a.month)}${year}`;
   }
-  return `${a.day} ${monthName(a.month)} ${RANGE_SPACED} ${b.day} ${monthName(b.month)}${year}`;
+  return `${a.day} ${monthName(a.month)} ${RANGE_DASH} ${b.day} ${monthName(b.month)}${year}`;
 }
-
-/** En dash, tight between two day numbers ("12–18 Oct"). */
-const RANGE_TIGHT = '\u2013';
-/** En dash, spaced between two full dates ("28 Mar – 3 Apr"). */
-const RANGE_SPACED = '\u2013';
 
 /**
  * A due or target date as its calendar day on the WORKSPACE zone: "23 Oct",
