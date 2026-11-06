@@ -3160,10 +3160,7 @@ async function attributeStill(target: Locator, name: string): Promise<void> {
 
 /** A pending page route: requests to this path are never answered. */
 async function neverAnswerPath(page: Page, path: string): Promise<void> {
-  await page.route(
-    (url) => url.pathname === path,
-    () => undefined,
-  );
+  await page.route((url) => url.pathname === path, () => undefined);
 }
 
 const PENDING_BODY = 'Sending the cut now';
@@ -3303,10 +3300,8 @@ SCREENS.push(
     url: '/chat',
     steps: async (page) => {
       await sendInDm(page, PENDING_BODY);
-      await waitFor(
-        [page.locator('[data-msg-id]', { hasText: PENDING_BODY }).locator('[data-status="sending"]')],
-        'pending clock',
-      );
+      const own = page.locator('[data-msg-id]', { hasText: PENDING_BODY });
+      await waitFor([own.locator('[data-status="sending"]')], 'pending clock');
     },
   },
   {
@@ -3316,10 +3311,8 @@ SCREENS.push(
     url: '/chat',
     steps: async (page) => {
       await sendInDm(page, REFUSED_SEND);
-      await waitFor(
-        [page.locator('[data-msg-id]', { hasText: REFUSED_SEND }).locator('[data-failed-actions]')],
-        'Not sent line',
-      );
+      const own = page.locator('[data-msg-id]', { hasText: REFUSED_SEND });
+      await waitFor([own.locator('[data-failed-actions]')], 'Not sent line');
     },
   },
   {

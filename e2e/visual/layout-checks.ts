@@ -178,7 +178,8 @@ async function readPage(page: Page): Promise<RawPage> {
       return false;
     };
     const bleeds = (el: Element): boolean =>
-      el.closest('img, video, canvas, picture, [data-full-bleed]') !== null || scrollsUnderEdge(el);
+      el.closest('img, video, canvas, picture, [data-full-bleed]') !== null ||
+      scrollsUnderEdge(el);
     const edges: EdgeItem[] = [];
     for (const node of textNodesOf(document.body)) {
       const parent = node.parentElement;
@@ -193,7 +194,8 @@ async function readPage(page: Page): Promise<RawPage> {
     }
     for (const el of Array.from(document.querySelectorAll('svg, input, textarea, select'))) {
       // The outermost svg only (an icon's parts are not separate things).
-      if (el.tagName.toLowerCase() === 'svg' && (el.parentElement?.closest('svg') ?? null) !== null) continue;
+      const inSvg = (el.parentElement?.closest('svg') ?? null) !== null;
+      if (el.tagName.toLowerCase() === 'svg' && inSvg) continue;
       if (!shown(el)) continue;
       const r = el.getBoundingClientRect();
       if (!onTop(el, r)) continue;
@@ -267,7 +269,9 @@ export async function checkLayout(page: Page, screenName: string): Promise<void>
       const roles = distinctRoles(signatures);
       violations.push({
         check: 'part-roles',
-        message: `${part.label} holds ${roles.length} text roles (max ${MAX_ROLES_PER_PART}): ${roles.join(', ')}`,
+        message:
+          `${part.label} holds ${roles.length} text roles ` +
+          `(max ${MAX_ROLES_PER_PART}): ${roles.join(', ')}`,
       });
     }
   }
