@@ -15,6 +15,17 @@ describe('cn', () => {
     expect(cn('text-legacy-sm', 'text-strip')).toBe('text-legacy-sm text-strip');
   });
 
+  it('keeps an arbitrary size beside an arbitrary or token colour', () => {
+    expect(cn('text-[11px] leading-[15px]', 'text-fg-3')).toBe(
+      'text-[11px] leading-[15px] text-fg-3',
+    );
+    expect(cn('text-[17px]', 'text-[color:var(--bubble-meta-own)]')).toBe(
+      'text-[17px] text-[color:var(--bubble-meta-own)]',
+    );
+    expect(cn('text-md', 'text-[var(--guide-ink)]')).toBe('text-md text-[var(--guide-ink)]');
+    expect(cn('text-[11px]', 'text-md')).toBe('text-md');
+  });
+
   it('later text size wins over an earlier size', () => {
     expect(cn('text-base', 'text-lg')).toBe('text-lg');
     expect(cn('text-legacy-sm', 'text-md')).toBe('text-md');

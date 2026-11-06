@@ -105,8 +105,6 @@ export default tseslint.config(
       'packages/schemas/dist/**',
       // Supabase types are generated; the drift gate owns their shape.
       'packages/schemas/src/supabase.generated.ts',
-      // Design ratchet fixtures hold the violations its test counts on purpose.
-      'scripts/__fixtures__/**',
     ],
   },
   js.configs.recommended,

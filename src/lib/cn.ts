@@ -1,4 +1,4 @@
-import { extendTailwindMerge } from 'tailwind-merge';
+import { extendTailwindMerge, validators } from 'tailwind-merge';
 
 // Class merge: when two classes set the same thing (p-4 then p-3), the later
 // one wins and the earlier one is dropped, so a call site's className really
@@ -54,7 +54,8 @@ const EASES = ['enter', 'exit', 'ios', 'move', 'pop'];
 const merge = extendTailwindMerge({
   override: {
     classGroups: {
-      'font-size': [{ text: FONT_SIZES }],
+      // Arbitrary lengths (text-[11px]) stay sizes, as in stock tailwind-merge.
+      'font-size': [{ text: [...FONT_SIZES, validators.isArbitraryLength] }],
     },
     // Stock tailwind-merge drops an earlier leading-* when a text size follows.
     // In Sorted's stylesheet leading-* always beats the size's own line
