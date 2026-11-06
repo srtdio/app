@@ -14,6 +14,13 @@
 // Approvers see shared plans only, and never Create, drag or the day menu.
 // A return to the tab lands on the same Month | Week, the same range and the
 // same scroll (src/lib/kept-view.ts), over the range's kept read.
+// The Bank (the idea bank, plan-tab/BankList.tsx): on the phone the first chip
+// (Bank, This week, Next week, Upcoming, Past, All; the tab still opens on
+// This week), whose toolbar is search, Filter and sort, then Add idea; on a
+// laptop a toggle chip after the plan chips that opens ui/SidePanel beside
+// the calendar (Expand swaps the calendar for the Bank table). ?week=bank
+// lands on it. A client sees it only when their bank read holds
+// an idea. The Bank reads after the tab paints (use-bank-data.ts).
 // Search (?q=, both widths, src/lib/search/server-search.ts): from 2
 // characters, plan_search then the matched plans in one plan_bundle_read, shown
 // as a list of plans with their matched items (tapping an item opens it in its
@@ -37,7 +44,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { Highlight } from '@/components/ui/SearchHighlight';
 import { SortMenu } from '@/components/ui/SortMenu';
-import { ICON_SIZE, IconPlan, IconPlus } from '@/components/ui/icons';
+import { IconButton } from '@/components/ui/IconButton';
+import { Input } from '@/components/ui/Input';
+import { ICON_SIZE, IconBank, IconFilterLines, IconPlan, IconPlus } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { ComposeRange, PlanBundle, PlanThumbs } from '@/lib/chat/plans';
 import { queryWords } from '@/lib/chat/search';
@@ -53,12 +62,14 @@ import {
   visibleBundles,
   visibleRange,
   zeroStateCopy,
+  PLAN_BANK_CHIP,
+  PLAN_BANK_CHIP_LABEL,
   PLAN_WEEK_CHIP_DEFAULT,
   PLAN_WEEK_CHIP_ZERO,
-  PLAN_WEEK_CHIPS,
   PLAN_WEEK_PARAM,
   parsePlanWeekChip,
   planSectionOf,
+  visiblePlanChips,
   planWeekChipLabel,
   planWeekChipRange,
   type CalendarEntry,
@@ -94,6 +105,22 @@ import {
   type PlanTabMore,
 } from './plan-tab/PlanTabList';
 import { usePlanTabData, warmPlanTabRead } from './plan-tab/use-plan-tab-data';
+import { BankAddSheet } from './plan-tab/BankAddSheet';
+import { BankFilterSheet } from './plan-tab/BankFilterSheet';
+import { BankFilterLine, BankPanel, BankSurface, type BankDropRequest } from './plan-tab/BankList';
+import {
+  BANK_FILTER_DEFAULT,
+  bankItemHref,
+  bucketIdeaCount,
+  sanitizeBankFilter,
+  type BankFilter,
+} from './plan-tab/bank-parts';
+import {
+  bucketWritesFor,
+  useBankBuckets,
+  useBankData,
+  readPlansForPlanIt,
+} from './plan-tab/use-bank-data';
 import { peekEntityUnreadComment, withCommentTarget } from '@/lib/inbox/unread-entities';
 
 /** The route a calendar entry opens: its item in its plan, or a post's page. Pure. */
@@ -267,17 +294,37 @@ export function PlanTabPage(): ReactElement {
         (prev) => {
           const next = new URLSearchParams(prev);
           next.set(PLAN_WEEK_PARAM, value);
+          // The search box belongs to the chip it was typed under.
+          if ((chip === PLAN_BANK_CHIP) !== (value === PLAN_BANK_CHIP)) next.delete(SEARCH_PARAM);
           return next;
         },
         { replace: true },
       );
     },
-    [setKeptChip, setParams],
+    [chip, setKeptChip, setParams],
   );
+  // The Bank (both widths share one hook). Laptop: the side panel's open
+  // state and Expand; ?week=bank opens the panel.
+  const [bankOpen, setBankOpen] = useKeptState(keptKey('bank-open'), false);
+  const [bankExpanded, setBankExpanded] = useState(false);
+  const [bankSearchLaptop, setBankSearchLaptop] = useState('');
+  const urlBank = parsePlanWeekChip(params.get(PLAN_WEEK_PARAM)) === PLAN_BANK_CHIP;
+  useEffect(() => {
+    if (desktop && urlBank) setBankOpen(true);
+  }, [desktop, urlBank, setBankOpen]);
+  const onBank = desktop ? bankOpen || bankExpanded : chip === PLAN_BANK_CHIP;
+  const [storedBankFilter, setBankFilter] = useKeptState<BankFilter>(
+    keptKey('bank-filter'),
+    BANK_FILTER_DEFAULT,
+  );
+  const bankFilter = useMemo(() => sanitizeBankFilter(storedBankFilter), [storedBankFilter]);
+  const [bankSheet, setBankSheet] = useState<'filter' | 'add' | null>(null);
+  const [bankDrop, setBankDrop] = useState<BankDropRequest | null>(null);
   const { value: storedSort, setValue: setSort } = useSort<PlanTabSort>('plan', PLAN_SORT_DEFAULT);
   const sort = sanitizePlanSort(storedSort);
+  const onPhoneBank = !desktop && chip === PLAN_BANK_CHIP;
   const planSearch = useServerSearch<PlanSearchData>(
-    search,
+    onPhoneBank ? '' : search,
     (query, signal) =>
       workspaceId === null
         ? Promise.resolve({
@@ -288,6 +335,24 @@ export function PlanTabPage(): ReactElement {
     workspaceId ?? '',
   );
   const searching = planSearch.active;
+  const bank = useBankData({
+    workspaceId,
+    userId,
+    enabled: ready,
+    filter: bankFilter,
+    searchText: desktop ? bankSearchLaptop : onPhoneBank ? search : '',
+  });
+  const bankBuckets = useBankBuckets({ workspaceId, userId, enabled: ready });
+  // A client sees the Bank only when their bank read holds an idea.
+  const showBank = creator || (bank.ideas?.length ?? 0) > 0;
+  if (onBank && bank.ideas !== null) mark('plan-bank:paint');
+  const bucketWrites = useMemo(
+    () =>
+      creator && workspaceId !== null
+        ? bucketWritesFor(workspaceId, (id) => bucketIdeaCount(bank.ideas ?? [], id))
+        : null,
+    [creator, workspaceId, bank.ideas],
+  );
   const { load, reload, retry, loadMore, moreBusy } = usePlanTabData({
     workspaceId,
     range: desktop ? visibleRange(view, anchor) : planWeekChipRange(chip, today),
@@ -358,7 +423,50 @@ export function PlanTabPage(): ReactElement {
   // search; on a laptop the legend, then the Month | Week switch (and, while
   // searching, the results' sort), then New plan for creators; on a phone the
   // sort, then New plan.
-  const head = (
+  const filterButton = (
+    <IconButton
+      label="Filter and sort"
+      data-bank-filter-open=""
+      onClick={() => setBankSheet('filter')}
+      className="shrink-0"
+    >
+      <IconFilterLines size={ICON_SIZE.control} />
+    </IconButton>
+  );
+  const chipRow = desktop ? undefined : (
+    <PlanWeekChips chip={chip} onChip={setChip} showBank={showBank} />
+  );
+  const head = onPhoneBank ? (
+    <SectionHeader<PlanTabSort>
+      search={{
+        value: search,
+        onChange: setSearch,
+        placeholder: 'Search ideas',
+        label: 'Search ideas',
+      }}
+      sort={{ node: filterButton }}
+      {...(creator
+        ? {
+            primaryAction: {
+              node: (
+                <Button
+                  variant="primary"
+                  type="button"
+                  data-bank-add-open=""
+                  onClick={() => setBankSheet('add')}
+                  className="shrink-0 whitespace-nowrap"
+                >
+                  <IconPlus size={ICON_SIZE.inline} />
+                  Add idea
+                </Button>
+              ),
+            },
+          }
+        : {})}
+    >
+      {chipRow}
+    </SectionHeader>
+  ) : (
     <SectionHeader<PlanTabSort>
       search={{
         value: search,
@@ -400,7 +508,7 @@ export function PlanTabPage(): ReactElement {
           }
         : {})}
     >
-      {desktop ? undefined : <PlanWeekChips chip={chip} onChip={setChip} />}
+      {chipRow}
     </SectionHeader>
   );
 
@@ -415,13 +523,87 @@ export function PlanTabPage(): ReactElement {
   // yet: boxes until its own read lands, never the zero line.
   const borrowedEmpty = borrowed !== null && !bundles.some(inChip);
   const listBoxes =
-    !searching && load.status !== 'failed' && !desktop && (data === null || borrowedEmpty);
+    !onPhoneBank &&
+    !searching &&
+    load.status !== 'failed' &&
+    !desktop &&
+    (data === null || borrowedEmpty);
   const hadBoxes = useHadBoxes(searchBoxes || listBoxes);
   const landedRef = useRef<HTMLDivElement>(null);
   const landed = searching ? results !== null && results.length > 0 : data !== null && !zero;
   useSettleOnLanding(landedRef, landed && !searchBoxes && !listBoxes, hadBoxes);
+  const openIdea = (id: string): void =>
+    navigate(withNewestUnread(bankItemHref(id), 'plan_item', id));
+  const bankSurfaceProps =
+    workspaceId !== null
+      ? {
+          data: bank,
+          filter: bankFilter,
+          onFilter: setBankFilter,
+          buckets: bankBuckets.buckets,
+          canWrite: creator,
+          workspaceId,
+          today,
+          getPlans: () => readPlansForPlanIt(workspaceId, today),
+          onOpenIdea: openIdea,
+          epoch: `${chip}:${String(bankExpanded)}`,
+        }
+      : null;
+  const laptopBankToolbar = (
+    <div data-bank-toolbar="" className="flex items-center gap-2 px-4 pt-2 md:px-0">
+      <Input
+        tone="search"
+        type="search"
+        aria-label="Search ideas"
+        placeholder="Search ideas"
+        value={bankSearchLaptop}
+        onChange={(e) => setBankSearchLaptop(e.target.value)}
+        className="min-w-0 flex-1"
+      />
+      {filterButton}
+      {creator ? (
+        <IconButton
+          label="Add idea"
+          data-bank-add-open=""
+          onClick={() => setBankSheet('add')}
+          className="shrink-0 bg-accent text-accent-fg lit-pill hover:text-accent-fg"
+        >
+          <IconPlus size={ICON_SIZE.control} />
+        </IconButton>
+      ) : null}
+    </div>
+  );
+  const bankLine = (
+    <BankFilterLine
+      filter={bankFilter}
+      buckets={bankBuckets.buckets}
+      onFilter={setBankFilter}
+      onClear={() => setBankFilter(BANK_FILTER_DEFAULT)}
+    />
+  );
   let body: ReactElement;
-  if (searching) {
+  if (onPhoneBank && bankSurfaceProps !== null) {
+    body = (
+      <>
+        {bankLine}
+        <BankSurface layout="phone" {...bankSurfaceProps} />
+      </>
+    );
+  } else if (desktop && bankExpanded && bankSurfaceProps !== null) {
+    body = (
+      <BankSurface
+        layout="table"
+        {...bankSurfaceProps}
+        onCollapse={() => setBankExpanded(false)}
+        toolbar={
+          <div className="flex flex-col gap-1">
+            {laptopBankToolbar}
+            {bankLine}
+          </div>
+        }
+      />
+    );
+  } else if (searching) {
     body =
       planSearch.status === 'error' && planSearch.data === null ? (
         <ScreenFailed onRetry={planSearch.refresh} />
@@ -482,6 +664,27 @@ export function PlanTabPage(): ReactElement {
         onNewPlan={openCompose}
         reload={reload}
         more={more}
+        {...(showBank
+          ? {
+              bankChip: (
+                <Chip
+                  type="button"
+                  label={PLAN_BANK_CHIP_LABEL}
+                  selected={bankOpen}
+                  data-plan-tab-bank-chip=""
+                  dot={<IconBank size={ICON_SIZE.inline} />}
+                  onClick={() => setBankOpen(!bankOpen)}
+                  className="shrink-0"
+                />
+              ),
+            }
+          : {})}
+        {...(bankOpen && creator
+          ? {
+              onBankDrop: (ideaId: string, day: string) =>
+                setBankDrop((prev) => ({ ideaId, day, nonce: (prev?.nonce ?? 0) + 1 })),
+            }
+          : {})}
       />
     );
   } else if (data === null || borrowedEmpty) {
@@ -516,6 +719,45 @@ export function PlanTabPage(): ReactElement {
       <div ref={landedRef} className="contents">
         {body}
       </div>
+      {desktop && bankSurfaceProps !== null && showBank ? (
+        <BankPanel
+          open={bankOpen && !bankExpanded}
+          onClose={() => setBankOpen(false)}
+          onExpand={() => {
+            setBankExpanded(true);
+            setBankOpen(false);
+          }}
+          surface={{ ...bankSurfaceProps, drop: bankDrop }}
+          toolbar={
+            <div className="flex flex-col gap-1 px-4">
+              {laptopBankToolbar}
+              {bankLine}
+            </div>
+          }
+        />
+      ) : null}
+      {workspaceId !== null ? (
+        <BankFilterSheet
+          open={bankSheet === 'filter'}
+          onClose={() => setBankSheet(null)}
+          filter={bankFilter}
+          onFilter={setBankFilter}
+          buckets={bankBuckets.buckets}
+          writes={bucketWrites}
+          onBuckets={bankBuckets.set}
+        />
+      ) : null}
+      {creator && workspaceId !== null && bucketWrites !== null ? (
+        <BankAddSheet
+          open={bankSheet === 'add'}
+          onClose={() => setBankSheet(null)}
+          workspaceId={workspaceId}
+          buckets={bankBuckets.buckets}
+          writes={bucketWrites}
+          onBuckets={bankBuckets.set}
+          onAdded={(idea) => bank.patch((list) => [idea, ...list.filter((i) => i.id !== idea.id)])}
+        />
+      ) : null}
       {creator && workspaceId !== null ? (
         <>
           <PlanComposeScreen
@@ -539,17 +781,19 @@ export function PlanTabPage(): ReactElement {
 }
 
 /**
- * The phone's week chips under the search row (All, This week, Next week,
- * Upcoming, Past), on the same line as Pipeline's stage chips so switching
- * tabs never moves the page. No counts: the list reads a page at a time.
+ * The phone's chips under the search row (Bank, This week, Next week,
+ * Upcoming, Past, All), on the same line as Pipeline's stage chips so
+ * switching tabs never moves the page. No counts: the list reads a page at a
+ * time. Bank shows for a creator, or a client whose bank holds an idea.
  */
 function PlanWeekChips(props: {
   chip: PlanWeekChip;
   onChip: (chip: PlanWeekChip) => void;
+  showBank: boolean;
 }): ReactElement {
   return (
     <>
-      {PLAN_WEEK_CHIPS.map((key) => (
+      {visiblePlanChips(props.showBank).map((key) => (
         <Chip
           key={key}
           label={planWeekChipLabel(key)}

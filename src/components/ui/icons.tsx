@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import {
   AdjustmentsHorizontalIcon,
+  ArchiveBoxIcon,
   ArrowDownTrayIcon,
   ArrowPathIcon,
   ArrowRightStartOnRectangleIcon,
@@ -19,6 +20,7 @@ import {
   Bars3BottomLeftIcon,
   BellAlertIcon,
   BookmarkIcon,
+  BuildingLibraryIcon,
   CalendarIcon,
   CalendarDaysIcon,
   CameraIcon,
@@ -496,6 +498,16 @@ export function IconStar(props: IconProps) {
 
 export function IconStarFilled(props: IconProps) {
   return <Hero icon={StarSolid} solid {...props} />;
+}
+
+/** The Plan tab's idea bank (bank outline). */
+export function IconBank(props: IconProps) {
+  return <Hero icon={BuildingLibraryIcon} {...props} />;
+}
+
+/** Archive (put an idea away; Unarchive brings it back). */
+export function IconArchive(props: IconProps) {
+  return <Hero icon={ArchiveBoxIcon} {...props} />;
 }
 
 /** Select text: an iMessage-style crop, a handle dot at either end. Hand-drawn: Heroicons has no text-selection glyph. */

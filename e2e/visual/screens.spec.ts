@@ -531,6 +531,137 @@ async function openChatPlanCard(page: Page): Promise<Locator> {
 const seedTab = (network: HarnessNetwork): void =>
   seedPlanTab(network.world, { sender: ME, now: NOW });
 
+/** Bank ideas' ids (no plan): a starred one, one shown to the client, one untouched for 90 days. */
+const BANK_IDEAS = [
+  '0190d500-0000-7000-8000-00000000e501',
+  '0190d500-0000-7000-8000-00000000e502',
+  '0190d500-0000-7000-8000-00000000e503',
+  '0190d500-0000-7000-8000-00000000e504',
+] as const;
+const BANK_BUCKETS = [
+  '0190d500-0000-7000-8000-00000000e5b1',
+  '0190d500-0000-7000-8000-00000000e5b2',
+] as const;
+const BANK_FIRST_TITLE = 'Founder story reel';
+
+/**
+ * The Plan tab plus the idea bank: four ideas (one starred, one shown to the
+ * client, one with the library photo, one untouched for 120 days), two
+ * buckets, comments on two of them.
+ */
+function seedBank(network: HarnessNetwork): void {
+  seedTab(network);
+  seedLibraryImage(network);
+  const t = network.world.tables;
+  const at = (daysAgo: number): string => new Date(NOW - daysAgo * 86_400_000).toISOString();
+  const idea = (
+    id: string,
+    title: string,
+    daysAgo: number,
+    extra: Partial<Record<string, unknown>> = {},
+  ): Row => ({
+    id,
+    workspace_id: WORKSPACE_ID,
+    plan_id: null,
+    kind: 'concept',
+    position: 0,
+    title,
+    description: null,
+    post_id: null,
+    target_date: null,
+    linked_post_id: null,
+    created_by: ME,
+    created_at: at(daysAgo + 3),
+    updated_at: at(daysAgo),
+    last_active_at: at(daysAgo),
+    show_to_client: false,
+    archived_at: null,
+    starred_at: null,
+    came_from_plan_title: null,
+    deleted_at: null,
+    ...extra,
+  });
+  (t.plan_items ??= []).push(
+    idea(BANK_IDEAS[0], BANK_FIRST_TITLE, 1, { starred_at: at(1) }),
+    idea(BANK_IDEAS[1], 'Behind the scenes carousel', 2, {
+      show_to_client: true,
+      came_from_plan_title: 'Week of 12 Oct',
+    }),
+    idea(BANK_IDEAS[2], 'Diwali gifting guide', 4),
+    idea(BANK_IDEAS[3], 'Customer FAQ series', 120),
+  );
+  (t.workspace_buckets ??= []).push(
+    {
+      id: BANK_BUCKETS[0],
+      workspace_id: WORKSPACE_ID,
+      name: 'Product',
+      color_hex: '#6b7280',
+      position: 1,
+      archived: false,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: BANK_BUCKETS[1],
+      workspace_id: WORKSPACE_ID,
+      name: 'Festive',
+      color_hex: '#6b7280',
+      position: 2,
+      archived: false,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+  );
+  (t.plan_item_buckets ??= []).push(
+    { item_id: BANK_IDEAS[0], bucket_id: BANK_BUCKETS[0], workspace_id: WORKSPACE_ID },
+    { item_id: BANK_IDEAS[2], bucket_id: BANK_BUCKETS[1], workspace_id: WORKSPACE_ID },
+  );
+  (t.asset_attachments ??= []).push({
+    id: '0190d500-0000-7000-8000-00000000e5a1',
+    workspace_id: WORKSPACE_ID,
+    entity_type: 'plan_item',
+    entity_id: BANK_IDEAS[0],
+    asset_version_id: LIB_IMAGE_VERSION,
+    position: 0,
+    attached_at: at(1),
+    deleted_at: null,
+    asset_versions: { mime_type: 'image/png', kind: 'image' },
+  });
+  const comment = (id: string, item: string, body: string): Row => ({
+    id,
+    workspace_id: WORKSPACE_ID,
+    item_id: item,
+    author_user_id: ME,
+    body,
+    visibility: 'everyone',
+    created_at: at(1),
+    edited_at: null,
+    deleted_at: null,
+  });
+  (t.plan_item_comments ??= []).push(
+    comment('0190d500-0000-7000-8000-00000000e5c1', BANK_IDEAS[0], 'Open on the factory floor.'),
+    comment('0190d500-0000-7000-8000-00000000e5c2', BANK_IDEAS[0], 'Keep it under a minute.'),
+    comment('0190d500-0000-7000-8000-00000000e5c3', BANK_IDEAS[1], 'Approver asked for this.'),
+  );
+}
+
+/** The Plan tab on the Bank (phone: the chip's list; laptop: the side panel). */
+async function bankReady(page: Page): Promise<void> {
+  await waitFor([page.locator('[data-bank-row]').getByText(BANK_FIRST_TITLE)], 'bank');
+}
+
+/** Open the first idea's ⋯ menu and pick `name`. */
+async function bankRowMenu(page: Page, name: RegExp): Promise<void> {
+  await bankReady(page);
+  await tap(
+    [
+      page
+        .locator(`[data-bank-row="${BANK_IDEAS[0]}"]`)
+        .getByRole('button', { name: 'More actions' }),
+    ],
+    'idea more',
+  );
+  await tap([page.getByRole('menuitem', { name })], 'idea menu item');
+}
+
 /** The laptop Plan tab switched to Week (the week of today), today's column filled. */
 async function planTabWeek(page: Page): Promise<void> {
   await waitFor([page.locator('[data-plan-tab-month]')], 'plan tab month');
@@ -1221,6 +1352,84 @@ const SCREENS: Screen[] = [
       await waitFor([page.getByText('Autumn launch')], 'plan');
       await tap([page.locator('[data-plan-tab-when="earlier"]')], 'Past');
       await waitFor([page.locator('[data-plan-tab-chip-zero]')], 'week zero');
+    },
+  },
+  {
+    // The Bank chip: idea cards (thumbnail, star, tags, meta).
+    name: 'plan-tab-bank',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: bankReady,
+  },
+  {
+    name: 'plan-tab-bank-filter',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankReady(page);
+      await tap([page.locator('[data-bank-filter-open]').first()], 'Filter and sort');
+      await waitFor(
+        [page.locator('[data-bank-filter-sheet] [data-bank-bucket]').first()],
+        'filter sheet',
+      );
+    },
+  },
+  {
+    name: 'plan-tab-bank-select',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankRowMenu(page, /^Select/);
+      await waitFor([page.locator('[data-bank-select-bar]')], 'select bar');
+    },
+  },
+  {
+    name: 'plan-tab-bank-add',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankReady(page);
+      await tap([page.locator('[data-bank-add-open]').first()], 'Add idea');
+      await waitFor([page.locator('[data-bank-add]')], 'add idea sheet');
+    },
+  },
+  {
+    name: 'plan-tab-bank-plan-it',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankRowMenu(page, /^Plan it/);
+      await waitFor([page.locator('[data-bank-plan-it]')], 'plan it sheet');
+    },
+  },
+  {
+    // Laptop: the Bank chip opens the side panel beside the calendar.
+    name: 'plan-tab-bank-panel',
+    only: 'laptop',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankReady(page);
+      await waitFor([page.locator('[data-bank="panel"] [data-bank-drag-hint]')], 'panel');
+    },
+  },
+  {
+    // Laptop: Expand swaps the calendar for the Bank table.
+    name: 'plan-tab-bank-table',
+    only: 'laptop',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankReady(page);
+      await tap([page.locator('[data-bank-expand]')], 'Expand');
+      await waitFor([page.locator('[data-bank-table]').getByText(BANK_FIRST_TITLE)], 'bank table');
     },
   },
   { name: 'post-detail', seed: creator, url: `/posts/${POST}`, steps: postDetailReady },
