@@ -12,7 +12,7 @@ const policies = {
 
 function PrivacyPolicyContent() {
   return (
-    <div className="space-y-6 text-base leading-6 text-fg-2">
+    <div className="space-y-6 text-base text-fg-2">
       <p>Last Updated: 08 Oct 2026</p>
       <p>
         This Privacy Policy explains how we collect, use, share and protect your personal data when
@@ -153,7 +153,7 @@ function PrivacyPolicyContent() {
 
 function TermsAndConditionsContent() {
   return (
-    <div className="space-y-6 text-base leading-6 text-fg-2">
+    <div className="space-y-6 text-base text-fg-2">
       <p>Last Updated: 08 Oct 2026</p>
       <p>
         These Terms and Conditions govern your use of srtd.io and the Sorted platform. By creating

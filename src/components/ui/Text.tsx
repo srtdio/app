@@ -27,6 +27,15 @@ export const TEXT_ROLE: Record<TextRole, string> = {
   meta: 'font-mono text-sm font-normal tabular-nums text-fg-3',
 };
 
+/**
+ * The section label (CLAUDE.md Design rules: sm/600 uppercase tracking-[0.06em]
+ * fg-2). Not a TextRole: it is the one tracked style, kept here so no call site
+ * writes tracking-*. SECTION_LABEL_INK is the same without the colour, for a
+ * label that sets its own ink.
+ */
+export const SECTION_LABEL_INK = 'text-sm font-semibold uppercase tracking-[0.06em]';
+export const SECTION_LABEL = `${SECTION_LABEL_INK} text-fg-2`;
+
 /** Body inside a text field: 16/22 on phone (iOS never zooms), 14/20 from md. */
 export const INPUT_BODY = 'text-input md:text-base';
 
