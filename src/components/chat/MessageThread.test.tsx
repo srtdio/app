@@ -1600,14 +1600,14 @@ describe('bubble text sizes', () => {
     expect(bar).not.toContain(QUOTE_TEXT_TYPE.touch);
   });
 
-  it('F12 bubble shape by layout: touch 18px, 12/8 padding, 76%; laptop 12px, 6/8, 65%', () => {
+  it('F12 bubble shape by layout: touch 18px, 12/8 padding, 76%; laptop 12px, 8, 65%', () => {
     const shape = { mine: false, head: false, tail: false, failed: false, voiceOnly: false };
     const touch = bubbleClass({ ...shape, layout: 'touch' });
     expect(touch).toContain('px-3 py-2');
     expect(touch).toContain('rounded-[18px]');
     const laptop = bubbleClass({ ...shape, layout: 'laptop' });
     expect(laptop).toContain('rounded-xl');
-    expect(laptop).toContain('px-2 pb-2 pt-1.5');
+    expect(laptop).toContain('p-2');
     for (const cls of [touch, laptop]) expect(cls).not.toContain('md:');
     const columnOf = (layout: ChatLayout): string => {
       let column = '';

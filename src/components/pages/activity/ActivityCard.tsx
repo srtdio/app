@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn';
 import { Avatar, avatarFillFor } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Button } from '@/components/ui/Button';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { Row } from '@/components/ui/Row';
 import { tagClass } from '@/components/ui/Tag';
 import { FORMER_MEMBER, splitAllMentions } from '@/lib/chat/mentions';
@@ -844,12 +845,6 @@ export function UpcomingCard({
   onEdit: (item: UpcomingItem) => void;
   onCancel: (item: UpcomingItem) => void;
 }): ReactElement {
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onOpen(item);
-    }
-  }
   return (
     <div
       data-upcoming-row={item.kind}
@@ -859,28 +854,30 @@ export function UpcomingCard({
       <div aria-hidden="true" className="w-1 shrink-0 bg-border-strong" />
 
       <div className="min-w-0 flex-1">
-        <div
-          role="button"
-          tabIndex={0}
+        <PressableRow
+          flat
+          insetFocus
+          type="button"
           onClick={() => onOpen(item)}
-          onKeyDown={onKeyDown}
           data-upcoming-open=""
-          className="flex cursor-pointer items-start gap-3 p-4 mv-tint lit-hover focus-visible:lit-focus-inset"
+          className="flex items-start gap-3 p-4 mv-tint"
         >
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex items-center gap-2">
+          <span className="block min-w-0 flex-1">
+            <span className="mb-1 flex items-center gap-2">
               <span data-upcoming-tag="" className="truncate text-sm font-medium text-fg-3">
                 {upcomingTag(item)}
               </span>
-            </div>
-            <p className="truncate text-base font-medium text-fg">{upcomingChat(item)}</p>
-            <p className="mt-1 line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
+            </span>
+            <span className="block truncate text-base font-medium text-fg">
+              {upcomingChat(item)}
+            </span>
+            <span className="mt-1 line-clamp-2 text-base text-fg-2 [overflow-wrap:anywhere]">
               {stripFormat(item.preview)}
-            </p>
-          </div>
+            </span>
+          </span>
 
-          <div className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg lit-media">
-            <div
+          <span className="flex w-24 shrink-0 self-start overflow-hidden rounded-lg lit-media">
+            <span
               aria-hidden="true"
               className="flex aspect-square w-full items-center justify-center bg-panel-2 text-fg-3"
             >
@@ -889,9 +886,9 @@ export function UpcomingCard({
               ) : (
                 <IconCalendarClock size={ICON_SIZE.status} />
               )}
-            </div>
-          </div>
-        </div>
+            </span>
+          </span>
+        </PressableRow>
 
         <div data-upcoming-actions="" className="flex justify-end gap-2 px-4 pb-4">
           <Button type="button" data-upcoming-action="edit" onClick={() => onEdit(item)}>

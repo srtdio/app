@@ -161,10 +161,10 @@ export const BUBBLE_TAIL = {
   theirs: 'rounded-bl-[4px]',
 } as const;
 
-/** Bubble padding: 8/12 touch, 6/8 laptop. */
+/** Bubble padding: 8/12 touch, 8 laptop. */
 export const BUBBLE_PAD: ChatSize = {
   touch: 'px-3 py-2',
-  laptop: 'px-2 pb-2 pt-1.5',
+  laptop: 'p-2',
 };
 
 /** The bubble column's max width: 76% touch, 65% laptop. */

@@ -2812,7 +2812,7 @@ export function MessageBubble(props: {
                   aria-hidden="true"
                   data-more-glyph=""
                   className={cn(
-                    'flex h-5 w-10 items-start justify-end rounded-tr-[inherit] bg-gradient-to-l from-50%',
+                    'flex w-10 items-start justify-end rounded-tr-[inherit] bg-gradient-to-l from-50%',
                     // On a card (the card is the bubble) the glyph's visible
                     // edge comes in to the card's 12px content edge.
                     cardOnly ? 'pr-2' : 'pr-1',
@@ -5064,7 +5064,7 @@ export function DayPill({ label, layout }: { label: string; layout: ChatLayout }
     <li role="separator" aria-label={label} className="flex justify-center">
       <span
         className={cn(
-          'self-center mb-1.5 mt-2 rounded-full border border-border-strong bg-panel px-3 py-0.5 text-fg-3 lit-pill',
+          'self-center mb-1.5 mt-2 rounded-full border border-border-strong bg-panel px-3 py-1 text-fg-3 lit-pill',
           sized(DATE_PILL_TYPE, layout),
         )}
       >
