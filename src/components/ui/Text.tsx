@@ -39,9 +39,10 @@ export const TEXT_ROLE: Record<TextRole, string> = {
 
 /**
  * The section label (CLAUDE.md Design rules: sm/600 uppercase tracking-[0.06em]
- * fg-2). Not a TextRole: it is the one tracked style, kept here so no call site
- * writes tracking-*. SECTION_LABEL_INK is the same without the colour, for a
- * label that sets its own ink.
+ * fg-2), the same string as TEXT_ROLE.section, for call sites that compose a
+ * class string. It is the one tracked style, kept here so no call site writes
+ * tracking-*. SECTION_LABEL_INK is the same without the colour, for a label
+ * that sets its own ink.
  */
 export const SECTION_LABEL_INK = 'text-sm font-semibold uppercase tracking-[0.06em]';
 export const SECTION_LABEL = `${SECTION_LABEL_INK} text-fg-2`;
