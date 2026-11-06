@@ -26,7 +26,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { IconPlus } from '@/components/ui/icons';
 import { Row } from '@/components/ui/Row';
-import { Tile } from '@/components/ui/Tile';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { Bone } from '@/lib/motion';
 
@@ -394,17 +393,16 @@ describe('load status', () => {
     expect(texts(tree)).not.toContain('Chats with your team show up here.');
   });
 
-  it('skeleton shapes are the real parts (2 group Rows, 4 people Tiles) drawn with Bones', () => {
+  it('skeleton shapes are the real part (2 group Rows, 4 people Rows) drawn with Bones', () => {
     const shells = findAll(
       withStatus('loading'),
       (el) => (el.props as Record<string, unknown>)['data-skeleton-row'] !== undefined,
     );
     const kinds = shells.map((t) => (t.props as Record<string, unknown>)['data-skeleton-row']);
-    expect(kinds).toEqual(['row', 'row', 'tile', 'tile', 'tile', 'tile']);
+    expect(kinds).toEqual(['row', 'row', 'row', 'row', 'row', 'row']);
     for (const shell of shells) {
-      const kind = (shell.props as Record<string, unknown>)['data-skeleton-row'];
       // The shell is the part it becomes, so swapping in the list shifts nothing.
-      const part = findAll(shell, (el) => el.type === (kind === 'row' ? Row : Tile));
+      const part = findAll(shell, (el) => el.type === Row);
       expect(part).toHaveLength(1);
       // Boxes sweep (motion Bone, in the part's slots); never a pulse or fade.
       const slots = Object.values(part[0]!.props as Record<string, unknown>).filter(
