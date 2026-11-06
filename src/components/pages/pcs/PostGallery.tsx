@@ -528,7 +528,7 @@ export function framePins(
             )}
           >
             {at.edge === null ? (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-annotation-line bg-annotation-bg text-sm font-semibold tabular-nums text-fg ring-2 ring-overlay-fg">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-annotation-line bg-annotation-bg text-sm font-semibold tabular-nums text-fg ring-2 ring-overlay-fg">
                 {pin.n}
               </span>
             ) : (
@@ -861,7 +861,7 @@ export function reorderView(model: ReorderModel): ReactElement {
                     : { aspectRatio: `${ratio}` }
                 }
                 className={cn(
-                  'relative flex h-24 min-w-11 touch-none cursor-grab items-center justify-center overflow-hidden border-2 bg-panel-2 mv-tint',
+                  'relative flex h-24 min-w-11 touch-none cursor-grab items-center justify-center overflow-hidden border bg-panel-2 mv-tint',
                   SLIDE_PRESS_CLASS,
                   slideEdge(selected),
                   dragging && 'z-10 cursor-grabbing lit-float',
@@ -1097,12 +1097,12 @@ export function galleryView({
             >
               <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
               {showIndex ? (
-                <span className="absolute left-1.5 bottom-1.5 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media">
+                <span className="absolute left-2 bottom-2 rounded bg-overlay px-2 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media">
                   {index + 1}/{items.length}
                 </span>
               ) : null}
               {pinCount > 0 ? (
-                <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media">
+                <span className="absolute right-2 top-2 inline-flex items-center gap-0.5 rounded bg-overlay px-2 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media">
                   <IconPin size={ICON_SIZE.inline} />
                   {pinCount}
                 </span>
@@ -1153,7 +1153,7 @@ export function galleryView({
         {pinArmedIndex !== null ? (
           <div
             role="status"
-            className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-1.5 text-sm font-medium text-overlay-fg lit-media"
+            className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full bg-overlay-surface px-3 py-2 text-sm font-medium text-overlay-fg lit-media"
           >
             Tap the image to place a pin
           </div>
@@ -1212,7 +1212,7 @@ export function galleryView({
                 </PressableRow>
                 {pinsFor !== undefined ? framePins(pinsFor(item), IDENTITY_MAP, onPinClick) : null}
                 {pinsFor === undefined && pinCount > 0 ? (
-                  <span className="pointer-events-none absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media">
+                  <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-0.5 rounded bg-overlay px-2 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media">
                     <IconPin size={ICON_SIZE.inline} />
                     {pinCount}
                   </span>
@@ -1237,7 +1237,7 @@ export function galleryView({
         {showIndex ? (
           <span
             aria-live="polite"
-            className="pointer-events-none absolute left-2 bottom-2 rounded bg-overlay px-1.5 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media"
+            className="pointer-events-none absolute left-2 bottom-2 rounded bg-overlay px-2 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media"
           >
             {`${active + 1}/${items.length}`}
           </span>

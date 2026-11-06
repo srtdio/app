@@ -62,8 +62,8 @@ const ASPECT: Record<NonNullable<ThumbnailProps['aspect']>, string> = {
 
 // Full class strings, so the default (Pipeline's) markup stays exactly as it was.
 const BODY_CLASS: Record<NonNullable<ThumbnailProps['bodyLines']>, string> = {
-  3: 'mt-auto line-clamp-3 text-sm leading-snug text-fg-2',
-  4: 'mt-auto line-clamp-4 text-sm leading-snug text-fg-2',
+  3: 'mt-auto line-clamp-3 text-sm text-fg-2',
+  4: 'mt-auto line-clamp-4 text-sm text-fg-2',
 };
 
 // Versions whose original has shown this session: a remount (a tab return)
@@ -87,10 +87,10 @@ function FallbackTile({
     // body snippet, no decorative gradient and no uppercase format label.
     if (fallback.layout === 'media') {
       return (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-2.5 p-3 text-center">
+        <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-3 text-center">
           <span className="text-fg-3">{formatIcon(fallback.glyph, 26)}</span>
           {fallback.body !== null ? (
-            <p className="line-clamp-2 text-sm leading-snug text-fg-2">{fallback.body}</p>
+            <p className="line-clamp-2 text-sm text-fg-2">{fallback.body}</p>
           ) : null}
         </div>
       );
@@ -105,7 +105,7 @@ function FallbackTile({
   if (fallback.kind === 'text') {
     return (
       <div className="h-full w-full overflow-hidden p-3">
-        <p className="line-clamp-4 text-sm italic leading-snug text-fg-2">{fallback.caption}</p>
+        <p className="line-clamp-4 text-sm italic text-fg-2">{fallback.caption}</p>
       </div>
     );
   }
