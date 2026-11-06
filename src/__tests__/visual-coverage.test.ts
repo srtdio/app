@@ -20,6 +20,7 @@ const DEFAULT_PROJECTS: readonly Project[] = ['iphone-light', 'iphone-dark', 'la
 
 /** Every screen name, sorted. */
 const REQUIRED: readonly string[] = [
+  'activity-bank',
   'approve-confirm-approver',
   'asset-more-menu',
   'asset-picker',
