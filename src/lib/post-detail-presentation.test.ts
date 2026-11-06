@@ -28,15 +28,20 @@ describe('postStatusLine', () => {
   const enteredAt = '2026-06-22T10:00:00Z'; // 2h before now
   const dated = '2025-06-11T12:00:00Z'; // prior year -> dated form with year
 
-  it('reads draft from updated_at (relative)', () => {
-    expect(postStatusLine('draft', updatedAt, enteredAt, now, 'UTC')).toBe('Updated 3 hours ago');
+  it('reads draft from updated_at (formatWhen, never relative)', () => {
+    expect(postStatusLine('draft', updatedAt, enteredAt, now, 'UTC')).toBe('Updated 9:00 AM');
     expect(postStatusLine('draft', now.toISOString(), enteredAt, now, 'UTC')).toBe(
-      'Updated just now',
+      'Updated 12:00 PM',
+    );
+    expect(postStatusLine('draft', '2026-06-21T09:00:00Z', enteredAt, now, 'UTC')).toBe(
+      'Updated Yesterday',
     );
   });
-  it('reads review from stage_entered_at (relative)', () => {
-    expect(postStatusLine('review', updatedAt, enteredAt, now, 'UTC')).toBe(
-      'In review · 2 hours ago',
+  it('reads review from stage_entered_at (formatWhen, never relative)', () => {
+    expect(postStatusLine('review', updatedAt, enteredAt, now, 'UTC')).toBe('In review · 10:00 AM');
+    // 22 Jun 2026 is a Monday; 18 Jun is the Thursday before.
+    expect(postStatusLine('review', updatedAt, '2026-06-18T10:00:00Z', now, 'UTC')).toBe(
+      'In review · Thu',
     );
   });
   it('reads approved as a dated event', () => {

@@ -72,9 +72,14 @@ describe('the date line', () => {
   it('done tasks: what was due and when it was done', () => {
     const done = { status: 'done' as const, doneAt: '2026-10-30T09:00:00.000Z' };
     expect(rowDateLine({ ...done, dueOn: '2026-10-31' }, CAL, 'UTC')?.text).toBe(
-      'Due 31 Oct · done 30 Oct',
+      'Due 31 Oct · done Fri',
     );
-    expect(rowDateLine({ ...done, dueOn: null }, CAL, 'UTC')?.text).toBe('Done 30 Oct');
+    expect(rowDateLine({ ...done, dueOn: null }, CAL, 'UTC')?.text).toBe('Done Fri');
+    // The done time is formatWhen: the clock today, a date a week or more back.
+    const today = { ...done, doneAt: '2026-11-05T09:00:00.000Z', dueOn: null };
+    expect(rowDateLine(today, CAL, 'UTC')?.text).toBe('Done 9:00 AM');
+    const older = { ...done, doneAt: '2026-10-20T09:00:00.000Z', dueOn: null };
+    expect(rowDateLine(older, CAL, 'UTC')?.text).toBe('Done 20 Oct');
     // Done before the stamp existed: the due day alone.
     expect(rowDateLine({ ...done, doneAt: null, dueOn: '2026-10-31' }, CAL)?.text).toBe(
       'Due 31 Oct',

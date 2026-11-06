@@ -9,7 +9,7 @@
 import { matchRuns } from '@/lib/chat/search';
 import { addCivilDays } from '@/lib/list-sort';
 import { weekBounds } from '@/lib/plan-week';
-import { civilDay, formatDate, formatDue, formatDueDate, formatOverdue } from '@/lib/time';
+import { civilDay, formatDue, formatDueDate, formatOverdue, formatWhen } from '@/lib/time';
 import type { ChatTask } from '@/lib/chat/tasks';
 
 export type TaskWhen = 'past' | 'today' | 'week' | 'later' | 'none';
@@ -89,9 +89,11 @@ export interface TaskDateLine {
  * The line under a row, or null when the chip already says it all:
  *   overdue: "Overdue · 3 Nov" (bad tone); today or undated: nothing
  *   this week or later: "7 Nov"
- *   done with a date: "Due 31 Oct · done 30 Oct"; done, no date: "Done 30 Oct"
- * A done task with no done time (done before the stamp existed) shows its due
- * day alone. Due days read on the workspace zone, the done time on the device's. Pure.
+ *   done with a date: "Due 31 Oct · done Fri"; done, no date: "Done Fri"
+ * The done time is the app's one past-time format (formatWhen: "9:00 AM"
+ * today, "Yesterday", "Fri", "30 Oct"). A done task with no done time (done
+ * before the stamp existed) shows its due day alone. Due days read on the
+ * workspace zone, the done time on the device's. Pure.
  */
 export function rowDateLine(
   task: Pick<ChatTask, 'dueOn' | 'status' | 'doneAt'>,
@@ -101,7 +103,7 @@ export function rowDateLine(
   const { today } = calendarDays(cal);
   const due = task.dueOn;
   if (task.status === 'done') {
-    const doneDay = task.doneAt !== null ? formatDate(task.doneAt, cal.now, deviceZone) : '';
+    const doneDay = task.doneAt !== null ? formatWhen(task.doneAt, cal.now, deviceZone) : '';
     if (due === null) return doneDay === '' ? null : { text: `Done ${doneDay}`, bad: false };
     const dueText = formatDue(due, cal.timeZone, cal.now);
     return { text: doneDay === '' ? dueText : `${dueText} · done ${doneDay}`, bad: false };
