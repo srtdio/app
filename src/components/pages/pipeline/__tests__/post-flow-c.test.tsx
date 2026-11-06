@@ -216,24 +216,21 @@ describe('post flow C: Pipeline card', () => {
     expect(card({ post: x5Post({ stage: 'review' }) })).not.toContain('data-post-card-status');
   });
 
-  it('fix 3: the ⋯ ends the due row, off the picture; Move hides when the viewer has no move', () => {
+  it('fix 3: the ⋯ ends the title line, off the picture; Move hides when the viewer has no move', () => {
     const out = card({ post: x5Post({ stage: 'review' }), onMove: () => {} });
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(button).toContain('aria-label="More actions for Post title"');
-    expect(/<div[^>]*data-post-card-menu=""[^>]*>/.exec(out)?.[0] ?? '').toContain('ml-auto');
     expect(button).not.toContain('absolute');
-    const metaAt = out.indexOf('data-post-card-meta');
-    expect(metaAt).toBeGreaterThan(out.indexOf('data-post-card-body'));
-    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(metaAt);
+    // The ⋯ is the Card more slot: it ends the title line.
+    const headerAt = out.indexOf('data-card-header');
+    expect(headerAt).toBeGreaterThan(-1);
+    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(headerAt);
     // Nothing of the move control sits on the picture.
-    const thumb = out.slice(
-      out.indexOf('data-post-card-thumb'),
-      out.indexOf('data-post-card-body'),
-    );
+    const thumb = out.slice(out.indexOf('data-post-card-thumb'), headerAt);
     expect(thumb).not.toContain('data-post-card-move');
     expect(thumb).not.toContain('bg-overlay-badge-hover');
-    // The title takes the full width and clamps at two lines.
-    const title = /<div[^>]*data-post-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
+    // The title clamps at two lines.
+    const title = /<span[^>]*data-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(title).toContain('line-clamp-2');
 
     // An approver can do nothing with a Draft, Parked or Rejected post: the ⋯

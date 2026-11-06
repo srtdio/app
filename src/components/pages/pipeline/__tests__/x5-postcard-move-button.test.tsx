@@ -52,17 +52,17 @@ class DOMParserLike {
   }
 }
 
-describe('X5 PostCard move button placement (the ⋯ at the right end of the due row)', () => {
+describe('X5 PostCard move button placement (the ⋯ at the right end of the title line)', () => {
   it('the carousel card keeps the move button off the picture; the badge stays on it', () => {
     const out = card('carousel');
     const thumb = section(out, 'data-post-card-thumb');
     expect(thumb).toContain('aria-label="Carousel"');
     expect(thumb).not.toContain('data-post-card-move');
     const badge = /<span[^>]*aria-label="Carousel"[^>]*>/.exec(out)?.[0] ?? '';
-    expect(badge).toContain('left-1.5');
-    // The ⋯ lives in the meta (due) row of the body.
-    const meta = section(out, 'data-post-card-meta');
-    expect(meta).toContain('data-post-card-move');
+    expect(badge).toContain('left-2');
+    // The ⋯ lives in the Card header (the title line).
+    const header = section(out, 'data-card-header');
+    expect(header).toContain('data-post-card-move');
   });
 
   it('the button is a plain 18px ⋯ in a 44px tap area that keeps the row height', () => {
@@ -70,20 +70,19 @@ describe('X5 PostCard move button placement (the ⋯ at the right end of the due
     const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(button).toContain('h-11');
     expect(button).toContain('w-11');
-    // Negative margins: the 44px target overflows a 20px row without growing it.
-    expect(button).toContain('-my-3');
-    expect(/<div[^>]*data-post-card-menu=""[^>]*>/.exec(out)?.[0] ?? '').toContain('ml-auto');
-    expect(button).toContain('z-10');
+    // The Card more slot keeps the 44px target in the line (-my-3) above the
+    // press surface (z-10); the trigger takes the trailing rule (-mr-3).
+    expect(out).toMatch(/data-card-more="" class="[^"]*-my-3[^"]*z-10/);
+    expect(button).toContain('-mr-3');
     expect(button).toContain('text-fg-3');
     // No resting fill (the shared IconButton only tints on hover).
     expect(button).not.toMatch(/[\s"]bg-/);
     expect(button).toContain('aria-label="More actions for Post title"');
-    const meta = /<div[^>]*data-post-card-meta=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(meta).toContain('h-5');
     const glyph = /<button[^>]*data-post-card-move=""[^>]*>(<svg[^>]*>)/.exec(out)?.[1] ?? '';
     expect(glyph).toContain('width="20"');
     expect(glyph).toContain('height="20"');
-    // It sits after the picture, inside the body.
-    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(out.indexOf('data-post-card-body'));
+    // It sits after the picture, in the card header.
+    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(out.indexOf('data-card-header'));
+    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(out.indexOf('data-post-card-thumb'));
   });
 });

@@ -381,7 +381,8 @@ function BankRow(props: RowProps): ReactElement {
         </span>
       </PressableRow>
       {props.canWrite && !props.selecting ? (
-        <span className="shrink-0 pr-3 pt-2">
+        // The ⋯ on the trailing rule: its glyph on the card's 16 content edge.
+        <span className="shrink-0 pr-4 pt-2">
           <ActionMenu
             title={idea.title ?? 'Idea'}
             items={props.menuItems}

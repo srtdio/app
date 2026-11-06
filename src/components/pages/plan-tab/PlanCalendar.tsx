@@ -51,6 +51,8 @@ import { Chip } from '@/components/ui/Chip';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconBank, IconChevronLeft, IconChevronRight } from '@/components/ui/icons';
+import { Toolbar } from '@/components/ui/Toolbar';
+import { Text } from '@/components/ui/Text';
 import { movedToBankLine } from '@/lib/chat/bank-plan-copy';
 import { useBankTraces } from '@/lib/chat/plan-bank-extras';
 import { supabase } from '@/lib/supabase';
@@ -351,47 +353,55 @@ export function PlanCalendar(props: {
       aria-busy={loading ? true : undefined}
       className={cn('flex flex-col', drag.state !== null && 'select-none')}
     >
-      <div data-plan-tab-toolbar="" className="flex items-center gap-2 px-6 py-2">
-        <h2
-          data-plan-tab-range=""
-          className="mr-1 shrink-0 whitespace-nowrap text-lg font-semibold text-fg"
-        >
-          {rangeLabel(view, anchor)}
-        </h2>
-        <IconButton
-          label={view === 'month' ? 'Last month' : 'Last week'}
-          data-plan-tab-prev=""
-          className="shrink-0"
-          onClick={() => goTo(shiftAnchor(view, anchor, -1), -1)}
-        >
-          <IconChevronLeft size={ICON_SIZE.control} />
-        </IconButton>
-        <IconButton
-          label={view === 'month' ? 'Next month' : 'Next week'}
-          data-plan-tab-next=""
-          className="shrink-0"
-          onClick={() => goTo(shiftAnchor(view, anchor, 1), 1)}
-        >
-          <IconChevronRight size={ICON_SIZE.control} />
-        </IconButton>
-        <Button
-          data-plan-tab-go-today=""
-          className="shrink-0"
-          onClick={() => goTo(today, today > anchor ? 1 : -1)}
-        >
-          {TODAY_LABEL}
-        </Button>
-        <ChipRow
-          bundles={bundles}
-          tones={tones}
-          selected={shownFilter}
-          onSelect={setFilter}
-          more={props.more}
-        />
-        {props.bankChip !== undefined ? (
-          <span className="flex shrink-0">{props.bankChip}</span>
-        ) : null}
-      </div>
+      {/* The one Toolbar: the range (title role), prev / next, Today, the plan chips, Bank. */}
+      <Toolbar
+        data-plan-tab-toolbar=""
+        context={
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Text
+              as="h2"
+              role="title"
+              data-plan-tab-range=""
+              className="mr-1 shrink-0 whitespace-nowrap"
+            >
+              {rangeLabel(view, anchor)}
+            </Text>
+            <IconButton
+              label={view === 'month' ? 'Last month' : 'Last week'}
+              data-plan-tab-prev=""
+              className="shrink-0"
+              onClick={() => goTo(shiftAnchor(view, anchor, -1), -1)}
+            >
+              <IconChevronLeft size={ICON_SIZE.control} />
+            </IconButton>
+            <IconButton
+              label={view === 'month' ? 'Next month' : 'Next week'}
+              data-plan-tab-next=""
+              className="shrink-0"
+              onClick={() => goTo(shiftAnchor(view, anchor, 1), 1)}
+            >
+              <IconChevronRight size={ICON_SIZE.control} />
+            </IconButton>
+            <Button
+              data-plan-tab-go-today=""
+              className="shrink-0"
+              onClick={() => goTo(today, today > anchor ? 1 : -1)}
+            >
+              {TODAY_LABEL}
+            </Button>
+            <ChipRow
+              bundles={bundles}
+              tones={tones}
+              selected={shownFilter}
+              onSelect={setFilter}
+              more={props.more}
+            />
+            {props.bankChip !== undefined ? (
+              <span className="flex shrink-0">{props.bankChip}</span>
+            ) : null}
+          </div>
+        }
+      />
       <div
         ref={fitRef}
         data-plan-tab-fit=""

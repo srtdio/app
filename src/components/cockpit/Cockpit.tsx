@@ -78,6 +78,8 @@ export function CockpitDot() {
     <IconButton
       type="button"
       label={dotLabel(level)}
+      // The dot has no text: the tooltip names it and its state, as the label does.
+      title={dotLabel(level)}
       aria-expanded={open}
       data-cockpit-dot={level}
       onClick={(event) => {

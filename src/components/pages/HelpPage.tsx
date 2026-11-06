@@ -159,13 +159,13 @@ export function HelpPage() {
     <>
       <PageHead title="Help" />
       <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
-        <section className="rounded-xl border bg-panel-2 lit-card-muted p-5 md:p-8">
+        <section className="rounded-xl border bg-panel-2 lit-card-muted p-4 md:p-6">
           <p className="text-base font-medium text-accent">Sorted Help Center</p>
           <h2 className="mt-2 text-lg font-semibold">Find your way through the workflow</h2>
-          <p className="mt-2 max-w-2xl text-base leading-6 text-fg-2">
+          <p className="mt-2 max-w-2xl text-base text-fg-2">
             Quick answers about pipeline, briefs, posts, approvals, files, and chat with your team.
           </p>
-          <div className="mt-5 max-w-xl">
+          <div className="mt-6 max-w-xl">
             <label htmlFor="help-search" className="sr-only">
               Search help
             </label>
@@ -177,7 +177,7 @@ export function HelpPage() {
               placeholder="Search help"
             />
           </div>
-          <nav aria-label="Helpful sections" className="mt-5 flex flex-wrap gap-2">
+          <nav aria-label="Helpful sections" className="mt-6 flex flex-wrap gap-2">
             {QUICK_LINKS.map((link) => (
               <NavLink
                 key={link.to}
@@ -229,14 +229,14 @@ export function HelpPage() {
                   key={article.id}
                   className="group rounded-xl border bg-panel lit-card px-4"
                 >
-                  <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-4 text-left text-base font-medium marker:hidden [&::-webkit-details-marker]:hidden">
+                  <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 text-left text-base font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                     <span>{article.title}</span>
                     <IconChevronDown
                       size={ICON_SIZE.nav}
                       className="shrink-0 text-fg-3 mv-slide group-open:rotate-180"
                     />
                   </summary>
-                  <p className="max-w-3xl pb-4 pr-8 text-base leading-6 text-fg-2">
+                  <p className="max-w-3xl pb-4 pr-8 text-base text-fg-2">
                     {article.content}
                   </p>
                 </details>

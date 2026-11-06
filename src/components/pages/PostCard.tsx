@@ -480,7 +480,7 @@ export function PostCard({
         onTouchStart: pressPrefetch,
         onClick: open,
       }}
-      title={<span data-post-card-title="">{post.title}</span>}
+      title={post.title}
       titleLines={2}
       {...(menu !== undefined ? { more: menu } : {})}
       {...(due !== null

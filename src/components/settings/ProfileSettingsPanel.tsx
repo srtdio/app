@@ -679,7 +679,7 @@ export function ProfileSettingsPanel(): React.ReactElement {
         <Bone lit="lit-avatar" className="h-[72px] w-[72px] rounded-full" />
         {[0, 1].map((key) => (
           <div key={key}>
-            <div className="mb-1.5 flex h-5 items-center">
+            <div className="mb-2 flex h-5 items-center">
               <Bone lit="flat" className="h-3.5 w-28 rounded" />
             </div>
             <Bone lit="lit-well" className="h-11 w-full rounded-lg" />

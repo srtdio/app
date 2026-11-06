@@ -109,7 +109,7 @@ describe('PostCard thumbnail frame', () => {
     expect(out).not.toContain('<img');
     expect(out).not.toContain('bg-panel-3');
     // The title is the card's first content; the caption reads under it.
-    expect(out.indexOf('data-post-card-title')).toBeLessThan(out.indexOf('data-post-card-caption'));
+    expect(out.indexOf('data-card-title')).toBeLessThan(out.indexOf('data-post-card-caption'));
     expect(out).toContain('Launch day is here');
     // A single image post with no upload yet is no-media too: no grey box.
     const noUpload = render({

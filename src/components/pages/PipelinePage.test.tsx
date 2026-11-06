@@ -1099,9 +1099,10 @@ describe('E: no jumps while loading', () => {
     expect((kanban.match(/w-\[260px\]/g) ?? []).length).toBe(5);
     expect(kanban).toContain('aspect-ratio:0.8');
     expect(kanban).not.toContain('aspect-square');
-    // The card shape: full height, a two-line title block and the meta row.
-    expect(kanban).toContain('min-h-[2.75em]');
-    expect(kanban).toContain('h-5');
+    // The card shape: the ui/Card surface and inset, content height, two title bones.
+    expect(kanban).toContain('lit-card');
+    expect(kanban).toContain('self-start');
+    expect(kanban).toContain('p-4');
     const client = renderToStaticMarkup(postsSkeleton(true, { kanban: true, ratio, columns: 4 }));
     expect((client.match(/w-\[260px\]/g) ?? []).length).toBe(4);
     // A stage view on a laptop draws the same column stacks as the cards.

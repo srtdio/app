@@ -111,10 +111,10 @@ describe('Pipeline page type roles', () => {
     expect(classes(count)).toEqual(expect.arrayContaining(['text-sm', 'text-fg-3']));
   });
 
-  it('card title: text-base font-medium', () => {
+  it('card title: the Card heading role (text-lg font-semibold)', () => {
     const host = paintBoard([makePost('a', 'draft')]);
     expect(classes(byText(host, 'Post a'))).toEqual(
-      expect.arrayContaining(['text-base', 'font-medium']),
+      expect.arrayContaining(['text-lg', 'font-semibold']),
     );
   });
 
