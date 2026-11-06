@@ -211,7 +211,7 @@ export function ActionMenu({
   const opener =
     trigger === null ? null : (
       <span className="inline-flex" onClick={() => setOpen(!open)}>
-        {trigger ?? <ActionMenuTrigger aria-expanded={open} />}
+        {trigger ?? <ActionMenuTrigger aria-expanded={open} edge="free" />}
       </span>
     );
 

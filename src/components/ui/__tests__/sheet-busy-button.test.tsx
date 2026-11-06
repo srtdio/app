@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +13,8 @@ import { PlanOpenSendSheet } from '@/components/chat/PlanOpenSendSheet';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const ROOT = fileURLToPath(new URL('../../', import.meta.url));
+// jsdom gives import.meta.url a non-file scheme: resolve from the repo root.
+const ROOT = join(process.cwd(), 'src');
 const read = (rel: string): string => readFileSync(join(ROOT, rel), 'utf8');
 
 let root: Root | null = null;
@@ -122,7 +122,7 @@ function tsx(dir: string): string[] {
 describe('every <Sheet busy=...> has a busy control', () => {
   const DELEGATES = /<(ApproveConfirm|PlanOpenSendSheet|BankPlanItSheets)\b/;
   for (const full of tsx(join(ROOT, 'components'))) {
-    const rel = relative(ROOT, full).split(sep).join('/');
+    const rel = relative(join(ROOT, 'components'), full).split(sep).join('/');
     if (rel.startsWith('ui/Sheet') || rel.includes('__tests__')) continue;
     const src = readFileSync(full, 'utf8');
     // The Sheet's own busy prop: no other JSX tag opens between <Sheet and busy=.
