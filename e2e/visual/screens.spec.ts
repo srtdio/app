@@ -1481,8 +1481,8 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // The bank idea's ⋯ menu: Plan it, Send to chat, Show to client, Star,
-    // Archive, Delete last.
+    // The bank idea's ⋯ menu: Plan it, Edit idea, Send to chat, Show to
+    // client, Star, Archive, Delete last.
     name: 'plan-item-bank-more-menu',
     seed: creator,
     extra: seedBankIdea,

@@ -207,6 +207,8 @@ export function ConceptSheet(props: {
   today?: string;
   /** Items per day for the tiles. */
   dayCounts?: Readonly<Record<string, number>>;
+  /** A bank idea: no date field or day tiles at all (its date comes when planned). */
+  noDate?: boolean;
 }): ReactElement {
   const { form, onChange } = props;
   const words = wordCounterLabel(form.description);
@@ -404,7 +406,7 @@ export function ConceptSheet(props: {
               {words.label}
             </p>
           </div>
-          {props.range === undefined ? (
+          {props.range === undefined && props.noDate !== true ? (
             <ConceptDateField
               value={form.date}
               disabled={busy}

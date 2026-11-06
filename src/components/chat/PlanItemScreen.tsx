@@ -57,6 +57,7 @@ import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'rea
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  bankIdeaEdit,
   planConceptEdit,
   planConceptLinkPost,
   planItemCommentCreate,
@@ -218,6 +219,7 @@ import {
 import { readProfiles } from '@/lib/chat-reads';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
 import {
+  bankIdeaEditArgs,
   bankItemReadWhat,
   conceptEditArgs,
   conceptEditUnchanged,
@@ -409,6 +411,7 @@ export const CONCEPT_EDIT_RESET_HINT =
 
 /** Toasts after an Edit concept save. */
 export const CONCEPT_UPDATED = 'Concept updated';
+export const IDEA_UPDATED = 'Idea updated';
 export const CONCEPT_SAVE_FAILED = errorText('save', null);
 
 /** Whether saving an edit resets a review: the team or client one is not waiting. Pure. */
@@ -811,9 +814,9 @@ export function PlanItemScreen(props: {
   // row's Edit opens it too. Save sends the full title, description and date;
   // files go as null unless they changed. An unchanged form sends nothing.
   const date = itemDateLabel(bundle, item, timeZone);
-  // plan_concept_edit edits a plan's concept (its date sits in the plan):
-  // a bank idea has no Edit yet.
-  const editable = !bank && canEditConcept(side, item);
+  // plan_concept_edit edits a plan's concept (its date sits in the plan);
+  // bank_idea_edit edits a bank idea (title, description, files; no date).
+  const editable = canEditConcept(side, item);
   const editResets = conceptEditResets(
     overrides.team ?? reviewStatus(bundle, item.id, 'team'),
     overrides.client ?? reviewStatus(bundle, item.id, 'client'),
@@ -840,10 +843,20 @@ export function PlanItemScreen(props: {
     const forItem = item.id;
     setEditBusy(true);
     const traceId = generateTraceId();
-    const result = await planConceptEdit(supabase, conceptEditArgs(forItem, edit, traceId));
+    const result = bank
+      ? await bankIdeaEdit(supabase, bankIdeaEditArgs(forItem, edit, traceId))
+      : await planConceptEdit(supabase, conceptEditArgs(forItem, edit, traceId));
     setEditBusy(false);
+    // A bank idea's kept read goes stale and the Bank re-reads (as its flag writes do).
+    const tellBank = (): void => {
+      if (bankKey !== null) invalidateReads(bankKey);
+      dispatchPlanChanged(window, '');
+    };
     if (!stillOn(forItem)) {
-      if (result.ok) dispatchPlanChanged(window, bundle.plan.id);
+      if (result.ok) {
+        if (bank) tellBank();
+        else dispatchPlanChanged(window, bundle.plan.id);
+      }
       return;
     }
     if (!result.ok) {
@@ -856,9 +869,10 @@ export function PlanItemScreen(props: {
       return;
     }
     setEditOpen(false);
-    toast.show({ title: CONCEPT_UPDATED });
+    toast.show({ title: bank ? IDEA_UPDATED : CONCEPT_UPDATED });
     reload();
-    dispatchPlanChanged(window, bundle.plan.id);
+    if (bank) tellBank();
+    else dispatchPlanChanged(window, bundle.plan.id);
   };
 
   // The concept's linked post: the screen's own write first, else the read.
@@ -1574,6 +1588,7 @@ export function PlanItemScreen(props: {
     bank && agency && concept
       ? bankIdeaMenu(item, {
           onPlanIt: () => planIt.start(ideaNow),
+          onEdit: openEdit,
           onSendToChat: sendToChat,
           onShow: () => setShowAsk(true),
           onHide: hideFromClient,
@@ -2078,12 +2093,16 @@ export function PlanItemScreen(props: {
             if (!editBusy) setEditOpen(false);
           }}
           busy={editBusy}
-          note={editResets ? CONCEPT_EDIT_RESET_HINT : null}
+          note={!bank && editResets ? CONCEPT_EDIT_RESET_HINT : null}
           filesState={editFiles !== null ? 'ready' : filesRead.state}
           onRetryFiles={filesRead.retry}
-          range={{ startsOn: bundle.plan.starts_on, endsOn: bundle.plan.ends_on }}
-          today={civilToday(new Date(), timeZone)}
-          dayCounts={dayCounts}
+          {...(bank
+            ? { noDate: true }
+            : {
+                range: { startsOn: bundle.plan.starts_on, endsOn: bundle.plan.ends_on },
+                today: civilToday(new Date(), timeZone),
+                dayCounts,
+              })}
           {...(canAttach ? { uploadFile } : {})}
         />
       ) : null}

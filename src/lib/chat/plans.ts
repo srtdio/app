@@ -16,8 +16,10 @@
 // the create steps and the readers are injected, so the contract is
 // unit-tested directly.
 
+import { firstExternalUrl } from '@/lib/chat/message-links';
 import { mark } from '@/lib/perf-marks';
 import type {
+  BankIdeaEditArgs,
   Client,
   PlanConceptAddArgs,
   PlanConceptEditArgs,
@@ -1336,6 +1338,25 @@ export function conceptEditArgs(
 }
 
 /**
+ * bank_idea_edit's args: conceptEditArgs without the date (a bank idea has
+ * none; its date comes when it is planned). Files follow the same rule. Pure.
+ */
+export function bankIdeaEditArgs(
+  itemId: string,
+  edit: ConceptEdit,
+  traceId: string,
+): BankIdeaEditArgs {
+  const args = conceptEditArgs(itemId, edit, traceId);
+  return {
+    p_item_id: args.p_item_id,
+    p_title: args.p_title,
+    p_description: args.p_description,
+    p_attachment_version_ids: args.p_attachment_version_ids,
+    p_trace_id: args.p_trace_id,
+  };
+}
+
+/**
  * Whether an edit leaves the concept as it is: same title, description and
  * date, and files that would go as null (untouched or picked the same). Such a
  * save sends nothing, so no review resets. Pure.
@@ -1378,8 +1399,30 @@ export interface PlanScreenData {
   lastChangedAt?: string | null;
 }
 
-/** A concept row's tile: its first image file, or "has files, none an image". */
-export type ConceptThumb = { kind: 'image'; versionId: string } | { kind: 'file' };
+/**
+ * A concept row's tile: its first image file, else (bank ideas) the picture
+ * of the first link in its description, else "has files, none an image".
+ */
+export type ConceptThumb =
+  | { kind: 'image'; versionId: string }
+  | { kind: 'link'; url: string }
+  | { kind: 'file' };
+
+/**
+ * A bank idea's tile: a picture wins, then the first external link's picture
+ * (fetched by the row when in view, through the link-preview Worker), then
+ * the file tile, else none. Pure.
+ */
+export function bankThumbOf(
+  files: ConceptThumb | undefined,
+  description: string | null,
+  firstLink: (body: string) => string | null = firstExternalUrl,
+): ConceptThumb | null {
+  if (files?.kind === 'image') return files;
+  const url = description !== null && description !== '' ? firstLink(description) : null;
+  if (url !== null) return { kind: 'link', url };
+  return files ?? null;
+}
 
 /** One asset_attachments row as the thumbs read selects it. */
 export interface ThumbRow {
@@ -1986,7 +2029,7 @@ export async function enrichBankIdeas(
       ...row,
       comment_count: comments.data[row.id] ?? 0,
       file_count: fileCounts[row.id] ?? 0,
-      thumb: thumbs[row.id] ?? null,
+      thumb: bankThumbOf(thumbs[row.id], row.description),
       format: row.linked_post_id ? (formats.get(row.linked_post_id) ?? null) : null,
     })),
   };
