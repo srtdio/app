@@ -65,7 +65,7 @@ import type { BucketOption } from '@/lib/buckets';
 import type { BankIdea, PlanRow } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
 import { errorText } from '@/lib/error-copy';
-import { formatRelative } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useWorkspaceMembers } from '@/lib/workspace-members';
 import { supabase } from '@/lib/supabase';
@@ -956,7 +956,7 @@ function BankTable(props: {
                 </td>
                 <td className="px-3 py-2 font-mono tabular-nums text-fg-2">{idea.comment_count}</td>
                 <td className="shrink-0 whitespace-nowrap px-3 py-2 font-mono text-sm tabular-nums text-fg-3">
-                  {formatRelative(idea.last_active_at ?? idea.created_at, props.now)}
+                  {formatWhen(idea.last_active_at ?? idea.created_at, props.now)}
                 </td>
                 <td className="py-1 pl-2 pr-3">
                   {props.canWrite ? (

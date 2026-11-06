@@ -9,7 +9,7 @@ import { errorText } from '@/lib/error-copy';
 import { isDraftPlan } from '@/lib/plan-tab';
 import { formatCivilShort } from '@/lib/plan-week';
 import { postFormatLabel } from '@/lib/post-format';
-import { formatRelative } from '@/lib/time';
+import { formatWhen } from '@/lib/time';
 
 /** The Bank's sort options, in menu order (Recently active by default). */
 export const BANK_SORT_OPTIONS: ReadonlyArray<{ value: BankSort; label: string }> = [
@@ -155,11 +155,11 @@ export function bankZeroCopy(filter: BankFilter, searching: boolean): string {
   return 'Ideas show up here.';
 }
 
-/** "{n} comments · {ago}" ("1 comment"); the ago from time.ts. Pure. */
+/** "{n} comments · {when}" ("1 comment"); when last active, time.ts formatWhen. Pure. */
 export function ideaMetaLine(idea: BankIdea, now: Date): string {
   const n = idea.comment_count;
-  const ago = formatRelative(idea.last_active_at ?? idea.created_at, now);
-  return `${n} ${n === 1 ? 'comment' : 'comments'} · ${ago}`;
+  const when = formatWhen(idea.last_active_at ?? idea.created_at, now);
+  return `${n} ${n === 1 ? 'comment' : 'comments'} · ${when}`;
 }
 
 /** The idea's format line: its linked post's format, else Idea. Pure. */

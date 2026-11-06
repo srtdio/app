@@ -160,7 +160,10 @@ describe('copy', () => {
   it('words rows', () => {
     expect(
       ideaMetaLine(idea('x', { comment_count: 1, last_active_at: '2026-11-04T12:00:00Z' }), NOW),
-    ).toBe('1 comment · 2 days ago');
+    ).toBe('1 comment · Wed');
+    expect(
+      ideaMetaLine(idea('x', { comment_count: 2, last_active_at: '2026-10-01T12:00:00Z' }), NOW),
+    ).toBe('2 comments · 1 Oct');
     expect(ideaFilesLine(idea('x', { file_count: 3 }))).toBe('Idea · 3 files');
     expect(moreFilesLabel(1)).toBeNull();
     expect(moreFilesLabel(4)).toBe('+3');
