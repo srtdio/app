@@ -4477,7 +4477,8 @@ function ThreadBody(
   // An idea card message follows the same rules (a bundle row's ids come from the batch).
   const menuIdeas = menu !== null ? withIdeaIds(menu.message) : null;
   const menuPlan =
-    menu !== null && (isPlanMessage(menu.message) || (menuIdeas !== null && isIdeaMessage(menuIdeas)));
+    menu !== null &&
+    (isPlanMessage(menu.message) || (menuIdeas !== null && isIdeaMessage(menuIdeas)));
   const menuPlanTitle =
     menu === null
       ? null

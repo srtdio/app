@@ -1,8 +1,10 @@
 // Add to a plan on a picked day, from the empty-day menu: the Plan screen's
-// own Add sheet ("Add to <day>": New concept or Pick a post), its Concept
+// own Add sheet ("Add to <day>": New concept, Pick a post or From bank), its Concept
 // sheet with that day set, and its post picker whose picks all go on that
-// day. The writes are the Plan screen's: one plan_concept_add, or one
-// plan_posts_add with the day; the same toasts and failure copy. Nothing is
+// day, and From bank (BankPickSheet: an idea from the bank onto that day of
+// this plan). The writes are the Plan screen's: one plan_concept_add, one
+// plan_posts_add with the day, or one plan_item_from_bank; the same toasts
+// and failure copy. Nothing is
 // sent to any chat. A write tells every open plan surface (PLAN_CHANGED_EVENT).
 
 import { useEffect, useMemo, useState } from 'react';
@@ -25,6 +27,7 @@ import { logger } from '@/lib/logger';
 import { civilToday } from '@/lib/plan-week';
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
+import { BankPickSheet } from './BankPickSheet';
 
 /** A plan and the day to add on. */
 export interface AddTarget {
@@ -32,7 +35,7 @@ export interface AddTarget {
   day: string;
 }
 
-type Stage = 'menu' | 'concept' | 'pick';
+type Stage = 'menu' | 'concept' | 'pick' | 'bank';
 
 export function PlanTabAdd(props: {
   target: AddTarget | null;
@@ -151,6 +154,15 @@ export function PlanTabAdd(props: {
           setPicked([]);
           setStage('pick');
         }}
+        onFromBank={() => setStage('bank')}
+        onClose={close}
+      />
+      <BankPickSheet
+        open={stage === 'bank' && day !== null}
+        workspaceId={shown?.bundle.plan.workspace_id ?? null}
+        day={day ?? ''}
+        today={civilToday(new Date(), props.timeZone)}
+        plans={shown !== null ? [shown.bundle.plan] : []}
         onClose={close}
       />
       <ConceptSheet

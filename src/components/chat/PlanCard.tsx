@@ -3,9 +3,9 @@
 // the shown side's progress (Draft "Team X of N", Open "Client X of N", the
 // same for every viewer), and a footer with Open plan (and Forward: the agency
 // on every plan, a client on an Open plan). Forwarding a Draft plan into a
-// chat with a client sends nothing and says "Open the plan for client first."
-// (when the chat is known to have one, or when the server refuses it for that
-// reason). Ids resolve through the thread's
+// chat with a client (known from the list, or refused by the server for that
+// reason) asks "Open this plan for approvers?" first (PlanOpenSendSheet: Open
+// and send opens the plan, then shares it). Ids resolve through the thread's
 // plan card cache (PlanCardsProvider), so every plan across the loaded thread
 // comes back in one batch, never one read per bubble. A plan the viewer can no
 // longer read (deleted, RLS) renders the neutral box with "Plan deleted";
@@ -424,9 +424,10 @@ function PlanForwardSheet(props: {
       return;
     }
     setAsk(null);
-    const channel = load.status === 'ready'
-      ? load.channels.find((c) => c.channelId === next.channelId)
-      : undefined;
+    const channel =
+      load.status === 'ready'
+        ? load.channels.find((c) => c.channelId === next.channelId)
+        : undefined;
     const publish = channel !== undefined ? publishOf(channel) : null;
     if (publish !== null) {
       void publish({ sorted_message_id: result.data.id, sorted_channel_id: next.channelId }).catch(
@@ -537,7 +538,7 @@ export function livePublishFor(
 }
 
 /**
- * The Forward list: the conversation picker's rows (same box, same fixed body
+ * The chat pick list (Forward plan, Send idea to chat): the conversation picker's rows (same box, same fixed body
  * height), with "Has client" on chats known to have a client when the plan is
  * a Draft. Hook-free.
  */

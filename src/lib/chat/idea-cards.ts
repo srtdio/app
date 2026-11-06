@@ -35,20 +35,7 @@ export const IDEA_EYEBROW = 'Idea';
 /** The card a viewer without access sees. */
 export const IDEA_NO_ACCESS = "You don't have access to this idea.";
 
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** "12 Oct" from a civil date (the plan card's day format). Pure. */
 function shortCivil(isoDate: string): string {
@@ -74,7 +61,9 @@ export function ideaLine(view: Extract<IdeaCardView, { kind: 'idea' }>): string 
 }
 
 /** Where a tap goes: the bank idea route, or the plan item route. Pure. */
-export function ideaHref(view: Pick<Extract<IdeaCardView, { kind: 'idea' }>, 'id' | 'planId'>): string {
+export function ideaHref(
+  view: Pick<Extract<IdeaCardView, { kind: 'idea' }>, 'id' | 'planId'>,
+): string {
   if (view.planId === null) {
     return `/plan/bank?${new URLSearchParams({ item: view.id }).toString()}`;
   }
@@ -109,9 +98,7 @@ async function selectByIds<T>(
   if (unique.length === 0) return { ok: true, data: [] };
   const results = await Promise.all(
     planChunks(unique).map((chunk) => {
-      const base = (
-        client.from(table) as unknown as { select: (c: string) => Query }
-      )
+      const base = (client.from(table) as unknown as { select: (c: string) => Query })
         .select(columns)
         .in('id', chunk);
       return abortable(extra(base), signal) as unknown as Promise<{
@@ -122,7 +109,8 @@ async function selectByIds<T>(
   );
   const rows: T[] = [];
   for (const r of results) {
-    if (r.error !== null) return { ok: false, error: { code: 'unknown', message: r.error.message } };
+    if (r.error !== null)
+      return { ok: false, error: { code: 'unknown', message: r.error.message } };
     rows.push(...((r.data as T[] | null) ?? []));
   }
   return { ok: true, data: rows };
@@ -252,7 +240,11 @@ export async function readMessageIdeaIds(
                 column: string,
                 values: readonly string[],
               ) => {
-                not: (column: string, op: string, value: null) => PromiseLike<{
+                not: (
+                  column: string,
+                  op: string,
+                  value: null,
+                ) => PromiseLike<{
                   data: unknown;
                   error: { message: string } | null;
                 }>;
@@ -270,10 +262,14 @@ export async function readMessageIdeaIds(
       }),
     );
     for (const r of results) {
-      if (r.error !== null) return { ok: false, error: { code: 'unknown', message: r.error.message } };
-      for (const row of (r.data as Array<{ id: string; shared_plan_item_ids: string[] | null }> | null) ??
-        []) {
-        if ((row.shared_plan_item_ids ?? []).length > 0) out.set(row.id, row.shared_plan_item_ids ?? []);
+      if (r.error !== null)
+        return { ok: false, error: { code: 'unknown', message: r.error.message } };
+      for (const row of (r.data as Array<{
+        id: string;
+        shared_plan_item_ids: string[] | null;
+      }> | null) ?? []) {
+        if ((row.shared_plan_item_ids ?? []).length > 0)
+          out.set(row.id, row.shared_plan_item_ids ?? []);
       }
     }
     return { ok: true, data: out };

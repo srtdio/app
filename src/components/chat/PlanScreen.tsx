@@ -46,6 +46,7 @@
 import { mark } from '@/lib/perf-marks';
 import { itemOut } from '@/lib/motion';
 import { PlanOpenSendSheet, type PlanOpenSendAsk } from '@/components/chat/PlanOpenSendSheet';
+import { BankPickSheet, fromBankDay } from '@/components/pages/plan-tab/BankPickSheet';
 import { movedToBankLine } from '@/lib/chat/bank-plan-copy';
 import {
   moveToBankAction,
@@ -232,6 +233,7 @@ import {
   bucketLine,
   tracesByDay,
   type BankTrace,
+  type RowBuckets,
   type ComposeRange,
   type ConceptThumb,
   type PlanBundle,
@@ -1075,6 +1077,8 @@ export function PlanScreen(props: {
   const [conceptForm, setConceptForm] = useState<ConceptForm>(EMPTY_CONCEPT);
   const [conceptBusy, setConceptBusy] = useState(false);
   const [pickFor, setPickFor] = useState<AddTarget | null>(null);
+  // From bank: the day the picked idea goes on (null = closed).
+  const [bankDay, setBankDay] = useState<string | null>(null);
   const [picked, setPicked] = useState<PostCardFields[]>([]);
   // Header "+" picks dated outside the plan: one day sheet per post, in turn.
   const [outside, setOutside] = useState<{
@@ -1142,6 +1146,7 @@ export function PlanScreen(props: {
     setAddFor(null);
     setConceptFor(null);
     setPickFor(null);
+    setBankDay(null);
     setPicked([]);
     // The header "+" day sheets and their notes never come back on the next open.
     setOutside(null);
@@ -1826,6 +1831,13 @@ export function PlanScreen(props: {
     setPickFor(addFor);
     setAddFor(null);
   };
+  // From bank: onto the Add's day; the header "+" and No date take today when
+  // the plan holds it, else its nearest day (plan_item_from_bank needs a day).
+  const startFromBank = (): void => {
+    if (addFor === null || bundle === null) return;
+    setBankDay(addFor.day ?? fromBankDay(bundle.plan, civilToday(new Date(), timeZone)));
+    setAddFor(null);
+  };
   const saveConcept = async (): Promise<void> => {
     if (conceptBusy || conceptFor === null) return;
     const date = conceptForm.date === '' ? null : conceptForm.date;
@@ -2287,7 +2299,16 @@ export function PlanScreen(props: {
             dayHeader={addFor !== null ? dayHeaderOf(addFor.day) : null}
             onNewConcept={startConcept}
             onPickPost={startPick}
+            onFromBank={startFromBank}
             onClose={() => setAddFor(null)}
+          />
+          <BankPickSheet
+            open={props.open && bankDay !== null}
+            workspaceId={bundle?.plan.workspace_id ?? workspaceId}
+            day={bankDay ?? ''}
+            today={civilToday(new Date(), timeZone)}
+            plans={bundle !== null ? [bundle.plan] : []}
+            onClose={() => setBankDay(null)}
           />
           <ConceptSheet
             open={props.open && conceptFor !== null}
@@ -2675,13 +2696,38 @@ export function rowSubline(item: PlanItemRow): string {
   return item.kind === 'concept' ? (item.description ?? '') : '';
 }
 
-/** A creator's row ⋯ menu: Open, Move to another day, Remove from plan. */
+/** A row's bucket names: a concept's own (plan_item_buckets), a post's one bucket. Pure. */
+export function rowBucketNames(item: PlanItemRow, buckets: RowBuckets | undefined): string[] {
+  if (buckets === undefined) return [];
+  if (item.kind === 'concept') return buckets.items[item.id] ?? [];
+  return item.post_id !== null ? (buckets.posts[item.post_id] ?? []) : [];
+}
+
+/**
+ * Where a concept left the plan (agency only): a quiet line on that day,
+ * "{title} moved to bank" with the bank icon, a dashed edge, never tappable.
+ */
+export function BankTraceLine(props: { trace: Pick<BankTrace, 'itemId' | 'title'> }): ReactElement {
+  return (
+    <p
+      data-plan-trace={props.trace.itemId}
+      className="flex min-w-0 items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-sm text-fg-3"
+    >
+      <IconBank size={ICON_SIZE.inline} className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{movedToBankLine(props.trace.title)}</span>
+    </p>
+  );
+}
+
+/** A creator's row ⋯ menu: Open, Move to another day, Move to bank, Remove from plan. */
 export interface PlanRowMenu {
   /** The row whose menu is open, or null. */
   openId: string | null;
   onOpenChange: (id: string, open: boolean) => void;
   /** Move to another day: opens the day picker for the row. */
   onMove: (id: string) => void;
+  /** Move to bank (concepts): the row leaves at once, the write behind Undo. */
+  onToBank?: (id: string) => void;
   /** Remove from plan: at once, behind Undo. */
   onRemove: (id: string) => void;
 }
@@ -2698,6 +2744,10 @@ export function PlanBody(props: {
   commentCounts?: Readonly<Record<string, number>>;
   /** Other plans' titles by post id (the Also in pill). */
   alsoIn?: Readonly<Record<string, string[]>>;
+  /** The rows' bucket names (read after paint): concepts by item id, posts by post id. */
+  buckets?: RowBuckets;
+  /** Agency: the moved-to-bank lines by plan day (read after paint). */
+  traces?: ReadonlyMap<string, BankTrace[]>;
   onOpenItem: (id: string) => void;
   /** A pair's post row opens its post. */
   onOpenLinkedPost?: (postId: string) => void;
@@ -2734,6 +2784,7 @@ export function PlanBody(props: {
             {week.days.map((day) => {
               const items = day.items;
               const empty = items.length === 0;
+              const dayTraces = day.day !== null ? (props.traces?.get(day.day) ?? []) : [];
               // One date tile per day: on its first row, or beside the empty day's line.
               const tile = <DayColumn day={day.day} today={today} empty={empty} />;
               const emptyBody =
@@ -2776,6 +2827,7 @@ export function PlanBody(props: {
                         ? { onOpenLinkedPost: props.onOpenLinkedPost }
                         : {})}
                       commentCount={props.commentCounts?.[item.id] ?? 0}
+                      buckets={rowBucketNames(item, props.buckets)}
                       tile={index === 0 ? tile : null}
                       timeZone={props.timeZone}
                       alsoIn={item.post_id !== null ? (props.alsoIn?.[item.post_id] ?? []) : []}
@@ -2792,7 +2844,18 @@ export function PlanBody(props: {
                       {tile}
                       <div className="ml-3 min-w-0 flex-1">{emptyBody}</div>
                     </div>
-                  ) : props.onAdd !== undefined && (day.day === null || day.inRange) ? (
+                  ) : null}
+                  {dayTraces.length > 0 ? (
+                    <div className="flex items-start gap-3">
+                      <span aria-hidden="true" className="w-14 shrink-0" />
+                      <div className="flex min-w-0 flex-1 flex-col gap-2">
+                        {dayTraces.map((trace) => (
+                          <BankTraceLine key={trace.itemId} trace={trace} />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {empty ? null : props.onAdd !== undefined && (day.day === null || day.inRange) ? (
                     <AddRow day={day.day} empty={false} onAdd={props.onAdd} />
                   ) : null}
                 </div>
@@ -3234,6 +3297,16 @@ function PairedPostRow(props: {
   );
 }
 
+/** The menu entry that sends a concept back to the bank. */
+export const MOVE_TO_BANK_LABEL = 'Move to bank';
+
+/** A concept's format: its linked post's, when it has one; '' otherwise. Pure. */
+export function conceptFormat(bundle: PlanBundle, item: PlanItemRow): string {
+  const linked = item.kind === 'concept' ? (item.linked_post_id ?? null) : null;
+  const format = linked !== null ? (bundle.postInfo[linked]?.format ?? null) : null;
+  return format !== null && format !== '' ? formatLabel(format) : '';
+}
+
 /** A row's format line: a post's format ("Carousel"), a concept's description. Pure. */
 export function rowMeta(bundle: PlanBundle, item: PlanItemRow): string {
   if (item.kind === 'concept') return rowSubline(item);
@@ -3384,6 +3457,8 @@ function PlanRow(props: {
   onOpenLinkedPost?: (postId: string) => void;
   /** Visible comments on the item; 0 shows nothing. */
   commentCount?: number;
+  /** The row's bucket names (the format line's tail). */
+  buckets?: readonly string[];
   /** The day's date tile on its first row; null on the rows under it. */
   tile: ReactNode;
   /** The workspace zone (the date line). */
@@ -3455,6 +3530,14 @@ function PlanRow(props: {
     );
   }
   const meta = rowMeta(props.bundle, props.item);
+  const buckets = props.buckets ?? [];
+  // A post's format line carries its bucket ("Reel · Launch"); a concept keeps
+  // its description and adds "{format} · {buckets}" when it has any.
+  const formatLine =
+    props.item.kind === 'post'
+      ? bucketLine(meta, buckets)
+      : bucketLine(conceptFormat(props.bundle, props.item), buckets);
+  const subLine = props.item.kind === 'post' ? '' : meta;
   const rowButton = (
     <PressableRow
       type="button"
@@ -3470,9 +3553,18 @@ function PlanRow(props: {
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         {titleText(false)}
-        {meta !== '' ? (
+        {formatLine !== '' ? (
+          <span
+            data-plan-row-format=""
+            {...(buckets.length > 0 ? { 'data-plan-row-buckets': '' } : {})}
+            className="truncate text-sm text-fg-2"
+          >
+            {formatLine}
+          </span>
+        ) : null}
+        {subLine !== '' ? (
           <span data-plan-row-meta="" className="truncate text-sm text-fg-3">
-            {meta}
+            {subLine}
           </span>
         ) : null}
         {alsoIn !== null ? (
@@ -3510,6 +3602,16 @@ function PlanRow(props: {
             icon: IconCalendar,
             onSelect: () => menu.onMove(id),
           },
+          ...(props.item.kind === 'concept' && menu.onToBank !== undefined
+            ? [
+                {
+                  id: 'to-bank',
+                  label: MOVE_TO_BANK_LABEL,
+                  icon: IconBank,
+                  onSelect: () => menu.onToBank?.(id),
+                },
+              ]
+            : []),
           {
             id: 'remove',
             label: REMOVE_ROW_LABEL,

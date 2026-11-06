@@ -41,6 +41,17 @@
 // through planItemRead (one shared session read, the kept idea paints first):
 // header "Idea", subline "Bank" ("Bank · archived"), a "Came from" line when it
 // left a plan, Date "No date"; no Approvers row, plan actions, reviews or Edit.
+// Bank meets Plan (6 Nov 2026), concepts only: a Buckets card (chips,
+// multi-pick, the pick the ink fill; the add chip turns into an inline field;
+// each change autosaves through plan_item_buckets_set with "Saving… / Saved";
+// a client reads Tags), and on a bank idea (agency) a Who can see this card
+// (Team only / Client can see, the approvers named, Show to client through
+// #816's warning sheet, Hide from client behind the Undo strip). More menu: a
+// planned concept adds Send to chat and Move to bank (above Remove from plan;
+// the write waits for the Undo strip, the screen goes back at once); a bank
+// idea gets Plan it (#816's flow, usePlanIt), Send to chat, Show or Hide,
+// Star or Unstar, Archive or Unarchive, Delete last. Send to chat is
+// IdeaShareFlow (the chat picker, then chat_plan_item_share).
 
 import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react';
@@ -1225,7 +1236,19 @@ export function PlanItemScreen(props: {
     setAddingBucket(false);
     setBucketName('');
     setBucketError(null);
-  }, [props.item.id, props.item.bucket_ids]);
+    // Only another item resets the picks; a re-read of this one keeps them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.item.id]);
+  // The ids arrived with a later read (the bundle) before any pick here.
+  const arrivedIds = props.item.bucket_ids;
+  useEffect(() => {
+    if (arrivedIds === undefined) return;
+    setPicked((cur) => {
+      if (cur !== null) return cur;
+      savedPicks.current = arrivedIds;
+      return arrivedIds;
+    });
+  }, [arrivedIds]);
   const needBucketRead = props.open && concept && picked === null;
   useEffect(() => {
     if (!needBucketRead) return;
@@ -1298,7 +1321,7 @@ export function PlanItemScreen(props: {
         aria-label={BUCKETS_LABEL}
         className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card"
       >
-        <div className="flex min-h-[28px] items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <h4 className={SECTION_LABEL}>{BUCKETS_LABEL}</h4>
           {agency && saveLabel !== null ? (
             <span
@@ -1392,7 +1415,7 @@ export function PlanItemScreen(props: {
   );
   const shownToClient = item.show_to_client === true;
   const [showAsk, setShowAsk] = useState(false);
-  const ideaNow = bankIdeaOf(props.item, commentCount);
+  const ideaNow = bankIdeaOf(item, commentCount);
   const markBankChanged = (): void => {
     if (bankKey !== null) invalidateReads(bankKey);
     dispatchPlanChanged(window, '');
@@ -1493,7 +1516,7 @@ export function PlanItemScreen(props: {
       className="flex flex-col gap-2 rounded-xl border bg-panel p-3 lit-card"
     >
       <h4 className={SECTION_LABEL}>{WHO_CAN_SEE_LABEL}</h4>
-      <div className="flex min-h-[28px] items-center">
+      <div className="flex items-center">
         <Tag
           label={shownToClient ? CLIENT_CAN_SEE : TEAM_ONLY}
           tone={shownToClient ? 'good' : 'neutral'}
@@ -1543,8 +1566,7 @@ export function PlanItemScreen(props: {
           onDelete: deleteIdea,
         })
       : null;
-  const conceptMenu: ActionMenuItem[] | null =
-    concept && planActions ? plannedMenu() : bankMenu;
+  const conceptMenu: ActionMenuItem[] | null = concept && planActions ? plannedMenu() : bankMenu;
 
   // The linked comment (concept items; a post item's comments land inside the
   // embedded post page): once its row renders, scroll to it and ring it briefly

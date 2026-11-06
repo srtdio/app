@@ -670,7 +670,8 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
             idea={sendIdea}
             onClose={() => setSendIdea(null)}
             onShown={() => {
-              const shown = sendIdea !== null ? ideas?.find((i) => i.id === sendIdea.id) : undefined;
+              const shown =
+                sendIdea !== null ? ideas?.find((i) => i.id === sendIdea.id) : undefined;
               if (shown !== undefined) {
                 replaceIdea(withFlags(shown, { show: true }, new Date().toISOString()));
               }

@@ -69,7 +69,11 @@ function useIdeaStoreVersion(store: IdeaCardStore): number {
 }
 
 /** A message's idea ids: its own, else (an empty-looking bundle row) the ones read for it. */
-export function useMessageIdeaIds(messageId: string, own: readonly string[], ask: boolean): string[] {
+export function useMessageIdeaIds(
+  messageId: string,
+  own: readonly string[],
+  ask: boolean,
+): string[] {
   const store = ideaCardStore();
   useIdeaStoreVersion(store);
   useEffect(() => {
@@ -96,7 +100,9 @@ export function withIdeaIds<M extends { id: string; sharedPlanItemIds?: string[]
 ): M {
   if ((message.sharedPlanItemIds ?? []).length > 0) return message;
   const read = ideaCardStore().messageIdeas(message.id);
-  return read !== undefined && read.length > 0 ? { ...message, sharedPlanItemIds: [...read] } : message;
+  return read !== undefined && read.length > 0
+    ? { ...message, sharedPlanItemIds: [...read] }
+    : message;
 }
 
 /** The first readable idea's title (the menu's Copy), or null. */
