@@ -4,18 +4,20 @@ import {
   formatChatTime,
   formatDate,
   formatDateTime,
+  formatDayLabel,
   formatDayRange,
   formatDue,
   formatDueDate,
   formatOverdue,
-  formatRelative,
   formatTime,
+  formatWhen,
   safeTimeZone,
 } from '@/lib/time';
 
 // Zones are passed explicitly so the suite is deterministic on any machine.
 const IST = 'Asia/Kolkata';
 const NY = 'America/New_York';
+const LA = 'America/Los_Angeles';
 // 25 Oct 2026, 14:14 IST.
 const NOW = new Date('2026-10-25T08:44:00Z');
 
@@ -29,46 +31,88 @@ describe('formatTime', () => {
   });
 });
 
-describe('formatChatTime', () => {
+describe('formatWhen', () => {
+  // NOW is Sunday 25 Oct 2026, 14:14 IST.
   it('today is the clock time', () => {
-    expect(formatChatTime('2026-10-25T08:44:00Z', NOW, IST)).toBe('2:14 PM');
+    expect(formatWhen('2026-10-25T08:44:00Z', NOW, IST)).toBe('2:14 PM');
+    expect(formatWhen('2026-10-24T18:30:00Z', NOW, IST)).toBe('12:00 AM');
   });
-  it('yesterday, including just before midnight', () => {
+  it('yesterday is "Yesterday"', () => {
     // 24 Oct 23:59 IST.
-    expect(formatChatTime('2026-10-24T18:29:00Z', NOW, IST)).toBe('Yesterday');
-    // 25 Oct 00:00 IST is today.
-    expect(formatChatTime('2026-10-24T18:30:00Z', NOW, IST)).toBe('12:00 AM');
+    expect(formatWhen('2026-10-24T18:29:00Z', NOW, IST)).toBe('Yesterday');
   });
-  it('this year and older', () => {
-    expect(formatChatTime('2026-10-20T06:00:00Z', NOW, IST)).toBe('20 Oct');
-    expect(formatChatTime('2025-10-20T06:00:00Z', NOW, IST)).toBe('20 Oct 2025');
+  it('2 to 6 days back is the short weekday', () => {
+    expect(formatWhen('2026-10-23T06:00:00Z', NOW, IST)).toBe('Fri');
+    expect(formatWhen('2026-10-20T06:00:00Z', NOW, IST)).toBe('Tue');
+    expect(formatWhen('2026-10-19T06:00:00Z', NOW, IST)).toBe('Mon');
   });
-  it('yesterday across a year boundary', () => {
+  it('7 or more days back is the date, the year only off the current year', () => {
+    expect(formatWhen('2026-10-18T06:00:00Z', NOW, IST)).toBe('18 Oct');
+    expect(formatWhen('2026-03-02T06:00:00Z', NOW, IST)).toBe('2 Mar');
+    expect(formatWhen('2025-10-20T06:00:00Z', NOW, IST)).toBe('20 Oct 2025');
+  });
+  it('never relative', () => {
+    for (const at of ['2026-10-25T08:43:30Z', '2026-10-25T05:00:00Z', '2026-09-01T00:00:00Z']) {
+      expect(formatWhen(at, NOW, IST)).not.toMatch(/ago|just now/);
+    }
+  });
+  it('across midnight in Asia/Kolkata (UTC is still on the same day)', () => {
+    // Now: 6 Nov 00:01 IST = 5 Nov 18:31Z.
+    const now = new Date('2026-11-05T18:31:00Z');
+    // 5 Nov 23:59 IST.
+    expect(formatWhen('2026-11-05T18:29:00Z', now, IST)).toBe('Yesterday');
+    expect(formatWhen('2026-11-05T18:31:00Z', now, IST)).toBe('12:01 AM');
+    // The same instants in UTC are both 5 Nov, so both read as today's clock.
+    expect(formatWhen('2026-11-05T18:29:00Z', now, 'UTC')).toBe('6:29 PM');
+  });
+  it('across midnight in America/Los_Angeles (UTC is already on the next day)', () => {
+    // Now: 6 Nov 00:01 PST = 6 Nov 08:01Z.
+    const now = new Date('2026-11-06T08:01:00Z');
+    // 5 Nov 23:59 PST = 6 Nov 07:59Z.
+    expect(formatWhen('2026-11-06T07:59:00Z', now, LA)).toBe('Yesterday');
+    expect(formatWhen('2026-11-06T08:01:00Z', now, LA)).toBe('12:01 AM');
+    expect(formatWhen('2026-11-06T07:59:00Z', now, 'UTC')).toBe('7:59 AM');
+  });
+  it('across a year change', () => {
     const jan1 = new Date('2027-01-01T10:00:00Z');
-    expect(formatChatTime('2026-12-31T10:00:00Z', jan1, 'UTC')).toBe('Yesterday');
-    expect(formatChatTime('2026-12-30T10:00:00Z', jan1, 'UTC')).toBe('30 Dec 2026');
+    expect(formatWhen('2026-12-31T10:00:00Z', jan1, 'UTC')).toBe('Yesterday');
+    expect(formatWhen('2026-12-30T10:00:00Z', jan1, 'UTC')).toBe('Wed');
+    const jan2 = new Date('2027-01-02T10:00:00Z');
+    // 28 Dec 2026 is 5 days back: the weekday.
+    expect(formatWhen('2026-12-28T10:00:00Z', jan2, 'UTC')).toBe('Mon');
+    // 26 Dec 2026 is 7 days back: the date, with its year.
+    expect(formatWhen('2026-12-26T10:00:00Z', jan2, 'UTC')).toBe('26 Dec 2026');
+    const jan5 = new Date('2026-01-05T10:00:00Z');
+    expect(formatWhen('2025-12-20T10:00:00Z', jan5, 'UTC')).toBe('20 Dec 2025');
   });
   it('reads the day in a non-IST zone', () => {
     // 04:44 New York on 25 Oct is today there; 03:00Z is 24 Oct 23:00 there.
-    expect(formatChatTime('2026-10-25T08:44:00Z', NOW, NY)).toBe('4:44 AM');
-    expect(formatChatTime('2026-10-25T03:00:00Z', NOW, NY)).toBe('Yesterday');
+    expect(formatWhen('2026-10-25T08:44:00Z', NOW, NY)).toBe('4:44 AM');
+    expect(formatWhen('2026-10-25T03:00:00Z', NOW, NY)).toBe('Yesterday');
+  });
+  it('invalid input is empty', () => {
+    expect(formatWhen('', NOW, IST)).toBe('');
+    expect(formatWhen('nope', NOW, IST)).toBe('');
+  });
+  it('formatChatTime is the same format', () => {
+    expect(formatChatTime('2026-10-20T06:00:00Z', NOW, IST)).toBe('Tue');
+    expect(formatChatTime('2026-10-24T18:29:00Z', NOW, IST)).toBe('Yesterday');
   });
 });
 
-describe('formatRelative', () => {
-  const ago = (ms: number) => new Date(NOW.getTime() - ms);
-  it('each unit', () => {
-    expect(formatRelative(ago(20 * 1000), NOW)).toBe('just now');
-    expect(formatRelative(new Date(NOW.getTime() + 60_000), NOW)).toBe('just now');
-    expect(formatRelative(ago(5 * 60_000), NOW)).toBe('5 min ago');
-    expect(formatRelative(ago(3600_000), NOW)).toBe('1 hour ago');
-    expect(formatRelative(ago(3 * 3600_000), NOW)).toBe('3 hours ago');
-    expect(formatRelative(ago(2 * 86400_000), NOW)).toBe('2 days ago');
-    expect(formatRelative(ago(125 * 86400_000), NOW)).toBe('4 months ago');
-    expect(formatRelative(ago(800 * 86400_000), NOW)).toBe('2 years ago');
+describe('formatDayLabel', () => {
+  it('"Today" for today, else formatWhen', () => {
+    expect(formatDayLabel('2026-10-25T08:44:00Z', NOW, IST)).toBe('Today');
+    expect(formatDayLabel('2026-10-24T18:29:00Z', NOW, IST)).toBe('Yesterday');
+    expect(formatDayLabel('2026-10-21', NOW, IST)).toBe('Wed');
+    expect(formatDayLabel('2026-10-02', NOW, IST)).toBe('2 Oct');
+    expect(formatDayLabel('2025-12-31', NOW, IST)).toBe('31 Dec 2025');
   });
-  it('unparseable is empty', () => {
-    expect(formatRelative('nope', NOW)).toBe('');
+  it('a date-only key for today is "Today" on any zone', () => {
+    expect(formatDayLabel('2026-10-25', NOW, IST)).toBe('Today');
+  });
+  it('invalid input is empty', () => {
+    expect(formatDayLabel('', NOW, IST)).toBe('');
   });
 });
 
