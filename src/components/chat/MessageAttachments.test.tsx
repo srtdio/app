@@ -313,7 +313,7 @@ describe('instant send tile (local preview + upload progress)', () => {
     expect(html).toMatch(/data-voice-bars="peaks" class="[^"]*invisible opacity-0/);
     // No visible upload bar; the ring's progress is announced by an sr-only progressbar.
     expect(html).toMatch(/role="progressbar"[^>]*class="sr-only"/);
-    expect(html).not.toContain('h-[3px]');
+    expect(html).not.toContain('h-1 bg-panel-3');
     expect(html).not.toContain('WEBM');
     expect(html).not.toContain('Open');
 

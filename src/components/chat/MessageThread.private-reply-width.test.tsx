@@ -56,7 +56,7 @@ describe('Reply privately bubble width', () => {
         expect.arrayContaining(['max-w-full', 'min-w-60']),
       );
       expect(tokens(bubbleClass({ ...shape, voiceOnly: true }))).toEqual(
-        expect.arrayContaining(['max-w-full', 'min-w-[220px]']),
+        expect.arrayContaining(['max-w-full', 'min-w-56']),
       );
     });
 

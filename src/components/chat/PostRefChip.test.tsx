@@ -89,12 +89,12 @@ describe('createChipBatch', () => {
 describe('PostRefChip', () => {
   const post = { id: 'p1', number: 14, title: 'Launch teaser', thumbnailAssetVersionId: null };
 
-  it('is a 44px tap target around a 24px pill: 18px round thumb and the title', () => {
+  it('is a 44px tap target around a 24px pill: 16px round thumb and the title', () => {
     const html = renderToStaticMarkup(<PostRefChip post={post} onTap={() => {}} />);
     expect(html).toContain('min-h-11');
     expect(html).toContain('h-6');
     expect(html).toContain('rounded-full');
-    expect(html).toContain('h-[18px] w-[18px]');
+    expect(html).toContain('h-4 w-4');
     expect(html).toMatch(/truncate[^>]*>Launch teaser</);
     // The bubble long-press ignores it, like a link.
     expect(html).toContain('data-msg-link=""');

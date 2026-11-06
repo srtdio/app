@@ -278,9 +278,9 @@ describe('menu style', () => {
     expect(MENU_WIDTH_PX).toBeGreaterThanOrEqual(6 * 44 + 20 + 2);
   });
 
-  it('rows: full-bleed, >= 44px, 16px sides, 14px gap, base fg text', () => {
+  it('rows: full-bleed, >= 44px, 16px sides, 12px gap, base fg text', () => {
     const cls = MENU_ROW.split(' ');
-    expect(cls).toEqual(expect.arrayContaining(['min-h-11', 'px-4', 'gap-[14px]']));
+    expect(cls).toEqual(expect.arrayContaining(['min-h-11', 'px-4', 'gap-3']));
     const html = renderToStaticMarkup(
       <>
         {items.map((item) => (
@@ -338,7 +338,7 @@ describe('menu style', () => {
       />,
     );
     expect(html.match(/h-11 w-11 min-h-11 min-w-11[^"]*shrink-0/g)?.length).toBe(6);
-    expect(html).toContain('px-[10px] py-2');
+    expect(html).toContain('px-2 py-2');
     expect(html).toContain('border-b border-border');
   });
 });

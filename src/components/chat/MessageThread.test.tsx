@@ -1032,7 +1032,7 @@ describe('voice-only bubble', () => {
       if (props['data-bubble'] !== undefined) cls = props.className ?? '';
     });
     expect(cls).toContain('rounded-[18px]');
-    expect(cls).toContain('min-w-[220px]');
+    expect(cls).toContain('min-w-56');
     expect(metaOf(root)).toMatchObject({ placement: 'row', meta: { time: T_UTC } });
   });
 
@@ -1401,7 +1401,7 @@ describe('image album and viewer', () => {
       voiceOnly: false,
       album: true,
     });
-    expect(cls).toContain('p-[3px]');
+    expect(cls).toContain('p-1');
     expect(cls).toContain('min-w-60');
     expect(cls).not.toContain('px-3');
   });

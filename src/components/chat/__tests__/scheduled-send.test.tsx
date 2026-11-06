@@ -325,7 +325,7 @@ describe('UI-3 S2 / S3: upload first, all or nothing', () => {
   it('a chip dims and shows a thin progress bar while it uploads', () => {
     const thumb = composer.slice(composer.indexOf('function PendingThumb'));
     expect(thumb).toContain("uploading && 'opacity-50'");
-    expect(thumb).toContain('absolute inset-x-0 bottom-0 h-[3px]');
+    expect(thumb).toContain('absolute inset-x-0 bottom-0 h-1');
     expect(thumb).toContain('bg-accent');
   });
   it('a failed upload: the chip takes the failed state, the toast copy is fixed', () => {

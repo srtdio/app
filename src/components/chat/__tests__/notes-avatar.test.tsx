@@ -44,8 +44,8 @@ describe('notes avatar', () => {
       /data-notes-badge=""[^>]*aria-hidden="true"|aria-hidden="true"[^>]*data-notes-badge/,
     );
     expect(html).toContain(`aria-label="${NOTES_AVATAR_LABEL}"`);
-    // Tile badge: 30px, -5px out, 3px ring in the surface token.
-    expect(html).toContain('h-[30px] w-[30px] -bottom-[5px] -right-[5px] border-[3px]');
+    // Tile badge: 32px, -4px out, 3px ring in the surface token.
+    expect(html).toContain('h-8 w-8 -bottom-1 -right-1 border-[3px]');
     expect(html).toContain('border-panel');
     expect(html).toContain('bg-accent text-accent-fg');
   });
