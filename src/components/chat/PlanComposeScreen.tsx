@@ -126,9 +126,6 @@ export function composeHasContent(input: {
   );
 }
 
-/** Create's button while the one call is in flight. */
-export const CREATING_LABEL = 'Creating…';
-
 /**
  * A concept form's date standing for "needs a day": before any plan day, so
  * the tiles select nothing and a Save without a pick keeps it flagged.
@@ -462,11 +459,10 @@ export function PlanComposeScreen(props: {
         variant="primary"
         data-plan-create=""
         className="w-full md:w-auto"
-        aria-busy={busy}
-        disabled={busy}
+        busy={busy}
         onClick={() => void create()}
       >
-        {busy ? CREATING_LABEL : CREATE_PLAN_LABEL}
+        {CREATE_PLAN_LABEL}
       </Button>
       <p data-plan-compose-summary="" className="text-center text-sm text-fg-3">
         {composeSummary(items)}

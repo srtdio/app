@@ -129,7 +129,8 @@ describe('New plan create: one call, never half built', () => {
     expect(src.match(/planCreateWithItems\(/g)).toHaveLength(1);
     expect(src).not.toMatch(/planCreate\(|planConceptAdd|planPostsAdd|runPlanShare/);
     expect(src).not.toMatch(/'Retry'|locked=|const locked/);
-    expect(src).toContain("CREATING_LABEL = 'Creating…'");
+    // In flight is Button busy on Create plan (label kept), never a swap.
+    expect(src).toMatch(/data-plan-create=""[^>]*?busy=\{busy\}/s);
     expect(src).toContain('if (inFlight.current) return;');
   });
 
