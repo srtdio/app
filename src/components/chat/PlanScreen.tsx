@@ -2114,9 +2114,11 @@ export function PlanScreen(props: {
         aria-label="Add to plan"
         data-plan-add-header=""
         onClick={openHeaderAdd}
-        className="shrink-0"
+        className="shrink-0 px-0"
       >
-        <span data-plan-header-box="" className="inline-flex items-center gap-2">
+        {/* The visible box spans the whole 44 button (its padding lives here),
+            so its right edge is the button's, on the 16px line. */}
+        <span data-plan-header-box="" className="inline-flex items-center gap-2 self-stretch px-4">
           <IconPlus size={ICON_SIZE.inline} />
           Add
         </span>

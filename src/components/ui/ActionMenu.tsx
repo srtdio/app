@@ -184,8 +184,11 @@ export function ActionMenu({
     // Closing keeps the last anchor so MenuPopover plays its shrink back.
     if (!isLaptop) setAnchor(null);
     if (!isLaptop || !open) return;
-    const el = wrapRef.current;
-    if (el === null) return;
+    const wrap = wrapRef.current;
+    if (wrap === null) return;
+    // Anchor to the trigger itself: the trailing rule pulls its 44 box 12 past
+    // the wrapper's edge, so the wrapper's rect would shift the popover by 12.
+    const el = wrap.querySelector<HTMLElement>('button') ?? wrap;
     const r = el.getBoundingClientRect();
     setAnchor({
       ...popoverAnchor(r, rows.length, viewportSize(), align),
