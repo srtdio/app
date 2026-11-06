@@ -38,9 +38,8 @@ export const PLAN_ITEM_LEGEND = "Plan item, in its plan's colour";
 export const LOOSE_POST_LEGEND = 'Post not in a plan';
 const NO_POST_YET = 'No post yet';
 
-/** A stage as a status line says it: "In review", else the capitalised stage. Pure. */
+/** A stage as a status line says it: the capitalised stage ("Review", never "In review"). Pure. */
 export function stageStatusWord(stage: string): string {
-  if (stage === 'review') return 'In review';
   return stage.charAt(0).toUpperCase() + stage.slice(1);
 }
 
@@ -414,7 +413,7 @@ export function planPill(
 }
 
 /**
- * The card's post line: "Post: <stage status word>" ("Post: In review",
+ * The card's post line: "Post: <stage status word>" ("Post: Review",
  * "Post: Draft") for a post item (a draft row reads "Draft"), "No post yet"
  * for a concept or an unreadable post. Pure.
  */

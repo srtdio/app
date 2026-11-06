@@ -246,8 +246,9 @@ describe('PostDetailPage embedded', () => {
   it('non-embedded keeps the 56px header (plus the page-mode safe area) with Back', () => {
     const html = paint(false);
     expect(html).toContain('Loading post');
-    expect(html).toContain(
-      'flex items-center gap-3 px-4 md:px-6 border-b lit-header h-[calc(3.5rem+var(--shell-safe-top,0px))] pt-[var(--shell-safe-top,0px)]',
+    // ui/HeaderBar (gutter 16/24, lit-header) with the page-mode safe area.
+    expect(html).toMatch(
+      /data-header-bar="" class="[^"]*border-b[^"]*lit-header[^"]*px-4 md:px-6[^"]*h-\[calc\(3\.5rem\+var\(--shell-safe-top,0px\)\)\] pt-\[var\(--shell-safe-top,0px\)\]/,
     );
     expect(html).toContain('aria-label="Back"');
   });

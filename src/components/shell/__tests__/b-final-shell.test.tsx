@@ -38,7 +38,9 @@ describe('PageHead is the one header bar', () => {
   it('HeaderBar, title role, 56 tall, the route-focus h1', () => {
     const out = html(<PageHead title="Settings" />);
     expect(out).toContain('data-header-bar=""');
-    expect(out).toMatch(/<h1 tabindex="-1" class="[^"]*text-lg font-semibold[^"]*focus:outline-none/);
+    expect(out).toMatch(
+      /<h1 tabindex="-1" class="[^"]*text-lg font-semibold[^"]*focus:outline-none/,
+    );
     expect(out).toContain('h-14');
     expect(out).not.toContain('md:h-16');
   });
@@ -51,6 +53,19 @@ describe('PageHead is the one header bar', () => {
     expect(html(<PageHead title="Pipeline" hidden />)).toBe(
       '<h1 tabindex="-1" class="sr-only">Pipeline</h1>',
     );
+  });
+});
+
+describe('Topbar edges', () => {
+  it('the bar sits on GUTTER and the workspace name starts on the 16 edge', () => {
+    const src = source('../Topbar.tsx');
+    expect(src).toContain('GUTTER,');
+    expect(src).not.toContain('px-3 md:px-4');
+    expect(src).toContain('className="md:hidden -ml-4 min-w-0');
+  });
+
+  it('the operator Cockpit dot carries a name and a tooltip', () => {
+    expect(source('../../cockpit/Cockpit.tsx')).toContain('title={dotLabel(level)}');
   });
 });
 
@@ -82,7 +97,7 @@ describe('trailing rule: the part applies it, never the call site', () => {
     }
   });
 
-  it('select mode: the count is the title, Cancel a text action kept on the edge (not a 44 box)', () => {
+  it('select mode: the count is the title, Cancel a text action on the edge', () => {
     const slots = selectionHeaderSlots({ count: 2, onCancel: noop });
     const out = html(<HeaderBar compact title={slots.title} actions={slots.cancel} />);
     expect(out).toContain('data-selection-count=""');
@@ -125,10 +140,27 @@ describe('Remind me and Schedule: one time pick frame', () => {
 
   it('a row keeps its height with a time, a chevron or as the danger row', () => {
     const rows = [
-      html(<WhenRow hook="reminder" id="a" icon={null} label="1 hour" detail="3:20 PM" onClick={noop} />),
+      html(
+        <WhenRow
+          hook="reminder"
+          id="a"
+          icon={null}
+          label="1 hour"
+          detail="3:20 PM"
+          onClick={noop}
+        />,
+      ),
       html(<WhenRow hook="reminder" id="b" icon={null} label="Custom" onClick={noop} />),
       html(
-        <WhenRow hook="reminder" id="cancel" icon={null} label="Cancel reminder" tone="danger" divided onClick={noop} />,
+        <WhenRow
+          hook="reminder"
+          id="cancel"
+          icon={null}
+          label="Cancel reminder"
+          tone="danger"
+          divided
+          onClick={noop}
+        />,
       ),
     ];
     for (const out of rows) expect(out).toContain('min-h-[56px]');

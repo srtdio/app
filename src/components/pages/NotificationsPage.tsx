@@ -1216,7 +1216,10 @@ export function NotificationsPage() {
                   </span>
                   {bucketIndex === 0 && chipUnread > 0 ? (
                     // L6: the link's own 8 inset is pulled out so its text ends on the edge.
-                    <div data-activity-mark-all="" className="-mr-2 ml-auto flex shrink-0 justify-end">
+                    <div
+                      data-activity-mark-all=""
+                      className="-mr-2 ml-auto flex shrink-0 justify-end"
+                    >
                       <Button variant="link" onClick={handleMarkAll}>
                         Mark all read
                       </Button>

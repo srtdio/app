@@ -244,22 +244,22 @@ export function WorkspaceSettingsPanel() {
         </h3>
         <div data-workspace-danger="" className={cn(cardSurface(), cardPad())}>
           {isOwner && session !== null ? (
-          <div className="flex items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-base text-fg">Delete workspace</p>
-              <p className="mt-0.5 text-base text-fg-2">Permanent. Nothing is saved.</p>
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-base text-fg">Delete workspace</p>
+                <p className="mt-0.5 text-base text-fg-2">Permanent. Nothing is saved.</p>
+              </div>
+              <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
+                Delete
+              </Button>
+              <DeleteWorkspaceSheet
+                open={deleteOpen}
+                workspaceId={activeId}
+                name={row.name}
+                userId={session.user.id}
+                onClose={() => setDeleteOpen(false)}
+              />
             </div>
-            <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
-              Delete
-            </Button>
-            <DeleteWorkspaceSheet
-              open={deleteOpen}
-              workspaceId={activeId}
-              name={row.name}
-              userId={session.user.id}
-              onClose={() => setDeleteOpen(false)}
-            />
-          </div>
           ) : (
             <p className="text-base text-fg-2">{DELETE_OWNER_ONLY_LINE}</p>
           )}

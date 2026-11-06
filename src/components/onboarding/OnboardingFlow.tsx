@@ -1380,10 +1380,7 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
       />
       <ol className="flex flex-col gap-3">
         {WAITING_LINES.map((line, i) => (
-          <li
-            key={line}
-            className={cn('flex items-center gap-3', cardSurface(), cardPad())}
-          >
+          <li key={line} className={cn('flex items-center gap-3', cardSurface(), cardPad())}>
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft lit-pill font-mono text-base font-medium text-accent">
               {i + 1}
             </span>

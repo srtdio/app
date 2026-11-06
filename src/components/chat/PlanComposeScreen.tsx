@@ -665,7 +665,7 @@ export function PlanComposeScreen(props: {
   );
 }
 
-/** A row's type line: "Concept", "Draft", or "Post · In review". Pure. */
+/** A row's type line: "Concept", "Draft", or "Post · Review". Pure. */
 export function composeKindLabel(item: ComposeItem): string {
   if (item.kind === 'concept') return 'Concept';
   if (item.kind === 'draft') return 'Draft';

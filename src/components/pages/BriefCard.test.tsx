@@ -232,7 +232,9 @@ describe('BriefCard thumbnail tile', () => {
     const { cache } = makeCache(null);
     const out = render(makeBrief({ target_date: '2026-07-01' }), cache);
     // The Card footer's trailing meta role: mono, tabular figures.
-    expect(out).toMatch(/class="font-mono[^"]*tabular-nums[^"]*"><span data-brief-due="">Due 1 Jul</);
+    expect(out).toMatch(
+      /class="font-mono[^"]*tabular-nums[^"]*"><span data-brief-due="">Due 1 Jul</,
+    );
   });
 
   it('the title is the Card heading on one line; the objective wraps instead of scrolling sideways', () => {

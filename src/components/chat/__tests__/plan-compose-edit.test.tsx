@@ -78,7 +78,7 @@ describe('New plan rows', () => {
     );
     expect(html).toContain('Pick a day');
     expect(html).toContain('Dated Mon 2 Nov, outside this plan. Pick a day.');
-    expect(html).toContain('Post · In review');
+    expect(html).toContain('Post · Review');
     const x = html.slice(html.lastIndexOf('<button', html.indexOf('data-plan-compose-remove')));
     expect(x).toContain('h-11 w-11');
     expect(x).toContain('aria-label="Remove Festive teaser carousel"');

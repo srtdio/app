@@ -133,36 +133,36 @@ function FileTileThumb(props: {
   const { kind, thumbUrl } = props;
   return (
     <>
-    {thumbUrl !== null ? (
-      <img
-        data-file-tile-thumb=""
-        src={thumbUrl}
-        alt=""
-        draggable={false}
-        onError={props.onImageError}
-        className={cn(
-          'absolute inset-0 h-full w-full',
-          // A document page thumbnail is softened in dark (lit-page); a video frame is not.
-          kind === 'video' ? 'object-cover' : 'object-cover object-top lit-page',
-        )}
-      />
-    ) : (
-      <span
-        data-file-tile-icon=""
-        className="absolute inset-0 flex items-center justify-center text-fg-3"
-      >
-        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-panel-2">
-          <KindIcon kind={kind} size={ICON_SIZE.control} />
+      {thumbUrl !== null ? (
+        <img
+          data-file-tile-thumb=""
+          src={thumbUrl}
+          alt=""
+          draggable={false}
+          onError={props.onImageError}
+          className={cn(
+            'absolute inset-0 h-full w-full',
+            // A document page thumbnail is softened in dark (lit-page); a video frame is not.
+            kind === 'video' ? 'object-cover' : 'object-cover object-top lit-page',
+          )}
+        />
+      ) : (
+        <span
+          data-file-tile-icon=""
+          className="absolute inset-0 flex items-center justify-center text-fg-3"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-panel-2">
+            <KindIcon kind={kind} size={ICON_SIZE.control} />
+          </span>
         </span>
-      </span>
-    )}
-    {kind === 'video' && thumbUrl !== null ? (
-      <span className="absolute inset-0 flex items-center justify-center">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-overlay text-overlay-fg lit-media">
-          <IconPlay size={ICON_SIZE.inline} />
+      )}
+      {kind === 'video' && thumbUrl !== null ? (
+        <span className="absolute inset-0 flex items-center justify-center">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-overlay text-overlay-fg lit-media">
+            <IconPlay size={ICON_SIZE.inline} />
+          </span>
         </span>
-      </span>
-    ) : null}
+      ) : null}
     </>
   );
 }

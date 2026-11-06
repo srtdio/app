@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Input } from '@/components/ui/Input';
-import { Sheet } from '@/components/ui/Sheet';
+import { Sheet, SheetActions } from '@/components/ui/Sheet';
 import type { RenameOutcome } from '@/lib/asset-upload';
 import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
 
@@ -102,14 +102,18 @@ export function AssetRenameSheet({
   }
 
   const footer = (
-    <span className="ml-auto flex gap-2.5">
-      <Button variant="ghost" onClick={onClose} disabled={saving}>
-        Cancel
-      </Button>
-      <Button variant="primary" type="submit" form={formId} busy={saving}>
-        Save
-      </Button>
-    </span>
+    <SheetActions
+      cancel={
+        <Button variant="ghost" onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+      }
+      primary={
+        <Button variant="primary" type="submit" form={formId} busy={saving}>
+          Save
+        </Button>
+      }
+    />
   );
 
   return (

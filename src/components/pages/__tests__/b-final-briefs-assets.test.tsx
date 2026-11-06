@@ -127,7 +127,9 @@ describe('Assets tile is ui/Tile', () => {
     const trigger = /<button[^>]*data-card-menu=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(trigger).toContain(TRAILING_PULL);
     // Never in a picture corner.
-    expect(out).not.toMatch(/data-tile-corner="[^"]*"[^>]*>(?:(?!data-tile-corner)[^])*?data-card-menu/);
+    expect(out).not.toMatch(
+      /data-tile-corner="[^"]*"[^>]*>(?:(?!data-tile-corner)[^])*?data-card-menu/,
+    );
   });
 
   it('overlays only at corners; the select box is a corner action outside the tap surface', () => {

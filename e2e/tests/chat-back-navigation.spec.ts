@@ -129,18 +129,18 @@ function typeOf(locator: Locator) {
 // uppercase), a card title is 14px/500 and the search field renders 16px on
 // the phone (iOS zoom).
 test(
-  'Pipeline type roles: sheet header 15px, section label 12px uppercase, card title 14px',
+  'Pipeline type roles: sheet header 15px, section label 12px uppercase, card title 15px',
   { tag: '@theme' },
   async ({ page }) => {
     const network = await installHarnessNetwork(page);
     await page.goto('/pipeline');
     const cardTitle = page
-      .locator('[data-post-card-title]', { hasText: 'Monday carousel' })
+      .locator('[data-card-title]', { hasText: 'Monday carousel' })
       .first();
     await expect(cardTitle).toBeVisible({ timeout: 15_000 });
     const cardType = await typeOf(cardTitle);
-    expect(cardType.size).toBe('14px');
-    expect(cardType.weight).toBe('500');
+    expect(cardType.size).toBe('15px');
+    expect(cardType.weight).toBe('600');
 
     expect((await typeOf(page.getByPlaceholder('Search posts'))).size).toBe('16px');
 

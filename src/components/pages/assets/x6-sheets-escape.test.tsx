@@ -253,9 +253,7 @@ describe('X6 lightbox', () => {
     await mount(lightbox(onClose));
     const bar = document.querySelector<HTMLElement>('[data-lightbox-bar]');
     await act(async () => bar?.querySelector<HTMLButtonElement>('[aria-label="Info"]')?.click());
-    await act(async () =>
-      document.querySelector<HTMLButtonElement>('[data-rename-file]')?.click(),
-    );
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-rename-file]')?.click());
     expect(document.querySelector('[aria-label="File name"]')).not.toBeNull();
 
     await escape();

@@ -187,9 +187,7 @@ function MemberRowItem({ member, canManage, divider, onChangeRole, onRemove }: M
             <EmailMark member={member} canManage={canManage} />
           </span>
         }
-        {...(joined !== null
-          ? { time: <span className="hidden sm:inline">{joined}</span> }
-          : {})}
+        {...(joined !== null ? { time: <span className="hidden sm:inline">{joined}</span> } : {})}
         {...(member.email !== null ? { secondary: member.email } : {})}
         badge={<RoleBadge role={member.role} />}
         {...(trailing !== undefined ? { trailing } : {})}

@@ -273,10 +273,10 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
     divider: boolean,
   ): ReactElement => (
     // Glide: a reorder (new message lifts a chat) moves rows to their new
-    // place; group rows list on Y, the people grid on X+Y.
+    // place; group and people rows both list on Y.
     <GlideItem
       as="li"
-      axis={anchored ? 'y' : 'xy'}
+      axis="y"
       key={channel.channelId}
       className="min-w-0"
       {...(anchored ? groupAnchor(channel) : {})}
@@ -319,7 +319,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
           <h3 data-section-label="groups" className={sectionLabelClass(true)}>
             Groups
           </h3>
-          <ul data-section="groups" className={GROUP_ROW_LIST}>
+          <ul data-section="groups" className={CHAT_ROW_LIST}>
             {groups.map((channel, i) => renderCard(channel, true, i < groups.length - 1))}
           </ul>
         </>
@@ -329,8 +329,8 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
           <h3 data-section-label="people" className={sectionLabelClass(groups.length === 0)}>
             People
           </h3>
-          <ul data-section="people" className={PEOPLE_TILE_GRID}>
-            {people.map((channel) => renderCard(channel, false, false))}
+          <ul data-section="people" className={CHAT_ROW_LIST}>
+            {people.map((channel, i) => renderCard(channel, false, i < people.length - 1))}
           </ul>
         </>
       ) : null}
@@ -341,9 +341,24 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
 /** Skeleton tiles shown while the list loads; enough to fill a phone screen. */
 export const SKELETON_ROWS = 6;
 
-/** The skeleton's sections: two group rows, then four people tiles. */
+/** The skeleton's sections: two group rows, then four people rows. */
 const SKELETON_GROUPS = 2;
 const SKELETON_PEOPLE = SKELETON_ROWS - SKELETON_GROUPS;
+
+/** One loading row: the real chat Row (72, 32 avatar, two lines) with Bones in its slots. */
+function skeletonRow(i: number, count: number): ReactElement {
+  return (
+    <li key={i} data-skeleton-row="row" className="min-w-0">
+      <Row
+        gutter="chat"
+        leading={<Bone lit="lit-avatar" as="span" className="h-8 w-8 rounded-lg" />}
+        title={<Bone lit="flat" as="span" className="my-1 h-3 w-1/2 rounded" />}
+        secondary={<Bone lit="flat" as="span" className="my-1 h-3 w-3/4 rounded" />}
+        divider={i < count - 1}
+      />
+    </li>
+  );
+}
 
 /** A label-sized placeholder bar on the label's own edge and padding. */
 function skeletonLabel(first: boolean): ReactElement {

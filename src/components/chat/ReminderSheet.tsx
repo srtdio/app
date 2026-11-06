@@ -52,6 +52,8 @@ export function ReminderOptions(props: {
   const presets = reminderPresets(now);
   const tomorrow = presets.find((p) => p.id === 'tomorrow')?.at ?? now;
   const onCancelReminder = props.onCancelReminder;
+  const cancelRow =
+    onCancelReminder !== undefined ? <CancelReminderRow onClick={onCancelReminder} /> : null;
   // The one time-pick frame (WhenOptions), shared with the Schedule sheet.
   return (
     <WhenOptions
@@ -77,11 +79,7 @@ export function ReminderOptions(props: {
           ),
       }))}
       customLabel="Custom"
-      extraRows={
-        onCancelReminder !== undefined ? (
-          <CancelReminderRow onClick={onCancelReminder} />
-        ) : undefined
-      }
+      extraRows={cancelRow}
       custom={{
         initial: tomorrow,
         summary: reminderSummary,

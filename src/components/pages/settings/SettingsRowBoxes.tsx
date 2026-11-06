@@ -14,7 +14,12 @@ export const LOADING_MEMBERS = 'Loading members';
  */
 export function SettingsRowBoxes({ label, rows = 3 }: { label: string; rows?: number }) {
   return (
-    <BoxSkeleton lit="flat" label={label} data-settings-row-boxes="" className="flex flex-col gap-2">
+    <BoxSkeleton
+      lit="flat"
+      label={label}
+      data-settings-row-boxes=""
+      className="flex flex-col gap-2"
+    >
       <div className="flex h-5 items-center">
         <Bone lit="flat" className="h-3 w-24 rounded" />
       </div>

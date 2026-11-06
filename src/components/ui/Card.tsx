@@ -156,10 +156,7 @@ export function Card({
       {media !== undefined && !mediaInset ? (
         <div
           data-card-media="bleed"
-          className={cn(
-            'overflow-hidden rounded-t-xl',
-            tapped && 'pointer-events-none relative',
-          )}
+          className={cn('overflow-hidden rounded-t-xl', tapped && 'pointer-events-none relative')}
         >
           {media}
         </div>

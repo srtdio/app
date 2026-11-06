@@ -236,9 +236,7 @@ export function HelpPage() {
                       className="shrink-0 text-fg-3 mv-slide group-open:rotate-180"
                     />
                   </summary>
-                  <p className="max-w-3xl pb-4 pr-8 text-base text-fg-2">
-                    {article.content}
-                  </p>
+                  <p className="max-w-3xl pb-4 pr-8 text-base text-fg-2">{article.content}</p>
                 </details>
               ))}
             </div>

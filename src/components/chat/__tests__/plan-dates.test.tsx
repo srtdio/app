@@ -73,7 +73,7 @@ describe('rows and the item status box (D3)', () => {
     const post = BUNDLE.items[1] as PlanItemRow;
     expect(statusRows(BUNDLE, post, 'client')[0]).toEqual({
       label: 'Pipeline',
-      value: 'In review',
+      value: 'Review',
       tone: 'neutral',
     });
   });

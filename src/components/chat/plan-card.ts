@@ -283,7 +283,7 @@ export const TEAM_STATUS_LABELS: Record<ReviewStatus, string> = {
 
 const STAGE_LABELS: Record<string, string> = {
   draft: 'Draft',
-  review: 'In review',
+  review: 'Review',
   approved: 'Approved',
   parked: 'Parked',
   rejected: 'Rejected',

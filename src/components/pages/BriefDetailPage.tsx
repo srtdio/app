@@ -15,7 +15,7 @@ import { Comments } from '@/components/comments/Comments';
 import { renderFormatted } from '@/components/chat/message-body';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { HeaderBar } from '@/components/ui/HeaderBar';
-import { StatusDot } from '@/components/ui/StatusDot';
+import { STATUS_DOT_TONE, StatusDot, type StatusDotStage } from '@/components/ui/StatusDot';
 import { textRole } from '@/components/ui/Text';
 import { GUTTER } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
@@ -210,14 +210,10 @@ export function linkedPostsFor(
     .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
 }
 
-// posts.stage is a plain text column; an unknown value gets the draft dot.
-const LINKED_STAGE_DOT: Record<string, string> = {
-  draft: 'bg-fg-3',
-  review: 'bg-accent',
-  approved: 'bg-good',
-  parked: 'bg-warn',
-  rejected: 'bg-bad',
-};
+/** A linked post's stage as the status dot's stage (posts.stage is plain text; an unknown value reads as Draft). */
+function linkedDotStage(stage: string): StatusDotStage {
+  return Object.hasOwn(STATUS_DOT_TONE, stage) ? (stage as StatusDotStage) : 'draft';
+}
 
 /**
  * Whether the viewer may close this brief: brief.close, or brief.close_own on a
@@ -804,10 +800,7 @@ export function BriefDetailPage({
                   data-linked-post=""
                   className="-mx-2 flex min-h-[44px] min-w-0 items-center gap-2 rounded-lg px-2 text-base text-fg mv-tint lit-hover focus-visible:lit-focus"
                 >
-                  <span
-                    aria-hidden="true"
-                    className={`h-[7px] w-[7px] shrink-0 rounded-full ${LINKED_STAGE_DOT[post.stage] ?? 'bg-fg-3'}`}
-                  />
+                  <StatusDot stage={linkedDotStage(post.stage)} />
                   <span className="min-w-0 flex-1 truncate">{post.title}</span>
                   {/* The dot's stage in words, so the row name never rests on colour. */}
                   <span className="sr-only">, {stageLabel(post.stage as Stage)}</span>

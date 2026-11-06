@@ -33,11 +33,7 @@ export function StatusDot({
     <span
       aria-hidden="true"
       data-status-dot={stage}
-      className={cn(
-        'inline-block h-2 w-2 shrink-0 rounded-full',
-        tone,
-        className,
-      )}
+      className={cn('inline-block h-2 w-2 shrink-0 rounded-full', tone, className)}
     />
   );
 }

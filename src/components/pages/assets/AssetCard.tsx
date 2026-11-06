@@ -136,9 +136,9 @@ export function AssetCard({
         </span>
       }
       meta={<span data-asset-meta="">{meta}</span>}
-      corners={
-        selectMode
-          ? {
+      {...(selectMode
+        ? {
+            corners: {
               tl: (
                 <span
                   aria-hidden="true"
@@ -155,9 +155,9 @@ export function AssetCard({
                   </span>
                 </span>
               ),
-            }
-          : undefined
-      }
+            },
+          }
+        : {})}
       {...(selectMode || onStartSelect === undefined
         ? {}
         : { cornerActions: { tl: <CardSelectBox name={name} onPress={onStartSelect} /> } })}
@@ -199,12 +199,7 @@ export function AssetCard({
  */
 export function CardSelectBox({ name, onPress }: { name: string; onPress: () => void }) {
   return (
-    <IconButton
-      type="button"
-      label={`Select ${name}`}
-      data-card-select=""
-      onClick={onPress}
-    >
+    <IconButton type="button" label={`Select ${name}`} data-card-select="" onClick={onPress}>
       <span className={cn('h-4 w-4 rounded', SELECT_BOX_EMPTY)} />
     </IconButton>
   );

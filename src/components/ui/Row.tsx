@@ -3,6 +3,7 @@ import { cn } from '@/lib/cn';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { textRole } from '@/components/ui/Text';
 import { ICON_SIZE, IconChevronRight } from '@/components/ui/icons';
+import { CHAT_GUTTER } from '@/components/ui/layout';
 
 /**
  * The tap surface's own attributes (pointer, key and context-menu handlers,
@@ -47,6 +48,12 @@ export interface RowProps extends RowSurfaceProps {
    * a sheet body, whose padding is already the content edge). Default false.
    */
   flush?: boolean;
+  /**
+   * The row's side inset. 'page' (default): the 16 page edge. 'chat': the 12
+   * chat edge (CHAT_GUTTER), the chat list's notes, group and people rows; the
+   * text then starts at 56 and the divider is inset 56. Ignored when flush.
+   */
+  gutter?: 'page' | 'chat';
   className?: string;
 }
 
@@ -69,11 +76,13 @@ export function Row({
   selected = false,
   buttonRef,
   flush = false,
+  gutter = 'page',
   className,
   ...surface
 }: RowProps) {
-  const inset = flush ? 'px-0' : 'px-4';
-  const trailingInset = flush ? 'pr-0' : 'pr-4';
+  const chat = !flush && gutter === 'chat';
+  const inset = flush ? 'px-0' : chat ? CHAT_GUTTER : 'px-4';
+  const trailingInset = flush ? 'pr-0' : chat ? 'pr-3' : 'pr-4';
   const badgeNode =
     badge !== undefined && badge !== null ? (
       <span data-row-badge="" className="flex shrink-0">
@@ -135,10 +144,7 @@ export function Row({
       ) : null}
       {trailing?.kind === 'node' ? (
         // The trailing rule for a caller's IconButton (a 44 box, pulled out by 12).
-        <span
-          data-row-trailing=""
-          className={cn('flex shrink-0 [&>button]:-mr-3', trailingInset)}
-        >
+        <span data-row-trailing="" className={cn('flex shrink-0 [&>button]:-mr-3', trailingInset)}>
           {trailing.node}
         </span>
       ) : null}
@@ -148,7 +154,7 @@ export function Row({
           data-row-divider=""
           className={cn(
             'pointer-events-none absolute bottom-0 right-0 h-px bg-border',
-            flush ? 'left-11' : 'left-15',
+            flush ? 'left-11' : chat ? 'left-14' : 'left-15',
           )}
         />
       ) : null}

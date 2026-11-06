@@ -102,68 +102,68 @@ export function ApprovedAddressesSection({
         data-approved-addresses=""
         className={cn('flex flex-col gap-3', cardSurface(), cardPad())}
       >
-      <p className="text-base text-fg-2">{approverAddressIntro(clientDomain)}</p>
+        <p className="text-base text-fg-2">{approverAddressIntro(clientDomain)}</p>
 
-      {loadError ? (
-        <p className="text-base text-bad">{errorText('load addresses', null)}</p>
-      ) : domains.length > 0 ? (
-        <ul aria-label="Approved addresses" className="flex flex-col divide-y divide-border">
-          {domains.map((domain) => (
-            <li key={domain} className="flex items-center gap-3 py-1">
-              <span className="min-w-0 flex-1 break-all text-base text-fg">{domain}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                aria-label={`Remove ${domain}`}
-                onClick={() => setConfirmFor(domain)}
-              >
-                Remove
-              </Button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      <form onSubmit={(e) => void add(e)} className="flex flex-col gap-2">
-        <Field label="Add an address" htmlFor="approved-address">
-          <Input
-            id="approved-address"
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              setError(null);
-            }}
-            placeholder="groupcompany.com"
-            autoCapitalize="none"
-            autoComplete="off"
-            inputMode="url"
-            disabled={adding}
-          />
-        </Field>
-        {error !== null ? (
-          <p role="alert" className="text-sm text-bad">
-            {error}
-          </p>
+        {loadError ? (
+          <p className="text-base text-bad">{errorText('load addresses', null)}</p>
+        ) : domains.length > 0 ? (
+          <ul aria-label="Approved addresses" className="flex flex-col divide-y divide-border">
+            {domains.map((domain) => (
+              <li key={domain} className="flex items-center gap-3 py-1">
+                <span className="min-w-0 flex-1 break-all text-base text-fg">{domain}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  aria-label={`Remove ${domain}`}
+                  onClick={() => setConfirmFor(domain)}
+                >
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
         ) : null}
-        <div>
-          <Button type="submit" disabled={adding || draft.trim() === ''}>
-            {adding ? 'Adding' : 'Add address'}
-          </Button>
-        </div>
-      </form>
 
-      {confirmFor !== null ? (
-        <ConfirmDialog
-          title={`Remove ${confirmFor}?`}
-          message="New approvers on this address can no longer be invited. People already here stay."
-          confirmLabel="Remove"
-          busyLabel="Removing"
-          destructive
-          busy={removing}
-          onConfirm={() => void remove(confirmFor)}
-          onCancel={() => setConfirmFor(null)}
-        />
-      ) : null}
+        <form onSubmit={(e) => void add(e)} className="flex flex-col gap-2">
+          <Field label="Add an address" htmlFor="approved-address">
+            <Input
+              id="approved-address"
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setError(null);
+              }}
+              placeholder="groupcompany.com"
+              autoCapitalize="none"
+              autoComplete="off"
+              inputMode="url"
+              disabled={adding}
+            />
+          </Field>
+          {error !== null ? (
+            <p role="alert" className="text-sm text-bad">
+              {error}
+            </p>
+          ) : null}
+          <div>
+            <Button type="submit" disabled={adding || draft.trim() === ''}>
+              {adding ? 'Adding' : 'Add address'}
+            </Button>
+          </div>
+        </form>
+
+        {confirmFor !== null ? (
+          <ConfirmDialog
+            title={`Remove ${confirmFor}?`}
+            message="New approvers on this address can no longer be invited. People already here stay."
+            confirmLabel="Remove"
+            busyLabel="Removing"
+            destructive
+            busy={removing}
+            onConfirm={() => void remove(confirmFor)}
+            onCancel={() => setConfirmFor(null)}
+          />
+        ) : null}
       </div>
     </section>
   );
