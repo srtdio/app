@@ -308,7 +308,7 @@ function BankRow(props: RowProps): ReactElement {
         </span>
       </PressableRow>
       {props.canWrite && !props.selecting ? (
-        <span className="shrink-0 pr-1 pt-2">
+        <span className="shrink-0 pr-3 pt-2">
           <ActionMenu
             title={idea.title ?? 'Idea'}
             items={props.menuItems}
@@ -883,7 +883,7 @@ function BankTable(props: {
                 <td className="shrink-0 whitespace-nowrap px-3 py-2 font-mono text-sm tabular-nums text-fg-3">
                   {formatRelative(idea.last_active_at ?? idea.created_at, props.now)}
                 </td>
-                <td className="px-2 py-1">
+                <td className="py-1 pl-2 pr-3">
                   {props.canWrite ? (
                     <span className="flex items-center justify-end gap-1">
                       <Button
@@ -1060,6 +1060,7 @@ export function BankPlanItSheets(props: {
               variant="primary"
               type="button"
               data-bank-plan-it-go=""
+              busy={props.busy}
               disabled={day === '' || day < props.today}
               onClick={() => {
                 if (step !== null && day !== '') props.onDay(step.idea, day);
@@ -1095,6 +1096,7 @@ export function BankPlanItSheets(props: {
               variant="primary"
               type="button"
               data-bank-make-plan=""
+              busy={props.busy}
               onClick={() => {
                 if (step?.kind === 'none') props.onMakePlan(step.idea, step.day);
               }}
@@ -1146,6 +1148,7 @@ export function BankPlanItSheets(props: {
               variant="primary"
               type="button"
               data-bank-shared-go=""
+              busy={props.busy}
               onClick={() => {
                 if (step?.kind === 'shared') props.onConfirmShared(step.idea, step.plan, step.day);
               }}

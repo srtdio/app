@@ -531,7 +531,9 @@ describe('PostCard hover keeps the content visible', () => {
   it('the ⋯ menu wrapper and trigger take pointer events back', () => {
     const src = readFileSync(fileURLToPath(new URL('./PostCard.tsx', import.meta.url)), 'utf8');
     expect(src).toContain('className="pointer-events-auto ml-auto flex shrink-0"');
-    expect(src).toContain('className="pointer-events-auto relative z-10 -my-3 -mr-3 text-fg-3"');
+    // The trailing pull (-mr-3) and in-line box (-my-3) come from ActionMenuTrigger.
+    expect(src).toContain('className="pointer-events-auto relative z-10 text-fg-3"');
+    expect(src).not.toMatch(/-mr-3/);
   });
 });
 

@@ -255,10 +255,10 @@ describe('rail plans over the rendered list', () => {
 });
 
 describe('thread controls', () => {
-  it('the chip: 28px, full radius, panel, 20px thumb, "title · N replies", 44px target', () => {
+  it('the chip: 44px face (B1), full radius, panel, 20px thumb, "title · N replies", 44px target', () => {
     const post = { id: 'p1', number: 12, title: 'Monday carousel', thumbnailAssetVersionId: null };
     const out = html(<ThreadChipRow post={post} count={4} coarse onOpen={() => {}} />);
-    expect(out).toContain('h-7');
+    expect(out).toContain('min-h-11');
     expect(out).toContain('rounded-full');
     expect(out).toContain('bg-panel');
     expect(out).toContain('h-5 w-5');

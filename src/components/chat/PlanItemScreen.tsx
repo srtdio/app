@@ -124,7 +124,6 @@ import {
   IconEye,
   IconEyeOff,
   IconLink,
-  IconMore,
   IconPlus,
   IconTrash,
   IconX,
@@ -1668,16 +1667,12 @@ export function PlanItemScreen(props: {
                   open={props.open && conceptMenuOpen}
                   onOpenChange={setConceptMenuOpen}
                   trigger={
-                    <IconButton
+                    <ActionMenuTrigger
                       type="button"
                       label="Item actions"
                       data-plan-item-more=""
-                      aria-haspopup="menu"
                       aria-expanded={conceptMenuOpen}
-                      className="shrink-0 text-fg"
-                    >
-                      <IconMore size={ICON_SIZE.control} />
-                    </IconButton>
+                    />
                   }
                 />
               ),
@@ -2186,7 +2181,7 @@ export function LinkActions(props: {
         data-plan-link-post=""
         disabled={props.busy}
         onClick={props.onLink}
-        className="w-full"
+        className="w-full md:w-auto"
       >
         <IconLink size={ICON_SIZE.inline} />
         {LINK_POST_LABEL}

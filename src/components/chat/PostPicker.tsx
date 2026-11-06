@@ -813,7 +813,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
             <Button
               variant="primary"
               data-picker-link-confirm=""
-              className="w-full"
+              className="w-full md:w-auto"
               onClick={confirmLink}
             >
               {LINK_CONFIRM}

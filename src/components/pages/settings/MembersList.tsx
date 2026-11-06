@@ -9,16 +9,14 @@ import type { ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Button } from '@/components/ui/Button';
-import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { useMenuGesture } from '@/components/ui/useLongPress';
-import { IconButton } from '@/components/ui/IconButton';
 import { Tag } from '@/components/ui/Tag';
 import {
   ICON_SIZE,
   IconLock,
   IconMail,
   IconMailOff,
-  IconMore,
   IconTrash,
   IconUser,
 } from '@/components/ui/icons';
@@ -159,11 +157,7 @@ function MemberRowItem({ member, canManage, onChangeRole, onRemove }: RowProps) 
           open={menuOpen}
           onOpenChange={setMenuOpen}
           items={memberActionItems(member, canManage, { onChangeRole, onRemove })}
-          trigger={
-            <IconButton label={`Actions for ${member.displayName}`} aria-haspopup="menu">
-              <IconMore size={ICON_SIZE.control} />
-            </IconButton>
-          }
+          trigger={<ActionMenuTrigger label={`Actions for ${member.displayName}`} />}
         />
       ) : null}
     </div>

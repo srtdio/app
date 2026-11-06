@@ -240,7 +240,7 @@ describe('group info full page', () => {
     expect(html).toContain('role="dialog"');
     expect(html).toContain('fixed inset-0 z-50');
     expect(html).toContain('bg-bg');
-    expect(html).toContain('aria-label="Close group info"');
+    expect(html).toContain('aria-label="Back"');
     expect(html).toContain('>Group info</h2>');
     expect(html).toContain('env(safe-area-inset-bottom)');
     expect(html).not.toMatch(/\d+vh|h-screen/);

@@ -78,11 +78,15 @@ const BUNDLE: PlanBundle = {
 
 describe('header, progress and status (A1)', () => {
   it('subtitle: "{range} · Draft" or "{range} · Shared with approvers" (item 3)', () => {
-    expect(planRangeShort('2026-10-12', '2026-10-16')).toBe('12 to 16 Oct');
-    expect(planRangeShort('2026-10-28', '2026-11-03')).toBe('28 Oct to 3 Nov');
-    expect(planHeaderSubtitle(BUNDLE.plan)).toBe('12 to 16 Oct · Draft');
+    expect(planRangeShort('2026-10-12', '2026-10-16', new Date('2026-11-06T12:00:00Z'))).toBe(
+      '12\u201316 Oct',
+    );
+    expect(planRangeShort('2026-10-28', '2026-11-03', new Date('2026-11-06T12:00:00Z'))).toBe(
+      '28 Oct \u2013 3 Nov',
+    );
+    expect(planHeaderSubtitle(BUNDLE.plan)).toBe('12\u201316 Oct · Draft');
     expect(planHeaderSubtitle({ ...BUNDLE.plan, audience: 'client' })).toBe(
-      '12 to 16 Oct · Shared with approvers',
+      '12\u201316 Oct · Shared with approvers',
     );
   });
 

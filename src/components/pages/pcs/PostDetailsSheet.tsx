@@ -416,10 +416,10 @@ export function PostDetailsSheet({
                   type="button"
                   variant="primary"
                   data-new-bucket-create=""
-                  disabled={newBucketBusy}
+                  busy={newBucketBusy}
                   onClick={() => void submitNewBucket()}
                 >
-                  {newBucketBusy ? 'Creating…' : 'Create'}
+                  Create
                 </Button>
                 <Button
                   type="button"

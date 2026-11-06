@@ -586,7 +586,9 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               type="button"
               label="Add image"
               onClick={manage.onAddAfter}
-              className={cn(TOOLBAR_SKIN, 'text-accent hover:text-overlay-fg')}
+              // cn() merges: text-accent would now beat the overlay ink (it lost by
+              // CSS order before), so the overlay ink stays, as it rendered.
+              className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
             >
               <IconPlus size={ICON_SIZE.control} />
             </IconButton>

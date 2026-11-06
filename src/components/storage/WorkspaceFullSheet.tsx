@@ -44,7 +44,7 @@ export function WorkspaceFullSheet() {
         onClose={dismiss}
         title="This workspace is full"
         footer={
-          <Button variant="ghost" size="lg" className="ml-auto" onClick={dismiss}>
+          <Button variant="ghost" className="ml-auto" onClick={dismiss}>
             Cancel
           </Button>
         }

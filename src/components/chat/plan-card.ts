@@ -17,7 +17,7 @@ import type {
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isOwnerOrAdmin } from '@/components/pages/pcs/roles';
 import { formatCivilDayHeader } from '@/lib/plan-week';
-import { civilDay, formatTime } from '@/lib/time';
+import { civilDay, formatDayRange, formatTime } from '@/lib/time';
 import { errorText } from '@/lib/error-copy';
 
 /** Card and screen copy. */
@@ -248,9 +248,9 @@ export function shortDay(isoDate: string): string {
   return `${Number(d)} ${month}`;
 }
 
-/** "12 Oct - 18 Oct". Pure. */
-export function planRangeLabel(startsOn: string, endsOn: string): string {
-  return `${shortDay(startsOn)} - ${shortDay(endsOn)}`;
+/** "12–18 Oct", "28 Mar – 3 Apr" (the one range formatter in lib/time). Pure. */
+export function planRangeLabel(startsOn: string, endsOn: string, now: Date = new Date()): string {
+  return formatDayRange(startsOn, endsOn, null, now);
 }
 
 /** The label of an item with no date. */
@@ -757,14 +757,9 @@ export function slotUndoStatus(previous: ReviewStatus): ReviewStatus {
 // The aligned Plan list: header, progress, status line, add and move copy
 // ---------------------------------------------------------------------------
 
-/** "12 to 16 Oct" in one month, "28 Oct to 3 Nov" across two. Pure. */
-export function planRangeShort(startsOn: string, endsOn: string): string {
-  const [, sm] = startsOn.split('-');
-  const [, em] = endsOn.split('-');
-  if (sm === em && startsOn.slice(0, 4) === endsOn.slice(0, 4)) {
-    return `${Number(startsOn.slice(8, 10))} to ${shortDay(endsOn)}`;
-  }
-  return `${shortDay(startsOn)} to ${shortDay(endsOn)}`;
+/** "12–16 Oct" in one month, "28 Oct – 3 Nov" across two (lib/time formatDayRange). Pure. */
+export function planRangeShort(startsOn: string, endsOn: string, now: Date = new Date()): string {
+  return formatDayRange(startsOn, endsOn, null, now);
 }
 
 /**

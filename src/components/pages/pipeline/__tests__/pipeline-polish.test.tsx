@@ -176,16 +176,16 @@ describe('Pipeline polish: move sheet', () => {
 });
 
 describe('Pipeline polish: sheet header', () => {
-  it('the sheet title clamps to two lines and breaks long words', () => {
+  it('the sheet title is one line and truncates; the actions never shrink (B1)', () => {
     mount(
       <Sheet open onClose={() => {}} title={'A very long post title '.repeat(8)}>
         <p>body</p>
       </Sheet>,
     );
     const h2 = document.querySelector<HTMLElement>('[role="dialog"] h2');
-    expect(h2?.className).toContain('line-clamp-2');
+    expect(h2?.className).toContain('truncate');
     expect(h2?.className).toContain('min-w-0');
-    expect(h2?.className).toContain('[overflow-wrap:anywhere]');
+    expect(document.querySelector('[data-sheet-actions]')?.className).toContain('shrink-0');
   });
 });
 

@@ -225,15 +225,11 @@ export function ReminderSheet(props: {
       open={props.open}
       onClose={props.onClose}
       title={change !== undefined ? REMINDER_CHANGE_TITLE : REMINDER_SHEET_TITLE}
+      // One exit per sheet: the header X. The footer carries the zone line only.
       footer={
-        <>
-          <span data-reminder-zone="" className="flex-1 text-sm text-fg-2">
-            {zoneLine(new Date())}
-          </span>
-          <Button type="button" variant="ghost" onClick={props.onClose}>
-            Cancel
-          </Button>
-        </>
+        <span data-reminder-zone="" className="flex-1 text-sm text-fg-2">
+          {zoneLine(new Date())}
+        </span>
       }
     >
       <ReminderOptions

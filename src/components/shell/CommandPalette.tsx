@@ -973,44 +973,46 @@ export function CommandPalette({
         {/* The search is a tool: quiet at rest, ink line and lift while focused
             (ui/Input tone search); the icon takes full ink with it. */}
         <div className="group/sfield flex shrink-0 items-center gap-2.5 px-4 py-2 border-b border-border pt-[calc(env(safe-area-inset-top)+0.5rem)] sm:pt-2">
-          <IconSearch
-            size={ICON_SIZE.nav}
-            className="text-fg-3 group-focus-within/sfield:text-fg"
-          />
-          <Input
-            tone="search"
-            ref={inputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Search anything"
-            aria-label="Search this workspace"
-            role="combobox"
-            aria-expanded={flat.length > 0}
-            aria-controls={listId}
-            aria-autocomplete="list"
-            {...(flat[active] !== undefined
-              ? { 'aria-activedescendant': paletteOptionId(listId, active) }
-              : {})}
-            enterKeyHint="search"
-            className="flex-1 min-w-0 h-12 sm:text-base"
-          />
-          {query !== '' ? (
-            <IconButton
-              type="button"
-              label="Clear search"
-              data-palette-clear=""
-              // The field keeps focus (and the phone keeps its keyboard).
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                setQuery('');
-                inputRef.current?.focus({ preventScroll: true });
-              }}
-              className="shrink-0"
-            >
-              <IconX size={ICON_SIZE.inline} />
-            </IconButton>
-          ) : null}
+          {/* One search field: the icon and the ONE clear X sit inside the box. */}
+          <div data-palette-field="" className="relative min-w-0 flex-1">
+            <span className="pointer-events-none absolute left-3 top-1/2 flex -translate-y-1/2 text-fg-3 group-focus-within/sfield:text-fg">
+              <IconSearch size={ICON_SIZE.control} />
+            </span>
+            <Input
+              tone="search"
+              ref={inputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="Search anything"
+              aria-label="Search this workspace"
+              role="combobox"
+              aria-expanded={flat.length > 0}
+              aria-controls={listId}
+              aria-autocomplete="list"
+              {...(flat[active] !== undefined
+                ? { 'aria-activedescendant': paletteOptionId(listId, active) }
+                : {})}
+              enterKeyHint="search"
+              className={cn('min-w-0 h-12 pl-12 sm:text-base', query !== '' ? 'pr-12' : 'pr-3')}
+            />
+            {query !== '' ? (
+              <IconButton
+                type="button"
+                label="Clear search"
+                data-palette-clear=""
+                // The field keeps focus (and the phone keeps its keyboard).
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setQuery('');
+                  inputRef.current?.focus({ preventScroll: true });
+                }}
+                className="absolute right-0 top-1/2 -translate-y-1/2"
+              >
+                <IconX size={ICON_SIZE.inline} />
+              </IconButton>
+            ) : null}
+          </div>
           <kbd className="hidden sm:inline text-xs text-fg-3 border border-border rounded px-1.5 py-0.5">
             Esc
           </kbd>

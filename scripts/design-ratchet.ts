@@ -106,12 +106,12 @@ export const METRICS = {
   },
   exitMix: {
     distinct: false,
-    what: 'files using both IconX and IconChevronLeft as an exit (Close / Back)',
+    what: 'files with an X exit and a < exit (any label but remove/clear/previous)',
     fix: 'One exit per panel: Back (IconChevronLeft) on pages, X only for remove/clear/dismiss.',
   },
   handTap: {
     distinct: false,
-    what: 'hand-built tap control under 44px (onClick or role="button" with h-5..h-10)',
+    what: 'tap control whose VISIBLE height (h-N on it or its first child) is under 44px',
     fix: 'Use Button / IconButton / Chip / PressableRow at 44 (CLAUDE.md B1).',
   },
   fullWidthButton: {
@@ -158,9 +158,11 @@ const LEADING = /^leading-(none|tight|snug|normal|relaxed|loose|\d+|\[[^\]]+\])$
 const TRACKING = /^tracking-(tighter|tight|normal|wide|wider|widest|\[[^\]]+\])$/;
 const BORDER_WIDTH = /^border(?:-[xytrblse])?-(2|4|8|\[\d+(?:\.\d+)?px\])$/;
 const PADDING = /^p[trblxyse]?-/;
-const HEIGHT_SMALL = /^h-(5|6|7|8|9|10|\[(\d+(?:\.\d+)?)px\])$/;
+const HEIGHT_SMALL = /^(?:h|size)-(5|6|7|8|9|10|\[(\d+(?:\.\d+)?)px\])$/;
 const ICONS_TRACKED = /^(IconX|IconChevron\w*|IconSearch|IconPlus|IconCheck)$/;
 const TAP_PRIMITIVES = new Set(['Button', 'IconButton', 'Chip', 'PressableRow']);
+/** The type-role table: the one file whose leading-* / tracking-* are the roles themselves. */
+export const TYPE_ROLE_FILE = 'src/components/ui/Text.tsx';
 
 /** Class-like tokens in a string (whitespace split). */
 function tokens(text: string): string[] {
@@ -193,6 +195,30 @@ function pxOf(value: string): number | null {
   if (arb) return Number(arb[1]);
   if (/^\d+(\.\d+)?$/.test(value)) return Number(value) * 4;
   if (value === 'px') return 1;
+  return null;
+}
+
+/** The first JSX element child of an element (its visible face), if any. */
+function firstChildElement(full: ts.Node): ts.JsxOpeningElement | ts.JsxSelfClosingElement | null {
+  if (!ts.isJsxElement(full)) return null;
+  for (const child of full.children) {
+    if (ts.isJsxElement(child)) return child.openingElement;
+    if (ts.isJsxSelfClosingElement(child)) return child;
+    if (ts.isJsxText(child) && child.text.trim() !== '') return null;
+  }
+  return null;
+}
+
+/** The first plain (no variant) h-N / size-N / h-[Npx] under 44 among the element's classes. */
+function smallHeight(attrs: ts.JsxAttributes): string | null {
+  for (const t of elementTokens(attrs)) {
+    const { variants, base } = splitVariant(t);
+    if (variants !== '') continue;
+    const m = HEIGHT_SMALL.exec(base);
+    if (!m) continue;
+    if (m[2] !== undefined && Number(m[2]) >= 44) continue;
+    return base;
+  }
   return null;
 }
 
@@ -268,8 +294,13 @@ export function scanSource(file: string, src: string): Hit[] {
   let exitBack = 0;
   let firstExit = -1;
 
+  const roleTable = file === TYPE_ROLE_FILE;
   const stringText = (n: ts.Node, text: string): void => {
-    for (const t of tokens(text)) for (const h of classTokenHits(t)) add(h.metric, n, h.value);
+    for (const t of tokens(text))
+      for (const h of classTokenHits(t)) {
+        if (roleTable && (h.metric === 'leading' || h.metric === 'tracking')) continue;
+        add(h.metric, n, h.value);
+      }
     if (text.includes('...')) add('threeDots', n, text.slice(0, 40));
   };
 
@@ -333,29 +364,37 @@ export function scanSource(file: string, src: string): Hit[] {
       const guarded = has(/^(truncate|shrink-0|flex-none|overflow-|text-ellipsis)/);
       if (!guarded) add('nowrap', node, 'whitespace-nowrap');
     }
-    // r. hand-built tap control under 44
-    if (
-      !TAP_PRIMITIVES.has(name) &&
-      (hasAttr(attrs, 'onClick') || attrString(attrs, 'role') === 'button')
-    ) {
-      for (const b of plain) {
-        const m = HEIGHT_SMALL.exec(b);
-        if (!m) continue;
-        if (m[2] !== undefined && Number(m[2]) >= 44) continue;
-        add('handTap', node, `<${name}> ${b}`);
-        break;
-      }
+    // r. tap control whose VISIBLE height is under 44: the box itself (any
+    // clickable, primitives included, since a className can shrink one) or
+    // its first child (the face a 44 hit box draws).
+    const clickable =
+      TAP_PRIMITIVES.has(name) ||
+      hasAttr(attrs, 'onClick') ||
+      attrString(attrs, 'role') === 'button';
+    if (clickable) {
+      const own = smallHeight(attrs);
+      const face = firstChildElement(full);
+      const inner = own === null && face !== null ? smallHeight(face.attributes) : null;
+      if (own !== null) add('handTap', node, `<${name}> ${own}`);
+      else if (inner !== null) add('handTap', node, `<${name}> face ${inner}`);
     }
     // s. full-width Button with no md: width
     if (name === 'Button' && plain.includes('w-full')) {
       const mdWidth = toks.some((t) => /^(md|lg):(w|max-w)-/.test(t));
       if (!mdWidth) add('fullWidthButton', node, '<Button w-full>');
     }
-    // q. exits
-    const label = `${attrString(attrs, 'aria-label') ?? ''} ${attrString(attrs, 'label') ?? ''}`;
-    if (/\b(close|back)\b/i.test(label)) {
-      const isX = name === 'IconX' || containsIcon(full, /^IconX$/);
-      const isBack = name === 'IconChevronLeft' || containsIcon(full, /^IconChevronLeft$/);
+    // q. exits: a tap control holding IconX or IconChevronLeft is an exit
+    // whatever its label says ("Close", "Done", "Cancel", "Back"), except the
+    // X's the Exit rule allows (remove / clear / dismiss / delete / cancel
+    // upload / stop) and chevrons that step through content (previous, move).
+    if (clickable) {
+      const label = `${attrString(attrs, 'aria-label') ?? ''} ${attrString(attrs, 'label') ?? ''}`;
+      const text = full.getText(sf);
+      const allowedX = /\b(remove|clear|dismiss|delete|stop|cancel upload|unpin|discard)\b/i;
+      const stepBack = /\b(previous|prev|earlier|move|left|calendar|month)\b/i;
+      const isX = containsIcon(full, /^IconX$/) && !allowedX.test(label) && !allowedX.test(text);
+      const isBack =
+        containsIcon(full, /^IconChevronLeft$/) && !stepBack.test(label) && !stepBack.test(text);
       if (isX) exitX++;
       if (isBack) exitBack++;
       if ((isX || isBack) && firstExit < 0) firstExit = node.getStart(sf);

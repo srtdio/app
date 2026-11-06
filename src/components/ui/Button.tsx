@@ -15,27 +15,22 @@ export type ButtonVariant =
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
-  /**
-   * Accepted so call sites compile; has no visual effect. Every button is 44
-   * tall (the design system has one height).
-   */
-  size?: 'sm' | 'md' | 'lg';
   /** 'round' renders a 44x44 circle (composer actions); default is the 8px-radius rectangle. */
   shape?: 'default' | 'round';
   /** Ref to the rendered <button>; a plain prop so Button stays a callable function. */
   buttonRef?: Ref<HTMLButtonElement> | undefined;
   /**
    * The action is running: the button is disabled and aria-busy, the label
-   * stays as it is (never swapped for "Saving..."), and a small turning arc
-   * sits beside it. Busy is the only reason a submit button is disabled; a
+   * keeps its place (invisible, so the width never changes; never swapped for
+   * "Saving…"), and a small turning arc sits over its centre. Busy is the only reason a submit button is disabled; a
    * form that is not valid yet keeps its button live and shows the field error.
    */
   busy?: boolean | undefined;
 }
 
 // One height (44), one radius (8), one type (14 / 500). Tokens only, so light
-// and dark match. cn() does not merge classes, so the radius and padding live in
-// the shape classes (never both rounded-lg and rounded-full on one element).
+// and dark match. cn() merges classes (tailwind-merge): a caller's class of the
+// same group replaces the base one (px-3 over px-4, min-w-0 over min-w-[44px]).
 // Callers never override a base property with the ! modifier (no-raw-button
 // test): pick another variant or primitive instead.
 // Press (motion move 5): MOVE_CLASS.press sinks to .97 while held, 120 ms, and
@@ -84,7 +79,6 @@ export function buttonClass(
 
 export function Button({
   variant = 'secondary',
-  size,
   shape = 'default',
   className,
   buttonRef,
@@ -93,7 +87,9 @@ export function Button({
   children,
   ...props
 }: ButtonProps) {
-  void size;
+  // Busy keeps the width: the label (and icon) stay in place, invisible, and
+  // the arc sits in the same grid cell over their centre, so a busy button
+  // never grows or jumps. The button's own classes never change.
   return (
     <button
       ref={buttonRef}
@@ -102,8 +98,21 @@ export function Button({
       disabled={busy || disabled}
       aria-busy={busy ? true : props['aria-busy']}
     >
-      {busy ? <BusyArc /> : null}
-      {children}
+      {busy ? (
+        <span data-busy="" className="grid place-items-center">
+          <span
+            data-busy-label=""
+            className="invisible col-start-1 row-start-1 inline-flex items-center gap-2"
+          >
+            {children}
+          </span>
+          <span data-busy-arc="" className="col-start-1 row-start-1 flex">
+            <BusyArc />
+          </span>
+        </span>
+      ) : (
+        children
+      )}
     </button>
   );
 }

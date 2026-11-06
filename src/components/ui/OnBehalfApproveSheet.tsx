@@ -81,7 +81,7 @@ export function OnBehalfApproveView(props: OnBehalfApproveViewProps): ReactEleme
             variant="success"
             className="flex-1"
             data-on-behalf-approve=""
-            disabled={props.busy}
+            busy={props.busy}
             onClick={() => props.onConfirm(props.selected !== '' ? props.selected : undefined)}
           >
             Approve

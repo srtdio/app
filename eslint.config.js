@@ -30,6 +30,12 @@ const designRules = [
     selector: "JSXOpeningElement[name.name='button']",
     message: 'Use Button, IconButton or Chip from src/components/ui',
   },
+  // B1: the ⋯ glyph lives only in ui/ActionMenu.tsx (ActionMenuTrigger owns
+  // the trailing rule); every menu opener renders ActionMenuTrigger.
+  {
+    selector: "JSXOpeningElement[name.name='IconMore']",
+    message: 'Render ActionMenuTrigger (ui/ActionMenu) instead of IconMore',
+  },
   {
     selector: `JSXAttribute[name.name='className'] Literal[value=${DESIGN_CLASS}]`,
     message: DESIGN_MESSAGE,
@@ -82,6 +88,52 @@ const layoutWarnings = [
     message: 'Use ICON_SIZE.*',
   },
 ];
+// B1 layout system (CLAUDE.md Layout rules). These patterns exist in code that
+// B2 migrates, so they warn here and scripts/design-ratchet.ts blocks new ones
+// (leading, tracking, arbitraryPx, handTap). ui/Text.tsx is the only place a
+// type override may live.
+// text-[Npx] / text-[Nrem] already error under DESIGN_CLASS; this warns on the rest.
+const TYPE_OVERRIDE = '/(^|[\\s:])(leading-|tracking-|text-\\[(?![0-9.]+(px|rem)\\]))/';
+const TYPE_MESSAGE = 'Use a text role from ui/Text.tsx (no leading-*, tracking-* or text-[..])';
+const PLACED_BUTTON = '/(^|[\\s:])(absolute|-m[trblxy]?-[0-9])/';
+const typeWarnings = [
+  {
+    selector: `JSXAttribute[name.name='className'] Literal[value=${TYPE_OVERRIDE}]`,
+    message: TYPE_MESSAGE,
+  },
+  {
+    selector: `JSXAttribute[name.name='className'] TemplateElement[value.raw=${TYPE_OVERRIDE}]`,
+    message: TYPE_MESSAGE,
+  },
+];
+const partWarnings = [
+  // The trailing rule belongs to the part (ActionMenuTrigger, Row, HeaderBar,
+  // Sheet), never an absolute or negative-margin IconButton at a call site.
+  {
+    selector: `JSXOpeningElement[name.name='IconButton'] JSXAttribute[name.name='className'] Literal[value=${PLACED_BUTTON}]`,
+    message: 'Place a trailing IconButton through its part (the trailing rule), not by hand',
+  },
+  {
+    selector: `JSXOpeningElement[name.name='IconButton'] JSXAttribute[name.name='className'] TemplateElement[value.raw=${PLACED_BUTTON}]`,
+    message: 'Place a trailing IconButton through its part (the trailing rule), not by hand',
+  },
+  // Raw controls and headings outside ui/ (extends the no-raw-button rule).
+  {
+    selector: 'JSXOpeningElement[name.name=/^(input|textarea|select|h[1-6])$/]',
+    message: 'Use ui/Input, ui/Textarea, ui/Select or a Text role / HeaderBar title',
+  },
+  {
+    selector: "JSXOpeningElement[name.name='div'] > JSXAttribute[name.name='onClick']",
+    message: 'A tappable surface is PressableRow / Button, never <div onClick>',
+  },
+];
+// Chat: ChatCard is the bubble, so no rounded + filled wrapper around it.
+const CHAT_CARD_FRAME =
+  '/(^|\\s)rounded-[^\\s]*\\s(.*\\s)?bg-|(^|\\s)bg-[^\\s]*\\s(.*\\s)?rounded-/';
+const chatCardFrame = {
+  selector: `JSXElement:has(JSXOpeningElement[name.name='ChatCard']) > JSXOpeningElement > JSXAttribute[name.name='className'] Literal[value=${CHAT_CARD_FRAME}]`,
+  message: 'ChatCard is the bubble: no hand-built rounded + bg frame around it',
+};
 const imgWarning = {
   selector: "JSXOpeningElement[name.name='img']",
   message: 'Use Avatar / Thumbnail / ui image parts (fixed size)',
@@ -172,12 +224,45 @@ export default tseslint.config(
     },
   },
   {
+    // B1 type roles and part placement: warn in components (existing code goes
+    // red otherwise; the ratchet blocks new ones). ui/ owns the raw elements.
+    files: ['src/components/**/*.{ts,tsx}', 'src/pages/**/*.{ts,tsx}'],
+    ignores: [...LAYOUT_IGNORES, 'src/components/ui/**'],
+    plugins: { design: designPlugin },
+    rules: {
+      'design/warn-syntax': [
+        'warn',
+        ...layoutWarnings,
+        imgWarning,
+        ...typeWarnings,
+        ...partWarnings,
+      ],
+    },
+  },
+  {
+    // B1: no hand-built card frame around ChatCard in chat/ (zero today: error).
+    files: ['src/components/chat/**/*.{ts,tsx}'],
+    ignores: LAYOUT_IGNORES,
+    rules: {
+      'no-restricted-syntax': ['error', rpcTraceId, ...designRules, chatCardFrame],
+    },
+  },
+  {
     // ui/ and media/ own the fixed-size image parts, so a raw <img> is theirs.
     files: ['src/components/ui/**/*.{ts,tsx}', 'src/components/media/**/*.{ts,tsx}'],
     ignores: LAYOUT_IGNORES,
     plugins: { design: designPlugin },
     rules: {
       'design/warn-syntax': ['warn', ...layoutWarnings],
+    },
+  },
+  {
+    // ui/ (after the ui/ + media/ block so it wins): type overrides warn everywhere but Text.tsx (the role table).
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    ignores: [...LAYOUT_IGNORES, 'src/components/ui/Text.tsx'],
+    plugins: { design: designPlugin },
+    rules: {
+      'design/warn-syntax': ['warn', ...layoutWarnings, ...typeWarnings],
     },
   },
   {

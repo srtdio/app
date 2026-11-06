@@ -13,10 +13,16 @@ export type InputTone = 'field' | 'search';
 const FIELD =
   'lit-well w-full h-11 px-3 rounded-lg border border-field bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus disabled:text-fg-3';
 
+// One clear X per search field (B1): the field's own IconButton. WebKit's
+// native type="search" cancel glyph (the second, backspace-like X) is hidden.
+export const SEARCH_ONE_CLEAR =
+  '[&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none';
+
 export const INPUT_TONE: Record<InputTone, string> = {
   field: FIELD,
   search:
-    'lit-well w-full h-11 px-3 rounded-lg border border-transparent bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus disabled:text-fg-3 caret-fg focus:border-field focus:bg-panel focus:lit-card',
+    'lit-well w-full h-11 px-3 rounded-lg border border-transparent bg-panel-2 text-fg text-input md:text-base placeholder:text-fg-3 outline-none focus:lit-focus disabled:text-fg-3 caret-fg focus:border-field focus:bg-panel focus:lit-card ' +
+    SEARCH_ONE_CLEAR,
 };
 
 // 16px text below md so iOS Safari does not zoom the page when the field takes

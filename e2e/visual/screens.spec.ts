@@ -1807,7 +1807,7 @@ const SCREENS: Screen[] = [
         'group info trigger',
       );
       await waitFor(
-        [page.getByRole('button', { name: 'Close group info', exact: true })],
+        [page.locator('[data-group-page]').getByRole('button', { name: 'Back', exact: true })],
         'group info',
       );
     },

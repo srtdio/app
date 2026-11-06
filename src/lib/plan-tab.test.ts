@@ -153,14 +153,16 @@ describe('month grid', () => {
 });
 
 describe('labels and steps', () => {
-  it('labels the month and the week with a spaced hyphen', () => {
+  it('labels the month, and the week through the one range formatter', () => {
+    const now = new Date('2026-11-06T12:00:00Z');
     expect(monthLabel('2026-10-22')).toBe('October 2026');
-    expect(weekRangeLabel('2026-10-22')).toBe('19 - 25 Oct 2026');
-    expect(weekRangeLabel('2026-10-01')).toBe('28 Sep - 4 Oct 2026');
-    expect(weekRangeLabel('2026-12-31')).toBe('28 Dec 2026 - 3 Jan 2027');
+    expect(weekRangeLabel('2026-10-22', now)).toBe('19\u201325 Oct');
+    expect(weekRangeLabel('2026-10-01', now)).toBe('28 Sep \u2013 4 Oct');
+    expect(weekRangeLabel('2026-12-31', now)).toBe('28 Dec 2026 \u2013 3 Jan 2027');
+    expect(weekRangeLabel('2025-10-22', now)).toBe('20\u201326 Oct 2025');
     expect(rangeLabel('month', '2026-10-01')).toBe('October 2026');
-    for (const label of [weekRangeLabel('2026-10-01'), weekRangeLabel('2026-12-31')]) {
-      expect(label).not.toMatch(/[–—]/);
+    for (const label of [weekRangeLabel('2026-10-01', now), weekRangeLabel('2026-12-31', now)]) {
+      expect(label).not.toMatch(/ - | to |\u2014/);
     }
   });
 

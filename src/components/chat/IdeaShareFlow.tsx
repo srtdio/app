@@ -411,8 +411,9 @@ export function IdeaShareFlow(props: {
               type="button"
               data-idea-share-show=""
               className="md:order-3"
+              busy={busy}
               onClick={() => {
-                if (ask !== null) void showAndSend(ask.channel, ask.messageId);
+                if (ask !== null && !busy) void showAndSend(ask.channel, ask.messageId);
               }}
             >
               Show and send

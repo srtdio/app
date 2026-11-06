@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { cn } from '@/lib/cn';
-import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import { Thumbnail, type ThumbnailFallback } from '@/components/media';
-import { ICON_SIZE, IconCheck, IconMore } from '@/components/ui/icons';
+import { ICON_SIZE, IconCheck } from '@/components/ui/icons';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -102,7 +102,7 @@ export function AssetCard({
               selected ? 'bg-accent text-accent-fg' : SELECT_BOX_EMPTY,
             )}
           >
-            {selected ? <IconCheck size={12} /> : null}
+            {selected ? <IconCheck size={ICON_SIZE.text} /> : null}
           </span>
         ) : null}
 
@@ -125,10 +125,9 @@ export function AssetCard({
         )}
       </PressableRow>
       {selectMode ? null : (
-        // The ⋯ sits in the card's bottom-right corner, on the size line; the
-        // hit area reaches 2px past the card edge so the card's own spacing
-        // stays even. The laptop popover anchors under it.
-        <div className="absolute -bottom-0.5 -right-0.5 z-10">
+        // The ⋯ sits in the card's bottom-right corner (a tile overlay lives
+        // only at a corner), on the size line. The laptop popover anchors under it.
+        <div className="absolute bottom-0 right-0 z-10">
           <ActionMenu
             title={name}
             items={menuItems}
@@ -138,15 +137,13 @@ export function AssetCard({
             // (buttons never nest); the bare dots line up with the kind label
             // above and sit centred on the size line. ActionMenu toggles it.
             trigger={
-              <IconButton
+              <ActionMenuTrigger
                 type="button"
                 label={`More actions for ${name}`}
-                aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 data-card-menu=""
-              >
-                <IconMore size={ICON_SIZE.control} />
-              </IconButton>
+                edge="free"
+              />
             }
           />
         </div>

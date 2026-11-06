@@ -461,7 +461,7 @@ export function PlanComposeScreen(props: {
       <Button
         variant="primary"
         data-plan-create=""
-        className="w-full"
+        className="w-full md:w-auto"
         aria-busy={busy}
         disabled={busy}
         onClick={() => void create()}
@@ -484,8 +484,7 @@ export function PlanComposeScreen(props: {
         open={props.open}
         testId="compose"
         title="New plan"
-        backLabel="Close"
-        backIcon={<IconX size={ICON_SIZE.tray} />}
+        backLabel="Back"
         onBack={requestClose}
         closeLabel="Close"
         footer={footer}
@@ -753,7 +752,7 @@ export function ComposeItemRow(props: {
         variant="secondary"
         data-plan-day-button={need ? 'need' : item.day === 'none' ? 'none' : 'day'}
         onClick={props.onDay}
-        className={cn('w-full text-left', need ? 'border-warn text-warn' : 'bg-panel-2')}
+        className={cn('w-full md:w-auto text-left', need ? 'border-warn text-warn' : 'bg-panel-2')}
       >
         <span data-plan-day-inner="" className="flex w-full items-center justify-between gap-2">
           {need ? (

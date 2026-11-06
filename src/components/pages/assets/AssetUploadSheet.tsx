@@ -1,6 +1,7 @@
 import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { textRole } from '@/components/ui/Text';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
@@ -559,14 +560,24 @@ export function AssetUploadSheet({
 
   const footer = (
     <>
-      {!canCommit ? (
+      {running ? (
+        // The run's progress stays visible: a meta line at the far left of the
+        // footer ("Uploading 2 of 5"); the primary shows busy.
+        <span data-upload-progress="" className={textRole('meta', 'mr-auto truncate')}>
+          {uploadBusyLabel(progress.finished + 1, progress.total)}
+        </span>
+      ) : !canCommit ? (
         <span className="mr-auto text-sm text-fg-3">
           Uploading is not enabled yet. Names are saved when the upload endpoint ships.
         </span>
       ) : nameError !== null ? (
         <span className="mr-auto text-sm text-fg-3">{nameError}</span>
       ) : null}
-      <span className={canCommit && nameError === null ? 'ml-auto flex gap-2.5' : 'flex gap-2.5'}>
+      <span
+        className={
+          canCommit && nameError === null && !running ? 'ml-auto flex gap-2' : 'flex gap-2'
+        }
+      >
         {running ? (
           <Button variant="ghost" onClick={() => setStopAsk(true)}>
             Stop
@@ -576,9 +587,14 @@ export function AssetUploadSheet({
             Cancel
           </Button>
         )}
-        <Button variant="primary" disabled={!canUpload} onClick={() => void startRun(uploads)}>
+        <Button
+          variant="primary"
+          busy={running}
+          disabled={!canUpload}
+          onClick={() => void startRun(uploads)}
+        >
           <IconUpload size={ICON_SIZE.inline} />
-          {running ? 'Uploading' : hasFiles ? `Upload ${uploads.length}` : 'Upload'}
+          {hasFiles ? `Upload ${uploads.length}` : 'Upload'}
         </Button>
       </span>
     </>

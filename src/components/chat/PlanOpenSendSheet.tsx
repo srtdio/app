@@ -86,8 +86,10 @@ export function PlanOpenSendSheet(props: {
             variant="primary"
             type="button"
             data-plan-open-send-go=""
+            // Busy disables the button too, so a double tap never sends twice.
+            busy={props.busy === true}
             onClick={() => {
-              if (ask !== null) props.onOpenAndSend(ask);
+              if (ask !== null && props.busy !== true) props.onOpenAndSend(ask);
             }}
           >
             Open and send

@@ -198,6 +198,9 @@ export function BankPickSheet(props: {
     props.onClose();
   };
 
+  // The row being placed carries the busy state (the sheet has no primary button).
+  const [pickedId, setPickedId] = useState<string | null>(null);
+
   const place = async (idea: BankIdea, plan: PlanRow, day: string): Promise<void> => {
     setBusy(true);
     const res = await placeBankIdea(supabase, idea.id, plan.id, day);
@@ -230,6 +233,7 @@ export function BankPickSheet(props: {
 
   const pick = async (idea: BankIdea): Promise<void> => {
     if (busy) return;
+    setPickedId(idea.id);
     const day = props.day;
     let plans = props.plans;
     if (plans === null) {
@@ -308,6 +312,7 @@ export function BankPickSheet(props: {
             type="button"
             data-plan-from-bank-idea={idea.id}
             disabled={busy}
+            aria-busy={busy && pickedId === idea.id ? true : undefined}
             onClick={() => void pick(idea)}
             className="lit-card flex items-center gap-3 rounded-xl border bg-panel p-3 text-left"
           >

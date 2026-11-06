@@ -520,17 +520,19 @@ export function PlanPage(props: {
       </IconButton>
     )
   ) : null;
-  const closeButton = desktop ? (
-    <IconButton
-      type="button"
-      label={props.closeLabel ?? 'Close'}
-      data-plan-close=""
-      onClick={props.onDismiss ?? props.onBack}
-      className="-mr-3 shrink-0 text-fg"
-    >
-      <IconX size={ICON_SIZE.control} />
-    </IconButton>
-  ) : null;
+  // One exit per panel: the X shows only where there is no back "<".
+  const closeButton =
+    desktop && !showBack ? (
+      <IconButton
+        type="button"
+        label={props.closeLabel ?? 'Close'}
+        data-plan-close=""
+        onClick={props.onDismiss ?? props.onBack}
+        className="-mr-3 shrink-0 text-fg"
+      >
+        <IconX size={ICON_SIZE.control} />
+      </IconButton>
+    ) : null;
   return createPortal(
     <div
       ref={pageRef}
@@ -2102,26 +2104,25 @@ export function PlanScreen(props: {
         onPress={onPrimary}
       />
     ) : undefined;
-  // Line 2's box: Add (accent soft), 34px in a 44px tap target, its right
-  // edge on the 16px line. No Edit: every change saves itself.
+  // Line 2's Add: the shared Button at 44 with IconPlus (B1: no hand-built
+  // 34px box), its right edge on the 16px line. No Edit: every change saves itself.
   const viewActions = (
     <span data-plan-header-actions="" className="flex shrink-0 items-center gap-2">
-      <PressableRow
+      <Button
         type="button"
-        inline
+        variant="secondary"
         aria-label="Add to plan"
         data-plan-add-header=""
         onClick={openHeaderAdd}
-        className="group flex h-11 shrink-0 items-center"
+        className="shrink-0 px-0"
       >
-        <span
-          data-plan-header-box=""
-          className="flex h-[34px] items-center gap-1.5 rounded-lg border px-3 text-base font-semibold leading-5 text-accent lit-selected group-hover:brightness-95 group-focus-visible:lit-focus"
-        >
+        {/* The visible box spans the whole 44 button (its padding lives here),
+            so its right edge is the button's, on the 16px line. */}
+        <span data-plan-header-box="" className="inline-flex items-center gap-2 self-stretch px-4">
           <IconPlus size={ICON_SIZE.inline} />
           Add
         </span>
-      </PressableRow>
+      </Button>
     </span>
   );
   return (
@@ -2667,7 +2668,7 @@ export function PlanFooter(props: {
           data-plan-primary={action.kind}
           data-plan-send-state="sent"
           disabled
-          className="w-full min-w-0"
+          className="w-full md:w-auto min-w-0"
         >
           <span className="truncate">{label}</span>
         </Button>
@@ -2686,7 +2687,7 @@ export function PlanFooter(props: {
         data-plan-primary={props.error !== null ? 'retry' : action.kind}
         data-plan-send-state={state}
         // Sending keeps the primary fill (accent sorts after fg-3, so it wins).
-        className={cn('w-full min-w-0', state === 'sending' && 'disabled:bg-accent')}
+        className={cn('w-full md:w-auto min-w-0', state === 'sending' && 'disabled:bg-accent')}
         aria-busy={props.busy}
         disabled={props.busy || state !== 'idle'}
         onClick={props.onPress}

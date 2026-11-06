@@ -161,7 +161,7 @@ export function RemoveFromPlanButton(props: { busy: boolean; onClick: () => void
     <Button
       variant="danger"
       data-plan-remove=""
-      className="w-full"
+      className="w-full md:w-auto"
       disabled={props.busy}
       onClick={props.onClick}
     >

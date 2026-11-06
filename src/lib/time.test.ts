@@ -103,12 +103,34 @@ describe('formatDate', () => {
 
 describe('formatDayRange', () => {
   it('same month and across months', () => {
-    expect(formatDayRange('2026-10-19', '2026-10-25', IST, NOW)).toBe('19 - 25 Oct');
-    expect(formatDayRange('2026-10-28', '2026-11-03', IST, NOW)).toBe('28 Oct - 3 Nov');
+    expect(formatDayRange('2026-10-19', '2026-10-25', IST, NOW)).toBe('19\u201325 Oct');
+    expect(formatDayRange('2026-10-28', '2026-11-03', IST, NOW)).toBe('28 Oct \u2013 3 Nov');
   });
   it('years appear off the current year', () => {
-    expect(formatDayRange('2025-10-19', '2025-10-25', IST, NOW)).toBe('19 - 25 Oct 2025');
-    expect(formatDayRange('2026-12-28', '2027-01-03', IST, NOW)).toBe('28 Dec 2026 - 3 Jan 2027');
+    expect(formatDayRange('2025-10-19', '2025-10-25', IST, NOW)).toBe('19\u201325 Oct 2025');
+    expect(formatDayRange('2026-12-28', '2027-01-03', IST, NOW)).toBe(
+      '28 Dec 2026 \u2013 3 Jan 2027',
+    );
+  });
+});
+
+describe('formatDayRange: one formatter, no "to" or "-"', () => {
+  it('one day reads as the day', () => {
+    expect(formatDayRange('2026-10-12', '2026-10-12', IST, NOW)).toBe('12 Oct');
+  });
+  it('never uses "to" or a hyphen', () => {
+    for (const [a, b] of [
+      ['2026-10-12', '2026-10-18'],
+      ['2026-03-28', '2026-04-03'],
+      ['2026-12-28', '2027-01-03'],
+    ] as const) {
+      const range = formatDayRange(a, b, IST, NOW);
+      expect(range).not.toMatch(/ to | - /);
+      expect(range).toContain('\u2013');
+    }
+  });
+  it('across months spaces the dash', () => {
+    expect(formatDayRange('2026-03-28', '2026-04-03', IST, NOW)).toBe('28 Mar \u2013 3 Apr');
   });
 });
 
@@ -173,7 +195,7 @@ describe('due dates are calendar days on the workspace zone', () => {
   it('plan ranges read on the workspace zone', () => {
     // Monday 00:00 IST is still Sunday in UTC.
     expect(formatDayRange('2026-10-18T18:30:00Z', '2026-10-25T06:30:00Z', IST, NOW)).toBe(
-      '19 - 25 Oct',
+      '19\u201325 Oct',
     );
   });
 });

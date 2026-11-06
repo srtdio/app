@@ -347,6 +347,7 @@ export function ConceptSheet(props: {
                 variant="primary"
                 data-plan-concept-save=""
                 aria-busy={waiting}
+                busy={busy && !waiting}
                 disabled={busy || !valid}
                 onClick={save}
               >

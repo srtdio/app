@@ -769,8 +769,18 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
 
   it('labels the Custom row from the active range', () => {
     expect(customRangeLabel(null)).toBe('Custom…');
-    expect(customRangeLabel({ start: '2026-06-24', end: '2026-06-24' })).toBe('24 Jun');
-    expect(customRangeLabel({ start: '2026-06-24', end: '2026-06-27' })).toBe('24 Jun to 27 Jun');
+    expect(
+      customRangeLabel(
+        { start: '2026-06-24', end: '2026-06-24' },
+        new Date('2026-11-06T12:00:00Z'),
+      ),
+    ).toBe('24 Jun');
+    expect(
+      customRangeLabel(
+        { start: '2026-06-24', end: '2026-06-27' },
+        new Date('2026-11-06T12:00:00Z'),
+      ),
+    ).toBe('24\u201327 Jun');
   });
 
   it('tapping the Custom row opens the calendar (flips the calendar-open state)', () => {

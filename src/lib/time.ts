@@ -227,7 +227,15 @@ export function formatDateTime(
   return `${formatDate(instant, now, zone)}, ${formatTime(instant, zone)}`;
 }
 
-/** "19 - 25 Oct", "28 Oct - 3 Nov" on the workspace zone; years appear only off the current year. */
+/** The range dash: an en dash, tight between day numbers, spaced between full dates. */
+const RANGE_DASH = '\u2013';
+
+/**
+ * The one date-range formatter: "12–18 Oct" in one month, "28 Mar – 3 Apr"
+ * across months (spaced en dash), "12 Oct" for one day; the year appears only
+ * off the current year ("28 Dec 2026 – 3 Jan 2027" across years). Civil days
+ * on the workspace zone; a date-only string is read as-is. Never "to" or "-".
+ */
 export function formatDayRange(
   start: DateInput,
   end: DateInput,
@@ -240,14 +248,14 @@ export function formatDayRange(
   const b = civilOf(end, zone);
   if (a === undefined || b === undefined) return '';
   const nowYear = civilOfInstant(now, zone).year;
-  if (a.year !== b.year) return `${dayText(a, -1)} - ${dayText(b, -1)}`;
+  if (a.year !== b.year) return `${dayText(a, -1)} ${RANGE_DASH} ${dayText(b, -1)}`;
   const year = a.year === nowYear ? '' : ` ${a.year}`;
   if (a.month === b.month) {
     return a.day === b.day
       ? `${a.day} ${monthName(a.month)}${year}`
-      : `${a.day} - ${b.day} ${monthName(a.month)}${year}`;
+      : `${a.day}${RANGE_DASH}${b.day} ${monthName(a.month)}${year}`;
   }
-  return `${a.day} ${monthName(a.month)} - ${b.day} ${monthName(b.month)}${year}`;
+  return `${a.day} ${monthName(a.month)} ${RANGE_DASH} ${b.day} ${monthName(b.month)}${year}`;
 }
 
 /**

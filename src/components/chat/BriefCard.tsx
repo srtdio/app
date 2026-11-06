@@ -6,7 +6,7 @@
 // skeleton and is re-read (tab visible, online, connected, into view, or on
 // its own after 5s), up to 3 tries, then shows "Couldn't load" with a tap to
 // retry. Tapping a card opens the brief in the app. Every state (loading,
-// loaded, unavailable, couldn't load) is one fixed 62px box (BRIEF_CARD_HEIGHT),
+// loaded, unavailable, couldn't load) is one fixed 72px box (BRIEF_CARD_HEIGHT),
 // so a card fills in place and never moves a row.
 
 import { useEffect, useMemo, useRef } from 'react';
@@ -14,22 +14,22 @@ import type { ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CouldntLoadCard,
-  SHARED_CARD,
   useRetryInView,
   useThreadCardCache,
   type ThreadCardCache,
 } from '@/components/chat/PostCard';
-import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
-import { PressableRow } from '@/components/ui/PressableRow';
+import { IconBriefs } from '@/components/ui/icons';
+import { ChatCard, CHAT_CARD_WIDTH, chatCardSurface } from '@/components/ui/ChatCard';
+import { useChatLayout } from '@/components/chat/chat-type';
 import { BriefStatusPill } from '@/components/pages/BriefCard';
 import { briefRoute, sharedBriefViews, type SharedBriefView } from '@/lib/chat/briefs';
 
 /**
- * The brief card's one outer height: py-2 (16) + the title over the status pill
- * (20 + 4 + 20) + the 1px border twice. The skeleton, the unavailable card and
+ * The brief card's one outer height (72): ChatCard's 12 inset twice + the title
+ * over the status pill (20 + 4 + 20). The skeleton, the unavailable card and
  * the retry card take it too.
  */
-export const BRIEF_CARD_HEIGHT = 'h-[62px]';
+export const BRIEF_CARD_HEIGHT = 'h-18';
 
 function useSharedBriefs(briefIds: string[]): {
   views: SharedBriefView[];
@@ -62,6 +62,7 @@ function useSharedBriefs(briefIds: string[]): {
 
 export function SharedBriefCards({ briefIds }: { briefIds: string[] }): ReactElement {
   const { views, loading, failed, cache } = useSharedBriefs(briefIds);
+  const layout = useChatLayout();
   const retryInView = useRetryInView(cache, { briefIds }, loading);
   if (briefIds.length === 0) return <></>;
   if (loading) {
@@ -73,7 +74,7 @@ export function SharedBriefCards({ briefIds }: { briefIds: string[] }): ReactEle
           <div
             key={id}
             data-brief-skeleton=""
-            className={`${BRIEF_CARD_HEIGHT} w-[240px] rounded-xl border bg-panel lit-card`}
+            className={`${BRIEF_CARD_HEIGHT} ${CHAT_CARD_WIDTH} ${chatCardSurface(layout, false)}`}
           />
         ))}
       </div>
@@ -100,36 +101,19 @@ export function BriefCardItem({ view }: { view: SharedBriefView }): ReactElement
   const navigate = useNavigate();
   if (view.kind === 'unavailable') {
     return (
-      <div className={`${SHARED_CARD} ${BRIEF_CARD_HEIGHT} text-fg-3`}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 lit-media">
-          <IconBriefs size={ICON_SIZE.nav} />
-        </span>
-        <span className="text-base font-medium">Brief unavailable</span>
-      </div>
+      <ChatCard icon={IconBriefs} title="Brief unavailable" muted className={BRIEF_CARD_HEIGHT} />
     );
   }
+  // ui/ChatCard: kind icon + title on line 1, the status Tag on line 2 (the
+  // same pill as the Briefs list and detail: Open accent, Closed grey).
   return (
-    <PressableRow
-      type="button"
-      inline
-      card
-      aria-label={`Open brief ${view.title}`}
-      onClick={() => navigate(briefRoute(view.briefId))}
-      className={`${SHARED_CARD} ${BRIEF_CARD_HEIGHT} mv-tint`}
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-panel-3 text-fg-3 lit-media">
-        <IconBriefs size={ICON_SIZE.nav} />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate text-base font-medium text-fg" title={view.title}>
-          {view.title}
-        </span>
-        {/* The same pill as the Briefs list and detail: Open (accent, dot) and
-            Closed (grey, lock) read clearly apart. */}
-        <span className="flex">
-          <BriefStatusPill status={view.status} />
-        </span>
-      </span>
-    </PressableRow>
+    <ChatCard
+      icon={IconBriefs}
+      title={<span title={view.title}>{view.title}</span>}
+      meta={<BriefStatusPill status={view.status} />}
+      onOpen={() => navigate(briefRoute(view.briefId))}
+      openLabel={`Open brief ${view.title}`}
+      className={BRIEF_CARD_HEIGHT}
+    />
   );
 }

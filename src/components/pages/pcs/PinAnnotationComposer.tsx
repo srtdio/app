@@ -52,7 +52,6 @@ export function PinAnnotationComposer({
       dirty={body.trim() !== ''}
       discard={COMMENT_DISCARD}
       busy={submitting}
-      busyLabel="Posting…"
       footer={
         <>
           <Button disabled={submitting} onClick={onCancel}>
@@ -67,10 +66,11 @@ export function PinAnnotationComposer({
           <Button
             variant="primary"
             className="ml-auto"
+            busy={submitting}
             disabled={!canPost}
             onClick={() => void onSubmit(body)}
           >
-            {submitting ? 'Posting…' : 'Post'}
+            Post
           </Button>
         </>
       }

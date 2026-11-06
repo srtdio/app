@@ -50,10 +50,13 @@ describe('X5 sort control and calendar a11y', () => {
     expect((date.props as { role?: string }).role).toBe('menu');
   });
 
-  it('the custom range label uses "to", never an en dash', () => {
-    const label = customRangeLabel({ start: '2026-06-24', end: '2026-06-27' });
-    expect(label).toBe('24 Jun to 27 Jun');
-    expect(label).not.toMatch(/[–—]/);
+  it('the custom range label is the one range form, never "to" or an em dash', () => {
+    const label = customRangeLabel(
+      { start: '2026-06-24', end: '2026-06-27' },
+      new Date('2026-11-06T12:00:00Z'),
+    );
+    expect(label).toBe('24\u201327 Jun');
+    expect(label).not.toMatch(/ to |\u2014/);
   });
 
   it('a day cell is labelled with its full date', () => {

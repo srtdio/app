@@ -38,6 +38,7 @@ describe('design tokens: type and radius scales', () => {
       xl: '12px',
       '2xl': '16px',
       full: '9999px',
+      inset: '4px',
       card: '8px',
       sheet: '16px',
       pill: '9999px',

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ReactElement } from 'react';
 import { Button, type ButtonVariant } from '@/components/ui/Button';
@@ -53,19 +56,16 @@ describe('Button design system', () => {
     }
   });
 
-  it('sm, md and lg all render 44', () => {
-    for (const size of ['sm', 'md', 'lg'] as const) {
-      const t = tokens(classOf({ size }));
-      expect(t).toContain('h-11');
-      expect(t).toContain('px-4');
-      expect(t).toContain('text-base');
-    }
-    expect(classOf({ size: 'sm' })).toBe(classOf({ size: 'lg' }));
+  it('one size: every button renders 44', () => {
+    const t = tokens(classOf({}));
+    expect(t).toContain('h-11');
+    expect(t).toContain('px-4');
+    expect(t).toContain('text-base');
   });
 
-  it('does not forward size to the DOM', () => {
-    const el = Button({ size: 'sm', children: 'Go' }) as ReactElement<Record<string, unknown>>;
-    expect(el.props['size']).toBeUndefined();
+  it('has no size prop: every button is 44 (B1)', () => {
+    const src = readFileSync(fileURLToPath(new URL('./Button.tsx', import.meta.url)), 'utf8');
+    expect(src).not.toMatch(/size\?: 'sm'/);
   });
 
   it('maps each variant to its tokens', () => {
@@ -157,27 +157,19 @@ describe('Button busy', () => {
     expect(el.props['aria-busy']).toBe(true);
   });
 
-  it('busy keeps the label and puts a spinner beside it (never replaces it)', () => {
-    const el = render({ busy: true });
-    const kids = el.props.children.filter((k) => k !== null);
-    expect(kids).toHaveLength(2);
-    expect(kids).toContain('Save');
-    // The busy mark is a small wrapper; call it to read the ProgressRing it draws.
-    const mark = kids.find((k) => k !== 'Save') as ReactElement;
-    const arc = (mark.type as () => ReactElement)() as ReactElement<{
-      progress: number | null;
-      className: string;
-    }>;
-    expect(arc.props.progress).toBeNull();
-    expect(arc.props.className).toContain('mv-spin');
-    expect(arc.props.className).not.toMatch(/opacity-|#[0-9a-fA-F]{3,8}\b|dark:/);
+  it('busy keeps the width: the label stays (invisible) and the arc sits over it', () => {
+    const html = renderToStaticMarkup(<Button busy>Save</Button>);
+    expect(html).toMatch(/data-busy-label=""[^>]*class="invisible[^"]*"[^>]*>Save</);
+    expect(html).toContain('data-busy-arc=""');
+    expect(html).toContain('mv-spin');
+    expect(html).not.toMatch(/opacity-|#[0-9a-fA-F]{3,8}\b|dark:/);
   });
 
   it('not busy: no spinner, no aria-busy, disabled only when asked', () => {
     const idle = render({});
     expect(idle.props.disabled).toBeUndefined();
     expect(idle.props['aria-busy']).toBeUndefined();
-    expect(idle.props.children.filter((k) => k !== null)).toEqual(['Save']);
+    expect(idle.props.children).toBe('Save');
     expect(render({ disabled: true }).props.disabled).toBe(true);
   });
 

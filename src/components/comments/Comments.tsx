@@ -31,15 +31,8 @@ import {
   FOCUS_READ_RETRY_MS,
   useFocusTarget,
 } from '@/lib/focus-target';
-import {
-  IconCheck,
-  IconCopy,
-  IconEdit,
-  IconMore,
-  IconTrash,
-  ICON_SIZE,
-} from '@/components/ui/icons';
-import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { IconCheck, IconCopy, IconEdit, IconTrash, ICON_SIZE } from '@/components/ui/icons';
+import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { LoadError } from '@/components/ui/LoadError';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import { Avatar } from '@/components/ui/Avatar';
@@ -2385,20 +2378,14 @@ export function Comments({
     }
     return (
       // -my-2 keeps the 44px target from making the header taller than its text.
-      <div className="relative -my-2 shrink-0">
+      <div className="relative shrink-0">
         <ActionMenu
           title={label}
           items={items}
           open={menuOpenId === comment.id}
           onOpenChange={(open) => setMenuOpenId(open ? comment.id : null)}
           trigger={
-            <IconButton
-              label={label}
-              aria-haspopup="menu"
-              aria-expanded={menuOpenId === comment.id}
-            >
-              <IconMore size={ICON_SIZE.control} />
-            </IconButton>
+            <ActionMenuTrigger label={label} inLine aria-expanded={menuOpenId === comment.id} />
           }
         />
       </div>

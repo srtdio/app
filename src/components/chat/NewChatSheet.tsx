@@ -343,10 +343,10 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
           <Button
             variant="primary"
             className={missing === null ? 'ml-auto' : undefined}
-            disabled={busy}
+            busy={busy}
             onClick={() => void submitDm()}
           >
-            {busy ? 'Starting' : 'Start chat'}
+            Start chat
           </Button>
         </>
       );
@@ -360,10 +360,10 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
         <Button
           variant="primary"
           className={missing === null ? 'ml-auto' : undefined}
-          disabled={busy}
+          busy={busy}
           onClick={() => void submitGroup()}
         >
-          {busy ? 'Creating' : 'Create group'}
+          Create group
         </Button>
       </>
     );

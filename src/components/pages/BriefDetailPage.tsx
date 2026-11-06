@@ -982,7 +982,7 @@ export function BriefDetailPage({
             <Button
               variant="primary"
               data-new-post-from-brief="bar"
-              className="w-full"
+              className="w-full md:w-auto"
               onClick={startPost}
             >
               {newPostLabel}

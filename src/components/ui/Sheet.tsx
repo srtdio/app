@@ -7,6 +7,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconX } from '@/components/ui/icons';
 import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
+import { textRole } from '@/components/ui/Text';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
 import {
@@ -45,10 +46,19 @@ interface SheetProps {
   dirty?: boolean;
   /** Discard confirm copy, passed by the caller, e.g. "Discard this post?". */
   discard?: { title: string; message: string };
-  /** A save is in flight: every close path does nothing and the header shows busyLabel. */
+  /**
+   * A save is in flight: every close path does nothing. The busy state shows on
+   * the footer's primary Button (Button busy); the header carries no text, only
+   * a screen-reader status (busyLabel).
+   */
   busy?: boolean;
-  /** Header text while busy. Default "Saving…". */
+  /** Screen-reader status while busy. Default "Saving…". */
   busyLabel?: string;
+  /**
+   * A verb in the header's trailing slot (phone full-screen form: X leading,
+   * the verb trailing). Leave it out for the default (X trailing).
+   */
+  headerAction?: ReactNode;
 }
 
 const DEFAULT_DISCARD = { title: 'Discard changes?', message: 'Your changes will be lost.' };
@@ -65,6 +75,7 @@ export function Sheet({
   discard,
   busy = false,
   busyLabel = 'Saving…',
+  headerAction,
 }: SheetProps) {
   // Motion (docs/motion.md, rise): the panel renders at its resting place from
   // the first frame and the move is laid over it. Phone: rises from 100%
@@ -193,6 +204,28 @@ export function Sheet({
     return null;
   }
 
+  function closeButton(pull: string): ReactNode {
+    return (
+      <IconButton
+        label="Close"
+        onClick={requestClose}
+        {...(busy
+          ? {
+              'aria-disabled': 'true' as const,
+              // Muted and inert while busy: aria-disabled variants out-rank the
+              // IconButton's own ink, hover and press classes (no "!").
+              className: cn(
+                pull,
+                'cursor-default aria-disabled:text-fg-3 aria-disabled:hover:bg-transparent aria-disabled:active:scale-100',
+              ),
+            }
+          : { className: pull })}
+      >
+        <IconX size={ICON_SIZE.control} />
+      </IconButton>
+    );
+  }
+
   function onOverlayClick(event: MouseEvent<HTMLDivElement>): void {
     if (event.target === event.currentTarget) {
       requestClose();
@@ -230,36 +263,29 @@ export function Sheet({
           wide === true && 'lg:w-[960px]',
         )}
       >
+        {/* Header 56 on the 16 edge: the title (heading role) takes what the
+            actions leave (min-w-0, truncate); the actions never shrink. One
+            exit: X trailing, or X leading when a header verb takes the trailing
+            slot. Each 44 box is pulled out by 12 (the trailing rule). */}
         <div
           data-sheet-grab=""
-          className="flex items-center gap-2.5 px-[18px] py-[15px] border-b border-border touch-none md:touch-auto"
+          className="flex h-14 shrink-0 items-center gap-2 px-4 border-b border-border touch-none md:touch-auto"
           {...drag}
         >
-          <h2 className="line-clamp-2 min-w-0 font-semibold text-lg [overflow-wrap:anywhere]">
-            {title}
-          </h2>
-          <span className="ml-auto flex items-center gap-2">
-            {busy ? <span className="text-sm text-fg-3">{busyLabel}</span> : null}
-            <IconButton
-              label="Close"
-              onClick={requestClose}
-              {...(busy
-                ? {
-                    'aria-disabled': 'true' as const,
-                    // Muted and inert while busy: aria-disabled variants out-rank the
-                    // IconButton's own ink, hover and press classes (no "!").
-                    className:
-                      'cursor-default aria-disabled:text-fg-3 aria-disabled:hover:bg-transparent aria-disabled:active:scale-100',
-                  }
-                : {})}
-            >
-              <IconX size={ICON_SIZE.control} />
-            </IconButton>
+          {headerAction !== undefined ? closeButton('-ml-3') : null}
+          <h2 className={textRole('heading', 'min-w-0 flex-1 truncate')}>{title}</h2>
+          {busy ? (
+            <span role="status" className="sr-only">
+              {busyLabel}
+            </span>
+          ) : null}
+          <span data-sheet-actions="" className="flex shrink-0 items-center gap-2">
+            {headerAction !== undefined ? headerAction : closeButton('-mr-3')}
           </span>
         </div>
         <div
           className={cn(
-            'px-[18px] py-4 overflow-y-auto',
+            'px-4 py-4 overflow-y-auto',
             // No footer: the body is the bottom edge, so it clears the home bar.
             footer === undefined && 'pb-[max(16px,env(safe-area-inset-bottom))]',
             fixedHeight === true && 'sm:flex sm:min-h-0 sm:flex-1 sm:flex-col',
@@ -272,7 +298,8 @@ export function Sheet({
           // bottom anchor: the phone Undo strip floats above it, never over it.
           <div
             {...bottomAnchorProps}
-            className="flex items-center gap-2.5 px-[18px] pt-3 pb-[max(12px,env(safe-area-inset-bottom))] border-t border-border"
+            data-sheet-footer=""
+            className="flex items-center gap-2 px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] border-t border-border"
           >
             {footer}
           </div>
@@ -299,5 +326,35 @@ export function Sheet({
       ) : null}
     </div>,
     document.body,
+  );
+}
+
+/**
+ * The sheet footer's two buttons: [Cancel] 8 [Primary]. Phone: equal halves;
+ * laptop: right-aligned, the primary on the right. A third action goes far
+ * left as a link button (`extra`). Busy shows on the primary (Button busy).
+ */
+export function SheetActions({
+  cancel,
+  primary,
+  extra,
+}: {
+  cancel?: ReactNode;
+  primary: ReactNode;
+  extra?: ReactNode;
+}) {
+  return (
+    <div data-sheet-actions-row="" className="flex w-full min-w-0 items-center gap-2">
+      {extra !== undefined ? <span className="hidden shrink-0 md:flex">{extra}</span> : null}
+      <span className="hidden flex-1 md:block" />
+      {cancel !== undefined ? (
+        <span className="flex min-w-0 flex-1 md:flex-none [&>button]:w-full md:[&>button]:w-auto">
+          {cancel}
+        </span>
+      ) : null}
+      <span className="flex min-w-0 flex-1 md:flex-none [&>button]:w-full md:[&>button]:w-auto">
+        {primary}
+      </span>
+    </div>
   );
 }

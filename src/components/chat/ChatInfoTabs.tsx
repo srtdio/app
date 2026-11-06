@@ -555,7 +555,7 @@ export function SeeAllRow(props: { onClick: () => void }): ReactElement {
       type="button"
       data-see-all=""
       onClick={props.onClick}
-      className="w-full text-accent"
+      className="w-full md:w-auto text-accent"
     >
       {SEE_ALL_LABEL}
     </Button>
@@ -602,7 +602,7 @@ export function FeedBody<T>(props: {
     ) : showLoadMore(feed) ? (
       <Button
         data-load-more=""
-        className="w-full"
+        className="w-full md:w-auto"
         disabled={feed.loadingMore}
         onClick={props.onLoadMore}
       >

@@ -135,7 +135,7 @@ export function ThreadChipRow(props: {
           onClick={props.onOpen}
           className={cn('flex min-w-0 max-w-full items-center', NO_TOUCH_SELECT)}
         >
-          <span className="inline-flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-full bg-panel pl-1 pr-2.5 text-sm lit-pill">
+          <span className="inline-flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-full bg-panel px-3 py-2 text-sm lit-pill">
             <PostRefThumb assetVersionId={post?.thumbnailAssetVersionId ?? null} size={20} />
             <span className="min-w-0 truncate text-fg-2">{label.title}</span>
             {label.count !== null ? (
