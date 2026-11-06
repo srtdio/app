@@ -78,7 +78,7 @@ describe('X7 H5: the row ⋯', () => {
     expect(out).not.toContain('data-row-more');
   });
 
-  it('the ⋯ is a sibling of the tap surface, its glyph on the 16 edge (the trailing rule)', () => {
+  it('the ⋯ is a sibling of the tap surface, its glyph on the 12 chat edge (the trailing rule)', () => {
     const out = renderToStaticMarkup(
       <ChannelCard
         channel={group}
@@ -91,8 +91,8 @@ describe('X7 H5: the row ⋯', () => {
         onLongPress={() => {}}
       />,
     );
-    // Row slot pr-4, trigger pulled -mr-3: the 20 glyph's edge sits on 16.
-    expect(out).toMatch(/data-row-more=""[^>]*pr-4/);
+    // Row slot pr-3 (chat gutter), trigger pulled -mr-3: the 20 glyph's edge sits on 12.
+    expect(out).toMatch(/data-row-more=""[^>]*pr-3/);
     expect(out).toMatch(/aria-label="Actions for Launch"[^>]*-mr-3/);
   });
 });

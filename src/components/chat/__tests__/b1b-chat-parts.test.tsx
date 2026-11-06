@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // B1b: the chat list and the chat headers render through the shared parts.
-// Group chats are ui/Row (56/72, a 32 avatar column, text at 60, the divider
-// inset 60, the ⋯ through the trailing rule); people are ui/Tile (name, the
-// time in the meta slot, the ⋯ on the title line); Thread, Contact, Group
+// Group and people chats are ui/Row (72, a 32 avatar column at the 12 chat
+// edge, text at 56, the divider inset 56, the ⋯ through the trailing rule);
+// no chat is a Tile; Thread, Contact, Group
 // info, Starred and Tasks headers are ui/HeaderBar with one exit (Back "<"
 // on the left, never an X), glyphs 20.
 import { readFileSync } from 'node:fs';
@@ -60,29 +60,28 @@ function list(): string {
   );
 }
 
-describe('ChannelList on ui/Row and ui/Tile', () => {
-  it('group chats render [data-row] with the 32 avatar column and the inset divider', () => {
+describe('ChannelList on ui/Row', () => {
+  it('group and people chats render [data-row] with the 32 avatar column and the inset divider', () => {
     const out = list();
-    expect(out.match(/data-row=""/g)).toHaveLength(2);
+    expect(out.match(/data-row=""/g)).toHaveLength(3);
     expect(out).toMatch(/data-row-leading=""[^>]*w-8/);
     expect(out).toContain('width:32px;height:32px');
-    // Every row but the last in its section, inset 60.
+    // Every row but the last in its section, inset 56 (the text edge).
     expect(out.match(/data-row-divider=""/g)).toHaveLength(1);
-    expect(out).toMatch(/data-row-divider=""[^>]*left-15/);
+    expect(out).toMatch(/data-row-divider=""[^>]*left-14/);
   });
 
-  it('the group ⋯ ends on the row edge: Row slot pr-4, trigger pulled 12 (the trailing rule)', () => {
+  it('the ⋯ ends on the row edge: Row slot pr-3, trigger pulled 12 (the trailing rule)', () => {
     const out = list();
-    expect(out).toMatch(/data-row-more=""[^>]*pr-4/);
+    expect(out).toMatch(/data-row-more=""[^>]*pr-3/);
     expect(out).toMatch(/aria-label="Actions for Launch"[^>]*-mr-3/);
+    expect(out).toMatch(/aria-label="Actions for Asha Rao"[^>]*-mr-3/);
   });
 
-  it('people render [data-tile]: the name, the time in the meta slot, the ⋯ on the title line', () => {
+  it('people render [data-row] like groups, never [data-tile]', () => {
     const out = list();
-    expect(out.match(/data-tile=""/g)).toHaveLength(1);
+    expect(out).not.toContain('data-tile');
     expect(out).toContain('>Asha Rao<');
-    expect(out).toMatch(/data-tile-more=""[^>]*>.*aria-label="Actions for Asha Rao"[^>]*-mr-3/);
-    expect(out).toContain('data-tile-press=""');
   });
 
   it('the onboarding tour still finds the default group row (data-induction on the li)', () => {
