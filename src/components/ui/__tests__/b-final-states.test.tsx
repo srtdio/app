@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -46,7 +47,13 @@ function composer(state: ComposerState): HTMLElement {
         </>
       }
       send={
-        <Button type="submit" variant="primary" shape="round" aria-label="Send" busy={state.kind === 'sending'}>
+        <Button
+          type="submit"
+          variant="primary"
+          shape="round"
+          aria-label="Send"
+          busy={state.kind === 'sending'}
+        >
           S
         </Button>
       }
@@ -92,8 +99,12 @@ describe('chat Tasks header reserves the save state width', () => {
   const src = read('components/chat/tasks/TaskSheet.tsx');
   const slot = src.slice(src.indexOf('data-task-save-slot'), src.indexOf('<ActionMenu title='));
   it('an invisible "Saving…" and an invisible Retry hold the slot when idle', () => {
-    expect(slot).toMatch(/aria-hidden="true"\s+className="invisible col-start-1 row-start-1[^"]*"\s*>\s*\{SAVING_LABEL\}/);
-    expect(slot).toMatch(/data-task-save-reserve="retry"\s+className="invisible col-start-1 row-start-1[^"]*"\s*>\s*\{RETRY_LABEL\}/);
+    expect(slot).toMatch(
+      /aria-hidden="true"\s+className="invisible col-start-1 row-start-1[^"]*"\s*>\s*\{SAVING_LABEL\}/,
+    );
+    expect(slot).toMatch(
+      /data-task-save-reserve="retry"\s+className="invisible col-start-1 row-start-1[^"]*"\s*>\s*\{RETRY_LABEL\}/,
+    );
     // The live state shares the same grid cell.
     expect(slot).toContain('className="col-start-1 row-start-1 flex items-center"');
   });
@@ -127,7 +138,10 @@ describe('thread lanes (ui/layout)', () => {
 
   it('the thread list keeps the lanes clear wherever it lands a row', () => {
     const src = read('components/chat/MessageThread.tsx');
-    const list = src.slice(src.indexOf('export const THREAD_LIST_CLASS'), src.indexOf(');', src.indexOf('export const THREAD_LIST_CLASS')));
+    const list = src.slice(
+      src.indexOf('export const THREAD_LIST_CLASS'),
+      src.indexOf(');', src.indexOf('export const THREAD_LIST_CLASS')),
+    );
     expect(list).toContain('LANE_TOP_CLEAR');
     expect(list).toContain('LANE_BOTTOM_CLEAR');
     expect(LANE_TOP_CLEAR).toMatch(/^scroll-pt-/);
