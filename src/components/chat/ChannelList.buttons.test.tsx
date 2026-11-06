@@ -5,7 +5,8 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ROW_MORE_BUTTON, searchChips } from '@/components/chat/ChannelList';
+import { ActionMenuTrigger } from '@/components/ui/ActionMenu';
+import { ROW_MORE_INK, searchChips } from '@/components/chat/ChannelList';
 
 const noop = (): void => undefined;
 
@@ -28,9 +29,11 @@ describe('ChannelList buttons (design system)', () => {
     expect(on).toContain('aria-pressed="true"');
   });
 
-  it('the row menu button is 44x44 with the 8px radius', () => {
-    expect(ROW_MORE_BUTTON).toContain('h-11 w-11');
-    expect(ROW_MORE_BUTTON).toContain('rounded-lg');
-    expect(ROW_MORE_BUTTON).not.toContain('rounded-md');
+  it('the row menu button is the shared ActionMenuTrigger: 44x44, 8px radius, fg-3 at rest', () => {
+    const [tag] = buttonTags(renderToStaticMarkup(<ActionMenuTrigger className={ROW_MORE_INK} />));
+    expect(tag).toContain('h-11 w-11');
+    expect(tag).toContain('rounded-lg');
+    expect(tag).not.toContain('rounded-md');
+    expect(tag).toContain('text-fg-3');
   });
 });

@@ -18,8 +18,9 @@ export const MODAL_PAGE_CLASS = 'fixed inset-0 z-50 flex flex-col bg-bg outline-
 /**
  * The modal page's 56px header height plus the status-bar strip it covers
  * (--shell-safe-top; 0 off the phone), padded so its controls sit below the
- * notch. Every ModalPanel header (Contact, Group info, Starred) takes this
- * instead of h-14.
+ * notch. Every ModalPanel header (Contact, Group info, Starred) is the shared
+ * ui/HeaderBar (compact: Back left, the title, actions right; never an X) and
+ * takes this as its className in place of h-14.
  */
 export const MODAL_HEADER_SAFE = SAFE_TOP_BAR_CLASS;
 

@@ -106,10 +106,13 @@ describe('X7 FN22-FN24: copy, inputs and skeletons', () => {
     expect(BAR_INPUT).not.toContain('sm:text-');
   });
 
-  it('ThreadView dismiss is a 44px chevron', () => {
+  it('ThreadView dismiss is the HeaderBar back: a 44px chevron named "Close thread"', () => {
     const view = source('../ThreadView.tsx');
-    expect(view).toContain('label="Close thread"');
-    expect(view).toContain('<IconChevronLeft size={ICON_SIZE.control} />');
+    expect(view).toContain('<HeaderBar');
+    expect(view).toContain("label: 'Close thread'");
+    expect(source('../../ui/HeaderBar.tsx')).toContain(
+      '<IconChevronLeft size={ICON_SIZE.control} />',
+    );
   });
 
   it('group photo errors are plain words; rename has Save / Cancel and never saves on blur', () => {

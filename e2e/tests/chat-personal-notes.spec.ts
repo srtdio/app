@@ -251,8 +251,9 @@ for (const photo of [true, false]) {
     await expect(avatar).toHaveAttribute('data-notes-avatar', photo ? 'photo' : 'notebook');
     await expect(tile.locator('[data-notes-badge]')).toHaveCount(photo ? 1 : 0);
     await expect(avatar).toHaveAttribute('aria-label', 'Personal notes');
+    // The notes row is a ui/Row: its avatar sits in the 32 leading column.
     const box = await avatar.boundingBox();
-    expect(Math.round(box?.width ?? 0)).toBe(72);
+    expect(Math.round(box?.width ?? 0)).toBe(32);
 
     await tile.click();
     const header = page.locator('[data-header-line]');

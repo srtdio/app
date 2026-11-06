@@ -17,13 +17,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, Ref } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
+import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { SelectCheck } from '@/components/ui/SelectCheck';
 import { NoResults } from '@/components/ui/NoResults';
-import { ICON_SIZE, IconChevronLeft, IconChevronRight, IconStar } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronRight, IconStar } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { BUBBLE_SHAPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { cn } from '@/lib/cn';
@@ -749,31 +749,25 @@ export function StarredSheet(props: {
   if (!open) return null;
   return createPortal(
     <ModalPanel aria-label={STARRED_TITLE} data-starred-sheet="" className={MODAL_PAGE_CLASS}>
-      <div
-        className={cn(
-          'flex shrink-0 items-center gap-1 border-b bg-panel px-2 md:px-4 lit-header',
-          MODAL_HEADER_SAFE,
-        )}
-      >
-        <IconButton label="Back" onClick={onClose}>
-          <IconChevronLeft size={ICON_SIZE.control} />
-        </IconButton>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <h2 className="truncate text-lg font-semibold leading-5 text-fg">{STARRED_TITLE}</h2>
-          <span data-starred-chat-name="" className="truncate text-sm text-fg-2">
-            {props.chatName}
-          </span>
-        </div>
-        <Button
-          type="button"
-          variant="link"
-          data-starred-edit={editing ? 'done' : 'edit'}
-          onClick={() => setEditing((on) => !on)}
-          className="min-w-[44px] shrink-0"
-        >
-          {editing ? 'Done' : 'Edit'}
-        </Button>
-      </div>
+      {/* A modal page: Back left, "Starred" over the chat's name, Edit / Done right. */}
+      <HeaderBar
+        compact
+        className={MODAL_HEADER_SAFE}
+        title={STARRED_TITLE}
+        subtitle={<span data-starred-chat-name="">{props.chatName}</span>}
+        onBack={onClose}
+        actions={
+          <Button
+            type="button"
+            variant="link"
+            data-starred-edit={editing ? 'done' : 'edit'}
+            onClick={() => setEditing((on) => !on)}
+            className="min-w-[44px] shrink-0"
+          >
+            {editing ? 'Done' : 'Edit'}
+          </Button>
+        }
+      />
       <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overflow-x-hidden overscroll-contain">
         <div className="mx-auto w-full max-w-2xl px-4 pt-3">
           <StarredList

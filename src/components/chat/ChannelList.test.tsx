@@ -25,6 +25,8 @@ import { SectionHeader } from '@/components/shell/SectionHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { IconPlus } from '@/components/ui/icons';
+import { Row } from '@/components/ui/Row';
+import { Tile } from '@/components/ui/Tile';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { Bone } from '@/lib/motion';
 
@@ -392,33 +394,34 @@ describe('load status', () => {
     expect(texts(tree)).not.toContain('Chats with your team show up here.');
   });
 
-  it('skeleton tiles match the real tile boxes (wide 100 + 72px photo, square 168 + 72px disc)', () => {
-    const tiles = findAll(
+  it('skeleton shapes are the real parts (2 group Rows, 4 people Tiles) drawn with Bones', () => {
+    const shells = findAll(
       withStatus('loading'),
       (el) => (el.props as Record<string, unknown>)['data-skeleton-row'] !== undefined,
     );
-    const kinds = tiles.map((t) => (t.props as Record<string, unknown>)['data-skeleton-row']);
-    expect(kinds).toEqual(['wide', 'wide', 'square', 'square', 'square', 'square']);
-    for (const tile of tiles) {
-      const cls = (tile.props as { className: string }).className;
-      // Loading shells take the lit class of the tile they become (lit-card
-      // draws the edges, so no neutral border colour).
-      for (const token of ['rounded-xl', 'border', 'lit-card']) {
-        expect(cls).toContain(token);
-      }
-      expect(cls).not.toContain('border-border');
-      // Boxes sweep (motion Bone); never a pulse or fade.
-      expect(cls).not.toContain('animate-pulse');
-      expect(findAll(tile, (el) => el.type === Bone).length).toBeGreaterThan(0);
-      const wide = (tile.props as Record<string, unknown>)['data-skeleton-row'] === 'wide';
-      expect(cls).toContain(wide ? 'h-[100px]' : 'h-[168px]');
-      const [photo] = findAll(
-        tile,
-        (el) =>
-          el !== tile &&
-          /rounded-(full|xl)/.test((el.props as { className?: string }).className ?? ''),
+    const kinds = shells.map((t) => (t.props as Record<string, unknown>)['data-skeleton-row']);
+    expect(kinds).toEqual(['row', 'row', 'tile', 'tile', 'tile', 'tile']);
+    for (const shell of shells) {
+      const kind = (shell.props as Record<string, unknown>)['data-skeleton-row'];
+      // The shell is the part it becomes, so swapping in the list shifts nothing.
+      const part = findAll(shell, (el) => el.type === (kind === 'row' ? Row : Tile));
+      expect(part).toHaveLength(1);
+      // Boxes sweep (motion Bone, in the part's slots); never a pulse or fade.
+      const slots = Object.values(part[0]!.props as Record<string, unknown>).filter(
+        (v): v is ReactElement => isElement(v as ReactNode),
       );
-      expect((photo!.props as { className: string }).className).toContain('h-[72px] w-[72px]');
+      const bones = slots.filter((el) => el.type === Bone);
+      expect(bones.length).toBeGreaterThan(0);
+      for (const bone of bones) {
+        expect((bone.props as { className?: string }).className ?? '').not.toContain(
+          'animate-pulse',
+        );
+      }
+      if (kind === 'row') {
+        // The 32 avatar placeholder in the Row's leading column.
+        const lead = (part[0]!.props as { leading: ReactElement }).leading;
+        expect((lead.props as { className: string }).className).toContain('h-8 w-8');
+      }
     }
     expect(
       findAll(withStatus('loading'), (el) =>

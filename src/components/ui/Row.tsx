@@ -1,10 +1,20 @@
-import type { ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { textRole } from '@/components/ui/Text';
 import { ICON_SIZE, IconChevronRight } from '@/components/ui/icons';
 
-export interface RowProps {
+/**
+ * The tap surface's own attributes (pointer, key and context-menu handlers,
+ * aria-pressed, data-* hooks), forwarded to the PressableRow as they are. They
+ * change behaviour only, never the look: the part owns every class.
+ */
+type RowSurfaceProps = Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'title' | 'onClick' | 'className' | 'children' | 'disabled' | 'type'
+>;
+
+export interface RowProps extends RowSurfaceProps {
   /** Leading avatar (32) or icon (20): held in a fixed 32 column so labels share one edge (L5). */
   leading?: ReactNode;
   /** Top line title (heading role). */
@@ -13,6 +23,12 @@ export interface RowProps {
   time?: ReactNode;
   /** Second line (secondary role): one line, truncated. Makes the row 72 tall. */
   secondary?: ReactNode;
+  /**
+   * A count on the second line's trailing end (an unread CountBadge), 8 after
+   * the secondary text; on the title line after the time when there is no
+   * second line. Never a control.
+   */
+  badge?: ReactNode;
   /** A chevron (the row opens somewhere) OR a ⋯ menu, never both. */
   trailing?:
     | { kind: 'chevron' }
@@ -24,8 +40,9 @@ export interface RowProps {
   disabled?: boolean;
   /** Current / chosen row: lit-selected. */
   selected?: boolean;
+  /** Ref to the tap surface's <button> (a menu anchors to it). */
+  buttonRef?: Ref<HTMLButtonElement> | undefined;
   className?: string;
-  'aria-label'?: string;
 }
 
 /**
@@ -39,14 +56,22 @@ export function Row({
   title,
   time,
   secondary,
+  badge,
   trailing,
   divider = false,
   onPress,
   disabled,
   selected = false,
+  buttonRef,
   className,
-  ...rest
+  ...surface
 }: RowProps) {
+  const badgeNode =
+    badge !== undefined && badge !== null ? (
+      <span data-row-badge="" className="flex shrink-0">
+        {badge}
+      </span>
+    ) : null;
   const body = (
     <>
       {leading !== undefined ? (
@@ -58,9 +83,13 @@ export function Row({
         <span className="flex min-w-0 items-baseline gap-2">
           <span className={textRole('heading', 'min-w-0 flex-1 truncate')}>{title}</span>
           {time !== undefined ? <span className={textRole('meta', 'shrink-0')}>{time}</span> : null}
+          {secondary === undefined ? badgeNode : null}
         </span>
         {secondary !== undefined ? (
-          <span className={textRole('secondary')}>{secondary}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className={textRole('secondary', 'min-w-0 flex-1')}>{secondary}</span>
+            {badgeNode}
+          </span>
         ) : null}
       </span>
       {trailing?.kind === 'chevron' ? (
@@ -75,9 +104,10 @@ export function Row({
     <div data-row="" className={cn('relative flex min-w-0 items-center', className)}>
       {onPress !== undefined ? (
         <PressableRow
+          {...surface}
+          buttonRef={buttonRef}
           onClick={onPress}
           disabled={disabled}
-          aria-label={rest['aria-label']}
           className={cn(
             'flex min-w-0 flex-1 items-center gap-3 rounded-none px-4',
             height,

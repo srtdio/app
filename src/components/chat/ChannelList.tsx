@@ -3,7 +3,8 @@ import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode }
 import { stripFormat } from '@srtdio/comments';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { PressableRow } from '@/components/ui/PressableRow';
+import { Row } from '@/components/ui/Row';
+import { Tile } from '@/components/ui/Tile';
 import { createPressIntent, type PressIntent } from '@/lib/chat/press-intent';
 import { IconButton } from '@/components/ui/IconButton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -265,9 +266,14 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
     'data-induction': INDUCTION_KEYS.chatDefaultGroupRow,
     'data-induction-channel': channel.channelId,
   });
-  const renderCard = (channel: ChannelSummary, anchored: boolean): ReactElement => (
+  const { groups, people } = splitSections(props.channels);
+  const renderCard = (
+    channel: ChannelSummary,
+    anchored: boolean,
+    divider: boolean,
+  ): ReactElement => (
     // Glide: a reorder (new message lifts a chat) moves rows to their new
-    // place; groups list on Y, the people grid on X+Y.
+    // place; group rows list on Y, the people grid on X+Y.
     <GlideItem
       as="li"
       axis={anchored ? 'y' : 'xy'}
@@ -286,6 +292,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
         nowMs={nowMs}
         timeZone={timeZone}
         onSelect={props.onSelect}
+        divider={divider}
         {...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {})}
         input={props.input ?? DEFAULT_LIST_INPUT}
         {...(props.selecting !== undefined
@@ -305,8 +312,6 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
       />
     </GlideItem>
   );
-  const card = (channel: ChannelSummary): ReactElement => renderCard(channel, false);
-  const { groups, people } = splitSections(props.channels);
   return (
     <div data-chat-home="" className={CHAT_HOME_STACK}>
       {groups.length > 0 ? (
@@ -314,8 +319,8 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
           <h3 data-section-label="groups" className={sectionLabelClass(true)}>
             Groups
           </h3>
-          <ul data-section="groups" className={GROUP_TILE_LIST}>
-            {groups.map((channel) => renderCard(channel, true))}
+          <ul data-section="groups" className={GROUP_ROW_LIST}>
+            {groups.map((channel, i) => renderCard(channel, true, i < groups.length - 1))}
           </ul>
         </>
       ) : null}
@@ -325,7 +330,7 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
             People
           </h3>
           <ul data-section="people" className={PEOPLE_TILE_GRID}>
-            {people.map(card)}
+            {people.map((channel) => renderCard(channel, false, false))}
           </ul>
         </>
       ) : null}
@@ -336,55 +341,51 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
 /** Skeleton tiles shown while the list loads; enough to fill a phone screen. */
 export const SKELETON_ROWS = 6;
 
-/** The skeleton's sections: two wide group tiles, then four square people tiles. */
+/** The skeleton's sections: two group rows, then four people tiles. */
 const SKELETON_GROUPS = 2;
 const SKELETON_PEOPLE = SKELETON_ROWS - SKELETON_GROUPS;
 
-/** A label-sized placeholder bar (16px line, same padding as the real label). */
+/** A label-sized placeholder bar on the label's own edge and padding. */
 function skeletonLabel(first: boolean): ReactElement {
   return (
-    <div className={first ? 'pt-1' : 'pt-3'}>
+    <div className={cn('px-4', first ? 'pt-1' : 'pt-3')}>
       <Bone lit="flat" as="div" className="h-4 w-16 rounded" />
     </div>
   );
 }
 
 /**
- * The loading body: the real sections' shapes (label, wide 100px tiles with a
- * 72px rounded-square photo, label, a 2-column grid of 168px square tiles with
- * a 72px disc), so swapping in the list shifts nothing. Each box is a motion
- * Bone (top-lit sweep, never a pulse); no spinner. Shown only when the device
- * holds no list (the store paints a saved list at once).
+ * The loading body: the real sections' shapes, drawn by the same parts (label,
+ * group Rows 72 tall with a 32 avatar and two lines, label, a 2-column grid of
+ * square Tiles with a caption), so swapping in the list shifts nothing. Each
+ * box is a motion Bone (top-lit sweep, never a pulse); no spinner. Shown only
+ * when the device holds no list (the store paints a saved list at once).
  */
 export function channelListSkeleton(): ReactElement {
   return (
     <BoxSkeleton lit="flat" className={CHAT_HOME_STACK} label="Loading conversations">
       {skeletonLabel(true)}
-      <ul className={GROUP_TILE_LIST}>
+      <ul className={GROUP_ROW_LIST}>
         {Array.from({ length: SKELETON_GROUPS }, (_, i) => (
-          <li key={i} className="min-w-0">
-            <div data-skeleton-row="wide" className={cn(tileBoxClass('wide'), 'bg-panel lit-card')}>
-              <Bone lit="lit-avatar" as="div" className="h-[72px] w-[72px] shrink-0 rounded-xl" />
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <Bone lit="flat" as="div" className="h-4 w-1/2 rounded" />
-                <Bone lit="flat" as="div" className="h-3 w-3/4 rounded" />
-              </div>
-            </div>
+          <li key={i} data-skeleton-row="row" className="min-w-0">
+            <Row
+              leading={<Bone lit="lit-avatar" as="span" className="h-8 w-8 rounded-lg" />}
+              title={<Bone lit="flat" as="span" className="my-1 h-3 w-1/2 rounded" />}
+              secondary={<Bone lit="flat" as="span" className="my-1 h-3 w-3/4 rounded" />}
+              divider={i < SKELETON_GROUPS - 1}
+            />
           </li>
         ))}
       </ul>
       {skeletonLabel(false)}
       <ul className={PEOPLE_TILE_GRID}>
         {Array.from({ length: SKELETON_PEOPLE }, (_, i) => (
-          <li key={i} className="min-w-0">
-            <div
-              data-skeleton-row="square"
-              className={cn(tileBoxClass('square'), 'bg-panel lit-card')}
-            >
-              <Bone lit="lit-avatar" as="div" className="h-[72px] w-[72px] shrink-0 rounded-full" />
-              <Bone lit="flat" as="div" className="mt-2 h-3.5 w-2/3 rounded" />
-              <Bone lit="flat" as="div" className="mt-2 h-3 w-full rounded" />
-            </div>
+          <li key={i} data-skeleton-row="tile" className="min-w-0">
+            <Tile
+              thumbnail={<Bone lit="lit-card" as="span" className="h-full w-full" />}
+              title={<Bone lit="flat" as="span" className="my-1 h-3 w-2/3 rounded" />}
+              meta={<Bone lit="flat" as="span" className="my-1 h-2 w-1/3 rounded" />}
+            />
           </li>
         ))}
       </ul>
@@ -471,97 +472,61 @@ export function unreadPillText(unread: number): string | null {
 }
 
 /**
- * The home stack inside the one scroll container: 16px sides (the same edge as
- * the search box and filter chips above it), 8px between blocks.
+ * The home stack inside the one scroll container, 8px between blocks. Rows
+ * bleed to the pane's sides and draw their own 16 edge; labels and the people
+ * grid sit on the same 16 edge (CHAT_HOME_EDGE), like the search box above.
  */
-export const CHAT_HOME_STACK = 'flex flex-col gap-2 px-4';
+export const CHAT_HOME_STACK = 'flex flex-col gap-2';
 
-/** Groups: one full-width wide tile per row, 8px apart. */
-export const GROUP_TILE_LIST = 'flex flex-col gap-2';
+/** The home's 16 edge for the parts that do not draw their own (labels, the grid). */
+export const CHAT_HOME_EDGE = 'px-4';
 
-/** People: two fluid columns of 168px rows, 10px gaps; an odd last cell stays empty. */
-export const PEOPLE_TILE_GRID =
-  'grid grid-cols-[repeat(2,minmax(0,1fr))] auto-rows-[168px] gap-[10px]';
+/** Groups: one ui/Row per chat, stacked, a divider (inset 60) between rows. */
+export const GROUP_ROW_LIST = 'flex flex-col';
+
+/** People: two fluid columns of ui/Tile, 12 apart; an odd last cell stays empty. */
+export const PEOPLE_TILE_GRID = cn('grid grid-cols-2 gap-3', CHAT_HOME_EDGE);
 
 /** Section label: 12/600 uppercase, 0.06em tracking, secondary ink. */
 export const SECTION_LABEL_TYPE = 'text-sm font-semibold uppercase tracking-[0.06em] text-fg-2';
 
 /**
- * The label's padding: 4px top for the first section, 12px after. No side
- * padding: the label starts on the stack's 16px edge, like the cards.
+ * The label's padding: 4px top for the first section, 12px after, on the
+ * home's 16 edge (the row text and the grid start on it too).
  */
 export function sectionLabelClass(first: boolean): string {
-  return cn(SECTION_LABEL_TYPE, first ? 'pt-1' : 'pt-3');
+  return cn(SECTION_LABEL_TYPE, CHAT_HOME_EDGE, first ? 'pt-1' : 'pt-3');
 }
 
-/** Tile type. Group: name 17/600, preview 14/20. Person: name 15/600, preview 13/18. Time 12. */
-export const GROUP_NAME_TYPE = 'text-xl font-semibold';
-export const GROUP_PREVIEW_TYPE = 'text-base font-normal';
-export const PERSON_NAME_TYPE = 'text-lg font-semibold';
-export const PERSON_PREVIEW_TYPE = 'text-md font-normal';
-export const TILE_TIME_TYPE = 'font-mono text-sm font-normal tabular-nums';
-
 /**
- * The square tile's time row: full width, 44px clear on the right for the
- * corner ⋯ (36px of it inside the content box plus an 8px gap).
- */
-export const TILE_TIME_ROW = 'mt-auto flex w-full min-w-0 pr-11';
-
-/**
- * The wide tile's group photo slot: the shared Avatar at its profile role
- * (72px), group kind (rounded square), so the box is final on first paint.
+ * A group row's photo slot: the shared Avatar at its header role (32), group
+ * kind (rounded square), in the Row's fixed 32 column, so the box is final on
+ * first paint.
  */
 export const GROUP_TILE_PHOTO = 'flex shrink-0';
 
-/** The square tile's photo slot: the shared Avatar at its profile role (72px circle). */
-export const PERSON_TILE_PHOTO = 'flex shrink-0';
-
 /**
- * A tile's box: hairline border, radius 18 and its fixed height. Wide: 100 tall
- * row, padding 12 16 12 12. Square: 168 tall centred column, padding 16 12 14,
- * positioned for its corner pill. Shared by the skeleton so swapping in the list
- * shifts nothing.
+ * A person tile's thumbnail: the shared Avatar at its profile role (72 circle)
+ * centred on the tile's lit square (radius 8 from ui/Tile).
  */
-export function tileBoxClass(kind: TileKind, more = false): string {
-  return cn(
-    'flex w-full rounded-xl border',
-    kind === 'wide'
-      ? cn('h-[100px] items-center gap-3 py-3 pl-3', more ? 'pr-14' : 'pr-4')
-      : 'relative h-[168px] flex-col items-center px-3 pt-4 pb-[14px] text-center',
-  );
-}
+export const PERSON_TILE_PHOTO = 'flex h-full w-full items-center justify-center bg-panel lit-card';
 
-/** Tile state that picks the tile fill. */
+/** Tile state that picks the tile's selected look. */
 export interface ChannelRowState {
-  kind: TileKind;
   /** Desktop: this chat is open in the thread pane. */
   selected: boolean;
   /** Select mode is on. */
   selecting: boolean;
   /** Select mode: this tile is checked. */
   checked: boolean;
-  /** The tile's ⋯ sits at its right: a wide tile leaves room for it. */
-  more?: boolean;
 }
 
 /**
- * The tile's tap target classes: the whole tile is one button, a lit card
- * (lit-card draws the edges); a checked tile takes the selected tint
- * (lit-selected, ink line), and so does the open chat on desktop (the one
- * selected look). Hover and press are the lit-card overlay (index.css). Token
- * classes only, so light and dark stay at parity.
+ * Whether the row or tile takes the one selected look (lit-selected): a
+ * checked chat in select mode, or the chat open on desktop. Pure.
  */
-export function channelRowClass(state: ChannelRowState): string {
-  const checked = state.selecting && state.checked;
-  const open = state.selected && !state.selecting;
-  return cn(
-    tileBoxClass(state.kind, state.more === true),
-    CHANNEL_ROW_BUTTON,
-    checked || open ? 'lit-selected bg-panel' : 'lit-card bg-panel',
-    // cn() merges: the square tile's centred text must come after the
-    // button's text-left (it used to win by CSS order).
-    state.kind === 'square' && 'text-center',
-  );
+export function channelRowSelected(state: ChannelRowState): boolean {
+  return state.selecting ? state.checked : state.selected;
 }
 
 /**
@@ -575,26 +540,38 @@ export function chatRowContextMenu(
   return coarsePointer ? (event) => event.preventDefault() : undefined;
 }
 
-/** The tile button's behaviour: no text selection, no iOS callout, focus ring. */
-export const CHANNEL_ROW_BUTTON = cn(
-  'min-w-0 text-left mv-tint focus-visible:lit-focus',
-  NO_TOUCH_SELECT,
-);
-
 /** The unread count (the shared CountBadge), or nothing when the count is 0. */
 function unreadPill(unread: number): ReactElement | null {
   return unreadPillText(unread) === null ? null : <CountBadge count={unread} />;
 }
 
+/** What a chat shows: the parts' slot contents, built once. Hook-free and pure. */
+export interface ChannelRowParts {
+  /** Group (a Row) or person (a Tile). */
+  kind: TileKind;
+  /** The chat's display name (chatDisplayName). */
+  name: string;
+  /** The last message time ('' when there is none). */
+  time: string;
+  /** The photo, in its slot (data-group-photo / data-person-photo). */
+  photo: ReactElement;
+  /** The group row's second line: the preview or "Draft: ..."; null for a person tile. */
+  preview: ReactElement | null;
+  /** The unread CountBadge, or null. */
+  pill: ReactElement | null;
+  /** The select-mode check, or null. */
+  check: ReactElement | null;
+}
+
 /**
- * The inside of one tile. Wide (group): 72px rounded-square photo, then name +
- * time over a 2-line preview, the pill at the far right. Square (person): 72px
- * disc, name, a 1-line preview, time pinned to the bottom, the pill in the top
- * right corner. The avatar URL is on the summary before the tile mounts (one
- * batched list read), so a tile with a photo paints the photo first, never the
- * initials. Hook-free so the tile's states are snapshot tested.
+ * The slot contents of one chat. A group is a Row: 32 rounded-square photo,
+ * name + time, a one-line preview (or "Draft: ..."), the unread badge on the
+ * second line's end. A person is a Tile: the 72 disc on the tile square, the
+ * name, the time in the meta slot (no preview line), the unread badge in the
+ * top-right corner. The avatar URL is on the summary before the tile mounts
+ * (one batched list read), so a photo paints first, never the initials.
  */
-export function channelRowBody(props: {
+export function channelRowParts(props: {
   channel: ChannelSummary;
   summary: ConversationSummary | undefined;
   /** The chat's unsent draft (not open): the preview reads "Draft: <text>". */
@@ -603,60 +580,48 @@ export function channelRowBody(props: {
   timeZone?: string | undefined;
   selecting: boolean;
   checked: boolean;
-}): ReactElement {
+}): ChannelRowParts {
   const { channel, summary } = props;
-  const wide = tileKind(channel) === 'wide';
+  const kind = tileKind(channel);
+  const wide = kind === 'wide';
+  const name = chatDisplayName(channel);
   const hasMessage = summary !== undefined && summary.lastMessageTs > 0;
   const unread = summary?.unread ?? 0;
-  const preview = hasMessage ? previewLine(summary) : 'No messages yet';
+  const previewText = hasMessage ? previewLine(summary) : 'No messages yet';
   // A media line ("Photo", "Voice message") leads with its glyph, as in the quote.
   const previewIcon = hasMessage ? summaryIconOfLine(summary.lastMessageText) : null;
   const draft = props.draft ?? null;
   const time = hasMessage
     ? formatChatTime(summary.lastMessageTs, new Date(props.nowMs), props.timeZone)
     : '';
-  // Wide clamps to two lines; square is one line with an ellipsis.
-  const fit = wide ? 'break-words line-clamp-2' : 'max-w-full truncate';
-  const previewType = wide ? GROUP_PREVIEW_TYPE : PERSON_PREVIEW_TYPE;
-  const name = (
-    <span className={cn('min-w-0 truncate text-fg', wide ? GROUP_NAME_TYPE : PERSON_NAME_TYPE)}>
-      {chatDisplayName(channel)}
+  const preview = !wide ? null : draft !== null ? (
+    <span data-draft-preview="">
+      <span className={cn('text-accent', DRAFT_PREFIX_TYPE)}>{DRAFT_PREFIX}</span>
+      {boldAllMentions(draft)}
+    </span>
+  ) : (
+    <span {...(hasMessage ? {} : { className: 'text-fg-3' })}>
+      {previewIcon !== null && hasMessage ? (
+        <>
+          {summary.lastMessagePrefix !== undefined ? `${summary.lastMessagePrefix}: ` : ''}
+          <SummaryGlyph icon={previewIcon} className="mr-1" />
+          {summary.lastMessageText}
+        </>
+      ) : (
+        boldAllMentions(previewText)
+      )}
     </span>
   );
-  const timeNode =
-    time !== '' ? <span className={cn('shrink-0 text-fg-2', TILE_TIME_TYPE)}>{time}</span> : null;
-  const check = props.selecting ? <SelectCheck checked={props.checked} /> : null;
-  const pill = unreadPill(unread);
-  const previewNode =
-    draft !== null ? (
-      <span data-draft-preview="" className={cn('min-w-0 text-fg-2', fit, previewType)}>
-        <span className={cn('text-accent', DRAFT_PREFIX_TYPE)}>{DRAFT_PREFIX}</span>
-        {boldAllMentions(draft)}
-      </span>
-    ) : (
-      <span className={cn('min-w-0', fit, previewType, hasMessage ? 'text-fg-2' : 'text-fg-3')}>
-        {previewIcon !== null && hasMessage ? (
-          <>
-            {summary.lastMessagePrefix !== undefined ? `${summary.lastMessagePrefix}: ` : ''}
-            <SummaryGlyph icon={previewIcon} className="mr-1" />
-            {summary.lastMessageText}
-          </>
-        ) : (
-          boldAllMentions(preview)
-        )}
-      </span>
-    );
   const avatar = (
     <Avatar
-      name={chatDisplayName(channel)}
+      name={name}
       {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
-      role="profile"
+      role={wide ? 'header' : 'profile'}
       kind={wide ? 'group' : 'person'}
     />
   );
-  // The photo is part of the tile: a tap on it opens the chat (or toggles the
-  // tile while selecting), same as the rest of the tile. The enlarged photo
-  // lives only inside a DM (header photo).
+  // The photo is part of the tap surface: a tap on it opens the chat (or
+  // toggles it while selecting). The enlarged photo lives only inside a DM.
   const photo = (
     <span
       {...(wide ? { 'data-group-photo': '' } : { 'data-person-photo': '' })}
@@ -665,56 +630,27 @@ export function channelRowBody(props: {
       {avatar}
     </span>
   );
-  if (wide) {
-    return (
-      <>
-        {photo}
-        <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span className="flex min-w-0 flex-1">{name}</span>
-            {timeNode}
-          </span>
-          {previewNode}
-        </span>
-        {pill}
-        {check}
-      </>
-    );
-  }
-  return (
-    <>
-      {photo}
-      <span className="mt-1.5 flex w-full min-w-0 justify-center">{name}</span>
-      <span className="mt-0.5 flex w-full min-w-0 justify-center">{previewNode}</span>
-      {timeNode !== null ? (
-        // The ⋯ sits in the bottom-right corner (44px at right-1, 36px into the
-        // content box): pr-11 keeps 8px clear of it at every width. The two
-        // spacers centre the time on the tile while it fits; when tight only
-        // the left spacer gives way, so the time moves left and never truncates.
-        <span data-tile-time="" className={TILE_TIME_ROW}>
-          <span aria-hidden="true" className="min-w-0 shrink grow basis-11" />
-          {timeNode}
-          <span aria-hidden="true" className="min-w-0 shrink-0 grow basis-0" />
-        </span>
-      ) : null}
-      {pill !== null ? <span className="absolute right-3 top-3 flex">{pill}</span> : null}
-      {check !== null ? <span className="absolute left-3 top-3 flex">{check}</span> : null}
-    </>
-  );
+  return {
+    kind,
+    name,
+    time,
+    photo,
+    preview,
+    pill: unreadPill(unread),
+    check: props.selecting ? <SelectCheck checked={props.checked} /> : null,
+  };
 }
+
+/** A tile corner's inset: the badge or check sits 8 inside the square's corner. */
+const TILE_CORNER_INSET = 'flex p-2';
 
 /**
- * The tile's ⋯ (H5): always visible at the tile's right (a wide tile's middle,
- * a square tile's bottom corner), 44px, fg-3, the trigger of the same
- * ActionMenu a long-press opens. rowMoreClass places its slot; the button
- * itself is ROW_MORE_BUTTON. Tokens only.
+ * The ⋯ opener for a chat (H5): always visible, the trigger of the same
+ * ActionMenu a long-press opens. ActionMenuTrigger owns the trailing rule, so
+ * its glyph's visible edge sits on the row's (or the tile's) content edge.
+ * fg-3 at rest, full ink on hover, as before. Tokens only.
  */
-export const ROW_MORE_BUTTON =
-  'flex h-11 w-11 items-center justify-center rounded-lg text-fg-3 mv-tint lit-hover hover:text-fg focus-visible:lit-focus';
-
-export function rowMoreClass(kind: TileKind): string {
-  return cn('absolute right-1 flex', kind === 'wide' ? 'top-1/2 -translate-y-1/2' : 'bottom-1');
-}
+export const ROW_MORE_INK = 'text-fg-3 hover:text-fg';
 
 /** A chat row's menu rows: Hide chat (non-destructive: eye-off, never red; FT43). */
 export function chatRowMenuItems(onHide: () => void): ActionMenuItem[] {
@@ -722,11 +658,12 @@ export function chatRowMenuItems(onHide: () => void): ActionMenuItem[] {
 }
 
 /**
- * One conversation tile; the whole tile is one button ("Open <name>"). A touch
- * long-press (moving or scrolling cancels it), right-click, Shift+F10, or the
- * always-visible ⋯ at the tile's right opens the tile menu; the
+ * One conversation: a group is a ui/Row, a person a ui/Tile; either way the
+ * whole surface is one button ("Open <name>"). A touch long-press (moving or
+ * scrolling cancels it), right-click, Shift+F10, or the always-visible ⋯ (the
+ * row's trailing slot, the tile's title line) opens the chat menu; the
  * trailing click is swallowed so a long-press never also opens the chat. In
- * select mode a check circle shows and a tap toggles.
+ * select mode a check shows and a tap toggles.
  */
 export function ChannelCard(props: {
   channel: ChannelSummary;
@@ -741,6 +678,8 @@ export function ChannelCard(props: {
   onPressIn?: (channel: ChannelSummary) => void;
   /** The list's input (hover, coarse), read once by the list. */
   input: ChannelListInput;
+  /** A group row's divider (every row but the last in its section). */
+  divider?: boolean;
   /** Present in select mode: whether this tile is checked. */
   checked?: boolean;
   onToggle?: (channelId: string) => void;
@@ -794,123 +733,145 @@ export function ChannelCard(props: {
     onPointerUp: () => press.cancel(),
     onPointerCancel: () => press.cancel(),
   };
+  const parts = channelRowParts({
+    channel,
+    summary,
+    draft: props.draft ?? null,
+    nowMs: props.nowMs,
+    timeZone: props.timeZone,
+    selecting,
+    checked,
+  });
+  const onTap = (): void => {
+    if (consumeClickSuppression()) return;
+    if (selecting) {
+      props.onToggle?.(channel.channelId);
+      return;
+    }
+    // A thread selecting messages exits that first (history.back()).
+    leaveSelectionThen(() => props.onSelect(channel));
+  };
+  // The tap surface's behaviour (the part draws it): long-press, press-in,
+  // right-click, Shift+F10, its name and its pressed state while selecting.
+  const surface = {
+    buttonRef: rowRef,
+    ...(menuEnabled
+      ? {
+          onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {
+            holdFiredRef.current = false;
+            handlers.onPointerDown(e);
+            pressDown(e);
+          },
+          onPointerMove: (e: PointerEvent<HTMLButtonElement>) => {
+            handlers.onPointerMove(e);
+            press.move(e);
+          },
+          onPointerUp: () => {
+            handlers.onPointerUp();
+            press.cancel();
+          },
+          onPointerCancel: () => {
+            handlers.onPointerCancel();
+            press.cancel();
+          },
+        }
+      : { ...pressHandlers, onPointerDown: pressDown }),
+    onContextMenu: (e: MouseEvent) => {
+      if (coarsePointer) e.preventDefault();
+      if (!menuEnabled) return;
+      e.preventDefault();
+      cancel();
+      // Touch-first: a contextmenu that beats the hold timer acts as the hold, once.
+      if (coarsePointer && holdFiredRef.current) return;
+      holdFiredRef.current = true;
+      openMenu();
+    },
+    onKeyDown: (e: KeyboardEvent<HTMLButtonElement>) => {
+      if (!menuEnabled || !rowMenuKey(e)) return;
+      e.preventDefault();
+      openMenu();
+    },
+    'aria-label': channelTileLabel({
+      title: parts.name,
+      unread: summary?.unread ?? 0,
+      preview: summary !== undefined && summary.lastMessageTs > 0 ? previewLine(summary) : '',
+      time: parts.time,
+      draft: props.draft ?? null,
+    }),
+    ...(selecting ? { 'aria-pressed': checked } : {}),
+  };
+  const isSelected = channelRowSelected({ selected: props.selected, selecting, checked });
+  const menu = menuEnabled ? (
+    <ActionMenu
+      title={parts.name}
+      items={chatRowMenuItems(() => props.onHide?.(channel))}
+      open={props.menuOpen === true}
+      onOpenChange={(open) => {
+        if (open) openMenu();
+        else props.onMenuClose?.();
+      }}
+      trigger={
+        <ActionMenuTrigger
+          type="button"
+          data-more=""
+          label={`Actions for ${parts.name}`}
+          aria-expanded={props.menuOpen === true}
+          className={ROW_MORE_INK}
+        />
+      }
+    />
+  ) : null;
   return (
     <div
-      className={cn('group relative', NO_TOUCH_SELECT)}
-      // Touch-first: the native menu and callout never show on a tile.
+      data-chat-list-item={parts.kind === 'wide' ? 'row' : 'tile'}
+      className={cn('h-full', NO_TOUCH_SELECT)}
+      // Touch-first: the native menu and callout never show on a chat.
       onContextMenu={chatRowContextMenu(coarsePointer)}
     >
-      <PressableRow
-        buttonRef={rowRef}
-        type="button"
-        align={tileKind(channel) === 'square' ? 'center' : 'left'}
-        {...(menuEnabled
-          ? {
-              onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {
-                holdFiredRef.current = false;
-                handlers.onPointerDown(e);
-                pressDown(e);
-              },
-              onPointerMove: (e: PointerEvent<HTMLButtonElement>) => {
-                handlers.onPointerMove(e);
-                press.move(e);
-              },
-              onPointerUp: () => {
-                handlers.onPointerUp();
-                press.cancel();
-              },
-              onPointerCancel: () => {
-                handlers.onPointerCancel();
-                press.cancel();
-              },
-            }
-          : { ...pressHandlers, onPointerDown: pressDown })}
-        onContextMenu={(e: MouseEvent) => {
-          if (coarsePointer) e.preventDefault();
-          if (!menuEnabled) return;
-          e.preventDefault();
-          cancel();
-          // Touch-first: a contextmenu that beats the hold timer acts as the hold, once.
-          if (coarsePointer && holdFiredRef.current) return;
-          holdFiredRef.current = true;
-          openMenu();
-        }}
-        onKeyDown={(e: KeyboardEvent<HTMLButtonElement>) => {
-          if (!menuEnabled || !rowMenuKey(e)) return;
-          e.preventDefault();
-          openMenu();
-        }}
-        onClick={() => {
-          if (consumeClickSuppression()) return;
-          if (selecting) {
-            props.onToggle?.(channel.channelId);
-            return;
-          }
-          // A thread selecting messages exits that first (history.back()).
-          leaveSelectionThen(() => props.onSelect(channel));
-        }}
-        aria-label={channelTileLabel({
-          title: chatDisplayName(channel),
-          unread: summary?.unread ?? 0,
-          preview: summary !== undefined && summary.lastMessageTs > 0 ? previewLine(summary) : '',
-          time:
-            summary !== undefined && summary.lastMessageTs > 0
-              ? formatChatTime(summary.lastMessageTs, new Date(props.nowMs), props.timeZone)
-              : '',
-          draft: props.draft ?? null,
-        })}
-        {...(selecting ? { 'aria-pressed': checked } : {})}
-        className={channelRowClass({
-          kind: tileKind(channel),
-          selected: props.selected,
-          selecting,
-          checked,
-          more: menuEnabled,
-        })}
-      >
-        {channelRowBody({
-          channel,
-          summary,
-          draft: props.draft ?? null,
-          nowMs: props.nowMs,
-          timeZone: props.timeZone,
-          selecting,
-          checked,
-        })}
-      </PressableRow>
-      {menuEnabled ? (
-        <div className={rowMoreClass(tileKind(channel))}>
-          <ActionMenu
-            title={chatDisplayName(channel)}
-            items={chatRowMenuItems(() => props.onHide?.(channel))}
-            open={props.menuOpen === true}
-            onOpenChange={(open) => {
-              if (open) openMenu();
-              else props.onMenuClose?.();
-            }}
-            trigger={
-              <ActionMenuTrigger
-                type="button"
-                data-more=""
-                data-row-more=""
-                label={`Actions for ${chatDisplayName(channel)}`}
-                aria-expanded={props.menuOpen === true}
-                className={ROW_MORE_BUTTON}
-              />
-            }
-          />
-        </div>
-      ) : null}
+      {parts.kind === 'wide' ? (
+        <Row
+          {...surface}
+          leading={parts.photo}
+          title={parts.name}
+          {...(parts.time !== '' ? { time: parts.time } : {})}
+          secondary={parts.preview}
+          badge={parts.pill}
+          {...(menu !== null
+            ? { trailing: { kind: 'more' as const, menu } }
+            : parts.check !== null
+              ? { trailing: { kind: 'node' as const, node: parts.check } }
+              : {})}
+          divider={props.divider === true}
+          selected={isSelected}
+          onPress={onTap}
+        />
+      ) : (
+        <Tile
+          thumbnail={parts.photo}
+          title={parts.name}
+          {...(parts.time !== '' ? { meta: <span data-tile-time="">{parts.time}</span> } : {})}
+          {...(menu !== null ? { more: menu } : {})}
+          corners={{
+            ...(parts.check !== null
+              ? { tl: <span className={TILE_CORNER_INSET}>{parts.check}</span> }
+              : {}),
+            ...(parts.pill !== null
+              ? { tr: <span className={TILE_CORNER_INSET}>{parts.pill}</span> }
+              : {}),
+          }}
+          press={{ ...surface, selected: isSelected, onClick: onTap }}
+        />
+      )}
     </div>
   );
 }
 
 /**
- * The Personal notes tile: full width above Groups, the accent-soft notebook
- * square, "Personal notes" over "Only you can see this". Paints the same in
- * every list state (loading, error, ready) from the session alone, so the
- * first paint is final. No motion. Not selectable in Select mode (inert).
- * Hook-free so it is unit tested.
+ * The Personal notes row: a ui/Row above Groups, the notebook (or own photo)
+ * at the header role, "Personal notes" over "Only you can see this". Paints
+ * the same in every list state (loading, error, ready) from the session alone,
+ * so the first paint is final. No motion. Not selectable in Select mode
+ * (inert). Hook-free so it is unit tested.
  */
 export function notesTile(props: {
   notes: ChannelSummary;
@@ -926,50 +887,26 @@ export function notesTile(props: {
   const { notes, summary } = props;
   const last = notesLastLine(summary, props.nowMs ?? 0, props.timeZone);
   return (
-    <div className={cn(CHAT_HOME_STACK, 'pb-2')}>
-      <PressableRow
-        type="button"
+    <div className={cn('pb-2', NO_TOUCH_SELECT)}>
+      <Row
         data-notes-tile=""
         aria-label={`Open ${chatDisplayName(notes)}`}
+        leading={<NotesAvatar role="header" src={notes.avatarUrl} surface="panel" />}
+        title={chatDisplayName(notes)}
+        {...(last !== null && last.time !== ''
+          ? { time: <span data-notes-time="">{last.time}</span> }
+          : {})}
+        secondary={
+          <span data-notes-preview="">{last !== null ? last.preview : NOTES_TILE_LINE}</span>
+        }
         disabled={props.selecting}
-        onClick={() => {
+        selected={props.selected && !props.selecting}
+        onPress={() => {
           if (props.selecting) return;
           // A thread selecting messages exits that first (history.back()).
           leaveSelectionThen(() => props.onSelect(notes));
         }}
-        className={cn(
-          tileBoxClass('wide'),
-          CHANNEL_ROW_BUTTON,
-          'group/notes-row disabled:cursor-default bg-panel',
-          // Open is the one selected look; hover is the PressableRow lit-hover overlay.
-          props.selected && !props.selecting ? 'lit-selected' : 'lit-card',
-        )}
-      >
-        <NotesAvatar
-          role="profile"
-          src={notes.avatarUrl}
-          surface="panel"
-          {...(!props.selected && !props.selecting ? { hoverSurface: 'panel-2' as const } : {})}
-        />
-        <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span className={cn('min-w-0 flex-1 truncate text-fg', GROUP_NAME_TYPE)}>
-              {chatDisplayName(notes)}
-            </span>
-            {last !== null && last.time !== '' ? (
-              <span data-notes-time="" className="shrink-0 text-sm tabular-nums text-fg-3">
-                {last.time}
-              </span>
-            ) : null}
-          </span>
-          <span
-            data-notes-preview=""
-            className={cn('min-w-0 truncate text-fg-2', GROUP_PREVIEW_TYPE)}
-          >
-            {last !== null ? last.preview : NOTES_TILE_LINE}
-          </span>
-        </span>
-      </PressableRow>
+      />
     </div>
   );
 }

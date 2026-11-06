@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { textRole } from '@/components/ui/Text';
 import { IconButton } from '@/components/ui/IconButton';
@@ -10,6 +10,19 @@ export interface HeaderBarProps {
   title: ReactNode;
   /** Pushed screen: the back "<" (label Back). Root screens pass `mark` instead. */
   onBack?: () => void;
+  /**
+   * The back "<"'s own name and hooks: its label (default "Back", e.g. "Close
+   * contact info"), a ref for focus, data-* test hooks. Behaviour only; the
+   * part owns its look, its glyph and the leading pull.
+   */
+  backProps?: Omit<
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    'className' | 'children' | 'onClick' | 'type'
+  > & {
+    label?: string;
+    buttonRef?: Ref<HTMLButtonElement> | undefined;
+    [hook: `data-${string}`]: string | undefined;
+  };
   /** Root screen: the workspace mark in the leading slot. */
   mark?: ReactNode;
   /** Up to two IconButtons, then the ⋯ last (its trigger applies the trailing rule). */
@@ -29,6 +42,7 @@ export interface HeaderBarProps {
 export function HeaderBar({
   title,
   onBack,
+  backProps,
   mark,
   actions,
   subtitle,
@@ -46,7 +60,13 @@ export function HeaderBar({
       )}
     >
       {onBack !== undefined ? (
-        <IconButton label="Back" onClick={onBack} className={LEADING_PULL}>
+        <IconButton
+          {...backProps}
+          type="button"
+          label={backProps?.label ?? 'Back'}
+          onClick={onBack}
+          className={LEADING_PULL}
+        >
           <IconChevronLeft size={ICON_SIZE.control} />
         </IconButton>
       ) : mark !== undefined ? (
@@ -61,7 +81,8 @@ export function HeaderBar({
       {actions !== undefined ? (
         <div
           data-header-actions=""
-          className="flex shrink-0 items-center gap-0 [&>button:last-child]:-mr-3"
+          // The trailing rule pulls only a 44 icon box (w-11); a text action keeps its text on the edge (L6).
+          className="flex shrink-0 items-center gap-0 [&>button.w-11:last-child]:-mr-3"
         >
           {actions}
         </div>

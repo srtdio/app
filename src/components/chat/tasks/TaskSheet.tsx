@@ -64,6 +64,7 @@ import { Backdrop } from '@/components/ui/Backdrop';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { HeaderBar } from '@/components/ui/HeaderBar';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { LoadError } from '@/components/ui/LoadError';
@@ -74,7 +75,6 @@ import { ForwardPicker } from '@/components/chat/ForwardPicker';
 import {
   ICON_SIZE,
   IconCalendar,
-  IconChevronLeft,
   IconCollapse,
   IconExpand,
   IconForward,
@@ -1036,52 +1036,61 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
               className="mx-auto mt-1.5 h-1 w-9 rounded-sm bg-border-strong"
             />
           )}
-          {/* pr-3: the ⋯'s 44 box is pulled 12 to the edge (the trailing rule);
-              a smaller pad let it overflow and scroll the sheet sideways,
-              which closed its menu. */}
-          <div className="flex items-center gap-1 py-1.5 pl-1.5 pr-3">
-            <IconButton label={BACK_LABEL} data-task-back="" onClick={requestClose}>
-              <IconChevronLeft size={ICON_SIZE.control} />
-            </IconButton>
-            <div className="flex min-w-0 flex-1 flex-col">
-              <h2 className="truncate text-lg font-semibold text-fg">{TASK_SHEET_TITLE}</h2>
-              {editingLine !== null ? (
-                <p data-task-editing="" className="truncate text-sm text-fg-3">
-                  {editingLine}
-                </p>
-              ) : null}
-            </div>
-            {/* The save state's slot always holds the width of "Saving…", so
-                Saved / Retry / nothing never shift the title or the ⋯ (B1). */}
-            <span data-task-save-slot="" className="grid shrink-0 items-center justify-items-end">
-              <span aria-hidden="true" className="invisible col-start-1 row-start-1 px-2 text-sm">
-                {SAVING_LABEL}
-              </span>
-              <span className="col-start-1 row-start-1 flex items-center">
-                {saveFailed ? (
-                  <Button
-                    variant="ghost"
-                    data-task-retry=""
-                    onClick={() => {
-                      setSaveFailed(false);
-                      save();
-                    }}
-                  >
-                    {RETRY_LABEL}
-                  </Button>
-                ) : saving || pending || savedOnce ? (
+          {/* ui/HeaderBar (56): Back, Tasks (and the editing line), the save
+              state, ⋯. The ⋯'s trigger takes the trailing rule, so its glyph
+              ends on the 16 edge like the back glyph starts on it. */}
+          <HeaderBar
+            compact
+            // A sheet keeps the 16 edge on laptop too (ui/Sheet); the head's
+            // wrapper draws the one divider.
+            className="border-b-0 md:px-4"
+            title={TASK_SHEET_TITLE}
+            {...(editingLine !== null
+              ? { subtitle: <span data-task-editing="">{editingLine}</span> }
+              : {})}
+            onBack={requestClose}
+            backProps={{ label: BACK_LABEL, 'data-task-back': '' }}
+            actions={
+              <>
+                {/* The save state's slot always holds the width of "Saving…", so
+                    Saved / Retry / nothing never shift the title or the ⋯ (B1). */}
+                <span
+                  data-task-save-slot=""
+                  className="grid shrink-0 items-center justify-items-end"
+                >
                   <span
-                    data-task-save-state={saving || pending ? 'saving' : 'saved'}
-                    aria-live="polite"
-                    className="shrink-0 px-2 text-sm text-fg-3"
+                    aria-hidden="true"
+                    className="invisible col-start-1 row-start-1 px-2 text-sm"
                   >
-                    {saving || pending ? SAVING_LABEL : SAVED_LABEL}
+                    {SAVING_LABEL}
                   </span>
-                ) : null}
-              </span>
-            </span>
-            <ActionMenu title={TASK_SHEET_TITLE} items={headerItems} />
-          </div>
+                  <span className="col-start-1 row-start-1 flex items-center">
+                    {saveFailed ? (
+                      <Button
+                        variant="ghost"
+                        data-task-retry=""
+                        onClick={() => {
+                          setSaveFailed(false);
+                          save();
+                        }}
+                      >
+                        {RETRY_LABEL}
+                      </Button>
+                    ) : saving || pending || savedOnce ? (
+                      <span
+                        data-task-save-state={saving || pending ? 'saving' : 'saved'}
+                        aria-live="polite"
+                        className="shrink-0 px-2 text-sm text-fg-3"
+                      >
+                        {saving || pending ? SAVING_LABEL : SAVED_LABEL}
+                      </span>
+                    ) : null}
+                  </span>
+                </span>
+                <ActionMenu title={TASK_SHEET_TITLE} items={headerItems} />
+              </>
+            }
+          />
         </div>
         {ready && searchOpen ? (
           <SearchLine query={query} onQuery={setQuery} onClose={closeSearch} />

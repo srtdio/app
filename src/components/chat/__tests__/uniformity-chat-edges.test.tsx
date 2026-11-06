@@ -1,7 +1,7 @@
 // Uniformity pass (11c, 11d, 11f, 11g, 11i, 8): own-bubble card contrast, the
 // laptop Chat list stepping aside for a docked Plan from 1180 to 1439px, the
-// "1 selected" edge, the phone chat list edges, the tile time clear of the ⋯,
-// and the swipe spring on the motion tokens. Class strings and source checks.
+// "1 selected" edge, the phone chat list edges, the time clear of the ⋯ (the
+// parts own the slots), and the swipe spring on the motion tokens. Class strings and source checks.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
@@ -14,12 +14,10 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import {
+  CHAT_HOME_EDGE,
   CHAT_HOME_STACK,
-  ROW_MORE_BUTTON,
-  rowMoreClass,
+  PEOPLE_TILE_GRID,
   sectionLabelClass,
-  tileBoxClass,
-  TILE_TIME_ROW,
 } from '@/components/chat/ChannelList';
 import { chatListPaneClass } from '@/components/chat/ChatConnected';
 import { OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
@@ -158,12 +156,16 @@ describe('11f "1 selected" on the 16px edge', () => {
 });
 
 describe('11g phone chat list edges', () => {
-  it('cards and section labels start on the same 16px edge as search and chips', () => {
-    expect(classes(CHAT_HOME_STACK)).toContain('px-4');
-    expect(CHAT_HOME_STACK).not.toContain('px-[14px]');
+  it('rows, tiles and section labels start on the same 16px edge as search and chips', () => {
+    // Rows (ui/Row) draw their own px-4; the stack itself has no side padding.
+    expect(classes(CHAT_HOME_STACK).some((c) => /^(px|pl|pr)-/.test(c))).toBe(false);
+    expect(CHAT_HOME_EDGE).toBe('px-4');
+    expect(read('../../ui/Row.tsx')).toContain('rounded-none px-4');
+    expect(classes(PEOPLE_TILE_GRID)).toContain('px-4');
     for (const first of [true, false]) {
       const label = classes(sectionLabelClass(first));
-      expect(label.some((c) => /^(px|pl|pr|mx|ml)-/.test(c))).toBe(false);
+      expect(label).toContain('px-4');
+      expect(label.some((c) => /^(pl|pr|mx|ml)-/.test(c))).toBe(false);
     }
     // The search box and the chip row sit in the SectionHeader's px-4 rows.
     expect(read('../../shell/SectionHeader.tsx')).toContain("'px-4 md:px-6");
@@ -171,33 +173,17 @@ describe('11g phone chat list edges', () => {
   });
 });
 
-describe('11i tile time clear of the ⋯', () => {
-  // px per Tailwind spacing step (0.25rem at 16px).
-  const STEP = 4;
-  const MORE_RIGHT = 1 * STEP; // rowMoreClass right-1
-  const MORE_SIZE = 11 * STEP; // ROW_MORE_BUTTON w-11
-  const GAP = 8;
-
-  it('square tile: pr-11 inside the px-3 box leaves 8px before the corner ⋯', () => {
-    expect(rowMoreClass('square')).toContain('right-1');
-    expect(ROW_MORE_BUTTON).toContain('w-11');
-    expect(tileBoxClass('square')).toContain('px-3');
-    expect(classes(TILE_TIME_ROW)).toEqual(expect.arrayContaining(['w-full', 'pr-11']));
-    const tilePad = 3 * STEP;
-    expect(tilePad + 11 * STEP).toBeGreaterThanOrEqual(MORE_RIGHT + MORE_SIZE + GAP);
+describe('11i the ⋯ never covers the time (B1b: parts own the slots)', () => {
+  it('a group row: the ⋯ is the Row trailing slot, after the text column, never over it', () => {
+    const row = read('../../ui/Row.tsx');
+    expect(row.indexOf('data-row-more')).toBeGreaterThan(row.indexOf("textRole('meta'"));
+    expect(row).not.toMatch(/data-row-more=""[^\n]*absolute/);
   });
 
-  it('the time never truncates; only the spacer beside it gives way', () => {
-    const src = read('../ChannelList.tsx');
-    expect(src).toContain("cn('shrink-0 text-fg-2', TILE_TIME_TYPE)");
-    expect(src).toContain('className="min-w-0 shrink grow basis-11"');
-    expect(src).toContain('className="min-w-0 shrink-0 grow basis-0"');
-  });
-
-  it('wide tile: pr-14 keeps 8px before the ⋯; the name truncates, never the time', () => {
-    expect(rowMoreClass('wide')).toContain('right-1');
-    expect(classes(tileBoxClass('wide', true))).toContain('pr-14');
-    expect(14 * STEP).toBeGreaterThanOrEqual(MORE_RIGHT + MORE_SIZE + GAP);
+  it('a person tile: the time is the meta line, the ⋯ sits on the title line', () => {
+    const tile = read('../../ui/Tile.tsx');
+    expect(tile.indexOf('data-tile-more')).toBeLessThan(tile.indexOf("textRole('meta'"));
+    expect(read('../ChannelList.tsx')).toContain('meta: <span data-tile-time="">');
   });
 });
 
