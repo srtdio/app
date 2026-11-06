@@ -40,7 +40,7 @@ describe('chat visual pass', () => {
 
   it('a mention never breaks across lines, and the own-name tint has room', () => {
     expect(mentionClass(false, true)).toContain('whitespace-nowrap');
-    expect(mentionClass(false, true)).toContain('px-[3px]');
+    expect(mentionClass(false, true)).toContain('px-1');
     expect(mentionClass(true, false)).toContain('whitespace-nowrap');
   });
 

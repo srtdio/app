@@ -127,7 +127,7 @@ describe('Remind me and Schedule: one time pick frame', () => {
     const reminder = html(<ReminderOptions preview="Ship it" onPick={noop} />);
     const schedule = html(<ScheduleOptions preview="To Ops: hi" onPick={noop} />);
     for (const out of [reminder, schedule]) {
-      expect(out).toContain('min-h-[56px]');
+      expect(out).toContain('min-h-14');
       expect(out).toContain('h-11 w-11');
       expect(out).toContain('width="20"');
     }
@@ -163,7 +163,7 @@ describe('Remind me and Schedule: one time pick frame', () => {
         />,
       ),
     ];
-    for (const out of rows) expect(out).toContain('min-h-[56px]');
+    for (const out of rows) expect(out).toContain('min-h-14');
     expect(rows[2]).toContain('text-bad');
     expect(rows[2]).toContain('<li class="mt-1 border-t border-border pt-1">');
   });
