@@ -112,19 +112,40 @@ describe.runIf(RPC_SUITE)('chat_plan_item_share (authenticated role)', () => {
     agencyClientDm = await seedDmChannel(g, ws.id, agency, client);
     clientClientDm = await seedDmChannel(g, ws.id, client, client2);
     agencyGroup = await seedGroupChannel([agency, agency2]);
-    // The idea itself is seeded as a row (a team-only bank concept): this
-    // spec is about chat_plan_item_share and chat_message_delete, not
-    // bank_idea_create.
-    const idea = await insertRow(g, 'plan_items', {
-      workspace_id: ws.id,
-      plan_id: null,
-      kind: 'concept',
-      position: 0,
-      title: `Idea ${randomSuffix()}`,
-      created_by: agency.id,
-      show_to_client: false,
-    });
-    ideaId = String(idea.id);
+    // The idea: a concept in a team plan, then moved to the bank
+    // (plan_item_to_bank), so it is a team-only bank idea. bank_idea_create
+    // is not used: its insert fires _plan_items_change_notify, which raises
+    // invalid_payload for an item with no plan (a schema follow-up).
+    const call = async <T>(
+      name: string,
+      res: { data: T | null; error: { message: string } | null },
+    ): Promise<T> => {
+      if (res.error !== null || res.data === null) {
+        throw new Error(`${name} failed: ${res.error?.message ?? 'no data'}`);
+      }
+      return res.data;
+    };
+    const as = clientFor(agency.id);
+    const planArgs: Rpc['plan_create']['Args'] = {
+      p_workspace_id: ws.id,
+      p_title: `Plan ${randomSuffix()}`,
+      p_starts_on: '2026-11-01',
+      p_ends_on: '2026-11-30',
+      p_audience: 'team',
+      p_trace_id: uuidv7(),
+    };
+    const planId = String(await call('plan_create', await as.rpc('plan_create', planArgs)));
+    const conceptArgs: Rpc['plan_concept_add']['Args'] = {
+      p_plan_id: planId,
+      p_title: `Idea ${randomSuffix()}`,
+      p_description: 'An idea',
+      p_attachment_version_ids: [],
+      p_trace_id: uuidv7(),
+    };
+    ideaId = String(await call('plan_concept_add', await as.rpc('plan_concept_add', conceptArgs)));
+    const toBank: Rpc['plan_item_to_bank']['Args'] = { p_item_id: ideaId, p_trace_id: uuidv7() };
+    const moved = await as.rpc('plan_item_to_bank', toBank);
+    if (moved.error !== null) throw new Error(`plan_item_to_bank failed: ${moved.error.message}`);
   });
 
   it('a team-only idea into an agency-only group: one row carrying the idea', async () => {
