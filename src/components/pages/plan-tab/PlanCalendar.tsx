@@ -54,7 +54,7 @@ import { ICON_SIZE, IconBank, IconChevronLeft, IconChevronRight } from '@/compon
 import { movedToBankLine } from '@/lib/chat/bank-plan-copy';
 import { useBankTraces } from '@/lib/chat/plan-bank-extras';
 import { supabase } from '@/lib/supabase';
-import { useWorkspace } from '@/lib/workspace-context';
+import { getPrefetchContext } from '@/lib/prefetch-context';
 import { BankPickSheet } from './BankPickSheet';
 import { cn } from '@/lib/cn';
 import type { BankTrace, PlanBundle, PlanThumbs } from '@/lib/chat/plans';
@@ -110,7 +110,7 @@ export function capWithTraces<E, T>(
 ): { shown: E[]; traces: T[]; more: number } {
   const { shown, more } = capEntries(entries, cap);
   if (cap === undefined) return { shown, traces: [...traces], more };
-  const room = Math.max(0, cap - shown.length - (more > 0 ? 0 : 0));
+  const room = Math.max(0, cap - shown.length);
   const fit = more > 0 ? [] : traces.slice(0, room);
   return { shown, traces: fit, more: more + (traces.length - fit.length) };
 }
@@ -231,7 +231,8 @@ export function PlanCalendar(props: {
   const [menu, setMenu] = useState<{ day: string; anchor: HTMLElement } | null>(null);
   // From bank (the empty-day menu): the day the picked idea goes on.
   const [bankDay, setBankDay] = useState<string | null>(null);
-  const { workspaceId } = useWorkspace();
+  // The workspace: the plans' own, else the shell's (no provider read here).
+  const workspaceId = bundles[0]?.plan.workspace_id ?? getPrefetchContext()?.workspaceId ?? null;
   // After the grid paints: where a concept left a plan (agency only).
   const tracePlans = useMemo(() => bundles.map((b) => b.plan), [bundles]);
   const traces = useBankTraces({
@@ -848,7 +849,7 @@ function MonthTrace(props: { trace: BankTrace }): ReactElement {
   return (
     <span
       data-plan-tab-trace={props.trace.itemId}
-      className="flex h-[22px] min-w-0 shrink-0 items-center gap-1 rounded-lg border border-dashed border-border px-1 text-xs text-fg-3"
+      className="box-content flex h-5 min-w-0 shrink-0 items-center gap-1 rounded-lg border border-dashed border-border px-1 text-xs text-fg-3"
     >
       <IconBank size={ICON_SIZE.inline} className="shrink-0" />
       <span className="min-w-0 flex-1 truncate">{movedToBankLine(props.trace.title)}</span>

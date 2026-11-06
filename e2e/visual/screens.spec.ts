@@ -18,6 +18,9 @@ import {
   POST_IDS,
   seedClientPlan,
   seedPlanTab,
+  seedTeamAndHiddenPlans,
+  TEAM_PLAN_ID,
+  planMessage,
   TAB_OK_ITEM_TITLE,
   TAB_SHARED_PLAN_ID,
   WORKSPACE_ID,
@@ -398,6 +401,27 @@ function seedLibraryImage(network: HarnessNetwork): void {
   });
 }
 
+const CHAT_PLAN_BUCKETS = [
+  '0190d500-0000-7000-8000-00000000e6b1',
+  '0190d500-0000-7000-8000-00000000e6b2',
+] as const;
+const IDEA_MESSAGE_ID = '0190d500-0000-7000-8000-00000000e6c1';
+
+/** The bank idea sent into the DM as an idea card (chat_plan_item_share's row). */
+function seedIdeaCard(network: HarnessNetwork): void {
+  seedBankIdea(network);
+  (network.world.tables.chat_messages ??= []).push({
+    ...planMessage(IDEA_MESSAGE_ID, DM_CHANNEL, ME, [], NOW + 60_000),
+    shared_plan_ids: null,
+    shared_plan_item_ids: [PLAN_CONCEPT_ITEM],
+  });
+}
+
+/** A team (Draft) plan carded into the group by ME, to forward into the client DM. */
+function seedDraftPlanCard(network: HarnessNetwork): void {
+  seedTeamAndHiddenPlans(network.world, { channelId: GROUP_CHANNEL, sender: ME, now: NOW });
+}
+
 /** A client plan (one concept with a library photo, one post) carded into the DM by ME. */
 function seedChatPlan(network: HarnessNetwork): void {
   seedLibraryImage(network);
@@ -408,6 +432,32 @@ function seedChatPlan(network: HarnessNetwork): void {
     fileVersionId: LIB_IMAGE_VERSION,
     now: NOW + 30_000,
   });
+  // Two buckets, the concept in both: the Plan row's line reads
+  // "{format} · Product, Festive" and the item screen's Buckets card picks them.
+  (network.world.tables.workspace_buckets ??= []).push(
+    {
+      id: CHAT_PLAN_BUCKETS[0],
+      workspace_id: WORKSPACE_ID,
+      name: 'Product',
+      color_hex: '#6b7280',
+      position: 1,
+      archived: false,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+    {
+      id: CHAT_PLAN_BUCKETS[1],
+      workspace_id: WORKSPACE_ID,
+      name: 'Festive',
+      color_hex: '#6b7280',
+      position: 2,
+      archived: false,
+      created_at: '2026-01-01T00:00:00Z',
+    },
+  );
+  (network.world.tables.plan_item_buckets ??= []).push(
+    { item_id: PLAN_CONCEPT_ITEM, bucket_id: CHAT_PLAN_BUCKETS[0], workspace_id: WORKSPACE_ID },
+    { item_id: PLAN_CONCEPT_ITEM, bucket_id: CHAT_PLAN_BUCKETS[1], workspace_id: WORKSPACE_ID },
+  );
   // The concept files read embeds the version and the asset (one select), so
   // the item screen's tile shows the file's name under it.
   for (const link of network.world.tables.asset_attachments ?? []) {
@@ -1253,6 +1303,13 @@ const SCREENS: Screen[] = [
         .click();
       await waitFor([page.locator('[data-plan-page="item"]')], 'plan item');
       await waitFor([page.locator('[data-plan-file-name]')], 'plan item files');
+      // The Buckets card with both buckets picked (saved, so no signal).
+      const card = page.locator('[data-plan-page="item"] [data-plan-buckets]');
+      await waitFor(
+        [card.locator(`[data-plan-bucket="${CHAT_PLAN_BUCKETS[1]}"][aria-pressed="true"]`)],
+        'buckets card',
+      );
+      await card.scrollIntoViewIfNeeded();
     },
   },
   {
@@ -1286,6 +1343,62 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // The bank idea's ⋯ menu: Plan it, Send to chat, Show to client, Star,
+    // Archive, Delete last.
+    name: 'plan-item-bank-more-menu',
+    seed: creator,
+    extra: seedBankIdea,
+    url: `/plan/bank?item=${PLAN_CONCEPT_ITEM}`,
+    steps: async (page) => {
+      await waitFor([page.locator('[data-plan-page="item"] [data-plan-who-can-see]')], 'bank idea');
+      await tap([page.locator('[data-plan-item-more]')], 'item more');
+      await waitFor([page.getByRole('menuitem', { name: /Plan it/ })], 'more menu');
+    },
+  },
+  {
+    // A team only idea sent into the DM with the client: "Show this idea to
+    // the client?" with Cancel, Send in Team instead, Show and send.
+    name: 'chat-idea-share-sheet',
+    seed: creator,
+    extra: seedBankIdea,
+    url: `/plan/bank?item=${PLAN_CONCEPT_ITEM}`,
+    steps: async (page) => {
+      await waitFor([page.locator('[data-plan-page="item"] [data-plan-who-can-see]')], 'bank idea');
+      await tap([page.locator('[data-plan-item-more]')], 'item more');
+      await tap([page.getByRole('menuitem', { name: /Send to chat/ })], 'Send to chat');
+      await tap([page.locator(`[data-plan-forward-target="${DM_CHANNEL}"]`)], 'client DM');
+      await waitFor([page.locator('[data-idea-share-ask]')], 'idea share sheet');
+    },
+  },
+  {
+    // The idea card in the DM: eyebrow Idea, title, "Bank · 1 comments" line.
+    name: 'chat-idea-card',
+    seed: creator,
+    extra: seedIdeaCard,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, PEER_NAME);
+      const card = page.locator(`[data-idea-card="${PLAN_CONCEPT_ITEM}"]`).last();
+      await card.scrollIntoViewIfNeeded();
+      await waitFor([card], 'idea card');
+    },
+  },
+  {
+    // Forward a Draft plan into the client DM: "Open this plan for approvers?".
+    name: 'plan-share-draft-sheet',
+    seed: creator,
+    extra: seedDraftPlanCard,
+    url: '/chat',
+    steps: async (page) => {
+      await openChat(page, GROUP_NAME);
+      const card = page.locator(`[data-plan-card="${TEAM_PLAN_ID}"]`).last();
+      await card.scrollIntoViewIfNeeded();
+      await tap([card.locator('[data-plan-forward]')], 'Forward');
+      await tap([page.locator(`[data-plan-forward-target="${DM_CHANNEL}"]`)], 'client DM');
+      await waitFor([page.locator('[data-plan-open-send]')], 'open and send sheet');
+    },
+  },
+  {
     name: 'plan-item-mention-picker',
     seed: creator,
     extra: (network) => seedChatPlanThread(network, true),
@@ -1308,6 +1421,10 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await waitFor([page.locator('[data-plan-page="item"] [data-plan-came-from]')], 'bank idea');
       await waitFor([page.locator('[data-plan-file-name]')], 'bank idea files');
+      // The Who can see this card (agency, bank idea) below the details.
+      const who = page.locator('[data-plan-page="item"] [data-plan-who-can-see]');
+      await waitFor([who], 'who can see');
+      await who.scrollIntoViewIfNeeded();
     },
   },
   {
