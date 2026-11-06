@@ -470,19 +470,36 @@ export const PLAN_SECTION_LABELS: Readonly<Record<PlanSectionKey, string>> = {
 export const SECTION_ORDER: readonly PlanSectionKey[] = ['this', 'next', 'later', 'earlier'];
 
 /**
- * The phone Plan tab's chip row (the same line as Pipeline's stage chips): All,
- * then the four week groups (Upcoming and Past named 5 Nov 2026). One pick;
- * This week by default.
+ * The phone Plan tab's chip row (the same line as Pipeline's stage chips):
+ * Bank (the idea bank) first, then the four week groups (Upcoming and Past
+ * named 5 Nov 2026), then All (prototype approved 6 Nov 2026). One pick; This
+ * week by default. A client sees Bank only when their bank read holds an idea.
  */
 export type PlanWeekChip = 'all' | PlanSectionKey | 'bank';
-// 'bank' (the idea bank) is in the type only; the Bank list adds it to the row.
-export const PLAN_WEEK_CHIPS: readonly PlanWeekChip[] = ['all', ...SECTION_ORDER];
+export const PLAN_WEEK_CHIPS: readonly PlanWeekChip[] = ['bank', ...SECTION_ORDER, 'all'];
 /** The idea bank's chip id and label. */
 export const PLAN_BANK_CHIP = 'bank' satisfies PlanWeekChip;
 export const PLAN_BANK_CHIP_LABEL = 'Bank';
 export const PLAN_WEEK_CHIP_DEFAULT: PlanWeekChip = 'this';
 /** The chip's URL param (?week=), so Back lands on the same chip. */
 export const PLAN_WEEK_PARAM = 'week';
+/** The Bank's own return param (?chip=bank), as a bank idea's Back may carry it. */
+export const PLAN_CHIP_PARAM = 'chip';
+
+/**
+ * The chip a Plan tab URL asks for: ?week=, else ?chip= (only bank), else
+ * null. Pure.
+ */
+export function planChipOfParams(params: Pick<URLSearchParams, 'get'>): PlanWeekChip | null {
+  const week = parsePlanWeekChip(params.get(PLAN_WEEK_PARAM));
+  if (week !== null) return week;
+  return params.get(PLAN_CHIP_PARAM) === PLAN_BANK_CHIP ? PLAN_BANK_CHIP : null;
+}
+
+/** The chips a viewer sees: Bank only for a creator or a client whose bank holds an idea. Pure. */
+export function visiblePlanChips(showBank: boolean): PlanWeekChip[] {
+  return PLAN_WEEK_CHIPS.filter((c) => c !== PLAN_BANK_CHIP || showBank);
+}
 
 /** A chip's label: All, or its week group's heading. Pure. */
 export function planWeekChipLabel(chip: PlanWeekChip): string {

@@ -29,7 +29,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Bone, MOVE_CLASS, slideX } from '@/lib/motion';
 import type {
   KeyboardEvent as ReactKeyboardEvent,
+  DragEvent as ReactDragEvent,
   MouseEvent as ReactMouseEvent,
+  ReactNode,
   PointerEvent as ReactPointerEvent,
   ReactElement,
 } from 'react';
@@ -78,6 +80,7 @@ import {
   type PlanTone,
 } from '@/lib/plan-tab';
 import { civilDayOf, civilWeekdayShort, dayOfMonth, formatCivilDayHeader } from '@/lib/plan-week';
+import { BANK_DRAG_TYPE, bankDragId } from './bank-parts';
 import { useFitHeight } from '@/lib/use-fit-height';
 import { useCoarsePointer } from '@/lib/use-is-laptop';
 import { PlanDayMenu } from './PlanDayMenu';
@@ -150,6 +153,10 @@ export function PlanCalendar(props: {
   reload: () => Promise<void>;
   /** Load more while more plans overlap the range; null when every one is in. */
   more: PlanTabMore | null;
+  /** The Bank chip (laptop), after the plan chips. */
+  bankChip?: ReactNode;
+  /** A Bank idea dropped on a day (a creator with the Bank open); absent: days take no Bank drop. */
+  onBankDrop?: (ideaId: string, day: string) => void;
 }): ReactElement {
   const { view, anchor, today, timeZone, side } = props;
   const data = props.data ?? EMPTY_DATA;
@@ -219,10 +226,35 @@ export function PlanCalendar(props: {
     event.preventDefault();
     setMenu({ day, anchor: event.currentTarget });
   };
+  // A Bank card dragged over a day (HTML drag): the day takes lit-drop while hovered.
+  const [bankOver, setBankOver] = useState<string | null>(null);
+  const onBankDrop = props.onBankDrop;
+  const bankDrop =
+    onBankDrop !== undefined
+      ? {
+          over: (day: string, event: ReactDragEvent<HTMLElement>): void => {
+            if (!event.dataTransfer.types.includes(BANK_DRAG_TYPE)) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            setBankOver(day);
+          },
+          leave: (day: string): void => setBankOver((cur) => (cur === day ? null : cur)),
+          drop: (day: string, event: ReactDragEvent<HTMLElement>): void => {
+            const id = bankDragId([...event.dataTransfer.types], (t) =>
+              event.dataTransfer.getData(t),
+            );
+            setBankOver(null);
+            if (id === null) return;
+            event.preventDefault();
+            onBankDrop(id, day);
+          },
+        }
+      : null;
   const cellProps = (day: string): CellProps => ({
     day,
     today,
-    over: drag.state?.over === day,
+    over: drag.state?.over === day || bankOver === day,
+    bankDrop,
     addable: canOpenDayMenu(side),
     onClick: dayClick,
     onKeyDown: dayKey,
@@ -290,6 +322,9 @@ export function PlanCalendar(props: {
           onSelect={setFilter}
           more={props.more}
         />
+        {props.bankChip !== undefined ? (
+          <span className="flex shrink-0">{props.bankChip}</span>
+        ) : null}
       </div>
       <div
         ref={fitRef}
@@ -472,6 +507,12 @@ interface CellProps {
   addable: boolean;
   onClick: (day: string, cell: HTMLElement, event: ReactMouseEvent) => void;
   onKeyDown: (day: string, event: ReactKeyboardEvent<HTMLElement>) => void;
+  /** The Bank's drop handlers (laptop, the Bank open); null when days take no Bank drop. */
+  bankDrop: {
+    over: (day: string, event: ReactDragEvent<HTMLElement>) => void;
+    leave: (day: string) => void;
+    drop: (day: string, event: ReactDragEvent<HTMLElement>) => void;
+  } | null;
 }
 
 interface EntryProps {
@@ -495,6 +536,9 @@ function dayAttrs(props: CellProps): {
   'aria-label': string;
   onClick: (event: ReactMouseEvent<HTMLElement>) => void;
   onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void;
+  onDragOver?: (event: ReactDragEvent<HTMLElement>) => void;
+  onDragLeave?: () => void;
+  onDrop?: (event: ReactDragEvent<HTMLElement>) => void;
 } {
   return {
     'data-plan-tab-day': props.day,
@@ -504,6 +548,14 @@ function dayAttrs(props: CellProps): {
     'aria-label': formatCivilDayHeader(props.day),
     onClick: (event) => props.onClick(props.day, event.currentTarget, event),
     onKeyDown: (event) => props.onKeyDown(props.day, event),
+    ...(props.bankDrop !== null
+      ? {
+          onDragOver: (event: ReactDragEvent<HTMLElement>) =>
+            props.bankDrop?.over(props.day, event),
+          onDragLeave: () => props.bankDrop?.leave(props.day),
+          onDrop: (event: ReactDragEvent<HTMLElement>) => props.bankDrop?.drop(props.day, event),
+        }
+      : {}),
   };
 }
 

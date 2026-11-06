@@ -5,7 +5,12 @@
 // Postgres' job. The shaping (`shapeBuckets`) is pure so the
 // archived filter + position ordering are unit-tested without a database.
 
-import type { Client, Result } from '@srtdio/rpc';
+import {
+  workspaceBucketDelete,
+  workspaceBucketRename,
+  type Client,
+  type Result,
+} from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';
 import { errorText } from '@/lib/error-copy';
 
@@ -122,4 +127,57 @@ export async function createBucket(
   } catch {
     return { ok: false, error: { code: 'unknown', message: bucketCreateErrorMessage('') } };
   }
+}
+
+/**
+ * The Bank's copy for a bucket write that failed: name_taken and invalid_name
+ * get their own line, anything else the generic "Couldn't {action}." Pure.
+ */
+export function bucketWriteError(action: 'add' | 'save' | 'delete', message: string): string {
+  // createBucket hands back its own copy; its two known lines map here too.
+  if (message.includes('name_taken') || message.includes('already taken')) {
+    return "Couldn't add. That bucket already exists.";
+  }
+  if (message.includes('invalid_name') || message.includes('1 to 40')) {
+    return "Couldn't save. Use 1 to 40 characters.";
+  }
+  return errorText(action === 'delete' ? 'delete the bucket' : action, message);
+}
+
+/** Rename a bucket (workspace_bucket_rename); a failure carries the Bank's copy. Never throws. */
+export async function renameBucket(
+  client: Client,
+  bucketId: string,
+  name: string,
+  traceId: string,
+): Promise<Result<null>> {
+  const res = await workspaceBucketRename(client, {
+    p_bucket_id: bucketId,
+    p_name: name.trim(),
+    p_trace_id: traceId,
+  });
+  return res.ok
+    ? { ok: true, data: null }
+    : {
+        ok: false,
+        error: { code: 'unknown', message: bucketWriteError('save', res.error.message) },
+      };
+}
+
+/**
+ * Delete a bucket (workspace_bucket_delete: its ideas keep their other
+ * buckets). Called when the Undo strip ends. Never throws.
+ */
+export async function deleteBucket(
+  client: Client,
+  bucketId: string,
+  traceId: string,
+): Promise<Result<null>> {
+  const res = await workspaceBucketDelete(client, { p_bucket_id: bucketId, p_trace_id: traceId });
+  return res.ok
+    ? { ok: true, data: null }
+    : {
+        ok: false,
+        error: { code: 'unknown', message: bucketWriteError('delete', res.error.message) },
+      };
 }

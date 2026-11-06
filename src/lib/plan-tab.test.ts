@@ -19,6 +19,8 @@ import {
   planSectionOf,
   planSections,
   parsePlanWeekChip,
+  planChipOfParams,
+  visiblePlanChips,
   planWeekChipLabel,
   planWeekChipRange,
   PLAN_WEEK_CHIPS,
@@ -394,11 +396,12 @@ describe('zero state', () => {
 describe('phone week chips', () => {
   it('reads the chips in order, This week by default', () => {
     expect(PLAN_WEEK_CHIPS.map(planWeekChipLabel)).toEqual([
-      'All',
+      'Bank',
       'This week',
       'Next week',
       'Upcoming',
       'Past',
+      'All',
     ]);
     expect(PLAN_WEEK_CHIP_DEFAULT).toBe('this');
   });
@@ -406,8 +409,21 @@ describe('phone week chips', () => {
   it('parses only the chips it knows', () => {
     expect(parsePlanWeekChip('next')).toBe('next');
     expect(parsePlanWeekChip('all')).toBe('all');
+    expect(parsePlanWeekChip('bank')).toBe('bank');
     expect(parsePlanWeekChip('soon')).toBeNull();
     expect(parsePlanWeekChip(null)).toBeNull();
+  });
+
+  it('reads ?week= first, then ?chip=bank only', () => {
+    expect(planChipOfParams(new URLSearchParams('week=next'))).toBe('next');
+    expect(planChipOfParams(new URLSearchParams('chip=bank'))).toBe('bank');
+    expect(planChipOfParams(new URLSearchParams('chip=next'))).toBeNull();
+    expect(planChipOfParams(new URLSearchParams(''))).toBeNull();
+  });
+
+  it('hides Bank unless the viewer may see it', () => {
+    expect(visiblePlanChips(false)).not.toContain('bank');
+    expect(visiblePlanChips(true)[0]).toBe('bank');
   });
 
   it('reads one Mon to Sun week for This week and Next week, every plan for the rest', () => {

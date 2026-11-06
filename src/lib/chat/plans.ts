@@ -1702,6 +1702,425 @@ export function bankItemReadWhat(itemId: string): string {
   return `bank-item:${itemId}`;
 }
 
+// ---------------------------------------------------------------------------
+// The idea bank's list (the Plan tab's Bank chip)
+// ---------------------------------------------------------------------------
+
+/** The Bank's sorts: Recently active (default), Newest first, Oldest first, Name. */
+export type BankSort = 'active' | 'newest' | 'oldest' | 'name';
+
+/** Ideas a Bank page holds. */
+export const BANK_PAGE_SIZE = 12;
+/** Search answers at most this many ideas (one read, no pages). */
+export const BANK_SEARCH_LIMIT = 50;
+
+/** One idea as the Bank list draws it: the row, its counts, its first file and its format. */
+export interface BankIdea extends PlanItemRow {
+  comment_count: number;
+  file_count: number;
+  /** The first file's tile (image or file); null when the idea holds none. */
+  thumb: ConceptThumb | null;
+  /** The linked post's format, when the idea has one; null otherwise. */
+  format: string | null;
+}
+
+/** Where the next page starts: the starred group first, then the rest, by the sort's key. */
+export interface BankCursor {
+  starred: boolean;
+  /** The last row's sort value and id; null: from the group's start. */
+  after: { key: string | null; id: string } | null;
+}
+
+/** What one Bank read asks for. */
+export interface BankQuery {
+  workspaceId: string;
+  sort: BankSort;
+  bucketId: string | null;
+  /** Archived ideas only (Show archived ideas); else the live ones. */
+  archived: boolean;
+  /** The 90-day review: live ideas last active before this instant (ISO). */
+  staleBefore: string | null;
+}
+
+/** One page of the Bank, with the bank's counts on a first page. */
+export interface BankPage {
+  ideas: BankIdea[];
+  nextCursor: BankCursor | null;
+  /** Live ideas, and live ideas untouched for 90 days (first page only; null otherwise). */
+  counts: { total: number; stale: number } | null;
+}
+
+/** A sort's key column and direction. Pure. */
+export function bankSortKey(sort: BankSort): { column: string; ascending: boolean } {
+  switch (sort) {
+    case 'newest':
+      return { column: 'created_at', ascending: false };
+    case 'oldest':
+      return { column: 'created_at', ascending: true };
+    case 'name':
+      return { column: 'title', ascending: true };
+    default:
+      return { column: 'last_active_at', ascending: false };
+  }
+}
+
+/** A value as a PostgREST double-quoted literal. Pure. */
+function quoted(value: string): string {
+  return `"${value.replace(/[\\"]/g, (c) => `\\${c}`)}"`;
+}
+
+/** The keyset filter after `after` in a sort (rows strictly after it, ties by id). Pure. */
+export function bankKeysetFilter(
+  sort: BankSort,
+  after: { key: string | null; id: string },
+): string {
+  const { column, ascending } = bankSortKey(sort);
+  const op = ascending ? 'gt' : 'lt';
+  const id = quoted(after.id);
+  if (after.key === null) return `and(${column}.is.null,id.${op}.${id})`;
+  const key = quoted(after.key);
+  return `${column}.${op}.${key},and(${column}.eq.${key},id.${op}.${id})`;
+}
+
+/** A row's value for the sort's key (the cursor's key). Pure. */
+export function bankSortValue(row: PlanItemRow, sort: BankSort): string | null {
+  switch (sort) {
+    case 'newest':
+    case 'oldest':
+      return row.created_at;
+    case 'name':
+      return row.title;
+    default:
+      return row.last_active_at ?? row.created_at;
+  }
+}
+
+/** The slice of a PostgREST builder the Bank read uses (typed loosely). */
+interface BankBuilder extends PromiseLike<SelectResult & { count?: number | null }> {
+  eq: (column: string, value: string) => BankBuilder;
+  is: (column: string, value: null) => BankBuilder;
+  not: (column: string, op: string, value: null) => BankBuilder;
+  in: (column: string, values: readonly string[]) => BankBuilder;
+  lt: (column: string, value: string) => BankBuilder;
+  or: (filters: string) => BankBuilder;
+  order: (column: string, opts?: { ascending?: boolean; nullsFirst?: boolean }) => BankBuilder;
+  limit: (count: number) => BankBuilder;
+}
+interface BankTable {
+  select: (columns: string, opts?: { count?: 'exact'; head?: boolean }) => BankBuilder;
+}
+
+/** The base Bank select: the workspace's ideas (no plan, not deleted), live or archived. */
+function bankBase(
+  client: Client,
+  q: BankQuery,
+  columns: string,
+  opts?: { count: 'exact'; head: boolean },
+): BankBuilder {
+  let query = (client.from('plan_items') as unknown as BankTable)
+    .select(columns, opts)
+    .eq('workspace_id', q.workspaceId)
+    .is('plan_id', null)
+    .is('deleted_at', null);
+  query = q.archived ? query.not('archived_at', 'is', null) : query.is('archived_at', null);
+  if (q.staleBefore !== null && !q.archived) query = query.lt('last_active_at', q.staleBefore);
+  return query;
+}
+
+/** The ids of the ideas in one bucket (one plan_item_buckets select). */
+async function bucketItemIds(
+  client: Client,
+  workspaceId: string,
+  bucketId: string,
+  signal?: AbortSignal,
+): Promise<Result<string[]>> {
+  const query = (client.from('plan_item_buckets') as unknown as BankTable)
+    .select('item_id')
+    .eq('workspace_id', workspaceId)
+    .eq('bucket_id', bucketId)
+    .limit(1000);
+  const res = (await abortable(query, signal)) as SelectResult;
+  if (res.error !== null) return fail(`plan_item_buckets: ${res.error.message}`);
+  return { ok: true, data: ((res.data ?? []) as Array<{ item_id: string }>).map((r) => r.item_id) };
+}
+
+/** One group (starred or not) of a page, ordered by the sort, after a cursor. */
+async function readBankGroup(
+  client: Client,
+  q: BankQuery,
+  starred: boolean,
+  after: { key: string | null; id: string } | null,
+  ids: readonly string[] | null,
+  signal?: AbortSignal,
+): Promise<Result<PlanItemRow[]>> {
+  const { column, ascending } = bankSortKey(q.sort);
+  let query = bankBase(client, q, ITEM_COLUMNS);
+  query = starred ? query.not('starred_at', 'is', null) : query.is('starred_at', null);
+  if (ids !== null) query = query.in('id', ids);
+  if (after !== null) query = query.or(bankKeysetFilter(q.sort, after));
+  query = query
+    .order(column, { ascending, nullsFirst: false })
+    .order('id', { ascending })
+    .limit(BANK_PAGE_SIZE + 1);
+  const res = (await abortable(query, signal)) as SelectResult;
+  if (res.error !== null) return fail(`plan_items: ${res.error.message}`);
+  return { ok: true, data: (res.data ?? []) as PlanItemRow[] };
+}
+
+/** One exact count of the Bank (head: no rows come back). */
+async function countBank(
+  client: Client,
+  q: BankQuery,
+  signal?: AbortSignal,
+): Promise<Result<number>> {
+  const query = bankBase(client, q, 'id', { count: 'exact', head: true });
+  const res = (await abortable(query, signal)) as SelectResult & { count?: number | null };
+  if (res.error !== null) return fail(`plan_items: ${res.error.message}`);
+  return { ok: true, data: res.count ?? 0 };
+}
+
+/**
+ * A page's rows split into the shown ideas and the next cursor: the starred
+ * group first (its rows after the cursor), then the rest. Each group was read
+ * with one extra row to know whether more remain. Pure.
+ */
+export function bankPageOf(
+  sort: BankSort,
+  cursor: BankCursor | null,
+  starred: readonly PlanItemRow[],
+  rest: readonly PlanItemRow[],
+): { rows: PlanItemRow[]; nextCursor: BankCursor | null } {
+  const at = (row: PlanItemRow | undefined): { key: string | null; id: string } | null =>
+    row !== undefined ? { key: bankSortValue(row, sort), id: row.id } : null;
+  if (cursor !== null && !cursor.starred) {
+    const rows = rest.slice(0, BANK_PAGE_SIZE);
+    return {
+      rows,
+      nextCursor: rest.length > BANK_PAGE_SIZE ? { starred: false, after: at(rows.at(-1)) } : null,
+    };
+  }
+  if (starred.length > BANK_PAGE_SIZE) {
+    const rows = starred.slice(0, BANK_PAGE_SIZE);
+    return { rows, nextCursor: { starred: true, after: at(rows.at(-1)) } };
+  }
+  const room = BANK_PAGE_SIZE - starred.length;
+  const tail = rest.slice(0, room);
+  const rows = [...starred, ...tail];
+  if (rest.length > room) {
+    return {
+      rows,
+      nextCursor: { starred: false, after: tail.length > 0 ? at(tail.at(-1)) : null },
+    };
+  }
+  return { rows, nextCursor: null };
+}
+
+/**
+ * The rows as Bank ideas: buckets, visible comment counts, files (first tile
+ * and count) and the linked post's format, one select per table over the
+ * page's ids in parallel (never per idea). Never throws.
+ */
+export async function enrichBankIdeas(
+  client: Client,
+  rows: readonly PlanItemRow[],
+  signal?: AbortSignal,
+): Promise<Result<BankIdea[]>> {
+  const ids = rows.map((r) => r.id);
+  const linked = rows.flatMap((r) => (r.linked_post_id ? [r.linked_post_id] : []));
+  const [buckets, comments, files, posts] = await Promise.all([
+    readItemBuckets(client, ids, signal),
+    readCommentCounts(client, ids, signal),
+    selectIn<ThumbRow>(
+      client,
+      'asset_attachments',
+      'entity_id, entity_type, asset_version_id, asset_versions!inner(mime_type)',
+      'entity_id',
+      ids,
+      signal,
+      (q) =>
+        q
+          .eq('entity_type', 'plan_item')
+          .is('deleted_at', null)
+          .order('entity_id', { ascending: true })
+          .order('position', { ascending: true }),
+    ),
+    selectIn<{ id: string; format: string | null }>(
+      client,
+      'posts',
+      'id, format',
+      'id',
+      linked,
+      signal,
+    ),
+  ]);
+  if (!buckets.ok) return buckets;
+  if (!comments.ok) return comments;
+  if (!files.ok) return files;
+  if (!posts.ok) return posts;
+  const thumbs = thumbsOfRows(files.data).concepts;
+  const fileCounts: Record<string, number> = {};
+  for (const f of files.data) fileCounts[f.entity_id] = (fileCounts[f.entity_id] ?? 0) + 1;
+  const formats = new Map(posts.data.map((p) => [p.id, p.format]));
+  return {
+    ok: true,
+    data: withBucketIds(rows, buckets.data).map((row) => ({
+      ...row,
+      comment_count: comments.data[row.id] ?? 0,
+      file_count: fileCounts[row.id] ?? 0,
+      thumb: thumbs[row.id] ?? null,
+      format: row.linked_post_id ? (formats.get(row.linked_post_id) ?? null) : null,
+    })),
+  };
+}
+
+/**
+ * One page of the Bank: starred ideas first, then the rest, each in the sort's
+ * order, 12 a page with a keyset cursor. A first page also counts the live
+ * bank and its 90-day-untouched ideas, in parallel with the page (head
+ * selects, no rows). RLS limits a client to ideas shown to them. Never throws.
+ */
+export async function readBankPage(
+  client: Client,
+  q: BankQuery,
+  cursor: BankCursor | null,
+  now: Date,
+  signal?: AbortSignal,
+): Promise<Result<BankPage>> {
+  try {
+    let ids: string[] | null = null;
+    if (q.bucketId !== null) {
+      const inBucket = await bucketItemIds(client, q.workspaceId, q.bucketId, signal);
+      if (!inBucket.ok) return inBucket;
+      ids = inBucket.data;
+      if (ids.length === 0) {
+        return { ok: true, data: { ideas: [], nextCursor: null, counts: null } };
+      }
+    }
+    const first = cursor === null;
+    const live: BankQuery = { ...q, archived: false, staleBefore: null, bucketId: null };
+    const empty: Result<PlanItemRow[]> = { ok: true, data: [] };
+    const [starred, rest, total, stale] = await Promise.all([
+      cursor === null || cursor.starred
+        ? readBankGroup(client, q, true, cursor?.after ?? null, ids, signal)
+        : Promise.resolve(empty),
+      readBankGroup(
+        client,
+        q,
+        false,
+        cursor !== null && !cursor.starred ? cursor.after : null,
+        ids,
+        signal,
+      ),
+      first ? countBank(client, live, signal) : Promise.resolve(null),
+      first
+        ? countBank(client, { ...live, staleBefore: bankStaleBefore(now) }, signal)
+        : Promise.resolve(null),
+    ]);
+    if (!starred.ok) return starred;
+    if (!rest.ok) return rest;
+    const page = bankPageOf(q.sort, cursor, starred.data, rest.data);
+    const ideas = await enrichBankIdeas(client, page.rows, signal);
+    if (!ideas.ok) return ideas;
+    const counts =
+      total !== null && stale !== null && total.ok && stale.ok
+        ? { total: total.data, stale: stale.data }
+        : null;
+    return { ok: true, data: { ideas: ideas.data, nextCursor: page.nextCursor, counts } };
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
+/** Days without activity before an idea counts as untouched (the 90-day nudge). */
+export const BANK_STALE_DAYS = 90;
+
+/** The instant 90 days before `now` (ISO): ideas last active before it are untouched. Pure. */
+export function bankStaleBefore(now: Date): string {
+  return new Date(now.getTime() - BANK_STALE_DAYS * 86_400_000).toISOString();
+}
+
+/**
+ * Bank search (2+ characters): ideas whose title or description holds the
+ * words, or with a comment that does (one plan_item_comments select first),
+ * under the same filter; one read, at most 50, starred first in the sort's
+ * order. Never throws.
+ */
+export async function searchBank(
+  client: Client,
+  q: BankQuery,
+  query: string,
+  signal?: AbortSignal,
+): Promise<Result<BankIdea[]>> {
+  try {
+    const like = quoted(`%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+    const commentQuery = (client.from('plan_item_comments') as unknown as BankTable)
+      .select('item_id')
+      .eq('workspace_id', q.workspaceId)
+      .is('deleted_at', null)
+      .or(`body.ilike.${like}`)
+      .limit(200);
+    const [hits, inBucket] = await Promise.all([
+      abortable(commentQuery, signal) as unknown as Promise<SelectResult>,
+      q.bucketId !== null
+        ? bucketItemIds(client, q.workspaceId, q.bucketId, signal)
+        : Promise.resolve(null),
+    ]);
+    if (hits.error !== null) return fail(`plan_item_comments: ${hits.error.message}`);
+    if (inBucket !== null && !inBucket.ok) return inBucket;
+    const commented = [
+      ...new Set(((hits.data ?? []) as Array<{ item_id: string }>).map((r) => r.item_id)),
+    ];
+    const terms = [`title.ilike.${like}`, `description.ilike.${like}`];
+    if (commented.length > 0) terms.push(`id.in.(${commented.map(quoted).join(',')})`);
+    const { column, ascending } = bankSortKey(q.sort);
+    let items = bankBase(client, q, ITEM_COLUMNS).or(terms.join(','));
+    if (inBucket !== null) items = items.in('id', inBucket.data);
+    items = items.order(column, { ascending, nullsFirst: false }).limit(BANK_SEARCH_LIMIT);
+    const res = (await abortable(items, signal)) as SelectResult;
+    if (res.error !== null) return fail(`plan_items: ${res.error.message}`);
+    const rows = (res.data ?? []) as PlanItemRow[];
+    const starredFirst = [
+      ...rows.filter((r) => r.starred_at != null),
+      ...rows.filter((r) => r.starred_at == null),
+    ];
+    return enrichBankIdeas(client, starredFirst, signal);
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
+/** The session read key of a Bank first page (user and workspace first). */
+export function bankReadWhat(q: Omit<BankQuery, 'workspaceId'>): string {
+  return `bank:${q.sort}:${q.bucketId ?? '-'}:${q.archived ? 'a' : 'l'}:${q.staleBefore !== null ? 's' : '-'}`;
+}
+
+/**
+ * The plans Plan it can place an idea into: not deleted, ending today or
+ * later (workspace zone), at most 200, one plans select. Read after the Bank
+ * paints (never on the tap); Plan it filters it by the picked day. Never throws.
+ */
+export async function readOpenPlanRows(
+  client: Client,
+  workspaceId: string,
+  today: string,
+  signal?: AbortSignal,
+): Promise<Result<PlanRow[]>> {
+  try {
+    const query = (client.from('plans') as unknown as PlanTable)
+      .select(PLAN_COLUMNS)
+      .eq('workspace_id', workspaceId)
+      .is('deleted_at', null)
+      .gte('ends_on', today)
+      .order('starts_on', { ascending: true })
+      .limit(200);
+    const res = (await abortable(query, signal)) as SelectResult;
+    if (res.error !== null) return fail(`plans: ${res.error.message}`);
+    return { ok: true, data: (res.data ?? []) as PlanRow[] };
+  } catch (error) {
+    return fail(String(error));
+  }
+}
+
 /** One author's name row (readProfiles). */
 export interface NameRow {
   userId: string;
