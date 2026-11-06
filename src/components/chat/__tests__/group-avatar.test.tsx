@@ -9,10 +9,7 @@ vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 
 import type { Database } from '@srtdio/schemas';
 import { shapeChannelSummaries, type ChannelSummary } from '@/lib/chat-reads';
-import {
-  channelRowParts,
-  CHAT_ROW_PHOTO,
-} from '@/components/chat/ChannelList';
+import { channelRowParts, CHAT_ROW_PHOTO } from '@/components/chat/ChannelList';
 import { GroupHero, groupInfoSections, groupInfoSubtitle } from '@/components/chat/GroupInfoSheet';
 import { centerSquare, GROUP_AVATAR_EXPORT_PX } from '@/lib/chat/group-avatar';
 

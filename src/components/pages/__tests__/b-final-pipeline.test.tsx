@@ -135,12 +135,7 @@ describe('PostPlaceholder', () => {
 describe('Post screen top bar', () => {
   it('HeaderBar with a title slot renders no second h1, and Back takes the leading pull', () => {
     const out = renderToStaticMarkup(
-      <HeaderBar
-        title="In review"
-        titleSlot={<span>In review</span>}
-        onBack={() => {}}
-        compact
-      />,
+      <HeaderBar title="In review" titleSlot={<span>In review</span>} onBack={() => {}} compact />,
     );
     expect(out).not.toContain('<h1');
     expect(out).toMatch(/aria-label="Back"[^>]*-ml-3|-ml-3[^>]*aria-label="Back"/);

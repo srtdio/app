@@ -19,12 +19,7 @@ import { Chip } from '@/components/ui/Chip';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Sheet } from '@/components/ui/Sheet';
-import {
-  ICON_SIZE,
-  IconBookmark,
-  IconCheck,
-  IconRotateCcw,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconBookmark, IconCheck, IconRotateCcw } from '@/components/ui/icons';
 import { Tag } from '@/components/ui/Tag';
 import { useToast } from '@/components/ui/toast';
 import { MARK_TONE } from '@/components/chat/MarkBits';

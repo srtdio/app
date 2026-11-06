@@ -3160,7 +3160,10 @@ async function attributeStill(target: Locator, name: string): Promise<void> {
 
 /** A pending page route: requests to this path are never answered. */
 async function neverAnswerPath(page: Page, path: string): Promise<void> {
-  await page.route((url) => url.pathname === path, () => undefined);
+  await page.route(
+    (url) => url.pathname === path,
+    () => undefined,
+  );
 }
 
 const PENDING_BODY = 'Sending the cut now';

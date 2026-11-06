@@ -178,8 +178,7 @@ async function readPage(page: Page): Promise<RawPage> {
       return false;
     };
     const bleeds = (el: Element): boolean =>
-      el.closest('img, video, canvas, picture, [data-full-bleed]') !== null ||
-      scrollsUnderEdge(el);
+      el.closest('img, video, canvas, picture, [data-full-bleed]') !== null || scrollsUnderEdge(el);
     const edges: EdgeItem[] = [];
     for (const node of textNodesOf(document.body)) {
       const parent = node.parentElement;

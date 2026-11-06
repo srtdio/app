@@ -134,9 +134,7 @@ test(
   async ({ page }) => {
     const network = await installHarnessNetwork(page);
     await page.goto('/pipeline');
-    const cardTitle = page
-      .locator('[data-card-title]', { hasText: 'Monday carousel' })
-      .first();
+    const cardTitle = page.locator('[data-card-title]', { hasText: 'Monday carousel' }).first();
     await expect(cardTitle).toBeVisible({ timeout: 15_000 });
     const cardType = await typeOf(cardTitle);
     expect(cardType.size).toBe('15px');

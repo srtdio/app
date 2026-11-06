@@ -27,11 +27,6 @@ export function PageHead({ title, actions, hidden = false }: PageHeadProps) {
   // The one header bar (ui/HeaderBar): title role, gutter 16/24, 56 tall,
   // trailing actions under the trailing rule.
   return (
-    <HeaderBar
-      title={title}
-      compact
-      routeFocus
-      {...(actions !== undefined ? { actions } : {})}
-    />
+    <HeaderBar title={title} compact routeFocus {...(actions !== undefined ? { actions } : {})} />
   );
 }

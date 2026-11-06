@@ -281,7 +281,9 @@ describe('Open tab posts section', () => {
       />,
     );
     expect(html).toContain('h-16');
-    expect(html).toMatch(/data-open-post-thumb=""[^>]*h-11 w-11[^>]*><span data-post-placeholder="text"/);
+    expect(html).toMatch(
+      /data-open-post-thumb=""[^>]*h-11 w-11[^>]*><span data-post-placeholder="text"/,
+    );
     expect(html).not.toMatch(/data-open-post-thumb=""[^>]*>GBL/);
     expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
   });

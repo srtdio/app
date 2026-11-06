@@ -149,7 +149,11 @@ export function roleSignature(style: {
   fontWeight: string;
   fontFamily: string;
 }): string {
-  const family = style.fontFamily.split(',')[0]?.trim().replace(/^["']|["']$/g, '') ?? '';
+  const family =
+    style.fontFamily
+      .split(',')[0]
+      ?.trim()
+      .replace(/^["']|["']$/g, '') ?? '';
   return `${style.fontSize}/${style.fontWeight}/${family}`;
 }
 

@@ -159,25 +159,32 @@ describe('icon set', () => {
         expect(svg.getAttribute('class')).toContain('text-accent');
       });
 
-      it(SOLID.has(name) ? 'is solid, no stroke width' : 'strokes per size (2 / 1.85 / 1.6)', () => {
-        const svg = svgOf(Icon);
-        if (SOLID.has(name)) {
-          expect(svg.getAttribute('stroke-width')).toBeNull();
-          expect(svg.getAttribute('fill')).toBe('currentColor');
-        } else {
-          expect(svg.getAttribute('stroke-width')).toBe('1.85');
-          if (FIXED_BOX[name] === undefined) {
-            expect(svgOf(Icon, { size: ICON_SIZE.inline }).getAttribute('stroke-width')).toBe('2');
-            expect(svgOf(Icon, { size: ICON_SIZE.control }).getAttribute('stroke-width')).toBe(
-              '1.85',
-            );
-            expect(svgOf(Icon, { size: ICON_SIZE.tray }).getAttribute('stroke-width')).toBe('1.6');
-            expect(svgOf(Icon, { size: ICON_SIZE.status }).getAttribute('stroke-width')).toBe(
-              '1.6',
-            );
+      it(
+        SOLID.has(name) ? 'is solid, no stroke width' : 'strokes per size (2 / 1.85 / 1.6)',
+        () => {
+          const svg = svgOf(Icon);
+          if (SOLID.has(name)) {
+            expect(svg.getAttribute('stroke-width')).toBeNull();
+            expect(svg.getAttribute('fill')).toBe('currentColor');
+          } else {
+            expect(svg.getAttribute('stroke-width')).toBe('1.85');
+            if (FIXED_BOX[name] === undefined) {
+              expect(svgOf(Icon, { size: ICON_SIZE.inline }).getAttribute('stroke-width')).toBe(
+                '2',
+              );
+              expect(svgOf(Icon, { size: ICON_SIZE.control }).getAttribute('stroke-width')).toBe(
+                '1.85',
+              );
+              expect(svgOf(Icon, { size: ICON_SIZE.tray }).getAttribute('stroke-width')).toBe(
+                '1.6',
+              );
+              expect(svgOf(Icon, { size: ICON_SIZE.status }).getAttribute('stroke-width')).toBe(
+                '1.6',
+              );
+            }
           }
-        }
-      });
+        },
+      );
 
       it('inline sets display inline-block and the text baseline nudge', () => {
         const svg = svgOf(Icon, { inline: true });
