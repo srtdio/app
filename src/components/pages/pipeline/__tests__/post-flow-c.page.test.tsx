@@ -2,7 +2,7 @@
 // Post flow C, page level: a workspace switch never shows the old workspace's
 // posts (skeleton until its own read lands, a late read of the old workspace
 // is dropped), and the narrowing count plus the undated hint show only while a
-// search or date filter is on. The board is stubbed to record what it is given.
+// search or date filter is on. The list is stubbed to record what it is given.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,7 +22,7 @@ const h = vi.hoisted(() => ({
   params: new URLSearchParams(),
   workspaceId: 'ws-1' as string | null,
   reads: [] as PendingRead[],
-  /** The post ids the board was handed, one entry per board render. */
+  /** The post ids the list was handed, one entry per list render. */
   boards: [] as string[][],
   /** posts_search calls (the query sent) and what each answers. */
   searches: [] as string[],
@@ -72,17 +72,13 @@ vi.mock('@/lib/pipeline-posts', async (orig) => ({
     return { ok: true, data: h.searchAnswer };
   },
 }));
-vi.mock('@/components/pages/pipeline/PipelineBoard', () => ({
-  PipelineBoard: (props: { grouped: Record<string, PipelinePost[]> }) => {
-    h.boards.push(
-      Object.values(props.grouped)
-        .flat()
-        .map((post) => post.id),
-    );
+vi.mock('@/components/pages/pipeline/PipelineFeed', () => ({
+  PipelineFeed: (props: { posts: PipelinePost[] }) => {
+    // Sorted ids: the set the list was handed, whatever its sort order.
+    h.boards.push(props.posts.map((post) => post.id).sort());
     return null;
   },
 }));
-vi.mock('@/components/pages/pipeline/PipelineFeed', () => ({ PipelineFeed: () => null }));
 vi.mock('@/components/pages/pipeline/MoveSheet', () => ({ MoveSheet: () => null }));
 vi.mock('@/components/pages/pipeline/StageChips', () => ({ StageChips: () => null }));
 vi.mock('@/components/pages/pipeline/PipelineSortControl', () => ({

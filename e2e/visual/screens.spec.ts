@@ -2258,6 +2258,125 @@ for (const dark of [false, true]) {
   });
 }
 
+// The six ui/ListCard lists, chip by chip (7 Nov 2026): Pipeline (each stage
+// chip and All), Assets (each tab and select mode), Activity (each chip) and
+// the Plan tab (each chip; Bank is plan-tab-bank). The default chip of each is
+// its base screen (pipeline: Review, assets: All, notifications: All,
+// plan-tab: This week). Phone light/dark and laptop light come from the
+// projects; LAPTOP_DARK_SCREENS adds laptop dark. A chip with nothing under it
+// shows its zero line, which is shot as it is.
+
+/** The list painted: a ListCard, or the chip's zero line. */
+async function listOrZero(page: Page, what: string, extra: Locator[] = []): Promise<void> {
+  await waitFor(
+    [
+      page.locator('[data-list-card]'),
+      ...extra,
+      page.getByText(/show up here\./),
+      page.getByText(/^No results/),
+    ],
+    what,
+  );
+}
+
+const PIPELINE_CHIP_SCREENS = ['all', 'draft', 'approved', 'parked', 'rejected'] as const;
+for (const stage of PIPELINE_CHIP_SCREENS) {
+  SCREENS.push({
+    name: `pipeline-chip-${stage}`,
+    seed: creator,
+    url: `/pipeline?stage=${stage}`,
+    steps: async (page) => {
+      await waitFor(
+        [page.locator('[data-chip-row]').locator('button[aria-current="true"]')],
+        `${stage} chip`,
+      );
+      await listOrZero(page, `pipeline ${stage}`);
+    },
+  });
+}
+
+const ASSET_TAB_SCREENS = [
+  { tab: 'media', label: 'Media' },
+  { tab: 'pdf', label: 'PDF' },
+  { tab: 'docs', label: 'Docs' },
+  { tab: 'sheets', label: 'Sheets' },
+  { tab: 'links', label: 'Links' },
+] as const;
+for (const { tab, label } of ASSET_TAB_SCREENS) {
+  SCREENS.push({
+    name: `assets-tab-${tab}`,
+    seed: creator,
+    url: `/assets?type=${tab}`,
+    steps: async (page) => {
+      await waitFor(
+        [page.getByRole('tab', { name: new RegExp(`^${label}(\\s\\d+)?$`), selected: true })],
+        `${label} tab`,
+      );
+      await listOrZero(page, `assets ${tab}`);
+    },
+  });
+}
+
+const ACTIVITY_CHIP_SCREENS = [
+  { chip: 'unread', label: 'Unread' },
+  { chip: 'mentions', label: 'Mentions' },
+  { chip: 'briefs', label: 'Briefs' },
+  { chip: 'plans', label: 'Plans' },
+  { chip: 'upcoming', label: 'Upcoming' },
+  { chip: 'snoozed', label: 'Snoozed' },
+] as const;
+for (const { chip, label } of ACTIVITY_CHIP_SCREENS) {
+  SCREENS.push({
+    name: `activity-chip-${chip}`,
+    seed: creator,
+    url: '/activity',
+    steps: async (page) => {
+      await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
+      const chips = page.locator('[data-activity-chips]');
+      await tap([chips.getByRole('button', { name: new RegExp(`^${label}\\b`) })], `${label} chip`);
+      await waitFor(
+        [chips.locator('button[aria-pressed="true"]', { hasText: label })],
+        `${label} chip on`,
+      );
+      await listOrZero(page, `activity ${chip}`, [page.locator('[data-upcoming-list]')]);
+    },
+  });
+}
+
+const PLAN_TAB_CHIP_SCREENS = ['next', 'later', 'earlier', 'all'] as const;
+for (const chip of PLAN_TAB_CHIP_SCREENS) {
+  SCREENS.push({
+    name: `plan-tab-chip-${chip}`,
+    seed: creator,
+    extra: seedTab,
+    url: `/plan?week=${chip}`,
+    steps: async (page) => {
+      await waitFor(
+        [page.locator(`[data-plan-tab-when="${chip}"][aria-pressed="true"]`)],
+        `${chip} chip`,
+      );
+      await listOrZero(page, `plan tab ${chip}`, [page.locator('[data-plan-tab-chip-zero]')]);
+    },
+  });
+}
+
+// Assets in select mode: a card's ⋯ Select starts it with that file ticked;
+// every card keeps its height with the tick box where the ⋮ was.
+SCREENS.push({
+  name: 'assets-select',
+  seed: creator,
+  url: '/assets',
+  steps: async (page) => {
+    await assetsReady(page);
+    await tap(
+      [page.getByRole('button', { name: 'More actions for Hero banner.png', exact: true })],
+      'asset ⋯ trigger',
+    );
+    await tap(menuRow(page, /^Select$/), 'Select');
+    await waitFor([page.locator('[data-select-bar]')], 'select bar');
+  },
+});
+
 // The person card and Reply privately (2 Nov 2026). The card opens from a
 // person's photo, name or @mention ([data-person-trigger]): a Sheet on phone
 // (iPhone light and dark projects), a popover beside the photo on laptop (light,
@@ -3482,14 +3601,24 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 }
 
-// The screens that list ui/ListCards (Briefs, Activity, the Chat list):
-// checkLayout's list-card rule runs on every screen; these must show cards.
+// The screens that list ui/ListCards (Pipeline, Briefs, Assets, the Chat
+// list, Activity, the Plan tab and its Bank): checkLayout's list-card rule
+// (every card 118 tall, the 72 picture 16 inside the edge and 12 to the text)
+// runs on every screen; these must show cards. The chip screens above may land
+// on a chip's zero line, so they are checked whenever cards show.
 const LIST_CARD_SCREENS = new Set([
+  'pipeline',
+  'pipeline-approver',
+  'briefs-approver',
+  'assets',
+  'assets-approver',
+  'assets-select',
   'chat-list',
   'chat-actions-menu',
-  'briefs-approver',
   'notifications',
   'activity-bank',
+  'plan-tab',
+  'plan-tab-bank',
 ]);
 
 // Laptop dark: these screens also run in the laptop-dark project
@@ -3520,6 +3649,31 @@ const LAPTOP_DARK_SCREENS = new Set([
   'chat-message-not-sent',
   'chat-select-mode',
   'post-approve-busy',
+  // The six ListCard lists, every chip: phone and laptop, light and dark.
+  'chat-list',
+  'notifications',
+  'plan-tab-bank',
+  'pipeline-chip-all',
+  'pipeline-chip-draft',
+  'pipeline-chip-approved',
+  'pipeline-chip-parked',
+  'pipeline-chip-rejected',
+  'assets-tab-media',
+  'assets-tab-pdf',
+  'assets-tab-docs',
+  'assets-tab-sheets',
+  'assets-tab-links',
+  'assets-select',
+  'activity-chip-unread',
+  'activity-chip-mentions',
+  'activity-chip-briefs',
+  'activity-chip-plans',
+  'activity-chip-upcoming',
+  'activity-chip-snoozed',
+  'plan-tab-chip-next',
+  'plan-tab-chip-later',
+  'plan-tab-chip-earlier',
+  'plan-tab-chip-all',
 ]);
 
 for (const screen of SCREENS) {

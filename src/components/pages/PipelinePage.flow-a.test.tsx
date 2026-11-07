@@ -53,7 +53,6 @@ vi.mock('@srtdio/posts', async (orig) => ({
   ...(await orig<typeof import('@srtdio/posts')>()),
   listPosts: h.listPosts,
 }));
-vi.mock('@/components/pages/pipeline/PipelineBoard', () => ({ PipelineBoard: () => null }));
 vi.mock('@/components/pages/pipeline/PipelineFeed', () => ({ PipelineFeed: () => null }));
 vi.mock('@/components/pages/pipeline/MoveSheet', () => ({ MoveSheet: () => null }));
 vi.mock('@/components/pages/pipeline/StageChips', () => ({ StageChips: () => null }));

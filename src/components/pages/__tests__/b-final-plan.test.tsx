@@ -103,10 +103,10 @@ describe('trailing rule on the Plan bar actions', () => {
     expect(item).not.toMatch(/data-plan-more=""[\s\S]{0,120}className="shrink-0 text-fg"/);
   });
 
-  it("a Bank row's ⋯ sits on the card's 16 content edge (pr-4, the trigger's pull)", () => {
+  it("a Bank card's ⋯ is ListCard's menu slot (the part applies the trailing rule)", () => {
     const bank = read('pages/plan-tab/BankList.tsx');
-    expect(bank).toContain('<span className="shrink-0 pr-4 pt-2">');
-    expect(bank).not.toContain('pr-3 pt-2');
+    expect(bank).toMatch(/<ListCard[\s\S]*?menu: \(\s*<ActionMenu/);
+    expect(bank).not.toContain('pr-4 pt-2');
   });
 });
 
@@ -142,20 +142,31 @@ describe('Card slots (additive)', () => {
   });
 });
 
-describe('Toolbar data hooks (additive) and the Plan tab toolbars', () => {
+describe('Toolbar data hooks (additive)', () => {
   it('data-* pass through; the bar stays 56 with the page edge', () => {
     const out = html(<Toolbar data-plan-tab-toolbar="" context={<span />} />);
     expect(out).toMatch(/^<div data-plan-tab-toolbar="" data-toolbar="" class="[^"]*h-14/);
     expect(out).toContain('px-4 md:px-6');
   });
+});
 
-  it('the calendar bar and the laptop bank bar render Toolbar; Add idea is the primary with IconPlus', () => {
-    const cal = read('pages/plan-tab/PlanCalendar.tsx');
-    expect(cal).toMatch(/<Toolbar\s+data-plan-tab-toolbar=""/);
-    expect(cal).toMatch(/<Text\s+as="h2"\s+role="title"\s+data-plan-tab-range=""/);
+describe('the Plan tab and the Bank on ListCard (phone and laptop)', () => {
+  it('one ListCard per plan and per idea, in LIST_CARD_GRID; the calendar is retired', () => {
+    const list = read('pages/plan-tab/PlanTabList.tsx');
+    expect(list).toContain('<ListCard');
+    expect(list).toContain('LIST_CARD_GRID');
+    expect(list).toContain('formatPlanStart');
+    const bank = read('pages/plan-tab/BankList.tsx');
+    expect(bank).toContain('<ListCard');
+    expect(bank).toContain('LIST_CARD_GRID');
+    expect(bank).toContain('formatRelative');
+    expect(bank).not.toContain('<SidePanel');
+    expect(bank).not.toContain('<table');
     const tab = read('pages/PlanTabPage.tsx');
-    expect(tab).toMatch(/<Toolbar\s+flush\s+data-bank-toolbar=""/);
-    expect(tab).not.toContain('bg-accent text-accent-fg lit-pill hover:text-accent-fg');
+    expect(tab).not.toContain('PlanCalendar');
+    expect(tab).not.toContain('useIsLaptop');
+    // One clock for every card's time.
+    expect(tab.match(/useMinuteClock\(\)/g)).toHaveLength(1);
   });
 });
 

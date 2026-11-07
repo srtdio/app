@@ -52,18 +52,23 @@ describe('task chips', () => {
 });
 
 describe('the date line', () => {
-  it('open tasks: Overdue in the bad tone, the day alone later; nothing for today or no date', () => {
+  it('open tasks: Overdue in the bad tone, Due ahead; nothing for today or no date', () => {
     expect(rowDateLine({ ...open, dueOn: '2026-11-03' }, CAL)).toEqual({
-      text: 'Overdue · 3 Nov',
+      text: 'Overdue 2 days',
+      bad: true,
+    });
+    expect(rowDateLine({ ...open, dueOn: '2026-11-04' }, CAL)).toEqual({
+      text: 'Overdue 1 day',
       bad: true,
     });
     expect(rowDateLine({ ...open, dueOn: '2026-11-05' }, CAL)).toBeNull();
+    expect(rowDateLine({ ...open, dueOn: '2026-11-06' }, CAL)?.text).toBe('Due tomorrow');
     expect(rowDateLine({ ...open, dueOn: '2026-11-12' }, CAL)).toEqual({
-      text: '12 Nov',
+      text: 'Due in 7 days',
       bad: false,
     });
     expect(rowDateLine({ ...open, dueOn: '2027-01-02' }, CAL)).toEqual({
-      text: '2 Jan 2027',
+      text: 'Due 2 Jan 2027',
       bad: false,
     });
     expect(rowDateLine({ ...open, dueOn: null }, CAL)).toBeNull();
@@ -71,15 +76,15 @@ describe('the date line', () => {
 
   it('done tasks: what was due and when it was done', () => {
     const done = { status: 'done' as const, doneAt: '2026-10-30T09:00:00.000Z' };
-    expect(rowDateLine({ ...done, dueOn: '2026-10-31' }, CAL, 'UTC')?.text).toBe(
-      'Due 31 Oct · done Fri',
+    expect(rowDateLine({ ...done, dueOn: '2026-10-31' }, CAL)?.text).toBe(
+      'Due 31 Oct · done 6 days ago',
     );
-    expect(rowDateLine({ ...done, dueOn: null }, CAL, 'UTC')?.text).toBe('Done Fri');
-    // The done time is formatWhen: the clock today, a date a week or more back.
+    expect(rowDateLine({ ...done, dueOn: null }, CAL)?.text).toBe('Done 6 days ago');
+    // The done time is formatRelative; a done task is never overdue.
     const today = { ...done, doneAt: '2026-11-05T09:00:00.000Z', dueOn: null };
-    expect(rowDateLine(today, CAL, 'UTC')?.text).toBe('Done 9:00 AM');
+    expect(rowDateLine(today, CAL)?.text).toBe('Done 1 hour ago');
     const older = { ...done, doneAt: '2026-10-20T09:00:00.000Z', dueOn: null };
-    expect(rowDateLine(older, CAL, 'UTC')?.text).toBe('Done 20 Oct');
+    expect(rowDateLine(older, CAL)?.text).toBe('Done 16 days ago');
     // Done before the stamp existed: the due day alone.
     expect(rowDateLine({ ...done, doneAt: null, dueOn: '2026-10-31' }, CAL)?.text).toBe(
       'Due 31 Oct',
