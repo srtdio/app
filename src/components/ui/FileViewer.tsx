@@ -40,7 +40,7 @@ import type { MutableRefObject, ReactElement, ReactNode, RefObject } from 'react
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { IconDownload, IconFile, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconChevronLeft, IconDownload, IconFile, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
@@ -1104,6 +1104,12 @@ export interface FileViewerProps {
   sentAt?: string | undefined;
   /** Chat home: a "Show in chat" text button in a bottom bar opens the chat at the file's message. */
   onShowInChat?: (() => void) | undefined;
+  /**
+   * Comments: the over-the-app bar. The exit is "<" (Back) in place of the X,
+   * and a PDF's "Page {i} of {n}" sits under the name in the bar (the bottom
+   * counter chip is not shown). Omitted (chat, Assets): today's bar, unchanged.
+   */
+  backBar?: boolean | undefined;
 }
 
 /** The top bar's line under the name with caller actions: "Page 3 of 12" for a PDF. Pure. */
@@ -1135,8 +1141,11 @@ function TopBar(props: {
   closeRef: RefObject<HTMLButtonElement>;
   actions?: ((barClass: string) => ReactNode) | undefined;
   line?: string | null;
+  /** Comments: "<" (Back) in place of the X, and the line shows under the name. */
+  back?: boolean | undefined;
 }): ReactElement {
   const { tone } = props;
+  const back = props.back === true;
   return (
     <div
       data-viewer-bar=""
@@ -1148,13 +1157,13 @@ function TopBar(props: {
       <button
         ref={props.closeRef}
         type="button"
-        aria-label="Close"
+        aria-label={back ? 'Back' : 'Close'}
         onClick={props.onClose}
         className={tone.bar}
       >
-        <IconX size={ICON_SIZE.control} />
+        {back ? <IconChevronLeft size={ICON_SIZE.control} /> : <IconX size={ICON_SIZE.control} />}
       </button>
-      {props.actions !== undefined ? (
+      {props.actions !== undefined || back ? (
         <div className="min-w-0 flex-1 px-1 text-center">
           <p title={props.name} className={cn('truncate text-base font-medium', tone.fg)}>
             {middleTruncate(props.name, VIEWER_NAME_BUDGET)}
@@ -1186,6 +1195,7 @@ function TopBar(props: {
 
 export function FileViewerSheet(props: FileViewerProps): ReactElement {
   const { name, kind, size, source, onLoadError, actions, subtitle, onShowInChat } = props;
+  const back = props.backBar === true;
   const nowMs = useMinuteClock();
   const details = fileViewerDetails(props.sender, props.sentAt, new Date(nowMs));
   // Callers pass a fresh onClose each render: keep the latest in a ref so the
@@ -1366,7 +1376,14 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
           onDownload={onDownload}
           closeRef={closeRef}
           actions={actions}
-          line={actions !== undefined ? viewerBarLine(null, subtitle) : null}
+          line={
+            back
+              ? viewerBarLine(kind === 'pdf' ? pages : null, subtitle)
+              : actions !== undefined
+                ? viewerBarLine(null, subtitle)
+                : null
+          }
+          back={back}
         />
         {details !== null ? (
           <div className="relative z-raised flex shrink-0 justify-center px-14 pb-1">
@@ -1409,7 +1426,7 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
             </Button>
           </div>
         ) : null}
-        {pages !== null && kind === 'pdf' ? (
+        {pages !== null && kind === 'pdf' && !back ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] flex justify-center">
             <span
               data-page-counter=""
@@ -1438,6 +1455,8 @@ export function FileViewerFallback(props: {
   kind: ViewerKind;
   source: FileViewerSource;
   onClose: () => void;
+  /** Comments: "<" (Back) in place of the X. */
+  back?: boolean | undefined;
 }): ReactElement {
   const toneName = viewerTone(props.kind);
   const tone = TONES[toneName];
@@ -1467,11 +1486,15 @@ export function FileViewerFallback(props: {
         <button
           ref={closeRef}
           type="button"
-          aria-label="Close"
+          aria-label={props.back === true ? 'Back' : 'Close'}
           onClick={props.onClose}
           className={tone.bar}
         >
-          <IconX size={ICON_SIZE.control} />
+          {props.back === true ? (
+            <IconChevronLeft size={ICON_SIZE.control} />
+          ) : (
+            <IconX size={ICON_SIZE.control} />
+          )}
         </button>
       </div>
       <div className="flex flex-1 items-center justify-center">
@@ -1518,6 +1541,7 @@ export function FileViewer(props: FileViewerProps): ReactElement | null {
             kind={props.kind}
             source={props.source}
             onClose={props.onClose}
+            back={props.backBar}
           />
         }
       >
