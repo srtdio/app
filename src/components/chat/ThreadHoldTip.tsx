@@ -1,5 +1,6 @@
 // The one-time thread tip (H6) above the composer. Storage rules live in
 // src/lib/chat/thread-tip.ts. Tokens only, so light and dark stay at parity.
+// Flat look: no frame or fill, a --border hairline above it.
 
 import { useEffect, useState, type ReactElement } from 'react';
 import type { ChatLayout } from '@/components/chat/chat-type';
@@ -24,7 +25,7 @@ export function holdTipView(onDismiss: () => void, layout: ChatLayout = 'touch')
       data-lane="strip"
       className={cn(
         LANE_STRIP,
-        'flex items-center gap-3 rounded-xl border bg-panel-2 py-1 pl-3 pr-1 text-base text-fg-2 lit-card-muted',
+        'flex items-center gap-3 border-t border-border py-1 pl-3 pr-1 text-base text-fg-2',
       )}
     >
       <p className="min-w-0 flex-1">{layout === 'laptop' ? HOLD_TIP_TEXT_LAPTOP : HOLD_TIP_TEXT}</p>

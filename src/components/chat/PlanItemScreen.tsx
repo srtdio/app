@@ -1737,7 +1737,7 @@ export function PlanItemScreen(props: {
               {askingChanges ? (
                 <div
                   data-plan-ask-hint=""
-                  className="flex items-center gap-2 rounded-xl bg-panel-2 py-1 pl-3 pr-1 text-md text-fg-2 lit-card-muted"
+                  className="flex items-center gap-2 border-t border-border py-1 pl-3 pr-1 text-md text-fg-2"
                 >
                   <p className="min-w-0 flex-1 py-2">{ASK_CHANGES_HINT}</p>
                   <Button

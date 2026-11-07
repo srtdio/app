@@ -14,7 +14,10 @@ describe('X7 H6: hold tip view', () => {
     expect(out).toContain('Got it');
     expect(out).toContain('h-11');
     expect(out).toContain('min-w-11');
-    expect(out).toContain('bg-panel-2');
+    // Flat look: a hairline above, no card frame or grey fill.
+    expect(out).toContain('border-t border-border');
+    expect(out).not.toContain('lit-card-muted');
+    expect(out).not.toContain('bg-panel-2');
     // No raw colour literal (the hash is built so the token check passes).
     expect(out).not.toMatch(new RegExp(`${String.fromCharCode(35)}[0-9a-f]{3,6}\\b|rgb\\(`, 'i'));
     expect(out).not.toContain('\u2014');
