@@ -286,17 +286,18 @@ export function boxText(box: Box): string {
 }
 
 /** ui/ListCard's geometry (src/components/ui/ListCard.tsx). */
-export const LIST_CARD_PICTURE_PX = 72;
-/** The card's inner padding: the picture sits this far inside the border. */
-export const LIST_CARD_INSET_PX = 16;
+export const LIST_CARD_PICTURE_PX = 48;
+/** The card's inner padding: the picture sits this far inside the border (left, and top: centred in 74). */
+export const LIST_CARD_INSET_PX = 12;
 /** Picture to text column. */
 export const LIST_CARD_GAP_PX = 12;
 /**
- * Every ui/ListCard in all six lists (Pipeline, Briefs, Assets, the Chat list,
- * Activity, the Plan tab and its Bank) is this tall: 1 + 16 + (20 + 4 + 36 + 4
- * + 20) + 16 + 1 (border, padding, the three lines; the 72 picture never sets it).
+ * Every ui/ListCard in all seven lists (Pipeline, Briefs, Assets, the Chat list,
+ * Activity, the Plan tab and its Bank) is this tall: 1 + 12 + 48 + 12 + 1
+ * (border, padding, the 48 picture; the two 20 lines and the 4 between, 44,
+ * centre inside it).
  */
-export const LIST_CARD_HEIGHT_PX = 118;
+export const LIST_CARD_HEIGHT_PX = 74;
 /** Cards are the same height (on a screen, and LIST_CARD_HEIGHT_PX) within this many px. */
 export const LIST_CARD_HEIGHT_TOLERANCE_PX = 1;
 /** Sizes and offsets within this many px are equal (sub-pixel layout rounding). */
@@ -318,8 +319,8 @@ const near = (a: number, b: number, tolerance = LIST_CARD_PX_TOLERANCE): boolean
 
 /**
  * The list card rule: every card on a screen has the same height (within 1px),
- * and that height is LIST_CARD_HEIGHT_PX on every screen, so the six lists'
- * cards are one height across the app; each card's picture is 72x72, on the left, 16 inside the card's border
+ * and that height is LIST_CARD_HEIGHT_PX (74) on every screen, so the seven lists'
+ * cards are one height across the app; each card's picture is 48x48, on the left, 12 inside the card's border
  * (left and top), with the text column 12 after it. Pure.
  */
 export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
@@ -345,12 +346,12 @@ export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
     }
     const p = c.picture;
     if (!near(p.width, LIST_CARD_PICTURE_PX) || !near(p.height, LIST_CARD_PICTURE_PX)) {
-      out.push(`${c.label} picture is ${p.width}x${p.height}, not 72x72`);
+      out.push(`${c.label} picture is ${p.width}x${p.height}, not 48x48`);
     }
     const left = p.x - c.card.x - c.borderLeft;
     const top = p.y - c.card.y - c.borderTop;
     if (!near(left, LIST_CARD_INSET_PX) || !near(top, LIST_CARD_INSET_PX)) {
-      out.push(`${c.label} picture sits ${left},${top} inside the card, not 16,16 (left, top)`);
+      out.push(`${c.label} picture sits ${left},${top} inside the card, not 12,12 (left, top)`);
     }
     if (c.text !== null) {
       const gap = c.text.x - (p.x + p.width);
