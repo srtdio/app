@@ -86,8 +86,8 @@ import {
   bodyLinkClass,
   markSearchWords,
   renderBodyLinks,
-  renderFormatted,
   renderMessageBody,
+  renderRich,
 } from '@/components/chat/message-body';
 import { Avatar } from '@/components/ui/Avatar';
 import { LANE_BOTTOM_CLEAR, LANE_TOP_CLEAR } from '@/components/ui/layout';
@@ -2003,9 +2003,10 @@ export function renderBodyWithMentions(
   if (splitMentions(body).every((segment) => segment.kind === 'text')) {
     return renderMessageBody(body, mine, currentOrigin(), highlight);
   }
-  // Formatting is the outer layer; mentions and links render inside each
-  // styled segment, so *hey @[id]* is a bold mention.
-  return renderFormatted(body, (text) => mentionRuns(text, mine, ctx, highlight));
+  // Blocks, then formatting, are the outer layers; mentions and links render
+  // inside each styled segment, so *hey @[id]* is a bold mention and a list
+  // item can hold one.
+  return renderRich(body, (text) => mentionRuns(text, mine, ctx, highlight));
 }
 
 /** One styled segment's text: mention tokens as "@Name", links between. */
@@ -2549,8 +2550,9 @@ export function MessageBubble(props: {
   const hasAttachments = message.attachments.length > 0;
   const quotedMine =
     reply !== null && reply.authorUserId !== null && reply.authorUserId === props.viewerUserId;
+  // A div: a list or quote in the body is a block (never inside a p).
   const body = (
-    <p
+    <div
       data-msg-body=""
       data-selecting-text={textSelect ? '' : undefined}
       className={cn(bodyText(layout), textSelect && SELECTING_TEXT_BODY)}
@@ -2564,7 +2566,7 @@ export function MessageBubble(props: {
         highlight: props.searchWords ?? [],
       })}
       {spacer}
-    </p>
+    </div>
   );
   // Only the first external link gets a card (WhatsApp rule), above the text.
   // Links to this app's own pages keep their in-app link and get no card.
@@ -7203,6 +7205,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         <Composer
           key={channelKey}
           channelId={channelId}
+          expandTitle={props.title}
           inputRef={composerInputRef}
           focusOnMount={finePointer && view === null}
           onSend={composerSend}
@@ -7372,6 +7375,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           {selectionBar ?? (
             <Composer
               key={`thread:${view.rootId}`}
+              expandTitle={viewTitle}
               inputRef={viewComposerInputRef}
               focusOnMount={finePointer}
               onSend={viewSend}

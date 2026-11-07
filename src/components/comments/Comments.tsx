@@ -22,8 +22,8 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { UnsafeLinkButton } from '@/components/ui/UnsafeLinkSheet';
 import { checkLink } from '@/lib/links/safety';
 import { parseExternalLink } from '@/lib/links';
-import { firstExternalUrl } from '@/lib/chat/message-links';
-import { renderFormatted } from '@/components/chat/message-body';
+import { currentOrigin, firstExternalUrl } from '@/lib/chat/message-links';
+import { renderRich, withTextLinks } from '@/components/chat/message-body';
 import { highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import {
   FOCUS_FAILED_COPY,
@@ -596,9 +596,10 @@ function CommentLink(props: { url: string }): ReactNode {
 }
 
 /**
- * A comment body (or a brief's objective / brand requirements): WhatsApp
- * formatting outermost, then mentions, links and search marks inside each
- * styled segment. A body with no formatting renders exactly as before.
+ * A comment body (or a brief's objective / brand requirements): Slack blocks
+ * and WhatsApp formatting outermost, then [text](url) links, mentions, links
+ * and search marks inside each styled segment. A body with no formatting
+ * renders exactly as before.
  */
 export function renderCommentBody(
   body: string,
@@ -608,7 +609,10 @@ export function renderCommentBody(
 ): ReactNode[] {
   // One card slot across segments: the card's link is shown there, once.
   const card = { url: cardUrl };
-  return renderFormatted(body, (text) => commentRuns(text, nameOf, words, card));
+  return renderRich(
+    body,
+    withTextLinks((text) => commentRuns(text, nameOf, words, card), false, currentOrigin(), words),
+  );
 }
 
 function commentRuns(
@@ -2709,14 +2713,14 @@ export function Comments({
                 opts.circle,
               )}
               {comment.body.trim() !== '' ? (
-                <p
+                <div
                   className={cn(
                     'text-base whitespace-pre-wrap [overflow-wrap:anywhere]',
                     opts.muted === true ? 'text-fg-2' : 'text-fg',
                   )}
                 >
                   {renderCommentBody(comment.body, handleOf, searchWords, cardUrl)}
-                </p>
+                </div>
               ) : null}
               <CommentLinkCard body={comment.body} url={cardUrl} />
               {attachments.length > 0 ? (

@@ -88,7 +88,9 @@ export function parseBlocks(body: string): readonly Block[] {
 }
 
 /** One [text](url) or bare text run inside a line. Pure. */
-export type LinkSegment = { kind: 'text'; text: string } | { kind: 'link'; text: string; url: string };
+export type LinkSegment =
+  | { kind: 'text'; text: string }
+  | { kind: 'link'; text: string; url: string };
 
 /** Split text into [text](url) links and the text between. Pure, linear. */
 export function splitLinks(text: string): LinkSegment[] {
@@ -165,7 +167,9 @@ export function toggleBlock(value: string, start: number, end: number, kind: Blo
   const outLines = lines.map((line, idx) => {
     const p = linePrefix(line);
     const bare = p !== null ? line.slice(p.len) : line;
-    const next = all ? bare : `${kind === 'ol' ? `${idx + 1}. ` : kind === 'ul' ? '- ' : '> '}${bare}`;
+    const next = all
+      ? bare
+      : `${kind === 'ol' ? `${idx + 1}. ` : kind === 'ul' ? '- ' : '> '}${bare}`;
     const d = next.length - line.length;
     if (idx === 0) delta0 = d;
     deltaEnd += d;
@@ -210,7 +214,13 @@ export function continueBlock(value: string, caret: number): TextEdit | null {
   }
   const prefix = p.kind === 'ol' ? `${(p.n ?? 0) + 1}. ` : p.kind === 'ul' ? '- ' : '> ';
   const insert = `\n${prefix}`;
-  return { from: caret, to: caret, insert, selStart: caret + insert.length, selEnd: caret + insert.length };
+  return {
+    from: caret,
+    to: caret,
+    insert,
+    selStart: caret + insert.length,
+    selEnd: caret + insert.length,
+  };
 }
 
 /** The block kind of the line the caret sits on, or null. Pure. */

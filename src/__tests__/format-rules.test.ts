@@ -75,11 +75,14 @@ describe('format rules', () => {
 
   it('chat and comment bodies render through the formatting renderer', () => {
     expect(read('components/chat/message-body.tsx')).toContain('parseFormat(body)');
-    expect(read('components/chat/MessageThread.tsx')).toContain('renderFormatted(body');
-    expect(read('components/chat/PlanItemThread.tsx')).toContain('renderFormatted(body');
-    expect(read('components/comments/Comments.tsx')).toContain('renderFormatted(body');
-    expect(read('components/pages/BriefDetailPage.tsx')).toContain(
-      'renderFormatted(brief.objective',
+    // Blocks (lists, quotes) are the outer layer: whole bodies go through renderRich.
+    expect(read('components/chat/message-body.tsx')).toContain('parseBlocks(body)');
+    expect(read('components/chat/MessageThread.tsx')).toContain('renderRich(body');
+    expect(read('components/chat/PlanItemThread.tsx')).toContain('renderRich(body');
+    expect(read('components/comments/Comments.tsx')).toMatch(/renderRich\(\s*body/);
+    expect(read('components/pages/BriefDetailPage.tsx')).toMatch(/renderRich\(\s*brief\.objective/);
+    expect(read('components/pages/BriefDetailPage.tsx')).toMatch(
+      /renderRich\(\s*brief\.brand_requirements/,
     );
   });
 

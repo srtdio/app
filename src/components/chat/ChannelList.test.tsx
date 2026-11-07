@@ -595,6 +595,14 @@ describe('chat list lines hide formatting markers', () => {
     expect(draftLine('*ship* _today_', 'w1')).toBe('ship today');
     expect(draftLine('snake_case_name', 'w1')).toBe('snake_case_name');
   });
+
+  it('a link reads as its text; lists and quotes read as display text', () => {
+    expect(line('see [the deck](https://a.test/x)', 'You')).toBe('You: see the deck');
+    expect(line('- one\n- two')).toBe('• one\n• two');
+    expect(line('3. third\n4. fourth')).toBe('3. third\n4. fourth');
+    expect(line('> quoted *words*')).toBe('quoted words');
+    expect(draftLine('[*bold* link](https://a.test)', 'w1')).toBe('bold link');
+  });
 });
 
 describe('chat list time: formatAgo on the list clock', () => {

@@ -1872,12 +1872,12 @@ export function PlanItemScreen(props: {
                 ) : null}
               </div>
               {description !== '' ? (
-                <p
+                <div
                   data-plan-description=""
                   className="whitespace-pre-wrap break-words text-base text-fg-2"
                 >
                   {renderMessageBody(description, false)}
-                </p>
+                </div>
               ) : null}
               <ConceptLinkCard text={description} />
             </Card>

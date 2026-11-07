@@ -108,7 +108,10 @@ export function splitMediaFiles(items: readonly ChannelAttachmentItem[]): {
   return { images, files };
 }
 
-/** External urls of link rows, in body order; links to this app's posts or briefs are cards, not links. */
+/**
+ * External urls of link rows ([text](url) included), in body order; links to
+ * this app's posts or briefs are cards, not links.
+ */
 export function toLinkItems(
   rows: readonly LinkRow[],
   appOrigin: string | null,
@@ -116,7 +119,7 @@ export function toLinkItems(
 ): ChannelLinkItem[] {
   return withoutGone(rows, (row) => row.id).flatMap((row) =>
     tokenize(row.body ?? '').flatMap((segment) =>
-      segment.kind === 'url' && classify(segment.url, appOrigin, routes).kind === 'external'
+      segment.kind !== 'text' && classify(segment.url, appOrigin, routes).kind === 'external'
         ? [
             {
               messageId: row.id,
