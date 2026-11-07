@@ -67,11 +67,13 @@ describe('1. caption block (mock P1)', () => {
 });
 
 describe('2 / 5. comments header, stage section once, sticky bar', () => {
-  it('drops the phone Feedback h2 and the Comments eyebrow; Comments own the header and the strip', () => {
+  it('drops the phone Feedback h2 and the Comments eyebrow; Comments own the header and the progress row', () => {
     expect(PAGE).not.toContain('>Feedback</h2>');
     expect(PAGE).not.toContain('>\n                  Comments\n                </span>');
     expect(PAGE).toContain('showHeader');
-    expect(PAGE).toMatch(/belowHeader=\{\s*<CheckpointStrip/);
+    // Mounted under the list's live state, drawn in the pinned slot under the bar.
+    expect(PAGE).toMatch(/belowHeader=\{\s*<CheckpointProgress/);
+    expect(PAGE).not.toContain('<CheckpointStrip');
   });
 
   it('renders the stage section exactly once (one conditional), so role=alert never duplicates', () => {

@@ -148,7 +148,7 @@ vi.mock('@/components/comments/Comments', async (importOriginal) => {
 });
 vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/pages/pcs/CheckpointStrip')>()),
-  CheckpointStrip: () => null,
+  CheckpointProgress: () => null,
 }));
 vi.mock('@/components/pages/pcs/PostDecisionBar', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/pages/pcs/PostDecisionBar')>();

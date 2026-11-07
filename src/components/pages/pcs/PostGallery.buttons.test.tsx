@@ -118,31 +118,23 @@ describe('PostGallery buttons', () => {
     expectShared(tags[0]!);
   });
 
-  it('reorder bar: Move left, Move right, Cancel secondary; Save order primary', () => {
+  it('reorder: no button bar, only the photo tiles (hold and drag, saved on drop)', () => {
     const model: ReorderModel = {
       items: [item(0), item(1), item(2)],
       cache,
       presignEnabled: false,
       ratio: 4 / 5,
       drag: null,
-      selectedId: 'aa-1',
-      changed: true,
       saving: false,
       error: null,
-      onSelect: vi.fn(),
       onMove: vi.fn(),
       onTilePointerDown: vi.fn(),
       onTilePointerMove: vi.fn(),
       onTilePointerUp: vi.fn(),
-      onSave: vi.fn(),
-      onCancel: vi.fn(),
+      onTilePointerCancel: vi.fn(),
     };
-    const tags = buttonTags(renderToStaticMarkup(reorderView(model))).filter(
-      (tag) => !tag.includes('data-reorder-tile'),
-    );
-    expect(tags).toHaveLength(4);
-    for (const tag of tags) expectShared(tag);
-    const save = tags.find((tag) => tag.includes('data-reorder-save'));
-    expect(classOf(save ?? '')).toContain('bg-accent');
+    const tags = buttonTags(renderToStaticMarkup(reorderView(model)));
+    expect(tags).toHaveLength(3);
+    expect(tags.every((tag) => tag.includes('data-reorder-tile'))).toBe(true);
   });
 });

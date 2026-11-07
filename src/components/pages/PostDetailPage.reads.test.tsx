@@ -191,7 +191,7 @@ vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => {
   const { useEffect } = await import('react');
   return {
     ...actual,
-    CheckpointStrip: (props: { checkpoints?: unknown }) => {
+    CheckpointProgress: (props: { checkpoints?: unknown }) => {
       h.stripRows.push(props.checkpoints === undefined ? 'absent' : props.checkpoints);
       useEffect(() => {
         h.stripMounts += 1;

@@ -11,23 +11,19 @@ import type { CommentResolveArgs, DomainError } from '@srtdio/rpc';
 import { errorText } from '@/lib/error-copy';
 
 /**
- * Build the comment_resolve args. The note rides as p_resolution_note ONLY on a
- * resolve (the proc ignores it on reopen and only stores it on a real
- * open-to-resolved transition); a blank note is omitted entirely so the proc's
- * trim-to-null never even sees it. trace is always explicit.
+ * Build the comment_resolve args: one tap, no note (the resolution-note field
+ * is retired; the column stays and the proc stores null). trace is always
+ * explicit.
  */
 export function buildResolveArgs(input: {
   commentId: string;
   resolved: boolean;
-  note?: string;
   traceId: string;
 }): CommentResolveArgs {
-  const trimmed = input.note?.trim() ?? '';
   return {
     p_comment_id: input.commentId,
     p_resolved: input.resolved,
     p_trace_id: input.traceId,
-    ...(input.resolved && trimmed !== '' ? { p_resolution_note: trimmed } : {}),
   };
 }
 

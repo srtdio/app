@@ -79,9 +79,7 @@ function expectShared(tag: string): void {
 
 describe('PostLightbox buttons', () => {
   it('close, prev, next and the manage bar are 44px IconButtons on overlay tokens', () => {
-    const html = renderToStaticMarkup(
-      lightboxView(props({ manage: { onAddAfter: vi.fn(), onRemove: vi.fn() } })),
-    );
+    const html = renderToStaticMarkup(lightboxView(props({ manage: { onAddAfter: vi.fn() } })));
     for (const label of ['Close viewer', 'Previous image', 'Next image']) {
       const tag = tagFor(html, `aria-label="${label}"`);
       expectShared(tag);
@@ -89,32 +87,12 @@ describe('PostLightbox buttons', () => {
       expect(classOf(tag)).toContain('bg-overlay-surface');
       expect(classOf(tag)).toContain('text-overlay-fg');
     }
-    for (const label of ['Download', 'Add image', 'Delete image']) {
+    for (const label of ['Download', 'Add image']) {
       const tag = tagFor(html, `aria-label="${label}"`);
       expectShared(tag);
       expect(classOf(tag)).toContain('text-overlay-fg');
     }
-  });
-
-  it('the remove confirm row: Cancel ghost, Remove secondary with bad ink', () => {
-    const html = renderToStaticMarkup(
-      lightboxView(
-        props({
-          manage: { onAddAfter: vi.fn(), onRemove: vi.fn() },
-          removeConfirming: true,
-          onCancelRemove: vi.fn(),
-          onConfirmRemove: vi.fn(),
-        }),
-      ),
-    );
-    const buttons = html.match(/<button[^>]*>[^<]*<\/button>/g) ?? [];
-    const cancel = buttons.find((b) => b.includes('>Cancel<'));
-    const remove = buttons.find((b) => b.includes('>Remove<'));
-    if (cancel === undefined || remove === undefined) throw new Error('no confirm row');
-    expectShared(cancel);
-    expectShared(remove);
-    expect(classOf(remove)).toContain('text-bad');
-    expect(classOf(remove)).toContain('lit-btn-secondary');
-    expect(classOf(remove)).not.toContain('bg-bad-solid');
+    // The duplicate Delete image is cut (Remove image stays, behind the Undo strip).
+    expect(html).not.toContain('aria-label="Delete image"');
   });
 });

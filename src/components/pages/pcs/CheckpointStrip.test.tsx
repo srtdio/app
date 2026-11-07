@@ -18,9 +18,9 @@ vi.mock('@/components/comments/flash-node', () => ({
 }));
 
 import {
-  CheckpointStrip,
+  CheckpointProgress,
+  CheckpointProgressRow,
   CHECKPOINT_SELECT,
-  STRIP_SURFACE_CLASS,
   checkpointChips,
   checkpointCounts,
   chipCircleClass,
@@ -28,7 +28,7 @@ import {
 } from '@/components/pages/pcs/CheckpointStrip';
 import type {
   CheckpointChipRow,
-  CheckpointStripProps,
+  CheckpointProgressProps,
 } from '@/components/pages/pcs/CheckpointStrip';
 import { commentDomId } from '@/components/comments/Comments';
 import { IconButton } from '@/components/ui/IconButton';
@@ -230,11 +230,10 @@ describe('checkpointChips', () => {
   });
 });
 
-function stripProps(overrides: Partial<CheckpointStripProps> = {}): CheckpointStripProps {
+function progressProps(overrides: Partial<CheckpointProgressProps> = {}): CheckpointProgressProps {
   return {
     workspaceId: 'ws-1',
     postId: 'post-1',
-    viewerIsClient: false,
     refreshSignal: 0,
     ...overrides,
   };
@@ -244,13 +243,49 @@ describe('render (empty state)', () => {
   // The self-fetch runs in an effect node SSR never flushes, so rows stay empty:
   // this exercises the "return null when there are no checkpoints" invariant.
   it('renders nothing when the post has no checkpoints', () => {
-    expect(renderToStaticMarkup(<CheckpointStrip {...stripProps()} />)).toBe('');
+    expect(renderToStaticMarkup(<CheckpointProgress {...progressProps()} />)).toBe('');
+    const none = <CheckpointProgress {...progressProps({ checkpoints: [] })} />;
+    expect(renderToStaticMarkup(none)).toBe('');
+  });
+
+  it('a pinned slot that is not mounted yet (or hidden behind the skeleton) draws nothing', () => {
+    const checkpoints = [
+      { id: 'a', ledger_seq: 1, resolved_at: null, accepted_at: null, deleted_at: null },
+    ];
+    const html = renderToStaticMarkup(
+      <CheckpointProgress {...progressProps({ checkpoints, target: null })} />,
+    );
+    expect(html).toBe('');
+    // Embedded (no target): the row in place.
+    const inPlace = <CheckpointProgress {...progressProps({ checkpoints })} />;
+    expect(renderToStaticMarkup(inPlace)).toContain('data-checkpoint-progress-row');
   });
 });
 
-describe('strip surface (sticky background matches its card)', () => {
-  it('uses the comments card surface token, not the page background', () => {
-    expect(STRIP_SURFACE_CLASS).toBe('bg-panel-2');
-    expect(STRIP_SURFACE_CLASS).not.toContain('bg-bg');
+describe('the progress row (retired floating strip)', () => {
+  const rows: CheckpointChipRow[] = [
+    { id: 'a', ledger_seq: 1, resolved_at: null, accepted_at: null },
+    { id: 'b', ledger_seq: 2, resolved_at: 't', accepted_at: 't' },
+  ];
+
+  it('pinned: the page gutter and a top hairline, never sticky, no surface of its own', () => {
+    const html = renderToStaticMarkup(
+      <CheckpointProgressRow rows={rows} counts={{ resolved: 1, total: 2 }} pinned />,
+    );
+    expect(html).toContain('border-t');
+    expect(html).toContain('px-4 md:px-6');
+    expect(html).toContain('h-12');
+    expect(html).not.toContain('sticky');
+    expect(html).not.toContain('lit-header');
+    expect(html).not.toContain('bg-panel-2');
+    expect(html).toContain('1 of 2 resolved');
+  });
+
+  it('in place (embedded): no edge of its own', () => {
+    const html = renderToStaticMarkup(
+      <CheckpointProgressRow rows={rows} counts={{ resolved: 1, total: 2 }} pinned={false} />,
+    );
+    expect(html).not.toContain('border-t');
+    expect(html).not.toContain('sticky');
   });
 });

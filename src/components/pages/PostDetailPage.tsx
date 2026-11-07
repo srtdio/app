@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactElement,
   type ReactNode,
 } from 'react';
@@ -65,7 +66,7 @@ import { PinAnnotationComposer } from '@/components/pages/pcs/PinAnnotationCompo
 import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
 import { buildPinData } from '@/components/pages/pcs/pin-annotations';
 import type { PinDot } from '@/components/pages/pcs/pin-annotations';
-import { CheckpointStrip } from '@/components/pages/pcs/CheckpointStrip';
+import { CheckpointProgress, type CheckpointCounts } from '@/components/pages/pcs/CheckpointStrip';
 import { PostDetailsSheet } from '@/components/pages/pcs/PostDetailsSheet';
 import { SlideActionsSheet } from '@/components/pages/pcs/SlideActionsSheet';
 import {
@@ -73,7 +74,6 @@ import {
   type VersionThumbs,
 } from '@/components/pages/pcs/VersionHistorySheet';
 import { ReadOnlyVersionView } from '@/components/pages/pcs/ReadOnlyVersionView';
-import { CompareVersionsView } from '@/components/pages/pcs/CompareVersionsView';
 import {
   currentVersionNumber as currentVersionNumberOf,
   parseSnapshot,
@@ -242,8 +242,42 @@ export function postPageGrid(embedded: boolean): {
     head: 'min-w-0 lg:col-start-1 lg:row-start-1',
     media: 'min-w-0 lg:col-start-1 lg:row-start-2',
     body: 'min-w-0 lg:col-start-1 lg:row-start-3 lg:self-start',
-    side: 'min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:overscroll-contain',
+    // --pin-h: the pinned exit block's height (pinBlockStyle), so the column
+    // sticks clear of it; unset (embedded) it is 0, the old top-4.
+    side: 'min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-3 lg:sticky lg:top-[calc(var(--pin-h,0px)+1rem)] lg:self-start lg:max-h-[calc(100dvh-6rem-var(--pin-h,0px))] lg:overflow-y-auto lg:overscroll-contain',
   };
+}
+
+/**
+ * The pinned exit block's height as --pin-h on the page grid: the bar (56px
+ * plus the status bar strip it covers in phone page mode) and, while the post
+ * has checkpoints, the 48px progress row under it. The checkpoints column
+ * sticks below it and a section scrolled into view clears it. Pure.
+ */
+export function pinBlockStyle(hasCheckpointRow: boolean): CSSProperties {
+  return {
+    ['--pin-h' as string]: hasCheckpointRow
+      ? 'calc(6.5rem + var(--shell-safe-top, 0px))'
+      : 'calc(3.5rem + var(--shell-safe-top, 0px))',
+  };
+}
+
+/**
+ * The comment composers' "+" tray opens above its composer (absolutely placed).
+ * On laptop the checkpoints column is its own scroller and clips at its edge,
+ * so a tray opening near the column's top is brought into view (nearest: when
+ * it already shows, nothing moves). Runs after the tap's commit (a microtask:
+ * React flushes the click's update before it); no wait, no read.
+ */
+export function revealOpeningTray(event: { target: EventTarget | null }): void {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const plus = target.closest('[data-plus][aria-expanded="false"]');
+  const trayId = plus?.getAttribute('aria-controls') ?? null;
+  if (trayId === null) return;
+  queueMicrotask(() => {
+    document.getElementById(trayId)?.scrollIntoView({ block: 'nearest' });
+  });
 }
 
 /** The caption Save label: the version this save creates, or plain Save before any version. */
@@ -273,7 +307,6 @@ export function PostDetailPage({
   onNavigateAway,
   actionsOpen: actionsOpenProp,
   onActionsOpenChange,
-  onOpenInPipeline,
   resolving = false,
 }: {
   postId?: string;
@@ -299,7 +332,10 @@ export function PostDetailPage({
   actionsOpen?: boolean;
   /** Embedded only: the sheet asks to open or close. */
   onActionsOpenChange?: (open: boolean) => void;
-  /** Embedded only: the sheet's first row, Open in pipeline. */
+  /**
+   * Retired with the sheet's Open in pipeline row: accepted and ignored until
+   * the plan item hosts stop passing it.
+   */
   onOpenInPipeline?: () => void;
 } = {}) {
   const params = useParams();
@@ -462,6 +498,17 @@ export function PostDetailPage({
   // The failure shown inside the open composer sheet (text kept).
   const [composerError, setComposerError] = useState<string | null>(null);
 
+  // The pinned block under the exit bar: the slot the checkpoint progress row
+  // draws into (a callback ref, so the row appears in the same commit), and
+  // whether the post has checkpoints (the block's height, --pin-h).
+  const [pinSlot, setPinSlot] = useState<HTMLDivElement | null>(null);
+  const [checkpointTotal, setCheckpointTotal] = useState(0);
+  const handleCheckpointCounts = useCallback(
+    (counts: CheckpointCounts) => setCheckpointTotal(counts.total),
+    [],
+  );
+  const pinStyle = embedded ? undefined : pinBlockStyle(checkpointTotal > 0);
+
   // Flow B 33: the live thread counts lifted from Comments (every open
   // top-level thread, checkpoints included, optimistic resolves too).
   const [commentCounts, setCommentCounts] = useState<CommentCounts>({ open: 0, resolved: 0 });
@@ -569,11 +616,8 @@ export function PostDetailPage({
   // when set to a non-current version, puts the whole PCS into read-only mode.
   const [historyOpen, setHistoryOpen] = useState(false);
   const [viewingVersionId, setViewingVersionId] = useState<string | null>(null);
-  // Compare mode (F7.6): the picked (earlier, later) version id pair, or null.
-  // Mutually exclusive with viewingVersionId below.
-  const [compareIds, setCompareIds] = useState<{ fromId: string; toId: string } | null>(null);
 
-  // Switching posts leaves read-only / compare mode and closes the sheet so a
+  // Switching posts leaves read-only mode and closes the sheet so a
   // stale version never bleeds across navigations. Only an actual switch: on
   // mount everything already starts clean, and the comments section (mounted
   // on the first render) may lift its counts before this parent effect runs.
@@ -583,7 +627,6 @@ export function PostDetailPage({
     resetForPost.current = postId;
     setHistoryOpen(false);
     setViewingVersionId(null);
-    setCompareIds(null);
     // A stale open count never bleeds across posts; Comments re-lifts the
     // real counts once its fetch for the new post lands.
     setCommentCounts({ open: 0, resolved: 0 });
@@ -833,24 +876,8 @@ export function PostDetailPage({
     [viewingVersion],
   );
 
-  // Compare mode resolves its two version snapshots the same defensive way the
-  // read-only path does. An id that no longer resolves drops the mode; captions
-  // come straight from parseSnapshot (never diffed against undefined).
-  const compareFrom = useMemo(
-    () =>
-      compareIds === null ? null : (versionViews.find((v) => v.id === compareIds.fromId) ?? null),
-    [compareIds, versionViews],
-  );
-  const compareTo = useMemo(
-    () =>
-      compareIds === null ? null : (versionViews.find((v) => v.id === compareIds.toId) ?? null),
-    [compareIds, versionViews],
-  );
-  const comparing = compareFrom !== null && compareTo !== null;
-
-  // Both history surfaces suppress every write affordance below; they are
-  // mutually exclusive, enforced by the handlers that enter each mode.
-  const readOnly = viewingVersion !== null || comparing;
+  // The old-version view suppresses every write affordance below.
+  const readOnly = viewingVersion !== null;
   // A host-owned open (the plan item's header button) while the sheet cannot
   // mount (loading, not found, an old version) closes again at once, so the
   // sheet never pops open later on its own.
@@ -1472,15 +1499,20 @@ export function PostDetailPage({
   // The post screen's top bar is ui/HeaderBar (Back "<" with the leading
   // pull, the stage line in the title slot, the ⋯ last). The post title is
   // the page's one h1 (Display, below), so the bar's title is never an h1.
+  // It opens over the app, so it is pinned while the page scrolls; the slot
+  // under it pins with it and holds the checkpoint progress row (portalled in
+  // from the comments list, where the live checkpoint state lives).
   const topBar = (title: ReactNode, actions?: ReactNode): ReactElement => (
     <HeaderBar
       barRef={pageAnchorRef}
       compact
+      pinned
       onBack={leave}
       title={title}
       titleSlot={<span className={textRole('title', 'truncate')}>{title}</span>}
       {...(actions !== undefined ? { actions } : {})}
       className={SAFE_TOP_BAR_CLASS}
+      below={<div data-checkpoint-pin-slot="" ref={setPinSlot} />}
     />
   );
 
@@ -1490,8 +1522,10 @@ export function PostDetailPage({
 
   // The checkpoints column (spec D1: its own column at lg, sticky and scrolling
   // within the viewport; below lg it follows the caption). Comments own their
-  // header row ("Checkpoints", Open / All); the checkpoint strip sits under it,
-  // only when there are checkpoints (it renders nothing otherwise).
+  // header row ("Checkpoints", Open / All). The checkpoint progress row mounts
+  // under it (belowHeader, inside the list's live checkpoint state) and draws
+  // in the pinned slot under the exit bar, only when there are checkpoints and
+  // the section is shown; embedded (no bar) it stays in place.
   //
   // It is the SAME element in the skeleton and the loaded page (same place in
   // the tree), so Comments and the strip mount on the first render and their
@@ -1513,7 +1547,8 @@ export function PostDetailPage({
         <section
           id={COMMENTS_SECTION_ID}
           hidden={pending}
-          className="scroll-mt-16 rounded-xl border bg-panel-2 p-4 lit-card-muted"
+          onClick={revealOpeningTray}
+          className="scroll-mt-[calc(var(--pin-h,0px)+0.5rem)] rounded-xl border bg-panel-2 p-4 lit-card-muted"
           {...(focusInsetBottom !== undefined
             ? { style: { ['--focus-inset-bottom' as string]: focusInsetBottom } }
             : {})}
@@ -1543,12 +1578,13 @@ export function PostDetailPage({
                 onCountsChange={handleCommentCounts}
                 sharedCheckpoints={sharedCheckpoints}
                 belowHeader={
-                  <CheckpointStrip
+                  <CheckpointProgress
                     workspaceId={commentsWorkspaceId}
                     postId={postId}
-                    viewerIsClient={clientRole}
                     refreshSignal={commentsRefresh}
                     checkpoints={checkpointRows}
+                    onCounts={handleCheckpointCounts}
+                    {...(embedded ? {} : { target: pending ? null : pinSlot })}
                   />
                 }
               />
@@ -1580,7 +1616,7 @@ export function PostDetailPage({
         {/* N12: a skeleton of the page's own shapes (title, details row, media,
             caption, comments) from the existing tokens, with a screen-reader
             label. Flow B 25: it stays until every first-paint read settles. */}
-        <div aria-busy="true" data-post-skeleton="" className={grid.page}>
+        <div aria-busy="true" data-post-skeleton="" className={grid.page} style={pinStyle}>
           <div aria-hidden className={cn(grid.head, 'flex flex-col gap-3')}>
             <Bone lit="flat" as="div" className="h-8 w-3/4 rounded" />
             <div className="flex min-h-11 items-center gap-2">
@@ -1879,7 +1915,7 @@ export function PostDetailPage({
 
   // The post ⋯ menu (ui/ActionMenu): its default trigger at the top right of
   // the header, or, embedded, opened by the host's own header button. Live
-  // PCS only, never an old version or a compare.
+  // PCS only, never an old version.
   const actionMenu = readOnly ? null : (
     <PostActionSheet
       open={actionsOpen}
@@ -1906,7 +1942,6 @@ export function PostDetailPage({
             }
           : undefined
       }
-      {...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}
     />
   );
   mark('post:first-paint');
@@ -1937,8 +1972,8 @@ export function PostDetailPage({
             </>,
           )}
 
-      {/* An old version or a compare: the title stays (one h1), every write
-          affordance is gone. */}
+      {/* An old version: the title stays (one h1), every write affordance is
+          gone. */}
       {readOnly ? (
         <div className={cn(grid.page, 'pb-0')}>
           <div className={grid.head}>
@@ -1949,17 +1984,7 @@ export function PostDetailPage({
         </div>
       ) : null}
 
-      {comparing && compareFrom !== null && compareTo !== null ? (
-        <CompareVersionsView
-          fromVersionNumber={compareFrom.versionNumber}
-          toVersionNumber={compareTo.versionNumber}
-          fromCreatedAt={compareFrom.createdAt}
-          toCreatedAt={compareTo.createdAt}
-          fromCaption={parseSnapshot(compareFrom.snapshot).caption}
-          toCaption={parseSnapshot(compareTo.snapshot).caption}
-          onBack={() => setCompareIds(null)}
-        />
-      ) : readOnly && viewingVersion !== null && currentVersionNumber !== null ? (
+      {readOnly && viewingVersion !== null && currentVersionNumber !== null ? (
         <ReadOnlyVersionView
           versionNumber={viewingVersion.versionNumber}
           currentVersionNumber={currentVersionNumber}
@@ -1970,7 +1995,7 @@ export function PostDetailPage({
           onBack={() => setViewingVersionId(null)}
         />
       ) : (
-        <div ref={landedRef} className={grid.page}>
+        <div ref={landedRef} className={grid.page} style={pinStyle}>
           <div className={cn(grid.head, 'flex flex-col gap-3')}>
             {canEditContent ? (
               editingTitle ? (
@@ -2122,7 +2147,6 @@ export function PostDetailPage({
                       ? (index: number) => openAdd({ mode: 'insertAfter', index })
                       : undefined
                   }
-                  onRemove={canEditContent ? handleRemove : undefined}
                   onActiveIndexChange={setGalleryIndex}
                   saving={gallerySaving}
                   tools={{
@@ -2390,6 +2414,7 @@ export function PostDetailPage({
         caption={post.caption ?? ''}
         handle={workspaceName ?? ''}
         firstMedia={gallery[0] ?? null}
+        slides={gallery.map((item) => ({ item }))}
         cache={cache}
         presignEnabled={presignEnabled}
       />
@@ -2431,13 +2456,7 @@ export function PostDetailPage({
         resolveAuthor={resolveAuthorName}
         thumbs={versionThumbs}
         onSelectVersion={(id) => {
-          setCompareIds(null);
           setViewingVersionId(id);
-          setHistoryOpen(false);
-        }}
-        onCompare={(fromId, toId) => {
-          setViewingVersionId(null);
-          setCompareIds({ fromId, toId });
           setHistoryOpen(false);
         }}
       />

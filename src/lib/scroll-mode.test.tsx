@@ -400,3 +400,14 @@ describe('highlights with the document as the scroller', () => {
     expect(scrollParent(row)).toBe(main);
   });
 });
+
+describe('PINNED_BAR_TOP_CLASS: where a pinned exit bar sticks', () => {
+  it('phone: 0 (the shell drops the Topbar on a detail screen); md and up: below the Topbar var', async () => {
+    const { PINNED_BAR_TOP_CLASS, SHELL_STICKY_TOP_CLASS } = await import('@/lib/scroll-mode');
+    const classes = PINNED_BAR_TOP_CLASS.split(' ');
+    expect(classes).toContain('top-0');
+    // The md: half is the shell's sticky top verbatim (unset on a laptop, so 0 in <main>).
+    expect(classes).toContain(`md:${SHELL_STICKY_TOP_CLASS}`);
+    expect(classes).toHaveLength(2);
+  });
+});

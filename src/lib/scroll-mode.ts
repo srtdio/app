@@ -141,6 +141,17 @@ export const SAFE_TOP_BAR_CLASS =
  */
 export const SHELL_STICKY_TOP_CLASS = 'top-[var(--shell-sticky-top,0px)]';
 
+/**
+ * A pinned exit bar's top (ui/HeaderBar `pinned`): a screen that opens over the
+ * app with its own back "<" (Post detail, Brief detail). On a phone the shell
+ * drops the Topbar there (AppLayout isDetailRoute), so the bar pins at 0 and
+ * covers the status bar strip itself (SAFE_TOP_BAR_CLASS keeps the inset as
+ * top padding). md and up: a touch tablet keeps the sticky Topbar, so the bar
+ * pins below it (--shell-sticky-top); a laptop scrolls <main>, where the var
+ * is unset and the bar pins at 0.
+ */
+export const PINNED_BAR_TOP_CLASS = 'top-0 md:top-[var(--shell-sticky-top,0px)]';
+
 // ---------------------------------------------------------------------------
 // The one device listener. watchScrollDevice() is called once at boot (main.tsx)
 // and registers a single 'change' listener on TOUCH_TABLET_QUERY: it flips when

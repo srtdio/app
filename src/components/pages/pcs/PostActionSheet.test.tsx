@@ -18,7 +18,6 @@ let postCopyLink: (
 ) => string;
 
 let postActionLabels: (opts: {
-  openInPipeline: boolean;
   download: boolean;
   canDelete: boolean;
   removeImage?: boolean;
@@ -65,30 +64,36 @@ describe('postCopyLink', () => {
 });
 
 describe('post actions (W9)', () => {
-  it('Open in pipeline leads when offered, Copy link next; Delete is last and agency only', () => {
-    expect(postActionLabels({ openInPipeline: true, download: true, canDelete: true })).toEqual([
-      'Open in pipeline',
+  it('Copy link leads (Open in pipeline retired); Delete is last and agency only', () => {
+    expect(postActionLabels({ download: true, canDelete: true })).toEqual([
       'Copy link',
       'Send to chat',
       'Download all images',
       'Delete post',
     ]);
-    expect(postActionLabels({ openInPipeline: true, download: false, canDelete: false })).toEqual([
-      'Open in pipeline',
+    expect(postActionLabels({ download: false, canDelete: false })).toEqual([
       'Copy link',
       'Send to chat',
     ]);
-    expect(postActionLabels({ openInPipeline: false, download: false, canDelete: true })).toEqual([
+    expect(postActionLabels({ download: false, canDelete: true })).toEqual([
       'Copy link',
       'Send to chat',
       'Delete post',
     ]);
   });
 
+  it('the menu never offers Open in pipeline', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./PostActionSheet.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).not.toContain('Open in pipeline');
+    expect(src).not.toContain('onOpenInPipeline');
+  });
+
   it('Remove image (moved from the picture ⋮) sits just before Delete post', () => {
     expect(
       postActionLabels({
-        openInPipeline: false,
         download: true,
         canDelete: true,
         removeImage: true,

@@ -15,7 +15,6 @@ import {
   IconChevronRight,
   IconDownload,
   IconPlus,
-  IconTrash,
   IconX,
 } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -230,36 +229,18 @@ const TOOLBAR_SKIN =
   'text-overlay-fg hover:bg-overlay-surface disabled:text-overlay-fg-dim focus-visible:lit-focus ' +
   'focus-visible:outline-overlay-fg/70';
 
-/**
- * The remove-image confirm copy, shared by this viewer's inline confirm and the
- * slide actions sheet so both ask the same question. A gallery may be emptied:
- * deleting the sole image leaves the post with no artwork, so the wording
- * shifts and a consequence line is added.
- */
-export function removeImageConfirmCopy(count: number): {
-  title: string;
-  message: string | null;
-} {
-  return count <= 1
-    ? {
-        title: 'Delete the only image?',
-        message: 'The post goes back to having no artwork, for everyone. The file stays in Assets.',
-      }
-    : { title: 'Remove this image?', message: null };
-}
-
 /** Lightbox download toasts. */
 export const DOWNLOAD_DONE = 'Downloaded';
 export const DOWNLOAD_FAILED = errorText('download', null);
 
 /**
  * The agency manage actions, prewired to the current slide. #26: no per-tap
- * reorder here (each tap saved a version); reordering happens only in the
- * gallery's Reorder mode, one save.
+ * reorder here; reordering is hold-and-drag in the gallery. No Delete image
+ * either: removing a picture is the one Remove image (the post ⋯ menu, the
+ * slide actions sheet), behind the page's Undo strip.
  */
 export interface LightboxManage {
   onAddAfter: () => void;
-  onRemove: () => void;
 }
 
 /** Pointer gesture handlers the zoom layer spreads onto each slide stage. */
@@ -303,19 +284,8 @@ export interface LightboxViewProps {
   rootRef?: Ref<HTMLDivElement> | undefined;
   /** Agency-only manage bar; absent for clients (their bar shows download only). */
   manage?: LightboxManage | undefined;
-  /** Whether the delete confirm row has replaced the bottom-bar controls. */
-  removeConfirming?: boolean;
-  /**
-   * A gallery write is in flight: delete is blocked and the bar
-   * says "Saving…", so two full-list writes never overlap.
-   */
+  /** A gallery write is in flight: the bar says "Saving…". */
   saving?: boolean;
-  /** Delete tapped: swap the bottom bar for the inline confirm row. */
-  onRequestRemove?: (() => void) | undefined;
-  /** Cancel in the confirm row: restore the bottom-bar controls. */
-  onCancelRemove?: (() => void) | undefined;
-  /** Remove in the confirm row: run the existing remove handler, then dismiss. */
-  onConfirmRemove?: (() => void) | undefined;
   /** F5 seam: overlay rendered over the sharp image; nothing when omitted. */
   pinOverlay?: ((item: GalleryItem, index: number) => ReactNode) | undefined;
   /** Swipe-down offset in px (translateY only); 0 or omitted at rest. */
@@ -426,9 +396,7 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
   const dragY = props.dragY ?? 0;
   const count = items.length;
   const chromeVisible = chrome;
-  const removeConfirming = props.removeConfirming === true;
   const saving = props.saving === true;
-  const removeCopy = removeImageConfirmCopy(count);
 
   // The image region is a full-width aspect-ratio box following the CURRENT
   // item's ratio (stored dims or measured fallback), so the whole image shows
@@ -528,10 +496,8 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
       </div>
 
       {/* Action bar: a slim full-width bar directly below the image (not
-          overlapping it) with the agency controls (download/add/delete; #26:
-          reordering lives in the gallery's Reorder mode), or download only for
-          clients and read-only.
-          Delete swaps the whole bar for an inline confirm row. */}
+          overlapping it) with the agency controls (download / add), or download
+          only for clients and read-only. */}
       <div
         className={cn('flex h-12 w-full items-center justify-center', chromeMotion(chromeVisible))}
       >
@@ -545,32 +511,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
           >
             <IconDownload size={ICON_SIZE.control} />
           </IconButton>
-        ) : removeConfirming ? (
-          <div className="flex items-center gap-2 px-3">
-            <span className="flex min-w-0 flex-col text-left">
-              <span className="text-base text-overlay-fg">{removeCopy.title}</span>
-              {removeCopy.message !== null ? (
-                <span className="text-sm text-overlay-fg-dim">{removeCopy.message}</span>
-              ) : null}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={props.onCancelRemove}
-              className="text-overlay-fg-dim hover:bg-overlay-surface hover:text-overlay-fg focus-visible:lit-focus focus-visible:outline-overlay-fg/70"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={saving || undefined}
-              onClick={props.onConfirmRemove}
-              className="text-bad focus-visible:lit-focus focus-visible:outline-bad"
-            >
-              Remove
-            </Button>
-          </div>
         ) : (
           <div className="flex items-center">
             <IconButton
@@ -591,15 +531,6 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
               className={cn(TOOLBAR_SKIN, 'hover:text-overlay-fg')}
             >
               <IconPlus size={ICON_SIZE.control} />
-            </IconButton>
-            <IconButton
-              type="button"
-              label="Delete image"
-              disabled={saving || undefined}
-              onClick={props.onRequestRemove}
-              className={cn(TOOLBAR_SKIN, 'hover:text-bad')}
-            >
-              <IconTrash size={ICON_SIZE.control} />
             </IconButton>
             {saving ? (
               <span aria-live="polite" className="ml-2 text-sm text-overlay-fg-dim">
@@ -720,10 +651,9 @@ interface PostLightboxProps {
   manage?:
     | {
         onAddAfter: (index: number) => void;
-        onRemove: (index: number) => void;
       }
     | undefined;
-  /** A gallery write is in flight: delete taps do nothing. */
+  /** A gallery write is in flight: the bar says "Saving…". */
   saving?: boolean | undefined;
   /** The post's title, for each slide's alt ("{title}, slide N"). */
   title?: string | undefined;
@@ -756,8 +686,6 @@ export function PostLightbox({
   const [chrome, setChrome] = useState(true);
   const [busy, setBusy] = useState(false);
   const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
-  // The delete confirm row replaces the bottom-bar controls until resolved.
-  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [dragY, setDragY] = useState(0);
   // The pdf, office or other file open in the FileViewer. The one tapped in the
   // gallery opens straight away; its source is made once per open, so a
@@ -888,11 +816,9 @@ export function PostLightbox({
     mounted.current = true;
   }, []);
 
-  // Zoom resets whenever the slide changes; a pending delete confirm is dropped
-  // too, so swiping away from a slide never leaves its confirm row armed.
+  // Zoom resets whenever the slide changes.
   useEffect(() => {
     setZoom({ scale: 1, x: 0, y: 0 });
-    setConfirmingRemove(false);
   }, [index]);
 
   // Escape goes through the shared escape stack (FT16), so it reaches the
@@ -1128,15 +1054,6 @@ export function PostLightbox({
           onAddAfter: () => {
             manage.onAddAfter(index);
           },
-          // Remove the viewed slide via the existing gallery_set commit, then
-          // keep a valid slide in view (the last one shrinks to its predecessor).
-          // Removing the sole image empties the gallery; the parent clears the
-          // open index when items becomes empty, so the viewer closes on its own.
-          onRemove: () => {
-            if (saving) return;
-            manage.onRemove(index);
-            onIndexChange(Math.max(0, Math.min(index, items.length - 2)));
-          },
         }
       : undefined;
 
@@ -1171,14 +1088,7 @@ export function PostLightbox({
     trackRef,
     rootRef,
     manage: manageView,
-    removeConfirming: confirmingRemove,
     saving,
-    onRequestRemove: () => setConfirmingRemove(true),
-    onCancelRemove: () => setConfirmingRemove(false),
-    onConfirmRemove: () => {
-      manageView?.onRemove();
-      setConfirmingRemove(false);
-    },
     pinOverlay,
     dragY,
     onOpenFile: openFile,

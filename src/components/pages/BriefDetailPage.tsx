@@ -651,10 +651,12 @@ export function BriefDetailPage({
   // The brief screen's top bar is ui/HeaderBar (Back "<" with the leading
   // pull, the status line in the title slot, the ⋯ last), as Post detail. The
   // brief title is the page's one h1 (below), so the bar's title is never an h1.
+  // It opens over the app, so it stays pinned while the page scrolls.
   const topBar = (title: ReactNode, actions?: ReactNode): ReactElement => (
     <HeaderBar
       barRef={pageAnchorRef}
       compact
+      pinned
       onBack={goBack}
       title={title}
       titleSlot={<span className={textRole('title', 'truncate')}>{title}</span>}

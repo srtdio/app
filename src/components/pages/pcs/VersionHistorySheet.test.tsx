@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
-import {
-  versionHistorySheet,
-  toggleCompareSelection,
-} from '@/components/pages/pcs/VersionHistorySheet';
+import { versionHistorySheet } from '@/components/pages/pcs/VersionHistorySheet';
 import type { PostVersionView } from '@/lib/post-versions';
-import { Button } from '@/components/ui/Button';
 
 // The unit environment is node (no DOM renderer), so these specs walk the JSX
 // tree returned by the hookless versionHistorySheet rather than mounting it, and
@@ -82,9 +78,6 @@ function render(over: {
   currentVersionNumber: number | null;
   resolveAuthor?: (userId: string | null, legacyName: string | null) => string;
   onSelectVersion?: (id: string) => void;
-  onCompare?: (fromId: string, toId: string) => void;
-  selectedIds?: readonly string[];
-  onToggleSelect?: (id: string) => void;
 }): ReactNode {
   return versionHistorySheet({
     open: true,
@@ -93,9 +86,6 @@ function render(over: {
     currentVersionNumber: over.currentVersionNumber,
     resolveAuthor: over.resolveAuthor ?? resolverWith({}),
     onSelectVersion: over.onSelectVersion ?? noop,
-    onCompare: over.onCompare ?? noop,
-    selectedIds: over.selectedIds ?? [],
-    onToggleSelect: over.onToggleSelect ?? noop,
   });
 }
 
@@ -142,87 +132,35 @@ describe('VersionHistorySheet author resolution', () => {
   });
 });
 
-describe('VersionHistorySheet compare selection', () => {
+describe('VersionHistorySheet without Compare versions (retired)', () => {
   const twoVersions = [
     version({ id: 'a', versionNumber: 1 }),
     version({ id: 'b', versionNumber: 2 }),
   ];
 
-  it('shows no select controls and no footer for a single-version post', () => {
-    const tree = render({
-      versions: [version({ id: 'a', versionNumber: 1 })],
-      currentVersionNumber: 1,
-    });
-    const selects = elements(sheetProps(tree).children).filter(
-      (el) => (el.props as { 'aria-pressed'?: boolean })['aria-pressed'] !== undefined,
+  it('no select controls and no footer, whatever the version count', () => {
+    for (const versions of [[version({ id: 'a', versionNumber: 1 })], twoVersions]) {
+      const tree = render({ versions, currentVersionNumber: versions.length });
+      const selects = elements(sheetProps(tree).children).filter(
+        (el) => (el.props as { 'aria-pressed'?: boolean })['aria-pressed'] !== undefined,
+      );
+      expect(selects).toHaveLength(0);
+      expect(sheetProps(tree).footer).toBeUndefined();
+      const shown = texts(tree).join(' ');
+      expect(shown).not.toContain('Compare');
+      expect(shown).not.toContain('Select two versions');
+    }
+  });
+
+  it('an older row still opens the read-only version; the current row only closes', () => {
+    const onSelectVersion = vi.fn();
+    const tree = render({ versions: twoVersions, currentVersionNumber: 2, onSelectVersion });
+    const rows = elements(sheetProps(tree).children).filter(
+      (el) => typeof (el.props as { onClick?: unknown }).onClick === 'function',
     );
-    expect(selects).toHaveLength(0);
-    expect(sheetProps(tree).footer).toBeUndefined();
-  });
-
-  it('renders a select control per row when there are two or more versions', () => {
-    const tree = render({ versions: twoVersions, currentVersionNumber: 2 });
-    const selects = elements(sheetProps(tree).children).filter(
-      (el) => (el.props as { 'aria-pressed'?: boolean })['aria-pressed'] !== undefined,
-    );
-    expect(selects).toHaveLength(2);
-    expect(
-      selects.every((el) => (el.props as { 'aria-pressed'?: boolean })['aria-pressed'] === false),
-    ).toBe(true);
-  });
-
-  it('marks the selected rows via aria-pressed', () => {
-    const tree = render({ versions: twoVersions, currentVersionNumber: 2, selectedIds: ['a'] });
-    const pressed = elements(sheetProps(tree).children).filter(
-      (el) => (el.props as { 'aria-pressed'?: boolean })['aria-pressed'] === true,
-    );
-    expect(pressed).toHaveLength(1);
-  });
-
-  it('footer defaults to the two newest versions until two are picked', () => {
-    const onCompare = vi.fn();
-    const tree = render({
-      versions: [...twoVersions, version({ id: 'c', versionNumber: 3 })],
-      currentVersionNumber: 3,
-      selectedIds: ['a'],
-      onCompare,
-    });
-    const footer = sheetProps(tree).footer;
-    expect(texts(footer)).toContain('Compare v2 and v3');
-    const button = elements(footer).find((el) => el.type === Button);
-    expect((button?.props as { disabled?: boolean }).disabled).toBe(false);
-    (button?.props as { onClick: () => void }).onClick();
-    expect(onCompare).toHaveBeenCalledWith('b', 'c');
-  });
-
-  it('footer enables and labels old -> new regardless of pick order', () => {
-    const onCompare = vi.fn();
-    const tree = render({
-      versions: twoVersions,
-      currentVersionNumber: 2,
-      selectedIds: ['b', 'a'],
-      onCompare,
-    });
-    const footer = sheetProps(tree).footer;
-    expect(texts(footer)).toContain('Compare v1 and v2');
-    const button = elements(footer).find((el) => el.type === Button);
-    expect((button?.props as { disabled?: boolean }).disabled).toBe(false);
-    (button?.props as { onClick: () => void }).onClick();
-    expect(onCompare).toHaveBeenCalledWith('a', 'b');
-  });
-});
-
-describe('toggleCompareSelection', () => {
-  it('adds up to two ids', () => {
-    expect(toggleCompareSelection([], 'a')).toEqual(['a']);
-    expect(toggleCompareSelection(['a'], 'b')).toEqual(['a', 'b']);
-  });
-
-  it('replaces the oldest when a third is picked', () => {
-    expect(toggleCompareSelection(['a', 'b'], 'c')).toEqual(['b', 'c']);
-  });
-
-  it('re-picking a selected id clears it', () => {
-    expect(toggleCompareSelection(['a', 'b'], 'a')).toEqual(['b']);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) (row.props as { onClick: () => void }).onClick();
+    expect(onSelectVersion).toHaveBeenCalledTimes(1);
+    expect(onSelectVersion).toHaveBeenCalledWith('a');
   });
 });

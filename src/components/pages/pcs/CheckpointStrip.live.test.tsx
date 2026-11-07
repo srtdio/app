@@ -85,7 +85,7 @@ vi.mock('@/lib/workspace-members', async (importOriginal) => ({
 }));
 
 import { Comments } from '@/components/comments/Comments';
-import { CheckpointStrip } from '@/components/pages/pcs/CheckpointStrip';
+import { CheckpointProgress } from '@/components/pages/pcs/CheckpointStrip';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -143,9 +143,7 @@ async function mount(): Promise<void> {
         entityId="post-1"
         viewerIsClient
         showHeader
-        belowHeader={
-          <CheckpointStrip workspaceId="ws-1" postId="post-1" viewerIsClient refreshSignal={0} />
-        }
+        belowHeader={<CheckpointProgress workspaceId="ws-1" postId="post-1" refreshSignal={0} />}
       />,
     );
   });
@@ -158,7 +156,8 @@ function confirmButton(seq: number): HTMLButtonElement | undefined {
   );
 }
 function stripTick(seq: number): string | null {
-  const chip = Array.from(host?.querySelectorAll('[data-checkpoint-strip] button') ?? []).find(
+  const buttons = host?.querySelectorAll('[data-checkpoint-progress-row] button') ?? [];
+  const chip = Array.from(buttons).find(
     (b) => b.getAttribute('aria-label') === `Jump to checkpoint ${seq}`,
   );
   return chip?.querySelector('[data-chip-tick]')?.getAttribute('data-chip-tick') ?? null;

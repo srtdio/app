@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -16,8 +16,8 @@ import type { PostVersionView } from '@/lib/post-versions';
 import type { GalleryItem } from '@srtdio/posts';
 
 // #35 regression: the versions sheet shows each version's pictures
-// (platform-shaped, from that version's snapshot), "Current" on the latest and
-// "Compare v{a} and v{b}"; the old-version view shows its pictures under a
+// (platform-shaped, from that version's snapshot) and "Current" on the latest
+// (Compare versions retired); the old-version view shows its pictures under a
 // neutral banner. node environment: hookless trees are walked, the view is
 // rendered to static markup.
 
@@ -82,7 +82,6 @@ function version(id: string, n: number, gallery: string[]): PostVersionView {
 const noop = (): void => {};
 
 function sheet(
-  selectedIds: string[] = [],
   versions: PostVersionView[] = [version('v1', 1, ['ver-a']), version('v2', 2, ['ver-a', 'ver-b'])],
 ): ReactNode {
   return versionHistorySheet({
@@ -92,9 +91,6 @@ function sheet(
     currentVersionNumber: 2,
     resolveAuthor: () => 'Casey',
     onSelectVersion: noop,
-    onCompare: vi.fn(),
-    selectedIds,
-    onToggleSelect: noop,
     thumbs,
   });
 }
@@ -116,7 +112,7 @@ describe('#35 versions sheet', () => {
     expect(html).toContain('aspect-ratio:0.5625');
   });
 
-  it('labels the latest "Current" and offers "Compare v1 and v2"', () => {
+  it('labels the latest "Current"; no Compare versions footer', () => {
     const tree = sheet() as ReactElement<{
       children?: ReactNode;
       footer?: ReactNode;
@@ -127,7 +123,8 @@ describe('#35 versions sheet', () => {
     // Read the visible text: icon path data (Heroicons) can contain "v1".
     const text = html.replace(/<[^>]*>/g, ' ');
     expect(text.indexOf('Current')).toBeLessThan(text.indexOf('v1'));
-    expect(renderToStaticMarkup(<>{tree.props.footer}</>)).toContain('Compare v1 and v2');
+    expect(tree.props.footer).toBeUndefined();
+    expect(html).not.toContain('Compare');
     expect(tree.props.title).toBe('Versions');
   });
 
@@ -147,7 +144,7 @@ describe('versions sheet at 360px (post screen polish)', () => {
   it('at most 2 thumbs per row, then "+n"', () => {
     expect(VERSION_THUMBS_MAX).toBe(2);
     const rows = elements(
-      (sheet([], four) as ReactElement<{ children?: ReactNode }>).props.children,
+      (sheet(four) as ReactElement<{ children?: ReactNode }>).props.children,
     ).filter((el) => el.type === SnapshotThumbs);
     expect(rows.every((el) => (el.props as { max?: number }).max === 2)).toBe(true);
     expect(rows.every((el) => (el.props as { size?: string }).size === 'xs')).toBe(true);
@@ -163,7 +160,7 @@ describe('versions sheet at 360px (post screen polish)', () => {
     expect(VERSION_THUMBS_CLASS).not.toContain('shrink-0');
     expect(VERSION_TEXT_CLASS).toContain('min-w-32');
     const all = elements(
-      (sheet([], four) as ReactElement<{ children?: ReactNode }>).props.children,
+      (sheet(four) as ReactElement<{ children?: ReactNode }>).props.children,
     );
     const wrappers = all.filter(
       (el) => (el.props as { className?: string }).className === VERSION_THUMBS_CLASS,
@@ -178,7 +175,7 @@ describe('versions sheet at 360px (post screen polish)', () => {
 
   it('the author truncates and the date stays', () => {
     const all = elements(
-      (sheet([], four) as ReactElement<{ children?: ReactNode }>).props.children,
+      (sheet(four) as ReactElement<{ children?: ReactNode }>).props.children,
     );
     const author = all.find((el) => 'data-version-author' in (el.props as object));
     const date = all.find((el) => 'data-version-date' in (el.props as object));
@@ -188,7 +185,7 @@ describe('versions sheet at 360px (post screen polish)', () => {
   });
 
   it('the list clips sideways overflow so the sheet never pans on X', () => {
-    const list = (sheet([], four) as ReactElement<{ children?: ReactNode }>).props
+    const list = (sheet(four) as ReactElement<{ children?: ReactNode }>).props
       .children as ReactElement<{ className: string }>;
     expect(list.type).toBe('ul');
     expect(list.props.className).toContain('overflow-x-hidden');
