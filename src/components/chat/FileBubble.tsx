@@ -74,6 +74,13 @@ export function thumbRatio(width: number, height: number): number {
  */
 export function reservedRatio(attachment: MessageAttachment): number | null {
   const kind = thumbnailKind(attachment.mime);
+  // D1: a single video keeps its own aspect ratio, never clamped or cropped:
+  // the size read at pick (own send) or the stored thumbnail's.
+  if (kind === 'video') {
+    const size = thumbnailMetaOf(attachment);
+    if (size !== null && size.thumbW > 0 && size.thumbH > 0) return size.thumbH / size.thumbW;
+    return attachment.local?.file != null ? SENDING_RATIO.video : null;
+  }
   if (kind !== null && attachment.local?.file != null)
     return SENDING_RATIO[kind === 'video' ? 'video' : 'pdf'];
   const meta = thumbnailMetaOf(attachment);
@@ -175,7 +182,7 @@ export function ThumbImage(props: {
     },
     [src, markLoaded],
   );
-  const fit = props.kind === 'video' ? 'object-cover' : 'object-cover object-top';
+  const fit = props.kind === 'video' ? 'object-contain' : 'object-cover object-top';
   const shown = loaded === src;
   return (
     <>

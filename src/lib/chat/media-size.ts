@@ -50,7 +50,12 @@ export function pickedSizeFields(file: File | null | undefined): {
  * caller; anything but an image is ignored.
  */
 export function readPickedSize(file: File, previewUrl: string | null): void {
-  if (!file.type.startsWith('image/') || sizes.has(file)) return;
+  if (sizes.has(file)) return;
+  if (file.type.startsWith('video/')) {
+    readFromVideo(file);
+    return;
+  }
+  if (!file.type.startsWith('image/')) return;
   if (typeof createImageBitmap === 'function') {
     void createImageBitmap(file)
       .then((bitmap) => {
@@ -61,6 +66,25 @@ export function readPickedSize(file: File, previewUrl: string | null): void {
     return;
   }
   readFromImage(file, previewUrl);
+}
+
+/** A picked video's size from its metadata (videoWidth/videoHeight); never throws. */
+function readFromVideo(file: File): void {
+  if (typeof document === 'undefined' || typeof URL.createObjectURL !== 'function') return;
+  const url = URL.createObjectURL(file);
+  const video = document.createElement('video');
+  const done = (): void => {
+    URL.revokeObjectURL(url);
+    video.removeAttribute('src');
+  };
+  video.preload = 'metadata';
+  video.muted = true;
+  video.onloadedmetadata = () => {
+    rememberPickedSize(file, video.videoWidth, video.videoHeight);
+    done();
+  };
+  video.onerror = done;
+  video.src = url;
 }
 
 function readFromImage(file: File, previewUrl: string | null): void {
