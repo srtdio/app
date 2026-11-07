@@ -72,7 +72,8 @@ describe('FileViewer chat extras', () => {
     const out = html({ sender: 'Maya', sentAt: AT });
     expect(out).toContain('data-lightbox-details');
     expect(out).toContain('Maya');
-    expect(out).toMatch(/\d+ (day|month|year)s? ago/);
+    // formatAgo: more than 6 days back reads as the day ("23 Oct", year when off-year).
+    expect(out).toMatch(/23 Oct/);
     expect(out).toMatch(/font-mono[^"]*tabular-nums/);
     expect(out).not.toContain('data-show-in-chat');
   });
