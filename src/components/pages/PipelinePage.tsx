@@ -250,7 +250,9 @@ function StageRow({
     );
   });
   return (
-    <div ref={ref} data-induction={INDUCTION_KEYS.pipelineStageRow}>
+    // Fills the chip row's scroller so StageChips scrolls (with its edge fade)
+    // under the pinned Select.
+    <div ref={ref} data-induction={INDUCTION_KEYS.pipelineStageRow} className="min-w-0 flex-1">
       {children}
     </div>
   );
@@ -1216,7 +1218,16 @@ export function PipelinePage() {
         weekStartDay,
         canCreate,
       }),
-    [activeSort, setSort, dateWindow, setDateWindow, customRange, setCustomRange, weekStartDay, canCreate],
+    [
+      activeSort,
+      setSort,
+      dateWindow,
+      setDateWindow,
+      customRange,
+      setCustomRange,
+      weekStartDay,
+      canCreate,
+    ],
   );
   useTopbarActions(topbar);
 

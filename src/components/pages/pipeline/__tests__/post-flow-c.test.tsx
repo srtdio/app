@@ -1,5 +1,5 @@
 // Post flow C: one regression test per Pipeline fix (cards, status line, the
-// select bar rows (the old ⋮), due words, search fields, chips, the narrowing count and
+// select bar rows (the old ⋮), due words, chips, the narrowing count and
 // undated hint, the two header buttons, the move sheet actions, the ask-first
 // confirms, the plain move error) plus the empty pipeline copy. Node env: cards
 // render to static markup, hookless views are walked as element trees, and
@@ -64,7 +64,6 @@ import {
   moveErrorMessage,
   pipelineHeader,
   pipelineSelectActions,
-  postSearchFields,
   runUndoableMove,
   stageChipItems,
   undatedHiddenLine,
@@ -73,7 +72,7 @@ import {
 } from '@/components/pages/PipelinePage';
 import { reasonFailureTitle } from '@/components/pages/pcs/stage-move-commit';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { filterByFields, filterByWindow, isUndated, sortPosts } from '@/lib/list-sort';
+import { filterByWindow, isUndated, sortPosts } from '@/lib/list-sort';
 import type { UndoableAction } from '@/lib/use-undoable-action';
 import { formatAgo } from '@/lib/time';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -270,35 +269,23 @@ describe('post flow C: Pipeline card', () => {
     expect(card({ post: x5Post({ target_date: null }) })).not.toContain('data-post-card-due');
   });
 
-  it('fix 5: no platform mark, no "Caption:" prefix, search reads title and caption only', () => {
+  it('fix 5: no platform mark, no "Caption:" prefix', () => {
     const out = card({ post: x5Post({ format: 'text', caption: 'Diwali offer copy' }) });
     expect(out).not.toContain('aria-label="instagram"');
     const caption = /<span[^>]*data-post-card-caption=""[^>]*>(.*?)<\/span>/.exec(out)?.[1] ?? '';
     expect(caption).toBe('Diwali offer copy');
-    const post = x5Post({ title: 'Launch teaser', caption: 'New drop', platform: 'instagram' });
-    expect(postSearchFields(post)).toEqual(['Launch teaser', 'New drop']);
-    expect(filterByFields([post], 'instagram', postSearchFields)).toEqual([]);
-    expect(filterByFields([post], 'drop', postSearchFields)).toEqual([post]);
   });
 });
 
 describe('post flow C: header, count and filters', () => {
   function header(hideDraft: boolean): ReactElement {
     return pipelineHeader({
-      search: '',
-      onSearchChange: () => {},
-      sort: 'updated',
-      onSortChange: () => {},
-      dateWindow: 'any',
-      onDateWindowChange: () => {},
-      customRange: null,
-      onCustomRangeChange: () => {},
-      weekStartDay: 1,
       stage: 'review',
       onStageChange: () => {},
       counts: { all: 4, draft: 2, review: 1, approved: 1 },
-      canCreate: false,
       hideDraft,
+      selectMode: false,
+      onSelectToggle: () => {},
     });
   }
 

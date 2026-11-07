@@ -2,7 +2,7 @@
 // Post flow C, page level: a workspace switch never shows the old workspace's
 // posts (skeleton until its own read lands, a late read of the old workspace
 // is dropped), and the narrowing count plus the undated hint show only while a
-// search or date filter is on. The list is stubbed to record what it is given.
+// date filter is on. The screen search is gone (decision B): no search read. The list is stubbed to record what it is given.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,9 +24,8 @@ const h = vi.hoisted(() => ({
   reads: [] as PendingRead[],
   /** The post ids the list was handed, one entry per list render. */
   boards: [] as string[][],
-  /** posts_search calls (the query sent) and what each answers. */
+  /** posts_search calls (the query sent): the board never makes one now. */
   searches: [] as string[],
-  searchAnswer: [] as PipelinePost[],
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -64,12 +63,12 @@ vi.mock('@srtdio/posts', async (orig) => ({
       h.reads.push({ workspaceId: input.workspaceId, resolve });
     }),
 }));
-// The search is a server read (posts_search): stand in for it.
+// The old screen search read (posts_search): recorded, so a regression shows.
 vi.mock('@/lib/pipeline-posts', async (orig) => ({
   ...(await orig<typeof import('@/lib/pipeline-posts')>()),
   searchPipelinePosts: async (_client: unknown, input: { query: string }) => {
     h.searches.push(input.query);
-    return { ok: true, data: h.searchAnswer };
+    return { ok: true, data: [] };
   },
 }));
 vi.mock('@/components/pages/pipeline/PipelineFeed', () => ({
@@ -103,7 +102,6 @@ beforeEach(() => {
   h.reads = [];
   h.boards = [];
   h.searches = [];
-  h.searchAnswer = [];
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
@@ -181,29 +179,15 @@ describe('post flow C: the narrowing count line (page)', () => {
     x5Post({ id: 'b', title: 'Recap reel', stage: 'review' }),
   ];
 
-  it('fix 7: no count line without a search or date filter (the chips carry the counts)', async () => {
+  it('fix 7: no count line without a date filter (the chips carry the counts)', async () => {
     await render();
     await land('ws-1', POSTS);
     expect(countLine()).toBeNull();
     expect(host!.querySelector('[data-undated-hint]')).toBeNull();
   });
 
-  it('fix 7: a search shows "{shown} of {total} posts" (the server answers the search)', async () => {
+  it('decision B: a stale ?q= is ignored: the full list, no count line, no search read', async () => {
     h.params = new URLSearchParams('q=launch');
-    h.searchAnswer = [POSTS[0]!];
-    await render();
-    await land('ws-1', POSTS);
-    // The search fires after the 250ms debounce.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-    });
-    expect(h.searches).toEqual(['launch']);
-    expect(countLine()).toBe('1 of 2 posts');
-    expect(h.boards.at(-1)).toEqual(['a']);
-  });
-
-  it('one character is the normal list: no search is sent', async () => {
-    h.params = new URLSearchParams('q=l');
     await render();
     await land('ws-1', POSTS);
     await act(async () => {
@@ -212,6 +196,7 @@ describe('post flow C: the narrowing count line (page)', () => {
     expect(h.searches).toEqual([]);
     expect(h.boards.at(-1)).toEqual(['a', 'b']);
     expect(countLine()).toBeNull();
+    expect(host!.querySelector('[data-filtered-empty]')).toBeNull();
   });
 
   it('fix 7: a date filter names the undated posts it hides, and Show them adds them back', async () => {

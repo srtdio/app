@@ -3,8 +3,11 @@ import type { ReactElement, ReactNode } from 'react';
 
 vi.mock('@/lib/events', () => ({ dispatchSorted: vi.fn() }));
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   briefsHeader,
+  briefsTopbarActions,
   briefCardList,
   briefSections,
   briefsEmptyState,
@@ -17,7 +20,8 @@ import { dispatchSorted } from '@/lib/events';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { Chip } from '@/components/ui/Chip';
-import { ICON_SIZE, IconPlus } from '@/components/ui/icons';
+import { TopbarPlus } from '@/components/shell/topbar-actions';
+import { INDUCTION_KEYS } from '@/lib/induction';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { BriefFilter } from '@/lib/brief-list';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
@@ -26,9 +30,8 @@ function isElement(node: ReactNode): node is ReactElement {
   return typeof node === 'object' && node !== null && 'props' in node;
 }
 
-// SectionHeader is hookless and holds search/sort/primaryAction in props, so it
-// is expanded by calling its render once (mirroring SectionHeader's own tests)
-// while leaving stateful children (SortMenu) as unexpanded elements.
+// SectionHeader is hookless and holds the chips in props, so it is expanded by
+// calling its render once (mirroring SectionHeader's own tests).
 function expandSectionHeader(el: ReactElement): ReactElement {
   return (el.type as unknown as (props: unknown) => ReactElement)(el.props);
 }
@@ -53,89 +56,27 @@ function findAll(tree: ReactNode, predicate: (el: ReactElement) => boolean): Rea
   return all.filter(predicate);
 }
 
-function isNewBrief(el: ReactElement): boolean {
-  const children = (el.props as { children?: ReactNode }).children;
-  return Array.isArray(children) ? children.includes('New brief') : children === 'New brief';
+function header(onFilterChange: (filter: BriefFilter) => void = () => {}): ReactElement {
+  return briefsHeader({ filter: 'all', onFilterChange });
 }
 
-function header(
-  onFilterChange: (filter: BriefFilter) => void = () => {},
-  canCreate = true,
-): ReactElement {
-  return briefsHeader({
-    search: '',
-    onSearchChange: () => {},
-    filter: 'all',
-    onFilterChange,
-    canCreate,
-  });
-}
-
-describe('briefsHeader', () => {
-  it('client side: the shared SectionHeader with no sort control', () => {
+describe('briefsHeader (decisions A, B: chips only)', () => {
+  it('the shared SectionHeader with no search, sort or New brief in the row', () => {
     const tree = header();
-    expect(findAll(tree, (el) => el.type === SectionHeader)).toHaveLength(1);
+    const headers = findAll(tree, (el) => el.type === SectionHeader);
+    expect(headers).toHaveLength(1);
+    const props = headers[0]!.props as Record<string, unknown>;
+    for (const gone of ['search', 'sort', 'primaryAction', 'title']) {
+      expect(props).not.toHaveProperty(gone);
+    }
     expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(0);
-  });
-
-  it('agency side: the Pipeline SortMenu with Due date (default) and Newest first', () => {
-    const onChange = vi.fn();
-    const tree = briefsHeader({
-      search: '',
-      onSearchChange: () => {},
-      filter: 'all',
-      onFilterChange: () => {},
-      canCreate: false,
-      sort: { value: 'due', onChange },
-    });
-    const menus = findAll(tree, (el) => el.type === SortMenu);
-    expect(menus).toHaveLength(1);
-    const props = menus[0]!.props as {
-      options: { value: string; label: string }[];
-      value: string;
-      onChange: (value: string) => void;
-    };
-    expect(props.options.map((o) => o.label)).toEqual(['Due date', 'Newest first']);
-    expect(props.value).toBe('due');
-    props.onChange('updated');
-    expect(onChange).toHaveBeenCalledWith('updated');
-  });
-
-  it('dispatches sorted:create-brief from the New brief action', () => {
-    const button = findAll(header(), isNewBrief);
-    expect(button).toHaveLength(1);
-    (button[0]!.props as { onClick: () => void }).onClick();
-    expect(dispatchSorted).toHaveBeenCalledWith('sorted:create-brief');
-  });
-
-  it('shows New brief as visible text with its induction target when brief.create is held', () => {
-    const tree = header(() => {}, true);
-    const button = findAll(tree, isNewBrief);
-    expect(button).toHaveLength(1);
-    const props = button[0]!.props as { 'aria-label'?: string; 'data-induction'?: string };
-    expect(props['aria-label']).toBeUndefined();
-    expect(props['data-induction']).toBe('briefs-new');
-    // The New button leads with IconPlus at the inline size.
-    const plus = findAll(tree, (el) => el.type === IconPlus);
-    expect(plus).toHaveLength(1);
-    expect((plus[0]!.props as { size?: number }).size).toBe(ICON_SIZE.inline);
+    expect(findAll(tree, (el) => el.type === TopbarPlus)).toHaveLength(0);
     expect(
       findAll(
         tree,
-        (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Create brief',
+        (el) => (el.props as { 'data-induction'?: string })['data-induction'] === 'briefs-new',
       ),
     ).toHaveLength(0);
-  });
-
-  it('hides New brief (and its induction target) without brief.create', () => {
-    const tree = header(() => {}, false);
-    const button = findAll(tree, isNewBrief);
-    expect(button).toHaveLength(0);
-    const target = findAll(
-      tree,
-      (el) => (el.props as { 'data-induction'?: string })['data-induction'] === 'briefs-new',
-    );
-    expect(target).toHaveLength(0);
   });
 
   it('renders the All / Open / Closed filter chips and wires them', () => {
@@ -149,17 +90,77 @@ describe('briefsHeader', () => {
 
   it('hands each chip its count (ui/Chip shows it only above 0)', () => {
     const tree = briefsHeader({
-      search: '',
-      onSearchChange: () => {},
       filter: 'all',
       onFilterChange: () => {},
-      canCreate: true,
       counts: { all: 3, open: 3, closed: 0 },
     });
     const counts = findAll(tree, (el) => el.type === Chip).map(
       (c) => (c.props as { count?: number }).count,
     );
     expect(counts).toEqual([3, 3, 0]);
+  });
+});
+
+describe('briefsTopbarActions (decision A: sort and "+" in the top bar)', () => {
+  it('agency side: sort is the shared SortMenu over Due date (default) and Newest first', () => {
+    const onChange = vi.fn();
+    const { sort, primary } = briefsTopbarActions({
+      canCreate: false,
+      sort: { value: 'due', onChange },
+    });
+    expect(sort).toBeDefined();
+    expect(sort!.type).toBe(SortMenu);
+    const props = sort!.props as {
+      options: { value: string; label: string }[];
+      value: string;
+      onChange: (value: string) => void;
+    };
+    expect(props.options.map((o) => o.label)).toEqual(['Due date', 'Newest first']);
+    expect(props.value).toBe('due');
+    props.onChange('updated');
+    expect(onChange).toHaveBeenCalledWith('updated');
+    // The agency side cannot raise a brief: no "+".
+    expect(primary).toBeUndefined();
+  });
+
+  it('client side (brief.create): "+" labelled New brief with the old induction key; no sort', () => {
+    const { sort, primary } = briefsTopbarActions({ canCreate: true });
+    expect(sort).toBeUndefined();
+    expect(primary).toBeDefined();
+    expect(primary!.type).toBe(TopbarPlus);
+    const props = primary!.props as { label: string; induction?: string; onClick: () => void };
+    expect(props.label).toBe('New brief');
+    expect(props.induction).toBe(INDUCTION_KEYS.briefsNew);
+    props.onClick();
+    expect(dispatchSorted).toHaveBeenCalledWith('sorted:create-brief');
+  });
+
+  it('without brief.create there is no "+"', () => {
+    expect(briefsTopbarActions({ canCreate: false }).primary).toBeUndefined();
+  });
+
+  it('the page publishes them with useTopbarActions, sort only on the agency side', () => {
+    const src = readFileSync(fileURLToPath(new URL('./BriefsPage.tsx', import.meta.url)), 'utf8');
+    expect(src).toContain('useTopbarActions(topbar)');
+    expect(src).toContain('canCreate: canCreateBrief');
+    expect(src).toContain('...(showSort ? { sort: { value: sort, onChange: setSort } } : {})');
+  });
+});
+
+describe('decision B: no screen search on Briefs', () => {
+  it('the page holds no search state, search read, debounce or search NoResults', () => {
+    const src = readFileSync(fileURLToPath(new URL('./BriefsPage.tsx', import.meta.url)), 'utf8');
+    for (const gone of [
+      'useServerSearch',
+      'serverSearchQuery',
+      'briefSearch',
+      'Search briefs',
+      'NoResults',
+      'filterByTitle',
+      "searchParams.get('q')",
+    ]) {
+      expect(src).not.toContain(gone);
+    }
   });
 });
 
@@ -294,37 +295,31 @@ describe('deriveBriefGroups', () => {
   ];
 
   it('renders one section per time bucket with correct labels and counts', () => {
-    const groups = deriveBriefGroups(briefs, 'all', '', NOW, CAL);
+    const groups = deriveBriefGroups(briefs, 'all', NOW, CAL);
     expect(groups.map((g) => g.label)).toEqual(['This week', 'Last week', 'June', 'May']);
     expect(groups.map((g) => g.items.length)).toEqual([2, 1, 1, 1]);
     expect(groups.map((g) => g.key)).toEqual(['w0', 'w1', 'm-2026-06', 'm-2026-05']);
   });
 
   it('re-narrows to BriefWithThumbnail, preserving the same object references', () => {
-    const groups = deriveBriefGroups(briefs, 'all', '', NOW, CAL);
+    const groups = deriveBriefGroups(briefs, 'all', NOW, CAL);
     const week = groups[0]!.items.find((b) => b.id === 'week');
     expect(week).toBe(briefs[0]);
   });
 
   it('lets the status chip change section counts (Closed drops the open This Week brief)', () => {
-    const groups = deriveBriefGroups(briefs, 'closed', '', NOW, CAL);
+    const groups = deriveBriefGroups(briefs, 'closed', NOW, CAL);
     expect(groups.map((g) => g.label)).toEqual(['This week']);
     expect(groups[0]!.items.map((b) => b.id)).toEqual(['closed']);
-  });
-
-  it('lets search change section counts, dropping now-empty sections', () => {
-    const groups = deriveBriefGroups(briefs, 'all', 'launch', NOW, CAL);
-    expect(groups.map((g) => g.label)).toEqual(['June']);
-    expect(groups[0]!.items.map((b) => b.id)).toEqual(['june']);
   });
 
   it('buckets on the WORKSPACE zone, not the browser zone', () => {
     // 19:00Z on Sunday 2026-07-05 is already Monday the 6th in Mumbai, so the
     // same instant opens This Week there and closes Last Week in London.
     const brief = [makeBrief('edge', { created_at: '2026-07-05T19:00:00Z' })];
-    expect(deriveBriefGroups(brief, 'all', '', NOW, CAL)[0]!.label).toBe('This week');
+    expect(deriveBriefGroups(brief, 'all', NOW, CAL)[0]!.label).toBe('This week');
     expect(
-      deriveBriefGroups(brief, 'all', '', NOW, { timeZone: 'Europe/London', weekStartDay: 1 })[0]!
+      deriveBriefGroups(brief, 'all', NOW, { timeZone: 'Europe/London', weekStartDay: 1 })[0]!
         .label,
     ).toBe('Last week');
   });
@@ -378,7 +373,7 @@ describe('briefSections', () => {
 
   function sectionsFor(briefs: BriefWithThumbnail[]): ReactElement[] {
     return briefSections({
-      groups: deriveBriefGroups(briefs, 'all', '', NOW, CAL),
+      groups: deriveBriefGroups(briefs, 'all', NOW, CAL),
       timeZone: CAL.timeZone,
       now: NOW,
       cache,
@@ -439,7 +434,7 @@ describe('briefSections', () => {
 
   it('reads the day heading in the workspace zone, not the browser zone', () => {
     const briefs = [makeBrief('edge', { created_at: '2026-07-07T19:00:00Z' })];
-    const groups = deriveBriefGroups(briefs, 'all', '', NOW, CAL);
+    const groups = deriveBriefGroups(briefs, 'all', NOW, CAL);
     const shared = {
       groups,
       now: NOW,
@@ -457,30 +452,22 @@ describe('briefSections', () => {
 });
 
 describe('briefsEmptyState', () => {
-  it('a typed search with no match: NoResults with the query (the only state with Clear)', () => {
-    expect(briefsEmptyState('open', ' diwali ', 4, true)).toEqual({
-      kind: 'no-results',
-      query: 'diwali',
-    });
-    expect(briefsEmptyState('closed', 'x', 4, false).kind).toBe('no-results');
-  });
-
   it('client with no open briefs: the New brief state', () => {
-    expect(briefsEmptyState('open', '', 0, true)).toEqual({ kind: 'client-empty' });
-    expect(briefsEmptyState('open', '', 3, true)).toEqual({ kind: 'client-empty' });
+    expect(briefsEmptyState('open', 0, true)).toEqual({ kind: 'client-empty' });
+    expect(briefsEmptyState('open', 3, true)).toEqual({ kind: 'client-empty' });
   });
 
   it('agency with no briefs: the one-line state', () => {
-    expect(briefsEmptyState('open', '', 0, false)).toEqual({ kind: 'agency-empty' });
-    expect(briefsEmptyState('all', '', 0, false)).toEqual({ kind: 'agency-empty' });
+    expect(briefsEmptyState('open', 0, false)).toEqual({ kind: 'agency-empty' });
+    expect(briefsEmptyState('all', 0, false)).toEqual({ kind: 'agency-empty' });
   });
 
-  it('a chip with nothing under it and no search: a heading, no Clear', () => {
-    expect(briefsEmptyState('closed', '', 2, true)).toEqual({
+  it('a chip with nothing under it: a heading, no Clear', () => {
+    expect(briefsEmptyState('closed', 2, true)).toEqual({
       kind: 'filtered',
       title: 'Closed briefs show up here.',
     });
-    expect(briefsEmptyState('open', '', 2, false)).toEqual({
+    expect(briefsEmptyState('open', 2, false)).toEqual({
       kind: 'filtered',
       title: 'Open briefs show up here.',
     });
@@ -500,7 +487,7 @@ describe('deriveSortedBriefs', () => {
   ];
 
   it('filters by chip, then sorts by due date (undated last)', () => {
-    expect(deriveSortedBriefs(briefs, 'open', '', 'due').map((b) => b.id)).toEqual([
+    expect(deriveSortedBriefs(briefs, 'open', 'due').map((b) => b.id)).toEqual([
       'soon',
       'late',
       'none',
@@ -508,7 +495,7 @@ describe('deriveSortedBriefs', () => {
   });
 
   it('recently updated puts the newest edit first, keeping object references', () => {
-    const out = deriveSortedBriefs(briefs, 'all', '', 'updated');
+    const out = deriveSortedBriefs(briefs, 'all', 'updated');
     expect(out.map((b) => b.id)).toEqual(['none', 'shut', 'soon', 'late']);
     expect(out[0]).toBe(briefs[0]);
   });
