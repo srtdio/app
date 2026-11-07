@@ -37,6 +37,7 @@ import { formatJoined, isUndelivered, memberEmailTag, roleLabel } from './member
 import type { DerivedMembers, InviteDeliveryStatus, MemberEntry } from './members-data';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 
 const OWNER_LOCK_TITLE = 'Transfer ownership before the owner can be removed';
 
@@ -115,6 +116,8 @@ interface MemberRowProps extends MemberActions {
   canManage: boolean;
   /** Divider under the row (every row but the group's last). */
   divider: boolean;
+  /** The shared minute clock's instant (the list's useMinuteClock): joined reads relative to it. */
+  now: Date;
 }
 
 /**
@@ -122,8 +125,15 @@ interface MemberRowProps extends MemberActions {
  * email under it with the role tag at its end, then the ⋯ (the trigger owns the
  * trailing rule, so its glyph ends on the content edge) or the owner's lock.
  */
-function MemberRowItem({ member, canManage, divider, onChangeRole, onRemove }: MemberRowProps) {
-  const joined = formatJoined(member.acceptedAt);
+function MemberRowItem({
+  member,
+  canManage,
+  divider,
+  now,
+  onChangeRole,
+  onRemove,
+}: MemberRowProps) {
+  const joined = formatJoined(member.acceptedAt, now);
   const hasMenu = canManage && !member.isOwner;
   // Long-press on touch and right-click on laptop open the row's ⋯ menu.
   const [menuOpen, setMenuOpen] = useState(false);
@@ -468,6 +478,7 @@ export function MembersList({
   onEditInvite,
 }: MembersListProps) {
   const { agency, client, pending } = derived;
+  const now = new Date(useMinuteClock());
 
   const renderActive = (member: MemberEntry, index: number, all: readonly MemberEntry[]) => (
     <MemberRowItem
@@ -475,6 +486,7 @@ export function MembersList({
       member={member}
       canManage={canManage}
       divider={index < all.length - 1}
+      now={now}
       onChangeRole={onChangeRole}
       onRemove={onRemove}
     />

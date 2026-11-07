@@ -156,7 +156,7 @@ export function groupBriefsByDay<T extends { created_at: string }>(
     const group: BriefGroup<T> = {
       key,
       // The workspace zone, so the label always names the day the key groups by.
-      // A day heading: "Today", else formatWhen ("Yesterday", "Mon", "22 Sep").
+      // A day heading (formatDayLabel): "Today", "Yesterday", else "Tue 22 Sep".
       label: formatDayLabel(item.created_at, now, zone) || item.created_at,
       items: [item],
     };

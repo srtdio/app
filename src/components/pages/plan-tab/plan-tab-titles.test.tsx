@@ -4,34 +4,27 @@ import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import type { PlanBundle, PlanItemRow, PlanRow } from '@/lib/chat/plans';
 
-// How plan titles wrap on each Plan tab surface: phone cards, week cards and
-// the empty-day menu rows take up to two lines, then an ellipsis; chips and
-// month rows stay on one line with an ellipsis. Plus the toolbar arrows'
-// hidden names in each view.
+// How plan titles sit on the Plan tab: the plan card is ui/ListCard, whose
+// title is one line with an ellipsis (every list card is the same height), as
+// the chat plan card's title is. The card's lines read the plan's dates and
+// count, when it starts and its one tag.
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
-vi.mock('@/components/chat/PlanMoveSheet', () => ({ PlanKeepApprovalSheet: () => null }));
 vi.mock('@/components/media/Thumbnail', () => ({ Thumbnail: () => null }));
 
 import { PlanCardTop } from '@/components/chat/PlanCard';
-import { ToastProvider } from '@/components/ui/toast';
-import { PlanCalendar } from '@/components/pages/plan-tab/PlanCalendar';
-import { PlanDayMenu } from '@/components/pages/plan-tab/PlanDayMenu';
 import { PlanTabCard } from '@/components/pages/plan-tab/PlanTabList';
-import type { PlanTabView } from '@/lib/plan-tab';
-import { civilToday } from '@/lib/plan-week';
 
-const TODAY = civilToday(new Date(), 'UTC');
+const NOW = new Date('2026-11-04T12:00:00Z');
 const PLAN_TITLE = 'A very long festive season launch plan title';
-const ITEM_TITLE = 'A very long concept title that needs two lines';
 
 const PLAN: PlanRow = {
   id: 'p1',
   workspace_id: 'ws',
   title: PLAN_TITLE,
-  starts_on: TODAY,
-  ends_on: TODAY,
+  starts_on: '2026-11-06',
+  ends_on: '2026-11-12',
   audience: 'client',
   created_by: null,
 };
@@ -41,11 +34,11 @@ const ITEM: PlanItemRow = {
   plan_id: 'p1',
   kind: 'concept',
   position: 0,
-  title: ITEM_TITLE,
+  title: 'A concept',
   description: null,
   post_id: null,
   created_at: '2026-10-01T00:00:00Z',
-  target_date: TODAY,
+  target_date: '2026-11-06',
 };
 
 const BUNDLE: PlanBundle = {
@@ -57,11 +50,7 @@ const BUNDLE: PlanBundle = {
 };
 
 const wrap = (node: ReactElement): string =>
-  renderToStaticMarkup(
-    <MemoryRouter>
-      <ToastProvider>{node}</ToastProvider>
-    </MemoryRouter>,
-  );
+  renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>);
 
 const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -71,103 +60,60 @@ function classesOf(html: string, text: string): string[] {
   return [...html.matchAll(re)].map((m) => m[1] ?? '');
 }
 
-function calendar(view: PlanTabView): string {
+function card(bundle: PlanBundle = BUNDLE, cover: string | null = null): string {
   return wrap(
-    <PlanCalendar
-      view={view}
-      anchor={TODAY}
-      today={TODAY}
-      timeZone="UTC"
-      side="agency"
-      data={{ bundles: [BUNDLE], posts: [], thumbs: { posts: {}, concepts: {} } }}
-      onAnchor={() => {}}
-      onWeekOf={() => {}}
-      onOpen={() => {}}
-      onAddTo={() => {}}
-      onNewPlan={() => {}}
-      reload={async () => {}}
-      more={null}
-    />,
+    <PlanTabCard bundle={bundle} cover={cover} timeZone="UTC" now={NOW} onOpen={() => {}} />,
   );
 }
 
-describe('plan titles: two lines, then an ellipsis', () => {
-  it('the phone card title wraps to two lines', () => {
-    const html = wrap(<PlanTabCard bundle={BUNDLE} covers={[]} onOpen={() => {}} />);
-    const [title] = classesOf(html, PLAN_TITLE);
-    expect(title).toContain('line-clamp-2');
-    expect(title).toContain('[overflow-wrap:anywhere]');
-    expect(title).not.toContain('truncate');
-  });
-
-  it('the week card title wraps to two lines', () => {
-    const [title, ...rest] = classesOf(calendar('week'), ITEM_TITLE);
-    expect(rest).toEqual([]);
-    expect(title).toContain('line-clamp-2');
-    expect(title).not.toContain('truncate');
-  });
-
-  it('the week card plan name wraps to two lines', () => {
-    expect(classesOf(calendar('week'), PLAN_TITLE)).toContain(
-      'line-clamp-2 [overflow-wrap:anywhere]',
-    );
-  });
-
-  it('the empty-day menu row title wraps to two lines; the row stays a 44px target', () => {
-    const html = wrap(
-      <PlanDayMenu
-        day={TODAY}
-        anchor={{} as HTMLElement}
-        plans={[BUNDLE]}
-        tones={new Map([['p1', 'accent']])}
-        onPick={() => {}}
-        onNewPlan={() => {}}
-        onClose={() => {}}
-      />,
-    );
-    const [title] = classesOf(html, PLAN_TITLE);
-    expect(title).toContain('line-clamp-2');
-    expect(title).not.toContain('truncate');
-    const row = html.match(/<button[^>]*data-plan-tab-menu-plan="p1"[^>]*>/)?.[0] ?? '';
-    expect(row).toContain('min-h-11');
-  });
-});
-
 describe('plan titles: one line, then an ellipsis', () => {
+  it('the plan card title is ListCard line 1 (heading, one line)', () => {
+    const html = card();
+    expect(html).toContain('data-list-card=""');
+    expect(html).toContain('data-plan-tab-card="p1"');
+    const [title] = classesOf(html, PLAN_TITLE);
+    expect(title).toContain('truncate');
+    expect(title).not.toContain('line-clamp-2');
+  });
+
   it('the chat plan card title stays on one line', () => {
     const html = renderToStaticMarkup(<PlanCardTop plan={PLAN} />);
     const [title] = classesOf(html, PLAN_TITLE);
     expect(title).toContain('truncate');
     expect(title).not.toContain('line-clamp-2');
   });
-
-  it('a plan chip truncates', () => {
-    const html = calendar('month');
-    const chip = html.match(/data-plan-tab-chip="p1"[\s\S]*?<\/button>/)?.[0] ?? '';
-    expect(classesOf(chip, PLAN_TITLE)).toEqual(['truncate']);
-  });
-
-  it('a month grid row truncates', () => {
-    // The title shrinks (min-w-0 flex-1) so the comment count keeps the line's right end.
-    expect(classesOf(calendar('month'), ITEM_TITLE)).toEqual(['min-w-0 flex-1 truncate']);
-  });
 });
 
-describe('toolbar arrows', () => {
-  it('week view: "Last week" and "Next week"', () => {
-    const html = calendar('week');
-    expect(html).toMatch(/aria-label="Last week"[^>]*data-plan-tab-prev=""/);
-    expect(html).toMatch(/aria-label="Next week"[^>]*data-plan-tab-next=""/);
+describe('the plan card lines', () => {
+  it('line 2: the date range then the post count; line 3: when it starts and "N of M OK"', () => {
+    const html = card();
+    expect(html).toMatch(/data-list-card-preview=""[^>]*data-plan-tab-dates=""[^>]*>6–12 Nov · 1 post</);
+    expect(html).toMatch(/data-list-card-time=""[^>]*data-plan-tab-start=""[^>]*>Starts in 2 days</);
+    expect(html).toMatch(/data-list-card-tag=""[^>]*data-plan-tab-progress=""/);
+    expect(html).toContain('0 of 1 OK');
+    expect(html).not.toContain('data-plan-tab-draft');
   });
 
-  it('month view: "Last month" and "Next month"', () => {
-    const html = calendar('month');
-    expect(html).toMatch(/aria-label="Last month"[^>]*data-plan-tab-prev=""/);
-    expect(html).toMatch(/aria-label="Next month"[^>]*data-plan-tab-next=""/);
-    expect(html).not.toContain('Previous');
+  it('a Draft: "only your team sees this" on line 2, the Draft tag on line 3', () => {
+    const draft: PlanBundle = {
+      ...BUNDLE,
+      plan: { ...PLAN, audience: 'team', starts_on: '2026-11-01', ends_on: '2026-11-07' },
+    };
+    const html = card(draft);
+    expect(html).toContain('1–7 Nov · 1 post · only your team sees this');
+    expect(html).toContain('Started 3 days ago');
+    expect(html).toMatch(/data-list-card-tag=""[^>]*data-plan-tab-draft=""/);
+    expect(html).toContain('>Draft<');
   });
 
-  it('the arrows are 44px targets', () => {
-    expect(calendar('week')).toMatch(/aria-label="Last week"[^>]*h-11 w-11/);
+  it('the picture: the plan icon box with no cover, the image slot with one', () => {
+    expect(card()).toMatch(/data-list-card-picture="icon"[^>]*data-plan-tab-cover="icon"/);
+    expect(card(BUNDLE, 'v1')).toMatch(/data-list-card-picture="image"[^>]*data-plan-tab-cover="image"/);
+  });
+
+  it('the whole card is one button with no menu', () => {
+    const html = card();
+    expect(html.match(/data-list-card-press=""/g)).toHaveLength(1);
+    expect(html).not.toContain('data-list-card-more');
   });
 });

@@ -5,30 +5,10 @@ vi.mock('agora-chat', () => ({
 }));
 
 import type { PlanBundle } from '@/lib/chat/plans';
-import { menuPosition } from '@/components/pages/plan-tab/PlanDayMenu';
-import { CARD_COVERS, planCovers } from '@/components/pages/plan-tab/PlanTabList';
+import { planCover } from '@/components/pages/plan-tab/PlanTabList';
 
-describe('the day menu position', () => {
-  const view = { width: 1280, height: 800 };
-  const menu = { width: 300, height: 200 };
-
-  it('sits at the cell, under its date', () => {
-    expect(menuPosition({ left: 400, top: 200, bottom: 328 }, menu, view)).toEqual({
-      left: 404,
-      top: 228,
-    });
-  });
-
-  it('stays on screen near the right and bottom edges', () => {
-    const pos = menuPosition({ left: 1200, top: 700, bottom: 790 }, menu, view);
-    expect(pos.left + menu.width).toBeLessThanOrEqual(view.width - 8);
-    expect(pos.top + menu.height).toBeLessThanOrEqual(view.height - 8);
-    expect(pos.top).toBeGreaterThanOrEqual(8);
-  });
-});
-
-describe('the phone card covers', () => {
-  it('takes post covers and concept images in item order, at most four, no repeats', () => {
+describe('the plan card picture', () => {
+  it("takes the first item's image in item order: a post's cover, else a concept image", () => {
     const items = ['a', 'b', 'c', 'd', 'e', 'f'].map((id, position) => ({
       id,
       plan_id: 'p',
@@ -54,12 +34,22 @@ describe('the phone card covers', () => {
       postStages: {},
       postInfo: {},
     };
-    const covers = planCovers(bundle, {
-      posts: { 'post-a': 'v1', 'post-c': 'v1', 'post-d': 'v3', 'post-e': 'v4', 'post-f': 'v5' },
-      concepts: { b: { kind: 'image', versionId: 'v2' } },
-    });
-    expect(covers).toEqual(['v1', 'v2', 'v3', 'v4']);
-    expect(covers).toHaveLength(CARD_COVERS);
+    expect(
+      planCover(bundle, {
+        posts: { 'post-a': 'v1', 'post-c': 'v3' },
+        concepts: { b: { kind: 'image', versionId: 'v2' } },
+      }),
+    ).toBe('v1');
+    // No post cover on a: the concept image of b comes first.
+    expect(
+      planCover(bundle, {
+        posts: { 'post-c': 'v3' },
+        concepts: { b: { kind: 'image', versionId: 'v2' } },
+      }),
+    ).toBe('v2');
+    // A concept's file tile is no picture.
+    expect(planCover(bundle, { posts: {}, concepts: { b: { kind: 'file' } } })).toBeNull();
+    expect(planCover(bundle, { posts: {}, concepts: {} })).toBeNull();
   });
 });
 

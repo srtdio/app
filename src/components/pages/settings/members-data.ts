@@ -6,7 +6,7 @@
 import type { Database } from '@srtdio/schemas';
 import type { DomainErrorCode } from '@srtdio/rpc';
 import type { ChatProfile } from '@/lib/chat-reads';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
 import { errorText } from '@/lib/error-copy';
 
 export type WorkspaceMemberRow = Database['public']['Tables']['workspace_members']['Row'];
@@ -199,11 +199,11 @@ export function memberRemoveErrorMessage(code: DomainErrorCode): string {
 }
 
 /** Format accepted_at for the "joined" column in the app's one past-time format
- *  (formatWhen: the clock today, "Yesterday", "Mon", "23 Oct", the year only
- *  outside now's year; the viewer's clock); null when never accepted. */
+ *  (formatRelative: "just now", "3 hours ago", "2 days ago", "4 months ago");
+ *  null when never accepted. */
 export function formatJoined(acceptedAt: string | null, now: Date = new Date()): string | null {
   if (acceptedAt === null) return null;
-  const day = formatWhen(acceptedAt, now);
+  const day = formatRelative(acceptedAt, now);
   return day === '' ? null : day;
 }
 
