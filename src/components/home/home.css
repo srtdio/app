@@ -340,7 +340,8 @@ html:has(.home) body {
 .home .panel .ph {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 12px;
   height: 48px;
   margin-bottom: 14px;
 }

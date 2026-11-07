@@ -1273,7 +1273,7 @@ const SCREENS: Screen[] = [
       await tap([page.getByRole('button', { name: 'New post', exact: true })], 'New post');
       const sheet = await firstVisible([page.getByRole('dialog')], 'create post sheet');
       await sheet.getByLabel('Title', { exact: false }).first().fill('Spring sale teaser');
-      await sheet.getByRole('button', { name: 'Close', exact: true }).first().click();
+      await sheet.getByRole('button', { name: 'Back', exact: true }).first().click();
       await waitFor([page.getByText('Discard changes?')], 'discard confirm');
     },
   },

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The photo-only viewer (inside a DM, the chat list's People cards): the
-// person's photo large with its initials fallback, the full name, an X; it
-// closes on the X, Esc, a tap outside the photo and Back, never on the photo
+// person's photo large with its initials fallback, the full name, "<" (Back,
+// never an X); it closes on "<", Esc, a tap outside the photo and Back, never on the photo
 // itself, and hands focus back to what was tapped. Nothing to message here.
 
 import { act } from 'react';
@@ -62,7 +62,7 @@ afterEach(() => {
 });
 
 describe('PhotoViewer', () => {
-  it('shows the photo large, the full name and an X; no message controls', async () => {
+  it('shows the photo large, the full name and "<" Back (no X); no message controls', async () => {
     await mount();
     const v = viewer();
     expect(v?.getAttribute('role')).toBe('dialog');
@@ -72,7 +72,10 @@ describe('PhotoViewer', () => {
     expect(photo?.querySelector('img')?.getAttribute('src')).toBe('https://x.test/leo.png');
     expect(photo?.querySelector('[data-avatar-role="profile"]')).not.toBeNull();
     expect(v?.textContent).toContain('Leo Martins');
-    expect(v?.querySelector('[data-photo-viewer-close]')?.getAttribute('aria-label')).toBe('Close');
+    expect(v?.querySelector('[data-photo-viewer-back] button')?.getAttribute('aria-label')).toBe(
+      'Back',
+    );
+    expect(v?.querySelector('button[aria-label="Close"]')).toBeNull();
     expect(v?.querySelector('textarea, input')).toBeNull();
     expect(v?.querySelectorAll('button')).toHaveLength(1);
     expect(v?.querySelector('[data-person-message]')).toBeNull();
@@ -85,10 +88,10 @@ describe('PhotoViewer', () => {
     expect(photo?.textContent).toBe('LM');
   });
 
-  it('the X closes it', async () => {
+  it('"<" closes it', async () => {
     await mount();
     await act(async () => {
-      viewer()?.querySelector<HTMLButtonElement>('[data-photo-viewer-close]')?.click();
+      viewer()?.querySelector<HTMLButtonElement>('[data-photo-viewer-back] button')?.click();
     });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -122,9 +125,10 @@ describe('PhotoViewer', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('focus moves to the X on open and back to the trigger on close', async () => {
+  it('focus moves to "<" on open and back to the trigger on close', async () => {
     await mount();
-    expect(document.activeElement?.hasAttribute('data-photo-viewer-close')).toBe(true);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Back');
+    expect(document.activeElement?.closest('[data-photo-viewer-back]')).not.toBeNull();
     act(() => root?.unmount());
     root = null;
     expect(document.activeElement).toBe(trigger);

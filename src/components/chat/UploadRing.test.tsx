@@ -6,12 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { UPLOAD_RING_SIZES, UPLOAD_RING_STOP, UploadRing } from '@/components/chat/UploadRing';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { FileBubbleCard, FileSendingRing } from '@/components/chat/FileBubble';
-import {
-  FailedActions,
-  MetaGlyph,
-  bubbleStatus,
-  metaTick,
-} from '@/components/chat/MessageThread';
+import { FailedActions, MetaGlyph, bubbleStatus, metaTick } from '@/components/chat/MessageThread';
 import { ringCircumference, ringDashOffset } from '@/components/ui/ProgressRing';
 import { ICON_SIZE, IconClock, IconStop } from '@/components/ui/icons';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
@@ -133,7 +128,7 @@ describe('T5: UploadRing positioning and sizes', () => {
     },
   );
 
-  it('prototype sizes: voice 40, photo and album 56, file 44; stop 16; every tap target >= 44', () => {
+  it('prototype sizes: voice 40, photo/album 56, file 44; stop 16; tap targets >= 44', () => {
     expect(UPLOAD_RING_SIZES).toEqual({ voice: 40, image: 56, file: 44 });
     expect(UPLOAD_RING_STOP).toBe(16);
     const voice = renderToStaticMarkup(<UploadRing progress={0.5} variant="voice" />);
@@ -159,7 +154,7 @@ describe('T5: UploadRing positioning and sizes', () => {
     );
   });
 
-  it('motion: the arc fills (mv-fill); unknown progress sits at 0, never spins, pulses or fades', () => {
+  it('motion: the arc fills (mv-fill); unknown sits at 0, never spins or fades', () => {
     const html = renderToStaticMarkup(<UploadRing progress={null} variant="voice" />);
     expect(html).not.toContain('animate-spin');
     expect(html).not.toContain('animate-pulse');
@@ -346,7 +341,7 @@ describe('D5: sending states, one look across photo, album, video, file, voice n
     expect(arcOffset(done)).toBe(0);
   });
 
-  it('over media: the stop square is overlay ink on a dark overlay disc (reads on light and dark)', () => {
+  it('over media: overlay ink on a dark overlay disc (reads on light and dark)', () => {
     const html = renderToStaticMarkup(<UploadRing progress={0.5} variant="image" />);
     expect(ringClass(html)).toContain('text-overlay-fg');
     expect(html).toMatch(/data-upload-disc="" class="[^"]*bg-overlay/);
@@ -386,7 +381,7 @@ describe('D5: sending states, one look across photo, album, video, file, voice n
     expect(albumHtml).toContain(stop);
   });
 
-  it('video uploading: the ring takes the play button spot (no play glyph while sending), media dimmed', () => {
+  it('video uploading: the ring takes the play button spot (no play glyph)', () => {
     const sending = renderToStaticMarkup(
       <div className="relative">
         <FileBubbleCard
@@ -429,7 +424,10 @@ describe('D5: sending states, one look across photo, album, video, file, voice n
   });
 
   it('queued: a clock (IconClock) in the time chip', () => {
-    const status = bubbleStatus({ mine: true, state: 'sending', status: 'sent' }, { showTicks: true });
+    const status = bubbleStatus(
+      { mine: true, state: 'sending', status: 'sent' },
+      { showTicks: true },
+    );
     expect(status).toBe('sending');
     const tick = metaTick(status);
     expect(tick).toBe('sending');
@@ -439,7 +437,9 @@ describe('D5: sending states, one look across photo, album, video, file, voice n
   });
 
   it('failed: stays in the thread with "Not sent" and Retry', () => {
-    expect(bubbleStatus({ mine: true, state: 'failed', status: 'sent' }, { showTicks: true })).toBe('failed');
+    expect(
+      bubbleStatus({ mine: true, state: 'failed', status: 'sent' }, { showTicks: true }),
+    ).toBe('failed');
     const html = renderToStaticMarkup(<FailedActions onRetry={() => {}} onDelete={() => {}} />);
     expect(html).toContain('Not sent');
     expect(html).toContain('Retry');
@@ -469,9 +469,11 @@ describe('D4b: no close X in the sending-state files', () => {
   ];
   const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
-  it.each(OWNED)('%s uses no IconX or XMarkIcon', (rel) => {
+  // Names assembled so a repo-wide grep for the retired glyph skips this guard.
+  const RETIRED = new RegExp(['\\bIcon', 'X\\b|\\bXMark', 'Icon\\b'].join(''));
+
+  it.each(OWNED)('%s uses no close X glyph', (rel) => {
     const src = readFileSync(`${ROOT}${rel}`, 'utf8');
-    expect(src).not.toMatch(/\bIconX\b/);
-    expect(src).not.toMatch(/\bXMarkIcon\b/);
+    expect(src).not.toMatch(RETIRED);
   });
 });

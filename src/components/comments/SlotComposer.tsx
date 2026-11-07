@@ -24,7 +24,7 @@ import { ErrorNote } from '@/components/ui/ErrorNote';
 import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/cn';
-import { IconSend, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconSend, IconTrash, ICON_SIZE } from '@/components/ui/icons';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import { IMAGE_ACCEPT, precheckImage, type ChatAttachmentUpload } from '@/lib/chat/attachments';
 import type { LibraryAsset } from '@/lib/chat/asset-picker';
@@ -478,7 +478,7 @@ export function SlotComposer({
                       disabled={submitting}
                       onClick={() => removeSlot(slot.id)}
                     >
-                      <IconX size={ICON_SIZE.control} />
+                      <IconTrash size={ICON_SIZE.control} />
                     </IconButton>
                   )
                 }

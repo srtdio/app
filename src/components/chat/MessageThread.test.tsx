@@ -2383,7 +2383,18 @@ describe('tombstones, edited label and the neutral selection', () => {
       expect(html).toContain(mine ? DELETED_OWN_LABEL : DELETED_OTHER_LABEL);
       expect(html).not.toContain(mine ? DELETED_OTHER_LABEL : DELETED_OWN_LABEL);
       expect(html).toContain(T_UTC);
-      expect(html).toContain('data-meta-spacer');
+      // D8: one height always. One line (the label truncates, never wraps), the
+      // time in flow on its right (no absolute meta, no spacer).
+      expect(html).not.toContain('data-meta-spacer');
+      expect(html).toMatch(
+        /data-tombstone-label=""[^>]*class="[^"]*min-w-0 truncate whitespace-nowrap italic/,
+      );
+      const meta = /<span[^>]*data-meta="inline"[^>]*>/.exec(html)?.[0] ?? '';
+      expect(meta).toContain('static');
+      expect(meta).not.toContain('absolute');
+      expect(html.indexOf('data-meta="inline"')).toBeGreaterThan(
+        html.indexOf('data-tombstone-label'),
+      );
       expect(html).toContain('data-tombstone');
       expect(html).toContain('M18.364 18.364A9 9');
       expect(root.props).toMatchObject({ 'data-deleted': '' });
@@ -2392,6 +2403,7 @@ describe('tombstones, edited label and the neutral selection', () => {
       expect(cls).toContain('bg-panel-2');
       expect(cls).toContain('lit-bubble-other');
       expect(cls).toContain('text-fg-3');
+      expect(cls).toContain('whitespace-nowrap');
       expect(cls).not.toContain('border border-border');
       // Italic sits on the text, which takes the body size.
       expect(html).toContain('italic');

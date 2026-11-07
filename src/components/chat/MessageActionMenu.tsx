@@ -23,7 +23,6 @@ import {
   IconSelectText,
   IconText,
   IconTrash,
-  IconX,
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { Backdrop } from '@/components/ui/Backdrop';
@@ -831,14 +830,17 @@ export function EmojiPickerShell(props: {
   if (!open) return null;
 
   const close = (
-    <IconButton
-      label="Close emoji picker"
+    // Dismiss is the ghost "Clear" text Button (44 tall), never an X.
+    <Button
+      type="button"
+      variant="ghost"
+      aria-label="Close emoji picker"
       data-emoji-close=""
-      className="shrink-0"
+      className="shrink-0 px-3"
       onClick={onClose}
     >
-      <IconX size={ICON_SIZE.nav} />
-    </IconButton>
+      Clear
+    </Button>
   );
   const body =
     module !== null ? (

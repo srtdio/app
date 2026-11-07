@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from 'react';
+import { readFileSync } from 'node:fs';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -35,7 +36,7 @@ function button(label: string): HTMLButtonElement | undefined {
 }
 
 describe('SlotComposer removable slots', () => {
-  it('gives every slot after the first a remove X and drops that slot', () => {
+  it('gives every slot after the first a remove bin and drops that slot', () => {
     const onSubmit = vi.fn(async () => ({ ok: true as const }));
     act(() => root?.render(<SlotComposer onSubmit={onSubmit} canAttach={false} />));
     act(() => button('+ Another')?.click());
@@ -82,5 +83,18 @@ describe('SlotComposer composer row', () => {
     }
     expect(button('Send 2 checkpoints')).toBeDefined();
     expect(button('Send')).toBeUndefined();
+  });
+});
+
+describe('comment composers remove with the bin (no-cross)', () => {
+  it('Remove checkpoint N and Remove <file> are IconTrash, never an X', () => {
+    for (const file of ['./SlotComposer.tsx', './CommentComposer.tsx']) {
+      const src = readFileSync(new URL(file, import.meta.url), 'utf8');
+      expect(src).not.toMatch(/\bIconX\b/);
+      for (const m of src.matchAll(/label=\{`Remove [^`]*`\}/g)) {
+        const end = src.indexOf('</IconButton>', m.index);
+        expect(src.slice(m.index, end)).toContain('<IconTrash');
+      }
+    }
   });
 });

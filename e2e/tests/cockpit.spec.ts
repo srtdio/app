@@ -144,7 +144,7 @@ test('the operator opens the panel, walks every tab, and closes it @theme @deskt
     await expect(surface).toHaveCount(0);
     await expect(dot(page)).toBeFocused();
   } else {
-    await surface.getByRole('button', { name: 'Close' }).click();
+    await surface.getByRole('button', { name: 'Back' }).click();
     await expect(surface).toHaveCount(0);
   }
   // Reopening returns to the last tab.

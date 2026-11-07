@@ -87,12 +87,12 @@ test('owner at the free-plan limit gets Contact us and Book a call @theme', asyn
     'href',
     /^mailto:support@srtd\.io\?subject=Another%20workspace%20for%20/,
   );
-  for (const name of ['Copy email', 'Close']) {
+  for (const name of ['Copy email', 'Back']) {
     expectMinTouchTarget(
       await contact.getByRole('button', { name, exact: true }).last().boundingBox(),
     );
   }
-  await contact.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await contact.getByRole('button', { name: 'Back', exact: true }).last().click();
   await expect(contact).toBeHidden();
 
   // Book a call: three suggested slots plus another day; Book waits for a pick.

@@ -1739,11 +1739,13 @@ export function bubbleClass(
  * A deleted message's bubble: the same shell, side, radius, tail, padding and
  * light as a peer bubble (panel-2 fill, lit-bubble-other) in secondary ink
  * (fg-3). Its text takes the body size (italic) and its time the normal meta
- * (TombstoneBubble). Focusable for its one-row menu (Delete for me).
+ * (TombstoneBubble). One height always: one line, never wrapping (the label
+ * truncates), the time in flow on the right, so it is exactly as tall as a
+ * one-line text bubble. Focusable for its one-row menu (Delete for me).
  */
 export function tombstoneClass(shape: BubbleShape): string {
   return cn(
-    'relative flex min-w-0 max-w-full items-center gap-1.5 bg-panel-2 text-fg-3 lit-bubble-other focus-visible:lit-focus',
+    'relative flex min-w-0 max-w-full items-center gap-1.5 whitespace-nowrap bg-panel-2 text-fg-3 lit-bubble-other focus-visible:lit-focus',
     NO_TOUCH_SELECT,
     bubbleCorners(shape),
     sized(BUBBLE_PAD, shape.layout),
@@ -2514,12 +2516,23 @@ export function MessageBubble(props: {
               className={tombstoneClass(shape)}
               onDeleteForMe={selecting ? undefined : props.onDeleteForMe}
             >
-              <IconBan size={ICON_SIZE.inline} />
-              <span className={cn(bodyText(layout), 'italic')}>
+              <IconBan size={ICON_SIZE.inline} className="shrink-0" />
+              {/* One line: the label truncates, never wraps; the time sits in flow on its right. */}
+              <span
+                data-tombstone-label=""
+                className={cn(
+                  'min-w-0 truncate whitespace-nowrap italic',
+                  sized(BUBBLE_BODY_TYPE, layout),
+                )}
+              >
                 {deletedMessageLabel({ mine })}
-                <MetaSpacer meta={tombMeta} />
               </span>
-              <BubbleMetaView meta={tombMeta} mine={false} placement="inline" />
+              <BubbleMetaView
+                meta={tombMeta}
+                mine={false}
+                placement="inline"
+                className="static ml-1.5"
+              />
             </TombstoneBubble>,
             rail,
             railEdge,

@@ -3,8 +3,9 @@
 // nothing to message: you are already in the chat). A dark overlay (the media
 // viewers' bg-overlay, not a Backdrop), the person's photo large (the shared
 // Avatar at its profile role, scaled up, so the initials fallback is the same
-// one), the full name under it, and an X top right. A tap outside the photo,
-// Esc, or Back closes it, and focus returns to what was tapped. Paints in the
+// one), the full name under it, and "<" (Back, ViewerBackButton) top left on
+// the leading edge, never an X. A tap outside the photo, Esc, or Back closes
+// it, and focus returns to what was tapped. Paints in the
 // tap's frame from the trigger's hint plus the held members cache: no read.
 // Motion (docs/motion.md): the photo grows out of the tapped photo
 // (growFromCard); a swipe down follows the finger and, past the line, rises
@@ -14,8 +15,7 @@ import { useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/ui/Avatar';
-import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconX } from '@/components/ui/icons';
+import { ViewerBackButton } from '@/components/ui/ViewerBackButton';
 import { useBackGuard } from '@/lib/back-guard';
 import { useEscapeLayer } from '@/lib/escape-stack';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -44,10 +44,11 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
   const dragged = useRef(false);
   useEscapeLayer(true, onClose);
 
-  // Grows out of the tapped photo on the first frame (rendered in place).
+  // Only the photo block grows out of the tapped photo on the first frame
+  // (rendered in place); the dialog and its "<" never move.
   const triggerBox = trigger?.getBoundingClientRect();
   useGrowFromThumb(
-    contentRef,
+    dialogRef,
     triggerBox !== undefined && triggerBox.width > 0
       ? {
           left: triggerBox.left,
@@ -56,6 +57,7 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
           height: triggerBox.height,
         }
       : null,
+    () => contentRef.current,
   );
 
   // Swipe down closes: follows the finger, rises out past the line.
@@ -86,7 +88,7 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
   });
   useBackGuard({ active: true, onBack: onClose });
 
-  // As the other viewers: focus lands on the X, Tab stays inside, the page
+  // As the other viewers: focus lands on "<", Tab stays inside, the page
   // behind is inert, and focus goes back on close (modal-focus.ts).
   useModalFocus(dialogRef, true, { initial: () => closeRef.current });
   // A tap that never focused the photo (iOS): the tapped element still gets it back.
@@ -107,7 +109,7 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
       data-photo-viewer={props.userId}
       className="fixed inset-0 z-sheet flex touch-none flex-col items-center justify-center bg-overlay"
       {...drag}
-      // A tap anywhere but the photo and the X closes it.
+      // A tap anywhere but the photo and "<" closes it.
       onClick={(event) => {
         if (dragged.current) {
           dragged.current = false;
@@ -116,16 +118,16 @@ export function PhotoViewer(props: PhotoViewerProps): ReactElement {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <IconButton
-        buttonRef={closeRef}
-        type="button"
-        label="Close"
-        data-photo-viewer-close=""
-        onClick={onClose}
-        className="absolute right-3 top-[max(12px,env(safe-area-inset-top))] text-overlay-fg hover:bg-overlay-surface focus-visible:outline-overlay-fg"
+      <span
+        data-photo-viewer-back=""
+        className="absolute left-3 top-[max(12px,env(safe-area-inset-top))]"
       >
-        <IconX size={ICON_SIZE.control} />
-      </IconButton>
+        <ViewerBackButton
+          buttonRef={closeRef}
+          onClick={onClose}
+          className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-overlay-fg hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay-fg/70"
+        />
+      </span>
       <div
         ref={contentRef}
         className="flex flex-col items-center gap-24"

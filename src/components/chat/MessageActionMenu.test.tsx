@@ -637,3 +637,16 @@ describe('the divider is the 1px border token', () => {
     expect(src.split('data-menu-divider').length - 1).toBe(1);
   });
 });
+
+describe('emoji picker dismiss (no-cross)', () => {
+  it('closes with the ghost "Clear" text Button, never an X; remove-file keeps the bin', () => {
+    const src = readFileSync(new URL('./MessageActionMenu.tsx', import.meta.url), 'utf8');
+    const at = src.indexOf('aria-label="Close emoji picker"');
+    expect(at).toBeGreaterThan(-1);
+    const open = src.lastIndexOf('<Button', at);
+    const end = src.indexOf('</Button>', at);
+    expect(src.slice(open, end)).toContain('variant="ghost"');
+    expect(src.slice(open, end)).toContain('Clear');
+    expect(src).not.toMatch(/\bIconX\b/);
+  });
+});

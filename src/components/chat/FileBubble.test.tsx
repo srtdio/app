@@ -154,7 +154,7 @@ describe('FileBubble height is final before the image loads', () => {
 });
 
 describe('FileBubble states', () => {
-  it('sending: the local thumbnail dimmed, no thin bar inside the card (the ring sits beside it)', () => {
+  it('sending: the local thumbnail, no thin bar in the card (the ring sits beside it)', () => {
     const html = renderToStaticMarkup(
       <FileBubbleCard
         kind="pdf"
@@ -212,7 +212,9 @@ describe('FileBubble states', () => {
   });
 
   it('sent: no ring, the root is the plain fill', () => {
-    const html = renderToStaticMarkup(<FileBubble attachment={PDF} cache={cache()} presignEnabled />);
+    const html = renderToStaticMarkup(
+      <FileBubble attachment={PDF} cache={cache()} presignEnabled />,
+    );
     expect(html).not.toContain('data-upload-ring');
     expect(html).not.toContain('data-file-ring');
   });
