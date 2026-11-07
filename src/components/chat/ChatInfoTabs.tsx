@@ -62,7 +62,7 @@ import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Result } from '@srtdio/rpc';
 import type { MessageCursor } from '@/lib/chat/thread';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { classifyFileKind } from '@/lib/chat/attachments';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
@@ -445,9 +445,9 @@ const ROW = 'flex min-h-16 w-full items-center gap-3 border-b border-border py-2
 const ROW_ICON =
   'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-panel-2 text-fg-3 lit-media';
 
-/** "size · when" under a file name ("2 MB · 3 days ago", formatRelative). Pure. */
+/** "size · when" under a file name ("2 MB · 3 days ago", formatAgo). Pure. */
 function fileMetaLine(item: ChannelAttachmentItem, now: Date): string {
-  return `${humanizeSize(item.size)} · ${formatRelative(item.createdAt, now)}`;
+  return `${humanizeSize(item.size)} · ${formatAgo(item.createdAt, now)}`;
 }
 
 /**
@@ -759,7 +759,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
               key={`${item.messageId}-${index}`}
               item={item}
               sender={props.senderName(item.senderUserId)}
-              date={formatRelative(item.createdAt, now)}
+              date={formatAgo(item.createdAt, now)}
             />
           ))}
         </ul>
@@ -1141,7 +1141,7 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
           presignEnabled={props.presignEnabled}
           details={{
             sender: senderName(current.senderUserId),
-            time: formatRelative(current.createdAt, new Date(nowMs)),
+            time: formatAgo(current.createdAt, new Date(nowMs)),
           }}
           onIndexChange={setViewer}
           onClose={() => setViewer(null)}

@@ -32,7 +32,7 @@ import { readPostsByIds } from '@srtdio/posts';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { readBriefsByIds } from '@/lib/chat/briefs';
 import { readPlanTitles } from '@/lib/chat/plans';
-import { formatDueDate, formatRelative } from '@/lib/time';
+import { formatDueDate, formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { WriteResult } from '@/lib/chat/record';
@@ -364,7 +364,7 @@ export interface MarksListProps {
   messageFor: (messageId: string) => ThreadMessage | undefined;
   profiles: Map<string, ChatProfile>;
   currentUserId: string;
-  /** Unused by mark times (relative, formatRelative); kept for callers. */
+  /** Unused by mark times (relative, formatAgo); kept for callers. */
   timeZone?: string | undefined;
   onJump: (messageId: string) => void;
   onResolve: (messageId: string) => Promise<WriteResult>;
@@ -479,8 +479,8 @@ export function MarksList(props: MarksListProps): ReactElement {
                       : undefined) ?? 'Member');
             const when =
               message !== undefined && message.createdAt !== ''
-                ? formatRelative(message.createdAt, now)
-                : formatRelative(mark.markedAt, now);
+                ? formatAgo(message.createdAt, now)
+                : formatAgo(mark.markedAt, now);
             return (
               <MarkSheetRow
                 key={mark.messageId}
@@ -492,7 +492,7 @@ export function MarksList(props: MarksListProps): ReactElement {
                   ? {
                       resolver: {
                         name: resolverName(mark, props.currentUserId, displayNameOf),
-                        when: mark.resolvedAt !== null ? formatRelative(mark.resolvedAt, now) : '',
+                        when: mark.resolvedAt !== null ? formatAgo(mark.resolvedAt, now) : '',
                       },
                     }
                   : {})}

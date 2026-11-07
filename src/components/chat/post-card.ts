@@ -6,7 +6,7 @@
 // footer wording, media pills and refetch triggers are decided here too.
 
 import type { PostCardRow } from '../../../packages/posts/src/reads';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { onBehalfSuffix } from '@/components/pages/pcs/roles';
 import { entityUrlPath } from '@/lib/entityRef';
@@ -143,14 +143,14 @@ export function cardFooter(
   switch (post.stage) {
     case 'approved': {
       if (approverName !== null && post.approved_at !== null) {
-        const at = formatRelative(post.approved_at, now);
+        const at = formatAgo(post.approved_at, now);
         return {
           ...plain,
           check: true,
           state: at === '' ? `Approved by ${approverName}` : `Approved by ${approverName} · ${at}`,
         };
       }
-      const on = formatRelative(post.stage_entered_at, now);
+      const on = formatAgo(post.stage_entered_at, now);
       return { ...plain, check: true, state: on === '' ? 'Approved' : `Approved · ${on}` };
     }
     case 'review':

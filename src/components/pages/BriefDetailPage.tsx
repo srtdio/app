@@ -42,7 +42,7 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { entityUrlPath } from '@/lib/entityRef';
 import { dispatchWorkspaceDataChanged } from '@/lib/events';
-import { civilDay, formatDue, formatDueDate, formatOverdue, formatRelative } from '@/lib/time';
+import { civilDay, formatDue, formatDueDate, formatOverdue, formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { postFormatLabel } from '@/lib/post-format';
 import { copyText, COPY_FAILED } from '@/lib/clipboard';
@@ -233,11 +233,11 @@ export function briefBackTarget(historyState: unknown): 'pop' | '/briefs' {
 
 /**
  * When this brief was raised, in the app's one past-time format
- * (formatRelative): "just now", "5 min ago", "3 hours ago", "2 days ago",
+ * (formatAgo): "just now", "5 min ago", "3 hours ago", "2 days ago",
  * "4 months ago", "2 years ago". An unparseable created_at is returned unchanged.
  */
 export function briefRaisedLabel(createdAt: string, now: Date = new Date()): string {
-  return formatRelative(createdAt, now) || createdAt;
+  return formatAgo(createdAt, now) || createdAt;
 }
 
 /**

@@ -24,7 +24,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { ICON_SIZE, IconArrowUp, IconChevronDown } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { LANE_BOTTOM, LANE_TOP } from '@/components/ui/layout';
-import { civilDay, formatRelative, formatTime } from '@/lib/time';
+import { civilDay, formatAgo, formatTime } from '@/lib/time';
 import { dayPillLabel } from '@/components/chat/day-separators';
 import { BUBBLE_META_TYPE, EMOJI_PICK_TYPE, NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { RailThrough } from '@/components/chat/ThreadRail';
@@ -310,7 +310,7 @@ export function MessageInfoSheet(props: {
               </span>
               {pos.readAt !== null ? (
                 <span className="font-mono text-sm tabular-nums text-fg-3">
-                  {formatRelative(pos.readAt, new Date(props.nowMs))}
+                  {formatAgo(pos.readAt, new Date(props.nowMs))}
                 </span>
               ) : null}
             </li>

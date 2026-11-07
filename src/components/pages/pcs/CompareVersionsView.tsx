@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { SECTION_LABEL } from '@/components/ui/Text';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { diffSegments, type DiffKind, type DiffResult, type DiffSegment } from '@/lib/text-diff';
 
@@ -61,12 +61,12 @@ function isEmptyCaption(caption: string | null): boolean {
   return caption === null || caption.trim() === '';
 }
 
-// The app's one past-time format (formatRelative: "just now", "5 min ago",
+// The app's one past-time format (formatAgo: "just now", "5 min ago",
 // "2 days ago"). Falls back to the raw value if unparseable.
 function formatTimestamp(value: string, now: Date): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatRelative(value, now);
+  return formatAgo(value, now);
 }
 
 const NO_CAPTION = <span className="text-fg-3">No caption in this version.</span>;

@@ -143,7 +143,7 @@ import {
   transcribeVoiceNote,
   useVoiceRecord,
 } from '@/lib/chat/transcript-store';
-import { civilDay, formatRelative, formatTime } from '@/lib/time';
+import { civilDay, formatAgo, formatTime } from '@/lib/time';
 import { getDraft, setDraft, strippedReply, type DraftReply } from '@/lib/chat/drafts';
 import {
   BUBBLE_BODY_TYPE,
@@ -930,7 +930,7 @@ export function hasAlbum(message: Pick<ThreadMessage, 'attachments'>): boolean {
  * What the thread's one image viewer shows for a message: its album images (a
  * local preview stands in for an own instant send still uploading), plus the
  * bottom bar's sender and when it was sent in the app's one past-time format
- * (formatRelative: "just now", "5 min ago", "2 days ago"; relative to `now`).
+ * (formatAgo: "just now", "5 min ago", "2 days ago"; relative to `now`).
  * Pure.
  */
 export function threadLightbox(
@@ -946,7 +946,7 @@ export function threadLightbox(
     images,
     details: {
       sender: senderName(message, profiles),
-      time: formatRelative(messageTimeSource(message), now),
+      time: formatAgo(messageTimeSource(message), now),
     },
   };
 }

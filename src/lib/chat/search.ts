@@ -21,7 +21,7 @@ import {
 } from '@/lib/chat/chat-store';
 import { rowToThreadMessage, type ChatMessageRow } from '@/lib/chat/thread';
 import { resolveMentionText } from '@/lib/chat/mentions';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { generateTraceId } from '@/lib/trace';
 import { errorText } from '@/lib/error-copy';
 
@@ -497,13 +497,13 @@ export function snippetText(
 
 /**
  * A hit's date in the app's one past-time format (src/lib/time.ts
- * formatRelative): "just now", "5 min ago", "3 hours ago", "2 days ago",
+ * formatAgo): "just now", "5 min ago", "3 hours ago", "2 days ago",
  * "4 months ago", "2 years ago". Pure (now is passed in).
  */
 export function searchDateLabel(createdAt: string, nowMs: number): string {
   const ts = Date.parse(createdAt);
   if (Number.isNaN(ts)) return '';
-  return formatRelative(ts, new Date(nowMs));
+  return formatAgo(ts, new Date(nowMs));
 }
 
 /**

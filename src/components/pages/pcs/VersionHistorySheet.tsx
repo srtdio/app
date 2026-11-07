@@ -24,7 +24,7 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 import { SnapshotThumbs } from '@/components/pages/pcs/PostGallery';
 import { snapshotItems } from '@/components/pages/pcs/gallery-transforms';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 
 interface VersionHistorySheetProps {
@@ -81,12 +81,12 @@ export const VERSION_THUMBS_CLASS = 'min-w-0 shrink overflow-hidden';
 /** The text column: fills the row and never squeezes below 128px. */
 export const VERSION_TEXT_CLASS = 'flex min-w-32 flex-1 flex-col';
 
-// The app's one past-time format (formatRelative): "just now", "5 min ago",
+// The app's one past-time format (formatAgo): "just now", "5 min ago",
 // "2 days ago". Falls back to the raw value if unparseable.
 function formatTimestamp(value: string, now: Date): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatRelative(value, now);
+  return formatAgo(value, now);
 }
 
 /** Toggle an id in the compare selection, a max-two queue: re-picking a selected

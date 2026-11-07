@@ -23,7 +23,7 @@ import type {
   TrafficData,
   UsersData,
 } from '@/lib/cockpit/types';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { Bone, BoxSkeleton } from '@/lib/motion';
 
@@ -194,7 +194,7 @@ export function ErrorsTab({ source }: { source: Source<{ issues: SentryIssue[] }
                     </span>
                     <span className="truncate text-sm text-fg-3">
                       {issue.culprit} · {countText(issue.count)} times ·{' '}
-                      {formatRelative(issue.lastSeen, now)}
+                      {formatAgo(issue.lastSeen, now)}
                     </span>
                   </PressableRow>
                 </li>

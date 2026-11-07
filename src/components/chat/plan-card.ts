@@ -17,7 +17,7 @@ import type {
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isOwnerOrAdmin } from '@/components/pages/pcs/roles';
 import { formatCivilDayHeader } from '@/lib/plan-week';
-import { civilDay, formatDayRange, formatRelative } from '@/lib/time';
+import { civilDay, formatDayRange, formatAgo } from '@/lib/time';
 import { errorText } from '@/lib/error-copy';
 
 /** Card and screen copy. */
@@ -1140,10 +1140,10 @@ export function approverIds(bundle: PlanBundle): string[] {
 
 /**
  * When a slot was approved, in the app's one past-time format
- * (formatRelative): "just now", "5 min ago", "2 days ago". Pure (given the clock).
+ * (formatAgo): "just now", "5 min ago", "2 days ago". Pure (given the clock).
  */
 export function approvedWhen(iso: string, now: Date): string {
-  return formatRelative(iso, now);
+  return formatAgo(iso, now);
 }
 
 /** "Approved by {name} · {when}". Pure. */

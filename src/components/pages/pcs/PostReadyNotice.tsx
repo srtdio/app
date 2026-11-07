@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { REASON_COPY, errorText } from '@/lib/error-copy';
 import { supabase } from '@/lib/supabase';
@@ -216,7 +216,7 @@ export function PostReadyNotice({
         <div className="flex flex-col gap-1">
           <p className="text-base font-medium text-fg">{view.headline}</p>
           <p className="text-sm tabular-nums text-fg-3">
-            {formatRelative(view.latest.sent_at, now)}
+            {formatAgo(view.latest.sent_at, now)}
             {' · '}
             {checkpointCountLabel(view.latest.checkpoint_count)}
             {view.latest.sent_by !== null && resolveName(profiles, view.latest.sent_by) !== null
@@ -227,7 +227,7 @@ export function PostReadyNotice({
             <ul className="mt-1 flex flex-col gap-1 border-t border-border pt-2">
               {view.earlier.map((notif) => (
                 <li key={notif.id} className="text-sm tabular-nums text-fg-3">
-                  {formatRelative(notif.sent_at, now)}
+                  {formatAgo(notif.sent_at, now)}
                   {' · '}
                   {checkpointCountLabel(notif.checkpoint_count)}
                 </li>

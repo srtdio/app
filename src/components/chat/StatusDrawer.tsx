@@ -90,7 +90,7 @@ import {
   type PlanSegment,
   type StatusKey,
 } from '@/lib/chat/status-bar';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
@@ -636,7 +636,7 @@ export function StatusDrawerList(
                   <span className="min-w-0 flex-1">
                     <span className={ROW_TITLE}>{brief.title}</span>
                     <span className={cn(ROW_SUB, 'font-mono tabular-nums')}>
-                      {formatRelative(brief.created_at, now)}
+                      {formatAgo(brief.created_at, now)}
                     </span>
                   </span>
                   <Chevron />
@@ -659,8 +659,8 @@ export function StatusDrawerList(
               const message = messageFor(mark.messageId);
               const when =
                 message !== undefined && message.createdAt !== ''
-                  ? formatRelative(message.createdAt, now)
-                  : formatRelative(mark.markedAt, now);
+                  ? formatAgo(message.createdAt, now)
+                  : formatAgo(mark.markedAt, now);
               return (
                 <StatusMarkRow
                   key={mark.messageId}

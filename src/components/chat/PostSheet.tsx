@@ -352,7 +352,7 @@ export function PostSheetMedia(props: {
  */
 export function PostSheetDetails(props: {
   view: PostView;
-  /** Unused: moments read relative (formatRelative on the shared minute clock). */
+  /** Unused: moments read relative (formatAgo on the shared minute clock). */
   timeZone?: string | undefined;
   /** The workspace's zone: the target (due) date reads its calendar day on it. */
   workspaceZone: string | null | undefined;

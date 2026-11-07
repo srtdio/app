@@ -31,7 +31,7 @@ import { Bone } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-reads';
 import { knownMentionName, resolveMentionText, withFormer, type NameOf } from '@/lib/chat/mentions';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { chatDisplayName } from '@/lib/chat/chat-name';
 import { stripFormat } from '@srtdio/comments';
 import type { Result } from '@srtdio/rpc';
@@ -513,7 +513,7 @@ export function StarredList(props: StarredListProps): ReactElement {
               null)
             : null,
         mine: row.senderUserId !== null && row.senderUserId === currentUserId,
-        date: formatRelative(row.createdAt, new Date(nowMs)),
+        date: formatAgo(row.createdAt, new Date(nowMs)),
         text: starredRowText(row, nameOf),
         // The all-chats list (chat home's Starred chip) shows every line.
         fullText: props.channelId === null,

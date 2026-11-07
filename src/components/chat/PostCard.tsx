@@ -58,7 +58,7 @@ import {
   type SharedCardCache,
   type SharedCardReaders,
 } from '@/lib/chat/shared-cards';
-import { formatDueDate, formatRelative } from '@/lib/time';
+import { formatDueDate, formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { Button } from '@/components/ui/Button';
@@ -583,7 +583,7 @@ export function SharedPostCards({
 
 /**
  * An approved card whose approver name is not loaded (none on record, or the
- * name read failed) reads "Approved · 3 days ago" (formatRelative) from
+ * name read failed) reads "Approved · 3 days ago" (formatAgo) from
  * approved_at, never a blank name. Other footers pass through. Pure.
  */
 export function approvedWithoutName<F extends { state: string }>(
@@ -595,7 +595,7 @@ export function approvedWithoutName<F extends { state: string }>(
   if (post.stage !== 'approved' || approverName !== null || post.approved_at === null) {
     return footer;
   }
-  const at = formatRelative(post.approved_at, now);
+  const at = formatAgo(post.approved_at, now);
   if (at === '') return footer;
   return { ...footer, state: `Approved · ${at}` };
 }

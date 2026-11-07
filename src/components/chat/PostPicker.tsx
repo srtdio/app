@@ -83,7 +83,7 @@ import {
   formatDue,
   formatDueDate,
   formatOverdue,
-  formatRelative,
+  formatAgo,
 } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { formatCivilDayHeader } from '@/lib/plan-week';
@@ -1220,7 +1220,7 @@ export function BriefPickerList(props: {
                   ) : null}
                   <span className="flex-1" />
                   <span className="text-sm text-fg-2">
-                    {`${briefPostCountLabel(brief.postCount)} · Raised ${formatRelative(brief.createdAt, now)}`}
+                    {`${briefPostCountLabel(brief.postCount)} · Raised ${formatAgo(brief.createdAt, now)}`}
                   </span>
                 </span>
               </span>

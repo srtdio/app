@@ -40,7 +40,7 @@ import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { cn } from '@/lib/cn';
 import { Bone, GlideItem, itemIn, itemOut } from '@/lib/motion';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { UNDO_MS } from '@/lib/undo';
@@ -379,13 +379,13 @@ export function annotationChip(
   );
 }
 
-// Format a stored timestamp in the app's one past-time format (formatRelative:
+// Format a stored timestamp in the app's one past-time format (formatAgo:
 // "just now", "5 min ago", "2 days ago"). Falls back to the raw value if it is
 // somehow unparseable so nothing is silently dropped.
 function formatTimestamp(value: string, now: Date): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatRelative(value, now);
+  return formatAgo(value, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -906,11 +906,11 @@ export function pointActions(
   return base;
 }
 
-/** When an edit happened, in the app's one past-time format (formatRelative:
+/** When an edit happened, in the app's one past-time format (formatAgo:
  *  "just now", "5 min ago", "2 days ago"). Unparseable input yields '' so
  *  nothing raw is shown. */
 export function editedTime(ts: string, now: Date): string {
-  return formatRelative(ts, now);
+  return formatAgo(ts, now);
 }
 
 /** The "edited <time>" marker shared by comments and ledger points, or null when
@@ -2431,7 +2431,7 @@ export function Comments({
           </span>
         ) : null}
         <span data-comment-time="" className={ROW_TIME_CLASS}>
-          {formatRelative(comment.created_at, new Date(nowMs))}
+          {formatAgo(comment.created_at, new Date(nowMs))}
         </span>
         {opts.seq !== null ? (
           <span

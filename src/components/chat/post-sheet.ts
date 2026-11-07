@@ -6,7 +6,7 @@
 // every value is derived from the PR 2 card row.
 
 import type { PostCardRow } from '../../../packages/posts/src/reads';
-import { formatDueDate, formatRelative } from '@/lib/time';
+import { formatDueDate, formatAgo } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { errorText } from '@/lib/error-copy';
@@ -18,7 +18,7 @@ type ConfirmKind = 'approve' | 'reject' | 'send_review';
 
 /**
  * The agency's quiet line on a post in review: "Waiting on approvers · 3 days
- * ago" (formatRelative, since it entered review; "Waiting on approvers" without
+ * ago" (formatAgo, since it entered review; "Waiting on approvers" without
  * a date); null for anyone else or any other stage. Informational only, never
  * an action. `now` comes from the shared minute clock.
  */
@@ -28,7 +28,7 @@ export function agencyWaitingHint(
   now: Date = new Date(),
 ): string | null {
   if (side !== 'agency' || post.stage !== 'review') return null;
-  const since = formatRelative(post.stage_entered_at, now);
+  const since = formatAgo(post.stage_entered_at, now);
   return since === '' ? 'Waiting on approvers' : `Waiting on approvers · ${since}`;
 }
 
@@ -168,7 +168,7 @@ interface DetailRow {
  * The rows after Stage: target date, format (with "· N slides" past one item),
  * and the approval. With an approver on record the value is "Name · 3 days ago"
  * ("Name on behalf of client · ..." for an agency-side approver); an approved
- * post with no approver reads when it entered approved (formatRelative). The
+ * post with no approver reads when it entered approved (formatAgo). The
  * target date is a due date: its calendar day on the workspace zone.
  */
 export function detailRows(
@@ -200,13 +200,13 @@ export function detailRows(
     value: post.mediaCount > 1 ? `${format} · ${post.mediaCount} slides` : format,
   });
   if (post.approved_by !== null) {
-    const at = post.approved_at !== null ? formatRelative(post.approved_at, now) : '';
+    const at = post.approved_at !== null ? formatAgo(post.approved_at, now) : '';
     const who =
       approverName !== null ? `${approverName}${onBehalfSuffix(approverRole, brand)}` : '';
     const value = [who, at].filter((part) => part !== '').join(' · ');
     if (value !== '') rows.push({ key: 'approved', label: 'Approved', value });
   } else if (post.stage === 'approved') {
-    const on = formatRelative(post.stage_entered_at, now);
+    const on = formatAgo(post.stage_entered_at, now);
     if (on !== '') rows.push({ key: 'approved', label: 'Approved', value: on });
   }
   return rows;

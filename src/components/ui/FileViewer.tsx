@@ -47,7 +47,7 @@ import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
 import { SPINNER_BUSY, useDelayedBusy } from '@/lib/useDelayedBusy';
 import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
 import { humanizeSize } from '@/lib/assets';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { PresignError, type PresignCache } from '@/lib/asset-presign';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
@@ -432,7 +432,7 @@ export function fileViewerDetails(
   now: Date = new Date(),
 ): { sender: string; time: string } | null {
   if (sender === undefined && sentAt === undefined) return null;
-  const time = sentAt !== undefined ? formatRelative(sentAt, now) : '';
+  const time = sentAt !== undefined ? formatAgo(sentAt, now) : '';
   const name = sender ?? '';
   if (name === '' && time === '') return null;
   return { sender: name, time };
