@@ -1534,9 +1534,10 @@ describe('swipe to reply', () => {
     }
   }
 
-  it('only the bubble carries swipe handlers', () => {
+  it('without row swipe handlers only the bubble (its hold) takes pointer handlers', () => {
     const root = render(makeMessage({ mine: true, status: 'read' }));
-    // Only the bubble itself takes pointer handlers.
+    // The row's swipe handlers come from MessageRow (swipe.handlers); {} has none.
+    // MessageThread.swipe-both.test.tsx covers the row as the grab area.
     expect(find(root, 'onPointerDown')).toHaveLength(1);
     expect(find(root, 'data-swipe-reply')).toHaveLength(1);
   });
