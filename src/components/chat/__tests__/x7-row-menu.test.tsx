@@ -106,7 +106,13 @@ describe('X7 FT43: Hide is not a destructive action', () => {
     expect(items.map((i) => i.label)).toEqual(['Hide chat']);
     expect(items[0]?.icon).toBe(IconEyeOff);
     expect(items[0]?.tone).toBeUndefined();
-    expect(list).not.toContain('IconTrash');
+    // The only trash is the chip view's "Delete for me" bar (a real delete), never Hide.
+    const media = list.slice(list.indexOf('function mediaSelectBar('));
+    const mediaBar = media.slice(0, media.indexOf('\n}\n'));
+    const withoutMediaBar = list.replace(mediaBar, '');
+    expect(withoutMediaBar).not.toContain('<IconTrash');
+    expect(mediaBar).toContain('<IconTrash');
+    expect(mediaBar).not.toContain('Hide');
     // No confirm at all: Hide runs behind the Undo toast.
     expect(list).not.toContain('ConfirmDialog');
     expect(list).toContain('useUndoableAction');

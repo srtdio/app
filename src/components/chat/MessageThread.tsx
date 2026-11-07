@@ -117,13 +117,22 @@ import {
   IconTrash,
 } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import {
   cancelPendingLongPressesWithin,
   LONG_PRESS_MS,
   MOVE_CANCEL_PX,
 } from '@/components/ui/useLongPress';
 import { useToast } from '@/components/ui/toast';
-import { deleteConfirmCopy, purgeChatFiles, type PurgeChatOutcome } from '@/lib/chat/delete-flow';
+import {
+  deleteChoices,
+  deleteConfirmCopy,
+  purgeChatFiles,
+  selectionDeleteChoices,
+  type PurgeChatOutcome,
+} from '@/lib/chat/delete-flow';
+import { useDeleteForMe } from '@/lib/chat/use-delete-for-me';
+import { DeleteSheet } from '@/components/chat/DeleteSheet';
 import { cn } from '@/lib/cn';
 import { useCoarsePointer, useHoverPointer, usePrefersReducedMotion } from '@/lib/use-is-laptop';
 import type { ChannelSummary, ChatProfile } from '@/lib/chat-reads';
@@ -1727,17 +1736,89 @@ export function bubbleClass(
 }
 
 /**
- * A deleted message's bubble: same side, radius and tail as a live one, but a
- * muted card (panel-2 fill, hairline border), muted italic ink, and no focus (no
- * menu).
+ * A deleted message's bubble: the same shell, side, radius, tail, padding and
+ * light as a peer bubble (panel-2 fill, lit-bubble-other) in secondary ink
+ * (fg-3). Its text takes the body size (italic) and its time the normal meta
+ * (TombstoneBubble). Focusable for its one-row menu (Delete for me).
  */
 export function tombstoneClass(shape: BubbleShape): string {
   return cn(
-    'relative flex min-w-0 items-center gap-1.5 border border-border bg-panel-2 italic text-fg-3 lit-card-muted',
+    'relative flex min-w-0 max-w-full items-center gap-1.5 bg-panel-2 text-fg-3 lit-bubble-other focus-visible:lit-focus',
     NO_TOUCH_SELECT,
-    sized(BUBBLE_BODY_TYPE, shape.layout),
     bubbleCorners(shape),
     sized(BUBBLE_PAD, shape.layout),
+  );
+}
+
+/** The tombstone's one menu row. */
+export const DELETE_FOR_ME_ROW = 'Delete for me';
+
+/**
+ * A tombstone's bubble and its one-row menu (ui/ActionMenu: a sheet on a
+ * phone, a popover on a laptop): long-press, right-click, Shift+F10 or the
+ * ContextMenu key open "Delete for me". Without `onDeleteForMe` it is inert.
+ */
+function TombstoneBubble(props: {
+  className: string;
+  label: string;
+  onDeleteForMe?: (() => void) | undefined;
+  children: ReactNode;
+}): ReactElement {
+  const [open, setOpen] = useState(false);
+  const onDeleteForMe = props.onDeleteForMe;
+  const enabled = onDeleteForMe !== undefined;
+  const press = useLongPress(() => {
+    if (enabled) setOpen(true);
+  });
+  const bubble = (
+    <div
+      data-bubble=""
+      data-tombstone=""
+      data-testid="tombstone"
+      role="group"
+      aria-label={props.label}
+      className={cn(props.className, enabled && 'focus-visible:lit-focus')}
+      {...(enabled
+        ? {
+            tabIndex: 0,
+            'aria-haspopup': 'menu' as const,
+            ...press.handlers,
+            onContextMenu: (event: { preventDefault: () => void }) => {
+              event.preventDefault();
+              press.cancel();
+              setOpen(true);
+            },
+            onKeyDown: (event: { key: string; shiftKey: boolean; preventDefault: () => void }) => {
+              if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+              event.preventDefault();
+              setOpen(true);
+            },
+          }
+        : {})}
+    >
+      {props.children}
+    </div>
+  );
+  if (onDeleteForMe === undefined) return bubble;
+  return (
+    <>
+      {bubble}
+      <ActionMenu
+        title="Message actions"
+        trigger={null}
+        open={open}
+        onOpenChange={setOpen}
+        items={[
+          {
+            id: 'delete-for-me',
+            label: DELETE_FOR_ME_ROW,
+            icon: IconTrash,
+            tone: 'danger',
+            onSelect: onDeleteForMe,
+          },
+        ]}
+      />
+    </>
   );
 }
 
@@ -2232,6 +2313,8 @@ export function MessageBubble(props: {
   onRetry?: (messageId: string) => void;
   /** Deletes this failed own send (the "Not sent" line's Delete). */
   onDiscard?: (messageId: string) => void;
+  /** A tombstone's one menu row: hide it for the viewer (Delete for me); absent: inert. */
+  onDeleteForMe?: (() => void) | undefined;
   /** Cancels this own send while its files upload (the UploadRing's X). */
   onCancelUpload?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
@@ -2426,20 +2509,18 @@ export function MessageBubble(props: {
         <div className={column}>
           {senderLine}
           {withRailBox(
-            <div
-              data-bubble=""
-              data-tombstone=""
-              role="group"
-              aria-label={`${mine ? 'Your message' : `Message from ${name}`}, deleted, ${bubbleTimeLabel(message, timeZone)}`}
+            <TombstoneBubble
+              label={`${mine ? 'Your message' : `Message from ${name}`}, deleted, ${bubbleTimeLabel(message, timeZone)}`}
               className={tombstoneClass(shape)}
+              onDeleteForMe={selecting ? undefined : props.onDeleteForMe}
             >
               <IconBan size={ICON_SIZE.inline} />
-              <span>
+              <span className={cn(bodyText(layout), 'italic')}>
                 {deletedMessageLabel({ mine })}
                 <MetaSpacer meta={tombMeta} />
               </span>
               <BubbleMetaView meta={tombMeta} mine={false} placement="inline" />
-            </div>,
+            </TombstoneBubble>,
             rail,
             railEdge,
           )}
@@ -2635,7 +2716,7 @@ export function MessageBubble(props: {
                         nextVoiceId: props.nextVoiceId ?? null,
                         // The time sits in the note's last row (Transcribe row / length row).
                         meta: <BubbleMetaView meta={meta} mine={mine} placement={placement} />,
-                        ...(!mine && props.onTranscribe !== undefined && isTranscribable(message)
+                        ...(props.onTranscribe !== undefined && isTranscribable(message)
                           ? { onTranscribe: props.onTranscribe }
                           : {}),
                       }}
@@ -3097,6 +3178,8 @@ interface MessageRowProps {
   ) => void;
   onRetry?: (messageId: string) => void;
   onDiscard?: (messageId: string) => void;
+  /** A tombstone's Delete for me (hide it for the viewer). */
+  onHideMessage?: (message: ThreadMessage) => void;
   onCancelUpload?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
   onOpenPrivateReply?: (reply: PrivateReply) => void;
@@ -3286,6 +3369,9 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       }}
       {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
       {...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {})}
+      {...(props.onHideMessage !== undefined && tombstone
+        ? { onDeleteForMe: () => props.onHideMessage?.(props.message) }
+        : {})}
       {...(props.onCancelUpload !== undefined ? { onCancelUpload: props.onCancelUpload } : {})}
       {...(props.onJumpToMessage !== undefined ? { onJumpToMessage: props.onJumpToMessage } : {})}
       {...(props.onOpenPrivateReply !== undefined
@@ -3568,8 +3654,15 @@ function ThreadBody(
     onForwardMessage?: (message: ThreadMessage) => boolean;
     /** Menu "Edit" picked; absent hides it. */
     onEditMessage?: (message: ThreadMessage) => void;
-    /** Menu "Delete" picked: the single-message confirm opens; absent hides it. */
-    onDeleteMessage?: (message: ThreadMessage) => void;
+    /**
+     * Menu "Delete" picked (`nowMs`: when the menu opened, server time): the
+     * delete sheet, or in Personal notes the single-message confirm; absent hides it.
+     */
+    onDeleteMessage?: (message: ThreadMessage, nowMs: number) => void;
+    /** Delete for me is available: Delete shows on every sent message, not only own ones. */
+    canDeleteForMe?: boolean;
+    /** A tombstone's Delete for me (its one menu row); absent leaves tombstones inert. */
+    onHideMessage?: (message: ThreadMessage) => void;
     onChangePriority?: (messageId: string) => void;
     /** A jump-to request (seq makes a repeat of the same id fire again). */
     /** quiet: a search jump whose message is gone opens the chat with no toast. */
@@ -4398,6 +4491,7 @@ function ThreadBody(
   const onSwipeReply = useStableCallback(props.onReply);
   const onTranscribeRow = useOptionalCallback(props.onTranscribe);
   const onRetryRow = useOptionalCallback(props.onRetry);
+  const onHideRow = useOptionalCallback(props.onHideMessage);
   const onDiscardRow = useOptionalCallback(props.onDiscard);
   const onCancelUploadRow = useOptionalCallback(props.onCancelUpload);
   const onOpenReactionsRow = useOptionalCallback(props.onOpenReactions);
@@ -4496,6 +4590,14 @@ function ThreadBody(
       ? ownMessageActions(menu.message, menu.openedAt, props.notes === true)
       : { canEdit: false, canDelete: false };
   const menuFailed = menu !== null && canDiscardFailed(menu.message);
+  // Delete for me: any sent, live message outside Personal notes.
+  const menuForMe =
+    menu !== null &&
+    props.canDeleteForMe === true &&
+    props.notes !== true &&
+    !menuFailed &&
+    menu.message.state === 'sent' &&
+    menu.message.deleted !== true;
   const replyPrivately = props.replyPrivately;
   const menuSender = menu?.message.senderUserId ?? null;
   const menuReplyPrivately =
@@ -4756,6 +4858,9 @@ function ThreadBody(
                       {...(onDiscardRow !== undefined && props.selection === undefined
                         ? { onDiscard: onDiscardRow }
                         : {})}
+                      {...(onHideRow !== undefined && props.selection === undefined
+                        ? { onHideMessage: onHideRow }
+                        : {})}
                       {...(onCancelUploadRow !== undefined
                         ? { onCancelUpload: onCancelUploadRow }
                         : {})}
@@ -4833,16 +4938,17 @@ function ThreadBody(
           if (menu) props.onEditMessage?.(menu.message);
         }}
         canDelete={
-          (props.onDeleteMessage !== undefined && menuOwn.canDelete) ||
+          (props.onDeleteMessage !== undefined && (menuOwn.canDelete || menuForMe)) ||
           (menuFailed && props.onDiscard !== undefined)
         }
         onDelete={() => {
           if (!menu) return;
           // A failed send never left the device: it goes at once, no confirm.
           if (menuFailed) props.onDiscard?.(menu.message.id);
-          else props.onDeleteMessage?.(menu.message);
+          else props.onDeleteMessage?.(menu.message, menu.openedAt);
         }}
         failedSend={menuFailed}
+        deleteForMeOnly={menuForMe && !menuOwn.canDelete}
         notes={props.notes === true}
         canSaveToNotes={
           menu !== null &&
@@ -5396,6 +5502,22 @@ export function deleteHasUndo(message: Pick<ThreadMessage, 'attachments' | 'stat
   return message.state === 'sent' && message.attachments.length === 0;
 }
 
+/** The menu Delete's sheet target: one message, and whether it offers "Delete for everyone". */
+interface DeleteSheetTarget {
+  message: ThreadMessage;
+  everyone: boolean;
+}
+
+/** Time since a message's server created_at at `nowMs`, or null when it has none. Pure. */
+export function messageAgeMs(
+  message: Pick<ThreadMessage, 'createdAt'>,
+  nowMs: number,
+): number | null {
+  if (message.createdAt === '') return null;
+  const created = Date.parse(message.createdAt);
+  return Number.isNaN(created) ? null : nowMs - created;
+}
+
 /** The Undo toast's title for a deleted message. */
 export const MESSAGE_DELETED_UNDO = 'Message deleted';
 
@@ -5941,6 +6063,26 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       },
       revert,
     });
+  };
+  // Delete for me: the sheet's second choice (and a tombstone's only one).
+  // Hidden at once behind the "Deleted for you" Undo; written when it ends.
+  const deleteForMe = useDeleteForMe({ userId: props.currentUserId, workspaceId });
+  const canDeleteForMe =
+    channelId !== undefined &&
+    props.notes !== true &&
+    props.currentUserId !== undefined &&
+    workspaceId !== null;
+  const hideForMe = (messages: readonly ThreadMessage[]): void => {
+    if (channelId === undefined) return;
+    const sent = messages.filter((m) => m.state === 'sent');
+    deleteForMe(sent.map((m) => ({ messageId: m.id, channelId })));
+  };
+  // The menu Delete's sheet: one message, "Delete for everyone" when it qualifies.
+  const [deleteSheetFor, setDeleteSheetFor] = useState<DeleteSheetTarget | null>(null);
+  // Today's delete for everyone: a 4s Undo for text, the files confirm otherwise.
+  const deleteForEveryone = (message: ThreadMessage): void => {
+    if (deleteHasUndo(message)) deleteWithUndo(message);
+    else setDeleteOneFor(message);
   };
   // Remove files, keep the message: the files go at once (the overlay), behind
   // the Undo strip; the record, purge and signal run when the window ends (or
@@ -6709,13 +6851,38 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   };
   const openPlanHere = (planId: string): void =>
     statusPlanCards?.openPlan({ planId, senderName: planSender(planId) });
+  // Selection Delete outside notes: "Delete for everyone" only when every
+  // selected message qualifies; "Delete for me" always.
+  const selectedMessages = [...selected].flatMap((id) => {
+    const message = messagesById.get(id);
+    return message !== undefined ? [message] : [];
+  });
+  const selectionNow = selecting ? serverNow() : 0;
+  const selectionForMe =
+    selecting && canDeleteForMe
+      ? {
+          everyone:
+            deleteBlock === null &&
+            selectionDeleteChoices(
+              selectedMessages.map((m) => ({
+                mine: m.mine && m.state === 'sent' && m.deleted !== true,
+                ageMs: messageAgeMs(m, selectionNow),
+              })),
+            ).everyone,
+          onDeleteForMe: () => {
+            hideForMe(selectedMessages);
+            exitSelection();
+          },
+        }
+      : undefined;
   // Selection mode's bar: in place of the composer, in the chat or the open thread.
   const selectionBar =
     selecting && onDeleteMessages !== undefined ? (
       <SelectionBar
         count={selected.size}
-        block={deleteBlock}
-        canDelete={selected.size > 0 && deleteBlock === null}
+        block={selectionForMe !== undefined ? null : deleteBlock}
+        canDelete={selected.size > 0 && (selectionForMe !== undefined || deleteBlock === null)}
+        {...(selectionForMe !== undefined ? { forMe: selectionForMe } : {})}
         {...(canForwardHere && selectionForwardable(selected, selectable)
           ? { onForward: () => setForwardFor(selectedForForward(selected, selectable)) }
           : {})}
@@ -6812,13 +6979,33 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     viewerUserId: props.currentUserId,
     mentions: props.mentions,
     workspaceId,
-    ...(onDeleteMessages !== undefined && !selecting
+    ...((onDeleteMessages !== undefined || canDeleteForMe) && !selecting
       ? {
-          onDeleteMessage: (message: ThreadMessage) => {
-            if (deleteHasUndo(message)) deleteWithUndo(message);
-            else setDeleteOneFor(message);
+          onDeleteMessage: (message: ThreadMessage, nowMs: number) => {
+            const choices = deleteChoices({
+              mine: message.mine && message.state === 'sent' && message.deleted !== true,
+              ageMs: messageAgeMs(message, nowMs),
+              notes,
+              failed: false,
+            });
+            // Personal notes keeps its single Delete, exactly as before.
+            if (choices.kind === 'notes') {
+              if (onDeleteMessages !== undefined) deleteForEveryone(message);
+              return;
+            }
+            if (choices.kind !== 'sheet') return;
+            const everyone = choices.everyone && onDeleteMessages !== undefined;
+            if (!canDeleteForMe) {
+              if (everyone) deleteForEveryone(message);
+              return;
+            }
+            setDeleteSheetFor({ message, everyone });
           },
+          canDeleteForMe,
         }
+      : {}),
+    ...(canDeleteForMe && !selecting
+      ? { onHideMessage: (message: ThreadMessage) => hideForMe([message]) }
       : {}),
     ...(onEditMessage !== undefined && !selecting ? { onEditMessage: startEdit } : {}),
     ...(onRemoveFiles !== undefined && !selecting ? { onRemoveFiles } : {}),
@@ -7138,6 +7325,18 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         onCancel: () => setDeleteOneFor(null),
         onConfirm: () => void confirmDeleteOne(),
       })}
+      <DeleteSheet
+        open={deleteSheetFor !== null}
+        count={1}
+        everyone={deleteSheetFor?.everyone === true}
+        onEveryone={() => {
+          if (deleteSheetFor !== null) deleteForEveryone(deleteSheetFor.message);
+        }}
+        onForMe={() => {
+          if (deleteSheetFor !== null) hideForMe([deleteSheetFor.message]);
+        }}
+        onClose={() => setDeleteSheetFor(null)}
+      />
       {taskChannel !== null ? (
         <SearchWordsContext.Provider value={headerWords}>
           <TaskSheet

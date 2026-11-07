@@ -70,6 +70,7 @@ import {
   type RowSelection,
   SELECTED_ROW_TINT,
   tombstoneClass,
+  DELETE_FOR_ME_ROW,
   OWN_BUBBLE_CONTENT,
   SwipeReplyIcon,
   THREAD_LIST_CLASS,
@@ -1061,12 +1062,18 @@ describe('voice-only bubble', () => {
     expect(isValidElement(voiceContext(root).meta)).toBe(true);
   });
 
-  it('hands the Transcribe flow to received recorded notes only', () => {
+  it('hands the Transcribe flow to every recorded note, own notes included', () => {
     const onTranscribe = vi.fn();
     const received = voiceContext(renderBubble(voice, { onTranscribe }));
     expect(received.onTranscribe).toBe(onTranscribe);
-    const own = voiceContext(renderBubble({ ...voice, mine: true }, { onTranscribe }));
-    expect(own.onTranscribe).toBeUndefined();
+    const own = voiceContext(
+      renderBubble({ ...voice, mine: true, senderUserId: 'me' }, { onTranscribe }),
+    );
+    expect(own.onTranscribe).toBe(onTranscribe);
+    const ownSending = voiceContext(
+      renderBubble({ ...voice, mine: true, state: 'sending' }, { onTranscribe }),
+    );
+    expect(ownSending.onTranscribe).toBeUndefined();
     const sending = voiceContext(renderBubble({ ...voice, state: 'sending' }, { onTranscribe }));
     expect(sending.onTranscribe).toBeUndefined();
     expect(voiceContext(renderBubble(voice)).onTranscribe).toBeUndefined();
@@ -2381,9 +2388,13 @@ describe('tombstones, edited label and the neutral selection', () => {
       expect(html).toContain('M18.364 18.364A9 9');
       expect(root.props).toMatchObject({ 'data-deleted': '' });
       const cls = tombstoneClass({ mine, head: false, tail: true, layout: 'touch' });
-      expect(cls).toContain('border border-border');
-      expect(cls).toContain('italic');
+      // The same shell and lighting as a peer bubble, in secondary ink.
+      expect(cls).toContain('bg-panel-2');
+      expect(cls).toContain('lit-bubble-other');
       expect(cls).toContain('text-fg-3');
+      expect(cls).not.toContain('border border-border');
+      // Italic sits on the text, which takes the body size.
+      expect(html).toContain('italic');
       expect(cls).toContain(mine ? 'rounded-br-[4px]' : 'rounded-bl-[4px]');
       expect(String(root.props.className)).toContain(mine ? 'flex-row-reverse' : 'flex-row');
     }
@@ -2401,6 +2412,31 @@ describe('tombstones, edited label and the neutral selection', () => {
     expect(els.some((el) => el.props.tabIndex !== undefined)).toBe(false);
     expect(renderStrip(root)).not.toContain('👍');
     expect(renderStrip(root)).not.toContain('role="checkbox"');
+  });
+
+  it('Delete for me: a tombstone with onDeleteForMe is focusable and names its one-row menu', () => {
+    expect(DELETE_FOR_ME_ROW).toBe('Delete for me');
+    const html = renderStrip(render(tomb, { onDeleteForMe: noop }));
+    expect(html).toContain('data-testid="tombstone"');
+    expect(html).toMatch(/data-testid="tombstone"[^>]*tabindex="0"/);
+    expect(html).toMatch(/data-testid="tombstone"[^>]*aria-haspopup="menu"/);
+    expect(html).toContain('focus-visible:lit-focus');
+    // The menu is closed until a long-press, right-click or Shift+F10.
+    expect(html).not.toContain(DELETE_FOR_ME_ROW);
+  });
+
+  it('Delete for me: a tombstone without onDeleteForMe, or in select mode, stays inert', () => {
+    const inert = renderStrip(render(tomb));
+    expect(inert).toContain('data-testid="tombstone"');
+    expect(inert).not.toContain('tabindex="0"');
+    expect(inert).not.toContain('aria-haspopup');
+    const selecting = renderStrip(
+      render(tomb, {
+        onDeleteForMe: noop,
+        selection: { role: 'none', checked: false, onToggle: noop },
+      }),
+    );
+    expect(selecting).not.toContain('aria-haspopup');
   });
 
   it('a deleted card message shows the tombstone, not the card', () => {
@@ -2559,7 +2595,8 @@ describe('D7: long-press never selects text or shows the iOS callout', () => {
     const tomb = bubble(makeMessage({ body: '', deleted: true }));
     for (const cls of NO_SELECT) {
       expect(String(tomb.props.className).split(' ')).toContain(cls);
-      expect(String(find(tomb, 'data-tombstone')?.props.className).split(' ')).toContain(cls);
+      const shell = tombstoneClass({ mine: false, head: false, tail: true, layout: 'touch' });
+      expect(shell.split(' ')).toContain(cls);
     }
   });
 

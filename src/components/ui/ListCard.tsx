@@ -23,12 +23,13 @@ export type ListCardHooks = { [hook: `data-${string}`]: string | undefined };
 /**
  * The picture slot (72x72, left, top-aligned, 12 to the text):
  * - person: the person's photo, a circle (ui/Avatar at 72; initials on their colour when none);
+ *   `node` replaces the Avatar with a caller's circle at 72 (Personal notes: NotesAvatar);
  * - image: a caller's picture (a thumbnail, a group photo or mark) in the radius 8 box;
  * - icon: a 24 glyph in fg-2 on the panel-2 radius 8 box (a brief, Personal notes);
  * - placeholder: ui/PostPlaceholder ("Aa", the play glyph) filling the radius 8 box.
  */
 export type ListCardPicture =
-  | { kind: 'person'; name: string; src?: string | null | undefined }
+  | { kind: 'person'; name: string; src?: string | null | undefined; node?: ReactNode }
   | { kind: 'image'; node: ReactNode }
   | { kind: 'icon'; icon: ComponentType<IconProps> }
   | { kind: 'placeholder'; placeholder: PostPlaceholderKind };
@@ -172,7 +173,9 @@ function Picture({
       {...hooks}
       className={cn(LIST_CARD_PICTURE, kind !== 'person' && PICTURE_BOX)}
     >
-      {picture.kind === 'person' ? (
+      {picture.kind === 'person' && picture.node !== undefined ? (
+        picture.node
+      ) : picture.kind === 'person' ? (
         <Avatar
           name={picture.name}
           {...(picture.src !== null && picture.src !== undefined ? { src: picture.src } : {})}

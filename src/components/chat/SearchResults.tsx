@@ -9,6 +9,7 @@ import { SettleLanding } from '@/components/chat/SettleLanding';
 import { supabase } from '@/lib/supabase';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { chatDisplayName } from '@/lib/chat/chat-name';
+import { useHiddenIds } from '@/lib/chat/hides';
 import type { PreviewNameOf } from '@/lib/chat/chat-store';
 import {
   createSearchRunner,
@@ -84,7 +85,15 @@ const RESULT_ROW = cn(
 /** The result avatar (row role): a group's rounded square, a person's circle, the notes notebook. */
 function resultAvatar(channel: ChannelSummary): ReactElement {
   if (channel.channelType === 'notes') {
-    return <NotesAvatar role="row" src={channel.avatarUrl} surface="bg" hoverSurface="panel-2" />;
+    return (
+      <NotesAvatar
+        role="row"
+        src={channel.avatarUrl}
+        surface="bg"
+        hoverSurface="panel-2"
+        shape="round"
+      />
+    );
   }
   return (
     <span className="flex shrink-0">
@@ -171,6 +180,8 @@ interface SearchResultsProps {
   onClear?: () => void;
   /** The end-of-list marker the next-page observer watches. */
   sentinelRef?: RefObject<HTMLLIElement>;
+  /** Delete for me: message ids the caller hid; their hits are left out. */
+  hiddenIds?: ReadonlySet<string>;
 }
 
 /** Skeleton rows while the first page of messages loads. */
@@ -192,7 +203,9 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
     sendable && (!current || props.state.status === 'loading' || props.state.status === 'idle');
   const failed = current && props.state.status === 'error';
   const hits = current && props.state.status === 'ready' ? props.state.hits : [];
+  const hidden = props.hiddenIds;
   const rows = hits.flatMap((hit) => {
+    if (hidden?.has(hit.id) === true) return [];
     const channel = props.channelsById.get(hit.channelId);
     return channel !== undefined ? [{ hit, channel }] : [];
   });
@@ -362,5 +375,10 @@ export function SearchResults(
           status: 'ready',
         }
       : props.state;
-  return <div ref={rootRef}>{searchResultsView({ ...props, state, onRetry, sentinelRef })}</div>;
+  const hiddenIds = useHiddenIds();
+  return (
+    <div ref={rootRef}>
+      {searchResultsView({ ...props, state, onRetry, sentinelRef, hiddenIds })}
+    </div>
+  );
 }

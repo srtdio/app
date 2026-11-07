@@ -88,7 +88,7 @@ describe('notes avatar', () => {
   });
 });
 
-describe('the same notes avatar in the header, picker and search; the list card shows the notes icon', () => {
+describe('the same notes avatar on the list card, header, picker and search', () => {
   const notes = notesSummary(WS, ME, PHOTO);
 
   it('tile, header, forward picker and search rows render it from the summary', () => {
@@ -141,19 +141,19 @@ describe('the same notes avatar in the header, picker and search; the list card 
         onRetry: () => {},
       }),
     );
-    for (const html of [header, picker, search]) {
+    for (const html of [tile, header, picker, search]) {
       expect(html).toContain('data-notes-avatar');
       expect(html).toContain(`src="${PHOTO}"`);
     }
-    // The chat list's Personal notes card is ui/ListCard: the notes icon on
-    // the panel-2 box at 72 (the 'icon' picture), never a photo.
-    expect(tile).toContain('data-list-card-picture="icon"');
+    // The chat list's Personal notes card is ui/ListCard's person slot: the
+    // caller's own photo, round at 72 like every person card, from the summary.
+    expect(tile).toContain('data-list-card-picture="person"');
     expect(tile).toContain('data-notes-picture=""');
-    expect(tile).not.toContain(`src="${PHOTO}"`);
-    // The shared avatar roles, note kind: header 32 (the thread header), row 40 (picker, search).
+    expect(tile).toContain('h-18 w-18 rounded-full');
+    // Header 32 and picker 40 keep the note rounded square; search rows match the card (round).
     expect(header).toContain('h-8 w-8 rounded-lg');
     expect(picker).toContain('h-10 w-10 rounded-lg');
-    expect(search).toContain('h-10 w-10 rounded-lg');
+    expect(search).toContain('h-10 w-10 rounded-full');
     expect(from).not.toHaveBeenCalled();
     expect(rpc).not.toHaveBeenCalled();
   });
@@ -182,5 +182,48 @@ describe('header second line', () => {
     expect(threadHeaderLine({ ...dm, notes: false })).toBe('Studio');
     expect(threadHeaderLine({ ...dm, notes: false, peerTyping: true })).toBe('typing…');
     expect(threadHeaderLine({ ...dm, notes: false, isGroup: true })).toBeNull();
+  });
+});
+
+describe('U9: the notes card picture', () => {
+  it('own photo with the notes badge once loaded; the notebook without a photo', () => {
+    const photo = renderToStaticMarkup(
+      notesAvatarView({
+        role: 'profile',
+        src: PHOTO,
+        loaded: true,
+        failed: false,
+        surface: 'panel',
+        shape: 'round',
+      }),
+    );
+    expect(photo).toContain('data-notes-avatar="photo"');
+    expect(photo).toContain('data-notes-badge');
+    expect(photo).toContain('h-18 w-18 rounded-full');
+    const none = renderToStaticMarkup(
+      notesTile({
+        notes: notesSummary(WS, ME),
+        selected: false,
+        selecting: false,
+        onSelect: () => {},
+      }),
+    );
+    expect(none).toContain('data-notes-avatar="notebook"');
+    expect(none).not.toContain('data-notes-badge');
+    expect(none).not.toContain('<img');
+    expect(none).toContain('data-list-card-picture="person"');
+  });
+
+  it('the header and picker keep the note shape by default', () => {
+    const header = renderToStaticMarkup(
+      notesAvatarView({
+        role: 'header',
+        src: PHOTO,
+        loaded: true,
+        failed: false,
+        surface: 'panel',
+      }),
+    );
+    expect(header).toContain('h-8 w-8 rounded-lg');
   });
 });

@@ -33,6 +33,7 @@ const t = (name: string): string => `e2e/tests/${name}.spec.ts`;
 
 const CHAT_SPECS = [
   'chat-back-navigation',
+  'chat-delete-for-me',
   'chat-file-viewer',
   'chat-imessage-threads',
   'chat-keyboard-gap',

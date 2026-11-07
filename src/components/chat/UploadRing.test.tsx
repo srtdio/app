@@ -214,9 +214,66 @@ describe('T6: upload states in light and dark', () => {
     expect(dark).toMatchSnapshot('dark');
   });
 
-  it('voice done draws the real waveform, not the flat line', () => {
+  it('voice done draws the real waveform at full emphasis', () => {
     const html = paint([voiceDone], 'light');
-    expect(html).toContain('data-voice-flat="hidden"');
+    expect(html).not.toContain('data-voice-flat');
+    expect(html).not.toMatch(/data-voice-bars="peaks" class="[^"]*opacity-\[\.45\]/);
     expect(html).toContain('data-voice-bars="peaks"');
+  });
+});
+
+describe('U6: the voice ring draws in the bubble inks', () => {
+  function voicePaint(mine: boolean): string {
+    return renderToStaticMarkup(
+      <MessageAttachments
+        attachments={[voiceUploading]}
+        cache={cache()}
+        presignEnabled
+        voice={{
+          messageId: 'm-voice',
+          mine,
+          sender: { name: 'Asha Rao' },
+          nextVoiceId: null,
+        }}
+        onCancelUpload={() => {}}
+      />,
+    ).replace(/blob:nodedata:[0-9a-f-]+/g, 'blob:local');
+  }
+
+  it('ink replaces the overlay disc and ink, with no shadow', () => {
+    const html = renderToStaticMarkup(
+      <UploadRing
+        progress={0.5}
+        variant="voice"
+        ink={{ disc: 'bg-panel-3', track: 'text-fg-3', arc: 'text-accent' }}
+      />,
+    );
+    expect(html).not.toContain('bg-overlay');
+    expect(html).not.toContain('text-overlay');
+    expect(html).not.toContain('lit-media');
+    expect(html).toMatch(/data-upload-disc="" class="[^"]*bg-panel-3/);
+    expect(html).toContain('class="text-fg-3"');
+    expect(html).toMatch(/data-upload-arc=""[^>]*class="[^"]*text-accent/);
+    expect(ringClass(html)).toContain('text-accent');
+  });
+
+  it('an own note uploading: the own-bubble inks, the testid and the real bars at .45', () => {
+    const html = voicePaint(true);
+    expect(html).toContain('data-testid="voice-uploading"');
+    expect(html).toContain('data-voice-side="own"');
+    expect(html).toMatch(/data-upload-disc="" class="[^"]*bg-on-bubble\/\[\.12\]/);
+    expect(html).toContain('class="text-on-bubble/[.45]"');
+    expect(html).toMatch(/data-upload-arc=""[^>]*class="[^"]*text-accent-fg/);
+    expect(html).not.toContain('bg-overlay');
+    expect(html).toMatch(/data-voice-bars="[a-z]+" class="[^"]*opacity-\[\.45\]/);
+    expect(html).not.toContain('data-voice-flat');
+  });
+
+  it('a peer-side voice ring takes the peer bubble inks', () => {
+    const html = voicePaint(false);
+    expect(html).toContain('data-voice-side="received"');
+    expect(html).toMatch(/data-upload-disc="" class="[^"]*bg-panel-3/);
+    expect(html).toMatch(/data-upload-arc=""[^>]*class="[^"]*text-accent(?!-)/);
+    expect(html).not.toContain('bg-overlay');
   });
 });

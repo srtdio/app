@@ -227,6 +227,9 @@ test('personal notes: a failed ensure shows the Retry state, not a skeleton', as
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });
 
+/** The notes avatar outside the list card (the thread header). */
+const HEADER_NOTES_AVATAR = '[data-notes-avatar]:not([data-notes-tile] [data-notes-avatar])';
+
 for (const photo of [true, false]) {
   const name = photo ? 'with photo' : 'without photo';
   test(`notes avatar: ${name}`, async ({ page }) => {
@@ -236,17 +239,23 @@ for (const photo of [true, false]) {
     await page.goto('/chat');
     const tile = page.locator('[data-notes-tile]');
     await tile.waitFor({ state: 'visible', timeout: 30_000 });
-    // The notes card is ui/ListCard: the notes icon on its 72 picture box, never a photo.
+    // The notes card is ui/ListCard's person slot at 72: the own photo, round,
+    // with the notes badge; the notebook (no badge) without a photo.
     const picture = tile.locator('[data-notes-picture]');
+    await expect(picture).toBeVisible();
     const box = await picture.boundingBox();
     expect(Math.round(box?.width ?? 0)).toBe(72);
     expect(Math.round(box?.height ?? 0)).toBe(72);
-    await expect(tile.locator('img')).toHaveCount(0);
+    const tileAvatar = tile.locator('[data-notes-avatar]');
+    await expect(tileAvatar).toHaveAttribute('data-notes-avatar', photo ? 'photo' : 'notebook');
+    await expect(tileAvatar).toHaveClass(/rounded-full/);
+    await expect(tile.locator('[data-notes-badge]')).toHaveCount(photo ? 1 : 0);
+    if (!photo) await expect(tile.locator('img')).toHaveCount(0);
 
     await tile.click();
     const header = page.locator('[data-header-line]');
     await expect(header).toHaveText('Only you can see this');
-    const headAvatar = page.locator('[data-notes-avatar]').first();
+    const headAvatar = page.locator(HEADER_NOTES_AVATAR).first();
     await expect(headAvatar).toHaveAttribute('data-notes-avatar', photo ? 'photo' : 'notebook');
     expect(Math.round((await headAvatar.boundingBox())?.width ?? 0)).toBe(32);
     await expect(page.locator('[data-contact-open]')).toHaveCount(0);
@@ -263,8 +272,12 @@ test('notes avatar: a photo that fails to load falls back to the notebook', asyn
   await page.goto('/chat');
   const tile = page.locator('[data-notes-tile]');
   await tile.waitFor({ state: 'visible', timeout: 30_000 });
+  await expect(tile.locator('[data-notes-avatar]')).toHaveAttribute(
+    'data-notes-avatar',
+    'notebook',
+  );
   await tile.click();
-  const headAvatar = page.locator('[data-notes-avatar]').first();
+  const headAvatar = page.locator(HEADER_NOTES_AVATAR).first();
   await expect(headAvatar).toHaveAttribute('data-notes-avatar', 'notebook');
   await expect(page.locator('[data-notes-badge]')).toHaveCount(0);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);

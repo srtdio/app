@@ -25,8 +25,11 @@ const NOTES_AVATAR_SIZE: Record<NotesAvatarRole, string> = {
   row: 'h-10 w-10',
 };
 
-function notesBox(role: NotesAvatarRole): string {
-  return cn(NOTES_AVATAR_SIZE[role], avatarShapeClass(role, 'note'));
+/** The box's shape: the note rounded square, or round where it sits among person cards. */
+type NotesAvatarShape = 'note' | 'round';
+
+function notesBox(role: NotesAvatarRole, shape: NotesAvatarShape = 'note'): string {
+  return cn(NOTES_AVATAR_SIZE[role], avatarShapeClass(role, shape === 'round' ? 'person' : 'note'));
 }
 
 const NOTES_GLYPH_SIZE: Record<NotesAvatarRole, number> = {
@@ -80,6 +83,8 @@ export function NotesAvatar(props: {
   /** The user's own users.avatar_url; null or absent shows the notebook. */
   src?: string | null;
   surface?: NotesAvatarSurface;
+  /** 'round' on the chat list card (a circle like every person card); 'note' elsewhere. */
+  shape?: NotesAvatarShape;
   /**
    * The surface while its row (a `group/notes-row` ancestor) is hovered, so
    * the badge ring follows the row's hover fill.
@@ -118,6 +123,7 @@ export function NotesAvatar(props: {
     },
     onError: () => setFailed(src),
     ...(props.hoverSurface !== undefined ? { hoverSurface: props.hoverSurface } : {}),
+    ...(props.shape !== undefined ? { shape: props.shape } : {}),
   });
 }
 
@@ -133,13 +139,14 @@ export function notesAvatarView(input: {
   failed: boolean;
   surface: NotesAvatarSurface;
   hoverSurface?: 'panel-2';
+  shape?: NotesAvatarShape;
   imgRef?: RefObject<HTMLImageElement>;
   onLoad?: () => void;
   onError?: () => void;
 }): ReactElement {
   const usable = input.src !== null && input.src !== '' && !input.failed;
   const shown = usable && input.loaded;
-  const box = notesBox(input.role);
+  const box = notesBox(input.role, input.shape);
   const badge = NOTES_BADGE[input.role];
   return (
     <span

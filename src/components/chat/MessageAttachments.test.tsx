@@ -308,16 +308,17 @@ describe('instant send tile (local preview + upload progress)', () => {
     expect(html).toMatch(
       /<button(?=[^>]*aria-hidden="true")(?=[^>]*tabindex="-1")(?=[^>]*invisible opacity-0)/,
     );
-    // A plain flat line; the bars are not visible.
-    expect(html).toContain('data-voice-flat="shown"');
-    expect(html).toMatch(/data-voice-bars="peaks" class="[^"]*invisible opacity-0/);
+    // The real bars at reduced emphasis; no flat line.
+    expect(html).toContain('data-testid="voice-uploading"');
+    expect(html).not.toContain('data-voice-flat');
+    expect(html).toMatch(/data-voice-bars="peaks" class="[^"]*opacity-\[\.45\]/);
     // No visible upload bar; the ring's progress is announced by an sr-only progressbar.
     expect(html).toMatch(/role="progressbar"[^>]*class="sr-only"/);
     expect(html).not.toContain('h-1 bg-panel-3');
     expect(html).not.toContain('WEBM');
     expect(html).not.toContain('Open');
 
-    // Done (version id known, record pending): X becomes play, the line becomes the waveform.
+    // Done (version id known, record pending): X becomes play, the bars return to full emphasis.
     const done = renderToStaticMarkup(
       <MessageAttachments
         attachments={[
@@ -335,7 +336,9 @@ describe('instant send tile (local preview + upload progress)', () => {
     );
     expect(done).not.toContain('data-voice-upload');
     expect(done).toContain('data-voice-play-slot="play"');
-    expect(done).toContain('data-voice-flat="hidden"');
+    expect(done).not.toContain('data-voice-flat');
+    expect(done).not.toContain('data-testid="voice-uploading"');
+    expect(done).not.toMatch(/data-voice-bars="peaks" class="[^"]*opacity-\[\.45\]/);
     expect(done).toMatch(/data-voice-bars="peaks" class="[^"]*"/);
     expect(done).not.toMatch(/data-voice-bars="peaks" class="[^"]*invisible/);
     // The ring is faded out and unfocusable; same size box (no layout shift).
@@ -387,6 +390,33 @@ describe('instant send tile (local preview + upload progress)', () => {
     );
     expect(html).toContain('data-voice-link="transcribe"');
     expect(html.indexOf('data-meta="row"')).toBeGreaterThan(html.indexOf('data-voice-link'));
+  });
+
+  it('U7: an own recorded note shows the inline Transcribe link too', () => {
+    const { cache } = spiedCache();
+    const html = renderToStaticMarkup(
+      <MessageAttachments
+        attachments={[
+          {
+            assetId: AUDIO_VERSION,
+            name: 'voice-note.webm',
+            mime: 'audio/webm',
+            durationMs: 7_000,
+          },
+        ]}
+        cache={cache}
+        presignEnabled
+        voice={{
+          messageId: 'ma-voice-own',
+          mine: true,
+          sender: { name: 'Me' },
+          nextVoiceId: null,
+          onTranscribe: () => {},
+        }}
+      />,
+    );
+    expect(html).toContain('data-voice-side="own"');
+    expect(html).toContain('data-voice-link="transcribe"');
   });
 
   it('T6: a single photo is dimmed with the ring centred on it while uploading', () => {
