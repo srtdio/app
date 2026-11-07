@@ -307,6 +307,123 @@ export function buildPreview(head: HeadData, base: PreviewBase, finalUrl: URL): 
 }
 
 // ---------------------------------------------------------------------------
+// YouTube
+//
+// YouTube pages often answer a consent wall instead of their og: tags, so a
+// YouTube link never fetches the page. The video id comes from the URL itself,
+// the picture is the fixed thumbnail URL for that id, and only the title is
+// asked of YouTube's public oEmbed endpoint (a fixed, known host) under its own
+// short budget. The answer is cached by handlePreview like any other preview.
+
+/** The oEmbed endpoint: fixed host, never derived from the shared link. */
+export const YOUTUBE_OEMBED = 'https://www.youtube.com/oembed';
+/** Budget for the oEmbed title read; the picture never waits on it. */
+export const YOUTUBE_OEMBED_TIMEOUT_MS = 1_500;
+/** Title when oEmbed fails or has none: the card keeps its picture. */
+export const YOUTUBE_FALLBACK_TITLE = 'YouTube video';
+const YOUTUBE_OEMBED_MAX_BYTES = 64 * 1024;
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+const YOUTUBE_HOSTS: ReadonlySet<string> = new Set([
+  'youtube.com',
+  'www.youtube.com',
+  'm.youtube.com',
+]);
+
+/**
+ * The 11-character video id of a YouTube watch, Shorts or youtu.be link, else
+ * null. Only https links on youtube.com, www.youtube.com, m.youtube.com and
+ * youtu.be count; the id must match [A-Za-z0-9_-]{11} exactly.
+ */
+export function youtubeVideoId(url: URL): string | null {
+  if (url.protocol !== 'https:') return null;
+  const host = url.hostname.toLowerCase().replace(/\.$/, '');
+  let candidate: string | null = null;
+  if (host === 'youtu.be') {
+    candidate = url.pathname.split('/')[1] ?? null;
+  } else if (YOUTUBE_HOSTS.has(host)) {
+    if (url.pathname === '/watch' || url.pathname === '/watch/') {
+      candidate = url.searchParams.get('v');
+    } else {
+      const shorts = url.pathname.match(/^\/shorts\/([^/]+)\/?$/);
+      candidate = shorts?.[1] ?? null;
+    }
+  }
+  return candidate !== null && YOUTUBE_ID.test(candidate) ? candidate : null;
+}
+
+/** The fixed thumbnail for a video id. */
+export function youtubeThumbnail(id: string): string {
+  return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+}
+
+/**
+ * The title from YouTube oEmbed, or null on any failure (timeout, non-200,
+ * redirect off the safe path, bad JSON, no title). Never throws.
+ */
+export async function fetchYouTubeTitle(
+  id: string,
+  fetcher: Fetcher,
+  traceId: string,
+): Promise<string | null> {
+  const watch = `https://www.youtube.com/watch?v=${id}`;
+  const endpoint = new URL(`${YOUTUBE_OEMBED}?url=${encodeURIComponent(watch)}&format=json`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), YOUTUBE_OEMBED_TIMEOUT_MS);
+  try {
+    const outcome = await guardedFetch(
+      endpoint,
+      'application/json',
+      fetcher,
+      traceId,
+      controller.signal,
+    );
+    if (outcome.kind !== 'ok') return null;
+    const bytes = await readCapped(outcome.response, YOUTUBE_OEMBED_MAX_BYTES);
+    if (bytes === null) return null;
+    const body: unknown = JSON.parse(new TextDecoder('utf-8').decode(bytes));
+    if (typeof body !== 'object' || body === null) return null;
+    const raw = (body as Record<string, unknown>).title;
+    if (typeof raw !== 'string') return null;
+    const title = cleanText(raw, TITLE_CAP);
+    return title === '' ? null : title;
+  } catch (error) {
+    logger.info('youtube oembed failed', {
+      reason: error instanceof Error ? error.name : 'unknown',
+    });
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The preview for a YouTube video: picture always, title from oEmbed when it answers. */
+export async function fetchYouTubePreview(
+  link: URL,
+  id: string,
+  fetcher: Fetcher,
+  traceId: string,
+): Promise<{ record: CachedPreview; ttl: number }> {
+  const base: PreviewBase = { ...linkBase(link), domain: 'youtube.com', letter: 'Y' };
+  const title = await fetchYouTubeTitle(id, fetcher, traceId);
+  return {
+    record: {
+      preview: {
+        type: 'full',
+        ...base,
+        title: title ?? YOUTUBE_FALLBACK_TITLE,
+        description: null,
+        siteName: 'YouTube',
+        video: true,
+        durationSeconds: null,
+      },
+      imageUrl: youtubeThumbnail(id),
+    },
+    // Without the real title, ask again sooner.
+    ttl: title !== null ? TTL_SUCCESS_S : TTL_FAILURE_S,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Guarded fetch
 
 export type Fetcher = (input: string, init: RequestInit, traceId: string) => Promise<Response>;
@@ -605,6 +722,8 @@ export async function fetchPreview(
   fetcher: Fetcher,
   traceId: string,
 ): Promise<{ record: CachedPreview; ttl: number }> {
+  const youtubeId = youtubeVideoId(link);
+  if (youtubeId !== null) return fetchYouTubePreview(link, youtubeId, fetcher, traceId);
   const base = linkBase(link);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_BUDGET_MS);

@@ -51,9 +51,10 @@ test('link previews in chat and comments @theme', async ({ page }) => {
     .toBeGreaterThan(0);
   await expect(login.locator('[data-card-type="login"]')).toBeVisible();
   await expect(login).toContainText('Sign-in needed to preview');
-  // No layout jump when the data lands.
+  // No layout jump for a card with a picture; a card without one settles to the row.
   expect(await cardHeight(full)).toBe(before.full);
-  expect(await cardHeight(login)).toBe(before.login);
+  expect(await cardHeight(login)).toBe(64);
+  await expect(login.locator('[data-card-media]')).toHaveCount(0);
   // The card is the tap target: a new tab, no opener, no referrer.
   const anchor = full.locator('a').first();
   await expect(anchor).toHaveAttribute('target', '_blank');

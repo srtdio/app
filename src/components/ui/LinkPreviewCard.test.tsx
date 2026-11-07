@@ -149,7 +149,7 @@ function cardType(el: Element): string | null {
 }
 
 describe('LinkPreviewCard', () => {
-  it.each(['full', 'video', 'text', 'login', 'bare'])(
+  it.each(['full', 'video'])(
     '%s: skeleton box == final box, in and out bubbles, light and dark',
     async (kind) => {
       const markup: string[] = [];
@@ -196,16 +196,87 @@ describe('LinkPreviewCard', () => {
     expect(el.textContent).toContain('instagram.com');
   });
 
-  it('a failed picture becomes the letter tile inside the same box', async () => {
+  it.each(['text', 'login', 'bare'])(
+    '%s: no picture settles to the compact row, never an empty 1.91 slot, light and dark',
+    async (kind) => {
+      const markup: string[] = [];
+      for (const tone of ['in', 'out'] as const) {
+        for (const theme of ['light', 'dark'] as const) {
+          const { client, answer } = controlledClient();
+          const el = await mount(URLS[kind] ?? '', client, { tone, theme });
+          expect(cardType(el)).toBe('skeleton');
+          await answer(kind);
+          expect(cardType(el)).toBe(ANSWERS[kind]?.type);
+          expect(boxSignature(el)).toEqual(['h-16']);
+          expect(el.querySelector('[class*="aspect-[1.91"]')).toBeNull();
+          expect(el.querySelector('[data-card-media]')).toBeNull();
+          markup.push(el.innerHTML);
+          act(() => root?.unmount());
+          host?.remove();
+        }
+      }
+      expect(markup[0]).toBe(markup[1]);
+      expect(markup[2]).toBe(markup[3]);
+      for (const html of markup) {
+        expect(html).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+        expect(html).not.toContain('dark:');
+      }
+    },
+  );
+
+  it.each(['text', 'login', 'bare'])(
+    '%s: title and path are ui/Text roles, never mono',
+    async (kind) => {
+      const { client, answer } = controlledClient();
+      const el = await mount(URLS[kind] ?? '', client);
+      await answer(kind);
+      expect(el.innerHTML).not.toContain('font-mono');
+      const title = el.querySelector('a span span');
+      expect(title?.getAttribute('class') ?? '').toContain('font-semibold');
+      expect(title?.getAttribute('class') ?? '').not.toContain('font-mono');
+    },
+  );
+
+  it('text known at first paint: compact row, no 1.91 slot, title not mono', async () => {
+    const { client, answer } = controlledClient();
+    await mount(URLS.text ?? '', client);
+    await answer('text');
+    act(() => root?.unmount());
+    const el = await mount(URLS.text ?? '', client);
+    expect(cardType(el)).toBe('text');
+    expect(el.querySelector('[class*="aspect-[1.91"]')).toBeNull();
+    expect(el.textContent).toContain('Diwali carousel v4');
+    for (const node of el.querySelectorAll('[class]')) {
+      if (node.textContent === 'Diwali carousel v4') {
+        expect(node.getAttribute('class') ?? '').not.toContain('font-mono');
+      }
+    }
+  });
+
+  it('a failed picture collapses to the compact row', async () => {
     const { client, answer } = controlledClient();
     const el = await mount(URLS.full ?? '', client);
     await answer('full');
-    const before = boxSignature(el);
+    expect(el.querySelector('[data-card-media]')).not.toBeNull();
     await act(async () => {
       el.querySelector('img')?.dispatchEvent(new Event('error'));
     });
     expect(el.querySelector('img')).toBeNull();
-    expect(boxSignature(el)).toEqual(before);
+    expect(el.querySelector('[class*="aspect-[1.91"]')).toBeNull();
+    expect(boxSignature(el)).toEqual(['h-16']);
+    expect(el.textContent).toContain('Northwind Foods on Instagram');
+  });
+
+  it('full without a Worker image URL never draws the picture box', async () => {
+    const client: PreviewClient = {
+      peek: () => ANSWERS.full ?? null,
+      request: async () => ANSWERS.full as LinkPreview,
+      imageUrl: () => null,
+    };
+    const el = await mount(URLS.full ?? '', client);
+    expect(cardType(el)).toBe('full');
+    expect(el.querySelector('[class*="aspect-[1.91"]')).toBeNull();
+    expect(boxSignature(el)).toEqual(['h-16']);
   });
 
   it('video: play badge and duration in the site row', async () => {
@@ -278,15 +349,20 @@ describe('LinkPreviewCard', () => {
     expect(anyway?.getAttribute('href')).toBe(UNSAFE_URL);
   });
 
-  it('draft: X calls onRemove', async () => {
+  it('draft: the ghost "Clear" button calls onRemove; no X icon', async () => {
     const { client, answer } = controlledClient();
     const onRemove = vi.fn();
     const el = await mount(URLS.full ?? '', client, { size: 'draft', onRemove });
     expect(boxSignature(el)).toEqual(['h-16']);
     await answer('full');
     expect(boxSignature(el)).toEqual(['h-16']);
+    const clear = el.querySelector<HTMLButtonElement>('button[data-card-remove]');
+    expect(clear?.textContent).toBe('Clear');
+    expect(clear?.getAttribute('aria-label')).toBe('Remove link preview');
+    expect(clear?.className).toContain('h-11');
+    expect(clear?.querySelector('svg')).toBeNull();
     await act(async () => {
-      el.querySelector<HTMLButtonElement>('[data-card-remove]')?.click();
+      clear?.click();
     });
     expect(onRemove).toHaveBeenCalledTimes(1);
   });
