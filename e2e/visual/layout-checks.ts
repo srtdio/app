@@ -9,6 +9,7 @@ import {
   layoutMode,
   movedSideways,
   lineHeightPx,
+  chipViolations,
   listCardViolations,
   MAX_ROLES_PER_PART,
   overlappingPairs,
@@ -20,6 +21,7 @@ import {
   underBarViolations,
   wrapsPastOneLine,
   type Box,
+  type ChipGeom,
   type EdgeItem,
   type LayoutViolation,
   type ListCardGeom,
@@ -102,6 +104,7 @@ interface RawPage {
   edges: EdgeItem[];
   parts: RawPart[];
   listCards: ListCardGeom[];
+  chips: ChipGeom[];
 }
 
 /** Reads every box the checks need in one pass over the page. */
@@ -408,6 +411,9 @@ async function readPage(page: Page): Promise<RawPage> {
       parts.push({ label: `[data-part="${part.getAttribute('data-part') ?? ''}"]`, styles });
     }
 
+    const boxOf = (el: Element | null): Box | null =>
+      el !== null && shown(el) ? toBox(el.getBoundingClientRect()) : null;
+
     // 6 List cards: every shown ui/ListCard (never its loading box).
     const listCards: ListCardGeom[] = [];
     for (const card of Array.from(document.querySelectorAll('[data-list-card]'))) {
@@ -422,10 +428,26 @@ async function readPage(page: Page): Promise<RawPage> {
         borderTop: parseFloat(style.borderTopWidth) || 0,
         picture: picture !== null ? toBox(picture.getBoundingClientRect()) : null,
         text: text !== null ? toBox(text.getBoundingClientRect()) : null,
+        time: boxOf(card.querySelector('[data-list-card-time]')),
+        tag: boxOf(card.querySelector('[data-list-card-tag]')),
+        hasPreview: card.querySelector('[data-list-card-preview]') !== null,
+        unread: card.querySelector('[data-list-card-unread]') !== null,
       });
     }
 
-    return { viewportWidth: vw, lines, targets, edges, parts, listCards };
+    // 7 Chips: every shown ui/Chip face and its tap box (the button around it).
+    const chips: ChipGeom[] = [];
+    for (const face of Array.from(document.querySelectorAll('[data-chip-face]'))) {
+      const hit = face.parentElement;
+      if (hit === null || !shown(hit)) continue;
+      chips.push({
+        label: nameOf(hit),
+        hit: toBox(hit.getBoundingClientRect()),
+        face: toBox(face.getBoundingClientRect()),
+      });
+    }
+
+    return { viewportWidth: vw, lines, targets, edges, parts, listCards, chips };
   }, rules);
 }
 
@@ -481,6 +503,10 @@ export async function checkLayout(page: Page, screenName: string): Promise<void>
 
   for (const message of listCardViolations(raw.listCards)) {
     violations.push({ check: 'list-card', message });
+  }
+
+  for (const message of chipViolations(raw.chips)) {
+    violations.push({ check: 'chip', message });
   }
 
   settleFindings(screenName, violations);

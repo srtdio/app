@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   boxText,
+  chipViolations,
   clipBox,
   distinctRoles,
   edgeHit,
@@ -27,6 +28,7 @@ import {
   underBarViolations,
   wrapsPastOneLine,
   type Box,
+  type ChipGeom,
   type ListCardGeom,
   type TapTarget,
 } from '../../e2e/visual/layout-checks-core';
@@ -491,5 +493,71 @@ describe('trayTileViolations', () => {
 
   it('fails the right tiles in the wrong order', () => {
     expect(trayTileViolations(['file', 'photos', 'assets'])).toHaveLength(1);
+  });
+});
+
+describe('list cards: no preview puts the tag under the time', () => {
+  const card = (tagRight: number, over: Partial<ListCardGeom> = {}): ListCardGeom => ({
+    label: 'card',
+    card: { x: 16, y: 0, width: 358, height: 74 },
+    borderLeft: 1,
+    borderTop: 1,
+    picture: { x: 29, y: 13, width: 48, height: 48 },
+    text: { x: 89, y: 15, width: 272, height: 44 },
+    time: { x: 331, y: 15, width: 30, height: 20 },
+    tag: { x: tagRight - 40, y: 39, width: 40, height: 20 },
+    hasPreview: false,
+    unread: false,
+    ...over,
+  });
+
+  it('passes a no-preview tag that ends where the time ends', () => {
+    expect(listCardViolations([card(361)])).toEqual([]);
+  });
+
+  it('fails a no-preview tag left on the start of line 2', () => {
+    const out = listCardViolations([card(129)]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('tag under the time');
+  });
+
+  it('skips cards with a preview or an unread dot after the tag', () => {
+    expect(listCardViolations([card(129, { hasPreview: true })])).toEqual([]);
+    expect(listCardViolations([card(345, { unread: true })])).toEqual([]);
+  });
+});
+
+describe('chips (ui/Chip): visible 32, tap box 44', () => {
+  const chip = (faceHeight: number, hit: Partial<Box> = {}): ChipGeom => {
+    const h = { x: 16, y: 100, width: 60, height: 44, ...hit };
+    return {
+      label: 'button "All"',
+      hit: h,
+      face: { x: h.x, y: h.y + (h.height - faceHeight) / 2, width: h.width, height: faceHeight },
+    };
+  };
+
+  it('passes a 32 face centred in a 44 box', () => {
+    expect(chipViolations([chip(32), chip(32, { width: 44 })])).toEqual([]);
+  });
+
+  it('fails a face that is still 44 tall', () => {
+    expect(chipViolations([chip(44)])).toEqual([expect.stringContaining('not 32')]);
+  });
+
+  it('fails a tap box under 44 tall or wide', () => {
+    expect(chipViolations([chip(32, { height: 32 })]).some((m) => m.includes('not 44'))).toBe(true);
+    expect(chipViolations([chip(32, { width: 41.5 })])).toEqual([
+      expect.stringContaining('under 44'),
+    ]);
+  });
+
+  it('fails a face pushed off centre, or a chip with no face', () => {
+    const off = chip(32);
+    off.face = { ...off.face!, y: off.hit.y };
+    expect(chipViolations([off])).toEqual([expect.stringContaining('not centred')]);
+    expect(chipViolations([{ ...chip(32), face: null }])).toEqual([
+      expect.stringContaining('no visible chip face'),
+    ]);
   });
 });
