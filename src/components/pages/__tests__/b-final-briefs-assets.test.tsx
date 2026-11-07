@@ -107,7 +107,7 @@ function slots(html: string): string[] {
 }
 
 describe('Assets item is ui/ListCard', () => {
-  it('renders the part: the picture first, then the name, the facts, the time and the tab tag', () => {
+  it('renders the part: the picture first, then the name, the facts, the tab tag and the time', () => {
     const out = tile();
     expect(out).toContain('data-list-card=""');
     expect(out).toContain('data-list-card-press=""');
@@ -119,8 +119,9 @@ describe('Assets item is ui/ListCard', () => {
     expect(picture).toBeGreaterThan(-1);
     expect(name).toBeGreaterThan(picture);
     expect(meta).toBeGreaterThan(name);
-    expect(time).toBeGreaterThan(meta);
-    expect(tag).toBeGreaterThan(time);
+    // Line 3 is the tag first, then " · " and the time.
+    expect(tag).toBeGreaterThan(meta);
+    expect(time).toBeGreaterThan(tag);
     // formatAdded on the device zone: uploaded the same day reads its clock time.
     expect(out).toMatch(/data-asset-uploaded=""[^>]*>\d{1,2}:\d{2} (AM|PM)</);
     expect(out).not.toContain('data-tile');
@@ -186,11 +187,11 @@ describe('Brief card is ui/ListCard', () => {
     );
   }
 
-  it('fills the slots: line 1 title, line 2 objective, line 3 Due and the status tag', () => {
+  it('fills the slots: line 1 title, line 2 objective, line 3 the status tag then Due', () => {
     const out = card();
     expect(out).toMatch(/^<div data-brief-card=""[^>]*data-list-card=""/);
     expect(out).toMatch(/data-list-card-line="1"[^]*data-list-card-title=""[^]*Spring launch/);
-    expect(out).toMatch(/data-list-card-line="3"[^]*Due 1 Jul[^]*data-brief-status="open"/);
+    expect(out).toMatch(/data-list-card-line="3"[^]*data-brief-status="open"[^]*Due 1 Jul/);
     expect(out).not.toContain('Target');
     // The cover link is the card's one link, at its corners.
     expect(out.match(/<a /g) ?? []).toHaveLength(1);
