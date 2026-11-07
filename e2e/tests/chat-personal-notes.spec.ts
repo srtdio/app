@@ -34,6 +34,10 @@ async function holdBubble(page: Page, text: string): Promise<void> {
   const box = await bubble.boundingBox();
   if (box === null) throw new Error('bubble has no box');
   const at = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
+  // Park Playwright's cursor on the bubble: left where the last click landed,
+  // WebKit sends a pointermove from it when the thread moves under it, and
+  // that move cancels the hold. A finger never leaves a cursor behind.
+  await page.mouse.move(at.clientX, at.clientY);
   await bubble.dispatchEvent('pointerdown', { ...at, pointerType: 'touch', isPrimary: true });
   await page.waitForTimeout(700);
   await bubble.dispatchEvent('pointerup', { ...at, pointerType: 'touch', isPrimary: true });
