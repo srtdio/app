@@ -1156,11 +1156,7 @@ function TopBar(props: {
       )}
     >
       {back ? (
-        <ViewerBackButton
-          buttonRef={props.closeRef}
-          onClick={props.onClose}
-          className={tone.bar}
-        />
+        <ViewerBackButton buttonRef={props.closeRef} onClick={props.onClose} className={tone.bar} />
       ) : (
         <button
           ref={props.closeRef}

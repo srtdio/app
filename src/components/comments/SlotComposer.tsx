@@ -202,7 +202,10 @@ export function SlotComposer({
     slot.pending.some((item) => item.status.state === 'uploading'),
   );
   const canSend = slotsSendable(slots.map((slot) => slot.body)) && !uploading && !submitting;
-  const numbers = slotNumbers(slots.map((slot) => slot.body), startSeq);
+  const numbers = slotNumbers(
+    slots.map((slot) => slot.body),
+    startSeq,
+  );
 
   function updateBody(slotId: string, body: string): void {
     setSlots((prev) => prev.map((slot) => (slot.id === slotId ? { ...slot, body } : slot)));

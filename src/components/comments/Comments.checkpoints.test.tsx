@@ -251,7 +251,9 @@ describe('checkpoint checkbox', () => {
     expect(rowEl('p-1')?.getAttribute('data-point-state')).toBe('resolved');
     expect(rowEl('p-1')?.querySelector('[data-point-fold]')).toBeTruthy();
     expect(
-      rowEl('p-1')?.querySelector('[data-checkpoint-circle]')?.getAttribute('data-checkpoint-circle'),
+      rowEl('p-1')
+        ?.querySelector('[data-checkpoint-circle]')
+        ?.getAttribute('data-checkpoint-circle'),
     ).toBe('resolved');
 
     expect(rpcSpy).toHaveBeenCalledTimes(1);
@@ -278,7 +280,9 @@ describe('checkpoint checkbox', () => {
     expect(byAria('Confirm checkpoint 1')).toBeDefined();
     expect(byAria('Resolve checkpoint 1')).toBeUndefined();
     expect(
-      rowEl('p-1')?.querySelector('[data-checkpoint-circle]')?.getAttribute('data-checkpoint-circle'),
+      rowEl('p-1')
+        ?.querySelector('[data-checkpoint-circle]')
+        ?.getAttribute('data-checkpoint-circle'),
     ).toBe('resolved');
     expect(host?.textContent ?? '').not.toContain('Not done');
     expect(host?.textContent ?? '').not.toContain('Send back');
@@ -480,7 +484,9 @@ describe('one row template for checkpoints and comments', () => {
       expect(time?.className).toContain('font-mono');
       expect(time?.className).toContain('text-sm');
       // Every control a 44 hit with small visible type.
-      for (const control of Array.from(el?.querySelectorAll('[data-comment-actions] > button') ?? [])) {
+      for (const control of Array.from(
+        el?.querySelectorAll('[data-comment-actions] > button') ?? [],
+      )) {
         expect(control.className).toContain('h-11');
         expect(control.className).toContain('min-w-11');
       }

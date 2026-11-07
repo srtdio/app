@@ -67,14 +67,15 @@ function Page({ live }: { live: ReadonlyMap<string, LiveCheckpoint> }) {
 }
 
 let root: Root | null = null;
-let host: HTMLDivElement | null = null;
+let host: HTMLElement | null = null;
 
 beforeEach(() => {
   // Phone page mode: the document is the scroller.
   applyScrollMode('page');
-  host = document.createElement('main');
-  document.body.appendChild(host);
-  root = createRoot(host);
+  const main = document.createElement('main');
+  document.body.appendChild(main);
+  host = main;
+  root = createRoot(main);
 });
 
 afterEach(() => {

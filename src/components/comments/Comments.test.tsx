@@ -301,7 +301,10 @@ describe('groupThreads (consecutive same-author checkpoints share one group)', (
   it('done points fold to the bottom; numbers never change', () => {
     const threads = buildThreads([
       { ...checkpoint('c3', 3, UUID_A, '2026-01-02T00:00:00.000Z') },
-      { ...checkpoint('c2', 2, UUID_A, '2026-01-02T00:00:00.000Z'), resolved_at: '2026-01-03T00:00:00.000Z' },
+      {
+        ...checkpoint('c2', 2, UUID_A, '2026-01-02T00:00:00.000Z'),
+        resolved_at: '2026-01-03T00:00:00.000Z',
+      },
       { ...checkpoint('c1', 1, UUID_A, '2026-01-02T00:00:00.000Z') },
     ]);
     const groups = groupThreads(threads);

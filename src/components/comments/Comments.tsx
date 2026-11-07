@@ -700,7 +700,10 @@ export interface ReplyFold {
 }
 
 /** Which replies show for a fold state: all when unfolded, else only the latest. Pure. */
-export function visibleReplies<T>(replies: readonly T[], unfolded: boolean): {
+export function visibleReplies<T>(
+  replies: readonly T[],
+  unfolded: boolean,
+): {
   shown: T[];
   hidden: number;
 } {
@@ -798,7 +801,8 @@ export function groupThreads(threads: readonly ThreadRoot[]): ThreadGroup[] {
   for (const group of groups) {
     if (group.kind === 'batch') {
       group.threads.sort((a, b) => {
-        const done = Number(a.comment.resolved_at !== null) - Number(b.comment.resolved_at !== null);
+        const done =
+          Number(a.comment.resolved_at !== null) - Number(b.comment.resolved_at !== null);
         return done !== 0 ? done : (a.comment.ledger_seq ?? 0) - (b.comment.ledger_seq ?? 0);
       });
     }
@@ -2577,9 +2581,7 @@ export function Comments({
           items={items}
           open={menuOpenId === comment.id}
           onOpenChange={(open) => setMenuOpenId(open ? comment.id : null)}
-          trigger={
-            <ActionMenuTrigger label={label} aria-expanded={menuOpenId === comment.id} />
-          }
+          trigger={<ActionMenuTrigger label={label} aria-expanded={menuOpenId === comment.id} />}
         />
       </div>
     );
@@ -2598,8 +2600,7 @@ export function Comments({
     asPerson: (node: ReactNode, display: 'inline' | 'block', className?: string) => ReactNode;
   } {
     const name = comment.legacy_author_name ?? nameOf(comment.author_user_id) ?? '';
-    const avatarUrl =
-      comment.legacy_author_name !== null ? null : avatarOf(comment.author_user_id);
+    const avatarUrl = comment.legacy_author_name !== null ? null : avatarOf(comment.author_user_id);
     const role = comment.legacy_author_name !== null ? null : roleOf(comment.author_user_id);
     const authorId = comment.legacy_author_name === null ? comment.author_user_id : null;
     const source = authorId !== null ? privateReplySource(comment, name) : null;
@@ -2623,10 +2624,7 @@ export function Comments({
   }
 
   // An author's avatar at a role ('header' on roots and groups, 'inline' on replies).
-  function authorAvatar(
-    view: ReturnType<typeof authorView>,
-    role: 'header' | 'inline',
-  ): ReactNode {
+  function authorAvatar(view: ReturnType<typeof authorView>, role: 'header' | 'inline'): ReactNode {
     return view.asPerson(
       <Avatar
         name={view.name}
@@ -2862,7 +2860,11 @@ export function Comments({
 
   // The agency's one-tap Resolve: a small checkbox + "Resolve" (no note, no
   // sheet, no confirm; Undo lives in the bottom strip).
-  function resolveButton(comment: CommentRow, label: string, dataAttr: 'box' | 'thread'): ReactNode {
+  function resolveButton(
+    comment: CommentRow,
+    label: string,
+    dataAttr: 'box' | 'thread',
+  ): ReactNode {
     return (
       <Button
         type="button"
@@ -3012,22 +3014,23 @@ export function Comments({
       reply: false,
       point: true,
       // A resolved point opened from its fold closes again from its circle.
-      lead: resolved && !awaitingMe ? (
-        <IconButton
-          type="button"
-          label={`Fold checkpoint ${seq}`}
-          aria-expanded
-          data-point-unfold=""
-          className="-my-2"
-          onClick={() => togglePoint(comment.id)}
-        >
-          <CheckpointCircle n={seq} state={circle} />
-        </IconButton>
-      ) : (
-        <span className={cn(CHECKPOINT_HIT_CLASS, '-my-2')} data-point-circle="">
-          <CheckpointCircle n={seq} state={circle} />
-        </span>
-      ),
+      lead:
+        resolved && !awaitingMe ? (
+          <IconButton
+            type="button"
+            label={`Fold checkpoint ${seq}`}
+            aria-expanded
+            data-point-unfold=""
+            className="-my-2"
+            onClick={() => togglePoint(comment.id)}
+          >
+            <CheckpointCircle n={seq} state={circle} />
+          </IconButton>
+        ) : (
+          <span className={cn(CHECKPOINT_HIT_CLASS, '-my-2')} data-point-circle="">
+            <CheckpointCircle n={seq} state={circle} />
+          </span>
+        ),
       circle,
       menuLabel: 'Checkpoint actions',
       // Author-only edit/delete, hidden once the point is frozen (confirmed or

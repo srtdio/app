@@ -476,9 +476,7 @@ async function expectOverflowOpensPostActions(page: Page, item: Locator): Promis
   // ActionMenu: a sheet titled Post actions on a phone, a popover menu at 768px and up.
   const laptop = (page.viewportSize()?.width ?? 0) >= 768;
   const more = laptop
-    ? page
-        .getByRole('menu')
-        .filter({ has: page.getByRole('menuitem', { name: /Send to chat/ }) })
+    ? page.getByRole('menu').filter({ has: page.getByRole('menuitem', { name: /Send to chat/ }) })
     : page.getByRole('dialog', { name: 'Post actions', exact: true });
   await expect(more.getByRole('menuitem', { name: /Copy link/ })).toBeVisible();
   await expect(more.getByRole('menuitem', { name: /Send to chat/ })).toBeVisible();

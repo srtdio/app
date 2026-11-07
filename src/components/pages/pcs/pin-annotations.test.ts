@@ -116,10 +116,7 @@ describe('buildPinData', () => {
         'c-b': { seq: 3, resolved_at: '2026-01-03T00:00:00Z', accepted_at: '2026-01-04T00:00:00Z' },
       }),
     );
-    expect(result.pinsByAttachment['aa-1']?.map((d) => d.state)).toEqual([
-      'resolved',
-      'confirmed',
-    ]);
+    expect(result.pinsByAttachment['aa-1']?.map((d) => d.state)).toEqual(['resolved', 'confirmed']);
   });
 
   it('excludes stale pins from the live overlay, surfacing only a greyed chip', () => {

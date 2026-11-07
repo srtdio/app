@@ -322,9 +322,7 @@ describe('#26 Reorder: hold and drag only, saved on drop', () => {
     expect((reorder?.props as { disabled?: boolean }).disabled).toBe(false);
     click(reorder);
     expect(onReorder).toHaveBeenCalledTimes(1);
-    expect((byData(tree, 'data-gallery-add')?.props as { disabled?: boolean }).disabled).toBe(
-      true,
-    );
+    expect((byData(tree, 'data-gallery-add')?.props as { disabled?: boolean }).disabled).toBe(true);
     expect(byData(tree, 'data-add-pin')).toBeUndefined();
   });
 

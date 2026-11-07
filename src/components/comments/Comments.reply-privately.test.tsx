@@ -216,7 +216,6 @@ describe('Reply privately on comments', () => {
     expect(request?.source).toEqual(QUOTE);
   });
 
-
   it('a tap on the author opens the inline message card with the comment as its source', async () => {
     await mount();
     const trigger = rowEl('c-other')?.querySelector<HTMLElement>(

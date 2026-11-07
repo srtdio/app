@@ -159,7 +159,9 @@ describe('CommentComposer "+" tray', () => {
   });
 
   it('an Assets pick becomes a removable chip and sends its library version id', async () => {
-    const onSubmit = vi.fn(async (): Promise<CommentSubmitResult> => ({ ok: true }));
+    const onSubmit = vi.fn<(body: string, options: unknown) => Promise<CommentSubmitResult>>(
+      async () => ({ ok: true }),
+    );
     mountComment(onSubmit);
     await settle();
     act(() => buttons('Add attachment')[0]?.click());
@@ -205,7 +207,9 @@ describe('SlotComposer "+" tray and numbers', () => {
   });
 
   it("an Assets pick lands on that slot's point", async () => {
-    const onSubmit = vi.fn(async (_points: CheckpointPoint[]) => ({ ok: true as const }));
+    const onSubmit = vi.fn<(points: CheckpointPoint[]) => Promise<{ ok: true }>>(async () => ({
+      ok: true,
+    }));
     act(() => root?.render(<SlotComposer onSubmit={onSubmit} canAttach uploadFile={upload} />));
     const area = host?.querySelector('textarea');
     if (area == null) throw new Error('no slot');

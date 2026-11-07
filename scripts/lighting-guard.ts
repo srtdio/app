@@ -111,8 +111,7 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
   'src/components/comments/Comments.tsx': {
     'lit-card-muted': {
       count: 4,
-      why:
-        'No card per thread: the thread, batch group, skeleton and two empty cards are one OWN_CARD_CLASS (lit-card-muted) around the section.',
+      why: 'No card per thread: the thread, batch group, skeleton and two empty cards are one OWN_CARD_CLASS (lit-card-muted) around the section.',
     },
   },
   'src/components/chat/tasks/TaskSheet.tsx': {

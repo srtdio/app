@@ -159,9 +159,7 @@ describe('versions sheet at 360px (post screen polish)', () => {
     expect(VERSION_THUMBS_CLASS).toContain('overflow-hidden');
     expect(VERSION_THUMBS_CLASS).not.toContain('shrink-0');
     expect(VERSION_TEXT_CLASS).toContain('min-w-32');
-    const all = elements(
-      (sheet(four) as ReactElement<{ children?: ReactNode }>).props.children,
-    );
+    const all = elements((sheet(four) as ReactElement<{ children?: ReactNode }>).props.children);
     const wrappers = all.filter(
       (el) => (el.props as { className?: string }).className === VERSION_THUMBS_CLASS,
     );
@@ -174,9 +172,7 @@ describe('versions sheet at 360px (post screen polish)', () => {
   });
 
   it('the author truncates and the date stays', () => {
-    const all = elements(
-      (sheet(four) as ReactElement<{ children?: ReactNode }>).props.children,
-    );
+    const all = elements((sheet(four) as ReactElement<{ children?: ReactNode }>).props.children);
     const author = all.find((el) => 'data-version-author' in (el.props as object));
     const date = all.find((el) => 'data-version-date' in (el.props as object));
     expect((author?.props as { className: string }).className).toContain('truncate');

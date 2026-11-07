@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
 import { DrawnMarkGlyph, ICON_SIZE } from '@/components/ui/icons';
-import { RESOLVED_FILL_CLASS, RESOLVED_HOLLOW_CLASS } from '@/components/pages/pcs/checkpoint-controls';
+import {
+  RESOLVED_FILL_CLASS,
+  RESOLVED_HOLLOW_CLASS,
+} from '@/components/pages/pcs/checkpoint-controls';
 import { cn } from '@/lib/cn';
 import { drawTick } from '@/lib/motion';
 
@@ -101,10 +104,7 @@ export function CheckpointCircle({
       {state === 'pin' ? (
         <span className={cn('rounded-full bg-fg', PIN_DOT[size])} />
       ) : isTick(state) ? (
-        <DrawnMarkGlyph
-          mark="tick"
-          size={size === 'inline' ? ICON_SIZE.text : ICON_SIZE.inline}
-        />
+        <DrawnMarkGlyph mark="tick" size={size === 'inline' ? ICON_SIZE.text : ICON_SIZE.inline} />
       ) : n !== undefined ? (
         n
       ) : null}
