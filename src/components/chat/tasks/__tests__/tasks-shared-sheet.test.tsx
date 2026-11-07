@@ -243,9 +243,7 @@ describe('shared Tasks sheet', () => {
       );
       expect(sections).toEqual(['open', 'done']);
       expect(q('[data-task-row-id="p1"] [data-task-when]')?.textContent).toBe('2d late');
-      expect(q('[data-task-row-id="p2"] [data-task-when]')?.textContent).toContain(
-        '2 Nov · done',
-      );
+      expect(q('[data-task-row-id="p2"] [data-task-when]')?.textContent).toContain('2 Nov · done');
       expect(q('[data-task-row-id="l1"]')).toBeNull();
       // Today holds nothing: one positive line.
       act(() => q('[data-task-when-chip="today"]')?.click());

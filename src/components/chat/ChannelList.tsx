@@ -1080,11 +1080,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                     <IconCheckCircle size={ICON_SIZE.control} />
                   </IconButton>
                 ) : null}
-                <Button
-                  variant="primary"
-                  className="shrink-0 whitespace-nowrap"
-                  onClick={newChat}
-                >
+                <Button variant="primary" className="shrink-0 whitespace-nowrap" onClick={newChat}>
                   <IconPlus size={ICON_SIZE.inline} />
                   New chat
                 </Button>

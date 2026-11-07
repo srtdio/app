@@ -125,7 +125,9 @@ describe('people cards are ui/ListCard, exactly like group cards', () => {
     expect(h).toContain('width:48px;height:48px');
     expect(h).toMatch(/text-lg font-semibold[^"]*">Asha Rao</);
     expect(h).toMatch(/font-mono[^"]*">1h</);
-    expect(h).toMatch(/data-list-card-preview=""[^>]*class="[^"]*truncate[^"]*"><span>See you then</);
+    expect(h).toMatch(
+      /data-list-card-preview=""[^>]*class="[^"]*truncate[^"]*"><span>See you then</,
+    );
     expect(h).not.toContain('line-clamp-2');
     expect(h.indexOf('4 new')).toBeGreaterThan(h.indexOf('See you then'));
     expect(h.indexOf('data-list-card-unread')).toBeGreaterThan(h.indexOf('4 new'));

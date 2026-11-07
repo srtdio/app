@@ -143,7 +143,9 @@ function mount(viewer: CardViewer = PENDING): void {
 }
 
 function card(title: string): HTMLButtonElement {
-  const button = document.querySelector<HTMLButtonElement>(`button[aria-label="Open post ${title}"]`);
+  const button = document.querySelector<HTMLButtonElement>(
+    `button[aria-label="Open post ${title}"]`,
+  );
   if (button === null) throw new Error(`no card ${title}`);
   return button;
 }

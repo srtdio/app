@@ -11,11 +11,7 @@
 
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
-import {
-  SelectBar,
-  visibleSelectActions,
-  type SelectBarAction,
-} from '@/components/ui/SelectBar';
+import { SelectBar, visibleSelectActions, type SelectBarAction } from '@/components/ui/SelectBar';
 import {
   IconArchive,
   IconArrowUpRight,

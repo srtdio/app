@@ -29,12 +29,7 @@ describe('X5 empty pipeline', () => {
   it('every empty stage names its stage instead of "Empty"', () => {
     for (const stage of STAGES) {
       const out = renderToStaticMarkup(
-        <PipelineFeed
-          posts={[]}
-          activeStage={stage}
-          cache={cache}
-          presignEnabled={false}
-        />,
+        <PipelineFeed posts={[]} activeStage={stage} cache={cache} presignEnabled={false} />,
       );
       expect(out).toContain(emptyStageMessage(stage));
       expect(out).not.toMatch(/>Empty</);

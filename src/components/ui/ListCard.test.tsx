@@ -437,9 +437,9 @@ describe('ListCard lighting: one lit height per surface', () => {
     expect(lits(render({ muted: true }))).toEqual(['lit-card-muted']);
     expect(lits(render({ selected: true }))).toEqual(['lit-selected']);
     expect(lits(render({ selected: true, muted: true }))).toEqual(['lit-selected']);
-    expect(lits(render({ muted: true, select: select({ active: true, chosen: true }) }))).toEqual(
-      ['lit-selected'],
-    );
+    expect(lits(render({ muted: true, select: select({ active: true, chosen: true }) }))).toEqual([
+      'lit-selected',
+    ]);
   });
 
   it('the tag keeps lit-pill; no shadow, drop-shadow, blur or dark: anywhere', () => {

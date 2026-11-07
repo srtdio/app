@@ -6,13 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import {
-  ICON_SIZE,
-  IconActivity,
-  IconAt,
-  IconBriefs,
-  IconPlan,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconActivity, IconAt, IconBriefs, IconPlan } from '@/components/ui/icons';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';

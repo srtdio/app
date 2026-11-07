@@ -83,9 +83,7 @@ describe('the date line', () => {
     const older = { ...done, doneAt: '2026-10-20T09:00:00.000Z', dueOn: null };
     expect(rowDateLine(older, CAL)?.text).toBe('Done 20 Oct');
     // Done before the stamp existed: the due day alone.
-    expect(rowDateLine({ ...done, doneAt: null, dueOn: '2026-10-31' }, CAL)?.text).toBe(
-      '31 Oct',
-    );
+    expect(rowDateLine({ ...done, doneAt: null, dueOn: '2026-10-31' }, CAL)?.text).toBe('31 Oct');
     expect(rowDateLine({ ...done, doneAt: null, dueOn: null }, CAL)).toBeNull();
   });
 });

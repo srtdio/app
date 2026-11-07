@@ -290,7 +290,9 @@ export interface SelectGestureHandlers extends MenuGestureHandlers {
  * toggles. Pure client state: no await, no read. `undefined` (a list with no
  * select mode) returns undefined and the item keeps its plain tap.
  */
-export function useSelectGesture(select: SelectGesture | undefined): SelectGestureHandlers | undefined {
+export function useSelectGesture(
+  select: SelectGesture | undefined,
+): SelectGestureHandlers | undefined {
   const selectRef = useRef(select);
   selectRef.current = select;
   // When the hold last fired: Android sends its own contextmenu right after a

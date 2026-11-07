@@ -11,7 +11,12 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ListCard, ListCardBox, LIST_CARD_HEIGHT_PX, type ListCardProps } from '@/components/ui/ListCard';
+import {
+  ListCard,
+  ListCardBox,
+  LIST_CARD_HEIGHT_PX,
+  type ListCardProps,
+} from '@/components/ui/ListCard';
 import { IconBriefs } from '@/components/ui/icons';
 import tailwindConfig from '../../tailwind.config';
 
@@ -66,7 +71,9 @@ function offences(path: string): string[] {
 
 describe('guard: no ListCard caller passes a menu', () => {
   const callers = sourceFiles(SRC).filter(
-    (path) => readFileSync(path, 'utf8').includes('<ListCard') && !path.endsWith(join('ui', 'ListCard.tsx')),
+    (path) =>
+      readFileSync(path, 'utf8').includes('<ListCard') &&
+      !path.endsWith(join('ui', 'ListCard.tsx')),
   );
 
   it('finds the list callers (Pipeline, Briefs, Assets, Chat, Plan tab, Bank, Activity)', () => {
@@ -122,7 +129,14 @@ describe('guard: every card is 74 tall', () => {
     onPress: () => {},
   };
   const variants: Record<string, Partial<ListCardProps>> = {
-    full: { preview: 'Tease the drop', time: '2d late', timeBad: true, tag: 'Review', tagDot: 'review', unread: true },
+    full: {
+      preview: 'Tease the drop',
+      time: '2d late',
+      timeBad: true,
+      tag: 'Review',
+      tagDot: 'review',
+      unread: true,
+    },
     'no preview': { time: 'Fri', tag: 'Open' },
     'no tag, no preview': { time: '3h' },
     'long preview': { preview: 'x'.repeat(500), tag: 'Draft' },

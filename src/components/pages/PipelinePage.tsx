@@ -1218,9 +1218,7 @@ export function PipelinePage() {
   // SelectBar. Pure client state; no await or read on the tap path.
   const selection = useListSelection();
   const tickedPost =
-    selection.count === 1
-      ? (shownPosts.find((post) => selection.ids.has(post.id)) ?? null)
-      : null;
+    selection.count === 1 ? (shownPosts.find((post) => selection.ids.has(post.id)) ?? null) : null;
   const selectActions = pipelineSelectActions({
     post: tickedPost,
     count: selection.count,
@@ -1230,12 +1228,11 @@ export function PipelinePage() {
     onOpen: (post) => selection.leaveThen(() => openPostCard(navigate, post, workspaceKey)),
     // The copy starts inside the tap (clipboard needs the gesture), then leaves.
     onCopyLink: (post) => {
-      void copyText(
-        buildPostLink(window.location.origin, postCardHref(post, workspaceKey)),
-      ).then((ok) =>
-        toastRef.current?.show(
-          ok ? { title: 'Link copied' } : { title: COPY_FAILED, tone: 'error' },
-        ),
+      void copyText(buildPostLink(window.location.origin, postCardHref(post, workspaceKey))).then(
+        (ok) =>
+          toastRef.current?.show(
+            ok ? { title: 'Link copied' } : { title: COPY_FAILED, tone: 'error' },
+          ),
       );
       selection.clear();
     },

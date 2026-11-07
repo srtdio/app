@@ -8,11 +8,12 @@ import {
 } from '../fixtures/assets-recently-deleted';
 
 // PR C: anything with a long-press menu on touch opens the same ActionMenu on
-// right-click on a laptop (useMenuGesture). Laptop only (@desktop,
-// desktop-webkit 1280x800): a right-click on a chat row, a message bubble, a
-// Pipeline card, a file tile on Assets, an Activity row and a Members row opens
-// a menu with its rows. The
-// iPhone project skips (long-press is covered by the chat and assets specs).
+// right-click on a laptop (useMenuGesture): a message bubble and a Members row.
+// List cards carry no menu (7 Nov 2026): a right-click on a chat card, a
+// Pipeline card or an Assets card enters that list's select mode with the card
+// ticked (ui/ListCard `select`); an Activity card has neither (no menu, no
+// select). Laptop only (@desktop, desktop-webkit 1280x800); the iPhone project
+// skips (long-press is covered by the chat and assets specs).
 
 test.beforeEach(({ page }) => {
   test.skip((page.viewportSize()?.width ?? 0) < 768, 'laptop only');
@@ -33,11 +34,27 @@ async function rightClickOpensMenu(page: Page, target: Locator): Promise<void> {
   await expect(page.getByRole('menuitem').first()).toBeVisible();
 }
 
-test('right-click a chat row opens its ActionMenu @desktop', async ({ page }) => {
+/** A right-click on a list card: select mode with that card ticked, no menu. */
+async function rightClickSelects(page: Page, card: Locator, bar: Locator): Promise<void> {
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await card.scrollIntoViewIfNeeded();
+  await card.click({ button: 'right' });
+  await expect(bar).toBeVisible();
+  await expect(bar).toContainText('1 selected');
+  await expect(card.locator('[data-list-card-tick]')).toHaveAttribute('data-list-card-tick', 'on');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+}
+
+test('right-click a chat card selects it (Hide chat on the bar) @desktop', async ({ page }) => {
   await installHarnessNetwork(page);
   await page.goto('/chat');
-  const row = page.getByRole('button', { name: new RegExp(`^Open ${PEER_NAME}`) }).first();
-  await rightClickOpensMenu(page, row);
+  const card = page
+    .locator('[data-chat-list] [data-list-card]')
+    .filter({ hasText: PEER_NAME })
+    .first();
+  const bar = page.locator('[data-chat-select-bar]');
+  await rightClickSelects(page, card, bar);
+  await expect(bar.locator('[data-selection-hide]')).toHaveAccessibleName('Hide chat');
 });
 
 test('right-click a message bubble opens the message menu @desktop', async ({ page }) => {
@@ -50,28 +67,27 @@ test('right-click a message bubble opens the message menu @desktop', async ({ pa
   await rightClickOpensMenu(page, bubble);
 });
 
-test('right-click a Pipeline card opens its ActionMenu @desktop', async ({ page }) => {
+test('right-click a Pipeline card selects it @desktop', async ({ page }) => {
   await installHarnessNetwork(page);
   await page.goto('/pipeline');
-  const card = page.getByRole('button', { name: 'Open post Monday carousel' }).first();
-  await rightClickOpensMenu(page, card);
+  const card = page
+    .locator('[data-list-card]')
+    .filter({ has: page.getByRole('button', { name: 'Open post Monday carousel' }) })
+    .first();
+  await rightClickSelects(page, card, page.locator('[data-select-bar]'));
+  await expect(page.locator('[data-select-bar-action="open"]')).toBeVisible();
 });
 
-test('right-click a file tile on Assets opens its ActionMenu @desktop', async ({ page }) => {
+test('right-click a file card on Assets selects it @desktop', async ({ page }) => {
   const network = await installHarnessNetwork(page);
   seedRecentlyDeleted(network);
   await installDeletedRoutes(page, network);
   await page.goto('/assets');
-  const tile = page.getByRole('button', { name: `View ${IN_USE_NAME}`, exact: true });
-  await rightClickOpensMenu(page, tile);
-});
-
-test('right-click an Activity row opens its ActionMenu @desktop', async ({ page }) => {
-  await installHarnessNetwork(page);
-  await page.goto('/activity');
-  const lead = page.locator('[data-activity-lead]').first();
-  await rightClickOpensMenu(page, lead);
-  await expect(page.getByRole('menuitem', { name: /^Snooze/ }).first()).toBeVisible();
+  const card = page
+    .locator('[data-asset-card]')
+    .filter({ has: page.getByRole('button', { name: `View ${IN_USE_NAME}`, exact: true }) });
+  await rightClickSelects(page, card, page.locator('[data-select-bar]'));
+  await expect(page.locator('[data-select-bar-action="delete"]')).toBeVisible();
 });
 
 test('right-click a Members row opens its ActionMenu @desktop', async ({ page }) => {

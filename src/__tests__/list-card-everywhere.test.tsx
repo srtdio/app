@@ -340,7 +340,10 @@ describe('line 1 time: by meaning (due, ago, added, plan), words only, never a c
 
   it('line 1 is title then time; line 2 is preview, tag, unread dot; no line 3, no ⋮', () => {
     for (const [name, html] of Object.entries(SCREENS)) {
-      const one = html.slice(html.indexOf('data-list-card-line="1"'), html.indexOf('data-list-card-line="2"'));
+      const one = html.slice(
+        html.indexOf('data-list-card-line="1"'),
+        html.indexOf('data-list-card-line="2"'),
+      );
       const order1 = [...one.matchAll(/data-list-card-(title|time)=""/g)].map((m) => m[1]);
       expect(order1[0], name).toBe('title');
       const two = html.slice(html.indexOf('data-list-card-line="2"'));

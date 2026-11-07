@@ -33,7 +33,10 @@ describe('ActivityFilterBar', () => {
       />,
     );
     const labels = [...html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((m) =>
-      (m[1] ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+      (m[1] ?? '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim(),
     );
     expect(labels[1]).toContain('4');
     expect(labels[2]).toContain('2');

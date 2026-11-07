@@ -364,7 +364,10 @@ export function ListCard({
                 data-list-card-time=""
                 {...(timeBad ? { 'data-list-card-time-bad': '' } : {})}
                 {...timeHooks}
-                className={textRole('meta', cn('shrink-0 whitespace-nowrap', timeBad && 'text-bad'))}
+                className={textRole(
+                  'meta',
+                  cn('shrink-0 whitespace-nowrap', timeBad && 'text-bad'),
+                )}
               >
                 {time}
               </span>
