@@ -15,13 +15,13 @@ function buttonTags(html: string): string[] {
 }
 
 describe('ChannelList buttons (design system)', () => {
-  it('search chips are ui/Chip: 44 tap box, 32 visible, 8px radius, its selected style', () => {
+  it('search chips are ui/Chip: 44 tap box, 32 visible, full pill, its selected style', () => {
     const html = renderToStaticMarkup(searchChips({ kind: 'photo', onChange: noop }));
     const tags = buttonTags(html);
     expect(tags.length).toBeGreaterThan(0);
     for (const tag of tags) {
       expect(tag).toContain('min-h-11');
-      expect(tag).not.toContain('rounded-full');
+      expect(tag).toContain('rounded-full');
       expect(tag).not.toMatch(/\bh-8\b|\bh-9\b|\bh-12\b|rounded-md|font-semibold/);
     }
     const faces = html.match(/<span data-chip-face=""[^>]*>/g) ?? [];

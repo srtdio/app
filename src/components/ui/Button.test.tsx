@@ -221,37 +221,40 @@ describe('Chip', () => {
   const faceOf = (el: ReactElement): Face =>
     (el as ReactElement<{ children: Face }>).props.children;
 
-  it('both sizes: a 44 tap box around the 32 chip (px-3, 8px radius, weight 500, the quiet grey well)', () => {
+  it('both sizes: a 44 tap box around the 32 chip (px-3, full pill, weight 500, the hairline outline)', () => {
     for (const size of ['sm', 'tap'] as const) {
       const el = Chip({ label: 'All', size }) as ReactElement<{ className: string }>;
       const box = tokens(el.props.className);
       expect(box).toContain('min-h-11');
+      expect(box).toContain('rounded-full');
       expect(box).not.toContain('bg-panel-3');
       const t = tokens(faceOf(el).props.className);
       expect(t).toContain('min-h-8');
       expect(t).toContain('px-3');
       expect(t).toContain('text-md');
-      expect(t).toContain('rounded-lg');
+      expect(t).toContain('rounded-full');
       expect(t).toContain('font-medium');
-      expect(t).toContain('bg-panel-3');
-      expect(t).toContain('lit-well-soft');
       expect(t).toContain('lit-hover');
-      expect(t).toContain('border-transparent');
-      expect(t).toContain('text-fg');
-      expect(t).not.toContain('text-fg-2');
-      expect(t).not.toContain('border-border');
-      expect(t).not.toContain('border-border-strong');
+      expect(t).toContain('border');
+      expect(t).toContain('border-border');
+      expect(t).toContain('text-fg-2');
+      expect(t).not.toContain('bg-panel-3');
+      expect(t).not.toContain('lit-well-soft');
+      expect(t).not.toContain('border-transparent');
+      expect(t).not.toContain('rounded-lg');
       expect(t).not.toContain('px-4');
     }
   });
 
-  it('selected is the solid ink fill (bg-accent, lit-pill); add is a dashed lit-chip', () => {
+  it('selected is the ink line (border-fg, text-fg, no fill); add is dashed, no lit-chip', () => {
     const sel = tokens(
       faceOf(Chip({ label: 'All', selected: true }) as ReactElement).props.className,
     );
-    expect(sel).toContain('bg-accent');
-    expect(sel).toContain('text-accent-fg');
-    expect(sel).toContain('lit-pill');
+    expect(sel).toContain('border-fg');
+    expect(sel).toContain('text-fg');
+    expect(sel).not.toContain('bg-accent');
+    expect(sel).not.toContain('text-accent-fg');
+    expect(sel).not.toContain('lit-pill');
     expect(sel).not.toContain('lit-selected');
     expect(sel).not.toContain('border-accent-line');
     expect(sel).not.toContain('bg-accent-soft');
@@ -261,7 +264,8 @@ describe('Chip', () => {
     );
     expect(add).toContain('border-dashed');
     expect(add).toContain('border-border-strong');
-    expect(add).toContain('lit-chip');
+    expect(add).toContain('text-fg-3');
+    expect(add).not.toContain('lit-chip');
   });
 });
 
