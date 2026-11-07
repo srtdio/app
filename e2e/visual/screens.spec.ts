@@ -3088,26 +3088,6 @@ async function sendInDm(page: Page, body: string): Promise<void> {
   await tap([page.getByRole('button', { name: 'Send', exact: true })], 'Send');
 }
 
-/**
- * Waits until the open thread has stopped growing and moving: its list's
- * scrollHeight and scrollTop read the same across two reads 400ms apart (late
- * cards and images land, the stick-to-bottom pin catches up). A shot taken
- * before that catches the thread at a different scroll.
- */
-async function threadStill(page: Page): Promise<void> {
-  const list = page.locator('[data-thread-viewport] ul').first();
-  const read = (): Promise<string> =>
-    list.evaluate((el) => `${el.scrollHeight}:${el.scrollTop}`).catch(() => '');
-  let last = await read();
-  for (let i = 0; i < 20; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    const now = await read();
-    if (now === last) return;
-    last = now;
-  }
-  throw new Error('thread never settled');
-}
-
 /** Waits until an attribute holds one value across two reads 400ms apart. */
 async function attributeStill(target: Locator, name: string): Promise<void> {
   let last = await target.getAttribute(name);
