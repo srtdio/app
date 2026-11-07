@@ -370,7 +370,7 @@ export function WritingBox(props: WritingBoxProps) {
   const shape: 'pill' | 'line' | 'card' | 'field' =
     mode === 'field' || mode === 'caption'
       ? 'field'
-      : expanded || formatOpen || focused || hasText
+      : expanded || formatOpen || focused || hasText || state.kind !== 'idle'
         ? 'card'
         : mode === 'chat' && !laptop
           ? 'pill'

@@ -176,3 +176,22 @@ describe('WritingBox expand', () => {
     expect(q(host, '[data-writing-box]')?.dataset.expanded).toBeUndefined();
   });
 });
+
+describe('WritingBox sending', () => {
+  it('a voice note on its way keeps the card (the send slot shows its spinner), never the pill', () => {
+    const ref = { current: null as HTMLTextAreaElement | null };
+    const host = mount(
+      <WritingBox
+        mode="chat"
+        laptop={false}
+        field={() => ref.current}
+        hasText={false}
+        state={{ kind: 'sending' }}
+        send={<span data-testid="send">busy</span>}
+        input={<textarea aria-label="Message" />}
+      />,
+    );
+    expect(q(host, '[data-writing-box]')?.dataset.shape).toBe('card');
+    expect(q(host, '[data-testid="send"]')).not.toBeNull();
+  });
+});
