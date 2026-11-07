@@ -146,13 +146,16 @@ const designPlugin = {
   rules: { 'warn-syntax': builtinRules.get('no-restricted-syntax') },
 };
 // Time format rule (CLAUDE.md Words: dates via src/lib/time.ts): every visible
-// date or time reads through src/lib/time.ts (formatWhen, formatTime,
-// formatDue, formatDayRange ...), never a locale formatter or a relative
-// reading ("ago", "just now"). Its own rule id (time/no-date-format) so it
-// stacks on the no-restricted-syntax blocks above without replacing them.
-// toLocaleString is banned on anything: counts use Intl.NumberFormat.
+// date or time reads through src/lib/time.ts (formatRelative for past moments,
+// formatDue / formatOverdue for due days, formatTime, formatDayLabel,
+// formatDayRange ...), never a locale formatter or a hand-rolled relative
+// reading. Its own rule id (time/no-date-format) so it stacks on the
+// no-restricted-syntax blocks above without replacing them. toLocaleString is
+// banned on anything: counts use Intl.NumberFormat. Any reference to
+// Intl.DateTimeFormat / Intl.RelativeTimeFormat (new, call, or an alias such
+// as `const F = Intl.DateTimeFormat`) is caught by the member selector.
 const TIME_MESSAGE =
-  'Time format: format dates and times only through src/lib/time.ts (formatWhen; see CLAUDE.md)';
+  'Time format: format dates and times only through src/lib/time.ts (formatRelative, formatDue; see CLAUDE.md)';
 const timeFormatRules = [
   {
     selector: 'CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]',
@@ -160,22 +163,37 @@ const timeFormatRules = [
   },
   {
     selector:
-      "NewExpression[callee.object.name='Intl'][callee.property.name=/^(DateTimeFormat|RelativeTimeFormat)$/]",
-    message: TIME_MESSAGE,
-  },
-  {
-    selector:
-      "CallExpression[callee.object.name='Intl'][callee.property.name=/^(DateTimeFormat|RelativeTimeFormat)$/]",
+      "MemberExpression[object.name='Intl'][property.name=/^(DateTimeFormat|RelativeTimeFormat)$/]",
     message: TIME_MESSAGE,
   },
 ];
-const DATE_FNS_FORMATS = ['format', 'formatDistance', 'formatDistanceToNow', 'formatRelative'];
+const DATE_FNS_FORMATS = [
+  'format',
+  'formatDistance',
+  'formatDistanceStrict',
+  'formatDistanceToNow',
+  'formatDistanceToNowStrict',
+  'formatRelative',
+  'intlFormat',
+  'intlFormatDistance',
+  'lightFormat',
+];
 const timeFormatImports = {
   paths: [
     { name: 'date-fns', importNames: DATE_FNS_FORMATS, message: TIME_MESSAGE },
     { name: 'date-fns-tz', importNames: ['format', 'formatInTimeZone'], message: TIME_MESSAGE },
   ],
-  patterns: [{ group: ['date-fns/format*', 'date-fns/*/format*'], message: TIME_MESSAGE }],
+  patterns: [
+    {
+      group: [
+        'date-fns/format*',
+        'date-fns/*/format*',
+        'date-fns/intlFormat*',
+        'date-fns/lightFormat*',
+      ],
+      message: TIME_MESSAGE,
+    },
+  ],
 };
 const timePlugin = {
   rules: { 'no-date-format': builtinRules.get('no-restricted-syntax') },
