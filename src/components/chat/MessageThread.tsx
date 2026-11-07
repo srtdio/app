@@ -172,7 +172,13 @@ import {
   type ChatLayout,
   type ChatSize,
 } from '@/components/chat/chat-type';
-import { createSwipeReplyController, type SwipeReplyController } from '@/lib/chat/swipe-reply';
+import {
+  createSwipeReplyController,
+  SWIPE_REST,
+  type SwipeFrame,
+  type SwipeReplyController,
+  type SwipeSide,
+} from '@/lib/chat/swipe-reply';
 import type { PresignCache } from '@/lib/asset-presign';
 import { Bone, itemIn, paintSwipe, pop, useFreshKeys } from '@/lib/motion';
 import { freshTailIds } from '@/lib/chat/fresh-tail';
@@ -596,6 +602,55 @@ export interface BubblePointerHandlers {
 }
 
 /**
+ * A row's swipe (touch and pen): right = Reply, left = Delete. The whole row
+ * (full width, not only the bubble) is the grab area: `handlers` go on the
+ * <li>, the bubble is what slides. Absent pieces leave that part off (a unit
+ * test passes {} to see the icons and the bubble's marks alone).
+ */
+export interface BubbleSwipe {
+  /** The reply arrow behind the bubble's left edge. */
+  iconRef?: Ref<HTMLSpanElement>;
+  /** The bin behind the bubble's right edge. */
+  deleteIconRef?: Ref<HTMLSpanElement>;
+  /** The swipe controller's pointer handlers, on the row. */
+  handlers?: BubblePointerHandlers;
+  /** True (once) when a click is the tail of a swipe: the row swallows it. */
+  consumeClick?: () => boolean;
+}
+
+/**
+ * The row's grab area: the swipe handlers, the vertical-pan touch-action (the
+ * list keeps scrolling, a horizontal move is the swipe's) and the swallowed
+ * click that trails a swipe. Empty without handlers.
+ */
+function rowSwipeProps(swipe: BubbleSwipe | undefined): {
+  'data-swipe-row'?: string;
+  onPointerDown?: BubblePointerHandlers['onPointerDown'];
+  onPointerMove?: BubblePointerHandlers['onPointerMove'];
+  onPointerUp?: BubblePointerHandlers['onPointerUp'];
+  onPointerCancel?: BubblePointerHandlers['onPointerCancel'];
+  onClickCapture?: (event: MouseEvent) => void;
+} {
+  const handlers = swipe?.handlers;
+  if (handlers === undefined) return {};
+  const consume = swipe?.consumeClick;
+  return {
+    'data-swipe-row': '',
+    ...handlers,
+    onClickCapture: (event) => {
+      // Pointer capture sends a swipe's trailing click to the row: it does nothing.
+      if (consume?.() === true) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    },
+  };
+}
+
+/** The row's touch-action while it swipes: vertical pans and pinch stay the browser's. */
+export const SWIPE_ROW_TOUCH = 'touch-pan-y touch-pinch-zoom';
+
+/**
  * The swipe-to-reply icon: sits behind the bubble's resting left edge and is
  * revealed as the bubble slides right. 32px circle, panel-3 idle, accent when
  * armed (data-armed). Scale and opacity (0 to 1 over 0 to 64px) are painted
@@ -615,6 +670,87 @@ export function SwipeReplyIcon(props: {
       <IconReply size={ICON_SIZE.nav} />
     </span>
   );
+}
+
+/**
+ * The swipe-to-delete bin: the reply icon's mirror, behind the bubble's
+ * resting right edge and revealed as the bubble slides left. 32px circle,
+ * bad ink on panel-3 idle, accent when armed (data-armed), the same as a task
+ * row's bin. Painted per frame by paintRowSwipe; at rest the classes hold it
+ * at scale 0, opacity 0.
+ */
+export function SwipeDeleteIcon(props: {
+  iconRef?: Ref<HTMLSpanElement> | undefined;
+}): ReactElement {
+  return (
+    <span
+      ref={props.iconRef}
+      aria-hidden="true"
+      data-swipe-delete-icon=""
+      className="pointer-events-none absolute inset-y-0 right-0 my-auto flex h-8 w-8 scale-0 items-center justify-center rounded-full bg-panel-3 text-bad opacity-0 data-[armed]:bg-accent data-[armed]:text-accent-fg"
+    >
+      <IconTrash size={ICON_SIZE.nav} />
+    </span>
+  );
+}
+
+/**
+ * The row's swipe: the bubble slides by the frame (its side picks the way),
+ * the icon on the revealed side follows the progress and the other one rests.
+ * `iconShown` false (a way that cannot trigger: the rubber band) keeps both
+ * icons at rest. Style writes only, no layout reads.
+ */
+export function paintRowSwipe(
+  bubble: HTMLElement | null,
+  replyIcon: HTMLElement | null,
+  deleteIcon: HTMLElement | null,
+  frame: SwipeFrame,
+  iconShown: boolean,
+): void {
+  const left = frame.side === 'left';
+  const active = left ? deleteIcon : replyIcon;
+  const idle = left ? replyIcon : deleteIcon;
+  paintSwipe(bubble, iconShown ? active : null, frame, frame.side);
+  if (!iconShown) paintSwipe(null, active, SWIPE_REST);
+  paintSwipe(null, idle, SWIPE_REST);
+}
+
+/**
+ * Whether a swipe that way may fire on this row. Right (Reply) on every live
+ * recorded message; left (Delete) only where the long-press menu offers
+ * Delete (`canDelete`, the same rule). A tombstone takes neither: the row
+ * rubber-bands and nothing opens. Pure.
+ */
+export function rowSwipeCanTrigger(
+  side: SwipeSide,
+  message: ThreadMessage,
+  canDelete: ((message: ThreadMessage) => boolean) | undefined,
+): boolean {
+  if (message.deleted === true) return false;
+  if (side === 'right') return true;
+  return canDelete?.(message) === true;
+}
+
+/**
+ * The long-press menu's Delete rule for one live message: an own message in
+ * its window (any age in Personal notes) deletes for everyone; Delete for me
+ * is offered on any sent, live message outside Personal notes where the chat
+ * has it. `forMeOnly`: the sheet shows only "Delete for me". Pure; the menu
+ * and the row's left swipe both read it.
+ */
+export function messageDeleteOffer(input: {
+  message: Pick<ThreadMessage, 'mine' | 'state' | 'createdAt' | 'body' | 'deleted'>;
+  nowMs: number;
+  notes: boolean;
+  canDeleteForMe: boolean;
+}): { canDelete: boolean; forMeOnly: boolean } {
+  const own = ownMessageActions(input.message, input.nowMs, input.notes);
+  const forMe =
+    input.canDeleteForMe &&
+    !input.notes &&
+    input.message.state === 'sent' &&
+    input.message.deleted !== true;
+  return { canDelete: own.canDelete || forMe, forMeOnly: forMe && !own.canDelete };
 }
 
 /**
@@ -1759,6 +1895,8 @@ function TombstoneBubble(props: {
   className: string;
   label: string;
   onDeleteForMe?: (() => void) | undefined;
+  /** The row's swipe slides this box (a rubber band: nothing fires on a tombstone). */
+  sliderRef?: Ref<HTMLDivElement> | undefined;
   children: ReactNode;
 }): ReactElement {
   const [open, setOpen] = useState(false);
@@ -1769,6 +1907,7 @@ function TombstoneBubble(props: {
   });
   const bubble = (
     <div
+      ref={props.sliderRef}
       data-bubble=""
       data-tombstone=""
       data-testid="tombstone"
@@ -2343,8 +2482,8 @@ export function MessageBubble(props: {
   bubbleRef?: Ref<HTMLDivElement>;
   /** The row; in selection mode its taps and holds are the selection gesture's. */
   rowRef?: Ref<HTMLLIElement>;
-  /** Swipe right to reply (touch and pen); off while selecting. */
-  swipe?: { iconRef?: Ref<HTMLSpanElement> };
+  /** Swipe right to reply, left to delete (touch and pen); off while selecting. */
+  swipe?: BubbleSwipe;
   press?: {
     handlers: BubblePointerHandlers;
     onContextMenu: (event: MouseEvent) => void;
@@ -2491,14 +2630,17 @@ export function MessageBubble(props: {
   if (message.deleted === true) {
     // A tombstone keeps its side, meta and run grouping; nothing else.
     const tombMeta: BubbleMeta = { time: meta.time, edited: false, status: null };
+    // A tombstone rubber-bands under a swipe either way; nothing fires.
+    const tombSwipe = selecting ? undefined : props.swipe;
     return (
       <li
         ref={props.rowRef}
         data-msg-id={message.id}
         data-state={message.state}
         data-deleted=""
-        className={rowClass}
+        className={cn(rowClass, tombSwipe?.handlers !== undefined && SWIPE_ROW_TOUCH)}
         onContextMenu={selecting ? undefined : rowContextMenu}
+        {...rowSwipeProps(tombSwipe)}
       >
         {rail?.role === 'middle' ? <RailThrough /> : null}
         {photo}
@@ -2510,6 +2652,7 @@ export function MessageBubble(props: {
               label={`${mine ? 'Your message' : `Message from ${name}`}, deleted, ${bubbleTimeLabel(message, timeZone)}`}
               className={tombstoneClass(shape)}
               onDeleteForMe={selecting ? undefined : props.onDeleteForMe}
+              sliderRef={tombSwipe !== undefined ? bubbleRef : undefined}
             >
               <IconBan size={ICON_SIZE.inline} className="shrink-0" />
               {/* One line: the label truncates, never wraps; the time sits in flow on its right. */}
@@ -2591,6 +2734,8 @@ export function MessageBubble(props: {
         rowClass,
         hasReactions && (rail?.role != null ? 'pb-6' : REACTION_ROW_SPACE),
         checked && 'isolate',
+        // The whole row is the swipe's grab area (own rows as freely as others').
+        swipe?.handlers !== undefined && SWIPE_ROW_TOUCH,
       )}
       // Selection mode: the whole row is the target, owned by the selection
       // gesture (createSelectionGesture, attached to this row): a tap anywhere
@@ -2598,6 +2743,7 @@ export function MessageBubble(props: {
       // (links, media, cards, voice, chips); a long-press toggles too.
       // Selecting text: the browser's own menu and callout (laptop right-click).
       {...(!pressOn ? {} : { onContextMenu: rowContextMenu })}
+      {...rowSwipeProps(swipe)}
     >
       {checked ? (
         <span aria-hidden="true" data-selected-tint="" className={SELECTED_ROW_TINT} />
@@ -2615,6 +2761,7 @@ export function MessageBubble(props: {
       <div className={cn('relative', column)}>
         {senderLine}
         {swipe !== undefined ? <SwipeReplyIcon iconRef={swipe.iconRef} /> : null}
+        {swipe !== undefined ? <SwipeDeleteIcon iconRef={swipe.deleteIconRef} /> : null}
         {withRailBox(
           <div
             ref={bubbleRef}
@@ -2642,7 +2789,7 @@ export function MessageBubble(props: {
               bubbleClass({ ...shape, failed, voiceOnly, album, card: cardOnly }),
               // The browser keeps vertical pans (the list scrolls); a horizontal
               // move is left to the swipe controller.
-              swipe !== undefined && 'touch-pan-y touch-pinch-zoom',
+              swipe !== undefined && SWIPE_ROW_TOUCH,
             )}
           >
             <div className={album ? cn(albumInset, 'empty:hidden') : 'contents'}>
@@ -3077,10 +3224,13 @@ export function threadRows(
  * The thread's scroll box. Its scroll padding keeps the floating lanes clear
  * (ui/layout LANE_TOP_CLEAR, LANE_BOTTOM_CLEAR): a row it lands on (a jump, a
  * quote) never parks its title or time under the unread pill or the latest
- * button.
+ * button. overflow-x-hidden: overflow-y auto alone computes overflow-x auto,
+ * so an own bubble swiped right past the box's edge made the list a sideways
+ * scroller mid-gesture (iOS could pan it, and the scroll cancelled the swipe);
+ * hidden clips it and never pans.
  */
 export const THREAD_LIST_CLASS = cn(
-  'flex flex-1 flex-col overflow-y-auto py-2',
+  'flex flex-1 flex-col overflow-y-auto overflow-x-hidden py-2',
   LANE_TOP_CLEAR,
   LANE_BOTTOM_CLEAR,
   NO_TOUCH_SELECT,
@@ -3198,8 +3348,12 @@ interface MessageRowProps {
   coarsePointer: boolean;
   /** prefers-reduced-motion: the swipe resets without a spring. */
   reducedMotion: boolean;
-  /** Swiped past the threshold: the same reply path as the menu's Reply. */
+  /** Swiped right past the threshold: the same reply path as the menu's Reply. */
   onSwipeReply: (message: ThreadMessage) => void;
+  /** Swiped left past the threshold: the long-press menu's Delete (its sheet, confirm or Undo). */
+  onSwipeDelete?: (message: ThreadMessage) => void;
+  /** Whether the menu offers Delete on this message now (the left swipe's canTrigger). */
+  canSwipeDelete?: (message: ThreadMessage) => boolean;
   onOpenImage: (message: ThreadMessage, index: number) => void;
   postRefs?: BubblePostRefs | undefined;
   /** A member of a card's thread (no quote, no chip). */
@@ -3225,6 +3379,12 @@ interface MessageRowProps {
 const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElement {
   const bubbleRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<HTMLSpanElement>(null);
+  const deleteIconRef = useRef<HTMLSpanElement>(null);
+  // The row: the swipe's grab area and pointer capture; in selection mode its
+  // own gesture's target.
+  const rowRef = useRef<HTMLLIElement>(null);
+  // The locked way can fire: its icon shows (false: the rubber band, no icon).
+  const swipeIconShownRef = useRef(true);
   const selecting = props.selection !== undefined;
   const latest = useRef(props);
   latest.current = props;
@@ -3248,19 +3408,36 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
   const rowHold = rowHoldRef.current;
   if (swipeRef.current === null) {
     swipeRef.current = createSwipeReplyController({
+      // Right = Reply, left = Delete, on own and others' rows alike.
+      direction: 'both',
       onReply: () => latest.current.onSwipeReply(latest.current.message),
-      onFrame: (frame) => paintSwipe(bubbleRef.current, iconRef.current, frame),
+      onLeft: () => latest.current.onSwipeDelete?.(latest.current.message),
+      canTrigger: (side) => {
+        const ok = rowSwipeCanTrigger(side, latest.current.message, latest.current.canSwipeDelete);
+        swipeIconShownRef.current = ok;
+        return ok;
+      },
+      onFrame: (frame) =>
+        paintRowSwipe(
+          bubbleRef.current,
+          iconRef.current,
+          deleteIconRef.current,
+          frame,
+          swipeIconShownRef.current,
+        ),
       onStart: (pointerId) => {
         // A swipe never opens a menu: stop the bubble's hold timer (8px < its
-        // 10px) and any hold inside this bubble (a post card's), which never
+        // 10px) and any hold inside this row (a post card's), which never
         // sees the captured moves; holds anywhere else are left alone. Drop
         // any text selection the press started.
         cancel();
-        if (bubbleRef.current !== null) cancelPendingLongPressesWithin(bubbleRef.current);
+        const scope = rowRef.current ?? bubbleRef.current;
+        if (scope !== null) cancelPendingLongPressesWithin(scope);
         window.getSelection()?.removeAllRanges();
         if (pointerId === undefined) return;
         try {
-          bubbleRef.current?.setPointerCapture(pointerId);
+          // The row, the grab area, keeps the moves wherever the finger goes.
+          scope?.setPointerCapture(pointerId);
         } catch {
           // The pointer is already gone; the gesture ends on its own.
         }
@@ -3279,7 +3456,6 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
     };
   }, [swipe]);
   // Selection mode: the row's own pointer gesture decides every toggle.
-  const rowRef = useRef<HTMLLIElement>(null);
   const gestureRef = useRef<SelectionGesture | null>(null);
   gestureRef.current ??= createSelectionGesture({
     selection: () => latest.current.selection,
@@ -3300,6 +3476,9 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
     const current = latest.current;
     current.onOpen(current.message, anchor, bubbleRef.current, reactionsOnly);
   }
+  // The bubble's hold (long-press). The swipe sits on the row (rowSwipe):
+  // the bubble's presses reach it by bubbling, so it hears every press on the
+  // row, the bubble's included.
   const pointer: BubblePointerHandlers = {
     onPointerDown: (e) => {
       rowHold.pointerDown();
@@ -3308,21 +3487,25 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       // mode the row's own gesture toggles it (links included); the hold here
       // never opens the menu.
       if (selecting || !isLinkTarget(e.target)) handlers.onPointerDown(e);
-      swipe.handlers.onPointerDown(e);
     },
-    onPointerMove: (e) => {
-      handlers.onPointerMove(e);
-      swipe.handlers.onPointerMove(e);
-    },
-    onPointerUp: (e) => {
-      handlers.onPointerUp();
-      swipe.handlers.onPointerUp(e);
-    },
-    onPointerCancel: () => {
-      handlers.onPointerCancel();
-      swipe.handlers.onPointerCancel();
-    },
+    onPointerMove: (e) => handlers.onPointerMove(e),
+    onPointerUp: () => handlers.onPointerUp(),
+    onPointerCancel: () => handlers.onPointerCancel(),
   };
+  // Stable for the row's life: the memoised bubble never re-renders for it.
+  const rowSwipeRef = useRef<BubbleSwipe | null>(null);
+  rowSwipeRef.current ??= {
+    iconRef,
+    deleteIconRef,
+    handlers: {
+      onPointerDown: (e) => swipe.handlers.onPointerDown(e),
+      onPointerMove: (e) => swipe.handlers.onPointerMove(e),
+      onPointerUp: (e) => swipe.handlers.onPointerUp(e),
+      onPointerCancel: () => swipe.handlers.onPointerCancel(),
+    },
+    consumeClick: () => swipe.consumeClickSuppression(),
+  };
+  const rowSwipe = rowSwipeRef.current;
   // A search jump's words: matched words in this bubble draw as <mark>.
   const searchWords = useContext(SearchWordsContext);
   const personSource = useContext(PersonSourceContext);
@@ -3358,7 +3541,7 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       quoted={props.quoted}
       bubbleRef={bubbleRef}
       rowRef={rowRef}
-      swipe={{ iconRef }}
+      swipe={rowSwipe}
       press={{
         handlers: pointer,
         onContextMenu: rowHold.contextMenu,
@@ -4497,6 +4680,22 @@ function ThreadBody(
     [],
   );
   const onSwipeReply = useStableCallback(props.onReply);
+  // Swipe left: exactly the long-press menu's Delete (its rule, its sheet).
+  const canSwipeDelete = useStableCallback(
+    (m: ThreadMessage): boolean =>
+      props.onDeleteMessage !== undefined &&
+      messageDeleteOffer({
+        message: m,
+        nowMs: serverNow(),
+        notes: props.notes === true,
+        canDeleteForMe: props.canDeleteForMe === true,
+      }).canDelete,
+  );
+  const onSwipeDelete = useStableCallback((m: ThreadMessage): void => {
+    if (!canSwipeDelete(m)) return;
+    setSelectingTextId(null);
+    props.onDeleteMessage?.(m, serverNow());
+  });
   const onTranscribeRow = useOptionalCallback(props.onTranscribe);
   const onRetryRow = useOptionalCallback(props.onRetry);
   const onHideRow = useOptionalCallback(props.onHideMessage);
@@ -4598,14 +4797,17 @@ function ThreadBody(
       ? ownMessageActions(menu.message, menu.openedAt, props.notes === true)
       : { canEdit: false, canDelete: false };
   const menuFailed = menu !== null && canDiscardFailed(menu.message);
-  // Delete for me: any sent, live message outside Personal notes.
-  const menuForMe =
-    menu !== null &&
-    props.canDeleteForMe === true &&
-    props.notes !== true &&
-    !menuFailed &&
-    menu.message.state === 'sent' &&
-    menu.message.deleted !== true;
+  // Delete (for everyone in the window) and Delete for me: the shared rule a
+  // row's left swipe reads too.
+  const menuDelete =
+    menu !== null && !menuFailed
+      ? messageDeleteOffer({
+          message: menu.message,
+          nowMs: menu.openedAt,
+          notes: props.notes === true,
+          canDeleteForMe: props.canDeleteForMe === true,
+        })
+      : { canDelete: false, forMeOnly: false };
   const replyPrivately = props.replyPrivately;
   const menuSender = menu?.message.senderUserId ?? null;
   const menuReplyPrivately =
@@ -4838,6 +5040,8 @@ function ThreadBody(
                       coarsePointer={coarsePointer}
                       reducedMotion={reducedMotion}
                       onSwipeReply={onSwipeReply}
+                      onSwipeDelete={onSwipeDelete}
+                      canSwipeDelete={canSwipeDelete}
                       onJumpToMessage={onJumpToMessage}
                       {...(openPrivateReplyHref !== undefined ? { onOpenPrivateReply } : {})}
                       nextVoiceId={voiceNext.get(row.message.id) ?? null}
@@ -4946,7 +5150,7 @@ function ThreadBody(
           if (menu) props.onEditMessage?.(menu.message);
         }}
         canDelete={
-          (props.onDeleteMessage !== undefined && (menuOwn.canDelete || menuForMe)) ||
+          (props.onDeleteMessage !== undefined && menuDelete.canDelete) ||
           (menuFailed && props.onDiscard !== undefined)
         }
         onDelete={() => {
@@ -4956,7 +5160,7 @@ function ThreadBody(
           else props.onDeleteMessage?.(menu.message, menu.openedAt);
         }}
         failedSend={menuFailed}
-        deleteForMeOnly={menuForMe && !menuOwn.canDelete}
+        deleteForMeOnly={menuDelete.forMeOnly}
         notes={props.notes === true}
         canSaveToNotes={
           menu !== null &&
