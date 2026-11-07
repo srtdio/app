@@ -44,6 +44,7 @@ import {
   toSignInCode,
 } from './onboarding-steps';
 import { CHECK_EMAIL_COPY } from '../../src/lib/induction-copy';
+import { stubVoiceRecorder } from '../helpers/voice-recorder';
 
 // Visual lock: every screen of the consistency audit (24 Oct 2026), the chat
 // PostSheet and the onboarding screens (onboarding-steps.ts: sign up, sign in,
@@ -3030,62 +3031,19 @@ const HELD_VOICE_BYTES = 4099;
  * header before it is handed to the thread).
  */
 async function stubRecorder(_network: HarnessNetwork, page: Page): Promise<void> {
-  await page.addInitScript((size: number) => {
-    const held = new WeakSet<Blob>();
-    const slice = Blob.prototype.slice;
-    Blob.prototype.slice = function (this: Blob, ...args: Parameters<Blob['slice']>): Blob {
-      const out = slice.apply(this, args);
-      if (this.size === size) held.add(out);
-      return out;
-    };
-    const arrayBuffer = Blob.prototype.arrayBuffer;
-    Blob.prototype.arrayBuffer = function (this: Blob): Promise<ArrayBuffer> {
-      if (held.has(this) || this.size === size) return new Promise<ArrayBuffer>(() => undefined);
-      return arrayBuffer.call(this);
-    };
-    class StubRecorder extends EventTarget {
-      state: 'inactive' | 'recording' = 'inactive';
-      readonly mimeType: string;
-      constructor(_stream: unknown, options?: { mimeType?: string }) {
-        super();
-        this.mimeType = options?.mimeType ?? 'audio/mp4';
-      }
-      static isTypeSupported(type: string): boolean {
-        return type === 'audio/mp4';
-      }
-      start(): void {
-        this.state = 'recording';
-      }
-      requestData(): void {
-        const event = new Event('dataavailable');
-        Object.defineProperty(event, 'data', {
-          value: new Blob([new Uint8Array(size)], { type: this.mimeType }),
-        });
-        this.dispatchEvent(event);
-      }
-      stop(): void {
-        if (this.state === 'inactive') return;
-        this.requestData();
-        this.state = 'inactive';
-        this.dispatchEvent(new Event('stop'));
-      }
-    }
-    Object.defineProperty(window, 'MediaRecorder', {
-      value: StubRecorder,
-      configurable: true,
-      writable: true,
-    });
-    const stream = { getTracks: () => [{ stop: () => undefined }] };
-    Object.defineProperty(navigator, 'mediaDevices', {
-      value: {
-        getUserMedia: () => Promise.resolve(stream),
-        enumerateDevices: () => Promise.resolve([]),
-        addEventListener: () => undefined,
-        removeEventListener: () => undefined,
-      },
-      configurable: true,
-    });
-  }, HELD_VOICE_BYTES);
+  await stubVoiceRecorder(page, { heldBytes: HELD_VOICE_BYTES, recordedBytes: HELD_VOICE_BYTES });
+}
+
+/** Bytes in a stub recording that reads back: the note is sent and lands in the thread. */
+const SENT_VOICE_BYTES = 2048;
+
+/**
+ * The stub microphone with a recording that reads back, and every upload held:
+ * stop and send puts the own voice note in the thread, its upload in flight.
+ */
+async function stubUploadingVoice(network: HarnessNetwork, page: Page): Promise<void> {
+  network.holdUploads();
+  await stubVoiceRecorder(page, { heldBytes: HELD_VOICE_BYTES, recordedBytes: SENT_VOICE_BYTES });
 }
 
 /**
@@ -3322,6 +3280,221 @@ SCREENS.push(
   },
 );
 
+// ---------------------------------------------------------------------------
+// Delete for me (7 Nov 2026): the delete sheet (an own message inside 30 min:
+// Delete for everyone and Delete for me; someone else's: Delete for me only),
+// a tombstone and its one-row menu, the chat home's chip select bar, the photo
+// viewer's bar (Forward, Delete, Download) and its sheet, an own voice note
+// uploading (the ring in the play slot, the real bars at reduced emphasis),
+// and the chat list with the Personal notes card showing the user's photo.
+// Phone light/dark and laptop light come from the projects; LAPTOP_DARK_SCREENS
+// adds laptop dark.
+
+/** An own DM text two minutes before NOW: its Delete offers Delete for everyone. */
+const FRESH_OWN_BODY = 'Final cut is in the folder';
+/** The peer's DM line the message menu screens open (an hour old, not own). */
+const PEER_LINE = 'Done, it reads well now.';
+
+function seedFreshOwnMessage(network: HarnessNetwork): void {
+  (network.world.tables.chat_messages ??= []).push({
+    id: '0190b000-0000-7000-8100-0000000009f1',
+    channel_id: DM_CHANNEL,
+    workspace_id: WORKSPACE_ID,
+    sender_user_id: ME,
+    body: FRESH_OWN_BODY,
+    mentions: null,
+    attachment_asset_ids: null,
+    shared_post_ids: null,
+    shared_brief_ids: null,
+    reply_to_message_id: null,
+    forwarded_from_message_id: null,
+    attachment_meta: null,
+    agora_event_id: null,
+    created_at: new Date(NOW - 2 * 60_000).toISOString(),
+    edited_at: null,
+    deleted_at: null,
+    thread_root_message_id: null,
+  });
+}
+
+/** The DM's newest peer row deleted: a tombstone sits at the bottom of the thread. */
+function seedDmTombstone(network: HarnessNetwork): void {
+  const row = network.world.dmMessages[network.world.dmMessages.length - 1];
+  if (row === undefined) throw new Error('no DM row to delete');
+  Object.assign(row, { body: null, deleted_at: new Date(NOW - 30 * 60_000).toISOString() });
+}
+
+/** The signed-in user's own photo (users.avatar_url): the notes card shows it. */
+function seedOwnPhoto(network: HarnessNetwork): void {
+  const photo = `data:image/png;base64,${solidPng(72, 72, [70, 110, 150]).toString('base64')}`;
+  for (const user of network.world.tables.users ?? []) {
+    if (user.id === ME) user.avatar_url = photo;
+  }
+}
+
+/** Long-press (phone) or right-click (laptop) the DM bubble with `text`: its menu. */
+async function openDmMenuOn(page: Page, text: string): Promise<void> {
+  await openDm(page);
+  const bubble = page.locator('[data-bubble]', { hasText: text }).last();
+  const menu = page.getByRole('menu').or(page.getByRole('dialog'));
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await openMenuGesture(page, bubble);
+    if (
+      await menu
+        .first()
+        .isVisible()
+        .catch(() => false)
+    ) {
+      break;
+    }
+  }
+  await waitFor([menu], 'message menu');
+}
+
+/** The message menu's Delete: the delete sheet opens. */
+async function openDeleteSheetOn(page: Page, text: string): Promise<Locator> {
+  await openDmMenuOn(page, text);
+  await tap([page.locator('[data-menu-item="delete"]')], 'menu Delete');
+  return firstVisible([page.getByTestId('delete-sheet')], 'delete sheet');
+}
+
+/** The Photos chip with the photo viewer open on the first tile. */
+async function openPhotoViewer(page: Page): Promise<Locator> {
+  const results = await openMediaChip(page, 'photo');
+  await tap([results.locator('[data-media-tile]').first()], 'first photo tile');
+  const bar = await firstVisible([page.getByTestId('viewer-bar')], 'viewer bar');
+  await waitFor([bar.getByRole('button', { name: 'Forward', exact: true })], 'viewer Forward');
+  await waitFor([bar.getByRole('button', { name: 'Delete', exact: true })], 'viewer Delete');
+  return bar;
+}
+
+SCREENS.push(
+  {
+    // An own message inside 30 minutes: Delete for everyone, Delete for me, Cancel.
+    name: 'chat-delete-sheet-everyone',
+    seed: creator,
+    extra: seedFreshOwnMessage,
+    url: '/chat',
+    steps: async (page) => {
+      const sheet = await openDeleteSheetOn(page, FRESH_OWN_BODY);
+      await waitFor([sheet.locator('[data-delete-choice="everyone"]')], 'Delete for everyone');
+      await waitFor([sheet.locator('[data-delete-choice="me"]')], 'Delete for me');
+    },
+  },
+  {
+    // Someone else's message: Delete for me and Cancel only.
+    name: 'chat-delete-sheet-me',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      const sheet = await openDeleteSheetOn(page, PEER_LINE);
+      await waitFor([sheet.locator('[data-delete-choice="me"]')], 'Delete for me');
+      await expect(sheet.locator('[data-delete-choice="everyone"]')).toHaveCount(0);
+    },
+  },
+  {
+    // A deleted message: the peer bubble's shell in secondary ink, its time.
+    name: 'chat-tombstone',
+    seed: creator,
+    extra: seedDmTombstone,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      const tomb = await firstVisible([page.getByTestId('tombstone')], 'tombstone');
+      await tomb.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // The tombstone's one-row menu: Delete for me.
+    name: 'chat-tombstone-menu',
+    seed: creator,
+    extra: seedDmTombstone,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      const tomb = await firstVisible([page.getByTestId('tombstone')], 'tombstone');
+      const row = page.getByRole('menuitem', { name: 'Delete for me' });
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await openMenuGesture(page, tomb);
+        if (await row.isVisible().catch(() => false)) break;
+      }
+      await waitFor([row], 'tombstone menu');
+    },
+  },
+  {
+    // The Photos chip in select mode, the album's message picked (its three
+    // tiles checked): Forward and Delete for me in the bottom bar.
+    name: 'chat-home-chip-select',
+    seed: creator,
+    prepare: seedMediaChips,
+    url: '/chat',
+    steps: async (page) => {
+      const results = await openMediaChip(page, 'photo');
+      await tap([page.getByRole('button', { name: 'Select', exact: true })], 'Select');
+      const first = results.locator('[data-media-tile]').first();
+      await tap([first], 'first photo tile');
+      await expect(first).toHaveAttribute('aria-pressed', 'true');
+      await waitFor([page.getByTestId('media-select-bar')], 'chip select bar');
+    },
+  },
+  {
+    // The photo viewer's bar: Show in chat, then Forward, Delete and Download.
+    name: 'chat-viewer-bar',
+    seed: creator,
+    prepare: seedMediaChips,
+    url: '/chat',
+    steps: async (page) => {
+      await openPhotoViewer(page);
+    },
+  },
+  {
+    // The viewer's Delete: the delete sheet (Delete for me), the viewer aside.
+    name: 'chat-viewer-delete-sheet',
+    seed: creator,
+    prepare: seedMediaChips,
+    url: '/chat',
+    steps: async (page) => {
+      const bar = await openPhotoViewer(page);
+      await tap([bar.getByRole('button', { name: 'Delete', exact: true })], 'viewer Delete');
+      const sheet = await firstVisible([page.getByTestId('delete-sheet')], 'delete sheet');
+      await waitFor([sheet.locator('[data-delete-choice="me"]')], 'Delete for me');
+    },
+  },
+  {
+    // An own voice note sent with its upload held: the ring in the play slot
+    // in the bubble's inks, the bars at reduced emphasis.
+    name: 'chat-voice-uploading',
+    seed: creator,
+    prepare: stubUploadingVoice,
+    url: '/chat',
+    steps: async (page) => {
+      await startRecording(page);
+      // Over MIN_VOICE_NOTE_MS, so the recording is sent and not dropped.
+      await page.waitForTimeout(1_100);
+      await tap(
+        [page.getByRole('button', { name: 'Stop and send voice note', exact: true })],
+        'Stop and send',
+      );
+      const note = await firstVisible([page.getByTestId('voice-uploading')], 'voice uploading');
+      await waitFor([note.locator('[data-voice-bars]')], 'voice bars');
+      const ring = await firstVisible([note.locator('[data-upload-ring]')], 'voice upload ring');
+      await attributeStill(ring, 'data-upload-progress');
+    },
+  },
+  {
+    // The chat home: the Personal notes card shows the user's own photo
+    // (round, with the notes badge) among the person cards.
+    name: 'chat-list-notes-photo',
+    seed: creator,
+    extra: seedOwnPhoto,
+    url: '/chat',
+    steps: async (page) => {
+      await chatListAllRows(page);
+      await waitFor([page.locator('[data-notes-tile] [data-notes-avatar="photo"]')], 'notes photo');
+    },
+  },
+);
+
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
 
@@ -3429,6 +3602,7 @@ async function capture(screen: Screen, page: Page): Promise<void> {
 // runs on every screen; these must show cards. The chip screens above may land
 // on a chip's zero line, so they are checked whenever cards show.
 const LIST_CARD_SCREENS = new Set([
+  'chat-list-notes-photo',
   'pipeline',
   'pipeline-approver',
   'briefs-approver',
@@ -3470,6 +3644,16 @@ const LAPTOP_DARK_SCREENS = new Set([
   'chat-message-not-sent',
   'chat-select-mode',
   'post-approve-busy',
+  // Delete for me: phone and laptop, light and dark.
+  'chat-delete-sheet-everyone',
+  'chat-delete-sheet-me',
+  'chat-tombstone',
+  'chat-tombstone-menu',
+  'chat-home-chip-select',
+  'chat-viewer-bar',
+  'chat-viewer-delete-sheet',
+  'chat-voice-uploading',
+  'chat-list-notes-photo',
   // The six ListCard lists, every chip: phone and laptop, light and dark.
   'chat-list',
   'notifications',

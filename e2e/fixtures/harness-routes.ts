@@ -1327,6 +1327,29 @@ const RPC: Record<string, RpcHandler> = {
     return null;
   },
   session_register: () => null,
+  // Delete for me: the caller's own hide rows (one per message, idempotent),
+  // the message's chat and workspace copied in, at most 100 ids per call.
+  chat_messages_hide: (args, tables) => {
+    const ids = Array.isArray(args.p_message_ids) ? args.p_message_ids.map(String) : [];
+    if (ids.length === 0 || ids.length > 100) {
+      throw new HarnessRpcError('select between 1 and 100 messages');
+    }
+    const rows = (tables.chat_message_hides ??= []);
+    const now = new Date().toISOString();
+    for (const id of ids) {
+      const message = (tables.chat_messages ?? []).find((m) => String(m.id) === id);
+      if (message === undefined) throw new HarnessRpcError('message not found');
+      if (rows.some((r) => r.message_id === id && r.user_id === ME)) continue;
+      rows.push({
+        user_id: ME,
+        message_id: id,
+        channel_id: message.channel_id,
+        workspace_id: WORKSPACE_ID,
+        created_at: now,
+      });
+    }
+    return null;
+  },
   // Personal notes: the deterministic channel, created once (idempotent).
   notes_channel_ensure: (args, tables) => {
     const channels = (tables.chat_channels ??= []);

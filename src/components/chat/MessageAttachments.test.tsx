@@ -392,6 +392,33 @@ describe('instant send tile (local preview + upload progress)', () => {
     expect(html.indexOf('data-meta="row"')).toBeGreaterThan(html.indexOf('data-voice-link'));
   });
 
+  it('U7: an own recorded note shows the inline Transcribe link too', () => {
+    const { cache } = spiedCache();
+    const html = renderToStaticMarkup(
+      <MessageAttachments
+        attachments={[
+          {
+            assetId: AUDIO_VERSION,
+            name: 'voice-note.webm',
+            mime: 'audio/webm',
+            durationMs: 7_000,
+          },
+        ]}
+        cache={cache}
+        presignEnabled
+        voice={{
+          messageId: 'ma-voice-own',
+          mine: true,
+          sender: { name: 'Me' },
+          nextVoiceId: null,
+          onTranscribe: () => {},
+        }}
+      />,
+    );
+    expect(html).toContain('data-voice-side="own"');
+    expect(html).toContain('data-voice-link="transcribe"');
+  });
+
   it('T6: a single photo is dimmed with the ring centred on it while uploading', () => {
     const { cache, fetcher } = spiedCache();
     const html = renderToStaticMarkup(

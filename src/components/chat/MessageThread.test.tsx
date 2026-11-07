@@ -1061,12 +1061,18 @@ describe('voice-only bubble', () => {
     expect(isValidElement(voiceContext(root).meta)).toBe(true);
   });
 
-  it('hands the Transcribe flow to received recorded notes only', () => {
+  it('hands the Transcribe flow to every recorded note, own notes included', () => {
     const onTranscribe = vi.fn();
     const received = voiceContext(renderBubble(voice, { onTranscribe }));
     expect(received.onTranscribe).toBe(onTranscribe);
-    const own = voiceContext(renderBubble({ ...voice, mine: true }, { onTranscribe }));
-    expect(own.onTranscribe).toBeUndefined();
+    const own = voiceContext(
+      renderBubble({ ...voice, mine: true, senderUserId: 'me' }, { onTranscribe }),
+    );
+    expect(own.onTranscribe).toBe(onTranscribe);
+    const ownSending = voiceContext(
+      renderBubble({ ...voice, mine: true, state: 'sending' }, { onTranscribe }),
+    );
+    expect(ownSending.onTranscribe).toBeUndefined();
     const sending = voiceContext(renderBubble({ ...voice, state: 'sending' }, { onTranscribe }));
     expect(sending.onTranscribe).toBeUndefined();
     expect(voiceContext(renderBubble(voice)).onTranscribe).toBeUndefined();
@@ -2405,6 +2411,31 @@ describe('tombstones, edited label and the neutral selection', () => {
     expect(els.some((el) => el.props.tabIndex !== undefined)).toBe(false);
     expect(renderStrip(root)).not.toContain('👍');
     expect(renderStrip(root)).not.toContain('role="checkbox"');
+  });
+
+  it('Delete for me: a tombstone with onDeleteForMe is focusable and names its one-row menu', () => {
+    expect(DELETE_FOR_ME_ROW).toBe('Delete for me');
+    const html = renderStrip(render(tomb, { onDeleteForMe: noop }));
+    expect(html).toContain('data-testid="tombstone"');
+    expect(html).toMatch(/data-testid="tombstone"[^>]*tabindex="0"/);
+    expect(html).toMatch(/data-testid="tombstone"[^>]*aria-haspopup="menu"/);
+    expect(html).toContain('focus-visible:lit-focus');
+    // The menu is closed until a long-press, right-click or Shift+F10.
+    expect(html).not.toContain(DELETE_FOR_ME_ROW);
+  });
+
+  it('Delete for me: a tombstone without onDeleteForMe, or in select mode, stays inert', () => {
+    const inert = renderStrip(render(tomb));
+    expect(inert).toContain('data-testid="tombstone"');
+    expect(inert).not.toContain('tabindex="0"');
+    expect(inert).not.toContain('aria-haspopup');
+    const selecting = renderStrip(
+      render(tomb, {
+        onDeleteForMe: noop,
+        selection: { role: 'none', checked: false, onToggle: noop },
+      }),
+    );
+    expect(selecting).not.toContain('aria-haspopup');
   });
 
   it('a deleted card message shows the tombstone, not the card', () => {

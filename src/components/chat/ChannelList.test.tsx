@@ -336,6 +336,49 @@ describe('select mode', () => {
     expect(some.onDelete).toHaveBeenCalledTimes(1);
   });
 
+  it('a chip view selects items: Forward and Delete for me, never Hide, both disabled at 0', () => {
+    const barOf = (t: ReactElement): ReactElement | undefined =>
+      findAll(
+        t,
+        (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'media-select-bar',
+      )[0];
+    const buttonsOf = (t: ReactElement): ReactElement[] =>
+      findAll(barOf(t), (el) => el.type === Button);
+    const onForward = vi.fn();
+    const empty = select({ active: true, media: { onForward } });
+    expect(barOf(tree(empty))).toBeDefined();
+    expect(texts(tree(empty))).not.toContain('Hide');
+    const emptyButtons = buttonsOf(tree(empty));
+    expect(emptyButtons).toHaveLength(2);
+    for (const b of emptyButtons) expect((b.props as { disabled: boolean }).disabled).toBe(true);
+
+    const some = select({ active: true, selectedIds: new Set(['m1']), media: { onForward } });
+    const [forward, del] = buttonsOf(tree(some));
+    const forwardProps = forward?.props as Record<string, unknown>;
+    const deleteProps = del?.props as Record<string, unknown>;
+    expect(forwardProps['data-selection-forward']).toBe('');
+    expect(deleteProps['data-selection-delete']).toBe('');
+    expect(deleteProps.variant).toBe('danger');
+    expect(deleteProps.children).toContain('Delete for me');
+    expect(forwardProps.disabled).toBe(false);
+    expect(deleteProps.disabled).toBe(false);
+    (forwardProps.onClick as () => void)();
+    (deleteProps.onClick as () => void)();
+    expect(onForward).toHaveBeenCalledTimes(1);
+    expect(some.onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('a chip view with no forward path shows Delete for me only', () => {
+    const mode = select({ active: true, selectedIds: new Set(['m1']), media: {} });
+    const bar = findAll(
+      tree(mode),
+      (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'media-select-bar',
+    )[0];
+    const buttons = findAll(bar, (el) => el.type === Button);
+    expect(buttons).toHaveLength(1);
+    expect((buttons[0]?.props as { children?: unknown }).children).toContain('Delete for me');
+  });
+
   it('no long-press menu on rows while selecting', () => {
     const t = channelListContent({
       channels,

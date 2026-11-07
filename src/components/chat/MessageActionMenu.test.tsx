@@ -262,6 +262,18 @@ describe('messageMenuItems: one level, row set per case', () => {
     expect(inNotes[inNotes.length - 1]?.key).toBe('delete');
   });
 
+  it('Delete for me only (others\' message, or own past 30 min): Delete shows, last, no "30 min" hint', () => {
+    const forMeOnly = messageMenuItems(itemProps({ canDelete: true, deleteForMeOnly: true }));
+    const del = forMeOnly.find((i) => i.key === 'delete');
+    expect(del?.label).toBe('Delete');
+    expect(del?.hint).toBeUndefined();
+    expect(del?.danger).toBe(true);
+    expect(forMeOnly[forMeOnly.length - 1]?.key).toBe('delete');
+    // An own message inside the window keeps its hint.
+    const own = messageMenuItems(itemProps({ canDelete: true, deleteForMeOnly: false }));
+    expect(own.find((i) => i.key === 'delete')?.hint).toBe('30 min');
+  });
+
   it('one divider, before the first danger row, only when a danger row shows', () => {
     const both = messageMenuItems(itemProps({ canRemoveFile: true, canDelete: true }));
     expect(dividerBefore(both)).toBe(both.findIndex((i) => i.key === 'remove-file'));
