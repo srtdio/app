@@ -269,8 +269,7 @@ export function NotificationsPage() {
       if (workspaceId === null) return;
       if (mode !== 'merge') activitySeqRef.current += 1;
       const seq = activitySeqRef.current;
-      const key =
-        userId !== null ? activityPageKey(userId, workspaceId, state, sort) : null;
+      const key = userId !== null ? activityPageKey(userId, workspaceId, state, sort) : null;
       if (mode !== 'merge') lateKeptRef.current = null;
       if (mode === 'refresh' && key !== null) invalidateActivityReads(key);
       // The kept page painted by this reset; its refresh is quiet.

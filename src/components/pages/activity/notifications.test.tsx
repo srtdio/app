@@ -1,6 +1,7 @@
-// Notifications: Activity and the chat bell on one feed. The chips (Mentions
-// takes chat mentions, Plans the six plan alerts, task alerts only under All
-// and Unread), Mark all read (one inbox_mark_all_read call on All), every
+// Notifications: Activity and the chat bell on one feed. The chips (All,
+// Unread, Mentions: Mentions takes chat mentions; plan, brief and task alerts
+// only under All and Unread), Mark all read (the top bar's primary; one
+// inbox_mark_all_read call on All), the top bar's sort (Newest / Oldest), every
 // former bell tap rule, the alert cards, and the batched enrichment (one IN
 // read per table, never per row). Reminders and scheduled sends are retired:
 // their rows map to no alert and the feed read leaves them out.
@@ -147,7 +148,7 @@ const ids = (state: ActivityState, items: readonly ActivityItem[] = feed): strin
 const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
 
 describe('the page', () => {
-  it('is titled "Activity"; the Plans chip has a positive zero state', () => {
+  it('is titled "Activity"; no Briefs or Plans chip, so no zero state of theirs', () => {
     const src = readFileSync(
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
@@ -156,13 +157,14 @@ describe('the page', () => {
     // The h1 is focusable from script (tabIndex -1) so a route change can move focus to it.
     expect(src).toMatch(/<h1 tabIndex=\{-1\} className="sr-only">\s*\{ACTIVITY_TITLE\}\s*<\/h1>/);
     expect(src).not.toContain('NOTIFICATIONS_TITLE');
-    expect(src).toMatch(
-      /state === 'plans' \? \(\s*<EmptyState icon=\{<IconPlan size=\{ICON_SIZE\.status\} \/>\} title=\{EMPTY_LINES\.plans\} \/>/,
-    );
-    expect(EMPTY_LINES.plans).toBe('Plan updates show up here.');
+    expect(src).not.toContain("state === 'plans'");
+    expect(src).not.toContain("state === 'briefs'");
+    expect(src).not.toContain('IconPlan');
+    expect(src).not.toContain('IconBriefs');
+    expect(Object.keys(EMPTY_LINES).sort()).toEqual(['mentions', 'unread']);
   });
 
-  it('has no visible title bar: no PageHead, it starts with the search row', () => {
+  it('has no visible title bar: no PageHead, it starts with the chip row', () => {
     const src = readFileSync(
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
@@ -170,7 +172,7 @@ describe('the page', () => {
     expect(src).not.toContain('PageHead');
     expect(src).not.toContain('@/components/shell/PageHead');
     expect(src.indexOf('<h1 tabIndex={-1} className="sr-only">')).toBeLessThan(
-      src.indexOf('<SectionHeader'),
+      src.indexOf('<ActivityFilterBar'),
     );
   });
 });
@@ -180,8 +182,12 @@ describe('chips', () => {
     expect(ids('mentions')).toEqual(['cm', 'pm']);
   });
 
-  it('Plans takes the six plan alert types and nothing else', () => {
-    expect(ids('plans')).toEqual(PLAN_TYPES);
+  it('the six plan alert types show under All and Unread (no Plans chip)', () => {
+    for (const id of PLAN_TYPES) {
+      expect(ids('all')).toContain(id);
+      expect(ids('unread')).toContain(id);
+      expect(ids('mentions')).not.toContain(id);
+    }
   });
 
   it('task alerts show only under All and Unread', () => {
@@ -189,9 +195,7 @@ describe('chips', () => {
     for (const id of alertIds) {
       expect(ids('all')).toContain(id);
       expect(ids('unread')).toContain(id);
-      for (const state of ['mentions', 'briefs', 'plans'] as const) {
-        expect(ids(state)).not.toContain(id);
-      }
+      expect(ids('mentions')).not.toContain(id);
     }
   });
 
@@ -222,22 +226,25 @@ describe('Mark all read', () => {
     expect(page).not.toMatch(/markAllPerRow|inbox_mark_read_events|inboxMarkReadEvents/);
   });
 
-  it('Mark all read is a right-aligned link on the first day line, not in the toolbar', () => {
+  it("Mark all read is the top bar's primary (IconTickDouble), hidden at 0 unread", () => {
     const page = readFileSync(
       fileURLToPath(new URL('../NotificationsPage.tsx', import.meta.url)),
       'utf8',
     );
-    // Shown only with something unread, on the first day's line, right-aligned; no count
-    // text (the Unread chip has it).
+    // The top bar's primary slot: an IconButton, gone (undefined) with nothing unread
+    // (the slot keeps its width), published with the sort.
+    expect(page).toContain("export const MARK_ALL_READ_LABEL = 'Mark all read';");
     expect(page).toMatch(
-      /\{bucketIndex === 0 && chipUnread > 0 \? \([\s\S]{0,200}?<div\s+data-activity-mark-all=""\s+className="[^"]*justify-end/,
+      /hasUnread \? \(\s*<IconButton\s+label=\{MARK_ALL_READ_LABEL\}[\s\S]{0,160}?<IconTickDouble size=\{ICON_SIZE\.control\} \/>[\s\S]{0,80}?\) : undefined/,
     );
+    expect(page).toContain('const hasUnread = chipUnread > 0;');
+    expect(page).toContain('useTopbarActions({ sort: sortNode, primary: markAllNode });');
+    // Moved up from the day line: no link there any more, no count text.
+    expect(page).not.toContain('<Button variant="link" onClick={handleMarkAll}>');
+    expect(page).not.toContain('bucketIndex === 0 && chipUnread > 0');
     expect(page).not.toContain('{chipUnread} unread');
-    expect(page).toMatch(/<Button variant="link" onClick=\{handleMarkAll\}>\s*Mark all read/);
-    // The toolbar is the search alone: no sort, no ⋯ menu, no text button there.
     expect(page).not.toContain('ActionMenu');
-    expect(page).not.toContain('SortMenu');
-    expect(count(page, 'onClick={handleMarkAll}')).toBe(1);
+    expect(count(page, 'markAllRef.current()')).toBe(1);
   });
 });
 
@@ -559,29 +566,35 @@ describe('notifications fixes: page and provider wiring', () => {
     'utf8',
   );
 
-  it('server search: the shared header, ?q= in the URL, chips hidden, newest first only', () => {
-    // The search runs the full width of the shared SectionHeader: no sort control.
-    expect(page).toMatch(/<SectionHeader\s+search=\{\{/);
-    expect(page).not.toMatch(/<SectionHeader[^>]*\bsort=/);
-    expect(page).toContain("placeholder: 'Search activity'");
-    expect(page).not.toContain('SortMenu');
-    expect(page).not.toContain('useSort');
-    expect(page).not.toContain('activitySortOptions');
-    expect(page).not.toContain('SORT_OPTIONS');
-    expect(page).not.toContain('Oldest first');
-    // The query lives in the URL; the search is the shared debounced runner.
-    expect(page).toContain("const SEARCH_PARAM = 'q';");
-    expect(page).toContain('useServerSearch<ActivityItem[]>(');
-    expect(page).toContain('searchActivityEntries(supabase, workspaceId, { query }, signal)');
-    // The list is newest first, the feed and the search alike.
-    expect(page).toContain("const ACTIVITY_SORT: ActivityDirection = 'newest';");
-    // The chips (and their Mark all read) hide while searching; results ignore the chip.
-    expect(page).toMatch(/\{searching \? null : \(\s*<ActivityFilterBar/);
-    expect(page).toContain('? groupDigest(items, ACTIVITY_SORT, { nowMs, tz })');
-    // Load more while searching pages the search, keyset on (created_at, id).
-    expect(page).toContain('await searchActivityEntries(supabase, workspaceId, { query, cursor })');
-    // The live poll never merges into search results.
-    expect(page).toContain("if (!searchingRef.current) void loadActivity('merge');");
+  it('no search on Activity: no search box, no ?q=, no activity_search read', () => {
+    expect(page).not.toContain('SectionHeader');
+    expect(page).not.toContain('Search activity');
+    expect(page).not.toContain('SEARCH_PARAM');
+    expect(page).not.toContain('useServerSearch');
+    expect(page).not.toContain('searchActivityEntries');
+    expect(page).not.toContain('useSearchParams');
+    expect(page).not.toContain('NoResults');
+    expect(page).not.toContain('searching');
+  });
+
+  it('sort: Newest first / Oldest first in the top bar, persisted with useSort, read in that order', () => {
+    expect(page).toMatch(
+      /<SortMenu\s+options=\{ACTIVITY_SORT_OPTIONS\}\s+value=\{sort\}\s+onChange=\{setSort\}/,
+    );
+    expect(page).toContain('useSort<ActivityDirection>(');
+    expect(page).toContain('ACTIVITY_SORT_PAGE,');
+    expect(page).toContain('const sort = activitySort(storedSort);');
+    // Page one and every next page are read server-side in the chosen direction
+    // (fetchActivityEntries' ascending keyset), each order with its own kept page.
+    expect(page).toContain('direction: sort,');
+    expect(page).toContain('activityPageKey(userId, workspaceId, state, sort)');
+    expect(page).toMatch(
+      /fetchActivityEntries\(supabase, workspaceId, \{\s*state: chip,\s*direction,\s*cursor,/,
+    );
+    // A load more that started under another sort is dropped.
+    expect(page).toContain('sortRef.current !== direction');
+    // No new RPC: the feed read is the only list read.
+    expect(page).not.toMatch(/\.rpc\(|callRpc\(/);
   });
 
   it('fix 9: opening a group marks every unread entry in it, not only the lead', () => {
@@ -610,9 +623,11 @@ describe('notifications fixes: page and provider wiring', () => {
   });
 
   it('fix 13: each chip empty state is its one positive line', () => {
-    for (const key of ['unread', 'mentions', 'briefs', 'plans'] as const) {
+    for (const key of ['unread', 'mentions'] as const) {
       expect(page).toContain(`title={EMPTY_LINES.${key}}`);
     }
+    expect(page).not.toContain('EMPTY_LINES.briefs');
+    expect(page).not.toContain('EMPTY_LINES.plans');
     // The Unread chip's own line; All keeps its line word for word; no Snoozed line.
     expect(EMPTY_LINES.unread).toBe('New updates show up here.');
     expect(page).toContain('title="Activity across posts, briefs and people shows up here."');
@@ -635,7 +650,7 @@ describe('notifications fixes: page and provider wiring', () => {
       'if (!(event instanceof CustomEvent) || event.detail !== POLL_CHANGE_SOURCE) return;',
     );
     expect(page).toContain("void loadActivity('merge');");
-    expect(page).toContain('setItems((prev) => mergeFresh(prev, result.data, ACTIVITY_SORT));');
+    expect(page).toContain('setItems((prev) => mergeFresh(prev, result.data, sort));');
     // The provider skips a count refresh for its own poll event.
     expect(provider).toMatch(
       /if \(event instanceof CustomEvent && event\.detail === POLL_CHANGE_SOURCE\) return;/,
@@ -702,9 +717,7 @@ describe('notifications fixes: page and provider wiring', () => {
   });
 
   it('fix 27: Today and Yesterday follow the workspace timezone and roll over at its midnight', () => {
-    expect(page).toContain(
-      'groupDigest(filterByState(items, state, nowMs), ACTIVITY_SORT, { nowMs, tz })',
-    );
+    expect(page).toContain('groupDigest(filterByState(items, state, nowMs), sort, { nowMs, tz })');
     expect(page).toContain('msUntilZonedMidnight(nowMs, tz)');
     expect(page).toContain('?.timezone ?? null');
   });

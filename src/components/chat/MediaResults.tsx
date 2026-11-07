@@ -48,11 +48,7 @@ import {
   IconPlay,
 } from '@/components/ui/icons';
 import { useOptionalToast } from '@/components/ui/toast';
-import {
-  useMenuGesture,
-  useSelectGesture,
-  type SelectGesture,
-} from '@/components/ui/useLongPress';
+import { useMenuGesture, useSelectGesture, type SelectGesture } from '@/components/ui/useLongPress';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { VoiceNote } from '@/components/chat/VoiceNote';
@@ -839,8 +835,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
       ? undefined
       : {
           active: select !== undefined,
-          onEnter: () =>
-            onEnterSelect?.({ messageId: item.messageId, channelId: item.channelId }),
+          onEnter: () => onEnterSelect?.({ messageId: item.messageId, channelId: item.channelId }),
           onToggle: () => select?.onToggle(),
         };
   /** A grid tile in select mode: the tile toggles, the check sits top right. */

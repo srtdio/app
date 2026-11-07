@@ -213,8 +213,8 @@ describe('idea bank rows: where a tap goes', () => {
 describe('idea bank rows: chip, tier, grouping', () => {
   const all = (): ActivityItem[] => [added(), moved(), planned(), shown(), hidden()];
 
-  it('the Plans chip shows every bank event', () => {
-    expect(filterByState(all(), 'plans', NOW).map((i) => i.eventType)).toEqual([
+  it('All shows every bank event (no Plans chip)', () => {
+    expect(filterByState(all(), 'all', NOW).map((i) => i.eventType)).toEqual([
       'bank_idea_added',
       'bank_idea_moved',
       'bank_idea_planned',

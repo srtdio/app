@@ -278,7 +278,10 @@ describe('select mode', () => {
     expect(barOf(t)).toBeUndefined();
     // The old Select IconButton beside New chat is gone.
     expect(
-      findAll(t, (el) => el.type === IconButton && (el.props as { label?: string }).label === 'Select'),
+      findAll(
+        t,
+        (el) => el.type === IconButton && (el.props as { label?: string }).label === 'Select',
+      ),
     ).toHaveLength(0);
     // Every chat card carries ListCard's select, off, entering with that chat ticked.
     const cards = findAll(t, (el) => el.type === ChannelCard);
@@ -538,12 +541,7 @@ describe('chat sort (top bar): Recent / Unread first / A to Z', () => {
   });
 
   it('visibleChannels applies the sort after the hidden filter', () => {
-    const list = visibleChannels(
-      [bob, amy, zed],
-      summaryFor,
-      (id) => id === 'z',
-      'az',
-    );
+    const list = visibleChannels([bob, amy, zed], summaryFor, (id) => id === 'z', 'az');
     expect(ids(list)).toEqual(['a', 'b']);
   });
 
