@@ -17,7 +17,7 @@ import {
   watchBatchFreshness,
 } from '@/components/chat/post-card';
 
-/** Two days after approved_at (21 Sep 14:05Z), three after stage_entered_at (20 Sep 10:00Z). */
+/** Two days after approved_at (Mon 21 Sep 14:05Z), three after stage_entered_at (Sun 20 Sep 10:00Z). */
 const NOW = new Date('2026-09-23T14:30:00Z');
 
 /** Pin the device locale: Intl.DateTimeFormat with no locale resolves to `locale`. */
@@ -124,9 +124,9 @@ describe('approverIds / firstName', () => {
 describe('cardFooter', () => {
   const approved = cardRow('p1', { approved_by: 'u1', approved_at: '2026-09-21T14:05:00Z' });
 
-  it('approved with a name: check, name and when (formatRelative), Open', () => {
+  it('approved with a name: check, name and when (formatAgo), Open', () => {
     expect(cardFooter(approved, 'Asha', 'agency', NOW)).toEqual({
-      state: 'Approved by Asha · 2 days ago',
+      state: 'Approved by Asha · Mon',
       action: 'Open',
       accent: false,
       check: true,
@@ -135,15 +135,15 @@ describe('cardFooter', () => {
 
   it('the approval time reads the same whatever the device locale', () => {
     deviceLocale('en-IN');
-    expect(cardFooter(approved, 'Asha', 'agency', NOW).state).toBe('Approved by Asha · 2 days ago');
+    expect(cardFooter(approved, 'Asha', 'agency', NOW).state).toBe('Approved by Asha · Mon');
     vi.restoreAllMocks();
     deviceLocale('en-GB');
-    expect(cardFooter(approved, 'Asha', 'agency', NOW).state).toBe('Approved by Asha · 2 days ago');
+    expect(cardFooter(approved, 'Asha', 'agency', NOW).state).toBe('Approved by Asha · Mon');
   });
 
   it('approved without an approver falls back to when it entered approved', () => {
     expect(cardFooter(cardRow('p1'), null, 'client', NOW)).toMatchObject({
-      state: 'Approved · 3 days ago',
+      state: 'Approved · Sun',
       action: 'Open',
       check: true,
     });
@@ -284,7 +284,7 @@ describe('approver label (on behalf of the approvers)', () => {
     deviceLocale('en-GB');
     const approved = cardRow('p1', { approved_by: 'u1', approved_at: '2026-09-21T14:05:00Z' });
     expect(cardFooter(approved, approverLabel('Chitra', 'agency'), 'client', NOW).state).toBe(
-      'Approved by Chitra on behalf of the approvers · 2 days ago',
+      'Approved by Chitra on behalf of the approvers · Mon',
     );
   });
 });

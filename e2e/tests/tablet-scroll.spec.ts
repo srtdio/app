@@ -42,7 +42,7 @@ async function scrollState(page: Page): Promise<ScrollState> {
  * More Pipeline posts, so the list overflows the screen whatever the card
  * layout: the harness has only a few posts, and since Pipeline lays its list
  * cards in laptop columns (LIST_CARD_GRID) they no longer fill an iPad height.
- * Clones of the harness's first post under new ids and titles.
+ * Clones of the harness's first post under new ids and titles, listed last.
  */
 function seedScrollPosts(network: HarnessNetwork, count = 24): void {
   const posts = (network.world.tables.posts ??= []);
@@ -54,6 +54,8 @@ function seedScrollPosts(network: HarnessNetwork, count = 24): void {
       id: `0190dc00-0000-7000-8c00-${String(i + 1).padStart(12, '0')}`,
       number: 800 + i,
       title: `Scroll filler ${i + 1}`,
+      // Older than every harness post, so the fixture posts keep the top.
+      created_at: new Date(Date.UTC(2026, 0, 1) - i * 60_000).toISOString(),
     });
   }
 }
@@ -107,7 +109,7 @@ for (const size of [
 
 test('iPad: Chat stays locked; Pipeline keeps its position across the trip', async ({ page }) => {
   const network = await installHarnessNetwork(page);
-    seedScrollPosts(network);
+  seedScrollPosts(network);
   await page.setViewportSize({ width: 820, height: 600 });
   await openPipeline(page);
   const kept = await page.evaluate(() => {
@@ -136,7 +138,7 @@ test('iPad: Chat stays locked; Pipeline keeps its position across the trip', asy
 
 test('iPad: an open overlay holds the page still and closing never jumps', async ({ page }) => {
   const network = await installHarnessNetwork(page);
-    seedScrollPosts(network);
+  seedScrollPosts(network);
   await page.setViewportSize({ width: 820, height: 600 });
   await openPipeline(page);
   await page.evaluate(() => window.scrollTo(0, 180));
