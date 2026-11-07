@@ -937,7 +937,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // in the same open chat must still read as new.
   const searchSeqRef = useRef(0);
   // A media item's Show in chat: the chat opens at that message (the same
-  // jump and highlight as a search hit), without the in-chat search bar.
+  // jump and highlight as a search jump), without the in-chat search bar.
   const openAtMessage = useCallback(
     (channel: ChannelSummary, messageId: string) => {
       searchSeqRef.current += 1;

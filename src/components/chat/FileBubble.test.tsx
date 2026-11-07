@@ -261,7 +261,9 @@ describe('FileBubble states', () => {
     const html = renderToStaticMarkup(
       <FileSendingRing ratio={SENDING_RATIO.pdf} progress={0.25} onCancel={() => {}} />,
     );
-    expect(html).toMatch(/data-file-ring="" class="[^"]*top-px[^"]*" style="aspect-ratio:1 \/ 1.3"/);
+    expect(html).toMatch(
+      /data-file-ring="" class="[^"]*top-px[^"]*" style="aspect-ratio:1 \/ 1.3"/,
+    );
     expect(html).toContain('data-upload-progress="25"');
     // The X cancels; no bar, no % text.
     expect(html).toContain('aria-label="Stop sending"');

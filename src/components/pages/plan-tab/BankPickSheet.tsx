@@ -1,10 +1,12 @@
 // From bank (agency): the third Add entry after New concept and Pick a post,
 // on the Plan screen's Add sheet, the Plan tab's Add sheet and the laptop
-// empty-day menu. A Sheet with a search well (ui/Input tone search) over the
-// bank's live ideas, starred first, then Recently active, 12 a page with Load
-// more. It reads when it opens (readBankPage: the same plan_items select the
-// Bank chip makes, plus its one read per table for the page), never before;
-// a search (2+ characters) runs searchBank. A tap puts the idea on that day:
+// empty-day menu. A Sheet over the bank's live ideas, starred first, then
+// Recently active, 12 a page with Load more. It reads when it opens
+// (readBankPage: the same plan_items select the Bank chip makes, plus its one
+// read per table for the page), never before. Search is the palette in pick
+// mode (the header's search button, bank ideas only); its pick takes the same
+// path as a tap (an idea not on the loaded page is first found by its title
+// with searchBank). A tap puts the idea on that day:
 // one plan_item_from_bank. The plan: the one the Add came from; from the day
 // menu the plans covering the day (one places at once, several open the
 // Bank's plan picker, none offers Make plan). Into a shared plan an idea the
@@ -17,8 +19,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Bone } from '@/lib/motion';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { NoResults } from '@/components/ui/NoResults';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconStarFilled } from '@/components/ui/icons';
@@ -36,8 +36,9 @@ import {
 import { errorText } from '@/lib/error-copy';
 import { logger } from '@/lib/logger';
 import { mark } from '@/lib/perf-marks';
-import { useServerSearch } from '@/lib/search/server-search';
+import type { WorkspaceHit } from '@/lib/search/workspace-search';
 import { supabase } from '@/lib/supabase';
+import { PalettePickButton } from '@/components/shell/CommandPalette';
 import { BankPlanItSheets, BankThumb, type PlanItStep } from './BankList';
 import {
   ideaFormatLine,
@@ -53,7 +54,7 @@ import { makeWeekPlan, placeBankIdea, readPlansForPlanIt, unplanBankIdea } from 
 export const FROM_BANK_LABEL = 'From bank';
 /** The Add sheet row's line under it. */
 export const FROM_BANK_SUB = 'Put an idea from the bank on this day.';
-/** The search well's placeholder. */
+/** The header's search button (the palette in pick mode, bank ideas only). */
 export const FROM_BANK_SEARCH = 'Search the bank';
 /** The zero line (no ideas in the bank). */
 export const FROM_BANK_ZERO = 'Ideas show up here.';
@@ -61,6 +62,23 @@ export const FROM_BANK_ZERO = 'Ideas show up here.';
 /** The bank as From bank reads it: live ideas, Recently active, starred first. Pure. */
 export function fromBankQuery(workspaceId: string): BankQuery {
   return { workspaceId, sort: 'active', bucketId: null, archived: false, staleBefore: null };
+}
+
+/**
+ * The bank idea a palette pick names (a plan item with no plan): the loaded
+ * row when it is on the page (`idea`), else the hit to find by title. Null
+ * when the pick is not a bank idea. Pure.
+ */
+export function bankPickOf(
+  hits: readonly WorkspaceHit[],
+  loaded: readonly BankIdea[],
+): { idea: BankIdea } | { find: WorkspaceHit } | null {
+  const hit = hits.find(
+    (h) => h.kind === 'plan_item' && (h.parentId === null || h.parentId === ''),
+  );
+  if (hit === undefined) return null;
+  const idea = loaded.find((i) => i.id === hit.id);
+  return idea !== undefined ? { idea } : { find: hit };
 }
 
 /** What a tap on an idea does next. */
@@ -123,7 +141,6 @@ export function BankPickSheet(props: {
 }): ReactElement {
   const { open, workspaceId } = props;
   const showToast = useToast().show;
-  const [text, setText] = useState('');
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [step, setStep] = useState<PlanItStep | null>(null);
   const [busy, setBusy] = useState(false);
@@ -155,7 +172,6 @@ export function BankPickSheet(props: {
   // The read starts when the sheet opens, never before.
   useEffect(() => {
     if (!open) return;
-    setText('');
     setStep(null);
     readFirst();
   }, [open, readFirst]);
@@ -183,15 +199,6 @@ export function BankPickSheet(props: {
       });
     });
   };
-
-  const search = useServerSearch<BankIdea[]>(
-    open ? text : '',
-    (query, signal) =>
-      workspaceId === null
-        ? Promise.resolve({ ok: true as const, data: [] })
-        : searchBank(supabase, fromBankQuery(workspaceId), query, signal),
-    workspaceId ?? '',
-  );
 
   const close = (): void => {
     setStep(null);
@@ -264,6 +271,28 @@ export function BankPickSheet(props: {
     }
   };
 
+  // The palette's pick: the same path as a tap on its row. An idea not on the
+  // loaded page is found by its title first (searchBank, the bank's own search).
+  const pickFromPalette = async (hits: WorkspaceHit[]): Promise<void> => {
+    const loaded = load.status === 'ready' ? load.ideas : [];
+    const found = bankPickOf(hits, loaded);
+    if (found === null) return;
+    if ('idea' in found) {
+      await pick(found.idea);
+      return;
+    }
+    if (workspaceId === null) return;
+    const res = await withReadTimeout((signal) =>
+      searchBank(supabase, fromBankQuery(workspaceId), found.find.title, signal),
+    );
+    const idea = res.ok ? res.data.find((i) => i.id === found.find.id) : undefined;
+    if (idea === undefined) {
+      showToast({ title: errorText('load the idea', res.ok ? null : res.error.message), tone: 'error' });
+      return;
+    }
+    await pick(idea);
+  };
+
   const makePlan = async (idea: BankIdea, day: string): Promise<void> => {
     if (workspaceId === null) return;
     setBusy(true);
@@ -277,13 +306,13 @@ export function BankPickSheet(props: {
     void place(idea, made.data, day);
   };
 
-  const ideas = search.active ? search.data : load.status === 'ready' ? load.ideas : null;
-  const failed = search.active ? search.status === 'error' : load.status === 'failed';
+  const ideas = load.status === 'ready' ? load.ideas : null;
+  const failed = load.status === 'failed';
   let body: ReactElement;
   if (ideas === null) {
     body = failed ? (
       <div className="py-2">
-        <Button type="button" onClick={search.active ? search.refresh : readFirst}>
+        <Button type="button" onClick={readFirst}>
           Retry
         </Button>
       </div>
@@ -295,9 +324,7 @@ export function BankPickSheet(props: {
       </div>
     );
   } else if (ideas.length === 0) {
-    body = search.active ? (
-      <NoResults query={search.query} filtersActive={false} onClear={() => setText('')} />
-    ) : (
+    body = (
       <p data-plan-from-bank-zero="" className="py-2 text-base text-fg-2">
         {FROM_BANK_ZERO}
       </p>
@@ -330,7 +357,7 @@ export function BankPickSheet(props: {
             </span>
           </PressableRow>
         ))}
-        {!search.active && load.status === 'ready' && load.next !== null ? (
+        {load.status === 'ready' && load.next !== null ? (
           <div className="pt-2">
             <PlanTabLoadMore more={{ busy: load.busy, onMore: more }} />
           </div>
@@ -347,17 +374,20 @@ export function BankPickSheet(props: {
         title={FROM_BANK_LABEL}
         fixedHeight
         busy={busy}
+        headerAction={
+          <PalettePickButton
+            label={FROM_BANK_SEARCH}
+            request={() => ({
+              pickKinds: ['bank_idea'],
+              multi: false,
+              verb: 'Add',
+              label: 'Ideas',
+              onPick: (hits) => void pickFromPalette(hits),
+            })}
+          />
+        }
       >
         <div data-plan-from-bank="" className="flex flex-col gap-3 px-4 pb-4">
-          <Input
-            tone="search"
-            type="search"
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            placeholder={FROM_BANK_SEARCH}
-            aria-label={FROM_BANK_SEARCH}
-            data-plan-from-bank-search=""
-          />
           {body}
         </div>
       </Sheet>

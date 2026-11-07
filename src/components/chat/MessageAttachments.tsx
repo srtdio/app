@@ -381,7 +381,7 @@ function AttachmentItem({
         </div>
       );
     case 'file':
-      // Sends with its own 44px ring (IconX inside; a tap stops the send);
+      // Sends with its own 44px ring (an X inside; a tap stops the send);
       // tap the card to open the in-app viewer.
       return (
         <FileBubble

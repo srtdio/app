@@ -184,7 +184,7 @@ export type ActivityDirection = 'newest' | 'oldest';
 
 export const ACTIVITY_SORT_DEFAULT: ActivityDirection = 'newest';
 
-/** The top bar's sort menu, in order. Every label says its direction. */
+/** The top bar's sort menu, in menu order. Every label says its direction. */
 export const ACTIVITY_SORT_OPTIONS: SortOption<ActivityDirection>[] = [
   { value: 'newest', label: 'Newest first' },
   { value: 'oldest', label: 'Oldest first' },

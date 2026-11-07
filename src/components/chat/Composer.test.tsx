@@ -910,7 +910,9 @@ describe('decision F: the pending-file chips are ui/PendingChip, ready', () => {
     const { readFileSync } = await import('node:fs');
     const { fileURLToPath } = await import('node:url');
     const source = readFileSync(fileURLToPath(new URL('./Composer.tsx', import.meta.url)), 'utf8');
-    expect(source).toContain("import { PendingChip, readyChipMeta } from '@/components/ui/PendingChip';");
+    expect(source).toContain(
+      "import { PendingChip, readyChipMeta } from '@/components/ui/PendingChip';",
+    );
     expect(source.split('meta={readyChipMeta(').length - 1).toBe(2);
     expect(source).not.toContain('fileExtension');
     // No upload bar or % text: a chat send uploads after Send (the bubble's ring).

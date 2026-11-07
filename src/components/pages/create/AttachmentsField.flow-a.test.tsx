@@ -127,7 +127,11 @@ describe('AttachmentsField flow A (framed)', () => {
     await act(async () => params.xhr.onProgress(0.5));
     const ring = document.querySelector('[aria-label="Uploading a.png"] [data-upload-ring]');
     expect(ring?.getAttribute('data-upload-progress')).toBe('50');
-    expect(document.querySelector('[aria-label="Uploading a.png"] [role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('50');
+    expect(
+      document
+        .querySelector('[aria-label="Uploading a.png"] [role="progressbar"]')
+        ?.getAttribute('aria-valuenow'),
+    ).toBe('50');
     // No % text anywhere on the tiles.
     expect(document.querySelector('[data-file-tiles]')?.textContent ?? '').not.toMatch(/%/);
   });

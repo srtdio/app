@@ -17,7 +17,9 @@ describe('comment attachment Retry (FT17)', () => {
   });
 
   it('the chip (ui/PendingChip) gets Retry wired to the composer, and the pre-check branch opts out', () => {
-    expect(SRC).toContain('onRetry={onRetry !== undefined && canRetryPending(item) ? onRetry : undefined}');
+    expect(SRC).toContain(
+      'onRetry={onRetry !== undefined && canRetryPending(item) ? onRetry : undefined}',
+    );
     expect(SRC).toContain('onRetry={() => retryPending(item.id)}');
     expect(SRC).toContain('retryable: false,');
     // Retry re-runs the same upload path the first attempt used.

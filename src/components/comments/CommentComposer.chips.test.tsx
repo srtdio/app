@@ -27,7 +27,10 @@ function chip(item: Pick<Pending, 'file' | 'previewUrl' | 'status' | 'retryable'
 
 describe('uploadChipStatus / uploadChipMeta', () => {
   it('maps the upload lifecycle onto the chip states (no bytes: progress null)', () => {
-    expect(uploadChipStatus({ state: 'uploading' })).toEqual({ state: 'uploading', progress: null });
+    expect(uploadChipStatus({ state: 'uploading' })).toEqual({
+      state: 'uploading',
+      progress: null,
+    });
     expect(uploadChipStatus({ state: 'done', versionId: 'v1' })).toEqual({ state: 'ready' });
     expect(uploadChipStatus({ state: 'error', message: 'x' })).toEqual({ state: 'failed' });
   });
@@ -79,7 +82,7 @@ describe('FileUploadChip', () => {
     expect(html).toContain('src="blob:a"');
   });
 
-  it('the caller\'s data hooks land on the chip', () => {
+  it("the caller's data hooks land on the chip", () => {
     const onRemove = vi.fn();
     const html = renderToStaticMarkup(
       <ul>
