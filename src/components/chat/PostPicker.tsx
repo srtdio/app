@@ -8,17 +8,23 @@
 // any viewer. All section reads run together and render once every one has
 // landed, so the first paint is final.
 //
-// Draft mode (the Draft tile): one Drafts section and search over drafts only.
+// Draft mode (the Draft tile): one Drafts section.
 // It reads only for an agency-side viewer in a chat with no client (both
 // known); otherwise nothing is read and the list is empty. The tray already
 // disables the tile then; this is the second gate.
 //
-// Search (post and draft modes): one keyset-paged read over the workspace
-// (title or caption ILIKE, plus an exact number match for "14" / "KEY-14"),
-// newest first, 50 a page, with count:'exact' on the first page for the
-// header. Post mode leaves drafts out; draft mode keeps drafts only. Input is
-// debounced 200 ms and a response whose text no longer matches the box is
-// dropped. Selection is controlled by the composer.
+// Sheet search (every sheet mode): no search box. The header's search button
+// opens the palette in pick mode (posts, or briefs in brief mode); its picks
+// come back as rows already on screen or through one batched by-id read
+// (readPostsByIds / readBriefsByIds), keep the mode's stage rule, and finish
+// the same way a tap and Done (or Link this post) would. Selection is
+// controlled by the composer.
+//
+// Inline search (the composer's hash picker): one keyset-paged read over the
+// workspace (title or caption ILIKE, plus an exact number match for "14" /
+// "KEY-14"), newest first, 50 a page, with count:'exact' on the first page for
+// the header. Input is debounced 200 ms and a response whose text no longer
+// matches the composer's text is dropped.
 //
 // Brief mode (the Brief tile): the workspace's briefs (title, objective,
 // Open/Closed, target and raised dates, live post count) through
@@ -36,8 +42,6 @@ import { Chip } from '@/components/ui/Chip';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
-import { Field } from '@/components/ui/Field';
-import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { Tag, isTagDot } from '@/components/ui/Tag';
 import { ICON_SIZE, IconBriefs, IconCheck, IconPipeline, IconSearch } from '@/components/ui/icons';
@@ -50,6 +54,8 @@ import { useSession } from '@/lib/session-context';
 import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { PostCover, warmCoverImages } from '@/components/chat/PostCover';
+import { PalettePickButton } from '@/components/shell/CommandPalette';
+import type { WorkspaceHit } from '@/lib/search/workspace-search';
 import {
   coverFor,
   requestPostCovers,
@@ -62,6 +68,7 @@ import {
   POST_PICKER_PAGE_COLUMNS,
   countPostsForPicker,
   listPostsForPickerPage,
+  readPostsByIds,
   type PostPickerCursor,
   type PostPickerPageRow,
 } from '../../../packages/posts/src/reads';
@@ -73,6 +80,7 @@ import {
   filterBriefStatus,
   isBriefSelected,
   listBriefsForPicker,
+  readBriefsByIds,
   type BriefCardFields,
   type BriefFilter,
   type BriefPickerRow,
@@ -112,7 +120,7 @@ import { listSkeleton } from '@/components/chat/ListSkeleton';
 import { errorText } from '@/lib/error-copy';
 import { TEXT_ROLE } from '@/components/ui/Text';
 
-/** Search debounce, in milliseconds. */
+/** Inline search debounce, in milliseconds. */
 const SEARCH_DEBOUNCE_MS = 200;
 
 interface PostPickerProps {
@@ -134,9 +142,9 @@ interface PostPickerProps {
   onToggleBrief: (brief: BriefCardFields) => void;
   /** Post ids already shared in this chat; those rows say "in this chat". */
   sharedPostIds?: ReadonlySet<string> | undefined;
-  /** Render the posts list alone (no sheet or search box), for the composer popover. */
+  /** Render the posts list alone (no sheet), for the composer popover. */
   inline?: boolean;
-  /** Controlled search text; the search box is not rendered when set inline. */
+  /** Inline: the composer's search text (the text after the hash). Ignored by the sheet. */
   query?: string | undefined;
   /** The sheet's mode (the tray tile that opened it). Ignored inline. Absent is 'posts'. */
   mode?: Exclude<PickerMode, 'inline'>;
@@ -168,6 +176,63 @@ const PICKER_TITLES: Record<Exclude<PickerMode, 'inline'>, string> = {
   briefs: 'Share a brief',
   link: 'Link a post',
 };
+
+/** The header's search button per mode (the palette in pick mode). */
+export const PICKER_SEARCH_LABELS: Record<Exclude<PickerMode, 'inline'>, string> = {
+  posts: 'Search posts',
+  drafts: 'Search posts',
+  briefs: 'Search briefs',
+  link: 'Search posts',
+};
+
+/**
+ * Palette picks for a sheet mode, in tick order: the post (or brief) ids, with
+ * any already excluded (a plan's own posts) left out. Pure.
+ */
+export function pickedIds(
+  hits: readonly WorkspaceHit[],
+  kind: 'post' | 'brief',
+  exclude?: ReadonlySet<string>,
+): string[] {
+  const out: string[] = [];
+  for (const hit of hits) {
+    if (hit.kind !== kind || exclude?.has(hit.id) === true || out.includes(hit.id)) continue;
+    out.push(hit.id);
+  }
+  return out;
+}
+
+/** Whether a picked post may be shared in this mode (the mode's stage rule). Pure. */
+export function pickAllowedInMode(
+  stage: string,
+  mode: Exclude<PickerMode, 'inline' | 'briefs'>,
+  allowDrafts: boolean,
+): boolean {
+  if (mode === 'link') return true;
+  if (mode === 'drafts') return allowDrafts && stage === 'draft';
+  return stage !== 'draft';
+}
+
+/**
+ * Picked ids as rows, in tick order: rows already on screen at once, the rest
+ * through one batched by-id read. Ids the read does not return are left out.
+ */
+export async function rowsForPicks<T extends { id: string }>(
+  ids: readonly string[],
+  onScreen: readonly T[],
+  readByIds: (ids: string[]) => Promise<T[] | null>,
+): Promise<T[]> {
+  const byId = new Map<string, T>(onScreen.map((row) => [row.id, row]));
+  const missing = ids.filter((id) => !byId.has(id));
+  if (missing.length > 0) {
+    const read = await readByIds(missing);
+    for (const row of read ?? []) byId.set(row.id, row);
+  }
+  return ids.flatMap((id) => {
+    const row = byId.get(id);
+    return row !== undefined ? [row] : [];
+  });
+}
 
 /** Link mode's full-width confirm and its nothing-picked hint. */
 export const LINK_CONFIRM = 'Link this post';
@@ -533,8 +598,8 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   const [briefFilter, setBriefFilter] = useState<BriefFilter>(DEFAULT_BRIEF_FILTER);
   const [briefLoadedKey, setBriefLoadedKey] = useState<string | null>(null);
   const [briefError, setBriefError] = useState<string | null>(null);
-  const [localQuery, setQuery] = useState('');
-  const query = props.query ?? localQuery;
+  // Only the inline picker searches here; the sheet's search is the palette.
+  const query = props.inline === true ? (props.query ?? '') : '';
   const [debounced, setDebounced] = useState('');
   const [sections, setSections] = useState<PickerSectionsData | null>(null);
   const [search, setSearch] = useState<SearchState | null>(null);
@@ -557,7 +622,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   const queryRef = useRef('');
   queryRef.current = query;
 
-  const briefRequestKey = [workspaceId, briefFilter, query].join('|');
+  const briefRequestKey = [workspaceId, briefFilter].join('|');
   const trimmed = query.trim();
 
   // Link mode: "Link this post" tapped with nothing picked.
@@ -568,7 +633,6 @@ export function PostPicker(props: PostPickerProps): ReactElement {
   useEffect(() => {
     if (props.open) {
       setBriefFilter(DEFAULT_BRIEF_FILTER);
-      setQuery('');
       setDebounced('');
       setSections(null);
       setSearch(null);
@@ -684,14 +748,14 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     });
   }
 
-  // Briefs: one RLS-scoped read per (workspace, filter, search) change.
+  // Briefs: one RLS-scoped read per (workspace, filter) change.
   useEffect(() => {
     if (!props.open || workspaceId === null || !reads.briefs) return;
     let cancelled = false;
     const status = filterBriefStatus(briefFilter);
     void listBriefsForPicker(supabase, {
       workspaceId,
-      titleQuery: query,
+      titleQuery: '',
       ...(status !== undefined ? { status } : {}),
     }).then((result) => {
       if (cancelled) return;
@@ -702,7 +766,7 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     return () => {
       cancelled = true;
     };
-  }, [props.open, workspaceId, briefFilter, query, reads.briefs, briefRequestKey]);
+  }, [props.open, workspaceId, briefFilter, reads.briefs, briefRequestKey]);
 
   const count = mode === 'briefs' ? props.selectedBriefs.length : props.selected.length;
   const rowProps: PostRowContext = {
@@ -797,7 +861,6 @@ export function PostPicker(props: PostPickerProps): ReactElement {
         query={trimmed}
         loadingMore={search.loadingMore}
         onLoadMore={loadMore}
-        {...(props.query === undefined ? { onClearSearch: () => setQuery('') } : {})}
         {...listProps}
       />
     );
@@ -807,6 +870,46 @@ export function PostPicker(props: PostPickerProps): ReactElement {
     return <InlinePickerPanel open={props.open}>{postBody}</InlinePickerPanel>;
   }
 
+  // The palette's picks finish the sheet's own way: posts and drafts tick
+  // into the selection then Done; link picks the one post then Link this post;
+  // briefs tick into the brief selection then Done. Picks already on screen
+  // need no read; the rest come in one batched by-id read.
+  const done = props.onDone ?? props.onClose;
+  const addPicked = async (hits: WorkspaceHit[]): Promise<void> => {
+    if (workspaceId === null) return;
+    if (sheetMode === 'briefs') {
+      const ids = pickedIds(hits, 'brief');
+      const rows = await rowsForPicks<BriefCardFields>(ids, briefs, async (missing) => {
+        const res = await readBriefsByIds(supabase, { workspaceId, ids: missing });
+        return res.ok ? res.data : null;
+      });
+      for (const brief of rows) {
+        if (!isBriefSelected(props.selectedBriefs, brief.id)) props.onToggleBrief(brief);
+      }
+      if (rows.length > 0) done();
+      return;
+    }
+    const ids = pickedIds(hits, 'post', props.excludePostIds);
+    const rows = (
+      await rowsForPicks<PostCardFields>(ids, shownRows, async (missing) => {
+        const res = await readPostsByIds(supabase, { workspaceId, ids: missing });
+        return res.ok ? res.data : null;
+      })
+    ).filter((post) => pickAllowedInMode(post.stage, sheetMode, allowDrafts));
+    if (sheetMode === 'link') {
+      const post = rows[0];
+      if (post === undefined) return;
+      setLinkHint(false);
+      props.onLinkSelect?.(post);
+      props.onLinkConfirm?.();
+      return;
+    }
+    for (const post of rows) {
+      if (!isPostSelected(props.selected, post.id)) props.onToggle(post);
+    }
+    if (rows.length > 0) done();
+  };
+
   return (
     <Sheet
       open={props.open}
@@ -815,6 +918,18 @@ export function PostPicker(props: PostPickerProps): ReactElement {
       // At sm+ one fixed box from the first paint: loading, empty, results
       // and filters all fill it, so the sheet never grows or shrinks.
       fixedHeight
+      headerAction={
+        <PalettePickButton
+          label={PICKER_SEARCH_LABELS[sheetMode]}
+          request={() => ({
+            pickKinds: [sheetMode === 'briefs' ? 'brief' : 'post'],
+            multi: sheetMode !== 'link',
+            verb: 'Add',
+            label: sheetMode === 'briefs' ? 'Briefs' : 'Posts',
+            onPick: (hits) => void addPicked(hits),
+          })}
+        />
+      }
       footer={
         linkMode ? (
           <div className="flex w-full flex-col gap-2">
@@ -829,31 +944,13 @@ export function PostPicker(props: PostPickerProps): ReactElement {
             </Button>
           </div>
         ) : (
-          <Button variant="primary" className="ml-auto" onClick={props.onDone ?? props.onClose}>
+          <Button variant="primary" className="ml-auto" onClick={done}>
             {count > 0 ? `Done (${count})` : 'Done'}
           </Button>
         )
       }
     >
       <div className="flex flex-col gap-3 sm:min-h-0 sm:flex-1" data-picker-mode={sheetMode}>
-        <Field label="Search">
-          {(id) => (
-            <div className="group/sfield relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3 group-focus-within/sfield:text-fg">
-                <IconSearch size={ICON_SIZE.inline} />
-              </span>
-              <Input
-                tone="search"
-                id={id}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={mode === 'briefs' ? 'Search briefs' : 'Search posts'}
-                className="pl-9"
-              />
-            </div>
-          )}
-        </Field>
-
         {mode !== 'briefs' ? (
           postBody
         ) : (
@@ -877,12 +974,8 @@ export function PostPicker(props: PostPickerProps): ReactElement {
               selected={props.selectedBriefs}
               onToggle={props.onToggleBrief}
               workspaceZone={workspaceZone}
-              query={trimmed}
               filtersActive={briefFilter !== DEFAULT_BRIEF_FILTER}
-              onClear={() => {
-                setQuery('');
-                setBriefFilter(DEFAULT_BRIEF_FILTER);
-              }}
+              onClear={() => setBriefFilter(DEFAULT_BRIEF_FILTER)}
             />
           </>
         )}
@@ -1024,14 +1117,10 @@ export function SearchResultsView(
     query: string;
     loadingMore: boolean;
     onLoadMore: () => void;
-    /** Clears the search box; absent (inline, the composer owns the text) shows the line alone. */
-    onClearSearch?: () => void;
   },
 ): ReactElement {
   if (props.rows.length === 0) {
-    return props.onClearSearch !== undefined ? (
-      <NoResults query={props.query} filtersActive={false} onClear={props.onClearSearch} />
-    ) : (
+    return (
       <EmptyState
         compact
         icon={<IconSearch size={ICON_SIZE.control} />}
@@ -1143,8 +1232,7 @@ export function BriefPickerList(props: {
   timeZone?: string | undefined;
   /** The workspace zone each brief's due date renders on. Absent: the device zone. */
   workspaceZone?: string | null | undefined;
-  /** The live search text; a search or a non-default filter turns zero rows into NoResults. */
-  query?: string;
+  /** A non-default status filter turns zero rows into NoResults (Clear resets it). */
   filtersActive?: boolean;
   onClear?: () => void;
 }): ReactElement {
@@ -1163,15 +1251,8 @@ export function BriefPickerList(props: {
     );
   }
   if (props.briefs.length === 0) {
-    const narrowed = (props.query ?? '').trim() !== '' || props.filtersActive === true;
-    if (narrowed && props.onClear !== undefined) {
-      return (
-        <NoResults
-          query={props.query ?? ''}
-          filtersActive={props.filtersActive === true}
-          onClear={props.onClear}
-        />
-      );
+    if (props.filtersActive === true && props.onClear !== undefined) {
+      return <NoResults query="" filtersActive onClear={props.onClear} />;
     }
     return <EmptyState icon={<IconBriefs size={ICON_SIZE.tray} />} title={BRIEFS_EMPTY_COPY} />;
   }
