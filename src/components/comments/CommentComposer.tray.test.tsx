@@ -96,6 +96,15 @@ function tileIds(): string[] {
   );
 }
 
+/** Focus every writing box (ui/WritingBox shows its row, the "+", only while focused). */
+function focusBoxes(): void {
+  act(() => {
+    host
+      ?.querySelectorAll('[data-writing-field] textarea, [data-writing-field] [contenteditable="true"]')
+      .forEach((el) => el.dispatchEvent(new FocusEvent('focusin', { bubbles: true })));
+  });
+}
+
 function tile(id: string): HTMLButtonElement | null {
   return host?.querySelector<HTMLButtonElement>(`[data-tray] [data-tray-tile="${id}"]`) ?? null;
 }
@@ -138,6 +147,7 @@ describe('CommentComposer "+" tray', () => {
   it('the "+" opens a tray with exactly Photos, File and Assets; no paper clip', async () => {
     mountComment();
     await settle();
+    focusBoxes();
     expect(buttons('Attach a file')).toHaveLength(0);
     const [plus] = buttons('Add attachment');
     expect(plus).toBeDefined();
@@ -155,6 +165,7 @@ describe('CommentComposer "+" tray', () => {
   it('no "+" where attaching is off', async () => {
     mountComment(undefined, false);
     await settle();
+    focusBoxes();
     expect(buttons('Add attachment')).toHaveLength(0);
   });
 
@@ -164,6 +175,7 @@ describe('CommentComposer "+" tray', () => {
     );
     mountComment(onSubmit);
     await settle();
+    focusBoxes();
     act(() => buttons('Add attachment')[0]?.click());
     act(() => tile('assets')?.click());
     await settle();
@@ -199,6 +211,7 @@ describe('SlotComposer "+" tray and numbers', () => {
       ),
     );
     act(() => buttons('+ Another')[0]?.click());
+    focusBoxes();
     const pluses = buttons('Add attachment');
     expect(pluses).toHaveLength(2);
     expect(buttons('Attach a file to checkpoint 1')).toHaveLength(0);

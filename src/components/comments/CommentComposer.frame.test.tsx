@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-// The comment composer on ui/Composer (ComposerFrame): chat's "+", field,
-// emoji and the round Send on one 44 row (no paper clip); sending keeps the
-// row (the spinner sits in the send slot); the field look is the frame's,
-// never the editor's own.
+// The comment composer on ui/WritingBox (comment mode): the card always; at
+// rest the text line and the round Send; focused or holding a draft, the row
+// under the text: + , Aa, emoji, @ (only with members) ... the round Send
+// (RowSend). No mic, no laptop emoji popover. Sending keeps the box (the
+// spinner sits in the send); the field look is the box's, never the editor's.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +15,7 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
 }));
 
 import { CommentComposer, type CommentSubmitResult } from '@/components/comments/CommentComposer';
+import type { MentionCandidate } from '@/lib/workspace-members';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -46,22 +48,38 @@ function byLabel(label: string): HTMLButtonElement | null {
   return q<HTMLButtonElement>(`button[aria-label="${label}"]`);
 }
 
+const ANA: MentionCandidate = {
+  id: 'u-ana',
+  name: 'Ana',
+  username: 'ana',
+  role: 'approver',
+  avatarUrl: null,
+};
+
 function mount(
   onSubmit: (
     body: string,
     options: { attachmentVersionIds: string[] },
   ) => Promise<CommentSubmitResult> = async () => ({ ok: true }),
-  extra: { submitLabel?: string; placeholder?: string; submitAnchor?: string } = {},
+  extra: {
+    submitLabel?: string;
+    placeholder?: string;
+    submitAnchor?: string;
+    initialBody?: string | null;
+    members?: MentionCandidate[];
+  } = {},
 ): void {
+  const initialBody = extra.initialBody === undefined ? 'Looks good' : extra.initialBody;
   act(() => {
     root?.render(
       <CommentComposer
         onSubmit={onSubmit}
-        members={[]}
+        members={extra.members ?? []}
         canAttach
         uploadFile={async () => ({ ok: true, reused: false, versionId: 'ver-1' })}
-        initialBody="Looks good"
+        {...(initialBody !== null ? { initialBody } : {})}
         placeholder={extra.placeholder ?? 'Write a comment'}
+        expandTitle="Spring drop"
         {...(extra.submitLabel !== undefined ? { submitLabel: extra.submitLabel } : {})}
         {...(extra.submitAnchor !== undefined ? { submitAnchor: extra.submitAnchor } : {})}
       />,
@@ -69,58 +87,84 @@ function mount(
   });
 }
 
-describe('CommentComposer on ui/Composer', () => {
-  it('renders inside [data-composer]: "+", field, emoji, then the round Send', async () => {
+/** The row's controls in order: each button's name, then 'send:<name>'. */
+function rowOrder(): string[] {
+  const row = q('[data-writing-row]');
+  if (row === null) return [];
+  return Array.from(row.querySelectorAll<HTMLButtonElement>('button')).map((b) =>
+    b.hasAttribute('data-row-send')
+      ? `send:${b.getAttribute('aria-label') ?? ''}`
+      : (b.getAttribute('aria-label') ?? ''),
+  );
+}
+
+describe('CommentComposer on ui/WritingBox', () => {
+  it('renders the WritingBox in comment mode', async () => {
     mount();
     await settle();
-    const frame = q('[data-composer]');
-    expect(frame).not.toBeNull();
-    const rows = host?.querySelectorAll('[data-composer-row]') ?? [];
-    expect(rows).toHaveLength(1);
-    const row = rows[0] as HTMLElement;
-    const field = row.querySelector('[data-composer-field]');
-    expect(field?.querySelector('[contenteditable="true"]')).not.toBeNull();
-
-    // The side slot (data-composer-side) is a wrapper; its buttons keep their place in the row.
-    const cells = Array.from(row.children).flatMap((el) =>
-      el.hasAttribute('data-composer-side') ? Array.from(el.children) : [el],
-    );
-    const order = cells.map((el) =>
-      el.hasAttribute('data-composer-field')
-        ? 'field'
-        : (el.querySelector('button')?.getAttribute('aria-label') ??
-          el.getAttribute('aria-label') ??
-          ''),
-    );
-    expect(order).toEqual(['Add attachment', 'field', 'Emoji', 'Post']);
-    // The paper clip is gone: attaching is the "+" tray only.
-    expect(byLabel('Attach a file')).toBeNull();
-
-    const send = byLabel('Post');
-    expect(send?.className).toContain('rounded-full');
-    expect(send?.className).toContain('bg-accent');
-    // The side button is a bare 44 circle; the "+" is chat's round secondary.
-    const emoji = byLabel('Emoji');
-    expect(emoji?.className).toContain('rounded-full');
-    expect(emoji?.className).toContain('h-11');
-    expect(emoji?.className).not.toContain('bg-accent');
-    const plus = byLabel('Add attachment');
-    expect(plus?.className).toContain('rounded-full');
-    expect(plus?.className).toContain('h-11');
-    expect(plus?.className).toContain('lit-btn-secondary');
+    const box = q('[data-writing-box]');
+    expect(box).not.toBeNull();
+    expect(box?.getAttribute('data-mode')).toBe('comment');
   });
 
-  it("the field look is the frame's: the editor draws no line, well or focus line", async () => {
+  it('holding a draft: the card, text on top, then + Aa Emoji ... the round Send', async () => {
+    mount();
+    await settle();
+    expect(q('[data-writing-box]')?.dataset.shape).toBe('card');
+    expect(q('[data-writing-field] [contenteditable="true"]')).not.toBeNull();
+    expect(rowOrder()).toEqual(['Add attachment', 'Aa', 'Emoji', 'send:Post']);
+    // No @ without members, no mic, no paper clip.
+    expect(byLabel('Mention')).toBeNull();
+    expect(byLabel('Record voice note')).toBeNull();
+    expect(byLabel('Attach a file')).toBeNull();
+    // The + is the compact 36 grey circle.
+    const plus = byLabel('Add attachment');
+    expect(plus?.className).toContain('w-9');
+    expect(plus?.querySelector('[data-plus-icon]')?.className).toContain('bg-panel-3');
+  });
+
+  it('Send is RowSend: solid ink when sendable, grey when not', async () => {
+    mount();
+    await settle();
+    const send = byLabel('Post');
+    expect(send?.hasAttribute('data-row-send')).toBe(true);
+    expect(send?.disabled).toBe(false);
+    expect(send?.querySelector('span')?.className).toContain('bg-accent');
+
+    act(() => root?.unmount());
+    root = createRoot(host as HTMLDivElement);
+    mount(undefined, { initialBody: null });
+    await settle();
+    const empty = byLabel('Post');
+    expect(empty?.disabled).toBe(true);
+    expect(empty?.querySelector('span')?.className).toContain('bg-panel-3');
+  });
+
+  it('at rest (empty, unfocused): the text line and Send only; focus shows the row', async () => {
+    mount(undefined, { initialBody: null, members: [ANA] });
+    await settle();
+    expect(q('[data-writing-box]')?.dataset.shape).toBe('line');
+    expect(byLabel('Aa')).toBeNull();
+    expect(byLabel('Add attachment')).toBeNull();
+    expect(byLabel('Post')).not.toBeNull();
+
+    const editor = q('[contenteditable="true"]');
+    act(() => {
+      editor?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    expect(q('[data-writing-box]')?.dataset.shape).toBe('card');
+    expect(rowOrder()).toEqual(['Add attachment', 'Aa', 'Emoji', 'Mention', 'send:Post']);
+  });
+
+  it("the field look is the box's: the editor draws no line, well or focus line", async () => {
     mount();
     await settle();
     const editor = q('[contenteditable="true"]');
     expect(editor?.className).not.toContain('border-field');
     expect(editor?.className).not.toContain('lit-well');
     expect(editor?.className).not.toContain('focus:lit-focus');
-    const field = q('[data-composer-field]');
-    expect(field?.className).toContain('border-field');
-    expect(field?.className).toContain('lit-well');
-    expect(field?.className).toContain('focus-within:lit-focus');
+    expect(editor?.getAttribute('aria-label')).toBe('Comment body');
+    expect(q('[data-writing-frame]')?.className).toContain('focus-within:lit-focus');
   });
 
   it('keeps its hint and the guide anchor on Send', async () => {
@@ -130,7 +174,7 @@ describe('CommentComposer on ui/Composer', () => {
     expect(byLabel('Reply')?.getAttribute('data-induction')).toBe('x-key');
   });
 
-  it('sending keeps the row: the spinner sits in the send slot, the field stays', async () => {
+  it('sending keeps the box: the spinner sits in the send, the field stays', async () => {
     let resolve: (r: CommentSubmitResult) => void = () => undefined;
     const onSubmit = vi.fn(
       () =>
@@ -140,29 +184,27 @@ describe('CommentComposer on ui/Composer', () => {
     );
     mount(onSubmit);
     await settle();
-    const before = q('[data-composer-row]');
+    const before = q('[data-writing-frame]');
 
     await act(async () => {
       byLabel('Post')?.click();
     });
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(q('[data-composer]')?.getAttribute('data-composer-state')).toBe('sending');
-    expect(q('[data-composer-row]')).toBe(before);
-    expect(q('[data-composer-field] [contenteditable="true"]')).not.toBeNull();
+    expect(q('[data-writing-box]')?.getAttribute('data-composer-state')).toBe('sending');
+    expect(q('[data-writing-frame]')).toBe(before);
+    expect(q('[data-writing-field] [contenteditable="true"]')).not.toBeNull();
     const send = byLabel('Post');
     expect(send?.getAttribute('aria-busy')).toBe('true');
-    expect(send?.querySelector('[data-busy-arc]')).not.toBeNull();
-    expect(send?.className).toContain('rounded-full');
+    expect(send?.querySelector('[data-upload-arc]')).not.toBeNull();
 
     await act(async () => {
       resolve({ ok: true });
     });
     await settle();
-    expect(q('[data-composer]')?.getAttribute('data-composer-state')).toBe('idle');
-    expect(q('[data-composer-row]')).not.toBeNull();
+    expect(q('[data-writing-box]')?.getAttribute('data-composer-state')).toBe('idle');
   });
 
-  it('chips and errors sit under the row, never inside it', async () => {
+  it('chips and errors sit under the box, never inside it', async () => {
     mount(async () => ({ ok: false, error: "Couldn't post the comment. Try again." }));
     await settle();
     await act(async () => {
@@ -171,6 +213,6 @@ describe('CommentComposer on ui/Composer', () => {
     await settle();
     const alert = q('[role="alert"]');
     expect(alert).not.toBeNull();
-    expect(q('[data-composer-row]')?.contains(alert)).toBe(false);
+    expect(q('[data-writing-box]')?.contains(alert)).toBe(false);
   });
 });
