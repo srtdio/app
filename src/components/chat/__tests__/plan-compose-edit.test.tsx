@@ -151,7 +151,7 @@ describe('New plan create: one call, never half built', () => {
     expect(src).not.toContain('type="date"');
     expect(pickerSrc).not.toContain('type="date"');
     expect(pickerSrc).toContain('className="flex w-full min-w-0 flex-col gap-1"');
-    // The field look (44px, 8px radius, panel-2, focus, left-aligned value) comes from ui/DatePicker.
+    // The field look (44px, 8px radius, panel-2, focus, left value) is ui/DatePicker's.
     expect(pickerSrc).toContain("import { DatePicker } from '@/components/ui/DatePicker';");
     expect(pickerSrc).toMatch(/data-plan-date=\{field\}[\s\S]*?<DatePicker\s+label=\{label\}/);
     const html = renderToStaticMarkup(
@@ -160,7 +160,9 @@ describe('New plan create: one call, never half built', () => {
     expect(html).toContain('Plan dates');
     expect(html).not.toContain('type="date"');
     // The DatePicker triggers show the range's days (44px, left-aligned).
-    expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*aria-label="From"[^>]*class="[^"]*h-11/);
+    expect(html).toMatch(
+      /<button[^>]*aria-haspopup="dialog"[^>]*aria-label="From"[^>]*class="[^"]*h-11/,
+    );
     expect(html).toMatch(/aria-label="To"/);
     expect(html).toContain('October 12, 2026');
     expect(html).toContain('October 18, 2026');

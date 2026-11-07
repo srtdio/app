@@ -210,7 +210,9 @@ describe('item 3: header menu, rename, delete, subtitle', () => {
     expect(html).toContain('maxLength="200"');
     expect(html).toContain('aria-label="Cancel rename"');
     expect(html).toContain('Done');
-    expect(html).toMatch(/class="[^"]*h-11 min-h-11[^"]*"[^>]*data-plan-rename-cancel=""[^>]*>Cancel<\/button>/);
+    expect(html).toMatch(
+      /class="[^"]*h-11 min-h-11[^"]*"[^>]*data-plan-rename-cancel=""[^>]*>Cancel<\/button>/,
+    );
     const empty = renderToStaticMarkup(
       <RenameField value="  " busy={false} onChange={noop} onCancel={noop} onDone={noop} />,
     );

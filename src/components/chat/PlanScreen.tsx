@@ -689,9 +689,7 @@ export function ConceptDateField(props: {
       disabled={props.disabled === true}
       className="flex min-w-0 flex-col gap-1"
     >
-      <span aria-hidden="true" className="text-md text-fg-3">
-        Date (optional)
-      </span>
+      <span aria-hidden="true" className="text-md text-fg-3">Date (optional)</span>
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="min-w-0 flex-1">
           <DatePicker label="Date (optional)" value={props.value} onChange={props.onChange} />

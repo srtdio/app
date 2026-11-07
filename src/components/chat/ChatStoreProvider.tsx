@@ -33,6 +33,7 @@
 // result replaces the snapshot in place, never a skeleton; a failed one keeps
 // the snapshot and never shows the list error.
 
+import { mediaMessagesGone } from '@/lib/chat/media-cache-drop';
 import { mark } from '@/lib/perf-marks';
 import {
   createContext,
@@ -1244,6 +1245,9 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
       },
       messageIds,
     );
+    // D7: deleted for everyone in any chat (open or not): drop its media from
+    // the chips and their saved first pages at once.
+    mediaMessagesGone({ userId: currentUserId, workspaceId, messageIds });
   };
 
   // Seed the store on workspace/user switch (and on Retry): the roster, clears,

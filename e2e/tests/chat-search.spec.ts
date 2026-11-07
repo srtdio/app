@@ -159,9 +159,9 @@ async function runMediaFlow(page: Page): Promise<void> {
   await expect(results.locator(`[data-media-tile^="${MEDIA_MSG.photoAlbum}:"]`)).toHaveCount(3);
   await expect(results.locator(`[data-media-tile^="${MEDIA_MSG.photoOne}:"]`)).toHaveCount(1);
 
-  // The viewer opens with its details on top and Show in chat.
+  // The viewer opens with its "<" back bar (sender · time title) and Show in chat.
   await tile.click();
-  await expect(page.locator('[data-lightbox-details]')).toBeVisible();
+  await expect(page.locator('[data-lightbox-back-bar] [data-lightbox-title]')).toBeVisible();
   const show = page.locator('[data-show-in-chat]');
   await expect(show).toBeVisible();
   await show.click();
@@ -171,7 +171,7 @@ async function runMediaFlow(page: Page): Promise<void> {
   await expect(
     page.locator(`[data-msg-id="${MEDIA_MSG.photoAlbum}"][data-jump-glow]`).first(),
   ).toBeVisible();
-  await expect(page.locator('[data-lightbox-details]')).toHaveCount(0);
+  await expect(page.locator('[data-lightbox-back-bar]')).toHaveCount(0);
   await expect(landed.first()).toContainText(MEDIA_ALBUM_BODY);
   await expect(landed.first()).toBeInViewport();
 

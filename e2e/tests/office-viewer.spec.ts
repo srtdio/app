@@ -105,7 +105,7 @@ test('Word and Excel open inside Sorted @theme', async ({ page, context }) => {
   await expect(sheet.locator('[data-sheet-title]')).toHaveText('Budget · 2 rows');
   await expect(sheet.getByRole('tab', { name: 'Budget' })).toHaveAttribute('aria-selected', 'true');
   await expect(sheet.getByText('Instagram reels')).toBeVisible();
-  await viewer.getByRole('button', { name: 'Close' }).click();
+  await viewer.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(viewer).toHaveCount(0);
 
   // Word: page 1 inside the sandboxed iframe; not one request leaves it.
@@ -133,7 +133,7 @@ test('Word and Excel open inside Sorted @theme', async ({ page, context }) => {
   await page.waitForTimeout(300);
   page.off('request', onRequest);
   expect(frameRequests).toEqual([]);
-  await viewer.getByRole('button', { name: 'Close' }).click();
+  await viewer.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(viewer).toHaveCount(0);
 
   // PowerPoint: the fallback with Download.
@@ -143,7 +143,7 @@ test('Word and Excel open inside Sorted @theme', async ({ page, context }) => {
   await expect(
     viewer.locator('[data-viewer-unavailable]').getByRole('button', { name: 'Download' }),
   ).toBeVisible();
-  await viewer.getByRole('button', { name: 'Close' }).click();
+  await viewer.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(viewer).toHaveCount(0);
 
   // A just-sent docx: its bubble shows the thumbnail drawn on this device.

@@ -201,18 +201,6 @@ export function PlanDayPickerSheet(props: {
   );
 }
 
-/**
- * Legacy: the classes the native From / To date inputs carried. From and To
- * are ui/DatePicker now (it owns the field look and the left-aligned value),
- * so nothing here renders these; they stay exported only because
- * PlanComposeScreen re-exports them. Remove both with that re-export.
- */
-export const DATE_FIT =
-  'block min-w-0 appearance-none [-webkit-appearance:none] [&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:min-h-[1.5em] [&::-webkit-calendar-picker-indicator]:m-0';
-
-/** Legacy, see DATE_FIT. */
-export const DATE_FIELD = cn(DATE_FIT, 'font-mono disabled:text-fg-3');
-
 const PLAN_DATES_TITLE = 'Plan dates';
 const PLAN_DATES_HINT = 'Up to 5 weeks. Items on days you drop go back to "Pick a day".';
 const PLAN_DATES_SAVE = 'Save dates';
@@ -266,9 +254,7 @@ export function PlanDatesSheet(props: {
             ] as const
           ).map(([field, label]) => (
             <div key={field} data-plan-date={field} className="flex w-full min-w-0 flex-col gap-1">
-              <span aria-hidden="true" className="text-md text-fg-3">
-                {label}
-              </span>
+              <span aria-hidden="true" className="text-md text-fg-3">{label}</span>
               <DatePicker
                 label={label}
                 value={draft[field]}

@@ -7,25 +7,31 @@
 // An own instant send renders from its local preview (the picked file's object
 // URL) for the whole session, before and after it records, so the tile never
 // swaps to the presigned URL. While its upload runs the image is dimmed and an
-// UploadRing (X in a circle, ring = progress; tap cancels the send) sits
+// UploadRing (the stop square in a filling ring; tap stops the send) sits
 // centred on it (56px): one ring over a whole album (progress across every
 // attachment's bytes), one in a voice note's play spot (40px). The ring never
-// positions itself; each spot here does. When the upload finishes the X is
-// gone: the ring scales to 0 and the tile settles (ease-pop); nothing fades
+// positions itself; each spot here does. When the upload finishes the square
+// is gone: the ring scales to 0 and the tile settles (ease-pop); nothing fades
 // and nothing changes size.
 //
 // Every other file (PDF, video, Office, anything else) is a FileBubble: a
-// fixed-width card with its thumbnail, that sends with a thin progress bar and
-// opens in the in-app FileViewer. Nothing here opens a new tab or window.
+// fixed-width card with its thumbnail, that sends with its own 44px stop ring
+// and opens in the in-app FileViewer. Nothing here opens a new tab or window.
 //
 // The whole attachment area sits in its own ErrorBoundary: an attachment that
 // throws while rendering shows a compact "Couldn't show this file" card with
 // Download, and the rest of the message, thread and app carry on.
 //
-// Chat groups a message's images into one album (AlbumGrid): the grid is sized
-// from the image COUNT alone, so first paint is final and a presigned image
-// arriving never shifts layout. Every tile is a real button that opens the
-// lightbox at its index; non-image attachments render below the album as before.
+// Chat groups a message's images into one album (AlbumGrid): 2 or more images
+// form a grid sized from the image COUNT alone, so first paint is final and a
+// presigned image arriving never shifts layout. ONE image is no grid and no
+// crop: the whole photo at its own aspect ratio, no height cap, at the album
+// width, its box from the stored size (thumbW/thumbH: an own send reads it at
+// pick time, Composer + media-size.ts; it rides the recorded meta to every
+// receiver). With no size known the photo stays hidden until its own image
+// reports its natural size, so a guessed box never paints and then resizes.
+// Every tile is a real button that opens the lightbox at its index; non-image
+// attachments render below the album as before.
 
 import { Bone } from '@/lib/motion';
 import { IconButton } from '@/components/ui/IconButton';
@@ -281,7 +287,7 @@ function AttachmentItem({
   backBar?: boolean | undefined;
   voiceSpacer?: ReactNode;
   voice?: VoiceContext | undefined;
-  /** An own send that can still be cancelled: the X cancels it. */
+  /** An own send that can still be cancelled: the ring's stop square stops it. */
   onCancelUpload?: (() => void) | undefined;
 }): ReactElement {
   const ring = ringFor([attachment], onCancelUpload);
@@ -351,7 +357,7 @@ function AttachmentItem({
       );
     case 'audio':
       // One wrapper in both states; the ring sits in the play spot, so the
-      // bubble keeps its size when the upload completes (X becomes play).
+      // bubble keeps its size when the upload completes (stop becomes play).
       return (
         <div data-voice-upload={ring !== null ? '' : undefined} className="relative">
           <VoiceNote
@@ -378,12 +384,14 @@ function AttachmentItem({
         </div>
       );
     case 'file':
-      // Sends with its own thin bar, no cancel; tap opens the in-app viewer.
+      // Sends with its own 44px ring (IconStop inside; a tap stops the send);
+      // tap the card to open the in-app viewer.
       return (
         <FileBubble
           attachment={attachment}
           cache={cache}
           presignEnabled={presignEnabled}
+          {...(onCancelUpload !== undefined ? { onCancel: onCancelUpload } : {})}
           {...(backBar === true ? { backBar: true } : {})}
         />
       );
@@ -405,14 +413,15 @@ export function albumGridClass(count: number): string {
 
 /**
  * Tile layout by image count, derived from the count alone so the grid never
- * waits on an image load. 1: one full-width tile (4:3 box, capped at 320px, the
- * image object-cover inside it). 2: two squares. 3: a 2:1 wide tile over two
- * squares. 4 or more: a 2x2 of squares, the fourth carrying "+N" (N = count - 4)
- * when there are more. Pure.
+ * waits on an image load. 1: one full-width tile with no box of its own (no
+ * aspect class, no height cap): its ratio comes from the photo itself
+ * (singleTileRatio), the whole photo shows, uncropped. 2: two squares. 3: a
+ * 2:1 wide tile over two squares. 4 or more: a 2x2 of squares, the fourth
+ * carrying "+N" (N = count - 4) when there are more. Pure.
  */
 export function albumTiles(count: number): AlbumTile[] {
   if (count <= 0) return [];
-  if (count === 1) return [{ index: 0, className: 'aspect-[4/3] max-h-80', more: 0 }];
+  if (count === 1) return [{ index: 0, className: 'w-full', more: 0 }];
   if (count === 2) {
     return [0, 1].map((index) => ({ index, className: 'aspect-square', more: 0 }));
   }
@@ -430,17 +439,64 @@ export function albumTiles(count: number): AlbumTile[] {
   }));
 }
 
+/**
+ * A single photo's aspect ratio (width / height) from its stored or
+ * pick-time size (thumbW/thumbH), or null when no size is known (the tile
+ * then waits for the image's own natural size before it shows). Pure.
+ */
+export function singleTileRatio(
+  attachment: Pick<MessageAttachment, 'thumbW' | 'thumbH'>,
+): number | null {
+  const w = attachment.thumbW;
+  const h = attachment.thumbH;
+  return w !== undefined && h !== undefined && w > 0 && h > 0 ? w / h : null;
+}
+
+/**
+ * The single photo tile's inline box: aspect-ratio "w / h" when the size is
+ * known, else none (the image sizes the tile itself once loaded). Inline style
+ * on purpose: the ratio is data, never an arbitrary Tailwind value. Pure.
+ */
+export function singleTileStyle(
+  attachment: Pick<MessageAttachment, 'thumbW' | 'thumbH'>,
+): CSSProperties | undefined {
+  const w = attachment.thumbW;
+  const h = attachment.thumbH;
+  return w !== undefined && h !== undefined && w > 0 && h > 0
+    ? { aspectRatio: `${w} / ${h}` }
+    : undefined;
+}
+
+/**
+ * How a tile's image fills it: 'cover' in a grid tile (fixed square / wide
+ * box), 'contain' for a single photo whose box already has its ratio (the
+ * whole photo, never cropped), 'natural' for a single photo of unknown size
+ * (the image in flow sizes the tile, hidden until it has loaded). Pure.
+ */
+export type TileFit = 'cover' | 'contain' | 'natural';
+
+export function tileFit(
+  count: number,
+  attachment: Pick<MessageAttachment, 'thumbW' | 'thumbH'>,
+): TileFit {
+  if (count !== 1) return 'cover';
+  return singleTileRatio(attachment) !== null ? 'contain' : 'natural';
+}
+
 /** The tile button's accessible name: "Open photo i of n" (1-based). Pure. */
 export function albumTileLabel(index: number, count: number): string {
   return `Open photo ${index + 1} of ${count}`;
 }
 
 /**
- * The image inside one album tile. It fills the tile absolutely (object-cover),
- * so the tile's size comes from the grid, never from the image. Until the
- * presigned image arrives the tile's own bg-panel-3 shows; an own instant send
- * shows its local preview, dimmed while it uploads (the album's one ring sits
- * over the grid). A failed
+ * The image inside one album tile. In a grid tile it fills the tile absolutely
+ * (object-cover), so the tile's size comes from the grid, never from the
+ * image. A single photo of known size fills its ratio box absolutely with
+ * object-contain (nothing cropped); of unknown size ('natural') it sits in
+ * flow at the tile's width and stays invisible until it has loaded, so the
+ * box appears once, at its final size. Until the presigned image arrives the
+ * tile's own bg-panel-3 shows; an own instant send shows its local preview,
+ * dimmed while it uploads (the album's one ring sits over the grid). A failed
  * or disabled presign keeps the tile with a centred image glyph (the lightbox
  * owns the retry).
  */
@@ -448,11 +504,15 @@ function AlbumTileImage({
   attachment,
   cache,
   presignEnabled,
+  fit = 'cover',
 }: {
   attachment: MessageAttachment;
   cache: PresignCache;
   presignEnabled: boolean;
+  fit?: TileFit;
 }): ReactElement | null {
+  // 'natural' only: the image has reported its size (onLoad), so it shows.
+  const [loaded, setLoaded] = useState(false);
   const hasPreview = attachment.local?.previewUrl != null;
   const { url, failed } = useAttachmentUrl(
     attachment.assetId,
@@ -467,6 +527,26 @@ function AlbumTileImage({
       : view.kind === 'file'
         ? (view.progress ?? null)
         : null;
+  const glyph = view.kind === 'file' && progress === null;
+  if (fit === 'natural') {
+    return src !== null ? (
+      <img
+        src={src}
+        alt={attachment.name}
+        draggable={false}
+        onLoad={() => setLoaded(true)}
+        className={cn(
+          'block h-auto w-full',
+          !loaded && 'invisible',
+          progress !== null && 'brightness-75',
+        )}
+      />
+    ) : glyph ? (
+      <span className="flex h-24 w-full items-center justify-center text-fg-3">
+        <IconImage size={ICON_SIZE.tray} />
+      </span>
+    ) : null;
+  }
   return (
     <>
       {src !== null ? (
@@ -475,11 +555,12 @@ function AlbumTileImage({
           alt={attachment.name}
           draggable={false}
           className={cn(
-            'absolute inset-0 h-full w-full object-cover',
+            'absolute inset-0 h-full w-full',
+            fit === 'contain' ? 'object-contain' : 'object-cover',
             progress !== null && 'brightness-75',
           )}
         />
-      ) : view.kind === 'file' && progress === null ? (
+      ) : glyph ? (
         <span className="absolute inset-0 flex items-center justify-center text-fg-3">
           <IconImage size={ICON_SIZE.tray} />
         </span>
@@ -489,7 +570,8 @@ function AlbumTileImage({
 }
 
 /**
- * The album: every image of one message in a count-sized grid, tiles 2px apart,
+ * The album: one image as the whole photo at its own ratio (no grid, no crop,
+ * no height cap), or 2+ images in a count-sized grid, tiles 2px apart,
  * 15px outer corners (the 18px bubble minus its 3px padding). Hook-free (the
  * per-tile presign lives in AlbumTileImage) so tests can call it directly. Each
  * tile is a real button; tapping opens the viewer at that index, and the "+N"
@@ -530,6 +612,8 @@ export function AlbumGrid({
     >
       {albumTiles(count).map((tile) => {
         const attachment = images[tile.index] as MessageAttachment;
+        const fit = tileFit(count, attachment);
+        const style = fit === 'contain' ? singleTileStyle(attachment) : undefined;
         return (
           <PressableRow
             insetFocus
@@ -542,8 +626,14 @@ export function AlbumGrid({
               'relative block cursor-zoom-in overflow-hidden bg-panel-3 [-webkit-touch-callout:none]',
               tile.className,
             )}
+            {...(style !== undefined ? { style } : {})}
           >
-            <AlbumTileImage attachment={attachment} cache={cache} presignEnabled={presignEnabled} />
+            <AlbumTileImage
+              attachment={attachment}
+              cache={cache}
+              presignEnabled={presignEnabled}
+              fit={fit}
+            />
             {tile.more > 0 ? (
               <span
                 aria-hidden="true"
@@ -616,7 +706,7 @@ export interface MessageAttachmentsProps {
   voice?: VoiceContext | undefined;
   /**
    * An own send whose upload can still be cancelled: each uploading photo,
-   * album, file or voice note shows the UploadRing, whose X calls this.
+   * album, file or voice note shows the UploadRing, whose stop square calls this.
    */
   onCancelUpload?: (() => void) | undefined;
   /** Album mode: the bubble's corner classes, passed on to the album (AlbumGrid). */
@@ -624,7 +714,8 @@ export interface MessageAttachmentsProps {
   /**
    * Comments: every file (PDF, Office, video, other) opens its in-app viewer
    * with the over-the-app bar: "<" (Back), the name, "Page {i} of {n}" for a
-   * PDF, Download. Chat omits it, so its viewer keeps the X bar.
+   * PDF, Download. No longer needed: every viewer has that bar now; kept so
+   * callers that still pass it compile.
    */
   backBar?: boolean | undefined;
 }

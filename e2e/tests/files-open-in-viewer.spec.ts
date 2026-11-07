@@ -99,12 +99,12 @@ async function expectPdfOpen(page: Page): Promise<void> {
   await expect(viewer.locator('[data-page-counter]')).toHaveText(`1 / ${FIXTURE_PDF_PAGES}`);
   expect(await canvas.evaluate((c) => (c as HTMLCanvasElement).width > 0)).toBe(true);
   await expect(viewer.getByText("Couldn't open. Try again.")).toHaveCount(0);
-  expectMinTouchTarget(await viewer.getByRole('button', { name: 'Close' }).boundingBox());
+  expectMinTouchTarget(await viewer.getByRole('button', { name: 'Back', exact: true }).boundingBox());
 }
 
 /** Close the viewer with its X; the page behind is still there. */
 async function closeViewer(page: Page): Promise<void> {
-  await page.locator('[data-file-viewer="pdf"]').getByRole('button', { name: 'Close' }).click();
+  await page.locator('[data-file-viewer="pdf"]').getByRole('button', { name: 'Back', exact: true }).click();
   await expect(page.locator('[data-file-viewer]')).toHaveCount(0);
 }
 
@@ -238,7 +238,10 @@ test('PDFs open in the in-app viewer from a brief, a post and Assets @theme', as
   await closeViewer(page);
   await expect(page.getByRole('dialog', { name: `Viewing ${PDF_NAME}` })).toBeVisible();
   // Closing the lightbox gives the page its scroll back (no lock left behind).
-  await page.getByRole('button', { name: 'Close viewer' }).click();
+  await page
+    .getByRole('dialog', { name: `Viewing ${PDF_NAME}` })
+    .getByRole('button', { name: 'Back', exact: true })
+    .click();
   await expect(page.getByRole('dialog', { name: `Viewing ${PDF_NAME}` })).toHaveCount(0);
   expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
   // No thumbnail request at all on Assets: the brief page already signed this

@@ -68,7 +68,6 @@ import {
   TrashIcon,
   UserIcon,
   ViewColumnsIcon,
-  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import {
   PauseIcon as PauseSolid,
@@ -174,10 +173,6 @@ function Hero({
       aria-hidden="true"
     />
   );
-}
-
-export function IconX(props: IconProps) {
-  return <Hero icon={XMarkIcon} {...props} />;
 }
 
 export function IconUser(props: IconProps) {

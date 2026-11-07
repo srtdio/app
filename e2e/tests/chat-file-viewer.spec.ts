@@ -117,7 +117,7 @@ test('chat files open in the in-app viewer @theme', async ({ page, context }) =>
   const office = page.locator('[data-file-viewer="office"]');
   await expect(office.getByText('Preview not available yet')).toBeVisible();
   await expect(office.getByRole('button', { name: 'Download' }).first()).toBeVisible();
-  await office.getByRole('button', { name: 'Close' }).click();
+  await office.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(office).toHaveCount(0);
 
   // Nothing left the tab, and no request escaped the fixtures.

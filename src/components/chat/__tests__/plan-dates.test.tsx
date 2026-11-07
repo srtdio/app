@@ -99,7 +99,8 @@ describe('concept date field (D4)', () => {
       <ConceptDateField value="2026-10-14" onChange={() => undefined} />,
     );
     expect(set).toContain('October 14, 2026');
-    const clear = /<button[^>]*data-plan-concept-date-clear[^>]*>[^<]*<\/button>/.exec(set)?.[0] ?? '';
+    const clear =
+      /<button[^>]*data-plan-concept-date-clear[^>]*>[^<]*<\/button>/.exec(set)?.[0] ?? '';
     expect(clear).toContain('h-11');
     expect(clear).toContain('min-w-11');
     expect(clear).toContain('lit-hover text-fg-2');
