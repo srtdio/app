@@ -201,17 +201,12 @@ const REQUIRED: readonly string[] = [
   'plan-tab-bank-add',
   'plan-tab-bank-filter',
   'plan-tab-bank-filter-bucket-menu',
-  'plan-tab-bank-panel',
   'plan-tab-bank-plan-it',
   'plan-tab-bank-select',
-  'plan-tab-bank-table',
   'plan-tab-chip-all',
   'plan-tab-chip-earlier',
   'plan-tab-chip-later',
   'plan-tab-chip-next',
-  'plan-tab-month-trace',
-  'plan-tab-week',
-  'plan-tab-week-dark',
   'plan-tab-week-zero',
   'post-approve-busy',
   'post-detail',
@@ -248,7 +243,6 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   'name: `cockpit-dot-${level}-dark`': ['cockpit-dot-green-dark', 'cockpit-dot-red-dark'],
   'name: `cockpit-panel-needs${suffix}`': withDark('cockpit-panel-needs'),
   'name: `cockpit-panel-users${suffix}`': withDark('cockpit-panel-users'),
-  'name: `plan-tab-week${suffix}`': withDark('plan-tab-week'),
   'name: `new-chat-group-limit-owner${suffix}`': withDark('new-chat-group-limit-owner'),
   'name: `new-chat-group-limit-member${suffix}`': withDark('new-chat-group-limit-member'),
   'name: `support-contact-sheet${suffix}`': withDark('support-contact-sheet'),
@@ -291,17 +285,13 @@ const PHONE_ONLY_NAMES = [
 ];
 
 /**
- * Laptop-only light screens (`only: 'laptop'`): the Cockpit side panel, the Week
- * view, the Bank side panel and table and the chip hover (a hover pointer).
+ * Laptop-only light screens (`only: 'laptop'`): the Cockpit side panel and the
+ * chip hover (a hover pointer).
  */
 const LAPTOP_LIGHT_NAMES = [
   'pipeline-search-typed',
   'cockpit-panel-needs',
   'cockpit-panel-users',
-  'plan-tab-week',
-  'plan-tab-bank-panel',
-  'plan-tab-month-trace',
-  'plan-tab-bank-table',
   'chip-row-hover',
 ];
 
@@ -312,7 +302,6 @@ const LAPTOP_FORCED_DARK_NAMES = [
   'cockpit-dot-red-dark',
   'cockpit-panel-needs-dark',
   'cockpit-panel-users-dark',
-  'plan-tab-week-dark',
   'plan-screen-today-dark',
   'new-chat-group-limit-owner-dark',
   'new-chat-group-limit-member-dark',
