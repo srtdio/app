@@ -67,12 +67,15 @@ const rows = (prefix: string, n: number, starred = false): PlanItemRow[] =>
 
 describe('a page and its cursor', () => {
   it('fills a first page with starred ideas, then the rest', () => {
-    const page = bankPageOf('active', null, rows('s', 2, true), rows('r', BANK_PAGE_SIZE + 1));
+    const rest = rows('r', BANK_PAGE_SIZE + 1);
+    const page = bankPageOf('active', null, rows('s', 2, true), rest);
     expect(page.rows).toHaveLength(BANK_PAGE_SIZE);
     expect(page.rows.slice(0, 2).map((r) => r.id)).toEqual(['s0', 's1']);
+    // The page's last row is the rest group's (BANK_PAGE_SIZE - 2)th.
+    const last = rest[BANK_PAGE_SIZE - 3]!;
     expect(page.nextCursor).toEqual({
       starred: false,
-      after: { key: '2026-10-19T00:00:00Z', id: 'r9' },
+      after: { key: last.last_active_at, id: `r${BANK_PAGE_SIZE - 3}` },
     });
   });
 

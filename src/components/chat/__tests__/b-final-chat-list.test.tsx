@@ -30,6 +30,7 @@ import { Row } from '@/components/ui/Row';
 import { Tile } from '@/components/ui/Tile';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import type { ConversationSummary } from '@/lib/chat/chat-store';
+import { getFillCount } from '@/lib/use-fill-count';
 
 const NOW = Date.parse('2026-11-06T10:00:00Z');
 
@@ -238,7 +239,7 @@ describe('notes, groups and people: one card style', () => {
     expect(findAll(tree, (el) => el.type === Tile)).toHaveLength(0);
     expect(findAll(tree, (el) => el.type === Row)).toHaveLength(0);
     // Six uniform cards, no section labels.
-    expect(findAll(tree, (el) => el.type === ListCardBox)).toHaveLength(6);
+    expect(findAll(tree, (el) => el.type === ListCardBox)).toHaveLength(getFillCount());
   });
 
   it('ChannelList never imports ui/Tile or ui/Row', () => {
