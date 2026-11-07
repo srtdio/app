@@ -1820,9 +1820,7 @@ export function PlanItemScreen(props: {
           <>
             {item.post_id !== null ? (
               <PostSheetPlanRowsContext.Provider value={planRows}>
-                <Suspense
-                  fallback={<Bone lit="flat" as="div" className="m-4 h-44 rounded-lg" />}
-                >
+                <Suspense fallback={<Bone lit="flat" as="div" className="m-4 h-44 rounded-lg" />}>
                   <PostDetailPage
                     postId={item.post_id}
                     embedded
@@ -2290,10 +2288,7 @@ function ItemMedia(props: {
   const images = useMemo(() => files.filter(isConceptImage), [files]);
   if (read.status === 'error') {
     return (
-      <div
-        data-plan-media="failed"
-        className="flex min-h-18 items-center justify-between gap-3"
-      >
+      <div data-plan-media="failed" className="flex min-h-18 items-center justify-between gap-3">
         <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
         <Button data-plan-media-retry="" onClick={props.onRetry}>
           Retry
@@ -2310,10 +2305,7 @@ function ItemMedia(props: {
   }
   if (files.length === 0) {
     return (
-      <div
-        data-plan-media="empty"
-        className="flex min-h-11 items-center text-md text-fg-3"
-      >
+      <div data-plan-media="empty" className="flex min-h-11 items-center text-md text-fg-3">
         No files
       </div>
     );

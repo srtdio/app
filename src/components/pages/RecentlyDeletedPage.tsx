@@ -104,10 +104,7 @@ export function RecentlyDeletedView({
         </BoxSkeleton>
       ) : items.length > 0 ? (
         <>
-          <ul
-            ref={listRef}
-            className="mt-4 divide-y divide-border border-b border-border"
-          >
+          <ul ref={listRef} className="mt-4 divide-y divide-border border-b border-border">
             {items.map((item) => (
               <li key={item.id} className="py-3">
                 <p className="text-base font-medium text-fg [overflow-wrap:anywhere]">

@@ -388,7 +388,12 @@ describe('list cards (ui/ListCard): the density height flat rows (72 Cozy defaul
       borderLeft: 0,
       borderTop: 0,
       picture: { x: 16, y: y + g.insetY, width: g.picture, height: g.picture },
-      text: { x: 16 + g.picture + 12, y: y + (g.height - 44) / 2, width: 390 - g.picture - 44, height: 44 },
+      text: {
+        x: 16 + g.picture + 12,
+        y: y + (g.height - 44) / 2,
+        width: 390 - g.picture - 44,
+        height: 44,
+      },
     };
   };
 
@@ -422,9 +427,7 @@ describe('list cards (ui/ListCard): the density height flat rows (72 Cozy defaul
     'passes the %s rows when checked against that density',
     (density) => {
       const h = LIST_CARD_GEOM_BY_DENSITY[density].height;
-      expect(
-        listCardViolations([good(0, h, density), good(h, h, density)], density),
-      ).toEqual([]);
+      expect(listCardViolations([good(0, h, density), good(h, h, density)], density)).toEqual([]);
     },
   );
 
@@ -439,9 +442,7 @@ describe('list cards (ui/ListCard): the density height flat rows (72 Cozy defaul
     expect(short.filter((m) => m.includes('not 72'))).toHaveLength(2);
     expect(listCardViolations([good(0, 71.2)])).toEqual([]);
     // A Cozy row on a Compact page fails, and a Compact row on a Calm page.
-    expect(
-      listCardViolations([good(0)], 'compact').some((m) => m.includes('not 60')),
-    ).toBe(true);
+    expect(listCardViolations([good(0)], 'compact').some((m) => m.includes('not 60'))).toBe(true);
     expect(
       listCardViolations([good(0, 60, 'compact')], 'calm').some((m) => m.includes('not 80')),
     ).toBe(true);

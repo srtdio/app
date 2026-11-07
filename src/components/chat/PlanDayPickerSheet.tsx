@@ -74,9 +74,7 @@ export function PlanDayTiles(props: {
     <div data-plan-day-tiles="" className="flex flex-col gap-2">
       {dayTileWeeks(props.range).map((week) => (
         <div key={week.days[0]} className="flex flex-col gap-2">
-          {week.label !== null ? (
-            <p className={`mt-1 ${TEXT_ROLE.section}`}>{week.label}</p>
-          ) : null}
+          {week.label !== null ? <p className={`mt-1 ${TEXT_ROLE.section}`}>{week.label}</p> : null}
           <div className="grid grid-cols-4 gap-2">
             {week.days.map((day) => {
               const on = props.selected === day;

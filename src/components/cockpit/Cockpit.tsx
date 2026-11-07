@@ -135,27 +135,18 @@ function Tiles({ state, onPick }: { state: CockpitState; onPick: (tab: CockpitTa
                 level={tile === undefined ? 'grey' : tile.state === 'ok' ? tile.level : 'amber'}
                 small
               />
-              <span
-                className={cn('truncate text-sm', selected ? 'text-fg' : 'text-fg-2')}
-              >
+              <span className={cn('truncate text-sm', selected ? 'text-fg' : 'text-fg-2')}>
                 {label}
               </span>
             </span>
             {tile === undefined ? (
               <Bone lit="flat" className="h-7 w-10 rounded" />
             ) : tile.state === 'ok' ? (
-              <span
-                className={cn(
-                  'font-mono text-2xl font-semibold tabular-nums',
-                  'text-fg',
-                )}
-              >
+              <span className={cn('font-mono text-2xl font-semibold tabular-nums', 'text-fg')}>
                 {countText(tile.value)}
               </span>
             ) : (
-              <span
-                className={cn('text-sm line-clamp-2', selected ? 'text-fg' : 'text-fg-2')}
-              >
+              <span className={cn('text-sm line-clamp-2', selected ? 'text-fg' : 'text-fg-2')}>
                 {tile.reason}
               </span>
             )}

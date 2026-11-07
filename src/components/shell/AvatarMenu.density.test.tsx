@@ -85,7 +85,9 @@ describe('AvatarMenu: the Density row', () => {
     const appearance = items.find((el) => el.textContent === 'Appearance')!;
     const help = items.find((el) => el.textContent === 'Help')!;
     // Between Appearance and Help.
-    expect(appearance.compareDocumentPosition(row!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      appearance.compareDocumentPosition(row!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(row!.compareDocumentPosition(help) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const group = row!.querySelector('[role="radiogroup"]');
     expect(group?.getAttribute('aria-label')).toBe('Density');

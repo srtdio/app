@@ -19,9 +19,7 @@ export function EmptyState({ icon, title, description, action, compact = false }
       )}
     >
       {/* Flat look: the glyph alone on the page fill, no grey box; the 56 slot keeps the footprint. */}
-      <div className="w-14 h-14 flex items-center justify-center text-fg-3 mb-2">
-        {icon}
-      </div>
+      <div className="w-14 h-14 flex items-center justify-center text-fg-3 mb-2">{icon}</div>
       <div className="text-lg font-semibold text-fg">{title}</div>
       {description !== undefined ? (
         <div className="text-base text-fg-2 max-w-xs">{description}</div>

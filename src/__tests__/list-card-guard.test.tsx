@@ -146,10 +146,7 @@ describe('guard: every row is the density height (Compact 60, Cozy 72, Calm 80)'
     const frameCls = under(density, cls(html, 'data-list-card=""'));
     const frame = px(pick(frameCls, /^h-\d/), 'h-');
     const inset = px(pick(frameCls, /^py-/), 'py-');
-    const picture = px(
-      pick(under(density, cls(html, 'data-list-card-picture=')), /^h-\d/),
-      'h-',
-    );
+    const picture = px(pick(under(density, cls(html, 'data-list-card-picture=')), /^h-\d/), 'h-');
     const line1 = px(pick(cls(html, 'data-list-card-line="1"'), /^h-\d/), 'h-');
     const line2 = px(pick(cls(html, 'data-list-card-line="2"'), /^h-\d/), 'h-');
     const text = line1 + 4 + line2;

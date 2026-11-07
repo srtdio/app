@@ -230,11 +230,7 @@ export function MoveSheetView({
             </p>
           ) : null}
           {!confirming && roleStatus === 'error' ? (
-            <div
-              data-role-error=""
-              role="alert"
-              className="flex items-center gap-3"
-            >
+            <div data-role-error="" role="alert" className="flex items-center gap-3">
               <p className="flex-1 text-base text-fg-2">{ROLE_READ_ERROR}</p>
               <Button onClick={() => onRetryRole?.()}>Retry</Button>
             </div>

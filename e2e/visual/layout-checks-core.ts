@@ -399,9 +399,7 @@ export function listCardViolations(
     }
     const p = c.picture;
     if (!near(p.width, geom.picture) || !near(p.height, geom.picture)) {
-      out.push(
-        `${c.label} picture is ${p.width}x${p.height}, not ${geom.picture}x${geom.picture}`,
-      );
+      out.push(`${c.label} picture is ${p.width}x${p.height}, not ${geom.picture}x${geom.picture}`);
     }
     const left = p.x - c.card.x - c.borderLeft;
     const top = p.y - c.card.y - c.borderTop;

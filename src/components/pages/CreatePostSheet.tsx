@@ -1557,10 +1557,7 @@ export function CreatePostSheet({
                       placeholder="No bucket"
                     />
                     {newBucketOpen ? (
-                      <div
-                        data-new-bucket=""
-                        className="mt-2 flex flex-col gap-2"
-                      >
+                      <div data-new-bucket="" className="mt-2 flex flex-col gap-2">
                         <Input
                           aria-label="New bucket name"
                           placeholder="Bucket name"

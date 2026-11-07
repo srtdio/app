@@ -80,7 +80,16 @@ const find = (tokens: string[], re: RegExp): string => tokens.find((c) => re.tes
 describe('ListCard frame', () => {
   it('flat row: no border, no radius, no fill, no lit height; bleeds -mx-4 / px-4; press on the whole row', () => {
     const root = classOf(render(), 'data-list-card=""');
-    for (const cls of ['relative', 'flex', 'h-18', 'min-w-0', '-mx-4', 'px-4', 'py-3', MOVE_CLASS.press]) {
+    for (const cls of [
+      'relative',
+      'flex',
+      'h-18',
+      'min-w-0',
+      '-mx-4',
+      'px-4',
+      'py-3',
+      MOVE_CLASS.press,
+    ]) {
       expect(root).toContain(cls);
     }
     expect(root).toEqual(
@@ -167,17 +176,20 @@ describe('ListCard height by density: Compact 60, Cozy 72 (default), Calm 80', (
     ['compact', 10, 40, 60],
     ['cozy', 12, 48, 72],
     ['calm', 16, 48, 80],
-  ] as const)('%s: the classes make inset %i + picture %i + inset = %i', (density, inset, pic, row) => {
-    const frame = frameFor(density, listCardFrame());
-    expect(stepPx(find(frame, /^h-\d/), 'h-')).toBe(row);
-    expect(stepPx(find(frame, /^py-/), 'py-')).toBe(inset);
-    const picture = frameFor(density, LIST_CARD_PICTURE);
-    expect(stepPx(find(picture, /^h-\d/), 'h-')).toBe(pic);
-    expect(stepPx(find(picture, /^w-\d/), 'w-')).toBe(pic);
-    expect(inset + pic + inset).toBe(row);
-    expect(LIST_CARD_HEIGHT_BY_DENSITY[density]).toBe(row);
-    expect(LIST_CARD_PICTURE_BY_DENSITY[density]).toBe(pic);
-  });
+  ] as const)(
+    '%s: the classes make inset %i + picture %i + inset = %i',
+    (density, inset, pic, row) => {
+      const frame = frameFor(density, listCardFrame());
+      expect(stepPx(find(frame, /^h-\d/), 'h-')).toBe(row);
+      expect(stepPx(find(frame, /^py-/), 'py-')).toBe(inset);
+      const picture = frameFor(density, LIST_CARD_PICTURE);
+      expect(stepPx(find(picture, /^h-\d/), 'h-')).toBe(pic);
+      expect(stepPx(find(picture, /^w-\d/), 'w-')).toBe(pic);
+      expect(inset + pic + inset).toBe(row);
+      expect(LIST_CARD_HEIGHT_BY_DENSITY[density]).toBe(row);
+      expect(LIST_CARD_PICTURE_BY_DENSITY[density]).toBe(pic);
+    },
+  );
 
   it('the text column is 20 + 4 + 20 = 44 in every density, inside the picture row (it never sets the height)', () => {
     const line = (cls: string): number =>

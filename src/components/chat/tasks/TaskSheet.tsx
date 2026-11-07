@@ -901,10 +901,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
           {...swipeDown}
         >
           {laptop ? null : (
-            <div
-              aria-hidden="true"
-              className="mx-auto mt-2 h-1 w-9 rounded-sm bg-border-strong"
-            />
+            <div aria-hidden="true" className="mx-auto mt-2 h-1 w-9 rounded-sm bg-border-strong" />
           )}
           {/* ui/HeaderBar (56): Back, Tasks (and the editing line), the save
               state, Share to chat. The last 44 box takes the trailing rule

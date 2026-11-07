@@ -302,7 +302,9 @@ describe('Pipeline, Briefs, Assets, Chat, Activity and the Plan tab render throu
       expect.arrayContaining(['-mx-4', 'h-18', 'compact:h-15', 'calm:h-20', 'px-4']),
     );
     expect(base[1]).not.toContain('p-3');
-    expect(base[2]).toEqual(expect.arrayContaining(['h-12', 'w-12', 'compact:h-10', 'compact:w-10']));
+    expect(base[2]).toEqual(
+      expect.arrayContaining(['h-12', 'w-12', 'compact:h-10', 'compact:w-10']),
+    );
     expect(base[3]).toContain('h-5');
     expect(base[4]).toContain('h-5');
     for (const [name, html] of Object.entries(SCREENS)) {
@@ -533,9 +535,7 @@ describe('S3: the picture box is 48x48 (40 in Compact) whatever the picture, bef
     const slot = ['h-12', 'w-12', 'compact:h-10', 'compact:w-10', 'shrink-0'];
     expect(LIST_CARD_PICTURE.split(' ')).toEqual(expect.arrayContaining(slot));
     for (const [name, html] of Object.entries(SCREENS)) {
-      expect(classOf(html, 'data-list-card-picture='), name).toEqual(
-        expect.arrayContaining(slot),
-      );
+      expect(classOf(html, 'data-list-card-picture='), name).toEqual(expect.arrayContaining(slot));
     }
   });
 

@@ -136,7 +136,8 @@ export const LIST_CARD_PICTURE_BY_DENSITY = { compact: 40, cozy: 48, calm: 48 } 
  */
 export function listCardHeightPx(density?: string): number {
   const d =
-    density ?? (typeof document === 'undefined' ? undefined : document.documentElement.dataset.density);
+    density ??
+    (typeof document === 'undefined' ? undefined : document.documentElement.dataset.density);
   return d === 'compact' || d === 'calm'
     ? LIST_CARD_HEIGHT_BY_DENSITY[d]
     : LIST_CARD_HEIGHT_BY_DENSITY.cozy;

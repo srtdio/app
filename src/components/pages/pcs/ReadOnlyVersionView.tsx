@@ -73,9 +73,7 @@ export function ReadOnlyVersionView({
             size="lg"
           />
         ) : (
-          <div className="py-6 text-center text-base text-fg-3">
-            {imageCountLabel(imageCount)}
-          </div>
+          <div className="py-6 text-center text-base text-fg-3">{imageCountLabel(imageCount)}</div>
         )}
       </section>
 

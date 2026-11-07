@@ -447,7 +447,7 @@ describe('density (users.density, read with the profile)', () => {
     );
   });
 
-  it('a known session adopts that account\'s device density first (sync), before the read lands', () => {
+  it("a known session adopts that account's device density first (sync), before the read lands", () => {
     void loadProfile('u-1');
     expect(density.adoptUserDensity).toHaveBeenCalledTimes(1);
     expect(density.adoptUserDensity).toHaveBeenCalledWith('u-1');

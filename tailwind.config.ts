@@ -81,7 +81,10 @@ export default {
     },
     // The spacing steps only (OFF_STEP above): width / height keep every value.
     padding: ({ theme }) => onStep(theme('spacing') as Record<string, string>),
-    margin: ({ theme }) => ({ auto: 'auto', ...onStep(theme('spacing') as Record<string, string>) }),
+    margin: ({ theme }) => ({
+      auto: 'auto',
+      ...onStep(theme('spacing') as Record<string, string>),
+    }),
     gap: ({ theme }) => onStep(theme('spacing') as Record<string, string>),
     space: ({ theme }) => onStep(theme('spacing') as Record<string, string>),
     // Radius roles (CLAUDE.md). Rendered values are unchanged by the lock.

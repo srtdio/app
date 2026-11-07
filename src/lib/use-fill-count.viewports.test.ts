@@ -6,12 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import {
-  FILL_COUNT_CEILING,
-  FILL_COUNT_FLOOR,
-  fillColumns,
-  fillCount,
-} from '@/lib/use-fill-count';
+import { FILL_COUNT_CEILING, FILL_COUNT_FLOOR, fillColumns, fillCount } from '@/lib/use-fill-count';
 import { LIST_CARD_HEIGHT_BY_DENSITY, listCardHeightPx } from '@/components/ui/ListCard';
 
 const VIEWPORTS = [
@@ -81,7 +76,8 @@ function source(rel: string): string {
   return readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 }
 
-const FILL_IMPORT = /import\s*\{[^}]*\b(useFillCount|getFillCount)\b[^}]*\}\s*from\s*'@\/lib\/use-fill-count'/;
+const FILL_IMPORT =
+  /import\s*\{[^}]*\b(useFillCount|getFillCount)\b[^}]*\}\s*from\s*'@\/lib\/use-fill-count'/;
 
 const LIST_SCREENS: { file: string; banned: RegExp[] }[] = [
   { file: '../components/pages/PipelinePage.tsx', banned: [] },

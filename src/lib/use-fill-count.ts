@@ -60,7 +60,11 @@ export function getFillCount(): number {
   if (stored !== null && storedFor === htmlDensity()) return stored;
   if (typeof window === 'undefined') return FILL_COUNT_FLOOR;
   storedFor = htmlDensity();
-  stored = fillCount(window.innerHeight, fillColumns(window.innerWidth), listCardHeightPx(storedFor));
+  stored = fillCount(
+    window.innerHeight,
+    fillColumns(window.innerWidth),
+    listCardHeightPx(storedFor),
+  );
   return stored;
 }
 
