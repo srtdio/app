@@ -15,11 +15,11 @@ import {
   IconChevronRight,
   IconDownload,
   IconPlus,
-  IconX,
 } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { ViewerBackButton } from '@/components/ui/ViewerBackButton';
 import { requestPresignedUrl, type PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import { wrapIndex, lightboxCounter, dragAxis, shouldDismiss } from '@/components/ui/ImageLightbox';
 import {
@@ -222,6 +222,10 @@ export function fitFrameStyle(width: number, height: number): CSSProperties {
 const OVERLAY_SKIN =
   'bg-overlay-surface text-overlay-fg lit-media hover:bg-overlay-line hover:text-overlay-fg ' +
   'disabled:text-overlay-fg-dim focus-visible:lit-focus focus-visible:outline-overlay-fg/70';
+
+// The "<" exit's own 44px box (ViewerBackButton is a plain button; the
+// IconButton's shape, so it matches the arrows beside it).
+const BACK_SHAPE = 'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg';
 
 // Icon buttons in the action bar below the image, which sits on the viewer's own
 // dark backdrop, so they need no chip of their own.
@@ -447,24 +451,30 @@ export function lightboxView(props: LightboxViewProps): ReactElement {
           ))}
         </div>
 
-        {/* Counter overlaid top-left, close overlaid top-right; translucent chips
-            keep both legible over any photo. */}
-        <span
+        {/* The viewer's exit: "<" (Back) overlaid top-left on the leading edge,
+            never an X; the counter overlaid top-right only with more than one
+            slide. No title here: the post's title sits right above this
+            in-flow viewer, and no filename ever renders on this surface.
+            Translucent chips keep both legible over any photo. */}
+        <ViewerBackButton
+          onClick={props.onClose}
           className={cn(
-            'pointer-events-none absolute left-2 top-2 rounded-lg bg-overlay-surface px-2 py-1 font-mono text-base tabular-nums text-overlay-fg lit-media',
+            BACK_SHAPE,
+            OVERLAY_SKIN,
+            'absolute left-2 top-2',
             chromeMotion(chromeVisible),
           )}
-        >
-          {lightboxCounter(index, count)}
-        </span>
-        <IconButton
-          type="button"
-          label="Close viewer"
-          onClick={props.onClose}
-          className={cn(OVERLAY_SKIN, 'absolute right-2 top-2', chromeMotion(chromeVisible))}
-        >
-          <IconX size={ICON_SIZE.control} />
-        </IconButton>
+        />
+        {count > 1 ? (
+          <span
+            className={cn(
+              'pointer-events-none absolute right-2 top-2 rounded-lg bg-overlay-surface px-2 py-1 font-mono text-base tabular-nums text-overlay-fg lit-media',
+              chromeMotion(chromeVisible),
+            )}
+          >
+            {lightboxCounter(index, count)}
+          </span>
+        ) : null}
 
         {/* Prev / next overlay arrows for click; swipe still drives the track.
             Centred by flex (no translate), edge-disabled. */}
@@ -662,7 +672,7 @@ interface PostLightboxProps {
 /**
  * In-place post-gallery viewer: a full-width, in-flow block (no modal, no
  * overlay sheet, no body scroll lock) with a native horizontal scroll-snap track
- * (one slide per width), overlaid counter/close/prev-next, tap-toggled chrome,
+ * (one slide per width), overlaid "<" Back/counter/prev-next, tap-toggled chrome,
  * pinch and double-tap zoom, and the agency manage row below the image. Pins are
  * placed from the inline gallery now, never here.
  */
@@ -730,7 +740,12 @@ export function PostLightbox({
   // first frame; a swipe down follows the finger, and on release springs back
   // from there, or (past the line) rises out from there, then closes.
   const rootRef = useRef<HTMLDivElement>(null);
-  useGrowFromThumb(rootRef);
+  // Only the opened slide's image or video grows; no media mounted yet
+  // (spinner, file card): it simply shows. The viewer block never grows.
+  useGrowFromThumb(rootRef, undefined, (root) => {
+    const slide = root.querySelector('[aria-roledescription="carousel"]')?.children.item(index);
+    return slide?.querySelector('img, video') ?? null;
+  });
   const lastDy = useRef(0);
   const releasedFrom = useRef(0);
   const closingRef = useRef(false);

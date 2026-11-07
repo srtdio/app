@@ -78,9 +78,10 @@ function expectShared(tag: string): void {
 }
 
 describe('PostLightbox buttons', () => {
-  it('close, prev, next and the manage bar are 44px IconButtons on overlay tokens', () => {
+  it('"<" Back, prev, next and the manage bar are 44px buttons on overlay tokens; no X', () => {
     const html = renderToStaticMarkup(lightboxView(props({ manage: { onAddAfter: vi.fn() } })));
-    for (const label of ['Close viewer', 'Previous image', 'Next image']) {
+    expect(html).not.toContain('aria-label="Close viewer"');
+    for (const label of ['Back', 'Previous image', 'Next image']) {
       const tag = tagFor(html, `aria-label="${label}"`);
       expectShared(tag);
       expect(classOf(tag)).toContain('w-11');

@@ -370,7 +370,7 @@ export function PlanPage(props: {
   onDismiss?: () => void;
   /**
    * Deprecated and ignored: the laptop close was an X; it is the back "<" now
-   * (labelled backLabel). Kept so existing callers compile.
+   * (aria-label "Back"). Kept so existing callers compile.
    */
   closeLabel?: string;
   /** Laptop: Escape for an inner layer (drag, pick-up, popover, menu, rename); true when taken. */
@@ -538,7 +538,7 @@ export function PlanPage(props: {
         title={<Highlight text={props.title} />}
         onBack={backAction}
         backProps={{
-          label: props.backLabel,
+          label: laptopClose ? 'Back' : props.backLabel,
           ...(laptopClose ? { 'data-plan-close': '' } : {}),
         }}
         {...(props.subtitle !== undefined

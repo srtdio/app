@@ -5,6 +5,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { ViewerBackButton } from '@/components/ui/ViewerBackButton';
 
 // The FileViewer portals to document.body, which this DOM-less environment has
 // none of: a marker stands in for it so a mount shows up in the markup.
@@ -207,24 +208,25 @@ describe('lightboxView', () => {
     }
   });
 
-  it('overlays only the mono counter and close on the image: no download, no caption toggle', () => {
+  it('overlays only "<" Back and the mono counter on the image: no X, no download, no caption toggle', () => {
     const tree = lightboxView(props({ index: 1 }));
-    const close = byLabel(tree, 'Close viewer')!;
-    expect(close).toBeDefined();
-    expect(className(close)).toContain('h-11');
-    expect(className(close)).toContain('w-11');
-    // Close is overlaid at the top-right, not inside any chrome bar.
-    expect(className(close)).toContain('absolute');
-    expect(className(close)).toContain('top-2');
-    expect(className(close)).toContain('right-2');
-    // The counter is the mono position readout overlaid at the top-left.
+    expect(byLabel(tree, 'Close viewer')).toBeUndefined();
+    const back = elements(tree).find((el) => el.type === ViewerBackButton)!;
+    expect(back).toBeDefined();
+    expect(className(back)).toContain('h-11');
+    expect(className(back)).toContain('w-11');
+    // "<" is overlaid at the top-left (the leading edge), not inside any chrome bar.
+    expect(className(back)).toContain('absolute');
+    expect(className(back)).toContain('top-2');
+    expect(className(back)).toContain('left-2');
+    // The counter is the mono position readout overlaid at the top-right.
     const counter = elements(tree).find(
       (el) => (el.props as { children?: ReactNode }).children === '2 / 3',
     );
     expect(counter).toBeDefined();
     expect(className(counter!)).toContain('font-mono');
     expect(className(counter!)).toContain('absolute');
-    expect(className(counter!)).toContain('left-2');
+    expect(className(counter!)).toContain('right-2');
     // No separate top chrome bar exists (nothing is h-12 + justify-between), and
     // download has moved into the action bar below the image.
     expect(
@@ -235,6 +237,14 @@ describe('lightboxView', () => {
     // The caption is gone end to end: no toggle button, no caption text.
     expect(byLabel(tree, 'Toggle caption')).toBeUndefined();
     expect(strings(tree)).not.toContain('Launch day walkthrough.');
+  });
+
+  it('one slide: "<" Back only, no counter and no arrows', () => {
+    const tree = lightboxView(props({ items: [item(0)], index: 0 }));
+    expect(elements(tree).some((el) => el.type === ViewerBackButton)).toBe(true);
+    expect(strings(tree)).not.toContain('1 / 1');
+    expect(byLabel(tree, 'Previous image')).toBeUndefined();
+    expect(byLabel(tree, 'Next image')).toBeUndefined();
   });
 
   it('renders in normal page flow, not as a fixed modal overlay', () => {

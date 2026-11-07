@@ -6,7 +6,11 @@ import { describe, expect, it } from 'vitest';
 // No X anywhere (design lock, D4). Back "<" leaves; the stop square cancels a
 // send; the bin removes; "Clear" clears or dismisses. No cross icon and no
 // cross glyph may appear in any app source file under src. Test files are
-// skipped: they assert on rendered markup, not author it. Allowlist: none.
+// skipped: they assert on rendered markup, not author it. Allowlist: none. The
+// one carve-out is by form, not by file: the heavy multiplication emoji in its
+// emoji presentation (U+2716 U+FE0F) is a pickable emoji in the generated
+// emoji dataset (chat/emoji-data.ts), user content rather than a UI cross; the
+// bare text glyph U+2716 is still banned.
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const ICONS = fileURLToPath(new URL('../components/ui/icons.tsx', import.meta.url));
 
@@ -17,7 +21,7 @@ const BANNED: { name: string; re: RegExp }[] = [
   { name: 'XCircleIcon', re: /XCircleIcon/ },
   { name: '×', re: /×/ },
   { name: '✕', re: /✕/ },
-  { name: '✖', re: /✖/ },
+  { name: '✖', re: /\u2716(?!\uFE0F)/ },
   { name: '⨯', re: /⨯/ },
 ];
 
@@ -64,5 +68,7 @@ describe('no cross anywhere', () => {
       'a.tsx:1 XCircleIcon',
     ]);
     expect(crossUses('a.tsx', 'IconXRay IconTrash Clear')).toEqual([]);
+    // The pickable emoji (emoji presentation) is content, not a UI cross.
+    expect(crossUses('emoji-data.ts', "['\u2716\uFE0F', 'multiply', 7]")).toEqual([]);
   });
 });
