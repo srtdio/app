@@ -308,3 +308,27 @@ describe('WritingBox width', () => {
     expect(q(host, '[data-format-row]')?.className).toContain('overflow-x-auto');
   });
 });
+
+describe('WritingBox overlay', () => {
+  it('at rest the overlay hangs on the box; in the phone editor it sits above the row', () => {
+    const ref = { current: null as HTMLTextAreaElement | null };
+    const host = mount(
+      <WritingBox
+        mode="comment"
+        laptop={false}
+        field={() => ref.current}
+        hasText
+        overlay={<div data-testid="picker">list</div>}
+        send={<span>send</span>}
+        input={<textarea ref={ref} aria-label="Message" defaultValue="x" />}
+      />,
+    );
+    const box = q(host, '[data-writing-box]');
+    expect(box?.className).toContain('relative');
+    expect(q(host, '[data-testid="picker"]')?.parentElement).toBe(box);
+    act(() => byLabel(host, 'Expand')?.click());
+    const picker = document.querySelector('[data-testid="picker"]');
+    const row = document.querySelector('[data-writing-row]');
+    expect(picker?.closest('[data-writing-overlay]')?.nextElementSibling).toBe(row);
+  });
+});

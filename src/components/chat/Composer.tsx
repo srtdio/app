@@ -1739,6 +1739,47 @@ export function Composer(props: ComposerProps): ReactElement {
 
   const draftCardUrl = draftCardUrlFor(cardText, dismissedCardUrl, editing !== undefined);
 
+  // The @ and # pickers slide up above the writing box (edgeStrip, never a
+  // fade). Handed to the box as its overlay: above the box at rest, above its
+  // row inside the full-screen phone editor.
+  const pickers = (
+    <>
+      <ComposerStrip
+        open={mentionRows.length > 0}
+        data-mention-anchor=""
+        className="absolute inset-x-0 bottom-full z-sticky mb-2"
+      >
+        <MentionPicker
+          members={mentionRows}
+          active={activeRow}
+          onPick={pickMention}
+          listId={mentionListId}
+        />
+      </ComposerStrip>
+
+      {hashQuery !== null && mentionRows.length === 0 ? (
+        <ComposerStrip
+          open
+          data-hash-picker=""
+          className="absolute inset-x-0 bottom-full z-sticky mb-2"
+        >
+          <PostPicker
+            inline
+            open
+            query={hashQuery}
+            onClose={() => setHashDismissed(true)}
+            selected={[]}
+            onToggle={pickHashPost}
+            selectedBriefs={[]}
+            onToggleBrief={() => undefined}
+            sharedPostIds={props.sharedPostIds}
+            channelHasClient={props.channelHasClient ?? null}
+          />
+        </ComposerStrip>
+      ) : null}
+    </>
+  );
+
   // The writing box: the card always on a laptop / iPad, the idle pill on a phone.
   const laptopBox = laptopLayout;
   const hasDraft =
@@ -1770,41 +1811,6 @@ export function Composer(props: ComposerProps): ReactElement {
             : 'border-t bg-panel px-3 py-2 lit-dock',
         )}
       >
-        {/* The pickers slide up above the composer (edgeStrip), never a fade. */}
-        <ComposerStrip
-          open={mentionRows.length > 0}
-          data-mention-anchor=""
-          className="absolute inset-x-3 bottom-full z-sticky mb-2"
-        >
-          <MentionPicker
-            members={mentionRows}
-            active={activeRow}
-            onPick={pickMention}
-            listId={mentionListId}
-          />
-        </ComposerStrip>
-
-        {hashQuery !== null && mentionRows.length === 0 ? (
-          <ComposerStrip
-            open
-            data-hash-picker=""
-            className="absolute inset-x-3 bottom-full z-sticky mb-2"
-          >
-            <PostPicker
-              inline
-              open
-              query={hashQuery}
-              onClose={() => setHashDismissed(true)}
-              selected={[]}
-              onToggle={pickHashPost}
-              selectedBriefs={[]}
-              onToggleBrief={() => undefined}
-              sharedPostIds={props.sharedPostIds}
-              channelHasClient={props.channelHasClient ?? null}
-            />
-          </ComposerStrip>
-        ) : null}
-
         {editing === undefined &&
         (pending.length > 0 ||
           library.length > 0 ||
@@ -1913,6 +1919,7 @@ export function Composer(props: ComposerProps): ReactElement {
           onInsert={insertEmoji}
           expandTitle={props.expandTitle}
           pillEnd={showMic ? micKey : undefined}
+          overlay={pickers}
           strip={
             <>
               {bars.editing && editing !== undefined ? (

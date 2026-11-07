@@ -233,6 +233,12 @@ export interface WritingBoxProps {
   send?: ReactNode;
   /** Chat on a phone: the idle pill's trailing mic. */
   pillEnd?: ReactNode;
+  /**
+   * Lists that open over the text (chat's @ and # pickers, positioned
+   * absolute bottom-full): anchored above the box at rest, above the row
+   * inside the full-screen phone editor.
+   */
+  overlay?: ReactNode;
   /** "@": types "@" at the caret (the field opens its own mention list). */
   mention?: boolean;
   /** Insert text where the caret was (MentionInput keeps its own caret). */
@@ -262,6 +268,7 @@ export function WritingBox(props: WritingBoxProps) {
     leading,
     send,
     pillEnd,
+    overlay,
     mention = false,
     onInsert,
     expandTitle,
@@ -513,6 +520,13 @@ export function WritingBox(props: WritingBoxProps) {
     </div>
   );
 
+  const overlayInEditor =
+    phoneExpanded && overlay !== undefined && overlay !== null ? (
+      <div data-writing-overlay="" className="relative">
+        {overlay}
+      </div>
+    ) : null;
+
   const row = rowShown ? (
     <div data-writing-row="" className="flex min-h-11 min-w-0 items-center gap-2">
       {shape === 'field' ? fieldRow : formatOpen ? formatRow : actionRow}
@@ -611,6 +625,7 @@ export function WritingBox(props: WritingBoxProps) {
           {send}
         </span>
       ) : null}
+      {overlayInEditor}
       {row}
     </div>
   );
@@ -630,11 +645,13 @@ export function WritingBox(props: WritingBoxProps) {
         // never sizes the page to its rows (the Aa row is wider than a phone:
         // it scrolls inside the box instead of pushing the chat off screen).
         'flex w-full min-w-0 max-w-full flex-col gap-2 [contain:inline-size]',
+        !phoneExpanded && 'relative',
         phoneExpanded && 'fixed inset-x-0 top-0 z-sheet bg-panel px-3 pb-2 lit-overlay',
         className,
       )}
       style={phoneExpanded ? { bottom: inset } : undefined}
     >
+      {phoneExpanded ? null : overlay}
       {phoneExpanded ? (
         <div data-expanded-bar="" className="wb-safe-top flex min-h-11 items-center gap-2">
           <RowKey label="Collapse" onPress={() => setExpanded(false)}>

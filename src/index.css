@@ -816,6 +816,13 @@
     min-height: 0;
     overflow-y: auto;
   }
+  /* A comment's @ list inside the phone editor sits at the foot of the text,
+     just above the row (above the field would be under the top bar). */
+  [data-expanded='phone'] [data-writing-field] [data-mention-list] {
+    top: auto;
+    bottom: 0;
+    margin-bottom: 0;
+  }
   .wb-safe-top {
     padding-top: env(safe-area-inset-top, 0px);
   }
