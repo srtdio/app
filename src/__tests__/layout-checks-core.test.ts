@@ -17,10 +17,14 @@ import {
   listCardViolations,
   overlappingPairs,
   overlaps,
+  pinnedBarViolations,
   roleSignature,
   sameWidth,
   spansFullWidth,
   tooManyRoles,
+  COMMENT_TRAY_TILE_IDS,
+  trayTileViolations,
+  underBarViolations,
   wrapsPastOneLine,
   type Box,
   type ListCardGeom,
@@ -413,5 +417,79 @@ describe('list cards (ui/ListCard): equal heights, the 72 picture 16 inside, 12 
 
   it('fails a card with no picture slot', () => {
     expect(listCardViolations([{ ...good(0), picture: null }])[0]).toContain('no picture slot');
+  });
+});
+
+describe('pinnedBarViolations', () => {
+  const at = (topAtRest: number, topScrolled: number, scrolledBy: number) => ({
+    found: true,
+    topAtRest,
+    topScrolled,
+    scrolledBy,
+  });
+
+  it('passes a bar that keeps its top after the scroll', () => {
+    expect(pinnedBarViolations(at(0, 0, 600))).toEqual([]);
+    expect(pinnedBarViolations(at(56, 56.8, 600))).toEqual([]);
+  });
+
+  it('fails a bar that scrolls away with the page', () => {
+    const out = pinnedBarViolations(at(0, -600, 600));
+    expect(out).toHaveLength(1);
+    expect(out[0]).toContain('must stay pinned');
+  });
+
+  it('a page too short to scroll proves nothing and passes', () => {
+    expect(pinnedBarViolations(at(0, 0, 0))).toEqual([]);
+  });
+
+  it('fails a screen with no pinned bar', () => {
+    const out = pinnedBarViolations({ found: false, topAtRest: 0, topScrolled: 0, scrolledBy: 0 });
+    expect(out[0]).toContain('no pinned exit bar');
+  });
+});
+
+describe('underBarViolations', () => {
+  const bar = box(0, 0, 390, 56);
+
+  it('passes a row whose top is the bar bottom, inside the pinned block', () => {
+    expect(underBarViolations({ bar, row: box(0, 56, 390, 48), insidePin: true })).toEqual([]);
+    expect(underBarViolations({ bar, row: box(0, 56.6, 390, 48), insidePin: true })).toEqual([]);
+  });
+
+  it('fails a row with a gap under the bar', () => {
+    const out = underBarViolations({ bar, row: box(0, 72, 390, 48), insidePin: true });
+    expect(out).toEqual(["the progress row starts 16px from the bar's bottom, not 0"]);
+  });
+
+  it('fails a row outside the pinned block', () => {
+    const out = underBarViolations({ bar, row: box(0, 56, 390, 48), insidePin: false });
+    expect(out[0]).toContain('not inside the pinned block');
+  });
+
+  it('fails a screen with no bar or no row', () => {
+    expect(underBarViolations({ bar: null, row: null, insidePin: false })[0]).toContain(
+      'no exit bar',
+    );
+    expect(underBarViolations({ bar, row: null, insidePin: false })[0]).toContain(
+      'no checkpoint progress row',
+    );
+  });
+});
+
+describe('trayTileViolations', () => {
+  it('the comment tray is exactly Photos, File, Assets', () => {
+    expect(COMMENT_TRAY_TILE_IDS).toEqual(['photos', 'file', 'assets']);
+    expect(trayTileViolations(['photos', 'file', 'assets'])).toEqual([]);
+  });
+
+  it('fails a tray with the chat tiles or a missing tile', () => {
+    expect(trayTileViolations(['photos', 'file', 'assets', 'brief'])).toHaveLength(1);
+    expect(trayTileViolations(['photos', 'file'])[0]).toContain('shows 2 tiles');
+    expect(trayTileViolations([])[0]).toContain('(none)');
+  });
+
+  it('fails the right tiles in the wrong order', () => {
+    expect(trayTileViolations(['file', 'photos', 'assets'])).toHaveLength(1);
   });
 });

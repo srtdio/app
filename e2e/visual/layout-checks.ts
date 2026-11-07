@@ -12,9 +12,12 @@ import {
   listCardViolations,
   MAX_ROLES_PER_PART,
   overlappingPairs,
+  pinnedBarViolations,
   roleSignature,
   sameWidth,
   tooManyRoles,
+  trayTileViolations,
+  underBarViolations,
   wrapsPastOneLine,
   type Box,
   type EdgeItem,
@@ -46,7 +49,12 @@ import {
 //     Chat list, Activity, the Plan tab and its Bank): every card on the screen
 //     is the same height (within 1px) and 118 tall on every screen, so all six
 //     lists match; each picture is 72x72, left, 16 inside the card edge, 12 to
-//     the text.
+//     the text;
+//   7 post screens (after the shot, so the baseline never moves): the pinned
+//     exit bar keeps its top after the page scrolls (assertPinnedBarOnScroll),
+//     the checkpoint progress row sits directly under the bar in the same
+//     pinned block (assertProgressRowUnderBar), and the comment composer's "+"
+//     tray opens with exactly Photos, File and Assets (assertCommentTray).
 // LAYOUT_CHECKS=strict (the default) fails the screen; LAYOUT_CHECKS=report
 // records every finding as a test annotation and in the log, and passes.
 // The geometry is pure and unit tested: layout-checks-core.ts.
@@ -533,4 +541,96 @@ async function boxWhenVisible(locator: Locator, state: string): Promise<Box> {
   const box = await locator.boundingBox({ timeout: SAME_WIDTH_WAIT_MS });
   if (box === null) throw new Error(`assertSameWidth: ${String(locator)} has no box ${state}`);
   return box;
+}
+
+/**
+ * Check 7a: the exit bar of a screen that opens over the app stays pinned
+ * while the page scrolls. Puts the page's scroller (the bar's nearest
+ * scrolling ancestor: <main> on a laptop, else the document on a phone in page
+ * mode) at its top, measures the bar, scrolls 600px, measures again, then puts
+ * the scroll back where it was.
+ */
+export async function assertPinnedBarOnScroll(page: Page, screenName: string): Promise<void> {
+  const geom = await page.evaluate(async () => {
+    const pin =
+      document.querySelector('[data-header-pin]') ??
+      document.querySelector('header[data-header-pinned]');
+    if (!(pin instanceof HTMLElement)) {
+      return { found: false, topAtRest: 0, topScrolled: 0, scrolledBy: 0 };
+    }
+    const scrolls = (el: Element): boolean =>
+      /^(auto|scroll)$/.test(getComputedStyle(el).overflowY) &&
+      el.scrollHeight > el.clientHeight + 1;
+    let scroller: Element = document.scrollingElement ?? document.documentElement;
+    for (let at = pin.parentElement; at !== null; at = at.parentElement) {
+      if (at !== document.body && at !== document.documentElement && scrolls(at)) {
+        scroller = at;
+        break;
+      }
+    }
+    const frames = (): Promise<void> =>
+      new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    const start = scroller.scrollTop;
+    scroller.scrollTop = 0;
+    await frames();
+    const topAtRest = pin.getBoundingClientRect().top;
+    scroller.scrollTop = 600;
+    await frames();
+    const scrolledBy = scroller.scrollTop;
+    const topScrolled = pin.getBoundingClientRect().top;
+    scroller.scrollTop = start;
+    await frames();
+    return { found: true, topAtRest, topScrolled, scrolledBy };
+  });
+  settleFindings(
+    screenName,
+    pinnedBarViolations(geom).map((message) => ({ check: 'pinned-bar' as const, message })),
+  );
+}
+
+/**
+ * Check 7b: the post's checkpoint progress row is directly under the exit
+ * bar, inside the bar's pinned block ([data-header-pin]).
+ */
+export async function assertProgressRowUnderBar(page: Page, screenName: string): Promise<void> {
+  const geom = await page.evaluate(() => {
+    const toBox = (el: Element | null): Box | null => {
+      if (el === null) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    const row = document.querySelector('[data-checkpoint-progress-row]');
+    const pin = row?.closest('[data-header-pin]') ?? null;
+    const bar =
+      pin?.querySelector('[data-header-bar]') ??
+      document.querySelector('header[data-header-pinned]') ??
+      document.querySelector('[data-header-bar]');
+    return { bar: toBox(bar), row: toBox(row), insidePin: pin !== null };
+  });
+  settleFindings(
+    screenName,
+    underBarViolations(geom).map((message) => ({ check: 'under-bar' as const, message })),
+  );
+}
+
+/**
+ * Check 7c: the comment composer's "+" opens the tray with exactly Photos,
+ * File and Assets (CommentComposer / SlotComposer COMMENT_TRAY_TILES), then
+ * closes it again with Escape.
+ */
+export async function assertCommentTray(page: Page, screenName: string): Promise<void> {
+  const plus = page.locator('[data-comments-composer] [data-plus]');
+  const trigger = (await plus.count()) > 0 ? plus.first() : page.locator('[data-plus]').first();
+  await trigger.scrollIntoViewIfNeeded();
+  await trigger.click();
+  const tray = page.locator('[data-tray]').first();
+  await tray.waitFor({ state: 'visible', timeout: SAME_WIDTH_WAIT_MS });
+  const tiles = await tray
+    .locator('[data-tray-tile]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('data-tray-tile') ?? ''));
+  await page.keyboard.press('Escape');
+  settleFindings(
+    screenName,
+    trayTileViolations(tiles).map((message) => ({ check: 'tray-tiles' as const, message })),
+  );
 }
