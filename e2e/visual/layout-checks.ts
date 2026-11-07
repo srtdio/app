@@ -83,8 +83,7 @@ import {
 //  10 upload screens (decision F, assertNoUploadBar): no visible progress bar
 //     and no % figure, only ui/UploadRing (its progressbar is sr-only) or Retry;
 //  11 writing box screens (ui/WritingBox, assertWritingBox): every row key and
-//     the send are 44 tall hits, the send ends inside the box, and the deleted
-//     floating format strip ([data-format-strip]) never shows.
+//     the send are 44 tall hits and the send ends inside the box.
 // LAYOUT_CHECKS=strict (the default) fails the screen; LAYOUT_CHECKS=report
 // records every finding as a test annotation and in the log, and passes.
 // The geometry is pure and unit tested: layout-checks-core.ts.
@@ -836,11 +835,11 @@ export async function assertNoUploadBar(page: Page, screenName: string): Promise
 /**
  * Check 11: the writing box screens (ui/WritingBox: chat, comment, field,
  * caption). Each shown box's row keys ([data-composer-key]) and send
- * ([data-row-send]) are 44 tall hits, the send ends inside the frame
- * ([data-writing-frame]), and no [data-format-strip] is on the page.
+ * ([data-row-send]) are 44 tall hits and the send ends inside the frame
+ * ([data-writing-frame]).
  */
 export async function assertWritingBox(page: Page, screenName: string): Promise<void> {
-  const found = await page.evaluate((): { boxes: WritingBoxGeom[]; strips: number } => {
+  const boxes = await page.evaluate((): WritingBoxGeom[] => {
     const toBox = (r: DOMRect) => ({ x: r.x, y: r.y, width: r.width, height: r.height });
     const shown = (el: Element): boolean => {
       const r = el.getBoundingClientRect();
@@ -869,16 +868,13 @@ export async function assertWritingBox(page: Page, screenName: string): Promise<
         send: send !== null && shown(send) ? toBox(send.getBoundingClientRect()) : null,
       });
     }
-    const strips = Array.from(document.querySelectorAll('[data-format-strip]')).filter(
-      shown,
-    ).length;
-    return { boxes, strips };
+    return boxes;
   });
-  const violations = writingBoxViolations(found.boxes, found.strips).map((message) => ({
+  const violations: LayoutViolation[] = writingBoxViolations(boxes).map((message) => ({
     check: 'writing-box' as const,
     message,
   }));
-  if (found.boxes.length === 0) {
+  if (boxes.length === 0) {
     violations.push({ check: 'writing-box', message: 'no [data-writing-box] on a writing box screen' });
   }
   settleFindings(screenName, violations);

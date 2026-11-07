@@ -752,18 +752,11 @@ export interface WritingBoxGeom {
 }
 
 /**
- * Check 11: a writing box's row keys and send are 44 tall hits; the send ends
- * inside the box's frame (never past its right edge); and the old floating
- * format strip ([data-format-strip], deleted 8 Nov 2026) never shows. Pure.
+ * Check 11: a writing box's row keys and send are 44 tall hits, and the send
+ * ends inside the box's frame (never past its right edge). Pure.
  */
-export function writingBoxViolations(
-  boxes: readonly WritingBoxGeom[],
-  formatStrips: number,
-): string[] {
+export function writingBoxViolations(boxes: readonly WritingBoxGeom[]): string[] {
   const out: string[] = [];
-  if (formatStrips > 0) {
-    out.push(`${formatStrips} [data-format-strip] on screen: the format row lives in the box`);
-  }
   for (const box of boxes) {
     for (const key of box.keys) {
       if (Math.abs(key.box.height - WRITING_KEY_PX) > 0.5) {

@@ -5138,7 +5138,7 @@ SCREENS.push(
   },
 );
 
-/** The writing box screens: check 11 (the row's keys, the send, no format strip) runs on each. */
+/** The writing box screens: check 11 (the row's keys and the send) runs on each. */
 const WRITING_BOX_SCREENS = new Set([
   'chat-box-focused',
   'chat-box-typing',
@@ -5244,8 +5244,7 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   if (LIST_CARD_SCREENS.has(screen.name)) await assertListCards(page, screen.name);
   // An upload screen shows the ring or Retry only: no visible bar, no % figure.
   if (UPLOAD_SCREENS.has(screen.name)) await assertNoUploadBar(page, screen.name);
-  // A writing box screen: the row's keys are 44 tall, the send ends inside the
-  // box, and the old floating format strip never shows.
+  // A writing box screen: the row's keys are 44 tall, the send ends inside the box.
   if (WRITING_BOX_SCREENS.has(screen.name)) await assertWritingBox(page, screen.name);
   await checkLayout(page, screen.name);
   await expect(page).toHaveScreenshot(`${screen.name}.png`, {
