@@ -25,6 +25,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Textarea } from '@/components/ui/Textarea';
+import { WritingBox } from '@/components/ui/WritingBox';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Comments, fetchCheckpoints, openCheckpointsLabel } from '@/components/comments/Comments';
 import type { CommentCounts, SharedCheckpoints } from '@/components/comments/Comments';
@@ -571,6 +572,8 @@ export function PostDetailPage({
 
   const [editingCaption, setEditingCaption] = useState(false);
   const [captionDraft, setCaptionDraft] = useState('');
+  // The caption editor's field (ui/WritingBox caption mode acts on it).
+  const captionEditRef = useRef<HTMLTextAreaElement | null>(null);
   const [captionError, setCaptionError] = useState<string | null>(null);
   const [captionSaving, setCaptionSaving] = useState(false);
   const [confirmCaptionDiscard, setConfirmCaptionDiscard] = useState(false);
@@ -2229,13 +2232,25 @@ export function PostDetailPage({
               </div>
               {editingCaption ? (
                 <div className="mt-3 flex flex-col gap-2">
-                  <Textarea
-                    autoFocus
-                    autoGrow
-                    aria-label="Caption"
-                    value={captionDraft}
-                    disabled={captionSaving}
-                    onChange={(event) => setCaptionDraft(event.target.value)}
+                  {/* ui/WritingBox (caption mode): Emoji and a plain "@" only;
+                      captions never format. */}
+                  <WritingBox
+                    mode="caption"
+                    field={() => captionEditRef.current}
+                    hasText={captionDraft !== ''}
+                    mention
+                    expandTitle="Caption"
+                    input={
+                      <Textarea
+                        ref={captionEditRef}
+                        autoFocus
+                        autoGrow
+                        aria-label="Caption"
+                        value={captionDraft}
+                        disabled={captionSaving}
+                        onChange={(event) => setCaptionDraft(event.target.value)}
+                      />
+                    }
                   />
                   {captionError !== null ? (
                     <div role="alert" className="text-base text-bad">
