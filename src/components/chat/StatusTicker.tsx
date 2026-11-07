@@ -1,15 +1,14 @@
 // The chat status ticker: a 36px bar under the thread header (in the slot the
 // open-loops strip held) and the drawer it drops down. The bar lists, in one
 // fixed order, the workspace's current shared plans (one item per plan for at
-// most two, then "+K"), posts in review, open briefs and this chat's open
-// commitments, decisions and pending marks; zero items are left out and the
+// most two, then "+K"), posts in review and open briefs; zero items are left out and the
 // rest close up. Full width first; when the items do not fit (measured on a
 // hidden copy before paint, again on resize and font load) every item drops
 // its word together and the gap tightens: never a mix, never a visible switch.
 // Both plan items stay; if the compact row still overflows, their titles drop
 // whole trailing words (measured on a second hidden copy, never a cut glyph).
 // Until every read has settled the slot is empty and inert, so the first
-// painted bar is final; "Open posts and marks show up here." shows only when every read
+// painted bar is final; the empty line shows only when every read
 // succeeded with nothing open, never as a button. The drawer opens by a tap on the bar (top of the list), a tap on an
 // item (scrolled to its section before paint) or a drag down; it closes by
 // the scrim, a drag up on its handle, or another tap on the bar. It moves on
@@ -949,10 +948,6 @@ export function ChatStatus(props: {
             onSeeAllBriefs={() => {
               remember();
               props.navigate('/briefs');
-            }}
-            onJumpMark={(messageId) => {
-              close();
-              props.actions.onJumpMark(messageId);
             }}
           />
         </StatusDrawerPanel>

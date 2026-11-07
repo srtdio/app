@@ -14,7 +14,6 @@ import {
   hydrateReplies,
   markMessagesDeleted,
   mapLiveTextMessage,
-  markEventExt,
   taskEventExt,
   missingReplyIds,
   markReadUpTo,
@@ -795,7 +794,7 @@ describe('delete and mark live events', () => {
     expect(parseLiveEvent({ sorted_event: 'delete', message_ids: 'a' })).toEqual({
       kind: 'unknown',
     });
-    expect(parseLiveEvent(markEventExt({ messageId: 'm' }))).toEqual({
+    expect(parseLiveEvent({ sorted_event: 'mark', message_id: 'm' })).toEqual({
       kind: 'mark',
       messageId: 'm',
     });
@@ -823,8 +822,8 @@ describe('delete and mark live events', () => {
     });
     const handler = handlers[THREAD_EVENT_HANDLER_ID];
     handler?.onCmdMessage?.(cmd({ ext: deleteEventExt({ messageIds: ['x', 'y'] }) }));
-    // A mark signal is not a read signal and is left to the marks subscription.
-    handler?.onCmdMessage?.(cmd({ ext: markEventExt({ messageId: 'x' }) }));
+    // A mark signal (an older client) is not a read signal and is ignored.
+    handler?.onCmdMessage?.(cmd({ ext: { sorted_event: 'mark', message_id: 'x' } }));
     expect(onDelete).toHaveBeenCalledWith({ messageIds: ['x', 'y'], fromUserId: PEER });
     expect(onRead).not.toHaveBeenCalled();
 

@@ -42,7 +42,6 @@ import {
   type ChannelSummary,
   type ChatProfile,
 } from '@/lib/chat-reads';
-import { findInOlderPages } from '@/lib/chat/marks';
 import {
   isFormerMember,
   isUnconfirmedMember,
@@ -61,7 +60,7 @@ import { runEdit } from '@/lib/chat/delete-flow';
 import type { ChatMessageRow, ThreadMessage } from '@/lib/chat/thread';
 import type { Client, Result } from '@srtdio/rpc';
 import { loadOlderMessages } from '@/lib/chat/history';
-import { findWithinBudget, JUMP_BUDGET_MS } from '@/lib/chat/use-chat-thread';
+import { findInOlderPages, findWithinBudget, JUMP_BUDGET_MS } from '@/lib/chat/use-chat-thread';
 
 const ANA = '11111111-1111-4111-8111-111111111111';
 const BEN = '22222222-2222-4222-8222-222222222222';

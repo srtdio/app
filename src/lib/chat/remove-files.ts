@@ -43,7 +43,7 @@ export const REMOVE_FILE_MENU_LABEL = 'Remove file';
 /** The photo viewer's bin button. */
 export const REMOVE_PHOTO_ARIA = 'Remove photo';
 export const REMOVE_VIDEO_ARIA = 'Remove video';
-/** The ownership or marked refusal. */
+/** The ownership refusal. */
 export const REMOVE_REFUSED_TOAST = "Couldn't remove. Only your own files can be removed.";
 /** Any other failure. */
 export const REMOVE_FAILED_TOAST = errorText('remove', null);
@@ -101,23 +101,17 @@ function isVoiceMime(mime: string): boolean {
   return mime.startsWith('audio/');
 }
 
-/** Anything with `has(messageId)`: the marks map, or a set of marked ids. */
-export interface MarkedLookup {
-  has(messageId: string): boolean;
-}
-
 /**
- * One file the viewer may remove: on their own, recorded, live, unmarked
- * message, and not a voice note. No time limit. Pure.
+ * One file the viewer may remove: on their own, recorded, live message, and
+ * not a voice note. No time limit. Pure.
  */
 export function canRemoveFile(
   message: { id: string; senderUserId: string | null; deleted?: boolean },
   file: { assetId?: string; mime: string },
   viewerId: string,
-  marks: MarkedLookup,
 ): boolean {
   if (viewerId === '' || message.senderUserId !== viewerId) return false;
-  if (message.deleted === true || marks.has(message.id)) return false;
+  if (message.deleted === true) return false;
   if (file.assetId !== undefined && file.assetId === '') return false;
   return !isVoiceMime(file.mime);
 }
@@ -126,31 +120,28 @@ export function canRemoveFile(
 function removableAttachments(
   message: Pick<ThreadMessage, 'id' | 'senderUserId' | 'deleted' | 'attachments' | 'state'>,
   viewerId: string,
-  marks: MarkedLookup,
 ): ThreadMessage['attachments'] {
   if (message.state !== 'sent') return [];
-  return message.attachments.filter((a) => canRemoveFile(message, a, viewerId, marks));
+  return message.attachments.filter((a) => canRemoveFile(message, a, viewerId));
 }
 
 /** True when the message has at least one file the viewer may remove. Pure. */
 export function canRemove(
   message: Pick<ThreadMessage, 'id' | 'senderUserId' | 'deleted' | 'attachments' | 'state'>,
   viewerId: string,
-  marks: MarkedLookup,
 ): boolean {
-  return removableAttachments(message, viewerId, marks).length > 0;
+  return removableAttachments(message, viewerId).length > 0;
 }
 
 /**
- * More -> "Remove file": only on an own, unmarked message with exactly one
+ * "Remove file": only on an own message with exactly one
  * file that is not a voice note (an album goes by the viewer bin or Select). Pure.
  */
 export function canRemoveSingleFile(
   message: Pick<ThreadMessage, 'id' | 'senderUserId' | 'deleted' | 'attachments' | 'state'>,
   viewerId: string,
-  marks: MarkedLookup,
 ): boolean {
-  return message.attachments.length === 1 && canRemove(message, viewerId, marks);
+  return message.attachments.length === 1 && canRemove(message, viewerId);
 }
 
 // ---------------------------------------------------------------------------

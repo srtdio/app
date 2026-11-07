@@ -106,18 +106,17 @@ describe('C: a deep link starts the open from the URL', () => {
 
 describe('D: tasks are off the open hold (task lines slot in)', () => {
   it('rows paint with the task read pending: the hold settles on the other parts alone', () => {
-    expect(openHoldSettled({ marks: true, side: true, ticker: true, cards: true })).toBe(true);
+    expect(openHoldSettled({ side: true, ticker: true, cards: true })).toBe(true);
     // The other parts still hold.
-    expect(openHoldSettled({ marks: false, side: true, ticker: true, cards: true })).toBe(false);
-    expect(openHoldSettled({ marks: true, side: false, ticker: true, cards: true })).toBe(false);
-    expect(openHoldSettled({ marks: true, side: true, ticker: false, cards: true })).toBe(false);
-    expect(openHoldSettled({ marks: true, side: true, ticker: true, cards: false })).toBe(false);
+    expect(openHoldSettled({ side: false, ticker: true, cards: true })).toBe(false);
+    expect(openHoldSettled({ side: true, ticker: false, cards: true })).toBe(false);
+    expect(openHoldSettled({ side: true, ticker: true, cards: false })).toBe(false);
   });
 
   it('tasks is no longer a hold part', () => {
     expect(
       // @ts-expect-error tasks is not a part of the open hold
-      openHoldSettled({ marks: true, side: true, ticker: true, cards: true, tasks: false }),
+      openHoldSettled({ side: true, ticker: true, cards: true, tasks: false }),
     ).toBe(true);
   });
 
@@ -126,7 +125,7 @@ describe('D: tasks are off the open hold (task lines slot in)', () => {
       resolve(process.cwd(), 'src/components/chat/MessageThread.tsx'),
       'utf8',
     );
-    const call = source.slice(source.indexOf('openHoldSettled({\n    marks:'));
+    const call = source.slice(source.indexOf('openHoldSettled({\n    // The side'));
     const parts = call.slice(0, call.indexOf('});'));
     expect(parts).not.toMatch(/tasks:/);
     expect(parts).not.toMatch(/chatTasks\.loaded/);

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// sameMarks' module reaches the agora-chat browser SDK through the message
-// factory; mock it so the pure pieces import in node.
+// The open cache's modules reach the agora-chat browser SDK through the
+// message factory; mock it so the pure pieces import in node.
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
@@ -22,10 +22,8 @@ import {
   type OpenKickoffReads,
   type SignOutSource,
 } from '@/lib/chat/open-cache';
-import { sameMarks } from '@/lib/chat/use-chat-marks';
 import { settleOpenPosts, type OpenPostsData } from '@/lib/chat/use-open-posts';
 import { settleStatusRound, type StatusRound } from '@/lib/chat/use-status-counts';
-import type { ChatMark } from '@/lib/chat/marks';
 import { READ_FRESH_MS } from '@/lib/session-read';
 
 const A: ChatKey = { userId: 'u1', workspaceId: 'w1', channelId: 'c1' };
@@ -259,51 +257,39 @@ describe('same-data revalidation', () => {
     );
     expect(settleStatusRound(first, key, { ...round, briefCount: 1 })).not.toBe(first);
   });
-
-  it('same marks compare equal by content', () => {
-    const mark = (resolved: boolean): ChatMark => ({
-      messageId: 'm1',
-      channelId: 'c1',
-      type: 'pending',
-      priority: null,
-      markedAt: '2026-10-12T00:00:00Z',
-      resolved,
-      resolvedBy: null,
-      resolvedAt: null,
-    });
-    expect(sameMarks(new Map([['m1', mark(false)]]), new Map([['m1', mark(false)]]))).toBe(true);
-    expect(sameMarks(new Map([['m1', mark(false)]]), new Map([['m1', mark(true)]]))).toBe(false);
-    expect(sameMarks(new Map(), new Map([['m1', mark(false)]]))).toBe(false);
-  });
 });
 
 describe('recallFresh: an old answer is never painted', () => {
-  const MARKS = { marks: new Map<string, ChatMark>(), markedMessages: new Map() };
+  const STATUS = settleStatusRound(null, 'w1\nc1', {
+    planIds: [],
+    briefs: [],
+    briefCount: 0,
+  }).view;
 
   it('a part is recalled fresh within READ_FRESH_MS, absent after it', () => {
     let t = 1_000;
     const cache = createOpenCache({ now: () => t });
-    cache.remember(A, 'marks', MARKS);
+    cache.remember(A, 'status', STATUS);
     cache.remember(A, 'scheduled', []);
-    expect(cache.recallFresh(A, 'marks')).toBe(MARKS);
+    expect(cache.recallFresh(A, 'status')).toBe(STATUS);
     t += READ_FRESH_MS;
-    expect(cache.recallFresh(A, 'marks')).toBe(MARKS);
+    expect(cache.recallFresh(A, 'status')).toBe(STATUS);
     t += 1;
-    expect(cache.recallFresh(A, 'marks')).toBeUndefined();
+    expect(cache.recallFresh(A, 'status')).toBeUndefined();
     expect(cache.recallFresh(A, 'scheduled')).toBeUndefined();
     // Still held (a new read replaces it); only painting it is refused.
-    expect(cache.recall(A, 'marks')).toBe(MARKS);
+    expect(cache.recall(A, 'status')).toBe(STATUS);
   });
 
   it('a live revise never makes a part fresher; a new read does', () => {
     let t = 1_000;
     const cache = createOpenCache({ now: () => t });
-    cache.remember(A, 'marks', MARKS);
+    cache.remember(A, 'status', STATUS);
     t += READ_FRESH_MS + 1;
-    cache.revise(A, 'marks', (value) => ({ ...value, markedMessages: new Map() }));
-    expect(cache.recallFresh(A, 'marks')).toBeUndefined();
-    cache.remember(A, 'marks', MARKS);
-    expect(cache.recallFresh(A, 'marks')).toBe(MARKS);
+    cache.revise(A, 'status', (value) => ({ ...value }));
+    expect(cache.recallFresh(A, 'status')).toBeUndefined();
+    cache.remember(A, 'status', STATUS);
+    expect(cache.recallFresh(A, 'status')).toBe(STATUS);
   });
 
   it('a forgotten part is absent', () => {

@@ -231,7 +231,7 @@ interface GroupInfoSheetProps {
   membersVersion?: number;
   /** Called after the current user leaves the group. */
   onLeft: () => void;
-  /** The thread's chat info tabs wiring (profiles, presign cache, marks, jump). */
+  /** The thread's chat info tabs wiring (profiles, presign cache). */
   tabs: GroupInfoTabsWiring;
 }
 
@@ -287,28 +287,22 @@ export function groupPhotoSheetProps(input: {
 }
 
 /**
- * The preview tabs, keyed by channel, wired like the DM page: a jump closes
- * the page first; Escape closes it unless the lightbox (or `escape` null,
+ * The preview tabs, keyed by channel, wired like the DM page: Escape closes it unless the lightbox (or `escape` null,
  * another overlay) owns the key.
  */
 export function groupInfoTabs(input: {
   tabs: GroupInfoTabsWiring;
   open: boolean;
-  onClose: () => void;
   escape: (() => void) | null;
   frame: (tabs: ReactElement, select: InfoSelectChrome) => ReactElement;
 }): ReactElement {
-  const { tabs, onClose } = input;
+  const { tabs } = input;
   return (
     <ChatInfoTabs
       key={tabs.channelId}
       {...tabs}
       mode="preview"
       open={input.open}
-      onJump={(messageId) => {
-        onClose();
-        tabs.onJump(messageId);
-      }}
       {...(input.escape !== null ? { onEscape: input.escape } : {})}
       frame={input.frame}
     />
@@ -914,7 +908,6 @@ export function GroupInfoSheet(props: GroupInfoSheetProps): ReactElement {
         groupInfoTabs({
           tabs: props.tabs,
           open: props.open,
-          onClose: props.onClose,
           escape: overlayOpen ? null : props.onClose,
           frame: (tabs, select) =>
             groupInfoPage({

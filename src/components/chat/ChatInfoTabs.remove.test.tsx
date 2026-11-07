@@ -43,7 +43,6 @@ import { RemoveSelectionBarView } from '@/components/chat/SelectionBar';
 import { PresignCache } from '@/lib/asset-presign';
 import { removedFilesStore } from '@/lib/chat/remove-files';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
-import type { ChatMark } from '@/lib/chat/marks';
 import type { ChannelAttachmentItem, ChannelLinkItem } from '@/lib/chat/channel-media';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -69,42 +68,29 @@ function item(n: number, over: Partial<ChannelAttachmentItem> = {}): ChannelAtta
   };
 }
 
-/** m3 is marked: its files stay. */
-const MARKS = new Map<string, ChatMark>([['m3', {} as ChatMark]]);
-
-function marksProps(marks: Map<string, ChatMark> = MARKS): ChatInfoTabsProps['marks'] {
-  return {
-    marks,
-    messageFor: () => undefined,
-    profiles: new Map(),
-    currentUserId: ME,
-    timeZone: 'UTC',
-    onResolve: vi.fn(),
-    onReopen: vi.fn(),
-  };
-}
+/** m3 is someone else's: its files stay. */
+const OTHER3 = { senderUserId: 'other' };
 
 // ---------------------------------------------------------------------------
 // Pure rules.
 
 describe('who may tick a file', () => {
-  it('own, unmarked, non-voice files only', () => {
-    expect(canTickFile(item(1), ME, MARKS)).toBe(true);
-    expect(canTickFile(item(2, { senderUserId: 'other' }), ME, MARKS)).toBe(false);
-    expect(canTickFile(item(3), ME, MARKS)).toBe(false);
-    expect(canTickFile(item(4, { mime: 'audio/webm' }), ME, MARKS)).toBe(false);
-    expect(canTickFile(item(5, { versionId: '' }), ME, MARKS)).toBe(false);
-    expect(canTickFile(item(6, { mime: 'application/pdf' }), ME, MARKS)).toBe(true);
+  it('own, non-voice files only', () => {
+    expect(canTickFile(item(1), ME)).toBe(true);
+    expect(canTickFile(item(2, { senderUserId: 'other' }), ME)).toBe(false);
+    expect(canTickFile(item(3, OTHER3), ME)).toBe(false);
+    expect(canTickFile(item(4, { mime: 'audio/webm' }), ME)).toBe(false);
+    expect(canTickFile(item(5, { versionId: '' }), ME)).toBe(false);
+    expect(canTickFile(item(6, { mime: 'application/pdf' }), ME)).toBe(true);
   });
 
   it('Select shows only on Media or Files with an own removable file there', () => {
-    expect(showSelect('media', [item(1)], ME, MARKS)).toBe(true);
-    expect(showSelect('media', [item(2, { senderUserId: 'other' }), item(3)], ME, MARKS)).toBe(
+    expect(showSelect('media', [item(1)], ME)).toBe(true);
+    expect(showSelect('media', [item(2, { senderUserId: 'other' }), item(3, OTHER3)], ME)).toBe(
       false,
     );
-    expect(showSelect('media', [], ME, MARKS)).toBe(false);
-    expect(showSelect('links', [item(1)], ME, MARKS)).toBe(false);
-    expect(showSelect('marks', [item(1)], ME, MARKS)).toBe(false);
+    expect(showSelect('media', [], ME)).toBe(false);
+    expect(showSelect('links', [item(1)], ME)).toBe(false);
   });
 
   it('the ticked files map to message, asset id and mime, in list order', () => {
@@ -158,9 +144,6 @@ function viewProps(over: Partial<ChatInfoTabsViewProps> = {}): ChatInfoTabsViewP
     timeZone: 'UTC',
     senderName: () => 'Alice',
     onOpenImage: vi.fn(),
-    marks: null,
-    open: true,
-    onJump: vi.fn(),
     mode: 'full',
     ...over,
   };
@@ -170,13 +153,13 @@ describe('ChatInfoTabsView select mode', () => {
   const list = [
     item(1),
     item(2, { senderUserId: 'other' }),
-    item(3),
+    item(3, OTHER3),
     item(6, { mime: 'application/pdf' }),
     item(7, { mime: 'application/pdf', senderUserId: 'other' }),
   ];
   const selection = {
     selected: new Set([fileKey(list[0]!)]),
-    canTick: (i: ChannelAttachmentItem) => canTickFile(i, ME, MARKS),
+    canTick: (i: ChannelAttachmentItem) => canTickFile(i, ME),
     onToggle: vi.fn(),
   };
   const ticks = (tree: ReactElement) =>
@@ -186,7 +169,7 @@ describe('ChatInfoTabsView select mode', () => {
       el.props.selecting,
     ]);
 
-  it('Media: a tick only on own removable tiles; others and marked get none', () => {
+  it('Media: a tick only on own removable tiles; others get none', () => {
     const tree = ChatInfoTabsView(viewProps({ attachments: feed(list), selection }));
     expect(ticks(tree)).toEqual([
       ['m1', true, true],
@@ -281,8 +264,6 @@ async function mount(
         timeZone="UTC"
         cache={cache}
         presignEnabled={false}
-        marks={marksProps()}
-        onJump={vi.fn()}
         mode="full"
         frame={frame}
         {...over}
@@ -300,7 +281,7 @@ const tile = (name: string) => q<HTMLButtonElement>(`button[aria-label="${name}"
 const click = (el: HTMLElement | null) => act(() => el!.click());
 
 describe('ChatInfoTabs select mode', () => {
-  const list = [item(1), item(2, { senderUserId: 'other' }), item(3)];
+  const list = [item(1), item(2, { senderUserId: 'other' }), item(3, OTHER3)];
 
   it('Select shows with an own removable file and onRemoveFiles', async () => {
     await mount(list, { onRemoveFiles: vi.fn() });
@@ -311,7 +292,7 @@ describe('ChatInfoTabs select mode', () => {
   });
 
   it('Select is hidden when only others and marked files are listed', async () => {
-    await mount([item(2, { senderUserId: 'other' }), item(3)], { onRemoveFiles: vi.fn() });
+    await mount([item(2, { senderUserId: 'other' }), item(3, OTHER3)], { onRemoveFiles: vi.fn() });
     expect(selectButton()).toBeNull();
   });
 

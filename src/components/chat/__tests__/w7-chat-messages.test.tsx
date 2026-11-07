@@ -200,8 +200,8 @@ describe('fix 4: personal notes', () => {
 
   it('notes have no edit time limit', () => {
     const old = msg({ createdAt: new Date(NOW - 5 * 60 * MIN).toISOString() });
-    expect(ownMessageActions(old, undefined, NOW, true).canEdit).toBe(true);
-    expect(ownMessageActions(old, undefined, NOW, false).canEdit).toBe(false);
+    expect(ownMessageActions(old, NOW, true).canEdit).toBe(true);
+    expect(ownMessageActions(old, NOW, false).canEdit).toBe(false);
     const edit = messageMenuItems({ ...everything, notes: true }).find((i) => i.key === 'edit');
     expect(edit?.kind === 'action' && edit.hint).toBeUndefined();
   });

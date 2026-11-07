@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// X7 fix 6 (FT40): Forward, Schedule, Priority, Who reacted, Message info and
+// X7 fix 6 (FT40): Forward, Schedule, Who reacted, Message info and
 // Reminder are history steps, so system Back closes only the sheet and the
 // chat under it stays open.
 import { readFileSync } from 'node:fs';
@@ -12,7 +12,6 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { PrioritySheet } from '@/components/chat/MarksSheet';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 import {
   HISTORY_STEP_KEYS,
@@ -29,7 +28,13 @@ const settle = () => act(async () => wait(60));
 const source = (path: string): string =>
   readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
 
-/** A chat layer (its own step), then the Priority sheet opened over it. */
+/** A sheet with its own history step (as Who reacted pushes one). */
+function StepSheet(props: { open: boolean; onClose: () => void }) {
+  useHistoryStep(props.open, SHEET_STEP_KEYS.whoReacted, props.onClose);
+  return props.open ? <div data-step-sheet="" /> : null;
+}
+
+/** A chat layer (its own step), then a small sheet opened over it. */
 function Harness(props: { sheet: boolean; onChatBack: () => void; onSheetClose: () => void }) {
   const [chatOpen, setChatOpen] = useState(true);
   const [closed, setClosed] = useState(false);
@@ -41,12 +46,8 @@ function Harness(props: { sheet: boolean; onChatBack: () => void; onSheetClose: 
   return (
     <div data-chat={chatOpen ? 'open' : 'closed'}>
       {chatOpen ? (
-        <PrioritySheet
+        <StepSheet
           open={sheetOpen}
-          title="Mark as Pending"
-          current={undefined}
-          busy={false}
-          onChoose={() => {}}
           onClose={() => {
             props.onSheetClose();
             setClosed(true);
@@ -68,7 +69,7 @@ afterEach(async () => {
 });
 
 describe('X7 FT40: system Back closes only the sheet', () => {
-  it('open Priority over a chat, system Back: the sheet closes, the chat stays open', async () => {
+  it('open a sheet over a chat, system Back: the sheet closes, the chat stays open', async () => {
     const onChatBack = vi.fn();
     const onSheetClose = vi.fn();
     const host = document.createElement('div');
@@ -83,7 +84,7 @@ describe('X7 FT40: system Back closes only the sheet', () => {
       root?.render(<Harness sheet onChatBack={onChatBack} onSheetClose={onSheetClose} />);
     });
     await settle();
-    expect(stepMarkerOf(window.history.state, SHEET_STEP_KEYS.priority)).not.toBeNull();
+    expect(stepMarkerOf(window.history.state, SHEET_STEP_KEYS.whoReacted)).not.toBeNull();
 
     await act(async () => {
       window.history.back();
@@ -111,10 +112,7 @@ describe('X7 FT40: system Back closes only the sheet', () => {
     expect(source('../ReminderSheet.tsx')).toContain(
       'useHistoryStep(props.open, SHEET_STEP_KEYS.reminder, props.onClose)',
     );
-    expect(source('../MarksSheet.tsx')).toContain(
-      'useHistoryStep(props.open, SHEET_STEP_KEYS.priority, props.onClose)',
-    );
     expect(source('../MessageThread.tsx')).toContain('HISTORY_STEP_KEYS.readInfo');
-    expect(new Set(Object.values(SHEET_STEP_KEYS)).size).toBe(5);
+    expect(new Set(Object.values(SHEET_STEP_KEYS)).size).toBe(4);
   });
 });

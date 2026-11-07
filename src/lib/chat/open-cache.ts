@@ -8,7 +8,7 @@
 // refetch (a plan change, a post change, a tab returning).
 //
 // An open's reads are ONE chat_open_bundle call (open-bundle.ts), stashed
-// here as 'bundle'; the parts each hook reads first (marks, scheduled rows,
+// here as 'bundle'; the parts each hook reads first (scheduled rows,
 // cursors, open posts, plan ids, briefs) are stashed beside it, derived from
 // that one call. Plan bundles are never remembered: each open reads its own
 // (PlanCardsProvider), so no bundle from an earlier open is ever painted. The
@@ -16,8 +16,8 @@
 // within PREWARM_FRESH_MS takes as its first plan read (takePrewarmPlans); a
 // plan or post change drops it first.
 //
-// The last settled state of each chat (marks, scheduled rows) is
-// remembered. Marks and scheduled
+// The last settled state of each chat (scheduled rows) is
+// remembered. Scheduled
 // rows paint on a reopen only while younger than READ_FRESH_MS (recallFresh):
 // older is absent, and the reopen holds for its own reads as a cold open does
 // (never the old answer, then a change). The ticker counts and open posts are
@@ -54,7 +54,6 @@
 import type { Result } from '@srtdio/rpc';
 import type { ScheduledRow } from '@/lib/chat/scheduled';
 import type { PlanBundle } from '@/lib/chat/plans';
-import type { ChatMark } from '@/lib/chat/marks';
 import type { OpenPostsData, OpenPostsView } from '@/lib/chat/use-open-posts';
 import type { StatusReadResults, StatusRoundView } from '@/lib/chat/use-status-counts';
 import {
@@ -111,7 +110,6 @@ export interface ChatKey {
 export interface OpenReads extends StatusReadResults {
   /** The open's one chat_open_bundle call; every other name here derives from it on an open. */
   bundle: Result<ChatOpenBundle>;
-  marks: Result<ChatMark[]>;
   openPosts: OpenPostsData;
   scheduled: Result<ScheduledRow[]>;
   positions: Result<ReadPositionsRead>;
@@ -119,7 +117,6 @@ export interface OpenReads extends StatusReadResults {
 
 /** A chat's last settled state. */
 export interface ChatMemory {
-  marks: { marks: Map<string, ChatMark>; markedMessages: Map<string, ThreadMessage> };
   openPosts: OpenPostsView;
   status: StatusRoundView;
   thread: RememberedThread;
@@ -994,7 +991,7 @@ export function chatScopeLeft(prev: ChatScope | null, next: ChatScope | null): C
 
 /**
  * The shell's user or workspace changed (ChatStoreProvider): a workspace
- * switch or a sign-out forgets every remembered page, marks, scheduled rows
+ * switch or a sign-out forgets every remembered page, scheduled rows
  * and cursors at once, not at the next chat open.
  */
 export function leaveChatScope(

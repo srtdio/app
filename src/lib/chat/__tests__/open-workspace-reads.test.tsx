@@ -201,7 +201,6 @@ describe('a chat open over its one chat_open_bundle call', () => {
       reactions: [],
       readPositions: { rows: [], times: new Map() },
       replyCounts: new Map(),
-      marks: [],
       scheduled: [],
       openPosts: [],
       openPostCount: 4,
@@ -253,8 +252,6 @@ describe('a chat open over its one chat_open_bundle call', () => {
     void joinChatBundle(key, { deps });
     // The hooks mount while it is in flight and join it.
     await openChat('c-f', client);
-    const marks = await store.join(key, 'marks');
-    expect(marks?.ok).toBe(false);
     const scheduled = await store.join(key, 'scheduled');
     expect(scheduled?.ok).toBe(false);
     const last = frames[frames.length - 1];

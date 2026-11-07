@@ -350,7 +350,7 @@ describe('menu matrix', () => {
 
   it('notes: no Mark as, no Save to notes; Edit and Delete for an hour-old own note, no hints', () => {
     const own = message({ mine: true, senderUserId: ME, body: 'note' });
-    const actions = ownMessageActions(own, undefined, NOW, true);
+    const actions = ownMessageActions(own, NOW, true);
     expect(actions.canDelete).toBe(true);
     expect(actions.canEdit).toBe(true);
     const props: MenuProps = {
@@ -377,9 +377,9 @@ describe('menu matrix', () => {
 
   it('a DM keeps its 30 minute delete window', () => {
     const own = message({ mine: true, senderUserId: ME, body: 'x' });
-    expect(ownMessageActions(own, undefined, NOW).canDelete).toBe(false);
+    expect(ownMessageActions(own, NOW).canDelete).toBe(false);
     const ids = new Set([own.id]);
-    expect(deleteSelectionBlock(ids, [own], new Map(), NOW)).toBe('old');
+    expect(deleteSelectionBlock(ids, [own], NOW)).toBe('old');
     expect(deleteSelectionBlock(ids, [own], new Map(), NOW, true)).toBeNull();
   });
 
@@ -537,9 +537,9 @@ describe('notes thread chrome', () => {
     expect(html).not.toContain('<button');
   });
 
-  it('no open-loops strip without marks (notes pass none)', () => {
-    expect(threadStripSlot({ hasMarks: false, selecting: false })).toBeNull();
-    expect(threadStripSlot({ hasMarks: true, selecting: false })).toBe('loops');
+  it('no status strip off the chat page (notes)', () => {
+    expect(threadStripSlot({ chatPage: false, selecting: false })).toBeNull();
+    expect(threadStripSlot({ chatPage: true, selecting: false })).toBe('loops');
   });
 });
 

@@ -68,7 +68,6 @@ import { PLAN_CHANGED_EVENT, readPlanBundles } from '@/lib/chat/plans';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
 import { notePlanShapes } from '@/lib/chat/plan-shapes';
 import { whenIdle } from '@/lib/chunk-reload';
-import { useChatMarks } from '@/lib/chat/use-chat-marks';
 import { chatKey, forgetRememberedThread, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
 import { joinChatBundle, pressChatBundle } from '@/lib/chat/open-bundle';
 import { resolveViewerSide } from '@/lib/chat/viewer-role';
@@ -1438,7 +1437,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // the tile in the same commit.
   const shown = useMemo(() => shownChannel(selected, chatRoster), [selected, chatRoster]);
   // The open chat is Personal notes: no Agora at all (no client handed to the
-  // thread, marks or typing), no schedule, marks, @ picker or reading layer.
+  // thread or typing), no schedule, @ picker or reading layer.
   const notesOpen = isNotes(selected);
   const notesReady = notesOpen && notes.status === 'ready';
   // Opening notes after its ensure failed tries again (the open waits 5s).
@@ -1480,7 +1479,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     groupMembers !== null && groupMembers.groupId === selectedGroupId ? groupMembers.ids : null;
 
   // The same target object while it routes the same way, so a rename or photo
-  // change never re-subscribes the thread, typing or marks.
+  // change never re-subscribes the thread or typing.
   const computedTarget = useMemo(
     () => safeTarget(shown, openMemberIds === null ? null : [...openMemberIds], currentUserId),
     [shown, openMemberIds, currentUserId],
@@ -1488,14 +1487,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const targetRef = useRef(computedTarget);
   if (!sameTarget(targetRef.current, computedTarget)) targetRef.current = computedTarget;
   const target = targetRef.current;
-  const marks = useChatMarks({
-    client: liveClient,
-    channelId: notesOpen ? null : selectedChannelId,
-    target,
-    currentUserId,
-    workspaceId,
-  });
-  const refetchMarks = marks.refetch;
   // A chat whose messages page is remembered reopens without waiting on reads
   // whose last answer is already on screen: its scheduled rows (remembered),
   // re-read in place.
@@ -1503,20 +1494,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     const key = chatKey(currentUserId, workspaceId, selectedChannelId);
     return key !== null && openCache.recall(key, 'thread') !== undefined;
   }, [currentUserId, workspaceId, selectedChannelId]);
-  // A remembered chat's marks as last settled, for its first frame, only while
-  // fresh (the marks hook sets the same ones in its effect, then revalidates;
-  // older ones are never painted).
-  const marksLoaded = marks.loaded;
-  const rememberedMarks = useMemo(() => {
-    if (!rememberedOpen || marksLoaded) return undefined;
-    const key = chatKey(currentUserId, workspaceId, selectedChannelId);
-    return key !== null ? openCache.recallFresh(key, 'marks') : undefined;
-  }, [rememberedOpen, marksLoaded, currentUserId, workspaceId, selectedChannelId]);
-  // Every catch-up refreshes the unread counts and re-reads the channel's marks.
+  // Every catch-up refreshes the unread counts.
   const onCaughtUp = useCallback(() => {
     refreshUnreadCounts();
-    refetchMarks();
-  }, [refreshUnreadCounts, refetchMarks]);
+  }, [refreshUnreadCounts]);
   const onMessagesDeleted = useCallback(() => refreshPreviews(), [refreshPreviews]);
   const thread = useChatThread({
     client: liveClient,
@@ -1786,7 +1767,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [selectedChannelId, refetchScheduled, notesOpen]);
   // The open's bundle failed (the thread showed Retry) and a later one landed:
-  // the parts that failed with it (marks, scheduled rows) are read again.
+  // the parts that failed with it (scheduled rows) are read again.
   const threadFailedRef = useRef<{ channelId: string | null; failed: boolean }>({
     channelId: null,
     failed: false,
@@ -1797,9 +1778,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     threadFailedRef.current = { channelId: selectedChannelId, failed: threadLoadFailed };
     if (selectedChannelId === null || notesOpen) return;
     if (prev.channelId !== selectedChannelId || !prev.failed || threadLoadFailed) return;
-    refetchMarks();
     refetchScheduled(selectedChannelId);
-  }, [threadLoadFailed, selectedChannelId, notesOpen, refetchMarks, refetchScheduled]);
+  }, [threadLoadFailed, selectedChannelId, notesOpen, refetchScheduled]);
   // A remembered chat's scheduled rows as last read, for its first frame
   // (until this open's own state for it is set), only while fresh: older rows
   // are never painted, the open waits for its read as a cold open does.
@@ -2415,17 +2395,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                       typingUserIds={notesOpen ? NO_TYPING : typingUserIds}
                       {...(!notesOpen ? { onTyping: typing.notifyTyping } : {})}
                       onToggleReaction={thread.toggleReaction}
-                      {...(notesOpen
-                        ? { marksLoaded: true }
-                        : {
-                            marks: rememberedMarks?.marks ?? marks.marks,
-                            marksLoaded: marks.loaded || rememberedMarks !== undefined,
-                            marksFailed: marks.failed,
-                            markedMessages: rememberedMarks?.markedMessages ?? marks.markedMessages,
-                            onSetMark: marks.setMark,
-                            onResolveMark: marks.resolve,
-                            onReopenMark: marks.reopen,
-                          })}
+                      chatPage={!notesOpen}
                       currentUserId={currentUserId}
                       onDeleteMessages={thread.deleteMessages}
                       onEditMessage={thread.editMessage}

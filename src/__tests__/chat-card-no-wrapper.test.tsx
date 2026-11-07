@@ -119,7 +119,7 @@ describe('chat cards: the card is the bubble (no wrapper bubble)', () => {
     for (const mine of [false, true]) {
       it(`a card-only ${kind} message (${mine ? 'own' : 'peer'}): bare shell, card holds the time`, () => {
         const m = message({ ...over, mine });
-        expect(isCardOnly(m, { marked: false, chip: false })).toBe(true);
+        expect(isCardOnly(m, { chip: false })).toBe(true);
         const { shell, cards, rowMeta } = parts(bubble(m));
         // The shell keeps the bubble's behaviour, never its look.
         expect(shell).not.toBeNull();
@@ -142,7 +142,7 @@ describe('chat cards: the card is the bubble (no wrapper bubble)', () => {
 
   it('a card with text keeps its bubble: the cards sit inside it, the meta row stays', () => {
     const m = message({ body: 'Have a look', sharedPostIds: ['p1'] });
-    expect(isCardOnly(m, { marked: false, chip: false })).toBe(false);
+    expect(isCardOnly(m, { chip: false })).toBe(false);
     const { shell, cards, rowMeta } = parts(bubble(m));
     expect(String(shell!.props.className)).toContain('bg-panel-2');
     expect(rowMeta).toBe(1);
@@ -153,16 +153,14 @@ describe('chat cards: the card is the bubble (no wrapper bubble)', () => {
     const base = { sharedPostIds: ['p1'] };
     expect(
       isCardOnly(message({ ...base, reply: { id: 'm0', authorUserId: null, preview: 'x' } }), {
-        marked: false,
         chip: false,
       }),
     ).toBe(false);
-    expect(isCardOnly(message({ ...base, forwarded: true }), { marked: false, chip: false })).toBe(
+    expect(isCardOnly(message({ ...base, forwarded: true }), { chip: false })).toBe(
       false,
     );
-    expect(isCardOnly(message(base), { marked: true, chip: false })).toBe(false);
-    expect(isCardOnly(message(base), { marked: false, chip: true })).toBe(false);
-    expect(isCardOnly(message({}), { marked: false, chip: false })).toBe(false);
+    expect(isCardOnly(message(base), { chip: true })).toBe(false);
+    expect(isCardOnly(message({}), { chip: false })).toBe(false);
   });
 
   it('the time goes in the last kind the bubble draws', () => {

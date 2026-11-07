@@ -35,7 +35,6 @@ function msg(over: Partial<ThreadMessage> = {}): ThreadMessage {
   };
 }
 
-const NO_MARKS = new Set<string>();
 
 function base(over: Record<string, unknown> = {}): Parameters<typeof moreMenuItems>[0] {
   return {
@@ -47,13 +46,12 @@ function base(over: Record<string, unknown> = {}): Parameters<typeof moreMenuIte
 }
 
 describe('canRemoveSingleFile: who gets "Remove file"', () => {
-  it('an own, unmarked message with one photo or one file', () => {
-    expect(canRemoveSingleFile(msg(), 'me', NO_MARKS)).toBe(true);
+  it('an own message with one photo or one file', () => {
+    expect(canRemoveSingleFile(msg(), 'me')).toBe(true);
     expect(
       canRemoveSingleFile(
         msg({ attachments: [{ assetId: 'a1', name: 'brief.pdf', mime: 'application/pdf' }] }),
         'me',
-        NO_MARKS,
       ),
     ).toBe(true);
   });
@@ -65,27 +63,23 @@ describe('canRemoveSingleFile: who gets "Remove file"', () => {
         { assetId: 'a2', name: '2.jpg', mime: 'image/jpeg' },
       ],
     });
-    expect(canRemoveSingleFile(album, 'me', NO_MARKS)).toBe(false);
+    expect(canRemoveSingleFile(album, 'me')).toBe(false);
   });
 
   it("never on someone else's message", () => {
-    expect(canRemoveSingleFile(msg({ senderUserId: 'peer', mine: false }), 'me', NO_MARKS)).toBe(
+    expect(canRemoveSingleFile(msg({ senderUserId: 'peer', mine: false }), 'me')).toBe(
       false,
     );
   });
 
   it('never on a voice note', () => {
     const voice = msg({ attachments: [{ assetId: 'a1', name: 'v.m4a', mime: 'audio/mp4' }] });
-    expect(canRemoveSingleFile(voice, 'me', NO_MARKS)).toBe(false);
-  });
-
-  it('never on a marked message', () => {
-    expect(canRemoveSingleFile(msg(), 'me', new Set(['m1']))).toBe(false);
+    expect(canRemoveSingleFile(voice, 'me')).toBe(false);
   });
 
   it('never on a message still sending or deleted', () => {
-    expect(canRemoveSingleFile(msg({ state: 'sending' }), 'me', NO_MARKS)).toBe(false);
-    expect(canRemoveSingleFile(msg({ deleted: true }), 'me', NO_MARKS)).toBe(false);
+    expect(canRemoveSingleFile(msg({ state: 'sending' }), 'me')).toBe(false);
+    expect(canRemoveSingleFile(msg({ deleted: true }), 'me')).toBe(false);
   });
 });
 

@@ -465,7 +465,6 @@ function bundleOf(rows: ChatMessageRow[], hasMore: boolean): ChatOpenBundle {
     reactions: [],
     readPositions: { rows: [], times: new Map() },
     replyCounts: new Map(),
-    marks: [],
     scheduled: [],
     openPosts: [],
     openPostCount: 0,

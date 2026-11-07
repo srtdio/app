@@ -210,8 +210,6 @@ import { SharedPlanCards } from '@/components/chat/PlanCard';
 import { SharedIdeaCards, ideaTitleOf } from '@/components/chat/PlanItemCard';
 import { PaintLogOverlay, paintLog, paintLogOn } from '@/components/chat/PaintLog';
 import { planTitleOf, usePlanCards } from '@/components/chat/PlanCardsProvider';
-import { MarkBadge, SelectCheckbox, SelectLock } from '@/components/chat/MarkBits';
-import { MarksSheet, PrioritySheet } from '@/components/chat/MarksSheet';
 import { ChatStatus } from '@/components/chat/StatusTicker';
 import { planProgress, todayInZone } from '@/components/chat/plan-card';
 import { briefRoute } from '@/lib/chat/briefs';
@@ -227,6 +225,7 @@ import type { PlanBundle } from '@/lib/chat/plans';
 import {
   currentSharedPlans,
   drawerKeys,
+  openPostsHeading,
   planSummaries,
   statusBar,
   statusReady,
@@ -236,7 +235,12 @@ import {
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { ContactSheet } from '@/components/chat/ContactSheet';
 import type { GroupInfoTabsWiring } from '@/components/chat/GroupInfoSheet';
-import { SelectionBar, SelectionHeader, deleteOneConfirm } from '@/components/chat/SelectionBar';
+import {
+  SelectCheckbox,
+  SelectionBar,
+  SelectionHeader,
+  deleteOneConfirm,
+} from '@/components/chat/SelectionBar';
 import { quoteMedia, ReplyQuoteBox } from '@/components/chat/ReplyQuote';
 import {
   canReplyPrivatelyInChat,
@@ -288,20 +292,10 @@ import {
   selectedForForward,
   threadSelectable,
   threadSelectionRole,
-} from '@/lib/chat/forward';
-import {
-  markCounts,
-  markBadgeLabel,
-  markMenuOptions,
-  openPostsHeading,
   toggleSelected,
-  type ChatMark,
-  type FindOlderOutcome,
-  type MarkPriority,
-  type MarkType,
   type SelectionRole,
-} from '@/lib/chat/marks';
-import { MARK_FAILED_COPY, type WriteResult } from '@/lib/chat/record';
+} from '@/lib/chat/forward';
+import type { FindOlderOutcome } from '@/lib/chat/use-chat-thread';
 import {
   aboutState,
   PAGE_HYDRATION_WAIT_MS,
@@ -387,7 +381,6 @@ import {
   rereadRemovedRows,
   runRemoveFiles,
   subscribeFilesRemoved,
-  type MarkedLookup,
   type RemovableFile,
   type RemoveFilesOutcome,
 } from '@/lib/chat/remove-files';
@@ -434,20 +427,11 @@ interface MessageThreadProps {
   /** False when sending is impossible (no channel selected). */
   canSend: boolean;
   onSend: ComposerSend;
-  /** Every mark of the channel keyed by message id (resolved included); absent = no marks UI. */
-  marks?: Map<string, ChatMark>;
-  /** The channel's marks read has settled; the open-loops strip holds its first paint until then. */
-  marksLoaded: boolean;
-  /** The marks have never been read (failed or timed out): the strip shows no content, never "Open posts and marks show up here.". */
-  marksFailed?: boolean;
-  /** Marked messages read from the record, for sheet rows beyond loaded history. */
-  markedMessages?: Map<string, ThreadMessage>;
-  /** Mark a message, or change an open pending mark's priority (same type). */
-  onSetMark?: (messageId: string, type: MarkType, priority: MarkPriority) => Promise<WriteResult>;
-  /** Stamp an open mark (Delivered / Closed / Completed). */
-  onResolveMark?: (messageId: string) => Promise<WriteResult>;
-  /** Return a stamped mark to open. */
-  onReopenMark?: (messageId: string) => Promise<WriteResult>;
+  /**
+   * The chat page's per-chat wiring (the status strip, its reads and tasks);
+   * absent in Personal notes and bare renders.
+   */
+  chatPage?: boolean;
   /** The caller's user id; the pin board names their own stamps "You". */
   currentUserId?: string;
   /** Delete own messages for everyone; absent hides "Select". */
@@ -644,16 +628,16 @@ export function keyOpensMenu(event: {
 }
 
 /**
- * What sits under the thread header: the open-loops strip (threads with marks,
- * not while selecting), else nothing.
+ * What sits under the thread header: the status strip (the chat page's
+ * threads, not while selecting), else nothing.
  */
-export function threadStripSlot(input: { hasMarks: boolean; selecting: boolean }): 'loops' | null {
-  return input.hasMarks && !input.selecting ? 'loops' : null;
+export function threadStripSlot(input: { chatPage: boolean; selecting: boolean }): 'loops' | null {
+  return input.chatPage && !input.selecting ? 'loops' : null;
 }
 
 /**
  * The status ticker's bar: null (the inert empty slot) until the posts round,
- * the viewer side, this channel's marks, the shared plans and the open briefs
+ * the viewer side, the shared plans and the open briefs
  * have all settled, so the first painted bar is final; then each read that
  * failed is left out (null) and the rest are counted. `open` are the
  * workspace's current shared plans, ending soonest first.
@@ -661,15 +645,12 @@ export function threadStripSlot(input: { hasMarks: boolean; selecting: boolean }
 export function tickerBar(input: {
   openPosts: Pick<UseOpenPosts, 'ready' | 'count' | 'failed'>;
   side: { side: ViewerSide; ready: boolean };
-  marks: Map<string, ChatMark>;
-  marksLoaded: boolean;
   status: UseStatusCounts;
   open: readonly PlanBundle[];
 }): StatusBar | null {
   const ready = statusReady({
     posts: input.openPosts.ready,
     side: input.side.ready,
-    marks: input.marksLoaded,
     plans: input.status.plans.ready,
     briefs: input.status.briefs.ready,
   });
@@ -678,7 +659,6 @@ export function tickerBar(input: {
     plans: input.status.plans.failed ? null : planSummaries(input.open, planProgress),
     posts: input.openPosts.failed ? null : input.openPosts.count,
     briefs: input.status.briefs.failed ? null : input.status.briefs.count,
-    marks: markCounts(input.marks.values()),
     side: input.side.side,
   };
   return statusBar(counts);
@@ -686,18 +666,17 @@ export function tickerBar(input: {
 
 /**
  * Whether a chat open's parts that paint with its first page have settled:
- * this channel's marks, the viewer side, the ticker's inputs and the bundles
- * of the plan cards on the page (each ok or failed). Pure.
+ * the viewer side, the ticker's inputs and the bundles of the plan cards on
+ * the page (each ok or failed). Pure.
  */
 export function openHoldSettled(parts: {
-  marks: boolean;
   side: boolean;
   ticker: boolean;
   cards: boolean;
 }): boolean {
   // Task lines are not a part: rows paint first and the lines slot in when
   // their read lands (the list may shift once; the bottom pin holds).
-  return parts.marks && parts.side && parts.ticker && parts.cards;
+  return parts.side && parts.ticker && parts.cards;
 }
 
 /**
@@ -705,7 +684,7 @@ export function openHoldSettled(parts: {
  * is done (released or capped). A cold open holds until all its parts settle.
  * A kept open (the chat's page was remembered: opened before or pre-warmed)
  * holds only for the parts that would move its rows when they land
- * (`keptPartsSettled`: its marks, and plan cards of unknown shape); with those
+ * (`keptPartsSettled`: plan cards of unknown shape); with those
  * in hand its rows are the first frame. Pure.
  */
 export function openHoldApplies(input: {
@@ -941,7 +920,7 @@ export function threadLightbox(
 
 /**
  * The viewer's images with the bin on each one the viewer may remove (own,
- * recorded, unmarked; canRemoveFile): its label reads "Remove photo" and its
+ * recorded; canRemoveFile): its label reads "Remove photo" and its
  * tap removes just that file. Unchanged without a remove handler. Pure.
  */
 export function withRemovableImages(
@@ -949,7 +928,6 @@ export function withRemovableImages(
   message: ThreadMessage,
   onRemoveFiles: ((files: RemovableFile[]) => void) | undefined,
   viewerId: string,
-  marks: MarkedLookup,
 ): { images: LightboxImage[]; details: LightboxDetails } {
   if (onRemoveFiles === undefined || message.state !== 'sent') return data;
   const byAsset = new Map(message.attachments.map((a) => [a.assetId, a] as const));
@@ -957,7 +935,7 @@ export function withRemovableImages(
     ...data,
     images: data.images.map((image) => {
       const attachment = byAsset.get(image.assetId);
-      if (attachment === undefined || !canRemoveFile(message, attachment, viewerId, marks)) {
+      if (attachment === undefined || !canRemoveFile(message, attachment, viewerId)) {
         return image;
       }
       return {
@@ -1085,8 +1063,6 @@ export function jumpMiss(
 ): { stick: boolean; toast: string } | null {
   return outcome === 'found' ? null : { stick: stickBefore, toast: JUMP_NOT_LOADED_TOAST };
 }
-
-const NO_MARKS: Map<string, ChatMark> = new Map();
 
 /**
  * What a bubble hands its post cards. While selecting, no talkAbout: a hold on
@@ -2056,7 +2032,7 @@ export function lastCardKind(
 /**
  * A card-only message: shared cards and nothing else the bubble would draw
  * around them (no text, files, reply or private-reply quote, Forwarded or
- * saved-from line, removed-files line, mark badge, or post chip). Its card IS
+ * saved-from line, removed-files line, or post chip). Its card IS
  * the bubble: no wrapper bubble fill, and its time and tick sit inside the
  * last card (ui/ChatCard's time slot). Pure.
  */
@@ -2073,7 +2049,7 @@ export function isCardOnly(
     | 'removedFiles'
   > &
     Partial<Pick<ThreadMessage, 'sharedPlanIds' | 'sharedPlanItemIds'>>,
-  around: { marked: boolean; chip: boolean },
+  around: { chip: boolean },
 ): boolean {
   return (
     lastCardKind(message) !== null &&
@@ -2083,7 +2059,6 @@ export function isCardOnly(
     message.privateReply == null &&
     message.forwarded !== true &&
     message.removedFiles === undefined &&
-    !around.marked &&
     !around.chip
   );
 }
@@ -2253,10 +2228,6 @@ export function MessageBubble(props: {
   onJumpToMessage?: (messageId: string) => void;
   /** A Reply privately quote tapped: open where it points; absent: the quote is static. */
   onOpenPrivateReply?: (reply: PrivateReply) => void;
-  /** The message's mark; drives the badge. */
-  mark?: ChatMark | undefined;
-  /** Opens the priority chooser from an open pending badge. */
-  onChangePriority?: () => void;
   /** Present while selection mode is on. */
   selection?: RowSelection;
   /**
@@ -2350,7 +2321,6 @@ export function MessageBubble(props: {
   // A card-only message: the card IS the bubble (the shell below keeps only
   // the bubble's behaviour), and the time and tick sit inside its last card.
   const cardOnly = isCardOnly(message, {
-    marked: props.mark !== undefined,
     chip: props.threadMember !== true && chip?.kind === 'chip' && message.parentDeleted !== true,
   });
   const lastCard = cardOnly ? lastCardKind(message) : null;
@@ -2541,11 +2511,6 @@ export function MessageBubble(props: {
           className={SELECTION_CHECK_SLOT}
         />
       ) : null}
-      {selection?.role === 'locked' ? (
-        <span className={SELECTION_CHECK_SLOT}>
-          <SelectLock />
-        </span>
-      ) : null}
       {rail?.role === 'middle' ? <RailThrough /> : null}
       {photo}
       {gutter ? <span className="w-8 shrink-0" aria-hidden="true" /> : null}
@@ -2583,12 +2548,6 @@ export function MessageBubble(props: {
             )}
           >
             <div className={album ? cn(albumInset, 'empty:hidden') : 'contents'}>
-              <MarkBadge
-                mark={props.mark}
-                {...(props.onChangePriority !== undefined && selection === undefined
-                  ? { onChangePriority: props.onChangePriority }
-                  : {})}
-              />
               {message.forwarded === true ? (
                 savedFrom !== null ? (
                   savedLine !== null ? (
@@ -3132,8 +3091,6 @@ interface MessageRowProps {
   onCancelUpload?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
   onOpenPrivateReply?: (reply: PrivateReply) => void;
-  mark: ChatMark | undefined;
-  onChangePriority?: (messageId: string) => void;
   selection?: RowSelection;
   /** Fine pointer device: the in-bubble chevron and the smiley. */
   hoverMenu: boolean;
@@ -3266,17 +3223,14 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       swipe.handlers.onPointerCancel();
     },
   };
-  const onChangePriority = props.onChangePriority;
   // The in-chat search's words: matched words in this bubble draw as <mark>.
   const searchWords = useContext(SearchHighlightContext);
   const personSource = useContext(PersonSourceContext);
   const savedFrom = useSavedFrom();
   const meta = props.meta;
-  // Small touches (docs/motion.md, pop from .9, ease-pop): a mark or
-  // a reaction that lands on a row already on screen. A row's first paint
-  // never pops.
+  // Small touches (docs/motion.md, pop from .9, ease-pop): a reaction that
+  // lands on a row already on screen. A row's first paint never pops.
   const reactionCount = props.message.reactions.reduce((sum, r) => sum + r.count, 0);
-  usePopOnChange(props.message.id, '[data-mark-badge]', markBadgeLabel(props.mark));
   usePopOnRise(props.message.id, '[data-reaction-emoji]', reactionCount);
   return (
     <MessageBubble
@@ -3327,10 +3281,6 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       {...(props.onJumpToMessage !== undefined ? { onJumpToMessage: props.onJumpToMessage } : {})}
       {...(props.onOpenPrivateReply !== undefined
         ? { onOpenPrivateReply: props.onOpenPrivateReply }
-        : {})}
-      mark={props.mark}
-      {...(onChangePriority !== undefined
-        ? { onChangePriority: () => onChangePriority(props.message.id) }
         : {})}
       {...(props.selection !== undefined ? { selection: props.selection } : {})}
       selectingText={props.selectingText === true}
@@ -3600,11 +3550,8 @@ function ThreadBody(
     showTicks: boolean;
     isGroup: boolean;
     onReply: (message: ThreadMessage) => void;
-    marks: Map<string, ChatMark>;
     /** Present while selection mode is on. */
     selection?: { selected: ReadonlySet<string>; onToggle: (id: string) => void };
-    /** Menu "Mark as ..." picked; absent hides mark actions. */
-    onMark?: (message: ThreadMessage, type: MarkType) => void;
     /**
      * Menu "Forward" picked: selection mode with the message ticked (true), or
      * the picker for just this message (false); absent hides it.
@@ -4244,7 +4191,7 @@ function ThreadBody(
     viewAnchorRef.current = list !== null && !stickRef.current ? firstVisibleRow(list) : null;
   });
   // Pin on any size change: every row and the list itself are observed (rows
-  // as they mount and unmount), so late growth (cards, marks, badges, the
+  // as they mount and unmount), so late growth (cards, badges, the
   // typing row, the composer, a font swap) re-pins before paint while the
   // intent holds. Runs after every commit to follow the rows.
   useLayoutEffect(() => {
@@ -4444,7 +4391,6 @@ function ThreadBody(
   const onRetryRow = useOptionalCallback(props.onRetry);
   const onDiscardRow = useOptionalCallback(props.onDiscard);
   const onCancelUploadRow = useOptionalCallback(props.onCancelUpload);
-  const onChangePriorityRow = useOptionalCallback(props.onChangePriority);
   const onOpenReactionsRow = useOptionalCallback(props.onOpenReactions);
   const onTalkAboutRow = useOptionalCallback(props.onTalkAbout);
   const onTalkAboutFocusRow = useOptionalCallback(props.onTalkAboutFocus);
@@ -4538,13 +4484,8 @@ function ThreadBody(
           : null;
   const menuOwn =
     menu !== null
-      ? ownMessageActions(
-          menu.message,
-          props.marks.get(menu.message.id),
-          menu.openedAt,
-          props.notes === true,
-        )
-      : { canEdit: false, canDelete: false, lockedByMark: false };
+      ? ownMessageActions(menu.message, menu.openedAt, props.notes === true)
+      : { canEdit: false, canDelete: false };
   const menuFailed = menu !== null && canDiscardFailed(menu.message);
   const replyPrivately = props.replyPrivately;
   const menuSender = menu?.message.senderUserId ?? null;
@@ -4569,15 +4510,14 @@ function ThreadBody(
           viewerMessage,
           props.onRemoveFiles,
           props.viewerUserId ?? '',
-          props.marks,
         )
       : null;
-  // More -> "Remove file": an own, unmarked message with exactly one file.
+  // More -> "Remove file": an own message with exactly one file.
   const onRemoveFiles = props.onRemoveFiles;
   const menuRemoveFile =
     menu !== null &&
     onRemoveFiles !== undefined &&
-    canRemoveSingleFile(menu.message, props.viewerUserId ?? '', props.marks)
+    canRemoveSingleFile(menu.message, props.viewerUserId ?? '')
       ? menu.message.attachments[0]
       : undefined;
   // Card threads: decided per row at first paint; the rail, its chips and
@@ -4795,10 +4735,6 @@ function ThreadBody(
                       })}
                       threadMember={memberOf?.(row.message) != null}
                       rail={rowCaches.rail(id, rowRail)}
-                      mark={props.marks.get(row.message.id)}
-                      {...(onChangePriorityRow !== undefined
-                        ? { onChangePriority: onChangePriorityRow }
-                        : {})}
                       {...(props.selection !== undefined
                         ? {
                             selection: rowCaches.selection(id, {
@@ -4884,7 +4820,6 @@ function ThreadBody(
         mine={menu?.message.mine ?? false}
         canReact={menu !== null && menu.message.state === 'sent'}
         reactionsOnly={menu?.reactionsOnly === true}
-        markedAs={menu !== null ? (props.marks.get(menu.message.id)?.type ?? null) : null}
         canEdit={props.onEditMessage !== undefined && menuOwn.canEdit && !menuPlan}
         onEdit={() => {
           if (menu) props.onEditMessage?.(menu.message);
@@ -4900,7 +4835,6 @@ function ThreadBody(
           else props.onDeleteMessage?.(menu.message);
         }}
         failedSend={menuFailed}
-        lockedByMark={menuOwn.lockedByMark}
         notes={props.notes === true}
         canSaveToNotes={
           menu !== null &&
@@ -4932,14 +4866,6 @@ function ThreadBody(
         }
         onTranscribe={() => {
           if (menu) props.onTranscribe?.(menu.message);
-        }}
-        markOptions={
-          menu && props.onMark !== undefined
-            ? markMenuOptions(menu.message, props.marks.get(menu.message.id))
-            : []
-        }
-        onMark={(type) => {
-          if (menu) props.onMark?.(menu.message, type);
         }}
         canForward={
           menu !== null &&
@@ -5195,9 +5121,8 @@ export function threadSkeleton(): ReactElement {
 }
 
 /**
- * Selection-mode state for one row: any recorded, live message can be checked
- * (a mark blocks only Delete, never the selection); deleted and pending ones
- * show nothing.
+ * Selection-mode state for one row: any recorded, live message can be checked;
+ * deleted and pending ones show nothing.
  */
 export function rowSelection(
   message: ThreadMessage,
@@ -5217,8 +5142,7 @@ export function selectionOnEntry(message: ThreadMessage): Set<string> {
 
 /**
  * Whether the menu's Forward enters selection mode (the message ticked) rather
- * than opening the picker for it alone: always, where selection mode exists,
- * marked messages included.
+ * than opening the picker for it alone: always, where selection mode exists.
  */
 export function forwardEntersSelection(
   message: ThreadMessage,
@@ -5272,15 +5196,6 @@ function usePopOnRise(id: string, part: string, value: number): void {
   const prev = useRef(value);
   useLayoutEffect(() => {
     if (value > prev.current) popRowPart(id, part);
-    prev.current = value;
-  }, [id, part, value]);
-}
-
-/** Pop a row's part when its non-empty `value` changes after the row's first paint (a mark). */
-function usePopOnChange(id: string, part: string, value: string): void {
-  const prev = useRef(value);
-  useLayoutEffect(() => {
-    if (value !== '' && value !== prev.current) popRowPart(id, part);
     prev.current = value;
   }, [id, part, value]);
 }
@@ -5389,12 +5304,6 @@ export function createSelectionScroll(): SelectionScroll {
   };
 }
 
-/** The toast for a mark outcome: fixed copy on failure (the raw text is logged), none on success. */
-export function markOutcomeCopy(result: WriteResult): string | null {
-  if (result.ok) return null;
-  logger.warn('chat: mark failed', { error: result.message });
-  return MARK_FAILED_COPY;
-}
 
 /** The history.state key that marks the entry selection mode pushed. */
 export const SELECTION_HISTORY_KEY = 'chatSelection';
@@ -5731,12 +5640,11 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // props.timeZone); derived the way the Briefs and Pipeline surfaces do.
   const workspaceWeekStart = workspaces.find((w) => w.id === workspaceId)?.week_start_day ?? 1;
   const toast = useToast();
-  const marks = props.marks ?? NO_MARKS;
+  const chatPage = props.chatPage === true;
   // The chat's task list (never in Personal notes; only where the chat page
-  // wires the per-chat reads, as the marks show): read with the first page, so
-  // its change lines paint with the messages, never after them.
-  const taskChannel =
-    props.notes === true || props.marks === undefined ? null : (channelId ?? null);
+  // wires the per-chat reads): read with the first page, so its change lines
+  // paint with the messages, never after them.
+  const taskChannel = props.notes === true || !chatPage ? null : (channelId ?? null);
   const taskSummary = useMemo(
     () => (props.forwardChannels ?? []).find((c) => c.channelId === taskChannel) ?? null,
     [props.forwardChannels, taskChannel],
@@ -5761,7 +5669,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     target: taskTarget,
     profiles: props.profiles,
   });
-  // `seenAtOpen`: this device's seen time when the sheet opened (its marks are
+  // `seenAtOpen`: this device's seen time when the sheet opened (its dots are
   // the changes after it); the new seen time is written when the sheet closes.
   const [taskSheet, setTaskSheet] = useState<{
     open: boolean;
@@ -5808,20 +5716,20 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     userId: props.currentUserId ?? null,
     channelId: channelId ?? null,
   });
-  // The status ticker's plans and briefs (only where the thread has marks).
+  // The status ticker's plans and briefs (only on the chat page).
   const livePlanIds = useMemo(
     () => [...new Set(props.messages.flatMap((m) => m.sharedPlanIds ?? []))],
     [props.messages],
   );
   const statusCounts = useStatusCounts({
-    workspaceId: props.marks !== undefined ? workspaceId : null,
+    workspaceId: chatPage ? workspaceId : null,
     channelId: channelId ?? null,
     livePlanIds,
     userId: props.currentUserId ?? null,
   });
   const statusPlanCards = usePlanCards();
   // Chat open, paint together: the first page waits (at most OPEN_HOLD_MS from
-  // the tap, else from this mount) for the marks, the viewer side, the ticker's
+  // the tap, else from this mount) for the viewer side, the ticker's
   // inputs and the bundles of the plan cards on it, so they all paint in one
   // frame. Once released it never holds again; whatever is still loading then
   // keeps its same-size placeholder and fills in place.
@@ -5842,16 +5750,14 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const pagePlanIds = pageCards.planIds;
   // A chat whose page is remembered (opened before, or pre-warmed) paints its
   // kept rows in the first frame while nothing on it can change height after:
-  // its marks are in hand (a badge adds a line) and every plan card on it is
-  // known to be a full card (its skeleton is the card's exact 217px). The
-  // ticker's pending slot and the side-dependent cards keep their same-size
-  // placeholders and fill in place. A card of unknown or other shape, or
-  // marks still loading, keep it on the cold open's hold (same cap).
+  // every plan card on it is known to be a full card (its skeleton is the
+  // card's exact 217px). The ticker's pending slot and the side-dependent
+  // cards keep their same-size placeholders and fill in place. A card of
+  // unknown or other shape keeps it on the cold open's hold (same cap).
   const [keptOpen] = useState(() => {
     const key = chatKey(props.currentUserId, workspaceId, channelId);
     return key !== null && openCache.recall(key, 'thread') !== undefined;
   });
-  const marksSettled = props.marks === undefined || props.marksLoaded || props.marksFailed === true;
   const cardsSnapshot =
     statusPlanCards !== null && pagePlanIds.length > 0
       ? statusPlanCards.cache.snapshot(pagePlanIds)
@@ -5870,13 +5776,12 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     notePlanShapes(viewerId, workspaceId, pagePlanIds, cardsSnapshot.bundles, cardsSnapshot.failed);
   }, [cardsSnapshot, pagePlanIds, viewerId, workspaceId]);
   const openPartsSettled = openHoldSettled({
-    marks: marksSettled,
     // The side words the ticker and the post and plan cards: only they wait on it.
     side:
       viewerSide.ready ||
-      (props.marks === undefined && pagePlanIds.length === 0 && pageCards.postIds.length === 0),
+      (!chatPage && pagePlanIds.length === 0 && pageCards.postIds.length === 0),
     ticker:
-      props.marks === undefined ||
+      !chatPage ||
       (openPosts.ready && statusCounts.plans.ready && statusCounts.briefs.ready),
     cards: cardsSettled,
   });
@@ -5884,20 +5789,14 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     keptOpen,
     holdDone: openHoldDone,
     partsSettled: openPartsSettled,
-    keptPartsSettled: marksSettled && cardsSized,
+    keptPartsSettled: cardsSized,
   });
   const onOpenPlanCompose = props.onOpenPlanCompose;
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Bumped when the selection's Delete window boundary passes (a re-render).
   const [selectionTick, setSelectionTick] = useState(0);
-  const [marksOpen, setMarksOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
-  const [priorityFor, setPriorityFor] = useState<{
-    messageId: string;
-    mode: 'mark' | 'change';
-  } | null>(null);
-  const [priorityBusy, setPriorityBusy] = useState(false);
   const [jumpRequest, setJumpRequest] = useState<{
     id: string;
     seq: number;
@@ -5936,17 +5835,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     const found = cardWait.resolve(props.messages);
     if (found !== null) setAboutDraft(found);
   }, [props.messages, cardWait]);
-
-  const onSetMark = props.onSetMark;
-  const applyMark = async (
-    messageId: string,
-    type: MarkType,
-    priority: MarkPriority,
-  ): Promise<void> => {
-    if (onSetMark === undefined) return;
-    const copy = markOutcomeCopy(await onSetMark(messageId, type, priority));
-    if (copy !== null) toast.show({ title: copy });
-  };
 
   const onDeleteMessages = props.onDeleteMessages;
   const onEditMessage = props.onEditMessage;
@@ -6496,7 +6384,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     : frozenUnread !== null
       ? frozenUnread.value
       : computedUnread;
-  // Pill tap: a loaded run jumps through the marks jump path; a run above the
+  // Pill tap: a loaded run jumps through the jump path; a run above the
   // loaded pages first pages back to the cursor message (5s bound), then jumps.
   // A miss leaves the pill as it is and shows nothing else.
   const [unreadJumpPending, setUnreadJumpPending] = useState(false);
@@ -6573,34 +6461,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     });
   }, [selectable]);
   const messagesById = useMemo(() => new Map(selectable.map((m) => [m.id, m])), [selectable]);
-  const markedMessages = props.markedMessages;
-  // The pin board reads bodies as text: mentions resolve to "@Name" first.
-  const profiles = props.profiles;
-  const messageFor = useCallback(
-    (id: string): ThreadMessage | undefined => {
-      const message = messagesById.get(id) ?? markedMessages?.get(id);
-      if (message === undefined) return undefined;
-      return {
-        ...message,
-        body: resolveMentionText(message.body, profileNameOf(profiles, workspaceId)),
-      };
-    },
-    [messagesById, markedMessages, profiles, workspaceId],
-  );
-  // The Marks tab of the chat info pages (DM Contact, group info); null without marks wiring.
-  const infoMarks =
-    props.marks !== undefined &&
-    props.onResolveMark !== undefined &&
-    props.onReopenMark !== undefined
-      ? {
-          marks,
-          messageFor,
-          profiles: props.profiles,
-          currentUserId: props.currentUserId ?? '',
-          onResolve: props.onResolveMark,
-          onReopen: props.onReopenMark,
-        }
-      : null;
 
   // The About post resolved to nothing (RLS, failed read): drop it and say so.
   const aboutPost = aboutDraft !== null ? postRef(aboutDraft.postId) : undefined;
@@ -6683,7 +6543,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     else closeThread();
   });
   useHistoryStep(contactOpen, HISTORY_STEP_KEYS.contact, () => setContactOpen(false));
-  useHistoryStep(marksOpen, HISTORY_STEP_KEYS.marks, () => setMarksOpen(false));
   useHistoryStep(readInfoOpen && readBy !== null, HISTORY_STEP_KEYS.readInfo, () =>
     setReadInfoOpen(false),
   );
@@ -6820,9 +6679,9 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     });
   }, [selecting, selected, selectable, serverNow, selectionTick, notes]);
   const deleteBlock = selecting
-    ? deleteSelectionBlock(selected, selectable, marks, serverNow(), notes)
+    ? deleteSelectionBlock(selected, selectable, serverNow(), notes)
     : null;
-  const stripSlot = threadStripSlot({ hasMarks: props.marks !== undefined, selecting });
+  const stripSlot = threadStripSlot({ chatPage, selecting });
   // The status ticker: the workspace's shared plans current today on its
   // clock (every chat, shared here or not), then the bar.
   const statusOpenPlans = currentSharedPlans(
@@ -6832,8 +6691,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const statusBarState = tickerBar({
     openPosts,
     side: viewerSide,
-    marks,
-    marksLoaded: props.marksLoaded,
     status: statusCounts,
     open: statusOpenPlans,
   });
@@ -6913,7 +6770,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
       : {}),
   });
   // What the chat's list and the thread view's list share: one bubble, one
-  // menu, the same marks, selection, edit and delete windows and reactions.
+  // menu, the same selection, edit and delete windows and reactions.
   // Reply privately (group chats only): the quote of the held message, then my DM with its sender.
   const onReplyPrivatelyProp = props.onReplyPrivately;
   const replyPrivatelyDraft =
@@ -6946,19 +6803,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     viewerUserId: props.currentUserId,
     mentions: props.mentions,
     workspaceId,
-    marks,
-    ...(onSetMark !== undefined && !selecting
-      ? {
-          onMark: (message: ThreadMessage, type: MarkType) => {
-            if (type === 'pending') {
-              setPriorityFor({ messageId: message.id, mode: 'mark' });
-              return;
-            }
-            void applyMark(message.id, type, null);
-          },
-          onChangePriority: (messageId: string) => setPriorityFor({ messageId, mode: 'change' }),
-        }
-      : {}),
     ...(onDeleteMessages !== undefined && !selecting
       ? {
           onDeleteMessage: (message: ThreadMessage) => {
@@ -7084,16 +6928,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           </>
         )}
       </div>
-      {stripSlot === 'loops' && props.marksFailed === true ? (
-        // Marks never read (failed or timed out): the ticker's 36px slot
-        // stays, empty and inert (no layout jump, nothing to open, never
-        // "Open posts and marks show up here."), until a re-read (visible, online, connected) lands.
-        <div
-          data-loops-strip="unread"
-          aria-hidden="true"
-          className="h-9 w-full shrink-0 border-b bg-panel lit-header"
-        />
-      ) : stripSlot === 'loops' ? (
+      {stripSlot === 'loops' ? (
         <ChatStatus
           channelId={channelId}
           bar={openHeld || (pageLoading && !tickerRemembered) ? null : statusBarState}
@@ -7111,11 +6946,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               count: openPosts.count ?? 0,
             },
             briefs: { rows: statusCounts.briefs.rows, count: statusCounts.briefs.count },
-            marks,
-            messageFor,
-            profiles: props.profiles,
-            onResolveMark: props.onResolveMark,
-            onReopenMark: props.onReopenMark,
           }}
           actions={{
             onOpenPlan: openPlanHere,
@@ -7124,8 +6954,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
                 props.onOpenPlanItem({ planId, senderName: planSender(planId), itemId });
               } else openPlanHere(planId);
             },
-            onJumpMark: jumpTo,
-            onSeeAllMarks: () => setMarksOpen(true),
           }}
           navigate={(to) => {
             if (props.onNavigate !== undefined) props.onNavigate(to);
@@ -7250,39 +7078,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           {...composerShared(view === null)}
         />
       )}
-      {props.marks !== undefined &&
-      props.onResolveMark !== undefined &&
-      props.onReopenMark !== undefined ? (
-        <MarksSheet
-          open={marksOpen}
-          onClose={() => setMarksOpen(false)}
-          marks={marks}
-          messageFor={messageFor}
-          profiles={props.profiles}
-          currentUserId={props.currentUserId ?? ''}
-          onJump={(id) => {
-            setMarksOpen(false);
-            jumpTo(id);
-          }}
-          onResolve={props.onResolveMark}
-          onReopen={props.onReopenMark}
-          openPosts={{
-            heading: openPostsHeading(viewerSide.side),
-            posts: openPosts.posts,
-            sharedIds: sharedInChat,
-            timeZone: props.timeZone,
-            onJump: (postId) => {
-              setMarksOpen(false);
-              const card = newestCardFor(props.messages, postId);
-              if (card !== null) jumpTo(card.id);
-            },
-            onShare: (postId) => {
-              setMarksOpen(false);
-              bringPost(postId);
-            },
-          }}
-        />
-      ) : null}
       {canOpenContact && props.channelId !== undefined ? (
         // Namespaced: the Composer above is keyed by the same channel id, and
         // two siblings sharing a key make React leak a Composer copy whenever a
@@ -7299,8 +7094,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           currentUserId={props.currentUserId ?? ''}
           cache={presignCache}
           presignEnabled={presignEnabled}
-          marks={infoMarks}
-          onJump={jumpTo}
           {...(onRemoveFiles !== undefined ? { onRemoveFiles } : {})}
         />
       ) : null}
@@ -7311,8 +7104,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             currentUserId: props.currentUserId ?? '',
             cache: presignCache,
             presignEnabled,
-            marks: infoMarks,
-            onJump: jumpTo,
             ...(onRemoveFiles !== undefined ? { onRemoveFiles } : {}),
           })
         : null}
@@ -7384,24 +7175,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           />
         </SearchWordsContext.Provider>
       ) : null}
-      <PrioritySheet
-        open={priorityFor !== null}
-        title={priorityFor?.mode === 'change' ? 'Change priority' : 'Mark as Pending'}
-        current={
-          priorityFor?.mode === 'change' ? marks.get(priorityFor.messageId)?.priority : undefined
-        }
-        busy={priorityBusy}
-        onClose={() => setPriorityFor(null)}
-        onChoose={(priority) => {
-          const target = priorityFor;
-          if (target === null) return;
-          setPriorityBusy(true);
-          void applyMark(target.messageId, 'pending', priority).finally(() => {
-            setPriorityBusy(false);
-            setPriorityFor(null);
-          });
-        }}
-      />
       {view !== null && viewParts !== null && viewThreads !== undefined ? (
         <ThreadViewFrame
           key={`thread:${view.rootId}`}

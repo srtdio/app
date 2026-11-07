@@ -1,4 +1,4 @@
-// Same-session chat memory (D3): a remembered message page, marks, scheduled
+// Same-session chat memory (D3): a remembered message page, scheduled
 // rows and cursors from an earlier open are allowed only when (a) they live
 // in memory only, never in localStorage, sessionStorage or IndexedDB; (b)
 // they are forgotten on sign-out AND at once on a workspace switch; (c) every
@@ -43,8 +43,6 @@ import { joinChatBundle, startChatBundle, type ChatBundleDeps } from '@/lib/chat
 import { revalidateRemembered } from '@/lib/chat/use-chat-thread';
 import { resetSessionReads } from '@/lib/session-read';
 import { sharedChatRead } from '@/lib/chat/workspace-reads';
-import type { ChatMark } from '@/lib/chat/marks';
-import type { ThreadMessage } from '@/lib/chat/thread';
 
 const KEY: ChatKey = { userId: 'u1', workspaceId: 'w1', channelId: 'c1' };
 const THROUGH = { createdAt: '2026-10-26T10:00:02.000Z', id: 'm2' };
@@ -57,7 +55,6 @@ function bundle(): ChatOpenBundle {
     reactions: [],
     readPositions: { rows: [], times: new Map() },
     replyCounts: new Map(),
-    marks: [],
     scheduled: [],
     openPosts: [],
     openPostCount: 0,
@@ -101,10 +98,6 @@ function holdAll(store: OpenCache): void {
   const owner = store.attach(KEY);
   owner.keep(page());
   owner.release();
-  store.remember(KEY, 'marks', {
-    marks: new Map<string, ChatMark>(),
-    markedMessages: new Map<string, ThreadMessage>(),
-  });
   store.remember(KEY, 'scheduled', []);
 }
 
@@ -156,8 +149,6 @@ describe('(a) chat memory is in memory only', () => {
       '../open-cache.ts',
       '../open-bundle.ts',
       '../use-chat-thread.ts',
-      '../use-chat-marks.ts',
-      '../marks.ts',
       '../scheduled.ts',
       '../read-receipts.ts',
       '../history.ts',
@@ -180,14 +171,13 @@ describe('(b) forgotten on sign-out and on a workspace switch', () => {
     expect(chatScopeLeft(a, null)).toEqual(a);
   });
 
-  it('a workspace switch forgets the page, marks, scheduled rows and cursors at once', () => {
+  it('a workspace switch forgets the page, scheduled rows and cursors at once', () => {
     const store = createOpenCache();
     holdAll(store);
     // Nothing of the new workspace was touched yet: the switch alone clears.
     leaveChatScope({ userId: 'u1', workspaceId: 'w1' }, { userId: 'u1', workspaceId: 'w2' }, store);
     expect(store.size()).toBe(0);
     expect(store.recall(KEY, 'thread')).toBeUndefined();
-    expect(store.recall(KEY, 'marks')).toBeUndefined();
     expect(store.recall(KEY, 'scheduled')).toBeUndefined();
   });
 

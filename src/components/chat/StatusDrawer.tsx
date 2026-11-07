@@ -4,37 +4,23 @@
 // (shared in this chat or not), ending soonest first, with its segmented bar,
 // progress line and first items (tap opens the Plan screen, at the item for
 // an item row). Posts in review open the same
-// PostSheet a PostCard tap opens. Briefs navigate to the brief. Marks jump to
-// the message and keep their stamp (Delivered / Closed / Completed) with the
-// existing inline confirm. The panel only moves on the Y axis (edgeStrip, run
+// PostSheet a PostCard tap opens. Briefs navigate to the brief. The panel only moves on the Y axis (edgeStrip, run
 // by StatusTicker through the motion module); colours are
 // design tokens only, so light and dark match.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { ReactElement, ReactNode, PointerEvent as ReactPointerEvent, Ref } from 'react';
 import { CountBadge } from '@/components/ui/CountBadge';
-import { Button } from '@/components/ui/Button';
 import { Backdrop } from '@/components/ui/Backdrop';
 import { PressableRow } from '@/components/ui/PressableRow';
 import {
   ICON_SIZE,
   IconBriefs,
-  IconCheck,
   IconChevronRight,
   IconEye,
   IconFile,
-  IconHourglass,
   IconPlan,
-  IconSignpost,
-  IconTarget,
 } from '@/components/ui/icons';
-import { useToast } from '@/components/ui/toast';
-import {
-  confirmMarkTransition,
-  messageTime,
-  openPostLines,
-  useCardTitles,
-} from '@/components/chat/MarksSheet';
 import {
   PRESIGN_ENABLED,
   sharedCardPresignCache,
@@ -60,15 +46,6 @@ import { fetchWithTrace } from '@/lib/fetch';
 import { formatLabel } from '@/lib/post-detail-presentation';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/cn';
-import type { ChatProfile } from '@/lib/chat-reads';
-import {
-  STAMP_WORD,
-  markConfirmAction,
-  markConfirmCopy,
-  markRowText,
-  priorityLabel,
-  type ChatMark,
-} from '@/lib/chat/marks';
 import {
   readPlanThumbs,
   type ConceptThumb,
@@ -77,12 +54,9 @@ import {
 } from '@/lib/chat/plans';
 import { POST_COVER_BOX, PostCover } from '@/components/chat/PostCover';
 import { usePostCovers, type CoverLookup } from '@/lib/chat/post-covers';
-import type { WriteResult } from '@/lib/chat/record';
 import {
-  SECTION_MARK_TYPE,
   SEGMENT_PILL,
   drawerDay,
-  openMarksOfType,
   planSectionCount,
   planSegment,
   sectionLabel,
@@ -92,7 +66,6 @@ import {
 } from '@/lib/chat/status-bar';
 import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
-import type { ThreadMessage } from '@/lib/chat/thread';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { OpenBriefRow } from '@/lib/chat/use-status-counts';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
@@ -106,9 +79,6 @@ export const STATUS_ICON: Record<
   plan: IconPlan,
   posts: IconEye,
   briefs: IconBriefs,
-  commitments: IconTarget,
-  decisions: IconSignpost,
-  pending: IconHourglass,
 };
 
 /** No iOS text selection or callout on the bar and drawer. */
@@ -127,12 +97,6 @@ export interface StatusDrawerData {
   plans: readonly PlanBundle[];
   posts: { heading: string; rows: readonly OpenPostRow[]; count: number };
   briefs: { rows: readonly OpenBriefRow[]; count: number };
-  marks: Map<string, ChatMark>;
-  messageFor: (messageId: string) => ThreadMessage | undefined;
-  profiles: Map<string, ChatProfile>;
-  /** Mark stamps; absent leaves the rows without a stamp. */
-  onResolveMark?: ((messageId: string) => Promise<WriteResult>) | undefined;
-  onReopenMark?: ((messageId: string) => Promise<WriteResult>) | undefined;
 }
 
 /** Where each drawer tap goes. */
@@ -142,8 +106,6 @@ export interface StatusDrawerActions {
   onOpenPost: (postId: string) => void;
   onOpenBrief: (briefId: string) => void;
   onSeeAllBriefs: () => void;
-  onJumpMark: (messageId: string) => void;
-  onSeeAllMarks: () => void;
 }
 
 // Layout and colour only: PressableRow provides width, 44px height, radius,
@@ -390,88 +352,8 @@ export function PlanBlock(props: {
   );
 }
 
-function senderOf(message: ThreadMessage | undefined, profiles: Map<string, ChatProfile>): string {
-  if (message === undefined) return 'Member';
-  if (message.mine) return 'You';
-  const name =
-    message.senderUserId !== null ? profiles.get(message.senderUserId)?.displayName : undefined;
-  return name ?? 'Member';
-}
-
-/** One open mark row: the message text, who and when, the P1/P2 pill and the stamp. */
-export function StatusMarkRow(props: {
-  mark: ChatMark;
-  text: string;
-  meta: string;
-  confirming: boolean;
-  busy: boolean;
-  canStamp: boolean;
-  onJump: () => void;
-  onAsk: () => void;
-  onCancel: () => void;
-  onConfirm: () => void;
-}): ReactElement {
-  const { mark } = props;
-  const priority = mark.type === 'pending' ? priorityLabel(mark.priority) : '';
-  return (
-    <div data-status-mark={mark.messageId} className={cn('-mx-3 flex flex-col pr-3', ROW_RULE)}>
-      <div className="flex items-center gap-3">
-        <PressableRow
-          type="button"
-          flat
-          data-mark-jump=""
-          onClick={props.onJump}
-          className={cn(ROW_BASE, 'flex-1 pl-3')}
-        >
-          <span className="min-w-0 flex-1">
-            <span className={ROW_TITLE}>{props.text}</span>
-            <span className={ROW_SUB}>{props.meta}</span>
-          </span>
-          {priority !== '' ? (
-            <span data-priority={priority} className={cn(PILL, 'bg-warn-soft text-warn')}>
-              {priority}
-            </span>
-          ) : null}
-          <Chevron />
-        </PressableRow>
-        {props.canStamp ? (
-          <Button
-            type="button"
-            data-mark-action="resolve"
-            aria-expanded={props.confirming}
-            disabled={props.busy}
-            onClick={props.onAsk}
-            className="min-w-11 shrink-0"
-          >
-            <IconCheck size={ICON_SIZE.inline} />
-            <span>{STAMP_WORD[mark.type]}</span>
-          </Button>
-        ) : null}
-      </div>
-      {props.confirming ? (
-        <div
-          role="group"
-          aria-label={markConfirmCopy(mark.type, 'resolve')}
-          data-mark-confirm="resolve"
-          className="mb-1 ml-3 flex flex-wrap items-center gap-2 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
-        >
-          <span className="min-w-0 flex-1 text-base text-fg">
-            {markConfirmCopy(mark.type, 'resolve')}
-          </span>
-          <Button variant="ghost" disabled={props.busy} onClick={props.onCancel}>
-            Cancel
-          </Button>
-          <Button variant="primary" disabled={props.busy} onClick={props.onConfirm}>
-            {markConfirmAction(mark.type, 'resolve')}
-          </Button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 /**
- * The drawer's sections. Holds the stamp confirm (one at a time) and the posts
+ * The drawer's sections. Holds the posts
  * section's in-place "See all" expansion; rows update in place on live data.
  */
 export function StatusDrawerList(
@@ -484,44 +366,7 @@ export function StatusDrawerList(
       onExpandPosts: () => void;
     },
 ): ReactElement {
-  const [confirming, setConfirming] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const toast = useToast();
   const now = new Date(useMinuteClock());
-  const { messageFor, profiles } = props;
-
-  // A closed drawer drops any half-asked confirm.
-  useEffect(() => {
-    if (!props.open) setConfirming(null);
-  }, [props.open]);
-
-  const markedMessages = useMemo(() => {
-    const list: ThreadMessage[] = [];
-    for (const mark of props.marks.values()) {
-      if (mark.resolved) continue;
-      const message = messageFor(mark.messageId);
-      if (message !== undefined) list.push(message);
-    }
-    return list;
-  }, [props.marks, messageFor]);
-  const titles = useCardTitles(props.open, markedMessages);
-  const timeOf = (mark: ChatMark): number => messageTime(mark, messageFor(mark.messageId));
-  const onResolve = props.onResolveMark;
-  const onReopen = props.onReopenMark;
-
-  async function confirm(mark: ChatMark): Promise<void> {
-    if (busy || onResolve === undefined || onReopen === undefined) return;
-    setBusy(true);
-    setConfirming(null);
-    await confirmMarkTransition({
-      action: 'resolve',
-      messageId: mark.messageId,
-      onResolve,
-      onReopen,
-      toast,
-    });
-    setBusy(false);
-  }
 
   const firstPlan = props.plans[0];
   const firstProgress = firstPlan !== undefined ? planProgress(firstPlan) : null;
@@ -585,7 +430,6 @@ export function StatusDrawerList(
             String(props.posts.count),
             <>
               {shown.map((post) => {
-                const lines = openPostLines(post, false, props.workspaceZone);
                 const busy = props.busyPostId === post.id;
                 return (
                   <PressableRow
@@ -603,7 +447,7 @@ export function StatusDrawerList(
                     </span>
                     <PostCover cover={covers(post.id)} />
                     <span className="min-w-0 flex-1">
-                      <span className={ROW_TITLE}>{lines.title}</span>
+                      <span className={ROW_TITLE}>{post.title}</span>
                       <span className={ROW_SUB}>{formatLabel(post.format)}</span>
                     </span>
                     <span className="flex shrink-0">
@@ -648,40 +492,7 @@ export function StatusDrawerList(
             </>,
           );
         }
-        const type = SECTION_MARK_TYPE[key];
-        const open = openMarksOfType(props.marks.values(), type, timeOf);
-        const { rows, seeAll } = sectionRows(open);
-        return section(
-          key,
-          String(open.length),
-          <>
-            {rows.map((mark) => {
-              const message = messageFor(mark.messageId);
-              const when =
-                message !== undefined && message.createdAt !== ''
-                  ? formatAgo(message.createdAt, now)
-                  : formatAgo(mark.markedAt, now);
-              return (
-                <StatusMarkRow
-                  key={mark.messageId}
-                  mark={mark}
-                  text={markRowText(message, titles.get(mark.messageId))}
-                  meta={`${senderOf(message, profiles)} · ${when}`}
-                  confirming={confirming === mark.messageId}
-                  busy={busy}
-                  canStamp={onResolve !== undefined && onReopen !== undefined}
-                  onJump={() => props.onJumpMark(mark.messageId)}
-                  onAsk={() => setConfirming(mark.messageId)}
-                  onCancel={() => setConfirming(null)}
-                  onConfirm={() => void confirm(mark)}
-                />
-              );
-            })}
-            {seeAll !== null ? (
-              <SeeAllRow total={seeAll} onClick={props.onSeeAllMarks} attr="marks" />
-            ) : null}
-          </>,
-        );
+        return null;
       })}
     </>
   );

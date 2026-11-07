@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { planProgress, todayInZone } from '@/components/chat/plan-card';
-import type { ChatMark, MarkCounts } from '@/lib/chat/marks';
 import type { PlanBundle, PlanItemRow } from '@/lib/chat/plans';
 import {
   NOTHING_OPEN_LINE,
@@ -16,7 +15,6 @@ import {
   drawerKeys,
   drawerShouldClose,
   keptTitle,
-  openMarksOfType,
   openPlans,
   planSectionCount,
   planSegment,
@@ -35,10 +33,8 @@ import {
   type StatusKey,
 } from '@/lib/chat/status-bar';
 
-const NO_MARKS: MarkCounts = { commitments: 0, decisions: 0, pending: 0, p1: 0 };
-
 function input(over: Partial<StatusInput> = {}): StatusInput {
-  return { plans: [], posts: 0, briefs: 0, marks: NO_MARKS, side: 'agency', ...over };
+  return { plans: [], posts: 0, briefs: 0, side: 'agency', ...over };
 }
 
 function bundle(
@@ -87,51 +83,24 @@ function summary(id: string, approved: number, total: number, changes = 0): Plan
   return { id, title: `Plan ${id}`, approved, total, changes };
 }
 
-describe('statusItems: every on/off combination of the six items', () => {
-  it('all 64 combos: fixed order, zero items omitted, the rest close up', () => {
-    for (let mask = 0; mask < 64; mask += 1) {
+describe('statusItems: every on/off combination of the three items', () => {
+  it('all 8 combos: fixed order, zero items omitted, the rest close up', () => {
+    for (let mask = 0; mask < 8; mask += 1) {
       const on = (bit: number): boolean => (mask & (1 << bit)) !== 0;
-      const items = statusItems(
-        input({
-          plans: on(0) ? [summary('p', 1, 3)] : [],
-          posts: on(1) ? 2 : 0,
-          briefs: on(2) ? 3 : 0,
-          marks: {
-            commitments: on(3) ? 4 : 0,
-            decisions: on(4) ? 5 : 0,
-            pending: on(5) ? 6 : 0,
-            p1: 0,
-          },
-        }),
-      );
+      const over = {
+        plans: on(0) ? [summary('p', 1, 3)] : [],
+        posts: on(1) ? 2 : 0,
+        briefs: on(2) ? 3 : 0,
+      };
+      const items = statusItems(input(over));
       const expected = STATUS_ORDER.filter((_, bit) => on(bit));
       expect(items.map((i) => i.key)).toEqual(expected);
-      const bar = statusBar(
-        input({
-          plans: on(0) ? [summary('p', 1, 3)] : [],
-          posts: on(1) ? 2 : 0,
-          briefs: on(2) ? 3 : 0,
-          marks: {
-            commitments: on(3) ? 4 : 0,
-            decisions: on(4) ? 5 : 0,
-            pending: on(5) ? 6 : 0,
-            p1: 0,
-          },
-        }),
-      );
-      expect(bar.kind).toBe(mask === 0 ? 'empty' : 'items');
+      expect(statusBar(input(over)).kind).toBe(mask === 0 ? 'empty' : 'items');
     }
   });
 
-  it('the order is plan, posts, briefs, commitments, decisions, pending', () => {
-    expect(STATUS_ORDER).toEqual([
-      'plan',
-      'posts',
-      'briefs',
-      'commitments',
-      'decisions',
-      'pending',
-    ]);
+  it('the order is plan, posts, briefs', () => {
+    expect(STATUS_ORDER).toEqual(['plan', 'posts', 'briefs']);
   });
 });
 
@@ -151,12 +120,6 @@ describe('bar wording', () => {
       statusItems(input(over)).map((i) => i.word ?? '');
     expect(word({ briefs: 1 })).toEqual(['brief']);
     expect(word({ briefs: 2 })).toEqual(['briefs']);
-    expect(word({ marks: { ...NO_MARKS, commitments: 1 } })).toEqual(['commitment']);
-    expect(word({ marks: { ...NO_MARKS, commitments: 3 } })).toEqual(['commitments']);
-    expect(word({ marks: { ...NO_MARKS, decisions: 1 } })).toEqual(['decision']);
-    expect(word({ marks: { ...NO_MARKS, decisions: 2 } })).toEqual(['decisions']);
-    expect(word({ marks: { ...NO_MARKS, pending: 1 } })).toEqual(['pending']);
-    expect(word({ marks: { ...NO_MARKS, pending: 7 } })).toEqual(['pending']);
   });
 
   it('posts wording follows the side', () => {
@@ -221,30 +184,23 @@ describe('bar wording', () => {
     expect(planTone({ approved: 2, total: 5, changes: 0 })).toBe('default');
     expect(planTone({ approved: 0, total: 0, changes: 0 })).toBe('default');
   });
-
-  it('pending is warn when any open pending is P1', () => {
-    const tone = (p1: number): string | undefined =>
-      statusItems(input({ marks: { ...NO_MARKS, pending: 2, p1 } }))[0]?.tone;
-    expect(tone(1)).toBe('warn');
-    expect(tone(0)).toBe('default');
-  });
 });
 
 describe('empty and failed reads', () => {
   it('empty only when every read succeeded with zero', () => {
     expect(statusBar(input())).toEqual({ kind: 'empty' });
-    expect(NOTHING_OPEN_LINE).toBe('Open posts and marks show up here.');
+    expect(NOTHING_OPEN_LINE).toBe('Open plans, posts and briefs show up here.');
   });
 
   it('a failed read never yields empty, and omits only its own item', () => {
-    for (const failed of ['plans', 'posts', 'briefs', 'marks'] as const) {
+    for (const failed of ['plans', 'posts', 'briefs'] as const) {
       const bar = statusBar(input({ [failed]: null }));
       expect(bar.kind).toBe('blank');
       expect(anyReadFailed(input({ [failed]: null }))).toBe(true);
     }
     const bar = statusBar(input({ posts: null, briefs: 2 }));
     expect(bar.kind === 'items' ? bar.items.map((i) => i.key) : []).toEqual(['briefs']);
-    expect(statusItems(input({ marks: null, posts: 1 })).map((i) => i.key)).toEqual(['posts']);
+    expect(statusItems(input({ plans: null, posts: 1 })).map((i) => i.key)).toEqual(['posts']);
   });
 
   it('the drawer closes itself once the bar is no longer items', () => {
@@ -254,7 +210,7 @@ describe('empty and failed reads', () => {
   });
 
   it('first paint waits for every read', () => {
-    const all = { posts: true, side: true, marks: true, plans: true, briefs: true };
+    const all = { posts: true, side: true, plans: true, briefs: true };
     expect(statusReady(all)).toBe(true);
     for (const key of Object.keys(all) as Array<keyof typeof all>) {
       expect(statusReady({ ...all, [key]: false })).toBe(false);
@@ -420,28 +376,6 @@ describe('plan rows', () => {
 });
 
 describe('drawer sections', () => {
-  const mark = (id: string, type: ChatMark['type'], at: string, resolved = false): ChatMark => ({
-    messageId: id,
-    channelId: 'c',
-    type,
-    priority: null,
-    markedAt: at,
-    resolved,
-    resolvedBy: null,
-    resolvedAt: resolved ? at : null,
-  });
-
-  it('open marks of a type, newest first', () => {
-    const marks = [
-      mark('a', 'commitment', '2026-10-01T00:00:00Z'),
-      mark('b', 'commitment', '2026-10-03T00:00:00Z'),
-      mark('c', 'decision', '2026-10-04T00:00:00Z'),
-      mark('d', 'commitment', '2026-10-05T00:00:00Z', true),
-    ];
-    const rows = openMarksOfType(marks, 'commitment', (m) => Date.parse(m.markedAt));
-    expect(rows.map((m) => m.messageId)).toEqual(['b', 'a']);
-  });
-
   it('first five rows then See all N', () => {
     const rows = Array.from({ length: 7 }, (_, i) => i);
     expect(sectionRows(rows)).toEqual({ rows: rows.slice(0, SECTION_ROWS), seeAll: 7 });
@@ -450,17 +384,10 @@ describe('drawer sections', () => {
   });
 
   it('labels', () => {
-    const labels = (
-      ['plan', 'posts', 'briefs', 'commitments', 'decisions', 'pending'] as StatusKey[]
-    ).map((key) => sectionLabel(key, { postsHeading: 'Posts waiting on you', plans: 1 }));
-    expect(labels).toEqual([
-      'Plan',
-      'Posts waiting on you',
-      'Open briefs',
-      'Commitments',
-      'Decisions',
-      'Pending',
-    ]);
+    const labels = (['plan', 'posts', 'briefs'] as StatusKey[]).map((key) =>
+      sectionLabel(key, { postsHeading: 'Posts waiting on you', plans: 1 }),
+    );
+    expect(labels).toEqual(['Plan', 'Posts waiting on you', 'Open briefs']);
     expect(sectionLabel('plan', { postsHeading: '', plans: 2 })).toBe('Plans');
   });
 

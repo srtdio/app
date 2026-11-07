@@ -167,7 +167,7 @@ describe('ownMessageActions: the edit and delete windows', () => {
 
   it('peer, pending (no created_at), failed and deleted: nothing', () => {
     const none = { canEdit: false, canDelete: false, lockedByMark: false };
-    expect(ownMessageActions(msg({ mine: false }), undefined, NOW)).toEqual(none);
+    expect(ownMessageActions(msg({ mine: false }), NOW)).toEqual(none);
     expect(ownMessageActions(msg({ mine: false }), MARK, NOW)).toEqual(none);
     expect(
       ownMessageActions(
@@ -176,14 +176,14 @@ describe('ownMessageActions: the edit and delete windows', () => {
         NOW,
       ),
     ).toEqual(none);
-    expect(ownMessageActions(msg({ createdAt: '' }), undefined, NOW)).toEqual(none);
-    expect(ownMessageActions(msg({ state: 'failed' }), undefined, NOW)).toEqual(none);
-    expect(ownMessageActions(msg({ deleted: true }), undefined, NOW)).toEqual(none);
+    expect(ownMessageActions(msg({ createdAt: '' }), NOW)).toEqual(none);
+    expect(ownMessageActions(msg({ state: 'failed' }), NOW)).toEqual(none);
+    expect(ownMessageActions(msg({ deleted: true }), NOW)).toEqual(none);
   });
 
   it('Edit needs a body: a card or attachment only message can be deleted, not edited', () => {
     const cardOnly = msg({ body: '', sharedPostIds: ['p1'] });
-    expect(ownMessageActions(cardOnly, undefined, NOW)).toEqual({
+    expect(ownMessageActions(cardOnly, NOW)).toEqual({
       canEdit: false,
       canDelete: true,
       lockedByMark: false,
@@ -197,16 +197,16 @@ describe('ownMessageActions: the edit and delete windows', () => {
       lockedByMark: false,
     });
     const blank = msg({ ...ago(40), body: ' ' });
-    expect(ownMessageActions(blank, undefined, NOW, true).canEdit).toBe(false);
+    expect(ownMessageActions(blank, NOW, true).canEdit).toBe(false);
   });
 
   it('judges the window from the server created_at against the given moment', () => {
     const m = msg(ago(0));
     const created = Date.parse(m.createdAt);
-    expect(ownMessageActions(m, undefined, created + EDIT_WINDOW_MS).canEdit).toBe(true);
-    expect(ownMessageActions(m, undefined, created + EDIT_WINDOW_MS + 1).canEdit).toBe(false);
-    expect(ownMessageActions(m, undefined, created + DELETE_WINDOW_MS).canDelete).toBe(true);
-    expect(ownMessageActions(m, undefined, created + DELETE_WINDOW_MS + 1).canDelete).toBe(false);
+    expect(ownMessageActions(m, created + EDIT_WINDOW_MS).canEdit).toBe(true);
+    expect(ownMessageActions(m, created + EDIT_WINDOW_MS + 1).canEdit).toBe(false);
+    expect(ownMessageActions(m, created + DELETE_WINDOW_MS).canDelete).toBe(true);
+    expect(ownMessageActions(m, created + DELETE_WINDOW_MS + 1).canDelete).toBe(false);
   });
 });
 
@@ -326,7 +326,7 @@ describe('messageMenuItems: row set per case', () => {
 
   it('pending: no Edit or Delete (no created_at)', () => {
     const pending = msg({ createdAt: '', state: 'sending', provisionalTime: true });
-    const own = ownMessageActions(pending, undefined, NOW);
+    const own = ownMessageActions(pending, NOW);
     expect(
       menu({
         canForward: false,
@@ -559,8 +559,8 @@ describe('D3: window visibility on server time', () => {
       NOW,
     ).serverClockOffsetMs;
     expect(offset).toBe(10 * MIN);
-    const onDevice = ownMessageActions(msg({ createdAt: created }), undefined, deviceNow);
-    const onServer = ownMessageActions(msg({ createdAt: created }), undefined, deviceNow + offset);
+    const onDevice = ownMessageActions(msg({ createdAt: created }), deviceNow);
+    const onServer = ownMessageActions(msg({ createdAt: created }), deviceNow + offset);
     expect(onDevice.canEdit).toBe(true);
     expect(onServer.canEdit).toBe(false);
     expect(onServer.canDelete).toBe(true);
@@ -581,7 +581,7 @@ describe('D3: window visibility on server time', () => {
     const serverNow = (): number => Date.now() + offset;
     // Created 5 server-minutes ago.
     const message = msg({ createdAt: new Date(serverNow() - 5 * MIN).toISOString() });
-    let rows = ownMessageActions(message, undefined, serverNow());
+    let rows = ownMessageActions(message, serverNow());
     const recomputed: string[] = [];
     let cancel = (): void => {};
     const arm = (): void => {
@@ -589,7 +589,7 @@ describe('D3: window visibility on server time', () => {
         createdAt: message.createdAt,
         now: serverNow,
         onBoundary: () => {
-          rows = ownMessageActions(message, undefined, serverNow());
+          rows = ownMessageActions(message, serverNow());
           recomputed.push(`${rows.canEdit ? 'edit' : '-'} ${rows.canDelete ? 'delete' : '-'}`);
           arm(); // the menu re-schedules from its new moment
         },

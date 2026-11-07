@@ -27,7 +27,6 @@ import {
   type ContactTab,
   type Feed,
 } from '@/components/chat/ChatInfoTabs';
-import { MarksList } from '@/components/chat/MarksSheet';
 import { PresignCache } from '@/lib/asset-presign';
 import type { ChatProfile } from '@/lib/chat-reads';
 import type { Result } from '@srtdio/rpc';
@@ -102,17 +101,6 @@ function props(over: Partial<ChatInfoTabsViewProps> = {}): ChatInfoTabsViewProps
     timeZone: 'UTC',
     senderName: () => 'Alice',
     onOpenImage: vi.fn(),
-    marks: {
-      marks: new Map(),
-      messageFor: () => undefined,
-      profiles: new Map(),
-      currentUserId: 'me',
-      timeZone: 'UTC',
-      onResolve: vi.fn(),
-      onReopen: vi.fn(),
-    },
-    open: true,
-    onJump: vi.fn(),
     mode: 'preview',
     ...over,
   };
@@ -199,19 +187,6 @@ describe('ChatInfoTabsView preview', () => {
     expect(seeAll(links)).toEqual([]);
   });
 
-  it('Marks passes a 3-row preview with See all until expanded', () => {
-    const onSeeAll = vi.fn();
-    const [list] = findAll(view(props({ tab: 'marks', onSeeAll })), (el) => el.type === MarksList);
-    const preview = list?.props.preview as { rows: number; seeAll: ReactElement };
-    expect(preview.rows).toBe(PREVIEW_COUNT.marks);
-    expect(preview.seeAll.type).toBe(SeeAllRow);
-    (preview.seeAll.props as { onClick: () => void }).onClick();
-    expect(onSeeAll).toHaveBeenCalledWith('marks');
-    const expanded = view(props({ tab: 'marks', expanded: new Set<ContactTab>(['marks']) }));
-    const [full] = findAll(expanded, (el) => el.type === MarksList);
-    expect(full?.props.preview).toBeUndefined();
-  });
-
   it('first paint is the same loading state as full mode', () => {
     const tree = view(props({ attachments: null }));
     expect(findAll(tree, (el) => el.props['data-feed'] === 'loading')).toHaveLength(1);
@@ -222,11 +197,6 @@ describe('ChatInfoTabsView preview', () => {
     const tree = view(props({ mode: 'full', attachments: feed(range(9).map((n) => item(n))) }));
     expect(tiles(tree)).toHaveLength(9);
     expect(seeAll(tree)).toEqual([]);
-    const [list] = findAll(
-      view(props({ mode: 'full', tab: 'marks' })),
-      (el) => el.type === MarksList,
-    );
-    expect(list?.props.preview).toBeUndefined();
   });
 
   it('previewOf offers See all past the cap or when an older page may exist', () => {

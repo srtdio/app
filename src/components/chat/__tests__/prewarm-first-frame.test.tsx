@@ -98,7 +98,6 @@ function bundle(scheduled: ScheduledRow[] = []): ChatOpenBundle {
     reactions: [],
     readPositions: { rows: [], times: new Map() },
     replyCounts: new Map(),
-    marks: [],
     scheduled,
     openPosts: [],
     openPostCount: 0,
@@ -279,7 +278,6 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
     expect(d.asked()).toBe(0);
     const scheduled = memory.recallFresh(KEY, 'scheduled');
     expect(scheduled?.map((r) => r.id)).toEqual(['s-1']);
-    expect(memory.recallFresh(KEY, 'marks')).toBeDefined();
     // The tap's names from the held members, in the same commit as the open.
     const named = heldOpenNames({
       page: memory.recall(KEY, 'thread'),
@@ -298,9 +296,8 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
         namesReady: named !== null,
         scheduledSettled: scheduled !== undefined,
         keptOpen: memory.recall(KEY, 'thread') !== undefined,
-        // The marks came with the taken pre-warm; no plan card is on this page.
-        keptPartsSettled:
-          memory.recallFresh(KEY, 'marks') !== undefined && planCardsSized(ME, WS, []),
+        // No plan card is on this page.
+        keptPartsSettled: planCardsSized(ME, WS, []),
       }),
     ).toBe(false);
     // Every later commit keeps the rows (the open re-reads nothing).

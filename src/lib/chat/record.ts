@@ -1,7 +1,7 @@
 // Postgres writes for chat, through the SECURITY DEFINER procs that are the
 // only write paths: chat_message_send (the record, called BEFORE Agora),
 // chat_reaction_add / chat_reaction_remove, chat_read_cursor_set,
-// chat_mark_set / chat_mark_resolve / chat_mark_reopen, chat_message_edit,
+// chat_message_edit,
 // chat_message_delete and
 // chat_channel_clear (delete a chat for the caller only). The actor
 // is auth.uid() server-side (never passed), and the trace id is the explicit
@@ -240,9 +240,6 @@ export function editFailureCopy(message: string): string {
   return errorText('edit', message);
 }
 
-/** User-facing copy for a failed mark; the raw proc text is only ever logged. */
-export const MARK_FAILED_COPY = errorText('mark', null);
-
 /**
  * User-facing copy for a failed delete, mapped from the proc's exception text
  * the same way edits are. Anything else (transport errors included) reads the
@@ -273,9 +270,6 @@ async function voidProc<
     | 'chat_reaction_add'
     | 'chat_reaction_remove'
     | 'chat_read_cursor_set'
-    | 'chat_mark_set'
-    | 'chat_mark_resolve'
-    | 'chat_mark_reopen'
     | 'chat_message_delete'
     | 'chat_message_remove_files',
 >(client: Client, fn: N, args: Functions[N]['Args']): Promise<WriteResult> {
@@ -328,66 +322,6 @@ export function setReadCursorRecord(params: ReadCursorParams): Promise<WriteResu
   return voidProc(params.client, 'chat_read_cursor_set', {
     p_channel_id: params.channelId,
     p_message_id: params.messageId,
-    p_trace_id: params.traceId,
-  });
-}
-
-export type MarkType = 'commitment' | 'decision' | 'pending';
-
-/** Pending priority: 1 (P1), 2 (P2), or null (unranked). */
-export type MarkPriority = 1 | 2 | null;
-
-interface MarkSetParams {
-  client: Client;
-  channelId: string;
-  messageId: string;
-  type: MarkType;
-  /** Pending only; always null for commitment and decision. */
-  priority: MarkPriority;
-  traceId: string;
-}
-
-/**
- * Mark a message, or (same type 'pending' on an already pending message) change
- * its priority: the proc inserts the first mark and updates priority after.
- * The generated Args type declares p_priority as a plain number because the
- * SQL smallint parameter has no default; SQL NULL (unranked) is valid there, so
- * the args are built with the nullable shape and narrowed once for the call.
- */
-export function setMarkRecord(params: MarkSetParams): Promise<WriteResult> {
-  const args: Omit<Functions['chat_mark_set']['Args'], 'p_priority'> & {
-    p_priority: number | null;
-  } = {
-    p_message_id: params.messageId,
-    p_channel_id: params.channelId,
-    p_mark_type: params.type,
-    p_priority: params.type === 'pending' ? params.priority : null,
-    p_trace_id: params.traceId,
-  };
-  return voidProc(params.client, 'chat_mark_set', args as Functions['chat_mark_set']['Args']);
-}
-
-interface MarkResolveParams {
-  client: Client;
-  channelId: string;
-  messageId: string;
-  traceId: string;
-}
-
-/** Stamp an open mark of any type (the row stays as history). */
-export function resolveMarkRecord(params: MarkResolveParams): Promise<WriteResult> {
-  return voidProc(params.client, 'chat_mark_resolve', {
-    p_message_id: params.messageId,
-    p_channel_id: params.channelId,
-    p_trace_id: params.traceId,
-  });
-}
-
-/** Return a stamped mark to open (resolver and resolved time cleared). */
-export function reopenMarkRecord(params: MarkResolveParams): Promise<WriteResult> {
-  return voidProc(params.client, 'chat_mark_reopen', {
-    p_message_id: params.messageId,
-    p_channel_id: params.channelId,
     p_trace_id: params.traceId,
   });
 }

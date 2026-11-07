@@ -9,9 +9,6 @@ import {
   editFailureCopy,
   editMessageRecord,
   removeReactionRecord,
-  reopenMarkRecord,
-  resolveMarkRecord,
-  setMarkRecord,
   sendMessageRecord,
   setReadCursorRecord,
 } from '@/lib/chat/record';
@@ -229,72 +226,6 @@ describe('sendMessageRecord with shared briefs', () => {
       p_channel_id: CHANNEL,
       p_trace_id: 'trace-1',
       p_shared_brief_ids: ['brief-1'],
-    });
-  });
-});
-
-describe('mark records', () => {
-  it('a pending priority change calls chat_mark_set with the same type and the new priority', async () => {
-    const { client, rpc } = voidClient();
-    const result = await setMarkRecord({
-      client,
-      channelId: CHANNEL,
-      messageId: 'm1',
-      type: 'pending',
-      priority: 2,
-      traceId: 't1',
-    });
-    expect(result.ok).toBe(true);
-    expect(rpc).toHaveBeenCalledWith('chat_mark_set', {
-      p_message_id: 'm1',
-      p_channel_id: CHANNEL,
-      p_mark_type: 'pending',
-      p_priority: 2,
-      p_trace_id: 't1',
-    });
-  });
-
-  it('commitment and decision always send a null priority; unranked pending sends null', async () => {
-    const { client, rpc } = voidClient();
-    await setMarkRecord({
-      client,
-      channelId: CHANNEL,
-      messageId: 'm1',
-      type: 'commitment',
-      priority: 1,
-      traceId: 't1',
-    });
-    await setMarkRecord({
-      client,
-      channelId: CHANNEL,
-      messageId: 'm2',
-      type: 'pending',
-      priority: null,
-      traceId: 't2',
-    });
-    expect(rpc.mock.calls.map((c) => (c as unknown[])[1])).toEqual([
-      expect.objectContaining({ p_mark_type: 'commitment', p_priority: null }),
-      expect.objectContaining({ p_mark_type: 'pending', p_priority: null }),
-    ]);
-  });
-
-  it('resolve calls chat_mark_resolve with the explicit trace id', async () => {
-    const { client, rpc } = voidClient();
-    await resolveMarkRecord({ client, channelId: CHANNEL, messageId: 'm1', traceId: 't1' });
-    expect(rpc).toHaveBeenCalledWith('chat_mark_resolve', {
-      p_message_id: 'm1',
-      p_channel_id: CHANNEL,
-      p_trace_id: 't1',
-    });
-  });
-
-  it('reopen calls chat_mark_reopen with the explicit trace id', async () => {
-    const { client, rpc } = voidClient();
-    await reopenMarkRecord({ client, channelId: CHANNEL, messageId: 'm1', traceId: 't1' });
-    expect(rpc).toHaveBeenCalledWith('chat_mark_reopen', {
-      p_message_id: 'm1',
-      p_channel_id: CHANNEL,
-      p_trace_id: 't1',
     });
   });
 });

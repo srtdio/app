@@ -367,7 +367,6 @@ describe('open bundle', () => {
       read_cursors: [],
       cursor_messages: [],
       reply_counts: [],
-      marks: [],
       scheduled: [],
       open_posts: [],
       open_post_count: 0,

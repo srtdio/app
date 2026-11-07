@@ -7,25 +7,17 @@
 // the drawer's per-section rows. No React and no reads, so every rule is
 // unit-tested directly.
 
-import { NOTHING_OPEN, type MarkCounts, type ChatMark, type MarkType } from '@/lib/chat/marks';
 import type { PlanBundle } from '@/lib/chat/plans';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatDate } from '@/lib/time';
 
 /** The bar's items and the drawer's sections, in their one fixed order. */
-export type StatusKey = 'plan' | 'posts' | 'briefs' | 'commitments' | 'decisions' | 'pending';
+export type StatusKey = 'plan' | 'posts' | 'briefs';
 
-export const STATUS_ORDER: readonly StatusKey[] = [
-  'plan',
-  'posts',
-  'briefs',
-  'commitments',
-  'decisions',
-  'pending',
-];
+export const STATUS_ORDER: readonly StatusKey[] = ['plan', 'posts', 'briefs'];
 
 /** The bar's line when every read succeeded and nothing is open. */
-export const NOTHING_OPEN_LINE = NOTHING_OPEN;
+export const NOTHING_OPEN_LINE = 'Open plans, posts and briefs show up here.';
 
 /** Rows a drawer section lists before its "See all N" row. */
 export const SECTION_ROWS = 5;
@@ -64,8 +56,6 @@ export interface StatusInput {
   posts: number | null;
   /** Open briefs (the head-only count). */
   briefs: number | null;
-  /** Open marks of this channel. */
-  marks: MarkCounts | null;
   side: ViewerSide;
 }
 
@@ -102,6 +92,13 @@ export function postsWord(side: ViewerSide): string {
   return side === 'client' ? 'waiting' : 'in review';
 }
 
+/** The drawer's posts heading per side. Pure. */
+export function openPostsHeading(side: ViewerSide): string {
+  if (side === 'client') return 'Posts waiting on you';
+  if (side === 'agency') return 'Posts waiting on approvers';
+  return 'Posts in review';
+}
+
 /** The plan number's colour: warn when any change is asked, good when all approved. Pure. */
 export function planTone(plan: Pick<PlanSummary, 'approved' | 'total' | 'changes'>): StatusTone {
   if (plan.changes > 0) return 'warn';
@@ -109,12 +106,7 @@ export function planTone(plan: Pick<PlanSummary, 'approved' | 'total' | 'changes
   return 'default';
 }
 
-function countItem(
-  key: Exclude<StatusKey, 'plan'>,
-  count: number,
-  word: string,
-  tone: StatusTone = 'default',
-): StatusItem {
+function countItem(key: Exclude<StatusKey, 'plan'>, count: number, word: string): StatusItem {
   return {
     key,
     id: key,
@@ -123,7 +115,7 @@ function countItem(
     number: capCount(count),
     word,
     more: 0,
-    tone,
+    tone: 'default',
     count,
     aria: `${count} ${word}`,
   };
@@ -168,38 +160,16 @@ export function statusItems(input: StatusInput): StatusItem[] {
   if (input.briefs !== null && input.briefs > 0) {
     items.push(countItem('briefs', input.briefs, plural(input.briefs, 'brief', 'briefs')));
   }
-  const marks = input.marks;
-  if (marks !== null) {
-    if (marks.commitments > 0) {
-      items.push(
-        countItem(
-          'commitments',
-          marks.commitments,
-          plural(marks.commitments, 'commitment', 'commitments'),
-        ),
-      );
-    }
-    if (marks.decisions > 0) {
-      items.push(
-        countItem('decisions', marks.decisions, plural(marks.decisions, 'decision', 'decisions')),
-      );
-    }
-    if (marks.pending > 0) {
-      items.push(countItem('pending', marks.pending, 'pending', marks.p1 > 0 ? 'warn' : 'default'));
-    }
-  }
   return items;
 }
 
 /** Whether any read of the round failed. Pure. */
 export function anyReadFailed(input: StatusInput): boolean {
-  return (
-    input.plans === null || input.posts === null || input.briefs === null || input.marks === null
-  );
+  return input.plans === null || input.posts === null || input.briefs === null;
 }
 
 /**
- * What the bar paints: its items; "Open posts and marks show up here." only when every
+ * What the bar paints: its items; NOTHING_OPEN_LINE only when every
  * read succeeded with zero; else a blank inert bar (something failed and
  * nothing else is open, so it never claims nothing is). Pure.
  */
@@ -216,16 +186,15 @@ export function statusBar(input: StatusInput): StatusBar {
 
 /**
  * The first-paint gate: the 36px slot stays empty and inert until the posts,
- * side, marks, plans and briefs reads have all settled (ok or failed). Pure.
+ * side, plans and briefs reads have all settled (ok or failed). Pure.
  */
 export function statusReady(input: {
   posts: boolean;
   side: boolean;
-  marks: boolean;
   plans: boolean;
   briefs: boolean;
 }): boolean {
-  return input.posts && input.side && input.marks && input.plans && input.briefs;
+  return input.posts && input.side && input.plans && input.briefs;
 }
 
 /**
@@ -348,24 +317,6 @@ export function titleWordsKept(
   return kept;
 }
 
-/** Which mark type a marks section lists. */
-export const SECTION_MARK_TYPE: Record<'commitments' | 'decisions' | 'pending', MarkType> = {
-  commitments: 'commitment',
-  decisions: 'decision',
-  pending: 'pending',
-};
-
-/** One marks section's rows: open marks of the type, newest message first. Pure. */
-export function openMarksOfType(
-  marks: Iterable<ChatMark>,
-  type: MarkType,
-  timeOf: (mark: ChatMark) => number,
-): ChatMark[] {
-  return [...marks]
-    .filter((m) => !m.resolved && m.type === type)
-    .sort((a, b) => timeOf(b) - timeOf(a));
-}
-
 /** The first rows of a section and whether a "See all N" row follows. Pure. */
 export function sectionRows<T>(
   rows: readonly T[],
@@ -390,12 +341,6 @@ export function sectionLabel(
       return input.postsHeading;
     case 'briefs':
       return 'Open briefs';
-    case 'commitments':
-      return 'Commitments';
-    case 'decisions':
-      return 'Decisions';
-    case 'pending':
-      return 'Pending';
   }
 }
 

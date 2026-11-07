@@ -198,7 +198,6 @@ function recordingClient(
       cursor_messages:
         peerRead !== undefined ? [{ id: peerRead.id, created_at: peerRead.created_at }] : [],
       reply_counts: [],
-      marks: [],
       scheduled,
       open_posts: [],
       open_post_count: 0,
@@ -437,8 +436,6 @@ describe('first tap on a pre-warmed chat', () => {
     await settle();
     const scheduled = await memory.join(KEY, 'scheduled');
     expect(scheduled?.ok === true ? scheduled.data.map((r) => r.id) : null).toEqual(['s-1']);
-    const marks = await memory.join(KEY, 'marks');
-    expect(marks?.ok).toBe(true);
     expect(perTable(queries)).toEqual({ 'rpc:chat_open_bundle': 1 });
   });
 

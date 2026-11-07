@@ -22,7 +22,6 @@ import { createLiveVerifier } from '@/lib/chat/live-verify';
 import { fetchOpenPosts } from '@/lib/chat/use-open-posts';
 import { resetViewerSideCache, resolveViewerSide } from '@/lib/chat/viewer-role';
 import { editedRows } from '@/lib/chat/use-chat-thread';
-import { marksReadFailed } from '@/lib/chat/use-chat-marks';
 import { CARD_READ_TRIES, createSharedCardCache } from '@/lib/chat/shared-cards';
 import type { ChatMessageRow, ThreadMessage } from '@/lib/chat/thread';
 
@@ -270,14 +269,6 @@ describe('E8: the preview names what the attachment is', () => {
     expect(previewText({ body: '', hasAttachments: true, attachmentKinds: ['audio'] })).toBe(
       'Voice message',
     );
-  });
-});
-
-describe('E16: marks read failure', () => {
-  it('settled with no good read is failed (strip hidden, never "Nothing open")', () => {
-    expect(marksReadFailed(true, null, 'c1')).toBe(true);
-    expect(marksReadFailed(true, 'c1', 'c1')).toBe(false);
-    expect(marksReadFailed(false, null, 'c1')).toBe(false);
   });
 });
 

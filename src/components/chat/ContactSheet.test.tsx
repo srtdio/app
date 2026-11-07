@@ -21,7 +21,6 @@ import {
   type ContactTab,
   type Feed,
 } from '@/components/chat/ContactSheet';
-import { MarksList } from '@/components/chat/MarksSheet';
 import { PresignCache } from '@/lib/asset-presign';
 import type { ChannelAttachmentItem, ChannelLinkItem } from '@/lib/chat/channel-media';
 
@@ -90,16 +89,6 @@ function props(over: Partial<ContactSheetViewProps> = {}): ContactSheetViewProps
     timeZone: 'UTC',
     senderName: () => 'Alice',
     onOpenImage: vi.fn(),
-    marks: {
-      marks: new Map(),
-      messageFor: () => undefined,
-      profiles: new Map(),
-      currentUserId: 'me',
-      timeZone: 'UTC',
-      onResolve: vi.fn(),
-      onReopen: vi.fn(),
-    },
-    onJump: vi.fn(),
     ...over,
   };
 }
@@ -146,17 +135,16 @@ describe('ContactSheetView page', () => {
 });
 
 describe('ContactSheetView tabs', () => {
-  it('renders Media, Files, Links, Marks as tap chips; Media selected by default', () => {
+  it('renders Media, Files, Links as tap chips; Media selected by default', () => {
     const tree = view(props());
     const chips = findAll(tree, (el) => el.type === Chip);
     expect(chips.map((c) => c.props.label)).toEqual([
       'Media',
       'Files',
       'Links',
-      'Marks',
     ]);
     expect(chips.every((c) => c.props.size === 'tap')).toBe(true);
-    expect(chips.map((c) => c.props.selected)).toEqual([true, false, false, false]);
+    expect(chips.map((c) => c.props.selected)).toEqual([true, false, false]);
   });
 
   it('tapping a chip switches the tab, and the body follows the tab', () => {
@@ -165,7 +153,7 @@ describe('ContactSheetView tabs', () => {
     const links = findAll(tree, (el) => el.type === Chip && el.props.label === 'Links')[0];
     (links?.props.onClick as () => void)();
     expect(onTab).toHaveBeenCalledWith('links');
-    for (const tab of ['media', 'files', 'links', 'marks'] as ContactTab[]) {
+    for (const tab of ['media', 'files', 'links'] as ContactTab[]) {
       const t = view(props({ tab }));
       expect(findAll(t, (el) => el.props['data-contact-tab'] === tab)).toHaveLength(1);
     }
@@ -180,11 +168,10 @@ describe('ContactSheetView tabs', () => {
     );
   });
 
-  it('Media and Files share the attachments read; Marks reads nothing', () => {
+  it('Media and Files share the attachments read; Links reads its own', () => {
     expect(feedForTab('media')).toBe('attachments');
     expect(feedForTab('files')).toBe('attachments');
     expect(feedForTab('links')).toBe('links');
-    expect(feedForTab('marks')).toBeNull();
   });
 });
 
@@ -241,18 +228,5 @@ describe('ContactSheetView states', () => {
     expect(first).toMatchObject({ status: 'ready', items: [1, 2], hasMore: true });
     const next = appendPage(first, { items: [3], hasMore: false, cursor: null });
     expect(next).toMatchObject({ items: [1, 2, 3], hasMore: false, cursor: { id: 'a' } });
-  });
-});
-
-describe('ContactSheetView Marks', () => {
-  it('jump closes the Contact sheet and calls onJump', () => {
-    const onClose = vi.fn();
-    const onJump = vi.fn();
-    const tree = view(props({ tab: 'marks', onClose, onJump }));
-    const list = findAll(tree, (el) => el.type === MarksList)[0];
-    expect(list).toBeDefined();
-    (list?.props.onJump as (id: string) => void)('m9');
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(onJump).toHaveBeenCalledWith('m9');
   });
 });

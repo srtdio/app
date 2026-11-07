@@ -279,7 +279,7 @@ describe('N4: a layer is one step', () => {
 
   it('a layer left under a navigation is buried and skipped on the way back', () => {
     const win = queuedWindow([LIST, CHAT_A]);
-    const step = enterHistoryStep(win, HISTORY_STEP_KEYS.marks, vi.fn());
+    const step = enterHistoryStep(win, HISTORY_STEP_KEYS.readInfo, vi.fn());
     win.write(PIPELINE, 'push');
     step.dispose();
     expect(buriedStepCount()).toBe(1);
