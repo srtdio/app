@@ -119,11 +119,7 @@ export function tabClass(active: boolean, shrunk = false): string {
 }
 
 /** One pill tab of the primary nav (Pipeline, Briefs, Assets, Plan). */
-function PillTab(props: {
-  item: (typeof PILL_NAV)[number];
-  planUnread: number;
-  shrunk: boolean;
-}) {
+function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number; shrunk: boolean }) {
   const { item, planUnread, shrunk } = props;
   const active = useMatch({ path: item.to, end: false }) !== null;
   // Plan with unread comments: the tap lands on the newest one (jump to latest).

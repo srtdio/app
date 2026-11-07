@@ -114,7 +114,10 @@ describe('ListCard frame', () => {
 describe('ListCard height: exactly 60 (10 + 40 + 10)', () => {
   it('the constant, and the classes that make it', () => {
     expect(LIST_CARD_HEIGHT_PX).toBe(60);
-    const frameH = listCardFrame().split(' ').find((c) => /^h-\d/.test(c)) ?? '';
+    const frameH =
+      listCardFrame()
+        .split(' ')
+        .find((c) => /^h-\d/.test(c)) ?? '';
     expect(stepPx(frameH, 'h-')).toBe(LIST_CARD_HEIGHT_PX);
     const pic = LIST_CARD_PICTURE.split(' ').find((c) => /^h-\d/.test(c)) ?? '';
     // The 40 picture centres in the row with 10 above and below.

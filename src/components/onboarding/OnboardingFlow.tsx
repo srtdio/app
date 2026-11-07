@@ -778,11 +778,7 @@ export function OnboardingFlow({
               )}
             >
               <span className="text-base font-medium">{tile.title}</span>
-              <span
-                className="text-sm text-fg-2"
-              >
-                {tile.sub}
-              </span>
+              <span className="text-sm text-fg-2">{tile.sub}</span>
             </PressableRow>
           ))}
         </div>

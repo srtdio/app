@@ -371,9 +371,7 @@ describe('tabClass: the flat pill tab', () => {
 
   it('active while shrunk: the same fill, squeezed to the 44 circle (no label room)', () => {
     const cls = tabClass(true, true).split(' ');
-    expect(cls).toEqual(
-      expect.arrayContaining(['bg-panel-3', 'text-fg', 'w-11', MOVE_CLASS.dock]),
-    );
+    expect(cls).toEqual(expect.arrayContaining(['bg-panel-3', 'text-fg', 'w-11', MOVE_CLASS.dock]));
     expect(cls).not.toContain('px-3');
     expect(cls).not.toContain('gap-1.5');
   });
@@ -381,9 +379,7 @@ describe('tabClass: the flat pill tab', () => {
   it('inactive: the icon alone in fg-2 in a 44 box, shrunk or not', () => {
     for (const shrunk of [false, true]) {
       const cls = tabClass(false, shrunk).split(' ');
-      expect(cls).toEqual(
-        expect.arrayContaining(['h-11', 'w-11', 'text-fg-2', MOVE_CLASS.dock]),
-      );
+      expect(cls).toEqual(expect.arrayContaining(['h-11', 'w-11', 'text-fg-2', MOVE_CLASS.dock]));
       expect(cls).not.toContain('bg-panel-3');
       expect(cls).not.toContain('bg-accent');
       expect(cls).not.toContain('lit-pill');
@@ -441,7 +437,6 @@ describe('useDockShrunk: one passive capture scroll listener on document', () =>
     act(() => root?.render(<Probe />));
     return host;
   }
-
 
   it('adds exactly one scroll listener ({capture, passive}) and removes the same one on unmount', () => {
     const add = vi.spyOn(document, 'addEventListener');
