@@ -7,10 +7,10 @@ import { cn } from '@/lib/cn';
 export const LOADING_MEMBERS = 'Loading members';
 
 /**
- * Settings rows while nothing is held for them (sweepBoxes): the group's label
- * on the page edge, then a card of ui/Rows holding Bones in the real row's
- * layout (a 32px avatar circle and two lines). A kept or session list paints at
- * once and never shows these.
+ * Settings rows while nothing is held for them (sweepBoxes): the group's card,
+ * its header (lit-header, as MembersList's group) holding the label's Bone, then
+ * ui/Rows holding Bones in the real row's layout (a 32px avatar circle and two
+ * lines). A kept or session list paints at once and never shows these.
  */
 export function SettingsRowBoxes({ label, rows = 3 }: { label: string; rows?: number }) {
   return (
@@ -18,12 +18,12 @@ export function SettingsRowBoxes({ label, rows = 3 }: { label: string; rows?: nu
       lit="flat"
       label={label}
       data-settings-row-boxes=""
-      className="flex flex-col gap-2"
+      className={cn('overflow-hidden', cardSurface())}
     >
-      <div className="flex h-5 items-center">
+      <div className="flex h-11 items-center border-b px-4 lit-header">
         <Bone lit="flat" className="h-3 w-24 rounded" />
       </div>
-      <div className={cn('overflow-hidden', cardSurface())}>
+      <div>
         {Array.from({ length: rows }, (_unused, index) => (
           <Row
             key={`row-${index}`}

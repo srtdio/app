@@ -536,12 +536,16 @@ describe('S3: the picture box is 72x72 whatever the picture, before and after it
   it('zero layout shift: the image fills the box and never sizes it (a 1600x400 picture stays 72)', () => {
     const html = renderToStaticMarkup(
       <ListCard
-        picture={{ kind: 'image', node: <img src="https://cdn/x.png" alt="" width={1600} height={400} /> }}
+        picture={{
+          kind: 'image',
+          node: <img src="https://cdn/x.png" alt="" width={1600} height={400} />,
+        }}
         title="T"
       />,
     );
     // The wrapper holds the picture to the slot: every child is h-full w-full.
-    const wrapper = /data-list-card-picture="image"[^>]*><span class="([^"]*)"/.exec(html)?.[1] ?? '';
+    const wrapper =
+      /data-list-card-picture="image"[^>]*><span class="([^"]*)"/.exec(html)?.[1] ?? '';
     const decoded = wrapper.replace(/&amp;/g, '&').replace(/&gt;/g, '>');
     expect(decoded.split(' ')).toEqual(
       expect.arrayContaining(['h-full', 'w-full', '[&>*]:h-full', '[&>*]:w-full']),

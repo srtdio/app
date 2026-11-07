@@ -419,10 +419,11 @@ function Group({
   emptyText: string;
   children: ReactNode;
 }) {
-  // The label sits on the page edge above its card (a grey page with lit cards).
+  // One lit card per group; its label is the card's header (lit-header, as on
+  // main), the rows under it.
   return (
-    <section aria-label={title} className="flex flex-col gap-2">
-      <div>
+    <section aria-label={title} className={cn('overflow-hidden', cardSurface())}>
+      <header className="border-b px-4 py-3 lit-header">
         <div className="flex items-center gap-2">
           <Text as="h3" role="section">
             {title}
@@ -430,10 +431,10 @@ function Group({
           <span className="text-sm text-fg-3">{count}</span>
         </div>
         {subtitle !== undefined && subtitle !== '' ? (
-          <p className="truncate text-sm text-fg-3">{subtitle}</p>
+          <p className="mt-0.5 truncate text-sm text-fg-3">{subtitle}</p>
         ) : null}
-      </div>
-      <div data-members-group="" className={cn('overflow-hidden', cardSurface())}>
+      </header>
+      <div data-members-group="">
         {count === 0 ? <p className="px-4 py-3 text-base text-fg-2">{emptyText}</p> : children}
       </div>
     </section>
