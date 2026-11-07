@@ -417,7 +417,7 @@ export interface PostSheetExtrasProps {
   onComment?: (() => void) | undefined;
   /** Bring the post into the chat's conversation; absent hides the button. */
   onTalkAbout?: (() => void) | undefined;
-  /** A quiet meta line (the agency's "Waiting on approvers since ..."), or null. */
+  /** A quiet meta line (the agency's "Waiting on approvers · 3 days ago"), or null. */
   hint: string | null;
 }
 
