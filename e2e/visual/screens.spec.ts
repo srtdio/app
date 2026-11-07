@@ -5412,6 +5412,11 @@ const LAPTOP_DARK_SCREENS = new Set([
   'concept-chip-ready',
   'concept-chip-failed',
   'onboarding-first-post-uploading',
+  // The writing box (8 Nov 2026): phone and laptop, light and dark.
+  'chat-box-typing',
+  'chat-box-format-row',
+  'chat-bubble-blocks',
+  'post-comment-box',
 ]);
 
 for (const screen of SCREENS) {
