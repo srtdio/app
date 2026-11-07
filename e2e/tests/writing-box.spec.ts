@@ -695,6 +695,24 @@ test('S12 phone: focusing the post comment box or a Reply box never shifts or wi
   await expect(bottom.locator('[data-writing-box]').first()).toHaveAttribute('data-shape', 'card');
   await page.keyboard.type('a long first line that runs past the width of the phone screen ');
   await onScreen('[data-comments-composer] [data-writing-box]');
+  // The whole card shows, its row of keys included: above the decision bar,
+  // with room under the keys (the card's bottom padding).
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const box = document.querySelector('[data-comments-composer] [data-writing-frame]');
+        const row = document.querySelector('[data-comments-composer] [data-writing-row]');
+        const bar = document.querySelector('[data-decision-bar]');
+        if (box === null || row === null) return 'missing';
+        const limit = bar?.getBoundingClientRect().top ?? window.innerHeight;
+        const b = box.getBoundingClientRect();
+        const r = row.getBoundingClientRect();
+        if (b.bottom > limit) return `card bottom ${b.bottom} under ${limit}`;
+        if (b.bottom - r.bottom < 4) return `keys on the card edge (${b.bottom - r.bottom})`;
+        return 'ok';
+      }),
+    )
+    .toBe('ok');
 
   // A Reply box in the thread: open it, a mention chip and words.
   const reply = page.locator('#post-comments [data-row-action="reply"]').first();

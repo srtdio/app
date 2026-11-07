@@ -303,6 +303,34 @@ export function WritingBox(props: WritingBoxProps) {
     setOn(activeActions(el));
   }, [field]);
 
+  // Focus grows the box (its row of keys appears under the text) and so does
+  // a new line: the browser only reveals the caret, so the row could sit under
+  // a bottom bar or the screen edge. While focused, each size change brings the
+  // whole box into view on the next frame (nearest: no move when it already
+  // shows; scroll-mb keeps it above the post page's decision bar). A box taller
+  // than half the screen is left to the caret (Expand is for long text). A
+  // scroll after paint, never a hold on the tap.
+  useEffect(() => {
+    if (!focused || phoneExpanded) return undefined;
+    const el = rootRef.current;
+    if (el === null || typeof el.scrollIntoView !== 'function') return undefined;
+    let raf = 0;
+    const reveal = (): void => {
+      window.cancelAnimationFrame(raf);
+      raf = window.requestAnimationFrame(() => {
+        if (el.getBoundingClientRect().height > window.innerHeight / 2) return;
+        el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      });
+    };
+    reveal();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(reveal) : null;
+    ro?.observe(el);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      ro?.disconnect();
+    };
+  }, [focused, phoneExpanded]);
+
   // While the format row is open, follow the caret (contentEditable has no
   // select event of its own). Only then: nothing is listened to at mount.
   useEffect(() => {
@@ -573,7 +601,7 @@ export function WritingBox(props: WritingBoxProps) {
     shape === 'pill' && 'min-h-11 items-center gap-2 rounded-full pl-1 pr-1',
     shape === 'line' &&
       cn('min-h-11 items-end gap-2 rounded-2xl pr-1', leading != null ? 'pl-1' : 'pl-3'),
-    shape === 'card' && 'flex-col rounded-2xl px-3 pt-1 focus-within:lit-focus',
+    shape === 'card' && 'flex-col rounded-2xl px-3 py-1 focus-within:lit-focus',
     shape === 'field' &&
       cn(
         'lit-well flex-col rounded-lg px-3 focus-within:lit-focus',
@@ -660,6 +688,9 @@ export function WritingBox(props: WritingBoxProps) {
         // never sizes the page to its rows (the Aa row is wider than a phone:
         // it scrolls inside the box instead of pushing the chat off screen).
         'flex w-full min-w-0 max-w-full flex-col gap-2 [contain:inline-size]',
+        // Revealed clear of a bottom bar the page names (the post page's phone
+        // decision bar sets --focus-inset-bottom), like a linked comment row.
+        'scroll-mb-[calc(var(--focus-inset-bottom,0px)+0.75rem)]',
         !phoneExpanded && 'relative',
         phoneExpanded && 'fixed inset-x-0 top-0 z-sheet bg-panel px-3 pb-2 lit-overlay',
         className,
