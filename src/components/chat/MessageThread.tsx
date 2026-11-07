@@ -1777,7 +1777,7 @@ function TombstoneBubble(props: {
       data-testid="tombstone"
       role="group"
       aria-label={props.label}
-      className={props.className}
+      className={cn(props.className, enabled && 'focus-visible:lit-focus')}
       {...(enabled
         ? {
             tabIndex: 0,
