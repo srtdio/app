@@ -16,6 +16,7 @@ import {
   IconUpload,
 } from '@/components/ui/icons';
 import { Card } from '@/components/ui/Card';
+import { UploadRetry, UploadRing, uploadSizeMeta } from '@/components/ui/UploadRing';
 import { humanizeSize } from '@/lib/assets';
 import {
   UPLOAD_ACCEPT,
@@ -26,7 +27,6 @@ import {
   type UploadOutcome,
 } from '@/lib/asset-upload';
 import { useBackGuard } from '@/lib/back-guard';
-import { fractionToPercent } from '@/lib/upload-queue';
 import { dispatchInductionRefresh } from '@/lib/induction';
 import { ROOT_LABEL } from '@/components/pages/assets/assets-nav';
 import type { AssetToast } from '@/components/pages/assets/AssetActionSheet';
@@ -246,8 +246,8 @@ interface AssetUploadSheetProps {
    * sheet stays a naming surface only (no upload endpoint configured) and the
    * confirm action explains that uploading is not wired yet. `signal` aborts
    * the requests in flight when the run is stopped. `onProgress` takes this
-   * file's bytes sent as a fraction 0..1 for its row's bar. Up to three files
-   * are submitted at once.
+   * file's bytes sent as a fraction 0..1 for its row's ring and size meta. Up
+   * to three files are submitted at once.
    */
   onSubmit?:
     | ((
@@ -372,7 +372,7 @@ export function AssetUploadSheet({
     setStatuses((prev) => ({ ...prev, [id]: status }));
   }, []);
 
-  // One file's bytes sent moved on: only its own row's bar changes, and only
+  // One file's bytes sent moved on: only its own row's ring changes, and only
   // while that file is still uploading (a late event after the end is dropped).
   const setFileProgress = useCallback((id: string, fraction: number): void => {
     setStatuses((prev) => {
@@ -462,7 +462,7 @@ export function AssetUploadSheet({
         { stopped: () => control.stopped, signal: control.controller.signal },
       );
 
-      // Up to three files go up at once, each with its own bar; one failing
+      // Up to three files go up at once, each with its own ring; one failing
       // never stops the others.
       const result = await runUploads(items, uploadOne, {
         onStart: (id) => {
@@ -669,16 +669,42 @@ export function AssetUploadSheet({
                 dense
                 muted
                 leading={
-                  <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3 lit-media">
+                  // The row thumb (44, the file ring's own box): the upload
+                  // ring with its X sits on it while the file goes up, Retry in
+                  // the same spot when it failed (decision F). Same footprint
+                  // in every state.
+                  <span
+                    data-upload-thumb={status.state}
+                    className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3 lit-media"
+                  >
                     {item.previewUrl !== null ? (
                       <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <IconFile size={ICON_SIZE.control} />
                     )}
+                    {status.state === 'uploading' ? (
+                      <UploadRing
+                        progress={status.progress}
+                        variant="file"
+                        label="Stop upload"
+                        onCancel={() => setStopAsk(true)}
+                        className="absolute inset-0"
+                      />
+                    ) : status.state === 'error' && !running ? (
+                      <UploadRetry
+                        variant="file"
+                        onRetry={() => void startRun([item])}
+                        className="absolute inset-0"
+                      />
+                    ) : null}
                   </span>
                 }
                 title={<span className="text-fg">{item.file.name}</span>}
-                meta={humanizeSize(item.file.size)}
+                meta={
+                  status.state === 'uploading'
+                    ? uploadSizeMeta(status.progress * item.file.size, item.file.size)
+                    : humanizeSize(item.file.size)
+                }
                 more={
                   <IconButton
                     label={`Remove ${item.file.name}`}
@@ -690,11 +716,7 @@ export function AssetUploadSheet({
                 }
                 className="self-stretch"
               >
-                <UploadStatusRow
-                  status={status}
-                  onRetry={() => void startRun([item])}
-                  disabled={running}
-                />
+                <UploadStatusRow status={status} />
               </Card>
             );
           })}
@@ -725,36 +747,10 @@ export function AssetUploadSheet({
   );
 }
 
-/** Per-file progress / outcome line: the file's real bytes-sent bar while
- *  uploading, a success marker on done, and an inline Retry on error. */
-function UploadStatusRow({
-  status,
-  onRetry,
-  disabled,
-}: {
-  status: FileStatus;
-  onRetry: () => void;
-  disabled: boolean;
-}) {
-  if (status.state === 'uploading') {
-    const percent = fractionToPercent(status.progress);
-    return (
-      <div
-        className="lit-well h-1 w-full overflow-hidden rounded-full bg-panel-3"
-        role="progressbar"
-        aria-label="Uploading"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-      >
-        {/* Width only (no translate): a sliver shows before the first bytes land. */}
-        <div
-          className="lit-fill h-full rounded-full bg-accent mv-fill"
-          style={{ width: `${Math.max(percent, 4)}%` }}
-        />
-      </div>
-    );
-  }
+/** Per-file outcome line: a success marker on done, the stopped note, and the
+ *  failure reason on error (its Retry is on the row thumb). While a file goes
+ *  up its progress is the thumb's ring and the size meta, so no line shows. */
+function UploadStatusRow({ status }: { status: FileStatus }) {
   if (status.state === 'done') {
     return (
       <span className="flex items-center gap-1 text-sm text-good">
@@ -768,17 +764,8 @@ function UploadStatusRow({
   }
   if (status.state === 'error') {
     return (
-      <span className="flex items-center justify-between gap-2 text-sm text-bad">
-        <span className="min-w-0 truncate">{status.message}</span>
-        <Button
-          variant="ghost"
-          type="button"
-          onClick={onRetry}
-          disabled={disabled}
-          className="shrink-0"
-        >
-          Retry
-        </Button>
+      <span data-upload-error="" className="block truncate text-sm text-bad">
+        {status.message}
       </span>
     );
   }

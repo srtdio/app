@@ -161,8 +161,8 @@ describe('Assets page type roles', () => {
   it('an old ?type=pdf lands on the Docs tab', async () => {
     await mount('/assets?type=pdf');
     expect(document.querySelector('[data-asset-tab-empty="docs"]')).not.toBeNull();
-    expect(
-      document.querySelector('[data-asset-tab="docs"]')?.getAttribute('aria-selected'),
-    ).toBe('true');
+    expect(document.querySelector('[data-asset-tab="docs"]')?.getAttribute('aria-selected')).toBe(
+      'true',
+    );
   });
 });

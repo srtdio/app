@@ -305,39 +305,46 @@ describe('X6 copy for the queue', () => {
   });
 });
 
-describe('per-file progress while files go up in parallel', () => {
-  const bars = () => [...document.querySelectorAll<HTMLElement>('[role="progressbar"]')];
+describe('per-file progress while files go up in parallel (decision F: ring on the thumb)', () => {
+  const rings = () => [...document.querySelectorAll<HTMLElement>('[data-upload-ring]')];
+  const progressOf = () => rings().map((ring) => ring.getAttribute('data-upload-progress'));
 
-  it('each row shows its own bytes-sent bar; a failure leaves the others going', async () => {
+  it('each row thumb carries its own ring and size meta; a failure leaves the others going', async () => {
     const onSubmit = fakeSubmit();
     const { onSummary } = await mount(onSubmit);
     await startUpload(3);
-    expect(bars()).toHaveLength(3);
-    expect(bars().map((bar) => bar.getAttribute('aria-valuenow'))).toEqual(['0', '0', '0']);
+    expect(rings()).toHaveLength(3);
+    for (const ring of rings()) {
+      expect(ring.getAttribute('data-ring-variant')).toBe('file');
+      expect(ring.getAttribute('aria-label')).toBe('Stop upload');
+      // The ring sits on the row thumb, filling its 44 box.
+      expect(ring.closest('[data-upload-thumb="uploading"]')).not.toBeNull();
+    }
+    expect(progressOf()).toEqual(['0', '0', '0']);
 
     await act(async () => {
       pending[0]?.progress?.(0.25);
       pending[2]?.progress?.(0.6);
     });
-    expect(bars().map((bar) => bar.getAttribute('aria-valuenow'))).toEqual(['25', '0', '60']);
-    // The bar animates its width only.
-    const fill = bars()[2]?.firstElementChild as HTMLElement | null;
-    expect(fill?.style.width).toBe('60%');
-    expect(fill?.className).toContain('mv-fill');
-    expect(fill?.className).not.toMatch(/translate|transform/);
+    expect(progressOf()).toEqual(['25', '0', '60']);
 
-    // A late, smaller value never moves a bar back.
+    // A late, smaller value never moves a ring back.
     await act(async () => pending[2]?.progress?.(0.4));
-    expect(bars()[1]?.getAttribute('aria-valuenow')).toBe('0');
-    expect(bars()[2]?.getAttribute('aria-valuenow')).toBe('60');
+    expect(progressOf()).toEqual(['25', '0', '60']);
 
-    // The second file fails: it shows the existing failed line and Retry; the others go on.
+    // The size meta reads bytes, never a % figure; no bar is left anywhere.
+    expect(document.body.textContent).toMatch(/\d+ of \d+ KB/);
+    expect(document.body.textContent).not.toMatch(/\d+%/);
+    expect(document.querySelector('.lit-fill')).toBeNull();
+    expect(document.querySelector('[role="progressbar"]:not(.sr-only)')).toBeNull();
+
+    // The second file fails: its reason shows and Retry waits on its thumb
+    // once the run ends; the others go on.
     await finish(1, { ok: false, message: 'This file was blocked for safety' });
     expect(document.body.textContent).toContain('This file was blocked for safety');
-    expect(button('Retry')).toBeDefined();
-    expect(bars()).toHaveLength(2);
+    expect(rings()).toHaveLength(2);
     await act(async () => pending[0]?.progress?.(1));
-    expect(bars()[0]?.getAttribute('aria-valuenow')).toBe('100');
+    expect(rings()[0]?.getAttribute('data-upload-progress')).toBe('100');
 
     await finish(0);
     await finish(2);
@@ -345,5 +352,17 @@ describe('per-file progress while files go up in parallel', () => {
       title: "Uploaded 2 of 3. Couldn't upload 1. Try again.",
       sticky: true,
     });
+    const retry = document.querySelector<HTMLElement>('[data-upload-retry]');
+    expect(retry?.getAttribute('aria-label')).toBe('Retry');
+    expect(retry?.closest('[data-upload-thumb="error"]')).not.toBeNull();
+    expect(button('Retry')).toBeUndefined();
+  });
+
+  it('the ring X asks the existing Stop confirm', async () => {
+    const onSubmit = fakeSubmit();
+    await mount(onSubmit);
+    await startUpload(1);
+    await act(async () => rings()[0]?.click());
+    expect(confirm()?.textContent).toContain('Stop uploading?');
   });
 });

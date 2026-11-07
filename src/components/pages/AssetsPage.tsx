@@ -429,7 +429,10 @@ export function AssetsPage() {
     [items, pendingDelete],
   );
 
-  const visible = useMemo(() => sortAssets(filterAssets(liveItems, tab), sort), [liveItems, tab, sort]);
+  const visible = useMemo(
+    () => sortAssets(filterAssets(liveItems, tab), sort),
+    [liveItems, tab, sort],
+  );
 
   // The viewer iterates the currently visible list with links excluded; links
   // open their external URL directly and never enter the lightbox.
@@ -840,9 +843,7 @@ export function AssetsPage() {
     <>
       <PageHead title="Assets" hidden />
       {/* The type chips with Select pinned at the row's end. */}
-      <SectionHeader
-        select={<SectionSelect active={selectMode.on} onToggle={selectMode.toggle} />}
-      >
+      <SectionHeader select={<SectionSelect active={selectMode.on} onToggle={selectMode.toggle} />}>
         {assetsFailed ? null : (
           <AssetTabs value={tab} counts={counts ?? NO_COUNTS} onChange={setTab} />
         )}

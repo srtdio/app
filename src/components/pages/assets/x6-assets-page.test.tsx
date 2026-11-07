@@ -9,10 +9,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssetsPage } from '@/components/pages/AssetsPage';
-import {
-  TopbarActionsProvider,
-  useTopbarActionsValue,
-} from '@/components/shell/topbar-actions';
+import { TopbarActionsProvider, useTopbarActionsValue } from '@/components/shell/topbar-actions';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { resetSessionReads } from '@/lib/session-read';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
