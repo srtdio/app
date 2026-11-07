@@ -445,7 +445,10 @@ describe('post sheet: Talk about', () => {
   function actions(onTalkAbout?: () => void): string {
     const post = cardRow('p1');
     return renderToStaticMarkup(
-      <PostSheetExtras hint={agencyWaitingHint('agency', post, new Date('2026-09-23T12:00:00Z'))} onTalkAbout={onTalkAbout} />,
+      <PostSheetExtras
+        hint={agencyWaitingHint('agency', post, new Date('2026-09-23T12:00:00Z'))}
+        onTalkAbout={onTalkAbout}
+      />,
     );
   }
 

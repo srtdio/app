@@ -31,6 +31,7 @@ import {
   BRIEFS_EMPTY_COPY,
   BriefPickerList,
   InlinePickerPanel,
+  briefPickerDue,
   PickerSkeleton,
   PostPicker,
   PostSectionsView,
@@ -632,5 +633,39 @@ describe('F6: Done vs dismiss (the add-posts picker never adds on close)', () =>
     renderSheet({ onClose, onDone }).dismiss();
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onDone).not.toHaveBeenCalled();
+  });
+});
+
+describe('briefPickerDue: the brief row due text (formatDue / formatOverdue)', () => {
+  // 5 Nov 2026, 10:00 in Kolkata.
+  const NOW = new Date('2026-11-05T04:30:00Z');
+  const IST = 'Asia/Kolkata';
+
+  it('ahead reads Due; no date reads nothing', () => {
+    expect(briefPickerDue('2026-11-05', 'open', IST, NOW)).toEqual({
+      text: 'Due today',
+      bad: false,
+    });
+    expect(briefPickerDue('2026-11-06', 'open', IST, NOW)?.text).toBe('Due tomorrow');
+    expect(briefPickerDue('2026-11-08', 'open', IST, NOW)?.text).toBe('Due in 3 days');
+    expect(briefPickerDue('2027-01-20', 'open', IST, NOW)?.text).toBe('Due 20 Jan 2027');
+    expect(briefPickerDue(null, 'open', IST, NOW)).toBeNull();
+  });
+
+  it('an open brief past its day is overdue in the bad token; a closed one never is', () => {
+    expect(briefPickerDue('2026-11-03', 'open', IST, NOW)).toEqual({
+      text: 'Overdue 2 days',
+      bad: true,
+    });
+    expect(briefPickerDue('2026-11-03', 'closed', IST, NOW)).toEqual({
+      text: 'Due 3 Nov',
+      bad: false,
+    });
+  });
+
+  it('never the word Target', () => {
+    for (const day of ['2026-11-03', '2026-11-05', '2026-12-25']) {
+      expect(briefPickerDue(day, 'open', IST, NOW)?.text).not.toContain('Target');
+    }
   });
 });

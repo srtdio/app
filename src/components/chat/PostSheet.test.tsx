@@ -137,7 +137,10 @@ describe('PostSheetExtras', () => {
     over: Partial<PostSheetExtrasProps> = {},
   ): string {
     return renderToStaticMarkup(
-      <PostSheetExtras hint={agencyWaitingHint(side, post, new Date('2026-09-23T12:00:00Z'))} {...over} />,
+      <PostSheetExtras
+        hint={agencyWaitingHint(side, post, new Date('2026-09-23T12:00:00Z'))}
+        {...over}
+      />,
     );
   }
 
@@ -327,7 +330,10 @@ describe('no KEY-N codes in the sheet', () => {
   it('extras and decision labels render no KEY-N code', () => {
     const htmls = [
       renderToStaticMarkup(
-        <PostSheetExtras hint={agencyWaitingHint('agency', row(), new Date('2026-09-23T12:00:00Z'))} onTalkAbout={vi.fn()} />,
+        <PostSheetExtras
+          hint={agencyWaitingHint('agency', row(), new Date('2026-09-23T12:00:00Z'))}
+          onTalkAbout={vi.fn()}
+        />,
       ),
       ...STAGES.flatMap((stage) =>
         (['client', 'agency'] as const).flatMap((side) => {

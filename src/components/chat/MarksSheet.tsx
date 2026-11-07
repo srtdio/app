@@ -492,10 +492,7 @@ export function MarksList(props: MarksListProps): ReactElement {
                   ? {
                       resolver: {
                         name: resolverName(mark, props.currentUserId, displayNameOf),
-                        when:
-                          mark.resolvedAt !== null
-                            ? formatRelative(mark.resolvedAt, now)
-                            : '',
+                        when: mark.resolvedAt !== null ? formatRelative(mark.resolvedAt, now) : '',
                       },
                     }
                   : {})}

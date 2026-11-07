@@ -165,7 +165,7 @@ describe('formatDue: a due day on the workspace zone', () => {
     expect(formatDue('2026-11-01', 'UTC', now)).toBe('Due tomorrow');
     expect(formatDue('2026-11-03', 'UTC', now)).toBe('Due in 3 days');
   });
-  it('across a year change: the year shows only off now\'s year in that zone', () => {
+  it("across a year change: the year shows only off now's year in that zone", () => {
     const now = new Date('2026-12-31T20:00:00Z'); // LA 31 Dec 12:00; IST 1 Jan 01:30
     expect(formatDue('2027-01-01', LA, now)).toBe('Due tomorrow');
     expect(formatDue('2027-01-01', IST, now)).toBe('Due today');

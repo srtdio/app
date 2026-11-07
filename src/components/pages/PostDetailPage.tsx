@@ -1918,7 +1918,12 @@ export function PostDetailPage({
         : topBar(
             <>
               <StatusDot stage={currentStage} className="mr-2 align-middle" />
-              {postStatusLine(currentStage, post.updated_at, post.stage_entered_at, new Date(nowMs))}
+              {postStatusLine(
+                currentStage,
+                post.updated_at,
+                post.stage_entered_at,
+                new Date(nowMs),
+              )}
             </>,
             <>
               {headerStageAction}
