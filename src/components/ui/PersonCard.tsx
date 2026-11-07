@@ -198,7 +198,7 @@ export function PersonCardBody({
         </p>
       </div>
       {data.action === 'removed' ? (
-        // Flat look: the note sits on the sheet, no grey box; the 12 above and below keep the footprint.
+        // Flat look: the note sits on the sheet, no grey box (py-3 keeps the footprint).
         <p className="w-full px-4 py-3 text-base text-fg-2">
           {PERSON_CARD_COPY.removed}
         </p>

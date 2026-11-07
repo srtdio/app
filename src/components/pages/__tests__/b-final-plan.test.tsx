@@ -127,8 +127,10 @@ describe('Card slots (additive)', () => {
     expect(today).toMatch(/^<div data-plan-day="2026-10-13" data-plan-day-today="" data-card=""/);
     expect(today).toContain('lit-selected');
     expect(today).not.toContain('lit-card');
+    // Flat look everywhere (8 Nov 2026): a plain Card is a flat section with a hairline.
     const other = html(<Card data-plan-day="2026-10-14">x</Card>);
-    expect(other).toContain('lit-card');
+    expect(other).not.toContain('lit-card');
+    expect(other).toContain('border-b border-border');
     expect(other).not.toContain('lit-selected');
   });
 

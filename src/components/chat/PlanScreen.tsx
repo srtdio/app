@@ -817,7 +817,7 @@ function ScreenSkeleton(): ReactElement {
       <Bone lit="lit-well" className="h-1.5 w-full rounded-full" />
       <Bone lit="lit-well" className="h-10 w-48 rounded-full" />
       {[0, 1, 2].map((i) => (
-        <Bone lit="lit-card" key={`bone-${i}`} className="h-24 w-full rounded-xl" />
+        <Bone lit="flat" key={`bone-${i}`} className="h-24 w-full rounded-lg" />
       ))}
     </BoxSkeleton>
   );
