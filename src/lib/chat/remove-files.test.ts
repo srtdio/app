@@ -41,8 +41,6 @@ const ME = '11111111-1111-4111-8111-111111111111';
 const PEER = '22222222-2222-4222-8222-222222222222';
 const CHANNEL = 'group__ws__g1';
 
-const NO_MARKS = { has: () => false };
-
 function message(over: Partial<ThreadMessage> = {}): ThreadMessage {
   return {
     id: 'm1',
@@ -109,44 +107,38 @@ describe('removedFilesLabel', () => {
 });
 
 describe('who may remove', () => {
-  it('canRemoveFile: own file ok; other, voice, marked, deleted and unrecorded refused', () => {
+  it('canRemoveFile: own file ok; other, voice, deleted and unrecorded refused', () => {
     const own = { id: 'm1', senderUserId: ME };
     const photo = { assetId: 'a1', mime: 'image/jpeg' };
-    expect(canRemoveFile(own, photo, ME, NO_MARKS)).toBe(true);
-    expect(canRemoveFile({ id: 'm1', senderUserId: PEER }, photo, ME, NO_MARKS)).toBe(false);
-    expect(canRemoveFile(own, { assetId: 'a1', mime: 'audio/webm' }, ME, NO_MARKS)).toBe(false);
-    expect(canRemoveFile(own, photo, ME, new Set(['m1']))).toBe(false);
-    expect(canRemoveFile({ ...own, deleted: true }, photo, ME, NO_MARKS)).toBe(false);
-    expect(canRemoveFile(own, { assetId: '', mime: 'image/jpeg' }, ME, NO_MARKS)).toBe(false);
-    expect(canRemoveFile(own, photo, '', NO_MARKS)).toBe(false);
+    expect(canRemoveFile(own, photo, ME)).toBe(true);
+    expect(canRemoveFile({ id: 'm1', senderUserId: PEER }, photo, ME)).toBe(false);
+    expect(canRemoveFile(own, { assetId: 'a1', mime: 'audio/webm' }, ME)).toBe(false);
+    expect(canRemoveFile({ ...own, deleted: true }, photo, ME)).toBe(false);
+    expect(canRemoveFile(own, { assetId: '', mime: 'image/jpeg' }, ME)).toBe(false);
+    expect(canRemoveFile(own, photo, '')).toBe(false);
   });
 
   it('canRemove: needs one removable file on a sent message', () => {
-    expect(canRemove(message(), ME, NO_MARKS)).toBe(true);
-    expect(canRemove(message({ senderUserId: PEER, mine: false }), ME, NO_MARKS)).toBe(false);
-    expect(canRemove(message({ state: 'sending' }), ME, NO_MARKS)).toBe(false);
+    expect(canRemove(message(), ME)).toBe(true);
+    expect(canRemove(message({ senderUserId: PEER, mine: false }), ME)).toBe(false);
+    expect(canRemove(message({ state: 'sending' }), ME)).toBe(false);
     expect(
-      canRemove(
-        message({ attachments: [{ assetId: 'v1', name: 'note', mime: 'audio/mp4' }] }),
-        ME,
-        NO_MARKS,
-      ),
+      canRemove(message({ attachments: [{ assetId: 'v1', name: 'note', mime: 'audio/mp4' }] }), ME),
     ).toBe(false);
-    expect(canRemove(message({ attachments: [] }), ME, NO_MARKS)).toBe(false);
-    expect(canRemove(message(), ME, new Set(['m1']))).toBe(false);
-    expect(canRemove(message({ deleted: true }), ME, NO_MARKS)).toBe(false);
+    expect(canRemove(message({ attachments: [] }), ME)).toBe(false);
+    expect(canRemove(message({ deleted: true }), ME)).toBe(false);
   });
 
   it('canRemoveSingleFile: exactly one removable file; an album of 2 is refused', () => {
-    expect(canRemoveSingleFile(message(), ME, NO_MARKS)).toBe(true);
+    expect(canRemoveSingleFile(message(), ME)).toBe(true);
     const album = message({
       attachments: [
         { assetId: 'a1', name: 'one.jpg', mime: 'image/jpeg' },
         { assetId: 'a2', name: 'two.jpg', mime: 'image/jpeg' },
       ],
     });
-    expect(canRemoveSingleFile(album, ME, NO_MARKS)).toBe(false);
-    expect(canRemoveSingleFile(message({ senderUserId: PEER }), ME, NO_MARKS)).toBe(false);
+    expect(canRemoveSingleFile(album, ME)).toBe(false);
+    expect(canRemoveSingleFile(message({ senderUserId: PEER }), ME)).toBe(false);
   });
 
   it('removeMediaAria reads photo or video', () => {

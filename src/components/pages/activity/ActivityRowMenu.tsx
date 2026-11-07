@@ -11,8 +11,6 @@ interface ActivityRowMenuProps {
   unread: boolean;
   onSnooze: (kind: SnoozeKind) => void;
   onMarkRead: () => void;
-  /** Rows of the card's own, first (a failed send's Edit and Retry). */
-  extra?: readonly ActionMenuItem[];
   /** Controlled open state (the card's long-press / right-click opens it); omit to self-manage. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -30,10 +28,9 @@ function snoozeLabel(option: { label: string }): string {
   return `Snooze ${rest}`;
 }
 
-/** The row's ⋯ actions: the card's own rows first, Mark as read (unread only), the snoozes, Un-snooze (snoozed only). Pure. */
+/** The row's ⋯ actions: Mark as read (unread only), the snoozes, Un-snooze (snoozed only). Pure. */
 export function activityRowItems(props: ActivityRowMenuProps): ActionMenuItem[] {
   return [
-    ...(props.extra ?? []),
     ...(props.unread
       ? [{ id: 'mark-read', label: 'Mark as read', icon: IconCheck, onSelect: props.onMarkRead }]
       : []),

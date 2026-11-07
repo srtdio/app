@@ -68,11 +68,9 @@ import { PLAN_CHANGED_EVENT, readPlanBundles } from '@/lib/chat/plans';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
 import { notePlanShapes } from '@/lib/chat/plan-shapes';
 import { whenIdle } from '@/lib/chunk-reload';
-import { useChatMarks } from '@/lib/chat/use-chat-marks';
 import { chatKey, forgetRememberedThread, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
 import { joinChatBundle, pressChatBundle } from '@/lib/chat/open-bundle';
 import { resolveViewerSide } from '@/lib/chat/viewer-role';
-import { createStarStore, StarStoreContext, useChannelStars } from '@/lib/chat/stars';
 import { useChatTyping } from '@/lib/chat/use-chat-typing';
 import { visibleTypingIds } from '@/lib/chat/typing';
 import { useChatPresence } from '@/lib/chat/use-chat-presence';
@@ -83,27 +81,9 @@ import { ICON_SIZE, IconChat } from '@/components/ui/icons';
 import { ChannelList, visibleChannels } from '@/components/chat/ChannelList';
 import {
   MessageThread,
-  profileNameOf,
   threadCardIds,
   threadOpeningSkeleton,
 } from '@/components/chat/MessageThread';
-import {
-  ChatScheduleProvider,
-  type ChatSchedule,
-  type ScheduleOutcome,
-} from '@/components/chat/ScheduleContext';
-import { ScheduledListSheet } from '@/components/chat/ScheduledListSheet';
-import {
-  cancelScheduledMessage,
-  mapScheduleError,
-  readScheduledMessages,
-  rowMentions,
-  scheduleMessage,
-  sendScheduledNow,
-  updateScheduledMessage,
-  type ScheduledRow,
-  type ScheduleWriteResult,
-} from '@/lib/chat/scheduled';
 import { newMessageId } from '@/lib/chat/message-id';
 import { SharedCardsProvider } from '@/components/chat/PostCard';
 import { PlanCardsProvider, type OpenPlanRequest } from '@/components/chat/PlanCardsProvider';
@@ -131,13 +111,10 @@ import { channelHasClient } from '@/components/chat/ComposerTray';
 import {
   knownMentionName,
   mentionIds,
-  mentionTargets,
   rememberMentionProfiles,
   rememberMentionRead,
 } from '@/lib/chat/mentions';
 import { useToast } from '@/components/ui/toast';
-import { ReminderProvider } from '@/components/chat/ReminderContext';
-import { ChatReminderSheet } from '@/components/chat/ReminderSheet';
 import { SavedFromProvider, type SavedFromWiring } from '@/components/chat/NotesBits';
 import { useNotes } from '@/lib/chat/use-notes';
 import { useCurrentProfile } from '@/lib/use-current-profile';
@@ -174,8 +151,6 @@ if (typeof window !== 'undefined') {
 
 const NO_MESSAGES: ThreadMessage[] = [];
 const NO_PLAN_IDS: readonly string[] = [];
-
-const NO_SCHEDULED: ScheduledRow[] = [];
 
 /**
  * A chat tap: the open's one chat_open_bundle call starts now (open-cache's
@@ -636,17 +611,12 @@ export function earlyDeepLinkOpen(input: {
   return channel === input.started ? null : channel;
 }
 
-/**
- * Whether the open chat paints its skeleton. Stars are not a part: rows
- * paint, and star badges appear when the stars read settles (remembered
- * stars still paint in the first frame). Pure.
- */
+/** Whether the open chat paints its skeleton. Pure. */
 export function chatThreadLoading(input: {
   threadCurrent: boolean;
   notesFailed: boolean;
   pageLoading: boolean;
   namesReady: boolean;
-  scheduledSettled: boolean;
   notesOpen: boolean;
   notesStatusReady: boolean;
   notesReady: boolean;
@@ -657,7 +627,6 @@ export function chatThreadLoading(input: {
     (!input.notesFailed &&
       (input.pageLoading ||
         !input.namesReady ||
-        !input.scheduledSettled ||
         (input.notesOpen && !input.notesStatusReady) ||
         (input.notesReady && !input.savedReady)))
   );
@@ -748,7 +717,7 @@ export type ChannelWrite = 'push' | 'replace';
 
 /**
  * Why ?channel= is written, and so how. An open (list, notes, search hit,
- * starred row, @mention, new DM, saved line, toast) pushes one step; a toast's
+ * Show in chat, @mention, new DM, saved line, toast) pushes one step; a toast's
  * pending open takes the /chat entry its press already pushed; a chat closing
  * on its own, a cold open's back arrow and an unknown link replace. Pure.
  */
@@ -977,9 +946,9 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     },
     [openChannel],
   );
-  // A starred row: the chat opens at that message (the same jump and
-  // highlight as a search hit), without the in-chat search bar.
-  const openStarredMessage = useCallback(
+  // A media item's Show in chat: the chat opens at that message (the same
+  // jump and highlight as a search hit), without the in-chat search bar.
+  const openAtMessage = useCallback(
     (channel: ChannelSummary, messageId: string) => {
       searchSeqRef.current += 1;
       setSearchRequest({
@@ -1443,7 +1412,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // the tile in the same commit.
   const shown = useMemo(() => shownChannel(selected, chatRoster), [selected, chatRoster]);
   // The open chat is Personal notes: no Agora at all (no client handed to the
-  // thread, marks or typing), no schedule, marks, @ picker or reading layer.
+  // thread or typing), no @ picker or reading layer.
   const notesOpen = isNotes(selected);
   const notesReady = notesOpen && notes.status === 'ready';
   // Opening notes after its ensure failed tries again (the open waits 5s).
@@ -1485,7 +1454,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     groupMembers !== null && groupMembers.groupId === selectedGroupId ? groupMembers.ids : null;
 
   // The same target object while it routes the same way, so a rename or photo
-  // change never re-subscribes the thread, typing or marks.
+  // change never re-subscribes the thread or typing.
   const computedTarget = useMemo(
     () => safeTarget(shown, openMemberIds === null ? null : [...openMemberIds], currentUserId),
     [shown, openMemberIds, currentUserId],
@@ -1493,43 +1462,10 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const targetRef = useRef(computedTarget);
   if (!sameTarget(targetRef.current, computedTarget)) targetRef.current = computedTarget;
   const target = targetRef.current;
-  const marks = useChatMarks({
-    client: liveClient,
-    channelId: notesOpen ? null : selectedChannelId,
-    target,
-    currentUserId,
-    workspaceId,
-  });
-  const refetchMarks = marks.refetch;
-  // Stars: one store per workspace (nothing carries across), the open chat's
-  // starred ids read with its first page (the thread waits for both), again
-  // on focus, the tab turning visible and every catch-up.
-  const starStore = useMemo(() => createStarStore({ workspaceId }), [workspaceId]);
-  const stars = useChannelStars({ store: starStore, channelId: selectedChannelId });
-  const refetchStars = stars.refetch;
-  // A chat whose messages page is remembered reopens without waiting on reads
-  // whose last answer is already on screen: its scheduled rows (remembered),
-  // re-read in place. Stars never hold the rows: the store's remembered stars
-  // paint in the first frame, the rest when the stars read settles.
-  const rememberedOpen = useMemo(() => {
-    const key = chatKey(currentUserId, workspaceId, selectedChannelId);
-    return key !== null && openCache.recall(key, 'thread') !== undefined;
-  }, [currentUserId, workspaceId, selectedChannelId]);
-  // A remembered chat's marks as last settled, for its first frame, only while
-  // fresh (the marks hook sets the same ones in its effect, then revalidates;
-  // older ones are never painted).
-  const marksLoaded = marks.loaded;
-  const rememberedMarks = useMemo(() => {
-    if (!rememberedOpen || marksLoaded) return undefined;
-    const key = chatKey(currentUserId, workspaceId, selectedChannelId);
-    return key !== null ? openCache.recallFresh(key, 'marks') : undefined;
-  }, [rememberedOpen, marksLoaded, currentUserId, workspaceId, selectedChannelId]);
-  // Every catch-up refreshes the unread counts and re-reads the channel's marks and stars.
+  // Every catch-up refreshes the unread counts.
   const onCaughtUp = useCallback(() => {
     refreshUnreadCounts();
-    refetchMarks();
-    refetchStars();
-  }, [refreshUnreadCounts, refetchMarks, refetchStars]);
+  }, [refreshUnreadCounts]);
   const onMessagesDeleted = useCallback(() => refreshPreviews(), [refreshPreviews]);
   const thread = useChatThread({
     client: liveClient,
@@ -1741,95 +1677,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // is ready in the same render (a reopen paints in its first frame).
   const namesReady = namesSettled === selectedChannelId || firstPageSettled;
 
-  // The viewer's scheduled messages in the open chat (RLS: own rows only).
-  // Read in parallel with the thread's first page; the thread keeps its
-  // skeleton until this read settles too, so the strip paints in the same
-  // frame as the messages and never pops in after. A failed or timed-out read
-  // settles with what was known. Re-read on chat open, every schedule action
-  // and the tab becoming visible.
-  const [scheduled, setScheduled] = useState<{
-    channelId: string | null;
-    rows: ScheduledRow[];
-    settled: boolean;
-  }>({ channelId: null, rows: NO_SCHEDULED, settled: false });
-  const scheduledSeq = useRef(0);
-  const refetchScheduled = useCallback((channelId: string, open = false): void => {
-    scheduledSeq.current += 1;
-    const seq = scheduledSeq.current;
-    const key = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
-    // An open's read is the open's chat bundle's part (no read of its own);
-    // every later one (a schedule action, the tab returning) reads.
-    const joined = open && key !== null ? openCache.join(key, 'scheduled') : null;
-    void (
-      joined ?? withReadTimeout((signal) => readScheduledMessages(supabase, { channelId, signal }))
-    ).then((result) => {
-      if (!mountedRef.current || seq !== scheduledSeq.current) return;
-      // Remembered only for the user and workspace still open (a late answer
-      // never re-scopes the memory).
-      const current = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
-      if (key !== null && current !== null && result.ok && current.userId === key.userId) {
-        if (current.workspaceId === key.workspaceId) {
-          openCache.remember(key, 'scheduled', result.data);
-        }
-      }
-      if (!result.ok) {
-        logger.warn('chat: scheduled read failed', {
-          channel_id: channelId,
-          error: result.error.message,
-        });
-      }
-      mark('chat:scheduled:end');
-      setScheduled((prev) => ({
-        channelId,
-        rows: result.ok ? result.data : prev.channelId === channelId ? prev.rows : NO_SCHEDULED,
-        settled: true,
-      }));
-    });
-  }, []);
-  useEffect(() => {
-    if (selectedChannelId !== null && !notesOpen) refetchScheduled(selectedChannelId, true);
-  }, [selectedChannelId, refetchScheduled, notesOpen]);
-  useEffect(() => {
-    if (selectedChannelId === null || notesOpen) return;
-    const channelId = selectedChannelId;
-    function onVisible(): void {
-      if (document.visibilityState === 'visible') refetchScheduled(channelId);
-    }
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [selectedChannelId, refetchScheduled, notesOpen]);
-  // The open's bundle failed (the thread showed Retry) and a later one landed:
-  // the parts that failed with it (marks, scheduled rows) are read again.
-  const threadFailedRef = useRef<{ channelId: string | null; failed: boolean }>({
-    channelId: null,
-    failed: false,
-  });
-  const threadLoadFailed = thread.loadFailed;
-  useEffect(() => {
-    const prev = threadFailedRef.current;
-    threadFailedRef.current = { channelId: selectedChannelId, failed: threadLoadFailed };
-    if (selectedChannelId === null || notesOpen) return;
-    if (prev.channelId !== selectedChannelId || !prev.failed || threadLoadFailed) return;
-    refetchMarks();
-    refetchScheduled(selectedChannelId);
-  }, [threadLoadFailed, selectedChannelId, notesOpen, refetchMarks, refetchScheduled]);
-  // A remembered chat's scheduled rows as last read, for its first frame
-  // (until this open's own state for it is set), only while fresh: older rows
-  // are never painted, the open waits for its read as a cold open does.
-  const rememberedScheduled = useMemo(() => {
-    if (!rememberedOpen) return undefined;
-    const key = chatKey(currentUserId, workspaceId, selectedChannelId);
-    return key !== null ? openCache.recallFresh(key, 'scheduled') : undefined;
-  }, [rememberedOpen, currentUserId, workspaceId, selectedChannelId]);
-  const scheduledOwn = scheduled.settled && scheduled.channelId === selectedChannelId;
-  // Notes never schedule: nothing to read, nothing to wait for.
-  const scheduledSettled = notesOpen || scheduledOwn || rememberedScheduled !== undefined;
-  const scheduledRows =
-    scheduledSettled && !notesOpen
-      ? scheduledOwn
-        ? scheduled.rows
-        : (rememberedScheduled ?? NO_SCHEDULED)
-      : NO_SCHEDULED;
   // Notes: the saved copies' "Saved from" lines of the first page paint with
   // it. One batched source read per loaded page (and one batched name read
   // for their senders), never one per row.
@@ -1900,27 +1747,16 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     notesFailed,
     pageLoading: thread.loading,
     namesReady,
-    scheduledSettled,
     notesOpen,
     notesStatusReady: notes.status === 'ready',
     notesReady,
     savedReady,
   });
-  // A message turned tombstone (deleted here or by its sender) loses its star.
-  useEffect(() => {
-    const gone = thread.messages.filter((m) => m.deleted === true).map((m) => m.id);
-    if (gone.length > 0) starStore.drop(gone);
-  }, [thread.messages, starStore]);
-  const [scheduledListOpen, setScheduledListOpen] = useState(false);
   // The chat's own sheets are history steps too: back closes only the sheet.
-  useHistoryStep(scheduledListOpen && selected !== null, HISTORY_STEP_KEYS.scheduledList, () =>
-    setScheduledListOpen(false),
-  );
   useHistoryStep(groupInfoOpen && selected !== null, HISTORY_STEP_KEYS.groupInfo, () =>
     setGroupInfoOpen(false),
   );
   useHistoryStep(newChatOpen, HISTORY_STEP_KEYS.newChat, () => setNewChatOpen(false));
-  useEffect(() => setScheduledListOpen(false), [selectedChannelId]);
   // Plans: the New plan screen and the Plan screen (the Item screen is the
   // Plan screen's own step). Each open layer is one history step; a chat
   // switch closes both.
@@ -1965,126 +1801,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   } | null>(null);
   // A chat switch drops it, so returning to that chat never jumps again.
   useEffect(() => setCardJump(null), [selectedChannelId]);
-  // The last one sent or cancelled: nothing left to show.
-  useEffect(() => {
-    if (scheduledSettled && scheduledRows.length === 0) setScheduledListOpen(false);
-  }, [scheduledSettled, scheduledRows.length]);
-  const selectedChannelType = selected?.channelType ?? undefined;
-
-  /** A schedule write's failure: logged, refetched, and mapped (null: silent). */
-  const scheduleFailure = useCallback(
-    (channelId: string, traceId: string, what: string, message: string): string | null => {
-      logger.warn(`chat: ${what} failed`, {
-        trace_id: traceId,
-        channel_id: channelId,
-        error: message,
-      });
-      return mapScheduleError(message);
-    },
-    [],
-  );
-  const runScheduledWrite = useCallback(
-    async <T,>(
-      channelId: string,
-      what: string,
-      write: (traceId: string) => Promise<ScheduleWriteResult<T>>,
-    ): Promise<{ ok: true; row: T; traceId: string } | { ok: false; copy: string | null }> => {
-      const traceId = generateTraceId();
-      const result = await write(traceId);
-      refetchScheduled(channelId);
-      if (result.ok) return { ok: true, row: result.row, traceId };
-      return { ok: false, copy: scheduleFailure(channelId, traceId, what, result.message) };
-    },
-    [refetchScheduled, scheduleFailure],
-  );
-
-  const scheduleDraft = useCallback<ChatSchedule['schedule']>(
-    async (draft, sendAt): Promise<ScheduleOutcome> => {
-      const channelId = selectedRef.current?.channelId;
-      if (channelId === undefined) return { ok: false, copy: mapScheduleError('no chat') };
-      const result = await runScheduledWrite(channelId, 'schedule', (traceId) =>
-        scheduleMessage({
-          client: supabase,
-          id: newMessageId(),
-          channelId,
-          sendAt,
-          traceId,
-          body: draft.body,
-          mentions: mentionTargets(draft.body, selectedRef.current?.channelType),
-          attachmentAssetIds: draft.attachmentAssetIds,
-          attachmentMeta: draft.attachmentMeta,
-          sharedPostIds: draft.sharedPostIds,
-          sharedBriefIds: draft.sharedBriefIds,
-          replyToMessageId: draft.replyToMessageId,
-        }),
-      );
-      return result.ok ? { ok: true } : { ok: false, copy: result.copy };
-    },
-    [runScheduledWrite],
-  );
-
-  const showScheduleError = useCallback(
-    (copy: string | null): void => {
-      if (copy !== null) toast.show({ title: copy });
-    },
-    [toast],
-  );
-  const addSentRow = thread.addSentRow;
-  const scheduledActions = useMemo(
-    () => ({
-      onSendNow: async (row: ScheduledRow): Promise<void> => {
-        const result = await runScheduledWrite(row.channel_id, 'scheduled send now', (traceId) =>
-          sendScheduledNow({ client: supabase, id: row.id, traceId }),
-        );
-        if (!result.ok) {
-          showScheduleError(result.copy);
-          return;
-        }
-        await addSentRow(result.row, result.traceId);
-      },
-      onSaveBody: async (row: ScheduledRow, body: string): Promise<boolean> => {
-        const result = await runScheduledWrite(row.channel_id, 'scheduled edit', (traceId) =>
-          updateScheduledMessage({
-            client: supabase,
-            id: row.id,
-            sendAt: new Date(row.send_at),
-            body,
-            mentions: mentionTargets(body, selectedChannelType),
-            traceId,
-          }),
-        );
-        if (!result.ok) showScheduleError(result.copy);
-        return result.ok;
-      },
-      onRetime: async (row: ScheduledRow, sendAt: Date): Promise<boolean> => {
-        const result = await runScheduledWrite(row.channel_id, 'scheduled retime', (traceId) =>
-          updateScheduledMessage({
-            client: supabase,
-            id: row.id,
-            sendAt,
-            body: row.body ?? '',
-            mentions: rowMentions(row),
-            traceId,
-          }),
-        );
-        if (!result.ok) showScheduleError(result.copy);
-        return result.ok;
-      },
-      onCancel: async (row: ScheduledRow): Promise<boolean> => {
-        const result = await runScheduledWrite(row.channel_id, 'scheduled cancel', (traceId) =>
-          cancelScheduledMessage({
-            client: supabase,
-            id: row.id,
-            channelId: row.channel_id,
-            traceId,
-          }),
-        );
-        if (!result.ok) showScheduleError(result.copy);
-        return result.ok;
-      },
-    }),
-    [runScheduledWrite, showScheduleError, addSentRow, selectedChannelType],
-  );
   // Every shared post and brief across the loaded messages: the thread's cards
   // read them in one batch per kind and share the results.
   const cardIds = useMemo(() => threadCardIds(threadMessages), [threadMessages]);
@@ -2118,38 +1834,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       prev !== null && prev.channelId !== selectedChannelForSearch ? null : prev,
     );
   }, [selectedChannelForSearch]);
-
-  const chatName = selected !== null ? chatDisplayName(shown ?? selected) : '';
-  const readsLoading = thread.readState.status === 'loading';
-  const scheduleWiring = useMemo<ChatSchedule | null>(
-    () =>
-      selectedChannelId === null || notesOpen
-        ? null
-        : {
-            channelId: selectedChannelId,
-            chatName,
-            rows: scheduledRows,
-            // The strip paints with the thread's first page, never after it.
-            stripVisible: !threadLoading && !readsLoading,
-            schedule: scheduleDraft,
-            openList: () => setScheduledListOpen(true),
-            refetch: () => refetchScheduled(selectedChannelId),
-          },
-    [
-      selectedChannelId,
-      notesOpen,
-      chatName,
-      scheduledRows,
-      threadLoading,
-      readsLoading,
-      scheduleDraft,
-      refetchScheduled,
-    ],
-  );
-  const scheduleNameOf = useMemo(
-    () => profileNameOf(profiles, workspaceId),
-    [profiles, workspaceId],
-  );
 
   // Save to notes: through the store's outbox (the same retries as any send,
   // never a visible failure), after this session's ensure (a failed one still
@@ -2332,7 +2016,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     ((openPlan !== null && planShown) || (planComposeOpen && !notesOpen));
   const infoGroupId = isGroup ? (selected?.groupId ?? null) : null;
 
-  const surface = (
+  return (
     <div className="relative flex h-full min-h-0">
       {showList ? (
         <div ref={listPaneRef} className={chatListPaneClass(planPanelOpen, listPageScroll)}>
@@ -2363,7 +2047,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             onDeleteChats={onDeleteChats}
             workspaceId={workspaceId}
             onOpenSearchHit={openSearchHit}
-            onOpenStarred={openStarredMessage}
+            onOpenAtMessage={openAtMessage}
             notes={notesChat}
           />
         </div>
@@ -2399,141 +2083,120 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                 onRowHere={(row, traceId) => void thread.addSentRow(row, traceId)}
                 status={status}
               >
-                <ChatScheduleProvider value={scheduleWiring}>
-                  <SavedFromProvider value={savedWiring}>
-                    <MessageThread
-                      key={selected.channelId}
-                      title={chatDisplayName(shown ?? selected)}
-                      channelId={selected.channelId}
-                      rootCreatedAt={thread.rootCreatedAt}
-                      avatarUrl={(shown ?? selected).avatarUrl}
-                      {...(!isGroup && !notesOpen && workspaceLabel !== undefined
-                        ? { subtitle: workspaceLabel }
-                        : {})}
-                      {...(!isGroup && !notesOpen
-                        ? { role: (shown ?? selected).role ?? null }
-                        : {})}
-                      notes={notesOpen}
-                      {...(!notesOpen ? { onSaveToNotes: saveToNotes } : {})}
-                      {...(isGroup && !notesOpen ? { onReplyPrivately: replyPrivately } : {})}
-                      isGroup={isGroup}
-                      profiles={profiles}
-                      messages={threadCurrent ? threadMessages : NO_MESSAGES}
-                      loading={threadLoading}
-                      loadFailed={threadCurrent && (thread.loadFailed || notesFailed)}
-                      onRetryLoad={notesFailed ? notesRetry : thread.retryLoad}
-                      loadingOlder={thread.loadingOlder}
-                      hasMore={thread.hasMore}
-                      onLoadOlder={thread.loadOlder}
-                      onNewestVisible={thread.markNewestVisible}
-                      timeZone={timeZone}
-                      canSend
-                      onSend={thread.send}
-                      onRetry={thread.retry}
-                      typingUserIds={notesOpen ? NO_TYPING : typingUserIds}
-                      {...(!notesOpen ? { onTyping: typing.notifyTyping } : {})}
-                      onToggleReaction={thread.toggleReaction}
-                      {...(notesOpen
-                        ? { marksLoaded: true }
-                        : {
-                            marks: rememberedMarks?.marks ?? marks.marks,
-                            marksLoaded: marks.loaded || rememberedMarks !== undefined,
-                            marksFailed: marks.failed,
-                            markedMessages: rememberedMarks?.markedMessages ?? marks.markedMessages,
-                            onSetMark: marks.setMark,
-                            onResolveMark: marks.resolve,
-                            onReopenMark: marks.reopen,
-                          })}
-                      currentUserId={currentUserId}
-                      onDeleteMessages={thread.deleteMessages}
-                      onEditMessage={thread.editMessage}
-                      forwardChannels={chatRoster}
-                      onForward={forwardWithNotes}
-                      onEnsureLoaded={thread.ensureLoaded}
-                      {...(!notesOpen
-                        ? {
-                            mentionMembers,
-                            mentionGone: mentionGone(membersLoad, currentUserId, workspaceId),
-                          }
-                        : {})}
-                      mentions={{
-                        peerUserId:
-                          selected.channelType === 'dm' ? (selected.peerUserId ?? null) : null,
-                        // Inside a DM a person opens the photo only; elsewhere the card.
-                        onOpen: selected.channelType === 'dm' ? openMentionPhoto : openMentionCard,
-                      }}
-                      channelHasClient={hasClient}
-                      {...(!notesOpen
-                        ? {
-                            onOpenPlanCompose: (inChat: readonly string[]) =>
-                              setPlanPicker({ inChat }),
-                          }
-                        : {})}
-                      onOpenPlanItem={onOpenPlanItem}
-                      onNavigate={navigate}
-                      locationKey={locationKey}
-                      cardJump={cardJump?.channelId === selected.channelId ? cardJump : null}
-                      initialMessageId={initialJumpFor(pendingJump, selected.channelId)}
-                      onInitialJumpTaken={() => setPendingJump(null)}
-                      initialTaskId={
-                        pendingTask?.channelId === selected.channelId ? pendingTask.taskId : null
-                      }
-                      onInitialTaskTaken={() => setPendingTask(null)}
-                      searchRequest={
-                        searchRequest?.channelId === selected.channelId ? searchRequest : null
-                      }
-                      onSearchRequestTaken={() => setSearchRequest(null)}
-                      initialSearchWords={
-                        pendingWords?.channelId === selected.channelId ? pendingWords.words : null
-                      }
-                      onInitialSearchWordsTaken={() => setPendingWords(null)}
-                      showTicks={selected.channelType === 'dm'}
-                      {...(threadCurrent && !notesOpen ? { readState: thread.readState } : {})}
-                      peerUserId={
-                        selected.channelType === 'dm' ? (selected.peerUserId ?? null) : null
-                      }
-                      unreadAtOpen={
-                        unreadAtOpen.channelId === selected.channelId ? unreadAtOpen.unread : 0
-                      }
-                      {...(selected.peerUserId != null ? { presence } : {})}
-                      {...(isDesktop ? {} : { onBack })}
-                      {...(isGroup ? { onOpenInfo: () => setGroupInfoOpen(true) } : {})}
-                      {...(infoGroupId !== null
-                        ? {
-                            renderGroupInfo: (tabs: GroupInfoTabsWiring) => (
-                              <GroupInfoSheet
-                                open={groupInfoOpen}
-                                onClose={() => setGroupInfoOpen(false)}
-                                workspaceId={workspaceId}
-                                workspaceName={workspaceLabel}
-                                groupId={infoGroupId}
-                                groupName={chatDisplayName(shown ?? selected)}
-                                avatarUrl={(shown ?? selected).avatarUrl}
-                                createdBy={(shown ?? selected).createdBy ?? null}
-                                viewerRole={
-                                  mentionMembers?.find((m) => m.userId === currentUserId)?.role ??
-                                  null
-                                }
-                                currentUserId={currentUserId}
-                                onChanged={onGroupChanged}
-                                signalRoster={(change) => signalRoster(shown ?? selected, change)}
-                                membersVersion={rosterVersion}
-                                onLeft={onGroupLeft}
-                                tabs={tabs}
-                              />
-                            ),
-                          }
-                        : {})}
-                    />
-                  </SavedFromProvider>
-                </ChatScheduleProvider>
-                <ScheduledListSheet
-                  open={scheduledListOpen}
-                  onClose={() => setScheduledListOpen(false)}
-                  rows={scheduledRows}
-                  nameOf={scheduleNameOf}
-                  {...scheduledActions}
-                />
+                <SavedFromProvider value={savedWiring}>
+                  <MessageThread
+                    key={selected.channelId}
+                    title={chatDisplayName(shown ?? selected)}
+                    channelId={selected.channelId}
+                    rootCreatedAt={thread.rootCreatedAt}
+                    avatarUrl={(shown ?? selected).avatarUrl}
+                    {...(!isGroup && !notesOpen && workspaceLabel !== undefined
+                      ? { subtitle: workspaceLabel }
+                      : {})}
+                    {...(!isGroup && !notesOpen ? { role: (shown ?? selected).role ?? null } : {})}
+                    notes={notesOpen}
+                    {...(!notesOpen ? { onSaveToNotes: saveToNotes } : {})}
+                    {...(isGroup && !notesOpen ? { onReplyPrivately: replyPrivately } : {})}
+                    isGroup={isGroup}
+                    profiles={profiles}
+                    messages={threadCurrent ? threadMessages : NO_MESSAGES}
+                    loading={threadLoading}
+                    loadFailed={threadCurrent && (thread.loadFailed || notesFailed)}
+                    onRetryLoad={notesFailed ? notesRetry : thread.retryLoad}
+                    loadingOlder={thread.loadingOlder}
+                    hasMore={thread.hasMore}
+                    onLoadOlder={thread.loadOlder}
+                    onNewestVisible={thread.markNewestVisible}
+                    timeZone={timeZone}
+                    canSend
+                    onSend={thread.send}
+                    onRetry={thread.retry}
+                    typingUserIds={notesOpen ? NO_TYPING : typingUserIds}
+                    {...(!notesOpen ? { onTyping: typing.notifyTyping } : {})}
+                    onToggleReaction={thread.toggleReaction}
+                    chatPage={!notesOpen}
+                    currentUserId={currentUserId}
+                    onDeleteMessages={thread.deleteMessages}
+                    onEditMessage={thread.editMessage}
+                    forwardChannels={chatRoster}
+                    onForward={forwardWithNotes}
+                    onEnsureLoaded={thread.ensureLoaded}
+                    {...(!notesOpen
+                      ? {
+                          mentionMembers,
+                          mentionGone: mentionGone(membersLoad, currentUserId, workspaceId),
+                        }
+                      : {})}
+                    mentions={{
+                      peerUserId:
+                        selected.channelType === 'dm' ? (selected.peerUserId ?? null) : null,
+                      // Inside a DM a person opens the photo only; elsewhere the card.
+                      onOpen: selected.channelType === 'dm' ? openMentionPhoto : openMentionCard,
+                    }}
+                    channelHasClient={hasClient}
+                    {...(!notesOpen
+                      ? {
+                          onOpenPlanCompose: (inChat: readonly string[]) =>
+                            setPlanPicker({ inChat }),
+                        }
+                      : {})}
+                    onOpenPlanItem={onOpenPlanItem}
+                    onNavigate={navigate}
+                    locationKey={locationKey}
+                    cardJump={cardJump?.channelId === selected.channelId ? cardJump : null}
+                    initialMessageId={initialJumpFor(pendingJump, selected.channelId)}
+                    onInitialJumpTaken={() => setPendingJump(null)}
+                    initialTaskId={
+                      pendingTask?.channelId === selected.channelId ? pendingTask.taskId : null
+                    }
+                    onInitialTaskTaken={() => setPendingTask(null)}
+                    searchRequest={
+                      searchRequest?.channelId === selected.channelId ? searchRequest : null
+                    }
+                    onSearchRequestTaken={() => setSearchRequest(null)}
+                    initialSearchWords={
+                      pendingWords?.channelId === selected.channelId ? pendingWords.words : null
+                    }
+                    onInitialSearchWordsTaken={() => setPendingWords(null)}
+                    showTicks={selected.channelType === 'dm'}
+                    {...(threadCurrent && !notesOpen ? { readState: thread.readState } : {})}
+                    peerUserId={
+                      selected.channelType === 'dm' ? (selected.peerUserId ?? null) : null
+                    }
+                    unreadAtOpen={
+                      unreadAtOpen.channelId === selected.channelId ? unreadAtOpen.unread : 0
+                    }
+                    {...(selected.peerUserId != null ? { presence } : {})}
+                    {...(isDesktop ? {} : { onBack })}
+                    {...(isGroup ? { onOpenInfo: () => setGroupInfoOpen(true) } : {})}
+                    {...(infoGroupId !== null
+                      ? {
+                          renderGroupInfo: (tabs: GroupInfoTabsWiring) => (
+                            <GroupInfoSheet
+                              open={groupInfoOpen}
+                              onClose={() => setGroupInfoOpen(false)}
+                              workspaceId={workspaceId}
+                              workspaceName={workspaceLabel}
+                              groupId={infoGroupId}
+                              groupName={chatDisplayName(shown ?? selected)}
+                              avatarUrl={(shown ?? selected).avatarUrl}
+                              createdBy={(shown ?? selected).createdBy ?? null}
+                              viewerRole={
+                                mentionMembers?.find((m) => m.userId === currentUserId)?.role ??
+                                null
+                              }
+                              currentUserId={currentUserId}
+                              onChanged={onGroupChanged}
+                              signalRoster={(change) => signalRoster(shown ?? selected, change)}
+                              membersVersion={rosterVersion}
+                              onLeft={onGroupLeft}
+                              tabs={tabs}
+                            />
+                          ),
+                        }
+                      : {})}
+                  />
+                </SavedFromProvider>
                 {!notesOpen ? (
                   <PlanPickerSheet
                     open={planPicker !== null}
@@ -2622,21 +2285,5 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
         onGroupCreated={onGroupCreated}
       />
     </div>
-  );
-
-  // The message menu's Remind me and its sheet.
-  return (
-    <StarStoreContext.Provider value={starStore}>
-      <ReminderProvider
-        workspaceId={workspaceId}
-        currentUserId={currentUserId}
-        openChannelId={selected?.channelId ?? null}
-        messages={threadCurrent ? threadMessages : NO_MESSAGES}
-        nameOf={scheduleNameOf}
-      >
-        {surface}
-        <ChatReminderSheet />
-      </ReminderProvider>
-    </StarStoreContext.Provider>
   );
 }

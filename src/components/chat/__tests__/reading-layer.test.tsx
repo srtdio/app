@@ -38,10 +38,10 @@ import { formatTime } from '@/lib/time';
 const EM_DASH = String.fromCharCode(0x2014);
 
 describe('T8 tray and emoji button by pointer', () => {
-  it('the D1 tiles in order on touch and laptop, Schedule last', () => {
+  it('the D1 tiles in order on touch and laptop', () => {
     const laptop = chatLayout({ widthPx: 1280 });
     const touch = chatLayout({ widthPx: 390 });
-    const ids = ['photos', 'file', 'assets', 'brief', 'post', 'draft', 'plan', 'schedule'];
+    const ids = ['photos', 'file', 'assets', 'brief', 'post', 'draft', 'plan'];
     expect(trayTiles(laptop).map((t) => t.id)).toEqual(ids);
     expect(trayTiles(touch).map((t) => t.id)).toEqual(ids);
     expect(trayTiles(touch, { draft: true }).map((t) => t.id)).toEqual(ids);
@@ -54,7 +54,6 @@ describe('T8 tray and emoji button by pointer', () => {
       'Post',
       'Draft',
       'Plan',
-      'Schedule',
     ]);
   });
 
@@ -111,14 +110,14 @@ describe('T8 tray and emoji button by pointer', () => {
     expect(channelHasClient([{ role: 'agency' }, { role: 'client' }])).toBe(true);
   });
 
-  it('the grid: 4 columns (two rows of 4), every tile at least 44x44, a disabled Draft faded and inert', () => {
+  it('the grid: 4 columns, every tile at least 44x44, a disabled Draft faded and inert', () => {
     const picks: string[] = [];
     const html = renderToStaticMarkup(
       <TrayGrid tiles={trayTiles('touch')} onPick={(id) => picks.push(id)} />,
     );
     expect(html).toContain('grid-cols-4');
-    expect(html.match(/data-tray-tile=/g)).toHaveLength(8);
-    expect(html.match(/h-18 min-w-11/g)).toHaveLength(8);
+    expect(html.match(/data-tray-tile=/g)).toHaveLength(7);
+    expect(html.match(/h-18 min-w-11/g)).toHaveLength(7);
     const plan = /<button[^>]*data-tray-tile="plan"[^>]*>/.exec(html)?.[0] ?? '';
     expect(plan).toContain('disabled=""');
     expect(plan).toContain('aria-disabled="true"');
@@ -149,17 +148,16 @@ describe('T8 tray and emoji button by pointer', () => {
 
   it('the composer maps every tile id explicitly (no fallthrough to the post picker)', () => {
     const src = readFileSync(fileURLToPath(new URL('../Composer.tsx', import.meta.url)), 'utf8');
-    for (const id of ['photos', 'file', 'assets', 'brief', 'post', 'draft', 'plan', 'schedule']) {
+    for (const id of ['photos', 'file', 'assets', 'brief', 'post', 'draft', 'plan']) {
       expect(src).toContain(`case '${id}':`);
     }
     expect(src).toContain("if (draftEnabled) openPicker('drafts');");
     expect(src).toContain('if (planEnabled) props.onOpenPlanCompose?.();');
     expect(src).toContain('plan={planEnabled}');
     // Library picks count as attachments everywhere the draft is weighed:
-    // Send vs mic, Send enabled, and the schedule preview.
+    // Send vs mic and Send enabled.
     expect(src).toContain('attachmentCount: pending.length + library.length,');
     expect(src).toContain('fileCount: pending.length + library.length,');
-    expect(src).toContain('draftFileCounts(pending, library)');
     expect(src).toContain('draft={draftEnabled}');
   });
 

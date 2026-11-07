@@ -280,7 +280,7 @@ describe('group info full page', () => {
     expect(remove).toHaveBeenCalledOnce();
   });
 
-  const wiring = (onJump: (id: string) => void): GroupInfoTabsWiring => ({
+  const wiring = (): GroupInfoTabsWiring => ({
     channelId: 'ch-1',
     profiles: new Map(),
     currentUserId: 'me',
@@ -291,17 +291,13 @@ describe('group info full page', () => {
       fetcher: () => Promise.reject(new Error('unused')),
     }),
     presignEnabled: false,
-    marks: null,
-    onJump,
   });
 
-  it('mounts ChatInfoTabs in preview mode keyed by channel; a jump closes first', () => {
-    const calls: string[] = [];
-    const onClose = () => calls.push('close');
+  it('mounts ChatInfoTabs in preview mode keyed by channel', () => {
+    const onClose = vi.fn();
     const el = groupInfoTabs({
-      tabs: wiring((id) => calls.push(`jump:${id}`)),
+      tabs: wiring(),
       open: true,
-      onClose,
       escape: onClose,
       frame: (tabs) => tabs,
     });
@@ -310,21 +306,17 @@ describe('group info full page', () => {
     const tabProps = el.props as {
       mode: string;
       open: boolean;
-      onJump: (id: string) => void;
       onEscape?: () => void;
     };
     expect(tabProps.mode).toBe('preview');
     expect(tabProps.open).toBe(true);
     expect(tabProps.onEscape).toBe(onClose);
-    tabProps.onJump('m9');
-    expect(calls).toEqual(['close', 'jump:m9']);
   });
 
   it('Escape is left to another overlay while one is up', () => {
     const el = groupInfoTabs({
-      tabs: wiring(vi.fn()),
+      tabs: wiring(),
       open: true,
-      onClose: vi.fn(),
       escape: null,
       frame: (tabs) => tabs,
     });

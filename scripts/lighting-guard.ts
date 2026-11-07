@@ -41,6 +41,16 @@ export const DELETED_ON_PURPOSE: Record<string, string> = {
     'Asset grid replaced by the ListCard list (AssetListCard).',
   'src/components/pages/activity/AvatarStack.tsx':
     'Activity avatar stack replaced by the ListCard picture (Avatar lit-avatar).',
+  'src/components/chat/StarredList.tsx': 'Message stars retired (chat simplification).',
+  'src/components/chat/MarkBits.tsx':
+    'Mark as retired; the select checkbox moved to SelectionBar (PressableRow).',
+  'src/components/chat/MarksSheet.tsx': 'Mark as retired (the marks pin board and sheets).',
+  'src/components/chat/ReminderSheet.tsx': 'Reminders retired (chat simplification).',
+  'src/components/chat/ScheduleSheet.tsx': 'Scheduled send retired (chat simplification).',
+  'src/components/chat/ScheduledListSheet.tsx': 'Scheduled send retired (chat simplification).',
+  'src/components/chat/ScheduledStrip.tsx': 'Scheduled send retired (chat simplification).',
+  'src/components/chat/WhenOptions.tsx':
+    'The shared when picker retired with reminders and scheduled send.',
 };
 
 /**
@@ -51,6 +61,31 @@ export const DELETED_ON_PURPOSE: Record<string, string> = {
  * and why. Never more than the file's real drop.
  */
 export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why: string }>> = {
+  'src/components/chat/Composer.tsx': {
+    'lit-btn-primary': {
+      count: 1,
+      why: 'The split Send / Schedule wrapper retired with scheduled send; Send is one round Button.',
+    },
+    'lit-well': { count: 1, why: 'The schedule upload bar on picked chips retired.' },
+    'lit-fill': { count: 1, why: 'The schedule upload bar on picked chips retired.' },
+  },
+  'src/components/chat/MessageThread.tsx': {
+    'lit-header': {
+      count: 1,
+      why: 'The inert "marks never read" ticker slot retired with Mark as.',
+    },
+  },
+  'src/components/chat/StatusDrawer.tsx': {
+    'lit-card-muted': { count: 1, why: "The mark row's stamp confirm retired with Mark as." },
+  },
+  'src/components/chat/tasks/TaskSheet.tsx': {
+    'lit-well': { count: 1, why: 'The Tasks sheet search field (Input) retired.' },
+    'lit-focus': { count: 1, why: 'The Tasks sheet search field (Input) retired.' },
+    'lit-overlay': {
+      count: 1,
+      why: 'Full screen retired: the sheet is the one SHEET_FRAME height (lit-overlay kept there).',
+    },
+  },
   'src/components/chat/PlanScreen.tsx': {
     'lit-header': {
       count: 1,
@@ -60,18 +95,6 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
       count: 1,
       why: "Today's day card is <Card selected>; Card paints lit-selected.",
     },
-  },
-  'src/components/chat/ReminderSheet.tsx': {
-    'lit-btn-secondary': { count: 1, why: 'Rows moved to the shared WhenOptions (one row part).' },
-    'lit-focus': { count: 4, why: 'Inputs and rows moved to the shared WhenOptions.' },
-    'lit-hover': { count: 2, why: 'Rows moved to the shared WhenOptions.' },
-    'lit-well': { count: 2, why: 'Date and time Inputs moved to the shared WhenOptions.' },
-  },
-  'src/components/chat/ScheduleSheet.tsx': {
-    'lit-btn-secondary': { count: 1, why: 'Rows moved to the shared WhenOptions (one row part).' },
-    'lit-focus': { count: 3, why: 'Inputs and rows moved to the shared WhenOptions.' },
-    'lit-hover': { count: 1, why: 'Rows moved to the shared WhenOptions.' },
-    'lit-well': { count: 2, why: 'Date and time Inputs moved to the shared WhenOptions.' },
   },
   'src/components/pages/BriefCard.tsx': {
     'lit-card-muted': {
@@ -99,6 +122,12 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
     'lit-badge': {
       count: 1,
       why: 'Skeleton status bone retired with the old card; ListCardBox draws the card.',
+    },
+  },
+  'src/components/pages/NotificationsPage.tsx': {
+    'lit-overlay': {
+      count: 1,
+      why: "Upcoming's cancel confirm <Sheet> retired with the Upcoming chip (no scheduled send).",
     },
   },
   'src/components/pages/PipelinePage.tsx': {
@@ -129,6 +158,10 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
   },
   'src/components/pages/activity/ActivityBoxes.tsx': {
     'lit-media': { count: 1, why: 'Skeleton card is ListCardBox; its picture box is lit-media.' },
+    'lit-card': {
+      count: 1,
+      why: "UpcomingBoxes' <ListCardBox> retired with the Upcoming chip (scheduled send removed).",
+    },
   },
   'src/components/pages/activity/ActivityCard.tsx': {
     'lit-hover': { count: 3, why: 'Card taps are the ListCard cover (lit-hover).' },
@@ -141,6 +174,10 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
     'lit-pill': {
       count: 4,
       why: "Scope / Only you tags are ListCard's one tag (Tag, lit-pill); the +N files badge left with the old media grid.",
+    },
+    'lit-card': {
+      count: 1,
+      why: "UpcomingCard's <ListCard> retired with the Upcoming chip (scheduled send removed).",
     },
   },
   'src/components/pages/assets/AssetUploadSheet.tsx': {

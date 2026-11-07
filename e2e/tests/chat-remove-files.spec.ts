@@ -18,7 +18,7 @@ import { undoStrip } from '../helpers/undo-strip';
 // Undo strip ("2 photos removed"); after the window chat_message_remove_files
 // records it, POST /purge-chat frees the storage, and the bubble keeps its
 // text with a "removed" line. The viewer's bin reads "Remove photo" on own
-// photos only; More -> "Remove file" on an own single-file message reads "File
+// photos only; the menu's "Remove file" on an own single-file message reads "File
 // removed"; Esc leaves select mode first. Tagged @theme and @desktop: runs on
 // iphone-webkit, iphone-webkit-light and desktop-webkit. Linux WebKit
 // approximates iOS WebKit; it is not iOS.
@@ -159,9 +159,7 @@ test('the viewer bin reads "Remove photo" on own photos only @theme @desktop', a
   expect(network.blocked).toEqual([]);
 });
 
-test('More -> Remove file on an own single file keeps the text @theme @desktop', async ({
-  page,
-}) => {
+test('Remove file on an own single file keeps the text @theme @desktop', async ({ page }) => {
   test.setTimeout(90_000);
   const { network, recorder } = await setup(page);
   const fileMessageId = String(network.world.dmMessages[35]?.id);
@@ -169,14 +167,14 @@ test('More -> Remove file on an own single file keeps the text @theme @desktop',
 
   // An album of two offers no "Remove file" (the viewer bin or Select does).
   let menu = await openMessageMenu(page, ALBUM_BODY);
-  await menu.locator('[data-menu-item="more"]').click();
-  await expect(menu.locator('[data-menu-item="back"]')).toBeVisible();
+  await expect(menu.locator('[data-menu-item="reply"]')).toBeVisible();
   await expect(menu.locator('[data-menu-item="remove-file"]')).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(menu).toHaveCount(0);
 
   menu = await openMessageMenu(page, SINGLE_FILE_BODY);
-  await menu.locator('[data-menu-item="more"]').click();
+  // One level: Remove file sits after the hairline, just before Delete.
+  await expect(menu.locator('[data-menu-divider]')).toHaveCount(1);
   const remove = menu.locator('[data-menu-item="remove-file"]');
   await expect(remove).toHaveText('Remove file');
   await remove.click();

@@ -1,7 +1,7 @@
 // Forwarding messages to other chats. Pure pieces only (no React, no SDK, no
 // client) so the unit job covers them: which messages can be forwarded and in
 // what order, the thread's selection rules now that selection serves both
-// Forward (anyone's recorded message) and Delete (own, unmarked only), the
+// Forward (anyone's recorded message) and Delete (own only), the
 // picker's channel list and copy, the record input for one forwarded copy, and
 // the sequential run that stops at the first failing chat.
 
@@ -10,7 +10,6 @@ import { filterChannelsByName } from '@/lib/channel-filter';
 import { sortChannelsByRecency, type RecencySummary } from '@/lib/chat/sort-conversations';
 import { buildAttachmentMeta } from '@/lib/chat/attachments';
 import { previewText } from '@/lib/chat/chat-store';
-import type { ChatMark, SelectionRole } from '@/lib/chat/marks';
 import type { SendRecordParams } from '@/lib/chat/record';
 import { compareMessages, type ThreadMessage } from '@/lib/chat/thread';
 import { errorText } from '@/lib/error-copy';
@@ -28,10 +27,21 @@ export function forwardableInOrder(messages: readonly ThreadMessage[]): ThreadMe
   return messages.filter(canForward).sort(compareMessages);
 }
 
+/** How a message participates in selection mode: a checkbox, or nothing. */
+export type SelectionRole = 'selectable' | 'none';
+
+/** Toggle an id in a selection (new Set). */
+export function toggleSelected(selected: ReadonlySet<string>, id: string): Set<string> {
+  const next = new Set(selected);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}
+
 /**
  * How a row takes part in thread selection: any recorded, live message can be
- * checked (Forward takes anyone's; a mark only blocks Delete, never the
- * selection), and pending, failed and deleted ones show nothing.
+ * checked (Forward takes anyone's), and pending, failed and deleted ones show
+ * nothing.
  */
 export function threadSelectionRole(
   message: Pick<ThreadMessage, 'state' | 'deleted'>,
@@ -57,29 +67,27 @@ export function pruneThreadSelection(
 export const DELETE_SELECTION_WINDOW_MS = 30 * 60 * 1000;
 
 /** Why the selection's Delete is disabled; the bar shows it as one line. */
-export type DeleteBlock = 'others' | 'marked' | 'old';
+export type DeleteBlock = 'others' | 'old';
 
 /** The reason line for each disabled Delete. */
 export const DELETE_BLOCK_COPY: Record<DeleteBlock, string> = {
   others: 'Only your own messages can be deleted',
-  marked: "Marked messages can't be deleted",
   old: "Messages older than 30 min can't be deleted",
 };
 
 /** Which reason wins when several apply. */
-const DELETE_BLOCK_PRIORITY: readonly DeleteBlock[] = ['others', 'marked', 'old'];
+const DELETE_BLOCK_PRIORITY: readonly DeleteBlock[] = ['others', 'old'];
 
 /**
  * Why Delete cannot apply to the selection, or null when it can (or nothing is
  * selected: Delete is simply disabled at 0 with no reason). Priority: someone
- * else's message, then a marked one, then age (sending and failed rows are
+ * else's message, then age (sending and failed rows are
  * never selectable). `nowMs` is server time (the store's clock offset applied),
  * never the device clock alone.
  */
 export function deleteSelectionBlock(
   selected: ReadonlySet<string>,
   messages: readonly ThreadMessage[],
-  marks: Map<string, ChatMark>,
   nowMs: number,
   /** Notes: own notes delete at any age (no 30 minute window). */
   noWindow = false,
@@ -93,7 +101,6 @@ export function deleteSelectionBlock(
       hit.add('others');
       continue;
     }
-    if (marks.has(id)) hit.add('marked');
     const created = Date.parse(message.createdAt);
     if (noWindow) continue;
     if (Number.isNaN(created) || nowMs - created > DELETE_SELECTION_WINDOW_MS) hit.add('old');
@@ -144,16 +151,15 @@ export function scheduleSelectionBoundary(input: {
 
 /**
  * Delete stays own-only: every selected message must be the caller's own,
- * recorded, unmarked (the proc refuses marked ones) and inside the 30 minute
+ * recorded and inside the 30 minute
  * window on server time. False at 0.
  */
 export function canDeleteSelection(
   selected: ReadonlySet<string>,
   messages: readonly ThreadMessage[],
-  marks: Map<string, ChatMark>,
   nowMs: number,
 ): boolean {
-  return selected.size > 0 && deleteSelectionBlock(selected, messages, marks, nowMs) === null;
+  return selected.size > 0 && deleteSelectionBlock(selected, messages, nowMs) === null;
 }
 
 /** The selected messages to forward, in thread order. */

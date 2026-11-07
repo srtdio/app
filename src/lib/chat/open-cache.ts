@@ -8,19 +8,17 @@
 // refetch (a plan change, a post change, a tab returning).
 //
 // An open's reads are ONE chat_open_bundle call (open-bundle.ts), stashed
-// here as 'bundle'; the parts each hook reads first (marks, scheduled rows,
-// cursors, open posts, plan ids, briefs) are stashed beside it, derived from
+// here as 'bundle'; the parts each hook reads first (cursors, open posts,
+// plan ids, briefs) are stashed beside it, derived from
 // that one call. Plan bundles are never remembered: each open reads its own
 // (PlanCardsProvider), so no bundle from an earlier open is ever painted. The
 // one exception is the pre-warm's one batched plan read, which the first open
 // within PREWARM_FRESH_MS takes as its first plan read (takePrewarmPlans); a
 // plan or post change drops it first.
 //
-// The last settled state of each chat (marks, scheduled rows) is
-// remembered. Marks and scheduled
-// rows paint on a reopen only while younger than READ_FRESH_MS (recallFresh):
-// older is absent, and the reopen holds for its own reads as a cold open does
-// (never the old answer, then a change). The ticker counts and open posts are
+// A remembered part paints on a reopen only while younger than READ_FRESH_MS
+// (recallFresh): older is absent, and the reopen holds for its own reads as a
+// cold open does (never the old answer, then a change). The ticker counts and open posts are
 // not kept here: they are the workspace's shared session reads
 // (workspace-reads.ts), joined by every chat while fresh. Memory is
 // keyed by user id, workspace id and channel id, capped at OPEN_CACHE_LIMIT
@@ -52,9 +50,7 @@
 // listed remove them with every other saved read (session-read.ts).
 
 import type { Result } from '@srtdio/rpc';
-import type { ScheduledRow } from '@/lib/chat/scheduled';
 import type { PlanBundle } from '@/lib/chat/plans';
-import type { ChatMark } from '@/lib/chat/marks';
 import type { OpenPostsData, OpenPostsView } from '@/lib/chat/use-open-posts';
 import type { StatusReadResults, StatusRoundView } from '@/lib/chat/use-status-counts';
 import {
@@ -111,20 +107,15 @@ export interface ChatKey {
 export interface OpenReads extends StatusReadResults {
   /** The open's one chat_open_bundle call; every other name here derives from it on an open. */
   bundle: Result<ChatOpenBundle>;
-  marks: Result<ChatMark[]>;
   openPosts: OpenPostsData;
-  scheduled: Result<ScheduledRow[]>;
   positions: Result<ReadPositionsRead>;
 }
 
 /** A chat's last settled state. */
 export interface ChatMemory {
-  marks: { marks: Map<string, ChatMark>; markedMessages: Map<string, ThreadMessage> };
   openPosts: OpenPostsView;
   status: StatusRoundView;
   thread: RememberedThread;
-  /** The viewer's scheduled messages in the chat as last read. */
-  scheduled: ScheduledRow[];
 }
 
 /** A chat's messages page as its thread left it, kept live while closed. */
@@ -236,8 +227,8 @@ export interface OpenCache {
   notePrewarm: (key: ChatKey, bundle: ChatOpenBundle) => void;
   /**
    * The pre-warmed bundle, once: only within PREWARM_FRESH_MS of the pre-warm,
-   * while the page it kept is still remembered (never forgotten since) and
-   * while none of its scheduled rows is due. Undefined otherwise; either way
+   * while the page it kept is still remembered (never forgotten since).
+   * Undefined otherwise; either way
    * the pre-warm is spent.
    */
   takePrewarm: (key: ChatKey) => ChatOpenBundle | undefined;
@@ -381,8 +372,8 @@ export function createOpenCache(
 
   /**
    * The slot's pre-warmed bundle while an open may take it: within
-   * PREWARM_FRESH_MS, its page still remembered (never forgotten since) and
-   * none of its scheduled rows due. Never spends it.
+   * PREWARM_FRESH_MS, its page still remembered (never forgotten since).
+   * Never spends it.
    */
   const usablePrewarm = (slot: Slot | undefined): ChatOpenBundle | undefined => {
     const warm = slot?.prewarm;
@@ -390,8 +381,6 @@ export function createOpenCache(
     if (slot.threadEpoch !== warm.epoch || slot.memory.thread === undefined) return undefined;
     const at = now();
     if (at - warm.at > PREWARM_FRESH_MS) return undefined;
-    // A scheduled row due since may have sent: the open reads, as before.
-    if (warm.bundle.scheduled.some((row) => Date.parse(row.send_at) <= at)) return undefined;
     return warm.bundle;
   };
 
@@ -994,7 +983,7 @@ export function chatScopeLeft(prev: ChatScope | null, next: ChatScope | null): C
 
 /**
  * The shell's user or workspace changed (ChatStoreProvider): a workspace
- * switch or a sign-out forgets every remembered page, marks, scheduled rows
+ * switch or a sign-out forgets every remembered page
  * and cursors at once, not at the next chat open.
  */
 export function leaveChatScope(

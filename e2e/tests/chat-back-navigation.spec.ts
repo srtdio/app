@@ -161,7 +161,7 @@ test(
   },
 );
 
-test('2: a layer is one step: thread view, contact sheet, Starred close on back and stay in the chat', async ({
+test('2: a layer is one step: thread view and contact sheet close on back and stay in the chat', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -178,21 +178,13 @@ test('2: a layer is one step: thread view, contact sheet, Starred close on back 
   expect(page.url()).toBe(chatUrl);
   await expect(page.locator('[data-msg-id]').first()).toBeVisible();
 
-  // Starred.
-  await page.getByRole('button', { name: 'Starred messages' }).click();
-  await expect(page.locator('[data-starred-sheet]')).toBeVisible();
-  await page.goBack();
-  await expect(page.locator('[data-starred-sheet]')).toHaveCount(0);
-  expect(page.url()).toBe(chatUrl);
-
   // Closing a layer by its own control leaves no step behind: the next back leaves the chat.
-  await page.getByRole('button', { name: 'Starred messages' }).click();
-  await page.locator('[data-starred-sheet]').getByRole('button', { name: 'Back' }).click();
-  await expect(page.locator('[data-starred-sheet]')).toHaveCount(0);
+  await page.locator('[data-contact-open]').click();
+  await contactClose.click();
+  await expect(contactClose).toHaveCount(0);
   await page.goBack();
   await expectList(page);
-  // The Starred sheet's own read (stubbed only by chat-stars.spec): an empty list here.
-  expectClean(network, ['rpc chat_message_starred_list']);
+  expectClean(network);
 });
 
 test('2b: the thread view closes on back (its fade) and stays in the chat', async ({ page }) => {

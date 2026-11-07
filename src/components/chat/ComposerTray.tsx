@@ -2,13 +2,14 @@
 // the panel showing a plus (the tray opener); while the tray is open it turns
 // accent and the plus turns 45deg into an X (mv-turn). The tray sits above the
 // composer: a 4-column grid of tiles (Photos, File, Assets, Brief, Post,
-// Draft, Plan, Schedule on touch and laptop alike) that slides up on Y from
+// Draft, Plan, then Tasks in a chat with a task list, on touch and laptop alike) that slides up on Y from
 // the composer and back down (edgeStrip above the composer, never a fade, no
 // X and no scale). A tap outside, Escape, or picking a tile closes it.
 // Photos / File run the composer's attach paths (the Photos picker still offers
 // Take Photo on phones); Assets opens the library picker; Brief, Post and Draft
-// open the share picker in that mode; Plan opens the New plan screen; Schedule
-// opens the Schedule sheet. Draft is live only for an agency-side viewer in a
+// open the share picker in that mode; Plan opens the New plan screen; Tasks
+// opens the chat's Tasks sheet (its accent dot while someone else changed the
+// list since this device last looked). Draft is live only for an agency-side viewer in a
 // chat with no client, Plan only for an agency-side viewer: otherwise (or while
 // either is unknown) they render faded and disabled from the first frame. Tokens only, so light and dark stay at parity.
 
@@ -19,13 +20,13 @@ import {
   ICON_SIZE,
   IconAssets,
   IconBriefs,
-  IconCalendarClock,
   IconDraft,
   IconFile,
   IconPhoto,
   IconPipeline,
   IconPlan,
   IconPlus,
+  IconTaskSquare,
 } from '@/components/ui/icons';
 import { isClient } from '@/components/pages/pcs/roles';
 import { cn } from '@/lib/cn';
@@ -43,7 +44,7 @@ const TRAY_SLIDE_PX = 8;
 type TileIcon = ComponentType<{ size?: number; className?: string }>;
 
 /** Every tray tile id, in display order. */
-type TrayTileId = 'photos' | 'file' | 'assets' | 'brief' | 'post' | 'draft' | 'plan' | 'schedule';
+type TrayTileId = 'photos' | 'file' | 'assets' | 'brief' | 'post' | 'draft' | 'plan' | 'tasks';
 
 /** One tray tile. A disabled tile renders faded, has no tap action and says why. */
 interface TrayTile {
@@ -53,6 +54,13 @@ interface TrayTile {
   disabled?: true;
   /** The accessible name when it differs from the label (a disabled Draft says why). */
   ariaLabel?: string;
+  /** The accent dot on the icon (Tasks: changed since this device last looked). */
+  dot?: true;
+}
+
+/** The Tasks tile's name: "Tasks", or "Tasks, new" while the dot shows (never colour alone). Pure. */
+export function tasksTileLabel(unseen: boolean): string {
+  return unseen ? 'Tasks, new' : 'Tasks';
 }
 
 /** The disabled Draft tile's accessible name. */
@@ -85,14 +93,20 @@ export function draftTileEnabled(side: ViewerSide, hasClient: boolean | null): b
 }
 
 /**
- * The tiles: the same set on touch and laptop, Schedule last. A chat that
- * cannot schedule (Personal notes) leaves Schedule out. Draft and Plan are
- * disabled unless `draft` / `plan` is true (absent counts as unknown, so
- * disabled). Pure.
+ * The tiles: the same set on touch and laptop. Draft and Plan are disabled
+ * unless `draft` / `plan` is true (absent counts as unknown, so disabled);
+ * in Personal notes (`notes`) the disabled Plan says a plan is never shared
+ * there. Tasks is last, only where the chat has a task list (`tasks`), its
+ * dot while `tasks.unseen`. Pure.
  */
 export function trayTiles(
   layout: ChatLayout,
-  opts: { schedule?: boolean; draft?: boolean; plan?: boolean } = {},
+  opts: {
+    notes?: boolean;
+    draft?: boolean;
+    plan?: boolean;
+    tasks?: { unseen: boolean } | undefined;
+  } = {},
 ): TrayTile[] {
   void layout;
   const tiles: TrayTile[] = [
@@ -117,12 +131,17 @@ export function trayTiles(
           label: 'Plan',
           Icon: IconPlan,
           disabled: true,
-          // No Schedule means Personal notes, where a plan is never shared.
-          ariaLabel: opts.schedule === false ? PLAN_NOTES_LABEL : PLAN_UNAVAILABLE_LABEL,
+          // Personal notes, where a plan is never shared.
+          ariaLabel: opts.notes === true ? PLAN_NOTES_LABEL : PLAN_UNAVAILABLE_LABEL,
         },
   ];
-  if (opts.schedule !== false) {
-    tiles.push({ id: 'schedule', label: 'Schedule', Icon: IconCalendarClock });
+  if (opts.tasks !== undefined) {
+    tiles.push({
+      id: 'tasks',
+      label: 'Tasks',
+      Icon: IconTaskSquare,
+      ...(opts.tasks.unseen ? { dot: true as const, ariaLabel: tasksTileLabel(true) } : {}),
+    });
   }
   return tiles;
 }
@@ -130,8 +149,10 @@ export function trayTiles(
 export function ComposerTray(props: {
   layout: ChatLayout;
   onPick: (id: TrayTileId) => void;
-  /** False: the chat cannot schedule, so no Schedule tile. Absent is true. */
-  schedule?: boolean;
+  /** Personal notes: the disabled Plan says why. */
+  notes?: boolean;
+  /** The chat's task list: the Tasks tile (its dot while unseen). Absent: no tile. */
+  tasks?: { unseen: boolean } | undefined;
   /** True: the Draft tile is live. Absent or false: faded and disabled. */
   draft?: boolean;
   /** True: the Plan tile is live. Absent or false: faded and disabled. */
@@ -184,9 +205,10 @@ export function ComposerTray(props: {
   }, [open]);
 
   const tiles = trayTiles(props.layout, {
-    schedule: props.schedule !== false,
+    notes: props.notes === true,
     draft: props.draft === true,
     plan: props.plan === true,
+    tasks: props.tasks,
   });
   return (
     <div ref={rootRef} className={cn('shrink-0', NO_TOUCH_SELECT)} onContextMenu={preventDefault}>
@@ -254,6 +276,8 @@ export function TrayGrid(props: {
           align="center"
           type="button"
           data-tray-tile={tile.id}
+          {...(tile.id === 'tasks' ? { 'data-induction': INDUCTION_KEYS.chatTasks } : {})}
+          {...(tile.dot === true ? { 'data-task-unseen': '' } : {})}
           disabled={tile.disabled === true}
           {...(tile.disabled === true ? { 'aria-disabled': true } : {})}
           {...(tile.ariaLabel !== undefined ? { 'aria-label': tile.ariaLabel } : {})}
@@ -263,8 +287,15 @@ export function TrayGrid(props: {
           }}
           className="flex h-18 min-w-11 flex-col items-center justify-center gap-1.5 text-fg-2 hover:text-fg"
         >
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-panel-2 text-fg lit-btn-secondary">
+          <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-panel-2 text-fg lit-btn-secondary">
             <tile.Icon size={ICON_SIZE.tray} />
+            {tile.dot === true ? (
+              <span
+                aria-hidden="true"
+                data-task-dot=""
+                className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-accent ring-2 ring-panel"
+              />
+            ) : null}
           </span>
           <span className="text-sm font-medium">{tile.label}</span>
         </PressableRow>

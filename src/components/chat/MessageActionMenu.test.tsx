@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
@@ -8,14 +10,11 @@ vi.mock('agora-chat', () => ({
 import {
   DELETE_WINDOW_MS,
   EDIT_WINDOW_MS,
-  MARKED_LOCKED_LABEL,
   MORE_REACTIONS_LABEL,
   QUICK_REACTIONS,
   ReactionsRow,
-  markSubmenuItems,
+  dividerBefore,
   messageMenuItems,
-  moreMenuItems,
-  moreSubmenuItems,
   runMenuItem,
   nextWindowBoundaryMs,
   ownMessageActions,
@@ -35,9 +34,8 @@ import {
   type MessageMenuItem,
 } from '@/components/chat/MessageActionMenu';
 import { applyServerClock, initialState } from '@/lib/chat/chat-store';
-import type { ChatMark } from '@/lib/chat/marks';
 import type { ThreadMessage } from '@/lib/chat/thread';
-import { ICON_SIZE, IconChevronRight } from '@/components/ui/icons';
+import { ICON_SIZE } from '@/components/ui/icons';
 
 type ItemProps = Parameters<typeof messageMenuItems>[0];
 
@@ -50,8 +48,6 @@ function itemProps(over: Partial<ItemProps> = {}): ItemProps {
     canCopy: true,
     onReply: () => {},
     onCopy: () => {},
-    markOptions: ['commitment', 'decision', 'pending'],
-    onMark: () => {},
     canForward: true,
     onForward: () => {},
     canSelectText: true,
@@ -60,14 +56,9 @@ function itemProps(over: Partial<ItemProps> = {}): ItemProps {
   };
 }
 
-/** The top-level rows. */
+/** The rows, one level. */
 function menu(over: Partial<ItemProps> = {}): string[] {
   return labels(messageMenuItems(itemProps(over)));
-}
-
-/** The rows under More. */
-function more(over: Partial<ItemProps> = {}): string[] {
-  return labels(moreMenuItems(itemProps(over)));
 }
 
 const NOW = Date.parse('2026-09-29T12:00:00Z');
@@ -99,283 +90,165 @@ function ago(minutes: number): Partial<ThreadMessage> {
   return { createdAt, time: Date.parse(createdAt) };
 }
 
-const MARK: ChatMark = {
-  messageId: 'm1',
-  channelId: 'c1',
-  type: 'decision',
-  priority: null,
-  markedAt: '2026-09-29T11:59:00Z',
-  resolved: false,
-  resolvedBy: null,
-  resolvedAt: null,
-};
-
-/** The row set the menu shows for a message at NOW (mark options as the thread computes them). */
-function propsFor(message: ThreadMessage, mark?: ChatMark): Partial<ItemProps> {
-  const own = ownMessageActions(message, mark, NOW);
-  return {
+/** The row set the menu shows for a message at NOW. */
+function rowsFor(message: ThreadMessage): string[] {
+  const own = ownMessageActions(message, NOW);
+  return menu({
     canCopy: message.body.trim() !== '',
     canSelectText: message.state === 'sent' && message.body.trim() !== '',
-    markOptions: mark === undefined ? ['commitment', 'decision', 'pending'] : [],
-    markedAs: mark?.type ?? null,
     canEdit: own.canEdit,
     canDelete: own.canDelete,
-    lockedByMark: own.lockedByMark,
-  };
-}
-
-/** The top-level rows the menu shows for a message at NOW. */
-function rowsFor(message: ThreadMessage, mark?: ChatMark): string[] {
-  return menu(propsFor(message, mark));
-}
-
-/** The rows under More for a message at NOW. */
-function moreRowsFor(message: ThreadMessage, mark?: ChatMark): string[] {
-  return more(propsFor(message, mark));
+  });
 }
 
 describe('ownMessageActions: the edit and delete windows', () => {
   it('own within 15 min: Edit and Delete', () => {
-    expect(ownMessageActions(msg(ago(5)), undefined, NOW)).toEqual({
-      canEdit: true,
-      canDelete: true,
-      lockedByMark: false,
-    });
-    expect(ownMessageActions(msg(ago(15)), undefined, NOW).canEdit).toBe(true);
+    expect(ownMessageActions(msg(ago(5)), NOW)).toEqual({ canEdit: true, canDelete: true });
+    expect(ownMessageActions(msg(ago(15)), NOW).canEdit).toBe(true);
   });
 
   it('own at 20 min: Delete only; own at 40 min: neither', () => {
-    expect(ownMessageActions(msg(ago(20)), undefined, NOW)).toEqual({
-      canEdit: false,
-      canDelete: true,
-      lockedByMark: false,
-    });
-    expect(ownMessageActions(msg(ago(40)), undefined, NOW)).toEqual({
-      canEdit: false,
-      canDelete: false,
-      lockedByMark: false,
-    });
-  });
-
-  it('marked own: the locked line, never Edit or Delete', () => {
-    expect(ownMessageActions(msg(ago(1)), MARK, NOW)).toEqual({
-      canEdit: false,
-      canDelete: false,
-      lockedByMark: true,
-    });
+    expect(ownMessageActions(msg(ago(20)), NOW)).toEqual({ canEdit: false, canDelete: true });
+    expect(ownMessageActions(msg(ago(40)), NOW)).toEqual({ canEdit: false, canDelete: false });
   });
 
   it('peer, pending (no created_at), failed and deleted: nothing', () => {
-    const none = { canEdit: false, canDelete: false, lockedByMark: false };
-    expect(ownMessageActions(msg({ mine: false }), undefined, NOW)).toEqual(none);
-    expect(ownMessageActions(msg({ mine: false }), MARK, NOW)).toEqual(none);
+    const none = { canEdit: false, canDelete: false };
+    expect(ownMessageActions(msg({ mine: false }), NOW)).toEqual(none);
     expect(
-      ownMessageActions(
-        msg({ createdAt: '', state: 'sending', provisionalTime: true }),
-        undefined,
-        NOW,
-      ),
+      ownMessageActions(msg({ createdAt: '', state: 'sending', provisionalTime: true }), NOW),
     ).toEqual(none);
-    expect(ownMessageActions(msg({ createdAt: '' }), undefined, NOW)).toEqual(none);
-    expect(ownMessageActions(msg({ state: 'failed' }), undefined, NOW)).toEqual(none);
-    expect(ownMessageActions(msg({ deleted: true }), undefined, NOW)).toEqual(none);
+    expect(ownMessageActions(msg({ createdAt: '' }), NOW)).toEqual(none);
+    expect(ownMessageActions(msg({ state: 'failed' }), NOW)).toEqual(none);
+    expect(ownMessageActions(msg({ deleted: true }), NOW)).toEqual(none);
   });
 
   it('Edit needs a body: a card or attachment only message can be deleted, not edited', () => {
     const cardOnly = msg({ body: '', sharedPostIds: ['p1'] });
-    expect(ownMessageActions(cardOnly, undefined, NOW)).toEqual({
-      canEdit: false,
-      canDelete: true,
-      lockedByMark: false,
-    });
+    expect(ownMessageActions(cardOnly, NOW)).toEqual({ canEdit: false, canDelete: true });
   });
 
   it('notes: Edit and Delete have no window (Edit still needs a body)', () => {
-    expect(ownMessageActions(msg(ago(40)), undefined, NOW, true)).toEqual({
-      canEdit: true,
-      canDelete: true,
-      lockedByMark: false,
-    });
+    expect(ownMessageActions(msg(ago(40)), NOW, true)).toEqual({ canEdit: true, canDelete: true });
     const blank = msg({ ...ago(40), body: ' ' });
-    expect(ownMessageActions(blank, undefined, NOW, true).canEdit).toBe(false);
+    expect(ownMessageActions(blank, NOW, true).canEdit).toBe(false);
   });
 
   it('judges the window from the server created_at against the given moment', () => {
     const m = msg(ago(0));
     const created = Date.parse(m.createdAt);
-    expect(ownMessageActions(m, undefined, created + EDIT_WINDOW_MS).canEdit).toBe(true);
-    expect(ownMessageActions(m, undefined, created + EDIT_WINDOW_MS + 1).canEdit).toBe(false);
-    expect(ownMessageActions(m, undefined, created + DELETE_WINDOW_MS).canDelete).toBe(true);
-    expect(ownMessageActions(m, undefined, created + DELETE_WINDOW_MS + 1).canDelete).toBe(false);
+    expect(ownMessageActions(m, created + EDIT_WINDOW_MS).canEdit).toBe(true);
+    expect(ownMessageActions(m, created + EDIT_WINDOW_MS + 1).canEdit).toBe(false);
+    expect(ownMessageActions(m, created + DELETE_WINDOW_MS).canDelete).toBe(true);
+    expect(ownMessageActions(m, created + DELETE_WINDOW_MS + 1).canDelete).toBe(false);
   });
 });
 
-describe('moreMenuItems: Remind me', () => {
-  it('sits directly before "Mark as"', () => {
-    const rows = more({ canRemind: true, onRemind: () => {} });
-    expect(rows.indexOf('Remind me')).toBe(rows.indexOf('Mark as') - 1);
-  });
-
-  it('sits directly before "Marked as <type>" on a marked message', () => {
-    const rows = more({ markedAs: 'decision', canRemind: true, onRemind: () => {} });
-    const marked = rows.findIndex((r) => r.startsWith('Marked as'));
-    expect(rows[marked - 1]).toBe('Remind me');
-  });
-
-  it('is absent without the wiring', () => {
-    expect(more()).not.toContain('Remind me');
-    expect(menu({ canRemind: true, onRemind: () => {} })).not.toContain('Remind me');
-  });
-});
-
-describe('messageMenuItems: row set per case', () => {
+describe('messageMenuItems: one level, row set per case', () => {
   it('own within 15 min', () => {
-    expect(rowsFor(msg(ago(5)))).toEqual(['Reply', 'Copy', 'Forward', 'Edit', 'More', 'Delete']);
-    expect(moreRowsFor(msg(ago(5)))).toEqual(['Select', 'Mark as']);
+    expect(rowsFor(msg(ago(5)))).toEqual(['Reply', 'Copy', 'Select', 'Forward', 'Edit', 'Delete']);
   });
 
   it('own at 20 min: no Edit', () => {
-    expect(rowsFor(msg(ago(20)))).toEqual(['Reply', 'Copy', 'Forward', 'More', 'Delete']);
-    expect(moreRowsFor(msg(ago(20)))).toEqual(['Select', 'Mark as']);
+    expect(rowsFor(msg(ago(20)))).toEqual(['Reply', 'Copy', 'Select', 'Forward', 'Delete']);
   });
 
   it('own at 40 min: neither Edit nor Delete', () => {
-    expect(rowsFor(msg(ago(40)))).toEqual(['Reply', 'Copy', 'Forward', 'More']);
-    expect(moreRowsFor(msg(ago(40)))).toEqual(['Select', 'Mark as']);
+    expect(rowsFor(msg(ago(40)))).toEqual(['Reply', 'Copy', 'Select', 'Forward']);
   });
 
-  it('marked own: "Marked as <type>" under More and the single locked line last', () => {
-    expect(rowsFor(msg(ago(2)), MARK)).toEqual([
+  it('peer: never Edit or Delete', () => {
+    expect(rowsFor(msg({ ...ago(1), mine: false }))).toEqual([
       'Reply',
       'Copy',
-      'Forward',
-      'More',
-      MARKED_LOCKED_LABEL,
-    ]);
-    expect(moreRowsFor(msg(ago(2)), MARK)).toEqual(['Select', 'Marked as Decision']);
-  });
-
-  it('peer: never Edit, Delete or the locked line', () => {
-    expect(rowsFor(msg({ ...ago(1), mine: false }))).toEqual(['Reply', 'Copy', 'Forward', 'More']);
-    expect(moreRowsFor(msg({ ...ago(1), mine: false }))).toEqual(['Select', 'Mark as']);
-    expect(rowsFor(msg({ ...ago(1), mine: false }), MARK)).toEqual([
-      'Reply',
-      'Copy',
-      'Forward',
-      'More',
-    ]);
-    expect(moreRowsFor(msg({ ...ago(1), mine: false }), MARK)).toEqual([
       'Select',
-      'Marked as Decision',
+      'Forward',
     ]);
   });
 
-  it('the full order: top level, then the rows under More', () => {
+  it('the full order: Reply .. Edit, then Remove file and Delete last', () => {
     const all: Partial<ItemProps> = {
-      canEdit: true,
-      canDelete: true,
-      canStar: true,
+      canReplyPrivately: true,
+      replyPrivatelyName: 'Priya Shah',
       canTranscribe: true,
       canSaveToNotes: true,
-      canRemind: true,
-      onRemind: () => {},
+      canEdit: true,
+      canRemoveFile: true,
+      canDelete: true,
     };
-    expect(menu(all)).toEqual(['Reply', 'Copy', 'Forward', 'Edit', 'Star', 'More', 'Delete']);
-    expect(more(all)).toEqual(['Transcribe', 'Select', 'Save to notes', 'Remind me', 'Mark as']);
+    expect(messageMenuItems(itemProps(all)).map((i) => i.key)).toEqual([
+      'reply',
+      'reply-privately',
+      'copy',
+      'select-text',
+      'transcribe',
+      'forward',
+      'save-notes',
+      'edit',
+      'remove-file',
+      'delete',
+    ]);
   });
 
-  it('More is a submenu row, shown only when it has a row', () => {
-    const item = messageMenuItems(itemProps()).find((i) => i.key === 'more');
-    expect(item?.kind === 'action' && item.submenu).toBe(true);
-    expect(menu({ canSelectText: false, markOptions: [] })).not.toContain('More');
+  it('no More row and no Back row, ever', () => {
+    const keys = messageMenuItems(
+      itemProps({ canTranscribe: true, canSaveToNotes: true, canRemoveFile: true }),
+    ).map((i) => i.key);
+    expect(keys).not.toContain('more');
+    expect(keys).not.toContain('back');
   });
 
-  it('More leads with the chevron, never the ⋯ glyph; the size flows to every icon', () => {
-    const item = messageMenuItems(itemProps()).find((i) => i.key === 'more');
-    const icon = item?.kind === 'action' ? (item.icon as ReactElement) : null;
-    expect(icon?.type).toBe(IconChevronRight);
-    for (const row of messageMenuItems(itemProps(), ICON_SIZE.inline)) {
-      if (row.kind !== 'action') continue;
-      expect((row.icon as ReactElement).props).toMatchObject({ size: ICON_SIZE.inline });
+  it('the size flows to every icon', () => {
+    const items = messageMenuItems(itemProps({ canEdit: true, canDelete: true }), 18);
+    for (const item of items) {
+      const icon = item.icon as ReactElement<{ size?: number }>;
+      expect(icon.props.size).toBe(18);
     }
-    // By default every row (phone sheet and laptop popover) is at the tray size.
-    for (const row of messageMenuItems(itemProps())) {
-      if (row.kind !== 'action') continue;
-      expect((row.icon as ReactElement).props).toMatchObject({ size: ICON_SIZE.tray });
-    }
+    const sized = messageMenuItems(itemProps());
+    expect((sized[0]?.icon as ReactElement<{ size?: number }>).props.size).toBe(ICON_SIZE.tray);
   });
 
-  it('the More submenu is Back, then the rows under More', () => {
-    const onBack = vi.fn();
-    const items = moreSubmenuItems(itemProps(), onBack);
-    expect(labels(items)).toEqual(['Back', 'Select', 'Mark as']);
-    const back = items[0];
-    if (back?.kind === 'action') back.run();
-    expect(onBack).toHaveBeenCalledTimes(1);
-  });
-
-  it('runMenuItem: More opens its view and does not close', () => {
-    const item = messageMenuItems(itemProps()).find((i) => i.key === 'more');
-    const openMore = vi.fn();
-    const openMark = vi.fn();
-    const close = vi.fn();
-    if (item !== undefined) runMenuItem(item, { openMark, openMore, close });
-    expect(openMore).toHaveBeenCalledTimes(1);
-    expect(openMark).not.toHaveBeenCalled();
-    expect(close).not.toHaveBeenCalled();
+  it('runMenuItem runs the row, then closes', () => {
+    const order: string[] = [];
+    const item = messageMenuItems(itemProps({ onReply: () => order.push('run') }))[0];
+    if (item !== undefined) runMenuItem(item, { close: () => order.push('close') });
+    expect(order).toEqual(['run', 'close']);
   });
 
   it('pending: no Edit or Delete (no created_at)', () => {
     const pending = msg({ createdAt: '', state: 'sending', provisionalTime: true });
-    const own = ownMessageActions(pending, undefined, NOW);
+    const own = ownMessageActions(pending, NOW);
     expect(
       menu({
         canForward: false,
-        markOptions: [],
         canEdit: own.canEdit,
         canDelete: own.canDelete,
-        lockedByMark: own.lockedByMark,
         canSelectText: false,
       }),
     ).toEqual(['Reply', 'Copy']);
   });
 
   it('hides rows that do not apply (never greyed)', () => {
-    expect(
-      menu({ canForward: false, canCopy: false, markOptions: [], canSelectText: false }),
-    ).toEqual(['Reply']);
+    expect(menu({ canForward: false, canCopy: false, canSelectText: false })).toEqual(['Reply']);
   });
 
-  it('the marked note and locked line are not interactive; Delete is danger with its hint', () => {
-    const lockedProps: ItemProps = {
-      canCopy: false,
-      onReply: () => {},
-      onCopy: () => {},
-      markedAs: 'commitment',
-      lockedByMark: true,
-    };
-    expect(
-      moreMenuItems(lockedProps)
-        .filter((i) => i.kind === 'note')
-        .map((i) => i.key),
-    ).toEqual(['marked']);
-    expect(
-      messageMenuItems(lockedProps)
-        .filter((i) => i.kind === 'note')
-        .map((i) => i.key),
-    ).toEqual(['locked']);
+  it('Edit and Delete keep their hints; Remove file and Delete are danger', () => {
     const withDelete = messageMenuItems({
       canCopy: false,
       onReply: () => {},
       onCopy: () => {},
       canEdit: true,
+      canRemoveFile: true,
       canDelete: true,
     });
     const edit = withDelete.find((i) => i.key === 'edit');
+    const remove = withDelete.find((i) => i.key === 'remove-file');
     const del = withDelete.find((i) => i.key === 'delete');
-    expect(edit?.kind === 'action' && edit.hint).toBe('15 min');
-    expect(del?.kind === 'action' && del.hint).toBe('30 min');
-    expect(del?.kind === 'action' && del.danger).toBe(true);
+    expect(edit?.hint).toBe('15 min');
+    expect(del?.hint).toBe('30 min');
+    expect(remove?.danger).toBe(true);
+    expect(del?.danger).toBe(true);
+    expect(edit?.danger).toBeUndefined();
     const inNotes = messageMenuItems({
       canCopy: false,
       onReply: () => {},
@@ -384,16 +257,33 @@ describe('messageMenuItems: row set per case', () => {
       canDelete: true,
       notes: true,
     });
-    const noteEdit = inNotes.find((i) => i.key === 'edit');
-    const noteDel = inNotes.find((i) => i.key === 'delete');
-    expect(noteEdit?.kind === 'action' && noteEdit.hint).toBeUndefined();
-    expect(noteDel?.kind === 'action' && noteDel.hint).toBeUndefined();
+    expect(inNotes.find((i) => i.key === 'edit')?.hint).toBeUndefined();
+    expect(inNotes.find((i) => i.key === 'delete')?.hint).toBeUndefined();
     expect(inNotes[inNotes.length - 1]?.key).toBe('delete');
   });
 
-  it('runs the forward, edit and delete handlers', () => {
+  it('one divider, before the first danger row, only when a danger row shows', () => {
+    const both = messageMenuItems(itemProps({ canRemoveFile: true, canDelete: true }));
+    expect(dividerBefore(both)).toBe(both.findIndex((i) => i.key === 'remove-file'));
+    const deleteOnly = messageMenuItems(itemProps({ canDelete: true }));
+    expect(dividerBefore(deleteOnly)).toBe(deleteOnly.length - 1);
+    expect(dividerBefore(messageMenuItems(itemProps()))).toBeNull();
+    // A danger row alone (nothing above it) needs no divider.
+    const alone: MessageMenuItem = {
+      kind: 'action',
+      key: 'delete',
+      label: 'Delete',
+      icon: null,
+      run: () => {},
+      danger: true,
+    };
+    expect(dividerBefore([alone])).toBeNull();
+  });
+
+  it('runs the forward, edit, remove file and delete handlers', () => {
     const onForward = vi.fn();
     const onEdit = vi.fn();
+    const onRemoveFile = vi.fn();
     const onDelete = vi.fn();
     const items = messageMenuItems({
       canCopy: false,
@@ -403,51 +293,18 @@ describe('messageMenuItems: row set per case', () => {
       onForward,
       canEdit: true,
       onEdit,
+      canRemoveFile: true,
+      onRemoveFile,
       canDelete: true,
       onDelete,
     });
-    for (const key of ['forward', 'edit', 'delete']) {
-      const item = items.find((i) => i.key === key);
-      if (item?.kind === 'action') item.run();
+    for (const key of ['forward', 'edit', 'remove-file', 'delete']) {
+      items.find((i) => i.key === key)?.run();
     }
     expect(onForward).toHaveBeenCalledTimes(1);
     expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onRemoveFile).toHaveBeenCalledTimes(1);
     expect(onDelete).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('Mark as submenu', () => {
-  it('Back, then Commitment, Decision, Pending, each with its colour dot', () => {
-    const onBack = vi.fn();
-    const onMark = vi.fn();
-    const items = markSubmenuItems(
-      { markOptions: ['commitment', 'decision', 'pending'], onMark },
-      onBack,
-    );
-    expect(labels(items)).toEqual(['Back', 'Commitment', 'Decision', 'Pending']);
-    expect(items.map((i) => (i.kind === 'action' ? i.dot : undefined))).toEqual([
-      undefined,
-      'commitment',
-      'decision',
-      'pending',
-    ]);
-    for (const item of items) if (item.kind === 'action') item.run();
-    expect(onBack).toHaveBeenCalledTimes(1);
-    expect(onMark.mock.calls.map((c) => (c as unknown[])[0])).toEqual([
-      'commitment',
-      'decision',
-      'pending',
-    ]);
-  });
-
-  it('the main row opens the submenu (no run, no close)', () => {
-    const item = moreMenuItems({
-      canCopy: false,
-      onReply: () => {},
-      onCopy: () => {},
-      markOptions: ['pending'],
-    }).find((i) => i.key === 'mark');
-    expect(item?.kind === 'action' && item.submenu).toBe(true);
   });
 });
 
@@ -560,8 +417,8 @@ describe('D3: window visibility on server time', () => {
       NOW,
     ).serverClockOffsetMs;
     expect(offset).toBe(10 * MIN);
-    const onDevice = ownMessageActions(msg({ createdAt: created }), undefined, deviceNow);
-    const onServer = ownMessageActions(msg({ createdAt: created }), undefined, deviceNow + offset);
+    const onDevice = ownMessageActions(msg({ createdAt: created }), deviceNow);
+    const onServer = ownMessageActions(msg({ createdAt: created }), deviceNow + offset);
     expect(onDevice.canEdit).toBe(true);
     expect(onServer.canEdit).toBe(false);
     expect(onServer.canDelete).toBe(true);
@@ -582,7 +439,7 @@ describe('D3: window visibility on server time', () => {
     const serverNow = (): number => Date.now() + offset;
     // Created 5 server-minutes ago.
     const message = msg({ createdAt: new Date(serverNow() - 5 * MIN).toISOString() });
-    let rows = ownMessageActions(message, undefined, serverNow());
+    let rows = ownMessageActions(message, serverNow());
     const recomputed: string[] = [];
     let cancel = (): void => {};
     const arm = (): void => {
@@ -590,7 +447,7 @@ describe('D3: window visibility on server time', () => {
         createdAt: message.createdAt,
         now: serverNow,
         onBoundary: () => {
-          rows = ownMessageActions(message, undefined, serverNow());
+          rows = ownMessageActions(message, serverNow());
           recomputed.push(`${rows.canEdit ? 'edit' : '-'} ${rows.canDelete ? 'delete' : '-'}`);
           arm(); // the menu re-schedules from its new moment
         },
@@ -728,35 +585,43 @@ describe('F5: picker focus', () => {
   });
 });
 
-describe('moreMenuItems: Transcribe', () => {
-  it('shows Transcribe first under More for a voice note (no Copy row: the body is empty)', () => {
+describe('Transcribe', () => {
+  it('sits after Select (none here) and before Forward for a voice note (no Copy row)', () => {
     const voice = {
       canCopy: false,
       canSelectText: false,
       canTranscribe: true,
       onTranscribe: () => {},
     };
-    expect(menu(voice)).toEqual(['Reply', 'Forward', 'More']);
-    expect(more(voice)).toEqual(['Transcribe', 'Mark as']);
+    expect(menu(voice)).toEqual(['Reply', 'Transcribe', 'Forward']);
   });
 
   it('hides Transcribe when not offered (loading, or a transcript exists)', () => {
-    expect(more({ canCopy: false, canTranscribe: false })).not.toContain('Transcribe');
-    expect(more({ canCopy: false })).not.toContain('Transcribe');
-    expect(menu({ canCopy: false, canTranscribe: true })).not.toContain('Transcribe');
+    expect(menu({ canCopy: false, canTranscribe: false })).not.toContain('Transcribe');
+    expect(menu({ canCopy: false })).not.toContain('Transcribe');
   });
 
   it('runs onTranscribe', () => {
     const onTranscribe = vi.fn();
-    const item = moreMenuItems({
+    const item = messageMenuItems({
       canCopy: false,
       onReply: () => {},
       onCopy: () => {},
       canTranscribe: true,
       onTranscribe,
-    }).find((i) => i.kind === 'action' && i.key === 'transcribe');
-    expect(item?.kind).toBe('action');
-    if (item?.kind === 'action') item.run();
+    }).find((i) => i.key === 'transcribe');
+    item?.run();
     expect(onTranscribe).toHaveBeenCalledOnce();
+  });
+});
+
+describe('the divider is the 1px border token', () => {
+  it('a hairline above the danger rows, no new colour', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./MessageActionMenu.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).toContain('data-menu-divider="" className="border-t border-border"');
+    expect(src.split('data-menu-divider').length - 1).toBe(1);
   });
 });

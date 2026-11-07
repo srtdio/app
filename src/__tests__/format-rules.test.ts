@@ -47,7 +47,6 @@ describe('format rules', () => {
 
   it.each([
     'components/chat/Composer.tsx',
-    'components/chat/ScheduledListSheet.tsx',
     'components/chat/PlanItemScreen.tsx',
     'components/chat/ConceptSheet.tsx',
     'components/comments/SlotComposer.tsx',

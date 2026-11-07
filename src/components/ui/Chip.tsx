@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { MOVE_CLASS } from '@/lib/motion';
+import { ICON_SIZE, IconX } from '@/components/ui/icons';
 
 interface ChipProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -41,6 +42,12 @@ interface ChipProps extends Omit<
   onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick'];
   /** Ref to the rendered <button>; a plain prop so Chip stays a callable function. */
   buttonRef?: Ref<HTMLButtonElement> | undefined;
+  /**
+   * A clear action: when set, a trailing X (its own 44x44 button, labelled
+   * "Clear <label> filter") sits on the chip's right end, in the chip's text
+   * colour. Unset, the chip renders exactly as without this prop.
+   */
+  onClear?: (() => void) | undefined;
 }
 
 const sizes: Record<NonNullable<ChipProps['size']>, string> = {
@@ -74,10 +81,11 @@ export function Chip({
   className,
   onClick,
   buttonRef,
+  onClear,
   ...props
 }: ChipProps) {
   const selected = selectedProp ?? false;
-  return (
+  const chip = (
     <button
       type="button"
       {...chipStateAria(selectedProp, tab || props.role === 'tab')}
@@ -109,6 +117,27 @@ export function Chip({
           <span className="tabular-nums">{count}</span>
         </>
       ) : null}
+      {onClear !== undefined ? <span aria-hidden="true" className="w-4 shrink-0" /> : null}
     </button>
+  );
+  if (onClear === undefined) return chip;
+  // The X is a sibling (never a button in a button): a 44x44 box on the
+  // chip's right end whose glyph sits where the chip reserved its width.
+  return (
+    <span data-chip-clearable="" className="relative inline-flex shrink-0">
+      {chip}
+      <button
+        type="button"
+        data-chip-clear=""
+        aria-label={`Clear ${label} filter`}
+        onClick={onClear}
+        className={cn(
+          'absolute inset-y-0 right-0 inline-flex min-h-11 w-11 items-center justify-end rounded-lg pr-4 focus-visible:lit-focus',
+          selected ? 'text-accent-fg' : 'text-fg',
+        )}
+      >
+        <IconX size={ICON_SIZE.inline} />
+      </button>
+    </span>
   );
 }

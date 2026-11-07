@@ -1,8 +1,6 @@
 // Selection mode's two bars. The header bar replaces the thread header: "N
 // selected" and a 44x44 Cancel. The bottom bar replaces the composer: Forward
-// (any recorded message), Star or Unstar (Unstar only when every selected
-// message is already starred; one write for the batch) and Delete (own,
-// unmarked, inside 30 minutes). When
+// (any recorded message) and Delete (own, inside 30 minutes). When
 // Delete cannot apply it stays visible but disabled, with one line saying why.
 // Delete opens the confirm dialog; a failure shows the mapped copy as a toast
 // (never raw proc text) and the selection is kept (the caller only clears it
@@ -13,19 +11,50 @@ import { useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { ICON_SIZE, IconForward, IconStar, IconTrash } from '@/components/ui/icons';
+import { PressableRow } from '@/components/ui/PressableRow';
+import { SelectCheck } from '@/components/ui/SelectCheck';
+import { ICON_SIZE, IconForward, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import { bottomAnchorProps } from '@/lib/bottom-inset';
 import { DELETE_BLOCK_COPY, type DeleteBlock } from '@/lib/chat/forward';
 import { deleteNotesConfirmCopy, type DeleteConfirmCopy } from '@/lib/chat/delete-flow';
-import { STAR_LABEL, UNSTAR_LABEL } from '@/lib/chat/stars';
 import {
   HEADER_NAME_TYPE,
   SELECTION_REASON_TYPE,
   sized,
   type ChatLayout,
 } from '@/components/chat/chat-type';
+
+/**
+ * A 44x44 selection check circle for one message row. It appears at once
+ * (motion never fades); nothing around it moves. In the thread the row
+ * itself takes the tap (anywhere on it toggles), so this is the visible state
+ * and the keyboard stop; `className` places it (the row's left column).
+ */
+export function SelectCheckbox(props: {
+  checked: boolean;
+  onToggle: () => void;
+  className?: string;
+}): ReactElement {
+  return (
+    <PressableRow
+      type="button"
+      inline
+      role="checkbox"
+      aria-checked={props.checked}
+      aria-label={props.checked ? 'Deselect message' : 'Select message'}
+      data-select-circle=""
+      onClick={props.onToggle}
+      className={cn(
+        'flex h-11 w-11 shrink-0 items-center justify-center',
+        props.className ?? 'self-center',
+      )}
+    >
+      <SelectCheck checked={props.checked} />
+    </PressableRow>
+  );
+}
 
 /** The selection header's count line. */
 export function selectedCountLabel(count: number): string {
@@ -97,13 +126,6 @@ export function selectionHeaderSlots(props: { count: number; onCancel: () => voi
   };
 }
 
-/** The selection bar's Star action: which way it goes, and the run. */
-interface SelectionStar {
-  /** 'unstar' when every selected message is already starred. */
-  action: 'star' | 'unstar';
-  onRun: () => void;
-}
-
 /** The bottom bar's frame: a top border on the panel, clear of the safe-area inset. */
 const SELECTION_BAR_CLASS =
   'flex shrink-0 flex-col gap-1 border-t bg-panel lit-dock px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3';
@@ -145,7 +167,7 @@ export function RemoveSelectionBarView(props: {
 }
 
 /**
- * The bottom bar's view: Forward, Star or Unstar, then Delete, with the reason line under the
+ * The bottom bar's view: Forward, then Delete, with the reason line under the
  * pair when Delete is blocked. Hook-free so the tests call it directly.
  */
 export function SelectionBarView(props: {
@@ -156,12 +178,9 @@ export function SelectionBarView(props: {
   canDelete: boolean;
   /** Opens the forward picker; absent hides Forward. */
   onForward?: (() => void) | undefined;
-  /** Star or Unstar the selection; absent hides it. */
-  star?: SelectionStar | undefined;
   /** Opens the delete confirm. */
   onDeleteTap: () => void;
 }): ReactElement {
-  const star = props.star;
   return (
     <div
       data-selection-bar=""
@@ -183,17 +202,6 @@ export function SelectionBarView(props: {
         ) : (
           <span />
         )}
-        {star !== undefined ? (
-          <Button
-            variant="ghost"
-            data-selection-star={star.action}
-            disabled={props.count === 0}
-            onClick={star.onRun}
-          >
-            <IconStar size={ICON_SIZE.inline} />
-            {star.action === 'unstar' ? UNSTAR_LABEL : STAR_LABEL}
-          </Button>
-        ) : null}
         <Button
           variant="ghost"
           data-selection-delete=""
@@ -227,8 +235,6 @@ export function SelectionBar(props: {
   canDelete: boolean;
   /** Opens the forward picker for the selection; absent hides Forward. */
   onForward?: (() => void) | undefined;
-  /** Star or Unstar the selection; absent hides it. */
-  star?: SelectionStar | undefined;
   /** The files confirm (deleteConfirmCopy), or null for today's text-only copy. */
   confirmCopy?: DeleteConfirmCopy | null;
   /** Personal notes: the notes copy, never "for everyone". */
@@ -257,7 +263,6 @@ export function SelectionBar(props: {
         block={props.block}
         canDelete={props.canDelete}
         onForward={props.onForward}
-        star={props.star}
         onDeleteTap={() => setConfirming(true)}
       />
       {deleteMessagesConfirm({

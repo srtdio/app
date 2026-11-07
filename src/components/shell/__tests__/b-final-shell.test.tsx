@@ -1,7 +1,7 @@
 // Layout B-final, shell + icons + chat sheets: the shell header and the chat
-// sheets render the shared parts (HeaderBar, the one sheet frame, one time
-// pick frame), the trailing rule stays on the part, and a row or bar keeps its
-// height across states.
+// sheets render the shared parts (HeaderBar, the one sheet frame), the
+// trailing rule stays on the part, and a row or bar keeps its height across
+// states.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -11,10 +11,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { SHEET_FRAME } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconAlarmClock, IconSearch, IconX, strokeFor } from '@/components/ui/icons';
 import { PageHead } from '@/components/shell/PageHead';
-import { WhenOptions, WhenRow } from '@/components/chat/WhenOptions';
 import { selectionHeaderSlots } from '@/components/chat/SelectionBar';
-import { ReminderOptions } from '@/components/chat/ReminderSheet';
-import { ScheduleOptions } from '@/components/chat/ScheduleSheet';
 
 const html = (node: Parameters<typeof renderToStaticMarkup>[0]): string =>
   renderToStaticMarkup(node);
@@ -113,79 +110,11 @@ describe('trailing rule: the part applies it, never the call site', () => {
 describe('Tasks sheet: one frame, the height of what it holds', () => {
   it('TaskSheet takes the shared SHEET_FRAME (no own 88svh / 560 size)', () => {
     const src = source('../../chat/tasks/TaskSheet.tsx');
-    expect(src).toContain(': SHEET_FRAME');
+    expect(src).toContain('SHEET_FRAME)');
     expect(src).not.toContain('88svh');
     expect(src).not.toContain('w-[560px]');
     expect(SHEET_FRAME).toContain('max-h-[90svh]');
     expect(SHEET_FRAME).toContain('sm:w-sheet');
     expect(source('../../ui/Sheet.tsx')).toContain('SHEET_FRAME,');
-  });
-});
-
-describe('Remind me and Schedule: one time pick frame', () => {
-  it('both render WhenOptions rows: 56 tall, a 44 disc, the 20 glyph', () => {
-    const reminder = html(<ReminderOptions preview="Ship it" onPick={noop} />);
-    const schedule = html(<ScheduleOptions preview="To Ops: hi" onPick={noop} />);
-    for (const out of [reminder, schedule]) {
-      expect(out).toContain('min-h-14');
-      expect(out).toContain('h-11 w-11');
-      expect(out).toContain('width="20"');
-    }
-    expect(reminder).toContain('data-reminder-row="custom"');
-    expect(schedule).toContain('data-schedule-row="custom"');
-    // Only the laptop Schedule list is a menu (arrow keys).
-    expect(schedule).toContain('role="menu"');
-    expect(reminder).not.toContain('role="menu"');
-  });
-
-  it('a row keeps its height with a time, a chevron or as the danger row', () => {
-    const rows = [
-      html(
-        <WhenRow
-          hook="reminder"
-          id="a"
-          icon={null}
-          label="1 hour"
-          detail="3:20 PM"
-          onClick={noop}
-        />,
-      ),
-      html(<WhenRow hook="reminder" id="b" icon={null} label="Custom" onClick={noop} />),
-      html(
-        <WhenRow
-          hook="reminder"
-          id="cancel"
-          icon={null}
-          label="Cancel reminder"
-          tone="danger"
-          divided
-          onClick={noop}
-        />,
-      ),
-    ];
-    for (const out of rows) expect(out).toContain('min-h-14');
-    expect(rows[2]).toContain('text-bad');
-    expect(rows[2]).toContain('<li class="mt-1 border-t border-border pt-1">');
-  });
-
-  it('the Custom step is the shared one (fields, summary, helper, confirm)', () => {
-    const out = html(
-      <WhenOptions
-        hook="schedule"
-        icon={IconAlarmClock}
-        presets={[]}
-        customLabel="Custom time"
-        custom={{
-          initial: new Date(2026, 10, 7, 9),
-          summary: () => 'Sends tomorrow at 9:00 AM',
-          allowed: () => true,
-          helper: 'Any time from 1 minute to 1 year ahead.',
-          confirmLabel: 'Schedule',
-          onPick: noop,
-        }}
-      />,
-    );
-    expect(out).toContain('data-schedule-options="presets"');
-    expect(out).toContain('Custom time');
   });
 });

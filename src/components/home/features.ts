@@ -27,7 +27,7 @@ export const FEATURES: readonly Feature[] = [
     tone: 'c1',
     clip: 'chat',
     title: '“Who’s doing what?” It’s in the top bar.',
-    body: 'The top bar keeps count of everything open in the chat: the plan, posts in review, briefs, commitments. Plus reminders, tasks, voice notes as text, and scheduled sends.',
+    body: 'The top bar keeps count of everything open in the chat: the plan, posts in review, briefs. Plus tasks, voice notes as text, and scheduled sends.',
     label: 'Walkthrough of Sorted chat',
     sub: 'Work chat per client',
   },

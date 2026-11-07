@@ -42,7 +42,6 @@ import { createOutboxSender, runSend, type SendOutcome } from '@/lib/chat/send-f
 import { canSendAttachmentMessage, type MessageAttachment } from '@/lib/chat/attachments';
 import { stripHashToken } from '@/lib/chat/post-refs';
 import { IconButton } from '@/components/ui/IconButton';
-import { createLongPressController, LONG_PRESS_MS } from '@/components/ui/useLongPress';
 import { getDraft, resetDrafts, setDraft } from '@/lib/chat/drafts';
 import { runEdit } from '@/lib/chat/delete-flow';
 import type { Client } from '@srtdio/rpc';
@@ -531,10 +530,9 @@ describe('D7/F10: only the textarea and search inputs stay selectable', () => {
     );
     expect(textarea).not.toContain('select-none');
     expect(textarea).not.toContain('NO_TOUCH_SELECT');
-    // The no-select class: its import, the About, reply and Reply privately
-    // bars, and the Send button while a hold schedules (no iOS selection or
-    // callout), nothing else.
-    expect(source.split('NO_TOUCH_SELECT').length - 1).toBe(5);
+    // The no-select class: its import and the About, reply and Reply
+    // privately bars (no iOS selection or callout), nothing else.
+    expect(source.split('NO_TOUCH_SELECT').length - 1).toBe(4);
     expect(source).not.toContain('select-none');
     expect(source).not.toContain('removeAllRanges');
   });
@@ -794,7 +792,7 @@ describe('voice notes under 1 second are discarded', () => {
 describe('phone Send: one tap sends and the keyboard stays up', () => {
   // A fake of the press: the textarea, which element has focus, and a
   // pointerdown that records whether its default (the blur) was prevented.
-  function setup(opts: { focused: boolean; schedulable?: boolean }) {
+  function setup(opts: { focused: boolean }) {
     let active: unknown = null;
     const area = { focus: vi.fn(), setSelectionRange: vi.fn() };
     area.focus.mockImplementation(() => {
@@ -802,13 +800,10 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
     });
     if (opts.focused) active = area;
     let keptAtPress = false;
-    const onLongPress = vi.fn();
-    const hold = createLongPressController({ onLongPress });
     const handlers = sendPressHandlers({
       enabled: true,
       textarea: () => area,
       activeElement: () => active,
-      hold: opts.schedulable === false ? null : hold.handlers,
       onPress: (kept) => {
         keptAtPress = kept;
       },
@@ -833,8 +828,6 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
       area,
       active: () => active,
       keptAtPress: () => keptAtPress,
-      hold,
-      onLongPress,
       handlers,
       press,
     };
@@ -848,7 +841,6 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
     // Nothing to fall back to: the textarea never lost focus.
     expect(refocusComposer(t.area, t.keptAtPress(), t.active())).toBe(false);
     expect(t.area.focus).not.toHaveBeenCalled();
-    t.hold.dispose();
   });
 
   it('with the textarea not focused (keyboard down), pointerdown is not prevented and nothing focuses', () => {
@@ -858,7 +850,6 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
     expect(refocusComposer(t.area, t.keptAtPress(), t.active())).toBe(false);
     expect(t.area.focus).not.toHaveBeenCalled();
     expect(keepsComposerFocus(null, null)).toBe(false);
-    t.hold.dispose();
   });
 
   it('one click with text sends exactly once and the send clears the text', async () => {
@@ -866,18 +857,15 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
     const onSend = vi.fn();
     let text = 'hello';
     t.press();
-    t.hold.handlers.onPointerUp();
-    // The click: a tap is never swallowed, so the form submits once.
-    if (!t.hold.consumeClickSuppression()) {
-      const taken = dispatchSend(onSend, {
-        text,
-        attachments: [],
-        sharedPostIds: [],
-        reply: null,
-        sharedBriefIds: [],
-      });
-      if (taken) text = '';
-    }
+    // The click: the form submits once.
+    const taken = dispatchSend(onSend, {
+      text,
+      attachments: [],
+      sharedPostIds: [],
+      reply: null,
+      sharedBriefIds: [],
+    });
+    if (taken) text = '';
     expect(onSend).toHaveBeenCalledTimes(1);
     expect(onSend.mock.calls[0]?.[0]).toBe('hello');
     expect(text).toBe('');
@@ -889,12 +877,9 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
     const body = source.slice(source.indexOf('  function send(draft: LinkCardDraft)'));
     const fn = body.slice(0, body.indexOf('\n  }\n') + 4);
     expect(fn).toContain("setText('');");
-    // The Send button spreads the hold handlers, then the composed press.
-    expect(source).toMatch(
-      /\{\.\.\.\(holdToSchedule \? sendHold\.handlers : \{\}\)\}\n\s*\{\.\.\.sendPress\}/,
-    );
-    expect(source).toContain('hold: holdToSchedule ? sendHold.handlers : null');
-    t.hold.dispose();
+    // The Send button spreads the composed press; Send never holds.
+    expect(source).toContain('{...sendPress}');
+    expect(source).not.toContain('useLongPress');
   });
 
   it('the textarea lost focus anyway: the click refocuses it with the caret at 0', () => {
@@ -903,33 +888,14 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
     expect(refocusComposer(t.area, true, null)).toBe(true);
     expect(t.area.focus).toHaveBeenCalledTimes(1);
     expect(t.area.setSelectionRange).toHaveBeenCalledWith(0, 0);
-    t.hold.dispose();
   });
 
-  it('hold-to-schedule still opens Schedule on a long press and the trailing click does not send', () => {
-    vi.useFakeTimers();
-    try {
-      const t = setup({ focused: true });
-      const onSend = vi.fn();
-      expect(t.press().prevented).toBe(true);
-      vi.advanceTimersByTime(LONG_PRESS_MS + 10);
-      expect(t.onLongPress).toHaveBeenCalledTimes(1);
-      t.hold.handlers.onPointerUp();
-      if (!t.hold.consumeClickSuppression()) onSend();
-      expect(onSend).not.toHaveBeenCalled();
-      t.hold.dispose();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('laptop: only the hold handlers (none when not schedulable), focus untouched', () => {
+  it('laptop: no press handlers, focus untouched', () => {
     const onPress = vi.fn();
     const none = sendPressHandlers({
       enabled: false,
       textarea: () => null,
       activeElement: () => null,
-      hold: null,
       onPress,
     });
     expect(none).toEqual({});

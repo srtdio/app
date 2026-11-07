@@ -10,7 +10,6 @@ import { ToastProvider } from '@/components/ui/toast';
 import {
   PlanBlock,
   StatusDrawerList,
-  StatusMarkRow,
   type StatusDrawerActions,
   type StatusDrawerData,
 } from '@/components/chat/StatusDrawer';
@@ -31,47 +30,15 @@ import {
   snapOpen,
   snapShut,
 } from '@/components/chat/StatusTicker';
-import type { ChatMark } from '@/lib/chat/marks';
 import type { PlanBundle } from '@/lib/chat/plans';
-import type { WriteResult } from '@/lib/chat/record';
 import { statusBar, type PlanSummary, type StatusBar } from '@/lib/chat/status-bar';
-import type { ThreadMessage } from '@/lib/chat/thread';
-
-const NO_MARKS = { commitments: 0, decisions: 0, pending: 0, p1: 0 };
 
 function bar(over: Partial<Parameters<typeof statusBar>[0]> = {}): StatusBar {
-  return statusBar({ plans: [], posts: 0, briefs: 0, marks: NO_MARKS, side: 'agency', ...over });
+  return statusBar({ plans: [], posts: 0, briefs: 0, tasks: 0, side: 'agency', ...over });
 }
 
 function plan(id: string, title: string, approved = 1, total = 5, changes = 0): PlanSummary {
   return { id, title, approved, total, changes };
-}
-
-function mark(id: string, type: ChatMark['type'] = 'commitment'): ChatMark {
-  return {
-    messageId: id,
-    channelId: 'c',
-    type,
-    priority: type === 'pending' ? 1 : null,
-    markedAt: `2026-10-0${id.length}T10:00:00Z`,
-    resolved: false,
-    resolvedBy: null,
-    resolvedAt: null,
-  };
-}
-
-function message(id: string, body: string): ThreadMessage {
-  return {
-    id,
-    body,
-    mine: false,
-    senderUserId: 'u1',
-    createdAt: '2026-10-01T10:00:00Z',
-    time: Date.parse('2026-10-01T10:00:00Z'),
-    attachments: [],
-    sharedPostIds: [],
-    sharedBriefIds: [],
-  } as unknown as ThreadMessage;
 }
 
 /** Every element in a returned tree (walks props.children). */
@@ -95,8 +62,8 @@ const visible = (html: string): string =>
 
 describe('first paint is final', () => {
   it('holds an empty, inert 36px slot until every read settles, then paints once', () => {
-    const frames = [null, null, bar({ posts: 3, marks: { ...NO_MARKS, commitments: 2 } })].map(
-      (b) => renderToStaticMarkup(<StatusTickerBar bar={b} />),
+    const frames = [null, null, bar({ posts: 3, briefs: 2, tasks: 1 })].map((b) =>
+      renderToStaticMarkup(<StatusTickerBar bar={b} />),
     );
     expect(frames[0]).toContain('data-loops-strip="pending"');
     expect(frames[0]).toContain('aria-hidden="true"');
@@ -105,7 +72,7 @@ describe('first paint is final', () => {
     expect(frames[0]).not.toContain('<button');
     expect(frames[1]).toBe(frames[0]);
     expect(frames[2]).toContain('data-loops-strip="open"');
-    expect(visible(frames[2] ?? '')).toBe('3in review2commitments');
+    expect(visible(frames[2] ?? '')).toBe('3in review2briefs1task');
   });
 
   it('a failed read with nothing else open is a blank bar, never Nothing open', () => {
@@ -119,7 +86,7 @@ describe('Nothing open', () => {
   it('shows the check and the line in fg-3, and is not a button', () => {
     const html = renderToStaticMarkup(<StatusTickerBar bar={bar()} />);
     expect(html).toContain('data-loops-strip="empty"');
-    expect(html).toContain('Open posts and marks show up here.');
+    expect(html).toContain('Open plans, posts, briefs and tasks show up here.');
     expect(html).toContain('text-fg-3');
     expect(html).not.toContain('<button');
     expect(html).not.toContain('role="button"');
@@ -256,11 +223,12 @@ function planBundle(id: string, title: string): PlanBundle {
 }
 
 describe('the drawer list', () => {
-  const marks = new Map(
-    ['a', 'bb', 'ccc', 'dddd', 'eeeee', 'ffffff'].map((id) => [id, mark(id)] as const),
-  );
-  marks.set('p', mark('p', 'pending'));
-  const messages = new Map([...marks.keys()].map((id) => [id, message(id, `Body ${id}`)]));
+  const briefs = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id, i) => ({
+    id,
+    number: i + 1,
+    title: `Brief ${id}`,
+    created_at: '2026-10-01T10:00:00Z',
+  }));
 
   function drawer(over: Partial<StatusDrawerData & StatusDrawerActions> = {}) {
     const actions = {
@@ -269,24 +237,17 @@ describe('the drawer list', () => {
       onOpenPost: vi.fn(),
       onOpenBrief: vi.fn(),
       onSeeAllBriefs: vi.fn(),
-      onJumpMark: vi.fn(),
-      onSeeAllMarks: vi.fn(),
+      onOpenTask: vi.fn(),
+      onSeeAllTasks: vi.fn(),
     };
-    const onResolveMark = vi.fn(
-      (): Promise<WriteResult> => Promise.resolve({ ok: true } as WriteResult),
-    );
     const props = {
-      keys: ['commitments', 'pending'] as const,
+      keys: ['posts', 'briefs'] as const,
       side: 'agency' as const,
       timeZone: 'UTC',
       plans: [],
       posts: { heading: 'Posts waiting on approvers', rows: [], count: 0 },
-      briefs: { rows: [], count: 0 },
-      marks,
-      messageFor: (id: string) => messages.get(id),
-      profiles: new Map(),
-      onResolveMark,
-      onReopenMark: vi.fn((): Promise<WriteResult> => Promise.resolve({ ok: true } as WriteResult)),
+      briefs: { rows: briefs, count: briefs.length },
+      tasks: { rows: [], count: 0 },
       ...actions,
       ...over,
     };
@@ -305,17 +266,16 @@ describe('the drawer list', () => {
         <Probe />
       </ToastProvider>,
     );
-    return { html, tree: walk(tree), actions, onResolveMark };
+    return { html, tree: walk(tree), actions };
   }
 
-  it('sections in the bar order; five rows then See all; P1 pill on pending', () => {
+  it('sections in the bar order; five rows then See all', () => {
     const { html } = drawer();
-    expect(html.indexOf('data-status-section="commitments"')).toBeLessThan(
-      html.indexOf('data-status-section="pending"'),
+    expect(html.indexOf('data-status-section="posts"')).toBeLessThan(
+      html.indexOf('data-status-section="briefs"'),
     );
-    expect(html.match(/data-status-mark="/g)?.length).toBe(6);
-    expect(html).toContain('See all 6');
-    expect(html).toContain('data-priority="P1"');
+    expect(html.match(/data-status-brief="/g)?.length).toBe(5);
+    expect(html).toContain('See all 7');
     expect(html).toContain('min-h-11');
     expect(html).toContain('line-clamp-2');
   });
@@ -343,70 +303,48 @@ describe('the drawer list', () => {
     expect(html).toContain('0/1');
   });
 
-  it('"See all" for marks opens the MarksSheet', () => {
+  it('Tasks: title, due line and priority tag; five rows then See all; taps open the sheet', () => {
+    const tasks = Array.from({ length: 6 }, (_, i) => ({
+      id: `t${i}`,
+      channelId: 'c',
+      number: i + 1,
+      title: `Task ${i + 1}`,
+      side: 'agency' as const,
+      status: 'todo' as const,
+      priority: 1 as const,
+      createdBy: null,
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+      deletedAt: null,
+      dueOn: i === 0 ? '2026-10-12' : null,
+      doneAt: null,
+    }));
+    const { html, tree, actions } = drawer({
+      keys: ['tasks'],
+      tasks: { rows: tasks, count: tasks.length },
+    });
+    expect(html).toContain('data-status-section="tasks"');
+    expect(html).toContain('Open tasks');
+    expect(html.match(/data-status-task="/g)?.length).toBe(5);
+    expect(html).toContain('See all 6');
+    expect(html).toContain('data-task-p="1"');
+    expect(html).toContain('Due ');
+    const row = tree.find(
+      (el) => (el.props as { 'data-status-task'?: string })['data-status-task'] === 't0',
+    );
+    (row?.props as { onClick: () => void }).onClick();
+    expect(actions.onOpenTask).toHaveBeenCalledWith('t0');
+    const seeAll = tree.find((el) => (el.props as { attr?: string }).attr === 'tasks');
+    (seeAll?.props as { onClick: () => void }).onClick();
+    expect(actions.onSeeAllTasks).toHaveBeenCalledTimes(1);
+  });
+
+  it('"See all" for briefs goes to Briefs', () => {
     const { tree, actions } = drawer();
-    const seeAll = tree.find((el) => (el.props as { attr?: string }).attr === 'marks');
+    const seeAll = tree.find((el) => (el.props as { attr?: string }).attr === 'briefs');
     expect(seeAll).toBeDefined();
     (seeAll?.props as { onClick: () => void }).onClick();
-    expect(actions.onSeeAllMarks).toHaveBeenCalledTimes(1);
-  });
-
-  it('a mark row stamp goes through the confirm: Ask never writes, Confirm does', async () => {
-    const { tree, onResolveMark, actions } = drawer();
-    const row = tree.find(
-      (el) => el.type === StatusMarkRow && (el.props as { mark: ChatMark }).mark.messageId === 'p',
-    );
-    expect(row).toBeDefined();
-    const rowProps = row?.props as {
-      onAsk: () => void;
-      onConfirm: () => void;
-      onJump: () => void;
-    };
-    rowProps.onAsk();
-    expect(onResolveMark).not.toHaveBeenCalled();
-    rowProps.onConfirm();
-    await Promise.resolve();
-    expect(onResolveMark).toHaveBeenCalledWith('p');
-    rowProps.onJump();
-    expect(actions.onJumpMark).toHaveBeenCalledWith('p');
-  });
-
-  it('the row asks first: the stamp button only asks; the confirm names the stamp', () => {
-    const base = {
-      mark: mark('x', 'decision'),
-      text: 'Go green',
-      meta: 'Asha · 10:00',
-      busy: false,
-      canStamp: true,
-      onJump: vi.fn(),
-      onAsk: vi.fn(),
-      onCancel: vi.fn(),
-      onConfirm: vi.fn(),
-    };
-    const idle = renderToStaticMarkup(<StatusMarkRow {...base} confirming={false} />);
-    expect(idle).toContain('Closed');
-    expect(idle).not.toContain('data-mark-confirm');
-    const asking = renderToStaticMarkup(<StatusMarkRow {...base} confirming />);
-    expect(asking).toContain('data-mark-confirm="resolve"');
-    expect(asking).toContain('Mark this decision as closed?');
-  });
-
-  it("the confirm's primary button calls onResolveMark once with the row's message id", async () => {
-    const { tree, onResolveMark } = drawer();
-    const row = tree.find(
-      (el) => el.type === StatusMarkRow && (el.props as { mark: ChatMark }).mark.messageId === 'p',
-    );
-    expect(row).toBeDefined();
-    // The row as it renders once asked: its confirm's primary button is the write.
-    const asking = walk(
-      StatusMarkRow({ ...(row?.props as Parameters<typeof StatusMarkRow>[0]), confirming: true }),
-    );
-    const primary = asking.find((el) => (el.props as { variant?: string }).variant === 'primary');
-    expect((primary?.props as { children?: ReactNode }).children).toBe('Completed');
-    (primary?.props as { onClick: () => void }).onClick();
-    await Promise.resolve();
-    expect(onResolveMark).toHaveBeenCalledTimes(1);
-    expect(onResolveMark).toHaveBeenCalledWith('p');
+    expect(actions.onSeeAllBriefs).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -497,16 +435,14 @@ describe('post rows never fail silently', () => {
           plans: [],
           posts: { heading: 'Posts waiting on approvers', rows: [post], count: 1 },
           briefs: { rows: [], count: 0 },
-          marks: new Map(),
-          messageFor: () => undefined,
-          profiles: new Map(),
+          tasks: { rows: [], count: 0 },
           onOpenPlan: () => {},
           onOpenPlanItem: () => {},
           onOpenPost: () => {},
           onOpenBrief: () => {},
           onSeeAllBriefs: () => {},
-          onJumpMark: () => {},
-          onSeeAllMarks: () => {},
+          onOpenTask: () => {},
+          onSeeAllTasks: () => {},
           open: true,
           postsExpanded: false,
           onExpandPosts: () => {},
@@ -553,16 +489,14 @@ describe('post rows never fail silently', () => {
         plans: [],
         posts: { heading: 'Posts waiting on approvers', rows: [post], count: 1 },
         briefs: { rows: [brief], count: 1 },
-        marks: new Map(),
-        messageFor: () => undefined,
-        profiles: new Map(),
+        tasks: { rows: [], count: 0 },
         onOpenPlan: () => {},
         onOpenPlanItem: () => {},
         onOpenPost: () => {},
         onOpenBrief: () => {},
         onSeeAllBriefs: () => {},
-        onJumpMark: () => {},
-        onSeeAllMarks: () => {},
+        onOpenTask: () => {},
+        onSeeAllTasks: () => {},
         open: true,
         postsExpanded: false,
         onExpandPosts: () => {},

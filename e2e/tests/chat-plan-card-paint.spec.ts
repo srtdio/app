@@ -10,7 +10,6 @@ import {
   PEER_NAME,
   TEAM_PLAN_ID,
   TEAM_PLAN_MESSAGE_ID,
-  WORKSPACE_ID,
   seedClientPlanWithDraft,
   seedTeamAndHiddenPlans,
 } from '../fixtures/chat-data';
@@ -281,7 +280,7 @@ for (const scenario of SCENARIOS) {
 
 // ---------------------------------------------------------------------------
 // The ticker and the card on open. The ticker's inputs (open posts list and
-// count, open briefs list and count, marks, the channel's shared plan ids) come
+// count, open briefs list and count, the channel's shared plan ids) come
 // in the same chat_open_bundle as the card's message, so the ticker is filled
 // when the card first paints; then a catch-up (the browser coming back online)
 // re-reads chat_messages, and a plan-changed event re-reads the plan, 3s later.
@@ -452,18 +451,6 @@ async function runTickerFill(page: Page): Promise<void> {
   const network = await installHarnessNetwork(page);
   viewAsClient(network);
   seedClientPlanWithDraft(network.world, { channelId: DM_CHANNEL, sender: PEER });
-  // An open mark on the plan message: the ticker has a marks item.
-  (network.world.tables.chat_message_marks ??= []).push({
-    message_id: String(network.world.dmMessages[0]?.id),
-    channel_id: DM_CHANNEL,
-    workspace_id: WORKSPACE_ID,
-    mark_type: 'pending',
-    priority: null,
-    marked_by: PEER,
-    marked_at: new Date(Date.now() - 60_000).toISOString(),
-    resolved_by: null,
-    resolved_at: null,
-  });
   await recordFrames(page, DRAFT_PLAN_MESSAGE_ID);
   const reads = { history: 0, plans: 0 };
   page.on('request', (request) => {
@@ -496,7 +483,7 @@ async function runTickerFill(page: Page): Promise<void> {
     await card.waitFor({ state: 'attached', timeout: 10_000 });
     // The ticker's inputs come in the same chat_open_bundle as the card, so
     // the ticker is filled when the card paints: first paint is final.
-    await expect(page.locator('[data-status-item]')).toHaveCount(3);
+    await expect(page.locator('[data-status-item]')).toHaveCount(2);
     await twoFrames(page);
     // The app's clock runs again.
     await page.clock.resume();

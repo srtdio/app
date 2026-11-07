@@ -2,12 +2,14 @@
 // Notifications page shows every inbox row (decision 89's split, 3 Oct 2026,
 // ended with the merge). docs/schema.md "Where inbox entries are shown" lists
 // them:
-//   - mention with entity_type chat_channel, reminder, scheduled_sent,
-//     scheduled_failed, the plan alerts (plan_opened, plan_deleted,
-//     plan_date_changed, plan_updated, plan_review, plan_comment) and the task
-//     alerts (task_changed, task_due).
+//   - mention with entity_type chat_channel, the plan alerts (plan_opened,
+//     plan_deleted, plan_date_changed, plan_updated, plan_review,
+//     plan_comment) and the task alerts (task_changed, task_due).
+// The retired types (RETIRED_EVENT_TYPES: reminder, scheduled_sent,
+// scheduled_failed) stay bell rows so they never toast, and the page never
+// lists them.
 // The live layer still toasts them apart: a new chat mention gets its own
-// "<name> mentioned you" toast, reminders ring (ReminderRing), plan comments
+// "<name> mentioned you" toast, plan comments
 // and plan reviews toast as activity (LIVE_PLAN_EVENT_TYPES; rule of 2 Nov
 // 2026: a comment or an OK / Not OK alerts everyone who can see the plan), and
 // the rest never toast (plan edits never pop up). Also here: the chat, task and plan deep links every surface
@@ -58,11 +60,23 @@ export function isBellTaskEvent(eventType: string): eventType is BellTaskEventTy
   return BELL_TASK.has(eventType);
 }
 
-/** Event types that were always bell rows, whatever their entity. */
-export const BELL_ONLY_EVENT_TYPES = [
+/**
+ * Event types the app no longer shows (the feature is retired; the DB may
+ * still write rows for ones set before): never listed, counted on the page
+ * or toasted.
+ */
+export const RETIRED_EVENT_TYPES = [
   'reminder',
   'scheduled_sent',
   'scheduled_failed',
+] as const satisfies readonly InboxEventTypeValue[];
+
+/** The PostgREST `in` list of the retired event types. */
+export const RETIRED_EVENT_LIST = `(${RETIRED_EVENT_TYPES.join(',')})`;
+
+/** Event types that were always bell rows, whatever their entity. */
+export const BELL_ONLY_EVENT_TYPES = [
+  ...RETIRED_EVENT_TYPES,
   ...BELL_PLAN_EVENT_TYPES,
   ...BELL_TASK_EVENT_TYPES,
 ] as const satisfies readonly InboxEventTypeValue[];

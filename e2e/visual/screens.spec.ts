@@ -246,11 +246,11 @@ async function chatListAllRows(page: Page): Promise<void> {
   await chatListReady(page);
   await waitFor([page.locator('[data-notes-tile]')], 'Personal notes row');
   await waitFor(
-    [page.locator('[data-section="groups"]').getByText(GROUP_NAME, { exact: true })],
+    [page.locator('[data-chat-list]').getByText(GROUP_NAME, { exact: true })],
     'group row',
   );
   await waitFor(
-    [page.locator('[data-section="people"]').getByText(PEER_NAME, { exact: true })],
+    [page.locator('[data-chat-list]').getByText(PEER_NAME, { exact: true })],
     'person row',
   );
 }
@@ -332,7 +332,8 @@ function seedDatedTasks(network: HarnessNetwork): void {
 /** The group chat's Tasks sheet, open on its opening chip (Today). */
 async function openTasks(page: Page): Promise<Locator> {
   await openChat(page, GROUP_NAME);
-  await tap([page.getByRole('button', { name: /^Tasks(, new)?$/ })], 'Tasks button');
+  await tap([page.getByRole('button', { name: 'Add attachment', exact: true })], 'tray');
+  await tap([page.locator('[data-tray-tile="tasks"]')], 'Tasks tile');
   const sheet = page.getByRole('dialog', { name: 'Tasks' });
   await waitFor([sheet.locator('[data-task-list]')], 'Tasks sheet');
   return sheet;
@@ -1135,15 +1136,13 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // Full screen (from the menu) on Past: Not done (overdue, bad tone) above Done.
-    name: 'chat-tasks-past-full',
+    // Past: Not done (overdue, bad tone) above Done.
+    name: 'chat-tasks-past',
     seed: creator,
     extra: seedDatedTasks,
     url: '/chat',
     steps: async (page) => {
       const sheet = await openTasks(page);
-      await tap([sheet.getByRole('button', { name: 'More actions' })], 'Tasks menu');
-      await tap([page.getByRole('menuitem', { name: 'Full screen' })], 'Full screen');
       await tap([sheet.locator('[data-task-when-chip="past"]')], 'Past chip');
       await waitFor([sheet.locator('[data-task-section="done"]')], 'Past sections');
     },
@@ -1194,21 +1193,6 @@ const SCREENS: Screen[] = [
       const row = sheet.locator('[data-task-row-id]', { hasText: 'Hook options' });
       await swipeRow(row.locator('[data-task-title]'), -80, { release: false });
       await waitFor([row.locator('[data-task-swipe-icon][data-armed]')], 'armed bin');
-    },
-  },
-  {
-    // Search (from the menu) takes the chip line: one flat list across every chip.
-    name: 'chat-tasks-search',
-    seed: creator,
-    extra: seedDatedTasks,
-    url: '/chat',
-    hold: true,
-    steps: async (page) => {
-      const sheet = await openTasks(page);
-      await tap([sheet.getByRole('button', { name: 'More actions' })], 'Tasks menu');
-      await tap([page.getByRole('menuitem', { name: 'Search tasks' })], 'Search tasks');
-      await sheet.locator('[data-task-search] input').fill('ca');
-      await waitFor([sheet.locator('[data-task-list][data-task-chip="search"]')], 'results');
     },
   },
   {
@@ -2144,6 +2128,8 @@ async function seedMediaChips(network: HarnessNetwork, page: Page, now: number):
 async function openMediaChip(page: Page, kind: MediaKind): Promise<Locator> {
   await chatListReady(page);
   await tap([page.locator(`[data-search-chip="${kind}"]`)], `${kind} chip`);
+  // The picked chip shows its X (Clear <chip> filter) in every chip screen.
+  await waitFor([page.locator('[data-chip-clear]')], `${kind} chip X`);
   const results = page.locator(`[data-media-results="${kind}"]`);
   await waitFor([results], `${kind} results`);
   await waitFor(
@@ -2259,7 +2245,6 @@ const ACTIVITY_CHIP_SCREENS = [
   { chip: 'mentions', label: 'Mentions' },
   { chip: 'briefs', label: 'Briefs' },
   { chip: 'plans', label: 'Plans' },
-  { chip: 'upcoming', label: 'Upcoming' },
   { chip: 'snoozed', label: 'Snoozed' },
 ] as const;
 for (const { chip, label } of ACTIVITY_CHIP_SCREENS) {
@@ -2275,7 +2260,7 @@ for (const { chip, label } of ACTIVITY_CHIP_SCREENS) {
         [chips.locator('button[aria-pressed="true"]', { hasText: label })],
         `${label} chip on`,
       );
-      await listOrZero(page, `activity ${chip}`, [page.locator('[data-upcoming-list]')]);
+      await listOrZero(page, `activity ${chip}`);
     },
   });
 }
@@ -2820,11 +2805,8 @@ SCREENS.push(
 );
 
 // The composer's pickers and sheets in the DM (creator: Plan is live), the
-// Forward and Remind me sheets from a message's menu, an own message carrying
+// Forward sheet from a message's menu, an own message carrying
 // a post card, and the guest homepage. Phone light/dark and laptop light.
-
-/** The draft the Schedule sheet previews ("To Priya Raman: ..."). */
-const SCHEDULE_DRAFT = 'Can we move the shoot to Monday?';
 
 /** Serve the homepage fixture for "/" (the harness keeps "/" as its smoke page); clips 404. */
 async function serveHomepage(_network: HarnessNetwork, page: Page): Promise<void> {
@@ -2903,35 +2885,6 @@ SCREENS.push(
         ],
         'forward picker rows',
       );
-    },
-  },
-  {
-    // A message's menu, More, Remind me: the presets under the preview.
-    name: 'reminder-sheet',
-    seed: creator,
-    url: '/chat',
-    steps: async (page) => {
-      await openDmMessageMenu(page);
-      await tap([page.locator('[data-menu-item="more"]')], 'More');
-      await tap([page.locator('[data-menu-item="remind"]')], 'Remind me');
-      const sheet = page.getByRole('dialog', { name: 'Remind me' });
-      await waitFor([sheet.locator('[data-reminder-row="1h"]')], 'reminder presets');
-    },
-  },
-  {
-    // A typed draft, then the tray's Schedule tile: the sheet on phone, the
-    // menu under the Send chevron on laptop (both "Schedule message").
-    name: 'schedule-sheet',
-    seed: creator,
-    url: '/chat',
-    steps: async (page) => {
-      await openDm(page);
-      const draft = page.locator('form:has(textarea)').first().locator('textarea');
-      await draft.fill(SCHEDULE_DRAFT);
-      await pickTrayTile(page, 'schedule');
-      const sheet = page.getByRole('dialog', { name: 'Schedule message' });
-      await waitFor([sheet.locator('[data-schedule-options]')], 'schedule options');
-      await waitFor([sheet.locator('[data-schedule-preview]')], 'schedule preview');
     },
   },
   {
@@ -3216,27 +3169,6 @@ SCREENS.push(
     },
   },
   {
-    // A typed draft scheduled for tomorrow, the write held: the field reads
-    // "Scheduling…" and the send slot spins at its own width.
-    name: 'chat-composer-scheduling',
-    seed: creator,
-    extra: (network) => {
-      network.holdRpc('chat_message_schedule');
-    },
-    url: '/chat',
-    steps: async (page) => {
-      await openDm(page);
-      await dmComposer(page).locator('textarea').fill(SCHEDULE_DRAFT);
-      await pickTrayTile(page, 'schedule');
-      const sheet = page.getByRole('dialog', { name: 'Schedule message' });
-      await waitFor([sheet.locator('[data-schedule-row="tomorrow"]')], 'schedule options');
-      await assertSameWidth(sendSlot(page), async () => {
-        await tap([sheet.locator('[data-schedule-row="tomorrow"]')], 'Tomorrow');
-        await waitFor([page.locator('[data-composer-state="scheduling"]')], 'scheduling');
-      });
-    },
-  },
-  {
     // One sheet saving: Rename file with a new name, the save held. Save
     // spins at its own width and the sheet cannot close.
     name: 'asset-rename-saving',
@@ -3342,7 +3274,6 @@ SCREENS.push(
     url: '/chat',
     steps: async (page) => {
       await openDmMessageMenu(page);
-      await tap([page.locator('[data-menu-item="more"]')], 'More');
       await tap([page.locator('[data-menu-item="select-text"]')], 'Select');
       await waitFor([page.locator('[data-selecting-text]')], 'select mode');
       await page.mouse.move(0, 0);
@@ -3532,7 +3463,6 @@ const LAPTOP_DARK_SCREENS = new Set([
   // Moment states: phone and laptop, light and dark.
   'chat-composer-recording',
   'chat-voice-sending',
-  'chat-composer-scheduling',
   'asset-rename-saving',
   'chat-tasks-saving',
   'chat-upload-progress',
@@ -3559,7 +3489,6 @@ const LAPTOP_DARK_SCREENS = new Set([
   'activity-chip-mentions',
   'activity-chip-briefs',
   'activity-chip-plans',
-  'activity-chip-upcoming',
   'activity-chip-snoozed',
   'plan-tab-chip-next',
   'plan-tab-chip-later',

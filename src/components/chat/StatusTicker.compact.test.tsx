@@ -10,8 +10,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StatusTickerBar } from '@/components/chat/StatusTicker';
 import { TITLE_ELLIPSIS, statusBar, type PlanSummary } from '@/lib/chat/status-bar';
 
-const NO_MARKS = { commitments: 0, decisions: 0, pending: 0, p1: 0 };
-
 /** Fake widths: the full copy, the compact copy, the ellipsis, each title word. */
 const WIDTH = { full: 500, compact: 0, ellipsis: 6, area: 300 };
 
@@ -64,7 +62,7 @@ function plan(id: string, title: string): PlanSummary {
 }
 
 function render(plans: PlanSummary[]): void {
-  const bar = statusBar({ plans, posts: 3, briefs: 2, marks: NO_MARKS, side: 'agency' });
+  const bar = statusBar({ plans, posts: 3, briefs: 2, tasks: 0, side: 'agency' });
   act(() => root.render(<StatusTickerBar bar={bar} />));
 }
 

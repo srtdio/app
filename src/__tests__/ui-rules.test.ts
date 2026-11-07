@@ -145,7 +145,6 @@ const CONFIRM_DIALOG_ALLOWLIST: Record<string, string> = {
   // Group membership: remove a member from a group, leave a group.
   'chat/GroupInfoSheet.tsx': 'Remove member from group; Leave group',
   // Hide chat clears the chat for the caller; it does not come back.
-  'chat/ChannelList.tsx': 'Hide chat (clears messages for the caller)',
   // Remove an approved address from settings (no Recently deleted).
   'pages/settings/ApprovedAddressesSection.tsx': 'Remove approved address',
   // Discard confirms: unsaved input that cannot come back.

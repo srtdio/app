@@ -18,7 +18,6 @@ import type { PlanTabData } from '@/lib/plan-tab-read';
 
 const h = vi.hoisted(() => ({
   fetchActivityEntries: vi.fn(),
-  fetchUpcoming: vi.fn(),
   readActivityBadge: vi.fn(),
   markEntryRead: vi.fn(),
   readPlanTab: vi.fn(),
@@ -67,7 +66,6 @@ vi.mock('@/lib/inbox/inbox-reads', async (importOriginal) => ({
 vi.mock('@/components/pages/activity/data', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/pages/activity/data')>()),
   fetchActivityEntries: (...args: unknown[]) => h.fetchActivityEntries(...args),
-  fetchUpcoming: (...args: unknown[]) => h.fetchUpcoming(...args),
   markEntryRead: (...args: unknown[]) => h.markEntryRead(...args),
 }));
 vi.mock('@/lib/plan-tab-read', async (importOriginal) => ({
@@ -179,7 +177,6 @@ beforeEach(async () => {
     // Storage can be unavailable; sorts fall back to their defaults.
   }
   h.fetchActivityEntries.mockReset();
-  h.fetchUpcoming.mockReset().mockResolvedValue({ ok: true, data: [] });
   h.readActivityBadge.mockReset().mockResolvedValue({ ok: true, data: { unread: 0, mentions: 0 } });
   h.markEntryRead.mockReset().mockResolvedValue({ ok: true, data: null });
   h.readPlanTab.mockReset();

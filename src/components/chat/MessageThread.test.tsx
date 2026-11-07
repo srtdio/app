@@ -51,7 +51,6 @@ import {
   rowSelection,
   createRowHold,
   createSelectionGesture,
-  markOutcomeCopy,
   captureRowAnchor,
   createSelectionScroll,
   restoreRowAnchor,
@@ -103,8 +102,7 @@ import { chatMentionPreview } from '@/components/pages/activity/data';
 import { boldAllMentions, draftLine } from '@/components/chat/ChannelList';
 import { MentionPicker } from '@/components/chat/MentionPicker';
 import { renderToStaticMarkup as renderStrip } from 'react-dom/server';
-import type { ChatMark } from '@/lib/chat/marks';
-import { SelectCheckbox } from '@/components/chat/MarkBits';
+import { SelectCheckbox } from '@/components/chat/SelectionBar';
 import { roleLabel } from '@/components/pages/settings/members-data';
 import {
   focusFirstMenuItem,
@@ -2240,24 +2238,14 @@ describe('post references after audit', () => {
 });
 
 describe('status ticker slot', () => {
-  it('the ticker shows for threads with marks, never while selecting', () => {
-    expect(threadStripSlot({ hasMarks: true, selecting: false })).toBe('loops');
-    expect(threadStripSlot({ hasMarks: true, selecting: true })).toBeNull();
-    expect(threadStripSlot({ hasMarks: false, selecting: false })).toBeNull();
+  it('the ticker shows on the chat page, never while selecting', () => {
+    expect(threadStripSlot({ chatPage: true, selecting: false })).toBe('loops');
+    expect(threadStripSlot({ chatPage: true, selecting: true })).toBeNull();
+    expect(threadStripSlot({ chatPage: false, selecting: false })).toBeNull();
   });
 });
 
 describe('status ticker first paint waits for every read (B1)', () => {
-  const pending = (id: string, channelId: string, priority: 1 | null = null): ChatMark => ({
-    messageId: id,
-    channelId,
-    type: 'pending',
-    priority,
-    markedAt: '2026-09-27T10:00:00Z',
-    resolved: false,
-    resolvedBy: null,
-    resolvedAt: null,
-  });
   const settled = {
     plans: { ready: true, failed: false, bundles: [] },
     briefs: { ready: true, failed: false, rows: [], count: 0 },
@@ -2267,10 +2255,9 @@ describe('status ticker first paint waits for every read (B1)', () => {
   const base = (over: Partial<Input>): Input => ({
     openPosts: { ready: true, count: 0, failed: false },
     side,
-    marks: new Map(),
-    marksLoaded: true,
     status: settled,
     open: [],
+    openTasks: 0,
     ...over,
   });
   /** The bar as one line: each item's number and word. */
@@ -2281,33 +2268,27 @@ describe('status ticker first paint waits for every read (B1)', () => {
     return bar.items.map((i) => `${i.lead ?? ''}${i.number} ${i.word ?? ''}`.trim()).join(' · ');
   };
 
-  it('posts lead the marks, pending P1 is warn', () => {
-    const marks = new Map([['m1', pending('m1', 'c1', 1)]]);
+  it('posts lead the briefs', () => {
     const input = base({
       openPosts: { ready: true, count: 4, failed: false },
       side: { side: 'agency', ready: true },
-      marks,
+      status: { ...settled, briefs: { ready: true, failed: false, rows: [], count: 2 } },
     });
-    expect(line(input)).toBe('4 in review · 1 pending');
-    const bar = tickerBar(input);
-    expect(bar?.kind === 'items' ? bar.items[1]?.tone : null).toBe('warn');
+    expect(line(input)).toBe('4 in review · 2 briefs');
   });
 
-  it('channel switch into a thread with marks: no bar until its marks are loaded', () => {
-    const oldMarks = new Map([['a', pending('a', 'A')]]);
-    const newMarks = new Map([
-      ['b1', pending('b1', 'B')],
-      ['b2', pending('b2', 'B')],
-    ]);
+  it('open tasks join the bar last; a list not in yet never reads as nothing open', () => {
+    expect(line(base({ openTasks: 2 }))).toBe('2 tasks');
+    expect(line(base({ openTasks: 1, openPosts: { ready: true, count: 3, failed: false } }))).toBe(
+      '3 waiting · 1 task',
+    );
+    expect(line(base({ openTasks: null }))).toBe('blank');
+  });
+
+  it('no bar until the posts round settles', () => {
     const posts = { ready: true, count: 1, failed: false };
-    const frames = [
-      line(base({ openPosts: { ...posts, ready: false }, marks: oldMarks, marksLoaded: false })),
-      line(base({ openPosts: posts, marks: oldMarks, marksLoaded: false })),
-      line(base({ openPosts: posts, marksLoaded: false })),
-      line(base({ openPosts: posts, marks: newMarks })),
-    ];
-    expect(frames.slice(0, 3)).toEqual([null, null, null]);
-    expect(frames[3]).toBe('1 waiting · 2 pending');
+    expect(line(base({ openPosts: { ...posts, ready: false } }))).toBeNull();
+    expect(line(base({ openPosts: posts }))).toBe('1 waiting');
   });
 
   it('plans and briefs still settling hold the slot too', () => {
@@ -2331,10 +2312,10 @@ describe('status ticker first paint waits for every read (B1)', () => {
       line(
         base({
           openPosts: { ready: true, count: null, failed: true },
-          marks: new Map([['c', pending('c', 'C')]]),
+          status: { ...settled, briefs: { ready: true, failed: false, rows: [], count: 1 } },
         }),
       ),
-    ).toBe('1 pending');
+    ).toBe('1 brief');
   });
 });
 
@@ -2509,9 +2490,9 @@ describe('tombstones, edited label and the neutral selection', () => {
     expect(all(unchecked).some((el) => el.props['data-selected-tint'] !== undefined)).toBe(false);
   });
 
-  it('F8 rowSelection: a marked own message is selectable, deleted is not', () => {
-    const selection = { selected: new Set<string>(['marked']), onToggle: noop };
-    expect(rowSelection(makeMessage({ id: 'marked', mine: true }), selection)).toMatchObject({
+  it('F8 rowSelection: an own message is selectable, deleted is not', () => {
+    const selection = { selected: new Set<string>(['own2']), onToggle: noop };
+    expect(rowSelection(makeMessage({ id: 'own2', mine: true }), selection)).toMatchObject({
       role: 'selectable',
       checked: true,
     });
@@ -2717,13 +2698,12 @@ describe('D8: WhatsApp multi-select', () => {
     return fire(target, 'click');
   }
 
-  it('menu Select, Forward and Delete enter the mode with that message ticked, marked ones too', () => {
+  it('menu Select, Forward and Delete enter the mode with that message ticked', () => {
     const own = makeMessage({ id: 'own', mine: true });
     const peer = makeMessage({ id: 'peer', mine: false });
     expect([...selectionOnEntry(own)]).toEqual(['own']);
     expect([...selectionOnEntry(peer)]).toEqual(['peer']);
     expect(forwardEntersSelection(peer, true)).toBe(true);
-    // F8: a marked own message is ticked like any other (the mark blocks Delete only).
     expect(forwardEntersSelection(own, true)).toBe(true);
     expect(forwardEntersSelection(own, false)).toBe(false);
   });
@@ -3261,15 +3241,6 @@ describe('F11: selection entry keeps the pressed row at its screen Y', () => {
     expect(scroll.entered(false)).toBeNull();
     scroll.beforeExit(list);
     expect(scroll.exited()).toEqual({ pin: false, anchor: null });
-  });
-});
-
-describe('F14: a failed mark never shows raw error text', () => {
-  it('maps any failure to the fixed mark copy; success shows nothing', () => {
-    expect(markOutcomeCopy({ ok: false, message: 'new row violates row-level security' })).toBe(
-      "Couldn't mark. Try again.",
-    );
-    expect(markOutcomeCopy({ ok: true })).toBeNull();
   });
 });
 
@@ -3912,9 +3883,7 @@ describe('decision 128: every Reply focuses the composer inside the user event',
     const item = items.find((i) => i.key === 'reply');
     expect(item).toBeDefined();
     if (item === undefined) return;
-    synchronously(() =>
-      runMenuItem(item, { openMark: () => log.push('mark'), close: () => log.push('close') }),
-    );
+    synchronously(() => runMenuItem(item, { close: () => log.push('close') }));
     expect(log).toEqual(['focus:noscroll', 'caret:0-0', 'reply:m-reply', 'close']);
   });
 

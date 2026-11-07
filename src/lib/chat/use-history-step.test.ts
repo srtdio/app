@@ -250,17 +250,17 @@ describe('N4: a layer is one step', () => {
     const win = queuedWindow([LIST, CHAT_A]);
     const contact = enterHistoryStep(win, HISTORY_STEP_KEYS.contact, vi.fn());
     contact.dispose();
-    const starredExit = vi.fn();
-    enterHistoryStep(win, HISTORY_STEP_KEYS.starred, starredExit);
+    const searchExit = vi.fn();
+    enterHistoryStep(win, HISTORY_STEP_KEYS.search, searchExit);
     // Not pushed yet: the pop is still queued.
     expect(win.index()).toBe(2);
     win.flush();
     expect(win.index()).toBe(2);
-    expect(stepMarkerOf(win.history.state, HISTORY_STEP_KEYS.starred)).not.toBeNull();
-    expect(starredExit).not.toHaveBeenCalled();
+    expect(stepMarkerOf(win.history.state, HISTORY_STEP_KEYS.search)).not.toBeNull();
+    expect(searchExit).not.toHaveBeenCalled();
     win.history.back();
     win.flush();
-    expect(starredExit).toHaveBeenCalledOnce();
+    expect(searchExit).toHaveBeenCalledOnce();
     expect(win.url()).toBe(CHAT_A);
     expect(win.index()).toBe(1);
   });
@@ -279,7 +279,7 @@ describe('N4: a layer is one step', () => {
 
   it('a layer left under a navigation is buried and skipped on the way back', () => {
     const win = queuedWindow([LIST, CHAT_A]);
-    const step = enterHistoryStep(win, HISTORY_STEP_KEYS.marks, vi.fn());
+    const step = enterHistoryStep(win, HISTORY_STEP_KEYS.readInfo, vi.fn());
     win.write(PIPELINE, 'push');
     step.dispose();
     expect(buriedStepCount()).toBe(1);
@@ -312,17 +312,17 @@ describe('N3: a kept layer is part of history', () => {
   it('chat opened from a sheet row: back = chat home with the sheet open, back again closes it', () => {
     const win = queuedWindow([PIPELINE, LIST]);
     const layerExit = vi.fn();
-    const layer = enterHistoryStep(win, HISTORY_STEP_KEYS.scheduledList, layerExit);
+    const layer = enterHistoryStep(win, HISTORY_STEP_KEYS.groupInfo, layerExit);
     // A row: the layer keeps its entry and the chat pushes.
     layer.detach();
     win.write(CHAT_A, 'push');
     win.history.back();
     win.flush();
     // Landed on the kept entry: the layer adopts it (no second push).
-    expect(stepMarkerOf(win.history.state, HISTORY_STEP_KEYS.scheduledList)).not.toBeNull();
+    expect(stepMarkerOf(win.history.state, HISTORY_STEP_KEYS.groupInfo)).not.toBeNull();
     expect(isBuriedStep(win.history.state)).toBe(false);
     const reopenedExit = vi.fn();
-    enterHistoryStep(win, HISTORY_STEP_KEYS.scheduledList, reopenedExit, { adopt: true });
+    enterHistoryStep(win, HISTORY_STEP_KEYS.groupInfo, reopenedExit, { adopt: true });
     expect(win.index()).toBe(2);
     win.history.back();
     win.flush();
@@ -336,7 +336,7 @@ describe('N3: a kept layer is part of history', () => {
 
   it('closing the layer itself pops its step', () => {
     const win = queuedWindow([LIST]);
-    enterHistoryStep(win, HISTORY_STEP_KEYS.scheduledList, vi.fn()).dispose();
+    enterHistoryStep(win, HISTORY_STEP_KEYS.groupInfo, vi.fn()).dispose();
     win.flush();
     expect(win.index()).toBe(0);
     expect(win.listeners()).toBe(0);
@@ -379,7 +379,7 @@ describe('F2: auto-close never leaves two list entries in a row', () => {
     expect(autoCloseAction({ idx: 0, usr: { chatBelow: 'list' } })).toBe('replace');
     // A sheet open over chat home is a step, not the bare list.
     const sheet = queuedWindow([LIST]);
-    enterHistoryStep(sheet, HISTORY_STEP_KEYS.scheduledList, vi.fn()).detach();
+    enterHistoryStep(sheet, HISTORY_STEP_KEYS.groupInfo, vi.fn()).detach();
     expect(chatEntryFrom(true, sheet.history.state)).toBeUndefined();
   });
 });

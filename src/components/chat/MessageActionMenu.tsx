@@ -1,15 +1,18 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+// The message action menu: the quick reactions on top, then ONE level of
+// rows (no More submenu): Reply, Reply privately, Copy, Select, Transcribe,
+// Forward, Save to notes, Edit, then one hairline divider and the danger
+// rows, Remove file and Delete (last). The divider shows only when a danger
+// row does. Each row shows only when it applies (the same conditions as
+// before); Edit and Delete keep their "15 min" / "30 min" hints. A phone gets
+// a ui/Sheet, a laptop a MenuPopover at the bubble.
+
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { growFromTrigger, riseIn, trackDim } from '@/lib/motion';
 import { menuOrigin } from '@/components/ui/popover-classes';
 import { createPortal } from 'react-dom';
 import {
   ICON_SIZE,
-  IconAlarmClock,
-  IconBan,
-  IconBookmark,
-  IconChevronLeft,
-  IconChevronRight,
   IconCopy,
   IconEdit,
   IconFile,
@@ -17,8 +20,6 @@ import {
   IconPlus,
   IconReply,
   IconSelectText,
-  IconStar,
-  IconStarFilled,
   IconText,
   IconTrash,
   IconUser,
@@ -31,16 +32,11 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { useIsLaptop, viewportSize } from '@/lib/use-is-laptop';
-import { MARK_TONE } from '@/components/chat/MarkBits';
 import { useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
-import { useReminderOptional } from '@/components/chat/ReminderContext';
 import { logger } from '@/lib/logger';
 import { DELETE_SELECTION_WINDOW_MS } from '@/lib/chat/forward';
-import { TYPE_LABEL, type ChatMark, type MarkType } from '@/lib/chat/marks';
 import type { ThreadMessage } from '@/lib/chat/thread';
-import { formatClock, formatSendLabel } from '@/lib/chat/scheduled';
 import { cn } from '@/lib/cn';
-import { STAR_LABEL, UNSTAR_LABEL } from '@/lib/chat/stars';
 import { REMOVE_FILE_MENU_LABEL } from '@/lib/chat/remove-files';
 import { useModalFocus } from '@/lib/modal-focus';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
@@ -95,35 +91,28 @@ export function scheduleWindowBoundary(input: {
   return () => clearTimeout(handle);
 }
 
-/** The one disabled line an own marked message shows in place of Edit and Delete. */
-export const MARKED_LOCKED_LABEL = "Marked messages can't be edited or deleted";
-
 /** The own-message rows a message offers when its menu opens. */
 export interface OwnMessageActions {
   canEdit: boolean;
   canDelete: boolean;
-  /** Own, recorded and marked: the single disabled "can't be edited or deleted" line. */
-  lockedByMark: boolean;
 }
 
 /**
  * Edit and Delete for one message at `nowMs` (the moment the menu opens). Only
- * the caller's own recorded, live, unmarked message qualifies; the windows run
+ * the caller's own recorded, live message qualifies; the windows run
  * from the server created_at (a pending message has none, so neither row
  * shows). Edit also needs a body: attachments, cards and mentions are never
  * editable. Mirrors chat_message_edit / chat_message_delete. Pure.
  */
 export function ownMessageActions(
   message: Pick<ThreadMessage, 'mine' | 'state' | 'createdAt' | 'body' | 'deleted'>,
-  mark: ChatMark | undefined,
   nowMs: number,
   /** Notes: no window on Edit or Delete. */
   notes = false,
 ): OwnMessageActions {
   // Notes: neither Edit nor Delete has a window.
-  const none = { canEdit: false, canDelete: false, lockedByMark: false };
+  const none = { canEdit: false, canDelete: false };
   if (!message.mine || message.state !== 'sent' || message.deleted === true) return none;
-  if (mark !== undefined) return { ...none, lockedByMark: true };
   if (message.createdAt === '') return none;
   const created = Date.parse(message.createdAt);
   if (Number.isNaN(created)) return none;
@@ -131,13 +120,12 @@ export function ownMessageActions(
   return {
     canEdit: message.body.trim() !== '' && (notes || age <= EDIT_WINDOW_MS),
     canDelete: notes || age <= DELETE_WINDOW_MS,
-    lockedByMark: false,
   };
 }
 
 /**
  * A plan card message (chat_plan_share): its menu hides Forward, Save to notes
- * and Edit; Reply, Copy (the plan's title), Mark as and Delete stay. Pure.
+ * and Edit; Reply, Copy (the plan's title) and Delete stay. Pure.
  */
 export function isPlanMessage(message: Pick<ThreadMessage, 'sharedPlanIds'>): boolean {
   return (message.sharedPlanIds ?? []).length > 0;
@@ -167,8 +155,6 @@ interface MessageActionMenuProps {
   open: boolean;
   onClose: () => void;
   anchor: DOMRect | null;
-  /** The pressed bubble: "Remind me" finds its message through it. */
-  held?: HTMLElement | null;
   mine: boolean;
   currentReaction: string | null;
   /** Offers the reaction row (a recorded message); false hides it. */
@@ -185,14 +171,6 @@ interface MessageActionMenuProps {
    */
   canTranscribe?: boolean;
   onTranscribe?: () => void;
-  /**
-   * Offers "Star" (or "Unstar" when `starred`), after Copy or Transcribe: any
-   * recorded, live message, own or not, in every chat.
-   */
-  canStar?: boolean;
-  /** The message is starred: the row reads "Unstar". */
-  starred?: boolean;
-  onStar?: () => void;
   onReact: (emoji: string) => void;
   onReply: () => void;
   /**
@@ -204,11 +182,6 @@ interface MessageActionMenuProps {
   replyPrivatelyName?: string;
   onReplyPrivately?: () => void;
   onCopy: () => void;
-  /** Types the "Mark as" submenu offers; empty hides the row. */
-  markOptions?: readonly MarkType[];
-  onMark?: (type: MarkType) => void;
-  /** The message's mark type when it carries one: "Marked as <type>", not interactive. */
-  markedAs?: MarkType | null;
   /** Offers "Forward" (a recorded message, anyone's). */
   canForward?: boolean;
   onForward?: () => void;
@@ -218,15 +191,13 @@ interface MessageActionMenuProps {
   /** Offers "Delete" (see ownMessageActions). */
   canDelete?: boolean;
   onDelete?: () => void;
-  /** Own marked message: the single disabled line in place of Edit and Delete. */
-  lockedByMark?: boolean;
   /**
    * A failed own send (never recorded): Delete removes it from this device,
    * so it carries no "30 min" hint.
    */
   failedSend?: boolean;
   /**
-   * Offers "Save to notes", between Copy and Remind me (a recorded, live
+   * Offers "Save to notes" (a recorded, live
    * message in any chat but notes).
    */
   canSaveToNotes?: boolean;
@@ -240,18 +211,6 @@ interface MessageActionMenuProps {
   canSelectText?: boolean;
   onSelectText?: () => void;
   /**
-   * Offers "Remind me" (a recorded message). When absent, the menu offers it
-   * itself for the held bubble's message inside a ReminderProvider.
-   */
-  canRemind?: boolean;
-  onRemind?: () => void;
-  /**
-   * The viewer's pending reminder on this message (its remind_at): the same
-   * slot then reads "Reminder · <time>" and opens the sheet to change or
-   * cancel it. Never shown on the bubble itself.
-   */
-  reminderAt?: string | null;
-  /**
    * Offers "Remove file", last under More: an own, unmarked message with
    * exactly one file that is not a voice note (canRemoveSingleFile). The
    * message stays; the file goes behind an Undo.
@@ -261,25 +220,17 @@ interface MessageActionMenuProps {
 }
 
 /** One entry of the message action menu. */
-export type MessageMenuItem =
-  | {
-      kind: 'action';
-      key: string;
-      label: string;
-      icon: ReactNode;
-      run: () => void;
-      /** Text in the bad token (Delete). */
-      danger?: boolean;
-      /** Muted note at the right ("15 min"). */
-      hint?: string;
-      /** Opens the in-place submenu instead of running and closing. */
-      submenu?: boolean;
-      /** A colour dot in place of the icon (the mark types). */
-      dot?: MarkType;
-      /** A time after the label, in mono ("Reminder · 9:00 AM"). */
-      mono?: string;
-    }
-  | { kind: 'note'; key: string; label: string; icon: ReactNode };
+export interface MessageMenuItem {
+  kind: 'action';
+  key: string;
+  label: string;
+  icon: ReactNode;
+  run: () => void;
+  /** Text in the bad token (Delete). */
+  danger?: boolean;
+  /** Muted note at the right ("15 min"). */
+  hint?: string;
+}
 
 type MenuItemProps = Pick<
   MessageActionMenuProps,
@@ -291,28 +242,18 @@ type MenuItemProps = Pick<
   | 'onCopy'
   | 'canTranscribe'
   | 'onTranscribe'
-  | 'canStar'
-  | 'starred'
-  | 'onStar'
-  | 'markOptions'
-  | 'onMark'
-  | 'markedAs'
   | 'canForward'
   | 'onForward'
   | 'canEdit'
   | 'onEdit'
   | 'canDelete'
   | 'onDelete'
-  | 'lockedByMark'
   | 'failedSend'
   | 'canSaveToNotes'
   | 'onSaveToNotes'
   | 'notes'
   | 'canSelectText'
   | 'onSelectText'
-  | 'canRemind'
-  | 'onRemind'
-  | 'reminderAt'
   | 'canRemoveFile'
   | 'onRemoveFile'
 >;
@@ -323,26 +264,9 @@ export const SAVE_TO_NOTES_LABEL = 'Save to notes';
 /**
  * A row's tap, inside its click: the action runs before the menu closes, so
  * Reply focuses the composer within the user's own tap (decision 128) and the
- * menu's focus return finds focus already taken. More and Mark open their
- * submenus; Back returns from one; none of them closes. Pure.
+ * menu's focus return finds focus already taken. Pure.
  */
-export function runMenuItem(
-  item: MessageMenuItem,
-  menu: { openMark: () => void; openMore?: () => void; close: () => void },
-): void {
-  if (item.kind !== 'action') return;
-  if (item.key === 'mark') {
-    menu.openMark();
-    return;
-  }
-  if (item.key === 'more') {
-    menu.openMore?.();
-    return;
-  }
-  if (item.key === 'back') {
-    item.run();
-    return;
-  }
+export function runMenuItem(item: MessageMenuItem, menu: { close: () => void }): void {
   item.run();
   menu.close();
 }
@@ -353,22 +277,18 @@ export const MENU_ICON_SIZE = ICON_SIZE.tray;
 /** The row that selects part of one message's text in place. */
 export const SELECT_TEXT_LABEL = 'Select';
 
-/** The top-level row that opens the rest of the actions. */
-export const MORE_LABEL = 'More';
-
 /**
- * The main view in display order: Reply, Reply privately (someone else's
- * message in a group), Copy, Forward, Edit, Star (or Unstar), More, then
- * Delete last (or the locked line). Everything else sits
- * under More (see moreMenuItems); More shows only when it has a row. No
- * dividers. Rows that do not apply are not rendered. Pure (no hooks) so the
- * row set is unit-tested without a DOM.
+ * The rows in display order, one level: Reply, Reply privately (someone else's
+ * message in a group), Copy, Select, Transcribe, Forward, Save to notes,
+ * Edit, then the danger rows: Remove file, Delete (last). Rows that do not
+ * apply are not rendered; the divider before the danger rows is the
+ * renderer's (dividerBefore). Pure (no hooks) so the row set is unit-tested
+ * without a DOM.
  */
 export function messageMenuItems(
   props: MenuItemProps,
   size: number = MENU_ICON_SIZE,
 ): MessageMenuItem[] {
-  const locked = props.lockedByMark === true;
   const items: MessageMenuItem[] = [
     {
       kind: 'action',
@@ -398,6 +318,24 @@ export function messageMenuItems(
       run: props.onCopy,
     });
   }
+  if (props.canSelectText === true) {
+    items.push({
+      kind: 'action',
+      key: 'select-text',
+      label: SELECT_TEXT_LABEL,
+      icon: <IconSelectText size={size} />,
+      run: () => props.onSelectText?.(),
+    });
+  }
+  if (props.canTranscribe === true) {
+    items.push({
+      kind: 'action',
+      key: 'transcribe',
+      label: 'Transcribe',
+      icon: <IconText size={size} />,
+      run: () => props.onTranscribe?.(),
+    });
+  }
   if (props.canForward === true) {
     items.push({
       kind: 'action',
@@ -407,7 +345,16 @@ export function messageMenuItems(
       run: () => props.onForward?.(),
     });
   }
-  if (!locked && props.canEdit === true) {
+  if (props.canSaveToNotes === true) {
+    items.push({
+      kind: 'action',
+      key: 'save-notes',
+      label: SAVE_TO_NOTES_LABEL,
+      icon: <IconFile size={size} />,
+      run: () => props.onSaveToNotes?.(),
+    });
+  }
+  if (props.canEdit === true) {
     items.push({
       kind: 'action',
       key: 'edit',
@@ -417,35 +364,17 @@ export function messageMenuItems(
       run: () => props.onEdit?.(),
     });
   }
-  if (props.canStar === true) {
-    const starred = props.starred === true;
+  if (props.canRemoveFile === true) {
     items.push({
       kind: 'action',
-      key: 'star',
-      label: starred ? UNSTAR_LABEL : STAR_LABEL,
-      icon: starred ? <IconStarFilled size={size} /> : <IconStar size={size} />,
-      run: () => props.onStar?.(),
+      key: 'remove-file',
+      label: REMOVE_FILE_MENU_LABEL,
+      icon: <IconTrash size={size} />,
+      danger: true,
+      run: () => props.onRemoveFile?.(),
     });
   }
-  if (moreMenuItems(props).length > 0) {
-    // The ⋯ glyph is the menu opener's alone; More leads with the chevron Back mirrors.
-    items.push({
-      kind: 'action',
-      key: 'more',
-      label: MORE_LABEL,
-      icon: <IconChevronRight size={size} />,
-      run: () => {},
-      submenu: true,
-    });
-  }
-  if (locked) {
-    items.push({
-      kind: 'note',
-      key: 'locked',
-      label: MARKED_LOCKED_LABEL,
-      icon: <IconBan size={size} />,
-    });
-  } else if (props.canDelete === true) {
+  if (props.canDelete === true) {
     items.push({
       kind: 'action',
       key: 'delete',
@@ -460,139 +389,13 @@ export function messageMenuItems(
 }
 
 /**
- * The rows under More, in display order: Transcribe, Select, "Save to notes",
- * "Remind me" (or "Reminder · <time>"), "Mark as" (or the static "Marked as
- * <type>"), then "Remove file" last (danger). Rows that do not apply are not
- * rendered; empty hides More. Pure.
+ * Where the one divider goes: before the first danger row, when one follows
+ * another row; null when no danger row shows (or a danger row is alone). Pure.
  */
-export function moreMenuItems(
-  props: MenuItemProps,
-  size: number = MENU_ICON_SIZE,
-): MessageMenuItem[] {
-  const items: MessageMenuItem[] = [];
-  if (props.canTranscribe === true) {
-    items.push({
-      kind: 'action',
-      key: 'transcribe',
-      label: 'Transcribe',
-      icon: <IconText size={size} />,
-      run: () => props.onTranscribe?.(),
-    });
-  }
-  if (props.canSelectText === true) {
-    items.push({
-      kind: 'action',
-      key: 'select-text',
-      label: SELECT_TEXT_LABEL,
-      icon: <IconSelectText size={size} />,
-      run: () => props.onSelectText?.(),
-    });
-  }
-  if (props.canSaveToNotes === true) {
-    items.push({
-      kind: 'action',
-      key: 'save-notes',
-      label: SAVE_TO_NOTES_LABEL,
-      icon: <IconFile size={size} />,
-      run: () => props.onSaveToNotes?.(),
-    });
-  }
-  if (props.canRemind === true) {
-    const at = props.reminderAt != null ? new Date(props.reminderAt) : null;
-    items.push({
-      kind: 'action',
-      key: 'remind',
-      label: at !== null && !Number.isNaN(at.getTime()) ? REMINDER_SET_LABEL : 'Remind me',
-      icon: <IconAlarmClock size={size} />,
-      run: () => props.onRemind?.(),
-      ...(at !== null && !Number.isNaN(at.getTime())
-        ? { mono: reminderMenuTime(at, new Date()) }
-        : {}),
-    });
-  }
-  if (props.markedAs != null) {
-    items.push({
-      kind: 'note',
-      key: 'marked',
-      label: `Marked as ${TYPE_LABEL[props.markedAs]}`,
-      icon: <IconBookmark size={size} />,
-    });
-  } else if ((props.markOptions ?? []).length > 0) {
-    items.push({
-      kind: 'action',
-      key: 'mark',
-      label: 'Mark as',
-      icon: <IconBookmark size={size} />,
-      run: () => {},
-      submenu: true,
-    });
-  }
-  if (props.canRemoveFile === true) {
-    items.push({
-      kind: 'action',
-      key: 'remove-file',
-      label: REMOVE_FILE_MENU_LABEL,
-      icon: <IconTrash size={size} />,
-      danger: true,
-      run: () => props.onRemoveFile?.(),
-    });
-  }
-  return items;
+export function dividerBefore(items: readonly MessageMenuItem[]): number | null {
+  const at = items.findIndex((item) => item.danger === true);
+  return at > 0 ? at : null;
 }
-
-/** The More submenu: Back, then its rows (see moreMenuItems). */
-export function moreSubmenuItems(
-  props: MenuItemProps,
-  onBack: () => void,
-  size: number = MENU_ICON_SIZE,
-): MessageMenuItem[] {
-  return [
-    {
-      kind: 'action',
-      key: 'back',
-      label: 'Back',
-      icon: <IconChevronLeft size={size} />,
-      run: onBack,
-      submenu: true,
-    },
-    ...moreMenuItems(props, size),
-  ];
-}
-
-/** The "Mark as" submenu: Back, then each offered type with its colour dot. */
-export function markSubmenuItems(
-  props: Pick<MessageActionMenuProps, 'markOptions' | 'onMark'>,
-  onBack: () => void,
-  size: number = MENU_ICON_SIZE,
-): MessageMenuItem[] {
-  return [
-    {
-      kind: 'action',
-      key: 'back',
-      label: 'Back',
-      icon: <IconChevronLeft size={size} />,
-      run: onBack,
-      submenu: true,
-    },
-    ...(props.markOptions ?? []).map(
-      (type): MessageMenuItem => ({
-        kind: 'action',
-        key: `mark-${type}`,
-        label: TYPE_LABEL[type],
-        icon: null,
-        dot: type,
-        run: () => props.onMark?.(type),
-      }),
-    ),
-  ];
-}
-
-/** The dot colour per mark type (the badge's tone). */
-const DOT_CLASS: Record<string, string> = {
-  good: 'bg-good',
-  accent: 'bg-accent',
-  warn: 'bg-warn',
-};
 
 /** Whether a keydown while the menu is open closes it. */
 export function menuClosesOnKey(key: string): boolean {
@@ -620,36 +423,14 @@ export function focusFirstMenuItem(root: MenuRoot | null): boolean {
 export const MENU_ROW = 'flex min-h-11 w-full items-center gap-3 px-4';
 
 /**
- * One row, ActionMenu's row look: base text, the icon (or dot) left in the
- * row's ink, Delete in bad, a muted sm hint or a submenu chevron right.
+ * One row, ActionMenu's row look: base text, the icon left in the row's ink,
+ * Delete in bad, a muted sm hint right.
  */
 export function MenuRow(props: {
   item: MessageMenuItem;
   onRun: (item: MessageMenuItem) => void;
 }): ReactElement {
   const item = props.item;
-  if (item.kind === 'note') {
-    return (
-      <div
-        role="menuitem"
-        aria-disabled="true"
-        data-menu-note={item.key}
-        className={cn(MENU_ROW, 'text-base text-fg-3')}
-      >
-        <span className="flex w-6 shrink-0 justify-center">{item.icon}</span>
-        <span className="min-w-0">{item.label}</span>
-      </div>
-    );
-  }
-  const icon =
-    item.dot !== undefined ? (
-      <span
-        aria-hidden="true"
-        className={cn('h-2 w-2 rounded-full', DOT_CLASS[MARK_TONE[item.dot]])}
-      />
-    ) : (
-      item.icon
-    );
   return (
     <PressableRow
       flat
@@ -664,23 +445,11 @@ export function MenuRow(props: {
       )}
     >
       <span data-menu-icon="" className="flex w-6 shrink-0 items-center justify-center">
-        {icon}
+        {item.icon}
       </span>
-      <span className="min-w-0 flex-1 truncate">
-        {item.label}
-        {item.mono !== undefined ? (
-          <span data-menu-mono="" className="font-mono text-md tabular-nums">
-            {item.mono}
-          </span>
-        ) : null}
-      </span>
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.hint !== undefined ? (
         <span className="shrink-0 text-sm text-fg-3">{item.hint}</span>
-      ) : null}
-      {item.submenu === true && item.key !== 'back' && item.key !== 'more' ? (
-        <span className="shrink-0 text-fg-3">
-          <IconChevronRight />
-        </span>
       ) : null}
     </PressableRow>
   );
@@ -1131,68 +900,25 @@ export function EmojiPickerShell(props: {
   );
 }
 
-/** The reminder row's label when one is pending; the time follows in mono. */
-export const REMINDER_SET_LABEL = 'Reminder · ';
-
-/**
- * A pending reminder's time for the menu, device-local: "3:20 PM" today, else
- * "Tomorrow 9:00 AM" or "Wed 7 Oct, 11:30 AM". Pure.
- */
-export function reminderMenuTime(at: Date, now: Date): string {
-  const label = formatSendLabel(at, now);
-  return label.startsWith('Today ') ? formatClock(at) : label;
-}
-
-type ChatRemind = Pick<
-  NonNullable<ReturnType<typeof useReminderOptional>>,
-  'canRemind' | 'openReminderFor'
-> &
-  Partial<Pick<NonNullable<ReturnType<typeof useReminderOptional>>, 'pendingReminderFor'>>;
-
-/**
- * "Remind me" for the menu: the caller's own wiring when given, else the
- * chat's reminders for the held bubble's row (its data-msg-id). With a pending
- * reminder on that message (the already-loaded list, no read here) the row
- * carries its time and opens the sheet in change mode. Pure but for the lookup.
- */
-export function remindProps(
-  props: Pick<MessageActionMenuProps, 'canRemind' | 'onRemind' | 'reminderAt'>,
-  reminders: ChatRemind | null,
-  held: HTMLElement | null | undefined,
-): Pick<MessageActionMenuProps, 'canRemind' | 'onRemind' | 'reminderAt'> {
-  if (props.canRemind !== undefined) return props;
-  const messageId = held?.closest('[data-msg-id]')?.getAttribute('data-msg-id') ?? null;
-  if (reminders === null || messageId === null || !reminders.canRemind(messageId)) return {};
-  const pending = reminders.pendingReminderFor?.(messageId) ?? null;
-  return {
-    canRemind: true,
-    onRemind: () => reminders.openReminderFor(messageId),
-    ...(pending !== null ? { reminderAt: pending.remind_at } : {}),
-  };
-}
-
 /**
  * The message action menu, opened by long-press (touch), right-click, the
  * hover ⋯ control (pointer devices) or Enter / Space on a focused bubble. The
  * one ⋯ container rule (ui/ActionMenu): phone (useIsLaptop false) a ui/Sheet,
  * laptop a shell/MenuPopover anchored under the bubble on its side (lifted to
  * stay on screen). The quick reactions sit on top (hairline under them), then
- * the rows; More and "Mark as" swap the rows for their submenu in place, Back
- * returns. It focuses the first row on open and hands focus back on close.
+ * the rows, one level, a hairline before the danger rows. It focuses the first row on open and hands focus back on close.
  * The laptop popover also closes on scroll or resize (never while the emoji
  * picker is open). Tokens only, so light and dark stay at parity.
  */
 export function MessageActionMenu(props: MessageActionMenuProps): ReactElement | null {
-  const { open, onClose, anchor, mine, currentReaction, onReact, held } = props;
+  const { open, onClose, anchor, mine, currentReaction, onReact } = props;
   const isLaptop = useIsLaptop();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState<'main' | 'more' | 'mark'>('main');
   const [picking, setPicking] = useState(false);
   const pickingRef = useRef(false);
   pickingRef.current = picking;
   const moreRef = useRef<HTMLButtonElement>(null);
   const layout = useChatLayout();
-  const reminders = useReminderOptional();
   // Laptop: how far the popover lifts so its bottom stays on screen.
   const [lift, setLift] = useState(0);
 
@@ -1206,7 +932,6 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
 
   useEffect(() => {
     if (open) return;
-    setView('main');
     setPicking(false);
   }, [open]);
 
@@ -1221,9 +946,9 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     if (panel === null) return;
     const overflow = anchor.bottom + 8 + panel.offsetHeight - (visibleViewportHeight(window) - 8);
     setLift(overflow > 0 ? Math.min(overflow, Math.max(0, anchor.bottom - 8)) : 0);
-  }, [open, isLaptop, anchor, view]);
+  }, [open, isLaptop, anchor]);
 
-  // Focus the first row on open and on each submenu swap; hand it back on close.
+  // Focus the first row on open; hand it back on close.
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement;
@@ -1241,7 +966,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   useEffect(() => {
     if (!open) return;
     focusFirstMenuItem(containerRef.current);
-  }, [open, view]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -1280,25 +1005,10 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   const active = open && anchor !== null;
   const reactionsOnly = props.reactionsOnly === true;
   const size = MENU_ICON_SIZE;
-  const items = !active
-    ? []
-    : reactionsOnly
-      ? []
-      : view === 'mark'
-        ? markSubmenuItems(props, () => setView('more'), size)
-        : view === 'more'
-          ? moreSubmenuItems(
-              { ...props, ...remindProps(props, reminders, held) },
-              () => setView('main'),
-              size,
-            )
-          : messageMenuItems({ ...props, ...remindProps(props, reminders, held) }, size);
+  const items = !active || reactionsOnly ? [] : messageMenuItems(props, size);
+  const divider = dividerBefore(items);
   const run = (item: MessageMenuItem): void => {
-    runMenuItem(item, {
-      openMark: () => setView('mark'),
-      openMore: () => setView('more'),
-      close: onClose,
-    });
+    runMenuItem(item, { close: onClose });
   };
 
   const body = (
@@ -1318,7 +1028,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
           : undefined
       }
     >
-      {props.canReact !== false && view === 'main' ? (
+      {props.canReact !== false ? (
         <ReactionsRow
           currentReaction={currentReaction}
           reactionsOnly={reactionsOnly}
@@ -1330,8 +1040,13 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
           moreRef={moreRef}
         />
       ) : null}
-      {items.map((item) => (
-        <MenuRow key={item.key} item={item} onRun={run} />
+      {items.map((item, index) => (
+        <Fragment key={item.key}>
+          {index === divider ? (
+            <div aria-hidden="true" data-menu-divider="" className="border-t border-border" />
+          ) : null}
+          <MenuRow item={item} onRun={run} />
+        </Fragment>
       ))}
     </div>
   );

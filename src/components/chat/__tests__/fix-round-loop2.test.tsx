@@ -9,7 +9,6 @@ vi.mock('@/lib/logger', () => ({
 
 import { deepLinkAfterRefresh } from '@/components/chat/ChatConnected';
 import { ROSTER_READ_BUDGET_MS } from '@/components/chat/ChatStoreProvider';
-import { tickerBar } from '@/components/chat/MessageThread';
 import { READ_TIMEOUT_MS, type ChannelSummary } from '@/lib/chat-reads';
 
 afterEach(() => {
@@ -40,22 +39,5 @@ describe('the deep-link re-read waits as long as the roster reload may take', ()
     });
     await vi.advanceTimersByTimeAsync(READ_TIMEOUT_MS + 2_000);
     expect(step).toMatchObject({ open: { channelId: 'B' }, unavailable: false });
-  });
-});
-
-describe('a failed marks read keeps the ticker slot empty (no jump, never "Nothing open")', () => {
-  it('not loaded is not ready: the ticker holds its empty 36px slot', () => {
-    const bar = tickerBar({
-      openPosts: { ready: true, count: 0, failed: false },
-      side: { side: 'client', ready: true },
-      marks: new Map(),
-      marksLoaded: false,
-      status: {
-        plans: { ready: true, failed: false, bundles: [] },
-        briefs: { ready: true, failed: false, rows: [], count: 0 },
-      },
-      open: [],
-    });
-    expect(bar).toBeNull();
   });
 });

@@ -1,8 +1,6 @@
-// The chat info tabs: Media, Files, Links, Starred and Marks for one channel,
+// The chat info tabs: Media, Files and Links for one channel,
 // DM or group. Media and Files share ONE attachments read per page (split
-// client-side, voice notes in neither); Links is one read per page; Starred is
-// the viewer's starred messages in this chat (StarredList, read the first time
-// the tab opens, no Edit here); Marks is the pin board list MarksSheet renders. A tab's first page loads the first
+// client-side, voice notes in neither); Links is one read per page. A tab's first page loads the first
 // time it is shown and shows its loading state until that page resolves (first
 // paint is final), then "Load more" reads the next keyset page while a page
 // comes back full. Presigns go through the thread's PresignCache; sender names
@@ -23,22 +21,12 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SelectCheck } from '@/components/ui/SelectCheck';
-import {
-  ICON_SIZE,
-  IconAlertTriangle,
-  IconBookmark,
-  IconFile,
-  IconLink,
-  IconPhoto,
-  IconStar,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconAlertTriangle, IconFile, IconLink, IconPhoto } from '@/components/ui/icons';
 import { UnsafeLinkText } from '@/components/ui/UnsafeLinkSheet';
 import { checkLink } from '@/lib/links/safety';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { FileViewer, remoteFileSource } from '@/components/ui/FileViewer';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
-import { MarksList, type MarksListProps } from '@/components/chat/MarksSheet';
-import { StarredList } from '@/components/chat/StarredList';
 import {
   RemoveSelectionBarView,
   SelectionHeader,
@@ -53,12 +41,11 @@ import {
   canRemoveFile,
   isFileRemoved,
   removedFilesStore,
-  type MarkedLookup,
   type RemovableFile,
 } from '@/lib/chat/remove-files';
 import { humanizeSize } from '@/lib/assets';
 import { supabase } from '@/lib/supabase';
-import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-reads';
+import { readProfiles, type ChatProfile } from '@/lib/chat-reads';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Result } from '@srtdio/rpc';
 import type { MessageCursor } from '@/lib/chat/thread';
@@ -76,7 +63,7 @@ import {
   type ChannelPage,
 } from '@/lib/chat/channel-media';
 
-export type ContactTab = 'media' | 'files' | 'links' | 'starred' | 'marks';
+export type ContactTab = 'media' | 'files' | 'links';
 
 /** 'full' is the DM Contact page; 'preview' caps each tab until its See all. */
 export type ChatInfoMode = 'full' | 'preview';
@@ -85,15 +72,12 @@ export const CONTACT_TABS: ReadonlyArray<{ key: ContactTab; label: string }> = [
   { key: 'media', label: 'Media' },
   { key: 'files', label: 'Files' },
   { key: 'links', label: 'Links' },
-  { key: 'starred', label: 'Starred' },
-  { key: 'marks', label: 'Marks' },
 ];
 
-export const CONTACT_EMPTY: Record<Exclude<ContactTab, 'marks'>, string> = {
+export const CONTACT_EMPTY: Record<ContactTab, string> = {
   media: 'Photos in this chat show up here.',
   files: 'Files in this chat show up here.',
   links: 'Links in this chat show up here.',
-  starred: 'Starred messages show up here.',
 };
 
 /** How many items each tab shows in preview mode before See all. */
@@ -101,8 +85,6 @@ export const PREVIEW_COUNT: Readonly<Record<ContactTab, number>> = {
   media: 6,
   files: 3,
   links: 3,
-  starred: 3,
-  marks: 3,
 };
 
 export const SEE_ALL_LABEL = 'See all';
@@ -188,19 +170,14 @@ function toRemovableFile(item: ChannelAttachmentItem): RemovableFile {
 }
 
 /**
- * Whether the viewer may tick this listed file: their own, unmarked, recorded,
+ * Whether the viewer may tick this listed file: their own, recorded,
  * not a voice note (canRemoveFile). Pure.
  */
-export function canTickFile(
-  item: ChannelAttachmentItem,
-  viewerId: string,
-  marks: MarkedLookup,
-): boolean {
+export function canTickFile(item: ChannelAttachmentItem, viewerId: string): boolean {
   return canRemoveFile(
     { id: item.messageId, senderUserId: item.senderUserId },
     { assetId: item.versionId, mime: item.mime },
     viewerId,
-    marks,
   );
 }
 
@@ -219,10 +196,9 @@ export function showSelect(
   tab: ContactTab,
   shown: readonly ChannelAttachmentItem[],
   viewerId: string,
-  marks: MarkedLookup,
 ): boolean {
   if (tab !== 'media' && tab !== 'files') return false;
-  return shown.some((item) => canTickFile(item, viewerId, marks));
+  return shown.some((item) => canTickFile(item, viewerId));
 }
 
 /** The ticked files, in list order, as the removal takes them. Pure. */
@@ -649,16 +625,6 @@ export interface ChatInfoTabsViewProps {
   timeZone?: string | undefined;
   senderName: (userId: string | null) => string;
   onOpenImage: (index: number) => void;
-  /**
-   * The Starred tab's list (built by ChatInfoTabs only while that tab shows,
-   * so its first page is read when the tab opens); absent reads empty.
-   */
-  starred?: ReactNode;
-  /** Marks tab props, or null when the thread has no marks wiring. */
-  marks: Omit<MarksListProps, 'open' | 'onJump'> | null;
-  /** The surface showing the tabs is open (gates the Marks list's reads). */
-  open: boolean;
-  onJump: (messageId: string) => void;
   mode: ChatInfoMode;
   /** Preview tabs whose See all was tapped; ignored in full mode. */
   expanded?: ReadonlySet<ContactTab>;
@@ -745,7 +711,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
         </ul>
       </FeedBody>
     );
-  } else if (props.tab === 'links') {
+  } else {
     const items = props.links?.items ?? [];
     const view = previewOf(items, props.links?.hasMore ?? false, limit);
     body = (
@@ -767,28 +733,6 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
         </ul>
       </FeedBody>
     );
-  } else if (props.tab === 'starred') {
-    body = (
-      <div data-starred-tab="">
-        {props.starred ?? (
-          <EmptyState icon={<IconStar size={ICON_SIZE.tray} />} title={CONTACT_EMPTY.starred} />
-        )}
-      </div>
-    );
-  } else {
-    body =
-      props.marks !== null ? (
-        <MarksList
-          {...props.marks}
-          open={props.open}
-          onJump={props.onJump}
-          {...(limit !== null
-            ? { preview: { rows: limit, seeAll: <SeeAllRow onClick={() => onSeeAll('marks')} /> } }
-            : {})}
-        />
-      ) : (
-        <EmptyState icon={<IconBookmark size={ICON_SIZE.tray} />} title="Marks show up here." />
-      );
   }
 
   return (
@@ -822,8 +766,6 @@ export interface ChatInfoTabsProps {
   timeZone?: string | undefined;
   cache: PresignCache;
   presignEnabled: boolean;
-  marks: Omit<MarksListProps, 'open' | 'onJump'> | null;
-  onJump: (messageId: string) => void;
   mode: ChatInfoMode;
   /**
    * The surface is showing (default true). While false nothing is read or
@@ -845,45 +787,9 @@ export interface ChatInfoTabsProps {
   onRemoveFiles?: (files: RemovableFile[]) => void;
 }
 
-const NO_MARKS: MarkedLookup = new Set<string>();
 const NONE_SELECTED: ReadonlySet<string> = new Set();
 
 const NO_FRAME = (tabs: ReactElement): ReactElement => tabs;
-
-const NO_CHANNELS: ReadonlyMap<string, ChannelSummary> = new Map();
-
-/**
- * The Starred tab's list: this chat's stars, no "› Chat", no Edit. Preview
- * mode (Group info) caps it at PREVIEW_COUNT.starred rows with See all until
- * that is tapped; full mode (the DM Contact sheet) lists them all. Pure.
- */
-export function starredTab(input: {
-  mode: ChatInfoMode;
-  expanded: ReadonlySet<ContactTab>;
-  channelId: string;
-  profiles: Map<string, ChatProfile>;
-  currentUserId: string;
-  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
-  timeZone?: string | undefined;
-  onJump: (messageId: string) => void;
-  onSeeAll: () => void;
-}): ReactElement {
-  const limit = previewLimit(input.mode, 'starred', input.expanded);
-  return (
-    <StarredList
-      channelId={input.channelId}
-      showChat={false}
-      channelsById={NO_CHANNELS}
-      profiles={input.profiles}
-      currentUserId={input.currentUserId}
-      timeZone={input.timeZone}
-      onOpen={(row) => input.onJump(row.id)}
-      {...(limit !== null
-        ? { preview: { rows: limit, seeAll: <SeeAllRow onClick={input.onSeeAll} /> } }
-        : {})}
-    />
-  );
-}
 
 /**
  * The stateful tabs: the selected tab, each tab's See-all state, the two
@@ -982,12 +888,11 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
     if (viewer !== null && images.length === 0) setViewer(null);
   }, [viewer, images.length]);
 
-  // Select mode: own, unmarked, non-voice files on the open Media or Files tab.
+  // Select mode: own, non-voice files on the open Media or Files tab.
   const removeFiles = props.onRemoveFiles;
-  const marked: MarkedLookup = props.marks?.marks ?? NO_MARKS;
   const canTick = useCallback(
-    (item: ChannelAttachmentItem) => canTickFile(item, currentUserId, marked),
-    [currentUserId, marked],
+    (item: ChannelAttachmentItem) => canTickFile(item, currentUserId),
+    [currentUserId],
   );
   const tabItems = selectableTabItems(tab, attachmentsFeed?.items ?? []) ?? [];
   const shownItems = previewOf(
@@ -999,7 +904,7 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
     open &&
     removeFiles !== undefined &&
     attachmentsFeed?.status === 'ready' &&
-    showSelect(tab, shownItems, currentUserId, marked);
+    showSelect(tab, shownItems, currentUserId);
   const selectedFiles = tickedFiles(shownItems, selected);
 
   const exitSelect = useCallback(() => {
@@ -1054,27 +959,10 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [open, viewer, onEscape, selecting, leaveSelect]);
 
-  // The Starred tab mounts its list only while it shows: its first page is
-  // read when the tab opens. No Edit here; a row closes the surface and jumps.
-  const starred =
-    open && tab === 'starred'
-      ? starredTab({
-          mode: props.mode,
-          expanded,
-          channelId,
-          profiles: known,
-          currentUserId,
-          timeZone: props.timeZone,
-          onJump: props.onJump,
-          onSeeAll: () => setExpanded((prev) => new Set(prev).add('starred')),
-        })
-      : null;
-
   const tabs = (
     <ChatInfoTabsView
       nowMs={nowMs}
       tab={tab}
-      starred={starred}
       onTab={onTab}
       attachments={attachmentsFeed}
       links={links.feed}
@@ -1085,9 +973,6 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
       timeZone={props.timeZone}
       senderName={senderName}
       onOpenImage={setViewer}
-      marks={props.marks}
-      open={open}
-      onJump={props.onJump}
       mode={props.mode}
       expanded={expanded}
       onSeeAll={(key) => setExpanded((prev) => new Set(prev).add(key))}

@@ -1,29 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { Database } from '@srtdio/schemas';
 import {
-  ONLY_YOU_LABEL,
   PLAN_ALERT_EVENT_TYPES,
   PLAN_DELETED_TOAST,
   alertDisplayTime,
   alertKindOf,
   chunked,
-  failureInPlainWords,
-  isStaleFailed,
   messagePreview,
   planAlertLine,
   planFieldsOf,
   readChatMessages,
-  readScheduledRows,
-  scheduledPreview,
-  scheduledFailedLead,
-  scheduledSentTitle,
   taskAlertLine,
   taskFieldsOf,
   type PlanAlertFields,
 } from '@/lib/inbox/alerts';
 import { mentionToastFrom, splitNewRows } from '@/lib/inbox/inbox-live';
-import { chatDisplayName } from '@/lib/chat/chat-name';
-import type { ScheduledRow } from '@/lib/chat/scheduled';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -33,7 +24,7 @@ function inbox(over: Partial<InboxEntryRow>): InboxEntryRow {
     user_id: 'u1',
     workspace_id: 'w1',
     actor_user_id: null,
-    event_type: 'reminder',
+    event_type: 'task_changed',
     entity_type: 'chat_channel',
     entity_id: 'c1',
     scope: 'people',
@@ -49,34 +40,11 @@ function inbox(over: Partial<InboxEntryRow>): InboxEntryRow {
   };
 }
 
-function scheduledRow(over: Partial<ScheduledRow> = {}): ScheduledRow {
-  return {
-    id: 's1',
-    channel_id: 'c1',
-    workspace_id: 'w1',
-    sender_user_id: 'u1',
-    body: 'See you at 5',
-    mentions: null,
-    attachment_asset_ids: null,
-    attachment_meta: null,
-    shared_post_ids: null,
-    shared_brief_ids: null,
-    reply_to_message_id: null,
-    send_at: '2026-10-03T09:00:00.000Z',
-    status: 'failed',
-    failure_reason: null,
-    sent_at: null,
-    created_at: '2026-10-03T08:00:00.000Z',
-    updated_at: '2026-10-03T08:00:00.000Z',
-    ...over,
-  };
-}
-
 describe('alert kinds', () => {
-  it('reminders, scheduled sends, the four plan alerts and the task alerts are alerts', () => {
-    expect(alertKindOf('reminder')).toBe('reminder');
-    expect(alertKindOf('scheduled_sent')).toBe('sent');
-    expect(alertKindOf('scheduled_failed')).toBe('failed');
+  it('the four plan alerts and the task alerts are alerts; reminders and scheduled sends are retired', () => {
+    expect(alertKindOf('reminder')).toBeNull();
+    expect(alertKindOf('scheduled_sent')).toBeNull();
+    expect(alertKindOf('scheduled_failed')).toBeNull();
     for (const t of PLAN_ALERT_EVENT_TYPES) expect(alertKindOf(t)).toBe('plan');
     expect(alertKindOf('task_changed')).toBe('task');
     expect(alertKindOf('task_due')).toBe('task');
@@ -275,15 +243,6 @@ describe('task alert lines', () => {
 });
 
 describe('copy', () => {
-  it('failure reasons read as plain words, never the raw proc text', () => {
-    expect(failureInPlainWords('not a member of this chat')).toBe("You're no longer in this chat");
-    expect(failureInPlainWords('attachment not available')).toBe(
-      'An attachment is no longer available',
-    );
-    expect(failureInPlainWords('XX000 something odd')).toBe("Couldn't send. Try again.");
-    expect(failureInPlainWords(null)).toBe("Couldn't send. Try again.");
-  });
-
   it('message preview: first line, names resolved, else what it carries', () => {
     const base = {
       id: 'm1',
@@ -304,52 +263,6 @@ describe('copy', () => {
     );
     expect(messagePreview(undefined, () => undefined)).toBe('Message');
     expect(messagePreview({ ...base, body: null, hasPlans: true }, () => undefined)).toBe('Plan');
-  });
-
-  it('scheduled preview and the sent line', () => {
-    expect(scheduledPreview(scheduledRow(), () => undefined)).toBe('See you at 5');
-    expect(scheduledPreview(undefined, () => undefined)).toBe('Scheduled message');
-  });
-});
-
-describe('scheduled send titles name the receiver', () => {
-  const dm = chatDisplayName({ channelType: 'dm', title: 'Priya Shah' });
-  const group = chatDisplayName({ channelType: 'group', title: 'Launch crew' });
-  const notes = chatDisplayName({ channelType: 'notes', title: '' });
-  const noDmName = chatDisplayName({ channelType: 'dm', title: '' });
-  const noGroupName = chatDisplayName({ channelType: 'group', title: '' });
-
-  it('sent: a DM names the other person, a group its name, notes "Personal notes"', () => {
-    expect(scheduledSentTitle(dm)).toBe('Your scheduled message was sent to Priya Shah');
-    expect(scheduledSentTitle(group)).toBe('Your scheduled message was sent to Launch crew');
-    expect(scheduledSentTitle(notes)).toBe('Your scheduled message was sent to Personal notes');
-  });
-
-  it('failed: the lead names the receiver (its reason is the body line)', () => {
-    expect(scheduledFailedLead(dm)).toBe("Couldn't send your scheduled message to Priya Shah.");
-    expect(scheduledFailedLead(group)).toBe("Couldn't send your scheduled message to Launch crew.");
-    expect(scheduledFailedLead(notes)).toBe(
-      "Couldn't send your scheduled message to Personal notes.",
-    );
-  });
-
-  it('a missing name falls back to chatDisplayName, never the bare word "Chat"', () => {
-    expect(scheduledSentTitle(noDmName)).toBe('Your scheduled message was sent to Direct message');
-    expect(scheduledFailedLead(noGroupName)).toBe("Couldn't send your scheduled message to Group.");
-    for (const line of [
-      scheduledSentTitle(noDmName),
-      scheduledSentTitle(noGroupName),
-      scheduledFailedLead(noDmName),
-    ]) {
-      expect(line).not.toMatch(/\bChat\b/);
-      expect(line).not.toContain('Sent in');
-      expect(line).not.toContain('Not sent');
-      expect(line).not.toContain('\u2014');
-    }
-  });
-
-  it('the privacy chip says only the sender got the alert', () => {
-    expect(ONLY_YOU_LABEL).toBe('Only you got this alert');
   });
 });
 
@@ -434,31 +347,5 @@ describe('batched reads', () => {
     );
     expect(reads.filter((r) => r.table === 'chat_messages')).toHaveLength(2);
     expect((await readChatMessages(client, [])).size).toBe(0);
-  });
-
-  it('no ids reads nothing; a failed failed-rows read is flagged, never mistaken for resolved', async () => {
-    const quiet = recordingClient({});
-    expect(await readScheduledRows(quiet.client, [])).toEqual({ rows: new Map(), ok: true });
-    expect(quiet.reads).toEqual([]);
-
-    const good = recordingClient({
-      chat_scheduled_messages: {
-        data: [scheduledRow({ id: 's1' }), scheduledRow({ id: 's2', status: 'sent' })],
-        error: null,
-      },
-    });
-    const read = await readScheduledRows(good.client, ['s1', 's2', 's3']);
-    expect(read.ok).toBe(true);
-    expect(isStaleFailed(read, 's1')).toBe(false);
-    expect(isStaleFailed(read, 's2')).toBe(true);
-    expect(isStaleFailed(read, 's3')).toBe(true);
-    expect(isStaleFailed(read, null)).toBe(false);
-
-    const flaky = recordingClient({
-      chat_scheduled_messages: { data: null, error: { message: 'timeout' } },
-    });
-    const failed = await readScheduledRows(flaky.client, ['s1']);
-    expect(failed.ok).toBe(false);
-    expect(isStaleFailed(failed, 's1')).toBe(false);
   });
 });

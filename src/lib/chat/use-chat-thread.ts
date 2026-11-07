@@ -124,7 +124,6 @@ import {
   runEdit,
   type PurgeChatOutcome,
 } from '@/lib/chat/delete-flow';
-import { findInOlderPages, type FindOlderOutcome } from '@/lib/chat/marks';
 import { createInFlightGuard, recordThenSignal } from '@/lib/chat/thread-actions';
 import {
   applyEdit,
@@ -224,6 +223,40 @@ export function editRunInput(input: {
     traceId: input.traceId,
     ...(channelType !== undefined ? { channelType } : {}),
   };
+}
+
+/** Older pages jump-to loads before giving up. */
+const JUMP_MAX_PAGES = 10;
+
+export type FindOlderOutcome = 'found' | 'not_found' | 'exhausted' | 'error';
+
+/**
+ * Page older history from `start` until a page contains `targetId`, at most
+ * `maxPages` pages. Each page is handed to `onPage` (the caller folds it into
+ * the thread) before the check. 'not_found' means history ran out, 'exhausted'
+ * means the page cap was hit.
+ */
+export async function findInOlderPages(params: {
+  start: MessageCursor | undefined;
+  targetId: string;
+  loadPage: (cursor: MessageCursor) => Promise<Result<HistoryPage>>;
+  onPage: (rows: ChatMessageRow[], hasMore: boolean) => void;
+  maxPages?: number;
+}): Promise<FindOlderOutcome> {
+  const maxPages = params.maxPages ?? JUMP_MAX_PAGES;
+  let cursor = params.start;
+  for (let page = 0; page < maxPages; page += 1) {
+    if (cursor === undefined) return 'not_found';
+    const result = await params.loadPage(cursor);
+    if (!result.ok) return 'error';
+    const rows = result.data.rows;
+    params.onPage(rows, result.data.hasMore);
+    if (rows.some((row) => row.id === params.targetId)) return 'found';
+    if (!result.data.hasMore) return 'not_found';
+    const oldest = rows[0];
+    cursor = oldest === undefined ? undefined : { createdAt: oldest.created_at, id: oldest.id };
+  }
+  return 'exhausted';
 }
 
 /**

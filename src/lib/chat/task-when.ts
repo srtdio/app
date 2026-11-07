@@ -1,12 +1,11 @@
 // When a chat task falls: the Tasks sheet's chips (Past, Today, This week,
 // Later, No date), the date line under a row, the day choices (a new task's,
-// and a row's menu), and the sheet's search. Due days are
-// calendar days on the WORKSPACE zone ('YYYY-MM-DD', never turned back into an
+// and a row's menu). Due days are calendar days on the WORKSPACE zone
+// ('YYYY-MM-DD', never turned back into an
 // instant); the done time is a moment and reads on the device zone. Every
 // function is pure: "now", the zone and the week start are passed in. Dates
 // read through src/lib/time.ts only.
 
-import { matchRuns } from '@/lib/chat/search';
 import { addCivilDays } from '@/lib/list-sort';
 import { weekBounds } from '@/lib/plan-week';
 import { civilDay, formatDue, formatOverdue, formatAgo } from '@/lib/time';
@@ -135,23 +134,4 @@ export function dayChoices(cal: TaskCalendar): DayChoice[] {
 /** Whether a picked day is allowed (today or later; no back-dating). Pure. */
 export function isPickableDay(dueOn: string, cal: TaskCalendar): boolean {
   return dueOn >= calendarDays(cal).today;
-}
-
-/**
- * The tasks a search keeps, across every chip: each query word starts a
- * word of the title (the app's one search rule, matchRuns: prefix, any case,
- * any script), so what is kept is exactly what the row highlights. No words
- * keeps everything. Pure.
- */
-export function searchTasks<T extends Pick<ChatTask, 'title'>>(
-  tasks: readonly T[],
-  words: readonly string[],
-): T[] {
-  if (words.length === 0) return [...tasks];
-  return tasks.filter((t) => {
-    const hits = matchRuns(t.title, words)
-      .filter((run) => run.hit)
-      .map((run) => run.text.toLowerCase());
-    return words.every((w) => hits.some((hit) => hit.startsWith(w)));
-  });
 }

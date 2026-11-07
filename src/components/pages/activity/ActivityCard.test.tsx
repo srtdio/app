@@ -11,7 +11,6 @@ import {
   activityCardTag,
   activityKind,
   activityPreviewText,
-  failedSendItems,
 } from '@/components/pages/activity/ActivityCard';
 import { chatMentionPreview, type ActivityItem } from '@/components/pages/activity/data';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -67,14 +66,7 @@ function item(over: Partial<ActivityItem>): ActivityItem {
 
 const NOW = Date.parse('2026-06-14T01:00:00.000Z');
 
-function renderCard(
-  group: ActivityItem[],
-  extra: {
-    entering?: boolean;
-    onEdit?: (i: ActivityItem) => void;
-    onRetry?: (i: ActivityItem) => void;
-  } = {},
-): string {
+function renderCard(group: ActivityItem[], extra: { entering?: boolean } = {}): string {
   return renderToStaticMarkup(
     <ActivityCard
       group={group}
@@ -187,11 +179,6 @@ describe('ActivityCard on ui/ListCard', () => {
           kind: 'plan',
           channelId: null,
           chatName: null,
-          chatType: null,
-          scheduledId: null,
-          reason: null,
-          stale: false,
-          preview: null,
           plan: {
             planId: 'plan1',
             itemId: null,
@@ -443,49 +430,5 @@ describe('ActivityCard titles and previews', () => {
     expect(html).toMatch(new RegExp(`<span[^>]*id="${ids[0]}"[^>]*>Dev commented on Q3<`));
     expect(html).toContain(`id="${ids[1]}" data-list-card-unread=""`);
     expect(html).toContain(`id="${ids[2]}" data-list-card-preview=""`);
-  });
-});
-
-describe('a failed scheduled send: Edit and Retry move into the ⋯', () => {
-  const failed = item({
-    eventType: 'scheduled_failed',
-    entityType: 'chat_channel',
-    alert: {
-      kind: 'failed',
-      channelId: 'c1',
-      chatName: 'Launch',
-      chatType: 'group',
-      scheduledId: 's1',
-      reason: null,
-      stale: false,
-      preview: null,
-      planTitle: null,
-      itemTitle: null,
-    },
-  });
-
-  it('the menu rows call Edit and Retry; the card keeps its one height (no buttons on it)', () => {
-    const calls: string[] = [];
-    const rows = failedSendItems(
-      failed,
-      () => calls.push('edit'),
-      () => calls.push('retry'),
-    );
-    expect(rows.map((r) => r.id)).toEqual(['edit', 'retry']);
-    for (const r of rows) r.onSelect();
-    expect(calls).toEqual(['edit', 'retry']);
-    const html = renderCard([failed], { onEdit: () => {}, onRetry: () => {} });
-    expect(html).not.toContain('data-activity-action');
-    expect(html).toContain('data-activity-only-you');
-  });
-
-  it('other cards add no rows', () => {
-    expect(
-      failedSendItems(
-        item({}),
-        () => {},
-        () => {},
-      ),
-    ).toEqual([]);
   });
 });

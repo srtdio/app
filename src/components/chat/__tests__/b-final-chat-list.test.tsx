@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Chat list on ui/ListCard: Personal notes, Groups and People are one card
-// style. The 72 picture (person circle, group photo or mark, the notes icon),
+// Chat list on ui/ListCard: Personal notes, groups and people are one card
+// style in one list. The 72 picture (person circle, group photo or mark, the notes icon),
 // the name + unread dot on line 1, the 2-line preview on line 2, the time and
 // the "3 new" tag on line 3 with the ⋯ (ActionMenuTrigger, TRAILING_PULL).
 // Every card is the same height. No ui/Tile and no ui/Row in the list.
@@ -171,7 +171,7 @@ describe('people cards are ui/ListCard, exactly like group cards', () => {
     expect(html).not.toContain('grid-cols');
     expect(html).not.toContain('data-row-divider');
     expect(html.match(/data-list-card=""/g)).toHaveLength(3);
-    expect(classOf(html, 'data-section="people"')).toContain('gap-3');
+    expect(classOf(html, 'data-chat-list=""')).toContain('gap-3');
   });
 });
 
@@ -193,11 +193,29 @@ describe('notes, groups and people: one card style', () => {
     expect(h).toMatch(/<button[^>]*aria-label="Open Personal notes"/);
   });
 
+  it('in the one list, notes is a card among the chats, in the order given (recency)', () => {
+    const html = renderToStaticMarkup(
+      channelListView({
+        channels: [dm, notes, group],
+        notes,
+        hasChannels: true,
+        selectedChannelId: null,
+        onSelect: () => {},
+        onNewChat: () => {},
+      }),
+    );
+    const order = [...html.matchAll(/aria-label="Open ([^",]*)/g)].map((m) => m[1]);
+    expect(order).toEqual([dm.title, 'Personal notes', group.title]);
+    expect(html.match(/data-notes-tile=""/g)).toHaveLength(1);
+    expect(html).not.toContain('data-section-label');
+  });
+
   it('the loading shell is ListCardBox only (no Tile, no Row)', () => {
     const tree = channelListSkeleton();
     expect(findAll(tree, (el) => el.type === Tile)).toHaveLength(0);
     expect(findAll(tree, (el) => el.type === Row)).toHaveLength(0);
-    expect(findAll(tree, (el) => el.type === ListCardBox).length).toBeGreaterThan(0);
+    // Six uniform cards, no section labels.
+    expect(findAll(tree, (el) => el.type === ListCardBox)).toHaveLength(6);
   });
 
   it('ChannelList never imports ui/Tile or ui/Row', () => {

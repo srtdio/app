@@ -460,12 +460,9 @@ export function useHistoryStep(
 export const HISTORY_STEP_KEYS = {
   threadView: 'chatThreadView',
   contact: 'chatContact',
-  starred: 'chatStarred',
-  marks: 'chatMarks',
   readInfo: 'chatReadInfo',
   search: 'chatSearch',
   groupInfo: 'chatGroupInfo',
-  scheduledList: 'chatScheduledList',
   newChat: 'chatNewChat',
   planCompose: 'chatPlanCompose',
   plan: 'chatPlan',

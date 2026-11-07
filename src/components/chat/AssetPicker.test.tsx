@@ -20,13 +20,8 @@ vi.mock('@/components/chat/PostCard', () => ({
 
 import { AssetGrid, AssetGridSkeleton, AssetTile } from '@/components/chat/AssetPicker';
 import { shapeLibraryRows, type LibraryAsset } from '@/lib/chat/asset-picker';
-import {
-  draftFileCounts,
-  withLibraryArgs,
-  withLibraryAttachments,
-} from '@/components/chat/Composer';
+import { withLibraryAttachments } from '@/components/chat/Composer';
 import { awaitsUpload, toLibraryAttachment, toLocalAttachment } from '@/lib/chat/attachments';
-import { scheduleAttachmentArgs } from '@/lib/chat/scheduled';
 
 function asset(n: number, mime: string, filename: string): LibraryAsset {
   const [row] = shapeLibraryRows([
@@ -121,7 +116,7 @@ describe('AssetPicker grid', () => {
   });
 });
 
-describe('composer: library picks ride the normal send and schedule', () => {
+describe('composer: library picks ride the normal send', () => {
   const lib = [
     toLibraryAttachment(
       { id: 'v-img', mime_type: 'image/png', size_bytes: 3, duration_ms: null },
@@ -144,25 +139,5 @@ describe('composer: library picks ride the normal send and schedule', () => {
     expect(draft.attachments.filter(awaitsUpload)).toHaveLength(1);
     const plain = { text: 'x', attachments: [local] };
     expect(withLibraryAttachments(plain, [])).toBe(plain);
-  });
-
-  it('schedule: uploaded args then library args, built like the normal send', () => {
-    const uploaded = scheduleAttachmentArgs([
-      { assetId: 'v-up', name: 'roll.png', mime: 'image/png', size: 1 },
-    ]);
-    const args = withLibraryArgs(uploaded, lib);
-    expect(args.attachmentAssetIds).toEqual(['v-up', 'v-img', 'v-pdf']);
-    expect(args.attachmentMeta).toEqual({
-      'v-up': { mime: 'image/png', name: 'roll.png', size: 1 },
-      'v-img': { mime: 'image/png', name: 'Hero.png', size: 3 },
-      'v-pdf': { mime: 'application/pdf', name: 'Deck.pdf', size: 9 },
-    });
-  });
-
-  it('the schedule preview counts library photos and files', () => {
-    const pending = [
-      { id: 'p1', file: new File(['a'], 'roll.png', { type: 'image/png' }), previewUrl: null },
-    ];
-    expect(draftFileCounts(pending, lib)).toEqual({ photos: 2, others: 1 });
   });
 });

@@ -13,9 +13,8 @@ import { LOADING_NOTIFICATIONS } from '@/components/pages/activity/data';
 /** Cards drawn: about one phone screen. */
 export const ACTIVITY_BOX_CARDS = 4;
 
-/** Stable keys for the fixed placeholder cards and Upcoming rows. */
+/** Stable keys for the fixed placeholder cards. */
 const CARD_KEYS = Array.from({ length: ACTIVITY_BOX_CARDS }, (_unused, n) => `card-${n}`);
-const UPCOMING_KEYS = ['upcoming-0', 'upcoming-1', 'upcoming-2'];
 
 /** The Activity list's boxes; the label is the screen reader's "Loading activity". */
 export function ActivityBoxes(): ReactElement {
@@ -32,22 +31,6 @@ export function ActivityBoxes(): ReactElement {
           ))}
         </div>
       </section>
-    </BoxSkeleton>
-  );
-}
-
-/** The Upcoming list's boxes: ListCard-shaped, in UpcomingCard's place. */
-export function UpcomingBoxes(): ReactElement {
-  return (
-    <BoxSkeleton
-      lit="flat"
-      label={LOADING_NOTIFICATIONS}
-      data-activity-boxes="upcoming"
-      className={cn('mt-4 pb-6', LIST_CARD_GRID, GUTTER)}
-    >
-      {UPCOMING_KEYS.map((key) => (
-        <ListCardBox key={key} />
-      ))}
     </BoxSkeleton>
   );
 }

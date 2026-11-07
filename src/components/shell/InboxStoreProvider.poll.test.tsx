@@ -1,17 +1,14 @@
 // @vitest-environment jsdom
 // The shell's inbox poll, counted on fake reads. A hidden tab polls every
-// 60 s (the background tab alert and tone need it), never asking the
-// reminder readers to reload; the return to visible ticks once. A tick that
-// finds no new rows asks the reminder readers for nothing (it used to make
-// both reload the workspace's reminders every 30 s); a tick with a new row
-// asks once.
+// 60 s (the background tab alert and tone need it); the return to visible
+// ticks once. A visible, idle tab reads once per 30 s.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { counts, next } = vi.hoisted(() => ({
-  counts: { badge: 0, seed: 0, since: 0, announce: 0 },
+  counts: { badge: 0, seed: 0, since: 0 },
   next: { rows: [] as unknown[] },
 }));
 
@@ -34,18 +31,11 @@ vi.mock('@/components/pages/activity/data', () => ({
   entityHref: () => null,
   mapEntry: (row: unknown) => row,
 }));
-vi.mock('@/components/chat/ReminderRing', () => ({ ReminderRing: () => null }));
 vi.mock('@/lib/chat/notify-sound', () => ({ playToneShared: () => {} }));
 vi.mock('@/lib/tab-alert', () => ({ pushTabAlert: () => {} }));
 vi.mock('@/lib/chat-reads', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/chat-reads')>()),
   readProfiles: async () => ({ ok: true, data: [] }),
-}));
-vi.mock('@/lib/chat/reminders', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/chat/reminders')>()),
-  announceRemindersChanged: () => {
-    counts.announce += 1;
-  },
 }));
 vi.mock('@/lib/inbox/inbox-reads', () => ({
   readActivityBadge: async () => {
@@ -101,7 +91,6 @@ beforeEach(() => {
   counts.badge = 0;
   counts.seed = 0;
   counts.since = 0;
-  counts.announce = 0;
   next.rows = [];
   hidden = false;
   Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
@@ -136,49 +125,21 @@ async function mount(): Promise<void> {
 }
 
 describe('inbox poll', () => {
-  it('a hidden tab polls every 60 s, no reminder reload; the return reads once', async () => {
+  it('a hidden tab polls every 60 s; the return reads once', async () => {
     await mount();
     expect(counts).toMatchObject({ badge: 1, seed: 1, since: 0 });
     setHidden(true);
     for (let i = 0; i < 10; i += 1) await advance(POLL_MS);
-    expect(counts).toMatchObject({ badge: 6, seed: 1, since: 5, announce: 0 });
+    expect(counts).toMatchObject({ badge: 6, seed: 1, since: 5 });
     setHidden(false);
     await flush();
-    expect(counts).toMatchObject({ badge: 7, since: 6, announce: 0 });
+    expect(counts).toMatchObject({ badge: 7, since: 6 });
   });
 
-  it('a tick with no new rows asks the reminders nothing; a new row asks once', async () => {
-    await mount();
-    await advance(POLL_MS);
-    expect(counts.since).toBe(1);
-    await advance(POLL_MS);
-    expect(counts.since).toBe(2);
-    expect(counts.announce).toBe(0);
-    next.rows = [
-      {
-        id: 'e1',
-        workspace_id: 'ws-1',
-        user_id: 'u1',
-        actor_user_id: 'u1',
-        event_type: 'reminder',
-        entity_type: 'chat_message',
-        entity_id: 'm1',
-        payload: {},
-        read_at: '2026-10-27T10:05:00.000Z',
-        deleted_at: null,
-        created_at: '2026-10-27T10:05:00.000Z',
-      },
-    ];
-    await advance(POLL_MS);
-    expect(counts.since).toBe(3);
-    expect(counts.announce).toBe(1);
-  });
-
-  it('5 min visible and idle: one read per 30 s, never a reminder reload', async () => {
+  it('5 min visible and idle: one read per 30 s', async () => {
     await mount();
     for (let i = 0; i < 10; i += 1) await advance(POLL_MS);
     expect(counts.since).toBe(10);
     expect(counts.badge).toBe(11);
-    expect(counts.announce).toBe(0);
   });
 });

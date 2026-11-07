@@ -2,11 +2,11 @@
 // The first tap on a pre-warmed chat. The pre-warm (prewarmChats) already ran
 // the open's one chat_open_bundle call and kept its page; a tap within
 // PREWARM_FRESH_MS takes that bundle as the open's own: no second bundle, no
-// chat_messages id=in re-read, no chat_reactions re-read, and its marks,
-// scheduled rows and cursors are this open's parts. The rows, tombstones,
+// chat_messages id=in re-read, no chat_reactions re-read, and its cursors
+// are this open's parts. The rows, tombstones,
 // reactions, quotes and unread cursor are the ones a normal open shows, and
 // a live event folded into the page after the pre-warm still shows. Later
-// than PREWARM_FRESH_MS (or with a scheduled row due since) the tap reopens
+// than PREWARM_FRESH_MS the tap reopens
 // as before: the bundle from the page's end plus the two re-reads.
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -98,10 +98,7 @@ function pageOf(size: number): ChatMessageRow[] {
  * A recording PostgREST-ish client: every from() is one request; chained
  * methods log and return the query; awaiting answers from the page.
  */
-function recordingClient(
-  page: readonly ChatMessageRow[],
-  scheduled: readonly Record<string, unknown>[] = [],
-): { db: Client; queries: Query[] } {
+function recordingClient(page: readonly ChatMessageRow[]): { db: Client; queries: Query[] } {
   const queries: Query[] = [];
   const byId = new Map(page.map((r) => [r.id, r]));
   const peerRead = page[Math.floor(page.length / 2)] ?? page[0];
@@ -198,8 +195,7 @@ function recordingClient(
       cursor_messages:
         peerRead !== undefined ? [{ id: peerRead.id, created_at: peerRead.created_at }] : [],
       reply_counts: [],
-      marks: [],
-      scheduled,
+      scheduled: [],
       open_posts: [],
       open_post_count: 0,
       shared_plan_ids: [],
@@ -354,26 +350,6 @@ async function coldOpen(page: readonly ChatMessageRow[]): Promise<{
   return out;
 }
 
-const FUTURE_SCHEDULED = {
-  id: 's-1',
-  channel_id: CHANNEL,
-  workspace_id: WS,
-  sender_user_id: ME,
-  body: 'later',
-  mentions: null,
-  attachment_asset_ids: null,
-  attachment_meta: null,
-  shared_post_ids: null,
-  shared_brief_ids: null,
-  reply_to_message_id: null,
-  send_at: '2026-10-25T18:00:00.000Z',
-  sent_at: null,
-  status: 'scheduled',
-  failure_reason: null,
-  created_at: '2026-10-25T11:00:00.000Z',
-  updated_at: '2026-10-25T11:00:00.000Z',
-};
-
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-25T12:00:00.000Z'));
@@ -427,18 +403,16 @@ describe('first tap on a pre-warmed chat', () => {
     expect(latest?.readState.open).toEqual(cold.open);
   });
 
-  it("its scheduled rows, marks and cursors are this open's parts (nothing re-read)", async () => {
+  it("its cursors are this open's parts (nothing re-read)", async () => {
     const page = pageOf(10);
-    const { db, queries } = recordingClient(page, [FUTURE_SCHEDULED]);
+    const { db, queries } = recordingClient(page);
     const memory = createOpenCache();
     await prewarm(db, memory);
     vi.setSystemTime(new Date(Date.now() + 5_000));
     mount(db, memory);
     await settle();
-    const scheduled = await memory.join(KEY, 'scheduled');
-    expect(scheduled?.ok === true ? scheduled.data.map((r) => r.id) : null).toEqual(['s-1']);
-    const marks = await memory.join(KEY, 'marks');
-    expect(marks?.ok).toBe(true);
+    const positions = await memory.join(KEY, 'positions');
+    expect(positions?.ok).toBe(true);
     expect(perTable(queries)).toEqual({ 'rpc:chat_open_bundle': 1 });
   });
 
@@ -481,19 +455,6 @@ describe('first tap on a pre-warmed chat', () => {
     const tap = queries.filter((q) => q.table === 'rpc:chat_open_bundle')[1];
     const args = tap?.calls[0]?.args[0] as Record<string, unknown> | undefined;
     expect(args?.p_since).toBe(page[29]?.created_at);
-  });
-
-  it('a scheduled row due since the pre-warm: the tap reads as before', async () => {
-    const page = pageOf(10);
-    const due = { ...FUTURE_SCHEDULED, send_at: '2026-10-25T12:00:20.000Z' };
-    const { db, queries } = recordingClient(page, [due]);
-    const memory = createOpenCache();
-    await prewarm(db, memory);
-    vi.setSystemTime(new Date('2026-10-25T12:00:30.000Z'));
-    mount(db, memory);
-    await settle();
-    expect(openedFromPrewarm(KEY, memory)).toBe(false);
-    expect(perTable(queries)['rpc:chat_open_bundle']).toBe(2);
   });
 
   it('the pre-warm is spent by the first open: a second open reads as before', async () => {

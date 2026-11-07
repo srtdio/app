@@ -39,20 +39,12 @@ async function saveNow(): Promise<void> {
 }
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** The ⋯ menu's rows by label (open it first). */
+/** A menu's rows by label (open it first). */
 const menuRows = (): HTMLButtonElement[] => [
   ...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
 ];
 const rowLabel = (row: HTMLButtonElement): string =>
   row.querySelector('span.truncate')?.textContent ?? row.textContent ?? '';
-async function openMenu(): Promise<void> {
-  const trigger = document.querySelector<HTMLButtonElement>('[aria-label="More actions"]');
-  if (trigger === null) throw new Error('no ⋯');
-  await act(async () => {
-    trigger.click();
-    await wait(30);
-  });
-}
 async function closeMenu(): Promise<void> {
   await act(async () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
@@ -229,7 +221,7 @@ describe('shared Tasks sheet', () => {
     }
   });
 
-  it('chips: Past splits Not done above Done; search (from the menu) finds tasks across every chip', async () => {
+  it('chips: Past splits Not done above Done; Today holds a positive zero line', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-05T10:00:00.000Z'));
     try {
@@ -258,19 +250,9 @@ describe('shared Tasks sheet', () => {
       // Today holds nothing: one positive line.
       act(() => q('[data-task-when-chip="today"]')?.click());
       expect(q('[data-task-zero]')?.textContent).toBe('Tasks due today show up here.');
-      // Search: from the menu, across every chip, by word prefix.
-      await openMenu();
-      await pickRow(menuRows(), 'Search tasks');
-      const field = q('[data-task-search] input') as HTMLInputElement;
-      act(() => x4Type(field, 'log'));
-      expect(chipOf()).toBe('search');
-      expect(q('[data-task-chips]')).toBeNull();
-      expect(q('[data-task-row-id="l1"]')).not.toBeNull();
-      expect(q('[data-task-row-id="p1"]')).toBeNull();
-      expect(q('[data-task-add]')).toBeNull();
-      act(() => q('[data-task-search-cancel]')?.click());
+      // No search: the chip line always shows.
       expect(q('[data-task-search]')).toBeNull();
-      expect(chipOf()).toBe('today');
+      expect(q('[data-task-chips]')).not.toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -335,17 +317,11 @@ describe('shared Tasks sheet', () => {
     expect(saveState()).toBeNull();
   });
 
-  it('full screen from the menu fills the screen; Half screen returns', async () => {
+  it('one height (no full screen) and no ⋯ menu in the header', () => {
     render(x4FakeTasks([A]));
-    const dialog = () => q('[role="dialog"][aria-label="Tasks"]');
-    expect(dialog()?.hasAttribute('data-task-full')).toBe(false);
-    await openMenu();
-    await pickRow(menuRows(), 'Full screen');
-    expect(dialog()?.hasAttribute('data-task-full')).toBe(true);
-    await openMenu();
-    expect(menuRows().map(rowLabel)).toEqual(['Search tasks', 'Half screen']);
-    await pickRow(menuRows(), 'Half screen');
-    expect(dialog()?.hasAttribute('data-task-full')).toBe(false);
+    const dialog = q('[role="dialog"][aria-label="Tasks"]');
+    expect(dialog?.hasAttribute('data-task-full')).toBe(false);
+    expect(document.querySelector('[aria-label="More actions"]')).toBeNull();
   });
 
   it('the priority menu lists P0 Urgent, P1 High, P2 Normal with the current ticked', () => {

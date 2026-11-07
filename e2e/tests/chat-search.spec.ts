@@ -100,7 +100,7 @@ async function runSearchFlow(page: Page): Promise<void> {
 }
 
 /**
- * The media chips: their order (Starred, Photos, Videos, Links, Files, Voice
+ * The media chips: their order (Photos, Videos, Links, Files, Voice
  * notes), then Photos alone (empty query, p_kind photo) lists photo tiles
  * newest first; the first tile opens the viewer with its details on top, and
  * Show in chat opens the thread at that message.
@@ -118,6 +118,23 @@ async function runMediaFlow(page: Page): Promise<void> {
   expect(chips).toEqual([...SEARCH_CHIP_ORDER]);
 
   const photo = page.locator('[data-search-chip="photo"]');
+  // The picked chip carries its own X (44x44, "Clear Photos filter"): it
+  // clears the filter and the chat list is back. No All chip.
+  await expect(page.locator('[data-chip-clear]')).toHaveCount(0);
+  await photo.click();
+  const clear = page.getByRole('button', { name: 'Clear Photos filter' });
+  await expect(clear).toBeVisible();
+  await expect(page.locator('[data-chip-clear]')).toHaveCount(1);
+  const box = await clear.boundingBox();
+  expect(Math.round(box?.width ?? 0)).toBe(44);
+  expect(Math.round(box?.height ?? 0)).toBe(44);
+  await clear.click();
+  await expect(photo).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('[data-media-results]')).toHaveCount(0);
+  await expect(page.locator('[data-chip-clear]')).toHaveCount(0);
+  await expect(page.getByText(GROUP_NAME, { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'All', exact: true })).toHaveCount(0);
+
   await photo.click();
   await expect(photo).toHaveAttribute('aria-pressed', 'true');
   const results = page.locator('[data-media-results="photo"]');

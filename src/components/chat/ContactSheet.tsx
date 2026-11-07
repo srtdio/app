@@ -1,6 +1,6 @@
 // The DM Contact page, full screen over the app: the peer's photo, name and
 // role line, then the shared chat info tabs (ChatInfoTabs, full mode): Media,
-// Files, Links and Marks. The page opens and closes without motion; colours
+// Files and Links. The page opens and closes without motion; colours
 // are tokens only, so light and dark match.
 
 import { createPortal } from 'react-dom';
@@ -13,7 +13,6 @@ import {
   type ChatInfoTabsViewProps,
   type InfoSelectChrome,
 } from '@/components/chat/ChatInfoTabs';
-import type { MarksListProps } from '@/components/chat/MarksSheet';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { ChatProfile } from '@/lib/chat-reads';
 import type { RemovableFile } from '@/lib/chat/remove-files';
@@ -111,7 +110,7 @@ function contactPage(props: {
 
 export interface ContactSheetViewProps extends Omit<
   ChatInfoTabsViewProps,
-  'open' | 'mode' | 'expanded' | 'onSeeAll'
+  'mode' | 'expanded' | 'onSeeAll'
 > {
   open: boolean;
   onClose: () => void;
@@ -126,22 +125,14 @@ export interface ContactSheetViewProps extends Omit<
 /** The page's tree for a given state. Hook-free so tests walk it directly. */
 export function ContactSheetView(props: ContactSheetViewProps): ReactElement | null {
   if (!props.open) return null;
-  const { open, onClose, heading, title, avatarUrl, roleLine, onJump, ...tabs } = props;
+  const { onClose, heading, title, avatarUrl, roleLine, ...tabs } = props;
   return contactPage({
     heading: heading ?? CONTACT_HEADING,
     onClose,
     title,
     avatarUrl,
     roleLine,
-    tabs: ChatInfoTabsView({
-      ...tabs,
-      open,
-      mode: 'full',
-      onJump: (messageId) => {
-        onClose();
-        onJump(messageId);
-      },
-    }),
+    tabs: ChatInfoTabsView({ ...tabs, mode: 'full' }),
   });
 }
 
@@ -160,15 +151,13 @@ interface ContactSheetProps {
   timeZone?: string | undefined;
   cache: PresignCache;
   presignEnabled: boolean;
-  marks: Omit<MarksListProps, 'open' | 'onJump'> | null;
-  onJump: (messageId: string) => void;
   /** Remove own files from Media / Files (Select, the viewer's bin); absent hides both. */
   onRemoveFiles?: (files: RemovableFile[]) => void;
 }
 
 /** The stateful page: ChatInfoTabs owns the tab, feeds and lightbox. Key it by channel. */
 export function ContactSheet(props: ContactSheetProps): ReactElement {
-  const { onClose, onJump } = props;
+  const { onClose } = props;
   const heading = props.heading ?? CONTACT_HEADING;
   return createPortal(
     <ChatInfoTabs
@@ -180,11 +169,6 @@ export function ContactSheet(props: ContactSheetProps): ReactElement {
       timeZone={props.timeZone}
       cache={props.cache}
       presignEnabled={props.presignEnabled}
-      marks={props.marks}
-      onJump={(messageId) => {
-        onClose();
-        onJump(messageId);
-      }}
       onEscape={onClose}
       {...(props.onRemoveFiles !== undefined ? { onRemoveFiles: props.onRemoveFiles } : {})}
       frame={(tabs, select) =>

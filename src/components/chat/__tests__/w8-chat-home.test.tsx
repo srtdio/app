@@ -9,12 +9,12 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { hideChatsTitle, notesLastLine } from '@/components/chat/ChannelList';
+import { hiddenChatsLabel, notesLastLine } from '@/components/chat/ChannelList';
 
 describe('W8 fix 7: small fixes', () => {
-  it('"Delete chat" is now "Hide chat" with matching confirm copy', () => {
-    expect(hideChatsTitle(1)).toBe('Hide this chat?');
-    expect(hideChatsTitle(3)).toBe('Hide 3 chats?');
+  it('Hide chat has no confirm: the Undo toast reads "Chat hidden" / "N chats hidden"', () => {
+    expect(hiddenChatsLabel(1)).toBe('Chat hidden');
+    expect(hiddenChatsLabel(3)).toBe('3 chats hidden');
   });
 
   it('the notes tile shows the last note and its time', () => {

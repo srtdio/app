@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ActivityFilterBar, moreToRight } from '@/components/pages/activity/ActivityFilterBar';
 
 describe('ActivityFilterBar', () => {
-  it('shows exactly All, Unread, Mentions, Briefs, Plans, Upcoming, Snoozed in that order', () => {
+  it('shows exactly All, Unread, Mentions, Briefs, Plans, Snoozed in that order', () => {
     const html = renderToStaticMarkup(
       <ActivityFilterBar
         state="all"
@@ -15,23 +15,7 @@ describe('ActivityFilterBar', () => {
     const labels = [...html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((m) =>
       (m[1] ?? '').replace(/<[^>]+>/g, '').trim(),
     );
-    expect(labels).toEqual(['All', 'Unread', 'Mentions', 'Briefs', 'Plans', 'Upcoming', 'Snoozed']);
-  });
-
-  it('never folds a count into the Upcoming chip', () => {
-    const html = renderToStaticMarkup(
-      <ActivityFilterBar
-        state="upcoming"
-        onStateChange={() => undefined}
-        totalUnread={4}
-        mentionCount={2}
-      />,
-    );
-    const labels = [...html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((m) =>
-      (m[1] ?? '').replace(/<[^>]+>/g, '').trim(),
-    );
-    expect(labels).toContain('Upcoming');
-    expect(labels.filter((l) => l.startsWith('Upcoming'))).toEqual(['Upcoming']);
+    expect(labels).toEqual(['All', 'Unread', 'Mentions', 'Briefs', 'Plans', 'Snoozed']);
   });
 
   it('fix 3: fades only while chips remain to the right (2px slack)', () => {

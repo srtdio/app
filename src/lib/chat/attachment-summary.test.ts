@@ -6,7 +6,6 @@ import {
   replyPreview,
   summaryIconOfLine,
 } from '@/lib/chat/thread';
-import { markRowText } from '@/lib/chat/marks';
 import { previewText } from '@/lib/chat/chat-store';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 
@@ -102,11 +101,6 @@ describe('one summary everywhere', () => {
     expect(replyPreview({ ...base, attachments: [img('a'), img('b')] })).toBe('2 photos');
     expect(replyPreview({ ...base, attachments: [pdf] })).toBe('Q3 brief final.pdf');
     expect(replyPreview({ ...base, body: 'look', attachments: [img('a')] })).toBe('look');
-  });
-
-  it('markRowText uses the same label', () => {
-    expect(markRowText({ ...base, attachments: [voice] }, undefined)).toBe('Voice message (1:07)');
-    expect(markRowText({ ...base, attachments: [video] }, undefined)).toBe('Video');
   });
 
   it('chat list line from kinds: Photo / N photos / Voice message / File', () => {

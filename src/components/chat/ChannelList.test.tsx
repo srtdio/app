@@ -321,7 +321,7 @@ describe('select mode', () => {
     expect(mode.onToggle).toHaveBeenCalledWith('a');
   });
 
-  it('the bottom Hide is disabled at 0 and opens the confirm otherwise', () => {
+  it('the bottom Hide is disabled at 0 and hides the checked chats otherwise (no confirm)', () => {
     const deleteOf = (t: ReactElement): ReactElement =>
       findAll(t, (el) => {
         const c = (el.props as { children?: unknown }).children;
@@ -393,7 +393,7 @@ describe('load status', () => {
     expect(texts(tree)).not.toContain('Chats with your team show up here.');
   });
 
-  it('skeleton shapes are the real part (2 group cards, 4 people cards): ListCardBox', () => {
+  it('skeleton shapes are the real part (6 round cards, one list): ListCardBox', () => {
     const shells = findAll(
       withStatus('loading'),
       (el) => (el.props as Record<string, unknown>)['data-skeleton-row'] !== undefined,
@@ -402,10 +402,10 @@ describe('load status', () => {
     expect(kinds).toEqual(['card', 'card', 'card', 'card', 'card', 'card']);
     const boxes = shells.map((shell) => findAll(shell, (el) => el.type === ListCardBox));
     for (const box of boxes) expect(box).toHaveLength(1);
-    // Groups are radius 8 picture boxes, people round, as the cards they become.
+    // One list, no sections: six round boxes.
     expect(boxes.map((b) => (b[0]!.props as { round?: boolean }).round === true)).toEqual([
-      false,
-      false,
+      true,
+      true,
       true,
       true,
       true,

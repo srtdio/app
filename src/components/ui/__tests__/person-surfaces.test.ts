@@ -13,7 +13,6 @@ const SURFACES: readonly { file: string; what: string }[] = [
   { file: 'chat/ChatConnected.tsx', what: 'bubble @mention tap opens the card' },
   { file: 'chat/GroupInfoSheet.tsx', what: 'group members photo + name' },
   { file: 'chat/ReadingLayer.tsx', what: 'read by / reactions rows' },
-  { file: 'chat/StarredList.tsx', what: 'starred row sender photo + name' },
   { file: 'chat/PlanItemThread.tsx', what: 'plan comment author + mentions' },
   { file: 'comments/Comments.tsx', what: 'comment author photo + name, @mentions' },
   // Activity cards are ui/ListCard: the whole card is the one tap target (it

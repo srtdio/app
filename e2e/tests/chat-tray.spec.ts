@@ -10,7 +10,7 @@ import { DM_CHANNEL, GROUP_NAME, PEER_NAME, WORKSPACE_ID, ME } from '../fixtures
 // is agency only. Runs in both colour schemes (the dark and light projects),
 // on the iPhone viewport and on a laptop. Linux WebKit approximates iOS WebKit.
 
-const TILE_ORDER = ['photos', 'file', 'assets', 'brief', 'post', 'draft', 'plan', 'schedule'];
+const TILE_ORDER = ['photos', 'file', 'assets', 'brief', 'post', 'draft', 'plan', 'tasks'];
 const LIB_IMAGE = '0190e000-0000-7000-8000-0000000000a1';
 const LIB_IMAGE_VERSION = '0190e100-0000-7000-8000-0000000000a1';
 const LIB_PDF = '0190e000-0000-7000-8000-0000000000a2';
@@ -168,10 +168,9 @@ async function libraryImageAndPdf(page: Page): Promise<void> {
   await sheet.getByRole('button', { name: 'Add (2)' }).click();
   await expect(sheet).toBeHidden();
 
-  // Already uploaded: chips with no progress bar.
+  // Already uploaded: chips, ready to send.
   await expect(composer(page).getByText('hero-shot.png')).toBeVisible();
   await expect(composer(page).getByText('brand-deck.pdf')).toBeVisible();
-  await expect(composer(page).locator('[data-schedule-upload-bar]')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => page.locator('[data-msg-id]').count()).toBe(before + 1);

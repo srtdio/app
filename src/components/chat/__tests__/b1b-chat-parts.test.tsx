@@ -3,7 +3,7 @@
 // Group and people chats are ui/Row (72, a 32 avatar column at the 12 chat
 // edge, text at 56, the divider inset 56, the ⋯ through the trailing rule);
 // no chat is a Tile; Thread, Contact, Group
-// info, Starred and Tasks headers are ui/HeaderBar with one exit (Back "<"
+// info and Tasks headers are ui/HeaderBar with one exit (Back "<"
 // on the left, never an X), glyphs 20.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
@@ -137,17 +137,18 @@ describe('chat headers on ui/HeaderBar: one exit each', () => {
     expect(bar?.querySelector('[data-thread-view-title]')?.textContent).toBe('Launch teaser');
   });
 
-  it('Contact, Starred and Tasks render the shared bar (Back left, never an X exit)', () => {
-    for (const file of ['../ContactSheet.tsx', '../StarredList.tsx', '../tasks/TaskSheet.tsx']) {
+  it('Contact and Tasks render the shared bar (Back left, never an X exit)', () => {
+    for (const file of ['../ContactSheet.tsx', '../tasks/TaskSheet.tsx']) {
       const text = source(file);
       expect(text).toContain('<HeaderBar');
       expect(text).not.toContain('<IconChevronLeft');
     }
-    // Tasks: Back, Tasks, the save state, ⋯ (the ⋯ is the bar's last action).
+    // Tasks: Back, Tasks, the save state, Share to chat (the bar's last action).
     const tasks = source('../tasks/TaskSheet.tsx');
     const start = tasks.indexOf('<HeaderBar');
     const bar = tasks.slice(start, tasks.indexOf('/>\n        </div>', start));
     expect(bar).toContain("backProps={{ label: BACK_LABEL, 'data-task-back': '' }}");
-    expect(bar.indexOf('data-task-save-slot')).toBeLessThan(bar.indexOf('<ActionMenu'));
+    expect(bar).not.toContain('<ActionMenu');
+    expect(bar.indexOf('data-task-save-slot')).toBeLessThan(bar.indexOf('label={SHARE_LABEL}'));
   });
 });

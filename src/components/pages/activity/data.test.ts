@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { RETIRED_EVENT_LIST } from '@/lib/inbox/bell-types';
 import type { Database } from '@srtdio/schemas';
 import {
   BRIEF_REOPENED_EVENT,
@@ -1330,10 +1331,11 @@ describe('fetchActivityEntries query composition', () => {
     expect(hasCall(calls, 'limit', [50])).toBe(true);
   });
 
-  it('shows every row: no bell split on the feed (Notifications shows them all)', async () => {
+  it('shows every row but the retired types: no bell split on the feed', async () => {
     const { client, calls } = recordingClient([]);
     await fetchActivityEntries(client, 'w1');
-    expect(calls.some((c) => c.method === 'not')).toBe(false);
+    expect(hasCall(calls, 'not', ['event_type', 'in', RETIRED_EVENT_LIST])).toBe(true);
+    expect(calls.filter((c) => c.method === 'not')).toHaveLength(1);
     expect(calls.some((c) => c.method === 'or')).toBe(false);
   });
 
@@ -2188,30 +2190,20 @@ describe('notifications fixes: pure helpers', () => {
     expect(SNOOZE_FAILED).not.toMatch(/error|rpc|permission|violates/i);
   });
 
-  it('fix 26: a failed scheduled send is an All and Unread target, not a Mentions or Briefs one', () => {
+  it('fix 26: All and Unread mark the whole inbox; every other chip only its own rows', () => {
     const now = Date.parse('2026-10-20T12:00:00.000Z');
-    const failed = mapEntry(
-      row({
-        id: 'fail',
-        event_type: 'scheduled_failed',
-        entity_type: 'chat_channel',
-        entity_id: 'c1',
-        scope: 'groups',
-        tier: 'urgent',
-        payload: { scheduled_id: 's1' },
-      }),
-    );
+    const comment = item({ id: 'c', eventType: 'comment' });
     const mention = item({ id: 'm', eventType: 'mention' });
     const brief = item({ id: 'b', entityType: 'brief', entityId: 'b1', scope: BRIEFS_SCOPE });
-    const rows = [failed, mention, brief];
+    const rows = [comment, mention, brief];
     expect(marksWholeInbox('all')).toBe(true);
     expect(marksWholeInbox('unread')).toBe(true);
     for (const state of ['all', 'unread'] as const) {
-      expect(markAllTargets(rows, state, now).map((i) => i.id)).toContain('fail');
+      expect(markAllTargets(rows, state, now).map((i) => i.id)).toEqual(['c', 'm', 'b']);
     }
-    for (const state of ['mentions', 'briefs', 'plans', 'snoozed', 'upcoming'] as const) {
+    for (const state of ['mentions', 'briefs', 'plans', 'snoozed'] as const) {
       expect(marksWholeInbox(state)).toBe(false);
-      expect(markAllTargets(rows, state, now).map((i) => i.id)).not.toContain('fail');
+      expect(markAllTargets(rows, state, now).map((i) => i.id)).not.toContain('c');
     }
     expect(markAllTargets(rows, 'mentions', now).map((i) => i.id)).toEqual(['m']);
     expect(markAllTargets(rows, 'briefs', now).map((i) => i.id)).toEqual(['b']);

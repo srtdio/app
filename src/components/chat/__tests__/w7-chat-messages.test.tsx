@@ -24,7 +24,6 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   menuMaxHeight,
   messageMenuItems,
-  moreMenuItems,
   ownMessageActions,
   runMenuItem,
   scrollFromMenu,
@@ -80,51 +79,42 @@ const everything = {
   onCopy: noop,
   canForward: true,
   canEdit: true,
-  canStar: true,
   canDelete: true,
   canTranscribe: true,
   canSelectText: true,
   canSaveToNotes: true,
-  canRemind: true,
-  markOptions: ['commitment' as const],
+  canRemoveFile: true,
 };
 
-describe('fix 1: the long-press menu top level', () => {
-  it('reads Reply, Copy, Forward, Edit, Star, More, Delete; the rest sits under More', () => {
+describe('fix 1: the long-press menu, one level', () => {
+  it('reads Reply, Copy, Select, Transcribe, Forward, Save, Edit, then Remove file and Delete', () => {
     expect(messageMenuItems(everything).map((i) => i.key)).toEqual([
       'reply',
       'copy',
+      'select-text',
+      'transcribe',
       'forward',
+      'save-notes',
       'edit',
-      'star',
-      'more',
+      'remove-file',
       'delete',
     ]);
-    expect(moreMenuItems(everything).map((i) => i.key)).toEqual([
-      'transcribe',
-      'select-text',
-      'save-notes',
-      'remind',
-      'mark',
-    ]);
     const del = messageMenuItems(everything).at(-1);
-    expect(del?.kind === 'action' && del.danger).toBe(true);
+    expect(del?.danger).toBe(true);
   });
 
-  it('hides rows that do not apply, More included when nothing sits under it', () => {
+  it('hides rows that do not apply', () => {
     const keys = messageMenuItems({ canCopy: false, onReply: noop, onCopy: noop }).map(
       (i) => i.key,
     );
     expect(keys).toEqual(['reply']);
   });
 
-  it('More opens its submenu without closing; the menu caps at the viewport less 16px', () => {
-    const more = messageMenuItems(everything).find((i) => i.key === 'more');
-    const openMore = vi.fn();
+  it('a row runs and closes; the menu caps at the viewport less 16px', () => {
+    const reply = messageMenuItems(everything).find((i) => i.key === 'reply');
     const close = vi.fn();
-    if (more !== undefined) runMenuItem(more, { openMark: noop, openMore, close });
-    expect(openMore).toHaveBeenCalledOnce();
-    expect(close).not.toHaveBeenCalled();
+    if (reply !== undefined) runMenuItem(reply, { close });
+    expect(close).toHaveBeenCalledOnce();
     expect(menuMaxHeight(568)).toBe(552);
     const inside = {} as Node;
     expect(scrollFromMenu({ contains: (n) => n === inside }, null)).toBe(false);
@@ -202,8 +192,8 @@ describe('fix 4: personal notes', () => {
 
   it('notes have no edit time limit', () => {
     const old = msg({ createdAt: new Date(NOW - 5 * 60 * MIN).toISOString() });
-    expect(ownMessageActions(old, undefined, NOW, true).canEdit).toBe(true);
-    expect(ownMessageActions(old, undefined, NOW, false).canEdit).toBe(false);
+    expect(ownMessageActions(old, NOW, true).canEdit).toBe(true);
+    expect(ownMessageActions(old, NOW, false).canEdit).toBe(false);
     const edit = messageMenuItems({ ...everything, notes: true }).find((i) => i.key === 'edit');
     expect(edit?.kind === 'action' && edit.hint).toBeUndefined();
   });

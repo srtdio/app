@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// X7 fix 11 (FB2): the chat's aria-modal pages (Contact, Group info, Starred)
+// X7 fix 11 (FB2): the chat's aria-modal pages (Contact, Group info)
 // use X1's useModalFocus through ModalPanel: focus moves in, Tab stays inside,
 // focus returns to the opener on close. The thread view and status drawer own
 // focus the same way without aria-modal (their Escape reads aria-modal).
@@ -46,10 +46,9 @@ describe('X7 FB2: modal chat pages own focus', () => {
     expect(document.activeElement).toBe(opener);
   });
 
-  it('Contact, Group info and Starred pages are ModalPanels; thread view and drawer use useModalFocus', () => {
+  it('Contact and Group info pages are ModalPanels; thread view and drawer use useModalFocus', () => {
     expect(source('../ContactSheet.tsx')).toContain('<ModalPanel');
     expect(source('../GroupInfoSheet.tsx')).toContain('<ModalPanel');
-    expect(source('../StarredList.tsx')).toContain('<ModalPanel');
     expect(source('../ThreadView.tsx')).toContain('useModalFocus(rootRef, true');
     expect(source('../StatusTicker.tsx')).toContain('useModalFocus(panelRef,');
     expect(source('../MessageActionMenu.tsx')).toContain('useModalFocus(dialogRef, open)');

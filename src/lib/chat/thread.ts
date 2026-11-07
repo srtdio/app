@@ -504,11 +504,6 @@ export function readEventExt(input: {
   return { [LIVE_EVENT_KEY]: 'read', channel_id: input.channelId, message_id: input.messageId };
 }
 
-/** Build the `ext` for a live mark signal (receivers re-read that one mark row). */
-export function markEventExt(input: { messageId: string }): Record<string, unknown> {
-  return { [LIVE_EVENT_KEY]: 'mark', message_id: input.messageId };
-}
-
 /**
  * Build the `ext` for a live task signal: one task of one chat changed (a
  * create or a field write the record accepted). Receivers re-read that task
@@ -1613,7 +1608,7 @@ export function subscribeIncoming(params: {
         });
         return;
       }
-      // Mark signals are consumed by the marks subscription (subscribeMarkEvents).
+      // Mark signals (older clients) are ignored: marks are retired.
       if (event.kind === 'mark') return;
       // Task signals are consumed by the task list (subscribeTaskEvents).
       if (event.kind === 'task') return;

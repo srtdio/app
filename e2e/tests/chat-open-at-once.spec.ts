@@ -12,7 +12,6 @@ import {
   ME,
   PEER,
   PEER_NAME,
-  WORKSPACE_ID,
   seedClientPlanWithDraft,
 } from '../fixtures/chat-data';
 import {
@@ -25,7 +24,7 @@ import { withSaveData } from '../helpers/save-data';
 
 // Opening a chat is complete at once. Per frame (and per DOM change) the
 // recorder keeps which chat is on screen, whether its messages, the plan
-// card (or its skeleton), the mark badges and the ticker are painted, the
+// card (or its skeleton) and the ticker are painted, the
 // card's node identity and on-screen top, and the thread's scroll. With
 // realistic per-read latency: everything paints in one frame when it all
 // settles inside the hold; with one read 2s late the rest paint without it
@@ -58,7 +57,6 @@ interface Frame {
   msgs: boolean;
   /** 'none', 'skel', or the card's plan id and title. */
   card: string;
-  badges: number;
   ticker: string;
 }
 
@@ -121,7 +119,6 @@ async function recordOpen(page: Page): Promise<void> {
             : skeleton !== null
               ? 'skel'
               : 'none',
-        badges: document.querySelectorAll('[data-msg-id] [data-mark-badge]').length,
         ticker: `${slot?.getAttribute('data-loops-strip') ?? 'none'}${items !== '' ? `:${items}` : ''}`,
       };
     };
@@ -133,7 +130,6 @@ async function recordOpen(page: Page): Promise<void> {
         last.chat === state.chat &&
         last.msgs === state.msgs &&
         last.card === state.card &&
-        last.badges === state.badges &&
         last.ticker === state.ticker;
       if (!same) log.frames.push({ at: Math.round(now()), ...state });
       const card = document.querySelector(`[data-plan-card="${CSS.escape(planId)}"]`);
@@ -238,7 +234,7 @@ function framesSince(log: OpenLog, tap: number): Frame[] {
 function show(frames: readonly Frame[]): string[] {
   return frames.map(
     (f) =>
-      `${f.at} chat=${f.chat.slice(-4)} msgs=${f.msgs ? 'y' : 'n'} card=${f.card} badges=${f.badges} ticker=${f.ticker}`,
+      `${f.at} chat=${f.chat.slice(-4)} msgs=${f.msgs ? 'y' : 'n'} card=${f.card} ticker=${f.ticker}`,
   );
 }
 
@@ -249,21 +245,10 @@ function viewAsClient(network: HarnessNetwork): void {
   }
 }
 
-/** The plan DM with an open mark on the plan message (a badge and a ticker item). */
+/** The plan DM with its shared plan (a card and a ticker item). */
 function seedPlanChat(network: HarnessNetwork): void {
   viewAsClient(network);
   seedClientPlanWithDraft(network.world, { channelId: DM_CHANNEL, sender: PEER });
-  (network.world.tables.chat_message_marks ??= []).push({
-    message_id: DRAFT_PLAN_MESSAGE_ID,
-    channel_id: DM_CHANNEL,
-    workspace_id: WORKSPACE_ID,
-    mark_type: 'pending',
-    priority: null,
-    marked_by: PEER,
-    marked_at: new Date(Date.now() - 60_000).toISOString(),
-    resolved_by: null,
-    resolved_at: null,
-  });
 }
 
 function expectClean(network: HarnessNetwork): void {
@@ -309,11 +294,10 @@ async function backToList(page: Page): Promise<void> {
   await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
 }
 
-/** Settled: the card, the open ticker and the badge are on screen. */
+/** Settled: the card and the open ticker are on screen. */
 async function settled(page: Page): Promise<void> {
   await page.locator(`[data-plan-card="${DRAFT_PLAN_ID}"]`).waitFor({ timeout: 10_000 });
   await page.locator('[data-loops-strip="open"]').waitFor({ timeout: 10_000 });
-  await page.locator('[data-msg-id] [data-mark-badge]').first().waitFor({ timeout: 10_000 });
 }
 
 function report(label: string, value: unknown): void {
@@ -328,7 +312,6 @@ function partTimes(frames: readonly Frame[]): Record<string, number | null> {
     messages: first((f) => f.msgs),
     cardSkeleton: first((f) => f.card === 'skel'),
     card: first((f) => f.card.startsWith(DRAFT_PLAN_ID)),
-    badges: first((f) => f.badges > 0),
     ticker: first((f) => /^(open|empty)/.test(f.ticker)),
   };
 }
@@ -400,15 +383,13 @@ async function runAtOnce(page: Page): Promise<void> {
   const firstPaint = frames.findIndex((f) => f.msgs);
   expect(firstPaint, show(frames).join('\n')).toBeGreaterThanOrEqual(0);
   const first = frames[firstPaint];
-  // One frame: messages, card, badge and ticker together.
+  // One frame: messages, card and ticker together.
   expect(first?.card, show(frames).join('\n')).toBe(`${DRAFT_PLAN_ID}:${DRAFT_PLAN_TITLE}`);
-  expect(first?.badges ?? 0).toBeGreaterThan(0);
   expect(first?.ticker ?? '').toMatch(/^open:/);
-  // Nothing after it changes: no skeleton, no ticker refill, no new badge.
+  // Nothing after it changes: no skeleton, no ticker refill.
   for (const f of frames.slice(firstPaint)) {
     expect(f.card).toBe(first?.card);
     expect(f.ticker).toBe(first?.ticker);
-    expect(f.badges).toBe(first?.badges);
   }
   expect(log.skeletonHeights, 'never a card skeleton').toEqual([]);
   expect(log.cardNodes).toBe(1);
@@ -448,11 +429,10 @@ async function runOneLate(page: Page): Promise<void> {
   const frames = framesSince(log, tap);
   const times = partTimes(frames);
   report('one late read', { ...times, log: { ...log, frames: show(frames) } });
-  // The messages and badges paint without the plan (its skeleton and the
+  // The messages paint without the plan (its skeleton and the
   // inert ticker slot hold their places), then the card and ticker fill in.
   expect(times.messages).not.toBeNull();
   expect(times.cardSkeleton, 'the card skeleton held the place').toBe(times.messages);
-  expect(times.badges).toBe(times.messages);
   expect(times.card ?? 0).toBeGreaterThan(times.messages ?? 0);
   // The hold is capped at 1s from the tap: the messages never wait for the late read.
   expect(times.card ?? 0, 'the card came with the late read').toBeGreaterThan(2_000);
@@ -497,7 +477,7 @@ async function runReopen(page: Page): Promise<void> {
   report('reopen', { ...partTimes(frames), frames: show(frames) });
   const firstPaint = frames.findIndex((f) => f.msgs);
   const first = frames[firstPaint];
-  expect(first?.badges ?? 0, show(frames).join('\n')).toBeGreaterThan(0);
+  expect(first?.msgs, show(frames).join('\n')).toBe(true);
   // No plan bundle is remembered from the earlier open: the card waits at its
   // final size (skeleton) for this open's read and never paints the old title.
   expect(
@@ -629,12 +609,11 @@ async function runSwitch(page: Page): Promise<void> {
     const inGroup = framesSince(log, groupTap);
     const inDm = framesSince(log, dmTap).filter((f) => f.at < groupTap - dmTap);
     report(`switch round ${round + 1}`, { dm: show(inDm), group: show(inGroup) });
-    // The group never shows the DM's plan card or its badge. Its ticker may
+    // The group never shows the DM's plan card. Its ticker may
     // read the plan: the bar shows the workspace's current shared plans in
     // every chat.
     for (const f of inGroup) {
       expect(f.card, show(inGroup).join('\n')).toBe('none');
-      expect(f.badges).toBe(0);
       if (f.msgs) expect(groupIds.has(f.chat) || f.chat === '-').toBe(true);
     }
     // The DM never shows the group's rows.

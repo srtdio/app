@@ -62,8 +62,6 @@ function bundle(key: ChatKey, count: number): ChatOpenBundle {
     reactions: [],
     readPositions: { rows: [], times: new Map() },
     replyCounts: new Map(),
-    marks: [],
-    scheduled: [],
     openPosts: [],
     openPostCount: 0,
     sharedPlanIds: [],

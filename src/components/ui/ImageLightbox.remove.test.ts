@@ -81,28 +81,25 @@ describe('ImageLightbox bin', () => {
 
 describe('withRemovableImages (chat)', () => {
   it('no handler: the viewer is unchanged (no bin)', () => {
-    expect(withRemovableImages(DATA, msg(), undefined, 'me', new Set())).toBe(DATA);
+    expect(withRemovableImages(DATA, msg(), undefined, 'me')).toBe(DATA);
   });
 
   it('own, unmarked images get the bin with "Remove photo"; a tap removes just that file', () => {
     const onRemove = vi.fn();
-    const out = withRemovableImages(DATA, msg(), onRemove, 'me', new Set());
+    const out = withRemovableImages(DATA, msg(), onRemove, 'me');
     expect(out.images.map((i) => i.removeLabel)).toEqual([REMOVE_PHOTO_ARIA, REMOVE_PHOTO_ARIA]);
     out.images[1]?.onRemove?.();
     expect(onRemove).toHaveBeenCalledWith([{ messageId: 'm1', assetId: 'a2', mime: 'image/jpeg' }]);
   });
 
-  it("no bin on someone else's or a marked message", () => {
+  it("no bin on someone else's message", () => {
     const peer = withRemovableImages(
       DATA,
       msg({ senderUserId: 'peer', mine: false }),
       vi.fn(),
       'me',
-      new Set(),
     );
     expect(peer.images.every((i) => i.onRemove === undefined)).toBe(true);
-    const marked = withRemovableImages(DATA, msg(), vi.fn(), 'me', new Set(['m1']));
-    expect(marked.images.every((i) => i.onRemove === undefined)).toBe(true);
   });
 
   it('the label reads "Remove video" for a video', () => {

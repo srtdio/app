@@ -1,5 +1,5 @@
-// Same-session chat memory (D3): a remembered message page, marks, scheduled
-// rows and cursors from an earlier open are allowed only when (a) they live
+// Same-session chat memory (D3): a remembered message page, the ticker's
+// counts and cursors from an earlier open are allowed only when (a) they live
 // in memory only, never in localStorage, sessionStorage or IndexedDB; (b)
 // they are forgotten on sign-out AND at once on a workspace switch; (c) every
 // reopen runs chat_open_bundle with p_since at once (at the tap, no timer, no
@@ -43,10 +43,10 @@ import { joinChatBundle, startChatBundle, type ChatBundleDeps } from '@/lib/chat
 import { revalidateRemembered } from '@/lib/chat/use-chat-thread';
 import { resetSessionReads } from '@/lib/session-read';
 import { sharedChatRead } from '@/lib/chat/workspace-reads';
-import type { ChatMark } from '@/lib/chat/marks';
-import type { ThreadMessage } from '@/lib/chat/thread';
+import { settleStatusRound } from '@/lib/chat/use-status-counts';
 
 const KEY: ChatKey = { userId: 'u1', workspaceId: 'w1', channelId: 'c1' };
+const STATUS = settleStatusRound(null, 'w1\nc1', { planIds: [], briefs: [], briefCount: 0 }).view;
 const THROUGH = { createdAt: '2026-10-26T10:00:02.000Z', id: 'm2' };
 
 function bundle(): ChatOpenBundle {
@@ -57,8 +57,6 @@ function bundle(): ChatOpenBundle {
     reactions: [],
     readPositions: { rows: [], times: new Map() },
     replyCounts: new Map(),
-    marks: [],
-    scheduled: [],
     openPosts: [],
     openPostCount: 0,
     sharedPlanIds: [],
@@ -101,11 +99,7 @@ function holdAll(store: OpenCache): void {
   const owner = store.attach(KEY);
   owner.keep(page());
   owner.release();
-  store.remember(KEY, 'marks', {
-    marks: new Map<string, ChatMark>(),
-    markedMessages: new Map<string, ThreadMessage>(),
-  });
-  store.remember(KEY, 'scheduled', []);
+  store.remember(KEY, 'status', STATUS);
 }
 
 /** Microtasks only: no timer runs. */
@@ -144,7 +138,7 @@ describe('(a) chat memory is in memory only', () => {
     });
     const store = createOpenCache();
     holdAll(store);
-    store.revise(KEY, 'scheduled', (rows) => [...rows]);
+    store.revise(KEY, 'status', (view) => ({ ...view }));
     await startChatBundle(KEY, { deps: deps(store) });
     store.recall(KEY, 'thread');
     store.clear();
@@ -156,9 +150,6 @@ describe('(a) chat memory is in memory only', () => {
       '../open-cache.ts',
       '../open-bundle.ts',
       '../use-chat-thread.ts',
-      '../use-chat-marks.ts',
-      '../marks.ts',
-      '../scheduled.ts',
       '../read-receipts.ts',
       '../history.ts',
       '../workspace-reads.ts',
@@ -180,15 +171,14 @@ describe('(b) forgotten on sign-out and on a workspace switch', () => {
     expect(chatScopeLeft(a, null)).toEqual(a);
   });
 
-  it('a workspace switch forgets the page, marks, scheduled rows and cursors at once', () => {
+  it('a workspace switch forgets the page, the counts and cursors at once', () => {
     const store = createOpenCache();
     holdAll(store);
     // Nothing of the new workspace was touched yet: the switch alone clears.
     leaveChatScope({ userId: 'u1', workspaceId: 'w1' }, { userId: 'u1', workspaceId: 'w2' }, store);
     expect(store.size()).toBe(0);
     expect(store.recall(KEY, 'thread')).toBeUndefined();
-    expect(store.recall(KEY, 'marks')).toBeUndefined();
-    expect(store.recall(KEY, 'scheduled')).toBeUndefined();
+    expect(store.recall(KEY, 'status')).toBeUndefined();
   });
 
   it('sign-out forgets everything at once', () => {
@@ -206,11 +196,11 @@ describe('(b) forgotten on sign-out and on a workspace switch', () => {
     // The new workspace's chat opened before the shell's switch effect ran:
     // entering it already dropped w1; leaving w1 now leaves the new open be.
     const other: ChatKey = { userId: 'u1', workspaceId: 'w2', channelId: 'c9' };
-    store.remember(other, 'scheduled', []);
+    store.remember(other, 'status', STATUS);
     // (A recall of KEY here would enter w1 again; count instead.)
     expect(store.size()).toBe(1);
     leaveChatScope({ userId: 'u1', workspaceId: 'w1' }, { userId: 'u1', workspaceId: 'w2' }, store);
-    expect(store.recall(other, 'scheduled')).toEqual([]);
+    expect(store.recall(other, 'status')).toBe(STATUS);
   });
 });
 

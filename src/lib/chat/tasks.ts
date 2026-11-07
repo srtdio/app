@@ -854,6 +854,27 @@ export function tasksSeenKey(channelId: string): string {
   return `sorted:tasks-seen:${channelId}`;
 }
 
+/** When this device last opened a chat's list (epoch ms); null when never or unreadable. */
+export function readTasksSeen(key: string): number | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return null;
+    const ms = Number(raw);
+    return Number.isFinite(ms) ? ms : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Remember that this device opened a chat's list now. */
+export function writeTasksSeen(key: string, ms: number): void {
+  try {
+    window.localStorage.setItem(key, String(ms));
+  } catch {
+    // Storage unavailable (private mode): the dot simply stays.
+  }
+}
+
 // ---------------------------------------------------------------------------
 // "Changed since you looked" marks
 // ---------------------------------------------------------------------------

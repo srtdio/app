@@ -5,7 +5,6 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { createPressIntent, type PressIntent } from '@/lib/chat/press-intent';
 import { IconButton } from '@/components/ui/IconButton';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { countBadgeText } from '@/components/ui/CountBadge';
 import {
   LIST_CARD_STACK,
@@ -28,10 +27,10 @@ import {
   IconFile,
   IconPlus,
 } from '@/components/ui/icons';
-import { useToast } from '@/components/ui/toast';
+import { useUndoableAction } from '@/lib/use-undoable-action';
 import { cn } from '@/lib/cn';
 import { SHELL_STICKY_TOP_CLASS } from '@/lib/scroll-mode';
-import { Bone, BoxSkeleton, GlideItem } from '@/lib/motion';
+import { BoxSkeleton, GlideItem } from '@/lib/motion';
 import { SettleLanding } from '@/components/chat/SettleLanding';
 import { useCoarsePointer, useHoverPointer } from '@/lib/use-is-laptop';
 import { filterChannelsByName } from '@/lib/channel-filter';
@@ -64,8 +63,6 @@ import { isFileRemoved, removedFilesStore } from '@/lib/chat/remove-files';
 import { APP_ENTITY_ROUTES, currentOrigin } from '@/lib/chat/message-links';
 import { peekKept, primeRead, readKey } from '@/lib/session-read';
 import { mark } from '@/lib/perf-marks';
-import { StarredList } from '@/components/chat/StarredList';
-import { STARRED_TITLE } from '@/lib/chat/stars';
 import {
   normalizeQuery,
   SEARCH_CHIPS,
@@ -84,7 +81,6 @@ import {
   useChatLayout,
   type ChatLayout,
 } from '@/components/chat/chat-type';
-import { TEXT_ROLE } from '@/components/ui/Text';
 
 /** Per-channel draft text lookup ('' when the chat has no draft). */
 type DraftLookup = (channelId: string) => string;
@@ -136,7 +132,7 @@ export interface ChannelSelectMode {
   onStart: () => void;
   onCancel: () => void;
   onToggle: (channelId: string) => void;
-  /** Opens the confirm for the checked chats. */
+  /** Hides the checked chats (behind the Undo toast). */
   onDelete: () => void;
 }
 
@@ -177,12 +173,13 @@ interface ChannelListProps {
   workspaceId?: string | null;
   /** A message search hit tapped: open that chat at that message, the bar on the query. */
   onOpenSearchHit?: (channel: ChannelSummary, messageId: string, query: string) => void;
-  /** A starred row tapped: open that chat at that message (no search bar). */
-  onOpenStarred?: (channel: ChannelSummary, messageId: string) => void;
+  /** A media item's Show in chat: open that chat at that message (no search bar). */
+  onOpenAtMessage?: (channel: ChannelSummary, messageId: string) => void;
   /**
    * The caller's Personal notes (built from the session, never read): its
-   * tile is pinned above Groups from the first paint, and search hits in it
-   * carry its name. Absent: no tile.
+   * card paints from the first frame and, once the list is in, sorts in with
+   * the chats by its last note; search hits in it carry its name. Absent: no
+   * card.
    */
   notes?: ChannelSummary;
   /** Rendered at the top of the home list (hidden while searching), e.g. the getting-started card. */
@@ -278,69 +275,70 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
     'data-induction': INDUCTION_KEYS.chatDefaultGroupRow,
     'data-induction-channel': channel.channelId,
   });
-  const { groups, people } = splitSections(props.channels);
-  const renderCard = (channel: ChannelSummary, anchored: boolean): ReactElement => (
+  const notes = props.notes;
+  const renderCard = (channel: ChannelSummary): ReactElement => {
+    if (notes !== undefined && channel.channelId === notes.channelId) {
+      // Personal notes sorts in with the chats by its last note.
+      return (
+        <GlideItem as="li" axis="y" key={channel.channelId} className="min-w-0">
+          {notesCard({
+            notes,
+            summary: summaryFor(notes.channelId),
+            nowMs,
+            timeZone,
+            selected: notes.channelId === props.selectedChannelId,
+            selecting: props.selecting !== undefined,
+            onSelect: props.onSelect,
+          })}
+        </GlideItem>
+      );
+    }
     // Glide: a reorder (new message lifts a chat) moves rows to their new
-    // place; group and people rows both list on Y.
-    <GlideItem
-      as="li"
-      axis="y"
-      key={channel.channelId}
-      className="min-w-0"
-      {...(anchored ? groupAnchor(channel) : {})}
-    >
-      <ChannelCard
-        channel={channel}
-        selected={channel.channelId === props.selectedChannelId}
-        summary={summaryFor(channel.channelId)}
-        draft={rowDraft(
-          props.draftFor?.(channel.channelId) ?? '',
-          channel.channelId === props.selectedChannelId,
-        )}
-        nowMs={nowMs}
-        timeZone={timeZone}
-        onSelect={props.onSelect}
-        {...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {})}
-        input={props.input ?? DEFAULT_LIST_INPUT}
-        {...(props.selecting !== undefined
-          ? {
-              checked: props.selecting.selectedIds.has(channel.channelId),
-              onToggle: props.selecting.onToggle,
-            }
-          : {})}
-        {...(props.onLongPress !== undefined
-          ? {
-              onLongPress: props.onLongPress,
-              menuOpen: props.menuOpenId === channel.channelId,
-              ...(props.onMenuClose !== undefined ? { onMenuClose: props.onMenuClose } : {}),
-              ...(props.onHide !== undefined ? { onHide: props.onHide } : {}),
-            }
-          : {})}
-      />
-    </GlideItem>
-  );
+    // place on Y.
+    return (
+      <GlideItem
+        as="li"
+        axis="y"
+        key={channel.channelId}
+        className="min-w-0"
+        {...(channel.channelType === 'group' ? groupAnchor(channel) : {})}
+      >
+        <ChannelCard
+          channel={channel}
+          selected={channel.channelId === props.selectedChannelId}
+          summary={summaryFor(channel.channelId)}
+          draft={rowDraft(
+            props.draftFor?.(channel.channelId) ?? '',
+            channel.channelId === props.selectedChannelId,
+          )}
+          nowMs={nowMs}
+          timeZone={timeZone}
+          onSelect={props.onSelect}
+          {...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {})}
+          input={props.input ?? DEFAULT_LIST_INPUT}
+          {...(props.selecting !== undefined
+            ? {
+                checked: props.selecting.selectedIds.has(channel.channelId),
+                onToggle: props.selecting.onToggle,
+              }
+            : {})}
+          {...(props.onLongPress !== undefined
+            ? {
+                onLongPress: props.onLongPress,
+                menuOpen: props.menuOpenId === channel.channelId,
+                ...(props.onMenuClose !== undefined ? { onMenuClose: props.onMenuClose } : {}),
+                ...(props.onHide !== undefined ? { onHide: props.onHide } : {}),
+              }
+            : {})}
+        />
+      </GlideItem>
+    );
+  };
   return (
     <div data-chat-home="" className={CHAT_HOME_STACK}>
-      {groups.length > 0 ? (
-        <>
-          <h3 data-section-label="groups" className={sectionLabelClass(true)}>
-            Groups
-          </h3>
-          <ul data-section="groups" className={CHAT_ROW_LIST}>
-            {groups.map((channel) => renderCard(channel, true))}
-          </ul>
-        </>
-      ) : null}
-      {people.length > 0 ? (
-        <>
-          <h3 data-section-label="people" className={sectionLabelClass(groups.length === 0)}>
-            People
-          </h3>
-          <ul data-section="people" className={CHAT_ROW_LIST}>
-            {people.map((channel) => renderCard(channel, false))}
-          </ul>
-        </>
-      ) : null}
+      <ul data-chat-list="" className={CHAT_ROW_LIST}>
+        {props.channels.map((channel) => renderCard(channel))}
+      </ul>
     </div>
   );
 }
@@ -348,45 +346,27 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
 /** Skeleton tiles shown while the list loads; enough to fill a phone screen. */
 export const SKELETON_ROWS = 6;
 
-/** The skeleton's sections: two group cards, then four people cards. */
-const SKELETON_GROUPS = 2;
-const SKELETON_PEOPLE = SKELETON_ROWS - SKELETON_GROUPS;
-
 /** One loading card: ui/ListCardBox, the ListCard's own frame and slots. */
-function skeletonRow(i: number, round: boolean): ReactElement {
+function skeletonRow(i: number): ReactElement {
   return (
     <li key={`bone-${i}`} data-skeleton-row="card" className="min-w-0">
-      <ListCardBox round={round} />
+      <ListCardBox round />
     </li>
   );
 }
 
-/** A label-sized placeholder bar on the label's own edge and padding. */
-function skeletonLabel(first: boolean): ReactElement {
-  return (
-    <div className={cn('px-4', first ? 'pt-1' : 'pt-3')}>
-      <Bone lit="flat" as="div" className="h-4 w-16 rounded" />
-    </div>
-  );
-}
-
 /**
- * The loading body: the real sections' shapes, drawn in the same frame (label,
- * group cards, label, people cards; every card the ListCard's one height with
- * its 72 picture), so swapping in the list shifts nothing. Each box is a motion
+ * The loading body: the real list's shape, drawn in the same frame (six
+ * uniform cards, the ListCard's one height with its 72 picture, no labels),
+ * so swapping in the list shifts nothing. Each box is a motion
  * Bone (top-lit sweep, never a pulse); no spinner. Shown only when the device
  * holds no list (the store paints a saved list at once).
  */
 export function channelListSkeleton(): ReactElement {
   return (
     <BoxSkeleton lit="flat" className={CHAT_HOME_STACK} label="Loading conversations">
-      {skeletonLabel(true)}
       <ul className={CHAT_ROW_LIST}>
-        {Array.from({ length: SKELETON_GROUPS }, (_, i) => skeletonRow(i, false))}
-      </ul>
-      {skeletonLabel(false)}
-      <ul className={CHAT_ROW_LIST}>
-        {Array.from({ length: SKELETON_PEOPLE }, (_, i) => skeletonRow(i, true))}
+        {Array.from({ length: SKELETON_ROWS }, (_, i) => skeletonRow(i))}
       </ul>
     </BoxSkeleton>
   );
@@ -444,25 +424,12 @@ export function rowMenuKey(event: { key: string; shiftKey: boolean }): boolean {
   return event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10');
 }
 
-/** A chat's section: a group is 'wide' (Groups), a DM 'square' (People); both are a Row. */
+/** A chat's picture shape: a group is 'wide' (its photo or mark), a DM 'square' (a person). */
 export type TileKind = 'wide' | 'square';
 
-/** The section a channel lists in: group -> wide (Groups), DM -> square (People). Pure. */
+/** A channel's picture shape: group -> wide, DM -> square. Pure. */
 export function tileKind(channel: Pick<ChannelSummary, 'channelType'>): TileKind {
   return channel.channelType === 'group' ? 'wide' : 'square';
-}
-
-/**
- * Split the (already recency-sorted, filtered) channels into the Groups and
- * People sections, keeping each section's order. Pure.
- */
-export function splitSections<T extends Pick<ChannelSummary, 'channelType'>>(
-  channels: readonly T[],
-): { groups: T[]; people: T[] } {
-  const groups: T[] = [];
-  const people: T[] = [];
-  for (const c of channels) (tileKind(c) === 'wide' ? groups : people).push(c);
-  return { groups, people };
 }
 
 /** The unread pill's text, or null when there is nothing unread (no pill). Pure. */
@@ -471,31 +438,19 @@ export function unreadPillText(unread: number): string | null {
 }
 
 /**
- * The home stack inside the one scroll container, 8px between blocks. Labels
- * and the card lists sit on the 16 edge (CHAT_HOME_EDGE), like the search box
- * above.
+ * The home stack inside the one scroll container, 8px between blocks. The card
+ * list sits on the 16 edge (CHAT_HOME_EDGE), like the search box above.
  */
 export const CHAT_HOME_STACK = 'flex flex-col gap-2';
 
-/** The home's 16 edge for the parts that do not draw their own (the labels). */
+/** The home's 16 edge for the parts that do not draw their own. */
 export const CHAT_HOME_EDGE = 'px-4';
 
 /**
- * Groups and People: one ui/ListCard per chat, 12 between cards, on the
- * home's 16 edge. Personal notes, groups and people are one card style.
+ * The one list: one ui/ListCard per chat, 12 between cards, on the home's 16
+ * edge. Personal notes, groups and people are one card style.
  */
 export const CHAT_ROW_LIST = cn(LIST_CARD_STACK, CHAT_HOME_EDGE);
-
-/** Section label: 12/600 uppercase, 0.06em tracking, secondary ink. */
-export const SECTION_LABEL_TYPE = TEXT_ROLE.section;
-
-/**
- * The label's padding: 4px top for the first section, 12px after, on the
- * home's 16 edge (the row text and the grid start on it too).
- */
-export function sectionLabelClass(first: boolean): string {
-  return cn(SECTION_LABEL_TYPE, CHAT_HOME_EDGE, first ? 'pt-1' : 'pt-3');
-}
 
 /**
  * A chat card's photo slot (ListCard's 72 picture): a person's photo circle
@@ -547,7 +502,7 @@ export function unreadTagText(unread: number): string | null {
 
 /** What a chat shows: the card's slot contents, built once. Hook-free and pure. */
 export interface ChannelRowParts {
-  /** Group (the Groups section) or person (the People section); both are a ListCard. */
+  /** Group or person; both are a ListCard. */
   kind: TileKind;
   /** The chat's display name (chatDisplayName). */
   name: string;
@@ -853,15 +808,8 @@ export function ChannelCard(props: {
   );
 }
 
-/**
- * The Personal notes card: a ui/ListCard above Groups, the notebook icon as
- * its picture, "Personal notes" over the last note (or "Only you can see
- * this"), how long ago the last note landed on line 3. Paints the same in every list state
- * (loading, error, ready) from the session alone, so the first paint is
- * final. No motion. Not selectable in Select mode (inert). Hook-free so it is
- * unit tested.
- */
-export function notesTile(props: {
+/** What the Personal notes card takes. */
+interface NotesCardProps {
   notes: ChannelSummary;
   /** The notes chat's last note, when one is loaded: its preview and time replace the tagline. */
   summary?: ConversationSummary | undefined;
@@ -871,34 +819,48 @@ export function notesTile(props: {
   /** Select mode is on: the tile is inert. */
   selecting: boolean;
   onSelect: (channel: ChannelSummary) => void;
-}): ReactElement {
+}
+
+/**
+ * The Personal notes card: a ui/ListCard, the notebook icon as its picture,
+ * "Personal notes" over the last note (or "Only you can see this"), how long
+ * ago the last note landed on line 3. In the list it sorts in with the chats
+ * by its last note. No motion. Not selectable in Select mode (inert).
+ * Hook-free so it is unit tested.
+ */
+export function notesCard(props: NotesCardProps): ReactElement {
   const { notes, summary } = props;
   const last = notesLastLine(summary, props.nowMs ?? 0, props.timeZone);
   const name = chatDisplayName(notes);
   return (
-    <div className={cn('pb-2', CHAT_HOME_EDGE, NO_TOUCH_SELECT)}>
-      <ListCard
-        data-notes-tile=""
-        picture={{ kind: 'icon', icon: IconFile }}
-        pictureHooks={{ 'data-notes-picture': '' }}
-        title={name}
-        preview={
-          <span data-notes-preview="">{last !== null ? last.preview : NOTES_TILE_LINE}</span>
-        }
-        {...(last !== null && last.time !== ''
-          ? { time: last.time, timeHooks: { 'data-notes-time': '' } }
-          : {})}
-        disabled={props.selecting}
-        selected={props.selected && !props.selecting}
-        press={{ 'aria-label': `Open ${name}` }}
-        onPress={() => {
-          if (props.selecting) return;
-          // A thread selecting messages exits that first (history.back()).
-          leaveSelectionThen(() => props.onSelect(notes));
-        }}
-      />
-    </div>
+    <ListCard
+      data-notes-tile=""
+      picture={{ kind: 'icon', icon: IconFile }}
+      pictureHooks={{ 'data-notes-picture': '' }}
+      title={name}
+      preview={<span data-notes-preview="">{last !== null ? last.preview : NOTES_TILE_LINE}</span>}
+      {...(last !== null && last.time !== ''
+        ? { time: last.time, timeHooks: { 'data-notes-time': '' } }
+        : {})}
+      disabled={props.selecting}
+      selected={props.selected && !props.selecting}
+      press={{ 'aria-label': `Open ${name}` }}
+      onPress={() => {
+        if (props.selecting) return;
+        // A thread selecting messages exits that first (history.back()).
+        leaveSelectionThen(() => props.onSelect(notes));
+      }}
+    />
   );
+}
+
+/**
+ * The notes card on its own, above the list body while the list is loading,
+ * failed or empty: it paints from the session alone, so the first paint is
+ * final. Hook-free.
+ */
+export function notesTile(props: NotesCardProps): ReactElement {
+  return <div className={cn('pb-2', CHAT_HOME_EDGE, NO_TOUCH_SELECT)}>{notesCard(props)}</div>;
 }
 
 /**
@@ -916,28 +878,21 @@ export function notesLastLine(
   return { preview, time: formatAgo(summary.lastMessageTs, new Date(nowMs), timeZone) };
 }
 
-/** A chat home chip: Starred, or one of the message search kinds. */
-export type HomeChip = SearchKind | 'starred';
+/** A chat home chip: one of the message search kinds. */
+export type HomeChip = SearchKind;
 
-/** The chat home chips in order: Starred first, then the search kinds. */
-export const HOME_CHIPS: readonly { kind: HomeChip; label: string }[] = [
-  { kind: 'starred', label: STARRED_TITLE },
-  ...SEARCH_CHIPS,
-];
+/** The chat home chips in order: the search kinds. */
+export const HOME_CHIPS: readonly { kind: HomeChip; label: string }[] = SEARCH_CHIPS;
 
 /** One chip at a time: tapping the active one clears it, another replaces it. Pure. */
 export function toggleHomeChip(current: HomeChip | null, tapped: HomeChip): HomeChip | null {
   return current === tapped ? null : tapped;
 }
 
-/** The message search kind a chip runs (Starred runs none). Pure. */
-export function searchKindOf(chip: HomeChip | null): SearchKind | null {
-  return chip === null || chip === 'starred' ? null : chip;
-}
-
 /**
- * The chips under the search box: Starred, then Photos, Videos, Links, Files,
- * Voice notes (WhatsApp's order). One at a time (tap again to clear). Each is ui/Chip with its
+ * The chips under the search box: Photos, Videos, Links, Files,
+ * Voice notes (WhatsApp's order). One at a time: tap it again, or its X,
+ * to clear and return to the list (no All chip). Each is ui/Chip with its
  * selected style, as on the other list pages (no counts: these filter
  * messages, nothing is tallied); the row scrolls on X when it overflows (no
  * scrollbar), chips never wrap or shrink. Tokens only, no motion. Hook-free.
@@ -964,6 +919,7 @@ export function searchChips(props: {
             data-search-chip={chip.kind}
             aria-pressed={on}
             onClick={() => props.onChange(toggleHomeChip(props.kind, chip.kind))}
+            onClear={on ? () => props.onChange(null) : undefined}
             className={cn('shrink-0 whitespace-nowrap', NO_TOUCH_SELECT)}
           />
         );
@@ -1127,6 +1083,11 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
   const searching = props.searchResults !== undefined && showSearchResults(props.search, kind);
   const onKindChange = props.onKindChange;
   const layout = channelListClasses(props.pageScroll === true);
+  // Personal notes sorts in with the chats once the list is in; while it is
+  // loading, failed or empty, its card sits above the body (from the session).
+  const notesInList = props.notes !== undefined && hasChannels;
+  const listed =
+    notesInList && props.notes !== undefined ? [...props.channels, props.notes] : props.channels;
   return (
     <div className={layout.column}>
       {selecting !== undefined ? (
@@ -1174,7 +1135,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
       )}
       <div className={layout.body}>
         {props.lead !== undefined && !searching ? props.lead : null}
-        {props.notes !== undefined && !searching
+        {props.notes !== undefined && !searching && !notesInList
           ? notesTile({
               notes: props.notes,
               summary: summaryFor(props.notes.channelId),
@@ -1193,7 +1154,8 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
               : searching
                 ? props.searchResults
                 : channelListView({
-                    channels: visibleChannels(props.channels, summaryFor, isHidden, props.search),
+                    channels: visibleChannels(listed, summaryFor, isHidden, props.search),
+                    ...(notesInList && props.notes !== undefined ? { notes: props.notes } : {}),
                     hasChannels: hasChannels || props.search.trim() !== '',
                     search: props.search,
                     onClearSearch: () => props.onSearchChange(''),
@@ -1232,37 +1194,16 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
   );
 }
 
-/** Confirm title: "Hide this chat?" / "Hide N chats?". Pure. */
-export function hideChatsTitle(count: number): string {
-  return count === 1 ? 'Hide this chat?' : `Hide ${count} chats?`;
+/** The Undo toast after a hide: "Chat hidden" / "3 chats hidden". Pure. */
+export function hiddenChatsLabel(count: number): string {
+  return count === 1 ? 'Chat hidden' : `${count} chats hidden`;
 }
 
-/** Confirm body: the hide is local to the caller and undone by a new message. */
-export const DELETE_CHATS_MESSAGE =
-  'Hidden for you only. It comes back if someone sends a new message.';
-
-/**
- * The delete-for-me confirm, or null when nothing is pending. Hook-free so the
- * confirm and cancel wiring are unit tested by calling the dialog's handlers.
- */
-export function deleteChatsConfirm(props: {
-  channels: readonly ChannelSummary[] | null;
-  busy: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}): ReactElement | null {
-  if (props.channels === null) return null;
-  return (
-    <ConfirmDialog
-      title={hideChatsTitle(props.channels.length)}
-      message={DELETE_CHATS_MESSAGE}
-      confirmLabel="Hide"
-      busyLabel="Hiding"
-      busy={props.busy}
-      onCancel={props.onCancel}
-      onConfirm={props.onConfirm}
-    />
-  );
+/** A hide that did not save: the chat it stopped at (the failure toast names it). */
+class HideFailed extends Error {
+  constructor(readonly channel: ChannelSummary) {
+    super('hide failed');
+  }
 }
 
 /** Scrollable channel list pane with the shared search/create header. */
@@ -1271,24 +1212,22 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   const [search, setSearch] = useState('');
   // The filter chip: one at a time, tap again to clear.
   const [kind, setKind] = useState<HomeChip | null>(null);
-  // The Starred list's Edit mode; any chip change leaves it.
-  const [starEditing, setStarEditing] = useState(false);
-  useEffect(() => setStarEditing(false), [kind]);
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // The chat whose row menu is open (ActionMenu: a sheet on phone, a popover at its ⋯ on laptop).
   const [menu, setMenu] = useState<ChannelSummary | null>(null);
-  const [confirm, setConfirm] = useState<ChannelSummary[] | null>(null);
-  const [busy, setBusy] = useState(false);
-  const toast = useToast();
+  // Chats hidden behind the Undo toast: they leave the list at once and the
+  // hide (chat_channel_clear) runs only when the toast ends; Undo puts them back.
+  const [pendingHidden, setPendingHidden] = useState<ReadonlySet<string>>(new Set());
+  const undoable = useUndoableAction();
   const { state } = useChatStore();
   const summaryFor = useCallback<SummaryLookup>(
     (channelId) => selectConversation(state, channelId),
     [state],
   );
   const isHidden = useCallback<HiddenLookup>(
-    (channelId) => selectHidden(state, channelId),
-    [state],
+    (channelId) => pendingHidden.has(channelId) || selectHidden(state, channelId),
+    [state, pendingHidden],
   );
   // Drafts live outside React; re-read the rows whenever one changes.
   const drafts = useSyncExternalStore(subscribeDrafts, draftsVersion, draftsVersion);
@@ -1304,20 +1243,36 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     setSelectedIds(new Set());
   };
 
-  async function runDelete(list: ChannelSummary[]): Promise<void> {
-    if (onDeleteChats === undefined || busy || list.length === 0) return;
-    setBusy(true);
-    const result = await onDeleteChats(list);
-    setBusy(false);
-    setConfirm(null);
-    if (result.ok) {
-      exitSelect();
-      return;
-    }
-    toast.show({ title: deleteChatFailedMessage(chatDisplayName(result.failed)) });
-    // The chats before the failed one are gone; keep the rest checked.
-    const at = list.findIndex((c) => c.channelId === result.failed.channelId);
-    setSelectedIds(new Set(list.slice(Math.max(0, at)).map((c) => c.channelId)));
+  // Hide (the row menu, or the select-mode bar): no confirm. The chats leave
+  // the list at once behind the Undo toast (UNDO_MS); the hide is written when
+  // the toast ends. Undo, or a hide that fails, puts them back in place (the
+  // list is sorted, so they land where they were).
+  function hideChats(list: readonly ChannelSummary[]): void {
+    if (onDeleteChats === undefined || list.length === 0) return;
+    const ids = list.map((c) => c.channelId);
+    const unpend = (): void =>
+      setPendingHidden((prev) => new Set([...prev].filter((id) => !ids.includes(id))));
+    setPendingHidden((prev) => new Set([...prev, ...ids]));
+    exitSelect();
+    undoable.run({
+      label: hiddenChatsLabel(list.length),
+      failure: (error) =>
+        deleteChatFailedMessage(
+          error instanceof HideFailed
+            ? chatDisplayName(error.channel)
+            : list.length === 1
+              ? chatDisplayName(list[0] as ChannelSummary)
+              : 'the chats',
+          error instanceof HideFailed ? null : error,
+        ),
+      commit: async () => {
+        const result = await onDeleteChats([...list]);
+        // Hidden in the store now (or put back below): the pending set lets go.
+        unpend();
+        if (!result.ok) throw new HideFailed(result.failed);
+      },
+      revert: unpend,
+    });
   }
 
   // One layout listener (and hover / coarse query) for the whole list.
@@ -1331,15 +1286,13 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   const { state: searchState, runner: searchRunner } = useMessageSearch({
     workspaceId: listWorkspaceId,
   });
-  // Starred lists stars, never message hits: the search stays idle under it.
   useEffect(() => {
-    if (kind === 'starred') searchRunner?.setQuery('', null);
-    else searchRunner?.setQuery(search, searchKindOf(kind));
+    searchRunner?.setQuery(search, kind);
   }, [searchRunner, search, kind]);
   // Media chips (WhatsApp): the items themselves. The chip's first page is
   // kept on the device (`chat:media:{kind}`), so a tap paints from it before
   // any read; the network page swaps in under the same keys (no blink).
-  const mediaKind = searchKindOf(kind);
+  const mediaKind = kind;
   const mediaKey =
     mediaKind !== null && currentUserId !== null && listWorkspaceId !== null
       ? readKey(currentUserId, listWorkspaceId, mediaCacheWhat(mediaKind))
@@ -1365,7 +1318,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     primeRead<MediaCacheValue>(mediaKey, { kind: mediaKind, items });
   }, [mediaKey, mediaKind, searchState]);
   const onKindChange = useCallback((next: HomeChip | null) => {
-    if (next !== null && next !== 'starred') mark('chat:chip:tap');
+    if (next !== null) mark('chat:chip:tap');
     setKind(next);
   }, []);
   // Hits in notes carry its name ("Personal notes") and notebook.
@@ -1392,37 +1345,12 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [props.onSelect],
   );
-  const onOpenStarred = props.onOpenStarred;
+  const onOpenAtMessage = props.onOpenAtMessage;
   // The list's one clock: every card's "5m" ages together, once a
   // minute, from one shared interval (no timer per card).
   const nowMs = useMinuteClock();
   const searchResults =
-    kind === 'starred' ? (
-      <div data-starred-home="" className="px-4 pb-4 pt-1">
-        <StarredList
-          channelId={null}
-          query={search}
-          onClearQuery={() => setSearch('')}
-          showChat
-          channelsById={channelsById}
-          currentUserId={currentUserId ?? ''}
-          {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
-          nowMs={nowMs}
-          inlineEdit
-          editing={starEditing}
-          onEditingChange={setStarEditing}
-          onOpen={(row) => {
-            const channel = channelsById.get(row.channelId);
-            if (channel === undefined) return;
-            leaveSelectionThen(() =>
-              onOpenStarred !== undefined
-                ? onOpenStarred(channel, row.id)
-                : props.onSelect(channel),
-            );
-          }}
-        />
-      </div>
-    ) : mediaKind !== null ? (
+    mediaKind !== null ? (
       <MediaResults
         kind={mediaKind}
         query={search}
@@ -1442,8 +1370,8 @@ export function ChannelList(props: ChannelListProps): ReactElement {
           const channel = channelsById.get(channelId);
           if (channel === undefined) return;
           leaveSelectionThen(() =>
-            onOpenStarred !== undefined
-              ? onOpenStarred(channel, messageId)
+            onOpenAtMessage !== undefined
+              ? onOpenAtMessage(channel, messageId)
               : props.onSelect(channel),
           );
         }}
@@ -1451,7 +1379,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     ) : showSearchResults(search, kind) ? (
       <SearchResults
         query={search}
-        kind={searchKindOf(kind)}
+        kind={kind}
         chats={visibleChannels(props.channels, summaryFor, isHidden, search)}
         state={searchState}
         runner={searchRunner}
@@ -1501,23 +1429,15 @@ export function ChannelList(props: ChannelListProps): ReactElement {
                     return next;
                   }),
                 onDelete: () =>
-                  setConfirm(props.channels.filter((c) => selectedIds.has(c.channelId))),
+                  hideChats(props.channels.filter((c) => selectedIds.has(c.channelId))),
               },
               onLongPress: (channel: ChannelSummary) => setMenu(channel),
               menuOpenId: menu?.channelId ?? null,
               onMenuClose: closeMenu,
-              onHide: (channel: ChannelSummary) => setConfirm([channel]),
+              onHide: (channel: ChannelSummary) => hideChats([channel]),
             }
           : {}),
       })}
-      {onDeleteChats !== undefined
-        ? deleteChatsConfirm({
-            channels: confirm,
-            busy,
-            onCancel: () => setConfirm(null),
-            onConfirm: () => void runDelete(confirm ?? []),
-          })
-        : null}
     </>
   );
 }

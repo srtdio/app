@@ -40,11 +40,7 @@ import { runSend } from '@/lib/chat/send-flow';
 import { mentionTargets } from '@/lib/chat/mentions';
 import { windowFocusTrigger } from '@/lib/chat/catch-up';
 import { deleteSelectionBlock, forwardPickerChannels } from '@/lib/chat/forward';
-import {
-  messageMenuItems,
-  moreMenuItems,
-  ownMessageActions,
-} from '@/components/chat/MessageActionMenu';
+import { messageMenuItems, ownMessageActions } from '@/components/chat/MessageActionMenu';
 import { channelHasClient, draftTileEnabled, trayTiles } from '@/components/chat/ComposerTray';
 import { ThreadHeaderIdentity, threadStripSlot } from '@/components/chat/MessageThread';
 import { channelListContent, showSearchResults } from '@/components/chat/ChannelList';
@@ -314,43 +310,32 @@ function menuProps(props: Partial<MenuProps>): MenuProps {
     onForward: () => {},
     canSelectText: true,
     onSelectText: () => {},
-    canRemind: true,
-    onRemind: () => {},
     ...props,
   };
 }
 
-/** The top-level rows. */
+/** The rows, one level. */
 function labels(props: Partial<MenuProps>): string[] {
   return messageMenuItems(menuProps(props)).map((item) => item.label);
 }
 
-/** The rows under More. */
-function moreLabels(props: Partial<MenuProps>): string[] {
-  return moreMenuItems(menuProps(props)).map((item) => item.label);
-}
-
 describe('menu matrix', () => {
-  it('DM and group: Save to notes sits under More, after Select and before Remind me', () => {
-    const wiring = {
+  it('DM and group: Save to notes sits after Forward and before Edit', () => {
+    const rows = labels({
       canSaveToNotes: true,
       onSaveToNotes: () => {},
-      markOptions: ['commitment' as const],
-      onMark: () => {},
-    };
-    expect(labels(wiring)).toContain('More');
-    expect(labels(wiring)).not.toContain('Save to notes');
-    const rows = moreLabels(wiring);
-    const select = rows.indexOf('Select');
+      canEdit: true,
+      onEdit: () => {},
+    });
+    expect(rows).not.toContain('More');
     const save = rows.indexOf('Save to notes');
-    expect(save).toBeGreaterThan(select);
-    expect(rows.indexOf('Remind me')).toBeGreaterThan(save);
-    expect(rows).toContain('Mark as');
+    expect(save).toBeGreaterThan(rows.indexOf('Forward'));
+    expect(save).toBeLessThan(rows.indexOf('Edit'));
   });
 
-  it('notes: no Mark as, no Save to notes; Edit and Delete for an hour-old own note, no hints', () => {
+  it('notes: no Save to notes; Edit and Delete for an hour-old own note, no hints', () => {
     const own = message({ mine: true, senderUserId: ME, body: 'note' });
-    const actions = ownMessageActions(own, undefined, NOW, true);
+    const actions = ownMessageActions(own, NOW, true);
     expect(actions.canDelete).toBe(true);
     expect(actions.canEdit).toBe(true);
     const props: MenuProps = {
@@ -364,27 +349,25 @@ describe('menu matrix', () => {
       notes: true,
     };
     const items = messageMenuItems(props);
-    const rows = [...items, ...moreMenuItems(props)].map((i) => i.label);
-    expect(rows).not.toContain('Mark as');
-    expect(rows).not.toContain('Save to notes');
-    const edit = items.find((i) => i.kind === 'action' && i.key === 'edit');
+    expect(items.map((i) => i.label)).not.toContain('Save to notes');
+    const edit = items.find((i) => i.key === 'edit');
     expect(edit).toBeDefined();
-    expect(edit?.kind === 'action' ? edit.hint : 'x').toBeUndefined();
-    const del = items.find((i) => i.kind === 'action' && i.key === 'delete');
+    expect(edit?.hint).toBeUndefined();
+    const del = items.find((i) => i.key === 'delete');
     expect(del).toBeDefined();
-    expect(del?.kind === 'action' ? del.hint : 'x').toBeUndefined();
+    expect(del?.hint).toBeUndefined();
   });
 
   it('a DM keeps its 30 minute delete window', () => {
     const own = message({ mine: true, senderUserId: ME, body: 'x' });
-    expect(ownMessageActions(own, undefined, NOW).canDelete).toBe(false);
+    expect(ownMessageActions(own, NOW).canDelete).toBe(false);
     const ids = new Set([own.id]);
-    expect(deleteSelectionBlock(ids, [own], new Map(), NOW)).toBe('old');
-    expect(deleteSelectionBlock(ids, [own], new Map(), NOW, true)).toBeNull();
+    expect(deleteSelectionBlock(ids, [own], NOW)).toBe('old');
+    expect(deleteSelectionBlock(ids, [own], NOW, true)).toBeNull();
   });
 
-  it('notes tray has no Schedule tile (7 tiles); other chats keep it', () => {
-    expect(trayTiles('touch', { schedule: false }).map((t) => t.id)).toEqual([
+  it('the tray has no Schedule tile (7 tiles); notes says why Plan is off', () => {
+    expect(trayTiles('touch', { notes: true }).map((t) => t.id)).toEqual([
       'photos',
       'file',
       'assets',
@@ -394,25 +377,23 @@ describe('menu matrix', () => {
       'plan',
     ]);
     // Notes never shares a plan: the tile stays faded there and says why.
-    expect(trayTiles('touch', { schedule: false }).find((t) => t.id === 'plan')?.ariaLabel).toBe(
+    expect(trayTiles('touch', { notes: true }).find((t) => t.id === 'plan')?.ariaLabel).toBe(
       'Plan, not available in Personal notes',
     );
-    expect(trayTiles('touch', { schedule: false }).find((t) => t.id === 'plan')?.disabled).toBe(
-      true,
-    );
-    expect(trayTiles('touch').map((t) => t.id)).toContain('schedule');
+    expect(trayTiles('touch', { notes: true }).find((t) => t.id === 'plan')?.disabled).toBe(true);
+    expect(trayTiles('touch').map((t) => t.id)).not.toContain('schedule');
   });
 
   it('notes: Draft is live for an agency-side viewer (no other members, so no client)', () => {
     const hasClient = channelHasClient([]);
     expect(hasClient).toBe(false);
     const tiles = trayTiles('touch', {
-      schedule: false,
+      notes: true,
       draft: draftTileEnabled('agency', hasClient),
     });
     expect(tiles.find((t) => t.id === 'draft')?.disabled).toBeUndefined();
     const asClient = trayTiles('touch', {
-      schedule: false,
+      notes: true,
       draft: draftTileEnabled('client', hasClient),
     });
     expect(asClient.find((t) => t.id === 'draft')?.disabled).toBe(true);
@@ -537,9 +518,9 @@ describe('notes thread chrome', () => {
     expect(html).not.toContain('<button');
   });
 
-  it('no open-loops strip without marks (notes pass none)', () => {
-    expect(threadStripSlot({ hasMarks: false, selecting: false })).toBeNull();
-    expect(threadStripSlot({ hasMarks: true, selecting: false })).toBe('loops');
+  it('no status strip off the chat page (notes)', () => {
+    expect(threadStripSlot({ chatPage: false, selecting: false })).toBeNull();
+    expect(threadStripSlot({ chatPage: true, selecting: false })).toBe('loops');
   });
 });
 

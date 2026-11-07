@@ -57,3 +57,29 @@ describe('Chip aria', () => {
     expect(idle).not.toContain('data-selected');
   });
 });
+
+describe('Chip onClear', () => {
+  it('unset: the chip renders exactly as before (no wrapper, no X, no spacer)', () => {
+    const html = renderToStaticMarkup(<Chip label="Open" selected />);
+    expect(html.startsWith('<button')).toBe(true);
+    expect(html).not.toContain('data-chip-clear');
+    expect(html).not.toContain('aria-hidden');
+  });
+
+  it('set: a sibling 44x44 X labelled "Clear <label> filter" in the chip ink', () => {
+    const html = renderToStaticMarkup(<Chip label="Photos" selected onClear={() => undefined} />);
+    expect(html.startsWith('<span data-chip-clearable')).toBe(true);
+    const buttons = html.match(/<button[^>]*>/g) ?? [];
+    expect(buttons).toHaveLength(2);
+    // Never a button inside a button: the chip closes before the X opens.
+    expect(html.indexOf('</button>')).toBeLessThan(html.lastIndexOf('<button'));
+    const x = buttons[1] ?? '';
+    expect(x).toContain('aria-label="Clear Photos filter"');
+    expect(x).toContain('min-h-11 w-11');
+    expect(x).toContain('text-accent-fg');
+    // The chip keeps its selected look and reserves the glyph's width.
+    expect(buttons[0]).toContain('bg-accent text-accent-fg lit-pill');
+    expect(buttons[0]).toContain('min-h-11 px-4');
+    expect(html).toContain('<span aria-hidden="true" class="w-4 shrink-0"></span>');
+  });
+});
