@@ -70,6 +70,7 @@ import {
   type RowSelection,
   SELECTED_ROW_TINT,
   tombstoneClass,
+  DELETE_FOR_ME_ROW,
   OWN_BUBBLE_CONTENT,
   SwipeReplyIcon,
   THREAD_LIST_CLASS,
