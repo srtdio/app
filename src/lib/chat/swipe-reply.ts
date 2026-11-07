@@ -28,6 +28,26 @@ interface SwipePointerSample {
   pointerId?: number;
   /** Event time (ms); absent reads the controller's clock. */
   timeStamp?: number;
+  /**
+   * The pressed element (React's currentTarget, else the target), read on the
+   * press only: a scroll cancels the swipe only when its scroller holds it.
+   * Absent: any scroll cancels.
+   */
+  currentTarget?: EventTarget | null;
+  target?: EventTarget | null;
+}
+
+/** An Element or the Document: something a scroll event can come from that may hold the press. */
+interface ScrollSource {
+  contains: (other: Node | null) => boolean;
+}
+
+/** The event target as a ScrollSource (duck-typed: no DOM globals needed). */
+function scrollSource(target: unknown): ScrollSource | null {
+  if (target === null || typeof target !== 'object') return null;
+  return typeof (target as { contains?: unknown }).contains === 'function'
+    ? (target as ScrollSource)
+    : null;
 }
 
 /** What the view paints: the bubble's translateX and the reply icon's state. */
@@ -190,6 +210,8 @@ export function createSwipeReplyController({
   let startY = 0;
   let dx = 0;
   let pointerId: number | undefined;
+  /** The pressed element (see SwipePointerSample.currentTarget); null: unknown. */
+  let pressed: Node | null = null;
   let buzzed = false;
   let suppressClick = false;
   /** Recent (x, t) samples for the release velocity. */
@@ -197,12 +219,25 @@ export function createSwipeReplyController({
   let pending: SwipeFrame | null = null;
   let rafHandle: number | null = null;
 
+  /**
+   * A scroll the press moves with (the window, or a scroller around the
+   * pressed row) ends the swipe: the list scrolled. Any other scroller is not
+   * the press's business: the chat thread behind the Tasks sheet pinning to a
+   * new line (an autosave landing) must not end a task row's swipe. With no
+   * pressed element known, every scroll cancels.
+   */
+  function onScroll(event?: Event): void {
+    const from = scrollSource(event?.target);
+    if (pressed !== null && from !== null && !from.contains(pressed)) return;
+    cancel();
+  }
+
   function attachScroll(): void {
-    if (typeof window !== 'undefined') window.addEventListener('scroll', cancel, true);
+    if (typeof window !== 'undefined') window.addEventListener('scroll', onScroll, true);
   }
 
   function detachScroll(): void {
-    if (typeof window !== 'undefined') window.removeEventListener('scroll', cancel, true);
+    if (typeof window !== 'undefined') window.removeEventListener('scroll', onScroll, true);
   }
 
   function dropFrame(): void {
@@ -235,6 +270,7 @@ export function createSwipeReplyController({
     dx = 0;
     samples = [];
     pointerId = undefined;
+    pressed = null;
     detachScroll();
     dropFrame();
     if (moved) onFrame({ ...SWIPE_REST, side, animate: !reducedMotion() });
@@ -284,6 +320,9 @@ export function createSwipeReplyController({
     startX = event.clientX;
     startY = event.clientY;
     pointerId = event.pointerId;
+    // Only an element (anything with contains) counts as the press's node.
+    const node = event.currentTarget ?? event.target ?? null;
+    pressed = scrollSource(node) !== null ? (node as Node) : null;
     samples = [{ x: event.clientX, t: event.timeStamp ?? now() }];
     attachScroll();
   }
