@@ -1739,7 +1739,7 @@ export function Composer(props: ComposerProps): ReactElement {
 
   const draftCardUrl = draftCardUrlFor(cardText, dismissedCardUrl, editing !== undefined);
 
-  // The @ and # pickers slide up above the writing box (edgeStrip, never a
+  // The mention and hashtag pickers slide up above the writing box (edgeStrip, never a
   // fade). Handed to the box as its overlay: above the box at rest, above its
   // row inside the full-screen phone editor.
   const pickers = (

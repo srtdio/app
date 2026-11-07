@@ -415,9 +415,14 @@ export function WritingBox(props: WritingBoxProps) {
     // The live format mirror follows the field's new size (Textarea listens).
     window.dispatchEvent(new Event('resize'));
   }, [phoneExpanded, host, field]);
+  // Only the phone editor's spot on <body> needs a cleanup: in its slot the box
+  // leaves with the slot. Never detached from its slot here, so a remount of
+  // effects (Strict Mode) does not blur an autoFocus field.
   useEffect(
     () => () => {
-      if (host !== null) host.parentNode?.removeChild(host);
+      if (host !== null && host.parentNode !== null && host.parentNode === document.body) {
+        host.parentNode.removeChild(host);
+      }
     },
     [host],
   );
