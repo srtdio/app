@@ -233,9 +233,9 @@ describe('fix 32: one word for done, one count', () => {
     // The section header is "Checkpoints" with no count; the chips row owns it.
     expect(host?.querySelector('[data-open-count]')).toBeNull();
     expect(host?.querySelector('[data-comments-header]')?.textContent).not.toMatch(/resolved/);
-    const text = host?.textContent ?? '';
-    expect(text).toContain('Open');
-    expect(text).toContain('Resolved');
+    // The circle carries the point's state: open ring, filled once confirmed.
+    expect(host?.querySelector('[data-checkpoint-circle="open"]')).toBeTruthy();
+    expect(host?.querySelector('[data-checkpoint-circle="confirmed"]')).toBeTruthy();
   });
 });
 
@@ -279,7 +279,7 @@ describe('fix 42: Resolve is one tap with a 4 second Undo strip', () => {
 
     const tap = buttonByAria('Resolve checkpoint 1');
     expect(tap).toBeDefined();
-    expect(tap?.textContent).toBe('Resolved');
+    expect(tap?.textContent).toBe('Resolve');
     act(() => tap?.click());
 
     expectNoNoteStep();

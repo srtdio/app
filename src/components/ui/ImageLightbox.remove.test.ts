@@ -70,7 +70,8 @@ describe('ImageLightbox bin', () => {
     expect(REMOVE_IMAGE_LABEL).toBe('Remove photo');
     expect(source).toContain('current.onRemove !== undefined ? (');
     expect(source).toContain('aria-label={current.removeLabel ?? REMOVE_IMAGE_LABEL}');
-    expect(source.indexOf('<IconTrash')).toBeLessThan(source.indexOf('<DownloadControl'));
+    // The toolbar's Download is the last one in the file (the comment back bar has its own).
+    expect(source.indexOf('<IconTrash')).toBeLessThan(source.lastIndexOf('<DownloadControl'));
   });
 
   it('a tap removes, then closes on the last image or moves on', () => {

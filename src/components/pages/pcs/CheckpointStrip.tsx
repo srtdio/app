@@ -1,14 +1,19 @@
-// The checkpoint strip on PCS: a sticky, single-row index of the post's
-// checkpoint comments. The comment feed now owns every checkpoint's body, state
-// and controls; the strip is only a jump index into it. It shows one chip per
-// checkpoint (its ledger_seq, or a tick once resolved), coloured by its one of
-// two visible states: Open or Resolved. Beside the chips it reads its progress,
-// "{n} of {m} resolved" (checkpointProgressText); no banner.
-// Activating a chip scrolls to and rings that checkpoint's row in the feed. No
-// checkpoint text and no controls live here. When the post has no checkpoints
-// the strip renders nothing.
+// The post's checkpoint progress row: one circle per checkpoint comment (its
+// ledger_seq, or a tick once resolved) and the progress text "{n} of {m}
+// resolved" (checkpointProgressText). It is part of the post screen's pinned
+// block, directly under the exit bar (ui/HeaderBar `below`), so it stays on
+// screen while the page scrolls; the floating sticky strip inside the comments
+// card is retired. The read and the live state are one hook
+// (useCheckpointProgress): the host's shared checkpoint read (or its own), with
+// the comments list's live state (LiveCheckpointsContext, optimistic taps
+// included) laid over it. The component is mounted inside the comments list
+// (belowHeader, where that context lives) and portals the row into the pinned
+// slot, so the context reaches it with no second read. Tapping a circle scrolls
+// to and flashes that checkpoint's row in the feed (flashNode). No checkpoint
+// text and no controls live here. No checkpoints: nothing renders.
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { IconButton } from '@/components/ui/IconButton';
 import type { ReactElement } from 'react';
 import {
@@ -24,6 +29,7 @@ import {
 } from '@/components/pages/pcs/checkpoint-controls';
 import { ICON_SIZE, IconCheck } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
+import { GUTTER } from '@/components/ui/layout';
 import { supabase } from '@/lib/supabase';
 import type { CommentRow } from '@srtdio/comments';
 
@@ -135,9 +141,6 @@ export function checkpointChips(rows: readonly CheckpointChipRow[]): ReactElemen
   });
 }
 
-/** The strip's sticky surface: the same token as the comments card it sits in. */
-export const STRIP_SURFACE_CLASS = 'bg-panel-2';
-
 /** Overlay the comments list's live state onto the strip's own read. Pure. */
 function withLiveState(
   rows: readonly CheckpointChipRow[],
@@ -152,31 +155,34 @@ function withLiveState(
   });
 }
 
-export interface CheckpointStripProps {
+export interface CheckpointProgressInput {
   workspaceId: string;
   postId: string;
-  /** True when the viewer's workspace role is 'client'. Kept for the page's
-   *  call site; the strip reads the same for both sides now. */
-  viewerIsClient: boolean;
   /** Bumped by the page (shared with Comments) to refetch. */
   refreshSignal: number;
   /** Lifted counts so the page renders its header chip without a second fetch. */
   onCounts?: (counts: CheckpointCounts) => void;
   /**
    * The host's one checkpoint read (PostDetailPage, shared with Comments); null
-   * until it lands. When set the strip never reads on its own and the host
-   * owns every refresh. Absent: the strip reads itself, as before.
+   * until it lands. When set the hook never reads on its own and the host
+   * owns every refresh. Absent: the hook reads itself, as before.
    */
   checkpoints?: readonly SharedCheckpointRow[] | null;
 }
 
-export function CheckpointStrip({
+/**
+ * The checkpoint progress read and live state: the rows to draw (ledger_seq
+ * order, live state laid over) and their counts. Must run under the comments
+ * list (LiveCheckpointsContext) so a Resolve, Confirm or Undo repaints a circle
+ * in the same render as its row; outside it the read alone shows.
+ */
+export function useCheckpointProgress({
   workspaceId,
   postId,
   refreshSignal,
   onCounts,
   checkpoints,
-}: CheckpointStripProps): ReactElement | null {
+}: CheckpointProgressInput): { rows: CheckpointChipRow[]; counts: CheckpointCounts } {
   const [ownRows, setRows] = useState<CheckpointChipRow[]>([]);
   const [ownLoaded, setLoaded] = useState(false);
   const shared = checkpoints !== undefined;
@@ -194,7 +200,7 @@ export function CheckpointStrip({
   }, [postId]);
 
   // Self-fetch, mirroring the feed: one plain RLS-scoped select of this post's
-  // checkpoint rows, narrowed to the columns the chips and counter need. One
+  // checkpoint rows, narrowed to the columns the circles and counter need. One
   // query, never a query inside a loop. A failed read keeps whatever was shown.
   // A host-owned read (checkpoints set) replaces it: no read here.
   const load = useCallback(async (): Promise<void> => {
@@ -226,37 +232,46 @@ export function CheckpointStrip({
   }, [refreshSignal, load]);
 
   // The comments list's live state (its optimistic Resolve / Reopen / Confirm /
-  // Undo included) wins over this read, so a chip changes in the same paint as
+  // Undo included) wins over this read, so a circle changes in the same paint as
   // the row and the header count. No refetch.
   const live = useContext(LiveCheckpointsContext);
   const shown = useMemo(() => withLiveState(rows, live), [rows, live]);
+  const counts = useMemo(() => checkpointCounts(shown), [shown]);
 
   // Lift the counts once a fetch has landed so the page chip / tab badge stay
   // derived from this one read.
   useEffect(() => {
     if (!loaded) return;
-    onCounts?.(checkpointCounts(shown));
-  }, [shown, loaded, onCounts]);
+    onCounts?.(counts);
+  }, [counts, loaded, onCounts]);
 
-  if (shown.length === 0) return null;
-  const counts = checkpointCounts(shown);
+  return { rows: shown, counts };
+}
 
-  // The sticky background is the comments card's own surface (bg-panel-2), so
-  // the strip never reads as a different-coloured band while pinned. In page
-  // mode (phone, touch tablet) the window scrolls, so it pins below the sticky
-  // header and status-bar strip (--shell-sticky-top); 0 inside a laptop scroller.
+/**
+ * The row itself: the circles (horizontal scroll only, never wrapping, so a
+ * twenty-point post stays one 48px row) and "{n} of {m} resolved". `pinned`
+ * (under the exit bar): the page gutter and a top hairline, the bar's block
+ * carrying the surface and its lit-header; in place (embedded): no edge of its
+ * own. Pure.
+ */
+export function CheckpointProgressRow({
+  rows,
+  counts,
+  pinned,
+}: {
+  rows: readonly CheckpointChipRow[];
+  counts: CheckpointCounts;
+  pinned: boolean;
+}): ReactElement {
   return (
     <div
-      data-checkpoint-strip=""
-      className={cn(
-        'sticky top-[var(--shell-sticky-top,0px)] z-raised flex border-b py-2 lit-header',
-        STRIP_SURFACE_CLASS,
-      )}
+      data-checkpoint-progress-row=""
+      className={cn('flex h-12 min-w-0 items-center', pinned && cn('border-t', GUTTER))}
     >
-      {/* axis: horizontal scroll only (overflow-x). Never overflow-y, never wrap:
-          a twenty-point post stays one row and never grows vertically. */}
+      {/* axis: horizontal scroll only (overflow-x). Never overflow-y, never wrap. */}
       <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-        {checkpointChips(shown)}
+        {checkpointChips(rows)}
       </div>
       <span
         data-checkpoint-progress=""
@@ -266,4 +281,28 @@ export function CheckpointStrip({
       </span>
     </div>
   );
+}
+
+export interface CheckpointProgressProps extends CheckpointProgressInput {
+  /**
+   * The pinned slot under the screen's exit bar (HeaderBar `below`): the row
+   * portals into it. null while the slot is not mounted or the section is
+   * still hidden behind the first-paint skeleton: nothing renders. Absent
+   * (embedded in a plan item, no bar of its own): the row renders in place.
+   */
+  target?: HTMLElement | null;
+}
+
+/** The progress row, wherever the host pins it. Nothing when there are no checkpoints. */
+export function CheckpointProgress({
+  target,
+  ...input
+}: CheckpointProgressProps): ReactElement | null {
+  const { rows, counts } = useCheckpointProgress(input);
+  if (rows.length === 0) return null;
+  if (target === undefined) {
+    return <CheckpointProgressRow rows={rows} counts={counts} pinned={false} />;
+  }
+  if (target === null) return null;
+  return createPortal(<CheckpointProgressRow rows={rows} counts={counts} pinned />, target);
 }

@@ -124,7 +124,7 @@ vi.mock('@/components/comments/Comments', async (importOriginal) => {
 });
 vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/pages/pcs/CheckpointStrip')>();
-  return { ...actual, CheckpointStrip: () => null };
+  return { ...actual, CheckpointProgress: () => null };
 });
 vi.mock('@/components/pages/pcs/PostActionSheet', () => ({ PostActionSheet: () => null }));
 vi.mock('@/components/pages/pcs/PostDetailsSheet', () => ({ PostDetailsSheet: () => null }));
@@ -197,7 +197,9 @@ describe('PostDetailPage type roles', () => {
 
   it('the header status line is a screen header: text-lg font-semibold', async () => {
     await render();
-    const status = document.querySelector('.lit-header.border-b span.text-lg');
+    const status = document.querySelector(
+      '.lit-header.border-b span.text-lg, .lit-header header span.text-lg',
+    );
     expect(status).not.toBeNull();
     expect(classes(status)).toContain('font-semibold');
   });

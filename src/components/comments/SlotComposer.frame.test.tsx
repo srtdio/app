@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // The checkpoint composer on ui/Composer (ComposerFrame): one comment composer
-// layout everywhere. Field, emoji, clip and the round Send on ONE 44 row; a
+// layout everywhere. "+", number, field, emoji and the round Send on ONE 44 row
+// (no paper clip); a
 // later slot keeps the same columns (its remove X in the send column); sending
 // keeps every row (the spinner sits in the send slot).
 import { act } from 'react';
@@ -53,7 +54,10 @@ function order(row: HTMLElement): string[] {
       ? 'field'
       : el.hasAttribute('data-slot-number')
         ? 'number'
-        : (el.getAttribute('aria-label') ?? el.textContent ?? ''),
+        : (el.querySelector('[data-plus]')?.getAttribute('aria-label') ??
+          el.getAttribute('aria-label') ??
+          el.textContent ??
+          ''),
   );
 }
 
@@ -66,7 +70,7 @@ function type(area: HTMLTextAreaElement, value: string): void {
 }
 
 describe('SlotComposer on ui/Composer', () => {
-  it('renders inside [data-composer]: field, emoji, clip, Send on one row', () => {
+  it('renders inside [data-composer]: "+", number, field, emoji, Send on one row', () => {
     act(() =>
       root?.render(
         <SlotComposer
@@ -80,16 +84,18 @@ describe('SlotComposer on ui/Composer', () => {
     const [row] = rows();
     expect(row).toBeDefined();
     expect(order(row as HTMLElement)).toEqual([
+      'Add attachment',
+      'number',
       'field',
       'Emoji',
-      'Attach a file to checkpoint 1',
       'Send',
     ]);
+    expect(button('Attach a file to checkpoint 1')).toBeUndefined();
     expect(row?.querySelector('[data-composer-field] textarea')).not.toBeNull();
     const send = button('Send');
     expect(send?.className).toContain('rounded-full');
     expect(send?.className).toContain('bg-accent');
-    for (const label of ['Emoji', 'Attach a file to checkpoint 1']) {
+    for (const label of ['Emoji', 'Add attachment']) {
       expect(button(label)?.className).toContain('rounded-full');
       expect(button(label)?.className).not.toContain('bg-accent');
     }

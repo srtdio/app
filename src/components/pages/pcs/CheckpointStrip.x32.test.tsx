@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CheckpointChipRow } from '@/components/pages/pcs/CheckpointStrip';
 
 // Fix 32 on the strip: no "settled" counter, no client banner, only two chip
-// looks (open / resolved), resolved ink is a token (never text-white), and the
-// sticky surface matches the comments card (bg-panel-2), not the page.
+// looks (open / resolved) and resolved ink is a token (never text-white). The
+// row has no surface of its own (it sits in the pinned block under the bar).
 
 const { rows } = vi.hoisted(() => ({ rows: { current: [] as CheckpointChipRow[] } }));
 
@@ -35,7 +35,7 @@ vi.mock('@/lib/supabase', () => ({
   },
 }));
 
-import { CheckpointStrip } from '@/components/pages/pcs/CheckpointStrip';
+import { CheckpointProgress } from '@/components/pages/pcs/CheckpointStrip';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -54,8 +54,8 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('CheckpointStrip (fix 32)', () => {
-  it('chips plus "{n} of {m} resolved": no settled counter, no banner, token ink, card surface', async () => {
+describe('CheckpointProgress (fix 32)', () => {
+  it('circles plus "{n} of {m} resolved": no settled counter, no banner, token ink', async () => {
     rows.current = [
       { id: 'a', ledger_seq: 1, resolved_at: null, accepted_at: null },
       { id: 'b', ledger_seq: 2, resolved_at: 't', accepted_at: null },
@@ -64,10 +64,9 @@ describe('CheckpointStrip (fix 32)', () => {
     const onCounts = vi.fn();
     act(() => {
       root?.render(
-        <CheckpointStrip
+        <CheckpointProgress
           workspaceId="ws-1"
           postId="post-1"
-          viewerIsClient
           refreshSignal={0}
           onCounts={onCounts}
         />,
@@ -77,7 +76,7 @@ describe('CheckpointStrip (fix 32)', () => {
       for (let i = 0; i < 5; i += 1) await Promise.resolve();
     });
 
-    const strip = host?.querySelector('[data-checkpoint-strip]');
+    const strip = host?.querySelector('[data-checkpoint-progress-row]');
     expect(strip).not.toBeNull();
     const text = host?.textContent ?? '';
     expect(text).not.toContain('2/3');
@@ -86,7 +85,6 @@ describe('CheckpointStrip (fix 32)', () => {
     expect(text).not.toMatch(/settled|ready for your check|Confirmed/);
     expect(host?.innerHTML ?? '').not.toContain('settled');
 
-    expect(strip?.className).toContain('bg-panel-2');
     expect(strip?.className).not.toContain('bg-bg');
     expect(host?.innerHTML ?? '').not.toContain('text-white');
     expect(host?.innerHTML ?? '').toContain('text-accent-fg');

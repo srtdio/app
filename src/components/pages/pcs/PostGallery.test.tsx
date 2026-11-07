@@ -825,8 +825,8 @@ describe('the post screen shows every picture whole', () => {
   it('pins render on the ribbon tiles at their stored positions, no frame mapping', () => {
     const items = [tall(0), square(1)];
     const pins: Record<string, PinDot[]> = {
-      'aa-0': [{ n: 1, annotationId: 'a1', commentId: 'c1', x: 0.1, y: 0.05 }],
-      'aa-1': [{ n: 2, annotationId: 'a2', commentId: 'c2', x: 0.75, y: 0.4 }],
+      'aa-0': [{ n: 1, state: 'open', annotationId: 'a1', commentId: 'c1', x: 0.1, y: 0.05 }],
+      'aa-1': [{ n: 2, state: 'open', annotationId: 'a2', commentId: 'c2', x: 0.75, y: 0.4 }],
     };
     const onPinClick = vi.fn();
     const tree = galleryView({
@@ -917,7 +917,7 @@ describe('the post screen shows every picture whole', () => {
 
   it('framePins with the identity map draws every pin at its stored spot', () => {
     const tree = framePins(
-      [{ n: 1, annotationId: 'a1', commentId: 'c1', x: 0.5, y: 0.25 }],
+      [{ n: 1, state: 'open', annotationId: 'a1', commentId: 'c1', x: 0.5, y: 0.25 }],
       IDENTITY_MAP,
       () => {},
     );

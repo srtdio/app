@@ -75,7 +75,7 @@ vi.mock('@/lib/workspace-members', async (importOriginal) => ({
 }));
 
 import { Comments, type SharedCheckpoints } from '@/components/comments/Comments';
-import { CheckpointStrip } from '@/components/pages/pcs/CheckpointStrip';
+import { CheckpointProgress } from '@/components/pages/pcs/CheckpointStrip';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -129,7 +129,7 @@ function commentReads(): number {
 }
 
 function chips(): string[] {
-  return Array.from(host?.querySelectorAll('[data-checkpoint-strip] button') ?? []).map(
+  return Array.from(host?.querySelectorAll('[data-checkpoint-progress-row] button') ?? []).map(
     (b) => b.getAttribute('aria-label') ?? '',
   );
 }
@@ -144,10 +144,9 @@ async function mountShared(shared: SharedCheckpoints): Promise<void> {
         showHeader
         sharedCheckpoints={shared}
         belowHeader={
-          <CheckpointStrip
+          <CheckpointProgress
             workspaceId="ws-1"
             postId="post-1"
-            viewerIsClient={false}
             refreshSignal={0}
             checkpoints={shared.rows}
           />
@@ -193,7 +192,7 @@ describe('Comments without sharedCheckpoints (every other host)', () => {
   });
 });
 
-describe('Comments and the strip with the host read', () => {
+describe('Comments and the progress row with the host read', () => {
   it('neither reads the checkpoints: the list and the chips show the host rows', async () => {
     const rows = [point('p-1', 1), point('p-2', 2, { deleted_at: '2026-01-03T00:00:00.000Z' })];
     const reload = vi.fn(async (): Promise<void> => {});
@@ -201,7 +200,7 @@ describe('Comments and the strip with the host read', () => {
     expect(commentReads()).toBe(0);
     expect(reload).not.toHaveBeenCalled();
     expect(host?.textContent).toContain('point 1');
-    // The strip drops soft-deleted checkpoints, as its own read did.
+    // The progress row drops soft-deleted checkpoints, as its own read did.
     expect(chips()).toEqual(['Jump to checkpoint 1']);
   });
 

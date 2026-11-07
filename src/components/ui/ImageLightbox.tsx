@@ -19,7 +19,12 @@
 //    and double-tap 1x <-> 2.5x. The pane itself never moves while zoomed.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement } from 'react';
+import type {
+  CSSProperties,
+  PointerEvent as ReactPointerEvent,
+  ReactElement,
+  RefObject,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   IconChevronLeft,
@@ -32,6 +37,7 @@ import {
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { ViewerBackButton } from '@/components/ui/ViewerBackButton';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
@@ -485,6 +491,62 @@ export interface ImageLightboxProps {
   onDelete?: (index: number) => void;
   /** The thumbnail's rect to grow from; default: the thumbnail the opening tap hit. */
   from?: Box | null;
+  /**
+   * Comments: the top bar becomes the over-the-app bar: "<" (Back) on the
+   * leading edge, `title` ("{Name} · {formatAgo}", formatted by the caller)
+   * in the middle, then the "{i} / {n}" counter (more than one photo) and
+   * Download on the trailing edge. The X and the bottom bar are not shown.
+   * Omitted (chat, posts, assets): today's bar, unchanged.
+   */
+  backBar?: { title: string } | undefined;
+}
+
+/**
+ * The comment viewer's top bar: "<" Back, the title, the counter (more than
+ * one photo) and Download. Hook-free apart from DownloadControl.
+ */
+function BackBar(props: {
+  title: string;
+  counter: string | null;
+  image: LightboxImage;
+  cache: PresignCache;
+  presignEnabled: boolean;
+  onClose: () => void;
+  closeRef: RefObject<HTMLButtonElement>;
+}): ReactElement {
+  return (
+    <div
+      data-lightbox-back-bar=""
+      className={cn('relative flex shrink-0 items-center gap-1 px-1', SAFE_TOP_BAR_CLASS)}
+    >
+      <ViewerBackButton
+        buttonRef={props.closeRef}
+        onClick={props.onClose}
+        className={TOOLBAR_BUTTON}
+      />
+      <p
+        data-lightbox-title=""
+        title={props.title}
+        className="min-w-0 flex-1 truncate text-base font-medium text-overlay-fg"
+      >
+        {props.title}
+      </p>
+      {props.counter !== null ? (
+        <span
+          data-lightbox-counter=""
+          className="shrink-0 px-1 font-mono text-sm tabular-nums text-overlay-fg-dim"
+        >
+          {props.counter}
+        </span>
+      ) : null}
+      <DownloadControl
+        key={`${props.image.assetId}:${props.image.src ?? ''}`}
+        image={props.image}
+        cache={props.cache}
+        presignEnabled={props.presignEnabled}
+      />
+    </div>
+  );
 }
 
 /**
@@ -507,6 +569,7 @@ export function ImageLightbox({
   onForward,
   onDelete,
   from,
+  backBar,
 }: ImageLightboxProps): ReactElement | null {
   const dialogRef = useRef<HTMLDivElement>(null);
   // The Y-moving wrapper (dismiss) and the dim behind it.
@@ -780,28 +843,40 @@ export function ImageLightbox({
         className="absolute inset-0 bg-overlay backdrop-blur-xl"
         style={dragY > 0 ? { opacity: dismissOpacity(dragY) } : undefined}
       />
-      <div className={cn('relative flex shrink-0 items-center gap-2 px-3', SAFE_TOP_BAR_CLASS)}>
-        {multiple ? (
-          <span className="shrink-0 font-mono text-md tabular-nums text-overlay-fg">
-            {lightboxCounter(index, count)}
-          </span>
-        ) : null}
-        {details !== undefined ? (
-          // Top centre, clear of the counter (left) and Close (right).
-          <div className="pointer-events-none absolute inset-x-20 top-0 flex h-14 items-center justify-center">
-            <ViewerDetails sender={details.sender} time={details.time} />
-          </div>
-        ) : null}
-        <button
-          ref={closeRef}
-          type="button"
-          aria-label="Close viewer"
-          onClick={onClose}
-          className={cn(TOOLBAR_BUTTON, 'ml-auto')}
-        >
-          <IconX size={ICON_SIZE.control} />
-        </button>
-      </div>
+      {backBar !== undefined ? (
+        <BackBar
+          title={backBar.title}
+          counter={multiple ? lightboxCounter(index, count) : null}
+          image={current}
+          cache={cache}
+          presignEnabled={presignEnabled}
+          onClose={onClose}
+          closeRef={closeRef}
+        />
+      ) : (
+        <div className={cn('relative flex shrink-0 items-center gap-2 px-3', SAFE_TOP_BAR_CLASS)}>
+          {multiple ? (
+            <span className="shrink-0 font-mono text-md tabular-nums text-overlay-fg">
+              {lightboxCounter(index, count)}
+            </span>
+          ) : null}
+          {details !== undefined ? (
+            // Top centre, clear of the counter (left) and Close (right).
+            <div className="pointer-events-none absolute inset-x-20 top-0 flex h-14 items-center justify-center">
+              <ViewerDetails sender={details.sender} time={details.time} />
+            </div>
+          ) : null}
+          <button
+            ref={closeRef}
+            type="button"
+            aria-label="Close viewer"
+            onClick={onClose}
+            className={cn(TOOLBAR_BUTTON, 'ml-auto')}
+          >
+            <IconX size={ICON_SIZE.control} />
+          </button>
+        </div>
+      )}
 
       <div
         data-lightbox-pane=""

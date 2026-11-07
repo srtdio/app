@@ -271,11 +271,14 @@ function AttachmentItem({
   voiceSpacer,
   voice,
   onCancelUpload,
+  backBar,
 }: {
   attachment: MessageAttachment;
   cache: PresignCache;
   presignEnabled: boolean;
   onImageClick?: (() => void) | undefined;
+  /** Comments: a file opens its viewer with the "<" Back bar. */
+  backBar?: boolean | undefined;
   voiceSpacer?: ReactNode;
   voice?: VoiceContext | undefined;
   /** An own send that can still be cancelled: the X cancels it. */
@@ -376,7 +379,14 @@ function AttachmentItem({
       );
     case 'file':
       // Sends with its own thin bar, no cancel; tap opens the in-app viewer.
-      return <FileBubble attachment={attachment} cache={cache} presignEnabled={presignEnabled} />;
+      return (
+        <FileBubble
+          attachment={attachment}
+          cache={cache}
+          presignEnabled={presignEnabled}
+          {...(backBar === true ? { backBar: true } : {})}
+        />
+      );
   }
 }
 
@@ -611,6 +621,12 @@ export interface MessageAttachmentsProps {
   onCancelUpload?: (() => void) | undefined;
   /** Album mode: the bubble's corner classes, passed on to the album (AlbumGrid). */
   albumCorners?: string | undefined;
+  /**
+   * Comments: every file (PDF, Office, video, other) opens its in-app viewer
+   * with the over-the-app bar: "<" (Back), the name, "Page {i} of {n}" for a
+   * PDF, Download. Chat omits it, so its viewer keeps the X bar.
+   */
+  backBar?: boolean | undefined;
 }
 
 /** "Couldn't show this file": the attachment area's crash fallback. */
@@ -698,6 +714,7 @@ function MessageAttachmentsBody({
   caption,
   onCancelUpload,
   albumCorners,
+  backBar,
 }: MessageAttachmentsProps): ReactElement | null {
   if (attachments.length === 0) return null;
   if (album === true) {
@@ -728,6 +745,7 @@ function MessageAttachmentsBody({
                   attachment={attachment}
                   cache={cache}
                   presignEnabled={presignEnabled}
+                  backBar={backBar}
                 />
               ))}
             </div>
@@ -755,6 +773,7 @@ function MessageAttachmentsBody({
           {...(voiceSpacer !== undefined ? { voiceSpacer } : {})}
           voice={voice}
           onCancelUpload={onCancelUpload}
+          backBar={backBar}
         />
       ))}
     </div>

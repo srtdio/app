@@ -9,6 +9,7 @@ import {
   galleryView,
   pinButton,
   reorderView,
+  REORDER_HELPER,
   type GalleryToolsModel,
   type ReorderModel,
 } from '@/components/pages/pcs/PostGallery';
@@ -250,7 +251,7 @@ describe('#26 Replace is one save', () => {
   });
 });
 
-describe('#26 Reorder saves one version', () => {
+describe('#26 Reorder: hold and drag only, saved on drop', () => {
   function reorderModel(over: Partial<ReorderModel> = {}): ReorderModel {
     return {
       items: [item(0), item(1), item(2)],
@@ -258,32 +259,35 @@ describe('#26 Reorder saves one version', () => {
       presignEnabled: false,
       ratio: 4 / 5,
       drag: null,
-      selectedId: 'aa-1',
-      changed: true,
       saving: false,
       error: null,
-      onSelect: vi.fn(),
       onMove: vi.fn(),
       onTilePointerDown: vi.fn(),
       onTilePointerMove: vi.fn(),
       onTilePointerUp: vi.fn(),
-      onSave: vi.fn(),
-      onCancel: vi.fn(),
+      onTilePointerCancel: vi.fn(),
       ...over,
     };
   }
 
-  it('moves only rearrange the draft; one Save order calls save exactly once', () => {
-    const model = reorderModel();
-    const tree = reorderView(model);
-    click(byData(tree, 'data-reorder-left'));
-    click(byData(tree, 'data-reorder-right'));
-    expect(model.onMove).toHaveBeenCalledTimes(2);
-    expect(model.onSave).not.toHaveBeenCalled();
-    click(byData(tree, 'data-reorder-save'));
-    expect(model.onSave).toHaveBeenCalledTimes(1);
-    expect(renderToStaticMarkup(tree)).toContain('>Save order<');
-    expect(renderToStaticMarkup(tree)).toContain('>Cancel<');
+  it('no reorder buttons: no Make first / last, Move left / right, Save order or Cancel', () => {
+    const tree = reorderView(reorderModel());
+    const html = renderToStaticMarkup(tree);
+    for (const gone of ['Make first', 'Make last', 'Move left', 'Move right', 'Save order']) {
+      expect(html).not.toContain(gone);
+    }
+    expect(html).not.toContain('>Cancel<');
+    for (const hook of ['data-reorder-left', 'data-reorder-right', 'data-reorder-save']) {
+      expect(byData(tree, hook)).toBeUndefined();
+    }
+    expect(elements(tree).filter((el) => el.type === Button)).toHaveLength(0);
+  });
+
+  it('one helper line: "Hold and drag a photo to reorder"', () => {
+    expect(REORDER_HELPER).toBe('Hold and drag a photo to reorder');
+    const html = renderToStaticMarkup(reorderView(reorderModel()));
+    expect(html.split(REORDER_HELPER)).toHaveLength(2);
+    expect(html).not.toContain('pick a slide and move it');
   });
 
   it('arrow keys move the focused tile (keyboard reorder)', () => {
@@ -296,21 +300,30 @@ describe('#26 Reorder saves one version', () => {
     expect(model.onMove).toHaveBeenCalledWith('aa-2', -1);
   });
 
-  it('the dragged tile moves along the row only: translateX, no rotate or scale', () => {
+  it('the lifted tile moves on X only (translateX); the row still scrolls', () => {
     const tree = reorderView(reorderModel({ drag: { id: 'aa-0', dx: 42 } }));
     const html = renderToStaticMarkup(tree);
     expect(html).toContain('transform:translateX(42px)');
+    expect(html).toContain('data-reorder-lifted');
     expect(html).not.toMatch(/rotate|scale\(/);
-    expect(html).toContain('touch-none');
+    // Hold, not touch: the row scrolls under a finger until a photo is lifted.
+    expect(html).not.toContain('touch-none');
     // Nothing animates movement, so reduced motion is respected.
     expect(GALLERY).not.toMatch(/transition-transform|transition-all/);
   });
 
-  it('Save order is disabled until the order changes', () => {
-    const tree = reorderView(reorderModel({ changed: false }));
-    expect((byData(tree, 'data-reorder-save')?.props as { disabled?: boolean }).disabled).toBe(
-      true,
-    );
+  it('the tools row rides under the strip with Reorder pressed (it leaves the mode)', () => {
+    const onReorder = vi.fn();
+    const pin = pinButton(0, null, vi.fn(), vi.fn());
+    const toolbar = galleryToolsRow(toolsModel({ reordering: true, onReorder, pin }));
+    const tree = reorderView(reorderModel({ toolbar }));
+    const reorder = byData(tree, 'data-gallery-reorder');
+    expect((reorder?.props as { 'aria-pressed'?: boolean })['aria-pressed']).toBe(true);
+    expect((reorder?.props as { disabled?: boolean }).disabled).toBe(false);
+    click(reorder);
+    expect(onReorder).toHaveBeenCalledTimes(1);
+    expect((byData(tree, 'data-gallery-add')?.props as { disabled?: boolean }).disabled).toBe(true);
+    expect(byData(tree, 'data-add-pin')).toBeUndefined();
   });
 
   it('drag math lands the tile by whole steps, clamped', () => {
@@ -320,8 +333,16 @@ describe('#26 Reorder saves one version', () => {
     expect(moveTo(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a']);
   });
 
-  it('the wrapper sends the whole draft once through onSaveOrder, wired to the one gallery_set commit', () => {
+  it('a drop saves at once through onSaveOrder (one gallery_set), held by LONG_PRESS_MS', () => {
+    // One save path, called from a drop and from the arrow keys.
     expect(GALLERY.split('tools.onSaveOrder(')).toHaveLength(2);
+    const up = GALLERY.slice(GALLERY.indexOf('onTilePointerUp: () => {'));
+    expect(up.slice(0, up.indexOf('\n      },\n'))).toContain('saveOrder(moveTo(');
+    // The hold lifts the tile; a refused save puts the saved order back.
+    expect(GALLERY).toContain('const { handlers: holdHandlers } = useLongPress(');
+    expect(GALLERY).toContain(
+      'if (!ok) setReorderIds((current) => (current === null ? current : saved));',
+    );
     expect(PAGE).toContain('onSaveOrder: commitGallery,');
     const commit = PAGE.slice(PAGE.indexOf('const commitGallery = useCallback('));
     expect(commit.slice(0, commit.indexOf('\n  );\n')).split('gallerySet(')).toHaveLength(2);

@@ -198,7 +198,7 @@ vi.mock('@/components/comments/Comments', async (importOriginal) => {
 });
 vi.mock('@/components/pages/pcs/CheckpointStrip', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/pages/pcs/CheckpointStrip')>();
-  return { ...actual, CheckpointStrip: () => null };
+  return { ...actual, CheckpointProgress: () => null };
 });
 vi.mock('@/components/pages/pcs/PostActionSheet', () => ({
   PostActionSheet: (props: { moveRows?: MoveRowLike[] }) => {

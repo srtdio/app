@@ -55,8 +55,11 @@ import {
   showCheckpointConfirm,
   tickFilled,
   tickInteractive,
-  toCommentAttachments,
   tombstoneText,
+  earlierRepliesLabel,
+  checkpointGroupMeta,
+  onPhotoLabel,
+  foldedPointText,
 } from '@/components/comments/Comments';
 import { copyText } from '@/lib/clipboard';
 import type { PointMenuMode } from '@/components/comments/Comments';
@@ -67,7 +70,6 @@ import type { DomainError } from '@srtdio/rpc';
 import { resolveName } from '@/components/comments/commentProfiles';
 import type { CommentProfile } from '@/components/comments/commentProfiles';
 import type { MentionCandidate } from '@/lib/workspace-members';
-import { attachmentView } from '@/components/chat/MessageAttachments';
 import { PressableRow } from '@/components/ui/PressableRow';
 
 // Node unit environment: walk the JSX returned by the hookless helpers and
@@ -187,6 +189,28 @@ describe('annotationChip (F4/F5 seam)', () => {
   it('renders nothing when there is no annotation (brief parity)', () => {
     expect(annotationChip('c3', undefined)).toBeNull();
   });
+
+  it('a live quote is an ink rail (border-fg) with the numbered circle, no gold', () => {
+    const tree = annotationChip('c4', { n: 5, quote: 'q', stale: false, versionNumber: 1 });
+    const markup = html(tree);
+    expect(markup).toContain('border-l-rail');
+    expect(markup).toContain('border-fg');
+    expect(markup).toContain('data-checkpoint-circle="open"');
+    expect(markup).toContain('>5<');
+    expect(markup).not.toContain('annotation-');
+  });
+
+  it('a photo pin reads "On photo {n}" in meta', () => {
+    const tree = annotationChip('c5', {
+      n: 2,
+      quote: 'Pin on a.png',
+      stale: false,
+      versionNumber: 1,
+      slide: 3,
+    });
+    expect(text(tree)).toBe('On photo 3');
+    expect(elements(tree).some(isButtonEl)).toBe(false);
+  });
 });
 
 describe('buildThreads', () => {
@@ -244,7 +268,7 @@ describe('buildThreads', () => {
   });
 });
 
-describe('groupThreads (feedback ledger: consecutive same-author checkpoints collapse)', () => {
+describe('groupThreads (consecutive same-author checkpoints share one group)', () => {
   const BATCH_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
   function checkpoint(id: string, seq: number, author: string, created: string) {
@@ -257,7 +281,7 @@ describe('groupThreads (feedback ledger: consecutive same-author checkpoints col
     });
   }
 
-  it('collapses consecutive same-author checkpoints, newest send on top, seq ascending inside a send', () => {
+  it('collapses consecutive same-author checkpoints, numbered by ledger_seq ascending', () => {
     const threads = buildThreads([
       // Newest-first list order; two sends (t2 newer than t1), each with two points.
       checkpoint('c4', 4, UUID_A, '2026-01-02T00:00:02.000Z'),
@@ -270,12 +294,26 @@ describe('groupThreads (feedback ledger: consecutive same-author checkpoints col
     expect(groups).toHaveLength(2);
     expect(groups[0]).toMatchObject({ kind: 'batch', authorId: UUID_A });
     if (groups[0]!.kind !== 'batch') throw new Error('expected a batch');
-    // created_at DESC across sends, ledger_seq ASC within a send (tie-break).
-    expect(groups[0]!.threads.map((t) => t.comment.ledger_seq)).toEqual([3, 4, 1, 2]);
+    expect(groups[0]!.threads.map((t) => t.comment.ledger_seq)).toEqual([1, 2, 3, 4]);
     expect(groups[1]).toMatchObject({ kind: 'single' });
   });
 
-  it('splits distinct authors into distinct cards', () => {
+  it('done points fold to the bottom; numbers never change', () => {
+    const threads = buildThreads([
+      { ...checkpoint('c3', 3, UUID_A, '2026-01-02T00:00:00.000Z') },
+      {
+        ...checkpoint('c2', 2, UUID_A, '2026-01-02T00:00:00.000Z'),
+        resolved_at: '2026-01-03T00:00:00.000Z',
+      },
+      { ...checkpoint('c1', 1, UUID_A, '2026-01-02T00:00:00.000Z') },
+    ]);
+    const groups = groupThreads(threads);
+    if (groups[0]!.kind !== 'batch') throw new Error('expected a batch');
+    // Open 1, 3 on top in ledger order; resolved 2 at the bottom, still "2".
+    expect(groups[0]!.threads.map((t) => t.comment.ledger_seq)).toEqual([1, 3, 2]);
+  });
+
+  it('splits distinct authors into distinct groups', () => {
     const threads = buildThreads([
       checkpoint('b1', 4, UUID_B, '2026-01-03T00:00:00.000Z'),
       checkpoint('a2', 2, UUID_A, '2026-01-02T00:00:02.000Z'),
@@ -446,8 +484,8 @@ describe('checkpoint state + feed controls', () => {
     expect(retargetDraft('the logo', '', b)).toBe(`${b}the logo`);
   });
 
-  it('labels the checkbox "Resolved", ticked or not', () => {
-    expect(CHECKPOINT_BOX_LABEL).toBe('Resolved');
+  it('labels the agency checkbox "Resolve" (one tap, no note)', () => {
+    expect(CHECKPOINT_BOX_LABEL).toBe('Resolve');
   });
 
   it('draws the checkbox from tokens only: empty, hollow tick, filled tick', () => {
@@ -1122,73 +1160,80 @@ describe('deleted point renders a tombstone with its replies still present', () 
   });
 });
 
-describe('comment attachments', () => {
-  it('maps stored version ids to renderable attachments with resolved mime', () => {
-    const out = toCommentAttachments(['v1', 'v2'], new Map([['v1', 'image/png']]));
-    expect(out).toEqual([
-      { assetId: 'v1', name: '', mime: 'image/png' },
-      { assetId: 'v2', name: '', mime: '' },
-    ]);
-  });
-
-  it('an image attachment renders via the presign path (reused attachmentView)', () => {
-    const [image] = toCommentAttachments(['v1'], new Map([['v1', 'image/png']]));
-    const view = attachmentView({
-      attachment: image!,
-      presignEnabled: true,
-      url: 'https://signed/thumb.png',
-      failed: false,
-    });
-    expect(view).toEqual({ kind: 'image', src: 'https://signed/thumb.png', alt: '' });
-  });
-
-  it('a non-image attachment renders as a file chip', () => {
-    const [file] = toCommentAttachments(['v9'], new Map());
-    const view = attachmentView({
-      attachment: file!,
-      presignEnabled: true,
-      url: null,
-      failed: false,
-    });
-    expect(view.kind).toBe('file');
-  });
-});
-
-describe('renderReplyList (replies are permanently open)', () => {
-  // Replies used to hide behind an expander and render only while a parent was
-  // in the expanded set. They are now permanent: the list renders from the reply
-  // data alone, with no toggle and no interaction. Walk the returned tree in the
-  // hookless node style used across this file (no DOM mount needed).
+describe('renderReplyList (replies fold to the latest)', () => {
   const renderReply = (reply: CommentRow): ReactElement => (
     <span key={reply.id}>{`body:${reply.id}`}</span>
   );
+  const three = [
+    row({ id: 'r1', parent_comment_id: 'P', body: 'first' }),
+    row({ id: 'r2', parent_comment_id: 'P', body: 'second' }),
+    row({ id: 'r3', parent_comment_id: 'P', body: 'third' }),
+  ];
+  const liIds = (tree: ReactNode): string[] =>
+    elements(tree)
+      .filter((el) => el.type === 'li')
+      .map((el) => (el.props as { id: string }).id);
 
-  it('renders every reply without any interaction, id-tagged for deep links', () => {
-    const replies = [
-      row({ id: 'r1', parent_comment_id: 'P', body: 'first' }),
-      row({ id: 'r2', parent_comment_id: 'P', body: 'second' }),
-    ];
-    const tree = renderReplyList(replies, renderReply);
-    const els = elements(tree);
-    // The list container is present with one row per reply, in order, each row
-    // carrying its stable comment DOM id.
-    expect(els.some((el) => el.type === 'ul')).toBe(true);
-    expect(
-      els.filter((el) => el.type === 'li').map((el) => (el.props as { id: string }).id),
-    ).toEqual([commentDomId('r1'), commentDomId('r2')]);
-    // Both bodies are in the rendered output with no click / expand step.
-    expect(text(tree)).toContain('body:r1');
-    expect(text(tree)).toContain('body:r2');
+  it('without a fold renders every reply, id-tagged for deep links', () => {
+    const tree = renderReplyList(three.slice(0, 2), renderReply);
+    expect(liIds(tree)).toEqual([commentDomId('r1'), commentDomId('r2')]);
+    expect(elements(tree).some(isButtonEl)).toBe(false);
   });
 
-  it('exposes no expander or other interactive control in the list', () => {
-    const tree = renderReplyList([row({ id: 'r1', parent_comment_id: 'P' })], renderReply);
-    // The old "N replies" / "Hide replies" toggle is gone; the list owns no button.
-    expect(elements(tree).some(isButtonEl)).toBe(false);
+  it('folded: only the latest reply, behind "View {n} earlier replies"', () => {
+    const onUnfold = vi.fn();
+    const tree = renderReplyList(three, renderReply, { unfolded: false, onUnfold, rootId: 'P' });
+    expect(liIds(tree)).toEqual([commentDomId('r3')]);
+    expect(text(tree)).toContain('View 2 earlier replies');
+    expect(text(tree)).not.toContain('body:r1');
+  });
+
+  it('one hidden reply reads "View 1 earlier reply"', () => {
+    const tree = renderReplyList(three.slice(0, 2), renderReply, {
+      unfolded: false,
+      onUnfold: () => undefined,
+      rootId: 'P',
+    });
+    expect(text(tree)).toContain('View 1 earlier reply');
+  });
+
+  it('unfolded: every reply in order, no fold control', () => {
+    const tree = renderReplyList(three, renderReply, {
+      unfolded: true,
+      onUnfold: () => undefined,
+      rootId: 'P',
+    });
+    expect(liIds(tree)).toEqual([commentDomId('r1'), commentDomId('r2'), commentDomId('r3')]);
+    expect(text(tree)).not.toContain('earlier repl');
+  });
+
+  it('a single reply never folds', () => {
+    const tree = renderReplyList(three.slice(0, 1), renderReply, {
+      unfolded: false,
+      onUnfold: () => undefined,
+      rootId: 'P',
+    });
+    expect(liIds(tree)).toEqual([commentDomId('r1')]);
+    expect(text(tree)).not.toContain('earlier repl');
   });
 
   it('renders nothing (no empty list container) when there are no replies', () => {
     expect(renderReplyList([], renderReply)).toBeNull();
+  });
+});
+
+describe('fold copy helpers', () => {
+  it('earlierRepliesLabel / checkpointGroupMeta / onPhotoLabel', () => {
+    expect(earlierRepliesLabel(1)).toBe('View 1 earlier reply');
+    expect(earlierRepliesLabel(4)).toBe('View 4 earlier replies');
+    expect(checkpointGroupMeta(3, '5m')).toBe('3 checkpoints · 5m');
+    expect(onPhotoLabel(2)).toBe('On photo 2');
+  });
+
+  it('foldedPointText is "{n} · {first line}" with formatting and mentions flattened', () => {
+    expect(foldedPointText(4, `*Fix* the logo @[${UUID_A}]\nsecond line`, () => 'ada')).toBe(
+      '4 · Fix the logo @ada',
+    );
   });
 });
 

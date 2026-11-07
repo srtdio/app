@@ -31,7 +31,29 @@ import {
   FOCUS_READ_RETRY_MS,
   useFocusTarget,
 } from '@/lib/focus-target';
-import { IconCheck, IconCopy, IconEdit, IconTrash, ICON_SIZE } from '@/components/ui/icons';
+import {
+  IconCheck,
+  IconChevronDown,
+  IconCopy,
+  IconEdit,
+  IconTrash,
+  ICON_SIZE,
+} from '@/components/ui/icons';
+import { Text } from '@/components/ui/Text';
+import {
+  CHECKPOINT_HIT_CLASS,
+  CheckpointCircle,
+  checkpointCircleState,
+  type CheckpointCircleState,
+} from '@/components/comments/CheckpointCircle';
+import { ReplyPrivatelyButton } from '@/components/comments/ReplyPrivatelyButton';
+import {
+  commentViewerTitle,
+  fetchCommentFiles,
+  idsToRead,
+  toCommentFileAttachments,
+  type CommentFile,
+} from '@/components/comments/comment-files';
 import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { LoadError } from '@/components/ui/LoadError';
 import { roleLabel } from '@/components/pages/settings/members-data';
@@ -63,6 +85,7 @@ import {
   listComments,
   parseMentions,
   resolveComment,
+  stripFormat,
   PAGE_SIZE,
 } from '@srtdio/comments';
 import type {
@@ -124,6 +147,12 @@ export interface CommentAnnotation {
   quote: string;
   stale: boolean;
   versionNumber: number;
+  /**
+   * A photo pin: the slide it sits on, 1-based. Set, the row reads "On photo
+   * {slide}" in its meta instead of the caption quote. Absent on a caption
+   * highlight.
+   */
+  slide?: number;
 }
 
 interface CommentsProps {
@@ -253,19 +282,18 @@ export function emptyListText(entityType: CommentEntityType, filter: CommentFilt
 }
 
 /**
- * Layout added to every text row action (the checkpoint checkbox, Confirm,
- * Resolve, Reply). Each is a ghost <Button> (44 tall, 8px radius, 14 / 500);
- * this only keeps the 44px minimum width. Hover is the primitive's lit-hover
- * overlay, which reads on panel-2 rows too. Reply privately and Copy are 44x44
- * IconButtons with the same overlay. The row's 12px side padding comes from
- * COMMENT_ACTIONS_ROW_CLASS.
+ * Layout added to every text row action (Resolve, Confirm, Reply, View earlier
+ * replies). Each is a ghost <Button>: a 44 tall, 44 wide minimum hit, with the
+ * visible word at meta size (12) so the line reads small. Hover is the
+ * primitive's lit-hover overlay. Reply privately and Copy are 44x44
+ * IconButtons with the same overlay.
  */
-export const ROW_ACTION_CLASS = 'min-w-11';
+export const ROW_ACTION_CLASS = 'min-w-11 px-2 text-sm';
 
-/** The passive (non-interactive) checkbox: the same box, height and padding as
- *  a ghost row-action Button without the hover or focus treatment. */
+/** A passive word in the action line ("Open" on a client's own open point): the
+ *  same box, height and padding as a row-action Button, without hover or focus. */
 export const ROW_ACTION_STATIC_CLASS =
-  'inline-flex h-11 min-h-11 min-w-11 items-center justify-center gap-2 px-3 text-base font-medium';
+  'inline-flex h-11 min-h-11 min-w-11 items-center justify-center gap-2 px-2 text-sm font-medium';
 
 /**
  * Extra classes for the icon-only row actions (Reply privately, Copy): none,
@@ -274,21 +302,52 @@ export const ROW_ACTION_STATIC_CLASS =
 export const ROW_ICON_ACTION_CLASS = '';
 
 /**
- * The one-line comment action row: never wraps. Its direct text Buttons take
- * 12px side padding instead of the Button's 16 (the child selector outranks the
- * Button's px-4; cn() does not merge; the 44x44 IconButtons keep their fixed
- * width), so a checkpoint root's Resolve + Reply +
- * two icons fit at 375 px. -ml-2 lines the first control's content up with the
- * body text.
+ * The one action line under every body: time, Resolve or Confirm, Reply, Reply
+ * privately, Copy, then the author's ⋯ at the trailing edge. The 44 boxes sit
+ * edge to edge (their own 8px side padding is the gap), which keeps the line
+ * whole at 375 px; only a long time ("Yesterday") plus every control may wrap
+ * the tail, never past the screen edge. -ml-2 lines the time's ink up with the
+ * body text above it.
  */
-export const COMMENT_ACTIONS_ROW_CLASS =
-  '-ml-2 mt-1 flex flex-nowrap items-center gap-1 [&>button]:px-3';
+export const COMMENT_ACTIONS_ROW_CLASS = '-ml-2 flex flex-wrap items-center';
 
-/** The time in every row header: 12px, regular weight, never monospace. */
-export const ROW_TIME_CLASS = 'whitespace-nowrap text-sm tabular-nums text-fg-3';
+/** The time at the head of every action line: formatAgo, meta role (mono, tabular). */
+export const ROW_TIME_CLASS = 'shrink-0 whitespace-nowrap px-2';
 
-/** The word beside every checkpoint checkbox, ticked or not. */
-export const CHECKPOINT_BOX_LABEL = 'Resolved';
+/** The word beside the agency's checkpoint checkbox: one tap resolves. */
+export const CHECKPOINT_BOX_LABEL = 'Resolve';
+
+/** The client's word on their own open point (no Resolve for clients). */
+export const CHECKPOINT_OPEN_LABEL = 'Open';
+
+/** The fold control over a thread's older replies. Pure. */
+export function earlierRepliesLabel(count: number): string {
+  return count === 1 ? 'View 1 earlier reply' : `View ${count} earlier replies`;
+}
+
+/** A checkpoint group's meta line: "{n} checkpoints · {time}". Pure. */
+export function checkpointGroupMeta(count: number, time: string): string {
+  return `${count} ${count === 1 ? 'checkpoint' : 'checkpoints'} · ${time}`;
+}
+
+/** A photo pin's row meta: "On photo {n}" (slide index, 1-based). Pure. */
+export function onPhotoLabel(slide: number): string {
+  return `On photo ${slide}`;
+}
+
+/** A resolved point's folded line: "{n} · {body first line}" (formatting and
+ *  mentions flattened; the line itself truncates with an ellipsis). Pure. */
+export function foldedPointText(
+  seq: number,
+  body: string,
+  nameOf: (id: string) => string | null,
+): string {
+  const first =
+    stripFormat(commentCopyText(body, nameOf))
+      .split('\n')
+      .find((line) => line.trim() !== '') ?? '';
+  return `${seq} · ${first.trim()}`;
+}
 
 /** The top-level thread filter: open threads only, or every thread. */
 export type CommentFilter = 'open' | 'all';
@@ -340,23 +399,26 @@ export function commentImageNav(
 }
 
 /**
- * The caption quote inside one comment (T9): a quoted line with a left rule in
- * fg-2, above the body. Live (current copy) is a button whose tap flashes the
- * caption mark; stale is inert and reads "copy changed" with the version it was
- * made on. Absent annotation (every brief comment) renders nothing, so the
- * brief path is byte-unchanged.
+ * What a comment row shows above its body for its annotation. A photo pin on
+ * the current version reads "On photo {n}" in meta. A live caption quote is an
+ * ink rail (border-l-rail fg) with the small numbered ink circle; its tap flashes
+ * the caption mark. A stale one (either kind) is inert and reads "copy changed"
+ * with the version it was made on. Absent annotation (every brief comment)
+ * renders nothing. `circle` is the checkpoint's own circle state when the row
+ * is a checkpoint, so the quote's circle never disagrees with the list's.
  */
 export function annotationChip(
   commentId: string,
   annotation: CommentAnnotation | undefined,
   onClick?: (commentId: string) => void,
+  circle: CheckpointCircleState = 'open',
 ): ReactNode {
   if (annotation === undefined) return null;
   if (annotation.stale) {
     return (
       <div
         data-caption-quote="stale"
-        className="mb-2 min-w-0 border-l-2 border-border pl-3 text-base text-fg-2"
+        className="mb-2 min-w-0 border-l-rail border-border pl-3 text-base text-fg-2"
       >
         <span className="block text-xs text-fg-3">copy changed · v{annotation.versionNumber}</span>
         {annotation.quote !== '' ? (
@@ -365,15 +427,22 @@ export function annotationChip(
       </div>
     );
   }
+  if (annotation.slide !== undefined) {
+    return (
+      <Text role="meta" as="p" data-photo-pin="" className="mb-1">
+        {onPhotoLabel(annotation.slide)}
+      </Text>
+    );
+  }
   return (
     <PressableRow
       type="button"
       flat
       data-caption-quote="live"
       onClick={() => onClick?.(commentId)}
-      className="mb-2 flex min-w-0 items-start gap-2 border-l-2 border-border-strong pl-3 text-base text-fg-2 mv-tint hover:text-fg"
+      className="mb-2 flex min-w-0 items-start gap-2 border-l-rail border-fg pl-3 text-base text-fg-2 mv-tint hover:text-fg"
     >
-      <sup className="shrink-0 text-xs font-semibold text-annotation-line">{annotation.n}</sup>
+      <CheckpointCircle n={annotation.n} state={circle} size="inline" className="mt-0.5" />
       <span className="min-w-0 [overflow-wrap:anywhere]">{annotation.quote}</span>
     </PressableRow>
   );
@@ -620,40 +689,74 @@ export function tombstoneText(
   return who !== null ? `Deleted by ${who} · ${when}` : `${noun} deleted · ${when}`;
 }
 
-/** Map a comment's stored version ids to renderable attachments. The mime is
- *  resolved from a batched asset_versions read so image vs file dispatch is
- *  correct; an unresolved mime renders as a file chip. */
-export function toCommentAttachments(
-  versionIds: readonly string[] | null,
-  mimeById: ReadonlyMap<string, string>,
-): MessageAttachment[] {
-  return (versionIds ?? []).map((id) => ({
-    assetId: id,
-    name: '',
-    mime: mimeById.get(id) ?? '',
-  }));
+/** How a thread's replies fold: only the latest shows until unfolded. */
+export interface ReplyFold {
+  /** True once "View {n} earlier replies" was tapped (or a link landed inside). */
+  unfolded: boolean;
+  /** Tap on "View {n} earlier replies". */
+  onUnfold: () => void;
+  /** The thread root, so the unfold's motion can find the rows it revealed. */
+  rootId: string;
+}
+
+/** Which replies show for a fold state: all when unfolded, else only the latest. Pure. */
+export function visibleReplies<T>(
+  replies: readonly T[],
+  unfolded: boolean,
+): {
+  shown: T[];
+  hidden: number;
+} {
+  if (unfolded || replies.length <= 1) return { shown: [...replies], hidden: 0 };
+  return { shown: replies.slice(-1), hidden: replies.length - 1 };
 }
 
 /**
- * The always-open replies list under a thread root. Replies are permanent:
- * rendered whenever the thread has at least one live reply, with no expander
- * gate and no interaction required. Zero replies renders nothing at all (no
- * empty <ul> container). Each reply keeps its stable per-row DOM id so a
- * deep-link can scroll to it. `renderReply` is the caller's card renderer.
+ * The replies under a thread root, oldest first, on the root's text column:
+ * no left rule and no indent beyond it. Folded, only the latest reply shows,
+ * with "View {n} earlier replies" above it; the tap reveals the rest in place.
+ * Without a fold every reply shows. Zero replies renders nothing at all. Each
+ * reply keeps its stable per-row DOM id so a deep link can scroll to it (a
+ * link to a folded reply unfolds its thread first). `renderReply` is the
+ * caller's row renderer.
  */
 export function renderReplyList(
   replies: readonly CommentRow[],
   renderReply: (reply: CommentRow) => ReactNode,
+  fold?: ReplyFold,
 ): ReactNode {
   if (replies.length === 0) return null;
+  const { shown, hidden } = visibleReplies(replies, fold === undefined || fold.unfolded);
+  const earlier = fold !== undefined && fold.unfolded ? replies.slice(0, -1) : [];
+  const latest = fold !== undefined && fold.unfolded ? replies.slice(-1) : shown;
+  const item = (reply: CommentRow): ReactNode => (
+    <li key={reply.id} id={commentDomId(reply.id)} className={COMMENT_ROW_SCROLL_CLASS}>
+      {renderReply(reply)}
+    </li>
+  );
   return (
-    <ul className="mt-3 flex flex-col gap-3 border-l border-border pl-4">
-      {replies.map((reply) => (
-        <li key={reply.id} id={commentDomId(reply.id)} className={COMMENT_ROW_SCROLL_CLASS}>
-          {renderReply(reply)}
-        </li>
-      ))}
-    </ul>
+    <div data-replies="" className="mt-1 flex flex-col">
+      {hidden > 0 && fold !== undefined ? (
+        <Button
+          type="button"
+          variant="ghost"
+          data-replies-more=""
+          aria-expanded={false}
+          className={cn(ROW_ACTION_CLASS, '-ml-2 self-start')}
+          onClick={fold.onUnfold}
+        >
+          {earlierRepliesLabel(hidden)}
+        </Button>
+      ) : null}
+      {earlier.length > 0 ? (
+        <ul data-replies-earlier={fold?.rootId ?? ''} className="flex flex-col gap-2">
+          {earlier.map(item)}
+        </ul>
+      ) : null}
+      <ul className={cn('flex flex-col gap-2', earlier.length > 0 ? 'mt-2' : '')}>
+        {latest.map(item)}
+      </ul>
+    </div>
   );
 }
 
@@ -662,18 +765,20 @@ export function renderReplyList(
 // ---------------------------------------------------------------------------
 
 /** One rendered item of the thread list: a plain one-level thread, or a run of
- *  consecutive checkpoint threads from the same author (collapsed into one card). */
+ *  consecutive checkpoint threads from the same author (one group, the author
+ *  shown once above a numbered list). */
 export type ThreadGroup =
   | { kind: 'single'; thread: ThreadRoot }
   | { kind: 'batch'; authorId: string; threads: ThreadRoot[] };
 
 /**
  * Collapse consecutive TOP-LEVEL checkpoint threads (ledger_seq not null) from
- * the SAME author into one card; every other thread passes through unchanged.
+ * the SAME author into one group; every other thread passes through unchanged.
  * Only adjacency in the newest-first list groups, so two runs from the same
- * author separated by an ordinary comment stay separate. Points inside a card
- * are ordered by created_at descending (newest send on top) with ledger_seq
- * ascending as the tie-breaker so points from one send read in order.
+ * author separated by an ordinary comment stay separate. Inside a group the
+ * open points come first, then the resolved ones (they fold to one line at the
+ * bottom), each in ledger_seq order. The number is the ledger_seq, so a point
+ * never changes number when another is resolved, reopened or deleted.
  */
 export function groupThreads(threads: readonly ThreadRoot[]): ThreadGroup[] {
   const groups: ThreadGroup[] = [];
@@ -696,12 +801,21 @@ export function groupThreads(threads: readonly ThreadRoot[]): ThreadGroup[] {
   for (const group of groups) {
     if (group.kind === 'batch') {
       group.threads.sort((a, b) => {
-        const byTime = b.comment.created_at.localeCompare(a.comment.created_at);
-        return byTime !== 0 ? byTime : (a.comment.ledger_seq ?? 0) - (b.comment.ledger_seq ?? 0);
+        const done =
+          Number(a.comment.resolved_at !== null) - Number(b.comment.resolved_at !== null);
+        return done !== 0 ? done : (a.comment.ledger_seq ?? 0) - (b.comment.ledger_seq ?? 0);
       });
     }
   }
   return groups;
+}
+
+/** The newest send in a checkpoint group (its meta time). Pure. */
+export function groupLatestAt(threads: readonly ThreadRoot[]): string {
+  return threads.reduce(
+    (latest, thread) => (thread.comment.created_at > latest ? thread.comment.created_at : latest),
+    '',
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -761,7 +875,8 @@ export function showCheckpointConfirm(
 }
 
 /**
- * The checkpoint's checkbox (the visible 24px box; the caller supplies the 44px
+ * The Resolve checkbox (the visible 16px box, at the action line's meta size;
+ * the caller supplies the 44px
  * hit area). Unticked: an empty box on the panel. Ticked: the shared resolved
  * treatment, filled once the approver has confirmed, hollow (good outline and
  * tick, no fill) while it waits for the Confirm. Tokens only, so light and dark
@@ -773,7 +888,7 @@ export function checkpointBox(checked: boolean, confirmed: boolean): ReactElemen
       aria-hidden
       data-tick={checked ? (confirmed ? 'filled' : 'hollow') : 'open'}
       className={cn(
-        'flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border',
+        'flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border',
         checked
           ? confirmed
             ? RESOLVED_FILL_CLASS
@@ -1153,21 +1268,6 @@ export async function runCreateCommentBatch(
   return { ok: true, data: parseBatchRows(data) };
 }
 
-/** Batched mime read so the renderer can dispatch image vs file (no N+1).
- *  Exported for the FeedbackLedger, which renders the same attachments. */
-export async function fetchAttachmentMime(
-  client: Client,
-  versionIds: readonly string[],
-): Promise<Map<string, string>> {
-  const ids = Array.from(new Set(versionIds.filter((id) => id !== '')));
-  const mimeById = new Map<string, string>();
-  if (ids.length === 0) return mimeById;
-  const { data, error } = await client.from('asset_versions').select('id, mime_type').in('id', ids);
-  if (error || data === null) return mimeById;
-  for (const row of data) mimeById.set(row.id, row.mime_type ?? '');
-  return mimeById;
-}
-
 /** Load EVERY checkpoint (ledger_seq set, top-level) for one post in ONE query,
  *  regardless of pagination, so a checkpoint on a long post never falls out of
  *  reach and its controls stay live. Soft-deleted checkpoints ride along so a
@@ -1193,23 +1293,39 @@ export async function fetchCheckpoints(
 
 /** What one row on the shared row template shows besides the comment itself. */
 interface RowOptions {
-  /** A reply: smaller avatar, name on its own line, role and time below it. */
+  /** A reply: avatar 20 and name on one line, on the root's text column. */
   reply: boolean;
-  /** The checkpoint number shown in the header as "#n"; null on any other row. */
-  seq: number | null;
-  /** The header kebab's accessible name (only drawn when Edit or Delete is open). */
+  /** A checkpoint point: its author shows once on the group, so no header. */
+  point: boolean;
+  /** The fixed left column (44 wide): the root's avatar or the point's circle. */
+  lead: ReactNode;
+  /** The ⋯ menu's accessible name (only drawn when Edit or Delete is open). */
   menuLabel: string;
   actions: CommentActions;
-  /** A resolved checkpoint's body reads in fg-2. */
+  /** A resolved row's body reads in fg-2. */
   muted?: boolean;
-  /** First in the action row: the checkpoint checkbox (+ Confirm) or the
-   *  thread's Resolve / Reopen. */
+  /** After the time in the action line: Resolve, Confirm, "Open" or Reopen. */
   leading?: ReactNode;
   /** The row's Reply, after the leading control. */
   replyButton?: ReactNode;
   /** Under the row on the text column: replies and the reply composer. */
   below?: ReactNode;
+  /** The checkpoint's circle state, so its caption quote circle matches. */
+  circle?: CheckpointCircleState;
 }
+
+/** One thread (or checkpoint group) in the list: hairlines between, no card. */
+export const THREAD_ITEM_CLASS = 'py-3';
+
+/** The list inside the one comments card: threads split by hairlines. */
+export const THREAD_LIST_CLASS = 'flex flex-col divide-y divide-border';
+
+/** Briefs have no host card: the list draws the one card itself. Posts sit in
+ *  the page's comments card (PostDetailPage), so the list adds none. */
+export const OWN_CARD_CLASS = 'rounded-xl border bg-panel-2 px-4 lit-card-muted';
+
+/** The fixed left column: the root avatar, the group avatar or the point circle. */
+const LEAD_COLUMN_CLASS = 'flex w-11 shrink-0 justify-center';
 
 // ---------------------------------------------------------------------------
 // Component
@@ -1322,10 +1438,20 @@ export function Comments({
   const undoable = useUndoableAction();
 
   const [profiles, setProfiles] = useState<Map<string, CommentProfile>>(new Map());
-  const [attachmentMime, setAttachmentMime] = useState<Map<string, string>>(new Map());
+  // Every comment file's name, mime, size (and pages, pixel size) from one
+  // batched asset_versions read; an id not answered yet renders as a file card.
+  const [attachmentFiles, setAttachmentFiles] = useState<Map<string, CommentFile>>(new Map());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [replyOpen, setReplyOpen] = useState<Set<string>>(new Set());
+  // Thread roots whose older replies are shown ("View {n} earlier replies"
+  // tapped, or a link landed on one of them). Folded by default: latest only.
+  const [unfoldedReplies, setUnfoldedReplies] = useState<Set<string>>(new Set());
+  // Resolved checkpoints opened from their folded line (the ⌄).
+  const [openPoints, setOpenPoints] = useState<Set<string>>(new Set());
+  // What the last unfold revealed, so its rows rise into place (itemIn,
+  // translateY only) once they are in the DOM; null when nothing is pending.
+  const revealSelector = useRef<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
   // The edit box shows "@username"; these picks turn each back into its token on save.
@@ -1352,9 +1478,11 @@ export function Comments({
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   // The open image lightbox: the clicked comment's image list + current index,
   // or null when closed. Images reuse the same PresignCache (a cache hit).
-  const [lightbox, setLightbox] = useState<{ images: MessageAttachment[]; index: number } | null>(
-    null,
-  );
+  const [lightbox, setLightbox] = useState<{
+    images: MessageAttachment[];
+    index: number;
+    title: string;
+  } | null>(null);
 
   // Current user id is server-trusted (the session), never a prop. It gates the
   // edit / delete affordances; the procs re-check auth.uid() regardless.
@@ -1650,28 +1778,25 @@ export function Comments({
     };
   }, [peopleIds, candidates, workspaceId, registryProfile, namesPass]);
 
-  // Resolve attachment mimes in one batched read (image vs file dispatch).
-  const attemptedMime = useRef<Set<string>>(new Set());
+  // Every comment file in one batched read (name, mime, size, pages): no N+1.
+  // An id is asked once; a failed read un-asks its ids so the next pass asks
+  // again. No active flag: an answer is never dropped (the ids stay valid).
+  const askedFiles = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const needed: string[] = [];
-    for (const comment of merged) {
-      for (const id of comment.attachment_asset_ids ?? []) {
-        if (!attemptedMime.current.has(id)) {
-          attemptedMime.current.add(id);
-          needed.push(id);
-        }
-      }
-    }
+    const needed = idsToRead(
+      merged.flatMap((comment) => comment.attachment_asset_ids ?? []),
+      askedFiles.current,
+    );
     if (needed.length === 0) return;
-    let active = true;
-    void fetchAttachmentMime(supabase, needed).then((fetched) => {
-      if (active && fetched.size > 0) {
-        setAttachmentMime((prev) => new Map([...prev, ...fetched]));
+    for (const id of needed) askedFiles.current.add(id);
+    void fetchCommentFiles(supabase, needed).then((fetched) => {
+      if (fetched === null) {
+        for (const id of needed) askedFiles.current.delete(id);
+        return;
       }
+      if (!mounted.current || fetched.size === 0) return;
+      setAttachmentFiles((prev) => new Map([...prev, ...fetched]));
     });
-    return () => {
-      active = false;
-    };
   }, [merged]);
 
   const nameOf = useCallback((id: string): string | null => resolveName(known, id), [known]);
@@ -2178,7 +2303,7 @@ export function Comments({
   function renderReplyComposer(comment: CommentRow): ReactNode {
     const key = draftKey(comment.id);
     return (
-      <div className="mt-3 border-l border-border pl-4">
+      <div data-reply-composer="" className="mt-2">
         <CommentComposer
           key={`reply-${comment.id}-${composerEpochs.get(comment.id) ?? 0}`}
           onSubmit={(body, options) =>
@@ -2225,12 +2350,78 @@ export function Comments({
     [merged, hiddenIds],
   );
   const threads = buildThreads(displayed);
+
+  // A link (Activity, toast, email, search) to a folded row unfolds it: a
+  // reply behind "View {n} earlier replies" opens its thread's replies, and a
+  // resolved checkpoint (or a reply under one) opens the point. Adopted in
+  // render once the row is held, so the row is in the DOM on the same commit
+  // that useFocusTarget looks for it. Once per distinct link.
+  const focusKey =
+    focusId === null || focusId === '' ? null : `${focusId} ${focusRequestKey ?? ''}`;
+  const [unfoldedFor, setUnfoldedFor] = useState<string | null>(null);
+  if (focusKey !== null && focusKey !== unfoldedFor) {
+    const target = displayed.find((row) => row.id === focusId);
+    if (target !== undefined) {
+      setUnfoldedFor(focusKey);
+      const rootId = replyParentId(target);
+      if (target.parent_comment_id !== null && !unfoldedReplies.has(rootId)) {
+        setUnfoldedReplies((prev) => new Set(prev).add(rootId));
+      }
+      const root = displayed.find((row) => row.id === rootId);
+      if (
+        root !== undefined &&
+        root.ledger_seq !== null &&
+        root.resolved_at !== null &&
+        !openPoints.has(rootId)
+      ) {
+        setOpenPoints((prev) => new Set(prev).add(rootId));
+      }
+    }
+  }
+
+  // An unfold's revealed rows rise 8 px into place (itemIn: translateY only,
+  // instant under Reduce Motion). A fold closes at once.
+  useLayoutEffect(() => {
+    const selector = revealSelector.current;
+    if (selector === null) return;
+    revealSelector.current = null;
+    itemIn(rootRef.current?.querySelector<HTMLElement>(selector) ?? null);
+  });
+
+  function unfoldReplies(rootId: string): void {
+    revealSelector.current = `[data-replies-earlier="${rootId}"]`;
+    setUnfoldedReplies((prev) => new Set(prev).add(rootId));
+  }
+
+  function togglePoint(commentId: string): void {
+    const opening = !openPoints.has(commentId);
+    revealSelector.current = opening
+      ? `[id="${commentDomId(commentId)}"] [data-comment-row="root"]`
+      : null;
+    setOpenPoints((prev) => {
+      const next = new Set(prev);
+      if (opening) next.add(commentId);
+      else next.delete(commentId);
+      return next;
+    });
+  }
   // The header's Open / All filter applies to top-level threads; replies follow
   // their thread. The open count is over every thread, whatever the filter.
   const openCount = openThreadCount(threads);
   const resolvedCount = resolvedThreadCount(threads);
   const groups = groupThreads(filterThreads(threads, filter));
   const isClient = viewerIsClient === true;
+  // The next checkpoint number the client's slots continue from: the highest
+  // ledger_seq already held (deleted points keep their number), 0 when none.
+  const maxLedgerSeq = displayed.reduce(
+    (max, row) =>
+      row.parent_comment_id === null && row.ledger_seq !== null && row.ledger_seq > max
+        ? row.ledger_seq
+        : max,
+    0,
+  );
+  // Briefs have no host card around the list: it draws the one card itself.
+  const ownCard = entityType !== 'post';
 
   // itemIn (docs/motion.md): a comment or reply that arrives after the list
   // first painted (posted here, or live) rises 8 px into place, laid over its
@@ -2288,7 +2479,7 @@ export function Comments({
           className={ROW_ICON_ACTION_CLASS}
           onClick={() => void handleCopy(comment)}
         >
-          {copied ? <IconCheck size={ICON_SIZE.nav} /> : <IconCopy size={ICON_SIZE.nav} />}
+          {copied ? <IconCheck size={ICON_SIZE.inline} /> : <IconCopy size={ICON_SIZE.inline} />}
         </IconButton>
         {copied ? (
           <span role="status" className="sr-only">
@@ -2382,91 +2573,45 @@ export function Comments({
       });
     }
     return (
-      // -my-2 keeps the 44px target from making the header taller than its text.
-      <div className="relative shrink-0">
+      // The trailing end of the action line (ActionMenuTrigger pulls the 44 box
+      // out so its glyph sits on the content edge).
+      <div className="relative ml-auto shrink-0">
         <ActionMenu
           title={label}
           items={items}
           open={menuOpenId === comment.id}
           onOpenChange={(open) => setMenuOpenId(open ? comment.id : null)}
-          trigger={
-            <ActionMenuTrigger label={label} inLine aria-expanded={menuOpenId === comment.id} />
-          }
+          trigger={<ActionMenuTrigger label={label} aria-expanded={menuOpenId === comment.id} />}
         />
       </div>
     );
   }
 
   /**
-   * The ONE row template for every item: checkpoints, plain comments and
-   * replies. Avatar on the left; on the text column a header (name, role, "·",
-   * time in regular 12px, the checkpoint's "#n" in fg-3), the body, then one
-   * left-aligned action row (the leading control, Reply, Copy), all the same
-   * ghost style and 44px height. A reply puts its name on its own line, with
-   * role and time wrapping below it, so the name is never cut.
+   * Who wrote a row, as every row shows it: the name ('' only until the
+   * batched read answers; a gone person reads "Former member"), the photo, the
+   * role label, and a wrapper that makes a node open the person card (a legacy
+   * author has no user id: nothing to open).
    */
-  function renderRow(comment: CommentRow, opts: RowOptions): ReactNode {
-    const authorName =
-      // '' only until the batched read answers (a gone person reads "Former member").
-      comment.legacy_author_name ?? nameOf(comment.author_user_id) ?? '';
-    const authorAvatarUrl =
-      comment.legacy_author_name !== null ? null : avatarOf(comment.author_user_id);
+  function authorView(comment: CommentRow): {
+    name: string;
+    avatarUrl: string | null;
+    role: string | null;
+    asPerson: (node: ReactNode, display: 'inline' | 'block', className?: string) => ReactNode;
+  } {
+    const name = comment.legacy_author_name ?? nameOf(comment.author_user_id) ?? '';
+    const avatarUrl = comment.legacy_author_name !== null ? null : avatarOf(comment.author_user_id);
     const role = comment.legacy_author_name !== null ? null : roleOf(comment.author_user_id);
-    const editing = editingId === comment.id;
-    const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
-    // One link scan per row: the body's card link feeds both the text and the card.
-    const cardUrl = firstExternalUrl(comment.body);
-    const edited = pointEditedMarker(comment.edited_at, new Date(nowMs));
-
-    const meta = (
-      <>
-        {role !== null ? (
-          <span data-comment-role="" className="text-sm text-fg-3">
-            {role}
-          </span>
-        ) : null}
-        {!opts.reply || role !== null ? (
-          <span aria-hidden className="text-sm text-fg-3">
-            ·
-          </span>
-        ) : null}
-        <span data-comment-time="" className={ROW_TIME_CLASS}>
-          {formatAgo(comment.created_at, new Date(nowMs))}
-        </span>
-        {opts.seq !== null ? (
-          <span
-            data-checkpoint-seq=""
-            className="shrink-0 whitespace-nowrap text-sm tabular-nums text-fg-3"
-          >
-            #{opts.seq}
-          </span>
-        ) : null}
-        {edited !== null ? <span className="text-sm text-fg-3">{edited}</span> : null}
-      </>
-    );
-    const nameEl = (
-      <span
-        data-comment-author=""
-        className={cn(
-          'text-sm font-medium text-fg [overflow-wrap:anywhere]',
-          opts.reply ? 'block' : '',
-        )}
-      >
-        {authorName}
-      </span>
-    );
-    // The author's photo and name open the person card (a legacy author has no
-    // user id: nothing to open).
     const authorId = comment.legacy_author_name === null ? comment.author_user_id : null;
-    const authorSource = authorId !== null ? privateReplySource(comment, authorName) : null;
+    const source = authorId !== null ? privateReplySource(comment, name) : null;
     const asPerson = (node: ReactNode, display: 'inline' | 'block', className?: string) =>
-      authorId !== null && authorName !== '' ? (
+      authorId !== null && name !== '' ? (
         <PersonTrigger
           userId={authorId}
-          name={authorName}
-          avatarUrl={authorAvatarUrl ?? null}
-          {...(authorName === FORMER_MEMBER ? { former: true } : {})}
-          {...(authorSource !== null ? { source: authorSource } : {})}
+          name={name}
+          avatarUrl={avatarUrl ?? null}
+          {...(name === FORMER_MEMBER ? { former: true } : {})}
+          {...(source !== null ? { source } : {})}
           display={display}
           {...(className !== undefined ? { className } : {})}
         >
@@ -2475,49 +2620,92 @@ export function Comments({
       ) : (
         node
       );
-    const name = opts.reply ? asPerson(nameEl, 'block', 'max-w-full') : asPerson(nameEl, 'inline');
+    return { name, avatarUrl, role, asPerson };
+  }
+
+  // An author's avatar at a role ('header' on roots and groups, 'inline' on replies).
+  function authorAvatar(view: ReturnType<typeof authorView>, role: 'header' | 'inline'): ReactNode {
+    return view.asPerson(
+      <Avatar
+        name={view.name}
+        role={role}
+        {...(view.avatarUrl !== null && view.avatarUrl !== undefined
+          ? { src: view.avatarUrl }
+          : {})}
+      />,
+      'block',
+    );
+  }
+
+  // Name + role on one line (role truncates first; the name is never cut).
+  function authorLine(view: ReturnType<typeof authorView>): ReactNode {
+    return (
+      <>
+        {view.asPerson(
+          <span
+            data-comment-author=""
+            className="text-sm font-medium text-fg [overflow-wrap:anywhere]"
+          >
+            {view.name}
+          </span>,
+          'inline',
+        )}
+        {view.role !== null ? (
+          <span data-comment-role="" className="min-w-0 truncate text-sm text-fg-3">
+            {view.role}
+          </span>
+        ) : null}
+      </>
+    );
+  }
+
+  /**
+   * The ONE row template for every item: plain roots, checkpoint points and
+   * replies. A root sits beside its 44 lead column (avatar, or the point's
+   * circle); a reply sits on the root's text column with avatar 20 + name on
+   * one line. Then the body, then ONE action line at meta size: time, the
+   * leading control (Resolve / Confirm / "Open" / Reopen), Reply, Reply
+   * privately, Copy, and the author's ⋯ at the trailing edge. Every hit is 44.
+   */
+  function renderRow(comment: CommentRow, opts: RowOptions): ReactNode {
+    const view = authorView(comment);
+    const editing = editingId === comment.id;
+    // Attachments: the version ids and the batched comment-files read meet here.
+    const attachments = toCommentFileAttachments(comment.attachment_asset_ids, attachmentFiles);
+    // One link scan per row: the body's card link feeds both the text and the card.
+    const cardUrl = firstExternalUrl(comment.body);
+    const now = new Date(nowMs);
+    const edited = pointEditedMarker(comment.edited_at, now);
+    const privateReply = privateReplySource(comment, view.name);
+
+    const header = opts.point ? null : (
+      <div
+        data-comment-header=""
+        className={cn('flex min-w-0 items-center gap-2', opts.reply ? 'min-h-5' : 'min-h-8')}
+      >
+        {opts.reply ? <span className="flex shrink-0">{authorAvatar(view, 'inline')}</span> : null}
+        {authorLine(view)}
+      </div>
+    );
 
     return (
       <div
         data-comment-row={opts.reply ? 'reply' : 'root'}
-        className="flex min-w-0 items-start gap-3"
+        className="flex min-w-0 items-start gap-2"
       >
-        <span className="flex shrink-0">
-          {asPerson(
-            <Avatar
-              name={authorName}
-              role={opts.reply ? 'inline' : 'header'}
-              {...(authorAvatarUrl !== null && authorAvatarUrl !== undefined
-                ? { src: authorAvatarUrl }
-                : {})}
-            />,
-            'block',
-          )}
-        </span>
+        {opts.lead !== null ? <span className={LEAD_COLUMN_CLASS}>{opts.lead}</span> : null}
         <div className="min-w-0 flex-1">
-          <div data-comment-header="" className="flex min-w-0 items-start gap-2">
-            {opts.reply ? (
-              <div className="min-w-0 flex-1">
-                {name}
-                <div className="flex flex-wrap items-center gap-x-2">{meta}</div>
-              </div>
-            ) : (
-              <div className="flex min-h-8 min-w-0 flex-1 flex-wrap items-center gap-x-2">
-                {name}
-                {meta}
-              </div>
-            )}
-            {rowMenu(comment, opts.actions, opts.menuLabel)}
-          </div>
+          {header}
 
           {editing ? (
             renderEditor(comment.id)
           ) : (
-            <div className="mt-1">
+            <div className={opts.point ? 'pt-1' : 'mt-1'}>
               {annotationChip(
                 comment.id,
                 annotationsByCommentId?.[comment.id],
                 onAnnotationChipClick,
+                opts.circle,
               )}
               {comment.body.trim() !== '' ? (
                 <p
@@ -2535,21 +2723,43 @@ export function Comments({
                   attachments={attachments}
                   cache={presignCache}
                   presignEnabled={presignEnabled}
+                  backBar
                   onImageClick={(attachment) => {
                     const nav = commentImageNav(attachments, attachment.assetId);
-                    if (nav.images.length > 0) setLightbox(nav);
+                    if (nav.images.length > 0) {
+                      setLightbox({
+                        ...nav,
+                        title: commentViewerTitle(view.name, comment.created_at, new Date(nowMs)),
+                      });
+                    }
                   }}
                 />
               ) : null}
             </div>
           )}
 
-          {/* One action row on one line, left-aligned on the text column. */}
+          {/* One action line at meta size, on the text column. */}
           {!editing ? (
             <div data-comment-actions="" className={COMMENT_ACTIONS_ROW_CLASS}>
+              <Text
+                role="meta"
+                as="time"
+                dateTime={comment.created_at}
+                data-comment-time=""
+                className={ROW_TIME_CLASS}
+              >
+                {formatAgo(comment.created_at, now)}
+              </Text>
+              {edited !== null ? (
+                <Text role="meta" className="shrink-0 whitespace-nowrap pr-2">
+                  {edited}
+                </Text>
+              ) : null}
               {opts.leading}
               {opts.replyButton}
+              {privateReply !== null ? <ReplyPrivatelyButton draft={privateReply} /> : null}
               {opts.actions.canCopy ? copyControl(comment) : null}
+              {rowMenu(comment, opts.actions, opts.menuLabel)}
             </div>
           ) : null}
 
@@ -2589,7 +2799,8 @@ export function Comments({
     // A reply is never a tombstone (deleted replies are filtered out).
     return renderRow(reply, {
       reply: true,
-      seq: null,
+      point: false,
+      lead: null,
       menuLabel: 'Comment actions',
       actions: commentActions(reply, currentUserId, false),
       replyButton:
@@ -2608,7 +2819,8 @@ export function Comments({
     });
   }
 
-  // Under a root: the always-open replies list, then the root's reply composer.
+  // Under a root: the folded replies list, then the root's reply composer
+  // (inline, no rule, no indent).
   function renderThreadBelow(
     root: CommentRow,
     replies: CommentRow[],
@@ -2617,11 +2829,18 @@ export function Comments({
   ): ReactNode {
     return (
       <>
-        {renderReplyList(replies, (reply) =>
-          renderReplyRow(
-            reply,
-            replyToReply && !tombstone ? () => onReplyToReply(root, reply) : undefined,
-          ),
+        {renderReplyList(
+          replies,
+          (reply) =>
+            renderReplyRow(
+              reply,
+              replyToReply && !tombstone ? () => onReplyToReply(root, reply) : undefined,
+            ),
+          {
+            unfolded: unfoldedReplies.has(root.id),
+            onUnfold: () => unfoldReplies(root.id),
+            rootId: root.id,
+          },
         )}
         {!tombstone && replyOpen.has(root.id) ? renderReplyComposer(root) : null}
       </>
@@ -2639,9 +2858,33 @@ export function Comments({
     );
   }
 
+  // The agency's one-tap Resolve: a small checkbox + "Resolve" (no note, no
+  // sheet, no confirm; Undo lives in the bottom strip).
+  function resolveButton(
+    comment: CommentRow,
+    label: string,
+    dataAttr: 'box' | 'thread',
+  ): ReactNode {
+    return (
+      <Button
+        type="button"
+        role="checkbox"
+        aria-checked={false}
+        aria-label={label}
+        {...(dataAttr === 'box' ? { 'data-checkpoint-box': '' } : { 'data-comment-resolve': '' })}
+        onClick={() => handleOneTapResolve(comment)}
+        // axis: background-color on hover only; the tick shows at once.
+        variant="ghost"
+        className={ROW_ACTION_CLASS}
+      >
+        {checkpointBox(false, false)}
+        <span>{CHECKPOINT_BOX_LABEL}</span>
+      </Button>
+    );
+  }
+
   // One plain one-level thread on the row template. Its leading control is the
-  // thread's one-tap Resolve (Reopen once resolved); a resolved thread keeps the
-  // good-family card border.
+  // agency's one-tap Resolve (Reopen once resolved); clients get none.
   function renderThreadItem({ comment, replies, tombstone }: ThreadRoot): ReactNode {
     // Thread-level resolved state lives on the root comment. A tombstone
     // root cannot be resolved/reopened (the proc rejects a deleted comment).
@@ -2652,32 +2895,30 @@ export function Comments({
         as="li"
         key={comment.id}
         id={commentDomId(comment.id)}
-        className={cn(
-          'rounded-xl border bg-panel-2 px-4 py-3 lit-card-muted',
-          COMMENT_ROW_SCROLL_CLASS,
-          isResolved ? 'border-good' : '',
-        )}
+        className={cn(THREAD_ITEM_CLASS, COMMENT_ROW_SCROLL_CLASS)}
       >
         {tombstone
           ? renderTombstone(comment, replies)
           : renderRow(comment, {
               reply: false,
-              seq: null,
+              point: false,
+              lead: authorAvatar(authorView(comment), 'header'),
               menuLabel: 'Comment actions',
               actions: commentActions(comment, currentUserId, false),
-              leading: (
+              muted: isResolved,
+              leading: isClient ? null : isResolved ? (
                 <Button
                   type="button"
                   data-comment-resolve=""
                   variant="ghost"
                   className={ROW_ACTION_CLASS}
                   busy={isResolving}
-                  onClick={() =>
-                    isResolved ? void handleResolve(comment, false) : handleOneTapResolve(comment)
-                  }
+                  onClick={() => void handleResolve(comment, false)}
                 >
-                  {isResolved ? 'Reopen' : 'Resolve'}
+                  Reopen
                 </Button>
+              ) : (
+                resolveButton(comment, 'Resolve', 'thread')
               ),
               replyButton: rootReplyButton(comment),
               below: renderThreadBelow(comment, replies, false, true),
@@ -2686,105 +2927,156 @@ export function Comments({
     );
   }
 
-  // A checkpoint's leading controls: the checkbox with its word "Resolved", then
-  // (approver only, on a resolved and unconfirmed point) the one-tap Confirm. An
-  // agency member ticks an open checkpoint's box in one tap (no note, no
-  // confirm; Undo lives in the bottom strip); every other case is a passive box.
-  function checkpointLeading(comment: CommentRow, tombstone: boolean): ReactNode {
+  // A checkpoint's leading control in the action line. Agency, open point:
+  // the one-tap checkbox + "Resolve". Client: "Open" on their own open point,
+  // the one-tap Confirm on a resolved point they have not confirmed. The
+  // circle in the lead column carries the state; nothing else repeats it.
+  function checkpointLeading(comment: CommentRow): ReactNode {
     const seq = comment.ledger_seq ?? 0;
     const state = checkpointState(comment);
-    const live = !tombstone && tickInteractive(state, isClient);
     const confirmed = checkpointConfirmed(comment);
-    const filled = tickFilled(state, confirmed);
-    const confirmable = !tombstone && showCheckpointConfirm(state, isClient, confirmed);
-    return (
-      <>
-        {live ? (
-          <Button
-            type="button"
-            role="checkbox"
-            aria-checked={false}
-            aria-label={`Resolve checkpoint ${seq}`}
-            data-checkpoint-box=""
-            onClick={() => handleOneTapResolve(comment)}
-            // axis: background-color on hover only; the tick inside
-            // checkpointBox shows at once.
-            variant="ghost"
-            className={ROW_ACTION_CLASS}
-          >
-            {checkpointBox(false, false)}
-            <span>{CHECKPOINT_BOX_LABEL}</span>
-          </Button>
-        ) : (
-          <span
-            role="checkbox"
-            aria-checked={state === 'resolved'}
-            aria-disabled="true"
-            data-checkpoint-box=""
-            className={cn(
-              ROW_ACTION_STATIC_CLASS,
-              state === 'resolved' ? 'text-good' : 'text-fg-3',
-            )}
-          >
-            {checkpointBox(state === 'resolved', filled)}
-            <span>{CHECKPOINT_BOX_LABEL}</span>
-          </span>
-        )}
-        {confirmable ? (
-          <Button
-            type="button"
-            aria-label={`Confirm checkpoint ${seq}`}
-            data-checkpoint-confirm=""
-            onClick={() => handleConfirm(comment)}
-            // axis: background-color on hover only.
-            variant="ghost"
-            className={cn(ROW_ACTION_CLASS, 'text-good hover:text-good')}
-          >
-            Confirm
-          </Button>
-        ) : null}
-      </>
-    );
+    if (tickInteractive(state, isClient)) {
+      return resolveButton(comment, `Resolve checkpoint ${seq}`, 'box');
+    }
+    if (showCheckpointConfirm(state, isClient, confirmed)) {
+      return (
+        <Button
+          type="button"
+          aria-label={`Confirm checkpoint ${seq}`}
+          data-checkpoint-confirm=""
+          onClick={() => handleConfirm(comment)}
+          // axis: background-color on hover only.
+          variant="ghost"
+          className={cn(ROW_ACTION_CLASS, 'text-good hover:text-good')}
+        >
+          Confirm
+        </Button>
+      );
+    }
+    if (isClient && state === 'open' && comment.author_user_id === currentUserId) {
+      return (
+        <span data-checkpoint-open="" className={cn(ROW_ACTION_STATIC_CLASS, 'text-fg-2')}>
+          {CHECKPOINT_OPEN_LABEL}
+        </span>
+      );
+    }
+    return null;
   }
 
-  // Consecutive checkpoints from one author share one card; each checkpoint is
-  // its own row on the same template as a plain comment, divided by a rule.
-  // Everyone, clients included, can reply on the checkpoint or on any reply
-  // inside it (the reply posts to the checkpoint).
+  // One numbered point inside a checkpoint group. Open (or opened) points show
+  // in full beside their circle; a resolved point folds to ONE line
+  // ("{n} · {body first line}", ⌄) until tapped. A deleted point keeps its
+  // circle and number above its tombstone line.
+  function renderPoint({ comment, replies, tombstone }: ThreadRoot): ReactNode {
+    const seq = comment.ledger_seq ?? 0;
+    const circle = checkpointCircleState(comment);
+    const resolved = circle !== 'open';
+    // A point waiting on this viewer's Confirm stays whole (the Confirm is the
+    // one thing to do on it); every other resolved point folds.
+    const awaitingMe = showCheckpointConfirm(
+      checkpointState(comment),
+      isClient,
+      checkpointConfirmed(comment),
+    );
+    const open = openPoints.has(comment.id) || awaitingMe;
+    if (tombstone) {
+      return (
+        <div data-comment-row="root" className="flex min-w-0 items-start gap-2">
+          <span className={LEAD_COLUMN_CLASS}>
+            <CheckpointCircle n={seq} state={circle} />
+          </span>
+          <div className="min-w-0 flex-1 pt-1">{renderTombstone(comment, replies)}</div>
+        </div>
+      );
+    }
+    if (resolved && !open) {
+      return (
+        <PressableRow
+          type="button"
+          data-point-fold=""
+          aria-expanded={false}
+          onClick={() => togglePoint(comment.id)}
+          className="flex min-w-0 items-center gap-2"
+        >
+          <span className={LEAD_COLUMN_CLASS}>
+            <CheckpointCircle n={seq} state={circle} />
+          </span>
+          <Text role="secondary" className="min-w-0 flex-1">
+            {foldedPointText(seq, comment.body, handleOf)}
+          </Text>
+          <span aria-hidden className={cn(LEAD_COLUMN_CLASS, 'text-fg-3')}>
+            <IconChevronDown size={ICON_SIZE.inline} />
+          </span>
+        </PressableRow>
+      );
+    }
+    return renderRow(comment, {
+      reply: false,
+      point: true,
+      // A resolved point opened from its fold closes again from its circle.
+      lead:
+        resolved && !awaitingMe ? (
+          <IconButton
+            type="button"
+            label={`Fold checkpoint ${seq}`}
+            aria-expanded
+            data-point-unfold=""
+            className="-my-2"
+            onClick={() => togglePoint(comment.id)}
+          >
+            <CheckpointCircle n={seq} state={circle} />
+          </IconButton>
+        ) : (
+          <span className={cn(CHECKPOINT_HIT_CLASS, '-my-2')} data-point-circle="">
+            <CheckpointCircle n={seq} state={circle} />
+          </span>
+        ),
+      circle,
+      menuLabel: 'Checkpoint actions',
+      // Author-only edit/delete, hidden once the point is frozen (confirmed or
+      // locked); Copy stays on every live point. The proc re-checks auth.uid().
+      actions: pointActions(comment, currentUserId, false),
+      muted: resolved,
+      leading: checkpointLeading(comment),
+      replyButton: rootReplyButton(comment),
+      below: renderThreadBelow(comment, replies, false, true),
+    });
+  }
+
+  // Consecutive checkpoints from one author: the author ONCE (avatar, name,
+  // role, "{n} checkpoints · {time}"), then the numbered list. Everyone,
+  // clients included, can reply on a point or on any reply inside it (the
+  // reply posts to the point).
   function renderBatchItem(group: { authorId: string; threads: ThreadRoot[] }): ReactNode {
     const first = group.threads[0]?.comment;
     if (first === undefined) return null;
+    const view = authorView(first);
+    const latest = groupLatestAt(group.threads);
     return (
       <GlideItem
         as="li"
         key={`batch-${group.authorId}-${first.id}`}
-        className="rounded-xl border bg-panel-2 px-4 py-3 lit-card-muted"
+        data-checkpoint-group=""
+        className={THREAD_ITEM_CLASS}
       >
-        <ol className="flex flex-col">
-          {group.threads.map(({ comment, replies, tombstone }, index) => (
+        <div data-group-header="" className="flex min-w-0 items-center gap-2">
+          <span className={LEAD_COLUMN_CLASS}>{authorAvatar(view, 'header')}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">{authorLine(view)}</div>
+            <Text role="meta" as="p" data-group-meta="">
+              {checkpointGroupMeta(group.threads.length, formatAgo(latest, new Date(nowMs)))}
+            </Text>
+          </div>
+        </div>
+        <ol className="mt-2 flex flex-col gap-2">
+          {group.threads.map((thread) => (
             <li
-              key={comment.id}
-              id={commentDomId(comment.id)}
-              className={cn(
-                COMMENT_ROW_SCROLL_CLASS,
-                index > 0 ? 'mt-3 border-t border-border pt-3' : '',
-              )}
+              key={thread.comment.id}
+              id={commentDomId(thread.comment.id)}
+              data-point-state={checkpointCircleState(thread.comment)}
+              className={COMMENT_ROW_SCROLL_CLASS}
             >
-              {tombstone
-                ? renderTombstone(comment, replies)
-                : renderRow(comment, {
-                    reply: false,
-                    seq: comment.ledger_seq,
-                    menuLabel: 'Checkpoint actions',
-                    // Author-only edit/delete, hidden once the point is frozen
-                    // (confirmed or locked); Copy stays on every live point. The
-                    // proc re-checks auth.uid().
-                    actions: pointActions(comment, currentUserId, false),
-                    muted: checkpointState(comment) === 'resolved',
-                    leading: checkpointLeading(comment, false),
-                    replyButton: rootReplyButton(comment),
-                    below: renderThreadBelow(comment, replies, false, true),
-                  })}
+              {renderPoint(thread)}
             </li>
           ))}
         </ol>
@@ -2796,7 +3088,12 @@ export function Comments({
   // first and writing follows it.
   const composer =
     viewerIsClient === true && entityType === 'post' ? (
-      <SlotComposer onSubmit={handleCreateBatch} canAttach={canAttach} uploadFile={uploadFile} />
+      <SlotComposer
+        onSubmit={handleCreateBatch}
+        canAttach={canAttach}
+        uploadFile={uploadFile}
+        startSeq={maxLedgerSeq + 1}
+      />
     ) : (
       <CommentComposer
         // Remounts per entity (its own kept draft) and after a discarded draft.
@@ -2843,41 +3140,32 @@ export function Comments({
       </LiveCheckpointsContext.Provider>
 
       {loading ? (
-        <div aria-busy="true" className="flex flex-col gap-3">
+        <div aria-busy="true" className={cn(THREAD_LIST_CLASS, ownCard ? OWN_CARD_CLASS : '')}>
           <span className="sr-only">Loading comments</span>
           {[0, 1, 2].map((row) => (
-            <div
-              key={row}
-              aria-hidden
-              className="rounded-xl border bg-panel-2 px-4 py-3 lit-card-muted"
-            >
-              <div className="flex items-center gap-2">
+            <div key={row} aria-hidden className={cn(THREAD_ITEM_CLASS, 'flex gap-2')}>
+              <span className={LEAD_COLUMN_CLASS}>
                 <Bone lit="lit-avatar" as="div" className="h-8 w-8 shrink-0 rounded-full" />
-                <Bone lit="flat" as="div" className="h-3 w-24 rounded" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <Bone lit="flat" as="div" className="mt-2 h-3 w-24 rounded" />
+                <Bone lit="flat" as="div" className="mt-3 h-3 w-full rounded" />
+                <Bone lit="flat" as="div" className="mt-2 h-3 w-2/3 rounded" />
               </div>
-              <Bone lit="flat" as="div" className="mt-3 h-3 w-full rounded" />
-              <Bone lit="flat" as="div" className="mt-2 h-3 w-2/3 rounded" />
             </div>
           ))}
         </div>
       ) : loadError ? (
         <LoadError title="comments" onRetry={() => void reloadAll()} />
-      ) : threads.length === 0 ? (
+      ) : threads.length === 0 || groups.length === 0 ? (
         <div
           data-comments-empty=""
-          className="rounded-xl border bg-panel-2 px-4 py-8 text-center text-base text-fg-3 lit-card-muted"
+          className={cn('px-4 py-8 text-center text-base text-fg-3', ownCard ? OWN_CARD_CLASS : '')}
         >
-          {emptyListText(entityType, 'all')}
-        </div>
-      ) : groups.length === 0 ? (
-        <div
-          data-comments-empty=""
-          className="rounded-xl border bg-panel-2 px-4 py-8 text-center text-base text-fg-3 lit-card-muted"
-        >
-          {emptyListText(entityType, 'open')}
+          {emptyListText(entityType, threads.length === 0 ? 'all' : 'open')}
         </div>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul data-comments-list="" className={cn(THREAD_LIST_CLASS, ownCard ? OWN_CARD_CLASS : '')}>
           {groups.map((group) =>
             group.kind === 'batch' ? renderBatchItem(group) : renderThreadItem(group.thread),
           )}
@@ -2950,6 +3238,7 @@ export function Comments({
           index={lightbox.index}
           cache={presignCache}
           presignEnabled={presignEnabled}
+          backBar={{ title: lightbox.title }}
           onIndexChange={(index) =>
             setLightbox((prev) => (prev !== null ? { ...prev, index } : prev))
           }

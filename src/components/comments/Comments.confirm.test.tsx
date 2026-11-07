@@ -9,7 +9,7 @@ import type { ToastOptions } from '@/components/ui/toast/types';
 // the approver sees "Confirm" (44px) on a resolved point; one tap calls
 // checkpoint_accept once (optimistic), the bottom strip says "Confirmed" with
 // Undo for 4 seconds, and Undo calls checkpoint_accept with accepted=false. The
-// row word stays "Resolved" throughout: hollow tick before, filled tick after.
+// circle is the state: good outline before, filled after (then the point folds).
 // The creator never sees Confirm.
 
 type ListResult = CommentResult<CommentRow[]>;
@@ -161,8 +161,12 @@ function confirmButton(seq: number): HTMLButtonElement | undefined {
 function rowEl(id: string): HTMLElement | null {
   return host?.querySelector(`#comment-${id}`) ?? null;
 }
+/** The point's circle: 'resolved' (good outline) or 'confirmed' (filled). */
 function rowTick(id: string): string | null {
-  return rowEl(id)?.querySelector('[data-tick]')?.getAttribute('data-tick') ?? null;
+  return (
+    rowEl(id)?.querySelector('[data-checkpoint-circle]')?.getAttribute('data-checkpoint-circle') ??
+    null
+  );
 }
 function rowText(id: string): string {
   return rowEl(id)?.textContent ?? '';
@@ -192,21 +196,20 @@ describe('approver Confirm on a resolved checkpoint', () => {
     checkpointRows.current = [point('p-1', 1)];
     await mount(true);
 
-    // Before: "Resolved" with a HOLLOW tick, and a 44px "Confirm".
+    // Before: the good-outline circle, and a 44px "Confirm" (the point stays
+    // whole while it waits on this approver).
     const tap = confirmButton(1);
     expect(tap).toBeDefined();
     expect(tap?.textContent).toContain('Confirm');
     expect(tap?.className).toContain('min-h-11');
     expect(tap?.className).toContain('min-w-11');
-    expect(rowText('p-1')).toContain('Resolved');
-    expect(rowTick('p-1')).toBe('hollow');
+    expect(rowTick('p-1')).toBe('resolved');
 
     act(() => tap?.click());
 
-    // Optimistic: Confirm hides, tick fills, word stays "Resolved", never "Confirmed".
+    // Optimistic: Confirm hides, the circle fills, never the word "Confirmed".
     expect(confirmButton(1)).toBeUndefined();
-    expect(rowTick('p-1')).toBe('filled');
-    expect(rowText('p-1')).toContain('Resolved');
+    expect(rowTick('p-1')).toBe('confirmed');
     expect(rowText('p-1')).not.toContain('Confirmed');
 
     expect(acceptSpy).toHaveBeenCalledTimes(1);
@@ -225,7 +228,7 @@ describe('approver Confirm on a resolved checkpoint', () => {
     expect(UNDO_MS).toBe(4000);
 
     await settle();
-    expect(rowTick('p-1')).toBe('filled');
+    expect(rowTick('p-1')).toBe('confirmed');
 
     act(() => toasts[0]?.action?.onPress());
     await settle();
@@ -237,17 +240,15 @@ describe('approver Confirm on a resolved checkpoint', () => {
       p_trace_id: 'trace-1',
     });
     expect(confirmButton(1)).toBeDefined();
-    expect(rowTick('p-1')).toBe('hollow');
-    expect(rowText('p-1')).toContain('Resolved');
+    expect(rowTick('p-1')).toBe('resolved');
   });
 
-  it('a point already confirmed shows "Resolved" with a filled tick and no Confirm', async () => {
+  it('a point already confirmed folds with a filled circle and no Confirm', async () => {
     checkpointRows.current = [point('p-1', 1, { accepted_at: '2026-02-02T00:00:00.000Z' })];
     await mount(true);
 
     expect(confirmButton(1)).toBeUndefined();
-    expect(rowTick('p-1')).toBe('filled');
-    expect(rowText('p-1')).toContain('Resolved');
+    expect(rowTick('p-1')).toBe('confirmed');
     expect(rowText('p-1')).not.toContain('Confirmed');
   });
 
@@ -261,7 +262,7 @@ describe('approver Confirm on a resolved checkpoint', () => {
 
     expect(dismissSpy).toHaveBeenCalledWith('toast-1');
     expect(confirmButton(1)).toBeDefined();
-    expect(rowTick('p-1')).toBe('hollow');
+    expect(rowTick('p-1')).toBe('resolved');
     const alerts = Array.from(host?.querySelectorAll('[role="alert"]') ?? []);
     expect(alerts.map((a) => a.textContent)).toEqual([CONFIRM_FAILED_COPY]);
     expect(CONFIRM_FAILED_COPY).toBe("Couldn't confirm the checkpoint. Try again.");
@@ -277,8 +278,8 @@ describe('approver Confirm on a resolved checkpoint', () => {
     expect(confirmButton(1)).toBeUndefined();
     expect(confirmButton(2)).toBeUndefined();
     expect(host?.textContent ?? '').not.toMatch(/\bConfirm\b/);
-    expect(rowTick('p-1')).toBe('hollow');
-    expect(rowTick('p-2')).toBe('filled');
+    expect(rowTick('p-1')).toBe('resolved');
+    expect(rowTick('p-2')).toBe('confirmed');
     expect(acceptSpy).not.toHaveBeenCalled();
   });
 });

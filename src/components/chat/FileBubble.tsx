@@ -84,7 +84,9 @@ export function fileMetaParts(
   const parts: Array<{ text: string; mono: boolean }> = [
     { text: fileKindLabel(attachment.mime), mono: false },
   ];
-  const pages = thumbnailMetaOf(attachment)?.pageCount;
+  // A stored thumbnail carries the count; a comment file has it from its
+  // asset_versions row (page_count) with no thumbnail meta.
+  const pages = thumbnailMetaOf(attachment)?.pageCount ?? attachment.pageCount;
   if (pages !== undefined) {
     parts.push({ text: pages === 1 ? '1 page' : `${pages} pages`, mono: true });
   }
@@ -118,6 +120,8 @@ interface FileBubbleProps {
   attachment: MessageAttachment;
   cache: PresignCache;
   presignEnabled: boolean;
+  /** Comments: the viewer opens with the over-the-app bar ("<" Back). Chat omits it. */
+  backBar?: boolean | undefined;
 }
 
 /** What the card shows; everything is decided before it renders. */
@@ -295,7 +299,12 @@ export function fileBubbleState(sending: boolean, failed: boolean): 'sending' | 
   return sending ? 'sending' : failed ? 'error' : 'sent';
 }
 
-export function FileBubble({ attachment, cache, presignEnabled }: FileBubbleProps): ReactElement {
+export function FileBubble({
+  attachment,
+  cache,
+  presignEnabled,
+  backBar,
+}: FileBubbleProps): ReactElement {
   const kind = classifyFileKind(attachment.mime);
   const ratio = reservedRatio(attachment);
   const localFile = attachment.local?.file ?? null;
@@ -372,6 +381,7 @@ export function FileBubble({ attachment, cache, presignEnabled }: FileBubbleProp
           source={source}
           onClose={() => setOpen(false)}
           onLoadError={() => setOpenFailed(true)}
+          {...(backBar === true ? { backBar: true } : {})}
         />
       ) : null}
     </div>

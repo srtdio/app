@@ -15,9 +15,9 @@ import {
 } from '@/components/comments/Comments';
 import { buttonClass } from '@/components/ui/Button';
 
-// Button system regression: every comment row action (Copy, Reply, Resolve,
-// the checkpoint checkbox, Confirm) and the Open / All filter is a <Button>,
-// 44 tall with the 8px radius, 14 / 500.
+// Button system regression: every comment row action (Reply, Resolve, Confirm,
+// View earlier replies) is a ghost <Button>: a 44 hit (44 tall, 44 wide
+// minimum, 8px radius) with the visible word at meta size (12 / 500).
 
 const SRC = readFileSync(fileURLToPath(new URL('./Comments.tsx', import.meta.url)), 'utf8');
 
@@ -25,35 +25,28 @@ function tokens(cls: string): string[] {
   return cls.split(/\s+/).filter(Boolean);
 }
 
-const BAD = ['h-8', 'h-9', 'h-10', 'h-12', 'rounded-md', 'rounded-xl', 'font-semibold', 'text-sm'];
-
 describe('Comments row actions', () => {
-  it('a ghost row action renders 44 tall, 8px radius, 14 / 500, 44 wide minimum', () => {
+  it('a ghost row action keeps the 44 hit and 8px radius, with small type', () => {
     const t = tokens(buttonClass('ghost', 'default', ROW_ACTION_CLASS));
-    for (const want of ['h-11', 'min-h-11', 'min-w-11', 'rounded-lg', 'text-base', 'font-medium']) {
+    for (const want of ['h-11', 'min-h-11', 'min-w-11', 'rounded-lg', 'text-sm', 'font-medium']) {
       expect(t).toContain(want);
     }
-    for (const bad of BAD) expect(t).not.toContain(bad);
+    expect(t).not.toContain('text-base');
+    for (const bad of ['h-8', 'h-9', 'h-10', 'rounded-md', 'rounded-xl', 'font-semibold']) {
+      expect(t).not.toContain(bad);
+    }
   });
 
-  it('the row-action layout carries no height, radius, padding or type of its own', () => {
-    const t = tokens(ROW_ACTION_CLASS);
-    expect(t.some((c) => /^(h-|rounded|px-|text-(xs|sm|base)|font-)/.test(c))).toBe(false);
-  });
-
-  it('the passive checkbox matches the button box', () => {
+  it('the passive "Open" word matches the button box', () => {
     const t = tokens(ROW_ACTION_STATIC_CLASS);
-    for (const want of ['h-11', 'min-h-11', 'px-3', 'text-base', 'font-medium']) {
+    for (const want of ['h-11', 'min-h-11', 'min-w-11', 'text-sm', 'font-medium']) {
       expect(t).toContain(want);
     }
   });
 
-  it('the action row is one line and gives its text actions 12px side padding', () => {
+  it('the action line is one flex line of 44 boxes', () => {
     const t = tokens(COMMENT_ACTIONS_ROW_CLASS);
-    for (const want of ['flex', 'flex-nowrap', 'items-center', 'gap-1', '[&>button]:px-3']) {
-      expect(t).toContain(want);
-    }
-    expect(t).not.toContain('flex-wrap');
+    for (const want of ['flex', 'items-center']) expect(t).toContain(want);
   });
 
   it('row actions and filters are Buttons, not raw buttons with their own recipe', () => {

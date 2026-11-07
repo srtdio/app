@@ -1,6 +1,4 @@
 // @vitest-environment jsdom
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -174,38 +172,4 @@ describe('glowTarget (arrival tint)', () => {
     expect(layer(el)).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
   });
-});
-
-describe('search highlight contrast, light and dark', () => {
-  const css = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
-  const HASH = String.fromCharCode(35);
-  function tokens(selector: string): Map<string, string> {
-    const start = css.indexOf(`${selector} {`);
-    const body = css.slice(start, css.indexOf('}', start));
-    const out = new Map<string, string>();
-    const pattern = new RegExp(`--([\\w-]+):\\s*${HASH}([0-9a-f]{6});`, 'gi');
-    for (const match of body.matchAll(pattern)) out.set(match[1] ?? '', match[2] ?? '');
-    return out;
-  }
-  function luminance(hex: string): number {
-    const [r = 0, g = 0, b = 0] = [0, 2, 4].map((i) => {
-      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
-      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    });
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  }
-  function ratio(a: string, b: string): number {
-    const [hi = 0, lo = 0] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-    return (hi + 0.05) / (lo + 0.05);
-  }
-
-  for (const [theme, selector] of [
-    ['light', ':root'],
-    ['dark', '.dark'],
-  ] as const) {
-    it(`--fg on --annotation-bg is at least 4.5:1 (${theme})`, () => {
-      const t = tokens(selector);
-      expect(ratio(t.get('fg') ?? '', t.get('annotation-bg') ?? '')).toBeGreaterThanOrEqual(4.5);
-    });
-  }
 });

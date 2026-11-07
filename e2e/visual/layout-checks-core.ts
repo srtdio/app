@@ -261,7 +261,16 @@ export function sameWidth(before: number, after: number, tolerance = WIDTH_TOLER
 
 /** One check's finding, named by screen and element. */
 export interface LayoutViolation {
-  check: 'one-line' | 'tap-overlap' | 'edge' | 'part-roles' | 'busy-width' | 'list-card';
+  check:
+    | 'one-line'
+    | 'tap-overlap'
+    | 'edge'
+    | 'part-roles'
+    | 'busy-width'
+    | 'list-card'
+    | 'pinned-bar'
+    | 'under-bar'
+    | 'tray-tiles';
   message: string;
 }
 
@@ -351,4 +360,79 @@ export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
     }
   }
   return out;
+}
+
+/** A pinned bar holds its top within this many px while the page scrolls. */
+export const PINNED_TOLERANCE_PX = 1;
+
+/** The pinned exit bar measured at the top of the page and again after a scroll. */
+export interface PinnedBarGeom {
+  /** False when the screen has no pinned exit bar ([data-header-pin] / [data-header-pinned]). */
+  found: boolean;
+  /** The bar's top with the page at its top. */
+  topAtRest: number;
+  /** The bar's top after the scroll. */
+  topScrolled: number;
+  /** How far the scroller really moved (0: the page is too short to scroll). */
+  scrolledBy: number;
+}
+
+/**
+ * The exit bar of a screen that opens over the app stays pinned while the page
+ * scrolls (ui/HeaderBar `pinned`): after the scroll its top is where it was at
+ * rest. A page too short to scroll proves nothing and passes. Pure.
+ */
+export function pinnedBarViolations(geom: PinnedBarGeom): string[] {
+  if (!geom.found) return ['no pinned exit bar ([data-header-pin] or [data-header-pinned])'];
+  if (geom.scrolledBy <= 0) return [];
+  if (Math.abs(geom.topScrolled - geom.topAtRest) > PINNED_TOLERANCE_PX) {
+    return [
+      `the exit bar moved from top ${geom.topAtRest} to ${geom.topScrolled} after a ` +
+        `${geom.scrolledBy}px scroll (it must stay pinned)`,
+    ];
+  }
+  return [];
+}
+
+/** The checkpoint progress row and the bar it pins under. */
+export interface UnderBarGeom {
+  /** The bar's box ([data-header-bar]); null when there is none. */
+  bar: Box | null;
+  /** The progress row's box ([data-checkpoint-progress-row]); null when there is none. */
+  row: Box | null;
+  /** The row sits inside the bar's pinned block ([data-header-pin]). */
+  insidePin: boolean;
+}
+
+/**
+ * The post's checkpoint progress row sits directly under the exit bar, in the
+ * same pinned block: its top is the bar's bottom (within 1px). Pure.
+ */
+export function underBarViolations(geom: UnderBarGeom): string[] {
+  if (geom.bar === null) return ['no exit bar ([data-header-bar])'];
+  if (geom.row === null) return ['no checkpoint progress row ([data-checkpoint-progress-row])'];
+  const out: string[] = [];
+  if (!geom.insidePin) {
+    out.push('the progress row is not inside the pinned block ([data-header-pin])');
+  }
+  const gap = geom.row.y - (geom.bar.y + geom.bar.height);
+  if (Math.abs(gap) > PINNED_TOLERANCE_PX) {
+    out.push(`the progress row starts ${Math.round(gap * 10) / 10}px from the bar's bottom, not 0`);
+  }
+  return out;
+}
+
+/** The comment composers' "+" tray: exactly these tiles, in this order. */
+export const COMMENT_TRAY_TILE_IDS = ['photos', 'file', 'assets'] as const;
+
+/** The open tray's tile ids ([data-tray-tile]) against the expected ones, in order. Pure. */
+export function trayTileViolations(
+  tiles: readonly string[],
+  expected: readonly string[] = COMMENT_TRAY_TILE_IDS,
+): string[] {
+  if (tiles.length === expected.length && tiles.every((id, i) => id === expected[i])) return [];
+  return [
+    `the "+" tray shows ${tiles.length} tiles (${tiles.join(', ') || 'none'}), ` +
+      `not ${expected.length} (${expected.join(', ')})`,
+  ];
 }

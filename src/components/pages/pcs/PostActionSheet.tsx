@@ -1,6 +1,5 @@
 // F8 PCS post ⋯ menu (ui/ActionMenu: a Sheet on phone, a popover on laptop)
-// on the live post header: Open in pipeline (embedded in a plan item), Copy
-// link, the creator's stage moves, Send to chat, Download all images, Remove
+// on the live post header: Copy link, the creator's stage moves, Send to chat, Download all images, Remove
 // image and Delete post, in the one ⋯ order (Open, Copy link, the rest, Delete
 // last). Frontend only, no schema, no Postgres write, no new RPC. Each action
 // reuses an existing path:
@@ -27,7 +26,6 @@ import {
   IconDownload,
   IconForward,
   IconLink,
-  IconPipeline,
   IconTrash,
   type IconProps,
 } from '@/components/ui/icons';
@@ -98,8 +96,6 @@ interface PostActionSheetProps {
    * window, the proc call, the failure toast and the navigation.
    */
   onDeletePost: () => Promise<void> | void;
-  /** Embedded in a plan item: the first row, Open in pipeline. Absent elsewhere. */
-  onOpenInPipeline?: () => void;
   /** Stage moves (creators only); absent or empty shows none. */
   moveRows?: readonly PostMoveRow[];
   /**
@@ -131,7 +127,6 @@ export const POST_ACTIONS_TITLE = 'Post actions';
 
 /** What the menu offers and what each row does. */
 export interface PostActionItemsInput {
-  onOpenInPipeline?: (() => void) | undefined;
   /** The plan item's Move to another day, when the item screen provides it. */
   onMoveInPlan?: (() => void) | undefined;
   moveRows?: readonly PostMoveRow[];
@@ -146,15 +141,6 @@ export interface PostActionItemsInput {
 /** The menu rows in the one ⋯ order (Open, Copy link, the rest, Delete last). Pure. */
 export function postActionItems(input: PostActionItemsInput): ActionMenuItem[] {
   const items: ActionMenuItem[] = [];
-  if (input.onOpenInPipeline !== undefined) {
-    items.push({
-      id: 'open-pipeline',
-      label: 'Open in pipeline',
-      icon: IconPipeline,
-      description: 'See this post in the pipeline',
-      onSelect: input.onOpenInPipeline,
-    });
-  }
   items.push({
     id: 'copy-link',
     label: 'Copy link',
@@ -227,14 +213,12 @@ export function postActionItems(input: PostActionItemsInput): ActionMenuItem[] {
 
 /** The action row labels in menu order. Pure. */
 export function postActionLabels(opts: {
-  openInPipeline: boolean;
   download: boolean;
   canDelete: boolean;
   removeImage?: boolean;
 }): string[] {
   const noop = (): void => {};
   return postActionItems({
-    ...(opts.openInPipeline ? { onOpenInPipeline: noop } : {}),
     onSendToChat: noop,
     onCopyLink: noop,
     download: opts.download ? { count: 1, busy: false, onSelect: noop } : null,
@@ -295,7 +279,6 @@ export function PostActionSheet({
   onToast,
   canDelete,
   onDeletePost,
-  onOpenInPipeline,
   moveRows = [],
   removeImage,
 }: PostActionSheetProps): ReactElement {
@@ -351,7 +334,6 @@ export function PostActionSheet({
   // Spec B7: no confirm. The menu closes, then the page deletes behind its
   // Undo strip ("Post deleted" · Undo, UNDO_MS).
   const items = postActionItems({
-    onOpenInPipeline,
     ...(planRows !== null ? { onMoveInPlan: planRows.onMove } : {}),
     moveRows,
     onSendToChat: () => setChatOpen(true),

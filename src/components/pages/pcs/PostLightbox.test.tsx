@@ -29,7 +29,6 @@ import {
   slideViewerKind,
   markOpenFailed,
   PostLightbox,
-  removeImageConfirmCopy,
   DOWNLOAD_DONE,
   DOWNLOAD_FAILED,
 } from '@/components/pages/pcs/PostLightbox';
@@ -129,7 +128,6 @@ const GESTURES: StageGestures = {
 
 const MANAGE = {
   onAddAfter: () => {},
-  onRemove: () => {},
 };
 
 function props(overrides: Partial<LightboxViewProps> = {}): LightboxViewProps {
@@ -320,10 +318,9 @@ describe('lightboxView', () => {
     ).toBe(true);
   });
 
-  it('renders the agency bottom bar: download/add/delete, no per-tap reorder (#26)', () => {
+  it('renders the agency bottom bar: download/add, no Delete image, no per-tap reorder (#26)', () => {
     const manage = {
       onAddAfter: vi.fn(),
-      onRemove: vi.fn(),
     };
     const tree = lightboxView(props({ index: 1, manage }));
     // The add control fires its prewired handler, and every icon button is a
@@ -336,14 +333,15 @@ describe('lightboxView', () => {
       (button.props as { onClick: () => void }).onClick();
       expect(fn).toHaveBeenCalledOnce();
     }
-    // Download now lives in the bottom bar next to add and delete.
+    // Download lives in the bottom bar next to add. The duplicate Delete image
+    // is cut: Remove image (post ⋯ menu, slide actions) is the one way, behind
+    // the page's Undo strip.
     expect(byLabel(tree, 'Download')).toBeDefined();
-    expect(byLabel(tree, 'Delete image')).toBeDefined();
+    expect(byLabel(tree, 'Delete image')).toBeUndefined();
     // Add keeps the overlay ink it always rendered with (text-accent lost to it
-    // by CSS order; cn() now merges, so it is gone); delete hovers to bad.
+    // by CSS order; cn() now merges, so it is gone).
     expect(className(byLabel(tree, 'Add image')!)).toContain('text-overlay-fg');
     expect(className(byLabel(tree, 'Add image')!)).not.toContain('text-accent');
-    expect(className(byLabel(tree, 'Delete image')!)).toContain('hover:text-bad');
     // #26: no per-tap reorder (each tap saved a version); Reorder mode in the
     // gallery is the one way to reorder.
     for (const label of ['Make first', 'Move left', 'Move right', 'Make last']) {
@@ -367,88 +365,13 @@ describe('lightboxView', () => {
     expect(inBottom.some((el) => byLabelEq(el, 'Download'))).toBe(true);
   });
 
-  it('enables delete on the last remaining image and confirms with the only-image copy', () => {
-    // A single-image gallery: delete is enabled now (an empty gallery is valid),
-    // and tapping it requests the confirm swap.
-    const onRequestRemove = vi.fn();
-    const solo = lightboxView(
-      props({ items: [item(0)], index: 0, manage: MANAGE, onRequestRemove }),
-    );
-    const soloDelete = byLabel(solo, 'Delete image')!;
-    expect((soloDelete.props as { disabled?: boolean }).disabled).toBeUndefined();
-    (soloDelete.props as { onClick: () => void }).onClick();
-    expect(onRequestRemove).toHaveBeenCalledOnce();
-
-    // Confirming on the solo gallery shows the only-image heading and body, and
-    // Remove runs onConfirmRemove (which empties the gallery and closes the
-    // viewer once items drains). Today's shorter copy is gone here.
-    const onConfirmRemove = vi.fn();
-    const confirming = lightboxView(
-      props({
-        items: [item(0)],
-        index: 0,
-        manage: MANAGE,
-        removeConfirming: true,
-        onConfirmRemove,
-      }),
-    );
-    const text = strings(confirming);
-    expect(text).toContain('Delete the only image?');
-    expect(text).toContain(
-      'The post goes back to having no artwork, for everyone. The file stays in Assets.',
-    );
-    expect(text).not.toContain('Remove this image?');
-    const remove = elements(confirming).find(
-      (el) => (el.props as { children?: ReactNode }).children === 'Remove',
-    )!;
-    (remove.props as { onClick: () => void }).onClick();
-    expect(onConfirmRemove).toHaveBeenCalledOnce();
-
-    // With more than one image delete still opens the confirm swap, and the copy
-    // keeps today's shorter wording without the only-image body.
-    const multiRequest = vi.fn();
-    const multi = lightboxView(props({ index: 1, manage: MANAGE, onRequestRemove: multiRequest }));
-    const multiDelete = byLabel(multi, 'Delete image')!;
-    expect((multiDelete.props as { disabled?: boolean }).disabled).toBeUndefined();
-    (multiDelete.props as { onClick: () => void }).onClick();
-    expect(multiRequest).toHaveBeenCalledOnce();
-    const multiConfirm = lightboxView(props({ index: 1, manage: MANAGE, removeConfirming: true }));
-    expect(strings(multiConfirm)).toContain('Remove this image?');
-    expect(strings(multiConfirm)).not.toContain('Delete the only image?');
-  });
-
-  it('swaps the bottom bar for a confirm row: cancel restores, remove runs onConfirmRemove', () => {
-    const onCancelRemove = vi.fn();
-    const onConfirmRemove = vi.fn();
-    const tree = lightboxView(
-      props({
-        index: 1,
-        manage: MANAGE,
-        removeConfirming: true,
-        onCancelRemove,
-        onConfirmRemove,
-      }),
-    );
-    // The confirm row replaces the controls; the reorder/add buttons are gone.
-    expect(strings(tree)).toContain('Remove this image?');
-    expect(byLabel(tree, 'Add image')).toBeUndefined();
-
-    // Cancel restores the bar; Remove runs the existing remove handler.
-    const cancel = elements(tree).find(
-      (el) => (el.props as { children?: ReactNode }).children === 'Cancel',
-    )!;
-    const remove = elements(tree).find(
-      (el) => (el.props as { children?: ReactNode }).children === 'Remove',
-    )!;
-    expect(remove.type).toBe(Button);
-    expect((remove.props as { variant?: string }).variant).toBe('secondary');
-    expect(className(remove)).toContain('h-11');
-    expect(className(remove)).toContain('rounded-lg');
-    expect(className(remove)).toContain('text-bad');
-    (cancel.props as { onClick: () => void }).onClick();
-    expect(onCancelRemove).toHaveBeenCalledOnce();
-    (remove.props as { onClick: () => void }).onClick();
-    expect(onConfirmRemove).toHaveBeenCalledOnce();
+  it('no remove confirm anywhere: neither confirm copy renders, solo or not', () => {
+    for (const items of [[item(0)], [item(0), item(1), item(2)]]) {
+      const text = strings(lightboxView(props({ items, index: 0, manage: MANAGE })));
+      expect(text).not.toContain('Delete the only image?');
+      expect(text).not.toContain('Remove this image?');
+      expect(text).not.toContain('Remove');
+    }
   });
 
   it('renders one snapping carousel slide per item, navigable by swipe or overlay arrows', () => {
@@ -847,19 +770,17 @@ describe('a broken file never blanks the post or brief', () => {
 });
 
 describe('W2 gallery and download', () => {
-  it('while a gallery save is in flight, delete is blocked and the bar says Saving…', () => {
+  it('while a gallery save is in flight the bar says Saving…', () => {
     const tree = lightboxView(props({ index: 1, manage: MANAGE, saving: true }));
-    for (const label of ['Delete image']) {
-      expect((byLabel(tree, label)!.props as { disabled?: boolean }).disabled).toBe(true);
-    }
     expect(strings(tree)).toContain('Saving…');
     const idle = lightboxView(props({ index: 1, manage: MANAGE }));
     expect(strings(idle)).not.toContain('Saving…');
   });
 
-  it("the remove confirm copy is this viewer's; the slide actions sheet removes at once (Undo strip)", () => {
-    expect(removeImageConfirmCopy(1).title).toBe('Delete the only image?');
-    expect(removeImageConfirmCopy(3)).toEqual({ title: 'Remove this image?', message: null });
+  it('no remove confirm copy is left; the slide actions sheet removes at once (Undo strip)', () => {
+    const src = readFileSync(fileURLToPath(new URL('./PostLightbox.tsx', import.meta.url)), 'utf8');
+    expect(src).not.toContain('removeImageConfirmCopy');
+    expect(src).not.toContain('Delete image');
     const sheet = readFileSync(
       fileURLToPath(new URL('./SlideActionsSheet.tsx', import.meta.url)),
       'utf8',

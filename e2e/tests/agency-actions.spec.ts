@@ -130,7 +130,7 @@ test('Activity: "<Name> approved" under the title, no brand suffix, never KEY-N'
 });
 
 // A post's platform always equals its workspace's. The PCS "{Platform} preview"
-// chip and panel name the workspace platform and list that platform's sizes.
+// chip and panel name the workspace platform and draw that platform's chrome.
 // Tagged @theme for light and dark.
 
 function workspaceLabel(page: Page) {
@@ -140,8 +140,8 @@ function workspaceLabel(page: Page) {
 }
 
 const CASES = [
-  { platform: 'linkedin', label: 'LinkedIn', format: 'carousel', size: '1200 x 627 · 1.91:1' },
-  { platform: 'instagram', label: 'Instagram', format: 'carousel', size: '1080 x 566 · 1.91:1' },
+  { platform: 'linkedin', label: 'LinkedIn', format: 'carousel' },
+  { platform: 'instagram', label: 'Instagram', format: 'carousel' },
 ] as const;
 
 for (const c of CASES) {
@@ -162,13 +162,10 @@ for (const c of CASES) {
 
     const panel = page.getByRole('dialog', { name: `${c.label} preview` });
     await expect(panel).toBeVisible();
-    // It opens on the frame the post page shows, then lists the platform's sizes.
-    await expect(panel.getByRole('radio', { name: /This post/ })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
-    await expect(panel.getByRole('radio', { name: /Portrait/ })).toBeVisible();
-    await expect(panel).toContainText(c.size);
+    // It draws the post in that platform's own feed card: no size picker.
+    await expect(panel.locator(`[data-preview-platform="${c.platform}"]`)).toBeVisible();
+    await expect(panel.locator(`[data-preview-chrome="feed-${c.platform}"]`)).toBeVisible();
+    await expect(panel.getByRole('radio')).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(panel).toHaveCount(0);
     expect(network.blocked, 'blocked non-fixture requests').toEqual([]);

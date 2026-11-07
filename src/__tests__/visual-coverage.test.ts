@@ -215,10 +215,20 @@ const REQUIRED: readonly string[] = [
   'plan-tab-chip-next',
   'plan-tab-week-zero',
   'post-approve-busy',
+  'post-comment-file-viewer',
   'post-detail',
+  'post-detail-approved',
   'post-detail-approver',
   'post-more-menu',
   'post-picker',
+  'post-preview-facebook',
+  'post-preview-instagram',
+  'post-preview-linkedin',
+  'post-preview-threads',
+  'post-preview-tiktok',
+  'post-preview-x',
+  'post-preview-youtube-shorts',
+  'post-thread-folded',
   'recently-deleted',
   'recently-deleted-empty',
   'select-open',
@@ -265,6 +275,16 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   'name: `plan-tab-chip-${chip}`': ['next', 'later', 'earlier', 'all'].map(
     (chip) => `plan-tab-chip-${chip}`,
   ),
+  // The platform preview, one per platform (post screen redo, 7 Nov 2026).
+  'name: `post-preview-${p.slug}`': [
+    'instagram',
+    'facebook',
+    'linkedin',
+    'x',
+    'threads',
+    'tiktok',
+    'youtube-shorts',
+  ].map((slug) => `post-preview-${slug}`),
 };
 
 interface Exception {

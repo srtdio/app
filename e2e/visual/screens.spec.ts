@@ -1,6 +1,18 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { installHarnessNetwork, solidPng, type HarnessNetwork } from '../fixtures/harness-routes';
-import { assertListCards, assertSameWidth, checkLayout } from './layout-checks';
+import {
+  FIXTURE_PDF_PAGES,
+  installHarnessNetwork,
+  solidPng,
+  type HarnessNetwork,
+} from '../fixtures/harness-routes';
+import {
+  assertCommentTray,
+  assertListCards,
+  assertPinnedBarOnScroll,
+  assertProgressRowUnderBar,
+  assertSameWidth,
+  checkLayout,
+} from './layout-checks';
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
 import type { Row } from '../fixtures/postgrest';
 import {
@@ -26,7 +38,12 @@ import {
   TAB_SHARED_PLAN_ID,
   WORKSPACE_ID,
 } from '../fixtures/chat-data';
-import { AUDIT_BRIEF_ID, seedAudit, type AuditSeedOptions } from '../fixtures/audit-pr-b';
+import {
+  AUDIT_BRIEF_ID,
+  AUDIT_POST_IDS,
+  seedAudit,
+  type AuditSeedOptions,
+} from '../fixtures/audit-pr-b';
 import {
   ALBUM_PHOTOS,
   REMOVED_BODY,
@@ -104,6 +121,8 @@ interface Screen {
   url: string;
   /** Waits for the page, then walks to the state to capture. */
   steps: (page: Page) => Promise<void>;
+  /** Checks after the shot (they may scroll or open things; the baseline never sees them). */
+  after?: (page: Page) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -1705,8 +1724,20 @@ const SCREENS: Screen[] = [
       await waitFor([page.locator('[data-bank-plan-it]')], 'plan it sheet');
     },
   },
-  { name: 'post-detail', seed: creator, url: `/posts/${POST}`, steps: postDetailReady },
-  { name: 'post-detail-approver', seed: approver, url: `/posts/${POST}`, steps: postDetailReady },
+  {
+    name: 'post-detail',
+    seed: creator,
+    url: `/posts/${POST}`,
+    steps: postDetailReady,
+    after: postScreenChecks,
+  },
+  {
+    name: 'post-detail-approver',
+    seed: approver,
+    url: `/posts/${POST}`,
+    steps: postDetailReady,
+    after: postScreenChecks,
+  },
   { name: 'post-more-menu', seed: creator, url: `/posts/${POST}`, steps: openPostMenu },
   {
     name: 'recently-deleted',
@@ -3527,6 +3558,287 @@ SCREENS.push(
   },
 );
 
+// ---------------------------------------------------------------------------
+// Post screen redo (7 Nov 2026): the post screen for the agency, the client
+// and an approved post (the pinned exit bar, the checkpoint progress row under
+// it), a thread folded (resolved points on one line at the bottom, replies
+// folded to the latest behind "View {n} earlier replies"), a PDF opened in the
+// in-app file viewer from a comment, and the platform preview for each of the
+// seven platforms (its own feed card or full screen, placed by the format).
+// Phone light/dark and laptop light come from the projects; LAPTOP_DARK_SCREENS
+// adds laptop dark. After the shot (never in it): the bar stays pinned when
+// the page scrolls, the progress row sits directly under it, and the comment
+// "+" tray holds exactly Photos, File and Assets (layout-checks.ts check 7).
+
+const POST_PHOTOS = [
+  {
+    asset: '0190e600-0000-7000-8000-0000000000a1',
+    version: '0190e600-0000-7000-8000-0000000000b1',
+  },
+  {
+    asset: '0190e600-0000-7000-8000-0000000000a2',
+    version: '0190e600-0000-7000-8000-0000000000b2',
+  },
+] as const;
+
+/** Two stored photos on Monday carousel: its gallery, and the preview's media. */
+function seedPostPhotos(network: HarnessNetwork): void {
+  const t = network.world.tables;
+  const at = new Date(NOW - 3 * 86_400_000).toISOString();
+  POST_PHOTOS.forEach(({ asset, version }, position) => {
+    const filename = `carousel-${position + 1}.png`;
+    const row = {
+      id: version,
+      asset_id: asset,
+      kind: 'image',
+      mime_type: 'image/png',
+      size_bytes: 180_000,
+      width: 1200,
+      height: 900,
+      duration_ms: null,
+      page_count: null,
+      external_url: null,
+      r2_key: `${WORKSPACE_ID}/${asset}/v1.png`,
+      version_number: 1,
+    };
+    (t.assets ??= []).push({
+      id: asset,
+      workspace_id: WORKSPACE_ID,
+      filename,
+      display_name: null,
+      folder_path: '/',
+      folder_id: null,
+      tags: [],
+      uploaded_at: at,
+      current_version_id: version,
+      current_version: row,
+      deleted_at: null,
+    });
+    (t.asset_versions ??= []).push({ ...row, assets: { display_name: null, filename } });
+    (t.asset_attachments ??= []).push({
+      id: `0190e600-0000-7000-8000-0000000000c${position + 1}`,
+      asset_id: asset,
+      asset_version_id: version,
+      entity_type: 'post',
+      entity_id: POST,
+      workspace_id: WORKSPACE_ID,
+      position,
+      attached_by: ME,
+      attached_at: at,
+      deleted_at: null,
+      asset_versions: row,
+      assets: { filename, display_name: null },
+    });
+  });
+}
+
+/** A post comment with its checkpoint, resolve and reply columns set. */
+function threadComment(
+  id: string,
+  author: string,
+  body: string,
+  at: number,
+  extra: Partial<Row> = {},
+): Row {
+  return { ...postComment(id, author, body, at), ...extra };
+}
+
+const CHECKPOINT_BATCH = '0190f300-0000-7000-8000-0000000000e1';
+const THREAD_ROOT = '0190f300-0000-7000-8000-0000000000a1';
+
+/**
+ * Priya's three checkpoints (one open, one resolved and confirmed, one
+ * resolved waiting for her Confirm) and Leo's plain comment with three
+ * replies: the resolved points fold to one line each at the bottom, the
+ * replies fold to the latest behind "View 2 earlier replies".
+ */
+function seedFoldedThread(network: HarnessNetwork): void {
+  const resolved = new Date(NOW - 90 * 60_000).toISOString();
+  const point = (n: number, body: string, extra: Partial<Row> = {}): Row =>
+    threadComment(
+      `0190f300-0000-7000-8000-0000000000d${n}`,
+      PEER,
+      body,
+      NOW - 4 * 3_600_000 + n * 1_000,
+      { ledger_seq: n, ledger_batch_id: CHECKPOINT_BATCH, ...extra },
+    );
+  (network.world.tables.comments ??= []).push(
+    point(1, 'Swap the cover for the morning shot.'),
+    point(2, 'The logo is too small on the second slide.', {
+      resolved_at: resolved,
+      resolved_by: ME,
+      accepted_at: resolved,
+      accepted_by: PEER,
+    }),
+    point(3, 'Tighten the second line of the caption.', {
+      resolved_at: resolved,
+      resolved_by: ME,
+    }),
+    threadComment(THREAD_ROOT, COLLEAGUE_A, 'Draft two is in the folder.', NOW - 3 * 3_600_000),
+    threadComment(
+      '0190f300-0000-7000-8000-0000000000a2',
+      PEER,
+      'Can we see it on the grid?',
+      NOW - 150 * 60_000,
+      { parent_comment_id: THREAD_ROOT },
+    ),
+    threadComment(
+      '0190f300-0000-7000-8000-0000000000a3',
+      ME,
+      'Added it as the first slide.',
+      NOW - 120 * 60_000,
+      { parent_comment_id: THREAD_ROOT },
+    ),
+    threadComment(
+      '0190f300-0000-7000-8000-0000000000a4',
+      PEER,
+      'Perfect, that works.',
+      NOW - 60 * 60_000,
+      { parent_comment_id: THREAD_ROOT },
+    ),
+  );
+}
+
+const COMMENT_PDF_NAME = 'Launch deck.pdf';
+const COMMENT_PDF_ASSET = '0190e600-0000-7000-8000-0000000000a9';
+const COMMENT_PDF_VERSION = '0190e600-0000-7000-8000-0000000000b9';
+
+/** Priya's comment with a stored PDF: its file card reads "PDF · 3 pages · {size}". */
+function seedCommentPdf(network: HarnessNetwork): void {
+  const t = network.world.tables;
+  const row = {
+    id: COMMENT_PDF_VERSION,
+    asset_id: COMMENT_PDF_ASSET,
+    kind: 'file',
+    mime_type: 'application/pdf',
+    size_bytes: 2_400_000,
+    width: null,
+    height: null,
+    duration_ms: null,
+    page_count: FIXTURE_PDF_PAGES,
+    external_url: null,
+    r2_key: `${WORKSPACE_ID}/${COMMENT_PDF_ASSET}/v1.pdf`,
+    version_number: 1,
+  };
+  (t.asset_versions ??= []).push({
+    ...row,
+    assets: { display_name: null, filename: COMMENT_PDF_NAME },
+  });
+  (t.comments ??= []).push(
+    threadComment(
+      '0190f300-0000-7000-8000-0000000000f1',
+      PEER,
+      'The deck for the launch is attached.',
+      NOW - 30 * 60_000,
+      { attachment_asset_ids: [COMMENT_PDF_VERSION] },
+    ),
+  );
+}
+
+/** The post screen's checks after the shot: pinned bar, and the comment "+" tray. */
+async function postScreenChecks(page: Page): Promise<void> {
+  const name = test.info().title.replace(/ @.*$/, '');
+  await assertPinnedBarOnScroll(page, name);
+  await assertCommentTray(page, name);
+}
+
+/** The seven platforms, each with a format it offers (FORMATS_BY_PLATFORM). */
+const PREVIEW_PLATFORMS = [
+  { platform: 'instagram', slug: 'instagram', format: 'carousel' },
+  { platform: 'facebook', slug: 'facebook', format: 'single_image' },
+  { platform: 'linkedin', slug: 'linkedin', format: 'carousel' },
+  { platform: 'x', slug: 'x', format: 'single_image' },
+  { platform: 'threads', slug: 'threads', format: 'carousel' },
+  { platform: 'tiktok', slug: 'tiktok', format: 'video' },
+  { platform: 'youtube_shorts', slug: 'youtube-shorts', format: 'short' },
+] as const;
+
+/** The workspace and Monday carousel on one platform and format (one workspace, one platform). */
+function onPlatform(network: HarnessNetwork, platform: string, format: string): void {
+  for (const workspace of network.world.tables.workspaces ?? []) workspace.platform = platform;
+  for (const post of network.world.tables.posts ?? []) {
+    post.platform = platform;
+    if (post.id === POST) post.format = format;
+  }
+}
+
+/** The Preview pill opens the preview: full screen on a phone, the side panel on a laptop. */
+async function openPostPreview(page: Page): Promise<void> {
+  await postDetailReady(page);
+  await tap([page.locator('[data-post-pills] button').first()], 'Preview pill');
+  const panel = await firstVisible([page.locator('[data-preview-panel]')], 'preview');
+  await waitFor([panel.locator('img'), panel.locator('[data-preview-cut]')], 'preview media');
+}
+
+SCREENS.push(
+  {
+    // An approved post: the lock line under the title, no decision row.
+    name: 'post-detail-approved',
+    seed: creator,
+    url: `/posts/${AUDIT_POST_IDS.approved}`,
+    steps: async (page) => {
+      await waitFor(
+        [page.getByRole('heading', { name: 'Customer quote tile', level: 1 })],
+        'approved post',
+      );
+      await waitFor([page.getByText('To make changes, move it to Parked.')], 'approved lock');
+    },
+    after: async (page) => assertPinnedBarOnScroll(page, 'post-detail-approved'),
+  },
+  {
+    // Checkpoints and a thread folded: open point on top, the resolved ones
+    // one line each at the bottom; the replies show only the latest.
+    name: 'post-thread-folded',
+    seed: creator,
+    extra: seedFoldedThread,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      await waitFor([page.locator('[data-checkpoint-progress-row]')], 'progress row');
+      await waitFor([page.locator('[data-point-fold]')], 'resolved point folded');
+      const more = await firstVisible([page.locator('[data-replies-more]')], 'earlier replies');
+      await expect(more).toHaveText('View 2 earlier replies');
+      await more.scrollIntoViewIfNeeded();
+    },
+    after: async (page) => {
+      await assertProgressRowUnderBar(page, 'post-thread-folded');
+      await assertPinnedBarOnScroll(page, 'post-thread-folded');
+    },
+  },
+  {
+    // A PDF from a comment opens in the in-app file viewer: "<", its name,
+    // "Page 1 of 3", Download; never a new tab.
+    name: 'post-comment-file-viewer',
+    seed: creator,
+    extra: seedCommentPdf,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const card = await firstVisible(
+        [page.getByRole('button', { name: `Open ${COMMENT_PDF_NAME}`, exact: true })],
+        'comment PDF card',
+      );
+      await card.scrollIntoViewIfNeeded();
+      await card.click();
+      const viewer = await firstVisible([page.locator('[data-file-viewer="pdf"]')], 'file viewer');
+      await waitFor([viewer.locator('[data-pdf-page="1"] canvas')], 'PDF page 1');
+      await waitFor([viewer.locator('[data-viewer-bar]')], 'viewer bar');
+    },
+  },
+  ...PREVIEW_PLATFORMS.map(
+    (p): Screen => ({
+      name: `post-preview-${p.slug}`,
+      seed: creator,
+      extra: (network) => {
+        onPlatform(network, p.platform, p.format);
+        seedPostPhotos(network);
+      },
+      url: `/posts/${POST}`,
+      steps: openPostPreview,
+    }),
+  ),
+);
+
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
 
@@ -3625,6 +3937,7 @@ async function capture(screen: Screen, page: Page): Promise<void> {
     caret: 'hide',
     ...(screen.mask !== undefined ? { mask: screen.mask(page) } : {}),
   });
+  await screen.after?.(page);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 }
 
@@ -3686,6 +3999,18 @@ const LAPTOP_DARK_SCREENS = new Set([
   'chat-viewer-delete-sheet',
   'chat-voice-uploading',
   'chat-list-notes-photo',
+  // Post screen redo: phone and laptop, light and dark.
+  'post-detail-approver',
+  'post-detail-approved',
+  'post-thread-folded',
+  'post-comment-file-viewer',
+  'post-preview-instagram',
+  'post-preview-facebook',
+  'post-preview-linkedin',
+  'post-preview-x',
+  'post-preview-threads',
+  'post-preview-tiktok',
+  'post-preview-youtube-shorts',
   // The six ListCard lists, every chip: phone and laptop, light and dark.
   'chat-list',
   'notifications',

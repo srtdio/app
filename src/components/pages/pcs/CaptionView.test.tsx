@@ -7,6 +7,7 @@ import {
   CAPTION_MARKER_ATTR,
   type SelectionLike,
 } from '@/components/pages/pcs/CaptionView';
+import { CheckpointCircle } from '@/components/comments/CheckpointCircle';
 
 // The unit environment is node (no DOM renderer), so these specs walk the JSX
 // tree returned by the hookless captionView and exercise the offset math with
@@ -45,7 +46,7 @@ function elementNode(children: Node[], marker = false): Node {
 }
 
 describe('captionView', () => {
-  it('renders a highlight and an unselectable superscript for an in-bounds annotation', () => {
+  it('renders an ink-underlined highlight and an unselectable numbered ink circle', () => {
     const tree = captionView({
       caption: 'Hello world',
       annotations: [{ id: 'a1', n: 1, captionStart: 0, captionEnd: 5, commentId: 'c1' }],
@@ -55,13 +56,33 @@ describe('captionView', () => {
 
     const marks = all.filter((el) => el.type === 'mark');
     expect(marks.length).toBe(1);
+    const markClass = String((marks[0]!.props as { className?: string }).className);
+    expect(markClass).toContain('underline');
+    expect(markClass).toContain('decoration-fg');
+    expect(markClass).toContain('bg-transparent');
+    expect(markClass).not.toContain('annotation');
 
-    const sup = all.find((el) => el.type === 'sup');
-    expect(sup).toBeDefined();
-    expect((sup!.props as Record<string, unknown>)[CAPTION_MARKER_ATTR]).toBe('');
-    expect((sup!.props as { children?: ReactNode }).children).toBe(1);
+    const marker = all.find(
+      (el) => (el.props as Record<string, unknown>)[CAPTION_MARKER_ATTR] !== undefined,
+    );
+    expect(marker).toBeDefined();
+    expect((marker!.props as Record<string, unknown>)[CAPTION_MARKER_ATTR]).toBe('');
     // The number marker opts out of selection so offset math can skip it.
-    expect((sup!.props as { className?: string }).className).toContain('select-none');
+    expect((marker!.props as { className?: string }).className).toContain('select-none');
+    const circle = all.find((el) => el.type === CheckpointCircle);
+    expect(circle?.props).toEqual({ n: 1, state: 'open', size: 'inline' });
+  });
+
+  it('a resolved checkpoint highlight draws its circle good, like the list', () => {
+    const tree = captionView({
+      caption: 'Hello world',
+      annotations: [
+        { id: 'a1', n: 4, state: 'confirmed', captionStart: 0, captionEnd: 5, commentId: 'c1' },
+      ],
+      onHighlightClick: () => {},
+    });
+    const circle = elements(tree).find((el) => el.type === CheckpointCircle);
+    expect(circle?.props).toEqual({ n: 4, state: 'confirmed', size: 'inline' });
   });
 
   it('skips an out-of-bounds annotation without throwing or emitting a mark', () => {
@@ -90,7 +111,7 @@ describe('captionView', () => {
 
 describe('caption selection offsets', () => {
   // Structure mirrors a rendered caption "abcdef": text "ab", a mark holding
-  // "cd" plus a superscript marker "1", then text "ef". Walking by node order
+  // "cd" plus a number marker "1", then text "ef". Walking by node order
   // must exclude the marker's "1", so abcdef stays length 6, not 7.
   function buildRoot(): { root: Node; ab: Node; ef: Node; sup: Node } {
     const ab = textNode('ab');
@@ -103,7 +124,7 @@ describe('caption selection offsets', () => {
     return { root, ab, ef, sup };
   }
 
-  it('computes start/end by node walking, excluding the superscript marker', () => {
+  it('computes start/end by node walking, excluding the number marker', () => {
     const { root, ab, ef } = buildRoot();
     const selection: SelectionLike = {
       anchorNode: ab,

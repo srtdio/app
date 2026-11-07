@@ -8,8 +8,6 @@ import type { CSSProperties, ReactElement, ReactNode, Ref } from 'react';
 import {
   ICON_SIZE,
   IconAssets,
-  IconChevronLeft,
-  IconChevronRight,
   IconGrip,
   IconHistory,
   IconImagePlus,
@@ -38,9 +36,11 @@ import {
   frameMap,
   IDENTITY_MAP,
   originalToFrame,
+  pinName,
   type FrameMap,
   type PinDot,
 } from '@/components/pages/pcs/pin-annotations';
+import { pinMarker } from '@/components/pages/pcs/PinOverlay';
 import { isPostPlatform, type GalleryItem } from '@srtdio/posts';
 
 /** The gesture handlers a tile spreads for long-press + right-click. */
@@ -502,8 +502,9 @@ const EDGE_SHIFT: Record<string, string> = {
 /**
  * Pins over a slide. Stored points are relative to the original; each is mapped
  * through the shown window (the post ribbon shows the whole original, so it
- * passes {@link IDENTITY_MAP}). Inside: the numbered dot at its exact spot.
- * Outside: a small marker on the nearest frame edge, still a 44px button.
+ * passes {@link IDENTITY_MAP}). Inside: the checkpoint circle (or the agency
+ * pin's ink dot) at its exact spot. Outside: the small inline circle on the
+ * nearest frame edge, still a 44px button.
  */
 export function framePins(
   pins: readonly PinDot[],
@@ -519,23 +520,16 @@ export function framePins(
             key={pin.annotationId}
             type="button"
             data-pin-edge={at.edge ?? undefined}
-            label={at.edge === null ? `Pin ${pin.n}` : `Pin ${pin.n}, outside the frame`}
+            data-pin-state={pin.state}
+            label={at.edge === null ? pinName(pin) : `${pinName(pin)}, outside the frame`}
             onClick={() => onPinClick?.(pin.commentId)}
             style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%` }}
             className={cn(
-              'pointer-events-auto absolute focus-visible:lit-focus focus-visible:outline-annotation-line',
+              'pointer-events-auto absolute focus-visible:lit-focus',
               at.edge === null ? '-translate-x-1/2 -translate-y-1/2' : EDGE_SHIFT[at.edge],
             )}
           >
-            {at.edge === null ? (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-annotation-line bg-annotation-bg text-sm font-semibold tabular-nums text-fg ring-2 ring-overlay-fg">
-                {pin.n}
-              </span>
-            ) : (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full border border-annotation-line bg-annotation-bg px-1 text-sm font-semibold tabular-nums text-fg ring-2 ring-overlay-fg">
-                {pin.n}
-              </span>
-            )}
+            {pinMarker(pin, at.edge === null ? 'marker' : 'inline')}
           </IconButton>
         );
       })}
@@ -699,20 +693,34 @@ export interface GalleryToolsModel {
   onVersions: () => void;
   /** The Add pin (or Cancel while armed) button, from {@link pinButton}. */
   pin?: ReactElement | null;
+  /**
+   * A client: the row is Add pin only (no edit tools, no lock, no v{n}). The
+   * agency row is Add, Replace, Reorder, Add pin and v{n}.
+   */
+  pinOnly?: boolean;
+  /**
+   * Reorder mode is on: Reorder shows pressed and leaves it (each drop already
+   * saved); Add, Replace and the pin wait until it is off.
+   */
+  reordering?: boolean;
 }
 
 /**
  * #26: the one toolbar row under the dots. Left: Add, Replace, Reorder (creators
  * on an editable stage), then Add pin (anyone who can comment); a creator on an
  * approved post sees one 14px lock in place of the edit tools. Right: the v{n}
- * button that opens the versions sheet. The left group wraps inside its own
- * column so v{n} stays on the right at 360px. Nothing when there is nothing to
- * show. Pure.
+ * button that opens the versions sheet. A client's row (pinOnly) is Add pin
+ * alone. The left group wraps inside its own column so v{n} stays on the right
+ * at 360px. Nothing when there is nothing to show. Pure.
  */
 export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
-  const { canEdit, itemCount, versionNumber, saving, error } = model;
-  const pin = model.pin ?? null;
-  const locked = !canEdit && model.locked === true;
+  const { itemCount, saving, error } = model;
+  const pinOnly = model.pinOnly === true;
+  const canEdit = model.canEdit && !pinOnly;
+  const versionNumber = pinOnly ? null : model.versionNumber;
+  const reordering = model.reordering === true;
+  const pin = reordering ? null : (model.pin ?? null);
+  const locked = !canEdit && !pinOnly && model.locked === true;
   if (!canEdit && !locked && versionNumber === null && pin === null) return null;
   return (
     <div data-gallery-tools="" className="mt-2 flex flex-col gap-1">
@@ -732,7 +740,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
               <Button
                 type="button"
                 data-gallery-add=""
-                disabled={saving}
+                disabled={saving || reordering}
                 onClick={model.onAdd}
                 variant="secondary"
               >
@@ -742,7 +750,7 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
               <Button
                 type="button"
                 data-gallery-replace=""
-                disabled={saving || itemCount === 0}
+                disabled={saving || reordering || itemCount === 0}
                 onClick={model.onReplace}
                 variant="secondary"
               >
@@ -752,7 +760,8 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
               <Button
                 type="button"
                 data-gallery-reorder=""
-                disabled={saving || itemCount < 2}
+                aria-pressed={reordering}
+                disabled={saving || (!reordering && itemCount < 2)}
                 onClick={model.onReorder}
                 variant="secondary"
               >
@@ -787,50 +796,59 @@ export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
   );
 }
 
-/** What the reorder strip needs; the wrapper owns the draft order and drag state. */
+/** The reorder mode's one helper line. */
+export const REORDER_HELPER = 'Hold and drag a photo to reorder';
+
+/** What the reorder strip needs; the wrapper owns the order and the drag state. */
 export interface ReorderModel {
-  /** The draft order (current items, rearranged). */
+  /** The order on show (the saved order, or the one a drop is saving). */
   items: readonly GalleryItem[];
   cache: PresignCache;
   presignEnabled: boolean;
   /** Platform frame ratio (w / h) for the tiles; 4/5 when the post has none. */
   ratio: number;
-  /** The tile being dragged and how far it has travelled along the row. */
+  /** The tile held and lifted, and how far it has travelled along the row. */
   drag: { id: string; dx: number } | null;
-  /** The tile the Move left / Move right buttons act on. */
-  selectedId: string | null;
-  /** The draft differs from the saved order. */
-  changed: boolean;
   saving: boolean;
   error: string | null;
-  onSelect: (id: string) => void;
+  /** Keyboard: move a tile one place; saved at once, like a drop. */
   onMove: (id: string, delta: -1 | 1) => void;
   onTilePointerDown: (id: string, event: ReactPointerEvent<HTMLButtonElement>) => void;
   onTilePointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  /** Release: a lifted tile drops (and the new order saves). */
   onTilePointerUp: () => void;
-  onSave: () => void;
-  onCancel: () => void;
+  /** The browser took the pointer: no drop, nothing saved. */
+  onTilePointerCancel: () => void;
+  /** The scrolling row (the wrapper holds its touch scroll while a tile is lifted). */
+  stripRef?: Ref<HTMLDivElement> | undefined;
   tileRef?: ((id: string, el: HTMLButtonElement | null) => void) | undefined;
+  /** The tools row under the strip, Reorder pressed (tapping it leaves the mode). */
+  toolbar?: ReactNode;
 }
 
 /**
- * #26: reorder mode. The slides sit in one horizontal row; a tile drags along
- * the row only (translateX, no rotation, no scale), arrow keys and the Move
- * buttons move the selected tile, and one "Save order" writes the whole order
- * once. The dragged tile follows the pointer directly; nothing else animates,
- * so reduced motion needs no special case beyond the motion-safe colour fade.
- * Pure.
+ * #26 reorder mode, hold-and-drag only. The slides sit in one horizontal row
+ * that scrolls natively; holding a photo (LONG_PRESS_MS) lifts it, and it then
+ * drags along the row only (translateX, no rotation, no scale). The drop saves
+ * the new order at once (one gallery_set); there are no move or save buttons.
+ * The arrow keys move a focused tile one place, saved the same way. The lifted
+ * tile follows the pointer directly; nothing else animates, so reduced motion
+ * needs no special case. Pure.
  */
 export function reorderView(model: ReorderModel): ReactElement {
-  const { items, drag, selectedId, changed, saving, error, ratio } = model;
-  const selectedIndex = items.findIndex((item) => item.assetAttachmentId === selectedId);
+  const { items, drag, error, ratio } = model;
   return (
     <div data-reorder="" className="flex flex-col gap-2">
-      <p className="text-base text-fg-2">Drag to reorder, or pick a slide and move it.</p>
-      <div className="flex gap-2 overflow-x-auto overscroll-x-contain py-1" role="list">
+      <p data-reorder-helper="" className="text-base text-fg-2">
+        {REORDER_HELPER}
+      </p>
+      <div
+        ref={model.stripRef}
+        className="flex gap-2 overflow-x-auto overscroll-x-contain py-1"
+        role="list"
+      >
         {items.map((item, index) => {
           const dragging = drag !== null && drag.id === item.assetAttachmentId;
-          const selected = item.assetAttachmentId === selectedId;
           return (
             <div key={item.assetAttachmentId} role="listitem" className="shrink-0">
               <PressableRow
@@ -842,9 +860,8 @@ export function reorderView(model: ReorderModel): ReactElement {
                     : undefined
                 }
                 data-reorder-tile=""
-                aria-pressed={selected}
+                {...(dragging ? { 'data-reorder-lifted': '' } : {})}
                 aria-label={`Slide ${index + 1} of ${items.length}. Use the arrow keys to move it.`}
-                onClick={() => model.onSelect(item.assetAttachmentId)}
                 onKeyDown={(event) => {
                   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
                     event.preventDefault();
@@ -854,16 +871,16 @@ export function reorderView(model: ReorderModel): ReactElement {
                 onPointerDown={(event) => model.onTilePointerDown(item.assetAttachmentId, event)}
                 onPointerMove={model.onTilePointerMove}
                 onPointerUp={model.onTilePointerUp}
-                onPointerCancel={model.onTilePointerUp}
+                onPointerCancel={model.onTilePointerCancel}
                 style={
                   dragging && drag !== null
                     ? { aspectRatio: `${ratio}`, transform: `translateX(${drag.dx}px)` }
                     : { aspectRatio: `${ratio}` }
                 }
                 className={cn(
-                  'relative flex h-24 min-w-11 touch-none cursor-grab items-center justify-center overflow-hidden border bg-panel-2 mv-tint',
+                  'relative flex h-24 min-w-11 cursor-grab items-center justify-center overflow-hidden border bg-panel-2 mv-tint',
                   SLIDE_PRESS_CLASS,
-                  slideEdge(selected),
+                  slideEdge(dragging),
                   dragging && 'z-raised cursor-grabbing lit-float',
                 )}
               >
@@ -880,57 +897,12 @@ export function reorderView(model: ReorderModel): ReactElement {
           );
         })}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          data-reorder-left=""
-          disabled={saving || selectedIndex <= 0}
-          onClick={() => {
-            if (selectedId !== null) model.onMove(selectedId, -1);
-          }}
-          variant="secondary"
-        >
-          <IconChevronLeft size={ICON_SIZE.inline} />
-          Move left
-        </Button>
-        <Button
-          type="button"
-          data-reorder-right=""
-          disabled={saving || selectedIndex < 0 || selectedIndex >= items.length - 1}
-          onClick={() => {
-            if (selectedId !== null) model.onMove(selectedId, 1);
-          }}
-          variant="secondary"
-        >
-          Move right
-          <IconChevronRight size={ICON_SIZE.inline} />
-        </Button>
-        <span className="flex-1" />
-        <Button
-          type="button"
-          data-reorder-cancel=""
-          disabled={saving}
-          onClick={model.onCancel}
-          variant="secondary"
-        >
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          variant="primary"
-          data-reorder-save=""
-          busy={saving}
-          disabled={!changed}
-          onClick={model.onSave}
-        >
-          Save order
-        </Button>
-      </div>
-      {error !== null ? (
+      {error !== null && model.toolbar === undefined ? (
         <p role="alert" data-gallery-error="" className="text-base text-bad">
           {error}
         </p>
       ) : null}
+      {model.toolbar}
     </div>
   );
 }
@@ -988,8 +960,9 @@ export function SnapshotThumbs({
 const SLIDE_PRESS_CLASS = 'select-none [-webkit-touch-callout:none]';
 
 /**
- * A slide's edge: the selected look, else the hairline; never both on one slide
- * (guard: outline-rules.test.ts). A dragged selected slide adds lit-float.
+ * A slide's edge: the selected look (the lifted reorder tile), else the
+ * hairline; never both on one slide (guard: outline-rules.test.ts). A lifted
+ * slide adds lit-float.
  */
 function slideEdge(selected: boolean): string {
   return selected ? 'lit-selected' : 'border-border';
@@ -1294,14 +1267,13 @@ interface PostGalleryProps {
   onAddSlide?: (() => void) | undefined;
   /**
    * Lightbox manage row: the existing insert-after add/upload flow. #26: the
-   * lightbox has no per-tap reorder; the Reorder mode saves one order.
+   * lightbox has no per-tap reorder (hold-and-drag in Reorder mode) and no
+   * Delete image (Remove image in the post ⋯ menu and the slide actions).
    */
   onAddAfter?: ((index: number) => void) | undefined;
-  /** Lightbox manage bar: remove the slide over the existing gallery_set commit. */
-  onRemove?: ((index: number) => void) | undefined;
   /**
-   * A gallery write is in flight: the lightbox blocks reorder and delete and
-   * shows "Saving…", so two full-list writes never overlap.
+   * A gallery write is in flight: reorder waits and the lightbox shows
+   * "Saving…", so two full-list writes never overlap.
    */
   saving?: boolean | undefined;
   /**
@@ -1328,13 +1300,24 @@ interface PostGalleryProps {
   onActiveIndexChange?: ((index: number) => void) | undefined;
 }
 
-const EMPTY_EDIT: Pick<PostGalleryProps, 'onAddAfter' | 'onRemove'> = {};
+const EMPTY_EDIT: Pick<PostGalleryProps, 'onAddAfter'> = {};
+
+/** A reorder tile under the finger, before the hold lifts it. */
+interface HeldTile {
+  id: string;
+  el: HTMLButtonElement;
+  pointerId: number;
+  /** The pointer's latest x, where the drag starts once lifted. */
+  x: number;
+}
 
 /** The page's side of the #26 tools row. */
 interface GalleryTools {
   canEdit: boolean;
   /** Spec B4: an approved post, seen by a creator: the tools row shows a lock. */
   locked?: boolean;
+  /** A client: the tools row is Add pin only. */
+  pinOnly?: boolean;
   versionNumber: number | null;
   /** The inline line from the last failed gallery write, or null. */
   error: string | null;
@@ -1342,7 +1325,7 @@ interface GalleryTools {
   onAdd: () => void;
   /** Replace the picture at this index (one gallery_set). */
   onReplace: (index: number) => void;
-  /** Save the whole draft order with one gallery_set; resolves true on success. */
+  /** Save the whole order with one gallery_set (each drop); resolves true on success. */
   onSaveOrder: (assetVersionIds: string[]) => Promise<boolean>;
 }
 
@@ -1381,15 +1364,17 @@ export function PostGallery({
   const editLocked = tools !== undefined && !tools.canEdit;
   const onSlideActions = editLocked ? undefined : editProps.onSlideActions;
   const onAddSlide = editLocked ? undefined : editProps.onAddSlide;
-  const { onAddAfter, onRemove } = editLocked ? EMPTY_EDIT : editProps;
+  const { onAddAfter } = editLocked ? EMPTY_EDIT : editProps;
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
-  // #26 reorder mode: a draft order of attachment ids (null when not
-  // reordering), the tile under the pointer, and the selected tile.
+  // #26 reorder mode, hold-and-drag only: the order on show (attachment ids;
+  // null when not reordering), the held tile, and the lifted tile's travel.
+  // Each drop saves at once; a refused save puts the saved order back.
   const [reorderIds, setReorderIds] = useState<string[] | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null);
   const dragRef = useRef<{ id: string; startX: number; step: number; dx: number } | null>(null);
+  const pressRef = useRef<HeldTile | null>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
   const tileEls = useRef(new Map<string, HTMLButtonElement>());
   const focusAfterMove = useRef<string | null>(null);
   useEffect(() => {
@@ -1398,10 +1383,38 @@ export function PostGallery({
     focusAfterMove.current = null;
     tileEls.current.get(id)?.focus();
   }, [reorderIds]);
-  // Leaving the editable state (approved, or the gallery emptied) drops a draft.
+  // Leaving the editable state (approved, or the gallery emptied) leaves the mode.
   useEffect(() => {
     if (editLocked || items.length < 2) setReorderIds(null);
   }, [editLocked, items.length]);
+  // Holding a photo lifts it (the one LONG_PRESS_MS); a move before that is a
+  // scroll of the row, never a drag.
+  const savingRef = useRef(saving);
+  savingRef.current = saving;
+  const { handlers: holdHandlers } = useLongPress(() => {
+    const press = pressRef.current;
+    if (press === null || savingRef.current) return;
+    try {
+      press.el.setPointerCapture(press.pointerId);
+    } catch {
+      // The pointer already ended; the drop below still runs on release.
+    }
+    // One step is a tile plus the row's gap-2 (8px).
+    dragRef.current = { id: press.id, startX: press.x, step: press.el.offsetWidth + 8, dx: 0 };
+    setDrag({ id: press.id, dx: 0 });
+  });
+  // While a tile is lifted the row's own touch scroll is held, so the finger
+  // drags the tile instead of the row (a non-passive listener; React's are passive).
+  const reordering = reorderIds !== null;
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!reordering || el === null) return;
+    const onTouchMove = (event: TouchEvent): void => {
+      if (dragRef.current !== null && event.cancelable) event.preventDefault();
+    };
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onTouchMove);
+  }, [reordering]);
 
   // Deleting the last image empties the gallery: the in-place viewer has nothing
   // to show, so clear the open index and let the ribbon branch fall through to
@@ -1523,10 +1536,9 @@ export function PostGallery({
     setOpenIndex(index);
   };
 
-  const manage =
-    onAddAfter !== undefined && onRemove !== undefined ? { onAddAfter, onRemove } : undefined;
+  const manage = onAddAfter !== undefined ? { onAddAfter } : undefined;
 
-  // #26 reorder mode: the draft order as items (unknown ids dropped, new items
+  // #26 reorder mode: the order on show as items (unknown ids dropped, new items
   // appended so a concurrent refresh never loses a slide).
   const draftItems: GalleryItem[] | null =
     reorderIds === null
@@ -1537,14 +1549,29 @@ export function PostGallery({
             .filter((item): item is GalleryItem => item !== undefined),
           ...items.filter((item) => !reorderIds.includes(item.assetAttachmentId)),
         ];
-  const moveDraft = (id: string, delta: -1 | 1): void => {
-    setReorderIds((current) => {
-      if (current === null) return current;
-      const from = current.indexOf(id);
-      return from < 0 ? current : moveTo(current, from, from + delta);
+  // A drop (or an arrow key) saves the new order at once: one gallery_set. A
+  // refused save puts the saved order back (the tools row shows the error).
+  const saveOrder = (nextIds: string[]): void => {
+    if (tools === undefined) return;
+    const saved = items.map((item) => item.assetAttachmentId);
+    const versionIds = [
+      ...nextIds
+        .map((id) => items.find((item) => item.assetAttachmentId === id))
+        .filter((item): item is GalleryItem => item !== undefined),
+      ...items.filter((item) => !nextIds.includes(item.assetAttachmentId)),
+    ].map((item) => item.assetVersionId);
+    setReorderIds(nextIds);
+    void tools.onSaveOrder(versionIds).then((ok) => {
+      if (!ok) setReorderIds((current) => (current === null ? current : saved));
     });
-    setSelectedId(id);
+  };
+  const moveBy = (id: string, delta: -1 | 1): void => {
+    if (reorderIds === null || saving) return;
+    const from = reorderIds.indexOf(id);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= reorderIds.length) return;
     focusAfterMove.current = id;
+    saveOrder(moveTo(reorderIds, from, to));
   };
   // The pin button: the visible Add pin arms the same state the long-press does.
   const armPin = canPlacePins
@@ -1559,6 +1586,7 @@ export function PostGallery({
       ? galleryToolsRow({
           canEdit: tools.canEdit,
           locked: tools.locked === true,
+          pinOnly: tools.pinOnly === true,
           itemCount: items.length,
           versionNumber: tools.versionNumber,
           saving,
@@ -1570,77 +1598,79 @@ export function PostGallery({
             else tools.onAdd();
           },
           onReplace: () => tools.onReplace(shownIndex),
+          // Reorder enters the mode; pressed, it leaves (every drop is saved).
           onReorder: () => {
+            if (reorderIds !== null) {
+              setReorderIds(null);
+              setDrag(null);
+              dragRef.current = null;
+              return;
+            }
             setOpenIndex(null);
             setPinArmedIndex(null);
             setReorderIds(items.map((item) => item.assetAttachmentId));
-            setSelectedId(null);
           },
           onVersions: tools.onVersions,
           pin: pinButton(shownIndex, canPlacePins ? pinArmedIndex : null, armPin, disarmPin),
+          reordering: reorderIds !== null,
         })
       : null;
 
   if (tools !== undefined && tools.canEdit && draftItems !== null) {
-    const draftVersionIds = draftItems.map((item) => item.assetVersionId);
-    const changed = draftItems.some(
-      (item, index) => item.assetAttachmentId !== items[index]?.assetAttachmentId,
-    );
     return reorderView({
       items: draftItems,
       cache,
       presignEnabled,
       ratio: postFrame?.ratio ?? 4 / 5,
       drag,
-      selectedId,
-      changed,
       saving,
       error: tools.error,
-      onSelect: setSelectedId,
-      onMove: moveDraft,
+      onMove: moveBy,
       onTilePointerDown: (id, event) => {
-        if (event.pointerType === 'mouse' && event.button !== 0) return;
-        const el = event.currentTarget;
-        el.setPointerCapture?.(event.pointerId);
-        // One step is a tile plus the row's gap-2 (8px).
-        dragRef.current = { id, startX: event.clientX, step: el.offsetWidth + 8, dx: 0 };
-        setSelectedId(id);
-        setDrag({ id, dx: 0 });
+        if (saving || (event.pointerType === 'mouse' && event.button !== 0)) return;
+        pressRef.current = {
+          id,
+          el: event.currentTarget,
+          pointerId: event.pointerId,
+          x: event.clientX,
+        };
+        holdHandlers.onPointerDown(event);
       },
       onTilePointerMove: (event) => {
         const current = dragRef.current;
-        if (current === null) return;
+        if (current === null) {
+          // Still holding: a move past the slop is a scroll and cancels the hold.
+          holdHandlers.onPointerMove(event);
+          if (pressRef.current !== null) pressRef.current.x = event.clientX;
+          return;
+        }
         current.dx = event.clientX - current.startX;
         setDrag({ id: current.id, dx: current.dx });
       },
       onTilePointerUp: () => {
+        holdHandlers.onPointerUp();
+        pressRef.current = null;
         const current = dragRef.current;
         dragRef.current = null;
         setDrag(null);
-        if (current === null) return;
-        const { dx } = current;
-        setReorderIds((ids) => {
-          if (ids === null) return ids;
-          const from = ids.indexOf(current.id);
-          if (from < 0) return ids;
-          const to = dropIndex(from, dx, current.step, ids.length);
-          return to === from ? ids : moveTo(ids, from, to);
-        });
+        if (current === null || reorderIds === null) return;
+        const from = reorderIds.indexOf(current.id);
+        if (from < 0) return;
+        const to = dropIndex(from, current.dx, current.step, reorderIds.length);
+        if (to !== from) saveOrder(moveTo(reorderIds, from, to));
       },
-      onSave: () => {
-        void tools.onSaveOrder(draftVersionIds).then((ok) => {
-          if (ok) setReorderIds(null);
-        });
-      },
-      onCancel: () => {
-        setReorderIds(null);
-        setDrag(null);
+      onTilePointerCancel: () => {
+        holdHandlers.onPointerCancel();
+        pressRef.current = null;
         dragRef.current = null;
+        setDrag(null);
       },
+      stripRef,
       tileRef: (id, el) => {
         if (el === null) tileEls.current.delete(id);
         else tileEls.current.set(id, el);
       },
+      toolbar: toolsRow ?? undefined,
     });
   }
 

@@ -177,8 +177,6 @@ export default {
         'good-soft': 'var(--good-soft)',
         'bad-soft': 'var(--bad-soft)',
         'warn-soft': 'rgb(var(--warn-soft-rgb) / <alpha-value>)',
-        'annotation-bg': 'rgb(var(--annotation-bg-rgb) / <alpha-value>)',
-        'annotation-line': 'rgb(var(--annotation-line-rgb) / <alpha-value>)',
         'search-mark': 'rgb(var(--search-mark-bg-rgb) / <alpha-value>)',
         'stage-review': 'rgb(var(--stage-review-rgb) / <alpha-value>)',
         'stage-approved': 'rgb(var(--stage-approved-rgb) / <alpha-value>)',
@@ -200,6 +198,40 @@ export default {
         'avatar-5': 'rgb(var(--avatar-5-rgb) / <alpha-value>)',
         'avatar-6': 'rgb(var(--avatar-6-rgb) / <alpha-value>)',
         scrim: 'var(--scrim)',
+        // Platform preview mocks (components/preview/platform-look.ts) draw each
+        // platform's own light feed or black full screen. The same in light and
+        // dark (the mock shows the platform's look, like the --overlay scale).
+        // Neutral values only: no blue or violet (palette rules), no logos.
+        // pv-card: the feed card ground on every feed platform.
+        'pv-card': '#ffffff',
+        // pv-screen: the full-screen ground (Reel, Story, TikTok, Shorts) and its inks.
+        'pv-screen': '#000000',
+        'pv-screen-ink': '#ffffff',
+        'pv-screen-ink-2': 'rgba(255, 255, 255, 0.8)',
+        // pv-cut: the shade over the strips a platform cuts off (Show cut).
+        'pv-cut': 'rgba(0, 0, 0, 0.55)',
+        // Instagram feed: ink, secondary ink (4.7:1 on the card), hairline.
+        'pv-ig-ink': '#000000',
+        'pv-ig-ink-2': '#737373',
+        'pv-ig-line': '#dbdbdb',
+        // Facebook feed: grey page behind the card, ink, secondary ink (5.7:1), hairline.
+        'pv-fb-page': '#f0f2f5',
+        'pv-fb-ink': '#050505',
+        'pv-fb-ink-2': '#65676b',
+        'pv-fb-line': '#ced0d4',
+        // LinkedIn feed: warm page behind the card, ink, secondary ink (5.7:1), hairline.
+        'pv-li-page': '#f4f2ee',
+        'pv-li-ink': '#191919',
+        'pv-li-ink-2': '#666666',
+        'pv-li-line': '#e0dfdc',
+        // X feed: ink, secondary ink (6.1:1), hairline.
+        'pv-x-ink': '#0f1419',
+        'pv-x-ink-2': '#536471',
+        'pv-x-line': '#eff3f4',
+        // Threads feed: ink, secondary ink (4.9:1), hairline.
+        'pv-th-ink': '#000000',
+        'pv-th-ink-2': '#707070',
+        'pv-th-line': '#e5e5e5',
       },
       // accent splits by use: ink reads --accent-text, fills --accent-fill
       // (under white accent-fg). border-accent and ring-accent keep --accent.
@@ -235,6 +267,8 @@ export default {
         // on-bubble/10 overlay stacked on top (same pattern as --hover-fill).
         'on-bubble-hover':
           'linear-gradient(rgb(var(--on-bubble-rgb) / 0.1), rgb(var(--on-bubble-rgb) / 0.1)), linear-gradient(rgb(var(--on-bubble-rgb) / 0.12), rgb(var(--on-bubble-rgb) / 0.12))',
+        // Platform preview: the dark fade under a full-screen caption (same in both themes).
+        'pv-scrim': 'linear-gradient(to top, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0))',
       },
       // Named panel and popover sizes: one name per surface, never w-[Npx] at a call site.
       width: {

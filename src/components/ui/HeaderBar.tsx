@@ -4,6 +4,7 @@ import { textRole } from '@/components/ui/Text';
 import { IconButton } from '@/components/ui/IconButton';
 import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
 import { GUTTER, LEADING_PULL } from '@/components/ui/layout';
+import { PINNED_BAR_TOP_CLASS } from '@/lib/scroll-mode';
 
 export interface HeaderBarProps {
   /** One line, truncated (title role). */
@@ -52,6 +53,21 @@ export interface HeaderBarProps {
   overlay?: ReactNode;
   /** Ref to the <header> (a page anchors its scroll or motion to the bar). Behaviour only. */
   barRef?: Ref<HTMLElement> | undefined;
+  /**
+   * The exit bar of a screen that opens over the app on the page scroller
+   * (Post detail, Brief detail): it stays pinned while the page scrolls,
+   * sticky at PINNED_BAR_TOP_CLASS (0 on a phone, where the bar covers the
+   * status bar itself; below the Topbar on a touch tablet; 0 in a laptop's
+   * <main>). Sheets and panels with their own fixed header leave it off.
+   */
+  pinned?: boolean;
+  /**
+   * Pinned only: rows pinned with the bar, directly under it, in the same
+   * block (the post's checkpoint progress row). The block is one lit surface
+   * (lit-header on the block, the bar's own shade dropped); a row draws its own
+   * hairline (border-t) so an empty slot adds no line.
+   */
+  below?: ReactNode;
   className?: string;
 }
 
@@ -73,17 +89,25 @@ export function HeaderBar({
   titleProps,
   overlay,
   barRef,
+  pinned = false,
+  below,
   className,
 }: HeaderBarProps) {
-  return (
+  // Pinned with rows under it: the block pins and carries the one lit surface.
+  const block = pinned && below !== undefined;
+  const bar = (
     <header
       ref={barRef}
       data-header-bar=""
+      {...(pinned ? { 'data-header-pinned': '' } : {})}
       className={cn(
-        'flex min-w-0 shrink-0 items-center gap-2 border-b bg-panel lit-header',
+        'flex min-w-0 shrink-0 items-center gap-2 bg-panel',
+        block ? null : 'border-b lit-header',
         compact ? 'h-14' : 'h-14 md:h-16',
         GUTTER,
-        overlay !== undefined && 'relative z-sticky',
+        pinned && !block
+          ? cn('sticky z-sticky', PINNED_BAR_TOP_CLASS)
+          : overlay !== undefined && 'relative z-sticky',
         className,
       )}
     >
@@ -130,5 +154,15 @@ export function HeaderBar({
       ) : null}
       {overlay}
     </header>
+  );
+  if (!block) return bar;
+  return (
+    <div
+      data-header-pin=""
+      className={cn('sticky z-sticky flex flex-col bg-panel lit-header', PINNED_BAR_TOP_CLASS)}
+    >
+      {bar}
+      {below}
+    </div>
   );
 }

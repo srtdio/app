@@ -243,12 +243,22 @@ describe('PostDetailPage embedded', () => {
     expect(html).not.toContain('aria-label="Back"');
   });
 
-  it('non-embedded keeps the 56px header (plus the page-mode safe area) with Back', () => {
+  it('non-embedded keeps the 56px header (plus the page-mode safe area) with Back, pinned', () => {
     const html = paint(false);
     expect(html).toContain('Loading post');
-    // ui/HeaderBar (gutter 16/24, lit-header) with the page-mode safe area.
+    // ui/HeaderBar pinned with its slot under it: one sticky block (lit-header
+    // on the block), top 0 on a phone (the shell drops the Topbar here), below
+    // the Topbar var from md up.
     expect(html).toMatch(
-      /data-header-bar="" class="[^"]*border-b[^"]*lit-header[^"]*px-4 md:px-6[^"]*h-\[calc\(3\.5rem\+var\(--shell-safe-top,0px\)\)\] pt-\[var\(--shell-safe-top,0px\)\]/,
+      /data-header-pin="" class="sticky z-sticky flex flex-col bg-panel lit-header top-0 md:top-\[var\(--shell-sticky-top,0px\)\]"/,
+    );
+    // The bar inside it: gutter 16/24 with the page-mode safe area.
+    expect(html).toMatch(
+      /data-header-bar="" data-header-pinned="" class="[^"]*px-4 md:px-6[^"]*h-\[calc\(3\.5rem\+var\(--shell-safe-top,0px\)\)\] pt-\[var\(--shell-safe-top,0px\)\]/,
+    );
+    // The checkpoint progress row's slot pins with the bar, right after it.
+    expect(html.indexOf('data-checkpoint-pin-slot')).toBeGreaterThan(
+      html.indexOf('data-header-bar'),
     );
     expect(html).toContain('aria-label="Back"');
   });
@@ -268,14 +278,14 @@ describe('PostDetailPage embedded', () => {
     expect(src.match(/navigate\('\/pipeline'\)/g)).toHaveLength(1);
   });
 
-  it('embedded: the host can own the action sheet open state and add Open in pipeline', () => {
+  it('embedded: the host can own the action sheet open state (Open in pipeline retired)', () => {
     const src = readFileSync(
       fileURLToPath(new URL('./PostDetailPage.tsx', import.meta.url)),
       'utf8',
     );
     expect(src).toContain('const actionsOpen = actionsOpenProp ?? ownActionsOpen;');
     expect(src).toContain('onActionsOpenChange?.(next);');
-    expect(src).toContain('{...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}');
+    expect(src).not.toContain('{...(onOpenInPipeline !== undefined ? { onOpenInPipeline } : {})}');
     // A host open while the sheet cannot mount closes at once (never pops open later).
     expect(src).toContain(
       '!firstPaintPending && !notFound && !loadError && detail !== null && !readOnly;',

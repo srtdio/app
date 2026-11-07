@@ -773,6 +773,24 @@ describe('Brief detail polish', () => {
     expect(line?.querySelector('[data-brief-due]')?.className ?? '').not.toContain('text-bad');
   });
 
+  it('the exit bar stays pinned while the page scrolls (sticky, top 0 on a phone, safe area kept)', async () => {
+    h.getBrief.mockResolvedValue(detail({}));
+    await mount();
+    const bar = document.querySelector<HTMLElement>('[data-header-bar]');
+    expect(bar).not.toBeNull();
+    expect(bar?.hasAttribute('data-header-pinned')).toBe(true);
+    const cls = bar?.className.split(' ') ?? [];
+    expect(cls).toContain('sticky');
+    expect(cls).toContain('top-0');
+    expect(cls).toContain('md:top-[var(--shell-sticky-top,0px)]');
+    expect(cls).toContain('pt-[var(--shell-safe-top,0px)]');
+    expect(cls).toContain('lit-header');
+    // Scrolling the document (phone page mode) leaves the same bar in place.
+    window.scrollTo = () => {};
+    window.dispatchEvent(new Event('scroll'));
+    expect(document.querySelector('[data-header-bar]')).toBe(bar);
+  });
+
   it('past due: the due part reads overdue in text-bad', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T09:00:00Z'));

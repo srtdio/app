@@ -8,8 +8,6 @@ import {
   formatDefaultSize,
   formatFrameRatio,
   postSize,
-  ratioLabel,
-  sizeMeta,
   sizesFor,
   specFor,
 } from '@/components/preview/preview-math';
@@ -97,40 +95,29 @@ describe('panel default follows the post frame', () => {
   });
 });
 
-describe('ratio labels', () => {
-  it('names published ratios', () => {
-    expect(ratioLabel(1080, 1350)).toBe('4:5');
-    expect(ratioLabel(1080, 1920)).toBe('9:16');
-    expect(ratioLabel(1080, 566)).toBe('1.91:1');
-    expect(ratioLabel(1200, 630)).toBe('1.91:1');
-    expect(ratioLabel(1200, 627)).toBe('1.91:1');
-    expect(sizeMeta(size(1080, 1440))).toBe('1080 x 1440 · 3:4');
-  });
-});
-
 describe('crop math', () => {
   it('fits exactly', () => {
     const r = cropFor({ w: 2160, h: 2700 }, size(1080, 1350));
     expect(r.kind).toBe('fits');
-    expect(cropLine(r)).toBe('Fits exactly');
+    expect(cropLine(r, 'instagram')).toBe('Fits exactly');
   });
   it('cuts the sides of a wider original', () => {
     const r = cropFor({ w: 1920, h: 1080 }, size(1080, 1080));
     expect(r).toMatchObject({ kind: 'cut', pct: 44, from: 'sides' });
-    expect(cropLine(r)).toBe('44% cut from sides');
+    expect(cropLine(r, 'instagram')).toBe('Instagram cuts 44% from sides');
     expect(r.window.w).toBeCloseTo(0.5625);
     expect(r.window.x).toBeCloseTo(0.21875);
   });
   it('cuts top and bottom of a taller original', () => {
     const r = cropFor({ w: 1080, h: 1920 }, size(1080, 1350));
     expect(r).toMatchObject({ kind: 'cut', pct: 30, from: 'top and bottom' });
-    expect(cropLine(r)).toBe('30% cut from top and bottom');
+    expect(cropLine(r, 'linkedin')).toBe('LinkedIn cuts 30% from top and bottom');
     expect(r.window.h).toBeCloseTo(0.703125);
   });
   it('shows bands / letterbox without a crop', () => {
     const bands = cropFor({ w: 1920, h: 1080 }, size(1080, 1920, 'bands'));
     expect(bands.kind).toBe('bands');
-    expect(cropLine(bands)).toBe('Shown with bands');
+    expect(cropLine(bands, 'youtube_shorts')).toBe('Shown with bands');
     expect(bands.window).toEqual({ x: 0, y: 0, w: 1, h: 1 });
     expect(cropFor({ w: 1080, h: 1080 }, size(1080, 1080, 'letterbox')).kind).toBe('bands');
     expect(cropFor({ w: 720, h: 1280 }, size(1080, 1920, 'bands')).kind).toBe('fits');
@@ -206,10 +193,12 @@ describe('postSize: the panel opens on the frame the post page shows', () => {
   it('crop line agrees with the page: bands never cut', () => {
     const tiktok = postSize('tiktok', 'video', 'image', { w: 1920, h: 1080 });
     if (tiktok === null) throw new Error('size');
-    expect(cropLine(cropFor({ w: 1920, h: 1080 }, tiktok))).toBe('Shown with bands');
-    expect(cropLine(cropFor({ w: 1080, h: 1920 }, tiktok))).toBe('Fits exactly');
+    expect(cropLine(cropFor({ w: 1920, h: 1080 }, tiktok), 'tiktok')).toBe('Shown with bands');
+    expect(cropLine(cropFor({ w: 1080, h: 1920 }, tiktok), 'tiktok')).toBe('Fits exactly');
     const ig = postSize('instagram', 'carousel', 'image', { w: 1080, h: 1920 });
     if (ig === null) throw new Error('size');
-    expect(cropLine(cropFor({ w: 1080, h: 1920 }, ig))).toBe('25% cut from top and bottom');
+    expect(cropLine(cropFor({ w: 1080, h: 1920 }, ig), 'instagram')).toBe(
+      'Instagram cuts 25% from top and bottom',
+    );
   });
 });
