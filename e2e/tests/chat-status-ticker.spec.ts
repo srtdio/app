@@ -9,7 +9,6 @@ import {
   PEER_NAME,
   WORKSPACE_ID,
 } from '../fixtures/chat-data';
-import type { Row } from '../fixtures/postgrest';
 import { noEntityCodesCases } from '../helpers/no-entity-codes-cases';
 
 // The chat status ticker under the thread header and its drop-down drawer:

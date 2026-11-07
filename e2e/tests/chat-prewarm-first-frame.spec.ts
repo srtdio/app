@@ -2,11 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import {
   DM_CHANNEL,
-  DRAFT_PLAN_MESSAGE_ID,
   PEER_NAME,
   ME,
   PEER,
-  WORKSPACE_ID,
   seedClientPlanWithDraft,
 } from '../fixtures/chat-data';
 import { delaySupabaseReads, realisticDelay } from '../fixtures/read-delays';
@@ -115,17 +113,6 @@ function seedPlanDm(network: HarnessNetwork): void {
     if (m.user_id === PEER) m.role = 'agency';
   }
   seedClientPlanWithDraft(network.world, { channelId: DM_CHANNEL, sender: PEER });
-  (network.world.tables.chat_message_marks ??= []).push({
-    message_id: DRAFT_PLAN_MESSAGE_ID,
-    channel_id: DM_CHANNEL,
-    workspace_id: WORKSPACE_ID,
-    mark_type: 'pending',
-    priority: null,
-    marked_by: PEER,
-    marked_at: new Date(Date.now() - 60_000).toISOString(),
-    resolved_by: null,
-    resolved_at: null,
-  });
 }
 
 /** Each row's on-screen top and the thread's distance from its bottom, now. */
