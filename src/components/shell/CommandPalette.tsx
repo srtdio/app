@@ -22,6 +22,7 @@ import { useToast } from '@/components/ui/toast';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
+import { createPortal } from 'react-dom';
 import { dropIn } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
@@ -1170,7 +1171,10 @@ export function CommandPalette({
       ? `Search ${pickWord(pickOn, pickLabel).toLowerCase()}`
       : 'Search this workspace';
 
-  return (
+  // Pick mode opens over a picker's Sheet, which holds #root aria-hidden
+  // (app-inert.ts): there the palette renders on <body>, outside #root, like
+  // every Sheet. The ⌘K palette stays where it is (nothing hides the root then).
+  const palette = (
     <div
       data-palette-overlay=""
       data-palette-mode={pickMode ? 'pick' : 'search'}
@@ -1302,4 +1306,7 @@ export function CommandPalette({
       </div>
     </div>
   );
+  return pickMode && typeof document !== 'undefined'
+    ? createPortal(palette, document.body)
+    : palette;
 }

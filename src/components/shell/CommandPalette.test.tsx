@@ -847,6 +847,18 @@ describe('CommandPalette Recent from the device', () => {
   });
 });
 
+describe('pick mode renders outside #root', () => {
+  it('portals to <body> in pick mode (a picker Sheet holds #root aria-hidden)', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./CommandPalette.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).toMatch(
+      /pickMode && typeof document !== 'undefined'\s*\?\s*createPortal\(palette, document\.body\)/,
+    );
+  });
+});
+
 describe('recent titles freshness pass', () => {
   // Effects are shimmed in this env, so the effect's wiring is read from source.
   const src = readFileSync(fileURLToPath(new URL('./CommandPalette.tsx', import.meta.url)), 'utf8');

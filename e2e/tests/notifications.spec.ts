@@ -333,14 +333,19 @@ test(
     }
     await expect(tab).toBeVisible({ timeout: 15_000 });
     await expect(header).toBeHidden();
-    // Search sits directly left of the avatar once Activity is out of the top bar.
+    // Search | sort | "+" | avatar, packed once Activity is out of the top bar.
     const search = await page
       .locator('header')
       .getByRole('button', { name: 'Search' })
       .boundingBox();
+    const sort = await page.locator('[data-topbar-slot="sort"]').boundingBox();
+    const primary = await page.locator('[data-topbar-slot="primary"]').boundingBox();
     const avatar = await page.getByRole('button', { name: 'Account menu' }).boundingBox();
-    if (search === null || avatar === null) throw new Error('top bar not laid out');
-    expect(avatar.x - (search.x + search.width)).toBeLessThanOrEqual(8);
+    if (search === null || sort === null || primary === null || avatar === null) {
+      throw new Error('top bar not laid out');
+    }
+    expect(sort.x - (search.x + search.width)).toBeLessThanOrEqual(8);
+    expect(avatar.x - (primary.x + primary.width)).toBeLessThanOrEqual(8);
 
     // The row floats 12px from both sides and the bottom (no home indicator inset here).
     const row = await page.locator('nav[data-undo-anchor]').boundingBox();
