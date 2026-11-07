@@ -1,5 +1,5 @@
 // Activity's loading boxes (sweepBoxes, docs/motion.md): ui/ListCardBox, the
-// ListCard's own 74 frame and slots (the 48 picture, the title line with its
+// ListCard's own 60 frame and slots (the 40 picture, the title line with its
 // time, the preview line) in LIST_CARD_GRID, under one bucket label, so
 // nothing moves when the cards land.
 // Rendered ONLY when the device or session holds nothing for the list; a kept

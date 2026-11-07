@@ -59,11 +59,11 @@ const sizes: Record<NonNullable<ChipProps['size']>, string> = {
 /**
  * The 44 tap box around the 32 chip: no look of its own (transparent, no
  * padding), so a chip row keeps its 44 height. At least 44 wide too (a short
- * label like "All" stretches the face to 44), radius 8 like every button. Its
+ * label like "All" stretches the face to 44), a full pill like the face. Its
  * focus line is drawn on the visible chip, the box's one child span.
  */
 export const CHIP_HIT =
-  'group relative inline-flex min-h-11 min-w-11 items-center rounded-lg outline-none [&:focus-visible>span]:lit-focus disabled:pointer-events-none disabled:cursor-default';
+  'group relative inline-flex min-h-11 min-w-11 items-center rounded-full outline-none [&:focus-visible>span]:lit-focus disabled:pointer-events-none disabled:cursor-default';
 
 /** A call site's layout classes that also apply to the tap box (it sits in their row). */
 const LAYOUT = /^(flex|shrink|grow|basis-|self-|order-|w-|min-w-|max-w-)/;
@@ -118,16 +118,16 @@ export function Chip({
       <span
         data-chip-face=""
         className={cn(
-          // At rest a quiet grey fill (no edge); the pick is the solid ink fill
-          // (bg-accent, lit-pill), the same look as a picked day. Hover/press: the
-          // lit-hover overlay, no flat swap. Disabled: fg-3 ink, never a fade.
-          'inline-flex min-w-0 flex-1 items-center gap-2 rounded-lg border text-md font-medium group-disabled:text-fg-3',
+          // Flat outline pill (7 Nov 2026): at rest a hairline and fg-2 ink; the
+          // pick is the ink line (black light, white dark) and fg ink, no fill.
+          // Hover/press: the lit-hover overlay. Disabled: fg-3 ink, never a fade.
+          'inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-full border text-md font-medium lit-hover group-disabled:text-fg-3',
           sizes[size],
           variant === 'add'
-            ? 'lit-chip border-dashed border-border-strong text-fg-3'
+            ? 'border-dashed border-border-strong text-fg-3'
             : selected
-              ? 'border-transparent bg-accent text-accent-fg lit-pill'
-              : 'border-transparent bg-panel-3 text-fg lit-well-soft lit-hover',
+              ? 'border-fg text-fg'
+              : 'border-border text-fg-2',
           className,
         )}
       >
@@ -137,7 +137,7 @@ export function Chip({
         {count !== undefined && count > 0 ? (
           <>
             {' '}
-            <span className="tabular-nums">{count}</span>
+            <span className="tabular-nums text-fg-3">{count}</span>
           </>
         ) : null}
       </span>

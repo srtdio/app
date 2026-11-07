@@ -126,7 +126,7 @@ function Tiles({ state, onPick }: { state: CockpitState; onPick: (tab: CockpitTa
             onClick={() => onPick(tab)}
             className={cn(
               'flex min-w-0 flex-col gap-1 border p-3',
-              selected ? 'border-transparent bg-accent text-accent-fg lit-pill' : 'lit-card',
+              selected ? 'border-fg text-fg lit-card' : 'border-border text-fg-2 lit-card',
             )}
           >
             <span className="flex w-full items-center gap-1">

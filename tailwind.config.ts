@@ -92,6 +92,8 @@ export default {
       pill: '9999px',
       // A picture inset inside a card (ui/Card media inset).
       inset: '4px',
+      // rounded-picture: a list row's 40 picture squircle (10), Slack style.
+      picture: '10px',
     },
     // Edges: 1 (DEFAULT) and 2; 0 removes a side. The named widths are the only
     // thicker lines.

@@ -279,7 +279,7 @@ export function briefsLoadMore(
 
 /**
  * The loading state: a static skeleton in the real list's shape (a section
- * header bar, a day label, then ui/ListCardBox: the ListCard's 74 frame, 48
+ * header bar, a day label, then ui/ListCardBox: the ListCard's 60 frame, 40
  * picture and two lines), in the same container and grid, so nothing
  * jumps when the cards arrive. Shared Bone boxes (a top-lit sweep, never a pulse).
  */

@@ -774,14 +774,12 @@ export function OnboardingFlow({
               onClick={() => setSide(tile.side)}
               className={cn(
                 'flex flex-col items-start justify-center gap-0.5 px-4 py-3',
-                side === tile.side
-                  ? 'bg-accent text-accent-fg lit-pill'
-                  : 'bg-panel-3 text-fg lit-well-soft',
+                side === tile.side ? 'border border-fg text-fg' : 'border border-border text-fg-2',
               )}
             >
               <span className="text-base font-medium">{tile.title}</span>
               <span
-                className={cn('text-sm', side === tile.side ? 'text-accent-fg/80' : 'text-fg-2')}
+                className="text-sm text-fg-2"
               >
                 {tile.sub}
               </span>

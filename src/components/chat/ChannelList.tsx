@@ -377,7 +377,7 @@ function skeletonRow(i: number): ReactElement {
 
 /**
  * The loading body: the real list's shape, drawn in the same frame (six
- * uniform cards, the ListCard's one 74 height with its round 48 picture, no labels),
+ * uniform rows, the ListCard's one 60 height with its round 40 picture, no labels),
  * so swapping in the list shifts nothing. Each box is a motion
  * Bone (top-lit sweep, never a pulse); no spinner. Shown only when the device
  * holds no list (the store paints a saved list at once).
@@ -462,7 +462,7 @@ export const CHAT_HOME_STACK = 'flex flex-col gap-2';
 export const CHAT_HOME_EDGE = 'px-4';
 
 /**
- * The one list: one ui/ListCard per chat, 8 between cards (LIST_CARD_STACK),
+ * The one list: one ui/ListCard per chat, rows touching (LIST_CARD_STACK),
  * on the home's 16 edge. Personal notes, groups and people are one card style.
  */
 export const CHAT_ROW_LIST = cn(LIST_CARD_STACK, CHAT_HOME_EDGE);
@@ -505,7 +505,7 @@ export interface ChannelRowParts {
   name: string;
   /** How long ago the last message landed (formatAgo; '' when there is none): line 1, right. */
   time: string;
-  /** The 48 picture: a person circle, or the group's photo or mark. */
+  /** The 40 picture: a person circle, or the group's photo or mark. */
   picture: ListCardPicture;
   /** The picture slot's hook (data-group-photo / data-person-photo). */
   pictureHooks: { 'data-group-photo': string } | { 'data-person-photo': string };
@@ -519,7 +519,7 @@ export interface ChannelRowParts {
 
 /**
  * The slot contents of one chat. Group and person are the same ListCard: the
- * 48 picture (a person circle, a group's photo or mark), line 1 the name and
+ * 40 picture (a person circle, a group's photo or mark), line 1 the name and
  * how long ago, line 2 the one-line preview (or "Draft: ...") then the "3 new"
  * tag and the unread dot. The avatar URL is on the summary before the card
  * mounts (one batched list read), so a photo paints first, never the initials.
@@ -618,7 +618,7 @@ export function ChannelCard(props: {
   onPressIn?: (channel: ChannelSummary) => void;
   /** The list's input (coarse pointer), read once by the list. */
   input: ChannelListInput;
-  /** Kept for callers: cards are 8 apart, no divider. */
+  /** Kept for callers: rows touch, no divider. */
   divider?: boolean;
   /** The list's select mode for this card; absent: long-press and right-click do nothing. */
   select?: ListCardSelect | undefined;
@@ -711,7 +711,7 @@ interface NotesCardProps {
 
 /**
  * The Personal notes card: a ui/ListCard whose person picture is the caller's
- * own photo (Avatar 'card', 48; the notes channel's avatarUrl, already in
+ * own photo (Avatar 'card', 40; the notes channel's avatarUrl, already in
  * memory), else their initials (ownName), else the person glyph. "Personal
  * notes" and how long ago the last note landed on line 1, the last note (or
  * "Only you can see this") on line 2. In the list it sorts in with the chats

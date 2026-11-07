@@ -188,8 +188,10 @@ export function EmojiTabs(props: {
           data-selected={props.activeGroup === section.group ? 'true' : undefined}
           onClick={() => props.onTab(section.group)}
           className={cn(
-            'shrink-0 text-fg-3',
-            props.activeGroup === section.group && 'bg-accent text-accent-fg lit-pill',
+            'shrink-0 border',
+            props.activeGroup === section.group
+              ? 'border-fg text-fg'
+              : 'border-transparent text-fg-3',
             EMOJI_GLYPH_TYPE,
           )}
         >

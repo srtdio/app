@@ -86,7 +86,7 @@ function ChoiceRow(props: { label: string; selected: boolean; onSelect: () => vo
       onClick={props.onSelect}
       className={cn(
         'flex items-center gap-3 px-3 text-base font-medium',
-        props.selected ? 'bg-accent text-accent-fg lit-pill' : 'bg-panel-3 text-fg lit-well-soft',
+        props.selected ? 'border border-fg text-fg' : 'border border-border text-fg-2',
       )}
     >
       <span className="min-w-0 flex-1 break-words">{props.label}</span>
