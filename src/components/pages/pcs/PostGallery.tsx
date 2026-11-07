@@ -1037,7 +1037,7 @@ export function galleryView({
       );
     }
     const none = (
-      <div className="rounded-xl border bg-panel-2 px-4 py-8 text-center text-base text-fg-3 lit-card-muted">
+      <div className="px-4 py-8 text-center text-base text-fg-3">
         <p>No images on this post yet.</p>
       </div>
     );

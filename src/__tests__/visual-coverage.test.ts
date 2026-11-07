@@ -113,13 +113,7 @@ const REQUIRED: readonly string[] = [
   'chat-send-failed-file',
   'chat-link-youtube',
   'chat-link-no-picture',
-  'new-plan-bank',
-  'pipeline-calm',
-  'pipeline-compact',
   'plan-dates-sheet',
-  'plan-screen-calm',
-  'plan-screen-compact',
-  'plan-screen-cozy',
   'sheet-header-back',
   'chat-viewer-delete-sheet',
   'chat-voice-sending',
@@ -276,6 +270,14 @@ const REQUIRED: readonly string[] = [
   'plan-tab-chip-past',
   'plan-tab-sort',
   'post-tile-uploading',
+  // Density (Compact / Cozy / Calm, 8 Nov 2026): the account menu row, New
+  // plan's Add from bank, and the plan screen and two lists per density.
+  'new-plan-bank',
+  'pipeline-calm',
+  'pipeline-compact',
+  'plan-screen-calm',
+  'plan-screen-compact',
+  'plan-screen-cozy',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */
