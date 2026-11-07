@@ -114,7 +114,7 @@ export function RowKey({
       aria-pressed={on ? true : undefined}
       data-composer-key=""
       className={cn(
-        'inline-flex h-11 w-9 shrink-0 items-center justify-center rounded-full focus-visible:lit-focus',
+        'inline-flex h-11 w-9 shrink-0 items-stretch py-1 rounded-full focus-visible:lit-focus',
         MOVE_CLASS.press,
         className,
       )}
@@ -126,7 +126,7 @@ export function RowKey({
       <span
         aria-hidden="true"
         className={cn(
-          'flex h-9 w-9 items-center justify-center rounded-full',
+          'flex w-full items-center justify-center rounded-full',
           MOVE_CLASS.tint,
           solid ? 'bg-accent text-accent-fg' : on ? 'bg-panel-3 text-fg' : 'text-fg-2 lit-hover',
         )}
@@ -168,7 +168,7 @@ export function RowSend({
       disabled={disabled || busy}
       data-row-send=""
       className={cn(
-        'inline-flex h-11 w-9 shrink-0 items-center justify-center rounded-full focus-visible:lit-focus disabled:pointer-events-none',
+        'inline-flex h-11 w-9 shrink-0 items-stretch py-1 rounded-full focus-visible:lit-focus disabled:pointer-events-none',
         MOVE_CLASS.press,
       )}
       onClick={onClick}
@@ -177,7 +177,7 @@ export function RowSend({
       <span
         aria-hidden="true"
         className={cn(
-          'grid h-9 w-9 place-items-center rounded-full',
+          'grid w-full place-items-center rounded-full',
           MOVE_CLASS.tint,
           disabled && !busy ? 'bg-panel-3 text-fg-3' : 'bg-accent text-accent-fg',
         )}
@@ -407,7 +407,7 @@ export function WritingBox(props: WritingBoxProps) {
     >
       {shape === 'card' ? (
         <RowKey label="Close formatting" solid onPress={() => setFormatOpen(false)}>
-          <IconX size={ICON_SIZE.control} />
+          <IconX size={ICON_SIZE.inline} />
         </RowKey>
       ) : null}
       {FORMAT_KEYS.map((k) => (

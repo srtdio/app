@@ -45,8 +45,9 @@ describe('composer row keys: the 36 exception stays in composer rows', () => {
 
   it('the row parts keep the 44 tall hit', () => {
     const src = readFileSync(join(ROOT, 'ui/WritingBox.tsx'), 'utf8');
-    expect(src).toMatch(/inline-flex h-11 w-9 shrink-0/);
-    expect(src).toMatch(/h-9 w-9/);
+    // 44 tall hit, the 36 face drawn by a 4px inset (py-1), never an h-9 face.
+    expect(src).toMatch(/inline-flex h-11 w-9 shrink-0 items-stretch py-1/);
+    expect(src).not.toMatch(/\bh-9\b/);
   });
 
   it('narrowHits flags a 36 wide hit elsewhere and passes the row parts', () => {

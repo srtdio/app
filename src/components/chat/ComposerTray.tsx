@@ -246,7 +246,9 @@ export function ComposerTray(props: {
         aria-expanded={open}
         aria-controls={trayId}
         onClick={() => setOpen((o) => !o)}
-        className={props.compact === true ? 'w-9 min-w-9 hover:bg-transparent' : undefined}
+        className={
+          props.compact === true ? 'w-9 min-w-9 items-stretch py-1 hover:bg-transparent' : undefined
+        }
         // Round secondary, primary while the tray is open; buttonRef returns
         // focus on Escape.
       >
@@ -256,7 +258,7 @@ export function ComposerTray(props: {
           data-plus-icon=""
           className={cn(
             'flex',
-            props.compact === true && 'h-9 w-9 items-center justify-center rounded-full',
+            props.compact === true && 'w-full items-center justify-center rounded-full',
             props.compact === true && (open ? 'bg-accent text-accent-fg' : 'bg-panel-3 text-fg-2'),
             MOVE_CLASS.turn,
             open && 'rotate-45',

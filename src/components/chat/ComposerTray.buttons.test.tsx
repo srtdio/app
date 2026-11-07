@@ -92,7 +92,8 @@ describe('ComposerTray compact (ui/WritingBox rows)', () => {
     );
     expect(html).toContain('h-11');
     expect(html).toContain('w-9 min-w-9');
-    expect(html).toContain('h-9 w-9 items-center justify-center rounded-full');
+    expect(html).toContain('w-full items-center justify-center rounded-full');
+    expect(html).toContain('py-1');
     expect(html).toContain('bg-panel-3 text-fg-2');
     expect(html).toContain('aria-label="Add attachment"');
   });
