@@ -197,14 +197,16 @@ describe('T5: UploadRing positioning and sizes', () => {
     expect(html).toContain('data-ring-variant="image"');
   });
 
-  it('file: the file bubble sends with the 44px ring over its icon spot, no thin bar', () => {
+  it('file: the file bubble sends with the 44px ring over its page box, no thin bar', () => {
     const html = paint([fileUploading], 'light');
     expect(html.match(/data-upload-ring=""/g)).toHaveLength(1);
     expect(html).toContain('data-ring-variant="file"');
     expect(html).toContain('data-file-state="sending"');
     expect(html).not.toContain('data-file-progress');
     expect(ringParent(html)).toContain('data-file-ring=""');
-    expect(ringParent(html)).toContain('absolute inset-y-0 left-px flex w-16');
+    // A sending pdf reserves the page box, so the ring sits centred over it.
+    expect(ringParent(html)).toContain('absolute inset-x-px top-px flex');
+    expect(ringParent(html)).toContain('aspect-ratio:1 / 1.3');
   });
 });
 
@@ -366,7 +368,9 @@ describe('D5: sending states, one look across photo, album, video, file, voice n
     const html = paint([voiceUploading], 'light');
     // The slot keeps its box; play is still there (so the wave never moves) but invisible.
     expect(html).toMatch(/data-voice-play-slot="upload" class="relative h-11 w-11 shrink-0"/);
-    expect(html).toMatch(/data-voice-control=""[^>]*class="[^"]*invisible/);
+    const play = /<button[^>]*data-voice-control=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(play).toContain('aria-label="Play voice note"');
+    expect(play).toMatch(/class="[^"]*\binvisible\b/);
     expect(ringParent(html)).toContain('data-voice-play-slot="upload"');
     // Never larger than the play button: a 40px ring in a 44px hit box.
     expect(ringClass(html)).toContain('h-11 min-w-11');

@@ -102,6 +102,23 @@ const REQUIRED: readonly string[] = [
   'chat-tombstone-menu',
   'chat-upload-progress',
   'chat-viewer-bar',
+  // Chat media sweep: single photos, albums, sending states, links, plan dates, sheet back.
+  'chat-photo-single-portrait',
+  'chat-photo-single-landscape',
+  'chat-photo-single-square',
+  'chat-album-2',
+  'chat-album-3',
+  'chat-album-4',
+  'chat-send-queued-photo',
+  'chat-send-uploading-album',
+  'chat-send-uploading-video',
+  'chat-send-uploading-file',
+  'chat-send-failed-photo',
+  'chat-send-failed-file',
+  'chat-link-youtube',
+  'chat-link-no-picture',
+  'plan-dates-sheet',
+  'sheet-header-back',
   'chat-viewer-delete-sheet',
   'chat-voice-sending',
   'chat-voice-uploading',
@@ -275,6 +292,11 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   'name: `activity-chip-${chip}`': ['unread', 'mentions', 'briefs', 'plans'].map(
     (chip) => `activity-chip-${chip}`,
   ),
+  // Chat media sweep (7 Nov 2026): single photos by shape, albums by count.
+  'name: `chat-photo-single-${shape}`': ['portrait', 'landscape', 'square'].map(
+    (shape) => `chat-photo-single-${shape}`,
+  ),
+  'name: `chat-album-${count}`': [2, 3, 4].map((count) => `chat-album-${count}`),
   'name: `plan-tab-chip-${chip}`': ['next', 'later', 'earlier', 'all'].map(
     (chip) => `plan-tab-chip-${chip}`,
   ),

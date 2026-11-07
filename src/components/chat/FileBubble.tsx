@@ -412,7 +412,9 @@ export function FileBubble({
         onImageError={() => setImageFailed(true)}
         thumbAttempt={thumbAttempt}
       />
-      {progress !== null ? (
+      {/* Only a send that can still be stopped shows the ring: below an album
+          the album holds the message's one ring, so the file carries none. */}
+      {progress !== null && onCancel !== undefined ? (
         <FileSendingRing
           ratio={ratio}
           progress={attachment.local?.uploading === true ? progress : null}

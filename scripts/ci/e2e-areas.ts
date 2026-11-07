@@ -35,6 +35,7 @@ const CHAT_SPECS = [
   'chat-back-navigation',
   'chat-delete-for-me',
   'chat-file-viewer',
+  'chat-viewer-no-dialog',
   'chat-imessage-threads',
   'chat-keyboard-gap',
   'chat-open-at-once',

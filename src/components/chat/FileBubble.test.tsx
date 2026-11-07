@@ -240,10 +240,16 @@ describe('FileBubble states', () => {
         attachment={{ ...sendingPdf, local: { ...sendingPdf.local!, uploading: false } }}
         cache={cache()}
         presignEnabled
+        onCancel={onCancel}
       />,
     );
     expect(waiting).toContain('data-upload-progress="unknown"');
     expect(waiting).not.toContain('mv-spin');
+    // No stop path (a file below an album): no ring of its own.
+    const below = renderToStaticMarkup(
+      <FileBubble attachment={sendingPdf} cache={cache()} presignEnabled />,
+    );
+    expect(below).not.toContain('data-upload-ring');
   });
 
   it('sent: no ring, the root is the plain fill', () => {

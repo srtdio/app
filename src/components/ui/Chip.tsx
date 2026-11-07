@@ -155,7 +155,7 @@ export function Chip({
         data-chip-clear=""
         aria-label={`Clear ${label} filter`}
         onClick={onClear}
-        className="shrink-0 px-3"
+        className="shrink-0 px-3 focus-visible:lit-focus"
       >
         Clear
       </Button>
