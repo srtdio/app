@@ -4602,7 +4602,7 @@ SCREENS.push(
     // New post: a photo going up (held): the tile under the ring, its X named Cancel upload.
     // Tiles are the framed sheet's (a format with a media frame): on Instagram the
     // untouched sheet opens on Single image. LinkedIn's Text default has no frame,
-    // so its pick is a plain "Uploading" row with no tile.
+    // so its pick is a ui/PendingChip (ring + X on the thumb) instead of a tile.
     name: 'post-tile-uploading',
     seed: creator,
     extra: (network) => {

@@ -94,11 +94,29 @@ describe('AttachmentsField uploads', () => {
     const retry = document.querySelector<HTMLButtonElement>('button[aria-label="Retry a.png"]');
     expect(retry).not.toBeNull();
     expect(retry!.className).toContain('h-11');
-    expect(document.querySelector('button[aria-label="Dismiss a.png"]')).not.toBeNull();
+    // ui/PendingChip failed state: Retry plus the trailing X that removes it.
+    expect(document.querySelector('button[aria-label="Remove a.png"]')).not.toBeNull();
+    expect(document.querySelector('[data-pending-chip="failed"]')).not.toBeNull();
+    // b and c upload as PendingChip with the ring (X cancels), never a bar or "Uploading" text.
+    expect(
+      document.querySelectorAll('[data-pending-chip="uploading"] [data-upload-ring]').length,
+    ).toBe(2);
+    expect(document.body.textContent).not.toMatch(/Uploading|\d%/);
 
     mockUpload.mockClear();
     await act(async () => retry!.click());
     expect(mockUpload).toHaveBeenCalledTimes(1);
     expect(onPendingChange).toHaveBeenLastCalledWith(3);
+  });
+});
+
+describe('pendingChipMeta', () => {
+  it('size progress from bytes for a file, "Link" for a link, never a % figure', async () => {
+    const { pendingChipMeta } = await import('@/components/pages/create/AttachmentsField');
+    const MB = 1024 * 1024;
+    const file = new File([new Uint8Array(2 * MB)], 'deck.pdf');
+    expect(pendingChipMeta({ kind: 'file', file, progress: 0.5 })).toBe('1.0 of 2.0 MB');
+    expect(pendingChipMeta({ kind: 'link', progress: 0 })).toBe('Link');
+    expect(pendingChipMeta({ kind: 'file', file, progress: 0 })).not.toMatch(/%/);
   });
 });

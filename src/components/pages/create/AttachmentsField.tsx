@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { ICON_SIZE, IconFile, IconImagePlus, IconLink, IconTrash } from '@/components/ui/icons';
+import { PendingChip, uploadingChipMeta } from '@/components/ui/PendingChip';
 import { frameFor, type Frame, type FrameMedia } from '@/lib/platform-specs';
 import {
   COMPOSER_FRAME_MAX_HEIGHT,
@@ -525,6 +526,16 @@ type Pending = {
   /** A failed link's input, kept so its row can Retry. */
   link?: { url: string; name: string };
 };
+
+/**
+ * A pending row's chip meta: "1.2 of 3.4 MB" while a file uploads (from its
+ * bytes; never a % figure), "Link" for a link. Pure.
+ */
+export function pendingChipMeta(row: Pick<Pending, 'kind' | 'file' | 'progress'>): string {
+  if (row.file === undefined) return row.kind === 'link' ? 'Link' : '';
+  const total = row.file.size;
+  return uploadingChipMeta(total, row.progress > 0 ? row.progress * total : null);
+}
 
 /** Rows still uploading (failed rows are not counted). Pure. */
 export function pendingUploadCount(rows: readonly { error: string | null }[]): number {
@@ -1053,7 +1064,7 @@ export function AttachmentsField({
       ) : null}
 
       {pendingRows.length > 0 ? (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-wrap gap-2">
           {pendingRows.map((item) => {
             // Framed: a failed document is covered by the "didn't upload" bar
             // (its Retry and Remove), so its row only marks which file failed.
@@ -1068,43 +1079,34 @@ export function AttachmentsField({
                 </span>
               </li>
             ) : (
-              <li key={item.id} className={cnPending(item.error)}>
-                <span className="shrink-0 text-fg-3">
-                  {item.kind === 'link' ? (
+              // One upload look (decision F): ui/PendingChip on every format,
+              // framed or not (a LinkedIn Text post has no frame to hold tiles).
+              <PendingChip
+                key={item.id}
+                thumb={
+                  item.previewUrl !== null ? (
+                    <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
+                  ) : item.kind === 'link' ? (
                     <IconLink size={ICON_SIZE.inline} />
                   ) : (
                     <IconFile size={ICON_SIZE.inline} />
-                  )}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-base text-fg" title={item.name}>
-                  {item.name}
-                </span>
-                <span className={item.error !== null ? 'text-sm text-bad' : 'text-sm text-fg-3'}>
-                  {item.error ?? 'Uploading'}
-                </span>
-                {item.error !== null && (item.file !== undefined || item.link !== undefined) ? (
-                  <Button
-                    type="button"
-                    variant="link"
-                    className="shrink-0"
-                    aria-label={`Retry ${item.name}`}
-                    onClick={() => retryPending(item.id)}
-                  >
-                    Retry
-                  </Button>
-                ) : null}
-                {item.error !== null ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="shrink-0 px-3"
-                    aria-label={`Dismiss ${item.name}`}
-                    onClick={() => dismissPending(item.id)}
-                  >
-                    Clear
-                  </Button>
-                ) : null}
-              </li>
+                  )
+                }
+                title={item.name}
+                meta={pendingChipMeta(item)}
+                status={
+                  item.error !== null
+                    ? { state: 'failed' }
+                    : { state: 'uploading', progress: item.progress > 0 ? item.progress : null }
+                }
+                onRemove={() =>
+                  item.error !== null ? dismissPending(item.id) : cancelPending(item.id)
+                }
+                onCancel={() => cancelPending(item.id)}
+                {...(item.error !== null && (item.file !== undefined || item.link !== undefined)
+                  ? { onRetry: () => retryPending(item.id) }
+                  : {})}
+              />
             );
           })}
         </ul>
