@@ -25,11 +25,13 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconDownload,
+  IconForward,
   IconTrash,
   IconX,
   ICON_SIZE,
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
@@ -271,6 +273,11 @@ const TOOLBAR_BUTTON =
   'hover:bg-overlay-surface focus-visible:outline-none focus-visible:ring-2 ' +
   'focus-visible:ring-overlay-fg/70';
 
+// The chat viewer's Forward and Delete (opt-in): ui/IconButton (44x44) in the
+// overlay ink, the same hover surface as Download.
+const OVERLAY_ICON_BUTTON =
+  'text-overlay-fg hover:bg-overlay-surface hover:text-overlay-fg disabled:text-overlay-fg-dim';
+
 // Prev/next arrows: a translucent chip keeps them legible over any photo. 44x44.
 const ARROW_BUTTON =
   'absolute top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center ' +
@@ -464,6 +471,18 @@ export interface ImageLightboxProps {
    * no button.
    */
   onShowInChat?: (index: number) => void;
+  /**
+   * Chat home: a Forward icon button (left of Delete and Download) forwards the
+   * shown image's message. Called with the index currently shown. Omitted: no
+   * button (every other caller).
+   */
+  onForward?: (index: number) => void;
+  /**
+   * Chat home: a Delete icon button (between Forward and Download) opens the
+   * caller's delete choices for the shown image's message; the caller moves
+   * `index` (or closes) once it is gone. Omitted: no button.
+   */
+  onDelete?: (index: number) => void;
   /** The thumbnail's rect to grow from; default: the thumbnail the opening tap hit. */
   from?: Box | null;
 }
@@ -485,6 +504,8 @@ export function ImageLightbox({
   onClose,
   details,
   onShowInChat,
+  onForward,
+  onDelete,
   from,
 }: ImageLightboxProps): ReactElement | null {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -839,8 +860,14 @@ export function ImageLightbox({
         </div>
       ) : null}
 
-      {details !== undefined || onShowInChat !== undefined ? (
-        <div className="relative flex h-16 shrink-0 items-center gap-3 px-4 pb-[env(safe-area-inset-bottom)]">
+      {details !== undefined ||
+      onShowInChat !== undefined ||
+      onForward !== undefined ||
+      onDelete !== undefined ? (
+        <div
+          data-testid="viewer-bar"
+          className="relative flex h-16 shrink-0 items-center gap-3 px-4 pb-[env(safe-area-inset-bottom)]"
+        >
           {onShowInChat !== undefined ? (
             <Button
               type="button"
@@ -853,6 +880,26 @@ export function ImageLightbox({
             </Button>
           ) : null}
           <span className="min-w-0 flex-1" />
+          {onForward !== undefined ? (
+            <IconButton
+              type="button"
+              label="Forward"
+              onClick={() => onForward(index)}
+              className={OVERLAY_ICON_BUTTON}
+            >
+              <IconForward size={ICON_SIZE.control} />
+            </IconButton>
+          ) : null}
+          {onDelete !== undefined ? (
+            <IconButton
+              type="button"
+              label="Delete"
+              onClick={() => onDelete(index)}
+              className={OVERLAY_ICON_BUTTON}
+            >
+              <IconTrash size={ICON_SIZE.control} />
+            </IconButton>
+          ) : null}
           {details !== undefined && current.onRemove !== undefined ? (
             <button
               type="button"

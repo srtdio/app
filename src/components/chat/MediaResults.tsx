@@ -9,6 +9,12 @@
 // Select mode (the home ✓) selects ITEMS keyed by their message: each tile or
 // row shows the SelectCheckbox and a tap toggles; a message carrying several
 // photos is one selection (every tile of it shows checked).
+// The Photos viewer's bar: Show in chat, then Forward, Delete and Download.
+// Delete opens the delete sheet (Delete for me here: the Delete for everyone
+// path lives in the open thread); once the message is hidden the viewer shows
+// the next photo (the previous at the end, or closes). A sheet opened from
+// the viewer sits under its layer, so the viewer steps aside while it is open
+// and comes back growing out of its tile.
 
 import {
   useCallback,
@@ -46,10 +52,11 @@ import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { VoiceNote } from '@/components/chat/VoiceNote';
 import { SettleLanding } from '@/components/chat/SettleLanding';
 import { SelectCheckbox } from '@/components/chat/SelectionBar';
+import { DeleteSheet } from '@/components/chat/DeleteSheet';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { RESULT_LABEL, noCallout, searchRetryRow } from '@/components/chat/SearchResults';
 import { cn } from '@/lib/cn';
-import { Bone } from '@/lib/motion';
+import { Bone, type Box } from '@/lib/motion';
 import { mark } from '@/lib/perf-marks';
 import { env } from '@/lib/env';
 import { humanizeSize } from '@/lib/assets';
@@ -68,7 +75,8 @@ import { OWN_PREFIX, type PreviewNameOf } from '@/lib/chat/chat-store';
 import { APP_ENTITY_ROUTES, classify, currentOrigin, displayUrl } from '@/lib/chat/message-links';
 import { isFileRemoved, removedFilesStore } from '@/lib/chat/remove-files';
 import { useHiddenIds, withoutHidden } from '@/lib/chat/hides';
-import type { MediaSelection } from '@/lib/chat/media-select';
+import { keyAfterHide, mediaDeleteEveryone, type MediaSelection } from '@/lib/chat/media-select';
+import type { HideItem } from '@/lib/chat/use-delete-for-me';
 import {
   MEDIA_MIN_TILES,
   flattenHits,
@@ -119,6 +127,25 @@ export interface MediaResultsProps {
     selection: MediaSelection;
     onToggle: (item: { messageId: string; channelId: string }) => void;
   };
+  /** The Photos viewer's Forward: open the forward picker for its message. Absent: none. */
+  onForwardItems?: (items: HideItem[]) => void;
+  /** The forward picker is open: the viewer steps aside (a sheet sits under its layer). */
+  forwarding?: boolean;
+  /** The Photos viewer's Delete for me (behind the Undo toast). Absent: no Delete. */
+  onDeleteForMe?: (items: HideItem[]) => void;
+}
+
+/** A grid tile's box on screen (the viewer grows back out of it), or null. A DOM read only. */
+function tileBox(key: string | null): Box | null {
+  if (key === null || typeof document === 'undefined') return null;
+  const el = [...document.querySelectorAll('[data-media-tile]')].find(
+    (tile) => tile.getAttribute('data-media-tile') === key,
+  );
+  if (el === undefined) return null;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0
+    ? { left: r.left, top: r.top, width: r.width, height: r.height }
+    : null;
 }
 
 /** One selectable item's check state and toggle, in select mode. */
@@ -703,6 +730,14 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
 
   // The open viewer, by item key (stable when the cache swaps to the network page).
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // Where the viewer grows from when it comes back after a sheet (undefined: the tap).
+  const [viewerFrom, setViewerFrom] = useState<Box | null | undefined>(undefined);
+  // The photo whose Delete sheet is open (the viewer steps aside meanwhile).
+  const [deleteFor, setDeleteFor] = useState<MediaItem | null>(null);
+  const openItem = (key: string): void => {
+    setViewerFrom(undefined);
+    setOpenKey(key);
+  };
   const onRetry = useCallback(() => runner?.retry(), [runner]);
 
   const names = {
@@ -735,6 +770,8 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
   );
 
   const grid = kind === 'photo' || kind === 'video';
+  const onForwardItems = props.onForwardItems;
+  const onDeleteForMe = props.onDeleteForMe;
 
   // Select mode: the item's message is the selection.
   const selecting = props.selecting;
@@ -841,14 +878,14 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
             if (kind === 'photo') {
               return (
                 <li key={item.key} className="min-w-0">
-                  <PhotoTile item={item} onOpen={() => setOpenKey(item.key)} />
+                  <PhotoTile item={item} onOpen={() => openItem(item.key)} />
                 </li>
               );
             }
             if (kind === 'video') {
               return (
                 <li key={item.key} className="min-w-0">
-                  <VideoTile item={item} onOpen={() => setOpenKey(item.key)} />
+                  <VideoTile item={item} onOpen={() => openItem(item.key)} />
                 </li>
               );
             }
@@ -875,7 +912,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
             }
             return (
               <li key={item.key} className="min-w-0">
-                <FileRowItem item={item} date={dateOf(item)} onOpen={() => setOpenKey(item.key)} />
+                <FileRowItem item={item} date={dateOf(item)} onOpen={() => openItem(item.key)} />
               </li>
             );
           })}
@@ -902,7 +939,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
       {!loading && !failed && hasMore ? (
         <div ref={sentinelRef} data-search-sentinel="" aria-hidden="true" className="h-px" />
       ) : null}
-      {photoIndex !== -1 ? (
+      {photoIndex !== -1 && deleteFor === null && props.forwarding !== true ? (
         <ImageLightbox
           images={photos.map((p) => ({ assetId: p.versionId, name: p.name }))}
           index={photoIndex}
@@ -917,6 +954,57 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
           onShowInChat={(i) => {
             const item = photos[i];
             if (item !== undefined) showInChat(item);
+          }}
+          {...(viewerFrom !== undefined ? { from: viewerFrom } : {})}
+          {...(onForwardItems !== undefined
+            ? {
+                onForward: (i: number) => {
+                  const item = photos[i];
+                  if (item === undefined) return;
+                  setViewerFrom(tileBox(item.key));
+                  onForwardItems([{ messageId: item.messageId, channelId: item.channelId }]);
+                },
+              }
+            : {})}
+          {...(onDeleteForMe !== undefined
+            ? {
+                onDelete: (i: number) => {
+                  const item = photos[i];
+                  if (item !== undefined) setDeleteFor(item);
+                },
+              }
+            : {})}
+        />
+      ) : null}
+      {onDeleteForMe !== undefined ? (
+        <DeleteSheet
+          open={deleteFor !== null}
+          count={1}
+          everyone={
+            deleteFor !== null &&
+            mediaDeleteEveryone({
+              senderId: deleteFor.senderId,
+              currentUserId: props.currentUserId,
+              createdAt: deleteFor.createdAt,
+              nowMs,
+              notes: props.channelsById.get(deleteFor.channelId)?.channelType === 'notes',
+              // No Delete for everyone path from the chat home (it lives in the thread).
+              canEveryone: false,
+            })
+          }
+          onEveryone={() => undefined}
+          onForMe={() => {
+            if (deleteFor === null) return;
+            const at = photos.findIndex((p) => p.key === deleteFor.key);
+            const next = at === -1 ? null : keyAfterHide(photos, at);
+            setViewerFrom(tileBox(next));
+            setOpenKey(next);
+            onDeleteForMe([{ messageId: deleteFor.messageId, channelId: deleteFor.channelId }]);
+          }}
+          onClose={() => {
+            // Cancel: the viewer comes back on the same photo.
+            if (deleteFor !== null) setViewerFrom(tileBox(deleteFor.key));
+            setDeleteFor(null);
           }}
         />
       ) : null}

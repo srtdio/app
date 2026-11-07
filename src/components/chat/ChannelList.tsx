@@ -1456,6 +1456,12 @@ export function ChannelList(props: ChannelListProps): ReactElement {
               },
             }
           : {})}
+        {...(canForward
+          ? { onForwardItems: setForwardItems, forwarding: forwardItems !== null }
+          : {})}
+        {...(currentUserId !== null && listWorkspaceId !== null
+          ? { onDeleteForMe: deleteForMe }
+          : {})}
         onShowInChat={(channelId, messageId) => {
           const channel = channelsById.get(channelId);
           if (channel === undefined) return;
