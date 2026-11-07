@@ -28,7 +28,10 @@ export function DeleteSheet(props: {
 }): ReactElement {
   return (
     <Sheet open={props.open} onClose={props.onClose} title={deleteSheetTitle(props.count)}>
-      <div data-testid="delete-sheet" className="flex flex-col gap-2 md:flex-row-reverse md:justify-start">
+      <div
+        data-testid="delete-sheet"
+        className="flex flex-col gap-2 md:flex-row-reverse md:justify-start"
+      >
         {props.everyone ? (
           <Button
             type="button"
