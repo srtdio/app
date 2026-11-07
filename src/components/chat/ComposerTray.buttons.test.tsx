@@ -1,14 +1,13 @@
-// Button system regression: the composer's plus, task, emoji and voice draft
-// controls render the shared 44px recipe (round for plus / task / send), and
-// the composer source keeps mic and send round.
+// Button system regression: the composer's plus, emoji and voice draft
+// controls render the shared 44px recipe (round for plus / send), the tray's
+// Tasks tile keeps its hooks, and the composer source keeps mic and send round.
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ComposerTray } from '@/components/chat/ComposerTray';
+import { ComposerTray, TrayGrid, trayTiles } from '@/components/chat/ComposerTray';
 import { ComposerEmoji } from '@/components/chat/ComposerEmoji';
-import { TaskButton } from '@/components/chat/tasks/TaskButton';
 import { voiceDraftView } from '@/components/chat/VoiceDraft';
 
 const buttons = (html: string): string[] => html.match(/<button[^>]*>/g) ?? [];
@@ -28,15 +27,21 @@ describe('composer buttons', () => {
     expect(plus).toContain('aria-label="Add attachment"');
   });
 
-  it('task: round secondary, 44px, keeps its data attributes', () => {
-    const [task] = buttons(renderToStaticMarkup(<TaskButton unseen onOpen={() => {}} />));
-    expectOnSystem(task ?? '');
-    expect(task).toContain('rounded-full w-11 px-0');
-    expect(task).toContain('bg-panel');
-    expect(task).toContain('data-task-button=""');
+  it('the Tasks tile: last, the tour key, the unseen dot and "Tasks, new"', () => {
+    const tiles = trayTiles('touch', { tasks: { unseen: true } });
+    expect(tiles.map((t) => t.id).at(-1)).toBe('tasks');
+    const html = renderToStaticMarkup(<TrayGrid tiles={tiles} onPick={() => {}} />);
+    const task = buttons(html).find((tag) => tag.includes('data-tray-tile="tasks"')) ?? '';
+    expect(task).toContain('data-induction="chat-tasks"');
     expect(task).toContain('data-task-unseen=""');
     // The unseen dot rides in the name too ("new"), never colour alone.
     expect(task).toContain('aria-label="Tasks, new"');
+    expect(html).toContain('data-task-dot=""');
+    const seen = renderToStaticMarkup(
+      <TrayGrid tiles={trayTiles('touch', { tasks: { unseen: false } })} onPick={() => {}} />,
+    );
+    expect(seen).not.toContain('data-task-dot');
+    expect(trayTiles('touch').map((t) => t.id)).not.toContain('tasks');
   });
 
   it("emoji: a bare 44 circle (the composer row's side treatment)", () => {

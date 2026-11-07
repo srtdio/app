@@ -56,40 +56,29 @@ async function openChat(page: Page, name: string): Promise<void> {
   await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
 }
 
+/** The tray's Tasks tile (the tray opens from the composer's plus). */
+async function tasksTile(page: Page): Promise<ReturnType<Page['locator']>> {
+  await page.getByRole('button', { name: 'Add attachment' }).click();
+  const tile = page.locator('[data-tray-tile="tasks"]');
+  await expect(tile).toBeVisible();
+  return tile;
+}
+
 async function openSheet(page: Page): Promise<ReturnType<Page['getByRole']>> {
-  const button = page.getByRole('button', { name: /^Tasks(, new)?$/ });
-  await button.click();
+  const tile = await tasksTile(page);
+  await tile.click();
   const sheet = page.getByRole('dialog', { name: 'Tasks' });
   await expect(sheet).toBeVisible();
   await expect(sheet.locator('[data-task-list]')).toBeVisible();
   return sheet;
 }
 
-/** The page's ⋯ menu: its rows by label; Escape closes it. */
-async function openMenu(page: Page): Promise<void> {
+/** The sheet's one header action: Share to chat. */
+async function openShare(page: Page): Promise<void> {
   await page
     .getByRole('dialog', { name: 'Tasks' })
-    .getByRole('button', { name: 'More actions' })
+    .getByRole('button', { name: 'Share to chat', exact: true })
     .click();
-  await expect(page.getByRole('menuitem').first()).toBeVisible();
-}
-async function menuLabels(page: Page): Promise<string[]> {
-  await openMenu(page);
-  const labels = await page
-    .getByRole('menuitem')
-    .evaluateAll((rows) =>
-      rows.map((r) =>
-        (r.querySelector('span.truncate')?.textContent ?? r.textContent ?? '').trim(),
-      ),
-    );
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('menuitem')).toHaveCount(0);
-  return labels;
-}
-async function menuPick(page: Page, label: string): Promise<void> {
-  await openMenu(page);
-  await page.getByRole('menuitem', { name: label }).click();
-  await expect(page.getByRole('menuitem')).toHaveCount(0);
 }
 /** The row whose title holds `text`. */
 function rowOf(sheet: ReturnType<Page['getByRole']>, text: string): ReturnType<Page['locator']> {
@@ -138,8 +127,9 @@ test(
     const network = await installHarnessNetwork(page);
     seedTasks(network.world);
     await openChat(page, GROUP_NAME);
-    const button = page.getByRole('button', { name: /^Tasks(, new)?$/ });
-    expectMinTouchTarget(await button.boundingBox());
+    const tile = await tasksTile(page);
+    expectMinTouchTarget(await tile.boundingBox());
+    await page.keyboard.press('Escape');
 
     const sheet = await openSheet(page);
     // Nothing dated: the sheet opens on No date, one flat list in number order
@@ -152,7 +142,10 @@ test(
     await expect(sheet.locator('[data-task-due]')).toHaveCount(0);
     await expect(sheet.locator('[data-task-save]')).toHaveCount(0);
     await expect(sheet.locator('[data-task-save-state]')).toHaveCount(0);
-    expect(await menuLabels(page)).toEqual(['Search tasks', 'Share to chat', 'Full screen']);
+    // One header action: Share to chat (no ⋯, no search, no full screen).
+    await expect(sheet.getByRole('button', { name: 'More actions' })).toHaveCount(0);
+    await expect(sheet.getByRole('button', { name: 'Share to chat', exact: true })).toBeVisible();
+    await expect(sheet.locator('[data-task-search]')).toHaveCount(0);
     expectMinTouchTarget(
       await rowOf(sheet, 'Hook options').locator('[data-task-tick]').boundingBox(),
     );
@@ -355,7 +348,7 @@ test('Share: the snapshot lands here and, Forwarded, in the picked chat and its 
   seedTasks(network.world);
   await openChat(page, GROUP_NAME);
   await openSheet(page);
-  await menuPick(page, 'Share to chat');
+  await openShare(page);
 
   const picker = page.getByRole('dialog', { name: 'Forward to' });
   await expect(picker).toBeVisible();

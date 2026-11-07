@@ -14,7 +14,6 @@ import type {
   KeyboardEvent,
   MutableRefObject,
   ReactElement,
-  ReactNode,
   SyntheticEvent,
 } from 'react';
 import { logger } from '@/lib/logger';
@@ -185,11 +184,11 @@ export interface ComposerProps {
    */
   onOpenPlanCompose?: (() => void) | undefined;
   /**
-   * The chat's task list button, drawn after the emoji button and before Mic /
-   * Send in the default row (never while recording or sending a voice note).
-   * Absent: none (Personal notes, the thread view).
+   * The chat's task list: the tray's Tasks tile (its dot while someone else
+   * changed the list since this device last looked) opens the Tasks sheet.
+   * Absent: no tile (Personal notes, the thread view).
    */
-  taskButton?: ReactNode | undefined;
+  tasks?: { unseen: boolean; onOpen: () => void } | undefined;
   /**
    * Queues the trimmed text plus any picked files (local attachments that upload
    * in the background) and shared posts and briefs. Synchronous: uploads,
@@ -1914,6 +1913,7 @@ export function Composer(props: ComposerProps): ReactElement {
                 layout={layout}
                 notes={props.notes === true}
                 draft={draftEnabled}
+                {...(props.tasks !== undefined ? { tasks: { unseen: props.tasks.unseen } } : {})}
                 plan={planEnabled}
                 onShownChange={setTrayShown}
                 onPick={(id) => {
@@ -1940,6 +1940,9 @@ export function Composer(props: ComposerProps): ReactElement {
                       return;
                     case 'plan':
                       if (planEnabled) props.onOpenPlanCompose?.();
+                      return;
+                    case 'tasks':
+                      props.tasks?.onOpen();
                       return;
                   }
                 }}
@@ -1982,7 +1985,6 @@ export function Composer(props: ComposerProps): ReactElement {
           side={
             <>
               {showsEmojiButton(layout) && !held ? <ComposerEmoji onPick={insertEmoji} /> : null}
-              {props.taskButton ?? null}
             </>
           }
           send={

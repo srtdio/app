@@ -332,7 +332,8 @@ function seedDatedTasks(network: HarnessNetwork): void {
 /** The group chat's Tasks sheet, open on its opening chip (Today). */
 async function openTasks(page: Page): Promise<Locator> {
   await openChat(page, GROUP_NAME);
-  await tap([page.getByRole('button', { name: /^Tasks(, new)?$/ })], 'Tasks button');
+  await tap([page.getByRole('button', { name: 'Add attachment', exact: true })], 'tray');
+  await tap([page.locator('[data-tray-tile="tasks"]')], 'Tasks tile');
   const sheet = page.getByRole('dialog', { name: 'Tasks' });
   await waitFor([sheet.locator('[data-task-list]')], 'Tasks sheet');
   return sheet;
@@ -1135,15 +1136,13 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // Full screen (from the menu) on Past: Not done (overdue, bad tone) above Done.
-    name: 'chat-tasks-past-full',
+    // Past: Not done (overdue, bad tone) above Done.
+    name: 'chat-tasks-past',
     seed: creator,
     extra: seedDatedTasks,
     url: '/chat',
     steps: async (page) => {
       const sheet = await openTasks(page);
-      await tap([sheet.getByRole('button', { name: 'More actions' })], 'Tasks menu');
-      await tap([page.getByRole('menuitem', { name: 'Full screen' })], 'Full screen');
       await tap([sheet.locator('[data-task-when-chip="past"]')], 'Past chip');
       await waitFor([sheet.locator('[data-task-section="done"]')], 'Past sections');
     },
@@ -1194,21 +1193,6 @@ const SCREENS: Screen[] = [
       const row = sheet.locator('[data-task-row-id]', { hasText: 'Hook options' });
       await swipeRow(row.locator('[data-task-title]'), -80, { release: false });
       await waitFor([row.locator('[data-task-swipe-icon][data-armed]')], 'armed bin');
-    },
-  },
-  {
-    // Search (from the menu) takes the chip line: one flat list across every chip.
-    name: 'chat-tasks-search',
-    seed: creator,
-    extra: seedDatedTasks,
-    url: '/chat',
-    hold: true,
-    steps: async (page) => {
-      const sheet = await openTasks(page);
-      await tap([sheet.getByRole('button', { name: 'More actions' })], 'Tasks menu');
-      await tap([page.getByRole('menuitem', { name: 'Search tasks' })], 'Search tasks');
-      await sheet.locator('[data-task-search] input').fill('ca');
-      await waitFor([sheet.locator('[data-task-list][data-task-chip="search"]')], 'results');
     },
   },
   {

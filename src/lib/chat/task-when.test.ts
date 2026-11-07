@@ -6,7 +6,6 @@ import {
   isPickableDay,
   openingChip,
   rowDateLine,
-  searchTasks,
   taskWhen,
   type TaskCalendar,
 } from '@/lib/chat/task-when';
@@ -100,21 +99,5 @@ describe('the row menu and search', () => {
     ]);
     expect(isPickableDay('2026-11-05', CAL)).toBe(true);
     expect(isPickableDay('2026-11-04', CAL)).toBe(false);
-  });
-
-  it('search keeps titles where every word starts a word, any case', () => {
-    const tasks = [
-      { title: 'Get GBL logo files' },
-      { title: 'Old logo cleanup' },
-      { title: 'Blog' },
-    ];
-    expect(searchTasks(tasks, ['logo']).map((t) => t.title)).toEqual([
-      'Get GBL logo files',
-      'Old logo cleanup',
-    ]);
-    expect(searchTasks(tasks, ['log', 'fil']).map((t) => t.title)).toEqual(['Get GBL logo files']);
-    // A word inside another word is no match (prefix rule): "log" never finds "Blog".
-    expect(searchTasks(tasks, ['log']).map((t) => t.title)).not.toContain('Blog');
-    expect(searchTasks(tasks, [])).toHaveLength(3);
   });
 });

@@ -10,7 +10,7 @@ import { DM_CHANNEL, GROUP_NAME, PEER_NAME, WORKSPACE_ID, ME } from '../fixtures
 // is agency only. Runs in both colour schemes (the dark and light projects),
 // on the iPhone viewport and on a laptop. Linux WebKit approximates iOS WebKit.
 
-const TILE_ORDER = ['photos', 'file', 'assets', 'brief', 'post', 'draft', 'plan'];
+const TILE_ORDER = ['photos', 'file', 'assets', 'brief', 'post', 'draft', 'plan', 'tasks'];
 const LIB_IMAGE = '0190e000-0000-7000-8000-0000000000a1';
 const LIB_IMAGE_VERSION = '0190e100-0000-7000-8000-0000000000a1';
 const LIB_PDF = '0190e000-0000-7000-8000-0000000000a2';

@@ -253,7 +253,6 @@ import {
 } from '@/lib/chat/private-reply';
 import { dayPillLabel, withDaySeparators, type ThreadItem } from '@/components/chat/day-separators';
 import { ForwardPicker, type ForwardSendResult } from '@/components/chat/ForwardPicker';
-import { TaskButton, readTasksSeen, writeTasksSeen } from '@/components/chat/tasks/TaskButton';
 import { TaskEventLine, type TaskLineContext } from '@/components/chat/tasks/TaskEventLine';
 import { TaskSheet } from '@/components/chat/tasks/TaskSheet';
 import { useChatTasks } from '@/components/chat/tasks/useChatTasks';
@@ -261,8 +260,10 @@ import {
   collapseTaskRun,
   eventsInWindow,
   hasUnseenChanges,
+  readTasksSeen,
   shareSnapshot,
   tasksSeenKey,
+  writeTasksSeen,
   type TaskEvent,
   type TaskLine,
 } from '@/lib/chat/tasks';
@@ -7051,15 +7052,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           {...(notes ? { notes: true } : {})}
           onCancelAbout={() => setAboutDraft(null)}
           {...(taskChannel !== null
-            ? {
-                taskButton: (
-                  <TaskButton
-                    unseen={taskUnseen}
-                    editing={chatTasks.editors.length > 0}
-                    onOpen={() => openTasks(null)}
-                  />
-                ),
-              }
+            ? { tasks: { unseen: taskUnseen, onOpen: () => openTasks(null) } }
             : {})}
           sharedPostIds={sharedInChat}
           onBringPost={bringPost}

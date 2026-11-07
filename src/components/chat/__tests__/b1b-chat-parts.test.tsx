@@ -143,11 +143,12 @@ describe('chat headers on ui/HeaderBar: one exit each', () => {
       expect(text).toContain('<HeaderBar');
       expect(text).not.toContain('<IconChevronLeft');
     }
-    // Tasks: Back, Tasks, the save state, ⋯ (the ⋯ is the bar's last action).
+    // Tasks: Back, Tasks, the save state, Share to chat (the bar's last action).
     const tasks = source('../tasks/TaskSheet.tsx');
     const start = tasks.indexOf('<HeaderBar');
     const bar = tasks.slice(start, tasks.indexOf('/>\n        </div>', start));
     expect(bar).toContain("backProps={{ label: BACK_LABEL, 'data-task-back': '' }}");
-    expect(bar.indexOf('data-task-save-slot')).toBeLessThan(bar.indexOf('<ActionMenu'));
+    expect(bar).not.toContain('<ActionMenu');
+    expect(bar.indexOf('data-task-save-slot')).toBeLessThan(bar.indexOf('label={SHARE_LABEL}'));
   });
 });
