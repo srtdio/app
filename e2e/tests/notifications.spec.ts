@@ -208,10 +208,16 @@ test('fix 3: at 390px the chip row ends with a full gutter after Plans and no fa
   const overflows = await row.evaluate((el) => el.scrollWidth - el.clientWidth > 2);
   if (overflows) await expect.poll(maskOf).not.toBe('none');
 
-  await row.evaluate((el) => {
-    el.scrollLeft = el.scrollWidth;
-  });
-  await expect.poll(maskOf).toBe('none');
+  // Scroll to the end inside the poll: the chip counts can land after the
+  // first scroll and widen the row, so each try scrolls to the new end.
+  await expect
+    .poll(async () => {
+      await row.evaluate((el) => {
+        el.scrollLeft = el.scrollWidth;
+      });
+      return maskOf();
+    })
+    .toBe('none');
 
   // Plans is the last chip (Snoozed is gone).
   const last = row.getByRole('button', { name: 'Plans', exact: true });
