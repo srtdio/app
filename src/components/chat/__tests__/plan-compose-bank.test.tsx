@@ -9,7 +9,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 
@@ -298,8 +298,9 @@ describe('New plan: bank helpers (pure)', () => {
 });
 
 describe('New plan: flat look (source)', () => {
+  // jsdom gives import.meta.url a non-file scheme: read from the repo root.
   const src = readFileSync(
-    fileURLToPath(new URL('../PlanComposeScreen.tsx', import.meta.url)),
+    join(process.cwd(), 'src/components/chat/PlanComposeScreen.tsx'),
     'utf8',
   );
 

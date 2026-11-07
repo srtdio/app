@@ -85,7 +85,9 @@ export interface CardProps {
  * section. Selected keeps only the outline family's ink line (lit-selected,
  * which needs a whole 1px edge, so it takes border + the card radius).
  */
-export function cardSurface(_muted = false, selected = false): string {
+export function cardSurface(muted = false, selected = false): string {
+  // Muted no longer draws its own surface (flat look); kept for the callers' API.
+  void muted;
   return selected ? 'rounded-xl border lit-selected' : 'border-b border-border';
 }
 

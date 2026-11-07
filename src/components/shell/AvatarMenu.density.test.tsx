@@ -20,7 +20,10 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
   useIsLaptop: () => true,
 }));
-vi.mock('@/lib/events', () => ({ dispatchSorted: vi.fn() }));
+vi.mock('@/lib/events', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/events')>()),
+  dispatchSorted: vi.fn(),
+}));
 vi.mock('@/lib/supabase', () => ({ supabase: { tag: 'supabase' } }));
 vi.mock('@srtdio/rpc', () => ({ userDensitySet }));
 vi.mock('@/lib/use-current-profile', async (importOriginal) => ({
