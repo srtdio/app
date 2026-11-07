@@ -103,9 +103,10 @@ async function swipeRow(row: ReturnType<Page['locator']>, dx: number): Promise<v
   const y = box.y + box.height / 2;
   const x0 = box.x + box.width / 2;
   const touch = { pointerType: 'touch', pointerId: 7, isPrimary: true, clientY: y };
-  // Park Playwright's cursor on the row: a stale cursor elsewhere sends a
-  // pointermove when the sheet moves under it, which cancels the swipe.
-  await title.page().mouse.move(x0, y);
+  // Park Playwright's cursor in the corner, off the row: a cursor over the
+  // row sends a pointermove when the row slides under it (from a stale click,
+  // or parked at the start point, which drags the swipe back to 0).
+  await title.page().mouse.move(1, 1);
   await title.dispatchEvent('pointerdown', { ...touch, clientX: x0 });
   const steps = 8;
   for (let i = 1; i <= steps; i += 1) {
