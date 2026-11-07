@@ -2926,13 +2926,13 @@ export function DayColumn(props: {
   empty?: boolean;
 }): ReactElement {
   const isToday = props.day !== null && props.day === props.today;
+  // Flat tile: no edge and no lit height. Today keeps its solid accent fill.
   const tile = (
     <div
       data-plan-day-col=""
       {...(isToday ? { 'data-plan-today': '' } : {})}
       className={cn(
         'flex h-14 w-14 shrink-0 flex-col overflow-hidden rounded-picture',
-        // Flat: no border, no lit-card. Today keeps its solid accent fill.
         isToday ? 'bg-accent' : 'bg-panel-2',
       )}
     >

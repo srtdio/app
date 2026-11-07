@@ -203,7 +203,8 @@ describe('#35 old version view', () => {
       />,
     );
     const banner = html.slice(html.indexOf('data-version-banner'));
-    expect(banner.slice(0, 200)).toContain('bg-panel-2');
+    expect(banner.slice(0, 200)).toContain('border-b border-border');
+    expect(banner.slice(0, 200)).not.toContain('bg-panel-2');
     expect(banner.slice(0, 200)).toContain('text-fg-2');
     expect(html).not.toMatch(/border-warn|text-warn/);
     expect(html).toContain('data-snapshot-thumbs');

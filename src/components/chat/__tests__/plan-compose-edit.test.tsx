@@ -137,7 +137,7 @@ describe('New plan create: one call, never half built', () => {
       src.indexOf('const create = async'),
       src.indexOf('inFlight.current = true'),
     );
-    expect(create).toContain('composeNeedsDayError(items)');
+    expect(create).toContain('composeNeedsDayError(items.map(composeAsItem))');
     expect(create).not.toContain('planCreateWithItems');
     expect(src).toContain('role="alert"');
     expect(src).toContain("scrollIntoView({ block: 'center' })");

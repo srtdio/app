@@ -699,7 +699,7 @@ describe('first paint', () => {
 
   it('is a fixed 256px wide (w-64) with the 4/6/4/0 inset in a bubble', () => {
     const html = render('fp-size');
-    expect(html).toMatch(/data-voice-note=""[^>]*class="[^"]*w-64[^"]*pb-1 pr-1\.5 pt-1/);
+    expect(html).toMatch(/data-voice-note=""[^>]*class="[^"]*w-64[^"]*pb-1 pr-2 pt-1/);
     expect(html).toContain('font-sans');
     expect(html).not.toContain('font-mono');
   });
