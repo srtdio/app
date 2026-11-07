@@ -285,6 +285,10 @@ Client writes the brief; it lands in the Briefs section and can be linked to a p
 | Decision Records | Boolean flag on comment. Filterable view. |
 | Rollback | Pre-approval edit history via versions; versions are immutable. |
 | Approve button | PCS only. Not on Pipeline cards. Client must be logged in. |
+| Post screen (decided 7 Nov 2026) | Pinned "<" bar with the checkpoint progress row under it. Cut: Compare versions, caption on/off toggle, duplicate Delete image, reorder buttons (hold and drag only, saved on drop), Open in pipeline, resolution note, checkpoint Send back. Image removal is a 4 s undo. |
+| Checkpoints and pins (decided 7 Nov 2026) | Author once per group, numbered points; resolved points fold to one line at the bottom. A client pin is a one-point checkpoint linked to the pin and shows "On photo {n}". Annotations draw in ink, not gold. |
+| Comment files (decided 7 Nov 2026) | Every comment photo and file opens in-app (lightbox or file viewer), never a new tab. |
+| Platform preview (decided 7 Nov 2026) | Placement from the post format; chips only for plain video on Instagram and Facebook. Each platform drawn in its own colours, no logos. One cut row with Show cut. No size picker, no Crop section. |
 
 ## 12. Create sheet
 
