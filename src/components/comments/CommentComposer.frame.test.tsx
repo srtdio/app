@@ -138,12 +138,13 @@ describe('CommentComposer on ui/WritingBox', () => {
     expect(empty?.querySelector('span')?.className).toContain('bg-panel-3');
   });
 
-  it('at rest (empty, unfocused): the text line and Send only; focus shows the row', async () => {
+  it('at rest (empty, unfocused): the text line with its + and Send; focus shows the row', async () => {
     mount(undefined, { initialBody: null, members: [ANA] });
     await settle();
     expect(q('[data-writing-box]')?.dataset.shape).toBe('line');
     expect(byLabel('Aa')).toBeNull();
-    expect(byLabel('Add attachment')).toBeNull();
+    // The + stays beside the field at rest (it attaches today).
+    expect(byLabel('Add attachment')).not.toBeNull();
     expect(byLabel('Post')).not.toBeNull();
 
     const editor = q('[contenteditable="true"]');

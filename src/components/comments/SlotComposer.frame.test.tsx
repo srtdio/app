@@ -95,7 +95,8 @@ describe('SlotComposer on ui/WritingBox', () => {
     expect(field?.querySelector('[data-slot-number="1"]')).not.toBeNull();
     expect(field?.querySelector('textarea')?.getAttribute('aria-label')).toBe('Checkpoint 1');
     expect(button('Aa')).toBeUndefined();
-    expect(button('Add attachment')).toBeUndefined();
+    // The + stays beside the field at rest (the slot attaches today).
+    expect(button('Add attachment')).toBeDefined();
     const send = button('Send');
     expect(send?.hasAttribute('data-row-send')).toBe(true);
     expect(send?.disabled).toBe(true);
