@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/format-actions';
 import type { MentionCandidate } from '@/lib/workspace-members';
 import { useEscapeLayer } from '@/lib/escape-stack';
+import { cn } from '@/lib/cn';
 
 // The editor's own field look (a standalone field), and the bare editor inside
 // ui/Composer's field: the field draws the line, the well and the focus line;
@@ -581,7 +582,16 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
       />
 
       {open ? (
-        <ul className="absolute left-0 right-0 z-sticky mt-1 max-h-64 overflow-auto rounded-xl border bg-panel py-1 lit-overlay">
+        <ul
+          data-mention-list=""
+          // Inside a writing box (bare) the box sits low on the screen, over
+          // the keyboard: the list opens above the field, like chat's, so it
+          // never covers what is under the box or runs off the bottom.
+          className={cn(
+            'absolute left-0 right-0 z-sticky max-h-64 overflow-auto rounded-xl border bg-panel py-1 lit-overlay',
+            bare ? 'bottom-full mb-2' : 'top-full mt-1',
+          )}
+        >
           {matches.map((member, index) => (
             <li key={member.id}>
               <PressableRow

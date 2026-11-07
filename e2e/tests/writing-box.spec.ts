@@ -7,6 +7,7 @@ import {
   DM_CHANNEL,
   ME,
   PEER_NAME,
+  POST_IDS,
   seedDatedPlan,
 } from '../fixtures/chat-data';
 import { seedAudit } from '../fixtures/audit-pr-b';
@@ -547,4 +548,42 @@ test('S10 the caption: emoji and "@brandname" through the @ key, no Aa, saved ex
     )
     .toBe(text);
   expectClean(network);
+});
+
+test('S11 phone: the post comment box stays on screen and its @ list opens above it', async ({
+  page,
+}) => {
+  test.skip(!isPhone(page), 'phone only');
+  await installHarnessNetwork(page);
+  await page.goto(`/posts/${POST_IDS[0] ?? ''}`);
+  const composer = page.locator('[data-comments-composer]');
+  const editor = composer.getByRole('textbox', { name: 'Comment body' });
+  await editor.scrollIntoViewIfNeeded();
+  await editor.click();
+  const box = composer.locator('[data-writing-box]').first();
+  await expect(box).toHaveAttribute('data-shape', 'card');
+  await page.keyboard.type('@');
+
+  // The page never grows sideways and the box sits inside the screen.
+  const geometry = await page.evaluate(() => {
+    const boxEl = document.querySelector('[data-comments-composer] [data-writing-box]');
+    const list = document.querySelector('[data-comments-composer] [data-mention-list]');
+    const field = document.querySelector('[data-comments-composer] [contenteditable="true"]');
+    const r = (el: Element | null): DOMRect | null => el?.getBoundingClientRect() ?? null;
+    return {
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      width: window.innerWidth,
+      box: r(boxEl),
+      list: r(list),
+      field: r(field),
+    };
+  });
+  expect(geometry.overflow).toBeLessThanOrEqual(0);
+  expect(geometry.box?.left ?? -1).toBeGreaterThanOrEqual(0);
+  expect(geometry.box?.right ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(geometry.width);
+  // The list (when members match) opens above the field, never under the box.
+  if (geometry.list !== null && geometry.field !== null) {
+    expect(geometry.list.bottom).toBeLessThanOrEqual(geometry.field.top);
+    expect(geometry.list.top).toBeGreaterThanOrEqual(0);
+  }
 });
