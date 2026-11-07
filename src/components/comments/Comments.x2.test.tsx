@@ -139,7 +139,7 @@ describe('Open / All filter (item 2)', () => {
 });
 
 describe('caption quote inside the comment (item 3)', () => {
-  it('a live quote is a quoted line with a left rule in fg-2 that still flashes the mark', () => {
+  it('a live quote is an ink rail (border-l-2 fg) that still flashes the mark', () => {
     const onClick = vi.fn();
     const tree = annotationChip(
       'c1',
@@ -149,8 +149,8 @@ describe('caption quote inside the comment (item 3)', () => {
     const button = elements(tree).find(isButtonEl)!;
     const className = (button.props as { className: string }).className;
     expect(className).toContain('border-l-2');
-    expect(className).toContain('text-fg-2');
-    expect(className).not.toContain('bg-annotation-bg');
+    expect(className).toContain('border-fg');
+    expect(className).not.toContain('annotation-');
     expect(className).not.toContain('rounded-md');
     expect(text(tree)).toContain('great hook');
     (button.props as { onClick: () => void }).onClick();
@@ -166,7 +166,7 @@ describe('caption quote inside the comment (item 3)', () => {
     expect(text(tree)).toContain('old copy');
   });
 
-  it('the quote renders above the body, and the card header carries the role label and time', () => {
+  it('the quote renders above the body; the header carries the role, the action line the time', () => {
     const quote = SRC.indexOf('{annotationChip(');
     const body = SRC.indexOf("{comment.body.trim() !== '' ? (");
     expect(quote).toBeGreaterThan(-1);
@@ -193,13 +193,14 @@ describe('section title, empty states and the top pill', () => {
 });
 
 describe('action row and composer (items 3, 4)', () => {
-  it('Resolve/Reopen, Reply and Copy are visible on every thread; the kebab holds only Edit / Delete', () => {
+  it('Resolve/Reopen, Reply and Copy are on the action line; the ⋯ holds only Edit / Delete', () => {
     expect(SRC).toContain('{opts.actions.canCopy ? copyControl(comment) : null}');
     // Busy shows on the button (Button busy); the label never swaps.
     expect(SRC).toContain('busy={isResolving}');
-    expect(SRC).toContain("{isResolved ? 'Reopen' : 'Resolve'}");
+    expect(SRC).toContain('Reopen');
+    expect(SRC).toContain("resolveButton(comment, 'Resolve', 'thread')");
     // Copy is icon-only: clipboard, a tick for 2000 ms after a copy, failure as a toast.
-    expect(SRC).toContain('<IconCopy size={ICON_SIZE.nav} />');
+    expect(SRC).toContain('<IconCopy size={ICON_SIZE.inline} />');
     expect(SRC).toContain("toast?.show({ title: COPY_FAILED, tone: 'error' })");
     expect(SRC).not.toContain("{copyFailed ? COPY_FAILED : 'Copied'}");
     expect(SRC).not.toContain("'Comment copied'");
@@ -209,7 +210,7 @@ describe('action row and composer (items 3, 4)', () => {
 
   it('the root composer reads "Write a comment" and sits after the list', () => {
     expect(SRC).toContain('placeholder="Write a comment"');
-    const list = SRC.indexOf('<ul className="flex flex-col gap-3">');
+    const list = SRC.indexOf('<ul data-comments-list=""');
     const composer = SRC.indexOf('<div data-comments-composer="">{composer}</div>');
     expect(list).toBeGreaterThan(-1);
     expect(composer).toBeGreaterThan(list);

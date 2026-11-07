@@ -5,13 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommentRow, CommentResult } from '@srtdio/comments';
 import type { ToastOptions } from '@/components/ui/toast/types';
 
-// Checkpoints in the post comments panel:
-// - each checkpoint has a checkbox (44px hit area); ONE tap resolves it: the box
-//   ticks and reads "Resolved", no box / note / confirm opens, Undo for 4s;
-// - everyone can reply inside a checkpoint, clients included;
-// - a reply to a reply posts to the checkpoint root (one reply level) and the
-//   composer opens with the @Name of the person replied to, sent in p_mentions;
-// - nothing is pre-filled except that @Name ("Not done" and its sentence are gone).
+// Checkpoints in the post comments panel (locked design, 7 Nov 2026):
+// - the author shows ONCE per group ("{n} checkpoints · {time}"), then a
+//   numbered list; the number circle is the only state;
+// - an agency member resolves an open point in ONE tap (checkbox + "Resolve",
+//   no note, no Send back), Undo for 4s; the point then folds to one line at
+//   the bottom ("{n} · {first line}", ⌄ opens it inline); numbers never change;
+// - a client sees "Open" on their own open point and Confirm on a resolved,
+//   unconfirmed one, never Resolve;
+// - everyone can reply inside a checkpoint, clients included; a reply to a
+//   reply posts to the checkpoint root with the @Name of the person replied to;
+// - replies fold to the latest ("View {n} earlier replies").
 
 type ListResult = CommentResult<CommentRow[]>;
 
@@ -222,7 +226,7 @@ afterEach(() => {
 });
 
 describe('checkpoint checkbox', () => {
-  it('resolves in one tap: the box ticks and reads "Resolved", Undo for 4s', async () => {
+  it('resolves in one tap: checkbox + "Resolve", no note, Undo for 4s, then folds', async () => {
     checkpointRows.current = [checkpoint('p-1', 1)];
     await mount(false);
 
@@ -232,21 +236,26 @@ describe('checkpoint checkbox', () => {
     expect(box?.getAttribute('aria-checked')).toBe('false');
     expect(box?.className).toContain('min-h-11');
     expect(box?.className).toContain('min-w-11');
+    expect(box?.textContent).toBe('Resolve');
     expect(box?.querySelector('[data-tick]')?.getAttribute('data-tick')).toBe('open');
 
     act(() => box?.click());
 
-    // One tap: no textarea, note, sheet or dialog.
+    // One tap: no textarea, note, sheet or dialog, and no Send back anywhere.
     expect(host?.querySelector('textarea')).toBeNull();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
-    // The box is ticked and its word is "Resolved".
+    expect(host?.textContent ?? '').not.toContain('Send back');
+    // The point is resolved and folds to its one line (good outline, tick).
     expect(byAria('Resolve checkpoint 1')).toBeUndefined();
-    const ticked = rowEl('p-1')?.querySelector('[data-checkpoint-box]');
-    expect(ticked?.querySelector('[data-tick]')?.getAttribute('data-tick')).not.toBe('open');
-    expect(ticked?.textContent).toBe('Resolved');
+    expect(rowEl('p-1')?.getAttribute('data-point-state')).toBe('resolved');
+    expect(rowEl('p-1')?.querySelector('[data-point-fold]')).toBeTruthy();
+    expect(
+      rowEl('p-1')?.querySelector('[data-checkpoint-circle]')?.getAttribute('data-checkpoint-circle'),
+    ).toBe('resolved');
 
     expect(rpcSpy).toHaveBeenCalledTimes(1);
+    // No resolution note rides along.
     expect(rpcSpy.mock.calls[0]?.[1]).toEqual({
       p_comment_id: 'p-1',
       p_resolved: true,
@@ -259,18 +268,77 @@ describe('checkpoint checkbox', () => {
     expect(UNDO_MS).toBe(4000);
   });
 
-  it('keeps the approver one-tap Confirm on a creator-resolved checkpoint, and no "Not done"', async () => {
+  it('a client gets Confirm on a resolved, unconfirmed point and never Resolve', async () => {
     viewer.id = CLIENT;
     checkpointRows.current = [checkpoint('p-1', 1, { resolved_at: RESOLVED })];
     await mount(true);
 
+    // A point waiting on this approver's Confirm stays whole (never folded).
+    expect(rowEl('p-1')?.querySelector('[data-point-fold]')).toBeNull();
     expect(byAria('Confirm checkpoint 1')).toBeDefined();
     expect(byAria('Resolve checkpoint 1')).toBeUndefined();
-    const box = rowEl('p-1')?.querySelector('[data-checkpoint-box]');
-    expect(box?.textContent).toBe('Resolved');
-    expect(box?.querySelector('[data-tick]')?.getAttribute('data-tick')).toBe('hollow');
+    expect(
+      rowEl('p-1')?.querySelector('[data-checkpoint-circle]')?.getAttribute('data-checkpoint-circle'),
+    ).toBe('resolved');
     expect(host?.textContent ?? '').not.toContain('Not done');
-    expect(host?.textContent ?? '').not.toContain('gone back to the creators');
+    expect(host?.textContent ?? '').not.toContain('Send back');
+  });
+
+  it('a client sees "Open" on their own open point, nothing on an agency one', async () => {
+    viewer.id = CLIENT;
+    checkpointRows.current = [checkpoint('p-1', 1, { author_user_id: CLIENT })];
+    await mount(true);
+    expect(rowEl('p-1')?.querySelector('[data-checkpoint-open]')?.textContent).toBe('Open');
+    expect(byAria('Resolve checkpoint 1')).toBeUndefined();
+  });
+});
+
+describe('checkpoint groups', () => {
+  it('shows the author once, "{n} checkpoints · {time}", then numbered circles', async () => {
+    checkpointRows.current = [checkpoint('p-2', 2), checkpoint('p-1', 1)];
+    await mount(false);
+    const groups = host?.querySelectorAll('[data-checkpoint-group]') ?? [];
+    expect(groups).toHaveLength(1);
+    const group = groups[0]!;
+    expect(group.querySelectorAll('[data-comment-author]')).toHaveLength(1);
+    expect(group.querySelector('[data-group-meta]')?.textContent).toMatch(/^2 checkpoints · /);
+    const circles = Array.from(group.querySelectorAll('[data-checkpoint-circle="open"]'));
+    expect(circles.map((c) => c.textContent)).toEqual(['1', '2']);
+    // No card per thread: the group is a hairline-split list item.
+    expect(group.className).not.toContain('lit-card-muted');
+    expect(group.className).not.toContain('rounded-xl');
+  });
+
+  it('done points fold to one line at the bottom; numbers stay', async () => {
+    checkpointRows.current = [
+      checkpoint('p-3', 3),
+      checkpoint('p-2', 2, { resolved_at: RESOLVED, body: '*Logo* too small\nsecond line' }),
+      checkpoint('p-1', 1),
+    ];
+    await mount(false);
+    const order = Array.from(host?.querySelectorAll('[data-point-state]') ?? []).map(
+      (el) => `${el.id}:${el.getAttribute('data-point-state')}`,
+    );
+    expect(order).toEqual(['comment-p-1:open', 'comment-p-3:open', 'comment-p-2:resolved']);
+    const fold = rowEl('p-2')?.querySelector<HTMLButtonElement>('[data-point-fold]');
+    expect(fold?.getAttribute('aria-expanded')).toBe('false');
+    expect(fold?.textContent).toContain('2 · Logo too small');
+    expect(fold?.textContent).not.toContain('second line');
+    // ⌄ opens the full point inline; its circle folds it again.
+    act(() => fold?.click());
+    expect(rowEl('p-2')?.querySelector('[data-point-fold]')).toBeNull();
+    expect(rowEl('p-2')?.textContent).toContain('second line');
+    act(() => byAria('Fold checkpoint 2')?.click());
+    expect(rowEl('p-2')?.querySelector('[data-point-fold]')).toBeTruthy();
+  });
+
+  it('numbering is stable: resolving point 1 keeps 2 and 3 as they are', async () => {
+    checkpointRows.current = [checkpoint('p-3', 3), checkpoint('p-2', 2), checkpoint('p-1', 1)];
+    await mount(false);
+    act(() => byAria('Resolve checkpoint 1')?.click());
+    const open = Array.from(host?.querySelectorAll('[data-checkpoint-circle="open"]') ?? []);
+    expect(open.map((c) => c.textContent)).toEqual(['2', '3']);
+    expect(rowEl('p-1')?.querySelector('[data-point-fold]')?.textContent).toContain('1 · ');
   });
 });
 
@@ -392,13 +460,13 @@ describe('one row template for checkpoints and comments', () => {
     const actions = rowEl(rowId)?.querySelector('[data-comment-actions]');
     return (
       Array.from(actions?.children ?? [])
-        .filter((el) => el.tagName === 'BUTTON' || el.hasAttribute('data-checkpoint-box'))
+        .filter((el) => el.tagName === 'BUTTON' || el.hasAttribute('data-checkpoint-open'))
         // Icon-only actions (Reply privately, Copy) read by their accessible name.
         .map((el) => el.textContent?.trim() || (el.getAttribute('aria-label') ?? ''))
     );
   }
 
-  it('a checkpoint and a plain comment share the header, body and action row', async () => {
+  it('a point and a plain comment share the body and one action line', async () => {
     checkpointRows.current = [checkpoint('p-1', 2)];
     pageRows.current = [row('c-1', 'plain note', { created_at: '2026-01-03T00:00:00.000Z' })];
     await mount(false);
@@ -406,46 +474,41 @@ describe('one row template for checkpoints and comments', () => {
     for (const id of ['p-1', 'c-1']) {
       const el = rowEl(id);
       expect(el?.querySelector('[data-comment-row="root"]')).toBeTruthy();
-      expect(el?.querySelector('[data-comment-header] [data-comment-author]')).toBeTruthy();
-      expect(el?.querySelector('[data-comment-header] [data-comment-role]')).toBeTruthy();
-      const time = el?.querySelector('[data-comment-header] [data-comment-time]');
+      // The time leads the action line, meta role (mono, tabular).
+      const time = el?.querySelector('[data-comment-actions] > [data-comment-time]');
       expect(time).toBeTruthy();
-      // 12px regular, never monospace.
+      expect(time?.className).toContain('font-mono');
       expect(time?.className).toContain('text-sm');
-      expect(time?.className).not.toContain('font-mono');
-      expect(time?.className).not.toContain('text-xs');
-      expect(el?.innerHTML ?? '').not.toContain('font-mono');
-      // Every action the same ghost height, 44px targets.
-      for (const control of Array.from(el?.querySelectorAll('[data-comment-actions] > *') ?? [])) {
-        if (control.tagName !== 'BUTTON' && !control.hasAttribute('data-checkpoint-box')) continue;
+      // Every control a 44 hit with small visible type.
+      for (const control of Array.from(el?.querySelectorAll('[data-comment-actions] > button') ?? [])) {
         expect(control.className).toContain('h-11');
-        expect(control.className).toContain('min-h-11');
         expect(control.className).toContain('min-w-11');
       }
-    }
-    // The checkpoint number sits in the header as "#2", in fg-3.
-    const seq = rowEl('p-1')?.querySelector('[data-comment-header] [data-checkpoint-seq]');
-    expect(seq?.textContent).toBe('#2');
-    expect(seq?.className).toContain('text-fg-3');
-    expect(rowEl('c-1')?.querySelector('[data-checkpoint-seq]')).toBeNull();
-
-    // One left-aligned action row on one line: checkbox + "Resolved" first, then
-    // Reply, then the Copy icon.
-    for (const id of ['p-1', 'c-1']) {
-      const actions = rowEl(id)?.querySelector('[data-comment-actions]');
-      expect(actions?.className).toContain('flex-nowrap');
-      expect(actions?.className).not.toContain('flex-wrap ');
-      const copy = actions?.querySelector('[data-row-action="copy"]');
+      const copy = el?.querySelector('[data-comment-actions] [data-row-action="copy"]');
       expect(copy?.textContent).toBe('');
       expect(copy?.querySelector('svg')).toBeTruthy();
     }
-    expect(actionWords('p-1')).toEqual(['Resolved', 'Reply', 'Copy']);
+    // A plain root has its header (name + role); a point shows its author on the group.
+    expect(rowEl('c-1')?.querySelector('[data-comment-header] [data-comment-role]')).toBeTruthy();
+    expect(rowEl('p-1')?.querySelector('[data-comment-header]')).toBeNull();
+    // The point's number is its circle, never a "#2".
+    expect(rowEl('p-1')?.querySelector('[data-checkpoint-circle]')?.textContent).toBe('2');
+    expect(rowEl('p-1')?.textContent ?? '').not.toContain('#2');
+
+    expect(actionWords('p-1')).toEqual(['Resolve', 'Reply', 'Copy']);
     expect(actionWords('c-1')).toEqual(['Resolve', 'Reply', 'Copy']);
-    // No icon-only Copy floating at the right any more.
-    expect(byAria('Copy text')).toBeUndefined();
+    // No card per thread.
+    expect(rowEl('c-1')?.className).not.toContain('lit-card-muted');
   });
 
-  it('a reply puts its author on its own line, with role and time below', async () => {
+  it('a client gets no Resolve on a plain thread', async () => {
+    viewer.id = CLIENT;
+    pageRows.current = [row('c-1', 'plain note')];
+    await mount(true);
+    expect(rowEl('c-1')?.querySelector('[data-comment-resolve]')).toBeNull();
+  });
+
+  it('a reply puts avatar 20 and name on one line, with no rule or indent', async () => {
     viewer.id = CLIENT;
     checkpointRows.current = [checkpoint('p-1', 1)];
     pageRows.current = [
@@ -459,16 +522,15 @@ describe('one row template for checkpoints and comments', () => {
 
     const reply = rowEl('r-1')?.querySelector('[data-comment-row="reply"]');
     expect(reply).toBeTruthy();
-    const author = reply?.querySelector('[data-comment-author]');
-    expect(author).toBeTruthy();
-    expect(author?.className).toContain('block');
-    expect(author?.className).not.toContain('truncate');
-    // Role and time live on the line below, not beside the name (the name
-    // sits inside its person-card trigger).
-    const below = (author?.closest('[data-person-trigger]') ?? author)?.nextElementSibling;
-    expect(below?.querySelector('[data-comment-role]')).toBeTruthy();
-    expect(below?.querySelector('[data-comment-time]')).toBeTruthy();
-    expect(below?.className).toContain('flex-wrap');
+    const header = reply?.querySelector('[data-comment-header]');
+    expect(header?.querySelector('[data-comment-author]')).toBeTruthy();
+    expect(header?.className).toContain('items-center');
+    // The time sits in the action line, not the header.
+    expect(header?.querySelector('[data-comment-time]')).toBeNull();
+    expect(reply?.querySelector('[data-comment-actions] [data-comment-time]')).toBeTruthy();
+    const list = rowEl('r-1')?.closest('[data-replies]');
+    expect(list?.innerHTML ?? '').not.toContain('border-l');
+    expect(list?.className ?? '').not.toContain('pl-4');
   });
 
   it('titles the section "Checkpoints" with no header count', async () => {
@@ -490,6 +552,83 @@ describe('one row template for checkpoints and comments', () => {
     expect(host?.querySelector('[data-comments-empty]')?.textContent).toBe(
       'Checkpoints show up here.',
     );
+  });
+});
+
+describe('folded replies', () => {
+  beforeEach(() => {
+    // A link scrolls its row into view; jsdom has no layout.
+    Element.prototype.scrollIntoView = vi.fn();
+    Element.prototype.scrollTo = vi.fn() as unknown as typeof Element.prototype.scrollTo;
+    window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
+  });
+
+  function replies(): CommentRow[] {
+    return [1, 2, 3].map((n) =>
+      row(`r-${n}`, `reply ${n}`, {
+        author_user_id: OTHER,
+        parent_comment_id: 'c-1',
+        created_at: `2026-01-0${n + 1}T00:00:00.000Z`,
+      }),
+    );
+  }
+
+  it('shows only the latest reply behind "View 2 earlier replies"; the tap shows all', async () => {
+    pageRows.current = [row('c-1', 'plain note'), ...replies()];
+    await mount(false);
+    expect(rowEl('r-3')).toBeTruthy();
+    expect(rowEl('r-1')).toBeNull();
+    expect(rowEl('r-2')).toBeNull();
+    const more = host?.querySelector<HTMLButtonElement>('[data-replies-more]');
+    expect(more?.textContent).toBe('View 2 earlier replies');
+    act(() => more?.click());
+    expect(rowEl('r-1')).toBeTruthy();
+    expect(rowEl('r-2')).toBeTruthy();
+    expect(host?.querySelector('[data-replies-more]')).toBeNull();
+  });
+
+  it('one hidden reply reads "View 1 earlier reply"', async () => {
+    pageRows.current = [row('c-1', 'plain note'), ...replies().slice(0, 2)];
+    await mount(false);
+    expect(host?.querySelector('[data-replies-more]')?.textContent).toBe('View 1 earlier reply');
+  });
+
+  it('a deep link to a folded reply unfolds its thread', async () => {
+    pageRows.current = [row('c-1', 'plain note'), ...replies()];
+    act(() => {
+      root?.render(
+        <Comments
+          workspaceId="ws-1"
+          entityType="post"
+          entityId="post-1"
+          viewerIsClient={false}
+          focusCommentId="r-1"
+          showHeader
+        />,
+      );
+    });
+    await settle();
+    expect(rowEl('r-1')).toBeTruthy();
+    expect(host?.querySelector('[data-replies-more]')).toBeNull();
+  });
+
+  it('a deep link to a resolved point opens it from its fold', async () => {
+    checkpointRows.current = [checkpoint('p-1', 1, { resolved_at: RESOLVED })];
+    act(() => {
+      root?.render(
+        <Comments
+          workspaceId="ws-1"
+          entityType="post"
+          entityId="post-1"
+          viewerIsClient={false}
+          focusCommentId="p-1"
+          showHeader
+        />,
+      );
+    });
+    await settle();
+    expect(rowEl('p-1')?.querySelector('[data-point-fold]')).toBeNull();
+    expect(rowEl('p-1')?.querySelector('[data-comment-actions]')).toBeTruthy();
   });
 });
 
