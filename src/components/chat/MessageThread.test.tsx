@@ -129,7 +129,7 @@ import {
   sized,
   type ChatLayout,
 } from '@/components/chat/chat-type';
-import { formatTime, formatWhen } from '@/lib/time';
+import { formatRelative, formatTime } from '@/lib/time';
 import { Link } from 'react-router-dom';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { UploadRing } from '@/components/chat/UploadRing';
@@ -1427,9 +1427,9 @@ describe('image album and viewer', () => {
     expect(onOpenImage).toHaveBeenCalledWith(2);
   });
 
-  it('the viewer gets the image list only, with sender and when it was sent (formatWhen)', () => {
+  it('the viewer gets the image list only, with sender and when it was sent (formatRelative)', () => {
     const now = new Date('2026-11-06T12:00:00Z');
-    const { images, details } = threadLightbox(albumMessage, PROFILES, 'Asia/Kolkata', now);
+    const { images, details } = threadLightbox(albumMessage, PROFILES, now);
     expect(images).toEqual([
       { assetId: 'v-1', name: 'p1.png' },
       { assetId: 'v-2', name: 'p2.png' },
@@ -1437,7 +1437,7 @@ describe('image album and viewer', () => {
     ]);
     expect(details).toEqual({
       sender: 'Alice',
-      time: formatWhen(albumMessage.createdAt, now, 'Asia/Kolkata'),
+      time: formatRelative(albumMessage.createdAt, now),
     });
   });
 
@@ -1454,7 +1454,7 @@ describe('image album and viewer', () => {
         },
       ],
     });
-    const { images, details } = threadLightbox(message, PROFILES, 'UTC');
+    const { images, details } = threadLightbox(message, PROFILES);
     expect(images).toEqual([{ assetId: '', name: 'p.png', src: 'blob:p' }]);
     expect(details.sender).toBe('You');
   });

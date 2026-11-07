@@ -424,15 +424,13 @@ describe('item 6: Approved by', () => {
     expect(approverIds(bundle('team'))).toEqual([]);
   });
 
-  it('"6:45 PM" / "Yesterday" / "Thu" / "2 Oct" in the given zone (formatWhen)', () => {
+  it('"just now" / "1 hour ago" / "1 day ago" / "10 days ago" (formatRelative)', () => {
     const now = new Date('2026-10-12T15:00:00Z');
-    expect(approvedWhen('2026-10-12T13:15:00Z', now, 'Asia/Kolkata')).toBe('6:45 PM');
-    expect(approvedWhen('2026-10-11T13:15:00Z', now, 'Asia/Kolkata')).toBe('Yesterday');
-    expect(approvedWhen('2026-10-08T13:15:00Z', now, 'Asia/Kolkata')).toBe('Thu');
-    expect(approvedWhen('2026-10-02T13:15:00Z', now, 'Asia/Kolkata')).toBe('2 Oct');
-    // 23:30 UTC on 11 Oct is 12 Oct in Kolkata: today there.
-    expect(approvedWhen('2026-10-11T23:30:00Z', now, 'Asia/Kolkata')).toBe('5:00 AM');
-    expect(approvedByLine('Riya Shah', '6:45 PM')).toBe('Approved by Riya Shah · 6:45 PM');
+    expect(approvedWhen('2026-10-12T15:00:00Z', now)).toBe('just now');
+    expect(approvedWhen('2026-10-12T13:15:00Z', now)).toBe('1 hour ago');
+    expect(approvedWhen('2026-10-11T13:15:00Z', now)).toBe('1 day ago');
+    expect(approvedWhen('2026-10-02T13:15:00Z', now)).toBe('10 days ago');
+    expect(approvedByLine('Riya Shah', '1 hour ago')).toBe('Approved by Riya Shah · 1 hour ago');
   });
 
   it('the row shows no Approved by line any more: the PLAN line reads OK', () => {

@@ -42,7 +42,8 @@ import { useNewTrace } from '@/lib/trace-context';
 import { useWorkspace } from '@/lib/workspace-context';
 import { entityUrlPath } from '@/lib/entityRef';
 import { dispatchWorkspaceDataChanged } from '@/lib/events';
-import { civilDay, formatDue, formatDueDate, formatOverdue, formatWhen } from '@/lib/time';
+import { civilDay, formatDue, formatDueDate, formatOverdue, formatRelative } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { postFormatLabel } from '@/lib/post-format';
 import { copyText, COPY_FAILED } from '@/lib/clipboard';
 import { errorText } from '@/lib/error-copy';
@@ -231,17 +232,12 @@ export function briefBackTarget(historyState: unknown): 'pop' | '/briefs' {
 }
 
 /**
- * When this brief was raised, read on the viewer's clock (`timeZone` is for
- * tests) in the app's one past-time format (formatWhen): "10:27 AM" today,
- * "Yesterday", "Mon", "22 Sep", or "22 Sep 2025" outside now's year. An
- * unparseable created_at is returned unchanged, and an unknown zone never throws.
+ * When this brief was raised, in the app's one past-time format
+ * (formatRelative): "just now", "5 min ago", "3 hours ago", "2 days ago",
+ * "4 months ago", "2 years ago". An unparseable created_at is returned unchanged.
  */
-export function briefRaisedLabel(
-  createdAt: string,
-  timeZone?: string,
-  now: Date = new Date(),
-): string {
-  return formatWhen(createdAt, now, timeZone) || createdAt;
+export function briefRaisedLabel(createdAt: string, now: Date = new Date()): string {
+  return formatRelative(createdAt, now) || createdAt;
 }
 
 /**
@@ -363,6 +359,8 @@ export function BriefDetailPage({
    */
   resolving?: boolean;
 } = {}) {
+  // The one shared minute clock: the Raised time and the due line age with it.
+  const nowMs = useMinuteClock();
   const params = useParams();
   // The pretty-link resolver (/b/:ref) passes the resolved id as a prop; the
   // classic /briefs/:briefId route supplies it via the URL. The prop wins so the
@@ -719,7 +717,7 @@ export function BriefDetailPage({
   const canClose = !closed && canCloseBrief(canCloseAny, canCloseOwn, brief.created_by, viewerId);
   const hasBrand = brief.brand_requirements !== null && brief.brand_requirements.trim() !== '';
   const hasFormat = brief.format_requested !== null && brief.format_requested.trim() !== '';
-  const statusLine = briefStatusLine(brief.status, brief.target_date, timeZone);
+  const statusLine = briefStatusLine(brief.status, brief.target_date, timeZone, new Date(nowMs));
   const showNewPost = canCreatePost && !isApprover && !closed && briefId !== undefined;
   // The brief's one action, placed as Post detail places its decision: the
   // right of the header on laptop (useIsLaptop), a bottom bar on phone.
@@ -741,13 +739,13 @@ export function BriefDetailPage({
   const creatorFormer =
     creatorId !== null && membersLoaded && (memberById.get(creatorId) ?? null) === null;
   // The details as two short lines, the same on phone (under the title) and
-  // desktop (the side column): "Raised 15 Jun by Priya Raman", then "Format
+  // desktop (the side column): "Raised 3 days ago by Priya Raman", then "Format
   // Carousel" when a format is set. Status and due date live in the top bar.
   const detailsLines = (
     <div className="flex min-w-0 flex-col gap-1 text-base">
       <p data-brief-raised="" className="min-w-0 break-words text-fg">
         <span className="text-fg-3">Raised</span>{' '}
-        <span className="tabular-nums">{briefRaisedLabel(brief.created_at)}</span>
+        <span className="tabular-nums">{briefRaisedLabel(brief.created_at, new Date(nowMs))}</span>
         {authorLabel === '' && membersLoading ? (
           <span
             data-testid="created-by-skeleton"

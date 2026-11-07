@@ -90,7 +90,8 @@ import {
   type PlanSegment,
   type StatusKey,
 } from '@/lib/chat/status-bar';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { OpenBriefRow } from '@/lib/chat/use-status-counts';
@@ -486,6 +487,7 @@ export function StatusDrawerList(
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+  const now = new Date(useMinuteClock());
   const { messageFor, profiles } = props;
 
   // A closed drawer drops any half-asked confirm.
@@ -631,9 +633,11 @@ export function StatusDrawerList(
                   onClick={() => props.onOpenBrief(brief.id)}
                   className={ROW}
                 >
-                  <span className={DATE_COL}>{formatWhen(brief.created_at)}</span>
                   <span className="min-w-0 flex-1">
                     <span className={ROW_TITLE}>{brief.title}</span>
+                    <span className={cn(ROW_SUB, 'font-mono tabular-nums')}>
+                      {formatRelative(brief.created_at, now)}
+                    </span>
                   </span>
                   <Chevron />
                 </PressableRow>
@@ -655,8 +659,8 @@ export function StatusDrawerList(
               const message = messageFor(mark.messageId);
               const when =
                 message !== undefined && message.createdAt !== ''
-                  ? formatWhen(message.createdAt)
-                  : formatWhen(mark.markedAt);
+                  ? formatRelative(message.createdAt, now)
+                  : formatRelative(mark.markedAt, now);
               return (
                 <StatusMarkRow
                   key={mark.messageId}

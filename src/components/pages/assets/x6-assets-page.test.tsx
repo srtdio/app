@@ -291,8 +291,15 @@ describe('Assets has no folders', () => {
     });
     await mount();
 
+    // Selecting starts from the card's ⋮ Select row (ui/ListCard has no corner box).
     await act(async () =>
-      document.querySelector<HTMLElement>('[aria-label="Select one.png"]')?.click(),
+      document.querySelector<HTMLElement>('[aria-label="More actions for one.png"]')?.click(),
+    );
+    await flush();
+    await act(async () =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .find((row) => row.textContent?.trim() === 'Select')
+        ?.click(),
     );
 
     expect(button('Delete')).toBeDefined();

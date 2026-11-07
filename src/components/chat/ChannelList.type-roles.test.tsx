@@ -15,7 +15,6 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { channelListView } from '@/components/chat/ChannelList';
-import { formatWhen } from '@/lib/time';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import type { ConversationSummary } from '@/lib/chat/chat-store';
 
@@ -95,7 +94,8 @@ describe('chat list type roles', () => {
   });
 
   it('meta: the row time is the meta role (sm, mono, tabular); the preview is secondary', () => {
-    const time = formatWhen(SENT, new Date(NOW), 'UTC');
+    // formatRelative on the list's clock: sent an hour before NOW.
+    const time = '1 hour ago';
     const [stamp] = paint(list([group]), 'span', time);
     expect(classes(stamp as Element)).toEqual(
       expect.arrayContaining(['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']),

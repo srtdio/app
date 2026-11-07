@@ -31,12 +31,12 @@ function pills(messages: ThreadMessage[], timeZone = 'UTC'): string[] {
 }
 
 describe('dayPillLabel', () => {
-  it('reads Today, then the formatWhen day: Yesterday, weekday, D MMM, other year', () => {
+  it('reads Today, Yesterday, then weekday + day (formatDayLabel), the year off the current one', () => {
     expect(dayPillLabel('2026-09-28', NOW, 'UTC')).toBe('Today');
     expect(dayPillLabel('2026-09-27', NOW, 'UTC')).toBe('Yesterday');
-    expect(dayPillLabel('2026-09-24', NOW, 'UTC')).toBe('Thu');
-    expect(dayPillLabel('2026-09-03', NOW, 'UTC')).toBe('3 Sep');
-    expect(dayPillLabel('2025-12-31', NOW, 'UTC')).toBe('31 Dec 2025');
+    expect(dayPillLabel('2026-09-24', NOW, 'UTC')).toBe('Thu 24 Sep');
+    expect(dayPillLabel('2026-09-03', NOW, 'UTC')).toBe('Thu 3 Sep');
+    expect(dayPillLabel('2025-12-31', NOW, 'UTC')).toBe('Wed 31 Dec 2025');
   });
 
   it('crosses a month boundary for Yesterday by calendar', () => {
@@ -69,8 +69,8 @@ describe('withDaySeparators', () => {
   it('groups by the workspace clock, not UTC', () => {
     // 17:00 and 19:00 UTC on the 26th straddle midnight in Kolkata (+05:30).
     const list = [message('a', '2026-09-26T17:00:00Z'), message('b', '2026-09-26T19:00:00Z')];
-    expect(pills(list, 'UTC')).toEqual(['Sat']);
-    expect(pills(list, 'Asia/Kolkata')).toEqual(['Sat', 'Yesterday']);
+    expect(pills(list, 'UTC')).toEqual(['Sat 26 Sep']);
+    expect(pills(list, 'Asia/Kolkata')).toEqual(['Sat 26 Sep', 'Yesterday']);
   });
 
   it('keeps every message in order and never starts a day on a time of 0', () => {

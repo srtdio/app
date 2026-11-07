@@ -28,7 +28,7 @@ type GalleryResult =
 
 const h = vi.hoisted(() => ({
   stage: 'review' as string,
-  targetDate: '2026-10-28T06:30:00.000Z' as string | null,
+  targetDate: '2099-10-28T06:30:00.000Z' as string | null,
   role: 'agency' as string | null,
   roleGate: null as Promise<void> | null,
   galleryGate: null as Promise<void> | null,
@@ -247,7 +247,7 @@ const scrollIntoView = vi.fn();
 
 beforeEach(() => {
   h.stage = 'review';
-  h.targetDate = '2026-10-28T06:30:00.000Z';
+  h.targetDate = '2099-10-28T06:30:00.000Z';
   h.role = 'agency';
   h.roleGate = null;
   h.galleryGate = null;
@@ -348,7 +348,8 @@ describe('28. one meta line', () => {
     expect(row).not.toBeNull();
     const rowText = row?.textContent ?? '';
     expect(rowText).toContain('Riya Menon');
-    expect(rowText).toContain('Due 28 Oct');
+    // A far-future due day reads "Due 28 Oct 2099" (formatDue) whatever today is.
+    expect(rowText).toContain('Due 28 Oct 2099');
     expect(rowText).toContain('Monsoon edit');
     expect(rowText).not.toContain('Monsoon drop');
     expect(rowText).not.toContain('Instagram');

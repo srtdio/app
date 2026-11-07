@@ -77,7 +77,15 @@ import {
   type BriefFilter,
   type BriefPickerRow,
 } from '@/lib/chat/briefs';
-import { civilDay, formatDueDate, formatWhen } from '@/lib/time';
+import {
+  civilDay,
+  daysFromToday,
+  formatDue,
+  formatDueDate,
+  formatOverdue,
+  formatRelative,
+} from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { formatCivilDayHeader } from '@/lib/plan-week';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import {
@@ -1104,6 +1112,27 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
   );
 }
 
+/**
+ * A brief row's due text: "Due today", "Due in 3 days", "Due 12 Dec"
+ * (formatDue), or "Overdue 2 days" (`bad`, the bad token) once an open brief's
+ * day has passed on the workspace zone; a closed brief is never overdue. Null
+ * without a due date. Pure.
+ */
+export function briefPickerDue(
+  targetDate: string | null,
+  status: string,
+  workspaceZone: string | null | undefined,
+  now: Date,
+): { text: string; bad: boolean } | null {
+  if (targetDate === null) return null;
+  const days = daysFromToday(targetDate, workspaceZone, now);
+  if (days === undefined) return null;
+  if (days < 0 && status !== 'closed') {
+    return { text: formatOverdue(targetDate, workspaceZone, now).text, bad: true };
+  }
+  return { text: formatDue(targetDate, workspaceZone, now), bad: false };
+}
+
 export function BriefPickerList(props: {
   briefs: BriefPickerRow[];
   loading: boolean;
@@ -1119,6 +1148,7 @@ export function BriefPickerList(props: {
   filtersActive?: boolean;
   onClear?: () => void;
 }): ReactElement {
+  const now = new Date(useMinuteClock());
   if (props.loading) {
     return listSkeleton('Loading briefs');
   }
@@ -1149,8 +1179,7 @@ export function BriefPickerList(props: {
     <ul className={LIST_CLASS}>
       {props.briefs.map((brief) => {
         const active = isBriefSelected(props.selected, brief.id);
-        const target =
-          brief.targetDate !== null ? formatDueDate(brief.targetDate, props.workspaceZone) : '';
+        const due = briefPickerDue(brief.targetDate, brief.status, props.workspaceZone, now);
         return (
           <li key={brief.id}>
             <PressableRow
@@ -1179,12 +1208,19 @@ export function BriefPickerList(props: {
                   {brief.formatRequested !== null && brief.formatRequested !== '' ? (
                     <Tag label={formatLabel(brief.formatRequested)} />
                   ) : null}
-                  {target !== '' ? (
-                    <span className="text-sm text-fg-2">{`Target ${target}`}</span>
+                  {due !== null ? (
+                    <span
+                      className={cn(
+                        'font-mono text-sm tabular-nums',
+                        due.bad ? 'text-bad' : 'text-fg-2',
+                      )}
+                    >
+                      {due.text}
+                    </span>
                   ) : null}
                   <span className="flex-1" />
                   <span className="text-sm text-fg-2">
-                    {`${briefPostCountLabel(brief.postCount)} · Raised ${formatWhen(brief.createdAt, undefined, props.timeZone)}`}
+                    {`${briefPostCountLabel(brief.postCount)} · Raised ${formatRelative(brief.createdAt, now)}`}
                   </span>
                 </span>
               </span>

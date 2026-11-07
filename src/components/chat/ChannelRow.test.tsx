@@ -30,7 +30,6 @@ import {
 } from '@/components/chat/ChannelList';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import type { ConversationSummary } from '@/lib/chat/chat-store';
-import { formatWhen } from '@/lib/time';
 import { LIST_CARD_STACK } from '@/components/ui/ListCard';
 
 // The rows are token-only: every colour is a CSS variable the
@@ -210,7 +209,8 @@ describe('group chat: ui/ListCard', () => {
     expect(h).toContain('width:72px;height:72px');
     expect(h).toMatch(/data-list-card-picture="image"[^>]*class="[^"]*h-18 w-18[^"]*rounded-lg/);
     // Time in the meta role on line 3; the preview clamps to two lines.
-    const time = formatWhen(read.lastMessageTs, new Date(NOW), 'UTC');
+    // formatRelative on the list's clock: sent an hour before NOW.
+    const time = '1 hour ago';
     expect(h).toMatch(new RegExp(`data-list-card-line="3"[^]*font-mono[^"]*">${time}<`));
     expect(h).toContain('line-clamp-2');
     expect(h.indexOf('3 new')).toBeGreaterThan(h.indexOf('See you then'));
@@ -244,7 +244,8 @@ describe('person chat: ui/ListCard, the same card as a group', () => {
     expect(h).toContain('width:72px;height:72px');
     expect(h).toContain('rounded-full');
     expect(h).toContain('>Asha Rao<');
-    const time = formatWhen(read.lastMessageTs, new Date(NOW), 'UTC');
+    // formatRelative on the list's clock: sent an hour before NOW.
+    const time = '1 hour ago';
     expect(h).toMatch(new RegExp(`font-mono[^"]*">${time}<`));
     expect(h).toContain('See you then<');
     expect(h).toContain('>99+ new<');

@@ -578,22 +578,29 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
     }
   });
 
-  it('footer: every other kind keeps its scope tag and has no privacy chip', () => {
-    const others: ActivityItem[] = [
-      reminder(),
-      plan('plan_opened', { scope: 'posts' }),
-      task(),
-      item({ id: 'post', event_type: 'stage_change', scope: 'posts' }),
-      item({ id: 'brief', event_type: 'brief_created', entity_type: 'brief', scope: 'briefs' }),
-      postMention(),
-      chatMention(),
+  it('footer: every other kind names its kind in the one tag and has no privacy chip', () => {
+    const others: [ActivityItem, string][] = [
+      [reminder(), 'Reminder'],
+      [taskDue(), 'Reminder'],
+      [plan('plan_opened', { scope: 'posts' }), 'Plan'],
+      [item({ id: 'post', event_type: 'stage_change', scope: 'posts' }), 'Post'],
+      [
+        item({ id: 'brief', event_type: 'brief_created', entity_type: 'brief', scope: 'briefs' }),
+        'Brief',
+      ],
+      [postMention(), 'Mention'],
+      [chatMention(), 'Mention'],
     ];
-    for (const i of others) {
+    for (const [i, kind] of others) {
       const html = card([i]);
-      expect(html, i.eventType).toContain('data-activity-scope-tag');
+      expect(html, i.eventType).toMatch(
+        new RegExp(`data-activity-scope-tag=""[^>]*>[^]*?">${kind}<`),
+      );
       expect(html, i.eventType).not.toContain('data-activity-only-you');
       expect(html, i.eventType).not.toContain('Only you got this alert');
     }
+    // A chat task change is none of those kinds: no tag at all.
+    expect(card([task()])).not.toContain('data-list-card-tag');
   });
 
   it('a reminder: the card frame, the menu, the unread dot and its icon', () => {
@@ -603,8 +610,8 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
     expect(html).toContain('data-activity-menu');
     expect(html).toContain('data-list-card-unread');
     expect(html).toContain('data-activity-alert-icon="reminder"');
-    // The one tag is the type chip's name (a chat alert reads People).
-    expect(html).toContain('>People<');
+    // The one tag names the kind: a reminder reads Reminder.
+    expect(html).toContain('>Reminder<');
     expect(html).not.toContain('data-activity-action');
   });
 
@@ -930,15 +937,13 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(page).not.toContain('if (lead !== undefined) handleOpenEntry(lead);');
   });
 
-  it('fix 11: relative times tick every 60s while visible and stop on hidden or unmount', () => {
-    expect(page).toContain('const TIME_TICK_MS = 60_000;');
-    expect(page).toContain('window.setInterval(() => setNowMs(Date.now()), TIME_TICK_MS)');
-    expect(page).toMatch(/if \(document\.hidden\) \{\s*stop\(\);\s*return;\s*\}/);
-    expect(page).toMatch(/if \(!document\.hidden\) start\(\);/);
-    expect(page).toMatch(
-      /return \(\) => \{\s*stop\(\);\s*document\.removeEventListener\('visibilitychange', onVisibility\);/,
-    );
-    expect(page).toContain('if (timer !== null) window.clearInterval(timer);');
+  it('fix 11: relative times age on the shared minute clock, never a page timer of its own', () => {
+    expect(page).toContain('const clockMs = useMinuteClock();');
+    expect(page).toContain('const nowMs = Math.max(clockMs, loadedMs);');
+    expect(page).not.toContain('TIME_TICK_MS');
+    expect(page).not.toContain('window.setInterval(');
+    // Back on a hidden tab, the page re-stamps its clock at once.
+    expect(page).toContain('if (!document.hidden) setNowMs(Date.now());');
   });
 
   it('fix 12: the page speaks of activity, never notifications, in its loading and sort copy', () => {

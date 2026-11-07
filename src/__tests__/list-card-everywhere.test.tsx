@@ -1,8 +1,13 @@
-// One list item part (decision locked 6 Nov 2026): every list item in Briefs,
-// Activity (and Upcoming) and the Chat list (Personal notes, Groups, People)
-// renders through ui/ListCard, and every card has the identical height
-// structure (padding 16, the 72 picture, a 20 title line, a 2-line preview
-// that always reserves 36, a 20 meta line). The old hand-built layouts are gone.
+// One list item part (decisions locked 6 and 7 Nov 2026): every list item in
+// Pipeline, Briefs, Assets, the Chat list (Personal notes, Groups, People),
+// Activity (and Upcoming) and the Plan tab (plans and the Bank) renders
+// through ui/ListCard, and every card has the identical height structure
+// (padding 16, the 72 picture, a 20 title line, a 2-line preview that always
+// reserves 36, a 20 meta line). The page lists sit in LIST_CARD_GRID (one
+// column on phone, auto-fill on laptop); the chat list in LIST_CARD_STACK.
+// The old hand-built layouts (the PostCard frame, AssetCard / AssetGrid,
+// PEOPLE_TILE_GRID, the Plan tab's own cards and calendar, the Bank's own
+// card, the board columns) are gone from those screens.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
@@ -126,7 +131,14 @@ function chat(channel: ChannelSummary): string {
 const SCREENS: Record<string, string> = {
   briefs: renderToStaticMarkup(
     <MemoryRouter>
-      <BriefCard brief={brief} cache={cache} presignEnabled={false} href="/b/1" timeZone="UTC" />
+      <BriefCard
+        brief={brief}
+        cache={cache}
+        presignEnabled={false}
+        href="/b/1"
+        timeZone="UTC"
+        now={new Date(NOW)}
+      />
     </MemoryRouter>,
   ),
   activity: renderToStaticMarkup(
@@ -197,9 +209,93 @@ describe('Briefs, Activity and Chat render through ui/ListCard', () => {
   });
 });
 
+describe('line 3 time: relative or due, never a clock time', () => {
+  it('Briefs read the due words, Activity and Chat read how long ago', () => {
+    expect(SCREENS.briefs).toMatch(/data-list-card-time=""[^>]*>Due in 22 days</);
+    expect(SCREENS.activity).toMatch(/data-list-card-time=""[^>]*>1 hour ago</);
+    expect(SCREENS.group).toMatch(/data-list-card-time=""[^>]*>1 min ago</);
+    expect(SCREENS.person).toMatch(/data-list-card-time=""[^>]*>1 min ago</);
+    for (const [name, html] of Object.entries(SCREENS)) {
+      expect(html, name).not.toMatch(/data-list-card-time=""[^>]*>[^<]*\b(AM|PM)</);
+    }
+  });
+
+  it('the chat card tags unread as "N new"; the activity card tags its kind', () => {
+    expect(SCREENS.group).toMatch(/data-list-card-tag=""[^]*?">2 new</);
+    expect(SCREENS.activity).toMatch(/data-list-card-tag=""[^]*?">Post</);
+    expect(SCREENS.briefs).toMatch(/data-list-card-tag=""[^]*?">Open</);
+  });
+});
+
+const read = (rel: string): string =>
+  readFileSync(fileURLToPath(new URL(`../components/${rel}`, import.meta.url)), 'utf8');
+
+/** Every screen's source, as the files that draw its list. */
+const SOURCES = {
+  pipeline: ['pages/PostCard.tsx', 'pages/PipelinePage.tsx', 'pages/pipeline/PipelineFeed.tsx'],
+  briefs: ['pages/BriefCard.tsx', 'pages/BriefsPage.tsx'],
+  assets: ['pages/AssetsPage.tsx', 'pages/assets/AssetListCard.tsx'],
+  chat: ['chat/ChannelList.tsx'],
+  activity: ['pages/activity/ActivityCard.tsx', 'pages/NotificationsPage.tsx'],
+  planTab: ['pages/PlanTabPage.tsx', 'pages/plan-tab/PlanTabList.tsx'],
+  bank: ['pages/plan-tab/BankList.tsx'],
+} as const;
+
+const source = (screen: keyof typeof SOURCES): string =>
+  SOURCES[screen].map((rel) => read(rel)).join('\n');
+
+describe('all six lists (and the Bank) render ui/ListCard', () => {
+  it.each(Object.keys(SOURCES) as (keyof typeof SOURCES)[])('%s draws its cards with <ListCard', (screen) => {
+    const src = source(screen);
+    expect(src).toContain("from '@/components/ui/ListCard'");
+    expect(src).toContain('<ListCard');
+  });
+
+  it.each(['pipeline', 'briefs', 'assets', 'activity', 'planTab', 'bank'] as const)(
+    '%s lays its list out in LIST_CARD_GRID',
+    (screen) => {
+      expect(source(screen)).toContain('LIST_CARD_GRID');
+    },
+  );
+
+  it('the chat list is one column in its pane (LIST_CARD_STACK)', () => {
+    const src = source('chat');
+    expect(src).toContain('LIST_CARD_STACK');
+    expect(src).not.toContain('LIST_CARD_GRID');
+  });
+
+  it('no page list keeps the ui/Card grid', () => {
+    for (const screen of ['briefs', 'activity', 'chat'] as const) {
+      // \b keeps LIST_CARD_GRID out: "_" is a word character.
+      expect(source(screen), screen).not.toMatch(/\bCARD_GRID\b/);
+    }
+  });
+});
+
 describe('the old layouts are gone', () => {
-  const read = (rel: string): string =>
-    readFileSync(fileURLToPath(new URL(`../components/${rel}`, import.meta.url)), 'utf8');
+  it('Pipeline: no PostCard frame of its own, no board columns', () => {
+    const src = source('pipeline');
+    expect(read('pages/PostCard.tsx')).not.toContain("from '@/components/ui/Card'");
+    expect(src).not.toMatch(/BoardColumns?\b/);
+    expect(src).not.toContain('data-board-column');
+  });
+
+  it('Assets: no AssetCard or AssetGrid', () => {
+    const src = source('assets');
+    expect(src).not.toMatch(/\bAssetGrid\b/);
+    expect(src).not.toMatch(/<AssetCard\b/);
+  });
+
+  it('Chat list: no people tiles', () => {
+    expect(source('chat')).not.toContain('PEOPLE_TILE_GRID');
+  });
+
+  it('Plan tab: no calendar and no card of its own; the Bank: no card of its own', () => {
+    const plan = source('planTab');
+    expect(plan).not.toContain('<PlanCalendar');
+    expect(read('pages/plan-tab/PlanTabList.tsx')).not.toContain("from '@/components/ui/Card'");
+    expect(read('pages/plan-tab/BankList.tsx')).not.toContain("from '@/components/ui/Card'");
+  });
 
   it('Briefs: no ui/Card frame or reference link on the list card', () => {
     const src = read('pages/BriefCard.tsx');
@@ -208,8 +304,11 @@ describe('the old layouts are gone', () => {
     expect(src).toContain('<ListCard');
   });
 
-  it('Activity: no lead rail, no actor line, no thread rows', () => {
+  it('Activity: no lead rail, no actor line or AvatarStack row, no thread rows, no unread border', () => {
     const src = read('pages/activity/ActivityCard.tsx');
+    expect(src).not.toContain('AvatarStack');
+    expect(src).not.toContain('lit-selected');
+    expect(source('activity')).not.toContain('selected={unread');
     expect(src).not.toContain('w-1 shrink-0');
     expect(src).not.toContain('ThreadRow');
     expect(src).not.toContain('data-activity-thread');

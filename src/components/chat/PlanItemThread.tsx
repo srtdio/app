@@ -2,7 +2,7 @@
 // the left under their avatar, the viewer's own on the right in bubble-own.
 // Consecutive comments from one author within PLAN_RUN_GAP_MS are one run: the
 // name and role sit over its first bubble, the time under its last. A day line
-// ("Today", "Yesterday", "3 Nov", chat's dayPillLabel) goes between days.
+// ("Today", "Yesterday", "Tue 3 Nov", chat's dayPillLabel) goes between days.
 // Creators-only comments are warn-soft with the warn line and a lock label.
 // Mention tokens render as pills (names from the shared registry, never a raw
 // token). Also the @ helpers the comment box uses: who can be tagged (never me;

@@ -45,6 +45,7 @@ import {
   segmentSelfMentions,
   upcomingChat,
   upcomingTag,
+  updatesLabel,
   welcomeTitle,
   type ActivityItem,
   type AlertInfo,
@@ -54,13 +55,14 @@ import {
 import { ONLY_YOU_LABEL, alertDisplayTime } from '@/lib/inbox/alerts';
 import { formatSendLabel } from '@/lib/chat/scheduled';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
 
 interface ActivityCardProps {
   /** A digest group: one entry (solo) or several on the same entity (one card). */
   group: ActivityItem[];
+  /** The list's one clock (the shared minute clock); the time reads "5 min ago" against it. */
   nowMs: number;
-  /** The workspace zone the time reads in ("Yesterday" rolls over there). Absent: the device zone. */
+  /** Kept for callers: the relative time ("3 hours ago") reads the same in every zone. */
   timeZone?: string | null | undefined;
   /** The page-owned presign cache, threaded into the picture. */
   cache: PresignCache;
@@ -135,22 +137,20 @@ export function groupHasUnread(group: readonly ActivityItem[]): boolean {
 /** The unread dot: one size (8px), ui/ListCard's. */
 export const UNREAD_DOT_CLASS = LIST_CARD_UNREAD_DOT;
 
-/** The Activity type chips' names: the one tag a card carries. */
-export type ActivityTag = 'Posts' | 'People' | 'Plans' | 'Briefs';
-
-/** The scopes that name people (a DM, a group, the approvers). */
-const PEOPLE_SCOPES: ReadonlySet<string> = new Set(['people', 'groups', 'clients']);
+/** The kind an Activity card names in its one tag. */
+export type ActivityKind = 'Mention' | 'Post' | 'Brief' | 'Plan' | 'Reminder';
 
 /**
- * The card's one tag, named as the type chips are: Plans (plan alerts, plan
- * items, plan events), Briefs (the briefs scope), Posts (a post), People (a
- * chat, a mention in a chat, an invite). A scheduled send went to its sender
- * alone: it reads "Only you". The welcome row has none. Pure.
+ * What one entry is, in one word: a reminder (or a missed due time), a
+ * mention (a comment's or a chat's), a plan (plan alerts, plan items, plan
+ * events), a brief, a post. A chat message, an invite, a file or the welcome
+ * row names none. Pure.
  */
-export function activityTag(item: ActivityItem): ActivityTag | typeof ONLY_YOU_LABEL | undefined {
+export function activityKind(item: ActivityItem): ActivityKind | undefined {
   const alert = item.alert ?? null;
-  if (alert !== null && (alert.kind === 'sent' || alert.kind === 'failed')) return ONLY_YOU_LABEL;
   if (isWelcome(item)) return undefined;
+  if (alert?.kind === 'reminder' || item.eventType === 'task_due') return 'Reminder';
+  if (item.eventType === MENTION_EVENT_TYPE || isChatMention(item)) return 'Mention';
   if (
     alert?.kind === 'plan' ||
     alert?.kind === 'bank' ||
@@ -158,12 +158,28 @@ export function activityTag(item: ActivityItem): ActivityTag | typeof ONLY_YOU_L
     item.entityType === 'plan' ||
     (item.planId !== null && item.planId !== undefined)
   ) {
-    return 'Plans';
+    return 'Plan';
   }
-  if (item.scope === BRIEFS_SCOPE || item.entityType === 'brief') return 'Briefs';
-  if (item.entityType === 'post' || item.scope === 'posts') return 'Posts';
-  if (alert !== null || isChatMention(item) || PEOPLE_SCOPES.has(item.scope)) return 'People';
+  if (item.scope === BRIEFS_SCOPE || item.entityType === 'brief') return 'Brief';
+  if (item.entityType === 'post' || item.scope === 'posts') return 'Post';
   return undefined;
+}
+
+/**
+ * The card's ONE grey tag on line 3: a scheduled send went to its sender
+ * alone ("Only you got this alert"); a digest group of several entries counts
+ * them ("3 updates"); else what the entry is (activityKind: Mention, Post,
+ * Brief, Plan, Reminder). None for the welcome row or a kindless entry. Pure.
+ */
+export function activityCardTag(
+  group: readonly ActivityItem[],
+): string | undefined {
+  const lead = group[0];
+  if (lead === undefined) return undefined;
+  const alert = lead.alert ?? null;
+  if (alert !== null && (alert.kind === 'sent' || alert.kind === 'failed')) return ONLY_YOU_LABEL;
+  if (group.length > 1) return updatesLabel(group.length);
+  return activityKind(lead);
 }
 
 /**
@@ -339,8 +355,9 @@ export function failedSendItems(
 /**
  * One digest group as one ui/ListCard: the picture (the thing, or the
  * person), the who-did-what title with the unread dot, the comment or alert
- * line as the preview, then the time (formatWhen, the workspace zone), the one
- * tag (Posts, People, Plans, Briefs) and the ⋯ (Mark as read, Snooze; a failed
+ * line as the preview, then the time (formatRelative on the list's clock), the
+ * one tag (activityCardTag: "3 updates", else Mention, Post, Brief, Plan,
+ * Reminder) and the ⋯ (Mark as read, Snooze; a failed
  * send's Edit and Retry). A tap opens the group (the newest entry that links
  * to a comment, else the lead). A threaded group is one card ("+N more" when
  * it has no line of its own); its entries open from the page it lands on.
@@ -348,7 +365,6 @@ export function failedSendItems(
 export function ActivityCard({
   group,
   nowMs,
-  timeZone,
   cache,
   presignEnabled,
   onOpenGroup,
@@ -389,11 +405,11 @@ export function ActivityCard({
       ? mentionPreview(lead.body, selfName, isChatMention(lead))
       : previewText;
   const tappable = !opensNothing(lead, side);
-  const tag = activityTag(lead);
-  const time = formatWhen(
+  const tag = activityCardTag(group);
+  // Line 3: how long ago, on the list's one clock ("just now", "3 hours ago").
+  const time = formatRelative(
     alertDisplayTime(lead.eventType, lead.createdAt, lead.alert?.plan),
     new Date(nowMs),
-    timeZone ?? undefined,
   );
   const bad = alert?.kind === 'failed' || lead.eventType === 'task_due';
 
@@ -429,7 +445,9 @@ export function ActivityCard({
       tagHooks={
         tag === ONLY_YOU_LABEL
           ? { 'data-activity-only-you': '' }
-          : { 'data-activity-scope-tag': '' }
+          : group.length > 1
+            ? { 'data-activity-updates-tag': '' }
+            : { 'data-activity-scope-tag': '' }
       }
       menu={
         <div data-activity-menu="" className="flex">

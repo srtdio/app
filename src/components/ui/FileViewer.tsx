@@ -47,7 +47,8 @@ import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
 import { SPINNER_BUSY, useDelayedBusy } from '@/lib/useDelayedBusy';
 import { dimWith, useGrowFromThumb } from '@/lib/motion/overlays';
 import { humanizeSize } from '@/lib/assets';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { PresignError, type PresignCache } from '@/lib/asset-presign';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { attachmentLink, saveFromLink, type HeldLink } from '@/lib/files/download';
@@ -431,7 +432,7 @@ export function fileViewerDetails(
   now: Date = new Date(),
 ): { sender: string; time: string } | null {
   if (sender === undefined && sentAt === undefined) return null;
-  const time = sentAt !== undefined ? formatWhen(sentAt, now) : '';
+  const time = sentAt !== undefined ? formatRelative(sentAt, now) : '';
   const name = sender ?? '';
   if (name === '' && time === '') return null;
   return { sender: name, time };
@@ -1185,7 +1186,8 @@ function TopBar(props: {
 
 export function FileViewerSheet(props: FileViewerProps): ReactElement {
   const { name, kind, size, source, onLoadError, actions, subtitle, onShowInChat } = props;
-  const details = fileViewerDetails(props.sender, props.sentAt);
+  const nowMs = useMinuteClock();
+  const details = fileViewerDetails(props.sender, props.sentAt, new Date(nowMs));
   // Callers pass a fresh onClose each render: keep the latest in a ref so the
   // key and swipe listeners are not re-attached (and a drag not dropped).
   const onCloseRef = useRef(props.onClose);

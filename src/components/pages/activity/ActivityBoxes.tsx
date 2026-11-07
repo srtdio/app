@@ -7,7 +7,7 @@ import type { ReactElement } from 'react';
 import { Bone, BoxSkeleton } from '@/lib/motion';
 import { cn } from '@/lib/cn';
 import { GUTTER } from '@/components/ui/layout';
-import { LIST_CARD_STACK, ListCardBox } from '@/components/ui/ListCard';
+import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
 import { LOADING_NOTIFICATIONS } from '@/components/pages/activity/data';
 
 /** Cards drawn: about one phone screen. */
@@ -26,7 +26,7 @@ export function ActivityBoxes(): ReactElement {
         <div className="flex h-11 items-center px-4 md:px-6">
           <Bone lit="flat" className="h-3 w-20 rounded" />
         </div>
-        <div className={cn(LIST_CARD_STACK, GUTTER)}>
+        <div className={cn(LIST_CARD_GRID, GUTTER)}>
           {CARD_KEYS.map((key) => (
             <ListCardBox key={key} data-activity-box="" />
           ))}
@@ -43,7 +43,7 @@ export function UpcomingBoxes(): ReactElement {
       lit="flat"
       label={LOADING_NOTIFICATIONS}
       data-activity-boxes="upcoming"
-      className={cn('mt-4 pb-6', LIST_CARD_STACK, GUTTER)}
+      className={cn('mt-4 pb-6', LIST_CARD_GRID, GUTTER)}
     >
       {UPCOMING_KEYS.map((key) => (
         <ListCardBox key={key} />

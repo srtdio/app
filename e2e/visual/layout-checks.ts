@@ -38,9 +38,11 @@ import {
 //     font size + weight + family);
 //   5 busy-state screens: a control keeps its width from idle to busy
 //     (assertSameWidth);
-//   6 list cards (ui/ListCard, [data-list-card]: Briefs, Activity, Chat list):
-//     every card on the screen is the same height (within 1px), and each
-//     picture is 72x72, left, 16 inside the card edge, 12 to the text.
+//   6 list cards (ui/ListCard, [data-list-card]: Pipeline, Briefs, Assets, the
+//     Chat list, Activity, the Plan tab and its Bank): every card on the screen
+//     is the same height (within 1px) and 118 tall on every screen, so all six
+//     lists match; each picture is 72x72, left, 16 inside the card edge, 12 to
+//     the text.
 // LAYOUT_CHECKS=strict (the default) fails the screen; LAYOUT_CHECKS=report
 // records every finding as a test annotation and in the log, and passes.
 // The geometry is pure and unit tested: layout-checks-core.ts.

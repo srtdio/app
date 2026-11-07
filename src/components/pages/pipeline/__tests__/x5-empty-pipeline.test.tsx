@@ -1,5 +1,5 @@
 // X5 fix 5 (FT21): an empty pipeline has a headline and no create button of its
-// own (the header's New post is the only one); empty board columns use
+// own (the header's New post is the only one); an empty stage chip uses
 // emptyStageMessage, not "Empty".
 import { describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
@@ -9,9 +9,8 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
 }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { emptyPipeline } from '@/components/pages/PipelinePage';
-import { PipelineBoardView } from '@/components/pages/pipeline/PipelineBoard';
+import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { emptyStageMessage } from '@/components/pages/pipeline/stage-meta';
-import { groupByStage } from '@/lib/post-board';
 import type { PresignCache } from '@/lib/asset-presign';
 import { STAGE_TRANSITIONS, type Stage } from '@srtdio/posts';
 
@@ -27,20 +26,19 @@ describe('X5 empty pipeline', () => {
     expect(out.toLowerCase()).not.toContain('new post');
   });
 
-  it('every empty board column names its stage instead of "Empty"', () => {
-    const out = renderToStaticMarkup(
-      PipelineBoardView({
-        stages: STAGES,
-        grouped: groupByStage([], STAGES),
-        cap: 6,
-        cache,
-        presignEnabled: false,
-        onViewAll: () => {},
-        onMovePost: () => {},
-        role: 'owner',
-      }),
-    );
-    for (const stage of STAGES) expect(out).toContain(emptyStageMessage(stage));
-    expect(out).not.toMatch(/>Empty</);
+  it('every empty stage names its stage instead of "Empty"', () => {
+    for (const stage of STAGES) {
+      const out = renderToStaticMarkup(
+        <PipelineFeed
+          posts={[]}
+          activeStage={stage}
+          cache={cache}
+          presignEnabled={false}
+          onLongPressPost={() => {}}
+        />,
+      );
+      expect(out).toContain(emptyStageMessage(stage));
+      expect(out).not.toMatch(/>Empty</);
+    }
   });
 });

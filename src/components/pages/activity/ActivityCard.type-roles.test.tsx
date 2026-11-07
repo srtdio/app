@@ -115,9 +115,9 @@ describe('ActivityCard type roles (ui/ListCard: heading, secondary, meta + one t
     expectRole(time as HTMLElement, ['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']);
   });
 
-  it('the scope tag is the one grey xs Tag', () => {
+  it('the kind tag is the one grey xs Tag', () => {
     mount([item({ title: 'Q3 Launch', scope: 'posts' })]);
-    expectRole(byText('Posts'), ['text-xs', 'font-medium', 'bg-panel-2', 'text-fg-2']);
+    expectRole(byText('Post'), ['text-xs', 'font-medium', 'bg-panel-2', 'text-fg-2']);
     expect(document.querySelectorAll('[data-list-card-tag]')).toHaveLength(1);
   });
 

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { AssetCard } from '@/components/pages/assets/AssetCard';
+import { AssetListCard } from '@/components/pages/assets/AssetListCard';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { orderActionItems } from '@/components/ui/ActionMenu';
 import {
@@ -104,23 +104,33 @@ describe('3. Copy link copies a lasting in-app link', () => {
   });
 });
 
+const NOW = new Date('2026-10-01T03:00:00Z');
+
 describe('4. every card shows a visible 44px ⋯ button', () => {
-  it('on asset cards, hidden in select mode', () => {
+  it('on asset cards, the tick in its place in select mode', () => {
     const card = renderToStaticMarkup(
-      <AssetCard item={asset()} cache={cache} presignEnabled={false} onOpen={() => {}} />,
+      <AssetListCard
+        item={asset()}
+        cache={cache}
+        presignEnabled={false}
+        now={NOW}
+        onOpen={() => {}}
+      />,
     );
     expect(card).toContain('aria-label="More actions for photo.png"');
     expect(card).toMatch(/class="[^"]*h-11 w-11[^"]*"[^>]*data-card-menu=""/);
     const selecting = renderToStaticMarkup(
-      <AssetCard
+      <AssetListCard
         item={asset()}
         cache={cache}
         presignEnabled={false}
+        now={NOW}
         onOpen={() => {}}
         selectMode
       />,
     );
     expect(selecting).not.toContain('data-card-menu');
+    expect(selecting).toMatch(/data-list-card-more=""[^>]*>\s*<span[^>]*data-card-tick="off"/);
   });
 });
 
@@ -203,7 +213,7 @@ describe('6. delete hides now and commits after the Undo window', () => {
 });
 
 describe('7. select mode', () => {
-  it('starts from the card box, with Cancel, a count and Select all up top and Delete below', () => {
+  it('starts from the card ⋮ Select row, with Cancel, a count and Select all up top and Delete below', () => {
     expect(selectedLabel(2)).toBe('2 selected');
     expect(selectAllIds([{ id: 'a' }, { id: 'b' }, { id: 'c' }], 2)).toEqual(['a', 'b']);
     const menu = read('src/components/pages/assets/AssetAddMenu.tsx');
@@ -255,16 +265,22 @@ describe('8. one upload summary toast; failures stay', () => {
 });
 
 describe('9. small fixes', () => {
-  it('the library is All files; a name is the ui/Tile one-line title with the full name kept', () => {
+  it('the library is All files; a name is the ui/ListCard one-line title with the full name kept', () => {
     expect(ROOT_LABEL).toBe('All files');
     expect(read('src/components/pages/assets/AssetUploadSheet.tsx')).toContain('{ROOT_LABEL}');
     const item = asset();
     const card = renderToStaticMarkup(
-      <AssetCard item={item} cache={cache} presignEnabled={false} onOpen={() => {}} />,
+      <AssetListCard
+        item={item}
+        cache={cache}
+        presignEnabled={false}
+        now={NOW}
+        onOpen={() => {}}
+      />,
     );
-    // Tiles in a row share height (L7): the title is one line, the meta line under it.
-    expect(card).toContain('data-tile=""');
-    expect(card).toMatch(/class="[^"]*truncate[^"]*"><span data-asset-name="" title="/);
+    // Every list card is the same height: the title is one line, the facts line under it.
+    expect(card).toContain('data-list-card=""');
+    expect(card).toMatch(/data-list-card-title=""[^>]*><span data-asset-name="" title="photo.png"/);
     expect(card).toContain('data-asset-meta=""');
   });
 });

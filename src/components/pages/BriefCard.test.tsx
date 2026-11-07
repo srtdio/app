@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { BriefCard, briefCardLink } from '@/components/pages/BriefCard';
+import { BriefCard, BriefStatusPill, briefCardTime } from '@/components/pages/BriefCard';
 import { tagClass } from '@/components/ui/Tag';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
@@ -60,10 +60,26 @@ function makeCache(peekUrl: string | null) {
   };
 }
 
-function render(brief: BriefWithThumbnail, cache: PresignCache, presignEnabled = true): string {
+// A fixed clock two months before the default due day (1 Jul), so "Due 1 Jul"
+// reads the same whatever day the suite runs.
+const NOW = new Date('2026-05-01T12:00:00Z');
+
+function render(
+  brief: BriefWithThumbnail,
+  cache: PresignCache,
+  presignEnabled = true,
+  now: Date = NOW,
+): string {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <BriefCard brief={brief} cache={cache} presignEnabled={presignEnabled} href="/briefs/b1" />
+      <BriefCard
+        brief={brief}
+        cache={cache}
+        presignEnabled={presignEnabled}
+        href="/briefs/b1"
+        timeZone="UTC"
+        now={now}
+      />
     </MemoryRouter>,
   );
 }
@@ -128,23 +144,53 @@ describe('BriefCard on ui/ListCard', () => {
     expect(out).toContain('Due 1 Jul');
   });
 
-  it('a brief with no due date shows the day it was raised (formatWhen), never "ago"', () => {
+  it('a brief with no due date shows when it was raised (formatRelative)', () => {
     const { cache } = makeCache(null);
-    const out = renderToStaticMarkup(
-      <MemoryRouter>
-        <BriefCard
-          brief={makeBrief({ target_date: null, created_at: '2025-10-19T10:00:00Z' })}
-          cache={cache}
-          presignEnabled
-          href="/briefs/b1"
-          timeZone="UTC"
-          now={new Date('2026-11-06T12:00:00Z')}
-        />
-      </MemoryRouter>,
+    const out = render(
+      makeBrief({ target_date: null, created_at: '2026-11-06T09:00:00Z' }),
+      cache,
+      true,
+      new Date('2026-11-06T12:00:00Z'),
     );
     expect(out).toContain('data-brief-date=""');
-    expect(out).toContain('19 Oct 2025');
-    expect(out).not.toContain('ago');
+    expect(out).toContain('3 hours ago');
+    expect(out).not.toContain('data-list-card-time-bad');
+  });
+
+  it('an open brief past its due day reads "Overdue N days" in the bad tone', () => {
+    const { cache } = makeCache(null);
+    const out = render(
+      makeBrief({ status: 'open', target_date: '2026-07-01' }),
+      cache,
+      true,
+      new Date('2026-07-03T12:00:00Z'),
+    );
+    expect(out).toContain('Overdue 2 days');
+    expect(out).toContain('data-list-card-time-bad=""');
+    expect(out).toMatch(/data-list-card-time=""[^>]*class="[^"]*text-bad/);
+  });
+
+  it('a closed brief is never overdue: it keeps its due words, not the bad tone', () => {
+    const { cache } = makeCache(null);
+    const out = render(
+      makeBrief({ status: 'closed', target_date: '2026-07-01' }),
+      cache,
+      true,
+      new Date('2026-07-03T12:00:00Z'),
+    );
+    expect(out).toContain('Due 1 Jul');
+    expect(out).not.toContain('Overdue');
+    expect(out).not.toContain('data-list-card-time-bad');
+  });
+
+  it('upcoming due days read relative: today, tomorrow, in N days', () => {
+    const now = new Date('2026-06-28T12:00:00Z');
+    const at = (target_date: string) =>
+      briefCardTime({ target_date, created_at: '2026-01-01T00:00:00Z', status: 'open' }, 'UTC', now);
+    expect(at('2026-06-28')).toEqual({ text: 'Due today', bad: false });
+    expect(at('2026-06-29')).toEqual({ text: 'Due tomorrow', bad: false });
+    expect(at('2026-07-01')).toEqual({ text: 'Due in 3 days', bad: false });
+    expect(at('2026-06-27')).toEqual({ text: 'Overdue 1 day', bad: true });
   });
 
   it('shows the Closed tag for a closed brief', () => {
@@ -178,36 +224,17 @@ describe('BriefCard on ui/ListCard', () => {
   });
 });
 
-// The image-wins rule on its own, without rendering: an image brief never grows a
-// link button, and a brief with no image takes its FIRST usable link.
-describe('briefCardLink', () => {
-  const links = [
-    'https://first.example/a',
-    'https://second.example/b',
-  ] as unknown as BriefWithThumbnail['reference_links'];
-
-  it('returns null when the brief has an image attachment, whatever its links', () => {
-    expect(
-      briefCardLink(makeBrief({ thumbnailAssetVersionId: 'av1', reference_links: links })),
-    ).toBeNull();
-  });
-
-  it('returns the first usable link when there is no image', () => {
-    expect(
-      briefCardLink(makeBrief({ thumbnailAssetVersionId: null, reference_links: links })),
-    ).toEqual({ href: 'https://first.example/a', domain: 'first.example' });
-  });
-
-  it('returns null when there is no image and nothing usable', () => {
-    expect(briefCardLink(makeBrief({ thumbnailAssetVersionId: null }))).toBeNull();
-    expect(
-      briefCardLink(
-        makeBrief({
-          thumbnailAssetVersionId: null,
-          reference_links: ['not-a-url'] as unknown as BriefWithThumbnail['reference_links'],
-        }),
-      ),
-    ).toBeNull();
+// BriefStatusPill is the same grey tag wherever a brief shows its status
+// (the detail page and the chat brief card), so Open and Closed read the same.
+describe('BriefStatusPill', () => {
+  it('is the neutral Tag for both statuses, carrying data-brief-status', () => {
+    for (const status of ['open', 'closed'] as const) {
+      const out = renderToStaticMarkup(<BriefStatusPill status={status} />);
+      expect(out).toContain(`data-brief-status="${status}"`);
+      expect(out).toContain(tagClass('neutral'));
+      expect(out).not.toContain('bg-accent-soft');
+      expect(out).toContain(status === 'open' ? 'Open' : 'Closed');
+    }
   });
 });
 

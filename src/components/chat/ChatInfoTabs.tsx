@@ -62,7 +62,8 @@ import { readProfiles, type ChannelSummary, type ChatProfile } from '@/lib/chat-
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Result } from '@srtdio/rpc';
 import type { MessageCursor } from '@/lib/chat/thread';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { classifyFileKind } from '@/lib/chat/attachments';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { APP_ENTITY_ROUTES, currentOrigin, displayUrl } from '@/lib/chat/message-links';
@@ -444,9 +445,9 @@ const ROW = 'flex min-h-16 w-full items-center gap-3 border-b border-border py-2
 const ROW_ICON =
   'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-panel-2 text-fg-3 lit-media';
 
-/** "size · when" under a file name (formatWhen). Pure but for the clock. */
-function fileMetaLine(item: ChannelAttachmentItem, timeZone?: string): string {
-  return `${humanizeSize(item.size)} · ${formatWhen(item.createdAt, undefined, timeZone)}`;
+/** "size · when" under a file name ("2 MB · 3 days ago", formatRelative). Pure. */
+function fileMetaLine(item: ChannelAttachmentItem, now: Date): string {
+  return `${humanizeSize(item.size)} · ${formatRelative(item.createdAt, now)}`;
 }
 
 /**
@@ -458,8 +459,8 @@ function FileRow(props: {
   item: ChannelAttachmentItem;
   cache: PresignCache;
   presignEnabled: boolean;
-  /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
-  timeZone?: string | undefined;
+  /** The shared minute clock's instant (the view's useMinuteClock): the time reads relative to it. */
+  now: Date;
   /** Select mode: a tap ticks (own files) or does nothing (the rest). */
   selecting: boolean;
   tick: Tick | null;
@@ -489,7 +490,7 @@ function FileRow(props: {
           <span title={name} className="truncate text-base font-medium text-fg">
             {middleTruncate(name, VIEWER_NAME_BUDGET)}
           </span>
-          <span className="truncate text-sm text-fg-2">{fileMetaLine(item, props.timeZone)}</span>
+          <span className="truncate text-sm text-fg-2">{fileMetaLine(item, props.now)}</span>
         </span>
       </PressableRow>
       {open && source !== null ? (
@@ -671,6 +672,7 @@ const NO_SEE_ALL = (): void => undefined;
 
 /** The chips and the selected tab's body. Hook-free so tests walk it directly. */
 export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
+  const now = new Date(useMinuteClock());
   const expanded = props.expanded ?? NONE_EXPANDED;
   const onSeeAll = props.onSeeAll ?? NO_SEE_ALL;
   const limit = previewLimit(props.mode, props.tab, expanded);
@@ -733,7 +735,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
               item={item}
               cache={props.cache}
               presignEnabled={props.presignEnabled}
-              timeZone={props.timeZone}
+              now={now}
               selecting={selecting}
               tick={tickOf(item)}
             />
@@ -757,7 +759,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
               key={`${item.messageId}-${index}`}
               item={item}
               sender={props.senderName(item.senderUserId)}
-              date={formatWhen(item.createdAt, undefined, props.timeZone)}
+              date={formatRelative(item.createdAt, now)}
             />
           ))}
         </ul>
@@ -888,6 +890,7 @@ export function starredTab(input: {
  * channel.
  */
 export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
+  const nowMs = useMinuteClock();
   const open = props.open ?? true;
   const frame = props.frame ?? NO_FRAME;
   const [tab, setTab] = useState<ContactTab>('media');
@@ -1138,7 +1141,7 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
           presignEnabled={props.presignEnabled}
           details={{
             sender: senderName(current.senderUserId),
-            time: formatWhen(current.createdAt, undefined, props.timeZone),
+            time: formatRelative(current.createdAt, new Date(nowMs)),
           }}
           onIndexChange={setViewer}
           onClose={() => setViewer(null)}

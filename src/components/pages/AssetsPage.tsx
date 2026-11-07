@@ -9,7 +9,7 @@ import { LoadError } from '@/components/ui/LoadError';
 import { PageHead } from '@/components/shell/PageHead';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { ICON_SIZE, IconAssets } from '@/components/ui/icons';
-import { AssetGrid } from '@/components/pages/assets/AssetGrid';
+import { AssetList } from '@/components/pages/assets/AssetListCard';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
 import { SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { useSearchJump } from '@/lib/search/jump';
@@ -47,9 +47,9 @@ import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/ke
 import { logger } from '@/lib/logger';
 import { bottomAnchorProps, useBottomInset } from '@/lib/bottom-inset';
 import { cn } from '@/lib/cn';
-import { TILE_GRID, Tile } from '@/components/ui/Tile';
+import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
 import { GUTTER } from '@/components/ui/layout';
-import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
+import { BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import {
   addAssetLink,
   canRenameAssets,
@@ -103,7 +103,7 @@ import { useServerSearch } from '@/lib/search/server-search';
 import { errorText } from '@/lib/error-copy';
 
 const SKELETON_COUNT = 12;
-/** Stable keys for the fixed set of placeholder tiles. */
+/** Stable keys for the fixed set of loading cards (ui/ListCardBox). */
 const SKELETON_KEYS = Array.from({ length: SKELETON_COUNT }, (_, n) => `skeleton-${n}`);
 
 /** The list search's URL param (?q=), as on every list screen. */
@@ -895,7 +895,7 @@ export function AssetsPage() {
   const viewerItem = viewer !== null ? navigable[viewer.index] : undefined;
   // Back on Assets, the scroll lands where it was once the files painted.
   useKeptScroll(viewKey('assets:scroll'), !listLoading && !assetsFailed);
-  // Boxes show only while nothing is held; the grid settles once when it lands
+  // Boxes show only while nothing is held; the list settles once when it lands
   // after them (a kept view paints at once and never settles).
   const hadBoxes = useHadBoxes(listLoading && !assetsFailed && !searchFailed);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -912,7 +912,7 @@ export function AssetsPage() {
   const nothingToSelect =
     visible.length === 0 && (searching || counts === null || counts[tab] === 0);
 
-  // The round box on a card: one tap starts selecting with that file ticked.
+  // A card's ⋮ Select row: starts selecting with that file ticked.
   const startSelectWith = (item: AssetListItem): void => {
     setSelected(new Set([item.id]));
     setSelectMode(true);
@@ -996,16 +996,13 @@ export function AssetsPage() {
             <LoadError title="your files" onRetry={() => void retryLoad()} retrying={retrying} />
           </div>
         ) : listLoading ? (
-          <BoxSkeleton lit="flat" label="Loading files" className={cn(GUTTER, 'py-4', TILE_GRID)}>
+          <BoxSkeleton
+            lit="flat"
+            label="Loading files"
+            className={cn(GUTTER, 'py-4', LIST_CARD_GRID)}
+          >
             {SKELETON_KEYS.map((key) => (
-              <div key={key} data-skeleton-tile="" className="min-w-0">
-                <Tile
-                  aspect="landscape"
-                  thumbnail={<Bone lit="lit-card" as="span" className="h-full w-full" />}
-                  title={<Bone lit="flat" as="span" className="my-1 h-3 w-2/3 rounded" />}
-                  meta={<Bone lit="flat" as="span" className="my-1 h-2 w-1/3 rounded" />}
-                />
-              </div>
+              <ListCardBox key={key} data-skeleton-tile="" />
             ))}
           </BoxSkeleton>
         ) : !searching && tab === 'all' && liveItems.length === 0 ? (
@@ -1028,7 +1025,7 @@ export function AssetsPage() {
           ) : null
         ) : (
           <div ref={gridRef} className={cn(GUTTER, 'py-4')}>
-            <AssetGrid
+            <AssetList
               items={visible}
               presignEnabled={presignEnabled}
               cache={cache}

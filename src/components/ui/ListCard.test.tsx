@@ -7,6 +7,7 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   LIST_CARD_BODY,
+  LIST_CARD_GRID,
   LIST_CARD_LINE1,
   LIST_CARD_LINE3,
   LIST_CARD_PICTURE,
@@ -39,7 +40,7 @@ function render(over: Partial<ListCardProps> = {}): string {
       picture={{ kind: 'icon', icon: IconBriefs }}
       title="Spring launch"
       preview="Tease the drop"
-      time="10:27 AM"
+      time="5 min ago"
       tag="Open"
       menu={menu}
       onPress={() => {}}
@@ -188,7 +189,7 @@ describe('ListCard lines: three roles plus the tag', () => {
     expect(classOf(html, 'data-list-card-more=""')).toContain('-my-3');
     expect(LIST_CARD_LINE3.split(' ')).toContain('h-5');
     // Order: time, tag, then the ⋮.
-    expect(html.indexOf('10:27 AM')).toBeLessThan(html.indexOf('>Open<'));
+    expect(html.indexOf('5 min ago')).toBeLessThan(html.indexOf('>Open<'));
     expect(html.indexOf('>Open<')).toBeLessThan(html.indexOf('Actions for Card'));
   });
 
@@ -223,6 +224,65 @@ describe('ListCard lines: three roles plus the tag', () => {
         'data-list-card-line="3"',
       ].map((attr) => classOf(h, attr).filter((c) => /^(h|w|min-h|p|gap|line-clamp)-/.test(c)));
     for (const h of variants) expect(shape(h)).toEqual(shape(variants[0] ?? ''));
+  });
+});
+
+describe('ListCard line 3: timeBad (overdue)', () => {
+  it('timeBad paints the time in the bad token instead of fg-3, and marks it', () => {
+    const html = render({ time: 'Overdue 2 days', timeBad: true });
+    const time = classOf(html, 'data-list-card-time=""');
+    expect(time).toContain('text-bad');
+    expect(time).not.toContain('text-fg-3');
+    expect(time).toEqual(expect.arrayContaining(['font-mono', 'tabular-nums']));
+    expect(html).toContain('data-list-card-time-bad=""');
+    expect(html).toMatch(/data-list-card-time=""[^>]*>Overdue 2 days</);
+  });
+
+  it('without timeBad the time is the plain meta ink, never bad', () => {
+    const html = render({ time: 'Due in 3 days' });
+    const time = classOf(html, 'data-list-card-time=""');
+    expect(time).toContain('text-fg-3');
+    expect(time).not.toContain('text-bad');
+    expect(html).not.toContain('data-list-card-time-bad');
+  });
+
+  it('timeBad never changes the line or the card height', () => {
+    const plain = render({ time: 'Due today' });
+    const bad = render({ time: 'Overdue 1 day', timeBad: true });
+    expect(classOf(bad, 'data-list-card-line="3"')).toEqual(
+      classOf(plain, 'data-list-card-line="3"'),
+    );
+    expect(classOf(bad, 'data-list-card-body=""')).toEqual(
+      classOf(plain, 'data-list-card-body=""'),
+    );
+  });
+});
+
+describe('LIST_CARD_GRID: the page list', () => {
+  it('one column on phone, the named auto-fill columns on laptop, 12 between cards', () => {
+    const classes = LIST_CARD_GRID.split(' ');
+    expect(classes).toEqual(
+      expect.arrayContaining(['grid', 'grid-cols-1', 'gap-3', 'md:grid-cols-list-cards']),
+    );
+    expect(px(spacing['3'] ?? '')).toBe(12);
+    // A named token, never an arbitrary value.
+    expect(LIST_CARD_GRID).not.toContain('[');
+  });
+
+  it('the laptop columns fill the width, each at least 360 wide', () => {
+    const columns = tailwindConfig.theme?.extend?.gridTemplateColumns as
+      | Record<string, string>
+      | undefined;
+    const fromTheme = tailwindConfig.theme?.gridTemplateColumns as
+      | Record<string, string>
+      | undefined;
+    const value = columns?.['list-cards'] ?? fromTheme?.['list-cards'];
+    expect(value).toBe('repeat(auto-fill, minmax(360px, 1fr))');
+  });
+
+  it('the chat pane keeps the one-column stack', () => {
+    expect(LIST_CARD_STACK.split(' ')).toEqual(expect.arrayContaining(['flex', 'flex-col', 'gap-3']));
+    expect(LIST_CARD_STACK).not.toContain('grid');
   });
 });
 
@@ -265,7 +325,7 @@ describe('ListCard tap target', () => {
           picture={{ kind: 'icon', icon: IconBriefs }}
           title="Spring launch"
           preview="Tease the drop"
-          time="10:27 AM"
+          time="5 min ago"
           tag="Open"
           menu={menu}
         />,

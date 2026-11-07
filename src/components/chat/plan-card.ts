@@ -17,7 +17,7 @@ import type {
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isOwnerOrAdmin } from '@/components/pages/pcs/roles';
 import { formatCivilDayHeader } from '@/lib/plan-week';
-import { civilDay, formatDayRange, formatWhen } from '@/lib/time';
+import { civilDay, formatDayRange, formatRelative } from '@/lib/time';
 import { errorText } from '@/lib/error-copy';
 
 /** Card and screen copy. */
@@ -1139,12 +1139,11 @@ export function approverIds(bundle: PlanBundle): string[] {
 }
 
 /**
- * When a slot was approved, on the viewer's clock, in the app's one past-time
- * format (formatWhen): "6:45 PM" today, "Yesterday", "Mon", "12 Oct".
- * `timeZone` is for tests. Pure (given the clock).
+ * When a slot was approved, in the app's one past-time format
+ * (formatRelative): "just now", "5 min ago", "2 days ago". Pure (given the clock).
  */
-export function approvedWhen(iso: string, now: Date, timeZone?: string): string {
-  return formatWhen(iso, now, timeZone);
+export function approvedWhen(iso: string, now: Date): string {
+  return formatRelative(iso, now);
 }
 
 /** "Approved by {name} · {when}". Pure. */

@@ -8,8 +8,7 @@ import { tagClass } from '@/components/ui/Tag';
 import { cn } from '@/lib/cn';
 import { LIST_CARD_COVER, ListCard } from '@/components/ui/ListCard';
 import { Thumbnail } from '@/components/media';
-import { formatDue, formatWhen } from '@/lib/time';
-import { toExternalLinks, type ExternalLink } from '@/lib/links';
+import { daysFromToday, formatDue, formatOverdue, formatRelative } from '@/lib/time';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
 
@@ -23,40 +22,33 @@ export function isBriefClosed(brief: Brief): boolean {
   return brief.status === BRIEF_STATUS.closed;
 }
 
+/** "Open" or "Closed": the one status word (anything not closed reads Open). */
+export function briefStatusLabel(status: string): 'Open' | 'Closed' {
+  return status === BRIEF_STATUS.closed ? 'Closed' : 'Open';
+}
+
 /**
- * The one status tag used on the list card, the detail page and the chat brief
- * card, so Open and Closed read the same everywhere. It is a ui/Tag (built from
- * tagClass so it can carry data-brief-status): Open is the accent tone, Closed
- * the neutral tone, text only. Not interactive, no motion. Anything that is not
- * "closed" reads as Open (the only two statuses).
+ * The one status tag used on the list card (ListCard's tag slot), the detail
+ * page and the chat brief card, so Open and Closed read the same everywhere:
+ * the grey ui/Tag look (tagClass neutral), text only, carrying data-brief-status. Not
+ * interactive, no motion.
  */
 export function BriefStatusPill({ status }: { status: string }): ReactElement {
   const closed = status === BRIEF_STATUS.closed;
   return (
     <span
       data-brief-status={closed ? BRIEF_STATUS.closed : BRIEF_STATUS.open}
-      className={cn(tagClass(closed ? 'neutral' : 'accent'), 'lit-pill shrink-0 whitespace-nowrap')}
+      className={cn(tagClass('neutral'), 'shrink-0 whitespace-nowrap')}
     >
-      {closed ? 'Closed' : 'Open'}
+      {briefStatusLabel(status)}
     </span>
   );
 }
 
 /**
- * A brief's first usable reference link, or null for none (an image brief: the
- * picture already carries the visual). The list card (ui/ListCard) shows no
- * link of its own; the detail page lists them. Pure, so the precedence is
- * unit-tested.
- */
-export function briefCardLink(brief: BriefWithThumbnail): ExternalLink | null {
-  if (brief.thumbnailAssetVersionId !== null) return null;
-  return toExternalLinks(brief.reference_links)[0] ?? null;
-}
-
-/**
- * The card's due line: "Due 8 Oct" ("Due 4 Jan 2027" outside now's year), read
- * off the date-only string itself so no zone can shift the day; the workspace
- * zone (due dates are workspace calendar days) only decides now's year.
+ * The card's due words (formatDue): "Due today", "Due tomorrow", "Due in 3
+ * days", "Due 8 Oct" ("Due 4 Jan 2027" outside now's year), on the workspace
+ * zone (due dates are workspace calendar days).
  */
 export function briefDueLabel(
   targetDate: string,
@@ -76,27 +68,43 @@ interface BriefCardProps {
   href: string;
   /** The workspace zone the dates read on. Absent: the device zone. */
   timeZone?: string | null | undefined;
-  /** The clock the date reads against. Default: now. */
-  now?: Date;
+  /** The clock the time reads against (the list's one useMinuteClock). Default: now. */
+  now?: Date | undefined;
+}
+
+/** A brief's line 3 time: the text, and whether it is overdue (the bad token). */
+export interface BriefCardTime {
+  text: string;
+  bad: boolean;
 }
 
 /**
- * A brief's line 3 date: "Due 8 Oct" when it has a due date, else the day it
- * was raised (formatWhen: "10:27 AM", "Yesterday", "Mon", "19 Oct"). Pure.
+ * A brief's line 3 time. With a due date: "Due today" / "Due in 3 days" /
+ * "Due 12 Dec" (formatDue), or "Overdue 2 days" in the bad tone once the day
+ * has passed (formatOverdue); a closed brief is never overdue (it keeps its
+ * "Due 12 Oct"). Without one: when it was raised, "3 hours ago"
+ * (formatRelative). Due days read on the workspace zone. Pure.
  */
-export function briefCardDate(
-  brief: Pick<Brief, 'target_date' | 'created_at'>,
+export function briefCardTime(
+  brief: Pick<Brief, 'target_date' | 'created_at' | 'status'>,
   timeZone: string | null | undefined,
   now: Date = new Date(),
-): string {
-  if (brief.target_date !== null) return briefDueLabel(brief.target_date, timeZone, now);
-  return formatWhen(brief.created_at, now, timeZone ?? undefined);
+): BriefCardTime {
+  if (brief.target_date === null) {
+    return { text: formatRelative(brief.created_at, now), bad: false };
+  }
+  const days = daysFromToday(brief.target_date, timeZone, now);
+  if (days !== undefined && days < 0 && brief.status !== BRIEF_STATUS.closed) {
+    return { text: formatOverdue(brief.target_date, timeZone, now).text, bad: true };
+  }
+  return { text: briefDueLabel(brief.target_date, timeZone, now), bad: false };
 }
 
 /**
  * A brief on ui/ListCard: the first image attachment (else the brief icon) as
- * the picture, the title, the objective as the 2-line preview, then the date
- * and the Open / Closed tag. The card's one real link is laid over the whole
+ * the picture, the title, the objective as the 2-line preview (stripFormat),
+ * then the due / overdue time (briefCardTime) and the grey Open / Closed tag.
+ * No link preview on the card (the brief screen lists the links). The card's one real link is laid over the whole
  * card (named by the title). Closing a brief lives in the detail page's menu,
  * never on the card.
  */
@@ -104,7 +112,7 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone, now }:
   const closed = isBriefClosed(brief);
   // growFromCard: the brief's page grows out of this card; Back grows it back.
   const cardRef = useGrowBackIntoCard<HTMLElement>(brief.id);
-  const date = briefCardDate(brief, timeZone, now);
+  const time = briefCardTime(brief, timeZone, now);
 
   return (
     <ListCard
@@ -148,9 +156,10 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone, now }:
       }}
       title={<span aria-hidden="true">{brief.title}</span>}
       preview={stripFormat(brief.objective)}
-      time={date}
+      time={time.text}
+      timeBad={time.bad}
       timeHooks={brief.target_date !== null ? { 'data-brief-due': '' } : { 'data-brief-date': '' }}
-      tag={closed ? 'Closed' : 'Open'}
+      tag={briefStatusLabel(brief.status)}
       tagHooks={{ 'data-brief-status': closed ? BRIEF_STATUS.closed : BRIEF_STATUS.open }}
     />
   );

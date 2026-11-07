@@ -239,7 +239,13 @@ export const LIST_CARD_PICTURE_PX = 72;
 export const LIST_CARD_INSET_PX = 16;
 /** Picture to text column. */
 export const LIST_CARD_GAP_PX = 12;
-/** Cards on one screen are the same height within this many px. */
+/**
+ * Every ui/ListCard in all six lists (Pipeline, Briefs, Assets, the Chat list,
+ * Activity, the Plan tab and its Bank) is this tall: 1 + 16 + (20 + 4 + 36 + 4
+ * + 20) + 16 + 1 (border, padding, the three lines; the 72 picture never sets it).
+ */
+export const LIST_CARD_HEIGHT_PX = 118;
+/** Cards are the same height (on a screen, and LIST_CARD_HEIGHT_PX) within this many px. */
 export const LIST_CARD_HEIGHT_TOLERANCE_PX = 1;
 /** Sizes and offsets within this many px are equal (sub-pixel layout rounding). */
 const LIST_CARD_PX_TOLERANCE = 0.5;
@@ -260,7 +266,8 @@ const near = (a: number, b: number, tolerance = LIST_CARD_PX_TOLERANCE): boolean
 
 /**
  * The list card rule: every card on a screen has the same height (within 1px),
- * and each card's picture is 72x72, on the left, 16 inside the card's border
+ * and that height is LIST_CARD_HEIGHT_PX on every screen, so the six lists'
+ * cards are one height across the app; each card's picture is 72x72, on the left, 16 inside the card's border
  * (left and top), with the text column 12 after it. Pure.
  */
 export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
@@ -273,6 +280,11 @@ export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
     ) {
       out.push(
         `${c.label} is ${c.card.height}px tall, ${first.label} is ${first.card.height}px (cards differ)`,
+      );
+    }
+    if (Math.abs(c.card.height - LIST_CARD_HEIGHT_PX) > LIST_CARD_HEIGHT_TOLERANCE_PX) {
+      out.push(
+        `${c.label} is ${c.card.height}px tall, not ${LIST_CARD_HEIGHT_PX} (every list card is one height)`,
       );
     }
     if (c.picture === null) {

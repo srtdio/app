@@ -1,12 +1,11 @@
 import { mark } from '@/lib/perf-marks';
-import { useState, type ComponentType, type MouseEvent } from 'react';
+import { useState, type ComponentType, type MouseEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Thumbnail } from '@/components/media';
 import {
   ICON_SIZE,
   IconArrowUpRight,
   IconCarousel,
-  IconChat,
   IconCheck,
   IconLink,
   IconPause,
@@ -23,20 +22,13 @@ import { stageLabel } from '@/components/pages/pipeline/stage-meta';
 import { moveActions } from '@/components/pages/pipeline/MoveSheet';
 import {
   hasAllowedMove,
-  reservesStatusLine,
   reviewStatus,
   type CardViewer,
 } from '@/components/pages/pipeline/card-status';
-import { civilDay, formatDue, formatOverdue } from '@/lib/time';
-import { frameFor } from '@/lib/platform-specs';
-import { cn } from '@/lib/cn';
+import { daysFromToday, formatDue, formatOverdue } from '@/lib/time';
 import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
-import { Card } from '@/components/ui/Card';
-import { Tag } from '@/components/ui/Tag';
-import { StatusDot } from '@/components/ui/StatusDot';
-import { textRole } from '@/components/ui/Text';
+import { ListCard, type ListCardHooks, type ListCardPicture } from '@/components/ui/ListCard';
 import { PostPlaceholder, postPlaceholderKind } from '@/components/ui/PostPlaceholder';
-import { CountBadge } from '@/components/ui/CountBadge';
 import {
   unreadCommentsLabel,
   useEntityUnread,
@@ -60,52 +52,33 @@ export interface PostCardProps {
    *  absent the card falls back to the classic /posts/:id route. */
   workspaceKey?: string | null;
   /**
-   * Renders the ⋯ (ui/ActionMenu) at the right end of the due row. With a
-   * known role the menu lists each move this viewer can make (Send for review,
-   * Approve, Park, Reject) and calls this with its target; without one it has a
-   * single Move row that calls it with no target (the move sheet).
+   * Renders the ⋮ (ui/ActionMenu) at the end of line 3. With a known role the
+   * menu lists each move this viewer can make (Send for review, Approve, Park,
+   * Reject) and calls this with its target; without one it has a single Move
+   * row that calls it with no target (the move sheet).
    */
   onMove?: (post: PipelinePost, to?: Stage) => void;
   /**
    * The viewer's role and the workspace approvers: drives the review status line
-   * and hides the ⋯ menu's Move row when this viewer has no allowed move.
+   * and hides the ⋮ menu's Move row when this viewer has no allowed move.
    * Absent: no status line, and Move shows whenever onMove is passed.
    */
   viewer?: CardViewer;
   /**
    * The post's first photo or video (the chat card's cover read): a video with
-   * no poster shows the play glyph in the cover box. undefined while unknown.
+   * no poster shows the play placeholder. undefined while unknown.
    */
   cover?: CardFirstMedia | null | undefined;
-  /** The clock for the time-in-stage reading. Default: now. */
-  now?: Date;
-  /** The phone All view: the meta line leads with the post's stage dot and label. */
-  showStage?: boolean;
   /**
-   * The card sits in a kanban column that already names its stage: the card
-   * never repeats the stage name or its dot (the status line drops its dot).
+   * The clock the due and status times read against: the list's one minute
+   * clock (useMinuteClock in PipelineFeed), never a timer per card. Default: now.
    */
-  inColumn?: boolean;
+  now?: Date;
   /**
    * The workspace's IANA zone: target_date is a due date, a calendar day on the
    * workspace zone (src/lib/time.ts). Absent or null: the device zone.
    */
   timeZone?: string | null | undefined;
-}
-
-/**
- * The card's due line via the app formatter: "Due 15 Mar" ("Due 4 Jan 2027"
- * outside now's year), the day read on the workspace zone. An unparseable value
- * shows as stored.
- */
-export function dueLabel(
-  value: string,
-  workspaceZone: string | null | undefined,
-  now: Date = new Date(),
-): string {
-  const instant = new Date(value);
-  if (Number.isNaN(instant.getTime())) return `Due ${value}`;
-  return formatDue(value, workspaceZone, now);
 }
 
 /** The card's due reading: the due line, or the overdue line in the bad tone. */
@@ -115,10 +88,11 @@ export interface CardDue {
 }
 
 /**
- * "Due 15 Mar" while the day is today or ahead; once the civil day (on the
- * workspace zone) has passed, "Overdue · 12 Oct" / "Overdue 5 months" via the
- * shared formatter. An approved post is done, so it never reads overdue. An
- * unparseable value shows as stored.
+ * Line 3's time: "Due today", "Due tomorrow", "Due in 3 days", "Due 12 Dec"
+ * (formatDue) while the day is today or ahead; once the civil day (on the
+ * workspace zone) has passed, "Overdue 1 day" / "Overdue 2 months"
+ * (formatOverdue) in the bad tone. An approved post is done, so it never reads
+ * overdue. An unparseable value reads '' (no time). Pure.
  */
 export function cardDue(
   value: string,
@@ -126,35 +100,21 @@ export function cardDue(
   workspaceZone: string | null | undefined,
   now: Date = new Date(),
 ): CardDue {
-  const instant = new Date(value);
-  if (Number.isNaN(instant.getTime())) return { text: `Due ${value}`, overdue: false };
-  const zone = workspaceZone ?? undefined;
-  const civil = civilDay(value, zone);
-  if (stage !== 'approved' && civil < civilDay(now, zone)) {
-    return { text: formatOverdue(civil, workspaceZone, now).text, overdue: true };
+  const days = daysFromToday(value, workspaceZone, now);
+  if (days === undefined) return { text: '', overdue: false };
+  if (days < 0 && stage !== 'approved') {
+    return { text: formatOverdue(value, workspaceZone, now).text, overdue: true };
   }
-  return { text: dueLabel(value, workspaceZone, now), overdue: false };
-}
-
-/**
- * The card's cover box ratio (w / h): ONE fixed box per workspace platform,
- * the platform's default image frame (4:5 for Instagram), whatever the post's
- * format or its media's own size. Every card in a row then has the same
- * picture height; the picture fills it with object-cover. null for a platform
- * with no frame: the box falls back to square. Pure.
- */
-export function cardRatio(post: Pick<PipelinePost, 'platform'>): number | null {
-  const frame = frameFor(post.platform, 'single_image', null);
-  return frame === null ? null : frame.ratio;
+  return { text: formatDue(value, workspaceZone, now), overdue: false };
 }
 
 /** Formats whose media is a video. */
 const VIDEO_FORMATS: readonly string[] = ['video', 'reel', 'story', 'short'];
 
 /**
- * What the card's cover box shows: the picture ('image'), a centred play glyph
- * for a video with no poster ('video'), or no box at all for a post with no
- * media ('none', a text-only post: the card starts at the title). Pure.
+ * What the card's picture shows: the post's picture ('image'), the play
+ * placeholder for a video with no poster ('video'), or the "Aa" placeholder
+ * for a post with no media ('none', a text post). Pure.
  */
 export type CardCoverKind = 'image' | 'video' | 'none';
 
@@ -167,42 +127,43 @@ export function cardCoverKind(
   return 'none';
 }
 
-/** A post with no media of its own: the tile is the format fallback. */
-function hasNoMedia(post: PipelinePost): boolean {
-  return post.thumbnailAssetVersionId === null;
-}
-
-/** The caption preview text for a no-media card, or null when there is none. */
-export function captionPreview(post: PipelinePost): string | null {
-  if (!hasNoMedia(post)) return null;
+/** The caption as plain text (captions never format), or null when there is none. */
+export function captionPreview(post: Pick<PipelinePost, 'caption'>): string | null {
   return post.caption !== null && post.caption.trim() !== '' ? post.caption : null;
 }
 
-/** A small "multiple images" badge (stacked squares) shown on carousel posts. */
+/** The ⋮ trigger's name: "Actions for {title}", then the unread comments when any. Pure. */
+export function cardMenuLabel(title: string, unreadComments: number): string {
+  return unreadComments > 0
+    ? `Actions for ${title}, ${unreadCommentsLabel(unreadComments)}`
+    : `Actions for ${title}`;
+}
+
+/** A small "multiple images" badge (stacked squares) on a carousel post's picture. */
 function CarouselBadge() {
   return (
     <span
       aria-label="Carousel"
-      className="pointer-events-none absolute left-2 top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-lg bg-overlay-badge text-overlay-fg lit-media"
+      className="pointer-events-none absolute left-1 top-1 inline-flex h-6 min-w-6 items-center justify-center rounded-lg bg-overlay-badge text-overlay-fg lit-media"
     >
       <IconCarousel size={ICON_SIZE.inline} />
     </span>
   );
 }
 
-/** A centred play badge painted over a video post's poster image. */
+/** A centred play badge painted over a video post's poster picture. */
 function PlayBadge() {
   return (
     <span
       aria-label="Video"
-      className="pointer-events-none absolute left-1/2 top-1/2 inline-flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-overlay-badge text-overlay-fg lit-media"
+      className="pointer-events-none absolute left-1/2 top-1/2 inline-flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-overlay-badge text-overlay-fg lit-media"
     >
-      <IconPlay size={ICON_SIZE.control} />
+      <IconPlay size={ICON_SIZE.inline} />
     </span>
   );
 }
 
-/** One move row in the card's ⋯ menu (the move sheet's actions, moveActions). */
+/** One move row in the card's ⋮ menu (the move sheet's actions, moveActions). */
 export interface CardMoveRow {
   to: Stage;
   label: string;
@@ -210,7 +171,7 @@ export interface CardMoveRow {
   onSelect: () => void;
 }
 
-/** What the card's ⋯ menu runs. */
+/** What the card's ⋮ menu runs. */
 export interface CardMenuActions {
   onOpen: () => void;
   onCopyLink: () => void;
@@ -230,7 +191,7 @@ const MOVE_ICON: Record<Stage, ComponentType<IconProps>> = {
 };
 
 /**
- * The card's ⋯ rows: Open, Copy link, then every move this viewer can make
+ * The card's ⋮ rows: Open, Copy link, then every move this viewer can make
  * (the same moves the move sheet lists), else Move when allowed. Pure.
  */
 export function cardMenuItems(actions: CardMenuActions): ActionMenuItem[] {
@@ -254,17 +215,65 @@ export function cardMenuItems(actions: CardMenuActions): ActionMenuItem[] {
 }
 
 /**
- * A pipeline board card, rendered by ui/Card: the picture bleeds at the top in
- * the workspace platform's one fixed cover box (4:5 for Instagram), the post
- * placeholder (play glyph) for a video with no poster, or no box for a
- * text-only post. The title (two lines at most) and the ⋯ share the header
- * (Card more: the trailing rule puts the glyph on the content edge); the due
- * or overdue reading is the meta line; the caption and the review status line
- * are the body; the stage Tag (phone All view) and the unread comments are the
- * footer. The card is as tall as its content (Card self-start). The whole card
- * opens the post (Card press); the ⋯ opens the shared ActionMenu: Open, Copy
- * link and the viewer's moves. A long-press on touch or a right-click on laptop
- * opens the same menu (useMenuGesture).
+ * The picture slot: the post's picture (its small copy; the "Aa" or play
+ * placeholder while it cannot show), the play placeholder for a video with no
+ * poster, or "Aa" for a text post. Pure.
+ */
+function cardPicture(
+  post: PipelinePost,
+  coverKind: CardCoverKind,
+  cache: PresignCache,
+  presignEnabled: boolean,
+): { picture: ListCardPicture; hooks: ListCardHooks } {
+  if (coverKind === 'image') {
+    let badge: ReactNode = null;
+    if (post.format === 'carousel') badge = <CarouselBadge />;
+    else if (post.format === 'video') badge = <PlayBadge />;
+    return {
+      picture: {
+        kind: 'image',
+        node: (
+          <Thumbnail
+            assetVersionId={post.thumbnailAssetVersionId}
+            cache={cache}
+            presignEnabled={presignEnabled}
+            aspect="square"
+            fallback={{ kind: 'glyph' }}
+            fallbackTile={
+              <PostPlaceholder
+                kind={postPlaceholderKind(post.format)}
+                size={ICON_SIZE.picture}
+                fill
+              />
+            }
+            alt={post.title}
+          >
+            {badge}
+          </Thumbnail>
+        ),
+      },
+      hooks: { 'data-post-card-thumb': '' },
+    };
+  }
+  if (coverKind === 'video') {
+    return {
+      picture: { kind: 'placeholder', placeholder: 'video' },
+      hooks: { 'data-post-card-play': '' },
+    };
+  }
+  return { picture: { kind: 'placeholder', placeholder: 'text' }, hooks: {} };
+}
+
+/**
+ * A Pipeline post on ui/ListCard. Picture: the post's picture, else the play
+ * placeholder (a video with no poster) or "Aa" (a text post). Line 1: the
+ * title and the unread dot (unread comments). Line 2: the review status line
+ * ("With Maya · 3 hours ago", "Waiting on you") over the caption on one line,
+ * or the caption on two lines when there is no status. Line 3: the due or
+ * overdue time, the stage tag and the ⋮ (Open, Copy link and the viewer's
+ * moves; its name carries the unread comment count). The whole card opens the
+ * post (onPress); a long-press on touch or a right-click on laptop opens the
+ * same ⋮ menu (useMenuGesture).
  */
 export function PostCard({
   post,
@@ -275,13 +284,10 @@ export function PostCard({
   viewer,
   cover,
   now,
-  showStage = false,
-  inColumn = false,
   timeZone,
 }: PostCardProps) {
   const navigate = useNavigate();
   const toast = useOptionalToast();
-  const hasPoster = post.thumbnailAssetVersionId !== null;
   // Prefer the pretty link (/p/KEY-N); the classic /posts/:id route remains a
   // working fallback when the key has not resolved yet.
   const href =
@@ -310,12 +316,10 @@ export function PostCard({
   };
   const caption = captionPreview(post);
   const stage = post.stage as Stage;
-  const ratio = cardRatio(post);
   const coverKind = cardCoverKind(post, cover);
   const clock = now ?? new Date();
   const status =
     viewer !== undefined ? reviewStatus(stage, post.stage_entered_at, viewer, clock) : null;
-  const reserveStatus = status === null && reservesStatusLine(stage, viewer);
   const canMove =
     onMove !== undefined && (viewer === undefined || hasAllowedMove(viewer.role, stage));
   const copyLink = (): void => {
@@ -330,7 +334,8 @@ export function PostCard({
   // A known role lists its moves in the menu; while it loads, the Move row.
   const directMoves =
     viewer !== undefined && viewer.pending !== true ? moveActions(viewer.role, stage) : [];
-  // The viewer's unread comments on this post (the same rows Activity shows).
+  // The viewer's unread comments on this post (the same rows Activity shows):
+  // the dot on line 1, the count in the ⋮'s name.
   const unreadComments = useEntityUnread('post', post.id);
 
   const menu =
@@ -369,11 +374,11 @@ export function PostCard({
                 : {}),
           })}
           trigger={
-            // The Card's more slot holds it in the title line; its trailing
-            // rule puts the glyph on the card's content edge.
+            // ListCard's line 3 holds it; ActionMenuTrigger's trailing rule puts
+            // the glyph on the card's content edge.
             <ActionMenuTrigger
               type="button"
-              label={`More actions for ${post.title}`}
+              label={cardMenuLabel(post.title, unreadComments)}
               data-post-card-move=""
               draggable={false}
               className="text-fg-3"
@@ -383,73 +388,34 @@ export function PostCard({
       </span>
     ) : undefined;
 
-  // The picture: the workspace platform's one fixed cover box, or the post
-  // placeholder (play glyph) for a video with no poster; none for a text post.
-  const media =
-    coverKind === 'image' ? (
-      <div data-post-card-thumb="" className="relative">
-        <Thumbnail
-          assetVersionId={post.thumbnailAssetVersionId}
-          cache={cache}
-          presignEnabled={presignEnabled}
-          aspect="square"
-          {...(ratio !== null ? { ratio } : {})}
-          fallback={{ kind: 'glyph' }}
-          fallbackTile={
-            <PostPlaceholder kind={postPlaceholderKind(post.format)} size={ICON_SIZE.status} />
-          }
-          alt={post.title}
-        >
-          {post.format === 'carousel' ? (
-            <CarouselBadge />
-          ) : post.format === 'video' && hasPoster ? (
-            <PlayBadge />
-          ) : null}
-        </Thumbnail>
-      </div>
-    ) : coverKind === 'video' ? (
-      <div
-        data-post-card-thumb=""
-        data-post-card-play=""
-        className={cn('flex w-full', ratio === null && 'aspect-square')}
-        {...(ratio !== null ? { style: { aspectRatio: String(ratio) } } : {})}
-      >
-        <PostPlaceholder kind="video" fill size={ICON_SIZE.status} label="Video" />
-      </div>
-    ) : undefined;
+  const { picture, hooks: pictureHooks } = cardPicture(post, coverKind, cache, presignEnabled);
 
-  const stageBadge =
-    showStage && !inColumn && status === null ? (
-      <span data-post-card-stage="" className="flex">
-        <Tag label={stageLabel(stage)} dot={stage} />
-      </span>
-    ) : undefined;
+  // Line 2: the status line over the caption on one line; the caption alone
+  // takes both lines. Captions are plain text (never formatted).
+  const preview =
+    status !== null ? (
+      <>
+        <span data-post-card-status={status.tone} className="block truncate">
+          {status.text}
+        </span>
+        {caption !== null ? (
+          <span data-post-card-caption="" className="block truncate">
+            {caption}
+          </span>
+        ) : null}
+      </>
+    ) : (
+      caption
+    );
 
-  const unread =
-    unreadComments > 0 ? (
-      // Unread comments: the comment glyph and the shared count pill.
-      <span
-        data-post-card-unread={unreadComments}
-        role="img"
-        aria-label={unreadCommentsLabel(unreadComments)}
-        className="inline-flex items-center gap-1 text-fg"
-      >
-        <IconChat size={ICON_SIZE.inline} />
-        <CountBadge count={unreadComments} />
-      </span>
-    ) : undefined;
-
-  // ui/Card: the picture bleeds at the top, the title (two lines at most) with
-  // the ⋯ in the header, the due reading as the meta line, the caption and the
-  // review status in the body, the stage badge and unread count in the footer.
-  // Its height is its content (self-start): a text-only card is short. The
-  // whole card is one tap surface (Card press) that opens the post.
   return (
-    <Card
+    <ListCard
       rootRef={cardRef}
       surface={{
+        'data-post-id': post.id,
         'data-induction': INDUCTION_KEYS.pipelinePostRow,
         'data-induction-post': post.id,
+        ...(unreadComments > 0 ? { 'data-post-card-unread': String(unreadComments) } : {}),
         ...(hasMenu
           ? {
               ...gesture.handlers,
@@ -469,59 +435,30 @@ export function PostCard({
             }
           : {}),
       }}
+      onPress={open}
       press={{
         'aria-label': `Open post ${post.title}`,
         onPointerDown: pressPrefetch,
         onTouchStart: pressPrefetch,
-        onClick: open,
       }}
+      picture={picture}
+      pictureHooks={pictureHooks}
       title={post.title}
-      titleLines={2}
-      {...(menu !== undefined ? { more: menu } : {})}
-      {...(due !== null
+      unread={unreadComments > 0}
+      preview={preview}
+      {...(status === null && caption !== null
+        ? { previewHooks: { 'data-post-card-caption': '' } }
+        : {})}
+      {...(due !== null && due.text !== ''
         ? {
-            meta: (
-              <span
-                data-post-card-due={due.overdue ? 'overdue' : ''}
-                className={due.overdue ? 'text-bad' : undefined}
-              >
-                {due.text}
-              </span>
-            ),
+            time: due.text,
+            timeBad: due.overdue,
+            timeHooks: { 'data-post-card-due': due.overdue ? 'overdue' : '' },
           }
         : {})}
-      {...(media !== undefined ? { media } : {})}
-      {...(stageBadge !== undefined ? { badge: stageBadge } : {})}
-      {...(unread !== undefined ? { footerTrailing: unread } : {})}
-      className="mv-tint"
-    >
-      {caption !== null ? (
-        <p data-post-card-caption="" className={textRole('secondary', '[overflow-wrap:anywhere]')}>
-          {caption}
-        </p>
-      ) : null}
-      {status !== null ? (
-        // A creator's line shows the dot and when it entered review only
-        // ("Mon", formatWhen); the full phrase stays as its title and aria-label.
-        <div
-          data-post-card-status={status.tone}
-          {...(status.tone === 'with' ? { title: status.text, 'aria-label': status.text } : {})}
-          className={cn(
-            'flex h-4 min-w-0 items-center gap-2 text-sm',
-            status.tone === 'you' ? 'font-semibold text-accent' : 'text-fg-2',
-          )}
-        >
-          {status.tone === 'you' ? (
-            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-accent" />
-          ) : inColumn ? null : (
-            <StatusDot stage={stage} />
-          )}
-          <span className="truncate">{status.tone === 'with' ? status.when : status.text}</span>
-        </div>
-      ) : reserveStatus ? (
-        // The role is still loading: hold the status line's height.
-        <div aria-hidden data-post-card-status-pending="" className="h-4" />
-      ) : null}
-    </Card>
+      tag={stageLabel(stage)}
+      tagHooks={{ 'data-post-card-stage': stage }}
+      {...(menu !== undefined ? { menu } : {})}
+    />
   );
 }

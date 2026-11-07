@@ -23,7 +23,8 @@ import type {
   TrafficData,
   UsersData,
 } from '@/lib/cockpit/types';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { Bone, BoxSkeleton } from '@/lib/motion';
 
 export const AGORA_CONSOLE_URL = 'https://console.agora.io';
@@ -165,6 +166,7 @@ function sentryStatus(substatus: string | null): 'New' | 'Ongoing' | 'Back again
 }
 
 export function ErrorsTab({ source }: { source: Source<{ issues: SentryIssue[] }> | undefined }) {
+  const now = new Date(useMinuteClock());
   return (
     <WithSource source={source}>
       {(d) =>
@@ -192,7 +194,7 @@ export function ErrorsTab({ source }: { source: Source<{ issues: SentryIssue[] }
                     </span>
                     <span className="truncate text-sm text-fg-3">
                       {issue.culprit} · {countText(issue.count)} times ·{' '}
-                      {formatWhen(issue.lastSeen)}
+                      {formatRelative(issue.lastSeen, now)}
                     </span>
                   </PressableRow>
                 </li>

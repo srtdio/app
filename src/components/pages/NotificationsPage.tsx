@@ -18,7 +18,8 @@ import {
   IconPlan,
 } from '@/components/ui/icons';
 import { ActivityCard, UpcomingCard } from '@/components/pages/activity/ActivityCard';
-import { LIST_CARD_STACK } from '@/components/ui/ListCard';
+import { LIST_CARD_GRID } from '@/components/ui/ListCard';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
 import { cn } from '@/lib/cn';
 import { Text, textRole } from '@/components/ui/Text';
@@ -144,9 +145,6 @@ function optimisticSnoozeUntil(kind: SnoozeKind, nowMs: number): string | null {
       return null;
   }
 }
-
-/** How often relative times ("5m") re-render while the page is visible. */
-const TIME_TICK_MS = 60_000;
 
 /**
  * How a feed load lands: 'reset' clears the list first (a chip, sort or
@@ -300,7 +298,12 @@ export function NotificationsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  // The list's one clock: the shared minute clock (useMinuteClock, one interval
+  // app-wide, no timer per card) ages every card's "5 min ago"; a load stamps
+  // the instant it landed so a fresh page never reads an older minute.
+  const clockMs = useMinuteClock();
+  const [loadedMs, setNowMs] = useState(() => Date.now());
+  const nowMs = Math.max(clockMs, loadedMs);
   const [mentionCount, setMentionCount] = useState(
     () =>
       (userId !== null && workspaceId !== null
@@ -645,31 +648,14 @@ export function NotificationsPage() {
     return () => window.removeEventListener(INBOX_CHANGED_EVENT, onChanged);
   }, [state, loadActivity, loadMentionCount]);
 
-  // Relative times keep moving: a tick every minute while the page is visible,
-  // stopped while hidden and refreshed on the return.
+  // Relative times keep moving on the shared minute clock (clockMs above); the
+  // return to a hidden tab re-stamps at once so nothing reads a stale minute.
   useEffect(() => {
-    let timer: number | null = null;
-    const start = (): void => {
-      if (timer === null) timer = window.setInterval(() => setNowMs(Date.now()), TIME_TICK_MS);
-    };
-    const stop = (): void => {
-      if (timer !== null) window.clearInterval(timer);
-      timer = null;
-    };
     const onVisibility = (): void => {
-      if (document.hidden) {
-        stop();
-        return;
-      }
-      setNowMs(Date.now());
-      start();
+      if (!document.hidden) setNowMs(Date.now());
     };
-    if (!document.hidden) start();
     document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      stop();
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
   // Today and Yesterday roll over at midnight in the workspace timezone.
@@ -1151,7 +1137,7 @@ export function NotificationsPage() {
         ) : visibleUpcoming.length === 0 ? (
           <EmptyState icon={<IconCalendarClock size={ICON_SIZE.status} />} title={UPCOMING_EMPTY} />
         ) : (
-          <div data-upcoming-list="" className={cn('mt-4 pb-6', LIST_CARD_STACK, GUTTER)}>
+          <div data-upcoming-list="" className={cn('mt-4 pb-6', LIST_CARD_GRID, GUTTER)}>
             {visibleUpcoming.map((item) => (
               <UpcomingCard
                 key={item.id}
@@ -1227,7 +1213,7 @@ export function NotificationsPage() {
                     </div>
                   ) : null}
                 </div>
-                <div className={cn(LIST_CARD_STACK, GUTTER)}>
+                <div data-activity-list="" className={cn(LIST_CARD_GRID, GUTTER)}>
                   {bucket.groups.map((group, groupIndex) => {
                     const card = (
                       <ActivityCard

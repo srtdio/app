@@ -159,7 +159,7 @@ describe('grouping and day lines', () => {
     ]);
   });
 
-  it('a day line before the first comment and each new day: Today, Yesterday, then the weekday', () => {
+  it('a day line before the first comment and each new day: Today, Yesterday, then weekday + day', () => {
     const rows = planThreadRows(
       [
         shown({ id: 'a', createdAt: '2026-10-28T09:00:00Z' }),
@@ -172,7 +172,7 @@ describe('grouping and day lines', () => {
     );
     expect(
       rows.filter((r) => r.kind === 'day').map((r) => (r.kind === 'day' ? r.label : '')),
-    ).toEqual(['Wed', 'Yesterday', 'Today']);
+    ).toEqual(['Wed 28 Oct', 'Yesterday', 'Today']);
     // A day line ends a run: b heads its own run after the line.
     const b = rows.find((r) => r.kind === 'comment' && r.comment.id === 'b');
     expect(b?.kind === 'comment' && b.head).toBe(true);

@@ -32,7 +32,8 @@ import { readPostsByIds } from '@srtdio/posts';
 import type { ChatProfile } from '@/lib/chat-reads';
 import { readBriefsByIds } from '@/lib/chat/briefs';
 import { readPlanTitles } from '@/lib/chat/plans';
-import { formatChatTime, formatDueDate } from '@/lib/time';
+import { formatDueDate, formatRelative } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { WriteResult } from '@/lib/chat/record';
 import type { ThreadMessage } from '@/lib/chat/thread';
@@ -363,7 +364,7 @@ export interface MarksListProps {
   messageFor: (messageId: string) => ThreadMessage | undefined;
   profiles: Map<string, ChatProfile>;
   currentUserId: string;
-  /** For tests: the zone mark times render in. The app passes none (the viewer's device zone). */
+  /** Unused by mark times (relative, formatRelative); kept for callers. */
   timeZone?: string | undefined;
   onJump: (messageId: string) => void;
   onResolve: (messageId: string) => Promise<WriteResult>;
@@ -400,6 +401,7 @@ export function MarksList(props: MarksListProps): ReactElement {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
+  const now = new Date(useMinuteClock());
   const { messageFor, profiles } = props;
 
   // A closed sheet or a tab switch drops any half-asked confirm.
@@ -477,8 +479,8 @@ export function MarksList(props: MarksListProps): ReactElement {
                       : undefined) ?? 'Member');
             const when =
               message !== undefined && message.createdAt !== ''
-                ? formatChatTime(message.createdAt, undefined, props.timeZone)
-                : formatChatTime(mark.markedAt, undefined, props.timeZone);
+                ? formatRelative(message.createdAt, now)
+                : formatRelative(mark.markedAt, now);
             return (
               <MarkSheetRow
                 key={mark.messageId}
@@ -492,7 +494,7 @@ export function MarksList(props: MarksListProps): ReactElement {
                         name: resolverName(mark, props.currentUserId, displayNameOf),
                         when:
                           mark.resolvedAt !== null
-                            ? formatChatTime(mark.resolvedAt, undefined, props.timeZone)
+                            ? formatRelative(mark.resolvedAt, now)
                             : '',
                       },
                     }

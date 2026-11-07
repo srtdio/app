@@ -58,7 +58,8 @@ import {
   type SharedCardCache,
   type SharedCardReaders,
 } from '@/lib/chat/shared-cards';
-import { formatDueDate, formatWhen } from '@/lib/time';
+import { formatDueDate, formatRelative } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
@@ -582,19 +583,19 @@ export function SharedPostCards({
 
 /**
  * An approved card whose approver name is not loaded (none on record, or the
- * name read failed) reads "Approved · <when>" (formatWhen) from approved_at, never a
- * blank name. Other footers pass through. `timeZone` is for tests. Pure.
+ * name read failed) reads "Approved · 3 days ago" (formatRelative) from
+ * approved_at, never a blank name. Other footers pass through. Pure.
  */
 export function approvedWithoutName<F extends { state: string }>(
   footer: F,
   post: Pick<PostCardRow, 'stage' | 'approved_at'>,
   approverName: string | null,
-  timeZone?: string,
+  now: Date = new Date(),
 ): F {
   if (post.stage !== 'approved' || approverName !== null || post.approved_at === null) {
     return footer;
   }
-  const at = formatWhen(post.approved_at, undefined, timeZone);
+  const at = formatRelative(post.approved_at, now);
   if (at === '') return footer;
   return { ...footer, state: `Approved · ${at}` };
 }
@@ -851,13 +852,10 @@ function PostCardItem(
 ): ReactElement {
   const { view, side, timeZone } = props;
   const { post } = view;
+  const nowMs = useMinuteClock();
+  const now = new Date(nowMs);
   const approver = approverLabel(view.approverName, view.approverRole, props.brand ?? null);
-  const footer = approvedWithoutName(
-    cardFooter(post, approver, side, timeZone),
-    post,
-    approver,
-    timeZone,
-  );
+  const footer = approvedWithoutName(cardFooter(post, approver, side, now), post, approver, now);
   const target =
     post.target_date !== null ? formatDueDate(post.target_date, props.workspaceZone) : '';
   // The media box is the workspace platform's frame, whatever the post holds:

@@ -45,7 +45,8 @@ import {
 } from '@/lib/chat/chat-store';
 import { deleteChatFailedMessage, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { sortChannelsByRecency } from '@/lib/chat/sort-conversations';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { draftText, draftsVersion, subscribeDrafts } from '@/lib/chat/drafts';
 import { mentionNamesIn, resolveMentionPreview, splitAllMentions } from '@/lib/chat/mentions';
 import { leaveSelectionThen } from '@/lib/chat/forward';
@@ -420,7 +421,7 @@ export function previewLine(summary: ConversationSummary): string {
 /**
  * The tile's accessible name: the chat, its unread count, the preview (or
  * draft) and the time, so a screen reader hears what a sighted user sees.
- * "Open Priya, 3 unread, Draft: see you, 10:42". Pure.
+ * "Open Priya, 3 unread, Draft: see you, 5 min ago". Pure.
  */
 export function channelTileLabel(props: {
   title: string;
@@ -593,9 +594,8 @@ export function channelRowParts(props: {
   // A media line ("Photo", "Voice message") leads with its glyph, as in the quote.
   const previewIcon = hasMessage ? summaryIconOfLine(summary.lastMessageText) : null;
   const draft = props.draft ?? null;
-  const time = hasMessage
-    ? formatWhen(summary.lastMessageTs, new Date(props.nowMs), props.timeZone)
-    : '';
+  // Line 3: how long ago the last message landed ("just now", "5 min ago").
+  const time = hasMessage ? formatRelative(summary.lastMessageTs, new Date(props.nowMs)) : '';
   const preview =
     draft !== null ? (
       <span data-draft-preview="">
@@ -854,7 +854,7 @@ export function ChannelCard(props: {
 /**
  * The Personal notes card: a ui/ListCard above Groups, the notebook icon as
  * its picture, "Personal notes" over the last note (or "Only you can see
- * this"), the last-edited date on line 3. Paints the same in every list state
+ * this"), how long ago the last note landed on line 3. Paints the same in every list state
  * (loading, error, ready) from the session alone, so the first paint is
  * final. No motion. Not selectable in Select mode (inert). Hook-free so it is
  * unit tested.
@@ -871,7 +871,7 @@ export function notesTile(props: {
   onSelect: (channel: ChannelSummary) => void;
 }): ReactElement {
   const { notes, summary } = props;
-  const last = notesLastLine(summary, props.nowMs ?? 0, props.timeZone);
+  const last = notesLastLine(summary, props.nowMs ?? 0);
   const name = chatDisplayName(notes);
   return (
     <div className={cn('pb-2', CHAT_HOME_EDGE, NO_TOUCH_SELECT)}>
@@ -906,12 +906,11 @@ export function notesTile(props: {
 export function notesLastLine(
   summary: ConversationSummary | undefined,
   nowMs: number,
-  timeZone?: string,
 ): { preview: string; time: string } | null {
   if (summary === undefined || summary.lastMessageTs <= 0) return null;
   const preview = stripFormat(summary.lastMessageText);
   if (preview === '') return null;
-  return { preview, time: formatWhen(summary.lastMessageTs, new Date(nowMs), timeZone) };
+  return { preview, time: formatRelative(summary.lastMessageTs, new Date(nowMs)) };
 }
 
 /** A chat home chip: Starred, or one of the message search kinds. */
@@ -1391,7 +1390,9 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     [props.onSelect],
   );
   const onOpenStarred = props.onOpenStarred;
-  const nowMs = Date.now();
+  // The list's one clock: every card's "5 min ago" ages together, once a
+  // minute, from one shared interval (no timer per card).
+  const nowMs = useMinuteClock();
   const searchResults =
     kind === 'starred' ? (
       <div data-starred-home="" className="px-4 pb-4 pt-1">

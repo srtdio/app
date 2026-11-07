@@ -8,12 +8,12 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
 }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { PostCard, cardDue } from '@/components/pages/PostCard';
+import { PostCard, cardDue, cardMenuLabel } from '@/components/pages/PostCard';
 import type { PostCardProps } from '@/components/pages/PostCard';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { PipelinePost } from '@srtdio/posts';
 
-// The board card is rendered to static markup (node SSR, no DOM dependency):
+// The Pipeline card (ui/ListCard) is rendered to static markup (node SSR, no DOM dependency):
 // useState initializers run (so a warm cache.peek hit shows the image) while
 // effects do not, which is exactly the lazy/off-screen state. The presign gate
 // is asserted via the spy counts on the injected cache.
@@ -73,223 +73,49 @@ function render(props: Pick<PostCardProps, 'post' | 'cache' | 'presignEnabled'>)
   );
 }
 
-describe('PostCard thumbnail frame', () => {
-  it('(a) renders the small copy when a thumbnail version is present and presign is enabled', () => {
-    const { cache: base } = makeCache('https://cdn.example/full.jpg');
-    const peekThumbnail = vi.fn(() => ({
-      url: 'https://cdn.example/thumb.jpg',
-      expiresAt: Date.now() + 3_600_000,
-    }));
-    const cache = { ...base, peekThumbnail } as unknown as PresignCache;
-    const out = render({
-      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
-      cache,
-      presignEnabled: true,
-    });
-    expect(out).toContain('<img');
-    expect(out).toContain('https://cdn.example/thumb.jpg');
-    expect(out).not.toContain('full.jpg');
-    expect(out).toContain('object-cover');
-    expect(peekThumbnail).toHaveBeenCalledWith('av1');
-  });
+function renderWith(props: Partial<PostCardProps> & Pick<PostCardProps, 'post'>): string {
+  const { cache } = makeCache(null);
+  return renderToStaticMarkup(
+    <MemoryRouter>
+      <PostCard cache={cache} presignEnabled={false} {...props} />
+    </MemoryRouter>,
+  );
+}
 
-  it('(b) a text-only post has no cover box: the card starts at the title', () => {
-    const { cache } = makeCache(null);
-    const out = render({
-      post: makePost({
-        thumbnailAssetVersionId: null,
-        format: 'text',
-        caption: 'Launch day is here',
-      }),
-      cache,
-      presignEnabled: true,
-    });
-    expect(out).not.toContain('data-post-card-thumb');
-    expect(out).not.toContain('data-post-card-play');
-    expect(out).not.toContain('<img');
-    expect(out).not.toContain('bg-panel-3');
-    // The title is the card's first content; the caption reads under it.
-    expect(out.indexOf('data-card-title')).toBeLessThan(out.indexOf('data-post-card-caption'));
-    expect(out).toContain('Launch day is here');
-    // A single image post with no upload yet is no-media too: no grey box.
-    const noUpload = render({
-      post: makePost({ thumbnailAssetVersionId: null, format: 'single_image' }),
-      cache,
-      presignEnabled: true,
-    });
-    expect(noUpload).not.toContain('data-post-card-thumb');
-  });
+/** The opening tag of the first element carrying `hook`. */
+function tag(out: string, hook: string): string {
+  return new RegExp(`<[a-z]+[^>]*${hook}[^>]*>`).exec(out)?.[0] ?? '';
+}
 
-  it('(c) a video with no poster shows a centred play glyph on bg-panel-3 at the fixed ratio', () => {
-    const { cache } = makeCache(null);
-    for (const format of ['video', 'reel']) {
-      const out = render({
-        post: makePost({ thumbnailAssetVersionId: null, format, caption: null }),
-        cache,
-        presignEnabled: true,
-      });
-      const box = /<div[^>]*data-post-card-play=""[^>]*>/.exec(out)?.[0] ?? '';
-      // Instagram's one fixed box (4:5), the same for a reel as for a photo.
-      expect(box).toContain('aspect-ratio:0.8');
-      // The one post placeholder (ui/PostPlaceholder): the play glyph, filled.
-      const glyph = /<span[^>]*data-post-placeholder="video"[^>]*>/.exec(out)?.[0] ?? '';
-      expect(glyph).toContain('bg-panel-3');
-      expect(glyph).toContain('items-center justify-center');
-      expect(out).toContain('aria-label="Video"');
-      expect(out).not.toContain('<img');
-    }
-  });
+/** The text of the first element carrying `hook` (no nested tags). */
+function textOf(out: string, hook: string): string | undefined {
+  return new RegExp(`<[a-z]+[^>]*${hook}[^>]*>([^<]*)<`).exec(out)?.[1];
+}
 
-  it('(d) never touches the cache and shows the fallback tile when presign is disabled', () => {
-    const { cache, peek, resolve } = makeCache('https://cdn.example/thumb.jpg');
-    const out = render({
-      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
-      cache,
-      presignEnabled: false,
-    });
-    expect(resolve).not.toHaveBeenCalled();
-    expect(peek).not.toHaveBeenCalled();
-    expect(out).not.toContain('<img');
-    // The one post placeholder stands in for the picture ("Aa" for a photo post).
-    expect(out).toContain('data-post-placeholder="text"');
-  });
+const NOW = new Date('2026-10-23T12:00:00Z');
 
-  it('(structural) the meta line is a single fixed-height row with no format glyph and no platform mark', () => {
-    const { cache } = makeCache(null);
-    const out = render({
-      post: makePost({ platform: 'instagram', format: 'single_image', target_date: null }),
-      cache,
-      presignEnabled: true,
-    });
-    // ui/Card: no footer when there is nothing for it (no stage, no unread).
-    expect(out).not.toContain('data-card-footer');
-    expect(out).not.toContain('flex-wrap');
-    expect(out).not.toContain('min-w-0 shrink truncate');
-    // The workspace has one platform: the card carries no platform mark.
-    expect(out).not.toContain('aria-label="instagram"');
-    // The card root is ui/Card: content height (self-start), never h-full.
-    expect(out).toContain('data-card=""');
-    expect(out).toContain('self-start');
-    expect(out).not.toContain('h-full min-w-0 flex-col rounded-xl');
-  });
-
-  it('renders the target date on the meta line when present', () => {
-    const { cache } = makeCache(null);
-    const out = renderToStaticMarkup(
-      <MemoryRouter>
-        <PostCard
-          post={makePost({ target_date: '2026-03-15', format: 'single_image' })}
-          cache={cache}
-          presignEnabled
-          now={new Date('2026-03-01T00:00:00Z')}
-        />
-      </MemoryRouter>,
-    );
-    expect(out).toContain('tabular-nums');
-    // Dates render mono, like the chat list times (the Card meta line).
-    expect(out).toMatch(/class="[^"]*font-mono[^"]*tabular-nums[^"]*"><span data-post-card-due=""/);
-    // The due line reads "Due {d MMM}", day first, no year.
-    expect(out).toContain('Due 15 Mar');
-    expect(out).toContain('data-post-card-due');
-  });
-
-  it('shows the carousel badge on a carousel post', () => {
-    const { cache } = makeCache(null);
-    const out = render({
-      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'carousel', caption: null }),
-      cache,
-      presignEnabled: true,
-    });
-    expect(out).toContain('aria-label="Carousel"');
-  });
-
-  it('lets a tap on the thumbnail reach the Open post button underneath', () => {
-    const { cache } = makeCache('https://cdn.example/thumb.jpg');
-    const out = render({
-      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
-      cache,
-      presignEnabled: true,
-    });
-    // The Card's bleed media wrapper is pointer-events-none, after the
-    // full-bleed absolute press surface, so the surface still takes the tap.
-    expect(out).toMatch(
-      /data-card-media="bleed" class="[^"]*pointer-events-none[^"]*"><div data-post-card-thumb=""/,
-    );
-    expect(out.indexOf('aria-label="Open post Post title"')).toBeLessThan(
-      out.indexOf('data-post-card-thumb'),
-    );
-    // The induction anchors stay on the card root.
-    expect(out).toContain('data-induction="pipeline-post-row" data-induction-post="p1"');
-  });
-
-  it('shows the play badge on a video post that has a poster thumbnail', () => {
-    const { cache } = makeCache(null);
-    const out = render({
-      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'video', caption: null }),
-      cache,
-      presignEnabled: false,
-    });
-    expect(out).toContain('aria-label="Video"');
-  });
-});
-
-describe('W4 PostCard fixes', () => {
-  function renderWith(props: Partial<PostCardProps> & Pick<PostCardProps, 'post'>): string {
-    const { cache } = makeCache(null);
-    return renderToStaticMarkup(
-      <MemoryRouter>
-        <PostCard cache={cache} presignEnabled={false} {...props} />
-      </MemoryRouter>,
-    );
-  }
-
-  it('fix 1: a card with onMove carries a 44x44 ⋯ (the ActionMenu trigger) above the open overlay', () => {
-    const out = renderWith({ post: makePost({}), onMove: () => {} });
-    expect(out).toContain('aria-label="More actions for Post title"');
-    const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(button).toContain('h-11');
-    expect(button).toContain('w-11');
-    // Card more slot: above the press surface.
-    expect(out).toMatch(/data-card-more="" class="[^"]*z-raised/);
-    // No onMove, no button.
-    expect(renderWith({ post: makePost({}) })).not.toContain('data-post-card-move');
-  });
-
-  it('fix 5: showStage puts the stage Tag (dot and label) in the card footer', () => {
-    const out = renderWith({ post: makePost({ stage: 'review' }), showStage: true });
-    expect(out).toContain('data-post-card-stage');
-    expect(out).toContain('bg-stage-review');
-    expect(out).toContain('Review');
-    expect(renderWith({ post: makePost({ stage: 'review' }) })).not.toContain(
-      'data-post-card-stage',
-    );
-  });
-
-  it('fix 9: the title wraps to two lines instead of truncating', () => {
+describe('PostCard is ui/ListCard', () => {
+  it('renders the ListCard frame with the post hooks on its root, no hand-built frame', () => {
     const out = renderWith({ post: makePost({}) });
-    const title = /<span[^>]*data-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(title).toContain('line-clamp-2');
-    expect(title).not.toContain('truncate');
+    const root = tag(out, 'data-list-card=""');
+    expect(root).toContain('data-post-id="p1"');
+    // The induction anchors stay on the card root.
+    expect(root).toContain('data-induction="pipeline-post-row"');
+    expect(root).toContain('data-induction-post="p1"');
+    expect(out).not.toContain('data-card=""');
+    // The whole card is one button that opens the post.
+    expect(out).toContain('aria-label="Open post Post title"');
+    expect(tag(out, 'data-list-card-press=""')).toContain('<button');
   });
-});
 
-describe('pipeline card shows no KEY-N code', () => {
-  it('names the post by title only, with the workspace key known, in every stage and format', () => {
-    const { cache } = makeCache(null);
+  it('never shows a KEY-N code, in every stage and format', () => {
     for (const stage of ['draft', 'review', 'approved', 'parked', 'rejected']) {
       for (const format of ['text', 'carousel', 'reel']) {
-        const out = renderToStaticMarkup(
-          <MemoryRouter>
-            <PostCard
-              post={makePost({ number: 12, stage, format, title: 'Launch teaser' })}
-              cache={cache}
-              presignEnabled={false}
-              workspaceKey="gbl"
-              showStage
-              onMove={() => {}}
-            />
-          </MemoryRouter>,
-        );
+        const out = renderWith({
+          post: makePost({ number: 12, stage, format, title: 'Launch teaser' }),
+          workspaceKey: 'gbl',
+          onMove: () => {},
+        });
         expect(out).toContain('Launch teaser');
         expect(out).not.toContain('GBL-12');
         expect(out.replace(/<[^>]*>/g, ' ')).not.toMatch(/\b[A-Z]{2,}-\d+\b/);
@@ -299,237 +125,223 @@ describe('pipeline card shows no KEY-N code', () => {
   });
 });
 
-describe('E: Pipeline card polish', () => {
-  function renderWith(props: Partial<PostCardProps> & Pick<PostCardProps, 'post'>): string {
-    const { cache } = makeCache(null);
-    return renderToStaticMarkup(
-      <MemoryRouter>
-        <PostCard cache={cache} presignEnabled={false} {...props} />
-      </MemoryRouter>,
-    );
-  }
-  const NOW = new Date('2026-10-23T12:00:00Z');
-
-  it('the ⋯ is a plain glyph at the right end of the title line (Card more), never on the picture', () => {
-    const out = renderWith({
-      post: makePost({
-        target_date: '2026-11-02',
-        format: 'carousel',
-        thumbnailAssetVersionId: 'av1',
-      }),
-      onMove: () => {},
-      now: NOW,
-    });
-    const titleAt = out.indexOf('data-card-title');
-    const dueAt = out.indexOf('data-post-card-due');
-    const moveAt = out.indexOf('data-post-card-move');
-    expect(titleAt).toBeGreaterThan(-1);
-    // The ⋯ ends the title line (Card more), before the due meta line.
-    expect(moveAt).toBeGreaterThan(titleAt);
-    expect(dueAt).toBeGreaterThan(moveAt);
-    const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(out).toMatch(/data-card-more="" class="[^"]*-my-3/);
-    expect(button).toContain('h-11 w-11');
-    // The trailing rule: the glyph sits on the card's content edge.
-    expect(button).toContain('-mr-3');
-    expect(button).toContain('text-fg-3');
-    // No resting fill (the shared IconButton only tints on hover).
-    expect(button).not.toMatch(/[\s"]bg-/);
-    // Nothing of it on the picture; the carousel badge stays there.
-    const thumb = out.slice(out.indexOf('data-post-card-thumb'), out.indexOf('data-card-header'));
-    expect(thumb).not.toContain('data-post-card-move');
-    expect(thumb).toContain('aria-label="Carousel"');
-  });
-
-  it('a past due date reads overdue in the bad tone, on one line that never wraps', () => {
-    expect(cardDue('2026-10-12', 'review', 'UTC', NOW)).toEqual({
-      text: 'Overdue · 12 Oct',
-      overdue: true,
-    });
-    expect(cardDue('2026-05-20', 'draft', 'UTC', NOW)).toEqual({
-      text: 'Overdue 5 months',
-      overdue: true,
-    });
-    // Today and ahead stay a due line; an approved post is done, never overdue.
-    expect(cardDue('2026-10-23', 'review', 'UTC', NOW)).toEqual({
-      text: 'Due 23 Oct',
-      overdue: false,
-    });
-    expect(cardDue('2026-11-02', 'review', 'UTC', NOW)).toEqual({
-      text: 'Due 2 Nov',
-      overdue: false,
-    });
-    expect(cardDue('2026-10-12', 'approved', 'UTC', NOW).overdue).toBe(false);
-
-    const out = renderWith({
-      post: makePost({ stage: 'review', target_date: '2026-10-12' }),
-      now: NOW,
-    });
-    const due = /<span[^>]*data-post-card-due="overdue"[^>]*>([^<]*)<\/span>/.exec(out);
-    expect(due?.[1]).toBe('Overdue · 12 Oct');
-    expect(due?.[0]).toContain('text-bad');
-    // One line: the Card meta line truncates.
-    expect(out).toMatch(/class="[^"]*truncate[^"]*"><span data-post-card-due="overdue"/);
-    const upcoming = renderWith({ post: makePost({ target_date: '2026-11-02' }), now: NOW });
-    expect(upcoming).not.toContain('text-bad');
-  });
-
-  it('the review status line shows the dot and "15 Jun" (formatWhen) only; the full phrase is its title and aria-label', () => {
-    const out = renderWith({
-      post: makePost({ stage: 'review', stage_entered_at: '2026-06-15T12:00:00Z' }),
-      viewer: { role: 'agency', approverFirstNames: ['Meera', 'Arjun'] },
-      now: NOW,
-    });
-    const line = /<div[^>]*data-post-card-status="with"[^>]*>(.*?)<\/div>/.exec(out);
-    expect(line?.[0]).toContain('title="With approvers · 15 Jun"');
-    expect(line?.[0]).toContain('aria-label="With approvers · 15 Jun"');
-    expect(line?.[1]).toContain('bg-stage-review');
-    expect(line?.[1]).toContain('>15 Jun</span>');
-    expect(line?.[1]).not.toContain('ago');
-    expect(line?.[1]).not.toContain('With approvers');
-  });
-
-  it('every card is content-tall (Card self-start) and the title holds at most two lines', () => {
-    const out = renderWith({ post: makePost({}) });
-    expect(out).toContain('self-start');
-    expect(out).not.toContain('h-full min-w-0 flex-col');
-    const title = /<span[^>]*data-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(title).toContain('line-clamp-2');
-    expect(title).not.toContain('min-h-[2.75em]');
-  });
-
-  it('in a kanban column the card never repeats the stage name or its dot', () => {
-    const viewer = { role: 'agency', approverFirstNames: [] };
-    for (const stage of ['draft', 'review', 'approved', 'parked', 'rejected']) {
-      const out = renderWith({
-        post: makePost({ stage }),
-        inColumn: true,
-        showStage: true,
-        viewer,
-      });
-      expect(out).not.toContain('data-post-card-stage');
-      expect(out).not.toContain(`bg-stage-${stage}`);
-    }
-    // Outside a column the review status line keeps its dot.
-    const free = renderWith({ post: makePost({ stage: 'review' }), viewer });
-    expect(free).toContain('bg-stage-review');
-  });
-
-  it('a review card holds its status line height while the role loads', () => {
-    const pending = renderWith({
-      post: makePost({ stage: 'review' }),
-      viewer: { role: null, approverFirstNames: [], pending: true },
-    });
-    expect(pending).toMatch(
-      /<div aria-hidden="true" data-post-card-status-pending="" class="h-4"><\/div>/,
-    );
-    const status = renderWith({
-      post: makePost({ stage: 'review' }),
-      viewer: { role: 'agency', approverFirstNames: [] },
-    });
-    expect(status).toContain('data-post-card-status="with"');
-    expect(status).not.toContain('data-post-card-status-pending');
-    // Only review cards carry a status line, so only they reserve one.
-    const draft = renderWith({
-      post: makePost({ stage: 'draft' }),
-      viewer: { role: null, approverFirstNames: [], pending: true },
-    });
-    expect(draft).not.toContain('data-post-card-status-pending');
-  });
-});
-
-describe('Pipeline polish: one fixed cover box per platform', () => {
-  function renderWith(props: Partial<PostCardProps> & Pick<PostCardProps, 'post'>): string {
-    const { cache } = makeCache(null);
-    return renderToStaticMarkup(
-      <MemoryRouter>
-        <PostCard cache={cache} presignEnabled={false} {...props} />
-      </MemoryRouter>,
-    );
-  }
-  function box(out: string): string {
-    const at = out.indexOf('data-post-card-thumb');
-    return /<div[^>]*>/.exec(out.slice(out.indexOf('<div', at + 1)))?.[0] ?? '';
-  }
-
-  it('portrait and landscape media get the same cover box', () => {
-    const post = makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' });
-    const portrait = renderWith({
-      post,
-      cover: { assetVersionId: 'av1', kind: 'image', width: 1080, height: 1350 },
-    });
-    const landscape = renderWith({
-      post,
-      cover: { assetVersionId: 'av1', kind: 'image', width: 3000, height: 1000 },
-    });
-    const video = renderWith({
-      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'reel' }),
-      cover: { assetVersionId: 'av2', kind: 'video', width: 1080, height: 1920 },
-    });
-    expect(box(portrait)).toContain('aspect-ratio:0.8');
-    expect(box(landscape)).toBe(box(portrait));
-    expect(box(video)).toBe(box(portrait));
-  });
-
-  it('a video post with a poster keeps the picture and its play badge', () => {
-    const out = renderWith({
-      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'video' }),
-    });
-    expect(out).toContain('data-post-card-thumb');
-    expect(out).not.toContain('data-post-card-play');
-    expect(out).toContain('aria-label="Video"');
-  });
-});
-
-describe('PostCard hover keeps the content visible', () => {
-  // The Open post button is absolute inset-0 and fills panel-2 on hover; the
-  // cover and the body must be positioned so they paint above it, and pass
-  // taps through to it. Only the ⋯ menu takes pointer events back.
-  const media = (out: string): string =>
-    /<div[^>]*data-card-media="bleed"[^>]*>/.exec(out)?.[0] ?? '';
-
-  it('the body is relative and pointer-events-none', () => {
-    const { cache } = makeCache(null);
-    const out = render({ post: makePost({ caption: 'Hello' }), cache, presignEnabled: true });
-    const body = /<div class="([^"]*)"><div data-card-header=""/.exec(out)?.[1] ?? '';
-    expect(body).toMatch(/\brelative\b/);
-    expect(body).toContain('pointer-events-none');
-  });
-
-  it('the image and the video cover wrappers are relative and pointer-events-none', () => {
+describe('PostCard picture', () => {
+  it('renders the small copy when a thumbnail version is present and presign is enabled', () => {
     const { cache: base } = makeCache('https://cdn.example/full.jpg');
     const peekThumbnail = vi.fn(() => ({
       url: 'https://cdn.example/thumb.jpg',
       expiresAt: Date.now() + 3_600_000,
     }));
     const cache = { ...base, peekThumbnail } as unknown as PresignCache;
-    const image = media(
-      render({
-        post: makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
-        cache,
-        presignEnabled: true,
-      }),
-    );
-    const video = media(
-      render({
-        post: makePost({ thumbnailAssetVersionId: null, format: 'video' }),
-        cache: makeCache(null).cache,
-        presignEnabled: true,
-      }),
-    );
-    for (const wrapper of [image, video]) {
-      expect(wrapper).not.toBe('');
-      expect(wrapper).toMatch(/\brelative\b/);
-      expect(wrapper).toContain('pointer-events-none');
+    const out = render({
+      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
+      cache,
+      presignEnabled: true,
+    });
+    expect(tag(out, 'data-list-card-picture="image"')).toContain('data-post-card-thumb=""');
+    expect(out).toContain('<img');
+    expect(out).toContain('https://cdn.example/thumb.jpg');
+    expect(out).not.toContain('full.jpg');
+    expect(peekThumbnail).toHaveBeenCalledWith('av1');
+  });
+
+  it('a text post (or a photo post with no upload yet) shows the "Aa" placeholder', () => {
+    for (const format of ['text', 'single_image']) {
+      const out = renderWith({ post: makePost({ thumbnailAssetVersionId: null, format }) });
+      expect(out).toContain('data-list-card-picture="placeholder"');
+      expect(out).toContain('data-post-placeholder="text"');
+      expect(out).toContain('>Aa<');
+      expect(out).not.toContain('data-post-card-thumb');
+      expect(out).not.toContain('<img');
     }
   });
 
-  it('the ⋯ menu wrapper and trigger take pointer events back', () => {
+  it('a video with no poster shows the play placeholder', () => {
+    for (const format of ['video', 'reel']) {
+      const out = renderWith({ post: makePost({ thumbnailAssetVersionId: null, format }) });
+      expect(tag(out, 'data-list-card-picture="placeholder"')).toContain('data-post-card-play=""');
+      expect(out).toContain('data-post-placeholder="video"');
+      expect(out).not.toContain('<img');
+    }
+    // A text-format post whose first media is a video reads as video too.
+    const fromCover = renderWith({
+      post: makePost({ format: 'text' }),
+      cover: { assetVersionId: 'av2', kind: 'video', width: 1080, height: 1920 },
+    });
+    expect(fromCover).toContain('data-post-placeholder="video"');
+  });
+
+  it('never touches the cache and shows the placeholder tile when presign is disabled', () => {
+    const { cache, peek, resolve } = makeCache('https://cdn.example/thumb.jpg');
+    const out = render({
+      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
+      cache,
+      presignEnabled: false,
+    });
+    expect(resolve).not.toHaveBeenCalled();
+    expect(peek).not.toHaveBeenCalled();
+    expect(out).not.toContain('<img');
+    expect(out).toContain('data-post-placeholder="text"');
+  });
+
+  it('keeps the carousel badge and the play badge on a poster', () => {
+    expect(
+      renderWith({ post: makePost({ thumbnailAssetVersionId: 'av1', format: 'carousel' }) }),
+    ).toContain('aria-label="Carousel"');
+    const video = renderWith({
+      post: makePost({ thumbnailAssetVersionId: 'av1', format: 'video' }),
+    });
+    expect(video).toContain('data-post-card-thumb');
+    expect(video).not.toContain('data-post-card-play');
+    expect(video).toContain('aria-label="Video"');
+  });
+});
+
+describe('PostCard lines', () => {
+  it('line 1 is the title; the tag on line 3 is the stage label, grey', () => {
+    for (const [stage, label] of [
+      ['draft', 'Draft'],
+      ['review', 'Review'],
+      ['approved', 'Approved'],
+      ['parked', 'Parked'],
+      ['rejected', 'Rejected'],
+    ] as const) {
+      const out = renderWith({ post: makePost({ stage }) });
+      expect(textOf(out, 'data-list-card-title=""')).toBe('Post title');
+      expect(tag(out, 'data-list-card-tag=""')).toContain(`data-post-card-stage="${stage}"`);
+      const line3 = out.slice(out.indexOf('data-list-card-line="3"'));
+      expect(line3).toContain(`>${label}<`);
+    }
+  });
+
+  it('with no status line the caption takes line 2 (two lines, plain text)', () => {
+    const out = renderWith({ post: makePost({ caption: 'Launch day is **here**' }) });
+    const preview = tag(out, 'data-list-card-preview=""');
+    expect(preview).toContain('data-post-card-caption=""');
+    expect(preview).toContain('line-clamp-2');
+    // Captions never format: the stars stay as typed.
+    expect(textOf(out, 'data-list-card-preview=""')).toBe('Launch day is **here**');
+    // A blank caption leaves line 2 empty.
+    expect(renderWith({ post: makePost({ caption: '  ' }) })).not.toContain(
+      'data-post-card-caption',
+    );
+  });
+
+  it('a review card leads line 2 with the status line, then the caption on one line', () => {
+    const out = renderWith({
+      post: makePost({
+        stage: 'review',
+        caption: 'Linen that breathes.',
+        stage_entered_at: '2026-10-23T09:00:00Z',
+      }),
+      viewer: { role: 'agency', approverFirstNames: ['Maya'] },
+      now: NOW,
+    });
+    const preview = out.slice(out.indexOf('data-list-card-preview'));
+    expect(textOf(preview, 'data-post-card-status="with"')).toBe('With Maya · 3 hours ago');
+    expect(textOf(preview, 'data-post-card-caption=""')).toBe('Linen that breathes.');
+    expect(tag(preview, 'data-post-card-caption=""')).toContain('truncate');
+    expect(preview.indexOf('data-post-card-status')).toBeLessThan(
+      preview.indexOf('data-post-card-caption'),
+    );
+    // An approver: "Waiting on you".
+    const mine = renderWith({
+      post: makePost({ stage: 'review' }),
+      viewer: { role: 'client', approverFirstNames: [] },
+      now: NOW,
+    });
+    expect(textOf(mine, 'data-post-card-status="you"')).toBe('Waiting on you');
+    // While the role loads there is no status line yet; the card keeps its height.
+    const pending = renderWith({
+      post: makePost({ stage: 'review', caption: 'Hello' }),
+      viewer: { role: null, approverFirstNames: [], pending: true },
+      now: NOW,
+    });
+    expect(pending).not.toContain('data-post-card-status');
+    expect(tag(pending, 'data-list-card-preview=""')).toContain('min-h-9');
+  });
+
+  it('line 3: the due time (formatDue) on the ListCard time slot', () => {
+    const out = renderWith({ post: makePost({ target_date: '2026-11-02' }), now: NOW });
+    const due = tag(out, 'data-post-card-due=""');
+    expect(due).toContain('data-list-card-time=""');
+    expect(due).toContain('font-mono');
+    expect(due).not.toContain('text-bad');
+    expect(textOf(out, 'data-post-card-due=""')).toBe('Due in 10 days');
+    // No due date: no time.
+    expect(renderWith({ post: makePost({}), now: NOW })).not.toContain('data-list-card-time');
+  });
+
+  it('a past due date reads overdue in the bad tone; approved is never overdue', () => {
+    expect(cardDue('2026-10-22', 'review', 'UTC', NOW)).toEqual({
+      text: 'Overdue 1 day',
+      overdue: true,
+    });
+    expect(cardDue('2026-10-12', 'draft', 'UTC', NOW)).toEqual({
+      text: 'Overdue 11 days',
+      overdue: true,
+    });
+    expect(cardDue('2026-05-20', 'draft', 'UTC', NOW)).toEqual({
+      text: 'Overdue 5 months',
+      overdue: true,
+    });
+    expect(cardDue('2026-10-23', 'review', 'UTC', NOW)).toEqual({
+      text: 'Due today',
+      overdue: false,
+    });
+    expect(cardDue('2026-10-24', 'review', 'UTC', NOW)).toEqual({
+      text: 'Due tomorrow',
+      overdue: false,
+    });
+    expect(cardDue('2026-12-12', 'review', 'UTC', NOW)).toEqual({
+      text: 'Due 12 Dec',
+      overdue: false,
+    });
+    expect(cardDue('2026-10-12', 'approved', 'UTC', NOW)).toEqual({
+      text: 'Due 12 Oct',
+      overdue: false,
+    });
+    expect(cardDue('not a date', 'review', 'UTC', NOW)).toEqual({ text: '', overdue: false });
+
+    const out = renderWith({
+      post: makePost({ stage: 'review', target_date: '2026-10-12' }),
+      timeZone: 'UTC',
+      now: NOW,
+    });
+    const due = tag(out, 'data-post-card-due="overdue"');
+    expect(due).toContain('text-bad');
+    expect(due).toContain('data-list-card-time-bad=""');
+    expect(textOf(out, 'data-post-card-due="overdue"')).toBe('Overdue 11 days');
+  });
+});
+
+describe('PostCard ⋮', () => {
+  it('a card with onMove carries the ActionMenu trigger on line 3, named with the title', () => {
+    const out = renderWith({ post: makePost({}), onMove: () => {} });
+    const button = tag(out, 'data-post-card-move=""');
+    expect(button).toContain('aria-label="Actions for Post title"');
+    expect(button).toContain('h-11');
+    expect(button).toContain('w-11');
+    // The trailing rule (ActionMenuTrigger) puts the glyph on the content edge.
+    expect(button).toContain('-mr-3');
+    expect(button).toContain('text-fg-3');
+    const line3 = out.slice(out.indexOf('data-list-card-line="3"'));
+    expect(line3).toContain('data-list-card-more=""');
+    expect(line3).toContain('data-post-card-move');
+    // No onMove, no ⋮.
+    expect(renderWith({ post: makePost({}) })).not.toContain('data-post-card-move');
+  });
+
+  it('the ⋮ name carries the unread comment count', () => {
+    expect(cardMenuLabel('X', 0)).toBe('Actions for X');
+    expect(cardMenuLabel('X', 1)).toBe('Actions for X, 1 unread comment');
+    expect(cardMenuLabel('X', 3)).toBe('Actions for X, 3 unread comments');
+  });
+
+  it('PostCard hands its slots to ListCard and builds no frame of its own', () => {
     const src = readFileSync(fileURLToPath(new URL('./PostCard.tsx', import.meta.url)), 'utf8');
-    // The Card more slot lifts the ⋯ above the press surface (pointer-events-auto z-raised).
-    expect(src).toContain('{...(menu !== undefined ? { more: menu } : {})}');
-    // The trailing pull (-mr-3) comes from ActionMenuTrigger, the in-line box from Card.
-    expect(src).not.toMatch(/-mr-3|-my-3/);
+    expect(src).toContain('<ListCard');
+    expect(src).not.toMatch(/rounded-xl|lit-card|\bborder\b|<Card\b/);
   });
 });
 

@@ -260,21 +260,21 @@ describe('matching and snippets', () => {
   });
 });
 
-describe('searchDateLabel', () => {
-  const tz = 'UTC';
-  const now = Date.parse('2026-10-03T15:00:00Z'); // a Saturday
-  it('today is the time', () => {
-    expect(searchDateLabel('2026-10-03T09:05:00Z', now, tz)).toBe('9:05 AM');
+describe('searchDateLabel (formatRelative)', () => {
+  const now = Date.parse('2026-10-03T15:00:00Z');
+  it('under a minute is "just now", then minutes and hours', () => {
+    expect(searchDateLabel('2026-10-03T14:59:30Z', now)).toBe('just now');
+    expect(searchDateLabel('2026-10-03T14:55:00Z', now)).toBe('5 min ago');
+    expect(searchDateLabel('2026-10-03T09:05:00Z', now)).toBe('5 hours ago');
   });
-  it('yesterday is "Yesterday"', () => {
-    expect(searchDateLabel('2026-10-02T23:00:00Z', now, tz)).toBe('Yesterday');
+  it('days, months and years, singular and plural', () => {
+    expect(searchDateLabel('2026-10-02T14:00:00Z', now)).toBe('1 day ago');
+    expect(searchDateLabel('2026-09-29T10:00:00Z', now)).toBe('4 days ago');
+    expect(searchDateLabel('2026-07-20T10:00:00Z', now)).toBe('2 months ago');
+    expect(searchDateLabel('2025-09-20T10:00:00Z', now)).toBe('1 year ago');
   });
-  it('2 to 6 days back is the short weekday', () => {
-    expect(searchDateLabel('2026-09-29T10:00:00Z', now, tz)).toBe('Tue');
-  });
-  it('older is the day and month, the year only off the current year', () => {
-    expect(searchDateLabel('2026-09-20T10:00:00Z', now, tz)).toBe('20 Sep');
-    expect(searchDateLabel('2025-09-20T10:00:00Z', now, tz)).toBe('20 Sep 2025');
+  it('unparseable is empty', () => {
+    expect(searchDateLabel('nope', now)).toBe('');
   });
 });
 

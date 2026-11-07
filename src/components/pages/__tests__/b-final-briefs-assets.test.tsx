@@ -1,19 +1,18 @@
 // Layout B-final, Briefs + Assets: the screens render the shared parts. Asset
-// tiles are ui/Tile (caption below the picture, the ⋯ on the name line with the
-// trailing rule, overlays only at corners), brief cards are ui/Card (the cover
+// items are ui/ListCard (picture, name, facts, time + tab tag, the ⋮ with the
+// trailing rule; the tick in its place while selecting), brief cards are ui/Card (the cover
 // link, the footer status and due), both grids fill the laptop width through
 // the parts' named auto-fill columns, and a tile keeps its height across states.
 
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { AssetCard } from '@/components/pages/assets/AssetCard';
-import { AssetGrid } from '@/components/pages/assets/AssetGrid';
+import { AssetList, AssetListCard } from '@/components/pages/assets/AssetListCard';
 import { BriefCard } from '@/components/pages/BriefCard';
 import { Card, CARD_GRID } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/IconButton';
 import { StatusDot } from '@/components/ui/StatusDot';
-import { TILE_GRID } from '@/components/ui/Tile';
+import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { TRAILING_PULL } from '@/components/ui/layout';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
@@ -84,12 +83,15 @@ function brief(overrides: Partial<BriefWithThumbnail> = {}): BriefWithThumbnail 
   };
 }
 
-function tile(props: Partial<Parameters<typeof AssetCard>[0]> = {}): string {
+const NOW = new Date('2026-01-01T03:00:00Z');
+
+function tile(props: Partial<Parameters<typeof AssetListCard>[0]> = {}): string {
   return renderToStaticMarkup(
-    <AssetCard
+    <AssetListCard
       item={asset()}
       cache={cache}
       presignEnabled={false}
+      now={NOW}
       onOpen={() => {}}
       onStartSelect={() => {}}
       {...props}
@@ -97,73 +99,70 @@ function tile(props: Partial<Parameters<typeof AssetCard>[0]> = {}): string {
   );
 }
 
-/** The caption's lines (title + meta) inside the tap surface, in markup order: their classes. */
-function captionLines(html: string): string[] {
-  const start = html.indexOf('data-tile-press=""');
-  const surface = html.slice(start, html.indexOf('</button>', start));
-  return [...surface.matchAll(/class="([^"]*\btext-md\b[^"]*|font-mono text-sm[^"]*)"/g)].map(
+/** The card's line wrappers and text slots, in markup order: the footprint every state keeps. */
+function slots(html: string): string[] {
+  return [...html.matchAll(/data-list-card-(line="\d"|title=""|preview=""|time=""|more="")/g)].map(
     (m) => m[1]!,
   );
 }
 
-describe('Assets tile is ui/Tile', () => {
-  it('renders the part: the picture first, the name and meta below it', () => {
+describe('Assets item is ui/ListCard', () => {
+  it('renders the part: the picture first, then the name, the facts, the time and the tab tag', () => {
     const out = tile();
-    expect(out).toContain('data-tile=""');
-    expect(out).toContain('data-tile-press=""');
-    const picture = out.indexOf('data-file-tile="pdf"');
+    expect(out).toContain('data-list-card=""');
+    expect(out).toContain('data-list-card-press=""');
+    const picture = out.indexOf('data-list-card-picture=');
     const name = out.indexOf('data-asset-name=""');
     const meta = out.indexOf('data-asset-meta=""');
+    const time = out.indexOf('data-asset-uploaded=""');
+    const tag = out.indexOf('data-asset-tag=""');
     expect(picture).toBeGreaterThan(-1);
     expect(name).toBeGreaterThan(picture);
     expect(meta).toBeGreaterThan(name);
-    // The caption sits in the tile, not in FileTile's own card footer.
-    expect(out).not.toContain('data-file-name');
+    expect(time).toBeGreaterThan(meta);
+    expect(tag).toBeGreaterThan(time);
+    expect(out).toContain('>3 hours ago<');
+    expect(out).not.toContain('data-tile');
   });
 
-  it('the ⋯ sits on the name line and takes the trailing rule (ends on the tile edge)', () => {
+  it('the ⋮ sits on line 3 and takes the trailing rule (ends on the card edge)', () => {
     const out = tile();
-    expect(out).toMatch(/data-tile-more=""[^]*?data-card-menu=""/);
+    expect(out).toMatch(/data-list-card-line="3"[^]*data-list-card-more=""[^]*?data-card-menu=""/);
     const trigger = /<button[^>]*data-card-menu=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(trigger).toContain(TRAILING_PULL);
-    // Never in a picture corner.
-    expect(out).not.toMatch(
-      /data-tile-corner="[^"]*"[^>]*>(?:(?!data-tile-corner)[^])*?data-card-menu/,
-    );
-  });
-
-  it('overlays only at corners; the select box is a corner action outside the tap surface', () => {
-    const out = tile();
-    expect(out).toMatch(/data-tile-action="tl"[^>]*>\s*<button[^>]*data-card-select=""/);
-    // The tap surface closes before the select box opens (buttons never nest).
-    const pressStart = out.indexOf('data-tile-press=""');
+    // The ⋮ is a sibling of the card's tap surface (buttons never nest).
+    const pressStart = out.indexOf('data-list-card-press=""');
     const pressEnd = out.indexOf('</button>', pressStart);
-    expect(out.indexOf('data-card-select=""')).toBeGreaterThan(pressEnd);
-    const ticked = tile({ selectMode: true, selected: true, onToggleSelect: () => {} });
-    expect(ticked).toMatch(/data-tile-corner="tl"[^>]*>[^]*?data-card-tick=""/);
+    expect(out.indexOf('data-card-menu=""')).toBeGreaterThan(pressEnd);
   });
 
-  it('keeps its height across states: the same picture box and caption lines', () => {
+  it('select mode puts the tick box where the ⋮ sits; no corner overlay', () => {
+    const ticked = tile({ selectMode: true, selected: true, onToggleSelect: () => {} });
+    expect(ticked).toMatch(/data-list-card-more=""[^>]*>\s*<span[^>]*data-card-tick="on"/);
+    expect(ticked).not.toContain('data-card-menu');
+    expect(ticked).not.toContain('data-card-select');
+    expect(ticked).toContain('lit-selected');
+  });
+
+  it('keeps its footprint across states: the same lines and slots', () => {
     const states = [
       tile(),
       tile({ selectMode: true, selected: false, onToggleSelect: () => {} }),
       tile({ selectMode: true, selected: true, onToggleSelect: () => {} }),
       tile({ item: asset({ sizeBytes: null, pageCount: 4 }) }),
     ];
-    const first = captionLines(states[0]!);
-    expect(first).toHaveLength(2);
-    for (const out of states) {
-      expect(out).toContain('aspect-[4/3]');
-      expect(captionLines(out)).toEqual(first);
-    }
+    const first = slots(states[0]!);
+    expect(first).toEqual(['line="1"', 'title=""', 'preview=""', 'line="3"', 'time=""', 'more=""']);
+    for (const out of states) expect(slots(out)).toEqual(first);
   });
 
-  it('the grid fills the laptop width with the named auto-fill columns', () => {
-    expect(TILE_GRID).toContain('md:grid-cols-tiles');
+  it('the list is LIST_CARD_GRID: one column on phone, the named auto-fill columns on laptop', () => {
+    expect(LIST_CARD_GRID).toContain('md:grid-cols-list-cards');
     const out = renderToStaticMarkup(
-      <AssetGrid items={[asset()]} presignEnabled={false} cache={cache} onOpen={() => {}} />,
+      <AssetList items={[asset()]} presignEnabled={false} cache={cache} onOpen={() => {}} />,
     );
-    expect(out).toContain('md:grid-cols-tiles');
+    expect(out).toContain('md:grid-cols-list-cards');
+    expect(out).not.toContain('grid-cols-tiles');
     expect(out).not.toContain('grid-cols-[');
   });
 });

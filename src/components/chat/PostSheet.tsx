@@ -63,6 +63,7 @@ import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { formatDueDate } from '@/lib/time';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { useIsLaptop } from '@/lib/use-is-laptop';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
@@ -351,7 +352,7 @@ export function PostSheetMedia(props: {
  */
 export function PostSheetDetails(props: {
   view: PostView;
-  /** For tests: the zone moments render in. The app passes none (the viewer's device zone). */
+  /** Unused: moments read relative (formatRelative on the shared minute clock). */
   timeZone?: string | undefined;
   /** The workspace's zone: the target (due) date reads its calendar day on it. */
   workspaceZone: string | null | undefined;
@@ -364,10 +365,11 @@ export function PostSheetDetails(props: {
 }): ReactElement {
   const { post, approverName, approverRole } = props.view;
   const stage = props.stage ?? post.stage;
+  const nowMs = useMinuteClock();
   const rows = detailRows(
     post,
     approverName,
-    props.timeZone,
+    new Date(nowMs),
     props.workspaceZone,
     approverRole ?? null,
     props.brand,
@@ -550,6 +552,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
   const newTrace = useNewTrace();
   const toast = useToast();
   const isLaptop = useIsLaptop();
+  const nowMs = useMinuteClock();
   const { workspaces, workspaceId, workspaceName, workspaceKey } = useWorkspace();
   const brand = workspaceName ?? null;
   // Due dates are calendar days on the workspace zone (src/lib/time.ts).
@@ -741,7 +744,7 @@ export function PostSheet(props: PostSheetProps): ReactElement {
                       }
                     : undefined
                 }
-                hint={agencyWaitingHint(side, post, timeZone)}
+                hint={agencyWaitingHint(side, post, new Date(nowMs))}
               />
             </>
           )}

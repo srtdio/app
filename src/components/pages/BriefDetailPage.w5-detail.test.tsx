@@ -733,9 +733,9 @@ describe('Brief detail polish', () => {
     await mount();
     for (const section of [phone(), desktop()]) {
       expect(section?.querySelectorAll('dt')).toHaveLength(0);
-      // "1 Oct" in 2026, "1 Oct 2026" from a later year.
+      // Relative to the shared minute clock (formatRelative), whatever today is.
       expect(section?.querySelector('[data-brief-raised]')?.textContent).toMatch(
-        /^Raised 1 Oct( 2026)? by Asha Rao$/,
+        /^Raised \d+ (min|hours?|days?|months?|years?) ago by Asha Rao$/,
       );
       expect(section?.querySelector('[data-brief-format]')?.textContent).toBe('Format Carousel');
       expect(section?.textContent).not.toContain('carousel');
@@ -794,13 +794,20 @@ describe('Brief detail polish', () => {
     const now = new Date('2026-08-01T09:00:00Z');
     expect(briefStatusLine('open', '2026-08-14', 'UTC', now)).toEqual({
       status: 'Open',
-      due: 'Due 14 Aug',
+      due: 'Due in 13 days',
       overdue: false,
     });
-    expect(briefStatusLine('open', '2026-08-01', 'UTC', now).overdue).toBe(false);
+    expect(briefStatusLine('open', '2026-08-01', 'UTC', now)).toEqual({
+      status: 'Open',
+      due: 'Due today',
+      overdue: false,
+    });
+    expect(briefStatusLine('open', '2026-08-02', 'UTC', now).due).toBe('Due tomorrow');
+    expect(briefStatusLine('open', '2026-12-12', 'UTC', now).due).toBe('Due 12 Dec');
+    expect(briefStatusLine('open', '2026-05-20', 'UTC', now).due).toBe('Overdue 2 months');
     expect(briefStatusLine('open', '2026-07-31', 'UTC', now)).toEqual({
       status: 'Open',
-      due: 'Overdue · 31 Jul',
+      due: 'Overdue 1 day',
       overdue: true,
     });
     expect(briefStatusLine('open', null, 'UTC', now)).toEqual({

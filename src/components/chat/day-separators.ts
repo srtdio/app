@@ -7,9 +7,9 @@ import { civilDay, formatDayLabel } from '@/lib/time';
 import type { ThreadMessage } from '@/lib/chat/thread';
 
 /**
- * The pill for a civil day key: "Today" (a clock time makes no sense for a
- * whole day), else the app's one past-time format (src/lib/time.ts formatWhen):
- * "Yesterday", "Mon" 2-6 days back, "3 Sep", "31 Dec 2025". `timeZone` is for tests.
+ * The pill for a civil day key (src/lib/time.ts formatDayLabel, absolute by
+ * rule): "Today", "Yesterday", else "Thu 24 Sep" ("Wed 31 Dec 2025" off the
+ * current year). `timeZone` is for tests.
  */
 export function dayPillLabel(day: string, nowMs: number, timeZone?: string): string {
   return formatDayLabel(day, new Date(nowMs), timeZone);

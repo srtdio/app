@@ -40,7 +40,8 @@ import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { cn } from '@/lib/cn';
 import { Bone, GlideItem, itemIn, itemOut } from '@/lib/motion';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { UNDO_MS } from '@/lib/undo';
 import { useBackGuard } from '@/lib/back-guard';
@@ -378,14 +379,13 @@ export function annotationChip(
   );
 }
 
-// Format a stored timestamp in the app's one past-time format (formatWhen:
-// "2:14 PM" today, "Yesterday", "Mon", "23 Oct"; the viewer's clock). Falls
-// back to the raw value if it is
+// Format a stored timestamp in the app's one past-time format (formatRelative:
+// "just now", "5 min ago", "2 days ago"). Falls back to the raw value if it is
 // somehow unparseable so nothing is silently dropped.
-function formatTimestamp(value: string): string {
+function formatTimestamp(value: string, now: Date): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatWhen(value);
+  return formatRelative(value, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -611,8 +611,9 @@ interface TombstoneRow {
 export function tombstoneText(
   comment: TombstoneRow,
   nameOf: (id: string) => string | null,
+  now: Date = new Date(),
 ): string {
-  const when = formatTimestamp(comment.deleted_at ?? comment.created_at);
+  const when = formatTimestamp(comment.deleted_at ?? comment.created_at, now);
   const who = comment.legacy_author_name ?? nameOf(comment.author_user_id);
   const noun =
     comment.ledger_seq !== undefined && comment.ledger_seq !== null ? 'Checkpoint' : 'Comment';
@@ -905,11 +906,11 @@ export function pointActions(
   return base;
 }
 
-/** When an edit happened, in the app's one past-time format (formatWhen:
- *  "2:14 PM" today, "Yesterday", "Mon", "1 Mar"; the viewer's clock).
- *  Unparseable input yields '' so nothing raw is shown. */
+/** When an edit happened, in the app's one past-time format (formatRelative:
+ *  "just now", "5 min ago", "2 days ago"). Unparseable input yields '' so
+ *  nothing raw is shown. */
 export function editedTime(ts: string, now: Date): string {
-  return formatWhen(ts, now);
+  return formatRelative(ts, now);
 }
 
 /** The "edited <time>" marker shared by comments and ledger points, or null when
@@ -1242,6 +1243,8 @@ export function Comments({
   whereLabel = '',
 }: CommentsProps) {
   const newTrace = useNewTrace();
+  // The one shared minute clock: every row's time ages together, no per-row timer.
+  const nowMs = useMinuteClock();
   // The Open / All thread filter (posts' header); All by default.
   const [filter, setFilter] = useState<CommentFilter>('all');
   const { canAttach, presignEnabled, presignCache, uploadFile } = useCommentAttachments();
@@ -2413,7 +2416,7 @@ export function Comments({
     const attachments = toCommentAttachments(comment.attachment_asset_ids, attachmentMime);
     // One link scan per row: the body's card link feeds both the text and the card.
     const cardUrl = firstExternalUrl(comment.body);
-    const edited = pointEditedMarker(comment.edited_at, new Date());
+    const edited = pointEditedMarker(comment.edited_at, new Date(nowMs));
 
     const meta = (
       <>
@@ -2428,7 +2431,7 @@ export function Comments({
           </span>
         ) : null}
         <span data-comment-time="" className={ROW_TIME_CLASS}>
-          {formatWhen(comment.created_at)}
+          {formatRelative(comment.created_at, new Date(nowMs))}
         </span>
         {opts.seq !== null ? (
           <span
@@ -2630,7 +2633,7 @@ export function Comments({
   function renderTombstone(root: CommentRow, replies: CommentRow[]): ReactNode {
     return (
       <>
-        <p className="text-sm italic text-fg-3">{tombstoneText(root, nameOf)}</p>
+        <p className="text-sm italic text-fg-3">{tombstoneText(root, nameOf, new Date(nowMs))}</p>
         {renderThreadBelow(root, replies, true, false)}
       </>
     );

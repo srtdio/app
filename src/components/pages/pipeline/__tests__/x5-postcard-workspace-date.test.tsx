@@ -6,7 +6,11 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
   useIsLaptop: () => true,
 }));
-import { dueLabel } from '@/components/pages/PostCard';
+import { cardDue } from '@/components/pages/PostCard';
+
+// The card's due text; an approved post never reads overdue, so a past day reads its date.
+const dueLabel = (value: string, zone: string | null | undefined, now: Date): string =>
+  cardDue(value, 'approved', zone, now).text;
 
 const NOW = new Date('2026-06-01T00:00:00Z');
 
@@ -38,7 +42,7 @@ describe('X5 PostCard date in the workspace zone', () => {
     expect(dueLabel('2026-03-15T02:00:00Z', undefined, NOW)).toBe(device);
   });
 
-  it('an unparseable value shows as stored', () => {
-    expect(dueLabel('soon', 'Asia/Kolkata', NOW)).toBe('Due soon');
+  it('an unparseable value shows no time', () => {
+    expect(dueLabel('soon', 'Asia/Kolkata', NOW)).toBe('');
   });
 });

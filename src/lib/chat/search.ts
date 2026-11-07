@@ -21,7 +21,7 @@ import {
 } from '@/lib/chat/chat-store';
 import { rowToThreadMessage, type ChatMessageRow } from '@/lib/chat/thread';
 import { resolveMentionText } from '@/lib/chat/mentions';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
 import { generateTraceId } from '@/lib/trace';
 import { errorText } from '@/lib/error-copy';
 
@@ -496,15 +496,14 @@ export function snippetText(
 }
 
 /**
- * A hit's date on the viewer's clock, in the app's one past-time format
- * (src/lib/time.ts formatWhen): today the time, "Yesterday", "Mon" 2-6 days
- * back, then "20 Sep" ("20 Sep 2025" off the current year). Pure (now is
- * passed in; `timeZone` is for tests, the app passes none).
+ * A hit's date in the app's one past-time format (src/lib/time.ts
+ * formatRelative): "just now", "5 min ago", "3 hours ago", "2 days ago",
+ * "4 months ago", "2 years ago". Pure (now is passed in).
  */
-export function searchDateLabel(createdAt: string, nowMs: number, timeZone?: string): string {
+export function searchDateLabel(createdAt: string, nowMs: number): string {
   const ts = Date.parse(createdAt);
   if (Number.isNaN(ts)) return '';
-  return formatWhen(ts, new Date(nowMs), timeZone);
+  return formatRelative(ts, new Date(nowMs));
 }
 
 /**

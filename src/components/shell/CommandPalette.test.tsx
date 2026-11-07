@@ -471,14 +471,14 @@ describe('CommandPalette', () => {
     ]);
   });
 
-  it('shows the chat sender, highlights matched words, and the chat time', () => {
+  it('shows the chat sender, highlights matched words, and the chat time (formatRelative)', () => {
     const tree = body('diwali', ready('diwali', [], [chatHit]));
     const all = texts(tree);
     expect(all).toContain('asha');
     expect(sections('diwali', ready('diwali', [], [chatHit]))[0]?.items[0]).toMatchObject({
       title: 'asha',
     });
-    expect(all).toContain('11:30 AM');
+    expect(all).toContain('30 min ago');
     const marked = findAll(tree, 'data-search-mark').map((el) => texts(el).join(''));
     expect(marked).toContain('diwali');
   });

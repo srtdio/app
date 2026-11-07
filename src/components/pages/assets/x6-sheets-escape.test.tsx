@@ -148,7 +148,7 @@ const baseDeps: AssetMenuDeps = {
   onToast: () => {},
 };
 
-/** A card's ⋯ menu, open, as AssetCard renders it (ui/ActionMenu). */
+/** A card's ⋮ menu, open, as AssetListCard renders it (ui/ActionMenu). */
 function fileMenu(
   item: AssetListItem,
   deps: Partial<AssetMenuDeps> = {},

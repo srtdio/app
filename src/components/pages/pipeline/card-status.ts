@@ -3,7 +3,7 @@
 // in the reject confirm. "Approver" is the client role, "creator" the agency
 // side (owner, admin, agency). No React, so every line is unit tested.
 
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import { canRoleMove } from '@/components/pages/pcs/stage-actions';
 import { STAGE_TRANSITIONS } from '@srtdio/posts';
@@ -17,18 +17,17 @@ export interface CardViewer {
   /** The workspace's active approvers' first names, in member order. */
   approverFirstNames: readonly string[];
   /**
-   * The role read is still in flight: a review card reserves its status line's
-   * height so the card does not grow when the line lands.
+   * The role read is still in flight: the card's ⋯ lists the Move row (the
+   * move sheet waits for the role) instead of the role's own moves.
    */
   pending?: boolean;
 }
 
 /**
- * A review post's status line: the approver's turn, or who the creator is
- * waiting on. For a creator the card shows only `when` ("Mon", formatWhen)
- * beside the stage dot; the full phrase (`text`) is the line's title and aria-label.
+ * A review post's status line (the list card's line 2): the approver's turn,
+ * or who the creator is waiting on and since when.
  */
-type ReviewStatus = { tone: 'you'; text: string } | { tone: 'with'; text: string; when: string };
+type ReviewStatus = { tone: 'you' | 'with'; text: string };
 
 /** The first word of a display name ("Meera Shah" -> "Meera"); '' for a blank name. */
 export function firstNameOf(displayName: string | null | undefined): string {
@@ -40,7 +39,7 @@ export function firstNameOf(displayName: string | null | undefined): string {
  * unknown role. An approver sees "Waiting on you". A creator sees
  * "With {approver first name} · {when}" when the workspace has one approver,
  * else "With approvers · {when}": when it entered review in the app's one
- * past-time format (formatWhen, never relative). `when` is that time alone.
+ * past-time format (formatRelative: "3 hours ago").
  */
 export function reviewStatus(
   stage: Stage,
@@ -53,13 +52,7 @@ export function reviewStatus(
   if (!isAgencySide(viewer.role)) return null;
   const only = viewer.approverFirstNames.length === 1 ? viewer.approverFirstNames[0] : undefined;
   const who = only !== undefined && only !== '' ? only : 'approvers';
-  const when = formatWhen(stageEnteredAt, now);
-  return { tone: 'with', text: `With ${who} · ${when}`, when };
-}
-
-/** Whether a review card holds its status line's height while the role loads. */
-export function reservesStatusLine(stage: Stage, viewer: CardViewer | undefined): boolean {
-  return stage === 'review' && viewer?.pending === true;
+  return { tone: 'with', text: `With ${who} · ${formatRelative(stageEnteredAt, now)}` };
 }
 
 /** Whether this viewer may make any move at all from `stage` (the card's ⋯ shows only then). */

@@ -8,11 +8,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   ActivityCard,
   activityCardTitle,
+  activityCardTag,
+  activityKind,
   activityPreviewText,
-  activityTag,
   failedSendItems,
 } from '@/components/pages/activity/ActivityCard';
-import { AvatarStack, STACK_OVERLAP_PX } from '@/components/pages/activity/AvatarStack';
 import { chatMentionPreview, type ActivityItem } from '@/components/pages/activity/data';
 import type { PresignCache } from '@/lib/asset-presign';
 
@@ -136,16 +136,39 @@ describe('ActivityCard on ui/ListCard', () => {
     expect(unread).not.toContain('lit-selected');
   });
 
-  it('the time is formatWhen in the workspace zone (mono meta), never relative', () => {
+  it('the time is formatRelative on the list clock (mono meta), never a clock time', () => {
     const html = renderCard([item({ createdAt: '2026-06-14T00:00:00.000Z' })]);
     const time = /<span data-list-card-time="" data-activity-time="" class="([^"]*)">([^<]*)</.exec(
       html,
     );
     expect(time?.[1]).toContain('font-mono');
     expect(time?.[1]).toContain('tabular-nums');
-    expect(time?.[2]).toBe('12:00 AM');
-    expect(html).not.toContain('ago');
-    expect(html).not.toContain('just now');
+    expect(time?.[2]).toBe('1 hour ago');
+    expect(html).not.toContain('12:00 AM');
+    expect(html).not.toContain('Yesterday');
+  });
+
+  it('the time ages with the clock it is handed (no timer of its own)', () => {
+    const at = (nowMs: number): string =>
+      /data-activity-time="" class="[^"]*">([^<]*)</.exec(
+        renderToStaticMarkup(
+          <ActivityCard
+            group={[item({ createdAt: '2026-06-14T00:00:00.000Z' })]}
+            nowMs={nowMs}
+            cache={cache}
+            presignEnabled={false}
+            onOpenGroup={() => {}}
+            onOpenEntry={() => {}}
+            onSnooze={() => {}}
+            onMarkRead={() => {}}
+            selfName={null}
+          />,
+        ),
+      )?.[1] ?? '';
+    const base = Date.parse('2026-06-14T00:00:00.000Z');
+    expect(at(base + 10_000)).toBe('just now');
+    expect(at(base + 5 * 60_000)).toBe('5 min ago');
+    expect(at(base + 2 * 86_400_000)).toBe('2 days ago');
   });
 
   it('an edited plan_updated card reads the last edit time, not the first', () => {
@@ -181,22 +204,45 @@ describe('ActivityCard on ui/ListCard', () => {
         },
       }),
     ]);
-    expect(html).toMatch(/data-activity-time=""[^>]*>12:59 AM</);
+    expect(html).toMatch(/data-activity-time=""[^>]*>just now</);
     expect(html).not.toContain('Yesterday');
   });
 
-  it('one grey tag named as the type chips: Posts, People, Plans, Briefs', () => {
-    expect(activityTag(item({ entityType: 'post', scope: 'posts' }))).toBe('Posts');
-    expect(activityTag(item({ entityType: 'brief', scope: 'briefs' }))).toBe('Briefs');
-    expect(activityTag(item({ entityType: 'plan_item', scope: 'posts', planId: 'p' }))).toBe(
-      'Plans',
+  it('one grey tag naming the kind: Mention, Post, Brief, Plan, Reminder', () => {
+    expect(activityKind(item({ entityType: 'post', scope: 'posts' }))).toBe('Post');
+    expect(activityKind(item({ entityType: 'brief', scope: 'briefs' }))).toBe('Brief');
+    expect(activityKind(item({ entityType: 'plan_item', scope: 'posts', planId: 'p' }))).toBe(
+      'Plan',
     );
     expect(
-      activityTag(item({ eventType: 'mention', entityType: 'chat_channel', scope: 'groups' })),
-    ).toBe('People');
+      activityKind(item({ eventType: 'mention', entityType: 'chat_channel', scope: 'groups' })),
+    ).toBe('Mention');
+    expect(activityKind(item({ eventType: 'mention', entityType: 'post', scope: 'posts' }))).toBe(
+      'Mention',
+    );
+    expect(activityKind(item({ eventType: 'task_due', entityType: 'chat_channel', scope: 'people' }))).toBe(
+      'Reminder',
+    );
+    expect(activityKind(item({ eventType: 'invite', entityType: null, scope: 'people' }))).toBe(
+      undefined,
+    );
     const html = renderCard([item({ eventType: 'comment', scope: 'posts' })]);
-    expect(html).toMatch(/data-activity-scope-tag=""[^>]*>[^]*?bg-panel-2 text-fg-2[^"]*">Posts</);
+    expect(html).toMatch(/data-activity-scope-tag=""[^>]*>[^]*?bg-panel-2 text-fg-2[^"]*">Post</);
     expect(count(html, 'data-list-card-tag')).toBe(1);
+  });
+
+  it('a group of several entries counts them in its one tag ("3 updates")', () => {
+    const group = [
+      item({ id: 'a', title: 'Q3', eventType: 'stage_change', toStage: 'approved' }),
+      item({ id: 'b', title: 'Q3', eventType: 'mention' }),
+      item({ id: 'c', title: 'Q3', eventType: 'comment' }),
+    ];
+    expect(activityCardTag(group)).toBe('3 updates');
+    expect(activityCardTag(group.slice(0, 1))).toBe('Post');
+    const html = renderCard(group);
+    expect(html).toMatch(/data-activity-updates-tag=""[^>]*>[^]*?">3 updates</);
+    expect(count(html, 'data-list-card-tag')).toBe(1);
+    expect(html).not.toContain('data-activity-scope-tag');
   });
 
   it('the ⋯ sits on line 3 through ActionMenuTrigger (the trailing rule)', () => {
@@ -436,41 +482,5 @@ describe('a failed scheduled send: Edit and Retry move into the ⋯', () => {
         () => {},
       ),
     ).toEqual([]);
-  });
-});
-
-describe('AvatarStack', () => {
-  it('renders nothing for an empty set', () => {
-    expect(renderToStaticMarkup(<AvatarStack names={[]} />)).toBe('');
-  });
-
-  it('overlaps up to three and shows a +N indicator beyond that', () => {
-    const html = renderToStaticMarkup(<AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />);
-    expect(html).toContain('+2');
-  });
-
-  it('draws its avatars at the inline role by default, the +N pill at the same height', () => {
-    const html = renderToStaticMarkup(<AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />);
-    expect(count(html, 'data-avatar-role="inline"')).toBe(3);
-    expect(html).toContain('height:20px');
-  });
-
-  it('fix 2: rings in ring-bg and overlaps by 4px, the +N pill too', () => {
-    const html = renderToStaticMarkup(<AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} />);
-    expect(STACK_OVERLAP_PX).toBe(4);
-    expect(count(html, 'rounded-full ring-2 ring-bg')).toBe(3);
-    expect(html).not.toContain('ring-panel');
-    expect(count(html, 'margin-left:-4px')).toBe(2);
-    expect(html).not.toContain('-8px');
-    expect(html).toMatch(/class="-ml-1 [^"]*ring-2 ring-bg"[^>]*>\+2</);
-  });
-
-  it('the ring takes the colour of the surface the stack sits on', () => {
-    const html = renderToStaticMarkup(
-      <AvatarStack names={['Ann', 'Bo', 'Cy', 'Di', 'Ed']} ring="ring-panel" />,
-    );
-    expect(count(html, 'rounded-full ring-2 ring-panel')).toBe(3);
-    expect(html).not.toContain('ring-bg');
-    expect(html).toMatch(/class="-ml-1 [^"]*ring-2 ring-panel"[^>]*>\+2</);
   });
 });

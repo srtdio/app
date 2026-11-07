@@ -24,7 +24,8 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { GalleryItem } from '@srtdio/posts';
 import { SnapshotThumbs } from '@/components/pages/pcs/PostGallery';
 import { snapshotItems } from '@/components/pages/pcs/gallery-transforms';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 
 interface VersionHistorySheetProps {
   open: boolean;
@@ -61,6 +62,8 @@ export interface VersionThumbs {
 interface VersionHistorySheetModel extends VersionHistorySheetProps {
   selectedIds: readonly string[];
   onToggleSelect: (id: string) => void;
+  /** The shared minute clock's instant; times read relative to it. Absent: the current instant. */
+  now?: Date;
 }
 
 // Layout only: PressableRow brings the width, 44px height, radius, hover and focus ring.
@@ -78,14 +81,12 @@ export const VERSION_THUMBS_CLASS = 'min-w-0 shrink overflow-hidden';
 /** The text column: fills the row and never squeezes below 128px. */
 export const VERSION_TEXT_CLASS = 'flex min-w-32 flex-1 flex-col';
 
-// The app's one past-time format (formatWhen): the clock today, "Yesterday",
-// "Mon", then "11 Jun", with the year once it differs from now's, on the
-// viewer's clock.
-// Falls back to the raw value if unparseable.
-function formatTimestamp(value: string): string {
+// The app's one past-time format (formatRelative): "just now", "5 min ago",
+// "2 days ago". Falls back to the raw value if unparseable.
+function formatTimestamp(value: string, now: Date): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatWhen(value);
+  return formatRelative(value, now);
 }
 
 /** Toggle an id in the compare selection, a max-two queue: re-picking a selected
@@ -108,6 +109,7 @@ export function versionHistorySheet({
   selectedIds,
   onToggleSelect,
   thumbs,
+  now = new Date(),
 }: VersionHistorySheetModel): ReactNode {
   const ordered = sortVersionsDesc(versions);
   // Compare is only offered when there is more than one version to line up.
@@ -184,7 +186,7 @@ export function versionHistorySheet({
                     {' · '}
                   </span>
                   <span data-version-date="" className="shrink-0 tabular-nums">
-                    {formatTimestamp(version.createdAt)}
+                    {formatTimestamp(version.createdAt, now)}
                   </span>
                 </span>
               </span>
@@ -244,12 +246,14 @@ export function VersionHistorySheet(props: VersionHistorySheetProps) {
   // The compare selection is transient UI state that belongs to the sheet, not
   // the page: it clears whenever the sheet closes so a stale pair never lingers.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const nowMs = useMinuteClock();
   useEffect(() => {
     if (!props.open) setSelectedIds([]);
   }, [props.open]);
 
   return versionHistorySheet({
     ...props,
+    now: new Date(nowMs),
     selectedIds,
     onToggleSelect: (id) => setSelectedIds((current) => toggleCompareSelection(current, id)),
     onCompare: (fromId, toId) => {

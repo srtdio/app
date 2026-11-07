@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// Type roles on Assets (design rules, 24 Oct 2026): an asset tile title is
-// the ui/Tile title (13 secondary role, full ink), its size line is sm fg-3 meta, the no-match state reads as an empty
+// Type roles on Assets (design rules, 24 Oct 2026; ui/ListCard, 7 Nov): an
+// asset card title is the ListCard heading, its facts line the secondary
+// preview and its added time the meta role; the no-match state reads as an empty
 // state (lg/600 title, base fg-2 description), and an empty tab line is base
 // fg-2 copy. Rendered for real in jsdom; mocks mirror
 // assets/x6-assets-page.test.tsx.
@@ -146,16 +147,19 @@ afterEach(() => {
 });
 
 describe('Assets page type roles', () => {
-  it('a file name is the ui/Tile title (secondary role, full ink) and its size line is sm fg-3 meta', async () => {
+  it('a file name is the ListCard heading, its facts the secondary line, its time meta', async () => {
     await mount();
     const title = [...document.querySelectorAll<HTMLElement>('span[title]')].find(
       (el) => el.getAttribute('title') === 'inside-brand.png',
     );
     expect(title).toBeDefined();
-    expectRole(title?.parentElement as HTMLElement, ['text-md', 'text-fg', 'truncate']);
-    const size = byText(`PNG · ${humanizeSize(2048)}`);
-    const meta = size.parentElement as HTMLElement;
-    expectRole(meta, ['text-sm', 'tabular-nums', 'text-fg-3']);
+    expectRole(title?.parentElement as HTMLElement, ['text-lg', 'font-semibold', 'truncate']);
+    const facts = byText(`PNG · ${humanizeSize(2048)}`);
+    expect(facts.hasAttribute('data-asset-meta')).toBe(true);
+    expectRole(facts, ['text-md', 'text-fg-2', 'line-clamp-2']);
+    const time = document.querySelector<HTMLElement>('[data-asset-uploaded]');
+    expect(time?.textContent).toMatch(/ago$|^just now$/);
+    expectRole(time as HTMLElement, ['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']);
   });
 
   it('a search with no match reads as an empty state', async () => {

@@ -264,7 +264,9 @@ describe('reading layer elements', () => {
         ]}
       />,
     );
-    expect(html).toContain(formatTime('2026-10-02T06:00:00Z', 'Asia/Kolkata'));
+    // The reader's time is relative (formatRelative): 06:00Z read, 12:00Z now.
+    expect(html).toContain('6 hours ago');
+    expect(html).not.toContain(formatTime('2026-10-02T06:00:00Z', 'Asia/Kolkata'));
     expect(html.match(/font-mono text-sm tabular-nums/g)?.length).toBe(1);
   });
 

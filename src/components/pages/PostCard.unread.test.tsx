@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
 vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
@@ -19,9 +17,9 @@ import {
 } from '@/lib/inbox/unread-entities';
 import type { PipelinePost } from '@srtdio/posts';
 
-// Unread comment marker on the Pipeline card (5 Nov 2026): the foot meta line
-// shows the comment glyph and the shared CountBadge after the due reading and
-// before the ⋯, only when the viewer has unread comments on that post.
+// Unread comments on the Pipeline card (ui/ListCard, 7 Nov 2026): line 1's
+// unread dot, and the count in the ⋮ trigger's name ("Actions for {title}, 3
+// unread comments"), only when the viewer has unread comments on that post.
 
 const CACHE = {
   peek: () => null,
@@ -75,35 +73,38 @@ function render(map: UnreadEntities, p: PipelinePost = post()): string {
   );
 }
 
-const meta = (html: string): string => {
-  const at = html.indexOf('data-card-header');
-  return at < 0 ? '' : html.slice(at);
-};
+/** The ⋮ trigger's aria-label. */
+const menuLabel = (html: string): string =>
+  /<button[^>]*aria-label="([^"]*)"[^>]*data-post-card-move=""/.exec(html)?.[1] ??
+  /<button[^>]*data-post-card-move=""[^>]*aria-label="([^"]*)"/.exec(html)?.[1] ??
+  '';
 
 afterEach(() => {
   resetUnreadEntitiesForTest();
   resetSessionReads();
 });
 
-describe('PostCard unread comment marker', () => {
-  it('shows the glyph and the count pill in the Card footer, after the ⋯ and the due', () => {
-    const line = meta(render({ 'post:p1': 3 }));
-    expect(line).toContain('data-post-card-unread="3"');
-    expect(line).toContain('aria-label="3 unread comments"');
-    expect(line).toContain('data-count-badge=""');
-    expect(line.indexOf('data-post-card-due')).toBeLessThan(line.indexOf('data-post-card-unread'));
-    expect(line.indexOf('data-post-card-move')).toBeLessThan(line.indexOf('data-post-card-due'));
-    expect(line.indexOf('data-card-footer')).toBeLessThan(line.indexOf('data-post-card-unread'));
+describe('PostCard unread comments', () => {
+  it('the unread dot on line 1 and the count in the ⋮ name', () => {
+    const html = render({ 'post:p1': 3 });
+    expect(html).toContain('data-list-card-unread=""');
+    expect(html).toContain('data-post-card-unread="3"');
+    expect(menuLabel(html)).toBe('Actions for Post title, 3 unread comments');
+    // The count is never painted: no count pill on the card.
+    expect(html).not.toContain('data-count-badge');
   });
 
-  it('nothing renders with no unread comments, or for another post', () => {
-    expect(render({})).not.toContain('data-post-card-unread');
-    expect(render({ 'post:other': 2 })).not.toContain('data-post-card-unread');
-    expect(render({ 'plan_item:p1': 2 })).not.toContain('data-post-card-unread');
+  it('no dot and a plain ⋮ name with no unread comments, or for another post', () => {
+    for (const map of [{}, { 'post:other': 2 }, { 'plan_item:p1': 2 }]) {
+      const html = render(map);
+      expect(html).not.toContain('data-list-card-unread');
+      expect(html).not.toContain('data-post-card-unread');
+      expect(menuLabel(html)).toBe('Actions for Post title');
+    }
   });
 
-  it('caps at 99+ through the shared badge', () => {
-    expect(render({ 'post:p1': 140 })).toContain('99+');
+  it('one unread comment reads singular', () => {
+    expect(menuLabel(render({ 'post:p1': 1 }))).toBe('Actions for Post title, 1 unread comment');
   });
 
   it('works on a media card too', () => {
@@ -111,12 +112,7 @@ describe('PostCard unread comment marker', () => {
       { 'post:p1': 1 },
       post({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
     );
-    expect(html).toContain('aria-label="1 unread comment"');
-  });
-
-  it('the marker sits in the Card footer trailing slot (never shrinks)', () => {
-    const src = readFileSync(fileURLToPath(new URL('./PostCard.tsx', import.meta.url)), 'utf8');
-    expect(src).toContain('footerTrailing: unread');
-    expect(src).toContain('className="inline-flex items-center gap-1 text-fg"');
+    expect(html).toContain('data-list-card-unread=""');
+    expect(menuLabel(html)).toBe('Actions for Post title, 1 unread comment');
   });
 });

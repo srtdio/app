@@ -13,7 +13,7 @@ import {
   type FileViewerProps,
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
 
 vi.mock('@/lib/files/office/run', () => ({ runOffice: vi.fn() }));
 
@@ -45,13 +45,13 @@ describe('fileViewerDetails', () => {
     expect(fileViewerDetails(undefined, undefined)).toBeNull();
   });
 
-  it('formats sentAt through src/lib/time.ts formatWhen (the one past-time format)', () => {
+  it('formats sentAt through src/lib/time.ts formatRelative (the one past-time format)', () => {
     const now = new Date('2026-11-04T10:00:00.000Z');
     expect(fileViewerDetails('Maya', AT, now)).toEqual({
       sender: 'Maya',
-      time: formatWhen(AT, now),
+      time: formatRelative(AT, now),
     });
-    expect(fileViewerDetails('Maya', AT, now)?.time).toBe('23 Oct');
+    expect(fileViewerDetails('Maya', AT, now)?.time).toBe('11 days ago');
   });
 
   it('either line alone still shows', () => {
@@ -72,7 +72,7 @@ describe('FileViewer chat extras', () => {
     const out = html({ sender: 'Maya', sentAt: AT });
     expect(out).toContain('data-lightbox-details');
     expect(out).toContain('Maya');
-    expect(out).toContain(formatWhen(AT));
+    expect(out).toMatch(/\d+ (day|month|year)s? ago/);
     expect(out).toMatch(/font-mono[^"]*tabular-nums/);
     expect(out).not.toContain('data-show-in-chat');
   });

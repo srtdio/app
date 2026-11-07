@@ -120,7 +120,8 @@ import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useBackGuard } from '@/lib/back-guard';
 import { useSession } from '@/lib/session-context';
 import { useWorkspace } from '@/lib/workspace-context';
-import { formatDue } from '@/lib/time';
+import { daysFromToday, formatDue, formatOverdue } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import {
   annotationCreate,
   getPost,
@@ -313,6 +314,8 @@ export function PostDetailPage({
   const pageAnchorRef = useRef<HTMLElement>(null);
   useGrowFromCard(postId, pageAnchorRef, !embedded);
   const newTrace = useNewTrace();
+  // The one shared minute clock: the status line and the due day age with it.
+  const nowMs = useMinuteClock();
   const { workspaceId, workspaceKey, workspaces, workspaceName } = useWorkspace();
 
   // A comment link (?comment={commentId}: Activity, toast, email, search) focuses
@@ -1659,7 +1662,18 @@ export function PostDetailPage({
   const canEditContent = agencySide && !readOnly && !approvedLocked;
   const ownerKnown =
     ownerInfo.name !== '' && !(post.owner_user_id === null && post.legacy_author_name === null);
-  const dueLabel = post.target_date !== null ? formatDue(post.target_date, approveTimeZone) : null;
+  // "Due today" / "Due in 3 days" / "Due 12 Dec", or "Overdue 2 days" in the
+  // bad token once the workspace day has passed; approved is never overdue.
+  const dueOverdue =
+    post.target_date !== null &&
+    currentStage !== 'approved' &&
+    (daysFromToday(post.target_date, approveTimeZone, new Date(nowMs)) ?? 0) < 0;
+  const dueLabel =
+    post.target_date === null
+      ? null
+      : dueOverdue
+        ? formatOverdue(post.target_date, approveTimeZone, new Date(nowMs)).text
+        : formatDue(post.target_date, approveTimeZone, new Date(nowMs));
   const detailsEditable = canEditContent;
   const metaDot = (
     <span aria-hidden className="shrink-0 text-fg-3">
@@ -1710,7 +1724,12 @@ export function PostDetailPage({
   if (dueLabel !== null) {
     if (metaHead.length > 0) metaHead.push(<span key="due-dot">{metaDot}</span>);
     metaHead.push(
-      <span key="due" data-detail="due" className="shrink-0 whitespace-nowrap tabular-nums">
+      <span
+        key="due"
+        data-detail="due"
+        {...(dueOverdue ? { 'data-overdue': '' } : {})}
+        className={cn('shrink-0 whitespace-nowrap tabular-nums', dueOverdue && 'text-bad')}
+      >
         {dueLabel}
       </span>,
     );
@@ -1899,7 +1918,7 @@ export function PostDetailPage({
         : topBar(
             <>
               <StatusDot stage={currentStage} className="mr-2 align-middle" />
-              {postStatusLine(currentStage, post.updated_at, post.stage_entered_at, new Date())}
+              {postStatusLine(currentStage, post.updated_at, post.stage_entered_at, new Date(nowMs))}
             </>,
             <>
               {headerStageAction}

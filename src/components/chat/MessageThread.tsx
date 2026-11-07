@@ -143,7 +143,7 @@ import {
   transcribeVoiceNote,
   useVoiceRecord,
 } from '@/lib/chat/transcript-store';
-import { civilDay, formatTime, formatWhen } from '@/lib/time';
+import { civilDay, formatRelative, formatTime } from '@/lib/time';
 import { getDraft, setDraft, strippedReply, type DraftReply } from '@/lib/chat/drafts';
 import {
   BUBBLE_BODY_TYPE,
@@ -930,13 +930,12 @@ export function hasAlbum(message: Pick<ThreadMessage, 'attachments'>): boolean {
  * What the thread's one image viewer shows for a message: its album images (a
  * local preview stands in for an own instant send still uploading), plus the
  * bottom bar's sender and when it was sent in the app's one past-time format
- * (formatWhen: "2:05 PM" today, "Yesterday", "Mon", "19 Oct"; the viewer's
- * clock; `timeZone` and `now` are for tests). Pure.
+ * (formatRelative: "just now", "5 min ago", "2 days ago"; relative to `now`).
+ * Pure.
  */
 export function threadLightbox(
   message: ThreadMessage,
   profiles: Map<string, ChatProfile>,
-  timeZone?: string,
   now: Date = new Date(),
 ): { images: LightboxImage[]; details: LightboxDetails } {
   const images = splitAlbum(message.attachments).images.map((a) => {
@@ -947,7 +946,7 @@ export function threadLightbox(
     images,
     details: {
       sender: senderName(message, profiles),
-      time: formatWhen(messageTimeSource(message), now, timeZone),
+      time: formatRelative(messageTimeSource(message), now),
     },
   };
 }
@@ -1449,8 +1448,8 @@ export function MetaStar({ mine }: { mine: boolean }): ReactElement {
 
 /**
  * A message's in-bubble meta: the clock time ("2:05 PM") on the viewer's clock.
- * formatTime, not formatChatTime: a bubble already sits under its day pill, so
- * it always shows its time. `timeZone` is for tests. Pure.
+ * formatTime (absolute): a bubble already sits under its day pill, so it
+ * always shows its clock time. `timeZone` is for tests. Pure.
  */
 export function bubbleMeta(
   message: ThreadMessage,
@@ -4613,7 +4612,7 @@ function ThreadBody(
   const viewerData =
     viewerMessage !== undefined
       ? withRemovableImages(
-          threadLightbox(viewerMessage, props.profiles),
+          threadLightbox(viewerMessage, props.profiles, new Date(nowMs)),
           viewerMessage,
           props.onRemoveFiles,
           props.viewerUserId ?? '',

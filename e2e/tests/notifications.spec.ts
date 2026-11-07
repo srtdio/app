@@ -541,7 +541,7 @@ test('fix 6 and 30 on ui/ListCard: a brief row shows the brief icon picture; del
   if (briefBox === null) throw new Error('brief picture has no box');
   expect(Math.round(briefBox.width)).toBe(72);
   expect(Math.round(briefBox.height)).toBe(72);
-  await expect(brief.locator('[data-activity-scope-tag]')).toHaveText('Briefs');
+  await expect(brief.locator('[data-activity-scope-tag]')).toHaveText('Brief');
 
   const files = card(page, 'assets_deleted');
   await expect(files).toContainText(`${PEER_NAME} deleted 3 files`);

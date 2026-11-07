@@ -256,6 +256,18 @@ describe('briefCardList presign wiring', () => {
     });
     expect((cards[0]!.props as { timeZone?: string }).timeZone).toBe('Asia/Kolkata');
   });
+
+  it('threads the list ONE clock into every card (no clock per card)', () => {
+    const now = new Date('2026-11-07T09:00:00Z');
+    const cards = briefCardList({
+      briefs: [makeBrief('a'), makeBrief('b')],
+      cache,
+      presignEnabled: true,
+      hrefFor: (brief: BriefWithThumbnail) => `/briefs/${brief.id}`,
+      now,
+    });
+    for (const card of cards) expect((card.props as { now?: Date }).now).toBe(now);
+  });
 });
 
 // The workspace calendar the page reads its sections on: Mumbai, Monday weeks.

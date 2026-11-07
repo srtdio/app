@@ -10,6 +10,7 @@ import {
   layoutMode,
   lineCount,
   lineHeightPx,
+  LIST_CARD_HEIGHT_PX,
   listCardViolations,
   overlappingPairs,
   overlaps,
@@ -302,8 +303,16 @@ describe('list cards (ui/ListCard): equal heights, the 72 picture 16 inside, 12 
 
   it('fails a card more than 1px taller than the first', () => {
     const out = listCardViolations([good(0), good(130, 140)]);
-    expect(out).toHaveLength(1);
-    expect(out[0]).toContain('cards differ');
+    expect(out.filter((m) => m.includes('cards differ'))).toHaveLength(1);
+  });
+
+  it('every list card is 118 tall on every screen (the six lists are one height)', () => {
+    expect(LIST_CARD_HEIGHT_PX).toBe(118);
+    // Equal to each other but not 118: a screen whose cards all grew still fails.
+    const tall = listCardViolations([good(0, 130), good(140, 130)]);
+    expect(tall).toHaveLength(2);
+    for (const m of tall) expect(m).toContain('not 118');
+    expect(listCardViolations([good(0, 117.2)])).toEqual([]);
   });
 
   it('fails a picture that is not 72x72', () => {

@@ -319,7 +319,7 @@ export function indexAfterRemove(index: number, count: number): number | null {
  */
 export interface LightboxDetails {
   sender: string;
-  /** Already formatted by the caller's src/lib/time.ts helper (formatWhen, the app's one past-time format). */
+  /** Already formatted by the caller's src/lib/time.ts helper (formatRelative, the app's one past-time format). */
   time: string;
 }
 

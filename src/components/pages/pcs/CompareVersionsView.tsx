@@ -12,7 +12,8 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { SECTION_LABEL } from '@/components/ui/Text';
-import { formatWhen } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { diffSegments, type DiffKind, type DiffResult, type DiffSegment } from '@/lib/text-diff';
 
 export type CompareViewMode = 'auto' | 'inline' | 'side';
@@ -35,6 +36,8 @@ interface CompareVersionsViewModel extends CompareVersionsViewProps {
   diff: DiffResult;
   mode: CompareViewMode;
   onModeChange: (mode: CompareViewMode) => void;
+  /** The shared minute clock's instant; times read relative to it. Absent: the current instant. */
+  now?: Date;
 }
 
 const MODES: ReadonlyArray<{ value: CompareViewMode; label: string }> = [
@@ -58,13 +61,12 @@ function isEmptyCaption(caption: string | null): boolean {
   return caption === null || caption.trim() === '';
 }
 
-// The app's one past-time format (formatWhen: "2:14 PM" today, "Yesterday",
-// "Mon", "23 Oct"), on the viewer's clock. Falls back
-// to the raw value if unparseable.
-function formatTimestamp(value: string): string {
+// The app's one past-time format (formatRelative: "just now", "5 min ago",
+// "2 days ago"). Falls back to the raw value if unparseable.
+function formatTimestamp(value: string, now: Date): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return formatWhen(value);
+  return formatRelative(value, now);
 }
 
 const NO_CAPTION = <span className="text-fg-3">No caption in this version.</span>;
@@ -124,6 +126,7 @@ export function compareVersionsView({
   diff,
   mode,
   onModeChange,
+  now = new Date(),
 }: CompareVersionsViewModel): ReactNode {
   const segs = diff.segs;
   const guarded = segs === null;
@@ -165,7 +168,7 @@ export function compareVersionsView({
             Comparing v{fromVersionNumber} → v{toVersionNumber}
           </span>
           <span className="text-sm text-fg-2">
-            {formatTimestamp(fromCreatedAt)} → {formatTimestamp(toCreatedAt)}
+            {formatTimestamp(fromCreatedAt, now)} → {formatTimestamp(toCreatedAt, now)}
           </span>
         </div>
         <span className="ml-auto font-mono text-base tabular-nums">
@@ -229,6 +232,7 @@ export function compareVersionsView({
 
 export function CompareVersionsView(props: CompareVersionsViewProps) {
   const [mode, setMode] = useState<CompareViewMode>('auto');
+  const nowMs = useMinuteClock();
   // Renders at its final state on the first frame (never a fade).
 
   const diff = useMemo(
@@ -236,5 +240,5 @@ export function CompareVersionsView(props: CompareVersionsViewProps) {
     [props.fromCaption, props.toCaption],
   );
 
-  return <div>{compareVersionsView({ ...props, diff, mode, onModeChange: setMode })}</div>;
+  return <div>{compareVersionsView({ ...props, diff, mode, onModeChange: setMode, now: new Date(nowMs) })}</div>;
 }

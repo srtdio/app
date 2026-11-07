@@ -7,14 +7,11 @@ import {
   UNTOUCHED_LABEL,
   archiveAllLabel,
   PAST_DAY_ERROR,
-  bankDragId,
   bankItemHref,
   bankZeroCopy,
-  cameFromLabel,
   filterApplied,
   filterPills,
-  ideaFilesLine,
-  ideaMetaLine,
+  ideaBucketTag,
   joinNames,
   moreFilesLabel,
   needsSharedWarning,
@@ -27,7 +24,6 @@ import {
   showToClientWarning,
   sortBankIdeas,
   withoutPill,
-  BANK_DRAG_TYPE,
 } from './bank-parts';
 
 function idea(id: string, over: Partial<BankIdea> = {}): BankIdea {
@@ -68,7 +64,6 @@ function plan(id: string, startsOn: string, endsOn: string, audience = 'team'): 
   } as PlanRow;
 }
 
-const NOW = new Date('2026-11-06T12:00:00Z');
 
 describe('sort, star first', () => {
   const a = idea('a', {
@@ -157,20 +152,17 @@ describe('copy', () => {
     );
   });
 
-  it('words rows', () => {
-    expect(
-      ideaMetaLine(idea('x', { comment_count: 1, last_active_at: '2026-11-04T12:00:00Z' }), NOW),
-    ).toBe('1 comment · Wed');
-    expect(
-      ideaMetaLine(idea('x', { comment_count: 2, last_active_at: '2026-10-01T12:00:00Z' }), NOW),
-    ).toBe('2 comments · 1 Oct');
-    expect(ideaFilesLine(idea('x', { file_count: 3 }))).toBe('Idea · 3 files');
+  it('words cards: the first bucket is the one tag; +N on the pick sheet tile', () => {
+    const buckets = [
+      { id: 'b1', name: 'Reels', colorHex: '', position: 0 },
+      { id: 'b2', name: 'Launch', colorHex: '', position: 1 },
+    ];
+    expect(ideaBucketTag(idea('x', { bucket_ids: ['b2', 'b1'] }), buckets)).toBe('Launch');
+    expect(ideaBucketTag(idea('x', { bucket_ids: ['gone', 'b1'] }), buckets)).toBe('Reels');
+    expect(ideaBucketTag(idea('x', { bucket_ids: [] }), buckets)).toBeUndefined();
+    expect(ideaBucketTag(idea('x'), buckets)).toBeUndefined();
     expect(moreFilesLabel(1)).toBeNull();
     expect(moreFilesLabel(4)).toBe('+3');
-    expect(cameFromLabel(idea('x'))).toBe('New idea');
-    expect(cameFromLabel(idea('x', { came_from_plan_title: 'Week of 12 Oct' }))).toBe(
-      'Week of 12 Oct',
-    );
   });
 
   it('names approvers from the workspace, never a fixed name', () => {
@@ -254,10 +246,5 @@ describe('bulk and routes', () => {
 
   it('opens an idea on the bank route', () => {
     expect(bankItemHref('abc')).toBe('/plan/bank?item=abc');
-  });
-
-  it('reads only a Bank drag', () => {
-    expect(bankDragId(['text/plain'], () => 'x')).toBeNull();
-    expect(bankDragId([BANK_DRAG_TYPE], () => 'id-1')).toBe('id-1');
   });
 });

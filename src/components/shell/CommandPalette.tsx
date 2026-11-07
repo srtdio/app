@@ -25,7 +25,7 @@ import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { generateTraceId } from '@/lib/trace';
 import { readMentionProfiles, READ_TIMEOUT_MS } from '@/lib/chat-reads';
-import { formatChatTime } from '@/lib/time';
+import { formatRelative } from '@/lib/time';
 import { UNDO_MS } from '@/lib/undo';
 import {
   mentionIds,
@@ -335,7 +335,7 @@ export function paletteSections(input: {
   workspaceId: string | null;
   workspaceKey: string | null;
   nowMs: number;
-  /** For tests; the app passes none (the viewer's device zone). */
+  /** Unused: result times read relative to nowMs (formatRelative). */
   timeZone?: string;
 }): PaletteSection[] {
   const query = normalizeQuery(input.query);
@@ -361,7 +361,7 @@ export function paletteSections(input: {
   const words = queryWords(search.query);
   const time = (createdAt: string): string => {
     const ts = Date.parse(createdAt);
-    return Number.isNaN(ts) ? '' : formatChatTime(ts, new Date(input.nowMs), input.timeZone);
+    return Number.isNaN(ts) ? '' : formatRelative(ts, new Date(input.nowMs));
   };
   const ctx = {
     query: search.query,

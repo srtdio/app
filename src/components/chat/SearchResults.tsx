@@ -287,7 +287,7 @@ export function searchResultsView(props: SearchResultsProps): ReactElement {
                           data-search-date=""
                           className="shrink-0 font-mono text-sm tabular-nums text-fg-2"
                         >
-                          {searchDateLabel(hit.createdAt, props.nowMs, props.timeZone)}
+                          {searchDateLabel(hit.createdAt, props.nowMs)}
                         </span>
                       </span>
                       <span

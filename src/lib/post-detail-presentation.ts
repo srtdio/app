@@ -4,7 +4,7 @@
 // an unknown value title-cases its raw token rather than rendering blank.
 
 import type { Stage } from '@srtdio/posts';
-import { formatWhen } from './time';
+import { formatRelative } from './time';
 import { postFormatLabel } from './post-format';
 
 const PLATFORM_LABELS = {
@@ -37,26 +37,25 @@ export function formatLabel(f: string, platform?: string | null): string {
  * The single-line status read for the post-detail header, per stage. Draft tracks
  * the last edit (updated_at); review tracks when it entered review
  * (stage_entered_at); approved/parked/rejected read as an event. Every time is
- * the app's one past-time format (formatWhen: "10:27 AM" today, "Yesterday",
- * "Mon", "11 Jun", "11 Jun 2025") on the viewer's clock (`timeZone` is for tests).
+ * the app's one past-time format (formatRelative: "just now", "5 min ago",
+ * "3 hours ago", "2 days ago", "4 months ago", "2 years ago") against `now`.
  */
 export function postStatusLine(
   stage: Stage,
   updatedAt: string,
   stageEnteredAt: string,
   now: Date,
-  timeZone?: string,
 ): string {
   switch (stage) {
     case 'draft':
-      return `Updated ${formatWhen(updatedAt, now, timeZone)}`;
+      return `Updated ${formatRelative(updatedAt, now)}`;
     case 'review':
-      return `In review · ${formatWhen(stageEnteredAt, now, timeZone)}`;
+      return `In review · ${formatRelative(stageEnteredAt, now)}`;
     case 'approved':
-      return `Approved ${formatWhen(stageEnteredAt, now, timeZone)}`;
+      return `Approved ${formatRelative(stageEnteredAt, now)}`;
     case 'parked':
-      return `Parked ${formatWhen(stageEnteredAt, now, timeZone)}`;
+      return `Parked ${formatRelative(stageEnteredAt, now)}`;
     case 'rejected':
-      return `Rejected ${formatWhen(stageEnteredAt, now, timeZone)}`;
+      return `Rejected ${formatRelative(stageEnteredAt, now)}`;
   }
 }

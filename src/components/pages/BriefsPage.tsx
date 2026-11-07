@@ -69,8 +69,8 @@ import {
   type BriefGroup,
 } from '@/lib/brief-groups';
 import { cn } from '@/lib/cn';
-import { CARD_GRID } from '@/components/ui/Card';
-import { ListCardBox } from '@/components/ui/ListCard';
+import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
+import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { GUTTER } from '@/components/ui/layout';
 import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
@@ -172,6 +172,8 @@ interface BriefCardListDeps {
   hrefFor: (brief: BriefWithThumbnail) => string;
   /** The workspace zone each card's due date reads on. Absent: the device zone. */
   timeZone?: string;
+  /** The list's one clock (useMinuteClock) every card's time reads against. Default: now. */
+  now?: Date;
 }
 
 /**
@@ -189,6 +191,7 @@ export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
       presignEnabled={deps.presignEnabled}
       href={deps.hrefFor(brief)}
       timeZone={deps.timeZone}
+      now={deps.now}
     />
   ));
 }
@@ -248,8 +251,9 @@ export function deriveSortedBriefs(
 }
 
 const LIST_CLASS = cn(GUTTER, 'py-4 flex flex-col gap-6');
-// ui/Card's grid: one column on phone, auto-fill columns that fill the laptop width.
-const GRID_CLASS = cn('pt-3', CARD_GRID);
+// ui/ListCard's page grid: one column on phone, auto-fill columns (at least 360)
+// on laptop, 12 between cards.
+const GRID_CLASS = cn('pt-3', LIST_CARD_GRID);
 
 /**
  * One search answer (2+ characters): the first page of matches (title or
@@ -356,7 +360,7 @@ interface BriefSectionsDeps extends Omit<BriefCardListDeps, 'briefs'> {
   groups: BriefGroup<BriefWithThumbnail>[];
   /** The workspace zone the day headings inside each section are read in. */
   timeZone: string;
-  /** The clock the day headings' year rule reads. Default: now. */
+  /** The clock the day headings' year rule and every card's time read. Default: now. */
   now?: Date;
 }
 
@@ -401,7 +405,7 @@ export function briefSections(deps: BriefSectionsDeps): ReactElement[] {
           {day.label}
         </div>,
         <div key={day.key} className={GRID_CLASS}>
-          {briefCardList({ ...cardDeps, timeZone, briefs: day.items })}
+          {briefCardList({ ...cardDeps, timeZone, now, briefs: day.items })}
         </div>,
       ])}
     </section>
@@ -837,6 +841,10 @@ export function BriefsPage() {
     [showSort, shownBriefs, filter, sort],
   );
 
+  // The list's one clock: every card's time ("Due today", "3 hours ago")
+  // reads the same instant and ages once a minute; no timer per card.
+  const nowMs = useMinuteClock();
+
   const shownCount = showSort
     ? sortedBriefs.length
     : groups.reduce((sum, group) => sum + group.items.length, 0);
@@ -918,12 +926,26 @@ export function BriefsPage() {
       ) : showSort ? (
         <div ref={listRef} className={LIST_CLASS}>
           <div className={GRID_CLASS}>
-            {briefCardList({ briefs: sortedBriefs, cache, presignEnabled, hrefFor })}
+            {briefCardList({
+              briefs: sortedBriefs,
+              cache,
+              presignEnabled,
+              hrefFor,
+              timeZone,
+              now: new Date(nowMs),
+            })}
           </div>
         </div>
       ) : (
         <div ref={listRef} className={LIST_CLASS}>
-          {briefSections({ groups, timeZone, cache, presignEnabled, hrefFor })}
+          {briefSections({
+            groups,
+            timeZone,
+            now: new Date(nowMs),
+            cache,
+            presignEnabled,
+            hrefFor,
+          })}
         </div>
       )}
 
