@@ -497,8 +497,14 @@ export function WritingBox(props: WritingBoxProps) {
       onFocus={(e) => {
         // Only the field itself opens the card: focusing the + (or any row
         // key) in the pill must not move it, or its tray would remount closed.
-        const el = field();
-        if (el !== null && (e.target === el || el.contains(e.target))) {
+        // The field itself (an autoFocus field may focus before its ref is
+        // set): anything in the field area except a key (Expand).
+        const t = e.target;
+        const inField =
+          t instanceof Element &&
+          t.closest('[data-writing-field]') !== null &&
+          t.closest('button') === null;
+        if (inField) {
           blurToken.current += 1;
           setFocused(true);
         }
