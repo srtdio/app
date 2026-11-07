@@ -2,8 +2,8 @@
 // Pipeline, Briefs, Assets, the Chat list (Personal notes, Groups, People),
 // Activity and the Plan tab (plans and the Bank) renders
 // through ui/ListCard, and every card has the identical height structure
-// (padding 16, the 72 picture, a 20 title line, a 2-line preview that always
-// reserves 36, a 20 meta line). The page lists sit in LIST_CARD_GRID (one
+// (padding 12, the 48 picture, a 20 title + time line, a 20 preview + tag +
+// unread line: 74 tall, decided 7 Nov 2026). The page lists sit in LIST_CARD_GRID (one
 // column on phone, auto-fill on laptop); the chat list in LIST_CARD_STACK.
 // The old hand-built layouts (the PostCard frame, AssetCard / AssetGrid,
 // PEOPLE_TILE_GRID, the Plan tab's own cards and calendar, the Bank's own
@@ -278,8 +278,7 @@ function heightShape(html: string): string[][] {
     'data-list-card-body=""',
     'data-list-card-picture=',
     'data-list-card-line="1"',
-    'data-list-card-preview=""',
-    'data-list-card-line="3"',
+    'data-list-card-line="2"',
   ].map((attr) =>
     classOf(html, attr)
       .filter((c) => /^(h|w|min-h|p|py|pt|pb|gap|line-clamp|items)-/.test(c))
@@ -297,9 +296,10 @@ describe('Pipeline, Briefs, Assets, Chat, Activity and the Plan tab render throu
 
   it('every card has the identical height structure', () => {
     const base = heightShape(SCREENS.briefs ?? '');
-    expect(base[0]).toContain('p-4');
-    expect(base[1]).toEqual(expect.arrayContaining(['h-18', 'w-18']));
-    expect(base[3]).toEqual(expect.arrayContaining(['line-clamp-2', 'min-h-9']));
+    expect(base[0]).toContain('p-3');
+    expect(base[1]).toEqual(expect.arrayContaining(['h-12', 'w-12']));
+    expect(base[2]).toContain('h-5');
+    expect(base[3]).toContain('h-5');
     for (const [name, html] of Object.entries(SCREENS)) {
       expect(heightShape(html), name).toEqual(base);
     }
@@ -322,31 +322,35 @@ describe('Pipeline, Briefs, Assets, Chat, Activity and the Plan tab render throu
   });
 });
 
-describe('line 3 time: by meaning (due, ago, added), never a clock time on a past day', () => {
+describe('line 1 time: by meaning (due, ago, added, plan), words only, never a clock time on a past day', () => {
   it('Pipeline and Briefs read the due words, Activity and Chat read how long ago', () => {
-    expect(SCREENS.pipeline).toMatch(/data-list-card-time=""[^>]*>Due Mon</);
-    expect(SCREENS.briefs).toMatch(/data-list-card-time=""[^>]*>Due 28 Nov</);
+    expect(SCREENS.pipeline).toMatch(/data-list-card-time=""[^>]*>Mon</);
+    expect(SCREENS.briefs).toMatch(/data-list-card-time=""[^>]*>28 Nov</);
     expect(SCREENS.activity).toMatch(/data-list-card-time=""[^>]*>1h</);
     expect(SCREENS.group).toMatch(/data-list-card-time=""[^>]*>1m</);
     expect(SCREENS.person).toMatch(/data-list-card-time=""[^>]*>1m</);
     expect(SCREENS.assets).toMatch(/data-list-card-time=""[^>]*>2 Nov</);
-    expect(SCREENS.planTab).toMatch(/data-list-card-time=""[^>]*>Starts today</);
+    expect(SCREENS.planTab).toMatch(/data-list-card-time=""[^>]*>Today</);
     for (const [name, html] of Object.entries(SCREENS)) {
       expect(html, name).not.toMatch(/data-list-card-time=""[^>]*>[^<]*\b(AM|PM)</);
       // The long forms are gone ("5 min ago", "Due in 3 days", "Overdue 2 days").
       expect(html, name).not.toMatch(/\b(min|hours?|days?) ago\b|Due in \d|Overdue \d+ days?\b/);
+      // Words only: never "Due", "Overdue", "Starts" or "Started" on a card.
+      expect(html, name).not.toMatch(/data-list-card-time=""[^>]*>(Due|Overdue|Starts?|Started)\b/);
     }
   });
 
-  it('line 3 reads tag, " · ", time wherever both show', () => {
+  it('line 1 is title then time; line 2 is preview, tag, unread dot; no line 3, no ⋮', () => {
     for (const [name, html] of Object.entries(SCREENS)) {
-      const line = html.slice(html.indexOf('data-list-card-line="3"'));
-      const order = [...line.matchAll(/data-list-card-(tag|sep|time)=""/g)].map((m) => m[1]);
-      if (order.includes('tag') && order.includes('time')) {
-        expect(order, name).toEqual(['tag', 'sep', 'time']);
-      } else {
-        expect(order, name).not.toContain('sep');
-      }
+      const one = html.slice(html.indexOf('data-list-card-line="1"'), html.indexOf('data-list-card-line="2"'));
+      const order1 = [...one.matchAll(/data-list-card-(title|time)=""/g)].map((m) => m[1]);
+      expect(order1[0], name).toBe('title');
+      const two = html.slice(html.indexOf('data-list-card-line="2"'));
+      const order2 = [...two.matchAll(/data-list-card-(preview|tag|unread)=""/g)].map((m) => m[1]);
+      expect(order2.join(','), name).toMatch(/^(preview,?)?(tag,?)?(unread)?$/);
+      expect(html, name).not.toContain('data-list-card-line="3"');
+      expect(html, name).not.toContain('data-list-card-more');
+      expect(html, name).not.toContain('aria-haspopup="menu"');
     }
   });
 
@@ -460,24 +464,21 @@ describe('the old layouts are gone', () => {
 const spacing = tailwindConfig.theme?.spacing as Record<string, string>;
 const px = (rem: string): number => parseFloat(rem) * 16;
 
-describe('equal height: 118 on every list (Pipeline, Briefs, Assets, Chat, Activity, Plan tab, Bank)', () => {
-  it('the arithmetic: 1 + 16 + max(72, 20 + 4 + 36 + 4 + 20) + 16 + 1 = 118', () => {
-    const pad = px(spacing['4'] ?? '');
-    const picture = px(spacing['18'] ?? '');
+describe('equal height: 74 on every list (Pipeline, Briefs, Assets, Chat, Activity, Plan tab, Bank)', () => {
+  it('the arithmetic: 1 + 12 + max(48, 20 + 4 + 20) + 12 + 1 = 74', () => {
+    const pad = px(spacing['3'] ?? '');
+    const picture = px(spacing['12'] ?? '');
     const line = px(spacing['5'] ?? '');
     const gap = px(spacing['1'] ?? '');
-    const preview = px(spacing['9'] ?? '');
-    expect(pad).toBe(16);
-    expect(picture).toBe(72);
-    const text = line + gap + preview + gap + line;
-    expect(1 + pad + Math.max(picture, text) + pad + 1).toBe(118);
+    expect(pad).toBe(12);
+    expect(picture).toBe(48);
+    const text = line + gap + line;
+    expect(1 + pad + Math.max(picture, text) + pad + 1).toBe(74);
   });
 
-  it('picture 72 at 16 from the card edge, 12 to the text', () => {
-    expect(LIST_CARD_BODY.split(' ')).toEqual(expect.arrayContaining(['p-4', 'gap-3']));
-    expect(px(spacing['3'] ?? '')).toBe(12);
+  it('picture 48 at 12 from the card edge, 12 to the text', () => {
+    expect(LIST_CARD_BODY.split(' ')).toEqual(expect.arrayContaining(['p-3', 'gap-3']));
     for (const [name, html] of Object.entries(SCREENS)) {
-      // The picture is the body's first child: nothing between the 16 padding and it.
       expect(html, name).toMatch(/data-list-card-body=""[^>]*><span data-list-card-picture=/);
     }
   });
@@ -505,14 +506,14 @@ describe('equal height: 118 on every list (Pipeline, Briefs, Assets, Chat, Activ
   });
 });
 
-describe('S3: the picture box is 72x72 whatever the picture, before and after it arrives', () => {
-  it('every picture kind keeps h-18 w-18 shrink-0 on the slot', () => {
+describe('S3: the picture box is 48x48 whatever the picture, before and after it arrives', () => {
+  it('every picture kind keeps h-12 w-12 shrink-0 on the slot', () => {
     expect(LIST_CARD_PICTURE.split(' ')).toEqual(
-      expect.arrayContaining(['h-18', 'w-18', 'shrink-0']),
+      expect.arrayContaining(['h-12', 'w-12', 'shrink-0']),
     );
     for (const [name, html] of Object.entries(SCREENS)) {
       expect(classOf(html, 'data-list-card-picture='), name).toEqual(
-        expect.arrayContaining(['h-18', 'w-18', 'shrink-0']),
+        expect.arrayContaining(['h-12', 'w-12', 'shrink-0']),
       );
     }
   });
@@ -528,10 +529,10 @@ describe('S3: the picture box is 72x72 whatever the picture, before and after it
     const pending = slot(<span data-pending="" />);
     const arrived = slot(<img src="https://cdn/x.png" alt="" width={1600} height={400} />);
     expect(arrived).toEqual(pending);
-    expect(pending).toEqual(expect.arrayContaining(['h-18', 'w-18', 'shrink-0']));
+    expect(pending).toEqual(expect.arrayContaining(['h-12', 'w-12', 'shrink-0']));
   });
 
-  it('zero layout shift: the image fills the box and never sizes it (a 1600x400 picture stays 72)', () => {
+  it('zero layout shift: the image fills the box and never sizes it (a 1600x400 picture stays 48)', () => {
     const html = renderToStaticMarkup(
       <ListCard
         picture={{
@@ -541,14 +542,12 @@ describe('S3: the picture box is 72x72 whatever the picture, before and after it
         title="T"
       />,
     );
-    // The wrapper holds the picture to the slot: every child is h-full w-full.
     const wrapper =
-      /data-list-card-picture="image"[^>]*><span class="([^"]*)"/.exec(html)?.[1] ?? '';
+      /data-list-card-picture-box=""[^>]*><span class="([^"]*)"/.exec(html)?.[1] ?? '';
     const decoded = wrapper.replace(/&amp;/g, '&').replace(/&gt;/g, '>');
     expect(decoded.split(' ')).toEqual(
       expect.arrayContaining(['h-full', 'w-full', '[&>*]:h-full', '[&>*]:w-full']),
     );
-    // The text column never depends on the picture: it is flex-1 min-w-0 beside a shrink-0 box.
     expect(classOf(html, 'data-list-card-picture=')).toContain('shrink-0');
   });
 });
