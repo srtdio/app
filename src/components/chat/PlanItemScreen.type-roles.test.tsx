@@ -169,10 +169,10 @@ describe('Plan item screen type roles', () => {
     const author = byText('span', 'Asha');
     expect(classes(author)).toEqual(expect.arrayContaining(['text-base', 'font-medium']));
     expect(classes(author)).not.toContain('font-semibold');
-    const body = byText('p', 'Looks good to me');
+    const body = byText('div.whitespace-pre-wrap', 'Looks good to me');
     expect(classes(body)).toEqual(expect.arrayContaining(['text-base', 'text-fg']));
     expect(classes(body)).not.toContain('text-lg');
-    const description = byText('p', 'A walk through the plant.');
+    const description = byText('[data-plan-description]', 'A walk through the plant.');
     expect(classes(description)).toEqual(expect.arrayContaining(['text-base', 'text-fg-2']));
   });
 
