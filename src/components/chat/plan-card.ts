@@ -1140,7 +1140,7 @@ export function approverIds(bundle: PlanBundle): string[] {
 
 /**
  * When a slot was approved, in the app's one past-time format
- * (formatAgo): "just now", "5 min ago", "2 days ago". Pure (given the clock).
+ * (formatAgo): "just now", "5m", "Yesterday", "Mon". Pure (given the clock).
  */
 export function approvedWhen(iso: string, now: Date): string {
   return formatAgo(iso, now);

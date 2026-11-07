@@ -583,7 +583,7 @@ export function SharedPostCards({
 
 /**
  * An approved card whose approver name is not loaded (none on record, or the
- * name read failed) reads "Approved · 3 days ago" (formatAgo) from
+ * name read failed) reads "Approved · 3h" / "Approved · Mon" (formatAgo) from
  * approved_at, never a blank name. Other footers pass through. Pure.
  */
 export function approvedWithoutName<F extends { state: string }>(

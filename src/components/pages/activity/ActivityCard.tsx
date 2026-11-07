@@ -285,7 +285,6 @@ function activityPicture(
       kind: 'image',
       node: (
         <Thumbnail
-          size="list"
           assetVersionId={lead.thumbnailAssetVersionId}
           cache={cache}
           presignEnabled={presignEnabled}
@@ -310,7 +309,6 @@ function activityPicture(
       kind: 'image',
       node: (
         <Thumbnail
-          size="list"
           assetVersionId={file.assetVersionId}
           cache={cache}
           presignEnabled={presignEnabled}

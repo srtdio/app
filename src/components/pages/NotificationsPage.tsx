@@ -299,7 +299,7 @@ export function NotificationsPage() {
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState(false);
   // The list's one clock: the shared minute clock (useMinuteClock, one interval
-  // app-wide, no timer per card) ages every card's "5 min ago"; a load stamps
+  // app-wide, no timer per card) ages every card's "5m"; a load stamps
   // the instant it landed so a fresh page never reads an older minute.
   const clockMs = useMinuteClock();
   const [loadedMs, setNowMs] = useState(() => Date.now());

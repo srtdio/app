@@ -37,8 +37,8 @@ export function formatLabel(f: string, platform?: string | null): string {
  * The single-line status read for the post-detail header, per stage. Draft tracks
  * the last edit (updated_at); review tracks when it entered review
  * (stage_entered_at); approved/parked/rejected read as an event. Every time is
- * the app's one past-time format (formatAgo: "just now", "5 min ago",
- * "3 hours ago", "2 days ago", "4 months ago", "2 years ago") against `now`.
+ * short (formatAgo: "just now", "5m", "3h", "Yesterday", "Mon", "2 Nov")
+ * against `now`.
  */
 export function postStatusLine(
   stage: Stage,

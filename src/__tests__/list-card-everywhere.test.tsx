@@ -26,6 +26,7 @@ vi.mock('@/lib/workspace-context', async (importOriginal) => ({
   useWorkspace: () => ({ workspaceKey: 'gbl' }),
 }));
 
+import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
@@ -33,8 +34,17 @@ import { BriefCard } from '@/components/pages/BriefCard';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import type { ActivityItem } from '@/components/pages/activity/data';
 import { ChannelCard, DEFAULT_LIST_INPUT, notesTile } from '@/components/chat/ChannelList';
+import { PostCard } from '@/components/pages/PostCard';
+import { AssetListCard } from '@/components/pages/assets/AssetListCard';
+import { PlanTabCard } from '@/components/pages/plan-tab/PlanTabList';
+import { bankCardPicture } from '@/components/pages/plan-tab/BankList';
+import { LIST_CARD_BODY, LIST_CARD_PICTURE, ListCard } from '@/components/ui/ListCard';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import type { PresignCache } from '@/lib/asset-presign';
+import type { AssetListItem } from '@/lib/assets';
+import type { BankIdea, PlanBundle } from '@/lib/chat/plans';
+import type { PipelinePost } from '@srtdio/posts';
+import tailwindConfig from '../../tailwind.config';
 
 const cache = {
   peek: () => null,
@@ -128,7 +138,103 @@ function chat(channel: ChannelSummary): string {
   );
 }
 
+const post: PipelinePost = {
+  id: 'p1',
+  number: 1,
+  title: 'Watch launch',
+  platform: 'instagram',
+  format: 'text',
+  caption: 'Tease the drop',
+  target_date: '2026-11-09T12:00:00Z',
+  stage: 'review',
+  origin: 'manual',
+  legacy_author_name: null,
+  bucket_id: null,
+  brief_id: null,
+  owner_user_id: 'u1',
+  created_by: 'u1',
+  workspace_id: 'w1',
+  created_at: '2026-11-01T00:00:00Z',
+  updated_at: '2026-11-01T00:00:00Z',
+  stage_entered_at: '2026-11-01T00:00:00Z',
+  approved_by: null,
+  approved_on_behalf_of: null,
+  approved_at: null,
+  deleted_at: null,
+  row_version: 1,
+  thumbnailAssetVersionId: null,
+};
+
+const asset: AssetListItem = {
+  id: 'a1',
+  filename: 'report.pdf',
+  displayName: null,
+  folderPath: '/',
+  folderId: null,
+  tags: [],
+  uploadedAt: '2026-11-02T09:00:00Z',
+  currentVersionId: 'av1',
+  kind: 'pdf',
+  mimeType: 'application/pdf',
+  sizeBytes: 2048,
+  width: null,
+  height: null,
+  durationMs: null,
+  pageCount: null,
+  externalUrl: null,
+  r2Key: null,
+  versionNumber: 1,
+  attachmentCount: 0,
+};
+
+const plan: PlanBundle = {
+  plan: {
+    id: 'pl1',
+    workspace_id: 'w1',
+    title: 'Festive season',
+    starts_on: '2026-11-06',
+    ends_on: '2026-11-12',
+    audience: 'client',
+    created_by: null,
+  },
+  items: [],
+  reviews: [],
+  postStages: {},
+  postInfo: {},
+};
+
 const SCREENS: Record<string, string> = {
+  pipeline: renderToStaticMarkup(
+    <MemoryRouter>
+      <PostCard
+        post={post}
+        cache={cache}
+        presignEnabled={false}
+        now={new Date(NOW)}
+        timeZone="UTC"
+      />
+    </MemoryRouter>,
+  ),
+  assets: renderToStaticMarkup(
+    <AssetListCard
+      item={asset}
+      cache={cache}
+      presignEnabled={false}
+      now={new Date(NOW)}
+      onOpen={() => {}}
+    />,
+  ),
+  planTab: renderToStaticMarkup(
+    <MemoryRouter>
+      <PlanTabCard
+        bundle={plan}
+        cover={null}
+        timeZone="UTC"
+        now={new Date(NOW)}
+        onOpen={() => {}}
+      />
+    </MemoryRouter>,
+  ),
   briefs: renderToStaticMarkup(
     <MemoryRouter>
       <BriefCard
@@ -183,7 +289,7 @@ function heightShape(html: string): string[][] {
   );
 }
 
-describe('Briefs, Activity and Chat render through ui/ListCard', () => {
+describe('Pipeline, Briefs, Assets, Chat, Activity and the Plan tab render through ui/ListCard', () => {
   it('every list carries data-list-card', () => {
     for (const [name, html] of Object.entries(SCREENS)) {
       expect(html, name).toContain('data-list-card=""');
@@ -201,22 +307,48 @@ describe('Briefs, Activity and Chat render through ui/ListCard', () => {
     }
   });
 
+  it('covers all six lists: Pipeline, Briefs, Assets, the Chat list, Activity, the Plan tab', () => {
+    expect(Object.keys(SCREENS)).toEqual(
+      expect.arrayContaining(['pipeline', 'briefs', 'assets', 'group', 'activity', 'planTab']),
+    );
+  });
+
   it('every card has its one tap surface and at most one grey tag', () => {
     for (const [name, html] of Object.entries(SCREENS)) {
-      expect(html.match(/data-list-card-press=""|data-brief-card-link=""/g), name).toHaveLength(1);
+      expect(
+        html.match(/data-list-card-press=""|data-[a-z-]+-link=""[^>]*class="absolute inset-0/g),
+        name,
+      ).toHaveLength(1);
       expect((html.match(/data-list-card-tag=""/g) ?? []).length, name).toBeLessThanOrEqual(1);
     }
   });
 });
 
-describe('line 3 time: relative or due, never a clock time', () => {
-  it('Briefs read the due words, Activity and Chat read how long ago', () => {
-    expect(SCREENS.briefs).toMatch(/data-list-card-time=""[^>]*>Due in 22 days</);
-    expect(SCREENS.activity).toMatch(/data-list-card-time=""[^>]*>1 hour ago</);
-    expect(SCREENS.group).toMatch(/data-list-card-time=""[^>]*>1 min ago</);
-    expect(SCREENS.person).toMatch(/data-list-card-time=""[^>]*>1 min ago</);
+describe('line 3 time: by meaning (due, ago, added), never a clock time on a past day', () => {
+  it('Pipeline and Briefs read the due words, Activity and Chat read how long ago', () => {
+    expect(SCREENS.pipeline).toMatch(/data-list-card-time=""[^>]*>Due Mon</);
+    expect(SCREENS.briefs).toMatch(/data-list-card-time=""[^>]*>Due 28 Nov</);
+    expect(SCREENS.activity).toMatch(/data-list-card-time=""[^>]*>1h</);
+    expect(SCREENS.group).toMatch(/data-list-card-time=""[^>]*>1m</);
+    expect(SCREENS.person).toMatch(/data-list-card-time=""[^>]*>1m</);
+    expect(SCREENS.assets).toMatch(/data-list-card-time=""[^>]*>2 Nov</);
+    expect(SCREENS.planTab).toMatch(/data-list-card-time=""[^>]*>Starts today</);
     for (const [name, html] of Object.entries(SCREENS)) {
       expect(html, name).not.toMatch(/data-list-card-time=""[^>]*>[^<]*\b(AM|PM)</);
+      // The long forms are gone ("5 min ago", "Due in 3 days", "Overdue 2 days").
+      expect(html, name).not.toMatch(/\b(min|hours?|days?) ago\b|Due in \d|Overdue \d+ days?\b/);
+    }
+  });
+
+  it('line 3 reads tag, " · ", time wherever both show', () => {
+    for (const [name, html] of Object.entries(SCREENS)) {
+      const line = html.slice(html.indexOf('data-list-card-line="3"'));
+      const order = [...line.matchAll(/data-list-card-(tag|sep|time)=""/g)].map((m) => m[1]);
+      if (order.includes('tag') && order.includes('time')) {
+        expect(order, name).toEqual(['tag', 'sep', 'time']);
+      } else {
+        expect(order, name).not.toContain('sep');
+      }
     }
   });
 
@@ -324,5 +456,97 @@ describe('the old layouts are gone', () => {
     expect(src).not.toContain("from '@/components/ui/Row'");
     expect(src).not.toContain('<CountBadge');
     expect(src).toContain('<ListCard');
+  });
+});
+
+const spacing = tailwindConfig.theme?.spacing as Record<string, string>;
+const px = (rem: string): number => parseFloat(rem) * 16;
+
+describe('equal height: 118 on every list (Pipeline, Briefs, Assets, Chat, Activity, Plan tab, Bank)', () => {
+  it('the arithmetic: 1 + 16 + max(72, 20 + 4 + 36 + 4 + 20) + 16 + 1 = 118', () => {
+    const pad = px(spacing['4'] ?? '');
+    const picture = px(spacing['18'] ?? '');
+    const line = px(spacing['5'] ?? '');
+    const gap = px(spacing['1'] ?? '');
+    const preview = px(spacing['9'] ?? '');
+    expect(pad).toBe(16);
+    expect(picture).toBe(72);
+    const text = line + gap + preview + gap + line;
+    expect(1 + pad + Math.max(picture, text) + pad + 1).toBe(118);
+  });
+
+  it('picture 72 at 16 from the card edge, 12 to the text', () => {
+    expect(LIST_CARD_BODY.split(' ')).toEqual(expect.arrayContaining(['p-4', 'gap-3']));
+    expect(px(spacing['3'] ?? '')).toBe(12);
+    for (const [name, html] of Object.entries(SCREENS)) {
+      // The picture is the body's first child: nothing between the 16 padding and it.
+      expect(html, name).toMatch(/data-list-card-body=""[^>]*><span data-list-card-picture=/);
+    }
+  });
+
+  it('the Bank card is the same part and the same shape', () => {
+    const idea = {
+      id: 'i1',
+      title: 'Behind the scenes',
+      description: 'Studio day',
+      thumb: null,
+      file_count: 0,
+    } as unknown as BankIdea;
+    const html = renderToStaticMarkup(
+      <ListCard
+        picture={bankCardPicture(idea)}
+        title="Behind the scenes"
+        preview="Studio day"
+        time="2 Nov"
+        tag="Reels"
+        onPress={() => {}}
+      />,
+    );
+    expect(heightShape(html)).toEqual(heightShape(SCREENS.briefs ?? ''));
+    expect(source('bank')).toContain('picture={bankCardPicture(idea)}');
+  });
+});
+
+describe('S3: the picture box is 72x72 whatever the picture, before and after it arrives', () => {
+  it('every picture kind keeps h-18 w-18 shrink-0 on the slot', () => {
+    expect(LIST_CARD_PICTURE.split(' ')).toEqual(
+      expect.arrayContaining(['h-18', 'w-18', 'shrink-0']),
+    );
+    for (const [name, html] of Object.entries(SCREENS)) {
+      expect(classOf(html, 'data-list-card-picture='), name).toEqual(
+        expect.arrayContaining(['h-18', 'w-18', 'shrink-0']),
+      );
+    }
+  });
+
+  it('an image that has not arrived (no peek) and one that has hold the same slot classes', () => {
+    const slot = (node: ReactElement): string[] =>
+      classOf(
+        renderToStaticMarkup(
+          <ListCard picture={{ kind: 'image', node }} title="T" preview="P" time="1m" />,
+        ),
+        'data-list-card-picture=',
+      ).sort();
+    const pending = slot(<span data-pending="" />);
+    const arrived = slot(<img src="https://cdn/x.png" alt="" width={1600} height={400} />);
+    expect(arrived).toEqual(pending);
+    expect(pending).toEqual(expect.arrayContaining(['h-18', 'w-18', 'shrink-0']));
+  });
+
+  it('zero layout shift: the image fills the box and never sizes it (a 1600x400 picture stays 72)', () => {
+    const html = renderToStaticMarkup(
+      <ListCard
+        picture={{ kind: 'image', node: <img src="https://cdn/x.png" alt="" width={1600} height={400} /> }}
+        title="T"
+      />,
+    );
+    // The wrapper holds the picture to the slot: every child is h-full w-full.
+    const wrapper = /data-list-card-picture="image"[^>]*><span class="([^"]*)"/.exec(html)?.[1] ?? '';
+    const decoded = wrapper.replace(/&amp;/g, '&').replace(/&gt;/g, '>');
+    expect(decoded.split(' ')).toEqual(
+      expect.arrayContaining(['h-full', 'w-full', '[&>*]:h-full', '[&>*]:w-full']),
+    );
+    // The text column never depends on the picture: it is flex-1 min-w-0 beside a shrink-0 box.
+    expect(classOf(html, 'data-list-card-picture=')).toContain('shrink-0');
   });
 });

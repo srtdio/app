@@ -929,8 +929,8 @@ export function hasAlbum(message: Pick<ThreadMessage, 'attachments'>): boolean {
 /**
  * What the thread's one image viewer shows for a message: its album images (a
  * local preview stands in for an own instant send still uploading), plus the
- * bottom bar's sender and when it was sent in the app's one past-time format
- * (formatAgo: "just now", "5 min ago", "2 days ago"; relative to `now`).
+ * bottom bar's sender and when it was sent, short (formatAgo: "just now",
+ * "5m", "Yesterday", "Mon"; relative to `now`).
  * Pure.
  */
 export function threadLightbox(

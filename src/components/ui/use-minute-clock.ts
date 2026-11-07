@@ -32,7 +32,7 @@ function subscribe(listener: () => void): () => void {
 
 // A read a minute or more off the device clock (the module loaded long before
 // the first card mounted, or a background tab throttled the interval) catches
-// up on the read itself, so the first paint never shows a stale "5 min ago"
+// up on the read itself, so the first paint never shows a stale "5m"
 // and then repaints. Within a minute the snapshot is the same value (stable
 // for useSyncExternalStore).
 function snapshot(): number {

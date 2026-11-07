@@ -138,14 +138,14 @@ export function briefDueDateLabel(
 
 export interface BriefStatusLine {
   status: 'Open' | 'Closed';
-  /** "Due 14 Aug", or the overdue wording ("Overdue 2 months"); null when not shown. */
+  /** "Due 14 Aug", or the overdue wording ("Overdue 2mo"); null when not shown. */
   due: string | null;
   /** True when the due part reads overdue (painted text-bad). */
   overdue: boolean;
 }
 
 /**
- * The top bar's status line: "Open · Due 14 Aug", "Open · Overdue 2 months"
+ * The top bar's status line: "Open · Due 14 Aug", "Open · Overdue 2mo"
  * once the due day has passed in the workspace zone, plain "Open" with no due
  * date, and plain "Closed" for a closed brief. The date-only target_date is read
  * as written; the workspace zone only decides which day is today. Pure.
@@ -232,9 +232,9 @@ export function briefBackTarget(historyState: unknown): 'pop' | '/briefs' {
 }
 
 /**
- * When this brief was raised, in the app's one past-time format
- * (formatAgo): "just now", "5 min ago", "3 hours ago", "2 days ago",
- * "4 months ago", "2 years ago". An unparseable created_at is returned unchanged.
+ * When this brief was raised, short (formatAgo): "just now", "5m", "3h",
+ * "Yesterday", "Mon", "2 Nov" ("2 Nov 2025" off-year). An unparseable
+ * created_at is returned unchanged.
  */
 export function briefRaisedLabel(createdAt: string, now: Date = new Date()): string {
   return formatAgo(createdAt, now) || createdAt;
@@ -739,7 +739,7 @@ export function BriefDetailPage({
   const creatorFormer =
     creatorId !== null && membersLoaded && (memberById.get(creatorId) ?? null) === null;
   // The details as two short lines, the same on phone (under the title) and
-  // desktop (the side column): "Raised 3 days ago by Priya Raman", then "Format
+  // desktop (the side column): "Raised Mon by Priya Raman", then "Format
   // Carousel" when a format is set. Status and due date live in the top bar.
   const detailsLines = (
     <div className="flex min-w-0 flex-col gap-1 text-base">

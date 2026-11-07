@@ -445,7 +445,7 @@ const ROW = 'flex min-h-16 w-full items-center gap-3 border-b border-border py-2
 const ROW_ICON =
   'flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-panel-2 text-fg-3 lit-media';
 
-/** "size · when" under a file name ("2 MB · 3 days ago", formatAgo). Pure. */
+/** "size · when" under a file name ("2 MB · Mon", formatAgo). Pure. */
 function fileMetaLine(item: ChannelAttachmentItem, now: Date): string {
   return `${humanizeSize(item.size)} · ${formatAgo(item.createdAt, now)}`;
 }
@@ -1141,7 +1141,7 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
           presignEnabled={props.presignEnabled}
           details={{
             sender: senderName(current.senderUserId),
-            time: formatAgo(current.createdAt, new Date(nowMs)),
+            time: formatAgo(current.createdAt, new Date(nowMs), props.timeZone),
           }}
           onIndexChange={setViewer}
           onClose={() => setViewer(null)}

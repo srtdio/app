@@ -1113,8 +1113,8 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
 }
 
 /**
- * A brief row's due text: "Due today", "Due in 3 days", "Due 12 Dec"
- * (formatDue), or "Overdue 2 days" (`bad`, the bad token) once an open brief's
+ * A brief row's due text: "Due today", "Due Fri", "Due 12 Dec"
+ * (formatDue), or "Overdue 2d" (`bad`, the bad token) once an open brief's
  * day has passed on the workspace zone; a closed brief is never overdue. Null
  * without a due date. Pure.
  */

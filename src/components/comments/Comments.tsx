@@ -380,7 +380,7 @@ export function annotationChip(
 }
 
 // Format a stored timestamp in the app's one past-time format (formatAgo:
-// "just now", "5 min ago", "2 days ago"). Falls back to the raw value if it is
+// "just now", "5m", "Yesterday", "Mon"). Falls back to the raw value if it is
 // somehow unparseable so nothing is silently dropped.
 function formatTimestamp(value: string, now: Date): string {
   const date = new Date(value);
@@ -907,7 +907,7 @@ export function pointActions(
 }
 
 /** When an edit happened, in the app's one past-time format (formatAgo:
- *  "just now", "5 min ago", "2 days ago"). Unparseable input yields '' so
+ *  "just now", "5m", "Yesterday", "Mon"). Unparseable input yields '' so
  *  nothing raw is shown. */
 export function editedTime(ts: string, now: Date): string {
   return formatAgo(ts, now);

@@ -17,8 +17,8 @@ import { onBehalfSuffix } from '@/components/pages/pcs/roles';
 type ConfirmKind = 'approve' | 'reject' | 'send_review';
 
 /**
- * The agency's quiet line on a post in review: "Waiting on approvers · 3 days
- * ago" (formatAgo, since it entered review; "Waiting on approvers" without
+ * The agency's quiet line on a post in review: "Waiting on approvers · 3h"
+ * (formatAgo, since it entered review; "Waiting on approvers" without
  * a date); null for anyone else or any other stage. Informational only, never
  * an action. `now` comes from the shared minute clock.
  */
@@ -166,7 +166,7 @@ interface DetailRow {
 
 /**
  * The rows after Stage: target date, format (with "· N slides" past one item),
- * and the approval. With an approver on record the value is "Name · 3 days ago"
+ * and the approval. With an approver on record the value is "Name · Mon"
  * ("Name on behalf of client · ..." for an agency-side approver); an approved
  * post with no approver reads when it entered approved (formatAgo). The
  * target date is a due date: its calendar day on the workspace zone.

@@ -87,10 +87,10 @@ export interface TaskDateLine {
 
 /**
  * The line under a row, or null when the chip already says it all:
- *   overdue: "Overdue 2 days" (bad tone); today or undated: nothing
- *   tomorrow or later: "Due tomorrow", "Due in 7 days", "Due 2 Jan 2027" (formatDue)
- *   done with a date: "Due 31 Oct · done 6 days ago"; done, no date: "Done 3 hours ago"
- * The done time is the app's one past-time format (formatAgo). A done
+ *   overdue: "Overdue 2d" (bad tone); today or undated: nothing
+ *   tomorrow or later: "Due tomorrow", "Due Fri", "Due 2 Jan 2027" (formatDue)
+ *   done with a date: "Due 31 Oct · done Mon"; done, no date: "Done 3h"
+ * The done time is short (formatAgo). A done
  * task is never overdue; one with no done time (done before the stamp
  * existed) shows its due day alone. Due days read on the workspace zone. Pure.
  */
@@ -101,7 +101,7 @@ export function rowDateLine(
   const { today } = calendarDays(cal);
   const due = task.dueOn;
   if (task.status === 'done') {
-    const doneDay = task.doneAt !== null ? formatAgo(task.doneAt, cal.now) : '';
+    const doneDay = task.doneAt !== null ? formatAgo(task.doneAt, cal.now, cal.timeZone) : '';
     if (due === null) return doneDay === '' ? null : { text: `Done ${doneDay}`, bad: false };
     const dueText = formatDue(due, cal.timeZone, cal.now);
     return { text: doneDay === '' ? dueText : `${dueText} · done ${doneDay}`, bad: false };

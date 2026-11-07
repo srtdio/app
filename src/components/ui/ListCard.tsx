@@ -119,8 +119,8 @@ export const LIST_CARD_BODY =
 /** The picture box: 72x72 (h-18 w-18), never shrinks. */
 export const LIST_CARD_PICTURE = 'flex h-18 w-18 shrink-0 items-center justify-center';
 
-/** The radius 8 box an image, icon or placeholder sits in. */
-const PICTURE_BOX = 'overflow-hidden rounded-lg';
+/** The radius 8 box a non-person picture sits in, lit as media (lit-media, as the old cards). */
+const PICTURE_BOX = 'lit-media overflow-hidden rounded-lg';
 
 /** Line 1: title + unread dot, one 20 line. */
 export const LIST_CARD_LINE1 = 'flex h-5 min-w-0 items-center gap-2';

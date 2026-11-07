@@ -496,9 +496,8 @@ export function snippetText(
 }
 
 /**
- * A hit's date in the app's one past-time format (src/lib/time.ts
- * formatAgo): "just now", "5 min ago", "3 hours ago", "2 days ago",
- * "4 months ago", "2 years ago". Pure (now is passed in).
+ * A hit's date, short (src/lib/time.ts formatAgo): "just now", "5m", "3h",
+ * "Yesterday", "Mon", "2 Nov" ("2 Nov 2025" off-year). Pure (now is passed in).
  */
 export function searchDateLabel(createdAt: string, nowMs: number): string {
   const ts = Date.parse(createdAt);

@@ -335,7 +335,7 @@ export function paletteSections(input: {
   workspaceId: string | null;
   workspaceKey: string | null;
   nowMs: number;
-  /** Unused: result times read relative to nowMs (formatAgo). */
+  /** The zone result times read "Yesterday" / the weekday on (formatAgo). Absent: the device zone. */
   timeZone?: string;
 }): PaletteSection[] {
   const query = normalizeQuery(input.query);
@@ -361,7 +361,7 @@ export function paletteSections(input: {
   const words = queryWords(search.query);
   const time = (createdAt: string): string => {
     const ts = Date.parse(createdAt);
-    return Number.isNaN(ts) ? '' : formatAgo(ts, new Date(input.nowMs));
+    return Number.isNaN(ts) ? '' : formatAgo(ts, new Date(input.nowMs), input.timeZone);
   };
   const ctx = {
     query: search.query,

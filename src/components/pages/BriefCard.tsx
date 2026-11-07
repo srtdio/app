@@ -135,7 +135,6 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone, now }:
               kind: 'image',
               node: (
                 <Thumbnail
-                  size="list"
                   assetVersionId={brief.thumbnailAssetVersionId}
                   cache={cache}
                   presignEnabled={presignEnabled}

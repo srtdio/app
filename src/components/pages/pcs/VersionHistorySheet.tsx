@@ -81,8 +81,8 @@ export const VERSION_THUMBS_CLASS = 'min-w-0 shrink overflow-hidden';
 /** The text column: fills the row and never squeezes below 128px. */
 export const VERSION_TEXT_CLASS = 'flex min-w-32 flex-1 flex-col';
 
-// The app's one past-time format (formatAgo): "just now", "5 min ago",
-// "2 days ago". Falls back to the raw value if unparseable.
+// When it happened, short (formatAgo): "just now", "5m", "Yesterday",
+// "Mon". Falls back to the raw value if unparseable.
 function formatTimestamp(value: string, now: Date): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;

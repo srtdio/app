@@ -234,7 +234,6 @@ function cardPicture(
         kind: 'image',
         node: (
           <Thumbnail
-            size="list"
             assetVersionId={post.thumbnailAssetVersionId}
             cache={cache}
             presignEnabled={presignEnabled}
@@ -269,7 +268,7 @@ function cardPicture(
  * A Pipeline post on ui/ListCard. Picture: the post's picture, else the play
  * placeholder (a video with no poster) or "Aa" (a text post). Line 1: the
  * title and the unread dot (unread comments). Line 2: the review status line
- * ("With Maya · 3 hours ago", "Waiting on you") over the caption on one line,
+ * ("With Maya · 3h", "Waiting on you") over the caption on one line,
  * or the caption on two lines when there is no status. Line 3: the due or
  * overdue time, the stage tag and the ⋮ (Open, Copy link and the viewer's
  * moves; its name carries the unread comment count). The whole card opens the

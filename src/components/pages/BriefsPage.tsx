@@ -841,7 +841,7 @@ export function BriefsPage() {
     [showSort, shownBriefs, filter, sort],
   );
 
-  // The list's one clock: every card's time ("Due today", "3 hours ago")
+  // The list's one clock: every card's time ("Due today", "3h")
   // reads the same instant and ages once a minute; no timer per card.
   const nowMs = useMinuteClock();
 

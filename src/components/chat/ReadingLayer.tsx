@@ -310,7 +310,7 @@ export function MessageInfoSheet(props: {
               </span>
               {pos.readAt !== null ? (
                 <span className="font-mono text-sm tabular-nums text-fg-3">
-                  {formatAgo(pos.readAt, new Date(props.nowMs))}
+                  {formatAgo(pos.readAt, new Date(props.nowMs), props.timeZone)}
                 </span>
               ) : null}
             </li>

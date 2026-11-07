@@ -1662,7 +1662,7 @@ export function PostDetailPage({
   const canEditContent = agencySide && !readOnly && !approvedLocked;
   const ownerKnown =
     ownerInfo.name !== '' && !(post.owner_user_id === null && post.legacy_author_name === null);
-  // "Due today" / "Due in 3 days" / "Due 12 Dec", or "Overdue 2 days" in the
+  // "Due today" / "Due Fri" / "Due 12 Dec", or "Overdue 2d" in the
   // bad token once the workspace day has passed; approved is never overdue.
   const dueOverdue =
     post.target_date !== null &&

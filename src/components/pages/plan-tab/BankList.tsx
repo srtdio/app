@@ -125,7 +125,6 @@ export function BankThumb(props: { idea: BankIdea; size: 44 }): ReactElement {
     <FilledThumb box={box} fileCount={props.idea.file_count}>
       {thumb.kind === 'image' ? (
         <Thumbnail
-          size="list"
           assetVersionId={thumb.versionId}
           cache={sharedCardPresignCache()}
           presignEnabled={PRESIGN_ENABLED}
@@ -307,7 +306,6 @@ export function bankCardPicture(idea: BankIdea): ListCardPicture {
     kind: 'image',
     node: (
       <Thumbnail
-        size="list"
         assetVersionId={thumb.versionId}
         cache={sharedCardPresignCache()}
         presignEnabled={PRESIGN_ENABLED}

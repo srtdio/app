@@ -4,7 +4,7 @@
 // (This week, Next week, Upcoming, Past; empty ones hidden). A card: the
 // plan's first cover (else the plan icon), its title, then its dates and post
 // count (a Draft adds "only your team sees this"), then when it starts
-// ("Starts in 2 days", "Started 3 days ago") and one grey tag ("1 of 3 OK", or
+// ("Starts Mon", "Started 3d ago") and one grey tag ("1 of 3 OK", or
 // "Draft"). A tap opens the plan's own screen. While more plans remain (the
 // read's next cursor), PlanTabPage hands the list its Load more (from
 // usePlanTabData) and the list ends with it (PlanTabLoadMore, which the Bank
@@ -190,7 +190,6 @@ export function PlanTabCard(props: {
               kind: 'image',
               node: (
                 <Thumbnail
-                  size="list"
                   assetVersionId={cover}
                   cache={sharedCardPresignCache()}
                   presignEnabled={PRESIGN_ENABLED}

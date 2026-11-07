@@ -421,7 +421,7 @@ export function previewLine(summary: ConversationSummary): string {
 /**
  * The tile's accessible name: the chat, its unread count, the preview (or
  * draft) and the time, so a screen reader hears what a sighted user sees.
- * "Open Priya, 3 unread, Draft: see you, 5 min ago". Pure.
+ * "Open Priya, 3 unread, Draft: see you, 5m". Pure.
  */
 export function channelTileLabel(props: {
   title: string;
@@ -1393,7 +1393,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     [props.onSelect],
   );
   const onOpenStarred = props.onOpenStarred;
-  // The list's one clock: every card's "5 min ago" ages together, once a
+  // The list's one clock: every card's "5m" ages together, once a
   // minute, from one shared interval (no timer per card).
   const nowMs = useMinuteClock();
   const searchResults =

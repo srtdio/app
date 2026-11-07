@@ -1,8 +1,8 @@
 // One task row of the shared list, and the priority chip with its menu.
 // Row: tick box (to do / done), title (tap to edit in place: Enter or blur
 // keeps, Esc cancels, empty keeps the old title), priority chip. Under the
-// title, only when there is something to say, a date line ("Overdue 2 days" in
-// the bad tone, "Due in 3 days", "Due 31 Oct · done 6 days ago"). Every change is
+// title, only when there is something to say, a date line ("Overdue 2d" in
+// the bad tone, "Due Fri", "Due 31 Oct · done Mon"). Every change is
 // local to the page's draft until Save. A row may carry an accent dot (changed
 // by someone else since you looked, or your own unsaved change), its changed
 // chip ringed, and sub-lines: what it was ("was <s>old</s>", "priority was
