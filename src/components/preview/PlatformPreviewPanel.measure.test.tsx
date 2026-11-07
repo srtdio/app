@@ -91,7 +91,8 @@ describe('PreviewBody measure', () => {
     try {
       render('v-uploaded');
       expect(host.textContent).not.toContain('Measuring the original.');
-      expect(host.textContent).toContain('1080 x 1350');
+      // The cut line reads the measured 4:5 photo in the 4:5 feed frame.
+      expect(host.textContent).toContain('Fits exactly');
     } finally {
       for (const [key, desc] of [
         ['complete', complete],

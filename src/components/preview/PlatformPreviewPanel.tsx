@@ -1,29 +1,31 @@
-// The "{Platform} preview" side panel on the post detail page and in the post
-// composer. It shows the post's first media and caption framed the way the
-// workspace's platform frames them (sizes from src/lib/platform-specs.ts), then
-// the original with the part that is shown. Dimensions come from asset_versions
+// The "{Platform} preview" on the post detail page and in the post composer.
+// Phone: a full-screen page with "<" and the title; laptop: the right side
+// panel, same content. The body draws the post the way its platform shows it
+// (PostMock: the platform's own feed card or full screen), placed by the
+// post's format, framed by the one frame rule (frameFor via preview-math), and
+// one line under it saying what the platform cuts, with "Show cut" shading the
+// hidden strips on the same media. Dimensions come from asset_versions
 // width/height when present, else are measured in the browser once the media
 // loads. The post page resolves saved media through its presign cache; the
-// composer passes the unsaved draft's local object URL. Presentation only: no
+// composer passes the unsaved draft's local object URLs. Presentation only: no
 // server change, no backfill.
 
 import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
+import type { KeyboardEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
-import { Avatar } from '@/components/ui/Avatar';
-import { Button } from '@/components/ui/Button';
 import { Backdrop } from '@/components/ui/Backdrop';
-import { IconButton } from '@/components/ui/IconButton';
-import { PressableRow } from '@/components/ui/PressableRow';
+import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
+import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Text } from '@/components/ui/Text';
-import { ICON_SIZE, IconEye, IconFile, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconEye, IconFile } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { riseIn, riseOut, usePresence } from '@/lib/motion';
 import { dimWith } from '@/lib/motion/overlays';
 import { useIsLaptop } from '@/lib/use-is-laptop';
 import type { PresignCache } from '@/lib/asset-presign';
-import type { PlatformSize } from '@/lib/platform-specs';
+import { VERTICAL_FRAME, type PlatformSize } from '@/lib/platform-specs';
 import type { GalleryItem } from '@srtdio/posts';
 import { isPostPlatform, platformLabel } from '@srtdio/posts';
 import {
@@ -31,18 +33,26 @@ import {
   cropFor,
   cropLine,
   defaultSizeFor,
-  postSize,
   frameRatio,
-  sizeMeta,
+  postSize,
   sizesFor,
   specFor,
-  type CropWindow,
   type PreviewMedia,
 } from '@/components/preview/preview-math';
+import {
+  PLACEMENT_LABEL,
+  defaultPlacement,
+  placementFormat,
+  placementOptions,
+  type Placement,
+} from '@/components/preview/placement';
+import { fullScreenOnly } from '@/components/preview/platform-look';
+import { FeedMock, FullMock, MediaStage, type StageSlide } from '@/components/preview/PostMock';
+import { useMediaUrl } from '@/components/preview/use-media-url';
 
 type PreviewMediaKind = PreviewMedia | 'document' | 'none';
 
-/** What the first gallery item is, for the preview. */
+/** What a gallery item is, for the preview. */
 export function previewMediaKind(item: GalleryItem | null): PreviewMediaKind {
   if (item === null) return 'none';
   const mime = item.mimeType ?? '';
@@ -52,7 +62,7 @@ export function previewMediaKind(item: GalleryItem | null): PreviewMediaKind {
   return 'none';
 }
 
-/** The chip's label, e.g. "Instagram preview". */
+/** The chip's label and the panel title, e.g. "Instagram preview". */
 export function previewChipLabel(platform: string): string {
   return `${platformLabel(platform)} preview`;
 }
@@ -73,7 +83,14 @@ export function PreviewChip({
   );
 }
 
-/** What the preview draws: the post (or the composer's draft) and its first media. */
+/** One photo or video of the post, in gallery order. */
+export interface PreviewSlide {
+  item: GalleryItem;
+  /** The draft's local object URL for this item; used as-is, never presigned. */
+  localUrl?: string | null;
+}
+
+/** What the preview draws: the post (or the composer's draft) and its media. */
 export interface PreviewBodyProps {
   platform: string;
   format: string;
@@ -81,6 +98,11 @@ export interface PreviewBodyProps {
   /** The account shown on the mock: the workspace name. */
   handle: string;
   firstMedia: GalleryItem | null;
+  /**
+   * Every item in gallery order, first included (a carousel swipes them all).
+   * Optional: absent, the preview draws firstMedia alone.
+   */
+  slides?: readonly PreviewSlide[];
   /** Saved media: resolved through the page's presign cache. */
   cache?: PresignCache;
   presignEnabled?: boolean;
@@ -93,13 +115,18 @@ interface PlatformPreviewPanelProps extends PreviewBodyProps {
   onClose: () => void;
 }
 
+/** The phone page and the laptop panel take the status-bar and home-indicator insets. */
+const PREVIEW_BAR_SAFE =
+  'h-[calc(3.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)]';
+const PREVIEW_BODY_SAFE = 'pb-[calc(1rem+env(safe-area-inset-bottom,0px))]';
+
 export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactElement | null {
   const { open, onClose } = props;
-  const closeRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
   const dimRef = useRef<HTMLButtonElement>(null);
-  // Motion (docs/motion.md): rendered at rest. Phone: the panel rises from the
-  // bottom edge and leaves the same way, the dim tracking it. Laptop: a side
-  // panel, instant. Never a fade.
+  // Motion (docs/motion.md): rendered at rest. Phone: the page rises from the
+  // bottom edge and leaves the same way. Laptop: a side panel, instant, the
+  // dim behind it. Never a fade.
   const isLaptop = useIsLaptop();
   const laptopRef = useRef(isLaptop);
   laptopRef.current = isLaptop;
@@ -116,10 +143,10 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
   const rendered = presence.rendered;
   const panelRef = presence.ref;
 
-  // Focus lands on Close once the panel is in the DOM, Tab stays inside, and
-  // the chip that opened it gets focus back on close (shared modal focus).
+  // Focus lands on "<" once the panel is in the DOM, Tab stays inside, and the
+  // chip that opened it gets focus back on close (shared modal focus).
   useModalFocus(panelRef, open && rendered, {
-    initial: () => closeRef.current?.querySelector('button'),
+    initial: () => backRef.current,
   });
 
   if (!rendered) return null;
@@ -135,26 +162,31 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
 
   return createPortal(
     <div className="fixed inset-0 z-sheet">
-      <Backdrop ref={dimRef} position="absolute" aria-label="Close preview" onClick={onClose} />
+      {isLaptop ? (
+        <Backdrop ref={dimRef} position="absolute" aria-label="Close preview" onClick={onClose} />
+      ) : null}
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        data-preview-panel={isLaptop ? 'side' : 'page'}
         onKeyDown={onKeyDown}
-        className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l bg-panel lit-overlay will-change-transform"
+        className={cn(
+          'absolute flex flex-col will-change-transform',
+          isLaptop
+            ? 'inset-y-0 right-0 w-full max-w-md border-l bg-panel lit-overlay'
+            : 'inset-0 bg-bg',
+        )}
       >
-        <div className="flex items-center gap-2 border-b border-border px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top,0px))]">
-          <Text as="h2" role="title">
-            {title}
-          </Text>
-          <div ref={closeRef} className="ml-auto">
-            <IconButton label="Close preview" onClick={onClose}>
-              <IconX />
-            </IconButton>
-          </div>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-4">
+        <HeaderBar
+          compact
+          title={title}
+          onBack={onClose}
+          backProps={{ buttonRef: backRef }}
+          className={PREVIEW_BAR_SAFE}
+        />
+        <div className={cn('min-h-0 flex-1 overflow-y-auto px-4 pt-4', PREVIEW_BODY_SAFE)}>
           {isPostPlatform(props.platform) ? <PreviewBody {...props} /> : null}
         </div>
       </div>
@@ -163,43 +195,38 @@ export function PlatformPreviewPanel(props: PlatformPreviewPanelProps): ReactEle
   );
 }
 
-/** The media's inline URL: the draft's local URL, else resolved through the presign cache. */
-function useMediaUrl(
-  item: GalleryItem | null,
+/** A full-screen frame: Reel, Story, Shorts bands, TikTok letterbox. */
+function isFullScreen(size: PlatformSize): boolean {
+  if (size.layout === 'letterbox') return size.feedCard !== true;
+  return size.layout === 'vertical' || size.layout === 'story' || size.layout === 'bands';
+}
+
+/** The size the preview draws: the frame the post page shows, for the picked placement. */
+function shownSize(
+  platform: string,
+  format: string,
+  placement: Placement,
+  media: PreviewMedia,
   kind: PreviewMediaKind,
-  cache: PresignCache | undefined,
-  enabled: boolean,
-  localUrl: string | null,
-): string | null {
-  const versionId = item?.assetVersionId ?? '';
-  const renderable =
-    localUrl === null &&
-    cache !== undefined &&
-    enabled &&
-    versionId !== '' &&
-    (kind === 'image' || kind === 'video');
-  const [url, setUrl] = useState<string | null>(() =>
-    renderable ? (cache.peek(versionId)?.url ?? null) : null,
-  );
-  useEffect(() => {
-    if (!renderable) {
-      setUrl(null);
-      return;
-    }
-    let live = true;
-    cache
-      ?.resolve(versionId)
-      .then((presigned) => {
-        if (live) setUrl(presigned.url);
-      })
-      .catch(() => {
-        if (live) setUrl(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [renderable, versionId, cache]);
-  return localUrl ?? url;
+  dims: { w: number; h: number } | null,
+): PlatformSize | null {
+  const shownFormat = placementFormat(platform, format, placement);
+  const size =
+    postSize(platform, shownFormat, media, dims) ??
+    (kind !== 'none' && isPostPlatform(platform)
+      ? defaultSizeFor(platform, shownFormat, media, dims)
+      : null);
+  // A plain video placed in the feed before its size is known: the platform's
+  // Feed size, not the 9:16 video default.
+  if (
+    placementOptions(platform, format) !== null &&
+    placement === 'feed' &&
+    size !== null &&
+    size.layout !== 'feed'
+  ) {
+    return sizesFor(platform, 'video').find((s) => s.label === PLACEMENT_LABEL.feed) ?? size;
+  }
+  return size;
 }
 
 export function PreviewBody(props: PreviewBodyProps): ReactElement {
@@ -207,7 +234,6 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
   const kind = previewMediaKind(firstMedia);
   const spec = specFor(platform);
   const mediaList: PreviewMedia = kind === 'video' ? 'video' : 'image';
-  const listSizes = sizesFor(platform, mediaList);
 
   const url = useMediaUrl(
     firstMedia,
@@ -234,19 +260,15 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
       : null;
   const shown = measured !== null && measured.src === url ? measured : null;
   const dims = stored ?? (shown !== null ? { w: shown.w, h: shown.h } : null);
-  // The panel opens on the frame the post page shows ("This post"), then the
-  // platform's published sizes to compare.
-  const thisPost = postSize(platform, format, mediaList, dims);
-  const sizes: readonly PlatformSize[] = thisPost !== null ? [thisPost, ...listSizes] : listSizes;
-  const fallback =
-    thisPost ??
-    (isPostPlatform(platform) ? defaultSizeFor(platform, format, mediaList, dims) : null);
 
-  const [label, setLabel] = useState<string | null>(fallback?.label ?? null);
+  // Placement: fixed by the format, except a plain video on Instagram or
+  // Facebook (Reel / Story / Feed chips; opens on Feed).
+  const options = placementOptions(platform, format);
+  const [placement, setPlacement] = useState<Placement>(() => defaultPlacement(format));
   useEffect(() => {
-    setLabel(fallback?.label ?? null);
-  }, [fallback?.label]);
-  const size = sizes.find((s) => s.label === label) ?? fallback;
+    setPlacement(defaultPlacement(format));
+  }, [format]);
+  const [showCut, setShowCut] = useState(false);
 
   /** src is the element's own src attribute, so a late load of a replaced file never counts. */
   function measure(src: string | null, w: number, h: number): void {
@@ -271,288 +293,132 @@ export function PreviewBody(props: PreviewBodyProps): ReactElement {
     );
   }
 
-  if (size === null) return <p className="text-base text-fg-2">No preview.</p>;
+  if (!isPostPlatform(platform)) return <p className="text-base text-fg-2">No preview.</p>;
+
+  const size = shownSize(platform, format, placement, mediaList, kind, dims);
+  const full = size !== null ? isFullScreen(size) : fullScreenOnly(platform);
+  if (size === null && kind !== 'none' && !full) {
+    return <p className="text-base text-fg-2">No preview.</p>;
+  }
+  const ratio = size !== null ? frameRatio(size) : VERTICAL_FRAME.w / VERTICAL_FRAME.h;
+  const result = size !== null && dims !== null && kind !== 'none' ? cropFor(dims, size) : null;
+  const cutOn = showCut && result !== null && result.kind === 'cut' && dims !== null;
 
   // Shorts with an image: the same "Shorts are video only." line the post page shows.
   const note =
-    mediaList === 'video'
-      ? spec?.videoNote
-      : kind === 'image' && spec?.imageUnsupported !== undefined
-        ? spec.imageUnsupported
-        : spec?.imageNote;
-  const media: ReactNode =
-    url === null ? null : kind === 'video' ? (
-      <video
-        src={url}
-        muted
-        playsInline
-        preload="metadata"
-        aria-hidden
-        onLoadedMetadata={(event) =>
-          measure(
-            event.currentTarget.getAttribute('src'),
-            event.currentTarget.videoWidth,
-            event.currentTarget.videoHeight,
-          )
-        }
-      />
-    ) : (
-      <img
-        src={url}
-        alt=""
-        className="h-full w-full"
-        // An image already decoded (cached, or loaded before a reset) fires no
-        // load event: measure it as it mounts.
-        ref={(el) => {
-          if (el !== null && el.complete) {
-            measure(el.getAttribute('src'), el.naturalWidth, el.naturalHeight);
-          }
-        }}
-        onLoad={(event) =>
-          measure(
-            event.currentTarget.getAttribute('src'),
-            event.currentTarget.naturalWidth,
-            event.currentTarget.naturalHeight,
-          )
-        }
-      />
-    );
+    size === null
+      ? undefined
+      : mediaList === 'video'
+        ? spec?.videoNote
+        : kind === 'image' && spec?.imageUnsupported !== undefined
+          ? spec.imageUnsupported
+          : spec?.imageNote;
+
+  // The first slide is firstMedia (its URL is the one measured); the rest
+  // follow in gallery order. Files that are not a photo or video are skipped.
+  const slides: StageSlide[] = [];
+  if (firstMedia !== null && (kind === 'image' || kind === 'video')) {
+    slides.push({
+      key: `first:${firstMedia.assetAttachmentId}`,
+      item: firstMedia,
+      kind,
+      localUrl: props.localUrl ?? null,
+    });
+    (props.slides ?? []).slice(1).forEach((slide, at) => {
+      const k = previewMediaKind(slide.item);
+      if (k !== 'image' && k !== 'video') return;
+      slides.push({
+        key: `${at + 1}:${slide.item.assetAttachmentId}`,
+        item: slide.item,
+        kind: k,
+        localUrl: slide.localUrl ?? null,
+      });
+    });
+  }
+
+  const layout = size?.layout;
+  const stage = (
+    <MediaStage
+      key={cutOn ? 'cut' : 'slides'}
+      slides={slides}
+      firstUrl={url}
+      cache={props.cache}
+      presignEnabled={props.presignEnabled === true}
+      fit={layout === 'bands' || layout === 'letterbox' ? 'contain' : 'cover'}
+      bands={layout === 'bands' ? 'blur' : layout === 'letterbox' ? 'black' : 'none'}
+      cut={
+        cutOn && dims !== null && result !== null
+          ? { window: result.window, mediaRatio: dims.w / dims.h, frameRatio: ratio }
+          : null
+      }
+      carousel={!full}
+      hasMedia={kind !== 'none'}
+      onMeasure={measure}
+    />
+  );
+  const media = size !== null || full ? { ratio, stage } : null;
+  const clampLines = size !== null ? captionClampLines(size) : full ? 2 : 3;
 
   return (
-    <div className="flex flex-col gap-5">
-      {sizes.length > 0 ? (
-        <SizePicker sizes={sizes} value={size.label} onChange={setLabel} />
+    <div className="flex flex-col gap-4">
+      {options !== null ? (
+        <div role="group" aria-label="Placement" className="flex flex-wrap gap-2">
+          {options.map((option) => (
+            <Chip
+              key={option}
+              label={PLACEMENT_LABEL[option]}
+              selected={option === placement}
+              onClick={() => {
+                setPlacement(option);
+                setShowCut(false);
+              }}
+            />
+          ))}
+        </div>
       ) : null}
       {note !== undefined ? <p className="text-base text-fg-2">{note}</p> : null}
 
-      <LayoutMock
-        size={size}
-        handle={props.handle}
-        caption={props.caption}
-        media={media}
-        hasMedia={kind !== 'none'}
-      />
+      {full ? (
+        <FullMock
+          platform={platform}
+          handle={props.handle}
+          caption={props.caption}
+          clampLines={clampLines}
+          media={media}
+          story={layout === 'story'}
+          ratio={ratio}
+        />
+      ) : (
+        <FeedMock
+          platform={platform}
+          handle={props.handle}
+          caption={props.caption}
+          clampLines={clampLines}
+          media={media}
+        />
+      )}
 
-      {kind !== 'none' && media !== null ? <CropBox size={size} dims={dims} media={media} /> : null}
-    </div>
-  );
-}
-
-function SizePicker({
-  sizes,
-  value,
-  onChange,
-}: {
-  sizes: readonly PlatformSize[];
-  value: string;
-  onChange: (label: string) => void;
-}): ReactElement {
-  return (
-    <div role="radiogroup" aria-label="Size" className="grid grid-cols-2 gap-2">
-      {sizes.map((size) => {
-        const selected = size.label === value;
-        return (
-          <SizeOption
-            key={size.label}
-            size={size}
-            selected={selected}
-            onPick={() => onChange(size.label)}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function clampStyle(lines: number): CSSProperties {
-  return {
-    display: '-webkit-box',
-    WebkitLineClamp: lines,
-    WebkitBoxOrient: 'vertical',
-    overflow: 'hidden',
-  };
-}
-
-/** The platform's frame: a feed card, or a full-screen vertical / story / banded frame. */
-function LayoutMock({
-  size,
-  handle,
-  caption,
-  media,
-  hasMedia,
-}: {
-  size: PlatformSize;
-  handle: string;
-  caption: string;
-  media: ReactNode;
-  hasMedia: boolean;
-}): ReactElement {
-  const ratio = frameRatio(size);
-  const avatar = <Avatar name={handle.trim()} role="header" />;
-  const placeholder = (
-    <span className="flex h-full w-full items-center justify-center text-sm text-fg-3">
-      {hasMedia ? 'Loading' : 'Photos and videos show up here.'}
-    </span>
-  );
-
-  // A feed post fit with bands (Threads, never cropped) keeps the feed card.
-  const feedLetterbox = size.layout === 'letterbox' && size.feedCard === true;
-  if (size.layout === 'feed' || feedLetterbox) {
-    return (
-      <figure
-        aria-label="Feed preview"
-        className="overflow-hidden rounded-xl border bg-panel lit-card"
-      >
-        <div className="flex items-center gap-2 px-3 py-2">
-          {avatar}
-          <span className="truncate text-base font-semibold text-fg">{handle}</span>
-        </div>
-        <div
-          data-mock-fit={feedLetterbox ? 'contain' : 'cover'}
-          className={cn(
-            'w-full overflow-hidden [&>img]:h-full [&>img]:w-full [&>video]:h-full [&>video]:w-full',
-            feedLetterbox
-              ? 'bg-black [&>img]:object-contain [&>video]:object-contain'
-              : 'bg-panel-3 [&>img]:object-cover [&>video]:object-cover',
+      {kind !== 'none' && size !== null ? (
+        <div data-preview-cut="" className="flex min-h-11 items-center gap-3">
+          {result === null ? (
+            <Text role="secondary" className="min-w-0 flex-1">
+              Measuring the original.
+            </Text>
+          ) : (
+            <Text role="body" className="min-w-0 flex-1">
+              {cropLine(result, platform)}
+            </Text>
           )}
-          style={{ aspectRatio: String(ratio) }}
-        >
-          {media ?? placeholder}
-        </div>
-        {caption !== '' ? (
-          <figcaption
-            className="px-3 py-2 text-base text-fg [overflow-wrap:anywhere]"
-            style={clampStyle(captionClampLines(size))}
-          >
-            <span className="font-semibold">{handle}</span> {caption}
-          </figcaption>
-        ) : null}
-      </figure>
-    );
-  }
-
-  const contain = size.layout === 'bands' || size.layout === 'letterbox';
-  return (
-    <figure
-      aria-label={size.layout === 'story' ? 'Story preview' : 'Full-screen preview'}
-      className="relative mx-auto w-full max-w-72 overflow-hidden rounded-2xl bg-black"
-      style={{ aspectRatio: String(ratio) }}
-    >
-      {size.layout === 'bands' && media !== null ? (
-        <div
-          aria-hidden
-          className="absolute inset-0 scale-110 opacity-70 blur-xl [&>img]:h-full [&>img]:w-full [&>img]:object-cover [&>video]:h-full [&>video]:w-full [&>video]:object-cover"
-        >
-          {media}
+          {result !== null && result.kind === 'cut' ? (
+            <Chip
+              label="Show cut"
+              selected={cutOn}
+              className="shrink-0"
+              onClick={() => setShowCut((on) => !on)}
+            />
+          ) : null}
         </div>
       ) : null}
-      <div
-        className={cn(
-          'absolute inset-0 flex items-center justify-center [&>img]:h-full [&>img]:w-full [&>video]:h-full [&>video]:w-full',
-          contain
-            ? '[&>img]:object-contain [&>video]:object-contain'
-            : '[&>img]:object-cover [&>video]:object-cover',
-        )}
-      >
-        {media ?? placeholder}
-      </div>
-      {size.layout === 'story' ? (
-        <div className="absolute inset-x-0 top-0 flex flex-col gap-2 p-3">
-          <span className="h-0.5 w-full rounded-full bg-white/60" />
-          <span className="flex items-center gap-2">
-            {avatar}
-            <span className="truncate text-base font-semibold text-white">{handle}</span>
-          </span>
-        </div>
-      ) : (
-        <figcaption className="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/70 to-transparent p-3 pt-10 text-white">
-          <span className="flex items-center gap-2">
-            {avatar}
-            <span className="truncate text-base font-semibold">{handle}</span>
-          </span>
-          {caption !== '' ? (
-            <span
-              className="text-md [overflow-wrap:anywhere]"
-              style={clampStyle(captionClampLines(size))}
-            >
-              {caption}
-            </span>
-          ) : null}
-        </figcaption>
-      )}
-    </figure>
-  );
-}
-
-/** The original, with the "Shown" window drawn over it and the crop line. */
-function CropBox({
-  size,
-  dims,
-  media,
-}: {
-  size: PlatformSize;
-  dims: { w: number; h: number } | null;
-  media: ReactNode;
-}): ReactElement {
-  if (dims === null) {
-    return <p className="text-sm text-fg-3">Measuring the original.</p>;
-  }
-  const result = cropFor(dims, size);
-  return (
-    <section aria-label="Crop" className="flex flex-col gap-2">
-      <Text as="h3" role="section">
-        Original · {dims.w} x {dims.h}
-      </Text>
-      <div
-        className="relative mx-auto w-full max-w-xs overflow-hidden rounded-lg bg-panel-3 [&>img]:h-full [&>img]:w-full [&>img]:object-fill [&>video]:h-full [&>video]:w-full [&>video]:object-fill"
-        style={{ aspectRatio: String(dims.w / dims.h) }}
-      >
-        {media}
-        <ShownWindow window={result.window} />
-      </div>
-      <p className="text-base text-fg">{cropLine(result)}</p>
-    </section>
-  );
-}
-
-function ShownWindow({ window: win }: { window: CropWindow }): ReactElement {
-  const pct = (n: number): string => `${n * 100}%`;
-  return (
-    <div
-      className="absolute rounded-sm border-2 border-field lit-spotlight"
-      style={{ left: pct(win.x), top: pct(win.y), width: pct(win.w), height: pct(win.h) }}
-    >
-      <span className="absolute left-1 top-1 rounded bg-accent lit-badge px-1 py-0.5 text-xs font-semibold text-accent-fg">
-        Shown
-      </span>
     </div>
-  );
-}
-
-/** One size pick: the pick is the solid ink fill. */
-function SizeOption(props: {
-  size: PlatformSize;
-  selected: boolean;
-  onPick: () => void;
-}): ReactElement {
-  return (
-    <PressableRow
-      type="button"
-      role="radio"
-      data-selected={props.selected ? 'true' : undefined}
-      aria-checked={props.selected}
-      onClick={props.onPick}
-      className={cn(
-        'flex flex-col items-start justify-center border px-3 py-2 mv-tint',
-        props.selected
-          ? 'border-transparent bg-accent text-accent-fg lit-pill'
-          : 'border-transparent bg-panel-3 font-medium text-fg lit-well-soft lit-hover',
-      )}
-    >
-      <span className="text-base font-medium">{props.size.label}</span>
-      <span className={cn('text-sm', props.selected ? 'text-accent-fg' : 'text-fg-3')}>
-        {sizeMeta(props.size)}
-      </span>
-    </PressableRow>
   );
 }

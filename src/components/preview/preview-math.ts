@@ -10,7 +10,7 @@ import {
   type PlatformSize,
   type PlatformSpec,
 } from '@/lib/platform-specs';
-import { isPostPlatform, type PostPlatform } from '@srtdio/posts';
+import { isPostPlatform, platformLabel, type PostPlatform } from '@srtdio/posts';
 
 export { formatDefaultSize };
 
@@ -63,39 +63,6 @@ export function formatFrameRatio(platform: string, format: string): number | nul
   return frameFor(platform, format, null)?.ratio ?? null;
 }
 
-// The ratios platforms publish; a size within 1% reads as the published one
-// (1200 x 630 is 1.905, published as 1.91:1).
-const NAMED_RATIOS: ReadonlyArray<readonly [number, string]> = [
-  [1, '1:1'],
-  [4 / 5, '4:5'],
-  [3 / 4, '3:4'],
-  [9 / 16, '9:16'],
-  [16 / 9, '16:9'],
-  [1.91, '1.91:1'],
-];
-
-/** A readable ratio for a size, e.g. "4:5", "9:16", "1.91:1". */
-export function ratioLabel(w: number, h: number): string {
-  const named = NAMED_RATIOS.find(([r]) => Math.abs(w / h / r - 1) < 0.01);
-  if (named !== undefined) return named[1];
-  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
-  const d = gcd(w, h);
-  const rw = w / d;
-  const rh = h / d;
-  if (rw <= 32 && rh <= 32) return `${rw}:${rh}`;
-  const r = w / h;
-  return r >= 1 ? `${trim(r)}:1` : `1:${trim(1 / r)}`;
-}
-
-function trim(n: number): string {
-  return String(Math.round(n * 100) / 100);
-}
-
-/** The size picker's second line: "1080 x 1350 · 4:5". */
-export function sizeMeta(size: PlatformSize): string {
-  return `${size.w} x ${size.h} · ${ratioLabel(size.w, size.h)}`;
-}
-
 /** The part of the original shown, as fractions of its width and height. */
 export interface CropWindow {
   x: number;
@@ -104,7 +71,7 @@ export interface CropWindow {
   h: number;
 }
 
-type CropResult =
+export type CropResult =
   | { kind: 'fits'; window: CropWindow }
   | { kind: 'cut'; pct: number; from: 'sides' | 'top and bottom'; window: CropWindow }
   | { kind: 'bands'; window: CropWindow };
@@ -148,11 +115,11 @@ export function cropFor(media: { w: number; h: number }, size: PlatformSize): Cr
   };
 }
 
-/** The line under the crop box. */
-export function cropLine(result: CropResult): string {
+/** The one line under the preview: "Instagram cuts 12% from sides", "Fits exactly", "Shown with bands". */
+export function cropLine(result: CropResult, platform: string): string {
   if (result.kind === 'fits') return 'Fits exactly';
   if (result.kind === 'bands') return 'Shown with bands';
-  return `${result.pct}% cut from ${result.from}`;
+  return `${platformLabel(platform)} cuts ${result.pct}% from ${result.from}`;
 }
 
 /**
