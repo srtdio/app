@@ -226,13 +226,13 @@ for (const photo of [true, false]) {
     await page.goto('/chat');
     const tile = page.locator('[data-notes-tile]');
     await tile.waitFor({ state: 'visible', timeout: 30_000 });
-    // The notes row is ui/ListCard's person slot at 40 (ui/Avatar 'card'):
+    // The notes row is ui/ListCard's person slot at 48 in Cozy (ui/Avatar 'card'):
     // the user's own photo, round; their initials (no image) without one.
     const picture = tile.locator('[data-notes-picture]');
     await expect(picture).toBeVisible();
     const box = await picture.boundingBox();
-    expect(Math.round(box?.width ?? 0)).toBe(40);
-    expect(Math.round(box?.height ?? 0)).toBe(40);
+    expect(Math.round(box?.width ?? 0)).toBe(48);
+    expect(Math.round(box?.height ?? 0)).toBe(48);
     const tileAvatar = tile.locator('[data-avatar-role="card"]');
     await expect(tileAvatar).toHaveClass(/rounded-full/);
     await expect(tile.locator('img')).toHaveCount(photo ? 1 : 0);

@@ -248,8 +248,9 @@ test('fix 6 and 30 on ui/ListCard: a brief row shows the brief icon picture; del
   await expect(briefPicture).toBeVisible();
   const briefBox = await briefPicture.boundingBox();
   if (briefBox === null) throw new Error('brief picture has no box');
-  expect(Math.round(briefBox.width)).toBe(40);
-  expect(Math.round(briefBox.height)).toBe(40);
+  // Cozy density (the default): the row picture is 48 (40 in Compact).
+  expect(Math.round(briefBox.width)).toBe(48);
+  expect(Math.round(briefBox.height)).toBe(48);
   await expect(brief.locator('[data-activity-scope-tag]')).toHaveText('Brief');
 
   const files = card(page, 'assets_deleted');

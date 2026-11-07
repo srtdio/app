@@ -73,7 +73,8 @@ async function expectRowLayout(page: Page, itemId: string): Promise<void> {
   expect(row !== null && thumb !== null && viewport !== null).toBe(true);
   if (row === null || thumb === null || viewport === null) return;
   expect(Math.round(thumb.width)).toBe(56);
-  expect(Math.round(viewport.width - (thumb.x + thumb.width))).toBe(16 + 1 + 16);
+  // Flat day section (8 Nov 2026): the tile sits on the 16 gutter, no card edge or inset.
+  expect(Math.round(viewport.width - (thumb.x + thumb.width))).toBe(16);
   const day = page.locator('[data-plan-day]').filter({ has: wrap });
   await expect(day.locator('[data-plan-day-col]')).toHaveCount(1);
   const col = await day.locator('[data-plan-day-col]').boundingBox();
@@ -379,7 +380,8 @@ test('client: a long plan shows week headers, 44px empty days, and a draft with 
     await expect(today).toHaveClass(/\bbg-accent\b/);
     await expect(today).toHaveClass(/\btext-accent-fg\b/);
     const tile = plan.locator('[data-plan-today]');
-    await expect(tile).toHaveClass(/\bborder-transparent\b/);
+    await expect(tile).not.toHaveClass(/\bborder\b/);
+    await expect(tile).toHaveClass(/\brounded-picture\b/);
     await expect(tile).toHaveClass(/\bbg-accent\b/);
     await expect(tile.locator('[data-plan-day-number]')).toHaveClass(/\btext-accent-fg\b/);
     await tile.scrollIntoViewIfNeeded();
