@@ -7,7 +7,8 @@
 // call site that moves onto the part keeps its count. The only other allowed
 // drops: files retired on purpose (DELETED_ON_PURPOSE) and per-file drops
 // checked by hand (EXPLAINED_DROPS). It also fails when src/index.css (where
-// the lit-* recipes live) differs from main by a single byte.
+// the lit-* recipes live) differs from main by a single byte, once the lines
+// declaring a variable retired on purpose (RETIRED_CSS_VARS) leave main's copy.
 //
 //   node --experimental-strip-types --no-warnings scripts/lighting-guard.ts            check
 //   node --experimental-strip-types --no-warnings scripts/lighting-guard.ts --verbose  + file:line lists
@@ -21,6 +22,34 @@ import { fileURLToPath } from 'node:url';
 
 export const BASE_REF = 'origin/main';
 export const INDEX_CSS = 'src/index.css';
+
+/**
+ * CSS variables retired from src/index.css on purpose, with the reason. The
+ * lines that declare only one of these are dropped from the main copy before
+ * the byte comparison; every other change to index.css (additions included)
+ * still fails.
+ */
+export const RETIRED_CSS_VARS: Record<string, string> = {
+  '--annotation-bg': 'gold annotation retired, ink now',
+  '--annotation-bg-rgb': 'gold annotation retired, ink now',
+  '--annotation-line': 'gold annotation retired, ink now',
+  '--annotation-line-rgb': 'gold annotation retired, ink now',
+};
+
+/**
+ * The CSS with every line that only declares a retired variable
+ * (`  --name: value;`) removed, newline included. Any other line, even one
+ * that mentions the variable, is kept. Pure.
+ */
+export function stripRetiredCssVars(
+  css: string,
+  retired: readonly string[] = Object.keys(RETIRED_CSS_VARS),
+): string {
+  if (retired.length === 0) return css;
+  const names = retired.map(escapeRe).join('|');
+  const line = new RegExp(`^[ \\t]*(?:${names})[ \\t]*:[^;\\n]*;[ \\t]*\\r?\\n`, 'gm');
+  return css.replace(line, '');
+}
 
 /**
  * Files retired on purpose (deleted, or emptied to a stub). Whatever lit-*
@@ -51,6 +80,7 @@ export const DELETED_ON_PURPOSE: Record<string, string> = {
   'src/components/chat/ScheduledStrip.tsx': 'Scheduled send retired (chat simplification).',
   'src/components/chat/WhenOptions.tsx':
     'The shared when picker retired with reminders and scheduled send.',
+  'src/components/pages/pcs/CompareVersionsView.tsx': 'Compare versions retired.',
 };
 
 /**
@@ -77,6 +107,13 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
   },
   'src/components/chat/StatusDrawer.tsx': {
     'lit-card-muted': { count: 1, why: "The mark row's stamp confirm retired with Mark as." },
+  },
+  'src/components/comments/Comments.tsx': {
+    'lit-card-muted': {
+      count: 4,
+      why:
+        'No card per thread: the thread, batch group, skeleton and two empty cards are one OWN_CARD_CLASS (lit-card-muted) around the section.',
+    },
   },
   'src/components/chat/tasks/TaskSheet.tsx': {
     'lit-well': { count: 1, why: 'The Tasks sheet search field (Input) retired.' },
@@ -156,6 +193,22 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
       why: 'Four hand-built top bars are one topBar() helper on HeaderBar (lit-header).',
     },
   },
+  'src/components/pages/pcs/PostLightbox.tsx': {
+    'lit-focus': {
+      count: 2,
+      why: 'The "Remove this image?" confirm (its two buttons) retired; remove is the 4 s UndoStrip.',
+    },
+  },
+  'src/components/pages/pcs/VersionHistorySheet.tsx': {
+    'lit-selected': {
+      count: 1,
+      why: 'The picked row of the compare select retired with Compare versions.',
+    },
+    'lit-badge': {
+      count: 1,
+      why: 'The compare select tick circle retired with Compare versions.',
+    },
+  },
   'src/components/pages/activity/ActivityBoxes.tsx': {
     'lit-media': { count: 1, why: 'Skeleton card is ListCardBox; its picture box is lit-media.' },
     'lit-card': {
@@ -210,6 +263,25 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
     },
     'lit-media': { count: 4, why: 'Pictures sit in the ListCard picture box (lit-media).' },
     'lit-pill': { count: 1, why: "Draft tag is ListCard's one tag (Tag, lit-pill)." },
+  },
+  'src/components/preview/PlatformPreviewPanel.tsx': {
+    'lit-spotlight': {
+      count: 1,
+      why: 'The separate Crop section retired (its "Shown" window); one cut row with Show cut.',
+    },
+    'lit-badge': {
+      count: 1,
+      why: 'The separate Crop section retired (its "Shown" label); one cut row with Show cut.',
+    },
+    'lit-well-soft': {
+      count: 1,
+      why: 'The size picker retired (unpicked SizeOption); placement comes from the post format.',
+    },
+    'lit-hover': {
+      count: 2,
+      why: 'The size picker retired (SizeOption lit-hover and its PressableRow).',
+    },
+    'lit-focus': { count: 1, why: "The size picker retired (SizeOption's PressableRow)." },
   },
   'src/components/pages/settings/MembersList.tsx': {
     'lit-pill': {
@@ -585,7 +657,8 @@ export function run(argv: string[], opts: RunOptions): number {
   }
 
   let code = 0;
-  const cssMain = git(opts.root, ['show', `${BASE_REF}:${INDEX_CSS}`]);
+  // Retired variables (RETIRED_CSS_VARS) leave the main copy first; nothing else may differ.
+  const cssMain = stripRetiredCssVars(git(opts.root, ['show', `${BASE_REF}:${INDEX_CSS}`]));
   const cssPath = join(opts.root, INDEX_CSS);
   const cssBranch = existsSync(cssPath) ? readFileSync(cssPath, 'utf8') : '';
   if (cssMain !== cssBranch) {

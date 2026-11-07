@@ -319,7 +319,7 @@ async function agencyFlow(page: Page): Promise<void> {
   await expect(item.locator('[data-plan-ask]')).toHaveCount(0);
   // The post view's own sheet keeps Move but no Remove from plan row.
   await expect(item.locator('[data-plan-remove]')).toBeVisible();
-  await expectOverflowOpensPipeline(page, item);
+  await expectOverflowOpensPostActions(page, item);
 
   // G2: the open item is removed elsewhere; the re-read closes the Item layer
   // through its own close (its history step released), the Plan stays.
@@ -456,7 +456,7 @@ async function clientFlow(page: Page): Promise<void> {
   await expect(item.getByText('Fixture caption')).toBeVisible();
   await expect(item.locator('[data-plan-approve]')).toHaveCount(0);
   await expect(item.locator('[data-plan-ask]')).toHaveCount(0);
-  await expectOverflowOpensPipeline(page, item);
+  await expectOverflowOpensPostActions(page, item);
 
   await page.goBack();
   await expect(item).toBeHidden();
@@ -468,25 +468,26 @@ async function clientFlow(page: Page): Promise<void> {
 
 /**
  * The post item's header overflow opens the post view's own action sheet:
- * Open in pipeline first, then the post's actions; Escape closes it.
+ * Copy link first, then the post's actions (Open in pipeline retired);
+ * Escape closes it.
  */
-async function expectOverflowOpensPipeline(page: Page, item: Locator): Promise<void> {
+async function expectOverflowOpensPostActions(page: Page, item: Locator): Promise<void> {
   await item.locator('[data-plan-more]').click();
   // ActionMenu: a sheet titled Post actions on a phone, a popover menu at 768px and up.
   const laptop = (page.viewportSize()?.width ?? 0) >= 768;
   const more = laptop
     ? page
         .getByRole('menu')
-        .filter({ has: page.getByRole('menuitem', { name: /Open in pipeline/ }) })
+        .filter({ has: page.getByRole('menuitem', { name: /Send to chat/ }) })
     : page.getByRole('dialog', { name: 'Post actions', exact: true });
-  await expect(more.getByRole('menuitem', { name: /Open in pipeline/ })).toBeVisible();
-  await expect(more.getByRole('menuitem', { name: /Send to chat/ })).toBeVisible();
   await expect(more.getByRole('menuitem', { name: /Copy link/ })).toBeVisible();
-  // Open in pipeline is the first row (DOM order, not geometry mid-slide).
+  await expect(more.getByRole('menuitem', { name: /Send to chat/ })).toBeVisible();
+  await expect(more.getByRole('menuitem', { name: /Open in pipeline/ })).toHaveCount(0);
+  // Copy link is the first row (DOM order, not geometry mid-slide).
   const labels = await more.getByRole('menuitem').allInnerTexts();
   const at = (re: RegExp): number => labels.findIndex((t) => re.test(t));
-  expect(at(/Open in pipeline/)).toBeGreaterThanOrEqual(0);
-  expect(at(/Open in pipeline/)).toBeLessThan(at(/Send to chat/));
+  expect(at(/Copy link/)).toBe(0);
+  expect(at(/Copy link/)).toBeLessThan(at(/Send to chat/));
   await page.keyboard.press('Escape');
   await expect(more).toBeHidden();
 }

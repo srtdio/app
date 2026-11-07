@@ -6,9 +6,11 @@ import {
   diffOccurrences,
   formatTable,
   isCounted,
+  RETIRED_CSS_VARS,
   scanFiles,
   scanSource,
   stripComments,
+  stripRetiredCssVars,
   type FileMap,
 } from './lighting-guard.ts';
 
@@ -185,5 +187,63 @@ describe('diffOccurrences', () => {
   it('lists every class of a deleted file as removed', () => {
     const changes = diffOccurrences({ 'src/b.tsx': `'lit-card lit-drop'` }, {});
     expect(changes.map((c) => `${c.sign}${c.occ.role}`)).toEqual(['-lit-card', '-lit-drop']);
+  });
+});
+
+describe('stripRetiredCssVars (index.css stays locked but for retired vars)', () => {
+  const main = [
+    ':root {',
+    '  --warn-line: #f2c9a2;',
+    '  --annotation-bg: #ffe9b8;',
+    '  --annotation-bg-rgb: 255 233 184;',
+    '  --annotation-line: #d9a93c;',
+    '  --annotation-line-rgb: 217 169 60;',
+    '  --search-mark-bg: #ffe9b8;',
+    '}',
+    '',
+  ].join('\n');
+  const branch = [
+    ':root {',
+    '  --warn-line: #f2c9a2;',
+    '  --search-mark-bg: #ffe9b8;',
+    '}',
+    '',
+  ].join('\n');
+
+  it('lists only the gold annotation vars, each with its reason', () => {
+    expect(Object.keys(RETIRED_CSS_VARS).sort()).toEqual([
+      '--annotation-bg',
+      '--annotation-bg-rgb',
+      '--annotation-line',
+      '--annotation-line-rgb',
+    ]);
+    for (const why of Object.values(RETIRED_CSS_VARS)) {
+      expect(why).toBe('gold annotation retired, ink now');
+    }
+  });
+
+  it('main minus the retired declarations equals a branch that removed them', () => {
+    expect(stripRetiredCssVars(main)).toBe(branch);
+  });
+
+  it('any other change still differs: an edit, an addition, a removed live var', () => {
+    const edited = branch.replace('#f2c9a2', '#f2c9a3');
+    const added = branch.replace('}', '  --new-token: #000;\n}');
+    const removed = branch.replace('  --search-mark-bg: #ffe9b8;\n', '');
+    for (const next of [edited, added, removed]) expect(stripRetiredCssVars(main)).not.toBe(next);
+  });
+
+  it('keeps a line that only uses a retired var, and a var that merely shares the prefix', () => {
+    const css = '  color: var(--annotation-line);\n  --annotation-bg-soft: #fff;\n';
+    expect(stripRetiredCssVars(css)).toBe(css);
+  });
+
+  it('keeps the dark block lines too (both themes stripped the same way)', () => {
+    const dark = '.dark {\n  --annotation-bg: #4a3a14;\n  --warn-ink: #f0a35c;\n}\n';
+    expect(stripRetiredCssVars(dark)).toBe('.dark {\n  --warn-ink: #f0a35c;\n}\n');
+  });
+
+  it('an empty list strips nothing', () => {
+    expect(stripRetiredCssVars(main, [])).toBe(main);
   });
 });
