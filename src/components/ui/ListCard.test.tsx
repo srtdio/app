@@ -273,10 +273,7 @@ describe('LIST_CARD_GRID: the page list', () => {
     const columns = tailwindConfig.theme?.extend?.gridTemplateColumns as
       | Record<string, string>
       | undefined;
-    const fromTheme = tailwindConfig.theme?.gridTemplateColumns as
-      | Record<string, string>
-      | undefined;
-    const value = columns?.['list-cards'] ?? fromTheme?.['list-cards'];
+    const value = columns?.['list-cards'];
     expect(value).toBe('repeat(auto-fill, minmax(360px, 1fr))');
   });
 

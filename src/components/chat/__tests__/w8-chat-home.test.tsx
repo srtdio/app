@@ -22,13 +22,10 @@ describe('W8 fix 7: small fixes', () => {
     const line = notesLastLine(
       { lastMessageText: 'Buy film', lastMessageTs: now - 5 * 60_000, unread: 0 },
       now,
-      'UTC',
     );
     expect(line?.preview).toBe('Buy film');
     expect(line?.time).not.toBe('');
-    expect(notesLastLine(undefined, now, 'UTC')).toBeNull();
-    expect(
-      notesLastLine({ lastMessageText: '', lastMessageTs: 0, unread: 0 }, now, 'UTC'),
-    ).toBeNull();
+    expect(notesLastLine(undefined, now)).toBeNull();
+    expect(notesLastLine({ lastMessageText: '', lastMessageTs: 0, unread: 0 }, now)).toBeNull();
   });
 });
