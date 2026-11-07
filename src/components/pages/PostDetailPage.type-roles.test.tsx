@@ -197,7 +197,9 @@ describe('PostDetailPage type roles', () => {
 
   it('the header status line is a screen header: text-lg font-semibold', async () => {
     await render();
-    const status = document.querySelector('.lit-header.border-b span.text-lg');
+    const status = document.querySelector(
+      '.lit-header.border-b span.text-lg, .lit-header header span.text-lg',
+    );
     expect(status).not.toBeNull();
     expect(classes(status)).toContain('font-semibold');
   });

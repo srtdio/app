@@ -277,7 +277,9 @@ describe('the progress row (retired floating strip)', () => {
     expect(html).toContain('h-12');
     expect(html).not.toContain('sticky');
     expect(html).not.toContain('lit-header');
-    expect(html).not.toContain('bg-panel-2');
+    // No surface of its own: the row's own class carries no fill (the chips do).
+    const rowClass = /data-checkpoint-progress-row=""[^>]*class="([^"]*)"/.exec(html)?.[1] ?? '';
+    expect(rowClass).not.toContain('bg-panel-2');
     expect(html).toContain('1 of 2 resolved');
   });
 

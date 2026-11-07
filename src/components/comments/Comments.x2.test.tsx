@@ -172,7 +172,7 @@ describe('caption quote inside the comment (item 3)', () => {
     expect(quote).toBeGreaterThan(-1);
     expect(quote).toBeLessThan(body);
     expect(SRC).toContain('data-comment-role=""');
-    expect(SRC).toContain('formatAgo(comment.created_at, new Date(nowMs))');
+    expect(SRC).toContain('formatAgo(comment.created_at, now)');
     // The retired long formatter (split so the src/** guard scan stays clean).
     expect(SRC).not.toContain('format' + 'When');
   });

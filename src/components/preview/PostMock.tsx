@@ -13,11 +13,11 @@ import { Avatar } from '@/components/ui/Avatar';
 import { textRole } from '@/components/ui/Text';
 import {
   ICON_SIZE,
+  IconArrowUpRight,
   IconBookmark,
   IconChat,
   IconForward,
   IconRotateCcw,
-  IconSend,
   IconStar,
 } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
@@ -58,7 +58,7 @@ function Glyph({ glyph }: { glyph: ActionGlyph }): ReactElement {
     case 'share':
       return <IconForward size={size} />;
     case 'send':
-      return <IconSend size={size} />;
+      return <IconArrowUpRight size={size} />;
     case 'repost':
       return <IconRotateCcw size={size} />;
     case 'save':

@@ -235,7 +235,7 @@ export const DOWNLOAD_FAILED = errorText('download', null);
 
 /**
  * The agency manage actions, prewired to the current slide. #26: no per-tap
- * reorder here; reordering is hold-and-drag in the gallery. No Delete image
+ * reorder here; reordering is hold-and-drag in the gallery. No second delete
  * either: removing a picture is the one Remove image (the post ⋯ menu, the
  * slide actions sheet), behind the page's Undo strip.
  */
