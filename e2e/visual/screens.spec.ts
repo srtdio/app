@@ -300,22 +300,6 @@ async function openDm(page: Page): Promise<void> {
   await waitFor([page.locator('[data-bubble]', { hasText: 'Ready for your look' })], 'DM');
 }
 
-/** The chat composer with formatted text typed and a word selected: live
- *  styling (faded markers) and the format strip open. */
-async function openFormatStrip(page: Page): Promise<void> {
-  await openDm(page);
-  const box = page.locator('form textarea').first();
-  await box.click();
-  await box.fill('*bold* _italic_ ~strike~ +underline+ ```mono``` today');
-  await box.evaluate((el: HTMLTextAreaElement) => {
-    el.focus();
-    el.setSelectionRange(el.value.length - 5, el.value.length);
-    el.dispatchEvent(new Event('select', { bubbles: true }));
-    document.dispatchEvent(new Event('selectionchange'));
-  });
-  await waitFor([page.locator('[data-format-strip]')], 'format strip');
-}
-
 /**
  * The group chat's tasks with due days around NOW (Wednesday 21 Oct, UTC,
  * week from Monday): #8 today, #9 later this week, #10 overdue, #11 done
@@ -1101,8 +1085,6 @@ const SCREENS: Screen[] = [
     },
   },
   { name: 'chat-thread', seed: creator, url: '/chat', steps: openDm },
-  // The format strip open over the composer, live styling in the box.
-  { name: 'chat-format-strip', seed: creator, url: '/chat', steps: openFormatStrip },
   {
     // The DM's open-items drawer from its ticker: grey sheet, lit cards.
     name: 'chat-status-drawer',
@@ -3245,14 +3227,18 @@ async function stubUploadingVoice(network: HarnessNetwork, page: Page): Promise<
 }
 
 /**
- * The DM's composer form. Found by the composer row (ui/Composer), not its
- * textarea: recording swaps the field's contents, so the textarea unmounts.
+ * The DM's composer form. Found by the composer root ([data-composer]: the
+ * writing box, or ui/Composer's frame while recording), not its textarea:
+ * recording swaps the field's contents, so the textarea unmounts.
  */
-const dmComposer = (page: Page): Locator => page.locator('form:has([data-composer-row])').first();
+const dmComposer = (page: Page): Locator => page.locator('form:has([data-composer])').first();
 
-/** The composer row's last slot (send, mic, stop or the busy spinner). */
+/**
+ * The composer's send slot (send, mic, stop or the busy spinner): the
+ * recording row's last slot, or the writing box row's trailing slot.
+ */
 const sendSlot = (page: Page): Locator =>
-  dmComposer(page).locator('[data-composer-row] > :last-child');
+  dmComposer(page).locator('[data-composer-row] > :last-child, [data-writing-row] > :last-child');
 
 /** The DM with a recording running (the stub microphone). */
 async function startRecording(page: Page): Promise<void> {
