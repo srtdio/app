@@ -293,6 +293,17 @@ describe('writes update in place; the refetch is silent', () => {
       'textarea[aria-label="Edit comment body"]',
     );
     expect(box).toBeTruthy();
+    // The edit field is ui/WritingBox in comment mode with no send of its own
+    // (Save and Cancel stay under it).
+    const writing = box?.closest<HTMLElement>('[data-writing-box]');
+    expect(writing?.getAttribute('data-mode')).toBe('comment');
+    expect(writing?.querySelector('[data-row-send]')).toBeNull();
+    // The root composer is a comment-mode WritingBox too.
+    expect(
+      Array.from(host?.querySelectorAll('[data-writing-box]') ?? []).filter(
+        (el) => el.getAttribute('data-mode') === 'comment',
+      ).length,
+    ).toBeGreaterThanOrEqual(2);
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
     act(() => {
       setter?.call(box, 'new body');
