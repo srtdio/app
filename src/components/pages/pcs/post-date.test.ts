@@ -44,8 +44,8 @@ describe('the details sheet date input reads and writes the workspace-zone day',
 });
 
 describe('the due label (flow B 28)', () => {
-  it('reads relative ahead ("Due in 5 days"), then the day, in the workspace zone', () => {
-    expect(formatDue('2026-10-28T06:30:00.000Z', 'Asia/Kolkata', NOW)).toBe('Due in 5 days');
+  it('reads the weekday ahead ("Due Wed", 5 days), then the day, in the workspace zone', () => {
+    expect(formatDue('2026-10-28T06:30:00.000Z', 'Asia/Kolkata', NOW)).toBe('Due Wed');
     expect(formatDue('2026-12-28T06:30:00.000Z', 'Asia/Kolkata', NOW)).toBe('Due 28 Dec');
     // A past day reads its date (the caller shows Overdue unless approved).
     expect(formatDue(INSTANT, 'Asia/Kolkata', NOW)).toBe('Due 20 Oct');
