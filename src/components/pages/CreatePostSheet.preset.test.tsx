@@ -280,6 +280,23 @@ describe('CreatePostSheet preset', () => {
   });
 });
 
+describe('CreatePostSheet preset caption box', () => {
+  it('is ui/WritingBox caption mode: no Aa, no format keys, Emoji and @ on focus', async () => {
+    await renderSheet('instagram', SEND);
+    const caption = document.querySelector<HTMLTextAreaElement>('#post-caption')!;
+    const box = caption.closest<HTMLElement>('[data-writing-box]');
+    expect(box?.dataset.mode).toBe('caption');
+    await act(async () => caption.focus());
+    expect(box?.querySelector('[aria-label="Emoji"]')).not.toBeNull();
+    expect(box?.querySelector('[aria-label="Mention"]')).not.toBeNull();
+    expect(box?.querySelector('[aria-label="Aa"]')).toBeNull();
+    expect(box?.querySelector('[aria-label="Bold"]')).toBeNull();
+    expect(caption.getAttribute('placeholder')).toBe(
+      'Write the caption. Its first line becomes the title.',
+    );
+  });
+});
+
 describe('CreatePostSheet first post fill on tap', () => {
   const onFilled = vi.fn();
   const FILL: PostSheetPreset = { ...SEND, fillOnTap: { onFilled } };

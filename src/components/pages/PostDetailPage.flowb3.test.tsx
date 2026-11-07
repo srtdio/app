@@ -668,6 +668,20 @@ describe('37. approved posts are locked', () => {
     expect(document.querySelector('[data-title-lock]')).toBeNull();
   });
 
+  it('the caption editor is ui/WritingBox caption mode: Emoji and @, no Aa or format keys', async () => {
+    h.stage = 'draft';
+    await render();
+    await click(document.querySelector('[data-caption-edit]'));
+    const area = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Caption"]');
+    const box = area?.closest<HTMLElement>('[data-writing-box]');
+    expect(box?.dataset.mode).toBe('caption');
+    await act(async () => area?.focus());
+    expect(box?.querySelector('[aria-label="Emoji"]')).not.toBeNull();
+    expect(box?.querySelector('[aria-label="Mention"]')).not.toBeNull();
+    expect(box?.querySelector('[aria-label="Aa"]')).toBeNull();
+    expect(box?.querySelector('[aria-label="Bold"]')).toBeNull();
+  });
+
   it('maps post_approved_locked to plain words', () => {
     expect(
       postActionErrorCopy({ code: 'unknown', message: 'post_approved_locked' }, 'save the caption'),

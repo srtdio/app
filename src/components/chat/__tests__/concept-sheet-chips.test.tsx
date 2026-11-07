@@ -167,3 +167,19 @@ describe.each([
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ConceptSheet description: ui/WritingBox field mode', () => {
+  it('a field-mode box, labelled Description; the Aa row and Emoji show on focus, no @', async () => {
+    const { upload } = recorder();
+    await mount({ upload });
+    const area = document.querySelector<HTMLTextAreaElement>('[data-plan-concept-description]');
+    const box = area?.closest<HTMLElement>('[data-writing-box]');
+    expect(box?.dataset.mode).toBe('field');
+    expect(area?.labels?.[0]?.textContent).toBe('Description');
+    expect(box?.querySelector('[aria-label="Bold"]')).toBeNull();
+    await act(async () => area?.focus());
+    expect(box?.querySelector('[aria-label="Bold"]')).not.toBeNull();
+    expect(box?.querySelector('[aria-label="Emoji"]')).not.toBeNull();
+    expect(box?.querySelector('[aria-label="Mention"]')).toBeNull();
+  });
+});

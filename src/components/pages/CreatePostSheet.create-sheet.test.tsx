@@ -272,6 +272,33 @@ describe('New post sheet: caption cap', () => {
   });
 });
 
+describe('New post sheet: caption box (ui/WritingBox caption mode)', () => {
+  const box = (): HTMLElement | null => caption().closest<HTMLElement>('[data-writing-box]');
+
+  it('is caption mode: Emoji and @ while focused, never Aa or a format key', async () => {
+    await renderSheet();
+    expect(box()?.dataset.mode).toBe('caption');
+    expect(document.querySelector('label[for="post-caption"]')).not.toBeNull();
+    await act(async () => caption().focus());
+    expect(box()?.querySelector('[aria-label="Emoji"]')).not.toBeNull();
+    expect(box()?.querySelector('[aria-label="Mention"]')).not.toBeNull();
+    expect(box()?.querySelector('[aria-label="Aa"]')).toBeNull();
+    expect(box()?.querySelector('[aria-label="Bold"]')).toBeNull();
+    expect(box()?.querySelector('[data-format-mirror]')).toBeNull();
+    // The counter stays inside the box.
+    expect(box()?.querySelector('[data-caption-count]')).not.toBeNull();
+  });
+
+  it('a caption error turns the box edge bad', async () => {
+    await renderSheet();
+    await act(async () => setValue(title(), 'Monsoon drop'));
+    await act(async () => setValue(caption(), 'a'.repeat(4001)));
+    await act(async () => draftButton().click());
+    expect(caption().getAttribute('aria-invalid')).toBe('true');
+    expect(box()?.querySelector('[data-writing-frame]')?.hasAttribute('data-invalid')).toBe(true);
+  });
+});
+
 describe('New post sheet: discard', () => {
   it('no changes: X closes at once, no prompt', async () => {
     await renderSheet();
