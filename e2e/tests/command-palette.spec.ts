@@ -423,7 +423,8 @@ test.describe('search basics', () => {
     const box = await clear.boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-    await expect(clear).toHaveText('');
+    // D4d: the clear is the text button "Clear", never an X glyph.
+    await expect(clear).toHaveText('Clear');
     await clear.tap();
     await expect(input).toHaveValue('');
     await expect(input).toBeFocused();
