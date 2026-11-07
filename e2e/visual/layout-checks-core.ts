@@ -271,7 +271,10 @@ export interface LayoutViolation {
     | 'pinned-bar'
     | 'under-bar'
     | 'tray-tiles'
-    | 'chip';
+    | 'chip'
+    | 'topbar'
+    | 'chip-row'
+    | 'upload-bar';
   message: string;
 }
 
@@ -500,4 +503,180 @@ export function trayTileViolations(
     `the "+" tray shows ${tiles.length} tiles (${tiles.join(', ') || 'none'}), ` +
       `not ${expected.length} (${expected.join(', ')})`,
   ];
+}
+
+/** The top bar's sort and primary slots (shell/Topbar TopbarSlots): fixed 44 boxes. */
+export const TOPBAR_SLOT_PX = 44;
+/** The top bar's controls sit gap-1 apart (4px), plus sub-pixel rounding. */
+export const TOPBAR_GAP_MAX_PX = 4.5;
+/** A slot holds one x across screens within this many px. */
+const TOPBAR_DRIFT_PX = 0.5;
+
+/** The top bar as measured: search, the sort slot, the primary ("+") slot, the avatar. */
+export interface TopbarGeom {
+  /** The visible Search control (the phone IconButton or the laptop field-button). */
+  search: Box | null;
+  /** [data-topbar-slot="sort"]. */
+  sort: Box | null;
+  /** [data-topbar-slot="primary"]. */
+  primary: Box | null;
+  /** The Account menu (avatar) button. */
+  avatar: Box | null;
+}
+
+/**
+ * Decision A: the top bar reads search | sort | "+" | avatar, left to right,
+ * the sort and "+" slots each a fixed 44x44 box (empty slots keep it), the "+"
+ * last before the avatar and the sort right before the "+". A bar with no
+ * slots (no workspace yet) is not checked. Pure.
+ */
+export function topbarViolations(g: TopbarGeom): string[] {
+  if (g.sort === null && g.primary === null) return [];
+  const out: string[] = [];
+  const slots: Array<[string, Box | null]> = [
+    ['sort', g.sort],
+    ['primary', g.primary],
+  ];
+  for (const [name, box] of slots) {
+    if (box === null) {
+      out.push(`no ${name} slot ([data-topbar-slot="${name}"])`);
+      continue;
+    }
+    if (!near(box.width, TOPBAR_SLOT_PX) || !near(box.height, TOPBAR_SLOT_PX)) {
+      out.push(`${name} slot is ${box.width}x${box.height}, not 44x44 (a fixed slot)`);
+    }
+  }
+  if (g.search === null) out.push('no visible Search in the top bar');
+  if (g.avatar === null) out.push('no Account menu (avatar) in the top bar');
+  const right = (b: Box): number => b.x + b.width;
+  const { search, sort, primary, avatar } = g;
+  if (search !== null && sort !== null && right(search) > sort.x + LIST_CARD_PX_TOLERANCE) {
+    out.push(`Search ends at ${right(search)}, after the sort slot starts at ${sort.x}`);
+  }
+  if (sort !== null && primary !== null) {
+    const gap = primary.x - right(sort);
+    if (gap < -LIST_CARD_PX_TOLERANCE || gap > TOPBAR_GAP_MAX_PX) {
+      out.push(`the sort slot and the "+" slot are ${gap}px apart (sort right before "+")`);
+    }
+  }
+  if (primary !== null && avatar !== null) {
+    const gap = avatar.x - right(primary);
+    if (gap < -LIST_CARD_PX_TOLERANCE || gap > TOPBAR_GAP_MAX_PX) {
+      out.push(`the "+" slot and the avatar are ${gap}px apart ("+" last before the avatar)`);
+    }
+  }
+  return out;
+}
+
+/** One screen's slot positions, for the across-screens check. */
+export interface TopbarSlotsAt {
+  screen: string;
+  sortX: number;
+  primaryX: number;
+}
+
+/**
+ * The sort and "+" slots sit at one x on every list screen (they never move
+ * between tabs): each screen against the first. Pure.
+ */
+export function topbarDriftViolations(rows: readonly TopbarSlotsAt[]): string[] {
+  const first = rows[0];
+  if (first === undefined) return [];
+  const out: string[] = [];
+  for (const r of rows) {
+    if (Math.abs(r.sortX - first.sortX) > TOPBAR_DRIFT_PX) {
+      out.push(`${r.screen}: sort slot at x ${r.sortX}, ${first.screen} at ${first.sortX}`);
+    }
+    if (Math.abs(r.primaryX - first.primaryX) > TOPBAR_DRIFT_PX) {
+      out.push(`${r.screen}: "+" slot at x ${r.primaryX}, ${first.screen} at ${first.primaryX}`);
+    }
+  }
+  return out;
+}
+
+/** One chip row ([data-chip-row]) with a pinned Select ([data-chip-row-select]). */
+export interface ChipRowGeom {
+  label: string;
+  /** The row's box. */
+  row: Box;
+  /** The row's right padding (the Select's 44 box is pulled out toward the edge). */
+  paddingRight: number;
+  /** The chips' scroller ([data-chip-scroll]). */
+  scroll: Box | null;
+  /** The pinned Select's wrapper ([data-chip-row-select]). */
+  select: Box | null;
+  /** The Select button itself ([data-section-select]). */
+  button: Box | null;
+}
+
+/**
+ * Decision E: the visible Select is pinned at the chip row's end (its right
+ * edge on the row's content edge), the chips scroll in their own box that
+ * ends before it (never under it), the Select's tap box is at least 44 tall
+ * and it sits on the chips' line (centred with them). Rows without a Select
+ * are not checked. Pure.
+ */
+export function chipRowViolations(rows: readonly ChipRowGeom[]): string[] {
+  const out: string[] = [];
+  for (const r of rows) {
+    if (r.select === null) continue;
+    const contentRight = r.row.x + r.row.width - r.paddingRight;
+    const selectRight = r.select.x + r.select.width;
+    if (Math.abs(selectRight - contentRight) > 1) {
+      out.push(
+        `${r.label} Select ends at ${selectRight}, the row's content edge is ${contentRight} (not pinned at the end)`,
+      );
+    }
+    if (r.scroll !== null && r.scroll.x + r.scroll.width > r.select.x + LIST_CARD_PX_TOLERANCE) {
+      out.push(
+        `${r.label} chips run to ${r.scroll.x + r.scroll.width}, under the Select at ${r.select.x}`,
+      );
+    }
+    if (r.button === null) {
+      out.push(`${r.label} has no Select button ([data-section-select])`);
+      continue;
+    }
+    if (r.button.height < CHIP_HIT_PX - LIST_CARD_PX_TOLERANCE) {
+      out.push(`${r.label} Select is ${r.button.height}px tall, under 44`);
+    }
+    if (r.scroll !== null && r.scroll.height > 0) {
+      const mid = (b: Box): number => b.y + b.height / 2;
+      if (Math.abs(mid(r.button) - mid(r.scroll)) > 1) {
+        out.push(
+          `${r.label} Select is off the chips' line (centre ${mid(r.button)} vs ${mid(r.scroll)})`,
+        );
+      }
+    }
+  }
+  return out;
+}
+
+/** A visible progress bar ([role=progressbar] or <progress>) on an upload screen. */
+export interface UploadBarItem {
+  label: string;
+  box: Box;
+}
+
+/**
+ * Decision F: an upload shows ui/UploadRing (its role="progressbar" is
+ * sr-only, a 1px box) or Retry, never a visible bar and never a % figure.
+ * Any shown progress bar bigger than 1x1, and any "N%" text in an upload's
+ * surroundings, is a fault. Pure.
+ */
+export function uploadBarViolations(
+  bars: readonly UploadBarItem[],
+  percentTexts: readonly string[],
+): string[] {
+  const out: string[] = [];
+  for (const bar of bars) {
+    if (bar.box.width > 1 && bar.box.height > 1) {
+      out.push(
+        `${bar.label} is a visible progress bar (${boxText(bar.box)}): uploads show the ring only`,
+      );
+    }
+  }
+  for (const text of percentTexts) {
+    if (/\d\s?%/.test(text)) out.push(`"${text}" shows a % figure on an upload`);
+  }
+  return out;
 }

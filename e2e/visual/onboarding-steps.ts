@@ -391,8 +391,8 @@ async function workspaceConfirm(page: Page): Promise<void> {
   await onGuideStep(page, 'c_workspace_create');
 }
 
-/** The first post's sheet filled by the guide's taps (caption, Single image, photo): Send is boxed. */
-async function firstPostFilled(page: Page): Promise<void> {
+/** The first post's sheet through the guide's taps: caption, Single image, then the photo picked. */
+async function firstPostToPhoto(page: Page): Promise<void> {
   const step = (id: string): Step => routeStep('creator', id);
   await onGuideStep(page, 'c_post_create');
   await tapControl(page, step('c_post_create'));
@@ -402,8 +402,24 @@ async function firstPostFilled(page: Page): Promise<void> {
   await tapControl(page, step('c_post_format'));
   await onGuideStep(page, 'c_post_media');
   await tapControl(page, step('c_post_media'));
+}
+
+/** The first post's sheet filled by the guide's taps (caption, Single image, photo): Send is boxed. */
+async function firstPostFilled(page: Page): Promise<void> {
+  await firstPostToPhoto(page);
   await waitFor([page.locator('img[src^="blob:"]')], 'first post photo');
   await onGuideStep(page, 'c_post_send');
+}
+
+/**
+ * The first post's photo on its way (uploads held): its own picture under the
+ * upload ring (ui/UploadRing, X named Cancel upload; no bar, no % figure).
+ */
+async function firstPostUploading(page: Page): Promise<void> {
+  await firstPostToPhoto(page);
+  const ring = page.locator('[data-pending-photo="uploading"] [data-upload-ring]');
+  await waitFor([ring], 'first post photo uploading');
+  await expect(ring.first()).toHaveAccessibleName('Cancel upload');
 }
 
 /** The approver invite gate on Members: the email field is boxed. */
@@ -636,6 +652,16 @@ export const ONBOARDING_SCREENS: OnboardingScreen[] = [
     prepare: (network) =>
       seedCreatorAt(network, { step: 'c_post_create', ownPost: false, client: true }),
     steps: firstPostFilled,
+  },
+  {
+    // The same sheet with the photo's upload held: the ring on its picture.
+    name: 'onboarding-first-post-uploading',
+    url: '/pipeline',
+    prepare: (network) => {
+      seedCreatorAt(network, { step: 'c_post_create', ownPost: false, client: true });
+      network.holdUploads();
+    },
+    steps: firstPostUploading,
   },
   {
     name: 'onboarding-invite-approver',

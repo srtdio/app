@@ -246,7 +246,7 @@ test('Photos chip: select picks a whole message; Delete for me hides it behind U
   const results = await openPhotos(page);
   await expect(albumTiles(results)).toHaveCount(3);
 
-  await page.getByRole('button', { name: 'Select', exact: true }).first().click();
+  await page.locator('[data-chip-row-select] [data-section-select]').click();
   const bar = page.getByTestId('media-select-bar');
   await expect(bar).toBeVisible();
   // Nothing picked: Forward and Delete for me wait, disabled.
@@ -276,7 +276,7 @@ test('Photos chip: select picks a whole message; Delete for me hides it behind U
   await expect(albumTiles(results)).toHaveCount(3);
 
   // Again, and let the window end.
-  await page.getByRole('button', { name: 'Select', exact: true }).first().click();
+  await page.locator('[data-chip-row-select] [data-section-select]').click();
   await tickAlbum(results);
   await page.getByTestId('media-select-bar').locator('[data-selection-delete]').click();
   // The Undo strip rises where the bar was and holds its window while hovered:

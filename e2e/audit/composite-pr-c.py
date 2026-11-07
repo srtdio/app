@@ -30,7 +30,6 @@ SCREENS = {
     "chat-list": ["E3-01", "E5-01", "PRC1-avatars"],
     "chat-thread": ["E3-01", "PRC1-avatars"],
     "chat-thread-group": ["E3-01", "PRC1-avatars"],
-    "chat-search-empty": ["E3-01"],
     "chat-info-group": ["PRC1-avatars"],
     "members": ["PRC1-avatars"],
     "pipeline": ["E5-01", "PRC2-badges"],

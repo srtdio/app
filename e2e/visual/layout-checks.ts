@@ -9,6 +9,7 @@ import {
   layoutMode,
   movedSideways,
   lineHeightPx,
+  chipRowViolations,
   chipViolations,
   listCardViolations,
   MAX_ROLES_PER_PART,
@@ -17,15 +18,22 @@ import {
   roleSignature,
   sameWidth,
   tooManyRoles,
+  topbarDriftViolations,
+  topbarViolations,
   trayTileViolations,
   underBarViolations,
+  uploadBarViolations,
   wrapsPastOneLine,
   type Box,
   type ChipGeom,
+  type ChipRowGeom,
   type EdgeItem,
   type LayoutViolation,
   type ListCardGeom,
   type TapTarget,
+  type TopbarGeom,
+  type TopbarSlotsAt,
+  type UploadBarItem,
 } from './layout-checks-core';
 
 // Automatic layout checks on every visual screen (screens.spec.ts capture()
@@ -56,7 +64,17 @@ import {
 //     exit bar keeps its top after the page scrolls (assertPinnedBarOnScroll),
 //     the checkpoint progress row sits directly under the bar in the same
 //     pinned block (assertProgressRowUnderBar), and the comment composer's "+"
-//     tray opens with exactly Photos, File and Assets (assertCommentTray).
+//     tray opens with exactly Photos, File and Assets (assertCommentTray);
+//   8 the top bar (decision A, every screen that shows its slots): search |
+//     sort | "+" | avatar, left to right, the sort and "+" slots fixed 44x44,
+//     the sort right before the "+" and the "+" last before the avatar; across
+//     the six list screens the two slots hold one x (assertTopbarSlotsStill);
+//   9 chip rows with a pinned Select (decision E): the Select ends on the
+//     row's content edge, the chips scroll in a box that ends before it, its
+//     tap box is 44 tall and it sits on the chips' line; every ui/Chip face is
+//     32 visible in a 44 tap box (the chip rule above);
+//  10 upload screens (decision F, assertNoUploadBar): no visible progress bar
+//     and no % figure, only ui/UploadRing (its progressbar is sr-only) or Retry.
 // LAYOUT_CHECKS=strict (the default) fails the screen; LAYOUT_CHECKS=report
 // records every finding as a test annotation and in the log, and passes.
 // The geometry is pure and unit tested: layout-checks-core.ts.
@@ -105,6 +123,8 @@ interface RawPage {
   parts: RawPart[];
   listCards: ListCardGeom[];
   chips: ChipGeom[];
+  topbar: TopbarGeom;
+  chipRows: ChipRowGeom[];
 }
 
 /** Reads every box the checks need in one pass over the page. */
@@ -447,7 +467,48 @@ async function readPage(page: Page): Promise<RawPage> {
       });
     }
 
-    return { viewportWidth: vw, lines, targets, edges, parts, listCards, chips };
+    // 8 The top bar: the visible Search, the two slots, the avatar.
+    const header =
+      Array.from(document.querySelectorAll('header')).find(
+        (h) => h.querySelector('[data-topbar-slot]') !== null,
+      ) ?? null;
+    const firstShown = (els: Element[]): Box | null => {
+      const el = els.find((e) => shown(e));
+      return el !== undefined ? toBox(el.getBoundingClientRect()) : null;
+    };
+    const topbar: TopbarGeom =
+      header === null
+        ? { search: null, sort: null, primary: null, avatar: null }
+        : {
+            search: firstShown(
+              Array.from(header.querySelectorAll('button')).filter(
+                (b) =>
+                  b.getAttribute('aria-label') === 'Search' ||
+                  /^Search\b/.test((b.textContent ?? '').trim()),
+              ),
+            ),
+            sort: boxOf(header.querySelector('[data-topbar-slot="sort"]')),
+            primary: boxOf(header.querySelector('[data-topbar-slot="primary"]')),
+            avatar: firstShown(
+              Array.from(header.querySelectorAll('button[aria-label="Account menu"]')),
+            ),
+          };
+
+    // 9 Chip rows with the pinned Select.
+    const chipRows: ChipRowGeom[] = [];
+    for (const row of Array.from(document.querySelectorAll('[data-chip-row]'))) {
+      if (!shown(row)) continue;
+      chipRows.push({
+        label: nameOf(row).slice(0, 60),
+        row: toBox(row.getBoundingClientRect()),
+        paddingRight: parseFloat(getComputedStyle(row).paddingRight) || 0,
+        scroll: boxOf(row.querySelector('[data-chip-scroll]')),
+        select: boxOf(row.querySelector('[data-chip-row-select]')),
+        button: boxOf(row.querySelector('[data-section-select]')),
+      });
+    }
+
+    return { viewportWidth: vw, lines, targets, edges, parts, listCards, chips, topbar, chipRows };
   }, rules);
 }
 
@@ -507,6 +568,14 @@ export async function checkLayout(page: Page, screenName: string): Promise<void>
 
   for (const message of chipViolations(raw.chips)) {
     violations.push({ check: 'chip', message });
+  }
+
+  for (const message of topbarViolations(raw.topbar)) {
+    violations.push({ check: 'topbar', message });
+  }
+
+  for (const message of chipRowViolations(raw.chipRows)) {
+    violations.push({ check: 'chip-row', message });
   }
 
   settleFindings(screenName, violations);
@@ -658,5 +727,83 @@ export async function assertCommentTray(page: Page, screenName: string): Promise
   settleFindings(
     screenName,
     trayTileViolations(tiles).map((message) => ({ check: 'tray-tiles' as const, message })),
+  );
+}
+
+/**
+ * Check 8b: the top bar's sort and "+" slots, read on the screen as it stands
+ * (their left x), for assertTopbarSlotsStill across screens.
+ */
+export async function readTopbarSlots(page: Page, screen: string): Promise<TopbarSlotsAt> {
+  const at = await page.evaluate(() => {
+    const x = (name: string): number => {
+      const el = document.querySelector(`header [data-topbar-slot="${name}"]`);
+      return el === null ? Number.NaN : el.getBoundingClientRect().x;
+    };
+    return { sortX: x('sort'), primaryX: x('primary') };
+  });
+  return { screen, ...at };
+}
+
+/** Check 8b: the slots hold one x on every screen read (each against the first). */
+export function assertTopbarSlotsStill(name: string, rows: readonly TopbarSlotsAt[]): void {
+  const missing = rows
+    .filter((r) => !Number.isFinite(r.sortX) || !Number.isFinite(r.primaryX))
+    .map((r) => ({ check: 'topbar' as const, message: `${r.screen}: no top bar slots` }));
+  settleFindings(name, [
+    ...missing,
+    ...topbarDriftViolations(rows).map((message) => ({ check: 'topbar' as const, message })),
+  ]);
+}
+
+/**
+ * Check 10: an upload screen shows no visible progress bar ([role=progressbar]
+ * or <progress> bigger than 1x1: UploadRing's own is sr-only; the guide's tour
+ * bar and a plan card's progress are not uploads) and no % figure
+ * in an upload's surroundings (the pending chip, tile, photo, row thumb's
+ * card, the sending file or voice note, or near a ring).
+ */
+export async function assertNoUploadBar(page: Page, screenName: string): Promise<void> {
+  const found = await page.evaluate((): { bars: UploadBarItem[]; texts: string[] } => {
+    const toBox = (r: DOMRect) => ({ x: r.x, y: r.y, width: r.width, height: r.height });
+    const visible = (el: Element): boolean => {
+      const s = getComputedStyle(el);
+      return s.display !== 'none' && s.visibility !== 'hidden';
+    };
+    const bars: UploadBarItem[] = [];
+    for (const el of Array.from(document.querySelectorAll('[role="progressbar"], progress'))) {
+      if (!visible(el)) continue;
+      // Not uploads: the onboarding guide's tour progress and a plan card's OK progress.
+      if (el.closest('[data-induction-bar], [data-plan-card]') !== null) continue;
+      const hook = Array.from(el.attributes).find((a) => a.name.startsWith('data-'));
+      bars.push({
+        label: `${el.tagName.toLowerCase()}${hook !== undefined ? `[${hook.name}]` : ''}`,
+        box: toBox(el.getBoundingClientRect()),
+      });
+    }
+    const scopes = new Set<Element>(
+      Array.from(
+        document.querySelectorAll(
+          '[data-pending-chip], [data-pending-tile], [data-pending-photo], [data-upload-thumb], [data-file-state="sending"], [data-testid="voice-uploading"]',
+        ),
+      ),
+    );
+    for (const ring of Array.from(document.querySelectorAll('[data-upload-ring]'))) {
+      const near = ring.parentElement?.parentElement ?? ring.parentElement;
+      if (near !== null && near !== undefined) scopes.add(near);
+    }
+    const texts: string[] = [];
+    for (const scope of scopes) {
+      const text = (scope.textContent ?? '').replace(/\s+/g, ' ').trim();
+      if (text !== '') texts.push(text.slice(0, 80));
+    }
+    return { bars, texts };
+  });
+  settleFindings(
+    screenName,
+    uploadBarViolations(found.bars, found.texts).map((message) => ({
+      check: 'upload-bar' as const,
+      message,
+    })),
   );
 }

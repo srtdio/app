@@ -561,3 +561,68 @@ describe('chips (ui/Chip): visible 32, tap box 44', () => {
     ]);
   });
 });
+
+// Decisions A, E, F (7 Nov 2026): top bar slots, the pinned chip-row Select,
+// and no upload bar.
+describe('top bar, chip-row Select and upload checks', () => {
+  const box = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
+
+  it('topbarViolations: search | sort | + | avatar with fixed 44 slots passes', async () => {
+    const { topbarViolations } = await import('../../e2e/visual/layout-checks-core');
+    const ok = {
+      search: box(200, 6, 44, 44),
+      sort: box(248, 6, 44, 44),
+      primary: box(292, 6, 44, 44),
+      avatar: box(336, 6, 44, 44),
+    };
+    expect(topbarViolations(ok)).toEqual([]);
+    expect(topbarViolations({ ...ok, sort: box(248, 6, 60, 44) })).not.toEqual([]);
+    expect(topbarViolations({ ...ok, primary: null })).not.toEqual([]);
+    expect(
+      topbarViolations({ search: null, sort: null, primary: null, avatar: box(0, 0, 44, 44) }),
+    ).toEqual([]);
+  });
+
+  it('topbarDriftViolations: slots hold one x across screens', async () => {
+    const { topbarDriftViolations } = await import('../../e2e/visual/layout-checks-core');
+    expect(
+      topbarDriftViolations([
+        { screen: 'pipeline', sortX: 248, primaryX: 292 },
+        { screen: 'assets', sortX: 248, primaryX: 292 },
+      ]),
+    ).toEqual([]);
+    expect(
+      topbarDriftViolations([
+        { screen: 'pipeline', sortX: 248, primaryX: 292 },
+        { screen: 'briefs', sortX: 230, primaryX: 292 },
+      ]),
+    ).toHaveLength(1);
+    expect(topbarDriftViolations([])).toEqual([]);
+  });
+
+  it('chipRowViolations: Select pinned at the content edge, chips end before it', async () => {
+    const { chipRowViolations } = await import('../../e2e/visual/layout-checks-core');
+    const ok = {
+      label: 'pipeline',
+      row: box(0, 100, 390, 44),
+      paddingRight: 4,
+      scroll: box(16, 106, 270, 32),
+      select: box(290, 100, 96, 44),
+      button: box(290, 100, 96, 44),
+    };
+    expect(chipRowViolations([ok])).toEqual([]);
+    expect(chipRowViolations([{ ...ok, select: box(280, 100, 96, 44) }])).not.toEqual([]);
+    expect(chipRowViolations([{ ...ok, scroll: box(16, 106, 330, 32) }])).not.toEqual([]);
+    expect(chipRowViolations([{ ...ok, button: box(290, 100, 96, 32) }])).not.toEqual([]);
+    expect(chipRowViolations([{ ...ok, select: null, button: null }])).toEqual([]);
+  });
+
+  it('uploadBarViolations: no visible bar and no % figure', async () => {
+    const { uploadBarViolations } = await import('../../e2e/visual/layout-checks-core');
+    expect(
+      uploadBarViolations([{ label: 'ring', box: box(0, 0, 1, 1) }], ['1.2 of 3.4 MB']),
+    ).toEqual([]);
+    expect(uploadBarViolations([{ label: 'bar', box: box(0, 0, 200, 4) }], [])).toHaveLength(1);
+    expect(uploadBarViolations([], ['Uploading, 40%'])).toHaveLength(1);
+  });
+});
