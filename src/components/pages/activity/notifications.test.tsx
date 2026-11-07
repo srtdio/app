@@ -468,6 +468,7 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
           select: () => self,
           eq: () => self,
           is: () => self,
+          not: () => self,
           order: (col: string, opts?: { ascending?: boolean }) => {
             w.order.push({ column: col, ascending: opts?.ascending !== false });
             return self;

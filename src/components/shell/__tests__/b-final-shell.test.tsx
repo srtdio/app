@@ -110,7 +110,7 @@ describe('trailing rule: the part applies it, never the call site', () => {
 describe('Tasks sheet: one frame, the height of what it holds', () => {
   it('TaskSheet takes the shared SHEET_FRAME (no own 88svh / 560 size)', () => {
     const src = source('../../chat/tasks/TaskSheet.tsx');
-    expect(src).toContain(': SHEET_FRAME');
+    expect(src).toContain('SHEET_FRAME)');
     expect(src).not.toContain('88svh');
     expect(src).not.toContain('w-[560px]');
     expect(SHEET_FRAME).toContain('max-h-[90svh]');

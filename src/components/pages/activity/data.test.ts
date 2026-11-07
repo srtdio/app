@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { RETIRED_EVENT_LIST } from '@/lib/inbox/bell-types';
 import type { Database } from '@srtdio/schemas';
 import {
   BRIEF_REOPENED_EVENT,
@@ -1330,10 +1331,11 @@ describe('fetchActivityEntries query composition', () => {
     expect(hasCall(calls, 'limit', [50])).toBe(true);
   });
 
-  it('shows every row: no bell split on the feed (Notifications shows them all)', async () => {
+  it('shows every row but the retired types: no bell split on the feed', async () => {
     const { client, calls } = recordingClient([]);
     await fetchActivityEntries(client, 'w1');
-    expect(calls.some((c) => c.method === 'not')).toBe(false);
+    expect(hasCall(calls, 'not', ['event_type', 'in', RETIRED_EVENT_LIST])).toBe(true);
+    expect(calls.filter((c) => c.method === 'not')).toHaveLength(1);
     expect(calls.some((c) => c.method === 'or')).toBe(false);
   });
 

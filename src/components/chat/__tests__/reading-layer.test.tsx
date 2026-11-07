@@ -110,14 +110,14 @@ describe('T8 tray and emoji button by pointer', () => {
     expect(channelHasClient([{ role: 'agency' }, { role: 'client' }])).toBe(true);
   });
 
-  it('the grid: 4 columns (two rows of 4), every tile at least 44x44, a disabled Draft faded and inert', () => {
+  it('the grid: 4 columns, every tile at least 44x44, a disabled Draft faded and inert', () => {
     const picks: string[] = [];
     const html = renderToStaticMarkup(
       <TrayGrid tiles={trayTiles('touch')} onPick={(id) => picks.push(id)} />,
     );
     expect(html).toContain('grid-cols-4');
-    expect(html.match(/data-tray-tile=/g)).toHaveLength(8);
-    expect(html.match(/h-18 min-w-11/g)).toHaveLength(8);
+    expect(html.match(/data-tray-tile=/g)).toHaveLength(7);
+    expect(html.match(/h-18 min-w-11/g)).toHaveLength(7);
     const plan = /<button[^>]*data-tray-tile="plan"[^>]*>/.exec(html)?.[0] ?? '';
     expect(plan).toContain('disabled=""');
     expect(plan).toContain('aria-disabled="true"');
