@@ -5110,7 +5110,10 @@ SCREENS.push(
       const field = sheet.locator('#brief-objective');
       await field.click();
       await page.keyboard.type('Three posts that sell the gift boxes.');
-      const box = sheet.locator('[data-writing-box][data-mode="field"]', { has: field });
+      // The inner locator is queried inside each box: root it at the page, not the sheet.
+      const box = sheet.locator('[data-writing-box][data-mode="field"]', {
+        has: page.locator('#brief-objective'),
+      });
       await waitFor([box.locator('[data-writing-row]')], 'field row');
       await waitFor([boxKey(box, 'Bullet list')], 'Bullet list');
       await expect(boxKey(box, 'Add attachment')).toHaveCount(0);

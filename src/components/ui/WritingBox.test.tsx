@@ -227,3 +227,12 @@ describe('WritingBox blur', () => {
     }
   });
 });
+
+describe('WritingBox comment line', () => {
+  it('an unfocused, empty comment box keeps its + beside the field', () => {
+    const host = mount(<Harness mode="comment" laptop />);
+    expect(q(host, '[data-writing-box]')?.dataset.shape).toBe('line');
+    expect(q(host, '[data-testid="plus"]')).not.toBeNull();
+    expect(q(host, '[data-testid="send"]')).not.toBeNull();
+  });
+});

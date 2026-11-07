@@ -479,7 +479,8 @@ export function WritingBox(props: WritingBoxProps) {
     'flex min-w-0 border bg-panel-2',
     BOX_OWNS_FIELD,
     shape === 'pill' && 'min-h-11 items-center gap-2 rounded-full pl-1 pr-1',
-    shape === 'line' && 'min-h-11 items-end gap-2 rounded-2xl pl-3 pr-1',
+    shape === 'line' &&
+      cn('min-h-11 items-end gap-2 rounded-2xl pr-1', leading != null ? 'pl-1' : 'pl-3'),
     shape === 'card' && 'flex-col rounded-2xl px-3 pt-1 focus-within:lit-focus',
     shape === 'field' &&
       cn(
@@ -530,7 +531,8 @@ export function WritingBox(props: WritingBoxProps) {
       onKeyUp={formatOpen ? refreshOn : undefined}
       onMouseUp={formatOpen ? refreshOn : undefined}
     >
-      {shape === 'pill' ? leading : null}
+      {/* The + at rest: the chat pill and the comment line keep it beside the field. */}
+      {shape === 'pill' || shape === 'line' ? leading : null}
       <div
         data-writing-field=""
         className={cn('flex min-w-0 flex-1 items-start', phoneExpanded && 'min-h-0')}
