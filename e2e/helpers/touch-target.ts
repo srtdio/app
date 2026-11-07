@@ -58,11 +58,18 @@ export async function expectAllVisibleControlsTouchSized(
         bottom = Math.max(bottom, r.bottom - px(cs.bottom));
       }
       const name = el.getAttribute('aria-label') ?? el.textContent?.trim().slice(0, 40) ?? '';
-      return { width: right - left, height: bottom - top, raw: r.width * r.height, name };
+      // A writing box row key (ui/WritingBox): 36 wide on a 44 tall hit, the
+      // approved composer-row exception (CLAUDE.md; composer-row-keys.test.ts).
+      const rowKey =
+        el.closest('[data-writing-box]') !== null &&
+        (el.hasAttribute('data-composer-key') ||
+          el.hasAttribute('data-row-send') ||
+          el.hasAttribute('data-plus'));
+      return { width: right - left, height: bottom - top, raw: r.width * r.height, name, rowKey };
     });
     if (hit.raw === 0) continue;
     expect(hit.width, `touch target width: "${hit.name}"`).toBeGreaterThanOrEqual(
-      min - SUBPIXEL_TOLERANCE,
+      (hit.rowKey ? 36 : min) - SUBPIXEL_TOLERANCE,
     );
     expect(hit.height, `touch target height: "${hit.name}"`).toBeGreaterThanOrEqual(
       min - SUBPIXEL_TOLERANCE,
