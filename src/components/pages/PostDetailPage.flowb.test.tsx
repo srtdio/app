@@ -342,14 +342,14 @@ describe('27. stage once (top bar), platform and format in the details sheet', (
 });
 
 describe('28. one meta line', () => {
-  it('A1: owner, "Due 28 Oct" and the brief on one line; no bucket, platform or Edit; tapping it opens the sheet', async () => {
+  it('A1: owner, "28 Oct" and the brief on one line; no bucket, platform or Edit; tapping it opens the sheet', async () => {
     await render();
     const row = document.querySelector<HTMLElement>('[data-post-details]');
     expect(row).not.toBeNull();
     const rowText = row?.textContent ?? '';
     expect(rowText).toContain('Riya Menon');
-    // A far-future due day reads "Due 28 Oct 2099" (formatDue) whatever today is.
-    expect(rowText).toContain('Due 28 Oct 2099');
+    // A far-future due day reads "28 Oct 2099" (formatDue) whatever today is.
+    expect(rowText).toContain('28 Oct 2099');
     expect(rowText).toContain('Monsoon edit');
     expect(rowText).not.toContain('Monsoon drop');
     expect(rowText).not.toContain('Instagram');

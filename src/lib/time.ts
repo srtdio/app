@@ -4,9 +4,9 @@
 // The three list-time functions, by meaning (every list caller uses one):
 //   formatAgo         things that just happened: "just now", "5m", "3h",
 //                     "Yesterday", "Mon", "2 Nov" ("2 Nov 2025" off-year)
-//   formatDue         deadlines: "Due today", "Due tomorrow", "Due Fri", "Due 12 Nov";
-//                     late via formatOverdue: "Overdue 1d" / "3w" / "2mo" / "1y";
-//                     plan starts via formatPlanStart: "Starts Mon", "Started 2d ago"
+//   formatDue         deadlines, words only: "Today", "Tomorrow", "Fri", "12 Nov";
+//                     late via formatOverdue: "2d late" / "3w late" / "2mo late" / "1y late";
+//                     plans via formatPlanStart: "Mon" before, "Live" while on, "1 Nov" once ended
 //   formatAdded       records (never ticks): "10:27 AM" today, else "2 Nov"
 //   formatDayLabel    chat day dividers: "Today", "Yesterday", "Mon 2 Nov"
 //   formatDateTime    "23 Oct, 2:14 PM"; "23 Oct 2025, 2:14 PM" off the current year
@@ -325,14 +325,14 @@ export function daysFromToday(
   return civilDaysBetween(civilOfInstant(now, zone), civil);
 }
 
-/** "today", "tomorrow", the weekday "Fri" 2-6 days ahead, else "12 Nov" ("12 Nov 2027" off-year). */
+/** "Today", "Tomorrow", the weekday "Fri" 2-6 days ahead, else "12 Nov" ("12 Nov 2027" off-year). */
 function aheadText(value: DateInput, zone: string, now: Date): string | undefined {
   const civil = civilOf(value, zone);
   if (civil === undefined) return undefined;
   const today = civilOfInstant(now, zone);
   const days = civilDaysBetween(today, civil);
-  if (days === 0) return 'today';
-  if (days === 1) return 'tomorrow';
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
   if (days >= 2 && days <= 6) return weekdayOf(civil);
   return dayText(civil, today.year);
 }
@@ -352,10 +352,11 @@ function behindText(value: DateInput, zone: string, now: Date): string | undefin
 }
 
 /**
- * formatDue: a deadline on the workspace zone (Pipeline, Briefs): "Due today",
- * "Due tomorrow", "Due Fri" (2-6 days ahead), then "Due 12 Nov" ("Due 12 Nov
- * 2027" off-year). A past day reads "Due 12 Oct": callers show formatOverdue
- * instead unless the post is approved (approved is never overdue).
+ * formatDue: a deadline on the workspace zone, words only (Pipeline, Briefs):
+ * "Today", "Tomorrow", "Fri" (2-6 days ahead), then "12 Nov" ("12 Nov 2027"
+ * off-year). Never the word "Due". A past day reads its date "12 Oct":
+ * callers show formatOverdue instead unless the post is approved (approved is
+ * never overdue).
  */
 export function formatDue(
   value: DateInput,
@@ -365,8 +366,8 @@ export function formatDue(
   const zone = safeTimeZone(workspaceZone);
   const days = daysFromToday(value, zone, now);
   if (days === undefined) return '';
-  if (days < 0) return `Due ${formatDueDate(value, zone, now)}`;
-  return `Due ${aheadText(value, zone, now) ?? ''}`;
+  if (days < 0) return formatDueDate(value, zone, now);
+  return aheadText(value, zone, now) ?? '';
 }
 
 /** An overdue reading; `bad` is always true so callers colour it with the bad token. */
@@ -376,9 +377,9 @@ interface OverdueLabel {
 }
 
 /**
- * How late a due day is, on the workspace zone: "Overdue 1d" .. "Overdue 6d",
- * "Overdue 3w", "Overdue 2mo", "Overdue 1y". Flips at the workspace's midnight.
- * Unparseable input reads as plain "Overdue".
+ * How late a due day is, on the workspace zone: "1d late" .. "6d late",
+ * "3w late", "2mo late", "1y late". Flips at the workspace's midnight.
+ * Unparseable input reads as plain "Late".
  */
 export function formatOverdue(
   value: DateInput,
@@ -386,24 +387,34 @@ export function formatOverdue(
   now: Date = new Date(),
 ): OverdueLabel {
   const late = behindText(value, safeTimeZone(workspaceZone), now);
-  return { text: late === undefined ? 'Overdue' : `Overdue ${late}`, bad: true };
+  return { text: late === undefined ? 'Late' : `${late} late`, bad: true };
 }
 
 /**
- * formatDue for a plan's start day on the workspace zone: "Starts today",
- * "Starts tomorrow", "Starts Mon" (2-6 days ahead), then "Starts 16 Nov"; a
- * past start reads "Started 2d ago" / "Started 3w ago" / "Started 2mo ago".
+ * A plan's words on the workspace zone, flipping at workspace midnight:
+ * up to its start "Today" (it starts today), "Tomorrow", "Mon" (2-6 days ahead),
+ * then "16 Nov"; started (after its first day) and its end day not passed "Live"; once its end day has passed, the
+ * end day "1 Nov" (formatAdded style, "1 Nov 2025" off-year). With no end day
+ * a started plan reads "Live".
  */
 export function formatPlanStart(
   value: DateInput,
   workspaceZone: string | null | undefined,
   now: Date = new Date(),
+  endsOn?: DateInput | null,
 ): string {
   const zone = safeTimeZone(workspaceZone);
   const days = daysFromToday(value, zone, now);
   if (days === undefined) return '';
-  if (days < 0) return `Started ${behindText(value, zone, now) ?? ''} ago`;
-  return `Starts ${aheadText(value, zone, now) ?? ''}`;
+  if (days >= 0) return aheadText(value, zone, now) ?? '';
+  if (endsOn !== undefined && endsOn !== null) {
+    const end = civilOf(endsOn, zone);
+    if (end !== undefined) {
+      const today = civilOfInstant(now, zone);
+      if (civilDaysBetween(end, today) > 0) return dayText(end, today.year);
+    }
+  }
+  return 'Live';
 }
 
 /** "Monday, 19 October 2026": the full spoken date, for accessible names. '' when unparseable. */

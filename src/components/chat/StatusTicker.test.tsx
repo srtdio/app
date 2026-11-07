@@ -328,7 +328,7 @@ describe('the drawer list', () => {
     expect(html.match(/data-status-task="/g)?.length).toBe(5);
     expect(html).toContain('See all 6');
     expect(html).toContain('data-task-p="1"');
-    expect(html).toContain('Due ');
+    expect(html).toContain('12 Oct');
     const row = tree.find(
       (el) => (el.props as { 'data-status-task'?: string })['data-status-task'] === 't0',
     );
