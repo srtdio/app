@@ -6,7 +6,7 @@ vi.mock('agora-chat', () => ({
 }));
 
 import { messageMenuItems, runMenuItem } from '@/components/chat/MessageActionMenu';
-import { ICON_SIZE, IconUser } from '@/components/ui/icons';
+import { ICON_SIZE, IconReplyPrivately } from '@/components/ui/icons';
 import { REPLY_PRIVATELY } from '@/lib/chat/private-reply';
 
 type ItemProps = Parameters<typeof messageMenuItems>[0];
@@ -33,12 +33,12 @@ describe('Reply privately row', () => {
     expect(row?.kind === 'action' && row.key).toBe('reply-privately');
   });
 
-  it('uses IconUser at the menu size', () => {
+  it('uses IconReplyPrivately (bubble with an out-arrow) at the menu size', () => {
     const row = messageMenuItems(
       itemProps({ canReplyPrivately: true, replyPrivatelyName: 'Asha' }),
     ).find((i) => i.key === 'reply-privately');
     const icon = row?.kind === 'action' ? (row.icon as ReactElement) : null;
-    expect(icon?.type).toBe(IconUser);
+    expect(icon?.type).toBe(IconReplyPrivately);
     expect(icon?.props).toMatchObject({ size: ICON_SIZE.tray });
   });
 

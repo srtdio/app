@@ -232,7 +232,9 @@ describe('ListCard line 2: preview, tag, unread dot', () => {
   /** Line 2's slots in document order, by their data hooks. */
   function line2Order(html: string): string[] {
     const line = html.slice(html.indexOf('data-list-card-line="2"'));
-    return [...line.matchAll(/data-list-card-(preview|tag|unread)=""/g)].map((m) => m[1] ?? '');
+    return [...line.matchAll(/data-list-card-(preview|spacer|tag|unread)=""/g)].map(
+      (m) => m[1] ?? '',
+    );
   }
 
   it('order: preview (one line, truncate), ONE grey tag, then the unread dot', () => {
@@ -257,16 +259,26 @@ describe('ListCard line 2: preview, tag, unread dot', () => {
     );
   });
 
-  it('no preview: the tag starts line 2', () => {
+  it('with a preview: no spacer, the tag follows the preview', () => {
+    expect(line2Order(render({ unread: true }))).toEqual(['preview', 'tag', 'unread']);
+  });
+
+  it('no preview: the spacer leads, so the tag sits on the right end under the time', () => {
     for (const preview of [undefined, '']) {
-      expect(line2Order(render({ preview, unread: true }))).toEqual(['tag', 'unread']);
+      const html = render({ preview, unread: true });
+      expect(line2Order(html)).toEqual(['spacer', 'tag', 'unread']);
+      expect(classOf(html, 'data-list-card-spacer=""')).toContain('flex-1');
+      // The tag keeps its own width (never stretched), so it hugs the right end.
+      expect(classOf(html, 'data-list-card-tag=""')).toContain('shrink-0');
+      expect(classOf(html, 'data-list-card-tag=""')).not.toContain('flex-1');
     }
+    expect(line2Order(render({ preview: '' }))).toEqual(['spacer', 'tag']);
   });
 
   it('no tag and no preview: line 2 stays (empty)', () => {
     const html = render({ preview: '', tag: undefined });
     expect(html).toContain('data-list-card-line="2"');
-    expect(line2Order(html)).toEqual([]);
+    expect(line2Order(html)).toEqual(['spacer']);
   });
 
   it('the stage dot rides on the tag when given', () => {

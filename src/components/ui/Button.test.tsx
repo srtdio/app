@@ -217,12 +217,20 @@ describe('IconButton', () => {
 });
 
 describe('Chip', () => {
-  it('both sizes are 44 tall, px-4, 8px radius, weight 500, the quiet grey well', () => {
+  type Face = ReactElement<{ className: string }>;
+  const faceOf = (el: ReactElement): Face =>
+    (el as ReactElement<{ children: Face }>).props.children;
+
+  it('both sizes: a 44 tap box around the 32 chip (px-3, 8px radius, weight 500, the quiet grey well)', () => {
     for (const size of ['sm', 'tap'] as const) {
       const el = Chip({ label: 'All', size }) as ReactElement<{ className: string }>;
-      const t = tokens(el.props.className);
-      expect(t).toContain('min-h-11');
-      expect(t).toContain('px-4');
+      const box = tokens(el.props.className);
+      expect(box).toContain('min-h-11');
+      expect(box).not.toContain('bg-panel-3');
+      const t = tokens(faceOf(el).props.className);
+      expect(t).toContain('min-h-8');
+      expect(t).toContain('px-3');
+      expect(t).toContain('text-md');
       expect(t).toContain('rounded-lg');
       expect(t).toContain('font-medium');
       expect(t).toContain('bg-panel-3');
@@ -233,14 +241,13 @@ describe('Chip', () => {
       expect(t).not.toContain('text-fg-2');
       expect(t).not.toContain('border-border');
       expect(t).not.toContain('border-border-strong');
-      expect(t).not.toContain('h-8');
+      expect(t).not.toContain('px-4');
     }
   });
 
   it('selected is the solid ink fill (bg-accent, lit-pill); add is a dashed lit-chip', () => {
     const sel = tokens(
-      (Chip({ label: 'All', selected: true }) as ReactElement<{ className: string }>).props
-        .className,
+      faceOf(Chip({ label: 'All', selected: true }) as ReactElement).props.className,
     );
     expect(sel).toContain('bg-accent');
     expect(sel).toContain('text-accent-fg');
@@ -250,8 +257,7 @@ describe('Chip', () => {
     expect(sel).not.toContain('bg-accent-soft');
     expect(sel).not.toContain('lit-chip');
     const add = tokens(
-      (Chip({ label: 'Add', variant: 'add' }) as ReactElement<{ className: string }>).props
-        .className,
+      faceOf(Chip({ label: 'Add', variant: 'add' }) as ReactElement).props.className,
     );
     expect(add).toContain('border-dashed');
     expect(add).toContain('border-border-strong');
@@ -274,7 +280,10 @@ describe('focus ring lives on the primitives', () => {
   }
 
   it('Button (every variant), IconButton and Chip carry the lit-focus outline', () => {
-    const classes = [...VARIANTS.map((variant) => classOf({ variant })), iconClass(), chipClass()];
+    const classes = [...VARIANTS.map((variant) => classOf({ variant })), iconClass()];
+    // The chip's 44 tap box draws the one focus line on its visible 32 face.
+    expect(tokens(chipClass())).toContain('[&:focus-visible>span]:lit-focus');
+    expect(tokens(chipClass())).not.toContain('focus:outline-none');
     for (const cls of classes) {
       const t = tokens(cls);
       for (const ring of RING) expect(t).toContain(ring);
@@ -319,6 +328,7 @@ describe('press (motion move 5): the shared mv-press class, never a call-site tr
       expect(tokens(cls)).toContain('min-h-11');
       expect(tokens(cls)).toContain('focus-visible:lit-focus');
     }
-    expect(tokens(chipClass())).toContain('focus-visible:lit-focus');
+    expect(tokens(chipClass())).toContain('min-h-11');
+    expect(tokens(chipClass())).toContain('[&:focus-visible>span]:lit-focus');
   });
 });

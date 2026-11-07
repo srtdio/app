@@ -78,8 +78,56 @@ describe('Chip onClear', () => {
     expect(x).toContain('min-h-11 w-11');
     expect(x).toContain('text-accent-fg');
     // The chip keeps its selected look and reserves the glyph's width.
-    expect(buttons[0]).toContain('bg-accent text-accent-fg lit-pill');
-    expect(buttons[0]).toContain('min-h-11 px-4');
+    expect(html).toContain('bg-accent text-accent-fg lit-pill');
+    expect(buttons[0]).toContain('min-h-11');
+    expect(html).toContain('min-h-8 px-3');
+    // The glyph sits 12 in from the visible chip's right end, centred on it.
+    expect(x).toContain('inset-y-0 right-0');
+    expect(x).toContain('pr-3');
     expect(html).toContain('<span aria-hidden="true" class="w-4 shrink-0"></span>');
+  });
+});
+
+describe('Chip 32 visible, 44 tap box', () => {
+  it('the button is the transparent 44 box; the face is the 32 chip, 12 side padding, text-md', () => {
+    for (const size of ['sm', 'tap'] as const) {
+      const html = renderToStaticMarkup(<Chip label="Open" size={size} selected={false} />);
+      const button = /<button[^>]*>/.exec(html)?.[0] ?? '';
+      expect(button).toContain('min-h-11 min-w-11');
+      // The box keeps the button system's 8px radius but draws nothing.
+      expect(button).toContain('rounded-lg');
+      expect(button).not.toMatch(/\b(bg-|lit-well|lit-pill|lit-hover|border|px-)/);
+      expect(button).toContain('[&amp;:focus-visible&gt;span]:lit-focus');
+      const face = /<span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
+      expect(face).toContain('min-h-8 px-3');
+      expect(face).toContain('rounded-lg');
+      expect(face).toContain('text-md font-medium');
+      expect(face).toContain('gap-2');
+      expect(face).toContain('bg-panel-3 text-fg lit-well-soft lit-hover');
+      expect(face).not.toContain('text-base');
+    }
+    expect(renderToStaticMarkup(<Chip label="Open" size="tap" />)).toMatch(
+      /data-chip-face=""[^>]*justify-center/,
+    );
+  });
+
+  it('the add chip keeps its dashed lit-chip on the face', () => {
+    const html = renderToStaticMarkup(<Chip label="Add" variant="add" />);
+    const face = /<span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(face).toContain('lit-chip border-dashed border-border-strong text-fg-3');
+  });
+
+  it('a call site className reaches the face; only layout classes reach the tap box', () => {
+    const html = renderToStaticMarkup(
+      <Chip label="Due" className="min-w-0 flex-auto justify-center truncate px-2" />,
+    );
+    const button = /<button[^>]*>/.exec(html)?.[0] ?? '';
+    expect(button).toContain('min-w-0 flex-auto');
+    expect(button).not.toContain('px-2');
+    expect(button).not.toContain('truncate');
+    const face = /<span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(face).toContain('px-2');
+    expect(face).not.toContain('px-3');
+    expect(face).toContain('truncate');
   });
 });

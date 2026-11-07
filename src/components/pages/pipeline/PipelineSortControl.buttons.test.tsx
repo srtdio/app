@@ -67,7 +67,7 @@ describe('Pipeline controls buttons', () => {
     expect(classOf(due)).toContain('lit-selected');
   });
 
-  it('stage chips are the shared ui/Chip: 44px, 8px radius, count only above 0', () => {
+  it('stage chips are the shared ui/Chip: 44 tap box, 32 visible, 8px radius, count only above 0', () => {
     const html = renderToStaticMarkup(
       <StageChips
         items={[
@@ -81,12 +81,14 @@ describe('Pipeline controls buttons', () => {
     );
     const tags = buttonTags(html);
     expect(tags).toHaveLength(3);
-    for (const tag of tags) {
-      expect(classOf(tag)).toContain('min-h-11');
-      expect(classOf(tag)).toContain('rounded-lg');
+    for (const tag of tags) expect(classOf(tag)).toContain('min-h-11');
+    const faces = html.match(/<span data-chip-face=""[^>]*>/g) ?? [];
+    expect(faces).toHaveLength(3);
+    for (const face of faces) {
+      expect(classOf(face)).toEqual(expect.arrayContaining(['min-h-8', 'px-3', 'rounded-lg']));
     }
-    const active = tags.find((tag) => tag.includes('aria-current="true"'));
-    expect(classOf(active ?? '')).toEqual(
+    const active = /aria-current="true"[^>]*><span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(classOf(active.slice(active.indexOf('<span')))).toEqual(
       expect.arrayContaining(['bg-accent', 'text-accent-fg', 'lit-pill']),
     );
     expect(html).toContain('<span class="tabular-nums">3</span>');

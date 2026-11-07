@@ -68,6 +68,7 @@ const DOCUMENTED = [
   'IconPlay',
   'IconPlus',
   'IconReply',
+  'IconReplyPrivately',
   'IconRotateCcw',
   'IconScrollText',
   'IconSearch',

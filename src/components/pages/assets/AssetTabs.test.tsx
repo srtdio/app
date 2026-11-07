@@ -25,13 +25,17 @@ describe('AssetTabs', () => {
     expect(html).toContain(`>Media</span> ${slot}3</span>`);
     // Zero: the slot is reserved (no shift when counts land) but empty.
     for (const label of ['PDF', 'Docs', 'Sheets', 'Links']) {
-      expect(html).toContain(`>${label}</span>${slot}</span></button>`);
+      expect(html).toContain(`>${label}</span>${slot}</span></span></button>`);
     }
     expect(html).not.toContain(`${slot}0</span>`);
     expect(html.match(/data-asset-tab-count=""/g)).toHaveLength(6);
+    // The 44 tap box around the 32 visible chip (12 side padding).
     expect(html).toContain('min-h-11');
-    // The shared Chip selected style on the selected tab.
-    expect(html).toMatch(/aria-selected="true"[^>]*class="[^"]*bg-accent text-accent-fg lit-pill/);
+    expect(html).toContain('min-h-8 px-3');
+    // The shared Chip selected style on the selected tab's visible chip.
+    expect(html).toMatch(
+      /aria-selected="true"[^>]*><span data-chip-face="" class="[^"]*bg-accent text-accent-fg lit-pill/,
+    );
     // Tokens only, no hex, no dark: literals: light and dark are the same markup.
     expect(html).not.toMatch(/#[0-9a-fA-F]{3,8}\b|dark:/);
   });

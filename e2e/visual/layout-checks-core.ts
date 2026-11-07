@@ -270,7 +270,8 @@ export interface LayoutViolation {
     | 'list-card'
     | 'pinned-bar'
     | 'under-bar'
-    | 'tray-tiles';
+    | 'tray-tiles'
+    | 'chip';
   message: string;
 }
 
@@ -312,6 +313,14 @@ export interface ListCardGeom {
   borderTop: number;
   picture: Box | null;
   text: Box | null;
+  /** Line 1's time, when shown. */
+  time?: Box | null;
+  /** Line 2's tag, when shown. */
+  tag?: Box | null;
+  /** Line 2 shows a preview. */
+  hasPreview?: boolean;
+  /** Line 2 ends with the unread dot (after the tag). */
+  unread?: boolean;
 }
 
 const near = (a: number, b: number, tolerance = LIST_CARD_PX_TOLERANCE): boolean =>
@@ -358,6 +367,61 @@ export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
       if (!near(gap, LIST_CARD_GAP_PX)) {
         out.push(`${c.label} text starts ${gap}px after the picture, not 12`);
       }
+    }
+    // No preview: the tag sits on line 2's right end, right under the time
+    // (an unread dot, when shown, follows it, so the rule reads unread-free cards).
+    const tag = c.tag ?? null;
+    const time = c.time ?? null;
+    if (c.hasPreview === false && c.unread !== true && tag !== null && time !== null) {
+      const tagRight = tag.x + tag.width;
+      const timeRight = time.x + time.width;
+      if (!near(tagRight, timeRight)) {
+        out.push(
+          `${c.label} tag ends at ${tagRight}, the time at ${timeRight} (no preview: tag under the time)`,
+        );
+      }
+    }
+  }
+  return out;
+}
+
+/** ui/Chip: the visible face is 32 tall inside a tap box at least 44 tall and wide. */
+export const CHIP_FACE_PX = 32;
+export const CHIP_HIT_PX = 44;
+
+/** One ui/Chip: its tap box (the button) and its visible face ([data-chip-face]). */
+export interface ChipGeom {
+  label: string;
+  hit: Box;
+  face: Box | null;
+}
+
+/**
+ * The chip rule: the face is 32 tall (0.5px rounding), vertically centred in a
+ * tap box at least 44 tall and 44 wide. Pure.
+ */
+export function chipViolations(chips: readonly ChipGeom[]): string[] {
+  const out: string[] = [];
+  for (const c of chips) {
+    if (c.hit.height < CHIP_HIT_PX - LIST_CARD_PX_TOLERANCE) {
+      out.push(`${c.label} tap box is ${c.hit.height}px tall, not 44`);
+    }
+    if (c.hit.width < CHIP_HIT_PX - LIST_CARD_PX_TOLERANCE) {
+      out.push(`${c.label} tap box is ${c.hit.width}px wide, under 44`);
+    }
+    if (c.face === null) {
+      out.push(`${c.label} has no visible chip face`);
+      continue;
+    }
+    if (!near(c.face.height, CHIP_FACE_PX)) {
+      out.push(`${c.label} chip is ${c.face.height}px tall, not 32`);
+    }
+    const above = c.face.y - c.hit.y;
+    const below = c.hit.y + c.hit.height - (c.face.y + c.face.height);
+    if (!near(above, below)) {
+      out.push(
+        `${c.label} chip sits ${above}px from the top, ${below}px from the bottom (not centred)`,
+      );
     }
   }
   return out;

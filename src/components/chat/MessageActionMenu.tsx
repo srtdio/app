@@ -19,10 +19,10 @@ import {
   IconForward,
   IconPlus,
   IconReply,
+  IconReplyPrivately,
   IconSelectText,
   IconText,
   IconTrash,
-  IconUser,
   IconX,
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
@@ -310,7 +310,7 @@ export function messageMenuItems(
       kind: 'action',
       key: 'reply-privately',
       label: REPLY_PRIVATELY,
-      icon: <IconUser size={size} />,
+      icon: <IconReplyPrivately size={size} />,
       ...(first !== '' ? { hint: replyPrivatelyTo(first) } : {}),
       run: () => props.onReplyPrivately?.(),
     });

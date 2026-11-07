@@ -86,6 +86,7 @@ describe('Alerts on this device', () => {
     for (const chip of all) {
       expect(chip.className).toContain('min-h-11');
       expect(chip.className).toContain('w-full');
+      expect(chip.querySelector('[data-chip-face]')?.className).toContain('min-h-8');
       expect(chip.getAttribute('aria-pressed')).toBe('false');
     }
     expect(el.querySelector('[data-alerts-paused]')).toBeNull();
@@ -116,7 +117,7 @@ describe('Alerts on this device', () => {
     expect(all).toHaveLength(6);
     const selected = all.filter((c) => c.getAttribute('aria-pressed') === 'true');
     expect(selected.map((c) => c.textContent)).toEqual(['2 hours']);
-    expect(selected[0]!.className).toContain('lit-pill');
+    expect(selected[0]!.querySelector('[data-chip-face]')?.className).toContain('lit-pill');
   });
 
   it('an ended pause shows no banner and no selected chip', () => {

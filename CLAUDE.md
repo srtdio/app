@@ -95,7 +95,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 ## Design and layout (locked 6 Nov 2026; guards in `src/__tests__`, eslint designRules, `scripts/design-ratchet.ts`)
 
 - Use a part or add a slot to it; never hand-build its frame or fork it. If no part fits, stop and ask.
-- Parts (src/components/ui): Text, layout.ts, Card, Row, Tile, ChatCard, Composer, HeaderBar, Toolbar, StatusDot, Sheet + SheetActions, ActionMenu + ActionMenuTrigger, Button / IconButton / Chip / PressableRow (44 tall), Tag, CountBadge, Avatar, PersonTrigger, NoResults, ErrorNote, SidePanel, PostPlaceholder.
+- Parts (src/components/ui): Text, layout.ts, Card, Row, Tile, ChatCard, Composer, HeaderBar, Toolbar, StatusDot, Sheet + SheetActions, ActionMenu + ActionMenuTrigger, Button / IconButton / PressableRow (44 tall), Chip (visible 32, hit 44), Tag, CountBadge, Avatar, PersonTrigger, NoResults, ErrorNote, SidePanel, PostPlaceholder.
 - Type roles (ui/Text only): display (post title only), title (bar titles), heading, body, secondary, label, meta (mono, tabular), section. Max 3 roles per part. leading-_, tracking-_, text-[..] live only in ui/Text (lint error).
 - Values: tailwind.config.ts holds only the allowed scale (type xs..3xl + input; 4px spacing grid plus 0.5 and 1.5; radius roles; border 1/2 + named cut-out/rail; named z layers base..top; named panel widths). New exception = named token + one-line comment. No [Npx], no z-[N].
 - Edges (L2): page 16 phone / 24 laptop (GUTTER), chat 12 (CHAT_GUTTER), sheets 16. Inside <= outside spacing.
@@ -107,8 +107,9 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Colour: token classes only; greys + amber Review, green Approved, red errors/Reject; no violet/blue, no hex, no text-white. Contrast 4.5:1 text, 3:1 edges.
 - Motion: src/lib/motion only; never fade; instant under Reduce Motion.
 - Icons: ui/icons.tsx only; ICON_SIZE; stroke follows size (strokeFor). One icon per concept.
+- Icon meanings: Copy = two squares (IconCopy, Square2Stack); Reply privately = bubble with arrow (IconReplyPrivately); the person icon (IconUser) = a person only.
 - Words: Activity, file/Assets, Due (never Target), Review, Retry, Alerts. Zero states "{Things} show up here." Errors "Couldn't {action}. {reason}". No em-dashes. Dates via src/lib/time.ts, font-mono tabular-nums.
-- List card (ui/ListCard, every list): 74 tall (1 + 12 + 48 + 12 + 1), 8 apart; 48 picture left, centred (people round, else radius 8). Line 1: title, time on the right. Line 2: one-line preview, one grey Tag, unread dot last; line 2 stays when empty. No line 3.
+- List card (ui/ListCard, every list): 74 tall (1 + 12 + 48 + 12 + 1), 8 apart; 48 picture left, centred (people round, else radius 8). Line 1: title, time on the right. Line 2: one-line preview, one grey Tag, unread dot last; no preview: the tag sits on the right, right under the time; line 2 stays when empty. No line 3.
 - Card dates are words only (time.ts): due "Today", "Tomorrow", "Fri", "12 Nov"; late "2d late" in the bad token; plans "Mon" ahead, "Live", then the end day. Never "Due", "Overdue", "Starts" on a card.
 - No ⋮ on a list card: long-press (phone) or right-click / Shift / Cmd-click (laptop) selects; actions live on the list's SelectBar (ui/SelectBar). Guard: `src/__tests__/list-card-guard.test.tsx`.
 - Text: fields are ui/Input or ui/Textarea; the format strip is ui/FormatStrip only. Saved free text renders through parseFormat; one-line previews use stripFormat; post captions never format.
