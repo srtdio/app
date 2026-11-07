@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 // B1b: the chat list and the chat headers render through the shared parts.
-// Group and people chats are ui/Row (72, a 32 avatar column at the 12 chat
-// edge, text at 56, the divider inset 56, the ⋯ through the trailing rule);
-// no chat is a Tile; Thread, Contact, Group
+// Group and people chats are ui/ListCard (74 tall, the 48 picture, no ⋮:
+// long-press selects); no chat is a Tile; Thread, Contact, Group
 // info and Tasks headers are ui/HeaderBar with one exit (Back "<"
 // on the left, never an X), glyphs 20.
 import { readFileSync } from 'node:fs';
@@ -54,25 +53,25 @@ function list(): string {
       selectedChannelId: null,
       onSelect: () => {},
       onNewChat: () => {},
-      onLongPress: () => {},
-      onHide: () => {},
+      select: { active: false, selectedIds: new Set(), onEnter: () => {}, onToggle: () => {} },
     }),
   );
 }
 
 describe('ChannelList on ui/ListCard', () => {
-  it('group and people chats render [data-list-card] with the 72 picture, no dividers', () => {
+  it('group and people chats render [data-list-card] with the 48 picture, no dividers', () => {
     const out = list();
     expect(out.match(/data-list-card=""/g)).toHaveLength(3);
-    expect(out).toMatch(/data-list-card-picture="[a-z]+"[^>]*class="[^"]*h-18 w-18/);
-    expect(out).toContain('width:72px;height:72px');
+    expect(out).toMatch(/data-list-card-picture="[a-z]+"[^>]*class="[^"]*h-12 w-12/);
+    expect(out).toContain('width:48px;height:48px');
     expect(out).not.toContain('data-row-divider');
   });
 
-  it('the ⋯ ends on the card content edge: trigger pulled 12 (the trailing rule)', () => {
+  it('no ⋮ on a chat card: one button per card (long-press selects)', () => {
     const out = list();
-    expect(out).toMatch(/aria-label="Actions for Launch"[^>]*-mr-3/);
-    expect(out).toMatch(/aria-label="Actions for Asha Rao"[^>]*-mr-3/);
+    expect(out).not.toContain('Actions for');
+    expect(out).not.toContain('data-list-card-more');
+    expect(out.match(/<button/g)).toHaveLength(3);
   });
 
   it('people render [data-list-card] like groups, never [data-tile]', () => {

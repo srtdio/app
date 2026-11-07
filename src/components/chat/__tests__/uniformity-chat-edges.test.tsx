@@ -1,6 +1,6 @@
 // Uniformity pass (11c, 11d, 11f, 11g, 11i, 8): own-bubble card contrast, the
 // laptop Chat list stepping aside for a docked Plan from 1180 to 1439px, the
-// "1 selected" edge, the phone chat list edges, the time clear of the ⋯ (the
+// "1 selected" edge, the phone chat list edges, the time never covered (the
 // parts own the slots), and the swipe spring on the motion tokens. Class strings and source checks.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
@@ -162,13 +162,12 @@ describe('11g phone chat list edges', () => {
   });
 });
 
-describe('11i the ⋯ never covers the time (B1b: parts own the slots)', () => {
-  it('a chat card: the ⋯ is line 3 trailing, after the time, never over it', () => {
+describe('11i nothing covers the time (parts own the slots)', () => {
+  it('a chat card has no ⋯: the time is line 1 trailing, in flow, never covered', () => {
     const card = read('../../ui/ListCard.tsx');
-    expect(card.indexOf('data-list-card-more')).toBeGreaterThan(
-      card.indexOf('data-list-card-time'),
-    );
-    expect(card).not.toMatch(/data-list-card-more=""[^\n]*absolute/);
+    expect(card).not.toContain('data-list-card-more');
+    expect(card).not.toMatch(/data-list-card-time=""[^\n]*absolute/);
+    expect(read('../ChannelList.tsx')).not.toContain('ActionMenu');
   });
 
   it('a person is the same Row: no Tile in the chat list', () => {

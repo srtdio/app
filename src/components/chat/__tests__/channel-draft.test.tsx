@@ -36,8 +36,6 @@ describe('chat list draft preview', () => {
         draft: 'half typed',
         nowMs: 0,
         timeZone: 'UTC',
-        selecting: false,
-        checked: false,
       }).preview,
     );
     expect(DRAFT_PREFIX).toBe('Draft: ');
@@ -52,8 +50,6 @@ describe('chat list draft preview', () => {
         summary: undefined,
         nowMs: 0,
         timeZone: 'UTC',
-        selecting: false,
-        checked: false,
       }).preview,
     );
     expect(html).toContain('No messages yet');
@@ -67,8 +63,6 @@ describe('chat list draft preview', () => {
       draft: 'half typed',
       nowMs: 0,
       timeZone: 'UTC',
-      selecting: false,
-      checked: false,
     });
     const html = renderToStaticMarkup(parts.preview);
     expect(html).toMatch(/<span class="text-accent font-medium">Draft: <\/span>half typed/);

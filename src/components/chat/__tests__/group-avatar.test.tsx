@@ -63,8 +63,6 @@ function rowHtml(summary: ChannelSummary): string {
     summary: undefined,
     nowMs: Date.parse('2026-09-29T10:00:00Z'),
     timeZone: 'UTC',
-    selecting: false,
-    checked: false,
   });
   return renderToStaticMarkup(
     <ListCard picture={parts.picture} pictureHooks={parts.pictureHooks} title={parts.name} />,
@@ -79,9 +77,9 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     expect(html).toContain(`src="${PHOTO}"`);
     // First paint is the photo: no initials fallback rendered alongside it.
     expect(html).not.toContain('>LA<');
-    // A group is a ListCard: its photo in the 72 radius 8 picture box (profile role, group kind).
+    // A group is a ListCard: its photo in the 48 radius 8 picture box (card role, group kind).
     expect(html).toMatch(/data-list-card-picture="image" data-group-photo=""/);
-    expect(html).toContain('data-avatar-role="profile"');
+    expect(html).toContain('data-avatar-role="card"');
   });
 
   it('a group without avatar_url falls back to the shared initials avatar', () => {
@@ -97,10 +95,10 @@ describe('chat home tile avatar resolution (one batched list read, no per-row fe
     expect(dm.avatarUrl).toBe(PEER_PHOTO);
     const html = rowHtml(dm);
     expect(html).toContain(`src="${PEER_PHOTO}"`);
-    // A DM is a ListCard: a 72 circular photo (profile role, person kind).
+    // A DM is a ListCard: a 48 circular photo (card role, person kind).
     expect(html).toMatch(/data-list-card-picture="person" data-person-photo=""/);
     expect(html).toContain('rounded-full');
-    expect(html).toContain('data-avatar-role="profile"');
+    expect(html).toContain('data-avatar-role="card"');
   });
 });
 
