@@ -99,7 +99,7 @@ import { getFillCount } from '@/lib/use-fill-count';
 
 /**
  * From bank's small tile (BankPickSheet, 44): first picture, else its first
- * link's picture, else a file glyph, else a dashed box. The Bank's own rows
+ * link's picture, else a file glyph, else a plain grey box. The Bank's own rows
  * take ListCard's 40 squircle picture (bankCardPicture).
  */
 export function BankThumb(props: { idea: BankIdea; size: 44 }): ReactElement {
@@ -133,7 +133,7 @@ function EmptyThumb(props: { box: string }): ReactElement {
       data-bank-thumb="none"
       className={cn(
         props.box,
-        'flex shrink-0 items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel-2 text-fg-3 lit-well-soft',
+        'flex shrink-0 items-center justify-center rounded-lg bg-panel-2 text-fg-3',
       )}
     >
       <IconBank size={ICON_SIZE.inline} />
@@ -328,7 +328,7 @@ export function BankFilterLine(props: {
         <span
           key={pill.key}
           data-bank-filter-pill={pill.key}
-          className="lit-badge inline-flex h-6 items-center gap-0.5 rounded-sm border border-border-strong bg-panel px-1 text-sm text-fg"
+          className="lit-badge inline-flex h-6 items-center gap-1 rounded-sm border border-border-strong bg-panel px-1 text-sm text-fg"
         >
           <span className="pl-1">{pill.label}</span>
           <IconButton
@@ -873,16 +873,16 @@ export function BankPlanItSheets(props: {
         </p>
       </Sheet>
       <Sheet open={step?.kind === 'several'} onClose={props.onClose} title="Pick a plan">
-        <div data-bank-plan-picker="" className="flex flex-col gap-2 p-4">
+        <div data-bank-plan-picker="" className="-mx-4 flex flex-col">
           {step?.kind === 'several'
             ? step.plans.map((plan) => (
                 <PressableRow
                   key={plan.id}
-                  card
+                  flat
                   type="button"
                   data-bank-plan-option={plan.id}
                   onClick={() => props.onPickPlan(step.idea, plan, step.day)}
-                  className="lit-card flex items-center gap-2 border bg-panel px-4 py-3"
+                  className="flex items-center gap-2 border-b border-border px-4 py-3"
                 >
                   <span className="min-w-0 flex-1 truncate text-base font-medium text-fg">
                     {plan.title}

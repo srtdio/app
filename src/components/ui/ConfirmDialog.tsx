@@ -100,7 +100,7 @@ export function ConfirmDialog({
         aria-label={title}
         tabIndex={-1}
         // Rendered at rest; rise (phone, Y) or grow (laptop, scale) is laid over it.
-        className="relative lit-overlay w-full max-w-sm rounded-2xl border bg-panel p-5 outline-none will-change-transform"
+        className="relative lit-overlay w-full max-w-sm rounded-2xl border bg-panel p-6 outline-none will-change-transform"
       >
         <h2 className="text-lg font-semibold text-fg">{title}</h2>
         {message !== undefined && message !== '' ? (
@@ -109,7 +109,7 @@ export function ConfirmDialog({
           </p>
         ) : null}
         {/* Cancel is ghost, left of the primary. */}
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-6 flex justify-end gap-2">
           <Button variant="ghost" disabled={busy} onClick={requestClose}>
             {cancelLabel}
           </Button>

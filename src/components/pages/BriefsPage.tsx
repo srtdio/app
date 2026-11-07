@@ -76,7 +76,8 @@ import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { errorText } from '@/lib/error-copy';
 import { Text } from '@/components/ui/Text';
-import { getFillCount } from '@/lib/use-fill-count';
+import { getFillCount, useFillCount } from '@/lib/use-fill-count';
+import { readShown, writeShown } from '@/components/pages/pipeline/pipeline-query';
 
 // Filter chips: All shows everything; Open/Closed key off brief.status. The
 // status keys come from the @srtdio/briefs type, never inline literals.
@@ -253,15 +254,17 @@ export const BRIEFS_LOAD_MORE_FAILED = errorText('load more briefs', null);
 
 /**
  * The Load more control under the list: the shared secondary Button (44 tall,
- * token classes only, so light and dark match), shown only while another page
- * exists. Pure (no hooks) so the show/hide rule is unit-tested directly.
+ * token classes only, so light and dark match), shown while loaded briefs are
+ * still held back by the fill count (`hidden`) or another server page exists.
+ * Pure (no hooks) so the show/hide rule is unit-tested directly.
  */
 export function briefsLoadMore(
   next: BriefPageNext,
   loadingMore: boolean,
   onLoadMore: () => void,
+  hidden = 0,
 ): ReactElement[] {
-  if (next.done) return [];
+  if (next.done && hidden <= 0) return [];
   return [
     <div key="load-more" className={cn(GUTTER, 'pb-6 flex justify-center')}>
       <Button
@@ -319,6 +322,28 @@ export function BriefsListSkeleton(): ReactElement {
  * reference) via an id map; the cards need thumbnailAssetVersionId. Pure so the
  * wiring is unit-tested without rendering.
  */
+/**
+ * The groups cut to their first `count` briefs, in order (a group left empty
+ * is dropped). The list shows the screen's fill count, then Load more adds
+ * the same count again. Pure.
+ */
+export function capBriefGroups<T>(groups: BriefGroup<T>[], count: number): BriefGroup<T>[] {
+  const out: BriefGroup<T>[] = [];
+  let left = count;
+  for (const group of groups) {
+    if (left <= 0) break;
+    const items = group.items.length <= left ? group.items : group.items.slice(0, left);
+    left -= items.length;
+    out.push(items === group.items ? group : { ...group, items });
+  }
+  return out;
+}
+
+/** The sessionStorage key for the Briefs list's Load more depth under one view. */
+export function briefsShownKey(workspaceId: string | null, filter: string, sort: string): string {
+  return `briefs:shown:${workspaceId ?? ''}:${filter}:${sort}`;
+}
+
 export function deriveBriefGroups(
   briefs: BriefWithThumbnail[],
   filter: BriefFilter,
@@ -755,6 +780,24 @@ export function BriefsPage() {
     ? sortedBriefs.length
     : groups.reduce((sum, group) => sum + group.items.length, 0);
 
+  // First page fills the screen: the loaded briefs show the fill count (sync,
+  // read once per app load), and Load more adds the same count again (reading
+  // the next server page only once the loaded ones are all shown). The depth is
+  // kept per view for the session, so Back lands on the same rows.
+  const fill = useFillCount();
+  const depthKey = briefsShownKey(workspaceId, filter, showSort ? sort : 'sections');
+  const [depth, setDepth] = useState(() => readShown(depthKey, fill));
+  useEffect(() => setDepth(readShown(depthKey, fill)), [depthKey, fill]);
+  const hiddenCount = Math.max(0, shownCount - depth);
+  const shownGroups = useMemo(() => capBriefGroups(groups, depth), [groups, depth]);
+  const shownSorted = useMemo(() => sortedBriefs.slice(0, depth), [sortedBriefs, depth]);
+  const onLoadMore = (): void => {
+    const nextDepth = depth + fill;
+    setDepth(nextDepth);
+    writeShown(depthKey, nextDepth);
+    if (hiddenCount < fill) void loadMore();
+  };
+
   const hrefFor = useCallback(
     (brief: BriefWithThumbnail): string =>
       // Prefer the pretty link (/b/KEY-N); the classic /briefs/:id route stays a
@@ -830,7 +873,7 @@ export function BriefsPage() {
         <div ref={listRef} className={LIST_CLASS}>
           <div className={GRID_CLASS}>
             {briefCardList({
-              briefs: sortedBriefs,
+              briefs: shownSorted,
               cache,
               presignEnabled,
               hrefFor,
@@ -842,7 +885,7 @@ export function BriefsPage() {
       ) : (
         <div ref={listRef} className={LIST_CLASS}>
           {briefSections({
-            groups,
+            groups: shownGroups,
             timeZone,
             now: new Date(nowMs),
             cache,
@@ -855,7 +898,7 @@ export function BriefsPage() {
       {/* Older briefs load a page at a time; chips and sort narrow what is
           loaded, while the chip counts are server totals. */}
       {!listFailed && !listLoading
-        ? briefsLoadMore(next, loadingMore, () => void loadMore())
+        ? briefsLoadMore(next, loadingMore, onLoadMore, hiddenCount)
         : null}
 
       <CreateBriefSheet

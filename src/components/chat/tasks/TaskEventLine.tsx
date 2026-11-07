@@ -41,7 +41,7 @@ export interface TaskLineContext {
 const OPEN_TASKS_LABEL = 'Open tasks';
 
 const PILL =
-  'rounded-full border border-border bg-panel-2 px-3 py-0.5 text-sm font-medium text-fg-3 lit-pill';
+  'rounded-full border border-border bg-panel-2 px-3 py-1 text-sm font-medium text-fg-3 lit-pill';
 // The pill's tap target: a ghost Button (44 tall) around the visual pill.
 const PRESS = cn('max-w-full', NO_TOUCH_SELECT);
 
@@ -157,9 +157,10 @@ function TaskBatch(props: {
         </span>
       </Button>
       {open ? (
-        // The rows, and the whole card opens the tasks (a chevron at its end).
+        // The rows, and the whole block opens the tasks (a chevron at its end).
+        // Flat look: hairlines above and below, no card frame or fill.
         <PressableRow
-          card
+          flat
           type="button"
           data-task-batch-rows=""
           data-task-open=""
@@ -167,7 +168,7 @@ function TaskBatch(props: {
           onClick={() => ctx.onOpenTask(TASKS_SHEET_ONLY)}
           onContextMenu={(e) => e.preventDefault()}
           className={cn(
-            'mx-4 mb-1 flex w-[min(100%-2rem,420px)] items-center gap-2 border bg-panel-2 px-3 py-2 text-md text-fg-2 lit-card-muted',
+            'mx-4 mb-1 flex w-[min(100%-2rem,420px)] items-center gap-2 border-y border-border px-3 py-2 text-md text-fg-2',
             NO_TOUCH_SELECT,
           )}
         >

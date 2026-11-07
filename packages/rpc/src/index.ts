@@ -358,6 +358,16 @@ export function userOnboardingSave(
   return callProc(client, 'user_onboarding_save', args);
 }
 
+/** Row density per account (users.density). Own row only; invalid value raises invalid_payload. */
+export type Density = 'compact' | 'cozy' | 'calm';
+export type UserDensitySetArgs = { p_density: Density; p_trace_id: string };
+export function userDensitySet(
+  client: Client,
+  args: UserDensitySetArgs,
+): Promise<Result<ProcReturns<'user_density_set'>>> {
+  return callProc(client, 'user_density_set', args);
+}
+
 export type UsernameAvailableArgs = ProcArgs<'username_available'>;
 export function usernameAvailable(
   client: Client,
@@ -395,28 +405,40 @@ export interface PlanCreatePost {
   target_date: string | null;
 }
 
+/** One bank idea for plan_create_with_items; null target_date = first plan day from today. */
+export interface PlanCreateBankIdea {
+  item_id: string;
+  /** 'YYYY-MM-DD', or null (the proc uses greatest(starts_on, today in workspace tz)). */
+  target_date: string | null;
+}
+
 /**
- * plan_create_with_items: the plan, its concepts and its posts in one
- * transaction (any failure saves nothing). The generated Args type the two
- * lists as Json; this wrapper types them.
+ * plan_create_with_items (8-arg, 20261108010000): the plan, its concepts, its
+ * posts and its bank ideas in one transaction (any failure saves nothing). Each
+ * bank idea goes through plan_item_from_bank (agency only). The old 7-arg
+ * overload stays live; the app only calls this one (p_bank [] when none).
  */
+type PlanCreateWithItemsProcArgs = Extract<ProcArgs<'plan_create_with_items'>, { p_bank: Json }>;
 export type PlanCreateWithItemsArgs = Omit<
-  ProcArgs<'plan_create_with_items'>,
-  'p_concepts' | 'p_posts'
+  PlanCreateWithItemsProcArgs,
+  'p_concepts' | 'p_posts' | 'p_bank'
 > & {
   p_concepts: PlanCreateConcept[];
   p_posts: PlanCreatePost[];
+  p_bank: PlanCreateBankIdea[];
 };
 export function planCreateWithItems(
   client: Client,
   args: PlanCreateWithItemsArgs,
 ): Promise<Result<ProcReturns<'plan_create_with_items'>>> {
-  const { p_concepts, p_posts, ...rest } = args;
-  return callProc(client, 'plan_create_with_items', {
+  const { p_concepts, p_posts, p_bank, ...rest } = args;
+  const procArgs: PlanCreateWithItemsProcArgs = {
     ...rest,
     p_concepts: p_concepts as unknown as Json,
     p_posts: p_posts as unknown as Json,
-  });
+    p_bank: p_bank as unknown as Json,
+  };
+  return callProc(client, 'plan_create_with_items', procArgs);
 }
 
 export type PlanUpdateArgs = ProcArgs<'plan_update'>;

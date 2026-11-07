@@ -47,9 +47,8 @@ import {
   type AssetKind,
   type AssetListItem,
 } from '@/lib/assets';
+import { getFillCount } from '@/lib/use-fill-count';
 
-/** Cards drawn first, and added each time the reader nears the end. */
-export const ASSET_LIST_PAGE = 60;
 /** How far below the last drawn card the next page starts drawing. */
 const MORE_MARGIN = '800px';
 
@@ -162,7 +161,7 @@ function AssetVideoThumb({
       <span
         data-asset-play-badge=""
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-0.5 left-0.5 inline-flex max-w-full items-center gap-0.5 rounded-full bg-overlay px-1 text-xs text-overlay-fg lit-media"
+        className="pointer-events-none absolute bottom-0.5 left-0.5 inline-flex max-w-full items-center gap-1 rounded-full bg-overlay px-1 text-xs text-overlay-fg lit-media"
       >
         <IconPlay size={ICON_SIZE.text} />
         {length !== null ? (
@@ -317,8 +316,9 @@ interface AssetListProps {
 }
 
 /**
- * How many cards to draw: the first page at once, then a page more each time
- * the end comes within MORE_MARGIN of the screen. A workspace with 1,500 files
+ * How many cards to draw: the first page (the screen's fill count, read sync
+ * once per app load) at once, then the same count more each time the end
+ * comes within MORE_MARGIN of the screen. A workspace with 1,500 files
  * draws a screenful straight away instead of 1,500 cards before anything shows.
  * Without IntersectionObserver every card is drawn.
  */
@@ -326,7 +326,7 @@ function useGrowingCount(total: number): {
   count: number;
   sentinelRef: RefObject<HTMLDivElement>;
 } {
-  const [count, setCount] = useState(ASSET_LIST_PAGE);
+  const [count, setCount] = useState(getFillCount);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const more = count < total;
   useEffect(() => {
@@ -340,7 +340,7 @@ function useGrowingCount(total: number): {
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
           mark('grid:grow');
-          setCount((now) => now + ASSET_LIST_PAGE);
+          setCount((now) => now + getFillCount());
         }
       },
       { rootMargin: MORE_MARGIN },

@@ -1,5 +1,6 @@
 import { installDomMutationGuard } from '@/lib/dom-mutation-guard';
 import { mark } from '@/lib/perf-marks';
+import { bootDensity } from '@/lib/density';
 import { StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import {
@@ -21,6 +22,10 @@ import { captureEarlyErrors, scheduleSentry } from '@/lib/sentry-lazy';
 import inter400 from '@fontsource/inter/files/inter-latin-400-normal.woff2?url';
 import inter500 from '@fontsource/inter/files/inter-latin-500-normal.woff2?url';
 import inter600 from '@fontsource/inter/files/inter-latin-600-normal.woff2?url';
+
+// Density from the device (users.density cached in localStorage) onto <html>
+// before anything renders, like the theme: no await, no read.
+bootDensity();
 
 // Preload Inter 400/500/600 (latin) before anything renders, so first paint
 // does not wait for the stylesheet to discover them. The same hashed files the

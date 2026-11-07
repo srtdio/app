@@ -431,7 +431,7 @@ function Group({
           <span className="text-sm text-fg-3">{count}</span>
         </div>
         {subtitle !== undefined && subtitle !== '' ? (
-          <p className="mt-0.5 truncate text-sm text-fg-3">{subtitle}</p>
+          <p className="mt-1 truncate text-sm text-fg-3">{subtitle}</p>
         ) : null}
       </header>
       <div data-members-group="">

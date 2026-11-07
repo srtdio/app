@@ -515,7 +515,7 @@ export function AboutBar(props: { post: PostRefPost | null; onCancel: () => void
         {post !== null ? (
           <span className="truncate text-sm text-fg-2">{post.title}</span>
         ) : (
-          <span aria-hidden="true" className="my-0.5 h-3 w-28 rounded bg-panel-2" />
+          <span aria-hidden="true" className="my-1 h-3 w-28 rounded bg-panel-2" />
         )}
       </span>
       <Button

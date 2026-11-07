@@ -130,7 +130,7 @@ export function PlanPickerSheet(props: {
         <p className="px-4 pb-1 pt-3 text-sm text-fg-3">Upcoming plans in {props.workspaceName}</p>
         <div className={BODY_BOX}>
           {read.status === 'loading' ? (
-            <BoxSkeleton lit="flat" label="Loading plans" className="flex flex-col gap-2 px-4">
+            <BoxSkeleton lit="flat" label="Loading plans" className="flex flex-col px-4">
               {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
                 <PickerSkeletonRow key={`bone-${i}`} />
               ))}
@@ -143,23 +143,24 @@ export function PlanPickerSheet(props: {
               </Button>
             </div>
           ) : (
-            <div className="flex flex-col gap-2 px-4 pb-4">
+            <div className="flex flex-col px-4 pb-4">
               {read.data.length === 0 ? (
                 <div data-plan-picker-empty="" className="pb-4 pt-6 text-center">
                   <p className="text-base text-fg-2">{PICKER_EMPTY}</p>
                 </div>
-              ) : (
-                pickerRows(read.data, inChat).map(({ bundle, chips }) => (
+              ) : null}
+              <div className="flex flex-col divide-y divide-border border-y border-border">
+                {pickerRows(read.data, inChat).map(({ bundle, chips }) => (
                   <PressableRow
                     key={bundle.plan.id}
-                    card
+                    flat
                     type="button"
                     data-plan-pick={bundle.plan.id}
                     onClick={() => {
                       props.onClose();
                       props.onOpenPlan(bundle.plan.id);
                     }}
-                    className="flex min-h-18 items-center gap-3 border bg-panel p-3 lit-card"
+                    className="flex min-h-18 items-center gap-3 px-1 py-3"
                   >
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent lit-pill">
                       <IconPlan size={ICON_SIZE.control} />
@@ -177,7 +178,7 @@ export function PlanPickerSheet(props: {
                             key={chip.label}
                             data-plan-chip={chip.tone}
                             className={cn(
-                              'inline-flex min-h-5 items-center rounded-lg border border-transparent px-1.5 text-xs lit-pill',
+                              'inline-flex min-h-5 items-center rounded-lg border border-transparent px-2 text-xs lit-pill',
                               CHIP_TONES[chip.tone],
                             )}
                           >
@@ -190,26 +191,26 @@ export function PlanPickerSheet(props: {
                       <IconChevronRight size={ICON_SIZE.control} />
                     </span>
                   </PressableRow>
-                ))
-              )}
-              <PressableRow
-                type="button"
-                card
-                data-plan-pick-new=""
-                onClick={() => {
-                  props.onClose();
-                  props.onNewPlan();
-                }}
-                className="flex min-h-12 items-center gap-3 border bg-panel p-3 text-lg font-semibold text-accent lit-card"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-panel-2 lit-pill">
-                  <IconPlus size={ICON_SIZE.control} />
-                </span>
-                <span className="flex-1">{NEW_PLAN_LABEL}</span>
-                <span className="shrink-0 text-fg-3">
-                  <IconChevronRight size={ICON_SIZE.control} />
-                </span>
-              </PressableRow>
+                ))}
+                <PressableRow
+                  type="button"
+                  flat
+                  data-plan-pick-new=""
+                  onClick={() => {
+                    props.onClose();
+                    props.onNewPlan();
+                  }}
+                  className="flex min-h-12 items-center gap-3 px-1 text-base text-fg"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center">
+                    <IconPlus size={ICON_SIZE.control} />
+                  </span>
+                  <span className="flex-1">{NEW_PLAN_LABEL}</span>
+                  <span className="shrink-0 text-fg-3">
+                    <IconChevronRight size={ICON_SIZE.control} />
+                  </span>
+                </PressableRow>
+              </div>
             </div>
           )}
         </div>
@@ -223,7 +224,7 @@ function PickerSkeletonRow(): ReactElement {
   return (
     <div
       data-plan-pick-skeleton=""
-      className="flex min-h-18 w-full items-center gap-3 rounded-xl border bg-panel p-3 lit-card"
+      className="flex min-h-18 w-full items-center gap-3 border-b border-border px-1 py-3"
     >
       <Bone lit="lit-media" className="h-10 w-10 shrink-0 rounded-lg" />
       <span className="flex min-w-0 flex-1 flex-col gap-1">

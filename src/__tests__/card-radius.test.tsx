@@ -31,11 +31,12 @@ import { IconPipeline } from '@/components/ui/icons';
 // Radius roles (CLAUDE.md): every card's outer box is 12px (rounded-xl);
 // thumbnails inside a card stay 8px (rounded-lg). List rows (ui/ListCard:
 // Pipeline, Briefs, Activity) are the flat look (7 Nov 2026): no radius, no
-// border, the 60 row bled 16 each side; their picture is rounded-picture (10).
+// border, the density row (72 Cozy, 60 Compact, 80 Calm) bled 16 each side;
+// their picture is rounded-picture (10).
 
-/** A flat list row: no radius and no border on the frame; the h-15 row bled -mx-4 / px-4. */
+/** A flat list row: no radius and no border on the frame; the h-18 row (compact:h-15, calm:h-20) bled -mx-4 / px-4. */
 function expectFlatRow(cls: string[]): void {
-  expect(cls).toContain('h-15');
+  expect(cls).toEqual(expect.arrayContaining(['h-18', 'compact:h-15', 'calm:h-20']));
   expect(cls).toEqual(expect.arrayContaining(['-mx-4', 'px-4']));
   expect(cls.filter((c) => /^rounded/.test(c))).toEqual([]);
   expect(cls.filter((c) => /^border/.test(c))).toEqual([]);

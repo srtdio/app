@@ -220,7 +220,7 @@ export function captionView({
         {quote}
         <span
           {...{ [CAPTION_MARKER_ATTR]: '' }}
-          className="ml-0.5 inline-flex select-none align-middle"
+          className="ml-1 inline-flex select-none align-middle"
           style={{ userSelect: 'none' }}
         >
           <CheckpointCircle n={a.n} state={a.state ?? 'open'} size="inline" />

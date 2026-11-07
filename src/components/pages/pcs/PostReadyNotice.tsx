@@ -211,7 +211,7 @@ export function PostReadyNotice({
   if (view === null && !showSend) return null;
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border bg-panel-2 p-4 lit-card-muted">
+    <section className="flex flex-col gap-3 border-t border-border pt-4">
       {view !== null ? (
         <div className="flex flex-col gap-1">
           <p className="text-base font-medium text-fg">{view.headline}</p>

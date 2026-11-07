@@ -442,7 +442,7 @@ export function annotationChip(
       onClick={() => onClick?.(commentId)}
       className="mb-2 flex min-w-0 items-start gap-2 border-l-rail border-fg pl-3 text-base text-fg-2 mv-tint hover:text-fg"
     >
-      <CheckpointCircle n={annotation.n} state={circle} size="inline" className="mt-0.5" />
+      <CheckpointCircle n={annotation.n} state={circle} size="inline" className="mt-1" />
       <span className="min-w-0 [overflow-wrap:anywhere]">{annotation.quote}</span>
     </PressableRow>
   );
@@ -1320,9 +1320,10 @@ export const THREAD_ITEM_CLASS = 'py-3';
 /** The list inside the one comments card: threads split by hairlines. */
 export const THREAD_LIST_CLASS = 'flex flex-col divide-y divide-border';
 
-/** Briefs have no host card: the list draws the one card itself. Posts sit in
- *  the page's comments card (PostDetailPage), so the list adds none. */
-export const OWN_CARD_CLASS = 'rounded-xl border bg-panel-2 px-4 lit-card-muted';
+/** Briefs have no host section: the list closes its own flat section (flat
+ *  look: no frame, no fill, a hairline under). Posts sit in the page's
+ *  comments section (PostDetailPage), so the list adds none. */
+export const OWN_CARD_CLASS = 'border-b border-border';
 
 /** The fixed left column: the root avatar, the group avatar or the point circle. */
 const LEAD_COLUMN_CLASS = 'flex w-11 shrink-0 justify-center';

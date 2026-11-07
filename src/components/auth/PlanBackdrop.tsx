@@ -105,7 +105,7 @@ function LaptopPlan({ weeks, weekdays, monthLabel }: PlanProps): ReactElement {
         <Bar className="h-8 w-56" />
         <span className="h-8 w-8 rounded-full bg-panel-3" />
       </div>
-      <div className="shrink-0 px-10 pt-5">
+      <div className="shrink-0 px-10 pt-6">
         <Chips />
       </div>
       <div className="flex shrink-0 items-center gap-3 px-10 py-4">
@@ -175,7 +175,7 @@ function PhonePlan({ weeks, weekdays, monthLabel }: PlanProps): ReactElement {
               <div
                 key={col}
                 className={cn(
-                  'flex min-w-0 flex-col items-center gap-0.5 border-b border-r border-border p-0.5 last:border-r-0',
+                  'flex min-w-0 flex-col items-center gap-1 border-b border-r border-border p-1 last:border-r-0',
                   cell.inMonth ? 'bg-panel' : 'bg-panel-2',
                 )}
               >
@@ -186,11 +186,12 @@ function PhonePlan({ weeks, weekdays, monthLabel }: PlanProps): ReactElement {
           </div>
         ))}
       </div>
-      <div className="mx-12 mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+      {/* The app's flat list rows (flat look): rows touching, no card frame. */}
+      <div className="mx-12 mt-3 flex min-h-0 flex-1 flex-col overflow-hidden">
         {listThumbs.map((cell) => (
           <div
             key={`${cell.day}-${cell.inMonth ? 'in' : 'out'}`}
-            className="flex items-center gap-3 rounded-xl border bg-panel p-2 lit-card"
+            className="flex items-center gap-3 py-2"
           >
             <Thumb thumb={cell.thumb} className="h-10 w-10 shrink-0" />
             <Bar className="h-3 w-1/2" />

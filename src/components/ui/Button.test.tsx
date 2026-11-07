@@ -221,7 +221,7 @@ describe('Chip', () => {
   const faceOf = (el: ReactElement): Face =>
     (el as ReactElement<{ children: Face }>).props.children;
 
-  it('both sizes: a 44 tap box around the 32 chip (px-3, full pill, weight 500, the hairline outline)', () => {
+  it('both sizes: a 44 tap box around the density chip (36 Cozy px-4; compact 32 px-3; calm 40), full pill, weight 500, the strong edge', () => {
     for (const size of ['sm', 'tap'] as const) {
       const el = Chip({ label: 'All', size }) as ReactElement<{ className: string }>;
       const box = tokens(el.props.className);
@@ -229,20 +229,29 @@ describe('Chip', () => {
       expect(box).toContain('rounded-full');
       expect(box).not.toContain('bg-panel-3');
       const t = tokens(faceOf(el).props.className);
-      expect(t).toContain('min-h-8');
-      expect(t).toContain('px-3');
+      expect(t).toEqual(
+        expect.arrayContaining([
+          'min-h-9',
+          'px-4',
+          'compact:min-h-8',
+          'compact:px-3',
+          'calm:min-h-10',
+        ]),
+      );
+      expect(t).not.toContain('min-h-8');
+      expect(t).not.toContain('px-3');
       expect(t).toContain('text-md');
       expect(t).toContain('rounded-full');
       expect(t).toContain('font-medium');
       expect(t).toContain('lit-hover');
       expect(t).toContain('border');
-      expect(t).toContain('border-border');
+      expect(t).toContain('border-border-strong');
+      expect(t).not.toContain('border-border');
       expect(t).toContain('text-fg-2');
       expect(t).not.toContain('bg-panel-3');
       expect(t).not.toContain('lit-well-soft');
       expect(t).not.toContain('border-transparent');
       expect(t).not.toContain('rounded-lg');
-      expect(t).not.toContain('px-4');
     }
   });
 
@@ -262,9 +271,9 @@ describe('Chip', () => {
     const add = tokens(
       faceOf(Chip({ label: 'Add', variant: 'add' }) as ReactElement).props.className,
     );
-    expect(add).toContain('border-dashed');
+    expect(add).not.toContain('border-dashed');
     expect(add).toContain('border-border-strong');
-    expect(add).toContain('text-fg-3');
+    expect(add).toContain('text-fg');
     expect(add).not.toContain('lit-chip');
   });
 });

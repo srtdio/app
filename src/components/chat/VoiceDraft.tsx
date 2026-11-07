@@ -29,7 +29,7 @@ export function voiceDraftView(props: {
       data-voice-draft=""
       role="group"
       aria-label={`Saved ${label.toLowerCase()}`}
-      className="flex items-center gap-1 rounded-xl border bg-panel-2 py-0.5 pl-1 pr-0.5 lit-card-muted"
+      className="flex items-center gap-1 rounded-xl border bg-panel-2 py-1 pl-1 pr-1 lit-card-muted"
     >
       <IconButton
         type="button"
@@ -159,10 +159,10 @@ export function StopRecordingDialog(props: {
         aria-modal="true"
         aria-label={STOP_RECORDING_TITLE}
         tabIndex={-1}
-        className="relative w-full max-w-sm rounded-2xl border bg-panel p-5 lit-overlay outline-none"
+        className="relative w-full max-w-sm rounded-2xl border bg-panel p-6 lit-overlay outline-none"
       >
         <h2 className="text-lg font-semibold text-fg">{STOP_RECORDING_TITLE}</h2>
-        <div className="mt-5 flex flex-col gap-2">
+        <div className="mt-6 flex flex-col gap-2">
           <Button variant="primary" onClick={props.onKeep}>
             {STOP_RECORDING_KEEP}
           </Button>

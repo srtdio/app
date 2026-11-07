@@ -188,19 +188,18 @@ export function PersonCardBody({
         name={data.name}
         {...(data.avatarUrl !== null ? { src: data.avatarUrl } : {})}
       />
-      <div className="flex w-full min-w-0 flex-col items-center gap-0.5">
+      <div className="flex w-full min-w-0 flex-col items-center gap-1">
         {showName ? (
           <p className="w-full truncate text-lg font-semibold text-fg">{data.name}</p>
         ) : null}
         {/* Reserved line: an unheld username or role fills in place, no jump. */}
-        <p className="h-5 w-full truncate py-0.5 text-sm text-fg-2" data-person-meta="">
+        <p className="h-5 w-full truncate py-1 text-sm text-fg-2" data-person-meta="">
           {meta}
         </p>
       </div>
       {data.action === 'removed' ? (
-        <p className="w-full rounded-lg bg-panel-2 lit-well-soft px-4 py-3 text-base text-fg-2">
-          {PERSON_CARD_COPY.removed}
-        </p>
+        // Flat look: the note sits on the sheet, no grey box (py-3 keeps the footprint).
+        <p className="w-full px-4 py-3 text-base text-fg-2">{PERSON_CARD_COPY.removed}</p>
       ) : (
         <Button
           variant="primary"
@@ -259,12 +258,12 @@ export function PersonMessageCard(props: PersonMessageCardProps): ReactElement {
           </IconButton>
         ) : null}
         {photo}
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           {props.showHeader ? (
             <p className="truncate text-base font-medium text-fg">{data.name}</p>
           ) : null}
           {/* Reserved line: an unheld username or role fills in place, no jump. */}
-          <p className="h-5 truncate py-0.5 text-sm text-fg-2" data-person-meta="">
+          <p className="h-5 truncate py-1 text-sm text-fg-2" data-person-meta="">
             {meta}
           </p>
         </div>

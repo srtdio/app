@@ -33,8 +33,9 @@ export const AGORA_CONSOLE_URL = 'https://console.agora.io';
 function Pending() {
   return (
     <BoxSkeleton lit="flat" label="Loading" className="flex flex-col gap-2">
-      <Bone lit="lit-card" className="h-16 rounded-xl" />
-      <Bone lit="lit-card" className="h-16 rounded-xl" />
+      {/* Flat look: flat bones, not card-shaped boxes. */}
+      <Bone lit="flat" className="h-16 rounded" />
+      <Bone lit="flat" className="h-16 rounded" />
     </BoxSkeleton>
   );
 }
@@ -66,7 +67,7 @@ export function NeedsYouTab({
   if (alerts === null) return <Pending />;
   if (alerts.length === 0) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border bg-panel lit-card p-3">
+      <div className="flex items-center gap-3 py-3">
         <span className="text-good">
           <IconCheckCircle size={ICON_SIZE.control} />
         </span>
@@ -373,7 +374,7 @@ export function ChatTab({ source }: { source: Source<ChatData> | undefined }) {
                   {d.problems.map((p) => (
                     <li
                       key={p.id}
-                      className="flex flex-col gap-0.5 border-b border-border py-2 last:border-b-0"
+                      className="flex flex-col gap-1 border-b border-border py-2 last:border-b-0"
                     >
                       <span className="flex items-center gap-2">
                         <Tag label={p.eventType.replace(/_/g, ' ')} />

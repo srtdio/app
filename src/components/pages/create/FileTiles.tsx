@@ -220,7 +220,7 @@ export function FileTiles({
       ref={rowRef}
       data-file-tiles=""
       aria-label="Files"
-      className="relative flex gap-2 overflow-x-auto overscroll-x-contain py-0.5"
+      className="relative flex gap-2 overflow-x-auto overscroll-x-contain py-1"
     >
       {items.map((item, index) => {
         const dragging = drag !== null && drag.from === index;

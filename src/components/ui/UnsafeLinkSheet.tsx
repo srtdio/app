@@ -143,7 +143,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
           onPointerUp={onPointerEnd}
           onPointerCancel={onPointerEnd}
         >
-          <div aria-hidden="true" className="mx-auto mb-0.5 h-1 w-9 rounded-sm bg-border-strong" />
+          <div aria-hidden="true" className="mx-auto mb-1 h-1 w-9 rounded-sm bg-border-strong" />
           <div className="flex items-center gap-2">
             <IconButton label="Back" onClick={onClose} className={cn(LEADING_PULL, 'shrink-0')}>
               <IconChevronLeft size={ICON_SIZE.control} />
@@ -176,7 +176,7 @@ export function UnsafeLinkSheet(props: UnsafeLinkSheetProps): ReactElement | nul
           </ul>
         ) : null}
         {/* The sheet's bottom inset (16 + the home bar) rides on its last block. */}
-        <div className="mt-0.5 flex flex-col gap-2 pb-[calc(16px+env(safe-area-inset-bottom))]">
+        <div className="mt-1 flex flex-col gap-2 pb-[calc(16px+env(safe-area-inset-bottom))]">
           <button
             ref={primaryRef}
             type="button"

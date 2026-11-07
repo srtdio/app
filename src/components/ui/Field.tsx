@@ -42,7 +42,7 @@ export function Field({ label, htmlFor, id, required = false, hint, children }: 
         className="block text-base font-medium mb-2"
       >
         {label}
-        {required ? <span className="text-bad ml-0.5">*</span> : null}
+        {required ? <span className="text-bad ml-1">*</span> : null}
       </label>
       {typeof children === 'function' ? children(controlId) : children}
       {hint !== undefined ? <p className="text-sm text-fg-3 mt-2">{hint}</p> : null}

@@ -37,6 +37,8 @@ export function ApprovedAddressesSection({
   const toast = useToast();
   const [domains, setDomains] = useState<string[]>([]);
   const [loadError, setLoadError] = useState(false);
+  /** The first list read has settled (data hook for the visual check; never the look). */
+  const [settled, setSettled] = useState(false);
   const [draft, setDraft] = useState('');
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +47,7 @@ export function ApprovedAddressesSection({
 
   const load = useCallback(async () => {
     const res = await listClientDomains(supabase, workspaceId);
+    setSettled(true);
     if (!res.ok) {
       setLoadError(true);
       return;
@@ -97,7 +100,7 @@ export function ApprovedAddressesSection({
         Approved approver addresses
       </Text>
       <div
-        data-approved-addresses=""
+        data-approved-addresses={settled ? 'ready' : 'loading'}
         className={cn('flex flex-col gap-3', cardSurface(), cardPad())}
       >
         <p className="text-base text-fg-2">{approverAddressIntro(clientDomain)}</p>

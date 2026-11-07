@@ -50,9 +50,8 @@ describe('LoadError', () => {
       expect(c).not.toMatch(/^(bg|text|border)-(red|gray|slate|zinc|neutral|blue|green)-/);
       expect(c).not.toMatch(/#[0-9a-f]{3,8}/i);
     }
-    expect(alert.className).toContain('lit-card');
-    expect(alert.className).not.toContain('border-border');
-    expect(alert.className).toContain('bg-panel');
+    // Flat look: no card frame (no lit-card, edge, panel fill or radius).
+    expect(alert.className).not.toMatch(/lit-card|\bborder\b|bg-panel|rounded/);
   });
 
   it('while retrying the button is disabled and says so', async () => {

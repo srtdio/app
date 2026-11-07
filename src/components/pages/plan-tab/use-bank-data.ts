@@ -49,6 +49,7 @@ import {
   bankChangeOf,
   bankReadWhat,
   bankStaleBefore,
+  bankPageSize,
   bankThumbOf,
   dispatchPlanChanged,
   enrichBankIdeas,
@@ -215,11 +216,11 @@ export function mergeLivePage(shown: BankPage, fresh: BankPage): BankPage {
   };
 }
 
-/** One first-page read, bounded at 5s; kept for the session once ok. */
+/** One first-page read (the screen's fill count, sync), bounded at 5s; kept for the session once ok. */
 function readFirstPage(key: string, q: BankQuery): Promise<Result<BankPage>> {
   return sharedRead(
     key,
-    () => withReadTimeout((signal) => readBankPage(supabase, q, null, signal)),
+    () => withReadTimeout((signal) => readBankPage(supabase, q, null, signal, bankPageSize())),
     { freshMs: Number.POSITIVE_INFINITY, isOk: (r) => r.ok },
   );
 }
@@ -364,6 +365,7 @@ export function useBankData(input: {
           bankQueryOf(workspaceId, filterRef.current, new Date()),
           null,
           signal,
+          bankPageSize(),
         ),
       ).then((fresh) => {
         if (mine !== seq.current || !fresh.ok) return;
@@ -390,6 +392,8 @@ export function useBankData(input: {
         bankQueryOf(workspaceId, filterRef.current, new Date()),
         cursor,
         signal,
+        // Load more adds the same count again.
+        bankPageSize(),
       ),
     ).then((next) => {
       setMoreBusy(false);

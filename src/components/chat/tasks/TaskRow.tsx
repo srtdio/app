@@ -129,7 +129,7 @@ export function PriorityChip(props: {
         // B1: the picker is a 44 control; the read-only tag stays 24.
         pick !== undefined
           ? 'inline-flex min-h-11 items-center gap-1 rounded-lg px-3 font-mono text-sm lit-pill'
-          : 'inline-flex h-6 items-center gap-0.5 rounded-sm px-2 font-mono text-sm lit-badge',
+          : 'inline-flex h-6 items-center gap-1 rounded-sm px-2 font-mono text-sm lit-badge',
         P_TAG[props.priority],
         props.ringed === true && 'lit-today',
       )}
@@ -246,7 +246,7 @@ function PriorityMenu(props: {
           onContextMenu={(e) => e.preventDefault()}
           className={cn('flex h-11 items-center gap-2 px-3 text-base text-fg', NO_TOUCH_SELECT)}
         >
-          <span className={cn('rounded-lg px-1.5 font-mono text-sm', P_TAG[p])}>P{p}</span>
+          <span className={cn('rounded-lg px-2 font-mono text-sm', P_TAG[p])}>P{p}</span>
           <span className="flex-1">{PRIORITY_LABEL[p]}</span>
           {p === props.current ? (
             <IconCheck size={ICON_SIZE.inline} className="text-accent" />
@@ -365,7 +365,7 @@ function TitleCell(props: {
           <span
             aria-hidden="true"
             data-task-dot=""
-            className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle"
+            className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle"
           />
         ) : null}
         <Highlight text={props.title} />
@@ -374,7 +374,7 @@ function TitleCell(props: {
         <span
           data-task-when=""
           className={cn(
-            'mt-0.5 font-mono text-sm tabular-nums',
+            'mt-1 font-mono text-sm tabular-nums',
             props.dateLine.bad ? 'text-bad' : 'text-fg-3',
           )}
         >

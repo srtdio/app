@@ -100,11 +100,13 @@ describe('onboarding and induction follow the design rules', () => {
     expect(hits(/\bease-(in-out|out|in)\b/)).toEqual([]);
   });
 
-  it('cards are 12, the step card 16; the step card is raised, cards lift', () => {
+  it('the step card is 16 and raised; cards inside it are flat sections (flat look)', () => {
     const flow = FILES.find(({ rel }) => rel === 'onboarding/OnboardingFlow.tsx')?.src ?? '';
     expect(flow).toContain('rounded-2xl border bg-panel p-6 lit-raised');
-    // Preview cards take the card part's surface (radius 12, lit-card) and its 16 pad.
+    // Preview cards take the card part's surface (flat: hairline under) and its 16 pad.
     expect(flow).toContain("cn('w-full max-w-xs', cardSurface(), cardPad())");
+    // No hand-built card frame inside the step card.
+    expect(flow).not.toMatch(/rounded-xl border bg-panel[^"']*lit-card/);
     expect(flow).not.toContain('p-3.5');
   });
 

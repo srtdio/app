@@ -28,8 +28,8 @@ describe('ChannelList buttons (design system)', () => {
     const faces = html.match(/<span data-chip-face=""[^>]*>/g) ?? [];
     expect(faces.length).toBeGreaterThan(0);
     for (const face of faces) {
-      expect(face).toContain('min-h-8');
-      expect(face).toContain('px-3');
+      // The density face: 36 Cozy (min-h-9 px-4), 32 Compact, 40 Calm.
+      expect(face).toContain('min-h-9 px-4 compact:min-h-8 compact:px-3 calm:min-h-10');
       expect(face).toContain('rounded-full');
       expect(face).toContain('text-md');
     }

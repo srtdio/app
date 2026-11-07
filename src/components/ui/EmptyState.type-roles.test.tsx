@@ -44,5 +44,8 @@ describe('EmptyState type roles', () => {
     expect(description).toContain('text-base');
     expect(description).toContain('text-fg-2');
     expect(description).not.toContain('text-fg-3');
+    // Flat look: the glyph has no grey box (no fill, edge, radius or lit-card).
+    const glyph = document.querySelector('svg')?.parentElement?.className ?? '';
+    expect(glyph).not.toMatch(/bg-panel|lit-card|\bborder\b|rounded/);
   });
 });

@@ -468,7 +468,7 @@ describe('bubble shell', () => {
     const headRow = renderBubble(makeMessage({}), { head: true });
     const tucked = renderBubble(makeMessage({}), { head: false });
     expect(rootClass(headRow)).toContain('pt-3');
-    expect(rootClass(tucked)).toContain('pt-0.5');
+    expect(rootClass(tucked)).toContain('pt-1');
     expect(rootClass(headRow)).not.toContain('py-2');
     let column = '';
     walk(headRow, (el) => {
@@ -1228,7 +1228,7 @@ describe('label spacing', () => {
       const cls = (el.props as { className?: string }).className ?? '';
       if (cls.includes('rounded-full')) pill = cls;
     });
-    expect(pill).toContain('mb-1.5');
+    expect(pill).toContain('mb-2');
   });
 
   it('threadListItems flags the message after a day pill only', () => {
@@ -1315,7 +1315,7 @@ describe('own-bubble inner content', () => {
       expect(rootClass(root).split(' ')).toContain(REACTION_ROW_SPACE);
     }
     // 20px of room below: the ~17px overhang never touches the next bubble.
-    expect(REACTION_ROW_SPACE).toBe('mb-5');
+    expect(REACTION_ROW_SPACE).toBe('mb-6');
   });
 
   it('the reaction count on an own bubble reads on its panel badge', () => {

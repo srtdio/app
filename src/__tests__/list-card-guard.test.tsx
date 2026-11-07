@@ -2,9 +2,11 @@
 // 1. No ListCard caller passes a menu: no `menu` / `check` prop on <ListCard>,
 //    and no ActionMenu / ActionMenuTrigger / ⋮ glyph inside a <ListCard>'s
 //    props. A card's actions live on its list's select bar (ui/SelectBar).
-// 2. Every row is 60 tall (flat look, 7 Nov 2026): the frame is h-15, the 40
-//    picture centred in it (10 above and below), the two 20 text lines (and
-//    the 2 between, 42) inside the 40 + padding. The frame is flat: no border,
+// 2. Every row is the density height (8 Nov 2026, <html data-density>): Cozy
+//    72 (h-18, py-3, the 48 picture), Compact 60 (compact:h-15,
+//    compact:py-row-inset, the 40 picture), Calm 80 (calm:h-20, calm:py-4, the
+//    48 picture); the two 20 text lines (and the 4 between, 44) fit inside
+//    the picture + padding. The frame is flat: no border,
 //    no radius, no lit height, no clip; it bleeds -mx-4 / px-4 so the selected
 //    and pressed fill runs edge to edge.
 //    The real measure runs in e2e/visual/layout-checks.ts (listCardHeight).
@@ -20,6 +22,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   ListCard,
   ListCardBox,
+  LIST_CARD_HEIGHT_BY_DENSITY,
   LIST_CARD_HEIGHT_PX,
   listCardFrame,
   type ListCardProps,
@@ -116,21 +119,40 @@ const cls = (html: string, attr: string): string[] =>
   (new RegExp(`<[a-z]+[^>]*${attr}[^>]*class="([^"]*)"`).exec(html)?.[1] ?? '').split(' ');
 const pick = (list: string[], re: RegExp): string => list.find((c) => re.test(c)) ?? '';
 
-describe('guard: every row is 60 tall', () => {
+type Density = keyof typeof LIST_CARD_HEIGHT_BY_DENSITY;
+const DENSITIES: Density[] = ['compact', 'cozy', 'calm'];
+
+/** The classes that apply under one density: the base, with its compact: / calm: overrides swapped in. */
+function under(density: Density, list: string[]): string[] {
+  const base = list.filter((c) => !c.includes(':'));
+  if (density === 'cozy') return base;
+  const over = list
+    .filter((c) => c.startsWith(`${density}:`))
+    .map((c) => c.slice(density.length + 1));
+  const key = (c: string): string => /^-?[a-z]+/.exec(c)?.[0] ?? c;
+  return [...base.filter((c) => !over.some((o) => key(o) === key(c))), ...over];
+}
+
+describe('guard: every row is the density height (Compact 60, Cozy 72, Calm 80)', () => {
   const spacing = tailwindConfig.theme?.spacing as Record<string, string>;
-  const px = (token: string, prefix: string): number =>
-    parseFloat(spacing[token.slice(prefix.length)] ?? 'NaN') * 16;
+  const padding = tailwindConfig.theme?.extend?.padding as Record<string, string>;
+  const px = (token: string, prefix: string): number => {
+    const key = token.slice(prefix.length);
+    return parseFloat(spacing[key] ?? padding[key] ?? 'NaN') * 16;
+  };
 
   /** The row height from the rendered classes: the frame's own h-N, never smaller than its content. */
-  function measured(html: string): number {
-    const frame = px(pick(cls(html, 'data-list-card=""'), /^h-\d/), 'h-');
-    const picture = px(pick(cls(html, 'data-list-card-picture='), /^h-\d/), 'h-');
+  function measured(html: string, density: Density): number {
+    const frameCls = under(density, cls(html, 'data-list-card=""'));
+    const frame = px(pick(frameCls, /^h-\d/), 'h-');
+    const inset = px(pick(frameCls, /^py-/), 'py-');
+    const picture = px(pick(under(density, cls(html, 'data-list-card-picture=')), /^h-\d/), 'h-');
     const line1 = px(pick(cls(html, 'data-list-card-line="1"'), /^h-\d/), 'h-');
     const line2 = px(pick(cls(html, 'data-list-card-line="2"'), /^h-\d/), 'h-');
-    const text = line1 + 2 + line2;
-    // The 40 picture sits 10 below the top and 10 above the bottom; the 42 text
-    // column (20 + 2 + 20) centres against it and still fits the frame.
-    expect(picture + 10 + 10).toBe(frame);
+    const text = line1 + 4 + line2;
+    // The picture sits one inset below the top and one above the bottom; the 44
+    // text column (20 + 4 + 20) centres against it and still fits the frame.
+    expect(picture + inset + inset).toBe(frame);
     expect(text).toBeLessThanOrEqual(frame);
     return frame;
   }
@@ -161,19 +183,24 @@ describe('guard: every row is 60 tall', () => {
   };
 
   for (const [name, over] of Object.entries(variants)) {
-    it(`${name}: 60`, () => {
-      expect(measured(renderToStaticMarkup(<ListCard {...base} {...over} />))).toBe(
-        LIST_CARD_HEIGHT_PX,
-      );
-    });
+    for (const density of DENSITIES) {
+      it(`${name}, ${density}: ${LIST_CARD_HEIGHT_BY_DENSITY[density]}`, () => {
+        expect(measured(renderToStaticMarkup(<ListCard {...base} {...over} />), density)).toBe(
+          LIST_CARD_HEIGHT_BY_DENSITY[density],
+        );
+      });
+    }
   }
 
-  it('LIST_CARD_HEIGHT_PX is 60 and the skeleton keeps the same frame and picture', () => {
-    expect(LIST_CARD_HEIGHT_PX).toBe(60);
+  it('LIST_CARD_HEIGHT_PX is the Cozy 72 and the skeleton keeps the same frame and picture', () => {
+    expect(LIST_CARD_HEIGHT_PX).toBe(72);
+    expect(LIST_CARD_HEIGHT_BY_DENSITY).toEqual({ compact: 60, cozy: 72, calm: 80 });
     const box = renderToStaticMarkup(<ListCardBox />);
-    expect(cls(box, 'data-list-card-box=""')).toContain('h-15');
-    expect(box).toContain('h-10 w-10');
-    expect(box).not.toContain('h-12 w-12');
+    expect(cls(box, 'data-list-card-box=""')).toEqual(
+      expect.arrayContaining(['h-18', 'compact:h-15', 'calm:h-20']),
+    );
+    expect(box).toContain('h-12 w-12');
+    expect(box).toContain('compact:h-10 compact:w-10');
   });
 });
 
@@ -182,7 +209,7 @@ describe('guard: the row frame is flat (no border, radius, lit or clip; bled 16)
     ['listCardFrame()', listCardFrame()],
     ['listCardFrame(true)', listCardFrame(true)],
   ] as const) {
-    it(`${name}: no border, rounded, lit- or overflow-hidden; -mx-4 px-4 h-15`, () => {
+    it(`${name}: no border, rounded, lit- or overflow-hidden; -mx-4 px-4 h-18 (compact:h-15, calm:h-20)`, () => {
       const tokens = frame.split(/\s+/).filter(Boolean);
       expect(
         tokens.filter((t) => /border/.test(t)),
@@ -197,7 +224,9 @@ describe('guard: the row frame is flat (no border, radius, lit or clip; bled 16)
         name,
       ).toEqual([]);
       expect(tokens, name).not.toContain('overflow-hidden');
-      expect(tokens, name).toEqual(expect.arrayContaining(['-mx-4', 'px-4', 'h-15']));
+      expect(tokens, name).toEqual(
+        expect.arrayContaining(['-mx-4', 'px-4', 'h-18', 'compact:h-15', 'calm:h-20']),
+      );
     });
   }
 
@@ -214,7 +243,9 @@ describe('guard: the row frame is flat (no border, radius, lit or clip; bled 16)
         'data-list-card=""',
       );
       expect(frame.filter((t) => /^(border|rounded|lit-|overflow-hidden$)/.test(t))).toEqual([]);
-      expect(frame).toEqual(expect.arrayContaining(['-mx-4', 'px-4', 'h-15']));
+      expect(frame).toEqual(
+        expect.arrayContaining(['-mx-4', 'px-4', 'h-18', 'compact:h-15', 'calm:h-20']),
+      );
     }
   });
 });

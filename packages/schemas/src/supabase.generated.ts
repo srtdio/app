@@ -8847,6 +8847,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           deleted_at: string | null
+          density: string
           designation: string | null
           display_name: string
           email_opt_in: boolean
@@ -8861,6 +8862,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
+          density?: string
           designation?: string | null
           display_name: string
           email_opt_in?: boolean
@@ -8875,6 +8877,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
+          density?: string
           designation?: string | null
           display_name?: string
           email_opt_in?: boolean
@@ -10577,18 +10580,32 @@ export type Database = {
         }
         Returns: string
       }
-      plan_create_with_items: {
-        Args: {
-          p_concepts: Json
-          p_ends_on: string
-          p_posts: Json
-          p_starts_on: string
-          p_title: string
-          p_trace_id: string
-          p_workspace_id: string
-        }
-        Returns: string
-      }
+      plan_create_with_items:
+        | {
+            Args: {
+              p_bank: Json
+              p_concepts: Json
+              p_ends_on: string
+              p_posts: Json
+              p_starts_on: string
+              p_title: string
+              p_trace_id: string
+              p_workspace_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_concepts: Json
+              p_ends_on: string
+              p_posts: Json
+              p_starts_on: string
+              p_title: string
+              p_trace_id: string
+              p_workspace_id: string
+            }
+            Returns: string
+          }
       plan_delete: {
         Args: { p_plan_id: string; p_trace_id: string }
         Returns: undefined
@@ -10878,6 +10895,10 @@ export type Database = {
       user_active_day_mark: {
         Args: { p_country: string; p_trace_id: string }
         Returns: undefined
+      }
+      user_density_set: {
+        Args: { p_density: string; p_trace_id: string }
+        Returns: string
       }
       user_onboarding_save: {
         Args: { p_payload: Json; p_trace_id: string }

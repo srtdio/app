@@ -20,6 +20,7 @@ const DEFAULT_PROJECTS: readonly Project[] = ['iphone-light', 'iphone-dark', 'la
 
 /** Every screen name, sorted. */
 const REQUIRED: readonly string[] = [
+  'account-menu-density',
   'activity-bank',
   'activity-chip-mentions',
   'activity-chip-unread',
@@ -66,6 +67,8 @@ const REQUIRED: readonly string[] = [
   'chat-idea-share-sheet',
   'chat-info-group',
   'chat-list',
+  'chat-list-calm',
+  'chat-list-compact',
   'chat-list-notes-photo',
   'chat-list-select',
   'chat-media-lightbox-details',
@@ -267,6 +270,14 @@ const REQUIRED: readonly string[] = [
   'plan-tab-chip-past',
   'plan-tab-sort',
   'post-tile-uploading',
+  // Density (Compact / Cozy / Calm, 8 Nov 2026): the account menu row, New
+  // plan's Add from bank, and the plan screen and two lists per density.
+  'new-plan-bank',
+  'pipeline-calm',
+  'pipeline-compact',
+  'plan-screen-calm',
+  'plan-screen-compact',
+  'plan-screen-cozy',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */
@@ -302,6 +313,12 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   ),
   'name: `chat-album-${count}`': [2, 3, 4].map((count) => `chat-album-${count}`),
   'name: `plan-tab-chip-${chip}`': ['past'].map((chip) => `plan-tab-chip-${chip}`),
+  // Density (Compact / Cozy / Calm, 8 Nov 2026).
+  'name: `plan-screen-${density}`': ['compact', 'cozy', 'calm'].map(
+    (density) => `plan-screen-${density}`,
+  ),
+  'name: `pipeline-${density}`': ['compact', 'calm'].map((density) => `pipeline-${density}`),
+  'name: `chat-list-${density}`': ['compact', 'calm'].map((density) => `chat-list-${density}`),
   // The platform preview, one per platform (post screen redo, 7 Nov 2026).
   'name: `post-preview-${p.slug}`': [
     'instagram',

@@ -22,9 +22,9 @@ import { useSelectGesture, type SelectGesture } from '@/components/ui/useLongPre
 export type ListCardHooks = { [hook: `data-${string}`]: string | undefined };
 
 /**
- * The picture slot (40x40, left, vertically centred, 12 to the text):
- * - person: the person's photo, a circle (ui/Avatar 'card', 40; initials on their colour when none);
- *   `node` replaces the Avatar with a caller's 40 circle;
+ * The picture slot (48x48, 40x40 in Compact; left, vertically centred, 12 to the text):
+ * - person: the person's photo, a circle (ui/Avatar 'card', 48 / 40; initials on their colour when none);
+ *   `node` replaces the Avatar with a caller's circle filling the slot;
  * - image: a caller's picture (a thumbnail, a group photo or mark) in the rounded-picture (10) squircle;
  * - icon: a 20 glyph in fg-2 on the panel-2 squircle (a brief, an activity kind);
  * - placeholder: ui/PostPlaceholder ("Aa", the play glyph) filling the squircle.
@@ -114,16 +114,39 @@ export interface ListCardProps {
  * The row frame (flat look, 7 Nov 2026): no border, no radius, no lit height.
  * It bleeds -mx-4 / px-4 so the selected, chosen and pressed fill runs edge to
  * edge on phone, never boxed inside the 16 gutter. Selected: the panel-2 fill.
+ * Density (8 Nov 2026, <html data-density>): Cozy 12 + 48 + 12 = 72; Compact
+ * 10 + 40 + 10 = 60 (py-row-inset, the one 10 token); Calm 16 + 48 + 16 = 80.
  */
 export function listCardFrame(selected = false): string {
-  return cn('relative -mx-4 flex h-15 min-w-0 px-4', selected && 'bg-panel-2');
+  return cn(
+    'relative -mx-4 flex h-18 min-w-0 px-4 py-3 compact:h-15 compact:py-row-inset calm:h-20 calm:py-4',
+    selected && 'bg-panel-2',
+  );
+}
+
+/** The row height per density: picture + inset above and below. */
+export const LIST_CARD_HEIGHT_BY_DENSITY = { compact: 60, cozy: 72, calm: 80 } as const;
+
+/** The row picture per density (Avatar 'card' matches it). */
+export const LIST_CARD_PICTURE_BY_DENSITY = { compact: 40, cozy: 48, calm: 48 } as const;
+
+/**
+ * The active density's row height (60 / 72 / 80): the given density, else the
+ * one on <html data-density>, else Cozy. Sync, no read.
+ */
+export function listCardHeightPx(density?: string): number {
+  const d =
+    density ??
+    (typeof document === 'undefined' ? undefined : document.documentElement.dataset.density);
+  return d === 'compact' || d === 'calm'
+    ? LIST_CARD_HEIGHT_BY_DENSITY[d]
+    : LIST_CARD_HEIGHT_BY_DENSITY.cozy;
 }
 
 /**
- * The row's exact height: 10 + 40 picture + 10. The text column
- * (20 + 2 + 20 = 42) centres against the 40 picture.
+ * The default (Cozy) row height. Use listCardHeightPx() for the active density.
  */
-export const LIST_CARD_HEIGHT_PX = 60;
+export const LIST_CARD_HEIGHT_PX = LIST_CARD_HEIGHT_BY_DENSITY.cozy;
 
 /**
  * The inner row: picture then text, 12 apart, vertically centred (the frame
@@ -132,14 +155,15 @@ export const LIST_CARD_HEIGHT_PX = 60;
  */
 export const LIST_CARD_BODY = 'pointer-events-none relative flex min-w-0 flex-1 items-center gap-3';
 
-/** The picture box: 40x40 (h-10 w-10), never shrinks. */
-export const LIST_CARD_PICTURE = 'relative flex h-10 w-10 shrink-0 items-center justify-center';
+/** The picture box: 48 (Cozy, Calm) or 40 (Compact), never shrinks. */
+export const LIST_CARD_PICTURE =
+  'relative flex h-12 w-12 shrink-0 items-center justify-center compact:h-10 compact:w-10';
 
 /** The rounded-picture (10) squircle a non-person picture sits in; flat. */
 const PICTURE_BOX = 'overflow-hidden rounded-picture';
 
-/** The text column: two 20 lines, 2 apart (42). */
-export const LIST_CARD_TEXT = 'flex min-w-0 flex-1 flex-col gap-0.5';
+/** The text column: two 20 lines, 4 apart (44), every density. */
+export const LIST_CARD_TEXT = 'flex min-w-0 flex-1 flex-col gap-1';
 
 /** Line 1: title then the time on the right; one 20 line. */
 export const LIST_CARD_LINE1 = 'flex h-5 min-w-0 items-center gap-2';
@@ -423,8 +447,8 @@ export function ListCard({
 }
 
 /**
- * A loading box in ListCard's own frame and slots (the 40 picture, the title
- * line with its time, the preview line), exactly 60 tall, so nothing moves
+ * A loading box in ListCard's own frame and slots (the density picture, the title
+ * line with its time, the preview line), the density row height, so nothing moves
  * when the cards land. Pure render; the screen's BoxSkeleton decides when it shows.
  */
 export function ListCardBox({

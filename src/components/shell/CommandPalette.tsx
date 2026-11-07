@@ -732,7 +732,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                     {...common}
                     className={cn(
                       ROW,
-                      'min-w-0 flex-1 flex-col items-stretch justify-center gap-0.5 py-1',
+                      'min-w-0 flex-1 flex-col items-stretch justify-center gap-1 py-1',
                       tone,
                     )}
                   >
@@ -763,7 +763,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                   data-palette-pick={ticked ? 'on' : 'off'}
                   className={cn(ROW, 'gap-3 py-1', tone)}
                 >
-                  <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+                  <span className="flex min-w-0 flex-1 flex-col justify-center gap-1">
                     <span className="min-w-0 truncate font-medium text-fg">
                       {highlightNodes(item.title, words)}
                     </span>
@@ -781,7 +781,7 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
               <PressableRow
                 key={`${section.label}:${item.id}`}
                 {...common}
-                className={cn(ROW, 'flex-col items-stretch justify-center gap-0.5 py-1', tone)}
+                className={cn(ROW, 'flex-col items-stretch justify-center gap-1 py-1', tone)}
               >
                 <span className="flex min-w-0 items-baseline gap-2">
                   <span className="min-w-0 flex-1 truncate font-medium text-fg">
@@ -1243,7 +1243,7 @@ export function CommandPalette({
               <Tag label={pickPillLabel(pickOn, pickLabel)} />
             </span>
           ) : null}
-          <kbd className="hidden sm:inline text-xs text-fg-3 border border-border rounded px-1 py-0.5">
+          <kbd className="hidden sm:inline text-xs text-fg-3 border border-border rounded px-1 py-1">
             Esc
           </kbd>
           <Button

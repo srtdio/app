@@ -6,6 +6,7 @@ import {
   edgeViolations,
   formatViolations,
   isLiftedLayer,
+  layoutDensity,
   layoutMode,
   movedSideways,
   lineHeightPx,
@@ -28,6 +29,7 @@ import {
   type ChipGeom,
   type ChipRowGeom,
   type EdgeItem,
+  type LayoutDensity,
   type LayoutViolation,
   type ListCardGeom,
   type TapTarget,
@@ -57,9 +59,11 @@ import {
 //     (assertSameWidth);
 //   6 list cards (ui/ListCard, [data-list-card]: Pipeline, Briefs, Assets, the
 //     Chat list, Activity, the Plan tab and its Bank): every card on the screen
-//     is the same height (within 1px) and 60 tall on every screen, so all seven
-//     lists match; each picture is 40x40, left, 16 inside the bled row (x) and
-//     10 from its top (y), 12 to the text (flat look, 7 Nov 2026);
+//     is the same height (within 1px) and the density height on every screen
+//     (<html data-density>: Compact 60, Cozy 72 default, Calm 80), so all seven
+//     lists match; each picture is the density square (40 Compact, else 48),
+//     left, 16 inside the bled row (x) and the density inset (10 / 12 / 16)
+//     from its top (y), 12 to the text (flat look 7 Nov, density 8 Nov 2026);
 //   7 post screens (after the shot, so the baseline never moves): the pinned
 //     exit bar keeps its top after the page scrolls (assertPinnedBarOnScroll),
 //     the checkpoint progress row sits directly under the bar in the same
@@ -72,7 +76,8 @@ import {
 //   9 chip rows with a pinned Select (decision E): the Select ends on the
 //     row's content edge, the chips scroll in a box that ends before it, its
 //     tap box is 44 tall and it sits on the chips' line; every ui/Chip face is
-//     32 visible in a 44 tap box (the chip rule above);
+//     the density height visible (32 Compact, 36 Cozy, 40 Calm) in a 44 tap
+//     box (the chip rule above);
 //  10 upload screens (decision F, assertNoUploadBar): no visible progress bar
 //     and no % figure, only ui/UploadRing (its progressbar is sr-only) or Retry.
 // LAYOUT_CHECKS=strict (the default) fails the screen; LAYOUT_CHECKS=report
@@ -117,6 +122,8 @@ interface RawPart {
 
 interface RawPage {
   viewportWidth: number;
+  /** <html data-density> as the page has it (undefined: Cozy). */
+  density: string | undefined;
   lines: RawLine[];
   targets: RawTarget[];
   edges: EdgeItem[];
@@ -508,7 +515,18 @@ async function readPage(page: Page): Promise<RawPage> {
       });
     }
 
-    return { viewportWidth: vw, lines, targets, edges, parts, listCards, chips, topbar, chipRows };
+    return {
+      viewportWidth: vw,
+      density: document.documentElement.dataset.density,
+      lines,
+      targets,
+      edges,
+      parts,
+      listCards,
+      chips,
+      topbar,
+      chipRows,
+    };
   }, rules);
 }
 
@@ -562,11 +580,13 @@ export async function checkLayout(page: Page, screenName: string): Promise<void>
     }
   }
 
-  for (const message of listCardViolations(raw.listCards)) {
+  // List rows and chips size by the density on <html> (60 / 72 / 80; 32 / 36 / 40).
+  const density: LayoutDensity = layoutDensity(raw.density);
+  for (const message of listCardViolations(raw.listCards, density)) {
     violations.push({ check: 'list-card', message });
   }
 
-  for (const message of chipViolations(raw.chips)) {
+  for (const message of chipViolations(raw.chips, density)) {
     violations.push({ check: 'chip', message });
   }
 

@@ -25,7 +25,21 @@ const BANG_CLASS = '/(^|[\\s:])![a-z[-]/';
 const BANG_MESSAGE = 'Never override a ui primitive with "!"; use its props (see CLAUDE.md)';
 const RGBA_CLASS = '/rgba\\(/';
 const RGBA_MESSAGE = 'No rgba() in a className; add a token in src/index.css';
+// Spacing steps (CLAUDE.md "Spacing"): padding / margin / gap / space take
+// 4 / 8 / 12 / 16 / 24 (+ 32 and up); the off-steps are gone from tailwind.config.ts.
+const OFF_STEP_CLASS =
+  '/(^|[\\s:])-?(p[trblxyse]?|m[trblxyse]?|gap|gap-[xy]|space-[xy])-(0\\.5|1\\.5|2\\.5|3\\.5|5|7)($|\\s)/';
+const OFF_STEP_MESSAGE =
+  'Spacing steps are 4 / 8 / 12 / 16 / 24 only (p/m/gap/space 1, 2, 3, 4, 6); see CLAUDE.md Spacing';
 const designRules = [
+  {
+    selector: `JSXAttribute[name.name='className'] Literal[value=${OFF_STEP_CLASS}]`,
+    message: OFF_STEP_MESSAGE,
+  },
+  {
+    selector: `JSXAttribute[name.name='className'] TemplateElement[value.raw=${OFF_STEP_CLASS}]`,
+    message: OFF_STEP_MESSAGE,
+  },
   {
     selector: "JSXOpeningElement[name.name='button']",
     message: 'Use Button, IconButton or Chip from src/components/ui',

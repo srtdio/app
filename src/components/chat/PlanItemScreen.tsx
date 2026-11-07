@@ -1710,7 +1710,7 @@ export function PlanItemScreen(props: {
             <form
               ref={formRef}
               onSubmit={(e) => void send(e)}
-              className="relative flex flex-col gap-1.5"
+              className="relative flex flex-col gap-2"
               aria-label="Add a comment"
             >
               {mentionRows.length > 0 || picker.hiddenApprovers ? (
@@ -1737,7 +1737,7 @@ export function PlanItemScreen(props: {
               {askingChanges ? (
                 <div
                   data-plan-ask-hint=""
-                  className="flex items-center gap-2 rounded-xl bg-panel-2 py-1 pl-3 pr-1 text-md text-fg-2 lit-card-muted"
+                  className="flex items-center gap-2 border-t border-border py-1 pl-3 pr-1 text-md text-fg-2"
                 >
                   <p className="min-w-0 flex-1 py-2">{ASK_CHANGES_HINT}</p>
                   <Button
@@ -1762,7 +1762,7 @@ export function PlanItemScreen(props: {
                   {actionError}
                 </p>
               ) : null}
-              <div className="flex items-end gap-1.5">
+              <div className="flex items-end gap-2">
                 <Textarea
                   formatting
                   ref={commentRef}
@@ -1820,9 +1820,7 @@ export function PlanItemScreen(props: {
           <>
             {item.post_id !== null ? (
               <PostSheetPlanRowsContext.Provider value={planRows}>
-                <Suspense
-                  fallback={<Bone lit="lit-card" as="div" className="m-4 h-44 rounded-xl" />}
-                >
+                <Suspense fallback={<Bone lit="flat" as="div" className="m-4 h-44 rounded-lg" />}>
                   <PostDetailPage
                     postId={item.post_id}
                     embedded
@@ -1969,7 +1967,7 @@ export function PlanItemScreen(props: {
             <section ref={commentsRef} className="flex flex-col gap-3" aria-label="Comments">
               <h4 className={SECTION_LABEL}>Comments</h4>
               {read.status === 'loading' ? (
-                <Bone lit="lit-card" as="div" className="h-18 rounded-xl" />
+                <Bone lit="flat" as="div" className="h-18 rounded-lg" />
               ) : read.status === 'error' ? (
                 <ScreenFailed onRetry={reload} />
               ) : shown.length === 0 ? (
@@ -2253,7 +2251,7 @@ export function LinkedPostPage(props: {
         />
       }
     >
-      <Suspense fallback={<Bone lit="lit-card" as="div" className="m-4 h-44 rounded-xl" />}>
+      <Suspense fallback={<Bone lit="flat" as="div" className="m-4 h-44 rounded-lg" />}>
         <PostDetailPage
           postId={props.postId}
           embedded
@@ -2290,10 +2288,7 @@ function ItemMedia(props: {
   const images = useMemo(() => files.filter(isConceptImage), [files]);
   if (read.status === 'error') {
     return (
-      <div
-        data-plan-media="failed"
-        className="flex min-h-18 items-center justify-between gap-3 rounded-xl border bg-panel px-4 lit-card"
-      >
+      <div data-plan-media="failed" className="flex min-h-18 items-center justify-between gap-3">
         <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
         <Button data-plan-media-retry="" onClick={props.onRetry}>
           Retry
@@ -2310,10 +2305,7 @@ function ItemMedia(props: {
   }
   if (files.length === 0) {
     return (
-      <div
-        data-plan-media="empty"
-        className="flex h-28 items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel-2 text-md text-fg-3 lit-well"
-      >
+      <div data-plan-media="empty" className="flex min-h-11 items-center text-md text-fg-3">
         No files
       </div>
     );
@@ -2332,7 +2324,7 @@ function ItemMedia(props: {
   };
   return (
     <>
-      <div data-plan-media="files" className="grid grid-cols-3 gap-1.5">
+      <div data-plan-media="files" className="grid grid-cols-3 gap-2">
         {files.map((file) => {
           const name = conceptFileName(file);
           return (
@@ -2346,7 +2338,7 @@ function ItemMedia(props: {
               onClick={() => open(file)}
               className="flex min-w-0 flex-col gap-1"
             >
-              <span className="block w-full overflow-hidden rounded-xl border bg-panel-2 lit-card-muted">
+              <span className="block w-full overflow-hidden rounded-picture bg-panel-2">
                 <Thumbnail
                   assetVersionId={file.versionId}
                   cache={sharedCardPresignCache()}

@@ -66,10 +66,10 @@ export function FilePromptSheet({ prompt, onKeep, onRemove }: FilePromptSheetPro
         aria-modal="true"
         aria-label="Check the file"
         tabIndex={-1}
-        className="relative w-full max-w-sm rounded-2xl border bg-panel p-5 lit-overlay outline-none will-change-transform"
+        className="relative w-full max-w-sm rounded-2xl border bg-panel p-6 lit-overlay outline-none will-change-transform"
       >
         <p className="text-base text-fg">{prompt.question}</p>
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-6 flex justify-end gap-2">
           <Button onClick={onRemove}>{prompt.removeLabel}</Button>
           <div ref={keepRef}>
             <Button variant="primary" onClick={onKeep}>

@@ -773,7 +773,7 @@ export function OnboardingFlow({
               aria-checked={side === tile.side}
               onClick={() => setSide(tile.side)}
               className={cn(
-                'flex flex-col items-start justify-center gap-0.5 px-4 py-3',
+                'flex flex-col items-start justify-center gap-1 px-4 py-3',
                 side === tile.side ? 'border border-fg text-fg' : 'border border-border text-fg-2',
               )}
             >
@@ -1088,7 +1088,7 @@ export function OnboardingFlow({
               <div
                 ref={cardRef}
                 data-onboarding-card=""
-                className="flex flex-col gap-5 rounded-2xl border bg-panel p-6 lit-raised"
+                className="flex flex-col gap-6 rounded-2xl border bg-panel p-6 lit-raised"
               >
                 {body}
                 {photoNotice !== null && (step === 'brand' || readyForShell) ? (
@@ -1354,7 +1354,8 @@ function WelcomeBody({
       <p className="min-h-5 text-base text-fg-2 [text-wrap:balance]" aria-live="polite">
         {subline}
       </p>
-      <p className="rounded-xl border bg-panel lit-card px-4 py-3 text-base text-fg">{joiningAs}</p>
+      {/* Flat look: a plain line on the step card, a hairline under; no card frame. */}
+      <p className="border-b border-border py-3 text-base text-fg">{joiningAs}</p>
     </div>
   );
 }
@@ -1376,7 +1377,8 @@ function WaitingBody({ email, resent }: { email: string; resent: boolean }): Rea
         title="Your team is on its way"
         lead="The real work starts the day they raise your first post: it lands here, you read it, you approve it."
       />
-      <ol className="flex flex-col gap-3">
+      {/* Flat rows touching, split by the section hairline (ui/Card cardSurface). */}
+      <ol className="flex flex-col">
         {WAITING_LINES.map((line, i) => (
           <li key={line} className={cn('flex items-center gap-3', cardSurface(), cardPad())}>
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-soft lit-pill font-mono text-base font-medium text-accent">

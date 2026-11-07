@@ -60,7 +60,7 @@ export function TestSiteAnywhereStart({
       className={cn(
         'flex min-h-11 shrink-0 items-center',
         inline
-          ? 'px-0.5'
+          ? 'px-1'
           : 'fixed left-1/2 top-[calc(env(safe-area-inset-top)+2px)] z-top -translate-x-1/2 px-2',
       )}
     >

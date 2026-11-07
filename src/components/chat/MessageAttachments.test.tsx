@@ -565,9 +565,9 @@ describe('album grid', () => {
     expect(html).toContain('+2');
     expect(html).toContain('bg-overlay-badge');
     expect(html).toContain('text-2xl font-semibold text-overlay-fg');
-    expect(html).toContain('gap-0.5');
+    expect(html).toContain('gap-1');
     // No corners passed: the touch bubble's 18px.
-    expect(html).toContain('gap-0.5 overflow-hidden rounded-[18px]');
+    expect(html).toContain('gap-1 overflow-hidden rounded-[18px]');
     expect(html.match(/<button/g)).toHaveLength(4);
     const { tiles, onOpen } = grid(6);
     (tiles[3]?.props as { onClick: () => void }).onClick();

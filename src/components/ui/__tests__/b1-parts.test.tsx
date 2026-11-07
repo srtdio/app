@@ -63,7 +63,7 @@ describe('Text roles', () => {
 });
 
 describe('Card', () => {
-  it('renders every slot and the 16 inset (12 dense)', () => {
+  it('renders every slot, flat: hairline under, 16 above and below (12 dense)', () => {
     const out = html(
       <Card
         title="Diwali reel"
@@ -78,14 +78,17 @@ describe('Card', () => {
     expect(out).toContain('data-card-header');
     expect(out).toContain('Diwali reel');
     expect(out).toContain('data-card-footer');
-    expect(out).toContain('p-4');
-    expect(out).toContain('rounded-xl');
-    expect(out).toContain('lit-card');
+    expect(out).toContain('py-4');
+    expect(out).toContain('border-b border-border');
+    expect(out).not.toMatch(/rounded-xl|lit-card|bg-panel/);
     expect(out).toContain('self-start');
-    expect(html(<Card dense title="x" />)).toContain('p-3');
+    expect(html(<Card dense title="x" />)).toContain('py-3');
+    // Muted is the same flat section; selected keeps only the outline line.
+    expect(html(<Card muted title="x" />)).not.toContain('lit-card-muted');
+    expect(html(<Card selected title="x" />)).toContain('lit-selected');
   });
-  it('media bleeds with top corners, or sits inset with radius 4', () => {
-    expect(html(<Card media={<img alt="" />} />)).toContain('rounded-t-xl');
+  it('media spans the section (picture radius), or sits inset with radius 4', () => {
+    expect(html(<Card media={<img alt="" />} />)).toContain('rounded-picture');
     expect(html(<Card media={<img alt="" />} mediaInset />)).toContain('rounded-inset');
   });
 });

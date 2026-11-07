@@ -24,7 +24,7 @@ describe('ReactionBadge', () => {
 
   it('keeps its 3px hang and drawn size', () => {
     const cls = REACTION_BADGE_CLASS.split(' ');
-    const hang = ['absolute', 'top-[calc(100%-3px)]', 'rounded-full', 'px-2', 'py-0.5'];
+    const hang = ['absolute', 'top-[calc(100%-3px)]', 'rounded-full', 'px-2', 'py-1'];
     expect(cls).toEqual(expect.arrayContaining(hang));
     expect(cls.some((c) => /^(min-)?h-/.test(c))).toBe(false);
   });

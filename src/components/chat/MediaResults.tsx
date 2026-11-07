@@ -169,7 +169,7 @@ const LOADING_TILES = 12;
 const LOADING_ROWS = 3;
 
 /** The square grid: 4 across, 6 from 1180px, 2px gaps. */
-const GRID = 'grid grid-cols-4 gap-0.5 min-[1180px]:grid-cols-6';
+const GRID = 'grid grid-cols-4 gap-1 min-[1180px]:grid-cols-6';
 
 /** A list row: one 64px tap target, no text selection and no iOS callout on hold. */
 const ROW = cn('flex min-h-16 min-w-0 items-center gap-3 px-2 py-2', NO_TOUCH_SELECT);
@@ -317,7 +317,7 @@ function VideoTile(props: {
           <IconPlay size={ICON_SIZE.control} />
         </span>
       ) : null}
-      <span className="pointer-events-none absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-xs text-media-meta lit-media">
+      <span className="pointer-events-none absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-[color:var(--media-meta-bg)] px-2 py-px text-xs text-media-meta lit-media">
         <IconPlay size={ICON_SIZE.text} />
         {item.durationMs !== null ? (
           <span data-media-duration="" className="font-mono tabular-nums">
@@ -371,7 +371,7 @@ function FileRowItem(props: {
           <KindIcon kind={kind === 'video' ? 'video' : 'file'} size={ICON_SIZE.control} />
         )}
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span
           title={name}
           className="line-clamp-2 text-base font-medium text-fg [overflow-wrap:anywhere]"
@@ -507,7 +507,7 @@ function LinkRowItem(props: {
             <IconLink size={ICON_SIZE.control} />
           )}
         </span>
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span
             className={cn('truncate text-base font-medium', unsafe ? 'text-warn-ink' : 'text-fg')}
           >

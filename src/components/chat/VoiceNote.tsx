@@ -900,7 +900,7 @@ function TranscriptDrop(props: {
       className={cn('grid', open ? 'visible grid-rows-[1fr]' : 'invisible grid-rows-[0fr]')}
     >
       <div className="min-h-0 overflow-hidden">
-        <div ref={boxRef} className="pl-1.5 pt-1">
+        <div ref={boxRef} className="pl-2 pt-1">
           <p
             dir="auto"
             className={cn(
@@ -1459,7 +1459,7 @@ export function VoiceNote({
       {...(uploading ? { 'data-testid': 'voice-uploading' } : {})}
       className={cn(
         'flex flex-col font-sans',
-        bubbleInset ? cn(sized(BUBBLE_INSET, layout), 'pb-1 pr-1.5 pt-1') : 'w-full',
+        bubbleInset ? cn(sized(BUBBLE_INSET, layout), 'pb-1 pr-2 pt-1') : 'w-full',
       )}
     >
       <audio ref={audioRef} preload="metadata" className="hidden" />

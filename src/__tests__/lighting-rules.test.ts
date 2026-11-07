@@ -488,10 +488,12 @@ describe('lighting rules', () => {
     for (const c of ['lit-btn-primary', 'lit-btn-secondary', 'lit-btn-success', 'lit-btn-danger']) {
       expect(button, c).toContain(c);
     }
-    // Chips are the flat outline pill (7 Nov 2026): rest on the hairline in
-    // fg-2, the pick is the fg line in fg ink; no fill, no lit-pill.
+    // Chips are the flat outline pill (7 Nov 2026): rest on the strong edge in
+    // fg-2 (3:1 edge rule, 8 Nov 2026), the pick is the fg line in fg ink; no
+    // fill, no lit-pill.
     const chip = src('ui/Chip.tsx');
-    expect(chip).toContain("'border-border text-fg-2'");
+    expect(chip).toContain("'border-border-strong text-fg-2'");
+    expect(chip).not.toContain("'border-border text-fg-2'");
     expect(chip).toContain("'border-fg text-fg'");
     expect(chip).not.toContain('bg-accent text-accent-fg lit-pill');
     expect(chip).not.toContain('lit-well-soft');

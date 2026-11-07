@@ -1,14 +1,14 @@
 // The Bank's Filter and sort sheet, opened by the top bar's sort control on the
-// Bank chip (BankFilterTrigger: one IconButton, IconSort): three lit cards on
-// the grey sheet.
+// Bank chip (BankFilterTrigger: one IconButton, IconSort): three flat sections
+// split by hairlines (flat look; the sheet itself stays lit).
 // - Buckets: All buckets, then each bucket (single pick, the pick is the ink
-//   fill), then the add chip (dashed +) that turns into an inline Input
+//   fill), then the add chip (+) that turns into an inline Input
 //   (Enter or the tick adds through createBucket and picks it; Esc cancels).
 //   A chip shows its name only. A second tap on the picked chip, or a
 //   long-press / right-click on any bucket chip, opens its menu: Rename
 //   (inline in place, workspace_bucket_rename), Delete bucket last (a second
 //   line "{n} ideas keep their other buckets" only when ideas use it). Phone:
-//   the menu replaces the Buckets card's body in place (Back, then the two
+//   the menu replaces the Buckets section's body in place (Back, then the two
 //   rows), never a second Sheet over this one (one sheet, one dim); Esc or
 //   Back returns to the chips. Laptop: ui/ActionMenu's popover anchored to
 //   the chip. A delete hides the chip behind the Undo strip for UNDO_MS and
@@ -64,7 +64,7 @@ export interface BucketWrites {
   countIn: (id: string) => number;
 }
 
-const CARD = 'lit-card flex flex-col gap-3 rounded-xl border bg-panel p-4';
+const SECTION = 'flex flex-col gap-3 py-4 first:pt-0 last:pb-0';
 
 /**
  * The sheet's trigger, the Bank's sort in the top bar (useTopbarActions sort):
@@ -109,9 +109,9 @@ export function BankFilterSheet(props: {
         </div>
       }
     >
-      <div data-bank-filter-sheet="" className="flex flex-col gap-3 bg-bg p-4">
-        <section className={CARD}>
-          <Text as="h3" role="label" className="text-fg">
+      <div data-bank-filter-sheet="" className="flex flex-col divide-y divide-border">
+        <section className={SECTION}>
+          <Text as="h3" role="section">
             Buckets
           </Text>
           <BucketChips
@@ -122,8 +122,8 @@ export function BankFilterSheet(props: {
             onBuckets={props.onBuckets}
           />
         </section>
-        <section className={CARD}>
-          <Text as="h3" role="label" className="text-fg">
+        <section className={SECTION}>
+          <Text as="h3" role="section">
             Sort
           </Text>
           <div role="radiogroup" aria-label="Sort" className="flex flex-col">
@@ -138,7 +138,7 @@ export function BankFilterSheet(props: {
             ))}
           </div>
         </section>
-        <section className={CARD}>
+        <section className={SECTION}>
           <div className="flex items-center justify-between">
             <span className="text-base text-fg">Show archived ideas</span>
             <Switch
@@ -306,7 +306,7 @@ export function BucketChips(props: {
     ];
   };
 
-  // Phone: the open menu takes the card's body in place (no second Sheet).
+  // Phone: the open menu takes the section's body in place (no second Sheet).
   const inPlace = laptop ? null : (shown.find((b) => b.id === menuFor) ?? null);
   const backTo = useRef<string | null>(null);
   const closeInPlace = (): void => {
@@ -450,7 +450,7 @@ function BucketChip(props: {
 }
 
 /**
- * Phone: the bucket's menu in the Buckets card's place (Back, Rename, Delete
+ * Phone: the bucket's menu in the Buckets section's place (Back, Rename, Delete
  * bucket). Esc or Back returns to the chips, focus back on the chip.
  */
 function BucketMenuInPlace(props: {

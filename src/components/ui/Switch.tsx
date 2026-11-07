@@ -35,7 +35,7 @@ export function Switch({ checked, onChange, label }: SwitchProps): ReactElement 
       <span
         aria-hidden
         className={cn(
-          'relative inline-flex h-8 w-12 items-center rounded-full border px-0.5 lit-well lit-hover group-focus-visible:lit-focus',
+          'relative inline-flex h-8 w-12 items-center rounded-full border px-1 lit-well lit-hover group-focus-visible:lit-focus',
           MOVE_CLASS.tint,
           checked ? 'border-transparent bg-accent' : 'border-field bg-transparent',
         )}
@@ -45,7 +45,7 @@ export function Switch({ checked, onChange, label }: SwitchProps): ReactElement 
             'h-6 w-6 rounded-full lit-knob',
             MOVE_CLASS.slide,
             checked ? 'bg-accent-fg' : 'bg-fg',
-            // 48 - 2 (border) - 4 (px-0.5) - 24 (knob) = 18 of travel.
+            // 48 - 2 (border) - 4 (px-1) - 24 (knob) = 18 of travel.
             checked ? 'translate-x-[18px]' : 'translate-x-0',
           )}
         />

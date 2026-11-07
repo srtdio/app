@@ -546,6 +546,15 @@ Plans: a shared object in chat holding concepts and posts with team and client a
 | Speed | 12 ideas a page, keyset cursor, Recently active default sort. No counts, no reads before first paint, no waits on tap paths. |
 | Not in v2.0 | Pipeline filter by bucket. One-query starred-first cursor. |
 
+### Density, spacing steps, flat Plan (decided 8 Nov 2026)
+
+| Decision | Detail |
+| --- | --- |
+| Density | Compact / Cozy / Calm per account (users.density, default Cozy). Switched only in the account menu (under Appearance), never in Settings. Text size is the same in all three. List row 60 / 72 / 80; row picture 40 / 48 / 48; chip 32 / 36 / 40 visible (tap 44); plan stack 4 / 8 / 12, plan padding 8 / 12 / 16. First paint from the device cache; the server value reconciles after paint. |
+| Spacing steps | Padding, margin, gap and space are 4 / 8 / 12 / 16 / 24 only (plus 32 and up). 4 lines in one item, 8 tight group, 12 row padding, 16 heading to content, 24 between sections. |
+| Flat Plan | Plan days are flat sections split by hairlines (no card frame, today marked by its date tile and Today pill). New plan rows are hairline rows, no boxes. |
+| Add from bank | New plan (agency only) adds bank ideas as items with a day ("No date" = first plan day from today). Create moves them out of the Bank in the same transaction. |
+
 ### One search, one top bar, fewer chips, one upload look (decided 7 Nov 2026)
 
 | Item | Decision |

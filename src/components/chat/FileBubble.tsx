@@ -267,7 +267,7 @@ export function FileBubbleCard(props: FileBubbleCardProps): ReactElement {
             </span>
           </span>
         ) : null}
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span
             data-file-name=""
             title={props.name}

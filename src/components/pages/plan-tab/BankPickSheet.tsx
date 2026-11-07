@@ -13,13 +13,18 @@
 // client cannot see asks first (PR 816's "{plan} is shared with approvers"
 // sheet). Done: "Planned in {plan}, {date}" with Undo (plan_item_to_bank).
 // A planned idea starts with no review ("Not checked yet"). Tokens only;
-// rows are lit-card cards, the sheet lit-overlay (ui/Sheet).
+// rows are flat, split by hairlines, edge to edge; the sheet keeps
+// lit-overlay (ui/Sheet).
+// Many-pick mode (`multi`, New plan's Add from bank): a tap ticks the idea in
+// or out (ui/SelectCheck), nothing is written and no plan is asked for; the
+// palette picks many; Done closes. The caller holds the ticks.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Bone } from '@/lib/motion';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { SelectCheck } from '@/components/ui/SelectCheck';
 import { Sheet } from '@/components/ui/Sheet';
 import { ICON_SIZE, IconStarFilled } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
@@ -121,6 +126,18 @@ export function fromBankDay(plan: Pick<PlanRow, 'starts_on' | 'ends_on'>, today:
   return today < plan.starts_on ? plan.starts_on : plan.ends_on;
 }
 
+/** Many-pick mode: the caller's ticks; a tap toggles one, nothing is written. */
+export interface BankMultiPick {
+  /** The ideas ticked now (by id). */
+  selected: ReadonlySet<string>;
+  onToggle: (idea: BankIdea) => void;
+}
+
+/** Done's label in many-pick mode, with the count once anything is ticked. Pure. */
+export function bankMultiDoneLabel(count: number): string {
+  return count > 0 ? `Done (${count})` : 'Done';
+}
+
 type Load =
   | { status: 'loading' }
   | { status: 'failed' }
@@ -137,9 +154,14 @@ export function BankPickSheet(props: {
    * covering the day. Null: read the open plans on the tap (readPlansForPlanIt).
    */
   plans: readonly PlanRow[] | null;
+  /**
+   * Many-pick mode (New plan): taps tick ideas in or out and nothing is
+   * placed; `day` and `plans` go unused. Absent: one tap places one idea.
+   */
+  multi?: BankMultiPick;
   onClose: () => void;
 }): ReactElement {
-  const { open, workspaceId } = props;
+  const { open, workspaceId, multi } = props;
   const showToast = useToast().show;
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [step, setStep] = useState<PlanItStep | null>(null);
@@ -296,6 +318,33 @@ export function BankPickSheet(props: {
     await pick(idea);
   };
 
+  // Many-pick palette: every bank idea it names is ticked in (never out).
+  const tickFromPalette = async (hits: WorkspaceHit[]): Promise<void> => {
+    if (multi === undefined || workspaceId === null) return;
+    const loaded = load.status === 'ready' ? load.ideas : [];
+    for (const hit of hits) {
+      const found = bankPickOf([hit], loaded);
+      if (found === null) continue;
+      let idea: BankIdea | undefined;
+      if ('idea' in found) {
+        idea = found.idea;
+      } else {
+        const res = await withReadTimeout((signal) =>
+          searchBank(supabase, fromBankQuery(workspaceId), found.find.title, signal),
+        );
+        idea = res.ok ? res.data.find((i) => i.id === found.find.id) : undefined;
+        if (idea === undefined) {
+          showToast({
+            title: errorText('load the idea', res.ok ? null : res.error.message),
+            tone: 'error',
+          });
+          continue;
+        }
+      }
+      if (!multi.selected.has(idea.id)) multi.onToggle(idea);
+    }
+  };
+
   const makePlan = async (idea: BankIdea, day: string): Promise<void> => {
     if (workspaceId === null) return;
     setBusy(true);
@@ -322,7 +371,7 @@ export function BankPickSheet(props: {
     ) : (
       <div data-plan-from-bank-loading="" className="flex flex-col gap-2">
         {[0, 1, 2].map((n) => (
-          <Bone key={n} lit="lit-card" className="h-16 w-full rounded-xl" />
+          <Bone key={n} lit="flat" className="h-16 w-full rounded-lg" />
         ))}
       </div>
     );
@@ -334,17 +383,18 @@ export function BankPickSheet(props: {
     );
   } else {
     body = (
-      <div data-plan-from-bank-list="" className="flex flex-col gap-2">
+      <div data-plan-from-bank-list="" className="-mx-4 flex flex-col">
         {ideas.map((idea) => (
           <PressableRow
             key={idea.id}
-            card
+            flat
             type="button"
             data-plan-from-bank-idea={idea.id}
             disabled={busy}
             aria-busy={busy && pickedId === idea.id ? true : undefined}
-            onClick={() => void pick(idea)}
-            className="lit-card flex items-center gap-3 rounded-xl border bg-panel p-3 text-left"
+            {...(multi !== undefined ? { 'aria-pressed': multi.selected.has(idea.id) } : {})}
+            onClick={() => (multi !== undefined ? multi.onToggle(idea) : void pick(idea))}
+            className="flex items-center gap-3 border-b border-border px-4 py-3 text-left"
           >
             <BankThumb idea={idea} size={44} />
             <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -358,10 +408,11 @@ export function BankPickSheet(props: {
               </span>
               <span className="truncate text-sm text-fg-2">{ideaFormatLine(idea)}</span>
             </span>
+            {multi !== undefined ? <SelectCheck checked={multi.selected.has(idea.id)} /> : null}
           </PressableRow>
         ))}
         {load.status === 'ready' && load.next !== null ? (
-          <div className="pt-2">
+          <div className="px-4 pt-2">
             <PlanTabLoadMore more={{ busy: load.busy, onMore: more }} />
           </div>
         ) : null}
@@ -377,16 +428,40 @@ export function BankPickSheet(props: {
         title={FROM_BANK_LABEL}
         fixedHeight
         busy={busy}
+        {...(multi !== undefined
+          ? {
+              footer: (
+                <Button
+                  variant="primary"
+                  data-plan-from-bank-done=""
+                  className="ml-auto"
+                  onClick={close}
+                >
+                  {bankMultiDoneLabel(multi.selected.size)}
+                </Button>
+              ),
+            }
+          : {})}
         headerAction={
           <PalettePickButton
             label={FROM_BANK_SEARCH}
-            request={() => ({
-              pickKinds: ['bank_idea'],
-              multi: false,
-              verb: 'Add',
-              label: 'Ideas',
-              onPick: (hits) => void pickFromPalette(hits),
-            })}
+            request={() =>
+              multi !== undefined
+                ? {
+                    pickKinds: ['bank_idea'],
+                    multi: true,
+                    verb: 'Add',
+                    label: 'Ideas',
+                    onPick: (hits) => void tickFromPalette(hits),
+                  }
+                : {
+                    pickKinds: ['bank_idea'],
+                    multi: false,
+                    verb: 'Add',
+                    label: 'Ideas',
+                    onPick: (hits) => void pickFromPalette(hits),
+                  }
+            }
           />
         }
       >

@@ -255,7 +255,7 @@ export function PlanCardTop(props: {
       <CardEyebrow
         icon={<IconPlan size={ICON_SIZE.inline} />}
         label={PLAN_EYEBROW}
-        className="gap-1.5 text-accent"
+        className="gap-2 text-accent"
       />
       <span
         data-plan-title=""
@@ -359,7 +359,7 @@ export function PlanCardBody(props: {
       rootProps={{ 'data-plan-card': bundle.plan.id }}
     >
       <span className={PLAN_CARD_ROWS}>
-        <span className="flex h-6 gap-1.5 overflow-hidden">
+        <span className="flex h-6 gap-2 overflow-hidden">
           {planChips(bundle).map((chip) => (
             <span
               key={chip.label}
@@ -636,7 +636,7 @@ export function chatPickList(
             {agencyOnly && summaryHasClient(channel) === true ? (
               <span
                 data-plan-has-client=""
-                className="shrink-0 whitespace-nowrap rounded-full bg-warn-soft px-2 py-0.5 text-xs font-semibold text-warn lit-pill"
+                className="shrink-0 whitespace-nowrap rounded-full bg-warn-soft px-2 py-1 text-xs font-semibold text-warn lit-pill"
               >
                 {HAS_CLIENT_TAG}
               </span>

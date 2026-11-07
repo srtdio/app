@@ -412,12 +412,12 @@ export function ConceptSheet(props: {
           ) : null}
           {filesState === 'loading' ? (
             <div data-plan-concept-files-loading="" aria-label="Loading files">
-              <Bone lit="lit-card" as="div" className="h-18 rounded-xl" />
+              <Bone lit="flat" as="div" className="h-18 rounded-lg" />
             </div>
           ) : filesState === 'failed' ? (
             <div
               data-plan-concept-files-failed=""
-              className="flex min-h-18 items-center justify-between gap-3 rounded-xl border bg-panel px-4 lit-card"
+              className="flex min-h-18 items-center justify-between gap-3"
             >
               <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
               <Button data-plan-concept-files-retry="" onClick={props.onRetryFiles}>

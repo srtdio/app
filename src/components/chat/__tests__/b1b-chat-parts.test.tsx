@@ -59,11 +59,11 @@ function list(): string {
 }
 
 describe('ChannelList on ui/ListCard', () => {
-  it('group and people chats render [data-list-card] with the 40 picture, no dividers', () => {
+  it('group and people chats render [data-list-card] with the 48 picture (40 Compact), no dividers', () => {
     const out = list();
     expect(out.match(/data-list-card=""/g)).toHaveLength(3);
-    expect(out).toMatch(/data-list-card-picture="[a-z]+"[^>]*class="[^"]*h-10 w-10/);
-    expect(out).toContain('width:40px;height:40px');
+    expect(out).toMatch(/data-list-card-picture="[a-z]+"[^>]*class="[^"]*h-12 w-12/);
+    expect(out).toContain('h-12 w-12 compact:h-10 compact:w-10');
     expect(out).not.toContain('data-row-divider');
   });
 

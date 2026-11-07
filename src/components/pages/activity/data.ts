@@ -78,6 +78,7 @@ import {
   sharedRead,
 } from '@/lib/session-read';
 import { generateTraceId } from '@/lib/trace';
+import { getFillCount } from '@/lib/use-fill-count';
 import type { PrefetchContext } from '@/lib/prefetch-context';
 import type { SortOption } from '@/components/ui/SortMenu';
 
@@ -1483,6 +1484,12 @@ interface ActivityPageInput {
   cursor?: ActivityCursor;
   /** The snooze cut-off; defaults to now. */
   nowIso?: string;
+  /**
+   * Rows per page; defaults to ACTIVITY_PAGE_SIZE. The Activity screen (and
+   * the bell's prefetch of its page one) pass the screen's fill count
+   * (getFillCount, sync), so page one and every Load more fill one screen.
+   */
+  pageSize?: number;
 }
 
 /** The cursor after a page: its last row's (created_at, id); undefined for an empty list. Pure. */
@@ -1533,7 +1540,8 @@ export function mergeFresh(
 
 export type LoadResult = { ok: true; data: ActivityItem[] } | { ok: false; error: string };
 
-/** One page of inbox rows. The live writer emits minimal payloads, so author and
+/** One page of inbox rows when the caller names no pageSize (the screen passes
+ * its fill count). The live writer emits minimal payloads, so author and
  * title are resolved by join (see fetchActivityEntries), never read from payload. */
 export const ACTIVITY_PAGE_SIZE = 50;
 
@@ -1714,13 +1722,14 @@ async function readInboxPage(
   opts: {
     ascending: boolean;
     cursor: ActivityCursor | undefined;
+    pageSize: number;
     readWindow: (bounds: TimeBounds, limit: number) => Promise<Result<InboxEntryRow[]>>;
   },
 ): Promise<Result<InboxEntryRow[]>> {
-  const { ascending, cursor, readWindow } = opts;
+  const { ascending, cursor, pageSize, readWindow } = opts;
   if (!ascending) {
     return readBoundedPage<InboxEntryRow>({
-      pageSize: ACTIVITY_PAGE_SIZE,
+      pageSize,
       upper: cursor !== undefined ? cursor.createdAt : upperFromNow(),
       upperInclusive: cursor !== undefined,
       openEnded: cursor === undefined,
@@ -1736,7 +1745,7 @@ async function readInboxPage(
     lower = oldest.data;
   }
   return readBoundedForward<InboxEntryRow>({
-    pageSize: ACTIVITY_PAGE_SIZE,
+    pageSize,
     lower,
     read: readWindow,
   });
@@ -1802,7 +1811,13 @@ export async function fetchActivityEntries(
     if (res.error) return { ok: false, error: { code: 'unknown', message: res.error.message } };
     return { ok: true, data: (res.data ?? []).map((row) => row as InboxEntryRow) };
   };
-  const read = await readInboxPage(client, workspaceId, { ascending, cursor, readWindow });
+  const pageSize = Math.max(1, Math.floor(input.pageSize ?? ACTIVITY_PAGE_SIZE));
+  const read = await readInboxPage(client, workspaceId, {
+    ascending,
+    cursor,
+    pageSize,
+    readWindow,
+  });
   if (!read.ok) return { ok: false, error: read.error.message };
   return enrichInboxRows(client, workspaceId, read.data);
 }
@@ -2381,7 +2396,13 @@ export function prefetchActivityData(ctx: PrefetchContext): void {
       .then(([{ supabase }, reads]) => {
         void sharedActivityPage(
           activityPageKey(ctx.userId, ctx.workspaceId, 'all', direction),
-          () => fetchActivityEntries(supabase, ctx.workspaceId, { state: 'all', direction }),
+          () =>
+            fetchActivityEntries(supabase, ctx.workspaceId, {
+              state: 'all',
+              direction,
+              // The page's own read size, so the page joins this read as page one.
+              pageSize: getFillCount(),
+            }),
         ).catch(() => undefined);
         void sharedMentionCount(mentionCountKey(ctx.userId, ctx.workspaceId), async () => {
           // Joins the shell's fresh badge read when there is one (one rpc gives both counts).

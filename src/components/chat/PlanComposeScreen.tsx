@@ -21,11 +21,19 @@
 // shake on the first flagged row.
 // The Plan tab opens it too, outside any chat, its dates the week of a
 // picked day when one is passed (initialRange).
+// Add from bank (agency side only): the From bank sheet in many-pick mode
+// (BankPickSheet `multi`; it reads only when it opens). Picked ideas sit in
+// Items like concepts, with the same day button (No date allowed), and go in
+// the same one plan_create_with_items call as p_bank ({ item_id,
+// target_date }); the proc moves each with plan_item_from_bank. After a
+// create every moved idea leaves the kept Bank pages through
+// PLAN_CHANGED_EVENT (a BankChange `out`, no read).
+// Flat look: the dates row and the rows are hairline separated, no boxes.
 
 import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { PostCardFields } from '@srtdio/posts';
-import { planCreateWithItems } from '@srtdio/rpc';
+import { planCreateWithItems, type PlanCreateBankIdea } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { IconButton } from '@/components/ui/IconButton';
@@ -41,6 +49,8 @@ import {
   type ConceptForm,
 } from '@/components/chat/ConceptSheet';
 import { PostPicker } from '@/components/chat/PostPicker';
+import { BankPickSheet } from '@/components/pages/plan-tab/BankPickSheet';
+import { BankThumb } from '@/components/pages/plan-tab/BankList';
 import { PlanPage } from '@/components/chat/PlanScreen';
 import {
   PlanDatesSheet,
@@ -77,8 +87,10 @@ import {
   composePostItem,
   composeSummary,
   createShareEpoch,
+  dispatchPlanChanged,
   inComposeRange,
   recheckComposeItems,
+  type BankIdea,
   type ComposeConcept,
   type ComposeDay,
   type ComposeItem,
@@ -86,6 +98,7 @@ import {
   type ShareEpoch,
 } from '@/lib/chat/plans';
 import { useCommentAttachments } from '@/lib/chat/use-chat-attachments';
+import { useViewerSide } from '@/lib/chat/viewer-role';
 import { cn } from '@/lib/cn';
 import { shake, stripIn, stripOut, usePresence } from '@/lib/motion';
 import { logger } from '@/lib/logger';
@@ -98,7 +111,81 @@ import { TEXT_ROLE } from '@/components/ui/Text';
 export const NEW_PLAN_AUDIENCE = 'team';
 
 /** The empty list's line. */
-export const COMPOSE_NO_ITEMS = 'Concepts, posts and drafts you add show up here.';
+export const COMPOSE_NO_ITEMS = 'Concepts, posts, drafts and bank ideas you add show up here.';
+
+/** The fourth Add row (agency side only). */
+export const ADD_FROM_BANK_LABEL = 'Add from bank';
+
+/** A bank idea row's type line (and the day sheet's line under its title). */
+export const BANK_IDEA_LABEL = 'Bank idea';
+
+/** A bank idea picked into the new plan: moved by the create, never before. */
+export interface ComposeBankIdea {
+  kind: 'bank';
+  /** The idea's plan_items id. */
+  key: string;
+  title: string;
+  day: ComposeDay;
+  idea: BankIdea;
+}
+
+/** One row of the New plan list: a concept, a post or draft, or a bank idea. */
+export type NewPlanItem = ComposeItem | ComposeBankIdea;
+
+/** A picked idea's row: No date until a day is picked (the proc then places it). Pure. */
+export function composeBankFrom(idea: BankIdea): ComposeBankIdea {
+  return { kind: 'bank', key: idea.id, title: idea.title ?? '', day: 'none', idea };
+}
+
+/**
+ * A row as the shared compose helpers read it: a bank idea counts as a
+ * concept (a day or No date, nothing in Pipeline). Pure.
+ */
+export function composeAsItem(item: NewPlanItem): ComposeItem {
+  if (item.kind !== 'bank') return item;
+  return {
+    kind: 'concept',
+    key: item.key,
+    title: item.title,
+    description: '',
+    files: [],
+    day: item.day,
+  };
+}
+
+/** The rows that are not bank ideas (what composeCreateArgs takes). Pure. */
+export function composePlainItems(items: readonly NewPlanItem[]): ComposeItem[] {
+  return items.filter((i): i is ComposeItem => i.kind !== 'bank');
+}
+
+/** p_bank: each idea once, in screen order; No date is null (the proc picks the day). Pure. */
+export function composeBankArgs(items: readonly NewPlanItem[]): PlanCreateBankIdea[] {
+  const seen = new Set<string>();
+  const out: PlanCreateBankIdea[] = [];
+  for (const item of items) {
+    if (item.kind !== 'bank' || seen.has(item.key)) continue;
+    seen.add(item.key);
+    out.push({
+      item_id: item.key,
+      target_date: item.day === null || item.day === 'none' ? null : item.day,
+    });
+  }
+  return out;
+}
+
+/** After the plan dates change: a bank idea's day now outside needs one again. Pure. */
+export function recheckNewPlanItems(
+  items: readonly NewPlanItem[],
+  range: ComposeRange,
+): NewPlanItem[] {
+  const plain = recheckComposeItems(composePlainItems(items), range);
+  let at = 0;
+  return items.map((item) => {
+    if (item.kind !== 'bank') return plain[at++] ?? item;
+    const out = item.day !== null && item.day !== 'none' && !inComposeRange(item.day, range);
+    return out ? { ...item, day: null } : item;
+  });
+}
 
 /** The day button while an item needs a day. */
 export const PICK_A_DAY = 'Pick a day';
@@ -168,7 +255,9 @@ export function composeConceptFrom(
 }
 
 /** Items per plan day (the tiles' counts). Pure. */
-export function composeDayCounts(items: readonly ComposeItem[]): Record<string, number> {
+export function composeDayCounts(
+  items: readonly Pick<ComposeItem, 'day'>[],
+): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const i of items) {
     if (i.day !== null && i.day !== 'none') counts[i.day] = (counts[i.day] ?? 0) + 1;
@@ -207,7 +296,7 @@ export function PlanComposeScreen(props: {
       ? { startsOn, endsOn }
       : defaultPlanRange(new Date(), props.timeZone),
   );
-  const [items, setItems] = useState<ComposeItem[]>([]);
+  const [items, setItems] = useState<NewPlanItem[]>([]);
   // The picker's rows for the posts in the list (the picker's selection).
   const [picked, setPicked] = useState<PostCardFields[]>([]);
   const [picker, setPicker] = useState<'posts' | 'drafts' | null>(null);
@@ -216,6 +305,10 @@ export function PlanComposeScreen(props: {
   const [editKey, setEditKey] = useState<string | null>(null);
   const [dayFor, setDayFor] = useState<string | null>(null);
   const [datesOpen, setDatesOpen] = useState(false);
+  const [bankOpen, setBankOpen] = useState(false);
+  // Add from bank is the agency's (the shared, cached role read; the row
+  // shows once the side is known and never holds the screen's paint).
+  const agency = useViewerSide(props.workspaceId).side === 'agency';
   // Concept uploads go as comments' do (library origin).
   const { canAttach, uploadFile } = useCommentAttachments();
   const [conceptForm, setConceptForm] = useState<ConceptForm>(EMPTY_CONCEPT);
@@ -260,6 +353,7 @@ export function PlanComposeScreen(props: {
     setEditKey(null);
     setDayFor(null);
     setDatesOpen(false);
+    setBankOpen(false);
     setConceptForm(EMPTY_CONCEPT);
     setBusy(false);
     setError(null);
@@ -304,15 +398,17 @@ export function PlanComposeScreen(props: {
       setError({ heading: COMPOSE_EMPTY, lines: [] });
       return;
     }
-    const need = composeNeedsDayError(items);
+    const need = composeNeedsDayError(items.map(composeAsItem));
     if (need !== null) {
       setError({ ...need, list: true });
-      const first = composeNeedsDay(items)[0];
+      const first = composeNeedsDay(items.map(composeAsItem))[0];
       if (first !== undefined) flash(first.key);
       return;
     }
-    const concepts = items.filter((i) => i.kind === 'concept').length;
-    if (concepts > COMPOSE_MAX_CONCEPTS || items.length - concepts > COMPOSE_MAX_POSTS) {
+    const plain = composePlainItems(items);
+    const bank = composeBankArgs(items);
+    const concepts = plain.filter((i) => i.kind === 'concept').length;
+    if (concepts > COMPOSE_MAX_CONCEPTS || plain.length - concepts > COMPOSE_MAX_POSTS) {
       setError({ heading: COMPOSE_TOO_MANY, lines: [] });
       return;
     }
@@ -321,13 +417,11 @@ export function PlanComposeScreen(props: {
     setBusy(true);
     setError(null);
     const traceId = generateTraceId();
-    const args = composeCreateArgs({
-      workspaceId: props.workspaceId,
-      title,
-      range,
-      items,
-      traceId,
-    });
+    // One call: concepts, posts and bank ideas together (p_bank [] when none).
+    const args = {
+      ...composeCreateArgs({ workspaceId: props.workspaceId, title, range, items: plain, traceId }),
+      p_bank: bank,
+    };
     let result: Awaited<ReturnType<typeof planCreateWithItems>>;
     try {
       result = await planCreateWithItems(supabase, args);
@@ -335,6 +429,11 @@ export function PlanComposeScreen(props: {
       result = { ok: false, error: { code: 'unknown', message: String(thrown) } };
     }
     inFlight.current = false;
+    // The moved ideas leave every kept Bank page (own write: a patch, no read),
+    // whether or not this form is still open.
+    if (result.ok) {
+      for (const b of bank) dispatchPlanChanged(window, '', { kind: 'out', itemId: b.item_id });
+    }
     if (!mounted.current || !epoch.isCurrent(token)) {
       // The form this create started from is gone: nothing opens.
       if (result.ok) props.onCreated(result.data, true);
@@ -349,7 +448,7 @@ export function PlanComposeScreen(props: {
       setError(composeServerError(result.error.message));
       return;
     }
-    toast.show({ title: composeCreatedToast(items.length, composePipelineUpdates(items)) });
+    toast.show({ title: composeCreatedToast(items.length, composePipelineUpdates(plain)) });
     const planId = result.data;
     // The guard goes before the parent's close pops the screen's own step.
     guard.release();
@@ -386,6 +485,17 @@ export function PlanComposeScreen(props: {
     setConceptOpen(true);
   };
 
+  // The bank sheet ticks an idea in or out; never twice (keyed by its id).
+  const toggleBank = (idea: BankIdea): void => {
+    setItems((prev) =>
+      prev.some((i) => i.key === idea.id)
+        ? prev.filter((i) => i.key !== idea.id)
+        : [...prev, composeBankFrom(idea)],
+    );
+    setError(null);
+  };
+  const bankPicked = new Set(items.filter((i) => i.kind === 'bank').map((i) => i.key));
+
   const removeItem = (key: string): void => {
     setItems((prev) => prev.filter((i) => i.key !== key));
     setPicked((prev) => prev.filter((p) => p.id !== key));
@@ -414,23 +524,28 @@ export function PlanComposeScreen(props: {
     const key = dayFor;
     setDayFor(null);
     if (key === null) return;
-    const next = items.map((i) =>
-      i.key !== key ? i : i.kind === 'concept' ? { ...i, day } : { ...i, day, chosen: true },
+    const next = items.map(
+      (i): NewPlanItem =>
+        i.key !== key
+          ? i
+          : i.kind === 'concept' || i.kind === 'bank'
+            ? { ...i, day }
+            : { ...i, day, chosen: true },
     );
     setItems(next);
-    if (composeNeedsDay(next).length === 0) setError(null);
+    if (next.every((i) => i.day !== null)) setError(null);
   };
 
   const saveDates = (next: ComposeRange): void => {
     setRange(next);
-    setItems((prev) => recheckComposeItems(prev, next));
+    setItems((prev) => recheckNewPlanItems(prev, next));
     setDatesOpen(false);
     setError(null);
   };
 
   const dayItem = items.find((i) => i.key === dayFor) ?? null;
   // The sheet keeps its last item's header through its exit.
-  const lastDayItem = useRef<ComposeItem | null>(null);
+  const lastDayItem = useRef<NewPlanItem | null>(null);
   if (dayItem !== null) lastDayItem.current = dayItem;
   const shownDayItem = dayItem ?? lastDayItem.current;
 
@@ -464,14 +579,13 @@ export function PlanComposeScreen(props: {
         {CREATE_PLAN_LABEL}
       </Button>
       <p data-plan-compose-summary="" className="text-center text-sm text-fg-3">
-        {composeSummary(items)}
+        {composeSummary(items.map(composeAsItem))}
       </p>
     </div>
   );
 
-  const addClass = 'w-full border-dashed border-border-strong text-accent';
-  // Left aligned inside the full-width button (the Button itself centres).
-  const addInner = 'flex w-full items-center gap-2';
+  // Plain 44 rows (ui/PressableRow), hairlines between: + then the words.
+  const addRow = 'flex items-center gap-3 px-1 text-base text-fg';
 
   return (
     <>
@@ -485,7 +599,7 @@ export function PlanComposeScreen(props: {
         footer={footer}
       >
         <div className="flex flex-col gap-3 p-3">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Input
               id="plan-title"
               data-plan-title=""
@@ -505,7 +619,7 @@ export function PlanComposeScreen(props: {
 
           <div
             data-plan-dates-row=""
-            className="flex min-h-12 items-center justify-between gap-2 rounded-xl bg-panel-2 pl-3 pr-1 lit-card-muted"
+            className="flex min-h-12 items-center justify-between gap-2 border-y border-border py-2 pl-1"
           >
             <div className="flex min-w-0 flex-col">
               <span className="text-base text-fg">
@@ -526,12 +640,12 @@ export function PlanComposeScreen(props: {
             </Button>
           </div>
 
-          <section className="flex flex-col gap-2" aria-label="Items">
-            <h3 className={`mx-1 ${TEXT_ROLE.section}`}>
+          <section className="flex flex-col" aria-label="Items">
+            <h3 className={`mx-1 mb-2 ${TEXT_ROLE.section}`}>
               Items · <span className="font-mono tabular-nums">{items.length}</span>
             </h3>
             {items.length === 0 ? (
-              <p className="px-0.5 text-sm text-fg-3">{COMPOSE_NO_ITEMS}</p>
+              <p className="px-1 text-sm text-fg-3">{COMPOSE_NO_ITEMS}</p>
             ) : null}
             {items.map((item) => (
               <ComposeItemRow
@@ -548,9 +662,13 @@ export function PlanComposeScreen(props: {
             ))}
           </section>
 
-          <div className="flex flex-col gap-2">
-            <Button
+          <div
+            data-plan-add-rows=""
+            className="flex flex-col divide-y divide-border border-y border-border"
+          >
+            <PressableRow
               type="button"
+              flat
               data-plan-add-concept=""
               onClick={() => {
                 // A kept Add draft reopens as it was; an edit's form never carries over.
@@ -560,35 +678,43 @@ export function PlanComposeScreen(props: {
                 }
                 setConceptOpen(true);
               }}
-              className={addClass}
+              className={addRow}
             >
-              <span className={addInner}>
-                <IconPlus size={ICON_SIZE.inline} />
-                Add concept
-              </span>
-            </Button>
-            <Button
+              <IconPlus size={ICON_SIZE.control} />
+              Add concept
+            </PressableRow>
+            <PressableRow
               type="button"
+              flat
               data-plan-add-posts=""
               onClick={() => setPicker('posts')}
-              className={addClass}
+              className={addRow}
             >
-              <span className={addInner}>
-                <IconPlus size={ICON_SIZE.inline} />
-                Add from Pipeline
-              </span>
-            </Button>
-            <Button
+              <IconPlus size={ICON_SIZE.control} />
+              Add from Pipeline
+            </PressableRow>
+            <PressableRow
               type="button"
+              flat
               data-plan-add-drafts=""
               onClick={() => setPicker('drafts')}
-              className={addClass}
+              className={addRow}
             >
-              <span className={addInner}>
-                <IconPlus size={ICON_SIZE.inline} />
-                Add drafts
-              </span>
-            </Button>
+              <IconPlus size={ICON_SIZE.control} />
+              Add drafts
+            </PressableRow>
+            {agency ? (
+              <PressableRow
+                type="button"
+                flat
+                data-plan-add-bank=""
+                onClick={() => setBankOpen(true)}
+                className={addRow}
+              >
+                <IconPlus size={ICON_SIZE.control} />
+                {ADD_FROM_BANK_LABEL}
+              </PressableRow>
+            ) : null}
           </div>
         </div>
       </PlanPage>
@@ -604,6 +730,19 @@ export function PlanComposeScreen(props: {
         // A Draft plan allows drafts (the picker's own drafts gate reads this).
         channelHasClient={false}
       />
+
+      {agency ? (
+        <BankPickSheet
+          open={props.open && bankOpen}
+          workspaceId={props.workspaceId}
+          // Many-pick ticks only: nothing is written until Create plan.
+          day={range.startsOn}
+          today={today}
+          plans={[]}
+          multi={{ selected: bankPicked, onToggle: toggleBank }}
+          onClose={() => setBankOpen(false)}
+        />
+      ) : null}
 
       <ConceptSheet
         open={props.open && conceptOpen}
@@ -621,13 +760,21 @@ export function PlanComposeScreen(props: {
       <PlanDayPickerSheet
         open={props.open && dayItem !== null}
         title={shownDayItem?.title ?? ''}
-        subline={shownDayItem !== null ? dayPickerSubline(shownDayItem, range) : ''}
+        subline={
+          shownDayItem === null
+            ? ''
+            : shownDayItem.kind === 'bank'
+              ? BANK_IDEA_LABEL
+              : dayPickerSubline(shownDayItem, range)
+        }
         range={range}
         selected={shownDayItem?.day ?? null}
         today={today}
         counts={counts}
         pipelineDay={
-          shownDayItem !== null && shownDayItem.kind !== 'concept' ? shownDayItem.orig : null
+          shownDayItem !== null && (shownDayItem.kind === 'post' || shownDayItem.kind === 'draft')
+            ? shownDayItem.orig
+            : null
         }
         onPick={pickDay}
         onClose={() => setDayFor(null)}
@@ -661,8 +808,9 @@ export function PlanComposeScreen(props: {
 }
 
 /** A row's type line: "Concept", "Draft", or "Post · Review". Pure. */
-export function composeKindLabel(item: ComposeItem): string {
+export function composeKindLabel(item: NewPlanItem): string {
   if (item.kind === 'concept') return 'Concept';
+  if (item.kind === 'bank') return BANK_IDEA_LABEL;
   if (item.kind === 'draft') return 'Draft';
   return `Post · ${stageLabel(item.stage)}`;
 }
@@ -670,11 +818,12 @@ export function composeKindLabel(item: ComposeItem): string {
 /**
  * One item on the New plan screen: thumb, title and type line, the remove X
  * (44px), a concept's description (2 lines), the full-width day button and
- * its note. A row that needs a day is drawn in warning colour. A concept's
- * title area opens it in the concept sheet.
+ * its note. Flat: a hairline under each row, no box. A row that needs a day
+ * is drawn in warning colour. A concept's title area opens it in the concept
+ * sheet; a bank idea shows its bank tile (BankThumb) and is not edited here.
  */
 export function ComposeItemRow(props: {
-  item: ComposeItem;
+  item: NewPlanItem;
   rowRef?: (el: HTMLDivElement | null) => void;
   onDay: () => void;
   onEdit: () => void;
@@ -682,21 +831,25 @@ export function ComposeItemRow(props: {
 }): ReactElement {
   const { item } = props;
   const need = item.day === null;
-  const note = composeItemNote(item);
+  const note = item.kind === 'bank' ? null : composeItemNote(item);
   const head = (
     <>
-      <span
-        aria-hidden="true"
-        className={cn(
-          'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-base font-semibold',
-          item.kind === 'concept' && 'border border-dashed border-border-strong text-fg-3',
-          item.kind === 'post' && 'bg-accent-soft text-accent lit-pill',
-          item.kind === 'draft' && 'bg-panel-2 text-fg-3 lit-pill',
-        )}
-      >
-        {item.kind === 'concept' ? 'C' : item.title.charAt(0).toUpperCase()}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+      {item.kind === 'bank' ? (
+        <BankThumb idea={item.idea} size={44} />
+      ) : (
+        <span
+          aria-hidden="true"
+          className={cn(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-base font-semibold',
+            item.kind === 'concept' && 'border border-dashed border-border-strong text-fg-3',
+            item.kind === 'post' && 'bg-accent-soft text-accent lit-pill',
+            item.kind === 'draft' && 'bg-panel-2 text-fg-3 lit-pill',
+          )}
+        >
+          {item.kind === 'concept' ? 'C' : item.title.charAt(0).toUpperCase()}
+        </span>
+      )}
+      <span className="flex min-w-0 flex-1 flex-col gap-1 text-left">
         <span data-plan-item-title="" className="truncate text-lg font-semibold text-fg">
           {item.title}
         </span>
@@ -710,8 +863,8 @@ export function ComposeItemRow(props: {
       data-plan-compose-item={item.kind}
       data-plan-compose-flag={need ? 'need' : 'ok'}
       className={cn(
-        'flex flex-col gap-2 rounded-xl border p-3 lit-card-muted',
-        need ? 'border-warn bg-warn-soft' : 'bg-panel',
+        'flex flex-col gap-2 border-b px-1 py-3',
+        need ? 'border-warn bg-warn-soft' : 'border-border',
       )}
     >
       <div className="flex items-center gap-3">
@@ -734,13 +887,13 @@ export function ComposeItemRow(props: {
           data-plan-compose-remove=""
           label={`Remove ${item.title}`}
           onClick={props.onRemove}
-          className="-my-1.5 -mr-1.5 shrink-0"
+          className="-my-2 -mr-2 shrink-0"
         >
           <IconTrash size={ICON_SIZE.control} />
         </IconButton>
       </div>
       {item.kind === 'concept' && item.description !== '' ? (
-        <p className="line-clamp-2 px-0.5 text-md text-fg-3">{item.description}</p>
+        <p className="line-clamp-2 px-1 text-md text-fg-3">{item.description}</p>
       ) : null}
       <Button
         type="button"
@@ -773,7 +926,7 @@ export function ComposeItemRow(props: {
       {note !== null ? (
         <p
           data-plan-compose-note={note.warn ? 'warn' : 'info'}
-          className={cn('px-0.5 text-sm', note.warn ? 'font-medium text-warn' : 'text-fg-3')}
+          className={cn('px-1 text-sm', note.warn ? 'font-medium text-warn' : 'text-fg-3')}
         >
           {note.text}
         </p>

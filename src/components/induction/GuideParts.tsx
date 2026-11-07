@@ -410,10 +410,8 @@ export function GuideCard({
       {copy.stats !== undefined && copy.stats.length > 0 ? (
         <div className="mt-3 flex gap-3">
           {copy.stats.map((stat) => (
-            <div
-              key={stat.label}
-              className="flex-1 rounded-xl border bg-panel-2 px-3 py-2 lit-card-muted"
-            >
+            // Flat look: a stat is a plain column inside the guide card, no grey box.
+            <div key={stat.label} className="flex-1 py-2">
               <p className="text-2xl font-semibold tabular-nums text-accent">{stat.value}</p>
               <p className="text-sm text-fg-2">{stat.label}</p>
             </div>

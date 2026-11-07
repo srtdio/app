@@ -4,7 +4,7 @@
 // comes from the screen the app runs on, read ONCE per app load (no resize or
 // scroll listener, no element measuring, no await) and reused by every list.
 
-import { LIST_CARD_HEIGHT_PX } from '@/components/ui/ListCard';
+import { listCardHeightPx } from '@/components/ui/ListCard';
 
 /** The fewest rows a first page shows (the old fixed cap). */
 export const FILL_COUNT_FLOOR = 6;
@@ -23,10 +23,10 @@ const LIST_COLUMN_PX = 360;
 /**
  * Rows the first page shows: one row more than the screen height holds (so the
  * list always runs past the fold), times the laptop columns, kept in 6..40.
- * Pure.
+ * rowPx is the active density's row height (60 / 72 / 80). Pure.
  */
-export function fillCount(viewportH: number, columns = 1): number {
-  const rows = Math.ceil(viewportH / LIST_CARD_HEIGHT_PX) + 1;
+export function fillCount(viewportH: number, columns = 1, rowPx = listCardHeightPx()): number {
+  const rows = Math.ceil(viewportH / rowPx) + 1;
   const count = rows * Math.max(1, Math.floor(columns));
   if (!Number.isFinite(count)) return FILL_COUNT_FLOOR;
   return Math.min(FILL_COUNT_CEILING, Math.max(FILL_COUNT_FLOOR, count));
@@ -42,16 +42,29 @@ export function fillColumns(viewportW: number): number {
 }
 
 let stored: number | null = null;
+/** The density the stored count was computed for. */
+let storedFor: string | undefined;
+
+/** The density on <html> (src/lib/density.ts sets it at boot), read sync. */
+function htmlDensity(): string | undefined {
+  return typeof document === 'undefined' ? undefined : document.documentElement.dataset.density;
+}
 
 /**
  * The one fill count for this app load: computed on first use from the
- * window's size, then reused. Outside a browser it is the floor and nothing is
+ * window's size and the active density's row height, then reused. Outside a browser it is the floor and nothing is
  * stored, so the first browser call still reads the real screen.
  */
 export function getFillCount(): number {
-  if (stored !== null) return stored;
+  // Density changed mid-session (account menu): read the count once again.
+  if (stored !== null && storedFor === htmlDensity()) return stored;
   if (typeof window === 'undefined') return FILL_COUNT_FLOOR;
-  stored = fillCount(window.innerHeight, fillColumns(window.innerWidth));
+  storedFor = htmlDensity();
+  stored = fillCount(
+    window.innerHeight,
+    fillColumns(window.innerWidth),
+    listCardHeightPx(storedFor),
+  );
   return stored;
 }
 
@@ -63,4 +76,5 @@ export function useFillCount(): number {
 /** Tests only: forget the stored value so the next call reads the window again. */
 export function resetFillCountForTest(): void {
   stored = null;
+  storedFor = undefined;
 }

@@ -146,7 +146,7 @@ function EmailOptInRow({
         </label>
         {offBy !== null ? (
           // Outside the label: a tap on the name opens the person, never the tick.
-          <span data-member-email-off-by="" className="pl-7 text-sm text-fg-2">
+          <span data-member-email-off-by="" className="pl-6 text-sm text-fg-2">
             Turned off by{' '}
             <PersonTrigger userId={offBy.userId} name={offBy.name} avatarUrl={offBy.avatarUrl}>
               {offBy.name}

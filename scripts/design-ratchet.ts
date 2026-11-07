@@ -31,8 +31,8 @@ export const METRICS = {
   },
   offGrid: {
     distinct: false,
-    what: 'spacing off the 4px grid (*-1.5, *-2.5, *-3.5, [Npx] not divisible by 4)',
-    fix: 'Use a 4px step: 1, 2, 3, 4, 6, 8, 12. 0.5 only inside badges and pills (CLAUDE.md L1).',
+    what: 'spacing off the 4px grid (*-1.5, *-2.5, *-3.5, [Npx] not divisible by 4; p/m/gap/space 0.5, 5, 7)',
+    fix: 'Use a spacing step: 1, 2, 3, 4, 6 (4 / 8 / 12 / 16 / 24), then 8 and up (CLAUDE.md Spacing).',
   },
   zValues: {
     distinct: true,
@@ -153,6 +153,8 @@ const SPACE_PREFIX =
   '(?:p[trblxyse]?|m[trblxyse]?|gap(?:-[xy])?|space-[xy]|top|left|right|bottom|start|end|inset(?:-[xy])?|h|w|size|min-[hw]|max-[hw])';
 const ARBITRARY_PX = new RegExp(`^${SPACE_PREFIX}-\\[(-?\\d+(?:\\.\\d+)?)px\\]$`);
 const HALF_STEP = new RegExp(`^${SPACE_PREFIX}-(1\\.5|2\\.5|3\\.5)$`);
+/** Spacing steps (CLAUDE.md Spacing): padding / margin / gap / space never take 2, 6, 20 or 28. */
+const OFF_STEP = /^-?(?:p[trblxyse]?|m[trblxyse]?|gap(?:-[xy])?|space-[xy])-(0\.5|5|7)$/;
 const Z_TOKEN = /^z-(\d+|\[[^\]]+\])$/;
 const LEADING = /^leading-(none|tight|snug|normal|relaxed|loose|\d+|\[[^\]]+\])$/;
 const TRACKING = /^tracking-(tighter|tight|normal|wide|wider|widest|\[[^\]]+\])$/;
@@ -178,7 +180,7 @@ function classTokenHits(token: string): Array<{ metric: Metric; value: string }>
     const n = Number(px[1]);
     if (n % 4 !== 0 && Math.abs(n) !== 2) out.push({ metric: 'offGrid', value: token });
   }
-  if (HALF_STEP.test(base)) out.push({ metric: 'offGrid', value: token });
+  if (HALF_STEP.test(base) || OFF_STEP.test(base)) out.push({ metric: 'offGrid', value: token });
   const z = Z_TOKEN.exec(base);
   if (z) {
     out.push({ metric: 'zValues', value: `z-${z[1]}` });

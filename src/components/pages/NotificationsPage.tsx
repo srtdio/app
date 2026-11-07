@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { useTopbarActions } from '@/components/shell/topbar-actions';
 import { ICON_SIZE, IconActivity, IconAt, IconTickDouble } from '@/components/ui/icons';
@@ -21,8 +22,8 @@ import { useViewerSide } from '@/lib/chat/viewer-role';
 import { logger } from '@/lib/logger';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
 import { POLL_CHANGE_SOURCE } from '@/lib/inbox/inbox-live';
+import { getFillCount } from '@/lib/use-fill-count';
 import {
-  ACTIVITY_PAGE_SIZE,
   ACTIVITY_SORT_DEFAULT,
   ACTIVITY_SORT_OPTIONS,
   ACTIVITY_SORT_PAGE,
@@ -138,12 +139,7 @@ function restoreAnchor(list: HTMLElement | null, anchor: ScrollAnchor): void {
 function LoadFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="px-4 md:px-6 mt-4">
-      <div
-        role="alert"
-        className="lit-card rounded-xl border border-bad bg-panel px-4 py-3 text-base text-bad"
-      >
-        {ACTIVITY_LOAD_FAILED}
-      </div>
+      <ErrorNote>{ACTIVITY_LOAD_FAILED}</ErrorNote>
       <div className="mt-3">
         <Button onClick={onRetry}>Retry</Button>
       </div>
@@ -276,7 +272,8 @@ export function NotificationsPage() {
       const held = mode === 'reset' && key !== null ? peekActivityPage(key) : undefined;
       if (mode === 'reset') {
         setItems(held ?? []);
-        setHasMore(held !== undefined && held.length === ACTIVITY_PAGE_SIZE);
+        // A kept page from an earlier load can be longer than this load's count.
+        setHasMore(held !== undefined && held.length >= getFillCount());
         setEntering(new Set());
         loadingMoreRef.current = false;
         setLoadingMore(false);
@@ -293,6 +290,8 @@ export function NotificationsPage() {
         fetchActivityEntries(supabase, workspaceId, {
           state,
           direction: sort,
+          // Page one fills the screen (getFillCount: sync, read once per app load).
+          pageSize: getFillCount(),
         });
       mark('activity:page1:start');
       const result = key !== null ? await sharedActivityPage(key, read) : await read();
@@ -321,7 +320,7 @@ export function NotificationsPage() {
         return;
       }
       setItems(result.data);
-      setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
+      setHasMore(result.data.length >= getFillCount());
     },
     [workspaceId, userId, state, sort, push, untouched],
   );
@@ -349,6 +348,8 @@ export function NotificationsPage() {
       state: chip,
       direction,
       cursor,
+      // Load more adds the same count again.
+      pageSize: getFillCount(),
     });
     loadingMoreRef.current = false;
     setLoadingMore(false);
@@ -364,7 +365,7 @@ export function NotificationsPage() {
       return;
     }
     setItems((prev) => appendUnique(prev, result.data));
-    setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
+    setHasMore(result.data.length >= getFillCount());
   }, [workspaceId, state, sort, push]);
 
   // The unread-mention count for the Mentions chip. Independent of the active
@@ -419,7 +420,7 @@ export function NotificationsPage() {
       if (kept === undefined) return;
       lateKeptRef.current = key;
       setItems(kept);
-      setHasMore(kept.length === ACTIVITY_PAGE_SIZE);
+      setHasMore(kept.length >= getFillCount());
       setNowMs(Date.now());
       setLoading(false);
       setError(false);

@@ -90,9 +90,9 @@ export function Topbar({
           aria-haspopup="dialog"
           data-induction={INDUCTION_KEYS.topbarWorkspaceSlot}
           onClick={onCreateWorkspace}
-          className="min-w-0 border-dashed text-left"
+          className="min-w-0 text-left"
         >
-          <IconPlus size={ICON_SIZE.inline} className="shrink-0 text-fg-3" />
+          <IconPlus size={ICON_SIZE.inline} className="shrink-0 text-fg" />
           <span className="truncate">Create your workspace</span>
         </Button>
       ) : workspaceName === null ? (
@@ -127,7 +127,7 @@ export function Topbar({
         >
           <IconSearch size={ICON_SIZE.inline} className="text-fg-3" />
           <span className="flex-1 text-left text-fg-3">Search</span>
-          <kbd className="text-xs text-fg-3 border border-border rounded px-1 py-0.5 lit-pill">
+          <kbd className="text-xs text-fg-3 border border-border rounded px-1 py-1 lit-pill">
             ⌘K
           </kbd>
         </Button>

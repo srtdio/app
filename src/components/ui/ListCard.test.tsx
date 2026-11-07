@@ -1,13 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   LIST_CARD_BODY,
   LIST_CARD_COVER,
   LIST_CARD_GRID,
+  LIST_CARD_HEIGHT_BY_DENSITY,
   LIST_CARD_HEIGHT_PX,
   LIST_CARD_LINE1,
   LIST_CARD_LINE2,
   LIST_CARD_PICTURE,
+  LIST_CARD_PICTURE_BY_DENSITY,
   LIST_CARD_PREVIEW,
   LIST_CARD_STACK,
   LIST_CARD_TEXT,
@@ -15,6 +17,7 @@ import {
   ListCard,
   ListCardBox,
   listCardFrame,
+  listCardHeightPx,
   listCardTickClass,
   type ListCardProps,
   type ListCardSelect,
@@ -55,20 +58,50 @@ function classOf(html: string, attr: string): string[] {
 }
 
 const spacing = tailwindConfig.theme?.spacing as Record<string, string>;
+const extendPadding = tailwindConfig.theme?.extend?.padding as Record<string, string>;
 const radius = tailwindConfig.theme?.borderRadius as Record<string, string>;
 const px = (rem: string): number => parseFloat(rem) * 16;
 const stepPx = (cls: string, prefix: string): number =>
-  px(spacing[cls.replace(prefix, '')] ?? 'NaN');
+  px(spacing[cls.replace(prefix, '')] ?? extendPadding[cls.replace(prefix, '')] ?? 'NaN');
+
+/** The frame's classes for one density: the base, or the compact: / calm: overrides. */
+function frameFor(density: 'compact' | 'cozy' | 'calm', cls: string): string[] {
+  const tokens = cls.split(' ');
+  const base = tokens.filter((c) => !c.includes(':'));
+  if (density === 'cozy') return base;
+  const over = tokens
+    .filter((c) => c.startsWith(`${density}:`))
+    .map((c) => c.slice(density.length + 1));
+  const key = (c: string): string => /^-?[a-z]+/.exec(c)?.[0] ?? c;
+  return [...base.filter((c) => !over.some((o) => key(o) === key(c))), ...over];
+}
+const find = (tokens: string[], re: RegExp): string => tokens.find((c) => re.test(c)) ?? '';
 
 describe('ListCard frame', () => {
   it('flat row: no border, no radius, no fill, no lit height; bleeds -mx-4 / px-4; press on the whole row', () => {
     const root = classOf(render(), 'data-list-card=""');
-    for (const cls of ['relative', 'flex', 'h-15', 'min-w-0', '-mx-4', 'px-4', MOVE_CLASS.press]) {
+    for (const cls of [
+      'relative',
+      'flex',
+      'h-18',
+      'min-w-0',
+      '-mx-4',
+      'px-4',
+      'py-3',
+      MOVE_CLASS.press,
+    ]) {
       expect(root).toContain(cls);
     }
-    expect(listCardFrame()).toBe('relative -mx-4 flex h-15 min-w-0 px-4');
+    expect(root).toEqual(
+      expect.arrayContaining(['compact:h-15', 'compact:py-row-inset', 'calm:h-20', 'calm:py-4']),
+    );
+    expect(listCardFrame()).toBe(
+      'relative -mx-4 flex h-18 min-w-0 px-4 py-3 compact:h-15 compact:py-row-inset calm:h-20 calm:py-4',
+    );
     for (const cls of listCardFrame().split(' ')) {
-      expect(cls).not.toMatch(/^(border|rounded|overflow-hidden|bg-|lit-)/);
+      expect(cls.replace(/^(compact|calm):/, '')).not.toMatch(
+        /^(border|rounded|overflow-hidden|bg-|lit-)/,
+      );
     }
     expect(root.filter((c) => /^(border|rounded|bg-|lit-)/.test(c))).toEqual([]);
   });
@@ -111,27 +144,63 @@ describe('ListCard frame', () => {
   });
 });
 
-describe('ListCard height: exactly 60 (10 + 40 + 10)', () => {
-  it('the constant, and the classes that make it', () => {
-    expect(LIST_CARD_HEIGHT_PX).toBe(60);
-    const frameH =
-      listCardFrame()
-        .split(' ')
-        .find((c) => /^h-\d/.test(c)) ?? '';
-    expect(stepPx(frameH, 'h-')).toBe(LIST_CARD_HEIGHT_PX);
-    const pic = LIST_CARD_PICTURE.split(' ').find((c) => /^h-\d/.test(c)) ?? '';
-    // The 40 picture centres in the row with 10 above and below.
-    expect((LIST_CARD_HEIGHT_PX - stepPx(pic, 'h-')) / 2).toBe(10);
+describe('ListCard height by density: Compact 60, Cozy 72 (default), Calm 80', () => {
+  it('the constants: Cozy 72 is the default; 60 / 72 / 80 per density', () => {
+    expect(LIST_CARD_HEIGHT_PX).toBe(72);
+    expect(LIST_CARD_HEIGHT_BY_DENSITY).toEqual({ compact: 60, cozy: 72, calm: 80 });
+    expect(LIST_CARD_PICTURE_BY_DENSITY).toEqual({ compact: 40, cozy: 48, calm: 48 });
+    expect(listCardHeightPx('compact')).toBe(60);
+    expect(listCardHeightPx('cozy')).toBe(72);
+    expect(listCardHeightPx('calm')).toBe(80);
+    expect(listCardHeightPx('nonsense')).toBe(72);
   });
 
-  it('the text column is 20 + 2 + 20 = 42, inside the 40 picture row (it never sets the height)', () => {
+  it('listCardHeightPx() reads <html data-density> when no density is given (Cozy outside a browser)', () => {
+    expect(listCardHeightPx()).toBe(72);
+    const dataset: Record<string, string | undefined> = {};
+    vi.stubGlobal('document', { documentElement: { dataset } });
+    try {
+      expect(listCardHeightPx()).toBe(72);
+      dataset.density = 'compact';
+      expect(listCardHeightPx()).toBe(60);
+      dataset.density = 'calm';
+      expect(listCardHeightPx()).toBe(80);
+      dataset.density = 'cozy';
+      expect(listCardHeightPx()).toBe(72);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each([
+    ['compact', 10, 40, 60],
+    ['cozy', 12, 48, 72],
+    ['calm', 16, 48, 80],
+  ] as const)(
+    '%s: the classes make inset %i + picture %i + inset = %i',
+    (density, inset, pic, row) => {
+      const frame = frameFor(density, listCardFrame());
+      expect(stepPx(find(frame, /^h-\d/), 'h-')).toBe(row);
+      expect(stepPx(find(frame, /^py-/), 'py-')).toBe(inset);
+      const picture = frameFor(density, LIST_CARD_PICTURE);
+      expect(stepPx(find(picture, /^h-\d/), 'h-')).toBe(pic);
+      expect(stepPx(find(picture, /^w-\d/), 'w-')).toBe(pic);
+      expect(inset + pic + inset).toBe(row);
+      expect(LIST_CARD_HEIGHT_BY_DENSITY[density]).toBe(row);
+      expect(LIST_CARD_PICTURE_BY_DENSITY[density]).toBe(pic);
+    },
+  );
+
+  it('the text column is 20 + 4 + 20 = 44 in every density, inside the picture row (it never sets the height)', () => {
     const line = (cls: string): number =>
       stepPx(cls.split(' ').find((c) => /^h-\d/.test(c)) ?? '', 'h-');
     const gap = stepPx(LIST_CARD_TEXT.split(' ').find((c) => /^gap-/.test(c)) ?? '', 'gap-');
-    expect(LIST_CARD_TEXT.split(' ')).toContain('gap-0.5');
+    expect(LIST_CARD_TEXT.split(' ')).toContain('gap-1');
     const text = line(LIST_CARD_LINE1) + gap + line(LIST_CARD_LINE2);
-    expect(text).toBe(42);
-    expect(text).toBeLessThanOrEqual(LIST_CARD_HEIGHT_PX);
+    expect(text).toBe(44);
+    for (const row of Object.values(LIST_CARD_HEIGHT_BY_DENSITY)) {
+      expect(text).toBeLessThanOrEqual(row);
+    }
   });
 
   it('every variant has the identical height structure (no line 3, line 2 always there)', () => {
@@ -158,13 +227,14 @@ describe('ListCard height: exactly 60 (10 + 40 + 10)', () => {
   });
 });
 
-describe('ListCard picture: 40 on the left, centred', () => {
-  it('the slot is 40x40 (h-10 w-10) and never shrinks; it comes first', () => {
+describe('ListCard picture: 48 (40 in Compact) on the left, centred', () => {
+  it('the slot is 48x48 (h-12 w-12; compact:h-10 compact:w-10) and never shrinks; it comes first', () => {
+    expect(px(spacing['12'] ?? '')).toBe(48);
     expect(px(spacing['10'] ?? '')).toBe(40);
     expect(LIST_CARD_PICTURE.split(' ')).toEqual(
-      expect.arrayContaining(['h-10', 'w-10', 'shrink-0']),
+      expect.arrayContaining(['h-12', 'w-12', 'compact:h-10', 'compact:w-10', 'shrink-0']),
     );
-    expect(LIST_CARD_PICTURE).not.toContain('h-12');
+    expect(LIST_CARD_PICTURE).not.toMatch(/calm:[hw]-/);
     const html = render();
     const body = html.indexOf('data-list-card-body');
     expect(html.indexOf('data-list-card-picture', body)).toBeLessThan(
@@ -172,11 +242,12 @@ describe('ListCard picture: 40 on the left, centred', () => {
     );
   });
 
-  it('person: a circle photo through ui/Avatar at 40 (initials when none)', () => {
+  it('person: a circle photo through ui/Avatar card (48, 40 in Compact; initials when none)', () => {
     const html = render({ picture: { kind: 'person', name: 'Priya Shah' } });
     expect(html).toContain('data-list-card-picture="person"');
     expect(html).toContain('data-avatar-role="card"');
-    expect(html).toContain('width:40px;height:40px');
+    expect(html).toContain('h-12 w-12 compact:h-10 compact:w-10');
+    expect(html).not.toContain('width:40px;height:40px');
     expect(html).toContain('rounded-full');
     expect(html).toContain('>PS<');
   });
@@ -395,19 +466,18 @@ describe('LIST_CARD_GRID: the page list', () => {
   });
 });
 
-describe('ListCardBox: the 60 skeleton', () => {
-  it('keeps the flat row frame, the 40 picture and the two 20 lines', () => {
+describe('ListCardBox: the density skeleton (72 Cozy, 60 Compact, 80 Calm)', () => {
+  it('keeps the flat row frame, the density picture and the two 20 lines', () => {
     const html = renderToStaticMarkup(<ListCardBox />);
     expect(html).toContain('data-list-card-box=""');
     expect(html).toContain(`class="${listCardFrame()}"`);
     expect(html).not.toContain('rounded-xl border bg-panel');
-    expect(html).toContain('h-10 w-10');
-    expect(html).not.toContain('h-12 w-12');
+    expect(html).toContain('h-12 w-12');
+    expect(html).toContain('compact:h-10 compact:w-10');
     expect(html).toContain(LIST_CARD_BODY);
     expect(html).toContain(LIST_CARD_LINE1);
     expect(html).toContain(LIST_CARD_LINE2);
     expect(html).not.toContain('min-h-9');
-    expect(html).not.toContain('h-18');
   });
 });
 

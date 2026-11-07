@@ -8,7 +8,7 @@ import { MOVE_CLASS } from '@/lib/motion';
  * any bubble width). About 20px tall, so it hangs 17px below the bubble.
  */
 export const REACTION_BADGE_CLASS =
-  'absolute left-2 top-[calc(100%-3px)] inline-flex items-center gap-0.5 rounded-full border border-border bg-panel px-2 py-0.5 lit-pill';
+  'absolute left-2 top-[calc(100%-3px)] inline-flex items-center gap-1 rounded-full border border-border bg-panel px-2 py-1 lit-pill';
 
 /**
  * The tap target: a ::before grown 12px above and below and 8px each side, so

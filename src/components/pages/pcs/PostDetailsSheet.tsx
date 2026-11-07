@@ -383,10 +383,7 @@ export function PostDetailsSheet({
             </PressableRow>
           ) : null}
           {onCreateBucket !== undefined && newBucketOpen ? (
-            <div
-              data-new-bucket=""
-              className="mt-1 flex flex-col gap-2 rounded-xl border bg-panel-2 p-3 lit-card-muted"
-            >
+            <div data-new-bucket="" className="flex flex-col gap-2 px-3 py-2">
               <Input
                 autoFocus
                 aria-label="New bucket name"

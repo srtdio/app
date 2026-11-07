@@ -34,7 +34,7 @@ describe('AssetTabs', () => {
     expect(html).not.toMatch(/>PDF<|>Sheets<|data-asset-tab="(pdf|sheets)"/);
     // The 44 tap box around the 32 visible chip (12 side padding).
     expect(html).toContain('min-h-11');
-    expect(html).toContain('min-h-8 px-3');
+    expect(html).toContain('min-h-9 px-4');
     // The shared Chip selected style on the selected tab's visible chip (ink outline).
     expect(html).toMatch(
       /aria-selected="true"[^>]*><span data-chip-face="" class="[^"]*border-fg text-fg\b/,

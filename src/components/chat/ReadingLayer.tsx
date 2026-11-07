@@ -168,7 +168,7 @@ export function SeenLine(props: {
     <li
       data-seen-line=""
       className={cn(
-        'flex justify-end px-4 pt-0.5',
+        'flex justify-end px-4 pt-1',
         props.rail === true && 'relative',
         NO_TOUCH_SELECT,
       )}
@@ -440,7 +440,7 @@ export function WhoReactedSheet(props: {
                   data-reactor-tab={t.key}
                   onClick={() => setTab(t.key)}
                   className={cn(
-                    'flex items-center gap-1.5 px-4 text-base font-medium',
+                    'flex items-center gap-2 px-4 text-base font-medium',
                     tab === t.key ? 'border border-fg text-fg' : 'border border-border text-fg-2',
                   )}
                 >

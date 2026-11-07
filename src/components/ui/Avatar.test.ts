@@ -33,8 +33,8 @@ describe('initialsFor', () => {
 });
 
 describe('Avatar roles', () => {
-  it('has exactly five roles: inline 20, header 32, row 40, card 40 (the flat list row), profile 72', () => {
-    expect(AVATAR_PX).toEqual({ inline: 20, header: 32, row: 40, card: 40, profile: 72 });
+  it('has exactly five roles: inline 20, header 32, row 40, card 48 (the list row picture; 40 in Compact), profile 72', () => {
+    expect(AVATAR_PX).toEqual({ inline: 20, header: 32, row: 40, card: 48, profile: 72 });
   });
 
   it('the card role draws its initials at text-base (the row size), never text-lg', () => {
@@ -43,14 +43,32 @@ describe('Avatar roles', () => {
     expect(html).not.toContain('text-lg');
   });
 
-  it('renders each role at its size', () => {
+  it('renders each role at its size (inline style; card by density classes)', () => {
     for (const role of Object.keys(AVATAR_PX) as AvatarRole[]) {
       const html = renderToStaticMarkup(createElement(Avatar, { role, name: 'Priya Shah' }));
       const px = AVATAR_PX[role];
+      expect(html).toContain(`data-avatar-role="${role}"`);
+      if (role === 'card') {
+        expect(html).not.toContain('width:');
+        continue;
+      }
       expect(html).toContain(`width:${px}px`);
       expect(html).toContain(`height:${px}px`);
-      expect(html).toContain(`data-avatar-role="${role}"`);
     }
+  });
+
+  it('card follows the density through classes: 48 (h-12 w-12), 40 in Compact, 48 in Calm', () => {
+    for (const props of [
+      { role: 'card' as const, name: 'Priya Shah' },
+      { role: 'card' as const, name: 'Priya Shah', src: 'https://cdn/p.png' },
+    ]) {
+      const html = renderToStaticMarkup(createElement(Avatar, props));
+      expect(html).toContain('h-12 w-12 compact:h-10 compact:w-10');
+      expect(html).not.toMatch(/calm:[hw]-/);
+      expect(html).not.toContain('style="width');
+    }
+    const row = renderToStaticMarkup(createElement(Avatar, { role: 'row', name: 'A B' }));
+    expect(row).not.toContain('compact:');
   });
 });
 

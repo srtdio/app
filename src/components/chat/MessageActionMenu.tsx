@@ -1031,7 +1031,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
         // FB2: arrow keys move between items.
         if (moveMenuFocus(containerRef.current, event.key)) event.preventDefault();
       }}
-      className={cn('flex flex-col', isLaptop && '-m-1.5 overflow-y-auto overscroll-contain')}
+      className={cn('flex flex-col', isLaptop && '-m-2 overflow-y-auto overscroll-contain')}
       style={
         isLaptop
           ? { width: MENU_WIDTH_PX, maxHeight: menuMaxHeight(visibleViewportHeight(window)) }

@@ -1548,12 +1548,12 @@ export function PostDetailPage({
         {...(pending ? { 'aria-hidden': true } : { 'data-post-side': '' })}
         className={grid.side}
       >
-        {pending ? <Bone lit="lit-card-muted" as="div" className="h-24 rounded-xl" /> : null}
+        {pending ? <Bone lit="flat" as="div" className="h-24 rounded-xl" /> : null}
         <section
           id={COMMENTS_SECTION_ID}
           hidden={pending}
           onClick={revealOpeningTray}
-          className="scroll-mt-[calc(var(--pin-h,0px)+0.5rem)] rounded-xl border bg-panel-2 p-4 lit-card-muted"
+          className="scroll-mt-[calc(var(--pin-h,0px)+0.5rem)] border-t border-border pt-4"
           {...(focusInsetBottom !== undefined
             ? { style: { ['--focus-inset-bottom' as string]: focusInsetBottom } }
             : {})}
@@ -1635,7 +1635,7 @@ export function PostDetailPage({
             <Bone lit="lit-media" as="div" className="aspect-[4/5] w-full rounded-xl" />
           </div>
           <div aria-hidden className={cn(grid.body, 'flex flex-col gap-6')}>
-            <div className="rounded-xl border bg-panel-2 p-4 lit-card-muted">
+            <div>
               <Bone lit="flat" as="div" className="h-3 w-full rounded" />
               <Bone lit="flat" as="div" className="mt-2 h-3 w-5/6 rounded" />
               <Bone lit="flat" as="div" className="mt-2 h-3 w-2/3 rounded" />
@@ -1876,7 +1876,7 @@ export function PostDetailPage({
   ) : null;
   const phoneStageNotes =
     stageHelper !== null ? (
-      <section className="rounded-xl border bg-panel-2 p-4 lit-card-muted">
+      <section>
         <p className="text-base text-fg-2">{stageHelper}</p>
       </section>
     ) : null;
@@ -2184,10 +2184,7 @@ export function PostDetailPage({
               as the author row, Edit at the right, the caption text below.
               Flow B 27: platform and format live once, in the details row;
               the version button lives in the gallery tools row. */}
-            <section
-              data-caption-block=""
-              className="rounded-xl border bg-panel-2 p-4 lit-card-muted"
-            >
+            <section data-caption-block="">
               <div className="flex items-center gap-3">
                 <Avatar name={workspaceName ?? ''} role="header" kind="group" />
                 <div className="min-w-0 flex-1">

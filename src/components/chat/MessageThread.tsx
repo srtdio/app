@@ -1184,7 +1184,7 @@ function TypingIndicator(props: {
     <div
       data-typing-row=""
       role="status"
-      className={cn('flex shrink-0 items-center gap-2 px-4 py-1.5 text-fg-3', TYPING_ROW_TYPE)}
+      className={cn('flex shrink-0 items-center gap-2 px-4 py-2 text-fg-3', TYPING_ROW_TYPE)}
     >
       <span className="flex items-center gap-1" aria-hidden="true">
         <span className="h-1.5 w-1.5 rounded-full bg-fg-3" />
@@ -1255,7 +1255,7 @@ export function ThreadHeaderIdentity(props: {
       face
     );
   const text = (
-    <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+    <span className="flex min-w-0 flex-1 flex-col gap-1 text-left">
       <span className={cn('block truncate text-fg', sized(HEADER_NAME_TYPE, props.layout))}>
         {(props.searchWords ?? []).length > 0
           ? highlightNodes(props.title, props.searchWords ?? [])
@@ -1504,7 +1504,7 @@ function metaInk(mine: boolean): string {
 /** Each placement's position: two overlays at the bottom-right, the row in flow. */
 const META_POSITION: Record<MetaPlacement, string> = {
   inline: 'pointer-events-none absolute bottom-1 right-2 inline-flex',
-  pill: 'pointer-events-none absolute bottom-3 right-3 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-media-meta lit-media',
+  pill: 'pointer-events-none absolute bottom-3 right-3 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-2 py-px text-media-meta lit-media',
   row: 'pointer-events-none mt-1 flex justify-end',
   // Inside ui/ChatCard's bottom-trailing time slot, which places and inks it.
   card: 'pointer-events-none inline-flex',
@@ -1740,7 +1740,7 @@ export function bubbleClass(
  */
 export function tombstoneClass(shape: BubbleShape): string {
   return cn(
-    'relative flex min-w-0 max-w-full items-center gap-1.5 whitespace-nowrap bg-panel-2 text-fg-3 lit-bubble-other focus-visible:lit-focus',
+    'relative flex min-w-0 max-w-full items-center gap-2 whitespace-nowrap bg-panel-2 text-fg-3 lit-bubble-other focus-visible:lit-focus',
     NO_TOUCH_SELECT,
     bubbleCorners(shape),
     sized(BUBBLE_PAD, shape.layout),
@@ -1824,8 +1824,8 @@ function TombstoneBubble(props: {
  * pulls out of BUBBLE_PAD; its 264px width widens a short message's bubble.
  */
 const LINK_CARD_INSET: ChatSize = {
-  touch: '-mx-2 -mt-1 mb-1.5 w-64 max-w-[calc(100%+16px)]',
-  laptop: '-mx-1 -mt-1 mb-1.5 w-64 max-w-[calc(100%+8px)]',
+  touch: '-mx-2 -mt-1 mb-2 w-64 max-w-[calc(100%+16px)]',
+  laptop: '-mx-1 -mt-1 mb-2 w-64 max-w-[calc(100%+8px)]',
 };
 
 /** Cancel the native default (the touch contextmenu on rows). */
@@ -2161,7 +2161,7 @@ function SmileyGlyph(): ReactElement {
 }
 
 /** A row with a reaction badge makes room for its 17px overhang plus a gap. */
-export const REACTION_ROW_SPACE = 'mb-5';
+export const REACTION_ROW_SPACE = 'mb-6';
 
 /**
  * A failed own send's alert: a 44x44 hit area outside the bubble on the side
@@ -2474,7 +2474,7 @@ export function MessageBubble(props: {
     'group flex items-start gap-2',
     railRowClass(rail, mine),
     NO_TOUCH_SELECT,
-    head ? (props.afterLabel === true ? 'pt-0' : 'pt-3') : 'pt-0.5',
+    head ? (props.afterLabel === true ? 'pt-0' : 'pt-3') : 'pt-1',
     mine ? 'flex-row-reverse' : 'flex-row',
     // Selection mode: a static 44px check column at the left of every row.
     selecting && SELECTION_ROW_OFFSET,
@@ -2526,7 +2526,7 @@ export function MessageBubble(props: {
                 meta={tombMeta}
                 mine={false}
                 placement="inline"
-                className="static ml-1.5"
+                className="static ml-2"
               />
             </TombstoneBubble>,
             rail,
@@ -2589,7 +2589,7 @@ export function MessageBubble(props: {
       // piece of the rail) reaches the next row with no gap.
       className={cn(
         rowClass,
-        hasReactions && (rail?.role != null ? 'pb-5' : REACTION_ROW_SPACE),
+        hasReactions && (rail?.role != null ? 'pb-6' : REACTION_ROW_SPACE),
         checked && 'isolate',
       )}
       // Selection mode: the whole row is the target, owned by the selection
@@ -2668,7 +2668,7 @@ export function MessageBubble(props: {
                   <PostRefChip
                     post={chip.post}
                     onTap={chip.onTap}
-                    className={album ? 'mx-2' : '-mb-1.5 -mt-2'}
+                    className={album ? 'mx-2' : '-mb-2 -mt-2'}
                   />
                 ) : (chip === undefined || parentDeleted) && reply !== null ? (
                   <ReplyQuoteBox
@@ -2791,7 +2791,7 @@ export function MessageBubble(props: {
                 meta={meta}
                 mine={mine}
                 placement={placement}
-                className={placement === 'row' && album ? 'px-1.5 pb-0.5' : undefined}
+                className={placement === 'row' && album ? 'px-2 pb-1' : undefined}
               />
             )}
             {failed && mine && message.filesMissing !== true && canRetryFailed(message) ? (
@@ -5062,7 +5062,7 @@ export function DayPill({ label, layout }: { label: string; layout: ChatLayout }
     <li role="separator" aria-label={label} className="flex justify-center">
       <span
         className={cn(
-          'self-center mb-1.5 mt-2 rounded-full border border-border-strong bg-panel px-3 py-1 text-fg-3 lit-pill',
+          'self-center mb-2 mt-2 rounded-full border border-border-strong bg-panel px-3 py-1 text-fg-3 lit-pill',
           sized(DATE_PILL_TYPE, layout),
         )}
       >

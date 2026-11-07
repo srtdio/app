@@ -15,11 +15,14 @@ const MIN_HEIGHT: Record<NonNullable<DropZoneProps['minHeight']>, string> = {
 };
 
 // The dashed upload target: a tappable surface (drag and drop handlers pass
-// through) with a strong dashed border on panel-2, a centred column of
-// content, a focus-visible ring and a disabled fade. Press (motion move 5):
-// mv-press (MOVE_CLASS.press) sinks it to .97 while held and eases colours.
+// through) with a strong dashed border, a centred column of content, a
+// focus-visible ring and a solid disabled look. Flat look (7 Nov 2026): no
+// grey fill; the dashed edge stays because it is the drop target itself (a
+// file dragged from the desktop needs a bounded place to land, and lit-drop
+// draws its ink line on that same 1px edge with no layout shift). Press
+// (motion move 5): mv-press (MOVE_CLASS.press) sinks it to .97 while held.
 const DROP_ZONE_BASE =
-  'flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong bg-panel-2 lit-well-soft p-4 text-center text-fg-2 mv-press hover:text-fg focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none disabled:cursor-default';
+  'flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong p-4 text-center text-fg-2 mv-press hover:text-fg focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none disabled:cursor-default';
 
 export function DropZone({
   minHeight = 'touch',

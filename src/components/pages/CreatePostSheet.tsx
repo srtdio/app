@@ -1499,7 +1499,7 @@ export function CreatePostSheet({
                 aria-describedby="post-caption-count"
                 onChange={(event) => patchField('caption', { caption: event.target.value })}
                 placeholder="Write the caption"
-                className="pb-7 aria-[invalid=true]:border-bad aria-[invalid=true]:lit-bad"
+                className="pb-6 aria-[invalid=true]:border-bad aria-[invalid=true]:lit-bad"
               />
               <span
                 id="post-caption-count"
@@ -1557,10 +1557,7 @@ export function CreatePostSheet({
                       placeholder="No bucket"
                     />
                     {newBucketOpen ? (
-                      <div
-                        data-new-bucket=""
-                        className="mt-2 flex flex-col gap-2 rounded-xl border bg-panel-2 p-3 lit-card-muted"
-                      >
+                      <div data-new-bucket="" className="mt-2 flex flex-col gap-2">
                         <Input
                           aria-label="New bucket name"
                           placeholder="Bucket name"

@@ -162,15 +162,15 @@ describe('chat home: one list', () => {
 });
 
 describe('group chat: ui/ListCard', () => {
-  it('40 picture (group photo or mark), name + time on line 1, preview + "3 new" + dot on line 2', () => {
+  it('48 picture, 40 in Compact (group photo or mark), name + time on line 1, preview + "3 new" + dot on line 2', () => {
     const h = card(group, { ...read, unread: 3 });
     expect(h).toContain('data-chat-list-item="card"');
     expect(h).toContain('data-list-card=""');
     expect(h).toMatch(/data-list-card-picture="image"[^>]*data-group-photo=""/);
-    // The shared Avatar at its card role (40), group kind, clipped to radius 8.
+    // The shared Avatar at its card role (48, 40 in Compact), group kind, clipped to radius 8.
     expect(h).toContain('data-avatar-role="card"');
-    expect(h).toContain('width:40px;height:40px');
-    expect(h).toMatch(/data-list-card-picture="image"[^>]*class="[^"]*h-10 w-10/);
+    expect(h).toContain('h-12 w-12 compact:h-10 compact:w-10');
+    expect(h).toMatch(/data-list-card-picture="image"[^>]*class="[^"]*h-12 w-12/);
     expect(h).toContain('rounded-lg');
     // formatAgo on the list's clock (sent an hour before NOW), meta role, line 1.
     const time = '1h';
@@ -199,14 +199,14 @@ describe('group chat: ui/ListCard', () => {
 });
 
 describe('person chat: ui/ListCard, the same card as a group', () => {
-  it('40 circle, name, preview, time + "99+ new"', () => {
+  it('48 circle (40 in Compact), name, preview, time + "99+ new"', () => {
     const h = card(dm, { ...read, unread: 120 });
     expect(h).toContain('data-chat-list-item="card"');
     expect(h).toContain('data-chat-kind="person"');
     expect(h).not.toContain('data-tile');
     expect(h).toMatch(/data-list-card-picture="person"[^>]*data-person-photo=""/);
     expect(h).toContain('data-avatar-role="card"');
-    expect(h).toContain('width:40px;height:40px');
+    expect(h).toContain('h-12 w-12 compact:h-10 compact:w-10');
     expect(h).toContain('rounded-full');
     expect(h).toContain('>Asha Rao<');
     // formatAgo on the list's clock: sent an hour before NOW.

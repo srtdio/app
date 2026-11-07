@@ -165,7 +165,7 @@ function MediaSlot(props: {
       />
       {props.video ? (
         <span className="absolute inset-0 grid place-items-center">
-          <span className="grid h-11 w-11 place-items-center rounded-full bg-overlay-badge pl-0.5 lit-media text-overlay-fg">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-overlay-badge pl-1 lit-media text-overlay-fg">
             <IconPlay size={ICON_SIZE.nav} />
           </span>
         </span>
@@ -183,7 +183,7 @@ function TallBody(props: {
   detail: ReactNode;
 }): ReactElement {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 px-3 pb-2 pt-2">
+    <div className="flex min-w-0 flex-col gap-1 px-3 pb-2 pt-2">
       <div className="flex h-4 min-w-0 items-center gap-2 text-sm text-fg-3">
         <LetterTile letter={props.letter} tone={props.tone} className="size-4 rounded text-xs" />
         <span className="min-w-0 truncate">{props.site}</span>
@@ -209,7 +209,7 @@ function TallSkeleton(props: { tone: CardTone }): ReactElement {
       className={cn('rounded-xl border lit-card', CARD_SURFACE[props.tone])}
     >
       <Bone lit="flat" as="div" className="aspect-[1.91/1] w-full rounded-t-xl" />
-      <div className="flex flex-col gap-0.5 px-3 pb-2 pt-2">
+      <div className="flex flex-col gap-1 px-3 pb-2 pt-2">
         <div className="flex h-4 items-center">
           <SkeletonBar className="h-2 w-24" />
         </div>
