@@ -238,7 +238,7 @@ describe('PostCard lines', () => {
       now: NOW,
     });
     const preview = out.slice(out.indexOf('data-list-card-preview'));
-    expect(textOf(preview, 'data-post-card-status="with"')).toBe('With Maya · 3 hours ago');
+    expect(textOf(preview, 'data-post-card-status="with"')).toBe('With Maya · 3h');
     expect(textOf(preview, 'data-post-card-caption=""')).toBe('Linen that breathes.');
     expect(tag(preview, 'data-post-card-caption=""')).toContain('truncate');
     expect(preview.indexOf('data-post-card-status')).toBeLessThan(
@@ -267,22 +267,22 @@ describe('PostCard lines', () => {
     expect(due).toContain('data-list-card-time=""');
     expect(due).toContain('font-mono');
     expect(due).not.toContain('text-bad');
-    expect(textOf(out, 'data-post-card-due=""')).toBe('Due in 10 days');
+    expect(textOf(out, 'data-post-card-due=""')).toBe('Due 2 Nov');
     // No due date: no time.
     expect(renderWith({ post: makePost({}), now: NOW })).not.toContain('data-list-card-time');
   });
 
   it('a past due date reads overdue in the bad tone; approved is never overdue', () => {
     expect(cardDue('2026-10-22', 'review', 'UTC', NOW)).toEqual({
-      text: 'Overdue 1 day',
+      text: 'Overdue 1d',
       overdue: true,
     });
     expect(cardDue('2026-10-12', 'draft', 'UTC', NOW)).toEqual({
-      text: 'Overdue 11 days',
+      text: 'Overdue 1w',
       overdue: true,
     });
     expect(cardDue('2026-05-20', 'draft', 'UTC', NOW)).toEqual({
-      text: 'Overdue 5 months',
+      text: 'Overdue 5mo',
       overdue: true,
     });
     expect(cardDue('2026-10-23', 'review', 'UTC', NOW)).toEqual({
@@ -311,7 +311,7 @@ describe('PostCard lines', () => {
     const due = tag(out, 'data-post-card-due="overdue"');
     expect(due).toContain('text-bad');
     expect(due).toContain('data-list-card-time-bad=""');
-    expect(textOf(out, 'data-post-card-due="overdue"')).toBe('Overdue 11 days');
+    expect(textOf(out, 'data-post-card-due="overdue"')).toBe('Overdue 1w');
   });
 });
 

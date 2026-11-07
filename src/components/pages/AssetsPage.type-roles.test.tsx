@@ -158,7 +158,8 @@ describe('Assets page type roles', () => {
     expect(facts.hasAttribute('data-asset-meta')).toBe(true);
     expectRole(facts, ['text-md', 'text-fg-2', 'line-clamp-2']);
     const time = document.querySelector<HTMLElement>('[data-asset-uploaded]');
-    expect(time?.textContent).toMatch(/ago$|^just now$/);
+    // formatAdded: a clock time today, else the day (never ticks).
+    expect(time?.textContent).toMatch(/^\d{1,2}:\d{2} (AM|PM)$|^\d{1,2} [A-Z][a-z]{2}( \d{4})?$/);
     expectRole(time as HTMLElement, ['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']);
   });
 

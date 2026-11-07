@@ -136,14 +136,14 @@ describe('ActivityCard on ui/ListCard', () => {
     expect(unread).not.toContain('lit-selected');
   });
 
-  it('the time is formatRelative on the list clock (mono meta), never a clock time', () => {
+  it('the time is formatAgo on the list clock (mono meta), never a clock time', () => {
     const html = renderCard([item({ createdAt: '2026-06-14T00:00:00.000Z' })]);
     const time = /<span data-list-card-time="" data-activity-time="" class="([^"]*)">([^<]*)</.exec(
       html,
     );
     expect(time?.[1]).toContain('font-mono');
     expect(time?.[1]).toContain('tabular-nums');
-    expect(time?.[2]).toBe('1 hour ago');
+    expect(time?.[2]).toBe('1h');
     expect(html).not.toContain('12:00 AM');
     expect(html).not.toContain('Yesterday');
   });
@@ -155,6 +155,7 @@ describe('ActivityCard on ui/ListCard', () => {
           <ActivityCard
             group={[item({ createdAt: '2026-06-14T00:00:00.000Z' })]}
             nowMs={nowMs}
+            timeZone="UTC"
             cache={cache}
             presignEnabled={false}
             onOpenGroup={() => {}}
@@ -167,8 +168,12 @@ describe('ActivityCard on ui/ListCard', () => {
       )?.[1] ?? '';
     const base = Date.parse('2026-06-14T00:00:00.000Z');
     expect(at(base + 10_000)).toBe('just now');
-    expect(at(base + 5 * 60_000)).toBe('5 min ago');
-    expect(at(base + 2 * 86_400_000)).toBe('2 days ago');
+    expect(at(base + 5 * 60_000)).toBe('5m');
+    expect(at(base + 3 * 3_600_000)).toBe('3h');
+    // Civil days on the zone it is handed: Sun 14 Jun read on Tue 16 Jun.
+    expect(at(base + 86_400_000)).toBe('Yesterday');
+    expect(at(base + 2 * 86_400_000)).toBe('Sun');
+    expect(at(base + 7 * 86_400_000)).toBe('14 Jun');
   });
 
   it('an edited plan_updated card reads the last edit time, not the first', () => {

@@ -86,7 +86,7 @@ describe('PostCard type roles', () => {
   it('due line is the ListCard meta role: text-sm text-fg-3 mono', () => {
     const host = paint(makePost());
     const due = host.querySelector('[data-post-card-due]');
-    expect(due?.textContent).toBe('Due in 10 days');
+    expect(due?.textContent).toBe('Due 2 Nov');
     expect(classes(due)).toEqual(expect.arrayContaining(['text-sm', 'text-fg-3', 'font-mono']));
   });
 

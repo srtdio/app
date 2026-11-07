@@ -64,9 +64,63 @@ export function isCounted(rel: string): boolean {
 // unlit-x never count), variants such as hover: or focus-visible: allowed.
 const LIT = /(?<![\w-])((?:[\w-]+:)*)(lit-[a-z0-9]+(?:-[a-z0-9]+)*)/g;
 
+/**
+ * Blank out // and /* *\/ comments (prose that names a class lights nothing),
+ * keeping every newline so line numbers hold. Strings and template literals
+ * are kept as they are; a regex literal holding // is rare enough to ignore.
+ */
+export function stripComments(src: string): string {
+  let out = '';
+  let i = 0;
+  // Stack of open quotes; '}' marks a ${ } inside a template literal.
+  const stack: string[] = [];
+  while (i < src.length) {
+    const c = src[i]!;
+    const next = src[i + 1];
+    const top = stack[stack.length - 1];
+    if (top === "'" || top === '"' || top === '`') {
+      out += c;
+      if (c === '\\') {
+        out += next ?? '';
+        i += 2;
+        continue;
+      }
+      if (c === top) stack.pop();
+      else if (top === '`' && c === '$' && next === '{') {
+        out += '{';
+        stack.push('}');
+        i += 2;
+        continue;
+      } else if (top !== '`' && c === '\n') stack.pop();
+      i++;
+      continue;
+    }
+    if (c === '/' && next === '/') {
+      while (i < src.length && src[i] !== '\n') {
+        out += ' ';
+        i++;
+      }
+      continue;
+    }
+    if (c === '/' && next === '*') {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end === -1 ? src.length : end + 2;
+      out += src.slice(i, stop).replace(/[^\n]/g, ' ');
+      i = stop;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') stack.push(c);
+    else if ((top === '}' || top === '{') && c === '{') stack.push('{');
+    else if ((top === '}' || top === '{') && c === '}') stack.pop();
+    out += c;
+    i++;
+  }
+  return out;
+}
+
 export function scanSource(file: string, src: string): Occurrence[] {
   const out: Occurrence[] = [];
-  const lines = src.split('\n');
+  const lines = stripComments(src).split('\n');
   for (let i = 0; i < lines.length; i++) {
     for (const m of lines[i]!.matchAll(LIT)) {
       out.push({ role: m[2]!, file, line: i + 1, token: `${m[1] ?? ''}${m[2]!}` });
