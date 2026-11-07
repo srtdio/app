@@ -3590,7 +3590,7 @@ SCREENS.push(
   },
   {
     // The chat home: the Personal notes card shows the user's own photo
-    // (round, ui/Avatar 'card' at 48) among the person cards.
+    // (round, ui/Avatar 'card' at 40) among the person rows.
     name: 'chat-list-notes-photo',
     seed: creator,
     extra: seedOwnPhoto,
@@ -4784,7 +4784,7 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   await settle(page);
   // Layout checks (layout-checks.ts) on the state as it is shot. A list
   // screen must show its ui/ListCards, so the list-card rule (equal heights,
-  // the 48 picture 12 inside the edge and 12 to the text) runs on it.
+  // the 40 picture at 16,10 in the bled row and 12 to the text) runs on it.
   if (LIST_CARD_SCREENS.has(screen.name)) await assertListCards(page, screen.name);
   // An upload screen shows the ring or Retry only: no visible bar, no % figure.
   if (UPLOAD_SCREENS.has(screen.name)) await assertNoUploadBar(page, screen.name);
@@ -4801,7 +4801,7 @@ async function capture(screen: Screen, page: Page): Promise<void> {
 
 // The screens that list ui/ListCards (Pipeline, Briefs, Assets, the Chat
 // list, Activity, the Plan tab and its Bank): checkLayout's list-card rule
-// (every card 74 tall, the 48 picture 12 inside the edge and 12 to the text)
+// (every row 60 tall, the 40 picture at 16,10 in the bled row, 12 to the text)
 // runs on every screen; these must show cards. The chip screens above may land
 // on a chip's zero line, so they are checked whenever cards show.
 const LIST_CARD_SCREENS = new Set([

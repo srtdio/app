@@ -248,8 +248,8 @@ test('fix 6 and 30 on ui/ListCard: a brief row shows the brief icon picture; del
   await expect(briefPicture).toBeVisible();
   const briefBox = await briefPicture.boundingBox();
   if (briefBox === null) throw new Error('brief picture has no box');
-  expect(Math.round(briefBox.width)).toBe(48);
-  expect(Math.round(briefBox.height)).toBe(48);
+  expect(Math.round(briefBox.width)).toBe(40);
+  expect(Math.round(briefBox.height)).toBe(40);
   await expect(brief.locator('[data-activity-scope-tag]')).toHaveText('Brief');
 
   const files = card(page, 'assets_deleted');
@@ -347,17 +347,23 @@ test(
     expect(sort.x - (search.x + search.width)).toBeLessThanOrEqual(8);
     expect(avatar.x - (primary.x + primary.width)).toBeLessThanOrEqual(8);
 
-    // The row floats 12px from both sides and the bottom (no home indicator inset here).
-    const row = await page.locator('nav[data-undo-anchor]').boundingBox();
+    // Flat look (7 Nov 2026): the dock is centred, only as wide as its tabs
+    // (never edge to edge), 16px above the bottom (no home indicator inset
+    // here), at rest (52) at the top of the page.
+    const nav = page.locator('nav[data-undo-anchor]');
+    await expect(nav).toHaveAttribute('data-dock', 'rest');
+    const row = await nav.boundingBox();
     const pill = await page.locator('[data-tab-pill]').boundingBox();
     const chat = await page.locator('[data-chat-tab]').boundingBox();
     if (row === null || pill === null || chat === null) throw new Error('tab bar not laid out');
-    expect(row.x).toBeCloseTo(12, 0);
-    expect(viewport.width - (row.x + row.width)).toBeCloseTo(12, 0);
-    expect(viewport.height - (row.y + row.height)).toBeCloseTo(12, 0);
-    expect(pill.height).toBeCloseTo(60, 0);
-    expect(chat.width).toBeCloseTo(60, 0);
-    expect(chat.height).toBeCloseTo(60, 0);
+    const leftGap = row.x;
+    const rightGap = viewport.width - (row.x + row.width);
+    expect(Math.abs(leftGap - rightGap)).toBeLessThanOrEqual(1);
+    expect(leftGap).toBeGreaterThan(12);
+    expect(viewport.height - (row.y + row.height)).toBeCloseTo(16, 0);
+    expect(pill.height).toBeCloseTo(52, 0);
+    expect(chat.width).toBeCloseTo(52, 0);
+    expect(chat.height).toBeCloseTo(52, 0);
     expect(chat.x - (pill.x + pill.width)).toBeCloseTo(8, 0);
     for (const link of await page.locator('[data-tab-pill] a').all()) {
       expectMinTouchTarget(await link.boundingBox());

@@ -370,54 +370,60 @@ describe('messages', () => {
   });
 });
 
-describe('list cards (ui/ListCard): 74 tall, the 48 picture 12 inside, 12 to the text', () => {
-  // A card at x 16 with a 1px border: picture at 16 + 1 + 12 = 29, text at 29 + 48 + 12 = 89.
-  const good = (y: number, height = 74): ListCardGeom => ({
+describe('list cards (ui/ListCard): 60 tall flat rows, the 40 picture at 16,10 in the bled row, 12 to the text', () => {
+  // A flat row bled -mx-4 from the 16 gutter: row at x 0, no border; picture
+  // at 0 + 16 = 16, top 10 (centred in 60); text at 16 + 40 + 12 = 68.
+  const good = (y: number, height = 60): ListCardGeom => ({
     label: `card@${y}`,
-    card: { x: 16, y, width: 358, height },
-    borderLeft: 1,
-    borderTop: 1,
-    picture: { x: 29, y: y + 13, width: 48, height: 48 },
-    text: { x: 89, y: y + 15, width: 270, height: 44 },
+    card: { x: 0, y, width: 390, height },
+    borderLeft: 0,
+    borderTop: 0,
+    picture: { x: 16, y: y + 10, width: 40, height: 40 },
+    text: { x: 68, y: y + 9, width: 306, height: 42 },
   });
 
-  it('passes cards of one height with the picture in place', () => {
-    expect(listCardViolations([good(0), good(82), good(164.6, 74.4)])).toEqual([]);
+  it('passes rows of one height with the picture in place (rows touch, no gap)', () => {
+    expect(listCardViolations([good(0), good(60), good(120.6, 60.4)])).toEqual([]);
   });
 
-  it('fails a card more than 1px taller than the first', () => {
-    const out = listCardViolations([good(0), good(82, 90)]);
+  it('fails a row more than 1px taller than the first', () => {
+    const out = listCardViolations([good(0), good(60, 76)]);
     expect(out.filter((m) => m.includes('cards differ'))).toHaveLength(1);
   });
 
-  it('every list card is 74 tall on every screen (the seven lists are one height)', () => {
-    expect(LIST_CARD_HEIGHT_PX).toBe(74);
-    // Equal to each other but not 74: a screen whose cards all grew (the old 118) still fails.
-    const tall = listCardViolations([good(0, 118), good(130, 118)]);
+  it('every list row is 60 tall on every screen (the seven lists are one height)', () => {
+    expect(LIST_CARD_HEIGHT_PX).toBe(60);
+    // Equal to each other but not 60: a screen whose rows all kept the old 74 card still fails.
+    const tall = listCardViolations([good(0, 74), good(74, 74)]);
     expect(tall).toHaveLength(2);
-    for (const m of tall) expect(m).toContain('not 74');
-    expect(listCardViolations([good(0, 73.2)])).toEqual([]);
+    for (const m of tall) expect(m).toContain('not 60');
+    expect(listCardViolations([good(0, 59.2)])).toEqual([]);
   });
 
-  it('fails a picture that is not 48x48 (the old 72 too)', () => {
+  it('fails a picture that is not 40x40 (the old 48 too)', () => {
     const card = good(0);
-    const out = listCardViolations([{ ...card, picture: { x: 29, y: 13, width: 72, height: 72 } }]);
-    expect(out.some((m) => m.includes('not 48x48'))).toBe(true);
+    const out = listCardViolations([{ ...card, picture: { x: 16, y: 10, width: 48, height: 48 } }]);
+    expect(out.some((m) => m.includes('not 40x40'))).toBe(true);
   });
 
-  it('fails a picture not 12 inside the card edge (left or top)', () => {
+  it('fails a picture not at 16,10 inside the bled row (the old boxed 12,12 too)', () => {
     const card = good(0);
-    const out = listCardViolations([{ ...card, picture: { x: 33, y: 13, width: 48, height: 48 } }]);
-    expect(out.some((m) => m.includes('not 12,12'))).toBe(true);
+    const off = listCardViolations([{ ...card, picture: { x: 20, y: 10, width: 40, height: 40 } }]);
+    expect(off.some((m) => m.includes('not 16,10'))).toBe(true);
+    // The old card: 1px border and 12 padding, i.e. a row that is not bled.
+    const boxed = listCardViolations([
+      { ...card, borderLeft: 1, borderTop: 1, picture: { x: 13, y: 13, width: 40, height: 40 } },
+    ]);
+    expect(boxed.some((m) => m.includes('not 16,10'))).toBe(true);
   });
 
   it('fails text not 12 after the picture', () => {
     const card = good(0);
-    const out = listCardViolations([{ ...card, text: { x: 97, y: 15, width: 200, height: 44 } }]);
+    const out = listCardViolations([{ ...card, text: { x: 76, y: 9, width: 200, height: 42 } }]);
     expect(out.some((m) => m.includes('not 12'))).toBe(true);
   });
 
-  it('fails a card with no picture slot', () => {
+  it('fails a row with no picture slot', () => {
     expect(listCardViolations([{ ...good(0), picture: null }])[0]).toContain('no picture slot');
   });
 });
@@ -499,12 +505,12 @@ describe('trayTileViolations', () => {
 describe('list cards: no preview puts the tag under the time', () => {
   const card = (tagRight: number, over: Partial<ListCardGeom> = {}): ListCardGeom => ({
     label: 'card',
-    card: { x: 16, y: 0, width: 358, height: 74 },
-    borderLeft: 1,
-    borderTop: 1,
-    picture: { x: 29, y: 13, width: 48, height: 48 },
-    text: { x: 89, y: 15, width: 272, height: 44 },
-    time: { x: 331, y: 15, width: 30, height: 20 },
+    card: { x: 0, y: 0, width: 390, height: 60 },
+    borderLeft: 0,
+    borderTop: 0,
+    picture: { x: 16, y: 10, width: 40, height: 40 },
+    text: { x: 68, y: 9, width: 306, height: 42 },
+    time: { x: 344, y: 9, width: 30, height: 20 },
     tag: { x: tagRight - 40, y: 39, width: 40, height: 20 },
     hasPreview: false,
     unread: false,
@@ -512,7 +518,7 @@ describe('list cards: no preview puts the tag under the time', () => {
   });
 
   it('passes a no-preview tag that ends where the time ends', () => {
-    expect(listCardViolations([card(361)])).toEqual([]);
+    expect(listCardViolations([card(374)])).toEqual([]);
   });
 
   it('fails a no-preview tag left on the start of line 2', () => {
