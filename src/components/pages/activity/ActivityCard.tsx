@@ -454,16 +454,8 @@ export function ActivityCard({
               rememberThisCard();
               onOpenGroup(group, openEntry);
             },
-            press: {
-              'aria-label': [
-                title,
-                unread ? 'Unread' : null,
-                previewText !== '' ? previewText : null,
-              ]
-                .filter((part): part is string => part !== null)
-                .join(', '),
-              'data-activity-lead': '',
-            },
+            // Named by the card's own title, unread dot and preview (ListCard).
+            press: { 'data-activity-lead': '' },
           }
         : {})}
     />

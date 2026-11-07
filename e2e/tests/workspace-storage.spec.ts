@@ -219,7 +219,7 @@ test('Settings > Storage under the warning line has no talk-to-us rows @theme', 
 
   const meter = page.getByRole('meter', { name: 'Storage' });
   await expect(meter).toBeVisible({ timeout: 15_000 });
-  const panel = page.locator('div.max-w-\\[520px\\]');
+  const panel = page.locator('[data-settings-content]');
   await expect(panel.getByText('300 MB', { exact: true })).toBeVisible();
   await expect(panel.getByText('of 1 GB', { exact: true })).toBeVisible();
   await expect(panel).toContainText("WHAT'S USING IT");
@@ -246,7 +246,7 @@ test('Settings > Storage past the warning line offers more space @theme', async 
   await routeWorkspaceStorage(page, { used: 850, library: 700, chat: 90, voice: 20, deleted: 40 });
   await page.goto('/settings?panel=storage');
 
-  const panel = page.locator('div.max-w-\\[520px\\]');
+  const panel = page.locator('[data-settings-content]');
   await expect(panel.getByText('850 MB', { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('meter', { name: 'Storage' })).toHaveAttribute('data-tone', 'warn');
   await expect(panel).toContainText('NEED MORE SPACE?');

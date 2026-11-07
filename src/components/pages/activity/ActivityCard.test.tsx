@@ -382,11 +382,16 @@ describe('ActivityCard titles and previews', () => {
     expect(html).not.toContain('data-activity-lead');
   });
 
-  it('a tappable card is one button named by its title', () => {
+  it('a tappable card is one button named by its title, unread dot and preview', () => {
     const html = renderCard([item({ title: 'Q3', actorName: 'Dev', readAt: null })]);
-    expect(html).toMatch(
-      /<button[^>]*aria-label="Dev commented on Q3, Unread"[^>]*data-activity-lead=""/,
-    );
+    const button = /<button[^>]*data-activity-lead=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(button).not.toContain('aria-label=');
+    const ids = /aria-labelledby="([^"]+)"/.exec(button)?.[1]?.split(' ') ?? [];
+    expect(ids).toHaveLength(3);
+    expect(html).toContain(`id="${ids[0]}" data-list-card-title=""`);
+    expect(html).toMatch(new RegExp(`<span[^>]*id="${ids[0]}"[^>]*>Dev commented on Q3<`));
+    expect(html).toContain(`id="${ids[1]}" data-list-card-unread=""`);
+    expect(html).toContain(`id="${ids[2]}" data-list-card-preview=""`);
   });
 });
 

@@ -2,10 +2,12 @@ import type {
   ButtonHTMLAttributes,
   ComponentType,
   HTMLAttributes,
+  MouseEvent,
   ReactElement,
   ReactNode,
   Ref,
 } from 'react';
+import { useId } from 'react';
 import { cn } from '@/lib/cn';
 import { Bone, MOVE_CLASS } from '@/lib/motion';
 import { TEXT_ROLE, textRole } from '@/components/ui/Text';
@@ -194,6 +196,17 @@ function Picture({
  * height: 1 + 16 + max(72, 20 + 4 + 36 + 4 + 20) + 16 + 1 = 118 (border, padding,
  * the text column; the 72 picture never sets it).
  */
+/**
+ * A click on the title is a click on the card: it hands the click to the card's
+ * own tap target (the cover button or link), so the title text is a real hit
+ * target and the card still has one button for keyboard and screen readers.
+ */
+function clickCover(event: MouseEvent<HTMLElement>): void {
+  const root = event.currentTarget.closest('[data-list-card]');
+  const target = root?.querySelector<HTMLElement>(':scope > button, :scope > a');
+  target?.click();
+}
+
 export function ListCard({
   picture,
   pictureHooks,
@@ -221,6 +234,16 @@ export function ListCard({
 }: ListCardProps) {
   const tapped = onPress !== undefined || cover !== undefined;
   const trailing = check ?? menu;
+  // The cover button is named by what the card shows (title, unread, preview)
+  // unless the caller gives its own aria-label; no copied text.
+  const id = useId();
+  const titleId = `${id}t`;
+  const unreadId = `${id}u`;
+  const previewId = `${id}p`;
+  const labelledBy =
+    press !== undefined && 'aria-label' in press && press['aria-label'] !== undefined
+      ? undefined
+      : [titleId, unread ? unreadId : null, previewId].filter(Boolean).join(' ');
   return (
     <Root
       {...surface}
@@ -232,6 +255,7 @@ export function ListCard({
     >
       {onPress !== undefined ? (
         <button
+          {...(labelledBy !== undefined ? { 'aria-labelledby': labelledBy } : {})}
           {...press}
           ref={pressRef}
           type="button"
@@ -248,13 +272,19 @@ export function ListCard({
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div data-list-card-line="1" className={LIST_CARD_LINE1}>
             <span
+              id={titleId}
               data-list-card-title=""
-              className={textRole('heading', 'min-w-0 flex-1 truncate')}
+              {...(tapped && !disabled ? { onClick: clickCover } : {})}
+              className={textRole(
+                'heading',
+                cn('min-w-0 flex-1 truncate', tapped && !disabled && 'pointer-events-auto'),
+              )}
             >
               {title}
             </span>
             {unread ? (
               <span
+                id={unreadId}
                 data-list-card-unread=""
                 role="img"
                 aria-label="Unread"
@@ -262,7 +292,12 @@ export function ListCard({
               />
             ) : null}
           </div>
-          <span data-list-card-preview="" {...previewHooks} className={LIST_CARD_PREVIEW}>
+          <span
+            id={previewId}
+            data-list-card-preview=""
+            {...previewHooks}
+            className={LIST_CARD_PREVIEW}
+          >
             {preview}
           </span>
           <div data-list-card-line="3" className={LIST_CARD_LINE3}>

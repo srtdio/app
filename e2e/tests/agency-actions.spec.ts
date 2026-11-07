@@ -118,12 +118,11 @@ test('Activity: "<Name> approved" under the title, no brand suffix, never KEY-N'
   );
   await page.goto('/notifications');
 
-  // The title shows once, in the card header; the line keeps the stage change only.
-  await expect(page.getByText('Leo Martins approved', { exact: true })).toBeVisible({
-    timeout: 15_000,
-  });
+  // ListCard: the actor starts the title and the title names the post once.
+  await expect(page.getByText('Leo Martins approved Monday carousel', { exact: true })).toBeVisible(
+    { timeout: 15_000 },
+  );
   await expect(page.getByText(/on behalf of/)).toHaveCount(0);
-  await expect(page.getByText('Monday carousel', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('HS-101', { exact: false })).toHaveCount(0);
   await expect(page.getByText('Leo Martins deleted 3 files', { exact: true })).toBeVisible();
   await expect(page.getByText('Moved to', { exact: false })).toHaveCount(0);

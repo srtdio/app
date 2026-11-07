@@ -235,3 +235,32 @@ describe('ListCardBox', () => {
     expect(html).toContain('min-h-9');
   });
 });
+
+describe('ListCard tap target', () => {
+  it('the cover button is named by the title, unread dot and preview (no copied text)', () => {
+    const html = render({ onPress: () => {}, unread: true });
+    const button = /<button[^>]*data-list-card-press=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(button).not.toContain('aria-label=');
+    const ids = /aria-labelledby="([^"]+)"/.exec(button)?.[1]?.split(' ') ?? [];
+    expect(ids).toHaveLength(3);
+    expect(html).toContain(`id="${ids[0]}" data-list-card-title=""`);
+    expect(html).toContain(`id="${ids[1]}" data-list-card-unread=""`);
+    expect(html).toContain(`id="${ids[2]}" data-list-card-preview=""`);
+  });
+
+  it("a caller's own aria-label wins over the visible text", () => {
+    const html = render({ onPress: () => {}, press: { 'aria-label': 'Open Spring launch' } });
+    const button = /<button[^>]*data-list-card-press=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(button).toContain('aria-label="Open Spring launch"');
+    expect(button).not.toContain('aria-labelledby');
+  });
+
+  it('the title is a real hit target on a tappable card (it hands the click to the card)', () => {
+    const tappable = render({ onPress: () => {} });
+    expect(tappable).toMatch(
+      /<span[^>]*data-list-card-title=""[^>]*class="[^"]*pointer-events-auto/,
+    );
+    const still = render({});
+    expect(still).not.toMatch(/data-list-card-title=""[^>]*pointer-events-auto/);
+  });
+});
