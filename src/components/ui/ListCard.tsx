@@ -75,7 +75,10 @@ export interface ListCardProps {
    * rule), or a bare IconButton the part pulls by the same rule.
    */
   menu?: ReactNode;
-  /** Select mode: the check sits where the ⋮ sits (the footprint never changes). */
+  /**
+   * Select mode: the check sits where the ⋮ sits (the footprint never changes).
+   * It takes no taps: a tap on it is a tap on the card.
+   */
   check?: ReactNode;
   /** The card opens something: the whole card is one button. */
   onPress?: () => void;
@@ -335,8 +338,12 @@ export function ListCard({
                   // A bare IconButton takes the trailing rule here (TRAILING_PULL);
                   // an ActionMenuTrigger applies it itself. The 44 box keeps its
                   // size without growing the 20 line (CONTROL_IN_LINE).
-                  'pointer-events-auto relative z-raised flex shrink-0',
-                  check === undefined && ['[&>button]:-mr-3', CONTROL_IN_LINE].join(' '),
+                  'relative z-raised flex shrink-0',
+                  // The select check is a mark, not a control: a tap on it falls
+                  // through to the card, which toggles the selection.
+                  check === undefined
+                    ? ['pointer-events-auto [&>button]:-mr-3', CONTROL_IN_LINE].join(' ')
+                    : 'pointer-events-none',
                 )}
               >
                 {trailing}

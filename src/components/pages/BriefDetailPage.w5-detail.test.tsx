@@ -765,7 +765,7 @@ describe('Brief detail polish', () => {
     h.getBrief.mockResolvedValue(detail({ target_date: '2026-08-14' }));
     await mount();
     const line = document.querySelector<HTMLElement>('[data-brief-status-line]');
-    expect(line?.textContent).toBe('Open · Due 14 Aug');
+    expect(line?.textContent).toBe('Open · Due in 13 days');
     expect(line?.querySelector('[data-status-dot="open"]')?.className).toContain('h-2 w-2');
     expect(line?.closest('[data-header-bar]')).not.toBeNull();
     expect(line?.closest('.text-lg')?.className).toContain('font-semibold');
