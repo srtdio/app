@@ -11,9 +11,10 @@
 // Sizes follow the approved prototype: voice 40, photo and album 56, file 44;
 // the button is never under 44x44 (the voice ring sits in a 44px button).
 //
-// It draws on the overlay tokens (a dark disc, light ink, the same values in
-// light and dark), so it reads the same over a photo, on the own bubble's fill
-// and on a peer bubble, in both themes. The button carries data-upload-ring so
+// Over a photo it draws on the overlay tokens (a dark disc, light ink, the same
+// values in light and dark). In the voice play slot the caller hands the
+// bubble's own inks instead (`ink`: a flat disc, a track and the arc and X in
+// the play glyph's ink), with no shadow, so nothing paints past the slot. The button carries data-upload-ring so
 // the own-bubble restyle (MessageThread OWN_BUBBLE_CONTENT) leaves it alone.
 // Motion (docs/motion.md, upload ring): the arc fills at the real progress
 // (mv-fill); on finish the ring scales to 0 (mv-ring-out) and the tile it sits
@@ -62,12 +63,23 @@ const ARC = 0.25;
 /** One grid cell for every layer: they stack without any positioning. */
 const LAYER = '[grid-area:1/1]';
 
+/** The bubble's inks for a ring drawn on a bubble fill (token classes only). */
+export interface UploadRingInk {
+  /** The flat disc behind the ring. */
+  disc: string;
+  /** The ring's track. */
+  track: string;
+  /** The arc and the X. */
+  arc: string;
+}
+
 export function UploadRing({
   progress,
   onCancel,
   className,
   variant,
   hidden = false,
+  ink,
 }: {
   /** Upload progress 0..1; null while unknown (the arc pulses). */
   progress: number | null;
@@ -78,6 +90,8 @@ export function UploadRing({
   variant: UploadRingVariant;
   /** Upload done: scaled to 0 in place (mv-ring-out), not focusable. */
   hidden?: boolean;
+  /** On a bubble fill: its inks in place of the overlay disc and ink. */
+  ink?: UploadRingInk | undefined;
 }): ReactElement {
   const indeterminate = progress === null;
   const size = UPLOAD_RING_SIZES[variant];
@@ -101,7 +115,8 @@ export function UploadRing({
         className={cn(
           // PressableRow (not IconButton): no text-fg-2 for the own bubble's
           // [&_.text-fg-2]:opacity-80 to dim, so the ring keeps its overlay ink.
-          'grid shrink-0 place-items-center text-overlay-fg',
+          'grid shrink-0 place-items-center',
+          ink === undefined ? 'text-overlay-fg' : ink.arc,
           HIT_CLASS[variant],
           hidden && 'pointer-events-none mv-ring-out',
           className,
@@ -110,7 +125,12 @@ export function UploadRing({
         <span
           aria-hidden="true"
           data-upload-disc=""
-          className={cn(LAYER, RING_CLASS[variant], 'rounded-full bg-overlay opacity-60 lit-media')}
+          className={cn(
+            LAYER,
+            RING_CLASS[variant],
+            'rounded-full',
+            ink === undefined ? 'bg-overlay opacity-60 lit-media' : ink.disc,
+          )}
         />
         <ProgressRing
           progress={progress}
@@ -118,8 +138,8 @@ export function UploadRing({
           stroke={STROKE}
           arc={ARC}
           className={cn(LAYER, RING_CLASS[variant], indeterminate && 'mv-spin')}
-          trackClass="text-overlay-dot"
-          arcClass="text-overlay-fg"
+          trackClass={ink === undefined ? 'text-overlay-dot' : ink.track}
+          arcClass={ink === undefined ? 'text-overlay-fg' : ink.arc}
         />
         <IconX size={ICON_SIZE.inline} className={LAYER} />
       </PressableRow>

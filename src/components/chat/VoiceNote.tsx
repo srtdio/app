@@ -29,9 +29,11 @@
 // store so first paint is final.
 //
 // While an own note uploads, the play spot holds the UploadRing (tap X cancels
-// the send) and the wave is a plain flat line of the same length; when the
-// upload finishes, the ring scales to 0 (mv-ring-out) and play and the
-// waveform show in its place at once (never a fade; nothing moves or resizes).
+// the send), drawn in the bubble's own inks and fully inside the 44px slot,
+// and the wave shows the note's real bars at reduced emphasis (opacity .45);
+// when the upload finishes, the ring scales to 0 (mv-ring-out), play shows in
+// its place and the same bars return to full emphasis at once (never a fade;
+// no bar moves or resizes).
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { itemIn } from '@/lib/motion';
@@ -43,7 +45,7 @@ import type {
   ReactNode,
 } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
-import { UploadRing } from '@/components/chat/UploadRing';
+import { UploadRing, type UploadRingInk } from '@/components/chat/UploadRing';
 import { sized, useChatLayout, type ChatSize } from '@/components/chat/chat-type';
 import {
   ICON_SIZE,
@@ -789,6 +791,7 @@ function sideTone(mine: boolean): {
   panel: string;
   panelInk: string;
   pill: string;
+  uploadInk: UploadRingInk;
 } {
   return mine
     ? {
@@ -801,6 +804,11 @@ function sideTone(mine: boolean): {
         panel: 'bg-on-bubble/10',
         panelInk: 'text-on-bubble',
         pill: 'bg-on-bubble/15 text-on-bubble',
+        uploadInk: {
+          disc: 'bg-on-bubble/[.12]',
+          track: 'text-on-bubble/[.45]',
+          arc: 'text-accent-fg',
+        },
       }
     : {
         glyph: 'text-accent',
@@ -812,6 +820,7 @@ function sideTone(mine: boolean): {
         panel: 'bg-panel-3',
         panelInk: 'text-fg',
         pill: 'bg-hover-fill text-accent',
+        uploadInk: { disc: 'bg-panel-3', track: 'text-fg-3', arc: 'text-accent' },
       };
 }
 
@@ -913,7 +922,7 @@ const VOICE_RING_POSITION = 'absolute left-1/2 top-1/2 z-raised -translate-x-1/2
 
 /** An own note's upload: the ring (active) or, once done, play in its place. */
 interface VoiceUpload {
-  /** True while the file still uploads: the X shows, the wave is a flat line. */
+  /** True while the file still uploads: the X shows, the bars at reduced emphasis. */
   active: boolean;
   /** Upload progress 0..1; null while unknown (the ring spins). */
   progress: number | null;
@@ -1365,8 +1374,8 @@ export function VoiceNote({
     </PressableRow>
   );
   // An own note sent this session: the play spot holds the ring while it
-  // uploads (40px, absolutely centred inside the 44px spot, so nothing moves
-  // and nothing leaves the slot), then play.
+  // uploads (40px, absolutely centred inside the 44px spot, in the bubble's
+  // inks with no shadow, so nothing moves and nothing leaves the slot), then play.
   // The slot is the same element with or without an upload, so play never
   // remounts (or loses focus) when the send records and the ring goes.
   const playButton = (
@@ -1381,6 +1390,7 @@ export function VoiceNote({
           onCancel={upload.onCancel}
           hidden={!uploading}
           variant="voice"
+          ink={tone.uploadInk}
           className={VOICE_RING_POSITION}
         />
       ) : null}
@@ -1446,6 +1456,7 @@ export function VoiceNote({
     <div
       data-voice-note=""
       data-voice-side={mine ? 'own' : 'received'}
+      {...(uploading ? { 'data-testid': 'voice-uploading' } : {})}
       className={cn(
         'flex flex-col font-sans',
         bubbleInset ? cn(sized(BUBBLE_INSET, layout), 'pb-1 pr-1.5 pt-1') : 'w-full',
@@ -1474,7 +1485,8 @@ export function VoiceNote({
             data-voice-bars={peaks !== undefined && peaks.length > 0 ? 'peaks' : 'fallback'}
             className={cn(
               'flex h-7 w-full items-center justify-between',
-              uploading && 'invisible opacity-0',
+              // Uploading: the same bars at reduced emphasis; full once sent.
+              uploading && 'opacity-[.45]',
             )}
             aria-hidden="true"
           >
@@ -1490,18 +1502,6 @@ export function VoiceNote({
               />
             ))}
           </div>
-          {upload !== undefined ? (
-            // While uploading: a plain flat line, the wave's full length.
-            <span
-              aria-hidden="true"
-              data-voice-flat={uploading ? 'shown' : 'hidden'}
-              className={cn(
-                'pointer-events-none absolute inset-x-0 top-1/2 -mt-px h-0.5 rounded-full',
-                tone.unplayed,
-                uploading ? 'opacity-100' : 'opacity-0',
-              )}
-            />
-          ) : null}
           <span
             aria-hidden="true"
             data-voice-dot=""
