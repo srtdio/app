@@ -39,12 +39,45 @@ export const DELETED_ON_PURPOSE: Record<string, string> = {
     'Activity avatar stack replaced by the ListCard picture (Avatar lit-avatar).',
 };
 
+/**
+ * Lit-* classes that left a file on purpose while the element they lit is
+ * still drawn by a part the file now uses (a part whose lighting is not one
+ * fixed class, so PART_CARRIERS cannot credit it). Keyed by file, then role:
+ * how many may leave and why. Never larger than the file's real drop.
+ */
+export const MOVED_ONTO_PART: Record<string, Record<string, { count: number; why: string }>> = {};
+
+/**
+ * Parts whose every use paints a lit role. A use at a call site counts as one
+ * occurrence of that role on main and on the branch alike, so a call site that
+ * moves from a hand-built lit-card frame onto the part keeps its count.
+ * Matched as JSX (`<Card ` / `<Card>` / `<Card/>`) or a call (`cardSurface(`).
+ */
+export const PART_CARRIERS: { use: string; roles: string[]; part: string }[] = [
+  { use: '<ListCard', roles: ['lit-card'], part: 'src/components/ui/ListCard.tsx' },
+  { use: '<Card', roles: ['lit-card'], part: 'src/components/ui/Card.tsx' },
+  { use: 'cardSurface(', roles: ['lit-card'], part: 'src/components/ui/Card.tsx' },
+  { use: '<HeaderBar', roles: ['lit-header'], part: 'src/components/ui/HeaderBar.tsx' },
+  { use: '<Tag', roles: ['lit-pill'], part: 'src/components/ui/Tag.tsx' },
+  { use: '<Avatar', roles: ['lit-avatar'], part: 'src/components/ui/Avatar.tsx' },
+  { use: '<Input', roles: ['lit-well', 'lit-focus'], part: 'src/components/ui/Input.tsx' },
+  { use: '<Textarea', roles: ['lit-well', 'lit-focus'], part: 'src/components/ui/Textarea.tsx' },
+  { use: '<Sheet', roles: ['lit-overlay'], part: 'src/components/ui/Sheet.tsx' },
+  {
+    use: '<PressableRow',
+    roles: ['lit-hover', 'lit-focus'],
+    part: 'src/components/ui/PressableRow.tsx',
+  },
+];
+
 export interface Occurrence {
   role: string;
   file: string;
   line: number;
-  /** The whole class token, variants included (focus-visible:lit-focus-inset). */
+  /** The class token, variants included (focus-visible:lit-focus-inset), or the part use (<Card>). */
   token: string;
+  /** 'class' for a literal lit-* class, 'part' for a PART_CARRIERS use. */
+  kind: 'class' | 'part';
 }
 
 export type Counts = Record<string, number>;
@@ -64,6 +97,17 @@ export function isCounted(rel: string): boolean {
 // unlit-x never count), variants such as hover: or focus-visible: allowed.
 const LIT = /(?<![\w-])((?:[\w-]+:)*)(lit-[a-z0-9]+(?:-[a-z0-9]+)*)/g;
 
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const CARRIER_RES = PART_CARRIERS.map((c) => ({
+  ...c,
+  re: c.use.startsWith('<')
+    ? new RegExp(`${escapeRe(c.use)}(?=[\\s>/])`, 'g')
+    : new RegExp(`(?<![\\w.])${escapeRe(c.use)}`, 'g'),
+}));
+
 /**
  * Blank out // and /* *\/ comments (prose that names a class lights nothing),
  * keeping every newline so line numbers hold. Strings and template literals
@@ -72,7 +116,7 @@ const LIT = /(?<![\w-])((?:[\w-]+:)*)(lit-[a-z0-9]+(?:-[a-z0-9]+)*)/g;
 export function stripComments(src: string): string {
   let out = '';
   let i = 0;
-  // Stack of open quotes; '}' marks a ${ } inside a template literal.
+  // Open quotes; '}' is a ${ } inside a template literal, '{' a brace inside it.
   const stack: string[] = [];
   while (i < src.length) {
     const c = src[i]!;
@@ -121,9 +165,17 @@ export function stripComments(src: string): string {
 export function scanSource(file: string, src: string): Occurrence[] {
   const out: Occurrence[] = [];
   const lines = stripComments(src).split('\n');
+  const carriers = CARRIER_RES.filter((c) => c.part !== file);
   for (let i = 0; i < lines.length; i++) {
-    for (const m of lines[i]!.matchAll(LIT)) {
-      out.push({ role: m[2]!, file, line: i + 1, token: `${m[1] ?? ''}${m[2]!}` });
+    const text = lines[i]!;
+    for (const m of text.matchAll(LIT)) {
+      out.push({ role: m[2]!, file, line: i + 1, token: `${m[1] ?? ''}${m[2]!}`, kind: 'class' });
+    }
+    for (const c of carriers) {
+      for (const _m of text.matchAll(c.re)) {
+        const token = c.use.startsWith('<') ? `${c.use}>` : `${c.use})`;
+        for (const role of c.roles) out.push({ role, file, line: i + 1, token, kind: 'part' });
+      }
     }
   }
   return out;
@@ -144,33 +196,65 @@ export function countRoles(occ: Occurrence[]): Counts {
   return counts;
 }
 
+function countBy(occ: Occurrence[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const o of occ) {
+    const k = `${o.file}\u0000${o.role}`;
+    map.set(k, (map.get(k) ?? 0) + 1);
+  }
+  return map;
+}
+
 export interface RoleRow {
   role: string;
   main: number;
   branch: number;
-  /** Count that left with files in DELETED_ON_PURPOSE. */
+  /** How much of the drop the allowlists explain (retired files, moves onto parts). */
   allowed: number;
   ok: boolean;
+}
+
+export interface Allowance {
+  file: string;
+  role: string;
+  count: number;
+  why: string;
 }
 
 export interface Comparison {
   rows: RoleRow[];
   drops: RoleRow[];
-  /** Allowlisted files that are actually gone on the branch. */
-  deleted: string[];
+  /** Every allowed per-file drop that applied, with its reason. */
+  allowances: Allowance[];
 }
 
 export function compareLighting(
   main: FileMap,
   branch: FileMap,
-  allow: Record<string, string> = DELETED_ON_PURPOSE,
+  retired: Record<string, string> = DELETED_ON_PURPOSE,
+  moved: Record<string, Record<string, { count: number; why: string }>> = MOVED_ONTO_PART,
 ): Comparison {
   const mainOcc = scanFiles(main);
+  const branchOcc = scanFiles(branch);
   const mainCounts = countRoles(mainOcc);
-  const branchCounts = countRoles(scanFiles(branch));
-  const deleted = Object.keys(allow).filter((f) => f in main && !(f in branch));
-  const gone = new Set(deleted);
-  const allowedCounts = countRoles(mainOcc.filter((o) => gone.has(o.file)));
+  const branchCounts = countRoles(branchOcc);
+  const mainBy = countBy(mainOcc);
+  const branchBy = countBy(branchOcc);
+  const allowances: Allowance[] = [];
+  for (const [k, before] of mainBy) {
+    const [file, role] = k.split('\u0000') as [string, string];
+    const drop = before - (branchBy.get(k) ?? 0);
+    if (drop <= 0) continue;
+    const why = retired[file];
+    if (why !== undefined) {
+      allowances.push({ file, role, count: drop, why });
+      continue;
+    }
+    const m = moved[file]?.[role];
+    if (m !== undefined) allowances.push({ file, role, count: Math.min(drop, m.count), why: m.why });
+  }
+  const allowedCounts: Counts = {};
+  for (const a of allowances) allowedCounts[a.role] = (allowedCounts[a.role] ?? 0) + a.count;
   const roles = [...new Set([...Object.keys(mainCounts), ...Object.keys(branchCounts)])].sort();
   const rows = roles.map((role) => {
     const m = mainCounts[role] ?? 0;
@@ -178,41 +262,65 @@ export function compareLighting(
     const a = allowedCounts[role] ?? 0;
     return { role, main: m, branch: b, allowed: a, ok: b >= m - a };
   });
-  return { rows, drops: rows.filter((r) => !r.ok), deleted };
+  return { rows, drops: rows.filter((r) => !r.ok), allowances };
 }
 
 export interface Change {
   sign: '+' | '-';
   occ: Occurrence;
-  /** Per-file change in this role's count. */
-  delta: number;
+}
+
+/** Longest common subsequence of two token lists; returns the unmatched indexes of each. */
+function unmatched(a: string[], b: string[]): { a: number[]; b: number[] } {
+  const n = a.length;
+  const m = b.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i]![j] = a[i] === b[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
+    }
+  }
+  const ua: number[] = [];
+  const ub: number[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      i++;
+      j++;
+    } else if (dp[i + 1]![j]! >= dp[i]![j + 1]!) ua.push(i++);
+    else ub.push(j++);
+  }
+  while (i < n) ua.push(i++);
+  while (j < m) ub.push(j++);
+  return { a: ua, b: ub };
 }
 
 /**
- * Every file whose count of a role changed. For a drop, the main occurrences
- * of that role in that file are listed with '-'; for a rise, the branch ones
- * with '+'. A file can drop one role and gain another.
+ * Every lit-* occurrence (and part use) added or removed, file by file: the
+ * file's ordered tokens on main and on the branch, matched by their longest
+ * common run, so an untouched class never shows even when lines moved.
  */
 export function diffOccurrences(main: FileMap, branch: FileMap): Change[] {
-  const byFileRole = (occ: Occurrence[]) => {
+  const byFile = (occ: Occurrence[]) => {
     const map = new Map<string, Occurrence[]>();
     for (const o of occ) {
-      const k = `${o.file}\u0000${o.role}`;
-      const list = map.get(k) ?? [];
+      const list = map.get(o.file) ?? [];
       list.push(o);
-      map.set(k, list);
+      map.set(o.file, list);
     }
     return map;
   };
-  const m = byFileRole(scanFiles(main));
-  const b = byFileRole(scanFiles(branch));
+  const m = byFile(scanFiles(main));
+  const b = byFile(scanFiles(branch));
   const out: Change[] = [];
-  for (const k of [...new Set([...m.keys(), ...b.keys()])].sort()) {
-    const before = m.get(k) ?? [];
-    const after = b.get(k) ?? [];
-    const delta = after.length - before.length;
-    if (delta < 0) for (const occ of before) out.push({ sign: '-', occ, delta });
-    if (delta > 0) for (const occ of after) out.push({ sign: '+', occ, delta });
+  for (const file of [...new Set([...m.keys(), ...b.keys()])].sort()) {
+    const before = m.get(file) ?? [];
+    const after = b.get(file) ?? [];
+    const key = (o: Occurrence) => `${o.role} ${o.token}`;
+    const u = unmatched(before.map(key), after.map(key));
+    for (const i of u.a) out.push({ sign: '-', occ: before[i]! });
+    for (const j of u.b) out.push({ sign: '+', occ: after[j]! });
   }
   return out;
 }
@@ -220,7 +328,7 @@ export function diffOccurrences(main: FileMap, branch: FileMap): Change[] {
 export function formatTable(rows: RoleRow[]): string[] {
   const w = Math.max(4, ...rows.map((r) => r.role.length));
   return rows.map((r) => {
-    const note = r.allowed > 0 ? `  (${r.allowed} from deleted files)` : '';
+    const note = r.allowed > 0 ? `  (${r.allowed} allowed)` : '';
     const flag = r.ok ? '' : '  DROP';
     return `${r.role.padEnd(w)}  ${String(r.main).padStart(4)} -> ${String(r.branch).padStart(4)}${note}${flag}`;
   });
@@ -278,18 +386,15 @@ export function run(argv: string[], opts: RunOptions): number {
 
   log(`Lighting roles, ${BASE_REF} -> working tree:`);
   for (const l of formatTable(cmp.rows)) log(`  ${l}`);
-  if (cmp.deleted.length > 0) {
-    log('\nDeleted on purpose (their lit-* may leave the count):');
-    for (const f of cmp.deleted) log(`  ${f}: ${DELETED_ON_PURPOSE[f]}`);
+  if (cmp.allowances.length > 0) {
+    log('\nAllowed drops (retired files, moves onto a part):');
+    for (const a of cmp.allowances) log(`  ${a.file}  ${a.role} -${a.count}: ${a.why}`);
   }
 
   if (verbose) {
     const changes = diffOccurrences(main, branch);
-    log(changes.length > 0 ? '\nChanged lit-* occurrences (per file and role):' : '\nNo lit-* changes.');
-    for (const c of changes) {
-      const d = c.delta > 0 ? `+${c.delta}` : String(c.delta);
-      log(`  ${c.sign} ${c.occ.file}:${c.occ.line}  ${c.occ.token}  (file ${d})`);
-    }
+    log(changes.length > 0 ? '\nlit-* added (+) and removed (-):' : '\nNo lit-* changes.');
+    for (const c of changes) log(`  ${c.sign} ${c.occ.file}:${c.occ.line}  ${c.occ.token}`);
   }
 
   let code = 0;
@@ -304,7 +409,7 @@ export function run(argv: string[], opts: RunOptions): number {
     for (const r of cmp.drops) {
       error(
         `\nLighting guard: ${r.role} dropped ${r.main} -> ${r.branch}` +
-          (r.allowed > 0 ? ` (only ${r.allowed} came from files deleted on purpose)` : '') +
+          (r.allowed > 0 ? ` (only ${r.allowed} of it is allowed)` : '') +
           '.',
       );
     }

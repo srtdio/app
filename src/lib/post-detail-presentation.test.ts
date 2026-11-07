@@ -23,36 +23,38 @@ describe('formatLabel', () => {
 });
 
 describe('postStatusLine', () => {
+  // Mon 22 Jun 2026, noon UTC: day-level cases sit at noon UTC so the civil
+  // gap is the same in any device zone.
   const now = new Date('2026-06-22T12:00:00Z');
   const updatedAt = '2026-06-22T09:00:00Z'; // 3h before now
   const enteredAt = '2026-06-22T10:00:00Z'; // 2h before now
   const dated = '2025-06-11T12:00:00Z'; // over a year before now
 
-  it('reads draft from updated_at (formatRelative)', () => {
-    expect(postStatusLine('draft', updatedAt, enteredAt, now)).toBe('Updated 3 hours ago');
+  it('reads draft from updated_at (formatAgo)', () => {
+    expect(postStatusLine('draft', updatedAt, enteredAt, now)).toBe('Updated 3h');
     expect(postStatusLine('draft', now.toISOString(), enteredAt, now)).toBe('Updated just now');
-    expect(postStatusLine('draft', '2026-06-21T09:00:00Z', enteredAt, now)).toBe(
-      'Updated 1 day ago',
+    expect(postStatusLine('draft', '2026-06-21T12:00:00Z', enteredAt, now)).toBe(
+      'Updated Yesterday',
     );
   });
-  it('reads review from stage_entered_at (formatRelative)', () => {
-    expect(postStatusLine('review', updatedAt, enteredAt, now)).toBe('In review · 2 hours ago');
+  it('reads review from stage_entered_at (formatAgo)', () => {
+    expect(postStatusLine('review', updatedAt, enteredAt, now)).toBe('In review · 2h');
     expect(postStatusLine('review', updatedAt, '2026-06-18T10:00:00Z', now)).toBe(
-      'In review · 4 days ago',
+      'In review · Thu',
     );
   });
-  it('reads approved as an event, relative', () => {
-    expect(postStatusLine('approved', updatedAt, dated, now)).toBe('Approved 1 year ago');
+  it('reads approved as an event, short', () => {
+    expect(postStatusLine('approved', updatedAt, dated, now)).toBe('Approved 11 Jun 2025');
     expect(postStatusLine('approved', updatedAt, '2026-06-11T12:00:00Z', now)).toBe(
-      'Approved 11 days ago',
+      'Approved 11 Jun',
     );
   });
-  it('reads parked as an event, relative', () => {
-    expect(postStatusLine('parked', updatedAt, dated, now)).toBe('Parked 1 year ago');
+  it('reads parked as an event, short', () => {
+    expect(postStatusLine('parked', updatedAt, dated, now)).toBe('Parked 11 Jun 2025');
   });
-  it('reads rejected as an event, relative', () => {
+  it('reads rejected as an event, short', () => {
     expect(postStatusLine('rejected', updatedAt, '2026-04-01T12:00:00Z', now)).toBe(
-      'Rejected 2 months ago',
+      'Rejected 1 Apr',
     );
   });
 });

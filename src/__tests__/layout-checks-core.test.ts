@@ -164,25 +164,30 @@ describe('tap targets', () => {
     // under that 4. The composer's schedule menu (absolute z-nav) opens
     // over the same list.
     const list = box(240, 148, 1040, 500);
-    const targets: TapTarget[] = [
-      {
-        label: 'status chevron',
-        box: box(1248, 107.5, 16, 44),
-        related: [],
-        scroller: null,
-        liftedOver: [0],
-      },
-      { label: 'post card', box: box(968, 12.5, 288, 448), related: [], scroller: 0, clip: list },
-      {
-        label: 'schedule row',
-        box: box(937, 400, 322, 56),
-        related: [],
-        scroller: null,
-        liftedOver: [0],
-      },
-    ];
-    expect(floatsOver(targets[0]!, targets[1]!)).toBe(true);
-    expect(floatsOver(targets[1]!, targets[0]!)).toBe(false);
+    const chevron: TapTarget = {
+      label: 'status chevron',
+      box: box(1248, 107.5, 16, 44),
+      related: [],
+      scroller: null,
+      liftedOver: [0],
+    };
+    const card: TapTarget = {
+      label: 'post card',
+      box: box(968, 12.5, 288, 448),
+      related: [],
+      scroller: 0,
+      clip: list,
+    };
+    const row: TapTarget = {
+      label: 'schedule row',
+      box: box(937, 400, 322, 56),
+      related: [],
+      scroller: null,
+      liftedOver: [0],
+    };
+    const targets = [chevron, card, row];
+    expect(floatsOver(chevron, card)).toBe(true);
+    expect(floatsOver(card, chevron)).toBe(false);
     expect(overlappingPairs(targets)).toEqual([]);
     // Without the lift (an in-flow control overhanging the list) it is a fault.
     const flat = targets.map((t) => ({ ...t, liftedOver: [] }));
@@ -199,7 +204,7 @@ describe('tap targets', () => {
       { label: 'row ⋮', box: box(300, 200, 44, 44), related: [], scroller: 0, liftedOver: [1] },
       { label: 'next row', box: box(0, 220, 400, 60), related: [], scroller: 0, clip: list },
       // A lifted bar over another scroller (1) does not float over list 0.
-      { label: 'bar btn', box: box(0, 150, 44, 44), related: [], scroller: null, liftedOver: [1] },
+      { label: 'bar btn', box: box(0, 200, 44, 44), related: [], scroller: null, liftedOver: [1] },
     ];
     expect(overlappingPairs(targets)).toEqual([
       [0, 1],
