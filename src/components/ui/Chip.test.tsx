@@ -93,8 +93,10 @@ describe('Chip 32 visible, 44 tap box', () => {
     for (const size of ['sm', 'tap'] as const) {
       const html = renderToStaticMarkup(<Chip label="Open" size={size} selected={false} />);
       const button = /<button[^>]*>/.exec(html)?.[0] ?? '';
-      expect(button).toContain('min-h-11');
-      expect(button).not.toMatch(/\b(bg-|lit-well|lit-pill|lit-hover|border|rounded|px-)/);
+      expect(button).toContain('min-h-11 min-w-11');
+      // The box keeps the button system's 8px radius but draws nothing.
+      expect(button).toContain('rounded-lg');
+      expect(button).not.toMatch(/\b(bg-|lit-well|lit-pill|lit-hover|border|px-)/);
       expect(button).toContain('[&amp;:focus-visible&gt;span]:lit-focus');
       const face = /<span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
       expect(face).toContain('min-h-8 px-3');

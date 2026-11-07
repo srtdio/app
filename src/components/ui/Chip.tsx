@@ -58,11 +58,12 @@ const sizes: Record<NonNullable<ChipProps['size']>, string> = {
 
 /**
  * The 44 tap box around the 32 chip: no look of its own (transparent, no
- * padding), so a chip row keeps its 44 height. Its focus line is drawn on the
- * visible chip, the box's one child span.
+ * padding), so a chip row keeps its 44 height. At least 44 wide too (a short
+ * label like "All" stretches the face to 44), radius 8 like every button. Its
+ * focus line is drawn on the visible chip, the box's one child span.
  */
 export const CHIP_HIT =
-  'group relative inline-flex min-h-11 items-center outline-none [&:focus-visible>span]:lit-focus disabled:pointer-events-none disabled:cursor-default';
+  'group relative inline-flex min-h-11 min-w-11 items-center rounded-lg outline-none [&:focus-visible>span]:lit-focus disabled:pointer-events-none disabled:cursor-default';
 
 /** A call site's layout classes that also apply to the tap box (it sits in their row). */
 const LAYOUT = /^(flex|shrink|grow|basis-|self-|order-|w-|min-w-|max-w-)/;
