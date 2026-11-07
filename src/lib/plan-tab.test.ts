@@ -13,7 +13,7 @@ import {
   plansInToneOrder,
   visiblePlanChips,
   planWeekChipLabel,
-  planWeekChipRange,
+  planChipHolds,
   PLAN_WEEK_CHIPS,
   PLAN_WEEK_CHIP_DEFAULT,
   postStageLine,
@@ -192,7 +192,7 @@ describe('the list (phone and laptop)', () => {
     );
     expect(sections.map((s) => [s.label, s.bundles.map((b) => b.plan.id)])).toEqual([
       ['This week', ['this1', 'this2']],
-      ['Upcoming', ['later']],
+      ['Later', ['later']],
       ['Past', ['old2', 'old1']],
     ]);
   });
@@ -263,49 +263,38 @@ describe('zero state', () => {
   });
 });
 
-describe('phone week chips', () => {
-  it('reads the chips in order, This week by default', () => {
-    expect(PLAN_WEEK_CHIPS.map(planWeekChipLabel)).toEqual([
-      'Bank',
-      'This week',
-      'Next week',
-      'Upcoming',
-      'Past',
-      'All',
-    ]);
-    expect(PLAN_WEEK_CHIP_DEFAULT).toBe('this');
+describe('Plan chips (decision D)', () => {
+  it('reads Bank, Upcoming, Past in that order, Upcoming by default', () => {
+    expect([...PLAN_WEEK_CHIPS]).toEqual(['bank', 'upcoming', 'past']);
+    expect(PLAN_WEEK_CHIPS.map(planWeekChipLabel)).toEqual(['Bank', 'Upcoming', 'Past']);
+    expect(PLAN_WEEK_CHIP_DEFAULT).toBe('upcoming');
   });
 
-  it('parses only the chips it knows', () => {
-    expect(parsePlanWeekChip('next')).toBe('next');
-    expect(parsePlanWeekChip('all')).toBe('all');
+  it('parses its own chips and maps the retired ones: this, next, later, all to Upcoming; earlier to Past', () => {
     expect(parsePlanWeekChip('bank')).toBe('bank');
+    expect(parsePlanWeekChip('upcoming')).toBe('upcoming');
+    expect(parsePlanWeekChip('past')).toBe('past');
+    for (const old of ['this', 'next', 'later', 'all']) {
+      expect(parsePlanWeekChip(old)).toBe('upcoming');
+    }
+    expect(parsePlanWeekChip('earlier')).toBe('past');
     expect(parsePlanWeekChip('soon')).toBeNull();
+    expect(parsePlanWeekChip('')).toBeNull();
     expect(parsePlanWeekChip(null)).toBeNull();
   });
 
-  it('hides Bank unless the viewer may see it', () => {
-    expect(visiblePlanChips(false)).not.toContain('bank');
-    expect(visiblePlanChips(true)[0]).toBe('bank');
+  it('hides Bank unless the viewer may see it; the order stays', () => {
+    expect(visiblePlanChips(false)).toEqual(['upcoming', 'past']);
+    expect(visiblePlanChips(true)).toEqual(['bank', 'upcoming', 'past']);
   });
 
-  it('reads one Mon to Sun week for This week and Next week, every plan for the rest', () => {
-    // Thursday 5 Nov 2026.
-    expect(planWeekChipRange('this', '2026-11-05')).toEqual({
-      start: '2026-11-02',
-      end: '2026-11-08',
-    });
-    expect(planWeekChipRange('next', '2026-11-05')).toEqual({
-      start: '2026-11-09',
-      end: '2026-11-15',
-    });
-    // A Sunday stays in its own week.
-    expect(planWeekChipRange('this', '2026-11-08')).toEqual({
-      start: '2026-11-02',
-      end: '2026-11-08',
-    });
-    expect(planWeekChipRange('all', '2026-11-05')).toBeNull();
-    expect(planWeekChipRange('later', '2026-11-05')).toBeNull();
-    expect(planWeekChipRange('earlier', '2026-11-05')).toBeNull();
+  it('Upcoming holds This week, Next week and Later; Past holds the rest; Bank holds no plan', () => {
+    expect(planChipHolds('upcoming', 'this')).toBe(true);
+    expect(planChipHolds('upcoming', 'next')).toBe(true);
+    expect(planChipHolds('upcoming', 'later')).toBe(true);
+    expect(planChipHolds('upcoming', 'earlier')).toBe(false);
+    expect(planChipHolds('past', 'earlier')).toBe(true);
+    expect(planChipHolds('past', 'this')).toBe(false);
+    expect(planChipHolds('bank', 'this')).toBe(false);
   });
 });

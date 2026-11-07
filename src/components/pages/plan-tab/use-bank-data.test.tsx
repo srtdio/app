@@ -143,7 +143,6 @@ describe('kept paint', () => {
         userId: 'me',
         enabled: true,
         filter: BANK_FILTER_DEFAULT,
-        searchText: '',
       });
       frames.push(data.load.status);
       return null;
@@ -151,6 +150,29 @@ describe('kept paint', () => {
     const root = createRoot(document.createElement('div'));
     act(() => root.render(<Probe />));
     expect(frames[0]).toBe('ready');
+    act(() => root.unmount());
+  });
+
+  it('the shown ideas are the kept page; the Bank has no search of its own', () => {
+    resetSessionReads();
+    const key = bankKeyOf('me', 'ws', BANK_FILTER_DEFAULT);
+    const page: BankPage = { ideas: [idea('kept')], nextCursor: null };
+    primeRead<Result<BankPage>>(key, { ok: true, data: page }, Number.POSITIVE_INFINITY);
+    let seen: BankData | null = null;
+    function Probe(): null {
+      seen = useBankData({
+        workspaceId: 'ws',
+        userId: 'me',
+        enabled: true,
+        filter: BANK_FILTER_DEFAULT,
+      });
+      return null;
+    }
+    const root = createRoot(document.createElement('div'));
+    act(() => root.render(<Probe />));
+    const data = seen as BankData | null;
+    expect(data?.ideas?.map((i) => i.id)).toEqual(['kept']);
+    expect(data !== null && 'search' in data).toBe(false);
     act(() => root.unmount());
   });
 });

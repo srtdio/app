@@ -7,7 +7,7 @@ import {
 } from '@/components/pages/activity/ActivityFilterBar';
 
 describe('ActivityFilterBar', () => {
-  it('shows exactly All, Unread, Mentions, Briefs, Plans in that order (no Snoozed)', () => {
+  it('shows exactly All, Unread, Mentions in that order (no Snoozed, Briefs or Plans)', () => {
     const html = renderToStaticMarkup(
       <ActivityFilterBar
         state="all"
@@ -19,8 +19,10 @@ describe('ActivityFilterBar', () => {
     const labels = [...html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((m) =>
       (m[1] ?? '').replace(/<[^>]+>/g, '').trim(),
     );
-    expect(labels).toEqual(['All', 'Unread', 'Mentions', 'Briefs', 'Plans']);
+    expect(labels).toEqual(['All', 'Unread', 'Mentions']);
     expect(html).not.toContain('Snoozed');
+    expect(html).not.toContain('Briefs');
+    expect(html).not.toContain('Plans');
   });
 
   it('the Unread and Mentions chips keep their counts', () => {
@@ -43,10 +45,14 @@ describe('ActivityFilterBar', () => {
     expect(labels[0]).toBe('All');
   });
 
-  it('a chip kept from before Snoozed was retired reads as All', () => {
+  it('a chip kept from before a chip was retired (Snoozed, Briefs, Plans) reads as All', () => {
     expect(activityChip('snoozed')).toBe('all');
+    expect(activityChip('briefs')).toBe('all');
+    expect(activityChip('plans')).toBe('all');
+    expect(activityChip('nonsense')).toBe('all');
+    expect(activityChip('all')).toBe('all');
     expect(activityChip('unread')).toBe('unread');
-    expect(activityChip('plans')).toBe('plans');
+    expect(activityChip('mentions')).toBe('mentions');
   });
 
   it('fix 3: fades only while chips remain to the right (2px slack)', () => {

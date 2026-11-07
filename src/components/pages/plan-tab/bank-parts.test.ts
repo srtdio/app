@@ -141,14 +141,12 @@ describe('the applied filter line', () => {
 
 describe('copy', () => {
   it('words the zero states', () => {
-    expect(bankZeroCopy(BANK_FILTER_DEFAULT, false)).toBe('Ideas show up here.');
-    expect(bankZeroCopy({ ...BANK_FILTER_DEFAULT, archived: true }, false)).toBe(
+    expect(bankZeroCopy(BANK_FILTER_DEFAULT)).toBe('Ideas show up here.');
+    expect(bankZeroCopy({ ...BANK_FILTER_DEFAULT, archived: true })).toBe(
       'Archived ideas show up here.',
     );
-    expect(bankZeroCopy(BANK_FILTER_DEFAULT, true)).toBe('Try another search or bucket.');
-    expect(bankZeroCopy({ ...BANK_FILTER_DEFAULT, bucketId: 'b' }, false)).toBe(
-      'Try another search or bucket.',
-    );
+    expect(bankZeroCopy({ ...BANK_FILTER_DEFAULT, bucketId: 'b' })).toBe('Try another bucket.');
+    expect(bankZeroCopy({ ...BANK_FILTER_DEFAULT, review: true })).toBe('Try another bucket.');
   });
 
   it('words cards: the first bucket is the one tag; +N on the pick sheet tile', () => {

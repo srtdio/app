@@ -241,10 +241,11 @@ describe('ui rules: one undo window', () => {
 });
 
 describe('ui rules: one New button', () => {
-  // Every Button whose label starts with "New " carries IconPlus before it.
+  // Every Button whose label starts with "New " carries IconPlus before it. The
+  // create actions are the icon-only top bar "+" (TopbarPlus, decision A 7 Nov),
+  // which must draw IconPlus itself.
   it('every <Button> labelled "New ..." includes IconPlus', () => {
     const offenders: string[] = [];
-    let seen = 0;
     for (const { rel, src } of FILES) {
       for (const start of indexesOf(src, /<Button\b/)) {
         const el = element(src, start, 'Button');
@@ -258,11 +259,13 @@ describe('ui rules: one New button', () => {
           .replace(/\s+/g, ' ')
           .trim();
         if (!text.startsWith('New ')) continue;
-        seen += 1;
         if (!/<IconPlus\b/.test(inner)) offenders.push(`${rel}:${lineOf(src, start)}`);
       }
     }
-    expect(seen).toBeGreaterThan(0);
+    const topbar = FILES.find((f) => f.rel.endsWith('shell/topbar-actions.tsx'));
+    expect(topbar).toBeDefined();
+    const plus = topbar!.src.slice(topbar!.src.indexOf('export function TopbarPlus'));
+    expect(plus).toMatch(/<IconPlus\b/);
     expect(offenders).toEqual([]);
   });
 });

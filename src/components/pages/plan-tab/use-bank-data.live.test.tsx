@@ -88,7 +88,6 @@ function Probe(props: { live: boolean }): null {
     userId: 'me',
     enabled: true,
     filter: BANK_FILTER_DEFAULT,
-    searchText: '',
     live: props.live,
   });
   return null;

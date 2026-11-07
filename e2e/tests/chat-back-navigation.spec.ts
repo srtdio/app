@@ -27,7 +27,8 @@ function expectClean(network: HarnessNetwork, allowed: readonly string[] = []): 
 
 /** The chat list is on screen (chat home), no thread. */
 async function expectList(page: Page): Promise<void> {
-  await expect(page.getByRole('searchbox', { name: 'Search chats' })).toBeVisible();
+  // The chat home's chip row (search lives only in the top bar's palette).
+  await expect(page.locator('[data-chip-row]').first()).toBeVisible();
   await expect(page.locator('[data-msg-id]')).toHaveCount(0);
 }
 
@@ -126,8 +127,8 @@ function typeOf(locator: Locator) {
 // Type roles on Pipeline (design rules, locked 24 Oct 2026). Pipeline has no
 // page title or PageHead: its screen header is the Filter and sort sheet title
 // (15px/600), the sheet's Due date label is a section label (12px/600,
-// uppercase), a list card title is 15px/600 (heading) and the search field renders 16px on
-// the phone (iOS zoom).
+// uppercase) and a list card title is 15px/600 (heading). Pipeline has no
+// search field of its own (search is the top bar's palette).
 test(
   'Pipeline type roles: sheet header 15px, section label 12px uppercase, card title 15px',
   { tag: '@theme' },
@@ -142,7 +143,7 @@ test(
     expect(cardType.size).toBe('15px');
     expect(cardType.weight).toBe('600');
 
-    expect((await typeOf(page.getByPlaceholder('Search posts'))).size).toBe('16px');
+    await expect(page.locator('input[type="search"]')).toHaveCount(0);
 
     await page.locator('[data-filter-control]').click();
     const sheet = page.getByRole('dialog', { name: 'Filter and sort' });

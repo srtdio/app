@@ -13,13 +13,13 @@ import {
 import { expectAllVisibleControlsTouchSized, expectMinTouchTarget } from '../helpers/touch-target';
 
 // The Plan tab (/plan), phone and laptop alike (the laptop Month | Week
-// calendar retired 7 Nov 2026): the chips (Bank, This week, Next week,
-// Upcoming, Past, All) over one ui/ListCard per plan in the list grid (one
+// calendar retired 7 Nov 2026): the chips (Bank, Upcoming, Past; decision D,
+// 7 Nov 2026) over one ui/ListCard per plan in the list grid (one
 // column on a phone, auto-fill columns on a laptop). A card: the plan's first
 // cover (else the plan icon), its title, its dates and post count, then when
 // it starts and one tag ("N of M OK", or "Draft"). A tap opens the plan's own
-// screen. Load more ends the list while more plans remain. An approver sees
-// shared plans only and no New plan. Screenshots in light and dark (the light
+// screen. Load more ends the list while more plans remain. New plan is the
+// top bar's "+"; an approver sees shared plans only and no "+". Screenshots in light and dark (the light
 // ones run @theme). The fixture clock is the real one: the plans sit on this
 // week and next (UTC, the workspace zone).
 
@@ -68,17 +68,23 @@ test('the Plan tab lists plans as ListCards in sections and a tap opens the plan
   seedPlanTab(network.world, { sender: ME });
   await openTab(page);
 
-  // The tab opens on the This week chip (both widths): its plans, no group
-  // heading (the chip names it); no calendar, legend or Month | Week.
-  await expect(page.locator('[data-plan-tab-when="this"]')).toHaveAttribute('aria-pressed', 'true');
+  // The tab opens on the Upcoming chip (both widths): This week, Next week
+  // and Later, each under its heading; no calendar, legend or Month | Week.
+  // The retired chips are gone (This week, Next week, All).
+  await expect(page.locator('[data-plan-tab-when="upcoming"]')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(
+    page.locator(
+      '[data-plan-tab-when="this"], [data-plan-tab-when="next"], [data-plan-tab-when="all"]',
+    ),
+  ).toHaveCount(0);
   await expect(page.locator('[data-plan-tab-month], [data-plan-tab-week]')).toHaveCount(0);
   await expect(page.locator('[data-plan-tab-view], [data-plan-tab-legend]')).toHaveCount(0);
   const list = page.locator('[data-plan-tab-list]');
   const thisWeek = list.locator('[data-plan-tab-section="this"]');
-  await expect(thisWeek.locator('h2')).toHaveCount(0);
-  // All shows every group with its heading.
-  await page.locator('[data-plan-tab-when="all"]').click();
-  await expect(thisWeek).toContainText('This week');
+  await expect(thisWeek.locator('h2')).toHaveText('This week');
 
   // One ListCard per plan: title, dates and count, when it starts, one tag.
   const shared = thisWeek.locator(`[data-plan-tab-card="${TAB_SHARED_PLAN_ID}"]`);
@@ -108,9 +114,10 @@ test('the Plan tab lists plans as ListCards in sections and a tap opens the plan
     if (a === null || b === null) throw new Error('card boxes');
     expect(Math.abs(a.y - b.y)).toBeLessThanOrEqual(1);
   }
-  const add = page.locator('[data-plan-tab-new]');
-  await expect(add).toHaveText('New plan');
-  expectMinTouchTarget(await add.boundingBox(), { dimension: 'height' });
+  // New plan is the top bar's filled "+" (icon only, named New plan).
+  const add = page.locator('[data-topbar-slot="primary"] [data-topbar-plus]');
+  await expect(add).toHaveAccessibleName('New plan');
+  expectMinTouchTarget(await add.boundingBox());
 
   await shootBoth(page, 'plan-tab-list', async () => {
     await expect(page.locator('[data-plan-tab-list]')).toBeVisible({ timeout: 15_000 });
@@ -142,19 +149,20 @@ test('Load more ends the list while older plans remain, then appends them @deskt
   });
   (network.world.tables.plans ??= []).push(...older);
   await openTab(page);
-  // This week reads its own week; every plan is read once behind it, so All
-  // paints from that read with no request of its own.
-  await page.locator('[data-plan-tab-when="all"]').click();
+  // Every chip reads every plan, a page at a time: Past paints from the one
+  // read Upcoming made, with no request of its own. The first page holds this
+  // week's two (Upcoming) and the 10 newest older ones (Past).
+  await page.locator('[data-plan-tab-when="past"]').click();
+  await expect(page.locator('[data-plan-tab-when="past"]')).toHaveAttribute('aria-pressed', 'true');
 
   const list = page.locator('[data-plan-tab-list]');
   const more = list.locator('[data-plan-tab-load-more]');
-  await expect(list.locator('[data-plan-tab-card]')).toHaveCount(12);
+  await expect(list.locator('[data-plan-tab-card]')).toHaveCount(10);
   await expect(more).toHaveText('Load more');
   expectMinTouchTarget(await more.boundingBox());
-  const allReads = network.rpcCalls.filter(
-    (c) => c.name === 'plan_bundle_read' && c.args.p_range_start === undefined,
-  );
+  const allReads = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read');
   expect(allReads).toHaveLength(1);
+  expect(allReads[0]?.args.p_range_start).toBeUndefined();
   expect(allReads[0]?.args.p_before_starts_on).toBeUndefined();
 
   await shootBoth(page, 'plan-tab-load-more', async () => {
@@ -163,7 +171,7 @@ test('Load more ends the list while older plans remain, then appends them @deskt
 
   const before = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read').length;
   await more.click();
-  await expect(list.locator('[data-plan-tab-card]')).toHaveCount(16);
+  await expect(list.locator('[data-plan-tab-card]')).toHaveCount(14);
   // The last page: the control is gone.
   await expect(more).toHaveCount(0);
   const calls = network.rpcCalls.filter((c) => c.name === 'plan_bundle_read');
@@ -173,11 +181,11 @@ test('Load more ends the list while older plans remain, then appends them @deskt
   // two, then the 10 newest older ones).
   expect(page2?.p_before_starts_on).toBe(civilPlus(MONDAY, -7 * 10));
   expect(page2?.p_before_id).toBe(older[9]?.id);
-  // Every plan once (no duplicates by id).
+  // Every past plan once (no duplicates by id).
   const ids = await list
     .locator('[data-plan-tab-card]')
     .evaluateAll((els) => els.map((el) => el.getAttribute('data-plan-tab-card')));
-  expect(new Set(ids).size).toBe(16);
+  expect(new Set(ids).size).toBe(14);
   expectClean(network);
 });
 
@@ -192,13 +200,14 @@ test('the Plan tab: every visible button is at least a 44x44 touch target @deskt
   expectClean(network);
 });
 
-test('an approver sees shared plans only and no New plan @desktop', async ({ page }) => {
+test('an approver sees shared plans only and no New plan "+" @desktop', async ({ page }) => {
   const network = await installHarnessNetwork(page);
   seedPlanTab(network.world, { sender: PEER });
   viewAsClient(network);
   await openTab(page);
   await expect(page.locator(`[data-plan-tab-card="${TAB_SHARED_PLAN_ID}"]`)).toBeVisible();
   await expect(page.locator(`[data-plan-tab-card="${TAB_DRAFT_PLAN_ID}"]`)).toHaveCount(0);
-  await expect(page.locator('[data-plan-tab-new]')).toHaveCount(0);
+  await expect(page.locator('[data-topbar-plus]')).toHaveCount(0);
+  await expect(page.locator('[data-topbar-slot="primary"]')).toBeVisible();
   expectClean(network);
 });

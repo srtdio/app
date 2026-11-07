@@ -112,10 +112,19 @@ test(
     await expect(card(page, 'mention')).toContainText(MENTION_PREVIEW);
     await expect(card(page, 'plan_opened')).toBeVisible();
 
-    // The chips (their order is a unit check): the counted ones carry their counts.
-    for (const name of ['All', 'Unread 2', 'Mentions 1', 'Briefs', 'Plans']) {
-      await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+    // The chips (their order is a unit check): All, Unread, Mentions, the
+    // counted ones carrying their counts. Briefs and Plans are gone.
+    const chipRow = page.locator('[data-activity-chips]');
+    for (const name of ['All', 'Unread 2', 'Mentions 1']) {
+      await expect(chipRow.getByRole('button', { name, exact: true })).toBeVisible();
     }
+    for (const name of ['Briefs', 'Plans']) {
+      await expect(chipRow.getByRole('button', { name, exact: true })).toHaveCount(0);
+    }
+    // Mark all read is the top bar's primary (2 unread on All).
+    await expect(
+      page.locator('[data-topbar-slot="primary"] [data-activity-mark-all]'),
+    ).toBeVisible();
     // Snooze is gone: no Snoozed chip.
     await expect(page.getByRole('button', { name: /^Snoozed/ })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Upcoming', exact: true })).toHaveCount(0);
@@ -125,15 +134,11 @@ test(
     await expect(card(page, 'mention')).toContainText(`${PEER_NAME} mentioned you`);
     await expect(card(page, 'plan_opened')).toHaveCount(0);
 
-    // Plans: the plan alert, in the bell's words.
-    await page.getByRole('button', { name: 'Plans', exact: true }).click();
+    // All: the plan alert, in the bell's words.
+    await page.getByRole('button', { name: 'All', exact: true }).click();
     await expect(card(page, 'plan_opened')).toContainText(
       `${PEER_NAME} opened ${PLAN_ALERT_TITLE} for approvers`,
     );
-    await expect(card(page, 'mention')).toHaveCount(0);
-
-    await page.getByRole('button', { name: 'All', exact: true }).click();
-    await expect(card(page, 'plan_opened')).toBeVisible();
     const scheme = testInfo.project.use.colorScheme ?? 'dark';
     await page.screenshot({ path: testInfo.outputPath(`notifications-${scheme}.png`) });
     expectClean(network);
@@ -193,7 +198,7 @@ function seedTiles(world: ChatWorld): void {
   );
 }
 
-test('fix 3: at 390px the chip row ends with a full gutter after Plans and no fade', async ({
+test('fix 3: at 390px the chip row ends with a full gutter after Mentions and no fade', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -219,11 +224,11 @@ test('fix 3: at 390px the chip row ends with a full gutter after Plans and no fa
     })
     .toBe('none');
 
-  // Plans is the last chip (Snoozed is gone).
-  const last = row.getByRole('button', { name: 'Plans', exact: true });
+  // Mentions is the last chip (Snoozed, Briefs and Plans are gone).
+  const last = row.getByRole('button', { name: /^Mentions\b/ });
   await expect(last).toBeVisible();
   const box = await last.boundingBox();
-  if (box === null) throw new Error('Plans chip has no box');
+  if (box === null) throw new Error('Mentions chip has no box');
   // The trailing spacer plus the chip gap: a 16px right gutter, like the left one.
   expect(Math.floor(box.x + box.width)).toBeLessThanOrEqual(390 - 16);
   expectClean(network);
@@ -328,14 +333,19 @@ test(
     }
     await expect(tab).toBeVisible({ timeout: 15_000 });
     await expect(header).toBeHidden();
-    // Search sits directly left of the avatar once Activity is out of the top bar.
+    // Search | sort | "+" | avatar, packed once Activity is out of the top bar.
     const search = await page
       .locator('header')
       .getByRole('button', { name: 'Search' })
       .boundingBox();
+    const sort = await page.locator('[data-topbar-slot="sort"]').boundingBox();
+    const primary = await page.locator('[data-topbar-slot="primary"]').boundingBox();
     const avatar = await page.getByRole('button', { name: 'Account menu' }).boundingBox();
-    if (search === null || avatar === null) throw new Error('top bar not laid out');
-    expect(avatar.x - (search.x + search.width)).toBeLessThanOrEqual(8);
+    if (search === null || sort === null || primary === null || avatar === null) {
+      throw new Error('top bar not laid out');
+    }
+    expect(sort.x - (search.x + search.width)).toBeLessThanOrEqual(8);
+    expect(avatar.x - (primary.x + primary.width)).toBeLessThanOrEqual(8);
 
     // The row floats 12px from both sides and the bottom (no home indicator inset here).
     const row = await page.locator('nav[data-undo-anchor]').boundingBox();

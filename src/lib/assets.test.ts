@@ -25,9 +25,10 @@ import {
   getAssetItem,
   mergeAssetPages,
   mimeBadge,
-  parseAssetTab,
   removeAssetsById,
   renameAssetInList,
+  sanitizeAssetTab,
+  sanitizeAssetTabCounts,
   shapeAssets,
   sortAssets,
   toAssetKind,
@@ -96,15 +97,16 @@ describe('kind to tab mapping', () => {
     expect(Object.keys(KIND_TAB).sort()).toEqual([...ASSET_KINDS].sort());
   });
 
-  it('groups kinds as Media, PDF, Docs, Sheets and Links', () => {
+  it('groups kinds as Media, Docs (PDF, documents, slides, sheets) and Links', () => {
+    expect(ASSET_TABS).toEqual(['all', 'media', 'docs', 'links']);
     expect(KIND_TAB).toEqual({
       image: 'media',
       video: 'media',
       audio: 'media',
-      pdf: 'pdf',
+      pdf: 'docs',
       document: 'docs',
       presentation: 'docs',
-      spreadsheet: 'sheets',
+      spreadsheet: 'docs',
       link: 'links',
     });
   });
@@ -118,13 +120,50 @@ describe('kind to tab mapping', () => {
   });
 });
 
-describe('parseAssetTab (?type=)', () => {
-  it('round-trips every tab and sends anything else to All', () => {
-    for (const tab of ASSET_TABS) expect(parseAssetTab(tab)).toBe(tab);
-    expect(parseAssetTab(null)).toBe('all');
-    expect(parseAssetTab('')).toBe('all');
-    expect(parseAssetTab('images')).toBe('all');
-    expect(parseAssetTab('PDF')).toBe('all');
+describe('sanitizeAssetTab (?type= and the kept tab)', () => {
+  it('round-trips every tab', () => {
+    for (const tab of ASSET_TABS) expect(sanitizeAssetTab(tab)).toBe(tab);
+  });
+
+  it('maps the old pdf, docs and sheets tabs to Docs', () => {
+    expect(sanitizeAssetTab('pdf')).toBe('docs');
+    expect(sanitizeAssetTab('docs')).toBe('docs');
+    expect(sanitizeAssetTab('sheets')).toBe('docs');
+  });
+
+  it('sends anything else (missing, unknown, wrong case, not a string) to All', () => {
+    expect(sanitizeAssetTab(null)).toBe('all');
+    expect(sanitizeAssetTab(undefined)).toBe('all');
+    expect(sanitizeAssetTab('')).toBe('all');
+    expect(sanitizeAssetTab('images')).toBe('all');
+    expect(sanitizeAssetTab('PDF')).toBe('all');
+    expect(sanitizeAssetTab(3)).toBe('all');
+  });
+});
+
+describe('sanitizeAssetTabCounts (kept totals)', () => {
+  it('sums an old total: Docs = pdf + docs + sheets', () => {
+    expect(
+      sanitizeAssetTabCounts({ all: 12, media: 4, pdf: 2, docs: 3, sheets: 1, links: 2 }),
+    ).toEqual({ all: 12, media: 4, docs: 6, links: 2 });
+  });
+
+  it('keeps a current total as it is', () => {
+    expect(sanitizeAssetTabCounts({ all: 9, media: 3, docs: 5, links: 1 })).toEqual({
+      all: 9,
+      media: 3,
+      docs: 5,
+      links: 1,
+    });
+  });
+
+  it('reads a missing or non-numeric count as 0', () => {
+    expect(sanitizeAssetTabCounts({ all: 2, pdf: 'x', sheets: Number.NaN })).toEqual({
+      all: 2,
+      media: 0,
+      docs: 0,
+      links: 0,
+    });
   });
 });
 
@@ -463,7 +502,7 @@ describe('sortAssets', () => {
   });
 
   it('type = tab order then name', () => {
-    // media (b), pdf (c), links (a)
+    // media (b), docs (c), links (a)
     expect(sortAssets(items, 'type').map((i) => i.id)).toEqual(['b', 'c', 'a']);
   });
 
@@ -509,48 +548,19 @@ describe('tab filtering and counts', () => {
     { ...base('5'), kind: 'presentation', filename: 'deck.pptx' },
     { ...base('6'), kind: 'document', filename: 'notes.docx' },
     { ...base('7'), kind: null, filename: 'mid-upload' },
+    { ...base('8'), kind: 'spreadsheet', filename: 'budget.xlsx' },
   ];
 
-  it('counts every tab from the one list, zero tabs included', () => {
-    expect(buildTabCounts(items)).toEqual({
-      all: 7,
-      media: 2,
-      pdf: 1,
-      docs: 2,
-      sheets: 0,
-      links: 1,
-    });
-    expect(buildTabCounts([])).toEqual({
-      all: 0,
-      media: 0,
-      pdf: 0,
-      docs: 0,
-      sheets: 0,
-      links: 0,
-    });
+  it('counts every tab from the one list; Docs sums PDFs, documents, slides and sheets', () => {
+    expect(buildTabCounts(items)).toEqual({ all: 8, media: 2, docs: 4, links: 1 });
+    expect(buildTabCounts([])).toEqual({ all: 0, media: 0, docs: 0, links: 0 });
   });
 
-  it('filters by tab', () => {
-    expect(filterAssets(items, 'media', '').map((i) => i.id)).toEqual(['1', '2']);
-    expect(filterAssets(items, 'docs', '').map((i) => i.id)).toEqual(['5', '6']);
-    expect(filterAssets(items, 'links', '').map((i) => i.id)).toEqual(['3']);
-    expect(filterAssets(items, 'sheets', '')).toEqual([]);
-    expect(filterAssets(items, 'all', '')).toHaveLength(7);
-  });
-
-  it('filters by filename search case-insensitively, ignoring tab=all', () => {
-    expect(filterAssets(items, 'all', 'HERO').map((i) => i.id)).toEqual(['2']);
-    expect(filterAssets(items, 'media', 'pdf')).toEqual([]);
-  });
-
-  it('matches the display name when present, not just the filename', () => {
-    const named: AssetListItem[] = [
-      { ...base('1'), filename: 'IMG_0001.jpg', displayName: 'Summer Campaign' },
-      { ...base('2'), filename: 'summer.png', displayName: null },
-    ];
-    // "campaign" matches the display name of 1; "IMG" matches the raw filename fallback of 2 only if it has no display name.
-    expect(filterAssets(named, 'all', 'campaign').map((i) => i.id)).toEqual(['1']);
-    expect(filterAssets(named, 'all', 'img_0001').map((i) => i.id)).toEqual([]);
+  it('filters by tab: Docs holds PDF, Doc and Sheet files', () => {
+    expect(filterAssets(items, 'media').map((i) => i.id)).toEqual(['1', '2']);
+    expect(filterAssets(items, 'docs').map((i) => i.id)).toEqual(['4', '5', '6', '8']);
+    expect(filterAssets(items, 'links').map((i) => i.id)).toEqual(['3']);
+    expect(filterAssets(items, 'all')).toHaveLength(8);
   });
 });
 

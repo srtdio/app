@@ -131,7 +131,7 @@ import {
 import { formatAgo, formatTime } from '@/lib/time';
 import { Link } from 'react-router-dom';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
-import { UploadRing } from '@/components/chat/UploadRing';
+import { UploadRing } from '@/components/ui/UploadRing';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 import { PresignCache } from '@/lib/asset-presign';
 import type { ChatProfile } from '@/lib/chat-reads';
@@ -3790,9 +3790,9 @@ describe('T12: the ring in light and dark, on own and peer bubbles and over a ph
     const light = ring(paint([...attachments], mine, 'light'));
     const dark = ring(paint([...attachments], mine, 'dark'));
     expect(light).toBe(dark);
-    // D5: the stop square (solid, no stroke cross) and its label.
+    // Decision F: the X (IconX) inside the ring and its label.
     expect(light).toContain('aria-label="Stop sending"');
-    expect(light).not.toContain('M6 18 18 6M6 6l12 12');
+    expect(light).toContain('M6 18 18 6M6 6l12 12');
   });
 
   it('draws only on overlay tokens that exist in both themes', () => {

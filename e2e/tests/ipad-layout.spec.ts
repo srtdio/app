@@ -55,7 +55,7 @@ test('iPad portrait: Chat renders the laptop split and laptop type', async ({ pa
   await body.scrollIntoViewIfNeeded();
   await expect(body).toBeVisible();
   // The list stays beside the open thread.
-  await expect(page.getByRole('searchbox', { name: 'Search chats' })).toBeVisible();
+  await expect(page.locator('[data-chip-row]').first()).toBeVisible();
   // Laptop chat type (chat-type.ts BUBBLE_BODY_TYPE): 14px, not the touch 17px.
   expect(await body.evaluate((el) => getComputedStyle(el).fontSize)).toBe('14px');
 });

@@ -87,7 +87,8 @@ describe('SlotComposer composer row', () => {
 });
 
 describe('comment composers remove with the bin (no-cross)', () => {
-  it('Remove checkpoint N and Remove <file> are IconTrash, never an X', () => {
+  // A file's remove is ui/PendingChip's trailing X (decision F), never authored here.
+  it('Remove checkpoint N is IconTrash; the composers author no X', () => {
     for (const file of ['./SlotComposer.tsx', './CommentComposer.tsx']) {
       const src = readFileSync(new URL(file, import.meta.url), 'utf8');
       expect(src).not.toMatch(/\bIconX\b/);

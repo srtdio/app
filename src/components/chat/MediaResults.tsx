@@ -6,9 +6,11 @@
 // and videos are a square grid (4 across, 6 from 1180px); files, links and
 // voice notes are rows. Thumbnails come from the app's one PresignCache (the
 // small copy first, kept on the device), asked for only near the viewport.
-// Select mode (the home ✓) selects ITEMS keyed by their message: each tile or
-// row shows the SelectCheckbox and a tap toggles; a message carrying several
-// photos is one selection (every tile of it shows checked).
+// Select mode (the chip row's Select, or a long-press / right-click on an
+// item, which enters with that item ticked) selects ITEMS keyed by their
+// message: each tile or row shows the SelectCheckbox (ui/SelectCheck) and a
+// tap toggles; a message carrying several photos is one selection (every tile
+// of it shows checked).
 // The Photos viewer's bar: Show in chat, then Forward, Delete and Download.
 // Delete opens the delete sheet (Delete for me here: the Delete for everyone
 // path lives in the open thread); once the message is hidden the viewer shows
@@ -46,7 +48,7 @@ import {
   IconPlay,
 } from '@/components/ui/icons';
 import { useOptionalToast } from '@/components/ui/toast';
-import { useMenuGesture } from '@/components/ui/useLongPress';
+import { useMenuGesture, useSelectGesture, type SelectGesture } from '@/components/ui/useLongPress';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { VoiceNote } from '@/components/chat/VoiceNote';
@@ -99,13 +101,11 @@ import {
 } from '@/lib/chat/search';
 
 export interface MediaResultsProps {
-  /** The chip that is on. */
+  /** The chip that is on (it lists alone: no words). */
   kind: SearchKind;
-  /** The text in the search box ('' lists the chip alone). */
-  query: string;
   state: SearchState;
   runner: SearchRunner | null;
-  /** The device-cached first page for this chip; painted only while the query is ''. */
+  /** The device-cached first page for this chip. */
   cached: MediaCacheValue | undefined;
   /** Every chat in the roster (hidden included), for sender names and photos. */
   channelsById: ReadonlyMap<string, ChannelSummary>;
@@ -115,18 +115,25 @@ export interface MediaResultsProps {
   nowMs: number;
   /** For tests: the zone dates render in. The app passes none (the viewer's device zone). */
   timeZone?: string | undefined;
-  /** Clears the search box and the chip (NoResults' button). */
+  /** Clears the chip (NoResults' button). */
   onClear: () => void;
   /** Opens the chat at that message. The viewer closes first. */
   onShowInChat: (channelId: string, messageId: string) => void;
   /**
-   * Select mode (the home ✓ while a chip is on): items show the
-   * SelectCheckbox and a tap toggles the item's message. Absent: taps open.
+   * Select mode (while a chip is on): items show the SelectCheckbox and a tap
+   * toggles the item's message. Absent: taps open.
    */
   selecting?: {
     selection: MediaSelection;
     onToggle: (item: { messageId: string; channelId: string }) => void;
   };
+  /**
+   * An item's long-press (touch) or right-click / Shift-click / Cmd-click
+   * (laptop) outside select mode: enter select mode with that item's message
+   * ticked (ui/useLongPress useSelectGesture, as every list). Absent: no
+   * gesture.
+   */
+  onEnterSelect?: (item: { messageId: string; channelId: string }) => void;
   /** The Photos viewer's Forward: open the forward picker for its message. Absent: none. */
   onForwardItems?: (items: HideItem[]) => void;
   /** The forward picker is open: the viewer steps aside (a sheet sits under its layer). */
@@ -407,13 +414,19 @@ function hostOf(url: string): string {
   }
 }
 
-/** One link row: title (from its preview), domain, date. Tap opens; hold or right-click: menu. */
+/**
+ * One link row: title (from its preview), domain, date. Tap opens; with a
+ * select gesture a hold or right-click enters select mode with it ticked,
+ * else they open the row's menu.
+ */
 function LinkRowItem(props: {
   item: LinkItem;
   date: string;
   onShowInChat: () => void;
   /** Select mode: a leading check, a tap toggles, no menu. */
   select?: ItemSelect | undefined;
+  /** The list's select gesture for this row (long-press / right-click enters). */
+  gesture?: SelectGesture | undefined;
 }): ReactElement {
   const { item } = props;
   const navigate = useNavigate();
@@ -442,7 +455,8 @@ function LinkRowItem(props: {
     // External pages open like message-text links: a real anchor, new tab.
     else externalRef.current?.click();
   };
-  const gesture = useMenuGesture(() => setMenuOpen(true));
+  const menuGesture = useMenuGesture(() => setMenuOpen(true));
+  const selectHandlers = useSelectGesture(props.gesture);
   const items: ActionMenuItem[] = [
     { id: 'open', label: 'Open', icon: IconArrowUpRight, onSelect: open },
     {
@@ -463,6 +477,7 @@ function LinkRowItem(props: {
       ref={ref}
       className={select !== undefined ? 'flex min-w-0 items-center' : 'min-w-0'}
       {...(select !== undefined ? { 'data-media-select-item': item.messageId } : {})}
+      {...(selectHandlers ?? {})}
     >
       {select !== undefined ? (
         <SelectCheckbox checked={select.checked} onToggle={select.onToggle} />
@@ -470,13 +485,17 @@ function LinkRowItem(props: {
       <PressableRow
         type="button"
         data-media-row={item.key}
-        {...(select !== undefined ? { 'aria-pressed': select.checked } : gesture.handlers)}
+        {...(select !== undefined
+          ? { 'aria-pressed': select.checked }
+          : selectHandlers === undefined
+            ? menuGesture.handlers
+            : {})}
         onClick={() => {
           if (select !== undefined) {
             select.onToggle();
             return;
           }
-          if (gesture.consumeClickSuppression()) return;
+          if (selectHandlers === undefined && menuGesture.consumeClickSuppression()) return;
           open();
         }}
         className={select !== undefined ? cn(ROW, 'flex-1') : ROW}
@@ -612,12 +631,38 @@ function MonthLabel(props: { groupKey: string; label: string }): ReactElement {
 }
 
 /**
+ * One media item's list entry. With a select gesture, a long-press (touch; a
+ * scroll or a move cancels it) or a right-click / Shift-click / Cmd-click
+ * (laptop) enters select mode with the item ticked, and inside select mode a
+ * tap anywhere on it toggles once (the capture-phase click; the tile's own
+ * tap never runs then). Pure client state: no await, no read.
+ */
+function MediaItemLi(props: {
+  gesture: SelectGesture | undefined;
+  className: string;
+  selectKey?: string | undefined;
+  children: ReactElement | ReactElement[];
+}): ReactElement {
+  const handlers = useSelectGesture(props.gesture);
+  return (
+    <li
+      className={props.className}
+      {...(props.selectKey !== undefined ? { 'data-media-select-item': props.selectKey } : {})}
+      {...(handlers ?? {})}
+    >
+      {props.children}
+    </li>
+  );
+}
+
+/**
  * The chip's results. Hooks only at the top; the item list is the network page
  * when it is current and ready, else the device cache (chip alone), else boxes.
  */
 export function MediaResults(props: MediaResultsProps): ReactElement {
   const { kind, runner, nowMs, timeZone } = props;
-  const query = normalizeQuery(props.query);
+  // A chip lists alone (no words): the runner's query is always ''.
+  const query = '';
   // No runner (no workspace): nothing can be searched, so no boxes forever.
   const state: SearchState =
     runner === null ? { ...IDLE_SEARCH, query, kind, status: 'ready' } : props.state;
@@ -783,27 +828,43 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
           onToggle: () =>
             selecting.onToggle({ messageId: item.messageId, channelId: item.channelId }),
         };
+  // The select gesture: a long-press or right-click enters with the item ticked.
+  const onEnterSelect = props.onEnterSelect;
+  const gestureOf = (item: ChipItem, select: ItemSelect | undefined): SelectGesture | undefined =>
+    onEnterSelect === undefined && select === undefined
+      ? undefined
+      : {
+          active: select !== undefined,
+          onEnter: () => onEnterSelect?.({ messageId: item.messageId, channelId: item.channelId }),
+          onToggle: () => select?.onToggle(),
+        };
   /** A grid tile in select mode: the tile toggles, the check sits top right. */
   const selectTile = (item: MediaItem, select: ItemSelect, tile: ReactElement): ReactElement => (
-    <li key={item.key} className="relative min-w-0" data-media-select-item={item.messageId}>
+    <MediaItemLi
+      key={item.key}
+      gesture={gestureOf(item, select)}
+      className="relative min-w-0"
+      selectKey={item.messageId}
+    >
       {tile}
       <SelectCheckbox
         checked={select.checked}
         onToggle={select.onToggle}
         className="absolute right-0 top-0"
       />
-    </li>
+    </MediaItemLi>
   );
   /** A list row in select mode: the check leads, the row keeps its look. */
   const selectRow = (item: MediaItem, select: ItemSelect, row: ReactElement): ReactElement => (
-    <li
+    <MediaItemLi
       key={item.key}
+      gesture={gestureOf(item, select)}
       className="flex min-w-0 items-center"
-      data-media-select-item={item.messageId}
+      selectKey={item.messageId}
     >
       <SelectCheckbox checked={select.checked} onToggle={select.onToggle} />
       <div className="min-w-0 flex-1">{row}</div>
-    </li>
+    </MediaItemLi>
   );
 
   const body = loading ? (
@@ -849,6 +910,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
                   date={dateOf(item)}
                   onShowInChat={() => showInChat(item)}
                   select={select}
+                  gesture={gestureOf(item, select)}
                 />
               );
             }
@@ -875,18 +937,19 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
                 />,
               );
             }
+            const gesture = gestureOf(item, undefined);
             if (kind === 'photo') {
               return (
-                <li key={item.key} className="min-w-0">
+                <MediaItemLi key={item.key} gesture={gesture} className="min-w-0">
                   <PhotoTile item={item} onOpen={() => openItem(item.key)} />
-                </li>
+                </MediaItemLi>
               );
             }
             if (kind === 'video') {
               return (
-                <li key={item.key} className="min-w-0">
+                <MediaItemLi key={item.key} gesture={gesture} className="min-w-0">
                   <VideoTile item={item} onOpen={() => openItem(item.key)} />
-                </li>
+                </MediaItemLi>
               );
             }
             if (kind === 'voice') {
@@ -905,15 +968,15 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
               );
               if (select !== undefined) return selectRow(item, select, voiceRow);
               return (
-                <li key={item.key} className="min-w-0">
+                <MediaItemLi key={item.key} gesture={gesture} className="min-w-0">
                   {voiceRow}
-                </li>
+                </MediaItemLi>
               );
             }
             return (
-              <li key={item.key} className="min-w-0">
+              <MediaItemLi key={item.key} gesture={gesture} className="min-w-0">
                 <FileRowItem item={item} date={dateOf(item)} onOpen={() => openItem(item.key)} />
-              </li>
+              </MediaItemLi>
             );
           })}
         </ul>

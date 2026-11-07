@@ -183,10 +183,10 @@ describe('save (E4, E6)', () => {
 });
 
 describe('Edit concept sheet file names (U9)', () => {
-  it('each file tile shows its name under it (truncated, meta style) with the full name on hover', () => {
+  it('each file is a ui/PendingChip titled with its name (truncated, full name on hover)', () => {
     const sheet = read('ConceptSheet.tsx');
     expect(sheet).toMatch(
-      /data-plan-concept-file=""\s+title=\{f\.name\}[\s\S]*?data-plan-concept-file-name=""\s+className="block truncate text-sm text-fg-3"\s*>\s*\{f\.name\}/,
+      /<PendingChip[\s\S]*?title=\{f\.name\}[\s\S]*?dataAttrs=\{\{ 'data-plan-concept-file': '' \}\}/,
     );
     // The names come from the read (D1), never "File N".
     expect(read('PlanItemScreen.tsx')).not.toContain('`File ${');

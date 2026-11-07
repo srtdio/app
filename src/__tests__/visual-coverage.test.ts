@@ -21,9 +21,7 @@ const DEFAULT_PROJECTS: readonly Project[] = ['iphone-light', 'iphone-dark', 'la
 /** Every screen name, sorted. */
 const REQUIRED: readonly string[] = [
   'activity-bank',
-  'activity-chip-briefs',
   'activity-chip-mentions',
-  'activity-chip-plans',
   'activity-chip-unread',
   'approve-confirm-approver',
   'asset-picker',
@@ -32,13 +30,10 @@ const REQUIRED: readonly string[] = [
   'assets-approver',
   'assets-empty',
   'assets-files-approver',
-  'assets-search-empty',
   'assets-select',
   'assets-tab-docs',
   'assets-tab-links',
   'assets-tab-media',
-  'assets-tab-pdf',
-  'assets-tab-sheets',
   'boxes-activity',
   'boxes-members',
   'boxes-plan-tab',
@@ -47,7 +42,6 @@ const REQUIRED: readonly string[] = [
   'brief-picker',
   'briefs-approver',
   'briefs-empty',
-  'briefs-search-empty',
   'chat-composer-keyboard',
   'chat-composer-recording',
   'chat-delete-sheet-everyone',
@@ -84,7 +78,6 @@ const REQUIRED: readonly string[] = [
   'chat-post-sheet',
   'chat-post-sheet-approver',
   'chat-post-sheet-scrolled',
-  'chat-search-empty',
   'chat-select-mode',
   'chat-status-drawer',
   'chat-status-drawer-plan',
@@ -200,9 +193,6 @@ const REQUIRED: readonly string[] = [
   'pipeline-chip-parked',
   'pipeline-chip-rejected',
   'pipeline-overdue',
-  'pipeline-search-empty',
-  'pipeline-search-focused',
-  'pipeline-search-typed',
   'pipeline-select-1',
   'pipeline-select-2',
   'plan-from-bank',
@@ -227,10 +217,6 @@ const REQUIRED: readonly string[] = [
   'plan-tab-bank-filter-bucket-menu',
   'plan-tab-bank-plan-it',
   'plan-tab-bank-select',
-  'plan-tab-chip-all',
-  'plan-tab-chip-earlier',
-  'plan-tab-chip-later',
-  'plan-tab-chip-next',
   'plan-tab-ended',
   'plan-tab-live',
   'plan-tab-week-zero',
@@ -259,6 +245,28 @@ const REQUIRED: readonly string[] = [
   'support-contact-sheet',
   'support-contact-sheet-dark',
   'viewer-remove',
+  // One search, the top bar and the chip row (7 Nov 2026): sorts, Activity at
+  // 0 unread, palette pick mode, Select pressed, upload states.
+  'activity-all-read',
+  'activity-sort',
+  'assets-select-on',
+  'assets-sort',
+  'assets-upload-uploading',
+  'briefs',
+  'briefs-sort',
+  'chat-list-select-on',
+  'chat-list-sort',
+  'concept-chip-failed',
+  'concept-chip-ready',
+  'concept-chip-uploading',
+  'onboarding-first-post-uploading',
+  'palette-pick',
+  'pipeline-select-on',
+  'pipeline-sort',
+  'plan-tab-bank-select-on',
+  'plan-tab-chip-past',
+  'plan-tab-sort',
+  'post-tile-uploading',
 ];
 
 /** A name and its laptop dark twin (the loops over dark false/true). */
@@ -286,20 +294,14 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   'name: `pipeline-chip-${stage}`': ['all', 'draft', 'approved', 'parked', 'rejected'].map(
     (stage) => `pipeline-chip-${stage}`,
   ),
-  'name: `assets-tab-${tab}`': ['media', 'pdf', 'docs', 'sheets', 'links'].map(
-    (tab) => `assets-tab-${tab}`,
-  ),
-  'name: `activity-chip-${chip}`': ['unread', 'mentions', 'briefs', 'plans'].map(
-    (chip) => `activity-chip-${chip}`,
-  ),
+  'name: `assets-tab-${tab}`': ['media', 'docs', 'links'].map((tab) => `assets-tab-${tab}`),
+  'name: `activity-chip-${chip}`': ['unread', 'mentions'].map((chip) => `activity-chip-${chip}`),
   // Chat media sweep (7 Nov 2026): single photos by shape, albums by count.
   'name: `chat-photo-single-${shape}`': ['portrait', 'landscape', 'square'].map(
     (shape) => `chat-photo-single-${shape}`,
   ),
   'name: `chat-album-${count}`': [2, 3, 4].map((count) => `chat-album-${count}`),
-  'name: `plan-tab-chip-${chip}`': ['next', 'later', 'earlier', 'all'].map(
-    (chip) => `plan-tab-chip-${chip}`,
-  ),
+  'name: `plan-tab-chip-${chip}`': ['past'].map((chip) => `plan-tab-chip-${chip}`),
   // The platform preview, one per platform (post screen redo, 7 Nov 2026).
   'name: `post-preview-${p.slug}`': [
     'instagram',
@@ -323,7 +325,6 @@ const PHONE_ONLY_NAMES = [
   'cockpit-sheet-users',
   'cockpit-sheet-traffic',
   'person-card-inline',
-  'pipeline-search-focused',
   'chat-tasks-swipe',
   'chat-composer-keyboard',
 ];
@@ -332,12 +333,7 @@ const PHONE_ONLY_NAMES = [
  * Laptop-only light screens (`only: 'laptop'`): the Cockpit side panel and the
  * chip hover (a hover pointer).
  */
-const LAPTOP_LIGHT_NAMES = [
-  'pipeline-search-typed',
-  'cockpit-panel-needs',
-  'cockpit-panel-users',
-  'chip-row-hover',
-];
+const LAPTOP_LIGHT_NAMES = ['cockpit-panel-needs', 'cockpit-panel-users', 'chip-row-hover'];
 
 /** Laptop dark shots taken in the laptop-light project (`only: 'laptop', dark: true`). */
 const LAPTOP_FORCED_DARK_NAMES = [

@@ -176,27 +176,10 @@ test.describe('laptop', () => {
     const network = await installHarnessNetwork(page);
     seedNotes(network.world);
     await firstPaintTile(page);
-    // The search box keeps a usable width beside New chat.
-    const box = await page.getByRole('searchbox', { name: 'Search chats' }).boundingBox();
-    expect(box?.width ?? 0).toBeGreaterThanOrEqual(200);
-    // One clear control only: the native search cancel button is hidden.
-    await page.getByRole('searchbox', { name: 'Search chats' }).fill('hook');
-    const native = await page.evaluate(() =>
-      [...document.styleSheets].some((sheet) => {
-        try {
-          return [...sheet.cssRules].some(
-            (rule) =>
-              rule.cssText.includes('input::-webkit-search-cancel-button') &&
-              rule.cssText.includes('display: none'),
-          );
-        } catch {
-          return false;
-        }
-      }),
-    );
-    expect(native, 'the native search cancel button is hidden').toBe(true);
-    await expect(page.getByRole('button', { name: 'Clear search' })).toHaveCount(1);
-    await page.getByRole('button', { name: 'Clear search' }).click();
+    // No search field on the chat home (search is the top bar's palette);
+    // New chat is the top bar's "+".
+    await expect(page.getByRole('searchbox')).toHaveCount(0);
+    await expect(page.locator('[data-topbar-plus][aria-label="New chat"]')).toBeVisible();
 
     await page.locator('[data-notes-tile]').click();
     const report = await checkStep(page, 'notes-laptop-2-open', {

@@ -320,8 +320,8 @@ test('Notifications: plan alerts under Plans; a deleted plan only toasts; a tap 
       240_000,
     ),
   );
+  // All lists the plan alerts (the Plans chip is gone).
   await page.goto('/notifications');
-  await page.getByRole('button', { name: 'Plans', exact: true }).click();
   const line = (event: string) => page.locator(`[data-activity-event="${event}"]`);
   await expect(line('plan_opened')).toContainText(
     `${PEER_NAME} opened ${DATED_PLAN_TITLE} for approvers`,

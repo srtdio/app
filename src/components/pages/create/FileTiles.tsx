@@ -1,6 +1,7 @@
 // The create sheet's file row: one small tile per photo or video, each showing
-// its own picture. A tile still uploading carries a thin progress bar; a failed
-// one is outlined in the bad colour. Finished tiles reorder by drag on laptop
+// its own picture. A tile still uploading carries ui/UploadRing (its X cancels
+// the upload); a failed one is outlined in the bad colour with Retry
+// (UploadRetry) in the ring's own spot. Finished tiles reorder by drag on laptop
 // and hold-and-drag on phone (pointer events): the dragged tile moves on the X
 // axis only, inside the row, with no rotation, and the others shift with
 // transform. Tapping a tile shows it in the frame.
@@ -12,6 +13,7 @@ import type { AttachmentItem } from '@/components/pages/create/AttachmentsField'
 import { RemoveButton } from '@/components/pages/create/RemoveButton';
 import { clampDrag, dropIndex, shiftFor } from '@/components/pages/create/reorder';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { UploadRetry, UploadRing } from '@/components/ui/UploadRing';
 import { LONG_PRESS_MS } from '@/components/ui/useLongPress';
 import { cn } from '@/lib/cn';
 
@@ -82,6 +84,8 @@ export function FileTiles({
   onSelect,
   onRemove,
   onReorder,
+  onCancelPending,
+  onRetryPending,
 }: {
   /** Finished photos and videos, in saved order. */
   items: readonly AttachmentItem[];
@@ -90,6 +94,10 @@ export function FileTiles({
   onSelect: (index: number) => void;
   onRemove: (index: number) => void;
   onReorder: (from: number, to: number) => void;
+  /** The ring's X on an uploading tile: stops the upload and drops the tile. */
+  onCancelPending: (id: string) => void;
+  /** Retry on a failed tile: runs its upload again. */
+  onRetryPending: (id: string) => void;
 }): ReactElement {
   const [drag, setDrag] = useState<{ from: number; dx: number } | null>(null);
   const gesture = useRef<Gesture | null>(null);
@@ -267,30 +275,25 @@ export function FileTiles({
             tileEdge(tile.failed ? 'failed' : 'rest'),
           )}
         >
-          {/* The dim is on the picture only (media); the state reads from a solid badge. */}
+          {/* The dim is on the picture only (media); the state reads from the ring or Retry. */}
           <span className={cn('block h-full w-full', tile.failed ? 'opacity-40' : 'opacity-70')}>
             <TilePicture src={tile.previewUrl} video={tile.video} />
           </span>
+          {/* Ring and Retry sit in one centred spot, so the tile never shifts. */}
           {tile.failed ? (
-            <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-bad-solid text-base font-semibold text-accent-fg lit-badge">
-                !
-              </span>
-            </span>
+            <UploadRetry
+              variant="file"
+              onRetry={() => onRetryPending(tile.id)}
+              className="absolute inset-0 m-auto"
+            />
           ) : (
-            <span
-              role="progressbar"
-              aria-label={`Uploading ${tile.name}`}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(tile.progress * 100)}
-              className="absolute inset-x-2 bottom-2 h-1 overflow-hidden rounded-full bg-panel"
-            >
-              <span
-                className="block h-full rounded-full bg-accent mv-fill"
-                style={{ width: `${Math.max(tile.progress, 0.04) * 100}%` }}
-              />
-            </span>
+            <UploadRing
+              variant="file"
+              label="Cancel upload"
+              progress={tile.progress}
+              onCancel={() => onCancelPending(tile.id)}
+              className="absolute inset-0 m-auto"
+            />
           )}
         </li>
       ))}

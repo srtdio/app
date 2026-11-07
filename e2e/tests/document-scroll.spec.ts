@@ -32,8 +32,9 @@ async function scrollState(page: Page): Promise<ScrollState> {
 }
 
 test('Pipeline scrolls the document on a phone and <main> on laptop @theme', async ({ page }) => {
+  // Short enough that the three-card list overflows now the screen search row is gone.
   await page.setViewportSize(
-    phone(page) ? { width: 390, height: 480 } : { width: 1280, height: 800 },
+    phone(page) ? { width: 390, height: 360 } : { width: 1280, height: 800 },
   );
   const network = await installHarnessNetwork(page);
   await page.goto('/pipeline?stage=all');
@@ -67,7 +68,7 @@ test('Chat list scrolls the page, a thread stays locked, Pipeline keeps its posi
   page,
 }) => {
   test.skip(!phone(page), 'phone only');
-  await page.setViewportSize({ width: 390, height: 480 });
+  await page.setViewportSize({ width: 390, height: 360 });
   const network = await installHarnessNetwork(page);
   await page.goto('/pipeline?stage=all');
   await expect(page.getByRole('button', { name: 'Open post Monday carousel' })).toBeVisible({

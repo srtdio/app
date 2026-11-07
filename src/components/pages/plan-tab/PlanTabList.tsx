@@ -1,7 +1,8 @@
 // The Plan tab's list, phone and laptop alike (the laptop Month | Week calendar
 // retired 7 Nov 2026): one ui/ListCard per plan in LIST_CARD_GRID (one column
-// on a phone, auto-fill columns on a laptop), grouped in sections under All
-// (This week, Next week, Upcoming, Past; empty ones hidden). A card: the
+// on a phone, auto-fill columns on a laptop): Upcoming groups This week, Next
+// week and Later under their headings (empty ones hidden); Past is one list
+// with no heading (the chip names it). A card: the
 // plan's first cover (else the plan icon), its title and its time on line 1
 // (formatPlanStart: "Today", "Mon", "16 Nov" before it starts, "Live" while
 // on, its end day "1 Nov" once over), then on line 2 its dates and post count
@@ -28,6 +29,7 @@ import {
   PLAN_WEEK_CHIP_ZERO,
   planCardMeta,
   planCardPreview,
+  planChipHolds,
   planSections,
   type PlanWeekChip,
 } from '@/lib/plan-tab';
@@ -109,12 +111,12 @@ export function PlanTabList(props: {
   onOpen: (planId: string) => void;
   /** Load more while more plans remain; null when every plan is in. */
   more: PlanTabMore | null;
-  /** The picked chip: All shows every group with its heading; a group shows only itself, no heading (the chip names it). */
+  /** The picked chip: Upcoming shows This week, Next week and Later, each under its heading; Past shows only itself, no heading (the chip names it). */
   chip: PlanWeekChip;
 }): ReactElement {
   const { chip } = props;
-  const sections = planSections(props.bundles, props.today).filter(
-    (section) => chip === 'all' || section.key === chip,
+  const sections = planSections(props.bundles, props.today).filter((section) =>
+    planChipHolds(chip, section.key),
   );
   // Keyed on every read plan, not the shown ones: a chip pick switches instantly (no rise).
   const rise = useAppendedRise(props.bundles.map((b) => b.plan.id));
@@ -131,7 +133,7 @@ export function PlanTabList(props: {
           data-plan-tab-section={section.key}
           className="flex flex-col gap-4"
         >
-          {chip === 'all' ? (
+          {chip === 'upcoming' ? (
             <Text as="h2" role="section">
               {section.label}
             </Text>
@@ -226,7 +228,7 @@ export function PlanTabCard(props: {
  * The Plan tab's loading boxes (sweepBoxes): ListCard's own loading box in the
  * list's grid, so nothing moves when the cards land. Only when nothing is held
  * for the tab. `heading`: the group heading's bone, drawn only where the list
- * will have one (the grouped All list).
+ * will have one (the grouped Upcoming list).
  */
 export function PlanTabBoxes(props: { heading?: boolean } = {}): ReactElement {
   const heading = props.heading ?? true;

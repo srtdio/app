@@ -1,10 +1,14 @@
 // The Plan tab (/plan), phone and laptop alike (the laptop Month | Week
-// calendar retired 7 Nov 2026): the shared top bar (no page title) with the
-// search, the sort and, for creators, New plan; the chips under it (Bank, This
-// week, Next week, Upcoming, Past, All; the tab opens on This week); then the
-// plans as ui/ListCard cards in LIST_CARD_GRID (one column on a phone,
-// auto-fill columns on a laptop; PlanTabList), grouped under All. A chip
-// reads its own range a page at a time (usePlanTabData): while more remain,
+// calendar retired 7 Nov 2026, so there is no Month | Week well to keep):
+// the app top bar carries the tab's sort and, for creators, its "+" (New plan;
+// on the Bank chip, Filter and sort and Add idea) through useTopbarActions;
+// there is no page title and no search of its own (the top bar's
+// CommandPalette is the one search). Under it the chip row (Bank, Upcoming,
+// Past; the tab opens on Upcoming) with the Bank's Select pinned at its end;
+// then the plans as ui/ListCard cards in LIST_CARD_GRID (one column on a
+// phone, auto-fill columns on a laptop; PlanTabList): Upcoming groups This
+// week, Next week and Later under their headings, Past is one list. Both
+// chips read every plan a page at a time (usePlanTabData): while more remain,
 // the page hands the list its Load more (the hook's loadMore and moreBusy).
 // Opening a plan goes to /plan/:planId, which PlanBesideLayout docks beside
 // this page on a laptop (the page stays mounted) and shows alone on a phone.
@@ -15,18 +19,16 @@
 // never Create. A return to the tab lands on the same chip and the same scroll
 // (src/lib/kept-view.ts), over the chip's kept read. The cards' times read off
 // one minute clock (useMinuteClock) held here.
-// The Bank (the idea bank, plan-tab/BankList.tsx): the first chip, whose
-// toolbar is search, Filter and sort, then Add idea, over the same ListCard
-// grid; ?week=bank lands on it. A client sees it only when their bank read
-// holds an idea. The Bank reads after the tab paints (use-bank-data.ts).
-// Search (?q=, src/lib/search/server-search.ts): from 2 characters,
-// plan_search then the matched plans in one plan_bundle_read, shown as a list
-// of plans with their matched items (tapping an item opens it in its plan).
-// Sort (Newest first, Oldest first, Name) orders the list and the search
-// results.
+// The Bank (the idea bank, plan-tab/BankList.tsx): the first chip; the top
+// bar's sort opens its Filter and sort sheet, its "+" is Add idea; the chip
+// row's Select starts its select mode (BankSelectBar), as a long-press does.
+// ?week=bank lands on it. A client sees it only when their bank read holds an
+// idea. The Bank reads after the tab paints (use-bank-data.ts) and re-reads
+// on its live topic (bank:<workspace_id>) while open.
+// Sort (Newest first, Oldest first, Name) orders the plan list.
 
 import { mark } from '@/lib/perf-marks';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -34,21 +36,16 @@ import { PlanComposeScreen } from '@/components/chat/PlanComposeScreen';
 import { ScreenFailed } from '@/components/chat/PlanScreen';
 import { useInduction } from '@/components/induction/InductionProvider';
 import { PageHead } from '@/components/shell/PageHead';
-import { SectionHeader } from '@/components/shell/SectionHeader';
-import { Button } from '@/components/ui/Button';
-import { PressableRow } from '@/components/ui/PressableRow';
+import { SectionHeader, SectionSelect } from '@/components/shell/SectionHeader';
+import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { NoResults } from '@/components/ui/NoResults';
-import { Highlight } from '@/components/ui/SearchHighlight';
 import { SortMenu } from '@/components/ui/SortMenu';
-import { IconButton } from '@/components/ui/IconButton';
 import { GUTTER } from '@/components/ui/layout';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
-import { ICON_SIZE, IconFilterLines, IconPlan, IconPlus } from '@/components/ui/icons';
+import { ICON_SIZE, IconPlan } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import type { ComposeRange, PlanBundle, PlanThumbs } from '@/lib/chat/plans';
-import { queryWords } from '@/lib/chat/search';
 import { keptViewKey, useKeptScroll, useKeptState } from '@/lib/kept-view';
 import { safeTimeZone } from '@/lib/time';
 import { useViewerSide } from '@/lib/chat/viewer-role';
@@ -63,10 +60,10 @@ import {
   PLAN_WEEK_CHIP_ZERO,
   PLAN_WEEK_PARAM,
   parsePlanWeekChip,
+  planChipHolds,
   planSectionOf,
   visiblePlanChips,
   planWeekChipLabel,
-  planWeekChipRange,
   type PlanWeekChip,
 } from '@/lib/plan-tab';
 import { Chip } from '@/components/ui/Chip';
@@ -74,16 +71,12 @@ import {
   PLAN_SORT_DEFAULT,
   PLAN_SORT_OPTIONS,
   sanitizePlanSort,
-  searchPlanTab,
   sortPlanBundles,
-  type PlanSearchData,
   type PlanTabData,
   type PlanTabSort,
 } from '@/lib/plan-tab-read';
 import { civilToday } from '@/lib/plan-week';
-import { useServerSearch } from '@/lib/search/server-search';
 import { useSession } from '@/lib/session-context';
-import { supabase } from '@/lib/supabase';
 import { useSort } from '@/lib/use-sort';
 import { useWorkspace } from '@/lib/workspace-context';
 import {
@@ -94,9 +87,9 @@ import {
   planCover,
   type PlanTabMore,
 } from './plan-tab/PlanTabList';
-import { usePlanTabData, warmPlanTabRead } from './plan-tab/use-plan-tab-data';
+import { usePlanTabData } from './plan-tab/use-plan-tab-data';
 import { BankAddSheet } from './plan-tab/BankAddSheet';
-import { BankFilterSheet } from './plan-tab/BankFilterSheet';
+import { BankFilterSheet, BankFilterTrigger } from './plan-tab/BankFilterSheet';
 import { BankFilterLine, BankSurface } from './plan-tab/BankList';
 import {
   BANK_FILTER_DEFAULT,
@@ -111,12 +104,8 @@ import {
   useBankData,
   readPlansForPlanIt,
 } from './plan-tab/use-bank-data';
+import { useBankSelect } from './plan-tab/use-bank-select';
 import { peekEntityUnreadComment, withCommentTarget } from '@/lib/inbox/unread-entities';
-
-/** The route an item opens: the item in its plan (a search match). Pure. */
-export function itemRoute(planId: string, itemId: string): string {
-  return `/plan/${planId}?item=${itemId}`;
-}
 
 /**
  * A list open with unread comments lands on the newest one (the
@@ -124,83 +113,6 @@ export function itemRoute(planId: string, itemId: string): string {
  */
 function withNewestUnread(route: string, type: 'post' | 'plan_item', id: string): string {
   return withCommentTarget(route, peekEntityUnreadComment(type, id));
-}
-
-/** The list search's URL param (?q=), as on every list screen. */
-const SEARCH_PARAM = 'q';
-
-/** An item's label in a search result: its title, or its post's. Pure. */
-export function matchedItemTitle(bundle: PlanBundle, itemId: string): string | null {
-  const item = bundle.items.find((candidate) => candidate.id === itemId);
-  if (item === undefined) return null;
-  if (item.title !== null && item.title !== '') return item.title;
-  return item.post_id !== null ? (bundle.postInfo[item.post_id]?.title ?? null) : null;
-}
-
-/**
- * Plan search results: one card per plan (the list's ListCard) in the list's
- * grid, in the sort's order, each followed by its matched items, the searched
- * words marked; a card opens its plan, an item opens in its plan. Zero
- * matches: NoResults.
- */
-export function PlanSearchResults(props: {
-  bundles: readonly PlanBundle[];
-  thumbs: PlanThumbs;
-  matchedItems: Readonly<Record<string, string[]>>;
-  query: string;
-  timeZone: string;
-  now: Date;
-  onOpenPlan: (planId: string) => void;
-  onOpenItem: (planId: string, itemId: string) => void;
-  /** Whether a chip also narrows the results (the phone's week chips); Clear then resets it too. */
-  filtersActive?: boolean;
-  onClear: () => void;
-}): ReactElement {
-  const words = queryWords(props.query);
-  if (props.bundles.length === 0) {
-    return (
-      <NoResults
-        query={props.query}
-        filtersActive={props.filtersActive ?? false}
-        onClear={props.onClear}
-      />
-    );
-  }
-  return (
-    <div data-plan-tab-results="" className={cn(LIST_CARD_GRID, 'pb-8 pt-4', GUTTER)}>
-      {props.bundles.map((bundle) => {
-        const id = bundle.plan.id;
-        const items = (props.matchedItems[id] ?? []).flatMap((itemId) => {
-          const title = matchedItemTitle(bundle, itemId);
-          return title !== null ? [{ itemId, title }] : [];
-        });
-        return (
-          <div key={id} className="flex min-w-0 flex-col gap-1">
-            <PlanTabCard
-              bundle={bundle}
-              cover={planCover(bundle, props.thumbs)}
-              timeZone={props.timeZone}
-              now={props.now}
-              onOpen={() => props.onOpenPlan(id)}
-            />
-            {items.map(({ itemId, title }) => (
-              <PressableRow
-                key={itemId}
-                type="button"
-                data-plan-tab-match={itemId}
-                onClick={() => props.onOpenItem(id, itemId)}
-                className="flex items-center px-4 text-base text-fg"
-              >
-                <span className="truncate">
-                  <Highlight text={title} words={words} />
-                </span>
-              </PressableRow>
-            ))}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 /** The list in a flat order (Newest first, Name), in the same grid, with the same Load more. */
@@ -257,45 +169,33 @@ export function PlanTabPage(): ReactElement {
   // The New plan screen: closed (null) or open with its dates (undefined: this week).
   const [compose, setCompose] = useState<{ range: ComposeRange | undefined } | null>(null);
   const creator = canCreatePlans(side);
-  // The search box lives in the URL (?q=) so Back lands on the same results.
   const [params, setParams] = useSearchParams();
-  const search = params.get(SEARCH_PARAM) ?? '';
-  const setSearch = useCallback(
-    (value: string): void => {
-      setParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (value === '') next.delete(SEARCH_PARAM);
-          else next.set(SEARCH_PARAM, value);
-          return next;
-        },
-        { replace: true },
-      );
-    },
-    [setParams],
-  );
-  // The chip: in the URL (?week=) so Back lands on it, else this
-  // session's last pick (a tab return), else This week.
-  const [keptChip, setKeptChip] = useKeptState<PlanWeekChip>(
-    keptKey('week'),
-    PLAN_WEEK_CHIP_DEFAULT,
-  );
-  const chip = parsePlanWeekChip(params.get(PLAN_WEEK_PARAM)) ?? keptChip;
+  // The chip: in the URL (?week=) so Back lands on it, else this session's
+  // last pick (a tab return), else Upcoming. A retired chip value (this, next,
+  // later, all, earlier) lands on Upcoming or Past (parsePlanWeekChip).
+  const [keptChip, setKeptChip] = useKeptState<string>(keptKey('week'), PLAN_WEEK_CHIP_DEFAULT);
+  const chip =
+    parsePlanWeekChip(params.get(PLAN_WEEK_PARAM)) ??
+    parsePlanWeekChip(keptChip) ??
+    PLAN_WEEK_CHIP_DEFAULT;
+  // The Bank's select mode, shared by its cards and the chip row's Select.
+  const bankSelect = useBankSelect();
+  const leaveBankSelect = bankSelect.clear;
   const setChip = useCallback(
     (value: PlanWeekChip): void => {
+      // A chip change leaves the Bank's select mode (its Back entry too).
+      if (value !== PLAN_BANK_CHIP) leaveBankSelect();
       setKeptChip(value);
       setParams(
         (prev) => {
           const next = new URLSearchParams(prev);
           next.set(PLAN_WEEK_PARAM, value);
-          // The search box belongs to the chip it was typed under.
-          if ((chip === PLAN_BANK_CHIP) !== (value === PLAN_BANK_CHIP)) next.delete(SEARCH_PARAM);
           return next;
         },
         { replace: true },
       );
     },
-    [chip, setKeptChip, setParams],
+    [leaveBankSelect, setKeptChip, setParams],
   );
   // The Bank: the Bank chip, on both widths.
   const onBank = chip === PLAN_BANK_CHIP;
@@ -307,24 +207,11 @@ export function PlanTabPage(): ReactElement {
   const [bankSheet, setBankSheet] = useState<'filter' | 'add' | null>(null);
   const { value: storedSort, setValue: setSort } = useSort<PlanTabSort>('plan', PLAN_SORT_DEFAULT);
   const sort = sanitizePlanSort(storedSort);
-  const planSearch = useServerSearch<PlanSearchData>(
-    onBank ? '' : search,
-    (query, signal) =>
-      workspaceId === null
-        ? Promise.resolve({
-            ok: true as const,
-            data: { bundles: [], thumbs: { posts: {}, concepts: {} }, matchedItems: {}, timeZone },
-          })
-        : searchPlanTab(supabase, { workspaceId, query }, signal),
-    workspaceId ?? '',
-  );
-  const searching = planSearch.active;
   const bank = useBankData({
     workspaceId,
     userId,
     enabled: ready,
     filter: bankFilter,
-    searchText: onBank ? search : '',
     // Live only while the Bank chip is picked, agency side; the
     // subscription starts in an effect, after the Bank paints.
     live: onBank && creator,
@@ -340,16 +227,19 @@ export function PlanTabPage(): ReactElement {
         : null,
     [creator, workspaceId, bank.ideas],
   );
+  // Upcoming and Past read every plan (no range), a page at a time: one read
+  // for both chips, so a chip pick paints at once from the same pages.
   const { load, retry, loadMore, moreBusy } = usePlanTabData({
     workspaceId,
-    range: planWeekChipRange(chip, today),
+    range: null,
     onlyShared: !creator,
     enabled: ready,
   });
-  // The chip's own read. A chip whose read is still on its way
-  // paints at once from the last read this mount held (narrowed to the chip),
-  // and its own read replaces it when it lands (speed rule: paint what the
-  // device holds, fetch the rest behind it). Never across workspaces or sides.
+  // The tab's own read. While a new read is on its way (a side or workspace
+  // change re-keys it) the page paints at once from the last read this mount
+  // held, and its own read replaces it when it lands (speed rule: paint what
+  // the device holds, fetch the rest behind it). Never across workspaces or
+  // sides.
   const own = load.status === 'ready' ? load.data : null;
   const heldKey = `${workspaceId ?? ''}:${String(creator)}`;
   const held = useRef<{ key: string; data: PlanTabData } | null>(null);
@@ -360,117 +250,62 @@ export function PlanTabPage(): ReactElement {
       : null;
   const data = own ?? borrowed;
   useKeptScroll(keptKey('scroll'), data !== null);
-  // Load more belongs to the chip's own read only.
+  // Load more belongs to the tab's own read only.
   const more = useMemo(
     () => (own !== null && own.nextCursor !== null ? { busy: moreBusy, onMore: loadMore } : null),
     [own, moreBusy, loadMore],
   );
-  // After This week or Next week paints, every plan is read once
-  // behind it (one request, not on a paint or tap path), so All, Upcoming and
-  // Past paint at once when tapped.
-  const weekRead = planWeekChipRange(chip, today) !== null;
-  const ownReady = own !== null;
-  useEffect(() => {
-    if (!ownReady || !weekRead || workspaceId === null) return;
-    warmPlanTabRead({ workspaceId, range: null, onlyShared: !creator });
-  }, [ownReady, weekRead, workspaceId, creator]);
   const bundles = useMemo(
     () => (data !== null ? visibleBundles(data.bundles, side) : []),
     [data, side],
   );
-  // The chip narrows the list and the search results to its week group.
+  // The chip narrows the list to its sections (Upcoming: This week, Next
+  // week, Later; Past: the rest).
   const inChip = useCallback(
-    (b: PlanBundle): boolean => chip === 'all' || planSectionOf(b.plan, today) === chip,
+    (b: PlanBundle): boolean => planChipHolds(chip, planSectionOf(b.plan, today)),
     [chip, today],
   );
   const zero = data !== null && !data.anyPlan;
   const openCompose = (range?: ComposeRange): void => setCompose({ range });
-  // Search results, in the sort's order; approvers see shared plans only.
-  const results = useMemo(
-    () =>
-      planSearch.data !== null
-        ? sortPlanBundles(visibleBundles(planSearch.data.bundles, side).filter(inChip), sort)
-        : null,
-    [planSearch.data, side, sort, inChip],
+
+  // The top bar (decision A): the sort, then the filled "+" for creators
+  // (none for anyone who can't create). On the Bank chip the sort opens its
+  // Filter and sort sheet and the "+" is Add idea. Pure render: published in
+  // a layout effect, no read, no await.
+  useTopbarActions(
+    onBank
+      ? {
+          sort: <BankFilterTrigger onOpen={() => setBankSheet('filter')} />,
+          primary:
+            creator && workspaceId !== null && bucketWrites !== null ? (
+              <TopbarPlus label="Add idea" onClick={() => setBankSheet('add')} />
+            ) : undefined,
+        }
+      : {
+          sort: (
+            <SortMenu<PlanTabSort>
+              options={PLAN_SORT_OPTIONS}
+              value={sort}
+              onChange={setSort}
+              label="Sort plans"
+            />
+          ),
+          primary:
+            creator && workspaceId !== null ? (
+              <TopbarPlus label={NEW_PLAN_LABEL} onClick={() => openCompose()} />
+            ) : undefined,
+        },
   );
 
-  const sortMenu = (
-    <SortMenu<PlanTabSort>
-      options={PLAN_SORT_OPTIONS}
-      value={sort}
-      onChange={setSort}
-      label="Sort plans"
-    />
-  );
-  // No page title (as Pipeline and Briefs): the shared top bar starts with the
-  // search, then the sort (the Bank: Filter and sort), then New plan (the
-  // Bank: Add idea) for creators; the chips under it. Both widths alike.
-  const filterButton = (
-    <IconButton
-      label="Filter and sort"
-      data-bank-filter-open=""
-      onClick={() => setBankSheet('filter')}
-      className="shrink-0"
-    >
-      <IconFilterLines size={ICON_SIZE.control} />
-    </IconButton>
-  );
   const chipRow = <PlanWeekChips chip={chip} onChip={setChip} showBank={showBank} />;
-  const head = onBank ? (
-    <SectionHeader<PlanTabSort>
-      search={{
-        value: search,
-        onChange: setSearch,
-        placeholder: 'Search ideas',
-        label: 'Search ideas',
-      }}
-      sort={{ node: filterButton }}
-      {...(creator
+  // Decision E: the Bank's visible Select at the chip row's end, where the
+  // person can select (creators; a client reads only). The plan list has no
+  // select mode, so its head shows none (hide what a person can't do).
+  const head = (
+    <SectionHeader
+      {...(onBank && creator
         ? {
-            primaryAction: {
-              node: (
-                <Button
-                  variant="primary"
-                  type="button"
-                  data-bank-add-open=""
-                  onClick={() => setBankSheet('add')}
-                  className="shrink-0 whitespace-nowrap"
-                >
-                  <IconPlus size={ICON_SIZE.inline} />
-                  Add idea
-                </Button>
-              ),
-            },
-          }
-        : {})}
-    >
-      {chipRow}
-    </SectionHeader>
-  ) : (
-    <SectionHeader<PlanTabSort>
-      search={{
-        value: search,
-        onChange: setSearch,
-        placeholder: 'Search plans',
-        label: 'Search plans',
-      }}
-      sort={{ node: sortMenu }}
-      {...(creator
-        ? {
-            primaryAction: {
-              node: (
-                <Button
-                  variant="primary"
-                  type="button"
-                  data-plan-tab-new=""
-                  onClick={() => openCompose()}
-                  className="shrink-0 whitespace-nowrap"
-                >
-                  <IconPlus size={ICON_SIZE.inline} />
-                  {NEW_PLAN_LABEL}
-                </Button>
-              ),
-            },
+            select: <SectionSelect active={bankSelect.active} onToggle={bankSelect.toggleMode} />,
           }
         : {})}
     >
@@ -478,22 +313,15 @@ export function PlanTabPage(): ReactElement {
     </SectionHeader>
   );
 
-  if (data !== null && !zero && !searching) mark('plan-tab:paint');
-  // Boxes only while nothing is held for the tab (a kept or session value
-  // paints at once); the cards settle once when they land after them.
-  const searchBoxes =
-    searching &&
-    !(planSearch.status === 'error' && planSearch.data === null) &&
-    (results === null || planSearch.data === null);
+  if (data !== null && !zero) mark('plan-tab:paint');
   // A borrowed read with nothing in the picked chip is not this chip's answer
   // yet: boxes until its own read lands, never the zero line.
   const borrowedEmpty = borrowed !== null && !bundles.some(inChip);
-  const listBoxes =
-    !onBank && !searching && load.status !== 'failed' && (data === null || borrowedEmpty);
-  const hadBoxes = useHadBoxes(searchBoxes || listBoxes);
+  const listBoxes = !onBank && load.status !== 'failed' && (data === null || borrowedEmpty);
+  const hadBoxes = useHadBoxes(listBoxes);
   const landedRef = useRef<HTMLDivElement>(null);
-  const landed = searching ? results !== null && results.length > 0 : data !== null && !zero;
-  useSettleOnLanding(landedRef, landed && !searchBoxes && !listBoxes, hadBoxes);
+  const landed = data !== null && !zero;
+  useSettleOnLanding(landedRef, landed && !listBoxes, hadBoxes);
   const openIdea = (id: string): void =>
     navigate(withNewestUnread(bankItemHref(id), 'plan_item', id));
   const bankSurfaceProps =
@@ -510,6 +338,7 @@ export function PlanTabPage(): ReactElement {
           getPlans: () => readPlansForPlanIt(workspaceId, today),
           onOpenIdea: openIdea,
           epoch: chip,
+          selection: bankSelect,
         }
       : null;
   const bankLine = (
@@ -528,31 +357,6 @@ export function PlanTabPage(): ReactElement {
         <BankSurface {...bankSurfaceProps} />
       </>
     );
-  } else if (searching) {
-    body =
-      planSearch.status === 'error' && planSearch.data === null ? (
-        <ScreenFailed onRetry={planSearch.refresh} />
-      ) : results === null || planSearch.data === null ? (
-        <PlanTabBoxes />
-      ) : (
-        <PlanSearchResults
-          bundles={results}
-          thumbs={planSearch.data.thumbs}
-          matchedItems={planSearch.data.matchedItems}
-          query={planSearch.query}
-          timeZone={timeZone}
-          now={now}
-          onOpenPlan={(planId) => navigate(`/plan/${planId}`)}
-          onOpenItem={(planId, itemId) =>
-            navigate(withNewestUnread(itemRoute(planId, itemId), 'plan_item', itemId))
-          }
-          filtersActive={chip !== 'all'}
-          onClear={() => {
-            setSearch('');
-            setChip('all');
-          }}
-        />
-      );
   } else if (load.status === 'failed') {
     body = <ScreenFailed onRetry={retry} />;
   } else if (zero) {
@@ -567,8 +371,8 @@ export function PlanTabPage(): ReactElement {
       </div>
     );
   } else if (data === null || borrowedEmpty) {
-    // Only the grouped All list has headings; elsewhere the boxes draw none (no shift on landing).
-    body = <PlanTabBoxes heading={chip === 'all' && sort === PLAN_SORT_DEFAULT} />;
+    // Only the grouped Upcoming list has headings; elsewhere the boxes draw none (no shift on landing).
+    body = <PlanTabBoxes heading={chip === 'upcoming' && sort === PLAN_SORT_DEFAULT} />;
   } else if (sort === PLAN_SORT_DEFAULT) {
     body = (
       <PlanTabList
@@ -644,9 +448,8 @@ export function PlanTabPage(): ReactElement {
 }
 
 /**
- * The chips under the search row, phone and laptop (Bank, This week, Next
- * week, Upcoming, Past, All), on the same line as Pipeline's stage chips so
- * switching tabs never moves the page. No counts: the list reads a page at a
+ * The chip row, phone and laptop (Bank, Upcoming, Past), on the same line as
+ * Pipeline's stage chips so switching tabs never moves the page. No counts: the list reads a page at a
  * time. Bank shows for a creator, or a client whose bank holds an idea.
  */
 function PlanWeekChips(props: {

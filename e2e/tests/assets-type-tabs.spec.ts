@@ -4,10 +4,11 @@ import { WORKSPACE_ID } from '../fixtures/chat-data';
 import { expectMinTouchTarget } from '../helpers/touch-target';
 import { expectButtonsMeetSystem } from '../helpers/button-system';
 
-// Assets tabs: All, Media, PDF, Docs, Sheets, Links filter the one loaded list
-// on the client (no per-tab read), the tab lives in ?type= (Back and refresh
-// keep it, unknown is All), counts and empty states come from the same list,
-// and a link opens its URL in a new tab. Tagged @theme for light and dark.
+// Assets tabs: All, Media, Docs, Links (Docs holds PDFs, documents,
+// presentations and sheets) filter the one loaded list on the client (no
+// per-tab read), the tab lives in ?type= (Back and refresh keep it, the old
+// pdf and sheets land on Docs, unknown is All), counts come from the same
+// list, and a link opens its URL in a new tab. Tagged @theme for light and dark.
 
 const AT = Date.parse('2026-10-01T09:00:00Z');
 
@@ -77,9 +78,7 @@ async function open(page: Page): Promise<HarnessNetwork> {
   return network;
 }
 
-test('six tabs filter the loaded list, with counts, empty states and ?type= @theme', async ({
-  page,
-}) => {
+test('four tabs filter the loaded list, with counts and ?type= @theme', async ({ page }) => {
   const network = await open(page);
   const reads: string[] = [];
   page.on('request', (r) => {
@@ -89,22 +88,14 @@ test('six tabs filter the loaded list, with counts, empty states and ?type= @the
   await expect(cards(page)).toHaveCount(6, { timeout: 15_000 });
 
   const tablist = page.getByRole('tablist', { name: 'File types' });
-  await expect(tablist.getByRole('tab')).toHaveText([
-    'All 6',
-    'Media 2',
-    'PDF 1',
-    'Docs 2',
-    'Sheets',
-    'Links 1',
-  ]);
+  await expect(tablist.getByRole('tab')).toHaveText(['All 6', 'Media 2', 'Docs 3', 'Links 1']);
   for (const t of await tablist.getByRole('tab').all()) expectMinTouchTarget(await t.boundingBox());
   await expect(tab(page, 'All')).toHaveAttribute('aria-selected', 'true');
   const readsAfterLoad = reads.length;
 
   const expected: [string, string, number][] = [
     ['Media', 'media', 2],
-    ['PDF', 'pdf', 1],
-    ['Docs', 'docs', 2],
+    ['Docs', 'docs', 3],
     ['Links', 'links', 1],
   ];
   for (const [name, type, count] of expected) {
@@ -113,9 +104,6 @@ test('six tabs filter the loaded list, with counts, empty states and ?type= @the
     await expect(cards(page)).toHaveCount(count);
     expect(new URL(page.url()).searchParams.get('type')).toBe(type);
   }
-  await tab(page, 'Sheets').click();
-  await expect(cards(page)).toHaveCount(0);
-  await expect(page.getByText('Sheets show up here.')).toBeVisible();
   await tab(page, 'All').click();
   await expect(cards(page)).toHaveCount(6);
   expect(new URL(page.url()).searchParams.has('type')).toBe(false);
@@ -137,6 +125,12 @@ test('six tabs filter the loaded list, with counts, empty states and ?type= @the
   await page.goto('/pipeline');
   await page.goBack();
   await expect(tab(page, 'Links')).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 });
+  // The retired PDF and Sheets tabs land on Docs.
+  for (const old of ['pdf', 'sheets']) {
+    await page.goto(`/assets?type=${old}`);
+    await expect(tab(page, 'Docs')).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 });
+    await expect(cards(page)).toHaveCount(3);
+  }
   await page.goto('/assets?type=nonsense');
   await expect(tab(page, 'All')).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 });
   await expect(cards(page)).toHaveCount(6);

@@ -12,26 +12,22 @@
 // the server. Sign-out deletes every session read.
 //
 // The workspace zone comes with the read (plan_bundle_read returns it), so no
-// read of its own: a key never carries a zone. A press that starts before the
-// page knows the zone guesses it for this week (the context's zone, else the
-// device's); a guess that lands on another week is a key the mount never asks
-// for, so it is never painted.
+// read of its own: a key never carries a zone. The tab's chips all read every
+// plan (no range), so a nav press needs no zone to land on the mount's key.
 
 import type { Client, Result } from '@srtdio/rpc';
 import { POST_CHANGED_EVENT } from '@/components/chat/post-card';
 import { PLAN_CHANGED_EVENT } from '@/lib/chat/plans';
 import { withReadTimeout, READ_TIMEOUT_MS } from '@/lib/chat-reads';
-import { canCreatePlans, PLAN_WEEK_CHIP_DEFAULT, planWeekChipRange } from '@/lib/plan-tab';
+import { canCreatePlans } from '@/lib/plan-tab';
 import { readPlanTab, type PlanTabData } from '@/lib/plan-tab-read';
-import { civilToday } from '@/lib/plan-week';
 import type { PrefetchContext } from '@/lib/prefetch-context';
 import { invalidateReads, peekKept, readKey, sharedRead } from '@/lib/session-read';
-import { safeTimeZone } from '@/lib/time';
 
 /** What one Plan tab read covers (the hook's inputs, minus the switches). */
 export interface PlanTabReadArgs {
   workspaceId: string;
-  /** The chip's week (inclusive); null: every plan (All, Upcoming, Past). */
+  /** The visible days (inclusive); null: every plan (the tab's Upcoming and Past chips). */
   range: { start: string; end: string } | null;
   onlyShared: boolean;
 }
@@ -88,26 +84,20 @@ export function invalidatePlanTabReads(): void {
 }
 
 /**
- * Start the read the tab's first render asks for: This week (the default chip,
- * on a phone and a laptop alike since the laptop calendar retired); shared
- * plans only for an approver. The viewer's side comes from the session-shared
- * role read (free when the shell already has it). The key is exactly the one
- * the mount computes, so the mount joins this read. The week around today is
- * taken in the context's zone, else the device's (no zone read: the bundle
- * carries the workspace's). Never throws.
+ * Start the read the tab's first render asks for: every plan, a page at a
+ * time (Upcoming, the default chip, and Past read the same pages), on a phone
+ * and a laptop alike; shared plans only for an approver. The viewer's side
+ * comes from the session-shared role read (free when the shell already has
+ * it). The key is exactly the one the mount computes, so the mount joins this
+ * read. Never throws.
  */
-export async function startPlanTabRead(
-  client: Client,
-  ctx: PrefetchContext & { timeZone?: string },
-  now: Date = new Date(),
-): Promise<void> {
+export async function startPlanTabRead(client: Client, ctx: PrefetchContext): Promise<void> {
   const { resolveViewerSide } = await import('@/lib/chat/viewer-role');
   const side = await resolveViewerSide(client, ctx.workspaceId, ctx.userId);
   if (side === 'unknown') return;
-  const today = civilToday(now, safeTimeZone(ctx.timeZone));
   await readSharedPlanTab(client, ctx.userId, {
     workspaceId: ctx.workspaceId,
-    range: planWeekChipRange(PLAN_WEEK_CHIP_DEFAULT, today),
+    range: null,
     onlyShared: !canCreatePlans(side),
   });
 }

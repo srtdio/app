@@ -4,7 +4,7 @@ import { PEER_NAME } from '../fixtures/chat-data';
 
 // The chat list scrolls the document on a phone (src/lib/scroll-mode.ts:
 // /chat with no ?channel= is page mode), so mobile browser bars shrink on
-// scroll and the rows run under them. The list header (search, chips) pins
+// scroll and the rows run under them. The list header (the chip row) pins
 // below the sticky Topbar, with no gap above it. Opening a chat puts the
 // shell back in the locked mode the thread has always had. Laptop is the
 // locked shell, unchanged. Tagged @theme for light and dark.
@@ -60,34 +60,35 @@ test('phone: the chat list scrolls the document under a pinned header @theme', a
   expect(state.innerScrollers).toBe(0);
   expect(state.scrollY).toBe(0);
 
-  const search = page.getByRole('searchbox', { name: 'Search chats' });
+  // The chip row (search lives only in the top bar's palette).
+  const chipRow = page.locator('[data-chip-row]').first();
   const topbarBottom = await page
     .locator('header')
     .first()
     .evaluate((el) => el.getBoundingClientRect().bottom);
-  const searchTopBefore = await search.evaluate((el) => el.getBoundingClientRect().top);
+  const rowTopBefore = await chipRow.evaluate((el) => el.getBoundingClientRect().top);
 
   await page.evaluate(() => window.scrollTo(0, 400));
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 
-  // The Topbar stays at the top; the search row stays where it was, pinned
+  // The Topbar stays at the top; the chip row stays where it was, pinned
   // below it (same offset as at rest: no jump, no gap).
   const topbarTop = await page
     .locator('header')
     .first()
     .evaluate((el) => el.getBoundingClientRect().top);
   expect(Math.abs(topbarTop)).toBeLessThanOrEqual(1);
-  const searchTopAfter = await search.evaluate((el) => el.getBoundingClientRect().top);
-  expect(Math.abs(searchTopAfter - searchTopBefore)).toBeLessThanOrEqual(1);
+  const rowTopAfter = await chipRow.evaluate((el) => el.getBoundingClientRect().top);
+  expect(Math.abs(rowTopAfter - rowTopBefore)).toBeLessThanOrEqual(1);
   // The pinned header box starts right at the Topbar's bottom edge.
-  const headerTop = await search.evaluate((el) => {
+  const headerTop = await chipRow.evaluate((el) => {
     let node: Element | null = el;
     while (node !== null && getComputedStyle(node).position !== 'sticky') node = node.parentElement;
     return node === null ? Number.NaN : node.getBoundingClientRect().top;
   });
   expect(Math.abs(headerTop - topbarBottom)).toBeLessThanOrEqual(1);
   // Light and dark: the pinned header paints the page canvas (no new surface).
-  const colors = await search.evaluate((el) => {
+  const colors = await chipRow.evaluate((el) => {
     let node: Element | null = el;
     while (node !== null && getComputedStyle(node).position !== 'sticky') node = node.parentElement;
     return {
@@ -109,29 +110,14 @@ test('phone: the chat list scrolls the document under a pinned header @theme', a
   // restoration puts the list back where it was (as on every page-mode route),
   // and the header is pinned there below the Topbar.
   await page.goBack();
-  await expect(search).toBeVisible();
+  await expect(chipRow).toBeVisible();
   await expect.poll(async () => (await listState(page)).pageClass).toBe(true);
   const back = await listState(page);
   expect(back.mainOverflowY).toBe('visible');
   expect(back.innerScrollers).toBe(0);
-  const searchTopBack = await search.evaluate((el) => el.getBoundingClientRect().top);
-  expect(Math.abs(searchTopBack - searchTopBefore)).toBeLessThanOrEqual(1);
+  const rowTopBack = await chipRow.evaluate((el) => el.getBoundingClientRect().top);
+  expect(Math.abs(rowTopBack - rowTopBefore)).toBeLessThanOrEqual(1);
   expect(network.blocked).toEqual([]);
-});
-
-test('phone: an open keyboard on the list search leaves no gap when it closes', async ({
-  page,
-}) => {
-  test.skip(!phone(page), 'phone only');
-  await page.setViewportSize({ width: 390, height: 320 });
-  await installHarnessNetwork(page);
-  await openList(page);
-  const search = page.getByRole('searchbox', { name: 'Search chats' });
-  await search.focus();
-  await search.blur();
-  const state = await listState(page);
-  expect(state.pageClass).toBe(true);
-  expect(state.scrollY).toBe(0);
 });
 
 test('laptop: the chat list is the locked shell, unchanged', async ({ page }) => {

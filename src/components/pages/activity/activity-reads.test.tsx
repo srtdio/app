@@ -5,9 +5,10 @@
 // pages stale (the next switch reads anew); a kept page paints at any age and
 // refreshes quietly; a return to Activity lands on the same chip with its kept
 // rows and no loading line, applies the refresh while untouched and holds it
-// after a touch; the page's own writes edit the kept pages; and the bell
-// press's prefetch is joined by the page's own read.
-import { act } from 'react';
+// after a touch; the page's own writes edit the kept pages; the bell
+// press's prefetch is joined by the page's own read; the top bar carries the
+// sort (each order read server-side) and Mark all read (only while unread).
+import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -77,7 +78,8 @@ window.matchMedia ??= ((query: string) => ({
   dispatchEvent: () => false,
 })) as unknown as typeof window.matchMedia;
 
-import { NotificationsPage } from '@/components/pages/NotificationsPage';
+import { NotificationsPage, MARK_ALL_READ_LABEL } from '@/components/pages/NotificationsPage';
+import { TopbarActionsProvider, useTopbarActionsValue } from '@/components/shell/topbar-actions';
 import {
   EMPTY_LINES,
   LOADING_NOTIFICATIONS,
@@ -128,6 +130,17 @@ function item(over: Partial<ActivityItem>): ActivityItem {
 
 let root: Root | null = null;
 
+/** The app top bar's two slots, as Topbar reads them. */
+function TopbarProbe(): ReactElement {
+  const { sort, primary } = useTopbarActionsValue();
+  return (
+    <div data-probe-topbar="">
+      <div data-probe-sort="">{sort}</div>
+      <div data-probe-primary="">{primary}</div>
+    </div>
+  );
+}
+
 function render(): void {
   const host = document.createElement('div');
   document.body.appendChild(host);
@@ -135,10 +148,20 @@ function render(): void {
   act(() => {
     root?.render(
       <MemoryRouter initialEntries={['/notifications']}>
-        <NotificationsPage />
+        <TopbarActionsProvider>
+          <TopbarProbe />
+          <NotificationsPage />
+        </TopbarActionsProvider>
       </MemoryRouter>,
     );
   });
+}
+
+/** The directions each fetchActivityEntries call asked for, in order. */
+function askedDirections(): string[] {
+  return h.fetchActivityEntries.mock.calls.map(
+    (call) => (call[2] as { direction?: string } | undefined)?.direction ?? 'newest',
+  );
 }
 
 async function settle(): Promise<void> {
@@ -386,7 +409,7 @@ describe('Activity: the bell press prefetch', () => {
     expect(count).not.toHaveBeenCalled();
   });
 
-  it('reads newest first even when an old Oldest first sort is still on the device', async () => {
+  it('reads in the order stored on the device (Oldest first), on the key the page joins', async () => {
     window.localStorage.setItem('sorted:sort:activity', 'oldest');
     h.from.mockImplementation(() => {
       const builder: object = new Proxy(
@@ -405,9 +428,67 @@ describe('Activity: the bell press prefetch', () => {
     });
     prefetchActivityData({ userId: 'u1', workspaceId: 'w1' });
     await settle();
-    // The page (newest first, no sort) joins the prefetch: no second read.
+    // The page (Oldest first, the stored sort) joins the prefetch: no second read.
     const page = vi.fn(async (): Promise<LoadResult> => ({ ok: true, data: [] }));
-    await sharedActivityPage(activityPageKey('u1', 'w1', 'all', 'newest'), page);
+    await sharedActivityPage(activityPageKey('u1', 'w1', 'all', 'oldest'), page);
     expect(page).not.toHaveBeenCalled();
+  });
+});
+
+describe('Activity: the top bar', () => {
+  const markAll = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>(
+      `[data-probe-primary] button[aria-label="${MARK_ALL_READ_LABEL}"]`,
+    );
+
+  it('Mark all read is the primary while something on the chip is unread', async () => {
+    render();
+    await settle();
+    expect(markAll()).not.toBeNull();
+    expect(markAll()?.hasAttribute('data-activity-mark-all')).toBe(true);
+    // Moved up from the day line: nothing on the bucket head.
+    expect(document.querySelector('[data-activity-bucket-head] button')).toBeNull();
+  });
+
+  it('the primary slot is empty at 0 unread', async () => {
+    h.fetchActivityEntries.mockResolvedValue({
+      ok: true,
+      data: [item({ id: 'e1', title: 'Q3 Launch', readAt: new Date().toISOString() })],
+    } satisfies LoadResult);
+    render();
+    await settle();
+    expect(document.body.textContent).toContain('Q3 Launch');
+    expect(markAll()).toBeNull();
+    expect(document.querySelector('[data-probe-primary]')?.childElementCount).toBe(0);
+  });
+
+  it('publishes the sort control (IconSort) into the top bar', async () => {
+    render();
+    await settle();
+    expect(document.querySelector('[data-probe-sort] button')).not.toBeNull();
+  });
+
+  it('reads newest first by default and Oldest first when that sort is stored', async () => {
+    render();
+    await settle();
+    expect(askedDirections()).toEqual(['newest']);
+    act(() => root?.unmount());
+    root = null;
+    document.body.innerHTML = '';
+    resetSessionReads();
+    h.fetchActivityEntries.mockClear();
+    window.localStorage.setItem('sorted:sort:activity', 'oldest');
+    render();
+    await settle();
+    expect(askedDirections()).toEqual(['oldest']);
+  });
+
+  it('only All, Unread and Mentions chips', async () => {
+    render();
+    await settle();
+    const labels = [...document.querySelectorAll('[data-activity-chips] button')].map((b) =>
+      (b.textContent ?? '').replace(/\d+/g, '').trim(),
+    );
+    expect(labels).toEqual(['All', 'Unread', 'Mentions']);
   });
 });

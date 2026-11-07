@@ -8,7 +8,7 @@
 
 import { mark } from '@/lib/perf-marks';
 import type { Client, Result } from '@srtdio/rpc';
-import { inboxMarkAllRead, inboxMarkRead, withTraceHeader } from '@srtdio/rpc';
+import { inboxMarkAllRead, inboxMarkRead } from '@srtdio/rpc';
 import type { Database, InboxEventTypeValue, Json } from '@srtdio/schemas';
 import { INBOX_EVENT_TYPES } from '@srtdio/schemas';
 import { parseMentions } from '@srtdio/comments';
@@ -22,10 +22,8 @@ import {
 import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
 import {
   BELL_CHAT_ENTITY,
-  BELL_PLAN_EVENT_TYPES,
   RETIRED_EVENT_LIST,
   chatMessageHref,
-  isBellPlanEvent,
   planHref,
   taskLinkToken,
 } from '@/lib/inbox/bell-types';
@@ -80,8 +78,8 @@ import {
   sharedRead,
 } from '@/lib/session-read';
 import { generateTraceId } from '@/lib/trace';
-import { serverSearchQuery, withAbort } from '@/lib/search/server-search';
 import type { PrefetchContext } from '@/lib/prefetch-context';
+import type { SortOption } from '@/components/ui/SortMenu';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -163,8 +161,12 @@ export function warnUnknownEventType(eventType: string): void {
  */
 export const MENTION_EVENT_TYPE: InboxEventTypeValue = 'mention';
 
-/** The chips (single-select): which slice of the inbox is shown. */
-export type ActivityState = 'all' | 'unread' | 'mentions' | 'briefs' | 'plans' | 'snoozed';
+/**
+ * The chips (single-select): which slice of the inbox is shown. Brief and
+ * plan rows have no chip of their own: All and Unread show them. 'snoozed'
+ * is kept by the reads only (no chip).
+ */
+export type ActivityState = 'all' | 'unread' | 'mentions' | 'snoozed';
 
 /** The display event type of a row: a 'system' brief reopen is BRIEF_REOPENED_EVENT. */
 function displayEventType(row: InboxEntryRow, payload: unknown): string {
@@ -177,8 +179,40 @@ function displayEventType(row: InboxEntryRow, payload: unknown): string {
  *  brief created / closed, posts created from a brief). */
 export const BRIEFS_SCOPE = 'briefs';
 
-/** The list order: Activity reads newest first (no sort control); 'oldest' is kept by the reads. */
+/** The list order: the top bar's sort (Newest first, the default, or Oldest first). */
 export type ActivityDirection = 'newest' | 'oldest';
+
+export const ACTIVITY_SORT_DEFAULT: ActivityDirection = 'newest';
+
+/** The top bar's sort menu, in menu order. Every label says its direction. */
+export const ACTIVITY_SORT_OPTIONS: SortOption<ActivityDirection>[] = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+];
+
+/** The useSort page key Activity's order persists under (src/lib/use-sort.ts). */
+export const ACTIVITY_SORT_PAGE = 'activity';
+
+/**
+ * Where useSort keeps Activity's order on the device ('sorted:sort:' + the page
+ * key, src/lib/use-sort.ts), read by the bell press's prefetch so it starts
+ * the page one the page will ask for.
+ */
+export const ACTIVITY_SORT_STORAGE_KEY = `sorted:sort:${ACTIVITY_SORT_PAGE}`;
+
+/** A stored sort value as a direction: anything stale or unknown reads as Newest first. Pure. */
+export function activitySort(value: string | null): ActivityDirection {
+  return value === 'oldest' ? 'oldest' : ACTIVITY_SORT_DEFAULT;
+}
+
+/** The order stored on this device (Newest first when storage is empty or unavailable). */
+export function storedActivitySort(): ActivityDirection {
+  try {
+    return activitySort(window.localStorage.getItem(ACTIVITY_SORT_STORAGE_KEY));
+  } catch {
+    return ACTIVITY_SORT_DEFAULT;
+  }
+}
 
 /** One inbox entry, mapped to the fields the row renders. */
 export interface ActivityItem {
@@ -1195,11 +1229,9 @@ export function isSnoozed(item: ActivityItem, nowMs: number): boolean {
 /**
  * Apply the chip: All hides snoozed; Unread is unread + not snoozed;
  * Mentions is every mention (post, brief and chat; read AND unread) that is
- * not snoozed; Briefs is every brief event (scope 'briefs') that is not
- * snoozed; Plans is every plan alert (the six plan_* types) that is not
- * snoozed; Snoozed is only snoozed. Task and idea bank alerts have no chip
- * of their own. Input order is preserved, so a newest-first page stays
- * newest-first through the filter.
+ * not snoozed; Snoozed is only snoozed. Brief, plan, task and idea bank rows
+ * have no chip of their own (All and Unread show them). Input order is
+ * preserved, so a page stays in its sort order through the filter.
  */
 export function filterByState(
   items: readonly ActivityItem[],
@@ -1215,10 +1247,6 @@ export function filterByState(
       return items.filter(
         (item) => item.eventType === MENTION_EVENT_TYPE && !isSnoozed(item, nowMs),
       );
-    case 'briefs':
-      return items.filter((item) => item.scope === BRIEFS_SCOPE && !isSnoozed(item, nowMs));
-    case 'plans':
-      return items.filter((item) => isBellPlanEvent(item.eventType) && !isSnoozed(item, nowMs));
     case 'all':
     default:
       return items.filter((item) => !isSnoozed(item, nowMs));
@@ -1242,9 +1270,7 @@ export function updatesLabel(n: number): string {
 /** The one positive line each chip's empty state shows (All keeps its own). */
 export const EMPTY_LINES = {
   unread: 'New updates show up here.',
-  plans: 'Plan updates show up here.',
   mentions: 'Mentions of you show up here.',
-  briefs: 'Brief updates show up here.',
 } as const;
 
 /** The load error: plain copy, never the raw error. */
@@ -1728,7 +1754,7 @@ async function readInboxPage(
  * ordered by (created_at, id) in `direction` (newest first by default) on the
  * server; pass `cursor` (the last loaded row's pair, cursorAfter) to fetch the
  * next page in that same direction. Pass `state` to filter server-side to the
- * active chip (Unread, Mentions, Briefs, Plans, Snoozed; All has no filter),
+ * active chip (Unread, Mentions, Snoozed; All has no filter),
  * so older matches are never hidden behind the page cap. `nowIso` is
  * the snooze cut-off (defaults to now). The page is read through
  * partition-bounded windows (readInboxPage), so only recent months are opened.
@@ -1763,15 +1789,11 @@ export async function fetchActivityEntries(
     const typed =
       input.state === 'mentions'
         ? capped.eq('event_type', MENTION_EVENT_TYPE)
-        : input.state === 'briefs'
-          ? capped.eq('scope', BRIEFS_SCOPE)
-          : input.state === 'plans'
-            ? capped.in('event_type', [...BELL_PLAN_EVENT_TYPES])
-            : input.state === 'unread'
-              ? capped.is('read_at', null).or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`)
-              : input.state === 'snoozed'
-                ? capped.gt('snoozed_until', nowIso)
-                : capped;
+        : input.state === 'unread'
+          ? capped.is('read_at', null).or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`)
+          : input.state === 'snoozed'
+            ? capped.gt('snoozed_until', nowIso)
+            : capped;
     const scoped = cursor !== undefined ? typed.or(keysetFilter(cursor, ascending)) : typed;
     const res = await scoped
       .order('created_at', { ascending })
@@ -1785,67 +1807,10 @@ export async function fetchActivityEntries(
   return enrichInboxRows(client, workspaceId, read.data);
 }
 
-type ActivitySearchFn = Database['public']['Functions']['activity_search'];
-
-/** One Activity search page: the cap is the feed's page size. */
-export const ACTIVITY_SEARCH_LIMIT = ACTIVITY_PAGE_SIZE;
-
-/**
- * activity_search's named args: the query trimmed, the trace explicit, the
- * keyset cursor (created_at, id) for a next page, the page size. Pure.
- */
-export function activitySearchArgs(input: {
-  workspaceId: string;
-  query: string;
-  traceId: string;
-  cursor?: ActivityCursor;
-}): ActivitySearchFn['Args'] {
-  return {
-    p_workspace_id: input.workspaceId,
-    p_query: serverSearchQuery(input.query),
-    p_trace_id: input.traceId,
-    p_limit: ACTIVITY_SEARCH_LIMIT,
-    ...(input.cursor !== undefined
-      ? { p_before_created_at: input.cursor.createdAt, p_before_id: input.cursor.id }
-      : {}),
-  };
-}
-
-/**
- * One page of the Activity search (2+ characters): ONE activity_search call,
- * newest first, keyset on (created_at, id) (pass cursorAfter of the loaded
- * rows for the next page), across every chip. The rows go through the SAME
- * mapping and batched joins as the feed (enrichInboxRows), so a result renders
- * exactly like its feed card. A fresh uuid_v7 per call as p_trace_id; `signal`
- * aborts it (a newer query).
- */
-export async function searchActivityEntries(
-  client: Client,
-  workspaceId: string,
-  input: { query: string; cursor?: ActivityCursor },
-  signal?: AbortSignal,
-): Promise<LoadResult> {
-  if (serverSearchQuery(input.query) === '') return { ok: true, data: [] };
-  try {
-    const args = activitySearchArgs({ workspaceId, ...input, traceId: generateTraceId() });
-    mark('activity:search:start');
-    const res = await withAbort(
-      withTraceHeader(client.rpc('activity_search', args), args.p_trace_id),
-      signal,
-    );
-    mark('activity:search:end');
-    if (res.error !== null) return { ok: false, error: res.error.message };
-    if (signal?.aborted === true) return { ok: false, error: 'aborted' };
-    return await enrichInboxRows(client, workspaceId, res.data ?? []);
-  } catch (error) {
-    return { ok: false, error: String(error) };
-  }
-}
-
 /**
  * The feed's one mapping path: map inbox rows (mapEntry) and resolve what the
  * minimal payloads omit (actor names, titles, previews, thumbnails) in batched
- * waves, never one read per row. Shared by the feed page and the search.
+ * waves, never one read per row.
  */
 async function enrichInboxRows(
   client: Client,
@@ -2231,11 +2196,11 @@ export function markAllEntriesRead(
 export const MARK_READ_BATCH = 500;
 
 /** A chip whose Mark all read covers every matching row on the server, loaded or not. */
-type ChipMarkState = 'mentions' | 'briefs' | 'plans';
+type ChipMarkState = 'mentions';
 
-/** Whether a chip's Mark all read pages through the server (Mentions, Briefs, Plans). Pure. */
+/** Whether a chip's Mark all read pages through the server (Mentions). Pure. */
 export function marksChipOnServer(state: ActivityState): state is ChipMarkState {
-  return state === 'mentions' || state === 'briefs' || state === 'plans';
+  return state === 'mentions';
 }
 
 /** One page (up to 500) of a chip's unread, unsnoozed ids, in id order after `after`. */
@@ -2251,12 +2216,7 @@ async function readChipUnreadIds(
     .is('read_at', null)
     .is('deleted_at', null)
     .or(`snoozed_until.is.null,snoozed_until.lte.${input.nowIso}`);
-  const typed =
-    input.state === 'mentions'
-      ? base.eq('event_type', MENTION_EVENT_TYPE)
-      : input.state === 'briefs'
-        ? base.eq('scope', BRIEFS_SCOPE)
-        : base.in('event_type', [...BELL_PLAN_EVENT_TYPES]);
+  const typed = base.eq('event_type', MENTION_EVENT_TYPE);
   const page = after !== null ? typed.gt('id', after) : typed;
   const res = await page.order('id', { ascending: true }).limit(MARK_READ_BATCH);
   if (res.error) return { ok: false, error: { code: 'unknown', message: res.error.message } };
@@ -2371,14 +2331,7 @@ export function invalidateActivityReads(key?: string): void {
 }
 
 /** Every inbox chip with a page one. */
-const PAGE_STATES: readonly ActivityState[] = [
-  'all',
-  'unread',
-  'mentions',
-  'briefs',
-  'plans',
-  'snoozed',
-];
+const PAGE_STATES: readonly ActivityState[] = ['all', 'unread', 'mentions', 'snoozed'];
 const PAGE_DIRECTIONS: readonly ActivityDirection[] = ['newest', 'oldest'];
 
 /**
@@ -2414,16 +2367,16 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * The bell press: start Activity's first reads (page one of All, newest
- * first, and the unread-mention count) through the keys the page's
- * mount joins. Cheap, never throws, paints nothing; a failure is the page's to
+ * The bell press: start Activity's first reads (page one of All, in the order
+ * stored on this device, and the unread-mention count) through the keys the
+ * page's mount joins. Cheap, never throws, paints nothing; a failure is the page's to
  * retry. The client and the count read load with import() (the client is the
  * shell's; the count's module imports this one).
  */
 export function prefetchActivityData(ctx: PrefetchContext): void {
   try {
     mark('activity:prefetch');
-    const direction: ActivityDirection = 'newest';
+    const direction = storedActivitySort();
     void Promise.all([import('@/lib/supabase'), import('@/lib/inbox/inbox-reads')])
       .then(([{ supabase }, reads]) => {
         void sharedActivityPage(

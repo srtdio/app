@@ -29,7 +29,8 @@ async function sampleFrames(page: Page, ms: number): Promise<void> {
 test('Back to Pipeline paints at the kept scroll position on the first frame @theme', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 480 });
+  // Short enough that the list overflows now the screen search row is gone.
+  await page.setViewportSize({ width: 390, height: 400 });
   const network = await installHarnessNetwork(page);
   await page.goto('/pipeline?stage=all');
   const card = page.getByRole('button', { name: 'Open post Monday carousel' });

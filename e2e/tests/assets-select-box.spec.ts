@@ -11,7 +11,8 @@ import { undoStrip } from '../helpers/undo-strip';
 // toggles, and the bottom bar shows Cancel, "N selected", Select all and the
 // old ⋮ rows: the one-file rows only with exactly one ticked, Delete for any
 // count (Undo). There is no Move (Assets has no folders). The "New file" menu
-// offers no Select. Tagged @theme for light and dark.
+// offers no Select: the visible Select is pinned at the chip row's end and a
+// tap starts (or ends) select mode. Tagged @theme for light and dark.
 
 const AT = Date.parse('2026-10-01T09:00:00Z');
 const NAMES = ['Logo.png', 'Lookbook.pdf', 'Reel.mp4'];
@@ -126,5 +127,33 @@ test('a long-press selects a file; tap toggles; Cancel, Select all and Delete @t
   await expect(card(page, 'Reel.mp4')).toHaveCount(0);
   await expect(cards(page)).toHaveCount(2);
   await expect(undoStrip(page)).toBeVisible();
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
+
+test('the chip row Select, pinned at the row end, starts and ends select mode @theme', async ({
+  page,
+}) => {
+  const network = await installHarnessNetwork(page);
+  seedAssets(network);
+  await page.goto('/assets');
+  await expect(cards(page)).toHaveCount(3, { timeout: 15_000 });
+
+  // Decision E: the visible Select sits at the chip row's end, a 44 target.
+  const select = page.locator('[data-chip-row] [data-chip-row-select] [data-section-select]');
+  await expect(select).toHaveText('Select');
+  await expect(select).toHaveAttribute('aria-pressed', 'false');
+  expectMinTouchTarget(await select.boundingBox());
+
+  // A tap starts select mode with nothing ticked; every card shows its open tick.
+  await select.click();
+  await expect(select).toHaveAttribute('aria-pressed', 'true');
+  await expect(ticks(page, 'off')).toHaveCount(3);
+  await card(page, 'Logo.png').click();
+  await expect(selectBar(page).locator('[data-select-bar-count]')).toHaveText('1 selected');
+
+  // A second tap ends it: the ticks hide again.
+  await select.click();
+  await expect(select).toHaveAttribute('aria-pressed', 'false');
+  await expect(ticks(page, 'hidden')).toHaveCount(3);
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });

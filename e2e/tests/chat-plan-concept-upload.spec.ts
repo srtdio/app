@@ -17,7 +17,8 @@ import {
 
 // Concept files: a fresh upload beside the library picker, and the Edit
 // concept sheet's files read. Create: one uploaded file (library origin, held
-// in flight so Save reads "Uploading…" and waits) and one library file land
+// in flight so its chip shows the upload ring and Add is busy on the button
+// and waits) and one library file land
 // in plan_create_with_items' concept. Edit: a slow files read shows the skeleton row with no
 // Add or Upload, then the list; a failed read shows "Couldn't load files."
 // with Retry, and Save sends files as null so the links stay. Runs in both
@@ -137,21 +138,27 @@ test('create a concept with one uploaded file and one library file', async ({ pa
   await expect(assets).toBeHidden();
   await expect(concept.locator('[data-plan-concept-file]')).toHaveCount(1);
 
-  // Fresh upload, held in flight: it shows the comments' Uploading chip.
+  // Fresh upload, held in flight: one ui/PendingChip uploading (the ring with
+  // its X on the thumb, named Cancel upload; no bar, no % text).
   const held = network.holdUploads();
   await concept.locator('[data-plan-concept-upload-input]').setInputFiles({
     name: 'storyboard.png',
     mimeType: 'image/png',
     buffer: solidPng(64, 48, [200, 120, 80]),
   });
-  await expect(concept.locator('[data-plan-concept-upload="uploading"]')).toHaveCount(1);
-  await expect(concept.getByText('Uploading', { exact: true })).toBeVisible();
+  const chip = concept.locator('[data-plan-concept-upload="uploading"]');
+  await expect(chip).toHaveCount(1);
+  await expect(chip).toHaveAttribute('data-pending-chip', 'uploading');
+  await expect(chip.locator('[data-upload-ring]')).toHaveAccessibleName('Cancel upload');
+  await expect(chip.getByText(/%/)).toHaveCount(0);
 
-  // Save waits: "Uploading…" and a second tap does nothing.
+  // Save waits, busy on the button: the label stays (Add, its width kept),
+  // aria-busy is on and the button takes no second tap.
   const save = concept.locator('[data-plan-concept-save]');
   await save.click();
-  await expect(save).toHaveText('Uploading…');
-  await save.click();
+  await expect(save).toHaveAttribute('aria-busy', 'true');
+  await expect(save).toHaveText('Add');
+  await expect(save).toBeDisabled();
   await expect(concept).toBeVisible();
   held.release();
   await expect(concept).toBeHidden();

@@ -41,6 +41,10 @@ import {
   briefsLoadError,
   searchEmptyTitle,
   sectionsEmptyCopy,
+  pickedIds,
+  pickAllowedInMode,
+  rowsForPicks,
+  PICKER_SEARCH_LABELS,
   POSTS_LOAD_FAILED,
   type PostRowContext,
 } from '@/components/chat/PostPicker';
@@ -533,7 +537,7 @@ describe('empty copy', () => {
     expect(html).toContain('Posts show up here.');
   });
 
-  it('a search with no match is NoResults: names the query, offers Clear search', () => {
+  it('an inline search with no match names the query (the composer owns the text: no Clear)', () => {
     expect(searchEmptyTitle('  diwali  ')).toBe('Try another word for "diwali".');
     const html = renderToStaticMarkup(
       <SearchResultsView
@@ -542,12 +546,11 @@ describe('empty copy', () => {
         query=" diwali "
         loadingMore={false}
         onLoadMore={() => undefined}
-        onClearSearch={() => undefined}
         {...ctx}
       />,
     );
     expect(visible(html)).toContain('Try another word for &quot;diwali&quot;.');
-    expect(visible(html)).toContain('Clear search');
+    expect(visible(html)).not.toContain('Clear search');
   });
 
   it('the briefs tab with nothing narrowing it reads "Briefs show up here."', () => {
@@ -667,5 +670,62 @@ describe('briefPickerDue: the brief row due text (formatDue / formatOverdue)', (
     for (const day of ['2026-11-03', '2026-11-05', '2026-12-25']) {
       expect(briefPickerDue(day, 'open', IST, NOW)?.text).not.toContain('Target');
     }
+  });
+});
+
+describe('sheet search is the palette in pick mode', () => {
+  const hit = (kind: 'post' | 'brief' | 'file', id: string) => ({
+    kind,
+    id,
+    parentId: null,
+    channelId: null,
+    entityType: kind === 'brief' ? 'brief' : 'post',
+    number: 1,
+    title: id,
+    snippet: '',
+    actorUserId: null,
+    actorIsMember: false,
+    createdAt: '2026-10-01T00:00:00Z',
+  });
+
+  it('keeps the picked kind in tick order, once each, minus excluded posts', () => {
+    const hits = [hit('post', 'p2'), hit('brief', 'b1'), hit('post', 'p1'), hit('post', 'p2')];
+    expect(pickedIds(hits, 'post')).toEqual(['p2', 'p1']);
+    expect(pickedIds(hits, 'post', new Set(['p1']))).toEqual(['p2']);
+    expect(pickedIds(hits, 'brief')).toEqual(['b1']);
+  });
+
+  it('a pick keeps the mode stage rule: posts never a draft, drafts only drafts, link any', () => {
+    expect(pickAllowedInMode('draft', 'posts', true)).toBe(false);
+    expect(pickAllowedInMode('review', 'posts', false)).toBe(true);
+    expect(pickAllowedInMode('draft', 'drafts', true)).toBe(true);
+    expect(pickAllowedInMode('draft', 'drafts', false)).toBe(false);
+    expect(pickAllowedInMode('approved', 'drafts', true)).toBe(false);
+    expect(pickAllowedInMode('draft', 'link', false)).toBe(true);
+  });
+
+  it('rows on screen need no read; the rest come in one batched by-id read, tick order', async () => {
+    const onScreen = [{ id: 'p1' }, { id: 'p2' }];
+    const read = vi.fn(async (ids: string[]) => ids.map((id) => ({ id })));
+    expect(await rowsForPicks(['p2', 'p1'], onScreen, read)).toEqual([{ id: 'p2' }, { id: 'p1' }]);
+    expect(read).not.toHaveBeenCalled();
+    expect(await rowsForPicks(['p9', 'p1', 'p8'], onScreen, read)).toEqual([
+      { id: 'p9' },
+      { id: 'p1' },
+      { id: 'p8' },
+    ]);
+    expect(read).toHaveBeenCalledOnce();
+    expect(read).toHaveBeenCalledWith(['p9', 'p8']);
+    const failed = vi.fn(async () => null);
+    expect(await rowsForPicks(['p9', 'p1'], onScreen, failed)).toEqual([{ id: 'p1' }]);
+  });
+
+  it('every sheet mode names its header search', () => {
+    expect(PICKER_SEARCH_LABELS).toEqual({
+      posts: 'Search posts',
+      drafts: 'Search posts',
+      briefs: 'Search briefs',
+      link: 'Search posts',
+    });
   });
 });

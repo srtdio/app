@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 // Type roles on Assets (design rules, 24 Oct 2026; ui/ListCard, 7 Nov): an
 // asset card title is the ListCard heading, its facts line the secondary
-// preview and its added time the meta role; the no-match state reads as an empty
-// state (lg/600 title, base fg-2 description), and an empty tab line is base
-// fg-2 copy. Rendered for real in jsdom; mocks mirror
+// preview and its added time the meta role, and an empty tab line is base fg-2
+// copy. Assets has no list search (decision B, 7 Nov). Rendered for real in jsdom; mocks mirror
 // assets/x6-assets-page.test.tsx.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -38,17 +37,12 @@ vi.mock('@/lib/assets', async (importOriginal) => {
     listAssets: (...args: unknown[]) => listAssets(...args),
     // The page reads keyset pages; a mocked plain list is one (last) page, and a
     // mocked { items, next } page passes through as is.
-    // A search (the fourth arg) stands in for the server's filename match.
     listAssetsPage: async (...args: unknown[]) => {
       const result = (await listAssets(...args)) as
         | { ok: true; data: unknown }
         | { ok: false; error: unknown };
       if (!result.ok || !Array.isArray(result.data)) return result;
-      const search = typeof args[3] === 'string' ? args[3].toLowerCase() : '';
-      const items = (result.data as { filename: string }[]).filter((row) =>
-        row.filename.toLowerCase().includes(search),
-      );
-      return { ok: true, data: { items, next: { done: true } } };
+      return { ok: true, data: { items: result.data, next: { done: true } } };
     },
     fetchMemberRole: async () => 'owner',
     findAssetsInUse: vi.fn(),
@@ -122,18 +116,6 @@ function expectRole(el: Element, classes: string[]): void {
   for (const c of classes) expect(list).toContain(c);
 }
 
-/** Type into the header search the way React sees a user edit. */
-async function typeSearch(value: string): Promise<void> {
-  const input = document.querySelector<HTMLInputElement>('input[placeholder="Search files"]');
-  expect(input).not.toBeNull();
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-  await act(async () => {
-    setter?.call(input, value);
-    input?.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-  await flush();
-}
-
 beforeEach(() => {
   listAssets.mockReset().mockResolvedValue({ ok: true, data: [asset()] });
 });
@@ -163,19 +145,24 @@ describe('Assets page type roles', () => {
     expectRole(time as HTMLElement, ['font-mono', 'text-sm', 'tabular-nums', 'text-fg-3']);
   });
 
-  it('a search with no match reads as an empty state', async () => {
+  it('no list search: no search box on Assets', async () => {
     await mount();
-    await typeSearch('zzz');
-    // The search goes to the server after the 250ms debounce.
-    await act(async () => new Promise((r) => setTimeout(r, 300)));
-    expectRole(byText('Try another word for "zzz".'), ['text-lg', 'font-semibold', 'text-fg']);
-    expect(byText('Clear search')).toBeTruthy();
+    expect(document.querySelector('input[placeholder="Search files"]')).toBeNull();
+    expect(document.querySelector('input[type="search"]')).toBeNull();
   });
 
   it('an empty tab line is base fg-2 copy', async () => {
-    await mount('/assets?type=pdf');
-    const line = document.querySelector('[data-asset-tab-empty="pdf"]');
-    expect(line?.textContent).toBe(TAB_EMPTY.pdf);
+    await mount('/assets?type=docs');
+    const line = document.querySelector('[data-asset-tab-empty="docs"]');
+    expect(line?.textContent).toBe(TAB_EMPTY.docs);
     expectRole(line as HTMLElement, ['text-base', 'text-fg-2']);
+  });
+
+  it('an old ?type=pdf lands on the Docs tab', async () => {
+    await mount('/assets?type=pdf');
+    expect(document.querySelector('[data-asset-tab-empty="docs"]')).not.toBeNull();
+    expect(document.querySelector('[data-asset-tab="docs"]')?.getAttribute('aria-selected')).toBe(
+      'true',
+    );
   });
 });

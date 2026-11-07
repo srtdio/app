@@ -116,7 +116,6 @@ function ready(kind: SearchState['kind'], hits: SearchHit[], hasMore = false): S
 function props(over: Partial<MediaResultsProps>): MediaResultsProps {
   return {
     kind: 'photo',
-    query: '',
     state: { ...IDLE_SEARCH, kind: 'photo', status: 'loading' },
     runner: runner(),
     cached: undefined,
@@ -215,5 +214,42 @@ describe('MediaResults', () => {
     render(props({ state: ready('photo', []) }));
     expect(document.querySelector('[data-search-empty]')).not.toBeNull();
     expect(document.querySelector('[data-media-tile]')).toBeNull();
+  });
+
+  it('a right-click on a tile enters select mode with that item ticked', () => {
+    const onEnterSelect = vi.fn();
+    render(props({ state: ready('photo', [photoHit('m1', ['a'])]), onEnterSelect }));
+    const el = tile('m1:a');
+    act(() => {
+      el?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(onEnterSelect).toHaveBeenCalledWith({ messageId: 'm1', channelId: 'c1' });
+  });
+
+  it('in select mode a tap on a tile toggles its message once, never opens the viewer', () => {
+    const onToggle = vi.fn();
+    render(
+      props({
+        state: ready('photo', [photoHit('m1', ['a'])]),
+        onEnterSelect: vi.fn(),
+        selecting: { selection: new Map<string, string>(), onToggle },
+      }),
+    );
+    act(() => {
+      (tile('m1:a') as HTMLElement | null)?.click();
+    });
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(onToggle).toHaveBeenCalledWith({ messageId: 'm1', channelId: 'c1' });
+    // The selection circle is ui/SelectCheck.
+    expect(document.querySelector('[data-select-check]')).not.toBeNull();
+  });
+
+  it('without a select gesture a right-click does nothing', () => {
+    render(props({ state: ready('photo', [photoHit('m1', ['a'])]) }));
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    act(() => {
+      tile('m1:a')?.dispatchEvent(event);
+    });
+    expect(document.querySelector('[data-media-select-item]')).toBeNull();
   });
 });

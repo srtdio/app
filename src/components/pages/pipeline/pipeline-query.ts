@@ -1,5 +1,5 @@
 // The Pipeline filters live in the URL query so Back (from a post, or any other
-// page) lands on the same stage, search and date window. Pure helpers: the page
+// page) lands on the same stage and date window. Pure helpers: the page
 // reads and writes through useSearchParams; the feed keys its Show more depth
 // in sessionStorage by the same query string.
 
@@ -14,7 +14,6 @@ export interface DateRange {
 export interface PipelineQuery {
   /** The active chip: 'all' or a Stage. */
   stage: string;
-  search: string;
   dateWindow: DateWindow;
   customRange: DateRange | null;
 }
@@ -34,7 +33,6 @@ export function parsePipelineQuery(params: URLSearchParams, initialStage: string
       : null;
   return {
     stage: params.get('stage') ?? initialStage,
-    search: params.get('q') ?? '',
     dateWindow,
     customRange,
   };
@@ -44,7 +42,6 @@ export function parsePipelineQuery(params: URLSearchParams, initialStage: string
 export function pipelineQueryParams(query: PipelineQuery, initialStage: string): URLSearchParams {
   const params = new URLSearchParams();
   if (query.stage !== initialStage) params.set('stage', query.stage);
-  if (query.search !== '') params.set('q', query.search);
   if (query.dateWindow !== DATE_WINDOW_DEFAULT) params.set('date', query.dateWindow);
   if (query.customRange !== null) {
     params.set('from', query.customRange.start);
@@ -59,11 +56,6 @@ export function dateFilterActive(
 ): boolean {
   if (query.dateWindow === 'custom') return query.customRange !== null;
   return query.dateWindow !== DATE_WINDOW_DEFAULT;
-}
-
-/** Search or date narrowing is on: an empty list is "No matches", not "No posts". */
-export function filtersActive(query: PipelineQuery): boolean {
-  return query.search.trim() !== '' || dateFilterActive(query);
 }
 
 /** The active date chip's label: the preset name or the custom range. */

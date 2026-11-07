@@ -2,15 +2,17 @@
 // W5 Briefs list: a load failure shows LoadError ("Couldn't load briefs.") with
 // Retry and never the server's text, and Retry re-runs the same workspace read;
 // the read is workspace-scoped and keyset paged on the server (Load more); the
-// chip defaults to Open and lives in the URL with the search; empty states (Clear only with a
-// typed search); agency sort; the loading skeleton; cards carry a real title
-// link with no buttons nested in a role=link, and no Close.
+// chip defaults to Open and lives in the URL; there is no screen search (decision B);
+// empty states (no Clear); the agency sort and the client "+" are published into
+// the top bar (decision A); the loading skeleton; cards carry a real title link
+// with no buttons nested in a role=link, and no Close.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { BriefsPage, briefsLoadMore } from '@/components/pages/BriefsPage';
+import { TopbarActionsProvider, useTopbarActionsValue } from '@/components/shell/topbar-actions';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -47,9 +49,7 @@ vi.mock('@/lib/brief-list', async (importOriginal) => {
       return { ok: true, data: { items: result.data, next: { done: true } } };
     },
     // The first page paints before its thumbnails; here the mocked rows carry
-    // their thumbnails already, so the thumbnails read finds nothing more. A
-    // search (the third arg) stands in for the server's title-or-objective
-    // match over the mocked rows.
+    // their thumbnails already, so the thumbnails read finds nothing more.
     listBriefsFirstPage: async (...args: unknown[]) => {
       const result = (await listBriefs(...args)) as
         | { ok: true; data: unknown }
@@ -58,14 +58,6 @@ vi.mock('@/lib/brief-list', async (importOriginal) => {
       const page = Array.isArray(result.data)
         ? { items: result.data, next: { done: true } }
         : { ...(result.data as { items: unknown[]; next: unknown }) };
-      const search = typeof args[2] === 'string' ? args[2].toLowerCase() : '';
-      if (search !== '') {
-        page.items = (page.items as { title: string; objective: string }[]).filter(
-          (row) =>
-            row.title.toLowerCase().includes(search) ||
-            row.objective.toLowerCase().includes(search),
-        );
-      }
       const thumbs = Promise.resolve({ ok: true, data: new Map() });
       return { ok: true, data: { ...page, thumbs } };
     },
@@ -121,6 +113,18 @@ function brief(id: string, over: Partial<BriefWithThumbnail> = {}): BriefWithThu
 let root: Root | null = null;
 let location = '';
 
+// What the page publishes into the app top bar (sort, "+"), rendered the way
+// Topbar renders it.
+function TopbarProbe() {
+  const { sort, primary } = useTopbarActionsValue();
+  return (
+    <div data-topbar-probe="">
+      {sort}
+      {primary}
+    </div>
+  );
+}
+
 function LocationProbe() {
   const here = useLocation();
   location = `${here.pathname}${here.search}`;
@@ -134,23 +138,24 @@ async function mount(path = '/briefs') {
   await act(async () => {
     root?.render(
       <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route
-            path="/briefs"
-            element={
-              <>
-                <BriefsPage />
-                <LocationProbe />
-              </>
-            }
-          />
-        </Routes>
+        <TopbarActionsProvider>
+          <TopbarProbe />
+          <Routes>
+            <Route
+              path="/briefs"
+              element={
+                <>
+                  <BriefsPage />
+                  <LocationProbe />
+                </>
+              }
+            />
+          </Routes>
+        </TopbarActionsProvider>
       </MemoryRouter>,
     );
   });
   await act(async () => new Promise((r) => setTimeout(r, 0)));
-  // A ?q= search goes to the server after the 250ms debounce.
-  if (path.includes('q=')) await act(async () => new Promise((r) => setTimeout(r, 300)));
 }
 
 const text = () => document.body.textContent ?? '';
@@ -254,7 +259,7 @@ describe('briefsLoadMore', () => {
   });
 });
 
-describe('Briefs list filter and search', () => {
+describe('Briefs list filter (no screen search)', () => {
   it('defaults to Open, with no total count line', async () => {
     listBriefs.mockResolvedValue({
       ok: true,
@@ -266,29 +271,43 @@ describe('Briefs list filter and search', () => {
     expect(text()).not.toContain('Brief b3');
   });
 
-  it('reads the chip and search from the URL and writes changes back', async () => {
+  it('reads the chip from the URL; a stale ?q= is ignored and dropped on the next chip tap', async () => {
     listBriefs.mockResolvedValue({
       ok: true,
       data: [brief('b1', { title: 'Launch reel' }), brief('b2', { status: 'closed' })],
     });
     await mount('/briefs?status=closed&q=zzz');
-    expect(text()).toContain('Try another word for "zzz".');
-    // Clear clears the search only: the Closed chip stays.
-    await act(async () => clearText()?.click());
-    expect(location).toBe('/briefs?status=closed');
+    expect(text()).not.toContain('Try another word');
     expect(text()).toContain('Brief b2');
     expect(text()).not.toContain('Launch reel');
+    // One plain read: no search argument reaches the server.
+    expect(listBriefs).toHaveBeenCalledTimes(1);
+    expect(listBriefs.mock.calls[0]?.[2]).toBeUndefined();
+    await act(async () => button('All')?.click());
+    expect(location).toBe('/briefs?status=all');
+    expect(text()).toContain('Launch reel');
   });
 
-  it('client with no briefs: "Open briefs show up here." and only the header New brief', async () => {
+  it('there is no search field on the screen', async () => {
+    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1')] });
+    await mount();
+    expect(document.querySelector('input[placeholder="Search briefs"]')).toBeNull();
+    expect(document.querySelector('input[type="search"]')).toBeNull();
+  });
+
+  it('client with no briefs: "Open briefs show up here." and only the top bar "+"', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [] });
     await mount();
     expect(text()).toContain('Open briefs show up here.');
     expect(text()).not.toContain('Tell the agency what you need next.');
     const newBriefs = [...document.querySelectorAll<HTMLButtonElement>('button')].filter(
-      (b) => b.textContent?.trim() === 'New brief',
+      (b) => b.getAttribute('aria-label') === 'New brief' || b.textContent?.trim() === 'New brief',
     );
     expect(newBriefs).toHaveLength(1);
+    // It is the top bar's filled "+", carrying the old tour target.
+    expect(newBriefs[0]!.closest('[data-topbar-probe]')).not.toBeNull();
+    expect(newBriefs[0]!.hasAttribute('data-topbar-plus')).toBe(true);
+    expect(newBriefs[0]!.getAttribute('data-induction')).toBe('briefs-new');
     expect(clearText()).toBeUndefined();
   });
 
@@ -304,11 +323,12 @@ describe('Briefs list filter and search', () => {
 });
 
 describe('Briefs sort and loading', () => {
-  it('agency side gets the Sort control; the client side does not', async () => {
+  it('agency side publishes the Sort control into the top bar; the client side does not', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b1')] });
     capability.create = false;
     await mount();
     expect(button('Sort')).toBeDefined();
+    expect(button('Sort')!.closest('[data-topbar-probe]')).not.toBeNull();
     act(() => root?.unmount());
     document.body.innerHTML = '';
     capability.create = true;
@@ -325,35 +345,25 @@ describe('Briefs sort and loading', () => {
   });
 });
 
-// The empty state's own "Clear search" text button (not the header X, which
-// has only an aria-label and no text).
+// The old empty state's "Clear search" text button: gone with the screen search.
 const clearText = () =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find(
     (b) => b.textContent?.trim() === 'Clear search',
   );
 
 describe('Briefs zero-result headings', () => {
-  it('client, Open chip, no open briefs, no search: "Open briefs show up here." and no Clear', async () => {
+  it('client, Open chip, no open briefs: "Open briefs show up here." and no Clear', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { status: 'closed' })] });
     await mount();
     expect(text()).toContain('Open briefs show up here.');
     expect(clearText()).toBeUndefined();
   });
 
-  it('Closed chip, empty search, no closed briefs: "Closed briefs show up here." and no Clear', async () => {
+  it('Closed chip, no closed briefs: "Closed briefs show up here." and no Clear', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b1')] });
     await mount('/briefs?status=closed');
     expect(text()).toContain('Closed briefs show up here.');
     expect(clearText()).toBeUndefined();
-  });
-
-  it('non-empty search, zero results: names the query with Clear', async () => {
-    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { title: 'Launch reel' })] });
-    await mount('/briefs?q=diwali');
-    expect(text()).toContain('Try another word for "diwali".');
-    expect(clearText()).toBeDefined();
-    await act(async () => clearText()?.click());
-    expect(location).toBe('/briefs');
   });
 
   it('each zero state renders the same markup in light and dark mode', async () => {
@@ -367,11 +377,6 @@ describe('Briefs zero-result headings', () => {
         path: '/briefs?status=closed',
         data: [brief('b1')],
         heading: 'Closed briefs show up here.',
-      },
-      {
-        path: '/briefs?q=diwali',
-        data: [brief('b1')],
-        heading: 'Try another word for "diwali".',
       },
     ];
     for (const item of cases) {
@@ -413,16 +418,6 @@ const chipText = (label: string) =>
     .map((b) => b.textContent?.trim() ?? '')
     .find((t) => t === label || t.startsWith(`${label} `));
 
-async function typeSearch(value: string) {
-  const input = document.querySelector<HTMLInputElement>('input[placeholder="Search briefs"]');
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-  await act(async () => {
-    if (input === null || setter === undefined) return;
-    setter.call(input, value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-}
-
 describe('Briefs chip counts', () => {
   it('shows the server totals, not the loaded rows, as plain text', async () => {
     // One loaded row, but the workspace holds 250: the chips say 250 / 200 / 50.
@@ -459,47 +454,13 @@ describe('Briefs chip counts', () => {
     expect(countBriefs).toHaveBeenCalledTimes(2);
   });
 
-  it('searches on the server once typing pauses: the page and the counts, not per keystroke', async () => {
-    listBriefs.mockResolvedValue({
-      ok: true,
-      data: [brief('b1', { title: 'Launch reel' }), brief('b2', { title: 'Recap' })],
-    });
-    await mount();
-    expect(countBriefs).toHaveBeenCalledTimes(1);
-    expect(listBriefs).toHaveBeenCalledTimes(1);
-    await typeSearch('la');
-    await typeSearch('lau');
-    await act(async () => new Promise((r) => setTimeout(r, 400)));
-    // One search for the settled query: the first page and the counts.
-    expect(listBriefs).toHaveBeenCalledTimes(2);
-    expect(listBriefs.mock.calls[1]?.[2]).toBe('lau');
-    expect(countBriefs).toHaveBeenCalledTimes(2);
-    expect(countBriefs.mock.calls[1]?.[2]).toBe('lau');
-    expect(text()).toContain('Launch reel');
-    expect(text()).not.toContain('Recap');
-  });
-
-  it('one character is the normal list: nothing is sent', async () => {
+  it('reads the counts once with no search, and never again on its own', async () => {
     listBriefs.mockResolvedValue({ ok: true, data: [brief('b1', { title: 'Launch reel' })] });
     await mount();
-    await typeSearch('l');
     await act(async () => new Promise((r) => setTimeout(r, 400)));
     expect(listBriefs).toHaveBeenCalledTimes(1);
     expect(countBriefs).toHaveBeenCalledTimes(1);
+    expect(countBriefs.mock.calls[0]?.[2]).toBe('');
     expect(text()).toContain('Launch reel');
-  });
-
-  it('a newer query aborts the search in flight', async () => {
-    listBriefs.mockResolvedValueOnce({ ok: true, data: [brief('b1')] });
-    await mount();
-    // The first search never answers: it is still in flight when the query changes.
-    listBriefs.mockReturnValueOnce(new Promise(() => {}));
-    await typeSearch('la');
-    await act(async () => new Promise((r) => setTimeout(r, 300)));
-    const first = listBriefs.mock.calls[1]?.[3] as AbortSignal | undefined;
-    expect(first?.aborted).toBe(false);
-    listBriefs.mockResolvedValue({ ok: true, data: [brief('b1')] });
-    await typeSearch('lau');
-    expect(first?.aborted).toBe(true);
   });
 });

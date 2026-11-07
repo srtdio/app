@@ -28,8 +28,8 @@
 // The transcript state is read synchronously from the per-device transcript
 // store so first paint is final.
 //
-// While an own note uploads, the play spot holds the UploadRing (its stop
-// square stops the send and removes the pending note), drawn in the bubble's own inks and fully inside the 44px slot,
+// While an own note uploads, the play spot holds the UploadRing (its X
+// stops the send and removes the pending note), drawn in the bubble's own inks and fully inside the 44px slot,
 // and the wave shows the note's real bars at reduced emphasis (opacity .45);
 // when the upload finishes, the ring scales to 0 (mv-ring-out), play shows in
 // its place and the same bars return to full emphasis at once (never a fade;
@@ -45,7 +45,7 @@ import type {
   ReactNode,
 } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
-import { UploadRing, type UploadRingInk } from '@/components/chat/UploadRing';
+import { UploadRing, type UploadRingInk } from '@/components/ui/UploadRing';
 import { sized, useChatLayout, type ChatSize } from '@/components/chat/chat-type';
 import {
   ICON_SIZE,

@@ -265,13 +265,17 @@ describe('Pipeline tab return', () => {
 describe('shownPipelineQuery', () => {
   const kept: PipelineQuery = {
     stage: 'approved',
-    search: 'launch',
-    dateWindow: 'any',
+    dateWindow: 'week',
     customRange: null,
   };
 
-  it('a clean URL (a tab return) lands on the kept chip and filter, never the kept search', () => {
-    expect(shownPipelineQuery(new URLSearchParams(''), kept)).toEqual({ ...kept, search: '' });
+  it('a clean URL (a tab return) lands on the kept chip and filter', () => {
+    expect(shownPipelineQuery(new URLSearchParams(''), kept)).toEqual(kept);
+  });
+
+  it('an older session kept a search: it is dropped (decision B, no screen search)', () => {
+    const stale = { ...kept, search: 'launch' } as PipelineQuery;
+    expect(shownPipelineQuery(new URLSearchParams(''), stale)).toEqual(kept);
   });
 
   it('a URL that names a filter wins; nothing kept opens Review', () => {

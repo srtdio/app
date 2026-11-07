@@ -1,6 +1,5 @@
-// The full emoji picker's body behind the reactions row's "+": a search field
-// on top (matching the CLDR short name), a row of group tabs that stays put,
-// and the grid grouped by Unicode group below it. Glyphs render as text in the
+// The full emoji picker's body behind the reactions row's "+": a row of group
+// tabs that stays put (no search field; a tab jumps to its group), and the grid grouped by Unicode group below it. Glyphs render as text in the
 // app's emoji font stack (no images, no emoji library); the data is generated
 // once from Unicode 15.0 (emoji-data.ts). This module and its data load through
 // a dynamic import() (MessageActionMenu starts it when the menu opens), so
@@ -12,23 +11,10 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FocusEvent, ReactElement, ReactNode } from 'react';
-import { ICON_SIZE, IconSearch } from '@/components/ui/icons';
 import { IconButton } from '@/components/ui/IconButton';
 import { cn } from '@/lib/cn';
 import { EMOJI, EMOJI_GROUPS, type EmojiEntry } from '@/components/chat/emoji-data';
-import {
-  EMOJI_GLYPH_TYPE,
-  EMOJI_GROUP_TYPE,
-  EMOJI_SEARCH_TYPE,
-  sized,
-  type ChatLayout,
-} from '@/components/chat/chat-type';
-
-/** The empty result line. */
-export const EMOJI_NO_RESULTS = 'Try another word.';
-
-/** The search field's placeholder. */
-export const EMOJI_SEARCH_PLACEHOLDER = 'Search emoji';
+import { EMOJI_GLYPH_TYPE, EMOJI_GROUP_TYPE, type ChatLayout } from '@/components/chat/chat-type';
 
 /** Every grid row (a group heading or a line of glyphs) is this tall. */
 export const EMOJI_ROW_PX = 44;
@@ -40,39 +26,6 @@ export const EMOJI_ROW_BUFFER = 3;
 export interface EmojiSection {
   group: string;
   emojis: readonly EmojiEntry[];
-}
-
-/**
- * The emoji whose CLDR short name matches every word of the query (any order,
- * case-insensitive, each word a substring of the name). An empty query matches
- * nothing: the grouped grid shows instead. Pure.
- */
-export function searchEmoji(query: string, list: readonly EmojiEntry[] = EMOJI): EmojiEntry[] {
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [];
-  return list.filter((entry) => {
-    const name = entry.name.toLowerCase();
-    return words.every((word) => name.includes(word));
-  });
-}
-
-/**
- * searchEmoji behind a per-query memo: the same query returns the same result
- * list without scanning again (scroll renders never re-run the search).
- */
-export function createEmojiSearch(
-  search: (query: string) => EmojiEntry[] = searchEmoji,
-): (query: string) => EmojiEntry[] {
-  let lastQuery: string | null = null;
-  let lastResults: EmojiEntry[] = [];
-  return (query) => {
-    const key = query.trim().toLowerCase();
-    if (key !== lastQuery) {
-      lastQuery = key;
-      lastResults = search(query);
-    }
-    return lastResults;
-  };
 }
 
 /** The grid's sections, one per Unicode group, in Unicode order. Pure. */
@@ -95,16 +48,12 @@ export type EmojiRow =
   | { kind: 'heading'; group: string }
   | { kind: 'glyphs'; emojis: readonly EmojiEntry[] };
 
-/** The grid as rows: a heading then its glyph lines per section (or just result lines). Pure. */
-export function emojiRows(
-  sections: readonly EmojiSection[],
-  columns: number,
-  headings = true,
-): EmojiRow[] {
+/** The grid as rows: a heading then its glyph lines per section. Pure. */
+export function emojiRows(sections: readonly EmojiSection[], columns: number): EmojiRow[] {
   const perRow = Math.max(1, Math.floor(columns));
   const rows: EmojiRow[] = [];
   for (const section of sections) {
-    if (headings) rows.push({ kind: 'heading', group: section.group });
+    rows.push({ kind: 'heading', group: section.group });
     for (let i = 0; i < section.emojis.length; i += perRow) {
       rows.push({ kind: 'glyphs', emojis: section.emojis.slice(i, i + perRow) });
     }
@@ -171,35 +120,19 @@ export function tabJumpTop(group: string, headingRow: ReadonlyMap<string, number
 }
 
 /**
- * The highlighted tab after a scroll: unchanged while searching, and unchanged
- * for the scroll a tab jump itself caused (the tapped group stays highlighted
+ * The highlighted tab after a scroll: unchanged for the scroll a tab jump
+ * itself caused (the tapped group stays highlighted
  * even where the end of the list clamps the jump); else the group at the top
  * of the window. Pure.
  */
 export function activeGroupAfterScroll(params: {
   rows: readonly EmojiRow[];
   scrollTop: number;
-  searching: boolean;
   jumpTop: number | null;
   current: string | null;
 }): string | null {
-  if (params.searching || params.jumpTop === params.scrollTop) return params.current;
+  if (params.jumpTop === params.scrollTop) return params.current;
   return groupAtRow(params.rows, Math.floor(params.scrollTop / EMOJI_ROW_PX)) ?? params.current;
-}
-
-/**
- * The highlighted tab after the query changes: the tapped group when a tab tap
- * cleared the query, the first group when the query was cleared by typing
- * (the grid is back at the top), else unchanged. Pure.
- */
-export function activeGroupAfterQuery(params: {
-  query: string;
-  pendingTab: string | null;
-  current: string | null;
-  first: string | null;
-}): string | null {
-  if (params.pendingTab !== null) return params.pendingTab;
-  return params.query.trim() === '' ? params.first : params.current;
 }
 
 /** Glyph columns that fit a grid this wide (44px each, 4px side padding). Pure. */
@@ -223,31 +156,10 @@ function EmojiButton(props: { entry: EmojiEntry; onPick: (char: string) => void 
   );
 }
 
-/** The search field (normal text selection, never under 16px on touch); `trailing` sits beside it. */
-export function EmojiSearchField(props: {
-  query: string;
-  onQuery: (query: string) => void;
-  layout: ChatLayout;
-  trailing?: ReactNode;
-}): ReactElement {
+/** The picker's top row: `trailing` (the shell's close control) at the end. */
+export function EmojiPickerTop(props: { trailing?: ReactNode }): ReactElement {
   return (
-    <div className="flex shrink-0 items-center gap-1 px-2 pt-2">
-      <label className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border border-field bg-panel-2 px-3 text-fg-3 lit-well focus-within:lit-focus">
-        <IconSearch size={ICON_SIZE.inline} />
-        <input
-          type="search"
-          data-emoji-search=""
-          aria-label={EMOJI_SEARCH_PLACEHOLDER}
-          placeholder={EMOJI_SEARCH_PLACEHOLDER}
-          value={props.query}
-          onChange={(e) => props.onQuery(e.target.value)}
-          autoComplete="off"
-          className={cn(
-            'min-w-0 flex-1 select-text bg-transparent text-fg placeholder:text-fg-3 focus:outline-none',
-            sized(EMOJI_SEARCH_TYPE, props.layout),
-          )}
-        />
-      </label>
+    <div data-emoji-top="" className="flex shrink-0 items-center justify-end gap-1 px-2 pt-2">
       {props.trailing}
     </div>
   );
@@ -255,11 +167,9 @@ export function EmojiSearchField(props: {
 
 /** The group tab row: one 44x44 tab per Unicode group; it sits outside the scroll. */
 export function EmojiTabs(props: {
-  query: string;
   activeGroup: string | null;
   onTab: (group: string) => void;
 }): ReactElement {
-  const searching = props.query.trim() !== '';
   return (
     <div
       role="tablist"
@@ -273,15 +183,13 @@ export function EmojiTabs(props: {
           type="button"
           role="tab"
           label={section.group}
-          aria-selected={!searching && props.activeGroup === section.group}
+          aria-selected={props.activeGroup === section.group}
           data-emoji-tab={section.group}
-          data-selected={!searching && props.activeGroup === section.group ? 'true' : undefined}
+          data-selected={props.activeGroup === section.group ? 'true' : undefined}
           onClick={() => props.onTab(section.group)}
           className={cn(
             'shrink-0 text-fg-3',
-            !searching &&
-              props.activeGroup === section.group &&
-              'bg-accent text-accent-fg lit-pill',
+            props.activeGroup === section.group && 'bg-accent text-accent-fg lit-pill',
             EMOJI_GLYPH_TYPE,
           )}
         >
@@ -350,76 +258,26 @@ export function EmojiVirtualGrid(props: {
 }
 
 /**
- * The grid's rows for a query: the result lines while a query is typed (null
- * when nothing matches), else every group with its heading (`sectionRows`).
- * `search` is the memoized search. Pure.
- */
-export function gridRows(
-  query: string,
-  columns: number,
-  search: (query: string) => readonly EmojiEntry[],
-  sectionRows: readonly EmojiRow[],
-): readonly EmojiRow[] | null {
-  if (query.trim() === '') return sectionRows;
-  const results = search(query);
-  if (results.length === 0) return null;
-  return emojiRows([{ group: '', emojis: results }], columns, false);
-}
-
-/** The grid: its rows, or the empty line when the query matched nothing. Hook-free. */
-export function EmojiGrid(props: {
-  rows: readonly EmojiRow[] | null;
-  onPick: (char: string) => void;
-  scrollTop: number;
-  viewportHeight: number;
-  keepRow?: number | null;
-}): ReactElement {
-  if (props.rows === null) {
-    return (
-      <p data-emoji-empty="" className="px-4 py-6 text-center text-base text-fg-3">
-        {EMOJI_NO_RESULTS}
-      </p>
-    );
-  }
-  return (
-    <EmojiVirtualGrid
-      rows={props.rows}
-      scrollTop={props.scrollTop}
-      viewportHeight={props.viewportHeight}
-      onPick={props.onPick}
-      keepRow={props.keepRow ?? null}
-    />
-  );
-}
-
-/**
- * The picker's contents inside the shell: search (with `trailing`, the
- * shell's close control, beside it), the group tabs, then the scrolling
- * virtual grid. Owns the query, the active tab and the scroll window.
+ * The picker's contents inside the shell: the top row (with `trailing`, the
+ * shell's close control), the group tabs, then the scrolling virtual grid.
+ * Owns the active tab and the scroll window.
  */
 export function EmojiPickerPanel(props: {
   onPick: (char: string) => void;
+  /** The shell passes its layout; the body has no layout-sized part since the search field went. */
   layout: ChatLayout;
   trailing?: ReactNode;
 }): ReactElement {
-  const [query, setQuery] = useState('');
   const [activeGroup, setActiveGroup] = useState<string | null>(SECTIONS[0]?.group ?? null);
   const [view, setView] = useState({ scrollTop: 0, height: 0, width: 0 });
   const [focusRow, setFocusRow] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  // A tab tapped while searching: where to land once the grouped grid is back.
-  const pendingTabRef = useRef<string | null>(null);
   // The scrollTop a tab jump set; its own scroll event keeps the tapped tab.
   const jumpTopRef = useRef<number | null>(null);
   const columns = gridColumns(view.width);
-  const search = useMemo(() => createEmojiSearch(), []);
-  const sectionRows = useMemo(() => emojiRows(SECTIONS, columns), [columns]);
-  const headingRow = useMemo(() => groupRowIndex(sectionRows), [sectionRows]);
-  // Rows change only with the query or the width, never on a scroll render.
-  const rows = useMemo(
-    () => gridRows(query, columns, search, sectionRows),
-    [query, columns, search, sectionRows],
-  );
+  // Rows change only with the width, never on a scroll render.
+  const rows = useMemo(() => emojiRows(SECTIONS, columns), [columns]);
+  const headingRow = useMemo(() => groupRowIndex(rows), [rows]);
 
   // The window's size, before paint and on every resize of the grid.
   useLayoutEffect(() => {
@@ -446,33 +304,8 @@ export function EmojiPickerPanel(props: {
     setView((v) => (v.scrollTop === actual ? v : { ...v, scrollTop: actual }));
   };
 
-  // A new query starts the list from the top, unless a tab tap cleared it:
-  // then it lands on that group (after the grouped rows are in the DOM). A
-  // query cleared by typing highlights the first group again.
-  useLayoutEffect(() => {
-    const pending = pendingTabRef.current;
-    pendingTabRef.current = null;
-    setFocusRow(null);
-    setActiveGroup((current) =>
-      activeGroupAfterQuery({
-        query,
-        pendingTab: pending,
-        current,
-        first: SECTIONS[0]?.group ?? null,
-      }),
-    );
-    scrollTo(pending !== null ? tabJumpTop(pending, headingRow) : 0);
-    // headingRow is read for the pending tab only; the reset runs per query.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
-
   const onTab = (group: string): void => {
     setActiveGroup(group);
-    if (query !== '') {
-      pendingTabRef.current = group;
-      setQuery('');
-      return;
-    }
     scrollTo(tabJumpTop(group, headingRow));
   };
   // The tab follows the group at the top of the window.
@@ -482,9 +315,8 @@ export function EmojiPickerPanel(props: {
     const scrollTop = el.scrollTop;
     setView((v) => (v.scrollTop === scrollTop ? v : { ...v, scrollTop }));
     const next = activeGroupAfterScroll({
-      rows: sectionRows,
+      rows,
       scrollTop,
-      searching: query.trim() !== '',
       jumpTop: jumpTopRef.current,
       current: activeGroup,
     });
@@ -505,13 +337,8 @@ export function EmojiPickerPanel(props: {
 
   return (
     <>
-      <EmojiSearchField
-        query={query}
-        onQuery={setQuery}
-        layout={props.layout}
-        trailing={props.trailing}
-      />
-      <EmojiTabs query={query} activeGroup={activeGroup} onTab={onTab} />
+      <EmojiPickerTop trailing={props.trailing} />
+      <EmojiTabs activeGroup={activeGroup} onTab={onTab} />
       <div
         ref={scrollRef}
         onScroll={onScroll}
@@ -520,7 +347,7 @@ export function EmojiPickerPanel(props: {
         data-emoji-scroll=""
         className="relative min-h-0 flex-1 overflow-y-auto"
       >
-        <EmojiGrid
+        <EmojiVirtualGrid
           rows={rows}
           onPick={props.onPick}
           scrollTop={view.scrollTop}

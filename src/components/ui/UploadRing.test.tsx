@@ -3,12 +3,12 @@ import { fileURLToPath } from 'node:url';
 import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { UPLOAD_RING_SIZES, UPLOAD_RING_STOP, UploadRing } from '@/components/chat/UploadRing';
+import { UPLOAD_RING_SIZES, UPLOAD_RING_STOP, UploadRing } from '@/components/ui/UploadRing';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { FileBubbleCard, FileSendingRing } from '@/components/chat/FileBubble';
 import { FailedActions, MetaGlyph, bubbleStatus, metaTick } from '@/components/chat/MessageThread';
 import { ringCircumference, ringDashOffset } from '@/components/ui/ProgressRing';
-import { ICON_SIZE, IconClock, IconStop } from '@/components/ui/icons';
+import { ICON_SIZE, IconClock, IconX } from '@/components/ui/icons';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 
@@ -294,12 +294,10 @@ function arcOffset(html: string): number {
 }
 
 describe('D5: sending states, one look across photo, album, video, file, voice note', () => {
-  const stop = renderToStaticMarkup(
-    <IconStop size={UPLOAD_RING_STOP} className="[grid-area:1/1]" />,
-  );
+  const stop = renderToStaticMarkup(<IconX size={UPLOAD_RING_STOP} className="[grid-area:1/1]" />);
 
   it.each(['voice', 'image', 'file'] as const)(
-    'uploading (%s): the stop square (IconStop) inside the ring, labelled "Stop sending"',
+    'uploading (%s): the X (IconX) inside the ring, labelled "Stop sending"',
     (variant) => {
       const html = renderToStaticMarkup(
         <UploadRing progress={0.5} variant={variant} onCancel={() => {}} />,
@@ -307,8 +305,6 @@ describe('D5: sending states, one look across photo, album, video, file, voice n
       expect(html).toContain(stop);
       expect(html).toContain('aria-label="Stop sending"');
       expect(html).not.toContain('Cancel upload');
-      // No X path (the old close glyph) anywhere in the control.
-      expect(html).not.toContain('M6 18 18 6M6 6l12 12');
     },
   );
 
@@ -463,8 +459,9 @@ describe('D5: sending states, one look across photo, album, video, file, voice n
 });
 
 describe('D4b: no close X in the sending-state files', () => {
+  // ui/UploadRing (and ui/PendingChip) own the one X (decision F); every
+  // other sending-state file reaches it only through them.
   const OWNED = [
-    'chat/UploadRing.tsx',
     'chat/VoiceNote.tsx',
     'chat/FileBubble.tsx',
     'ui/ProgressRing.tsx',
@@ -479,5 +476,23 @@ describe('D4b: no close X in the sending-state files', () => {
   it.each(OWNED)('%s uses no close X glyph', (rel) => {
     const src = readFileSync(`${ROOT}${rel}`, 'utf8');
     expect(src).not.toMatch(RETIRED);
+  });
+});
+
+describe('decision F: one upload look', () => {
+  it('UploadRetry sits in the ring spot, labelled Retry', async () => {
+    const { UploadRetry } = await import('@/components/ui/UploadRing');
+    const html = renderToStaticMarkup(<UploadRetry variant="image" onRetry={() => {}} />);
+    expect(html).toContain('aria-label="Retry"');
+    expect(html).toContain('h-14 min-w-14');
+  });
+
+  it('uploadSizeMeta: "1.2 of 3.4 MB", never a % figure', async () => {
+    const { uploadSizeMeta } = await import('@/components/ui/UploadRing');
+    const MB = 1024 * 1024;
+    expect(uploadSizeMeta(1.2 * MB, 3.4 * MB)).toBe('1.2 of 3.4 MB');
+    expect(uploadSizeMeta(0, 12 * MB)).toBe('0.0 of 12 MB');
+    expect(uploadSizeMeta(20 * 1024, 50 * 1024)).toBe('20 of 50 KB');
+    expect(uploadSizeMeta(5 * MB, 3 * MB)).toBe('3.0 of 3.0 MB');
   });
 });

@@ -24,7 +24,7 @@ import {
 
 // Plan rows on Notifications (the bell merged into Activity): a plan_comment
 // or plan_review row is an Activity plan-item card with its Activity wording,
-// listed under All and the Plans chip; a tap marks it read and opens the
+// listed under All (no Plans chip); a tap marks it read and opens the
 // Plan tab's plan page (/plan/:planId?item=, a comment adds &comment=) with
 // that item open. A cold deep link to an unreadable plan shows "Plan not
 // available" and Back lands on Notifications. Runs in both colour schemes (the
@@ -54,7 +54,7 @@ function card(page: Page, title: string) {
   return page.locator('[data-activity-id]').filter({ hasText: title }).first();
 }
 
-test('agency: a plan_comment row is a Notifications card (All and Plans) and opens the item', async ({
+test('agency: a plan_comment row is a Notifications card (All) and opens the item', async ({
   page,
 }) => {
   const network = await installHarnessNetwork(page);
@@ -72,9 +72,10 @@ test('agency: a plan_comment row is a Notifications card (All and Plans) and ope
   await expect(row).toContainText(ACTIVITY_PLAN_COMMENT_BODY);
   await expect(page.locator('[data-activity-plan-icon]')).toHaveCount(1);
 
-  // The Plans chip lists it too.
-  await page.getByRole('button', { name: 'Plans', exact: true }).click();
-  await expect(row).toBeVisible();
+  // No Plans chip (Activity's chips are All, Unread, Mentions): All lists it.
+  await expect(
+    page.locator('[data-activity-chips]').getByRole('button', { name: 'Plans', exact: true }),
+  ).toHaveCount(0);
   expectMinTouchTarget(await row.boundingBox());
 
   // The tap: marked read, then the standalone page with the item open.

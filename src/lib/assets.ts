@@ -14,12 +14,6 @@ import type { PurgeRequest, PurgeResponse } from '@/server/workers/asset-upload-
 import type { PrefetchContext } from '@/lib/prefetch-context';
 import { invalidateReads, peekKept, primeRead, readKey, sharedRead } from '@/lib/session-read';
 import { readSharedMemberRole } from '@/lib/member-role';
-import {
-  andOrFilters,
-  ilikeAnyFilter,
-  serverSearchQuery,
-  withAbort,
-} from '@/lib/search/server-search';
 
 /**
  * The version kinds the server records (asset_versions.kind CHECK, live). A
@@ -39,10 +33,13 @@ export const ASSET_KINDS = [
 
 export type AssetKind = (typeof ASSET_KINDS)[number];
 
-/** The Assets tabs, in display order. `all` shows every asset. */
-export type AssetTab = 'all' | 'media' | 'pdf' | 'docs' | 'sheets' | 'links';
+/**
+ * The Assets tabs, in display order (decision D, 7 Nov). `all` shows every
+ * asset; Docs is PDFs, documents, presentations and spreadsheets together.
+ */
+export type AssetTab = 'all' | 'media' | 'docs' | 'links';
 
-export const ASSET_TABS: readonly AssetTab[] = ['all', 'media', 'pdf', 'docs', 'sheets', 'links'];
+export const ASSET_TABS: readonly AssetTab[] = ['all', 'media', 'docs', 'links'];
 
 export const ASSET_TAB_DEFAULT: AssetTab = 'all';
 
@@ -51,28 +48,24 @@ export const KIND_TAB: Record<AssetKind, Exclude<AssetTab, 'all'>> = {
   image: 'media',
   video: 'media',
   audio: 'media',
-  pdf: 'pdf',
+  pdf: 'docs',
   document: 'docs',
   presentation: 'docs',
-  spreadsheet: 'sheets',
+  spreadsheet: 'docs',
   link: 'links',
 };
 
 export const TAB_LABELS: Record<AssetTab, string> = {
   all: 'All',
   media: 'Media',
-  pdf: 'PDF',
   docs: 'Docs',
-  sheets: 'Sheets',
   links: 'Links',
 };
 
 /** What an empty tab says. All keeps the page's own empty states. */
 export const TAB_EMPTY: Record<Exclude<AssetTab, 'all'>, string> = {
   media: 'Photos and videos show up here.',
-  pdf: 'PDFs show up here.',
   docs: 'Docs show up here.',
-  sheets: 'Sheets show up here.',
   links: 'Links show up here.',
 };
 
@@ -81,9 +74,35 @@ export function toAssetKind(rawKind: string | null): AssetKind | null {
   return ASSET_KINDS.find((kind) => kind === rawKind) ?? null;
 }
 
-/** The tab named by a ?type= value; anything else (missing, unknown) is All. */
-export function parseAssetTab(value: string | null): AssetTab {
+/**
+ * The tab a stored or URL value names (?type=, the kept tab on this device).
+ * The old PDF, Docs and Sheets tabs are one Docs tab now, so pdf, docs and
+ * sheets all land on Docs; anything else unknown (or missing) is All. Pure.
+ */
+export function sanitizeAssetTab(value: unknown): AssetTab {
+  if (value === 'pdf' || value === 'sheets') return 'docs';
   return ASSET_TABS.find((tab) => tab === value) ?? ASSET_TAB_DEFAULT;
+}
+
+/**
+ * Tab totals from any shape this device may hold: a kept total saved before
+ * the Docs merge still carries pdf and sheets, so Docs is pdf + docs + sheets
+ * (a current total has only docs, so the sum is itself). A missing or
+ * non-numeric count is 0. Pure.
+ */
+export function sanitizeAssetTabCounts(
+  counts: Readonly<Partial<Record<string, unknown>>>,
+): Record<AssetTab, number> {
+  const n = (key: string): number => {
+    const value = counts[key];
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  };
+  return {
+    all: n('all'),
+    media: n('media'),
+    docs: n('pdf') + n('docs') + n('sheets'),
+    links: n('links'),
+  };
 }
 
 /** Whether an asset shows under a tab. */
@@ -236,8 +255,6 @@ export const ASSETS_PAGE_SIZE = 100;
 export interface AssetCursor {
   uploadedAt: string;
   id: string;
-  /** The search the page answered (absent for the plain list): Load more continues it. */
-  query?: string;
 }
 
 /** Whether another page follows, and where it starts. Never null. */
@@ -259,22 +276,6 @@ export function assetKeysetFilter(cursor: AssetCursor): string {
   const at = `"${cursor.uploadedAt}"`;
   const id = `"${cursor.id}"`;
   return `uploaded_at.lt.${at},and(uploaded_at.eq.${at},id.lt.${id})`;
-}
-
-/** The columns the Assets search matches (ILIKE, either one). */
-export const ASSET_SEARCH_COLUMNS = ['filename', 'display_name'] as const;
-
-/**
- * The ONE or() argument of a page read: the keyset cursor AND the search
- * (filename or display_name ILIKE the escaped, quoted pattern; from 2
- * characters), as and(or(cursor),or(search)) when both are set; '' when
- * neither. Pure.
- */
-export function assetPageFilter(cursor: AssetCursor | undefined, search: string): string {
-  return andOrFilters(
-    cursor !== undefined ? assetKeysetFilter(cursor) : '',
-    ilikeAnyFilter(ASSET_SEARCH_COLUMNS, search),
-  );
 }
 
 /**
@@ -309,10 +310,7 @@ export async function listAssetsPage(
   client: Client,
   workspaceId: string,
   cursor?: AssetCursor,
-  search: string = cursor?.query ?? '',
-  signal?: AbortSignal,
 ): Promise<Result<AssetPage>> {
-  const searched = serverSearchQuery(search);
   let query = client
     .from('assets')
     .select(ASSET_LIST_SELECT)
@@ -320,15 +318,11 @@ export async function listAssetsPage(
     .is('deleted_at', null)
     .eq('asset_attachments.workspace_id', workspaceId)
     .is('asset_attachments.deleted_at', null);
-  const filter = assetPageFilter(cursor, searched);
-  if (filter !== '') query = query.or(filter);
-  const assetsResult = await withAbort(
-    query
-      .order('uploaded_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(ASSETS_PAGE_SIZE + 1),
-    signal,
-  );
+  if (cursor !== undefined) query = query.or(assetKeysetFilter(cursor));
+  const assetsResult = await query
+    .order('uploaded_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(ASSETS_PAGE_SIZE + 1);
   if (assetsResult.error) {
     return { ok: false, error: { code: 'unknown', message: assetsResult.error.message } };
   }
@@ -340,11 +334,7 @@ export async function listAssetsPage(
     fetched.length > ASSETS_PAGE_SIZE && last !== undefined
       ? {
           done: false,
-          cursor: {
-            uploadedAt: last.uploaded_at,
-            id: last.id,
-            ...(searched !== '' ? { query: searched } : {}),
-          },
+          cursor: { uploadedAt: last.uploaded_at, id: last.id },
         }
       : { done: true };
   return { ok: true, data: { items: shapeAssets(rows, embeddedAttachmentCounts(rows)), next } };
@@ -385,7 +375,11 @@ export function readAssetsFirstPage(
   return sharedRead(key, () => read(client, workspaceId), { isOk: (result) => result.ok });
 }
 
-/** Every tab's total, joined with a read already running or just settled. */
+/**
+ * Every tab's total, joined with a read already running or just settled. A
+ * joined value saved on this device before the Docs merge is summed to the
+ * current tabs (sanitizeAssetTabCounts); a fresh read is already in shape.
+ */
 export function readAssetTabCounts(
   client: Client,
   userId: string,
@@ -393,7 +387,10 @@ export function readAssetTabCounts(
   read: typeof countAssetTabs = countAssetTabs,
 ): Promise<Result<Record<AssetTab, number>>> {
   const key = assetTabCountsKey(userId, workspaceId);
-  return sharedRead(key, () => read(client, workspaceId), { isOk: (result) => result.ok });
+  return sharedRead(key, () => read(client, workspaceId), { isOk: (result) => result.ok }).then(
+    (result): Result<Record<AssetTab, number>> =>
+      result.ok ? { ok: true, data: sanitizeAssetTabCounts(result.data) } : result,
+  );
 }
 
 /** Mark the shared first reads stale (a write, a reload): the next read asks again. */
@@ -413,8 +410,11 @@ export function keptAssetTabCounts(
   userId: string,
   workspaceId: string,
 ): Record<AssetTab, number> | undefined {
-  const kept = peekKept<Result<Record<AssetTab, number>>>(assetTabCountsKey(userId, workspaceId));
-  return kept !== undefined && kept.ok ? kept.data : undefined;
+  // A total saved on this device before the Docs merge still has pdf and sheets.
+  const kept = peekKept<Result<Readonly<Partial<Record<string, unknown>>>>>(
+    assetTabCountsKey(userId, workspaceId),
+  );
+  return kept !== undefined && kept.ok ? sanitizeAssetTabCounts(kept.data) : undefined;
 }
 
 /** Keep the list the page shows (after Load more or its own write) for the next visit. */
@@ -520,8 +520,11 @@ export async function countAssetsInTab(
 
 /**
  * Every tab's server total, one HEAD count per tab, all in flight at once
- * (ASSET_TABS.length requests in parallel). Any failure fails the whole read so
- * the page never shows a mix of fresh and stale counts.
+ * (ASSET_TABS.length requests in parallel). Docs is one count over all four of
+ * its kinds (pdf, document, presentation, spreadsheet): the kinds never
+ * overlap, so it is exactly the sum of the old PDF, Docs and Sheets totals,
+ * in one request instead of three. Any failure fails the whole read so the
+ * page never shows a mix of fresh and stale counts.
  */
 export async function countAssetTabs(
   client: Client,
@@ -530,14 +533,7 @@ export async function countAssetTabs(
   const results = await Promise.all(
     ASSET_TABS.map((tab) => countAssetsInTab(client, workspaceId, tab)),
   );
-  const counts: Record<AssetTab, number> = {
-    all: 0,
-    media: 0,
-    pdf: 0,
-    docs: 0,
-    sheets: 0,
-    links: 0,
-  };
+  const counts: Record<AssetTab, number> = { all: 0, media: 0, docs: 0, links: 0 };
   for (const [index, tab] of ASSET_TABS.entries()) {
     const result = results[index];
     if (result === undefined) continue;
@@ -686,7 +682,7 @@ export function renameAssetInList(
   return items.map((item) => (item.id === assetId ? { ...item, displayName: name } : item));
 }
 
-/** The name shown on the card and matched by search/sort: display_name ?? filename. */
+/** The name shown on the card and ordered by the Name sort: display_name ?? filename. */
 export function displayLabel(item: Pick<AssetListItem, 'displayName' | 'filename'>): string {
   const name = item.displayName;
   return name !== null && name.trim() !== '' ? name : item.filename;
@@ -819,35 +815,16 @@ export async function deleteInBatches(
 
 /** Per-tab counts over the given items: All is the total, each kind counts once. */
 export function buildTabCounts(items: AssetListItem[]): Record<AssetTab, number> {
-  const counts: Record<AssetTab, number> = {
-    all: items.length,
-    media: 0,
-    pdf: 0,
-    docs: 0,
-    sheets: 0,
-    links: 0,
-  };
+  const counts: Record<AssetTab, number> = { all: items.length, media: 0, docs: 0, links: 0 };
   for (const item of items) {
     if (item.kind !== null) counts[KIND_TAB[item.kind]] += 1;
   }
   return counts;
 }
 
-/**
- * Apply the tab and the client-side name search. Search matches the display
- * label (display_name ?? filename) across the whole library.
- */
-export function filterAssets(
-  items: AssetListItem[],
-  tab: AssetTab,
-  search: string,
-): AssetListItem[] {
-  const query = search.trim().toLowerCase();
-  return items.filter((item) => {
-    if (!inTab(item, tab)) return false;
-    if (query !== '' && !displayLabel(item).toLowerCase().includes(query)) return false;
-    return true;
-  });
+/** The items under a tab (Assets has no list search: decision B, 7 Nov). Pure. */
+export function filterAssets(items: AssetListItem[], tab: AssetTab): AssetListItem[] {
+  return tab === 'all' ? items : items.filter((item) => inTab(item, tab));
 }
 
 /** The library sort orders, in menu order. */

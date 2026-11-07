@@ -9,15 +9,17 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssetsPage } from '@/components/pages/AssetsPage';
-import { keptAssetsPage, type AssetListItem } from '@/lib/assets';
-import { READ_FRESH_MS, resetSessionReads } from '@/lib/session-read';
+import { assetTabCountsKey, keptAssetsPage, type AssetListItem } from '@/lib/assets';
+import { keptViewKey } from '@/lib/kept-view';
+import { READ_FRESH_MS, primeRead, resetSessionReads } from '@/lib/session-read';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const { showToast, listAssets, assetDelete } = vi.hoisted(() => ({
+const { showToast, listAssets, assetDelete, countTabs } = vi.hoisted(() => ({
   showToast: vi.fn<(options: unknown) => string>(() => 'toast-1'),
   listAssets: vi.fn(),
   assetDelete: vi.fn(),
+  countTabs: vi.fn(),
 }));
 
 vi.mock('@/lib/env', () => ({ env: { VITE_ASSET_UPLOAD_URL: 'https://upload.test' } }));
@@ -40,10 +42,7 @@ vi.mock('@/lib/assets', async (importOriginal) => {
   return {
     ...actual,
     listAssetsPage: (...args: unknown[]) => listAssets(...args),
-    countAssetTabs: async () => ({
-      ok: true,
-      data: { all: 2, media: 2, pdf: 0, docs: 0, sheets: 0, links: 0 },
-    }),
+    countAssetTabs: (...args: unknown[]) => countTabs(...args),
     getAssetItem: async () => ({ ok: true, data: [] }),
     fetchMemberRole: async () => 'owner',
     findAssetsInUse: async () => ({ ok: true, data: [] }),
@@ -140,12 +139,46 @@ beforeEach(() => {
   showToast.mockClear();
   listAssets.mockReset();
   assetDelete.mockReset();
+  countTabs.mockReset().mockResolvedValue({
+    ok: true,
+    data: { all: 2, media: 2, docs: 0, links: 0 },
+  });
 });
 
 afterEach(() => {
   leave();
   vi.useRealTimers();
   resetSessionReads();
+});
+
+describe('Assets tab return: tabs and totals kept before the Docs merge', () => {
+  const docsChip = () => document.querySelector<HTMLElement>('[data-asset-tab="docs"]');
+
+  it('a kept PDF or Sheets tab lands on Docs', async () => {
+    listAssets.mockResolvedValue({ ok: true, data: { items: [ONE], next: { done: true } } });
+    primeRead(keptViewKey('u1', 'w1', 'assets:tab'), 'sheets');
+    await visit();
+    expect(docsChip()?.getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelector('[data-asset-tab-empty="docs"]')).not.toBeNull();
+    leave();
+    primeRead(keptViewKey('u1', 'w1', 'assets:tab'), 'pdf');
+    await visit();
+    expect(docsChip()?.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('kept totals with pdf, docs and sheets paint Docs as their sum', async () => {
+    listAssets.mockResolvedValue({ ok: true, data: { items: [ONE], next: { done: true } } });
+    // The fresh count never lands, so only the kept (old) total can paint.
+    countTabs.mockImplementation(() => new Promise(() => {}));
+    primeRead(assetTabCountsKey('u1', 'w1'), {
+      ok: true,
+      data: { all: 9, media: 2, pdf: 1, docs: 3, sheets: 2, links: 1 },
+    });
+    await visit();
+    expect(docsChip()?.querySelector('[data-asset-tab-count]')?.textContent).toBe('6');
+    expect(document.querySelector('[data-asset-tab="pdf"]')).toBeNull();
+    expect(document.querySelector('[data-asset-tab="sheets"]')).toBeNull();
+  });
 });
 
 describe('Assets tab return', () => {

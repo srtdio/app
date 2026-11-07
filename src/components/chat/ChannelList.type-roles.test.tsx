@@ -2,7 +2,8 @@
 // Type roles on the chat home list (one list, no section labels): group and
 // person names as the Row heading
 // role (one row style for both), the time as meta (12, tabular) and the
-// no-match state (title lg/600, description base fg-2).
+// zero state (title lg/600 fg). The list has no search field, so no no-match
+// state.
 // Pure renders; nothing reads.
 
 import { describe, expect, it, vi } from 'vitest';
@@ -39,7 +40,7 @@ const read: ConversationSummary = {
   unread: 0,
 };
 
-function list(channels: ChannelSummary[], search?: string): ReactElement {
+function list(channels: ChannelSummary[]): ReactElement {
   return channelListView({
     channels,
     hasChannels: true,
@@ -49,7 +50,6 @@ function list(channels: ChannelSummary[], search?: string): ReactElement {
     summaryFor: () => read,
     nowMs: NOW,
     timeZone: 'UTC',
-    ...(search !== undefined ? { search } : {}),
   });
 }
 
@@ -106,11 +106,13 @@ describe('chat list type roles', () => {
     );
   });
 
-  it('no match: NoResults names the query (lg/600 fg) with Clear search', () => {
-    const [title] = paint(list([], 'zzz'), 'div', 'Try another word for "zzz".');
+  it('zero state: names what shows up here (lg/600 fg), no Clear search', () => {
+    const title = paint(list([]), 'div', 'Chats with your team show up here.').find((e) =>
+      e.classList.contains('text-lg'),
+    );
     expect(classes(title as Element)).toEqual(
       expect.arrayContaining(['text-lg', 'font-semibold', 'text-fg']),
     );
-    expect(paint(list([], 'zzz'), 'button', 'Clear search')).toHaveLength(1);
+    expect(() => paint(list([]), 'button', 'Clear search')).toThrow();
   });
 });

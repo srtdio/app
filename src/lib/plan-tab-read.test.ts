@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 import { PLAN_BUNDLE_PAGE } from '@/lib/chat/plan-bundle';
-import { mergePlanTabPages, readPlanTab } from '@/lib/plan-tab-read';
+import {
+  PLAN_SORT_DEFAULT,
+  PLAN_SORT_OPTIONS,
+  mergePlanTabPages,
+  readPlanTab,
+  sanitizePlanSort,
+  sortPlanBundles,
+} from '@/lib/plan-tab-read';
 
 type Row = Record<string, unknown>;
 
@@ -292,5 +299,30 @@ describe('the comment counts (D2)', () => {
       { ...base, commentCounts: { b: 2 } },
     );
     expect(merged.commentCounts).toEqual({ a: 1, b: 2 });
+  });
+});
+
+describe('Plan sort (the top bar sort)', () => {
+  const bundles = [
+    { plan: { id: 'b', title: 'beta', starts_on: '2026-10-05', ends_on: '2026-10-06' } },
+    { plan: { id: 'a', title: 'Alpha', starts_on: '2026-10-20', ends_on: '2026-10-21' } },
+    { plan: { id: 'c', title: 'gamma', starts_on: '2026-09-01', ends_on: '2026-09-02' } },
+  ];
+
+  it('offers Newest first, Oldest first and Name', () => {
+    expect(PLAN_SORT_OPTIONS.map((o) => o.label)).toEqual(['Newest first', 'Oldest first', 'Name']);
+    expect(sanitizePlanSort('due')).toBe(PLAN_SORT_DEFAULT);
+  });
+
+  it('orders by start date either way, or by name', () => {
+    expect(sortPlanBundles(bundles, 'newest').map((b) => b.plan.id)).toEqual(['a', 'b', 'c']);
+    expect(sortPlanBundles(bundles, 'oldest').map((b) => b.plan.id)).toEqual(['c', 'b', 'a']);
+    expect(sortPlanBundles(bundles, 'name').map((b) => b.plan.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('the Plan search read is gone: no plan_search export', async () => {
+    const mod: Record<string, unknown> = await import('@/lib/plan-tab-read');
+    expect(mod.searchPlanTab).toBeUndefined();
+    expect(mod.planSearchArgs).toBeUndefined();
   });
 });

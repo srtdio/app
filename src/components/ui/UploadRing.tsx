@@ -1,8 +1,8 @@
-// The upload control on an uploading photo, album, video, file or voice note
-// (D5 sending states, one look for every type): a 16px solid stop square
-// (IconStop) on a dark scrim disc, with a ring around it that fills with the
-// upload's real progress 0..1 (a light arc on a translucent track). Tapping it
-// stops the send (no confirm): the caller's cancel removes the pending
+// The one upload indicator (decision F, 7 Nov): on an uploading photo, album,
+// video, file, voice note, Assets row thumb, post tile, onboarding photo or a
+// pending-file chip thumb. A 16px X (IconX) on a dark scrim disc, with a ring around it that fills with the
+// upload's real progress 0..1 (a light arc on a translucent track). Tapping
+// the X cancels (no confirm): the caller's cancel removes the pending
 // message. While progress is unknown (queued, waiting, backoff, offline) the
 // arc sits at 0 and fills once bytes move; it never spins ahead of the upload.
 //
@@ -13,10 +13,13 @@
 // the button is never under 44x44 (the voice ring sits in a 44px button, the
 // play button's own box, so it is never larger than play).
 //
+// A failed upload shows Retry in the same spot (UploadRetry): the same disc
+// with IconRotateCcw, labelled "Retry". No bars and no % text anywhere.
+//
 // Over media it draws on the overlay tokens (a dark disc, light ink, the same
-// values in light and dark), so the stop square reads on light and dark media.
+// values in light and dark), so the X reads on light and dark media.
 // In the voice play slot the caller hands the bubble's own inks instead (`ink`:
-// a flat disc, a track and the arc and stop square in the play glyph's ink),
+// a flat disc, a track and the arc and X in the play glyph's ink),
 // with no shadow, so nothing paints past the slot. The button carries
 // data-upload-ring so the own-bubble restyle (MessageThread OWN_BUBBLE_CONTENT)
 // leaves it alone.
@@ -26,7 +29,7 @@
 
 import { useRef, type ReactElement } from 'react';
 import { uploadSettle, usePresence } from '@/lib/motion';
-import { ICON_SIZE, IconStop } from '@/components/ui/icons';
+import { ICON_SIZE, IconRotateCcw, IconX } from '@/components/ui/icons';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { cn } from '@/lib/cn';
@@ -59,13 +62,13 @@ const HIT_CLASS: Readonly<Record<UploadRingVariant, string>> = {
 };
 
 const STROKE = 3;
-/** The stop square inside the ring (px). */
+/** The X inside the ring (px). */
 export const UPLOAD_RING_STOP = ICON_SIZE.inline;
 /** ProgressRing's partial arc share; unused here (unknown progress draws 0). */
 const ARC = 0;
 
-/** The spoken name of the stop control (D4b). */
-export type UploadRingLabel = 'Stop sending' | 'Stop upload' | 'Stop recording';
+/** The spoken name of the cancel control (D4b). */
+export type UploadRingLabel = 'Stop sending' | 'Stop upload' | 'Stop recording' | 'Cancel upload';
 
 /** One grid cell for every layer: they stack without any positioning. */
 const LAYER = '[grid-area:1/1]';
@@ -76,7 +79,7 @@ export interface UploadRingInk {
   disc: string;
   /** The ring's track. */
   track: string;
-  /** The arc and the stop square. */
+  /** The arc and the X. */
   arc: string;
 }
 
@@ -100,7 +103,7 @@ export function UploadRing({
   hidden?: boolean;
   /** On a bubble fill: its inks in place of the overlay disc and ink. */
   ink?: UploadRingInk | undefined;
-  /** The stop control's spoken name; chat sends say "Stop sending". */
+  /** The cancel control's spoken name; chat sends say "Stop sending". */
   label?: UploadRingLabel | undefined;
 }): ReactElement {
   const indeterminate = progress === null;
@@ -153,7 +156,7 @@ export function UploadRing({
           trackClass={ink === undefined ? 'text-overlay-dot' : ink.track}
           arcClass={ink === undefined ? 'text-overlay-fg' : ink.arc}
         />
-        <IconStop size={UPLOAD_RING_STOP} className={LAYER} />
+        <IconX size={UPLOAD_RING_STOP} className={LAYER} />
       </PressableRow>
       {/* The progress for screen readers: a button's children are not read, so
           the progressbar sits beside it, sr-only (out of flow, nothing paints). */}
@@ -199,4 +202,64 @@ export function TileUploadRing(props: {
       />
     </span>
   );
+}
+
+/**
+ * A failed upload: Retry in the ring's own spot (same disc, same box, same
+ * hit area), so the item never shifts between uploading and failed.
+ */
+export function UploadRetry({
+  onRetry,
+  className,
+  variant,
+}: {
+  onRetry: () => void;
+  className?: string | undefined;
+  variant: UploadRingVariant;
+}): ReactElement {
+  return (
+    <PressableRow
+      inline
+      type="button"
+      data-upload-retry=""
+      data-ring-variant={variant}
+      aria-label="Retry"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onRetry();
+      }}
+      className={cn(
+        'grid shrink-0 place-items-center text-overlay-fg',
+        HIT_CLASS[variant],
+        className,
+      )}
+    >
+      <span
+        aria-hidden="true"
+        data-upload-disc=""
+        className={cn(LAYER, RING_CLASS[variant], 'rounded-full bg-overlay opacity-60 lit-media')}
+      />
+      <IconRotateCcw size={UPLOAD_RING_STOP} className={LAYER} />
+    </PressableRow>
+  );
+}
+
+const MB = 1024 * 1024;
+
+function mb(bytes: number): string {
+  const v = bytes / MB;
+  return v >= 10 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1);
+}
+
+/**
+ * The size progress meta for an uploading item: "1.2 of 3.4 MB" (from bytes;
+ * never a % figure). Under 0.1 MB in total it reads in KB. Pure.
+ */
+export function uploadSizeMeta(loaded: number, total: number): string {
+  const done = Math.max(0, Math.min(loaded, total));
+  if (total < MB / 10) {
+    return `${Math.round(done / 1024)} of ${Math.max(1, Math.round(total / 1024))} KB`;
+  }
+  return `${mb(done)} of ${mb(total)} MB`;
 }
