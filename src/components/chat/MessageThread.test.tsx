@@ -2258,6 +2258,7 @@ describe('status ticker first paint waits for every read (B1)', () => {
     side,
     status: settled,
     open: [],
+    openTasks: 0,
     ...over,
   });
   /** The bar as one line: each item's number and word. */
@@ -2275,6 +2276,14 @@ describe('status ticker first paint waits for every read (B1)', () => {
       status: { ...settled, briefs: { ready: true, failed: false, rows: [], count: 2 } },
     });
     expect(line(input)).toBe('4 in review · 2 briefs');
+  });
+
+  it('open tasks join the bar last; a list not in yet never reads as nothing open', () => {
+    expect(line(base({ openTasks: 2 }))).toBe('2 tasks');
+    expect(line(base({ openTasks: 1, openPosts: { ready: true, count: 3, failed: false } }))).toBe(
+      '3 waiting · 1 task',
+    );
+    expect(line(base({ openTasks: null }))).toBe('blank');
   });
 
   it('no bar until the posts round settles', () => {

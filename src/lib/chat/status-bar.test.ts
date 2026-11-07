@@ -15,6 +15,7 @@ import {
   drawerKeys,
   drawerShouldClose,
   keptTitle,
+  openTasksOf,
   openPlans,
   planSectionCount,
   planSegment,
@@ -34,7 +35,7 @@ import {
 } from '@/lib/chat/status-bar';
 
 function input(over: Partial<StatusInput> = {}): StatusInput {
-  return { plans: [], posts: 0, briefs: 0, side: 'agency', ...over };
+  return { plans: [], posts: 0, briefs: 0, tasks: 0, side: 'agency', ...over };
 }
 
 function bundle(
@@ -83,14 +84,15 @@ function summary(id: string, approved: number, total: number, changes = 0): Plan
   return { id, title: `Plan ${id}`, approved, total, changes };
 }
 
-describe('statusItems: every on/off combination of the three items', () => {
-  it('all 8 combos: fixed order, zero items omitted, the rest close up', () => {
-    for (let mask = 0; mask < 8; mask += 1) {
+describe('statusItems: every on/off combination of the four items', () => {
+  it('all 16 combos: fixed order, zero items omitted, the rest close up', () => {
+    for (let mask = 0; mask < 16; mask += 1) {
       const on = (bit: number): boolean => (mask & (1 << bit)) !== 0;
       const over = {
         plans: on(0) ? [summary('p', 1, 3)] : [],
         posts: on(1) ? 2 : 0,
         briefs: on(2) ? 3 : 0,
+        tasks: on(3) ? 4 : 0,
       };
       const items = statusItems(input(over));
       const expected = STATUS_ORDER.filter((_, bit) => on(bit));
@@ -99,8 +101,29 @@ describe('statusItems: every on/off combination of the three items', () => {
     }
   });
 
-  it('the order is plan, posts, briefs', () => {
-    expect(STATUS_ORDER).toEqual(['plan', 'posts', 'briefs']);
+  it('the order is plan, posts, briefs, tasks', () => {
+    expect(STATUS_ORDER).toEqual(['plan', 'posts', 'briefs', 'tasks']);
+  });
+
+  it('tasks: "1 task" / "N tasks", capped at 99+, hidden at zero', () => {
+    const word = (n: number): string[] => statusItems(input({ tasks: n })).map((i) => i.word ?? '');
+    expect(word(1)).toEqual(['task']);
+    expect(word(3)).toEqual(['tasks']);
+    expect(word(0)).toEqual([]);
+    const [many] = statusItems(input({ tasks: 120 }));
+    expect(many?.number).toBe('99+');
+    expect(many?.count).toBe(120);
+    expect(many?.aria).toBe('120 tasks');
+  });
+
+  it('open tasks: not done and not deleted, in list order', () => {
+    const tasks = [
+      { id: 'a', status: 'todo' as const, deletedAt: null },
+      { id: 'b', status: 'done' as const, deletedAt: null },
+      { id: 'c', status: 'todo' as const, deletedAt: '2026-11-01T00:00:00Z' },
+      { id: 'd', status: 'todo' as const },
+    ];
+    expect(openTasksOf(tasks).map((t) => t.id)).toEqual(['a', 'd']);
   });
 });
 
@@ -189,11 +212,11 @@ describe('bar wording', () => {
 describe('empty and failed reads', () => {
   it('empty only when every read succeeded with zero', () => {
     expect(statusBar(input())).toEqual({ kind: 'empty' });
-    expect(NOTHING_OPEN_LINE).toBe('Open plans, posts and briefs show up here.');
+    expect(NOTHING_OPEN_LINE).toBe('Open plans, posts, briefs and tasks show up here.');
   });
 
   it('a failed read never yields empty, and omits only its own item', () => {
-    for (const failed of ['plans', 'posts', 'briefs'] as const) {
+    for (const failed of ['plans', 'posts', 'briefs', 'tasks'] as const) {
       const bar = statusBar(input({ [failed]: null }));
       expect(bar.kind).toBe('blank');
       expect(anyReadFailed(input({ [failed]: null }))).toBe(true);
@@ -384,10 +407,10 @@ describe('drawer sections', () => {
   });
 
   it('labels', () => {
-    const labels = (['plan', 'posts', 'briefs'] as StatusKey[]).map((key) =>
+    const labels = (['plan', 'posts', 'briefs', 'tasks'] as StatusKey[]).map((key) =>
       sectionLabel(key, { postsHeading: 'Posts waiting on you', plans: 1 }),
     );
-    expect(labels).toEqual(['Plan', 'Posts waiting on you', 'Open briefs']);
+    expect(labels).toEqual(['Plan', 'Posts waiting on you', 'Open briefs', 'Open tasks']);
     expect(sectionLabel('plan', { postsHeading: '', plans: 2 })).toBe('Plans');
   });
 

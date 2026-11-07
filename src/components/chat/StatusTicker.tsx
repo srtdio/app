@@ -1,7 +1,8 @@
 // The chat status ticker: a 36px bar under the thread header (in the slot the
 // open-loops strip held) and the drawer it drops down. The bar lists, in one
 // fixed order, the workspace's current shared plans (one item per plan for at
-// most two, then "+K"), posts in review and open briefs; zero items are left out and the
+// most two, then "+K"), posts in review, open briefs and this chat's open
+// tasks; zero items are left out and the
 // rest close up. Full width first; when the items do not fit (measured on a
 // hidden copy before paint, again on resize and font load) every item drops
 // its word together and the gap tightens: never a mix, never a visible switch.
@@ -948,6 +949,14 @@ export function ChatStatus(props: {
             onSeeAllBriefs={() => {
               remember();
               props.navigate('/briefs');
+            }}
+            onOpenTask={(taskId) => {
+              close();
+              props.actions.onOpenTask(taskId);
+            }}
+            onSeeAllTasks={() => {
+              close();
+              props.actions.onSeeAllTasks();
             }}
           />
         </StatusDrawerPanel>

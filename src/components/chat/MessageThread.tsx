@@ -226,6 +226,7 @@ import {
   currentSharedPlans,
   drawerKeys,
   openPostsHeading,
+  openTasksOf,
   planSummaries,
   statusBar,
   statusReady,
@@ -648,6 +649,12 @@ export function tickerBar(input: {
   side: { side: ViewerSide; ready: boolean };
   status: UseStatusCounts;
   open: readonly PlanBundle[];
+  /**
+   * This chat's open tasks, from the list the thread already holds (no read
+   * of its own); null while that list is not in (its item then waits, and
+   * the bar never says nothing is open).
+   */
+  openTasks: number | null;
 }): StatusBar | null {
   const ready = statusReady({
     posts: input.openPosts.ready,
@@ -660,6 +667,7 @@ export function tickerBar(input: {
     plans: input.status.plans.failed ? null : planSummaries(input.open, planProgress),
     posts: input.openPosts.failed ? null : input.openPosts.count,
     briefs: input.status.briefs.failed ? null : input.status.briefs.count,
+    tasks: input.openTasks,
     side: input.side.side,
   };
   return statusBar(counts);
@@ -6688,11 +6696,16 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     statusCounts.plans.bundles,
     todayInZone(new Date(), props.timeZone),
   );
+  // This chat's open tasks: the list useChatTasks already holds for the
+  // thread's task lines and the tray dot (remembered per chat, read with the
+  // first page), so the ticker reads nothing more.
+  const statusTasks = useMemo(() => openTasksOf(chatTasks.tasks), [chatTasks.tasks]);
   const statusBarState = tickerBar({
     openPosts,
     side: viewerSide,
     status: statusCounts,
     open: statusOpenPlans,
+    openTasks: chatTasks.loadState === 'ready' ? statusTasks.length : null,
   });
   const planSender = (planId: string): string => {
     const shared = props.messages.find((m) => (m.sharedPlanIds ?? []).includes(planId));
@@ -6946,6 +6959,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
               count: openPosts.count ?? 0,
             },
             briefs: { rows: statusCounts.briefs.rows, count: statusCounts.briefs.count },
+            tasks: { rows: statusTasks, count: statusTasks.length },
           }}
           actions={{
             onOpenPlan: openPlanHere,
@@ -6954,6 +6968,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
                 props.onOpenPlanItem({ planId, senderName: planSender(planId), itemId });
               } else openPlanHere(planId);
             },
+            onOpenTask: (taskId) => openTasks(taskId),
+            onSeeAllTasks: () => openTasks(null),
           }}
           navigate={(to) => {
             if (props.onNavigate !== undefined) props.onNavigate(to);

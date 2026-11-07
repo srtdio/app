@@ -34,7 +34,7 @@ import type { PlanBundle } from '@/lib/chat/plans';
 import { statusBar, type PlanSummary, type StatusBar } from '@/lib/chat/status-bar';
 
 function bar(over: Partial<Parameters<typeof statusBar>[0]> = {}): StatusBar {
-  return statusBar({ plans: [], posts: 0, briefs: 0, side: 'agency', ...over });
+  return statusBar({ plans: [], posts: 0, briefs: 0, tasks: 0, side: 'agency', ...over });
 }
 
 function plan(id: string, title: string, approved = 1, total = 5, changes = 0): PlanSummary {
@@ -62,7 +62,7 @@ const visible = (html: string): string =>
 
 describe('first paint is final', () => {
   it('holds an empty, inert 36px slot until every read settles, then paints once', () => {
-    const frames = [null, null, bar({ posts: 3, briefs: 2 })].map(
+    const frames = [null, null, bar({ posts: 3, briefs: 2, tasks: 1 })].map(
       (b) => renderToStaticMarkup(<StatusTickerBar bar={b} />),
     );
     expect(frames[0]).toContain('data-loops-strip="pending"');
@@ -72,7 +72,7 @@ describe('first paint is final', () => {
     expect(frames[0]).not.toContain('<button');
     expect(frames[1]).toBe(frames[0]);
     expect(frames[2]).toContain('data-loops-strip="open"');
-    expect(visible(frames[2] ?? '')).toBe('3in review2briefs');
+    expect(visible(frames[2] ?? '')).toBe('3in review2briefs1task');
   });
 
   it('a failed read with nothing else open is a blank bar, never Nothing open', () => {
@@ -86,7 +86,7 @@ describe('Nothing open', () => {
   it('shows the check and the line in fg-3, and is not a button', () => {
     const html = renderToStaticMarkup(<StatusTickerBar bar={bar()} />);
     expect(html).toContain('data-loops-strip="empty"');
-    expect(html).toContain('Open plans, posts and briefs show up here.');
+    expect(html).toContain('Open plans, posts, briefs and tasks show up here.');
     expect(html).toContain('text-fg-3');
     expect(html).not.toContain('<button');
     expect(html).not.toContain('role="button"');
@@ -237,6 +237,8 @@ describe('the drawer list', () => {
       onOpenPost: vi.fn(),
       onOpenBrief: vi.fn(),
       onSeeAllBriefs: vi.fn(),
+      onOpenTask: vi.fn(),
+      onSeeAllTasks: vi.fn(),
     };
     const props = {
       keys: ['posts', 'briefs'] as const,
@@ -245,6 +247,7 @@ describe('the drawer list', () => {
       plans: [],
       posts: { heading: 'Posts waiting on approvers', rows: [], count: 0 },
       briefs: { rows: briefs, count: briefs.length },
+      tasks: { rows: [], count: 0 },
       ...actions,
       ...over,
     };
@@ -298,6 +301,42 @@ describe('the drawer list', () => {
     const { html } = drawer({ keys: ['plan'], plans: [planBundle('a', 'Week ahead')] });
     expect(html).toContain('>Plan<');
     expect(html).toContain('0/1');
+  });
+
+  it('Tasks: title, due line and priority tag; five rows then See all; taps open the sheet', () => {
+    const tasks = Array.from({ length: 6 }, (_, i) => ({
+      id: `t${i}`,
+      channelId: 'c',
+      number: i + 1,
+      title: `Task ${i + 1}`,
+      side: 'agency' as const,
+      status: 'todo' as const,
+      priority: 1 as const,
+      createdBy: null,
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+      deletedAt: null,
+      dueOn: i === 0 ? '2026-10-12' : null,
+      doneAt: null,
+    }));
+    const { html, tree, actions } = drawer({
+      keys: ['tasks'],
+      tasks: { rows: tasks, count: tasks.length },
+    });
+    expect(html).toContain('data-status-section="tasks"');
+    expect(html).toContain('Open tasks');
+    expect(html.match(/data-status-task="/g)?.length).toBe(5);
+    expect(html).toContain('See all 6');
+    expect(html).toContain('data-task-p="1"');
+    expect(html).toContain('Due ');
+    const row = tree.find(
+      (el) => (el.props as { 'data-status-task'?: string })['data-status-task'] === 't0',
+    );
+    (row?.props as { onClick: () => void }).onClick();
+    expect(actions.onOpenTask).toHaveBeenCalledWith('t0');
+    const seeAll = tree.find((el) => (el.props as { attr?: string }).attr === 'tasks');
+    (seeAll?.props as { onClick: () => void }).onClick();
+    expect(actions.onSeeAllTasks).toHaveBeenCalledTimes(1);
   });
 
   it('"See all" for briefs goes to Briefs', () => {
@@ -396,11 +435,14 @@ describe('post rows never fail silently', () => {
           plans: [],
           posts: { heading: 'Posts waiting on approvers', rows: [post], count: 1 },
           briefs: { rows: [], count: 0 },
+          tasks: { rows: [], count: 0 },
           onOpenPlan: () => {},
           onOpenPlanItem: () => {},
           onOpenPost: () => {},
           onOpenBrief: () => {},
           onSeeAllBriefs: () => {},
+          onOpenTask: () => {},
+          onSeeAllTasks: () => {},
           open: true,
           postsExpanded: false,
           onExpandPosts: () => {},
@@ -447,11 +489,14 @@ describe('post rows never fail silently', () => {
         plans: [],
         posts: { heading: 'Posts waiting on approvers', rows: [post], count: 1 },
         briefs: { rows: [brief], count: 1 },
+        tasks: { rows: [], count: 0 },
         onOpenPlan: () => {},
         onOpenPlanItem: () => {},
         onOpenPost: () => {},
         onOpenBrief: () => {},
         onSeeAllBriefs: () => {},
+        onOpenTask: () => {},
+        onSeeAllTasks: () => {},
         open: true,
         postsExpanded: false,
         onExpandPosts: () => {},

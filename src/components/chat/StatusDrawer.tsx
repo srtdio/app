@@ -4,7 +4,8 @@
 // (shared in this chat or not), ending soonest first, with its segmented bar,
 // progress line and first items (tap opens the Plan screen, at the item for
 // an item row). Posts in review open the same
-// PostSheet a PostCard tap opens. Briefs navigate to the brief. The panel only moves on the Y axis (edgeStrip, run
+// PostSheet a PostCard tap opens. Briefs navigate to the brief. Tasks (this
+// chat's open ones) open the Tasks sheet at that task. The panel only moves on the Y axis (edgeStrip, run
 // by StatusTicker through the motion module); colours are
 // design tokens only, so light and dark match.
 
@@ -20,6 +21,7 @@ import {
   IconEye,
   IconFile,
   IconPlan,
+  IconTaskSquare,
 } from '@/components/ui/icons';
 import {
   PRESIGN_ENABLED,
@@ -64,7 +66,9 @@ import {
   type PlanSegment,
   type StatusKey,
 } from '@/lib/chat/status-bar';
-import { formatAgo } from '@/lib/time';
+import { formatAgo, formatDue } from '@/lib/time';
+import { PriorityChip } from '@/components/chat/tasks/TaskRow';
+import type { ChatTask } from '@/lib/chat/tasks';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import type { OpenPostRow } from '@/lib/chat/use-open-posts';
 import type { OpenBriefRow } from '@/lib/chat/use-status-counts';
@@ -79,6 +83,7 @@ export const STATUS_ICON: Record<
   plan: IconPlan,
   posts: IconEye,
   briefs: IconBriefs,
+  tasks: IconTaskSquare,
 };
 
 /** No iOS text selection or callout on the bar and drawer. */
@@ -97,6 +102,8 @@ export interface StatusDrawerData {
   plans: readonly PlanBundle[];
   posts: { heading: string; rows: readonly OpenPostRow[]; count: number };
   briefs: { rows: readonly OpenBriefRow[]; count: number };
+  /** This chat's open tasks, in list order (the list the thread already holds). */
+  tasks: { rows: readonly ChatTask[]; count: number };
 }
 
 /** Where each drawer tap goes. */
@@ -106,6 +113,10 @@ export interface StatusDrawerActions {
   onOpenPost: (postId: string) => void;
   onOpenBrief: (briefId: string) => void;
   onSeeAllBriefs: () => void;
+  /** A task row: the Tasks sheet opens at it. */
+  onOpenTask: (taskId: string) => void;
+  /** "See all N": the Tasks sheet opens. */
+  onSeeAllTasks: () => void;
 }
 
 // Layout and colour only: PressableRow provides width, 44px height, radius,
@@ -488,6 +499,41 @@ export function StatusDrawerList(
               ))}
               {seeAll !== null ? (
                 <SeeAllRow total={seeAll} onClick={props.onSeeAllBriefs} attr="briefs" />
+              ) : null}
+            </>,
+          );
+        }
+        if (key === 'tasks') {
+          const { rows, seeAll } = sectionRows(props.tasks.rows, props.tasks.count);
+          return section(
+            key,
+            String(props.tasks.count),
+            <>
+              {rows.map((task) => {
+                const due =
+                  task.dueOn !== null ? formatDue(task.dueOn, props.workspaceZone, now) : '';
+                return (
+                  <PressableRow
+                    key={task.id}
+                    type="button"
+                    flat
+                    data-status-task={task.id}
+                    onClick={() => props.onOpenTask(task.id)}
+                    className={ROW}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className={ROW_TITLE}>{task.title}</span>
+                      {due !== '' ? (
+                        <span className={cn(ROW_SUB, 'font-mono tabular-nums')}>{due}</span>
+                      ) : null}
+                    </span>
+                    <PriorityChip priority={task.priority} />
+                    <Chevron />
+                  </PressableRow>
+                );
+              })}
+              {seeAll !== null ? (
+                <SeeAllRow total={seeAll} onClick={props.onSeeAllTasks} attr="tasks" />
               ) : null}
             </>,
           );

@@ -62,7 +62,7 @@ function plan(id: string, title: string): PlanSummary {
 }
 
 function render(plans: PlanSummary[]): void {
-  const bar = statusBar({ plans, posts: 3, briefs: 2, side: 'agency' });
+  const bar = statusBar({ plans, posts: 3, briefs: 2, tasks: 0, side: 'agency' });
   act(() => root.render(<StatusTickerBar bar={bar} />));
 }
 

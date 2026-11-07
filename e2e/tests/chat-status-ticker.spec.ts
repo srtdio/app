@@ -169,33 +169,32 @@ function seedPosts(network: HarnessNetwork, count: number): void {
   }
 }
 
-/** Open marks on the DM's own loaded messages (cycling through them). */
-function seedMarks(
-  network: HarnessNetwork,
-  perType: { commitment: number; decision: number; pending: number },
-): void {
+/** This DM's open tasks (to do, not deleted), plus one done task that never counts. */
+function seedOpenTasks(network: HarnessNetwork, count: number): void {
   const t = network.world.tables;
-  const messages = network.world.dmMessages;
-  let n = 0;
-  for (const type of ['commitment', 'decision', 'pending'] as const) {
-    for (let i = 0; i < perType[type]; i += 1) {
-      const message: Row | undefined = messages[n % messages.length];
-      n += 1;
-      // One mark per message: past the loaded rows, marks name synthetic ids.
-      const messageId =
-        n <= messages.length && message !== undefined ? String(message.id) : uuid('0190dc00', n);
-      (t.chat_message_marks ??= []).push({
-        message_id: messageId,
-        channel_id: DM_CHANNEL,
-        workspace_id: WORKSPACE_ID,
-        mark_type: type,
-        priority: type === 'pending' && i === 0 ? 1 : null,
-        marked_by: PEER,
-        marked_at: new Date(Date.now() - n * 60_000).toISOString(),
-        resolved_by: null,
-        resolved_at: null,
-      });
-    }
+  const at = new Date(Date.now() - 86_400_000).toISOString();
+  for (let n = 1; n <= count + 1; n += 1) {
+    (t.chat_tasks ??= []).push({
+      id: uuid('0190dd00', n),
+      channel_id: DM_CHANNEL,
+      workspace_id: WORKSPACE_ID,
+      number: n,
+      title: `Task ${n}`,
+      side: 'agency',
+      note: null,
+      status: n <= count ? 'todo' : 'done',
+      priority: n === 1 ? 0 : 2,
+      due_at: null,
+      due_set_by: null,
+      due_set_at: null,
+      due_passed_at: null,
+      due_on: null,
+      done_at: n <= count ? null : at,
+      deleted_at: null,
+      created_by: ME,
+      created_at: at,
+      updated_at: at,
+    });
   }
 }
 
@@ -289,28 +288,25 @@ test.describe('chat status ticker', () => {
     const network = await installHarnessNetwork(page);
     seedPlans(network);
     seedBriefs(network, 2);
-    seedMarks(network, { commitment: 6, decision: 2, pending: 2 });
+    seedOpenTasks(network, 7);
     const bar = await openDm(page);
 
     const keys = await bar
       .locator('[data-status-item]')
       .evaluateAll((els) => els.map((el) => el.getAttribute('data-status-item')));
-    expect(keys).toEqual([
-      'plan',
-      'plan',
-      'posts',
-      'briefs',
-      'commitments',
-      'decisions',
-      'pending',
-    ]);
+    expect(keys).toEqual(['plan', 'plan', 'posts', 'briefs', 'tasks']);
+    // The done task never counts.
+    await expect(bar.locator('[data-status-item="tasks"] [data-status-number]')).toHaveText('7');
     const barBox = await bar.boundingBox();
     expect(barBox?.height).toBe(36);
 
-    await bar.locator('[data-status-item="pending"]').click();
+    await bar.locator('[data-status-item="tasks"]').click();
     await drawerOpen(page);
     const list = page.locator('[data-status-list]');
-    const section = page.locator('[data-status-section="pending"]');
+    const section = page.locator('[data-status-section="tasks"]');
+    // Five rows, then See all 7.
+    await expect(section.locator('[data-status-task]')).toHaveCount(5);
+    await expect(section).toContainText('See all 7');
     const listBox = await list.boundingBox();
     const sectionBox = await section.boundingBox();
     expect(listBox).not.toBeNull();
@@ -326,9 +322,26 @@ test.describe('chat status ticker', () => {
     await drawerClosed(page);
   });
 
+  test('a task row closes the drawer and opens the Tasks sheet; See all opens it too', async ({
+    page,
+  }) => {
+    const network = await installHarnessNetwork(page);
+    seedOpenTasks(network, 2);
+    const bar = await openDm(page);
+    await bar.locator('[data-status-item="tasks"]').click();
+    await drawerOpen(page);
+    await page.locator('[data-status-task]').first().click();
+    await drawerClosed(page);
+    const sheet = page.getByRole('dialog', { name: 'Tasks' });
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    expect(network.blocked).toEqual([]);
+  });
+
   test('open by dragging the bar down', async ({ page }) => {
     const network = await installHarnessNetwork(page);
-    seedMarks(network, { commitment: 2, decision: 1, pending: 1 });
+    seedOpenTasks(network, 2);
     const bar = await openDm(page);
     await drag(page, bar, 320);
     await drawerOpen(page);
@@ -337,9 +350,9 @@ test.describe('chat status ticker', () => {
 
   test('close by dragging the handle up', async ({ page }) => {
     const network = await installHarnessNetwork(page);
-    seedMarks(network, { commitment: 2, decision: 1, pending: 1 });
+    seedOpenTasks(network, 2);
     const bar = await openDm(page);
-    await bar.locator('[data-status-item="commitments"]').click();
+    await bar.locator('[data-status-item="tasks"]').click();
     await drawerOpen(page);
     await drag(page, page.locator('[data-status-handle]'), -320);
     await drawerClosed(page);
@@ -353,11 +366,11 @@ test.describe('chat status ticker', () => {
     seedPlans(network);
     seedPosts(network, 120);
     seedBriefs(network, 120);
-    seedMarks(network, { commitment: 120, decision: 120, pending: 120 });
+    seedOpenTasks(network, 120);
     const bar = await openDm(page);
     await expect(bar).toHaveAttribute('data-status-ticker', 'compact');
     const numbers = await bar.locator('[data-status-item] [data-status-number]').allTextContents();
-    expect(numbers.slice(2)).toEqual(['99+', '99+', '99+', '99+', '99+']);
+    expect(numbers.slice(2)).toEqual(['99+', '99+', '99+']);
     await expect(bar.locator('[data-status-item] [data-status-word]')).toHaveCount(0);
     await expect(bar.locator('[data-status-item] [data-status-more]')).toHaveCount(0);
     // Compact keeps both plan items (their titles may drop trailing words).
@@ -381,7 +394,7 @@ test.describe('chat status ticker', () => {
 
   test('a long-press on the bar selects no text and shows no callout', async ({ page }) => {
     const network = await installHarnessNetwork(page);
-    seedMarks(network, { commitment: 2, decision: 0, pending: 0 });
+    seedOpenTasks(network, 2);
     const bar = await openDm(page);
     const style = await bar.evaluate((el) => {
       const s = getComputedStyle(el) as CSSStyleDeclaration & { webkitTouchCallout?: string };
@@ -497,94 +510,6 @@ test.describe('chat status ticker', () => {
     await page.waitForTimeout(500);
     await expect(page.locator('[data-status-panel]')).toHaveCount(0);
   });
-
-  const STAMPS = [
-    {
-      type: 'commitment',
-      section: 'commitments',
-      stamp: 'Delivered',
-      copy: 'Mark this commitment as delivered?',
-    },
-    {
-      type: 'decision',
-      section: 'decisions',
-      stamp: 'Closed',
-      copy: 'Mark this decision as closed?',
-    },
-    {
-      type: 'pending',
-      section: 'pending',
-      stamp: 'Completed',
-      copy: 'Mark this priority as completed?',
-    },
-  ] as const;
-
-  for (const s of STAMPS) {
-    test(`${s.type} stamp: tap, confirm, one chat_mark_resolve; the row leaves, the count drops`, async ({
-      page,
-    }) => {
-      const network = await installHarnessNetwork(page);
-      seedMarks(network, {
-        commitment: s.type === 'commitment' ? 2 : 0,
-        decision: s.type === 'decision' ? 2 : 0,
-        pending: s.type === 'pending' ? 2 : 0,
-      });
-      const bar = await openDm(page);
-      const number = bar.locator(`[data-status-item="${s.section}"] [data-status-number]`);
-      await expect(number).toHaveText('2');
-      await bar.locator(`[data-status-item="${s.section}"]`).tap();
-      await drawerOpen(page);
-      const section = page.locator(`[data-status-section="${s.section}"]`);
-      const row = section.locator('[data-status-mark]').first();
-      const messageId = await row.getAttribute('data-status-mark');
-      expect(messageId).not.toBeNull();
-      await row.locator('[data-mark-action="resolve"]').tap();
-      const confirm = row.locator('[data-mark-confirm="resolve"]');
-      await expect(confirm).toBeVisible();
-      await expect(confirm).toContainText(s.copy);
-      await confirm.getByRole('button', { name: s.stamp, exact: true }).tap();
-
-      await expect(page.locator(`[data-status-mark="${messageId}"]`)).toHaveCount(0);
-      await expect(number).toHaveText('1');
-      await expect(section.locator('[data-status-mark]')).toHaveCount(1);
-      const calls = network.rpcCalls.filter((c) => c.name === 'chat_mark_resolve');
-      expect(calls).toHaveLength(1);
-      expect(calls[0]?.args.p_message_id).toBe(messageId);
-      expect(calls[0]?.args.p_channel_id).toBe(DM_CHANNEL);
-      expect(network.rpcCalls.filter((c) => c.name === 'chat_mark_reopen')).toHaveLength(0);
-    });
-
-    test(`${s.type} stamp refused: "Couldn't update. Try again." and the row stays`, async ({
-      page,
-    }) => {
-      const network = await installHarnessNetwork(page);
-      network.refuseRpc.add('chat_mark_resolve');
-      seedMarks(network, {
-        commitment: s.type === 'commitment' ? 2 : 0,
-        decision: s.type === 'decision' ? 2 : 0,
-        pending: s.type === 'pending' ? 2 : 0,
-      });
-      const bar = await openDm(page);
-      const number = bar.locator(`[data-status-item="${s.section}"] [data-status-number]`);
-      await bar.locator(`[data-status-item="${s.section}"]`).tap();
-      await drawerOpen(page);
-      const row = page.locator(`[data-status-section="${s.section}"] [data-status-mark]`).first();
-      const messageId = await row.getAttribute('data-status-mark');
-      await row.locator('[data-mark-action="resolve"]').tap();
-      await row
-        .locator('[data-mark-confirm="resolve"]')
-        .getByRole('button', { name: s.stamp, exact: true })
-        .tap();
-
-      await expect(page.getByText("Couldn't update. Try again.")).toBeVisible();
-      await expect(page.locator(`[data-status-mark="${messageId}"]`)).toHaveCount(1);
-      await expect(number).toHaveText('2');
-      await expect(
-        page.locator(`[data-status-mark="${messageId}"] [data-mark-action]`),
-      ).toBeEnabled();
-      expect(network.rpcCalls.filter((c) => c.name === 'chat_mark_resolve')).toHaveLength(1);
-    });
-  }
 });
 
 noEntityCodesCases();

@@ -1,4 +1,5 @@
-// The chat status ticker's pure pieces: which items the bar shows and how each
+// The chat status ticker's pure pieces: which items the bar shows (plans,
+// posts, briefs, this chat's open tasks) and how each
 // reads (fixed order, zero items omitted, 99+ cap, plural words, side wording,
 // plan colour), the current shared plans filter and order (audience 'client',
 // starts_on <= today <= ends_on in the workspace zone, ending soonest first),
@@ -8,16 +9,17 @@
 // unit-tested directly.
 
 import type { PlanBundle } from '@/lib/chat/plans';
+import type { ChatTask } from '@/lib/chat/tasks';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatDate } from '@/lib/time';
 
 /** The bar's items and the drawer's sections, in their one fixed order. */
-export type StatusKey = 'plan' | 'posts' | 'briefs';
+export type StatusKey = 'plan' | 'posts' | 'briefs' | 'tasks';
 
-export const STATUS_ORDER: readonly StatusKey[] = ['plan', 'posts', 'briefs'];
+export const STATUS_ORDER: readonly StatusKey[] = ['plan', 'posts', 'briefs', 'tasks'];
 
 /** The bar's line when every read succeeded and nothing is open. */
-export const NOTHING_OPEN_LINE = 'Open plans, posts and briefs show up here.';
+export const NOTHING_OPEN_LINE = 'Open plans, posts, briefs and tasks show up here.';
 
 /** Rows a drawer section lists before its "See all N" row. */
 export const SECTION_ROWS = 5;
@@ -56,6 +58,11 @@ export interface StatusInput {
   posts: number | null;
   /** Open briefs (the head-only count). */
   briefs: number | null;
+  /**
+   * This chat's open tasks (not done, not deleted), from the list the thread
+   * already holds; null while that list is not in yet (or its read failed).
+   */
+  tasks: number | null;
   side: ViewerSide;
 }
 
@@ -160,12 +167,17 @@ export function statusItems(input: StatusInput): StatusItem[] {
   if (input.briefs !== null && input.briefs > 0) {
     items.push(countItem('briefs', input.briefs, plural(input.briefs, 'brief', 'briefs')));
   }
+  if (input.tasks !== null && input.tasks > 0) {
+    items.push(countItem('tasks', input.tasks, plural(input.tasks, 'task', 'tasks')));
+  }
   return items;
 }
 
 /** Whether any read of the round failed. Pure. */
 export function anyReadFailed(input: StatusInput): boolean {
-  return input.plans === null || input.posts === null || input.briefs === null;
+  return (
+    input.plans === null || input.posts === null || input.briefs === null || input.tasks === null
+  );
 }
 
 /**
@@ -317,6 +329,16 @@ export function titleWordsKept(
   return kept;
 }
 
+/**
+ * This chat's open tasks in list order: not done and not deleted (the list
+ * the thread already holds never carries a deleted one; checked anyway). Pure.
+ */
+export function openTasksOf<T extends Pick<ChatTask, 'status' | 'deletedAt'>>(
+  tasks: readonly T[],
+): T[] {
+  return tasks.filter((task) => task.status !== 'done' && (task.deletedAt ?? null) === null);
+}
+
 /** The first rows of a section and whether a "See all N" row follows. Pure. */
 export function sectionRows<T>(
   rows: readonly T[],
@@ -341,6 +363,8 @@ export function sectionLabel(
       return input.postsHeading;
     case 'briefs':
       return 'Open briefs';
+    case 'tasks':
+      return 'Open tasks';
   }
 }
 
