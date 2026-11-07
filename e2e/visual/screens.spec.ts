@@ -37,6 +37,8 @@ import {
   planMessage,
   TAB_SHARED_PLAN_ID,
   WORKSPACE_ID,
+  civilPlus,
+  mondayOf,
 } from '../fixtures/chat-data';
 import {
   AUDIT_BRIEF_ID,
@@ -62,6 +64,7 @@ import {
 } from './onboarding-steps';
 import { CHECK_EMAIL_COPY } from '../../src/lib/induction-copy';
 import { stubVoiceRecorder } from '../helpers/voice-recorder';
+import { selectGesture } from '../helpers/select-mode';
 
 // Visual lock: every screen of the consistency audit (24 Oct 2026), the chat
 // PostSheet and the onboarding screens (onboarding-steps.ts: sign up, sign in,
@@ -375,6 +378,32 @@ const assetsReady = async (page: Page): Promise<void> =>
 
 const briefsReady = async (page: Page): Promise<void> =>
   waitFor([page.getByText('Autumn range launch')], 'briefs');
+
+/** Assets select mode: Hero banner.png ticked by the select gesture, the bar up. */
+async function assetsSelect(page: Page): Promise<void> {
+  await assetsReady(page);
+  await selectGesture(
+    page,
+    page.locator('[data-asset-card]').filter({ hasText: 'Hero banner.png' }).first(),
+  );
+  await waitFor([page.locator('[data-select-bar]')], 'assets select bar');
+}
+
+/** A Pipeline post's card (ui/ListCard root). */
+const pipelineCard = (page: Page, postId: string): Locator =>
+  page.locator(`[data-list-card][data-post-id="${postId}"]`);
+
+/** Pipeline select mode with the first `count` Review posts ticked (gesture, then taps). */
+async function pipelineSelect(page: Page, count: 1 | 2): Promise<void> {
+  await pipelineReady(page);
+  await selectGesture(page, pipelineCard(page, POST_IDS[0] ?? ''));
+  await waitFor([page.locator('[data-pipeline-select-bar]')], 'pipeline select bar');
+  if (count === 2) await pipelineCard(page, POST_IDS[1] ?? '').click();
+  await waitFor(
+    [page.locator('[data-select-bar-count]', { hasText: `${count} selected` })],
+    `${count} selected`,
+  );
+}
 
 async function openPaletteFrom(page: Page): Promise<void> {
   await chatListReady(page);
@@ -866,18 +895,14 @@ async function bankReady(page: Page): Promise<void> {
   await waitFor([page.locator('[data-bank-row]').getByText(BANK_FIRST_TITLE)], 'bank');
 }
 
-/** Open the first idea's ⋯ menu and pick `name`. */
-async function bankRowMenu(page: Page, name: RegExp): Promise<void> {
+/**
+ * Select mode on the Bank: a long-press (phone) or right-click (laptop) on the
+ * first idea's card ticks it and brings up the Bank's select bar.
+ */
+async function bankSelect(page: Page): Promise<void> {
   await bankReady(page);
-  await tap(
-    [
-      page
-        .locator(`[data-bank-row="${BANK_IDEAS[0]}"]`)
-        .getByRole('button', { name: 'More actions' }),
-    ],
-    'idea more',
-  );
-  await tap([page.getByRole('menuitem', { name })], 'idea menu item');
+  await selectGesture(page, page.locator(`[data-bank-row="${BANK_IDEAS[0]}"]`));
+  await waitFor([page.locator('[data-bank-select-bar]')], 'bank select bar');
 }
 
 /** The shared plan "Autumn launch" (/plan/:id) with today's tile and pill in view. */
@@ -1003,23 +1028,6 @@ const SCREENS: Screen[] = [
       );
     },
   },
-  {
-    name: 'asset-more-menu',
-    seed: creator,
-    url: '/assets',
-    steps: async (page) => {
-      await assetsReady(page);
-      await page
-        .getByRole('button', { name: 'View Hero banner.png' })
-        .hover()
-        .catch(() => undefined);
-      await tap(
-        [page.getByRole('button', { name: 'More actions for Hero banner.png', exact: true })],
-        'asset ⋯ trigger',
-      );
-      await waitFor(anyOverlay(page), 'asset ⋯ menu');
-    },
-  },
   { name: 'assets', seed: creator, url: '/assets', steps: assetsReady },
   { name: 'assets-approver', seed: approver, url: '/assets', steps: assetsReady },
   {
@@ -1087,24 +1095,6 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await briefsReady(page);
       await searchNoMatch(page, [page.getByPlaceholder('Search briefs')], 'briefs');
-    },
-  },
-  {
-    name: 'chat-actions-menu',
-    seed: creator,
-    url: '/chat',
-    steps: async (page) => {
-      await chatListReady(page);
-      await page
-        .getByRole('button', { name: /^Open Priya Raman/ })
-        .first()
-        .hover()
-        .catch(() => undefined);
-      await tap(
-        [page.getByRole('button', { name: `Actions for ${PEER_NAME}`, exact: true })],
-        'chat row ⋯ trigger',
-      );
-      await waitFor(anyOverlay(page), 'chat row menu');
     },
   },
   { name: 'chat-list', seed: creator, url: '/chat', steps: chatListAllRows },
@@ -1699,8 +1689,8 @@ const SCREENS: Screen[] = [
     extra: seedBank,
     url: '/plan?week=bank',
     steps: async (page) => {
-      await bankRowMenu(page, /^Select/);
-      await waitFor([page.locator('[data-bank-select-bar]')], 'select bar');
+      // Bank select mode: the first idea ticked, the select bar at the bottom.
+      await bankSelect(page);
     },
   },
   {
@@ -1720,7 +1710,8 @@ const SCREENS: Screen[] = [
     extra: seedBank,
     url: '/plan?week=bank',
     steps: async (page) => {
-      await bankRowMenu(page, /^Plan it/);
+      await bankSelect(page);
+      await tap([page.locator('[data-bank-select-plan-it]')], 'Plan it');
       await waitFor([page.locator('[data-bank-plan-it]')], 'plan it sheet');
     },
   },
@@ -2238,14 +2229,14 @@ for (const dark of [false, true]) {
 
 /**
  * The list painted: a ListCard, or the chip's zero line ("{Things} show up
- * here.", or Snoozed's "Snoozed updates come back here.").
+ * here.").
  */
 async function listOrZero(page: Page, what: string, extra: Locator[] = []): Promise<void> {
   await waitFor(
     [
       page.locator('[data-list-card]'),
       ...extra,
-      page.getByText(/(show up|come back) here\./),
+      page.getByText(/show up here\./),
       page.getByText(/^No results/),
     ],
     what,
@@ -2295,7 +2286,6 @@ const ACTIVITY_CHIP_SCREENS = [
   { chip: 'mentions', label: 'Mentions' },
   { chip: 'briefs', label: 'Briefs' },
   { chip: 'plans', label: 'Plans' },
-  { chip: 'snoozed', label: 'Snoozed' },
 ] as const;
 for (const { chip, label } of ACTIVITY_CHIP_SCREENS) {
   SCREENS.push({
@@ -2332,22 +2322,117 @@ for (const chip of PLAN_TAB_CHIP_SCREENS) {
   });
 }
 
-// Assets in select mode: a card's ⋯ Select starts it with that file ticked;
-// every card keeps its height with the tick box where the ⋮ was.
+// Assets in select mode: a long-press (phone) or right-click (laptop) on a
+// card starts it with that file ticked (the tick on its picture); every card
+// keeps its height; the select bar carries the one-file rows and Delete.
 SCREENS.push({
   name: 'assets-select',
   seed: creator,
   url: '/assets',
-  steps: async (page) => {
-    await assetsReady(page);
-    await tap(
-      [page.getByRole('button', { name: 'More actions for Hero banner.png', exact: true })],
-      'asset ⋯ trigger',
-    );
-    await tap(menuRow(page, /^Select$/), 'Select');
-    await waitFor([page.locator('[data-select-bar]')], 'select bar');
-  },
+  steps: assetsSelect,
 });
+
+// Pipeline in select mode (7 Nov 2026): a long-press (phone) or right-click
+// (laptop) on Monday carousel ticks it; the bar carries Open, Copy link and
+// the moves (one-post rows). With a second card tapped the bar holds Cancel
+// and "2 selected" only (approval is never bulk).
+SCREENS.push(
+  {
+    name: 'pipeline-select-1',
+    seed: creator,
+    url: '/pipeline',
+    steps: async (page) => pipelineSelect(page, 1),
+  },
+  {
+    name: 'pipeline-select-2',
+    seed: creator,
+    url: '/pipeline',
+    steps: async (page) => pipelineSelect(page, 2),
+  },
+  {
+    // A Review post whose due day passed three days ago: line 1's time reads
+    // "3d late" in the bad token (formatOverdue).
+    name: 'pipeline-overdue',
+    seed: creator,
+    extra: (network) => {
+      const post = (network.world.tables.posts ?? []).find((p) => p.id === POST_IDS[2]);
+      if (post === undefined) throw new Error('no Product teaser post');
+      post.target_date = new Date(NOW - 3 * 86_400_000).toISOString();
+    },
+    url: '/pipeline',
+    steps: async (page) => {
+      await pipelineReady(page);
+      const due = pipelineCard(page, POST_IDS[2] ?? '').locator('[data-post-card-due="overdue"]');
+      await waitFor([due], 'overdue due words');
+      await expect(due).toHaveText('3d late');
+      await expect(due).toHaveAttribute('data-list-card-time-bad', '');
+    },
+  },
+  {
+    // The chat list in select mode: a long-press (phone) or right-click
+    // (laptop) on Priya's card ticks it; the list's own bar carries Hide chat.
+    name: 'chat-list-select',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await chatListAllRows(page);
+      const card = page
+        .locator('[data-chat-list] [data-list-card]')
+        .filter({ hasText: PEER_NAME })
+        .first();
+      await selectGesture(page, card);
+      const bar = page.locator('[data-chat-select-bar]');
+      await waitFor([bar.locator('[data-selection-hide]')], 'chat select bar');
+      await expect(bar.locator('[data-selection-count]')).toHaveText('1 selected');
+    },
+  },
+);
+
+/** A shared plan that ran two weeks before NOW's week and is over. */
+const ENDED_PLAN_ID = '0190d000-0000-7000-8000-00000000d0e1';
+
+// The Plan tab's time words (formatPlanStart): a plan whose start has passed
+// and whose end has not reads "Live" (This week); one whose end day passed
+// reads its end day ("11 Oct") on the Past chip.
+SCREENS.push(
+  {
+    name: 'plan-tab-live',
+    seed: creator,
+    extra: seedTab,
+    url: '/plan',
+    steps: async (page) => {
+      const time = page.locator(
+        `[data-plan-tab-card="${TAB_SHARED_PLAN_ID}"] [data-plan-tab-start]`,
+      );
+      await waitFor([time], 'live plan');
+      await expect(time).toHaveText('Live');
+    },
+  },
+  {
+    name: 'plan-tab-ended',
+    seed: creator,
+    extra: (network) => {
+      seedTab(network);
+      const plans = (network.world.tables.plans ??= []);
+      const template = plans.find((p) => p.id === TAB_SHARED_PLAN_ID);
+      if (template === undefined) throw new Error('no shared plan');
+      const monday = mondayOf(NOW);
+      plans.push({
+        ...template,
+        id: ENDED_PLAN_ID,
+        title: 'Summer sale',
+        starts_on: civilPlus(monday, -14),
+        ends_on: civilPlus(monday, -8),
+      });
+    },
+    url: '/plan?week=earlier',
+    steps: async (page) => {
+      const time = page.locator(`[data-plan-tab-card="${ENDED_PLAN_ID}"] [data-plan-tab-start]`);
+      await waitFor([time], 'ended plan');
+      await expect(time).toHaveText(/^\d{1,2} [A-Z][a-z]{2}$/);
+    },
+  },
+);
 
 // The person card and Reply privately (2 Nov 2026). The card opens from a
 // person's photo, name or @mention ([data-person-trigger]): a Sheet on phone
@@ -3183,12 +3268,8 @@ SCREENS.push(
     prepare: (_network, page) => neverAnswerPath(page, '/rename'),
     url: '/assets',
     steps: async (page) => {
-      await assetsReady(page);
-      await tap(
-        [page.getByRole('button', { name: 'More actions for Hero banner.png', exact: true })],
-        'asset ⋯ trigger',
-      );
-      await tap(menuRow(page, /^Rename$/), 'Rename');
+      await assetsSelect(page);
+      await tap([page.locator('[data-select-bar-action="rename"]')], 'Rename');
       const sheet = page.getByRole('dialog', { name: 'Rename file' });
       await waitFor([sheet], 'rename sheet');
       await sheet.getByRole('textbox').first().fill('Hero banner final.png');
@@ -3928,7 +4009,7 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   await settle(page);
   // Layout checks (layout-checks.ts) on the state as it is shot. A list
   // screen must show its ui/ListCards, so the list-card rule (equal heights,
-  // the 72 picture 16 inside the edge and 12 to the text) runs on it.
+  // the 48 picture 12 inside the edge and 12 to the text) runs on it.
   if (LIST_CARD_SCREENS.has(screen.name)) await assertListCards(page, screen.name);
   await checkLayout(page, screen.name);
   await expect(page).toHaveScreenshot(`${screen.name}.png`, {
@@ -3943,7 +4024,7 @@ async function capture(screen: Screen, page: Page): Promise<void> {
 
 // The screens that list ui/ListCards (Pipeline, Briefs, Assets, the Chat
 // list, Activity, the Plan tab and its Bank): checkLayout's list-card rule
-// (every card 118 tall, the 72 picture 16 inside the edge and 12 to the text)
+// (every card 74 tall, the 48 picture 12 inside the edge and 12 to the text)
 // runs on every screen; these must show cards. The chip screens above may land
 // on a chip's zero line, so they are checked whenever cards show.
 const LIST_CARD_SCREENS = new Set([
@@ -3955,11 +4036,17 @@ const LIST_CARD_SCREENS = new Set([
   'assets-approver',
   'assets-select',
   'chat-list',
-  'chat-actions-menu',
+  'chat-list-select',
   'notifications',
   'activity-bank',
   'plan-tab',
+  'plan-tab-live',
+  'plan-tab-ended',
   'plan-tab-bank',
+  'plan-tab-bank-select',
+  'pipeline-select-1',
+  'pipeline-select-2',
+  'pipeline-overdue',
 ]);
 
 // Laptop dark: these screens also run in the laptop-dark project
@@ -4026,11 +4113,17 @@ const LAPTOP_DARK_SCREENS = new Set([
   'assets-tab-sheets',
   'assets-tab-links',
   'assets-select',
+  'pipeline-select-1',
+  'pipeline-select-2',
+  'pipeline-overdue',
+  'chat-list-select',
+  'plan-tab-bank-select',
+  'plan-tab-live',
+  'plan-tab-ended',
   'activity-chip-unread',
   'activity-chip-mentions',
   'activity-chip-briefs',
   'activity-chip-plans',
-  'activity-chip-snoozed',
   'plan-tab-chip-next',
   'plan-tab-chip-later',
   'plan-tab-chip-earlier',
