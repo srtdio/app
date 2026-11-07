@@ -120,7 +120,7 @@ export function UsernameField({
               setMessage(null);
               setValue(normalizeUsernameInput(event.target.value));
             }}
-            className="h-full min-w-0 flex-1 bg-transparent pl-0.5 pr-3 text-input text-fg outline-none md:text-base"
+            className="h-full min-w-0 flex-1 bg-transparent pl-1 pr-3 text-input text-fg outline-none md:text-base"
           />
         </div>
         {!unchanged ? (

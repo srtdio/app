@@ -442,7 +442,7 @@ export function annotationChip(
       onClick={() => onClick?.(commentId)}
       className="mb-2 flex min-w-0 items-start gap-2 border-l-rail border-fg pl-3 text-base text-fg-2 mv-tint hover:text-fg"
     >
-      <CheckpointCircle n={annotation.n} state={circle} size="inline" className="mt-0.5" />
+      <CheckpointCircle n={annotation.n} state={circle} size="inline" className="mt-1" />
       <span className="min-w-0 [overflow-wrap:anywhere]">{annotation.quote}</span>
     </PressableRow>
   );

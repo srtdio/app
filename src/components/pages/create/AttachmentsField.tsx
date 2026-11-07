@@ -467,7 +467,7 @@ export function ComposerMediaFrame({
             <span
               data-frame-counter=""
               aria-live="polite"
-              className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-xs font-medium tabular-nums text-overlay-fg"
+              className="pointer-events-none absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs font-medium tabular-nums text-overlay-fg"
             >
               {slideCounterText(navIndex, count)}
             </span>

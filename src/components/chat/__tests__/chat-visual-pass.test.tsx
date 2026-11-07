@@ -96,7 +96,7 @@ describe('chat visual pass', () => {
 
   it('info tabs stay on one row', () => {
     const tabs = read('../ChatInfoTabs.tsx');
-    expect(tabs).toContain('flex flex-nowrap gap-1.5 overflow-x-auto');
+    expect(tabs).toContain('flex flex-nowrap gap-2 overflow-x-auto');
     expect(tabs).not.toContain('<div className="flex flex-wrap gap-2" role="tablist">');
   });
 

@@ -104,7 +104,7 @@ export function orderActionItems(items: readonly ActionMenuItem[]): ActionMenuIt
     .map(({ item }) => item);
 }
 
-// Laptop popover geometry: MenuPopover's row height, its p-1.5 padding plus
+// Laptop popover geometry: MenuPopover's row height, its p-2 padding plus
 // border, its mt-2 gap, its min width, and the margin kept from the viewport.
 const ROW_PX = 44;
 const PANEL_CHROME_PX = 14;

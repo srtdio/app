@@ -463,7 +463,7 @@ function FileRow(props: {
         <span className={ROW_ICON}>
           <IconFile size={ICON_SIZE.control} />
         </span>
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span title={name} className="truncate text-base font-medium text-fg">
             {middleTruncate(name, VIEWER_NAME_BUDGET)}
           </span>
@@ -502,7 +502,7 @@ export function LinkRow(props: {
           <span className={cn(ROW_ICON, 'text-warn-ink')}>
             <IconAlertTriangle size={ICON_SIZE.control} />
           </span>
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="truncate text-base font-medium text-warn-ink">
               {displayUrl(props.item.url)}
             </span>
@@ -523,7 +523,7 @@ export function LinkRow(props: {
         <span className={ROW_ICON}>
           <IconLink size={ICON_SIZE.control} />
         </span>
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="truncate text-base font-medium text-accent">
             {displayUrl(props.item.url)}
           </span>
@@ -673,7 +673,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
         }
         {...feedProps('attachments', view.seeAll)}
       >
-        <div data-media-grid="" className="grid grid-cols-3 gap-0.5">
+        <div data-media-grid="" className="grid grid-cols-3 gap-1">
           {view.shown.map((item, index) => (
             <MediaTile
               key={`${item.messageId}-${item.versionId}`}
@@ -739,7 +739,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
   return (
     <>
       <div
-        className="-mx-1 flex flex-nowrap gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-1 flex flex-nowrap gap-2 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
       >
         {CONTACT_TABS.map((option) => (

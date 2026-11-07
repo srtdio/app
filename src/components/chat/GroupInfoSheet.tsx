@@ -177,7 +177,7 @@ export function groupActionMessage(error: { code: string; message: string }): st
 /** The inline notice under the group name (a member who cannot rename). */
 export function GroupInfoNotice(): ReactElement {
   return (
-    <p id="group-rename-note" role="status" className={`mt-1.5 text-fg-2 ${SHEET_NOTICE_TYPE}`}>
+    <p id="group-rename-note" role="status" className={`mt-2 text-fg-2 ${SHEET_NOTICE_TYPE}`}>
       {GROUP_INFO_ADMIN_ONLY}
     </p>
   );
@@ -451,7 +451,7 @@ export function groupInfoPage(props: {
         />
       )}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-6">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-6">
           {props.error !== null ? (
             <div
               role="alert"

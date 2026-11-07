@@ -245,7 +245,7 @@ export function WorkspaceSettingsPanel() {
             <div className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-base text-fg">Delete workspace</p>
-                <p className="mt-0.5 text-base text-fg-2">Permanent. Nothing is saved.</p>
+                <p className="mt-1 text-base text-fg-2">Permanent. Nothing is saved.</p>
               </div>
               <Button type="button" variant="danger" onClick={() => setDeleteOpen(true)}>
                 Delete

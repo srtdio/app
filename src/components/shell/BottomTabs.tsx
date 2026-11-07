@@ -114,7 +114,7 @@ export function tabClass(active: boolean, shrunk = false): string {
     'relative flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full focus-visible:lit-focus',
     MOVE_CLASS.dock,
     active ? 'bg-panel-3 text-fg' : 'w-11 text-fg-2',
-    active && (shrunk ? 'w-11' : 'gap-1.5 px-3'),
+    active && (shrunk ? 'w-11' : 'gap-2 px-3'),
   );
 }
 

@@ -1032,7 +1032,7 @@ export function PickerSkeleton(): ReactElement {
           className="flex min-h-11 items-center gap-3 rounded-xl border bg-panel p-3 lit-card"
         >
           <span className="h-12 w-12 shrink-0 rounded-lg bg-panel-3" />
-          <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <span className="flex min-w-0 flex-1 flex-col gap-2">
             <span className="h-3 w-2/3 rounded bg-panel-3" />
             <span className="h-3 w-1/3 rounded bg-panel-2" />
           </span>
@@ -1177,7 +1177,7 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
       >
         <PostCover cover={props.cover !== undefined ? props.cover(post.id) : null} />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className="flex min-w-0 items-baseline gap-2">
             <span className="min-w-0 flex-1 truncate text-lg font-medium text-fg">
               {post.title}
             </span>
@@ -1306,7 +1306,7 @@ export function BriefPickerList(props: {
                 </span>
               </span>
               {active ? (
-                <span className="shrink-0 pt-0.5 text-accent">
+                <span className="shrink-0 pt-1 text-accent">
                   <IconCheck size={ICON_SIZE.nav} />
                 </span>
               ) : null}

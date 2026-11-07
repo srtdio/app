@@ -113,7 +113,7 @@ describe('Chip 32 visible, 44 tap box', () => {
       expect(face).toContain('rounded-full');
       expect(face).not.toContain('rounded-lg');
       expect(face).toContain('text-md font-medium');
-      expect(face).toContain('gap-1.5');
+      expect(face).toContain('gap-2');
       expect(face).not.toContain('gap-2');
       expect(face).toContain('border text-md font-medium lit-hover');
       expect(face).toContain('border-border text-fg-2');

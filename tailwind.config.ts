@@ -1,4 +1,14 @@
 import type { Config } from 'tailwindcss';
+import plugin from 'tailwindcss/plugin';
+
+// Spacing steps (CLAUDE.md "Spacing", 8 Nov 2026): padding, margin, gap and
+// space take 4 / 8 / 12 / 16 / 24 (plus 32+ layout values). The off-steps
+// 0.5 (2), 1.5 (6), 5 (20) and 7 (28) stay in width / height / inset only, so a
+// p-0.5 / gap-1.5 / mt-5 / pl-7 class no longer exists and CI rejects it.
+const OFF_STEP = new Set(['0.5', '1.5', '5', '7']);
+function onStep(spacing: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(spacing).filter(([k]) => !OFF_STEP.has(k)));
+}
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   darkMode: 'class',
@@ -69,6 +79,11 @@ export default {
       72: '18rem',
       80: '20rem',
     },
+    // The spacing steps only (OFF_STEP above): width / height keep every value.
+    padding: ({ theme }) => onStep(theme('spacing') as Record<string, string>),
+    margin: ({ theme }) => ({ auto: 'auto', ...onStep(theme('spacing') as Record<string, string>) }),
+    gap: ({ theme }) => onStep(theme('spacing') as Record<string, string>),
+    space: ({ theme }) => onStep(theme('spacing') as Record<string, string>),
     // Radius roles (CLAUDE.md). Rendered values are unchanged by the lock.
     borderRadius: {
       // rounded: controls and fields (8).
@@ -308,6 +323,8 @@ export default {
       padding: {
         // Text field vertical inset (10px): a one-line Textarea / MentionInput is 44 with its edge.
         'field-y': '0.625rem',
+        // Compact list row inset (10px): 10 + 40 picture + 10 = the 60 Compact row (ui/ListCard).
+        'row-inset': '0.625rem',
       },
       // Auto-fill grids that fill the laptop width (ui/Tile TILE_GRID, ui/Card CARD_GRID).
       gridTemplateColumns: {
@@ -353,5 +370,14 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // Density (Compact / Cozy / Calm, users.density): <html data-density> is set
+    // at boot from the device cache (src/lib/density.ts). Cozy is the default
+    // class; compact: and calm: override it. Parts only (ListCard, Chip, Avatar
+    // 'card', plan spacing), never a screen.
+    plugin(({ addVariant }) => {
+      addVariant('compact', 'html[data-density="compact"] &');
+      addVariant('calm', 'html[data-density="calm"] &');
+    }),
+  ],
 } satisfies Config;

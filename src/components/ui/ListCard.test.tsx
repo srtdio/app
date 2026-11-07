@@ -128,7 +128,7 @@ describe('ListCard height: exactly 60 (10 + 40 + 10)', () => {
     const line = (cls: string): number =>
       stepPx(cls.split(' ').find((c) => /^h-\d/.test(c)) ?? '', 'h-');
     const gap = stepPx(LIST_CARD_TEXT.split(' ').find((c) => /^gap-/.test(c)) ?? '', 'gap-');
-    expect(LIST_CARD_TEXT.split(' ')).toContain('gap-0.5');
+    expect(LIST_CARD_TEXT.split(' ')).toContain('gap-1');
     const text = line(LIST_CARD_LINE1) + gap + line(LIST_CARD_LINE2);
     expect(text).toBe(42);
     expect(text).toBeLessThanOrEqual(LIST_CARD_HEIGHT_PX);

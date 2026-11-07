@@ -114,7 +114,7 @@ export function RecentlyDeletedView({
                 <p className="text-base font-medium text-fg [overflow-wrap:anywhere]">
                   {item.name}
                 </p>
-                <p className="mt-0.5 text-sm text-fg-3">
+                <p className="mt-1 text-sm text-fg-3">
                   {goneInLine(item.sizeBytes, daysLeft(item.deletedAt, now))}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">

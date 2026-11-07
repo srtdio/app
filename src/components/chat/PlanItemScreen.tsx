@@ -1710,7 +1710,7 @@ export function PlanItemScreen(props: {
             <form
               ref={formRef}
               onSubmit={(e) => void send(e)}
-              className="relative flex flex-col gap-1.5"
+              className="relative flex flex-col gap-2"
               aria-label="Add a comment"
             >
               {mentionRows.length > 0 || picker.hiddenApprovers ? (
@@ -1762,7 +1762,7 @@ export function PlanItemScreen(props: {
                   {actionError}
                 </p>
               ) : null}
-              <div className="flex items-end gap-1.5">
+              <div className="flex items-end gap-2">
                 <Textarea
                   formatting
                   ref={commentRef}
@@ -2332,7 +2332,7 @@ function ItemMedia(props: {
   };
   return (
     <>
-      <div data-plan-media="files" className="grid grid-cols-3 gap-1.5">
+      <div data-plan-media="files" className="grid grid-cols-3 gap-2">
         {files.map((file) => {
           const name = conceptFileName(file);
           return (

@@ -903,7 +903,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
           {laptop ? null : (
             <div
               aria-hidden="true"
-              className="mx-auto mt-1.5 h-1 w-9 rounded-sm bg-border-strong"
+              className="mx-auto mt-2 h-1 w-9 rounded-sm bg-border-strong"
             />
           )}
           {/* ui/HeaderBar (56): Back, Tasks (and the editing line), the save

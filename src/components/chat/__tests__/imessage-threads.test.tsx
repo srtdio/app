@@ -175,8 +175,8 @@ describe('member rows on the rail', () => {
 
   it('a reaction badge row keeps its room as padding on the rail (no gap between rows)', () => {
     const reacted = { ...memberRow, reactions: [{ emoji: '👍', count: 1, mine: false }] };
-    expect(bubble(reacted, { member: true, rail: railFor('middle', {}) })).toContain('pb-5');
-    expect(bubble(reacted)).toContain('mb-5');
+    expect(bubble(reacted, { member: true, rail: railFor('middle', {}) })).toContain('pb-6');
+    expect(bubble(reacted)).toContain('mb-6');
   });
 
   it('an own row keeps its place and reaches across in CSS', () => {

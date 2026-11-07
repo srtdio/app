@@ -692,7 +692,7 @@ export function ConceptDateField(props: {
       <span aria-hidden="true" className="text-md text-fg-3">
         Date (optional)
       </span>
-      <span className="flex min-w-0 items-center gap-1.5">
+      <span className="flex min-w-0 items-center gap-2">
         <span className="min-w-0 flex-1">
           <DatePicker label="Date (optional)" value={props.value} onChange={props.onChange} />
         </span>
@@ -776,7 +776,7 @@ export function PlanProgressRow(props: { bundle: PlanBundle; side?: ViewerSide }
         <div
           key={box.key}
           data-plan-screen-progress={box.key}
-          className="flex min-w-0 flex-col gap-1.5 rounded-xl bg-panel-2 p-3 lit-card-muted"
+          className="flex min-w-0 flex-col gap-2 rounded-xl bg-panel-2 p-3 lit-card-muted"
         >
           <span className={TEXT_ROLE.section}>{box.label}</span>
           <span className="truncate font-mono text-md text-fg">{box.text}</span>
@@ -2117,7 +2117,7 @@ export function PlanScreen(props: {
             data-plan-skipped-notes=""
             className="mx-3 mt-3 flex items-start gap-2 rounded-xl bg-warn-soft py-1 pl-3 pr-1 text-md text-warn lit-tint"
           >
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-2">
+            <div className="flex min-w-0 flex-1 flex-col gap-1 py-2">
               {skippedNotes.map((note, at) => (
                 <p key={at}>{note}</p>
               ))}
@@ -2596,7 +2596,7 @@ export function PlanFooter(props: {
   });
   if (state === 'sent') {
     return (
-      <div data-plan-footer="" className="flex flex-col gap-1.5">
+      <div data-plan-footer="" className="flex flex-col gap-2">
         <Button
           type="button"
           variant="primary"
@@ -2611,7 +2611,7 @@ export function PlanFooter(props: {
     );
   }
   return (
-    <div data-plan-footer="" className="flex flex-col gap-1.5">
+    <div data-plan-footer="" className="flex flex-col gap-2">
       {props.error !== null ? (
         <p role="alert" data-plan-send-error="" className="text-md text-bad">
           {props.error}
@@ -2942,11 +2942,11 @@ export function DayColumn(props: {
   );
   if (!isToday) return tile;
   return (
-    <div className="flex w-14 shrink-0 flex-col items-center gap-1.5">
+    <div className="flex w-14 shrink-0 flex-col items-center gap-2">
       {tile}
       <span
         data-plan-today-pill=""
-        className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-fg lit-pill"
+        className="rounded-full bg-accent px-2 py-1 text-xs font-semibold text-accent-fg lit-pill"
       >
         {TODAY_LABEL}
       </span>
@@ -3216,7 +3216,7 @@ function PairedPostRow(props: {
           onContextMenu={(event) => event.preventDefault()}
           className={cn('flex min-h-11 min-w-0 cursor-default items-start gap-3', NO_TOUCH_SELECT)}
         >
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
             {label}
             <span className="truncate text-sm text-fg-3">{DRAFT_NOT_READY}</span>
           </span>
@@ -3246,7 +3246,7 @@ function PairedPostRow(props: {
         onClick={() => onOpen?.(link.postId)}
         className={cn('flex min-w-0 items-start gap-3', NO_TOUCH_SELECT)}
       >
-        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
           {label}
           <span
             data-plan-pair-title=""
@@ -3499,7 +3499,7 @@ function PlanRow(props: {
           onContextMenu={(event) => event.preventDefault()}
           className={cn('flex min-w-0 flex-1 cursor-default items-start gap-3', NO_TOUCH_SELECT)}
         >
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
             {titleText(true)}
             <span className="truncate text-sm text-fg-3">{DRAFT_NOT_READY}</span>
             {dateLine}
@@ -3533,7 +3533,7 @@ function PlanRow(props: {
       }}
       className={cn('flex min-w-0 items-start gap-3', NO_TOUCH_SELECT)}
     >
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
         {titleText(false)}
         {formatLine !== '' ? (
           <span
@@ -3552,7 +3552,7 @@ function PlanRow(props: {
         {alsoIn !== null ? (
           <span
             data-plan-row-also-in=""
-            className="inline-flex max-w-full self-start truncate rounded px-1.5 text-xs font-semibold bg-warn-soft text-warn lit-pill"
+            className="inline-flex max-w-full self-start truncate rounded px-2 text-xs font-semibold bg-warn-soft text-warn lit-pill"
           >
             {alsoIn}
           </span>

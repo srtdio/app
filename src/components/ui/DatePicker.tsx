@@ -381,7 +381,7 @@ export function DatePicker({
                 {/* Weekday letters are visual only: every day cell's name is its full spoken date. */}
                 <div
                   aria-hidden="true"
-                  className="grid grid-cols-7 place-items-center gap-0.5 text-center text-xs text-fg-3"
+                  className="grid grid-cols-7 place-items-center gap-1 text-center text-xs text-fg-3"
                 >
                   {WEEKDAYS.map((weekday, index) => (
                     <span key={`${weekday}-${index}`}>{weekday}</span>
@@ -391,7 +391,7 @@ export function DatePicker({
                   role="grid"
                   aria-label={`${MONTHS[view.monthIndex]} ${view.year}`}
                   onKeyDown={onGridKeyDown}
-                  className="mt-1 grid grid-cols-7 place-items-center gap-0.5"
+                  className="mt-1 grid grid-cols-7 place-items-center gap-1"
                 >
                   {/* Week rows are display:contents, so the seven-column grid lays out as before. */}
                   {weekRows(

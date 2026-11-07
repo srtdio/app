@@ -24,7 +24,7 @@ function countsOf(metric: string): Counts {
 // One fixture per metric; the number is what that fixture is built to hold.
 const EXPECTED: Record<Metric, number> = {
   arbitraryPx: 3,
-  offGrid: 4,
+  offGrid: 5,
   zValues: 3,
   zArbitrary: 1,
   leading: 3,
@@ -58,10 +58,19 @@ describe('design ratchet: per-metric counts', () => {
     expect(countsOf('zValues').zArbitrary).toBe(1);
   });
 
-  it('offGrid allows 0.5 and px divisible by 4', () => {
-    const c = countHits(scanSource('src/a.tsx', '<div className="p-0.5 m-[8px] gap-[2px]" />'));
+  it('offGrid allows px divisible by 4 and 0.5 on sizes', () => {
+    const c = countHits(
+      scanSource('src/a.tsx', '<div className="h-0.5 w-5 p-1 m-[8px] gap-[2px]" />'),
+    );
     expect(c.offGrid).toBe(0);
     expect(c.arbitraryPx).toBe(2);
+  });
+
+  it('offGrid counts the spacing off-steps (p/m/gap/space 0.5, 5, 7; CLAUDE.md Spacing)', () => {
+    const c = countHits(
+      scanSource('src/a.tsx', '<div className="p-0.5 gap-5 -mt-7 md:space-y-5 h-5 w-7" />'),
+    );
+    expect(c.offGrid).toBe(4);
   });
 
   it('handTap counts the VISIBLE height: a primitive shrunk by className, or a small first child', () => {

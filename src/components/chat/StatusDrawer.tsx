@@ -131,7 +131,7 @@ const ROW = `${ROW_BASE} -mx-3 px-3 ${ROW_RULE}`;
 const DATE_COL = 'w-12 shrink-0 font-mono text-sm tabular-nums text-fg-3';
 const ROW_TITLE = 'line-clamp-2 [overflow-wrap:anywhere] text-base text-fg';
 const ROW_SUB = 'block truncate text-sm text-fg-3';
-const PILL = 'shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold lit-pill';
+const PILL = 'shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold lit-pill';
 
 const SEGMENT_CLASS: Record<PlanSegment, string> = {
   client: 'bg-accent',
@@ -304,7 +304,7 @@ export function PlanBlock(props: {
         </span>
         <Chevron />
       </PressableRow>
-      <div aria-hidden="true" data-plan-bar="" className="mt-1 flex h-1.5 gap-0.5">
+      <div aria-hidden="true" data-plan-bar="" className="mt-1 flex h-1.5 gap-1">
         {bundle.items.map((item) => {
           const seg = itemSegment(bundle, item, side);
           return (

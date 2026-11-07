@@ -121,7 +121,7 @@ export function Chip({
           // Flat outline pill (7 Nov 2026): at rest a hairline and fg-2 ink; the
           // pick is the ink line (black light, white dark) and fg ink, no fill.
           // Hover/press: the lit-hover overlay. Disabled: fg-3 ink, never a fade.
-          'inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-full border text-md font-medium lit-hover group-disabled:text-fg-3',
+          'inline-flex min-w-0 flex-1 items-center gap-2 rounded-full border text-md font-medium lit-hover group-disabled:text-fg-3',
           sizes[size],
           variant === 'add'
             ? 'border-dashed border-border-strong text-fg-3'

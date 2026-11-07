@@ -75,7 +75,7 @@ export function PlanDayTiles(props: {
       {dayTileWeeks(props.range).map((week) => (
         <div key={week.days[0]} className="flex flex-col gap-2">
           {week.label !== null ? (
-            <p className={`mt-0.5 ${TEXT_ROLE.section}`}>{week.label}</p>
+            <p className={`mt-1 ${TEXT_ROLE.section}`}>{week.label}</p>
           ) : null}
           <div className="grid grid-cols-4 gap-2">
             {week.days.map((day) => {
@@ -134,7 +134,7 @@ export function PlanDayTiles(props: {
         </div>
       ))}
       {pipelineInside ? (
-        <p className="flex items-center gap-1.5 text-sm text-fg-3">
+        <p className="flex items-center gap-2 text-sm text-fg-3">
           <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-warn" />
           {CURRENT_PIPELINE_DAY}
         </p>

@@ -139,7 +139,7 @@ export const LIST_CARD_PICTURE = 'relative flex h-10 w-10 shrink-0 items-center 
 const PICTURE_BOX = 'overflow-hidden rounded-picture';
 
 /** The text column: two 20 lines, 2 apart (42). */
-export const LIST_CARD_TEXT = 'flex min-w-0 flex-1 flex-col gap-0.5';
+export const LIST_CARD_TEXT = 'flex min-w-0 flex-1 flex-col gap-1';
 
 /** Line 1: title then the time on the right; one 20 line. */
 export const LIST_CARD_LINE1 = 'flex h-5 min-w-0 items-center gap-2';

@@ -602,7 +602,7 @@ export function AlbumGrid({
       data-album={count}
       className={cn(
         albumGridClass(count),
-        'relative w-80 max-w-full gap-0.5 overflow-hidden',
+        'relative w-80 max-w-full gap-1 overflow-hidden',
         corners,
       )}
     >
@@ -664,7 +664,7 @@ export function FilesRemovedLine(props: {
     <p
       data-testid="files-removed-line"
       className={cn(
-        'flex min-w-0 items-center gap-1.5 italic',
+        'flex min-w-0 items-center gap-2 italic',
         props.mine ? 'text-bubble-meta-own' : 'text-bubble-meta',
         sized(BUBBLE_BODY_TYPE, props.layout),
         props.className,
@@ -723,7 +723,7 @@ export function AttachmentsFallback(props: {
   presignEnabled: boolean;
 }): ReactElement {
   return (
-    <div data-attachments-fallback="" className={cn('mt-1.5 gap-1.5', BUBBLE_FILL)}>
+    <div data-attachments-fallback="" className={cn('mt-2 gap-2', BUBBLE_FILL)}>
       {props.attachments.map((attachment, index) => {
         const name = attachment.name.trim() !== '' ? attachment.name : 'Attachment';
         const canDownload = props.presignEnabled && attachment.assetId !== '';
@@ -816,7 +816,7 @@ function MessageAttachmentsBody({
             {...(albumCorners !== undefined ? { corners: albumCorners } : {})}
           />
           {hasBelow ? (
-            <div className="flex flex-col items-start gap-1.5 px-2 pb-1 pt-1.5">
+            <div className="flex flex-col items-start gap-2 px-2 pb-1 pt-2">
               {caption}
               {others.map((attachment, index) => (
                 <AttachmentItem
@@ -835,8 +835,8 @@ function MessageAttachmentsBody({
   return (
     <div
       className={cn(
-        'flex flex-col gap-1.5',
-        voiceSpacer !== undefined || voice !== undefined ? 'items-stretch' : 'mt-1.5 items-start',
+        'flex flex-col gap-2',
+        voiceSpacer !== undefined || voice !== undefined ? 'items-stretch' : 'mt-2 items-start',
       )}
     >
       {attachments.map((attachment, index) => (

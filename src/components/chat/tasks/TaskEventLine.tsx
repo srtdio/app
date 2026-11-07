@@ -41,7 +41,7 @@ export interface TaskLineContext {
 const OPEN_TASKS_LABEL = 'Open tasks';
 
 const PILL =
-  'rounded-full border border-border bg-panel-2 px-3 py-0.5 text-sm font-medium text-fg-3 lit-pill';
+  'rounded-full border border-border bg-panel-2 px-3 py-1 text-sm font-medium text-fg-3 lit-pill';
 // The pill's tap target: a ghost Button (44 tall) around the visual pill.
 const PRESS = cn('max-w-full', NO_TOUCH_SELECT);
 

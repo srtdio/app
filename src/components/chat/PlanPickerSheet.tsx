@@ -177,7 +177,7 @@ export function PlanPickerSheet(props: {
                             key={chip.label}
                             data-plan-chip={chip.tone}
                             className={cn(
-                              'inline-flex min-h-5 items-center rounded-lg border border-transparent px-1.5 text-xs lit-pill',
+                              'inline-flex min-h-5 items-center rounded-lg border border-transparent px-2 text-xs lit-pill',
                               CHIP_TONES[chip.tone],
                             )}
                           >

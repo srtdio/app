@@ -328,7 +328,7 @@ export function BankFilterLine(props: {
         <span
           key={pill.key}
           data-bank-filter-pill={pill.key}
-          className="lit-badge inline-flex h-6 items-center gap-0.5 rounded-sm border border-border-strong bg-panel px-1 text-sm text-fg"
+          className="lit-badge inline-flex h-6 items-center gap-1 rounded-sm border border-border-strong bg-panel px-1 text-sm text-fg"
         >
           <span className="pl-1">{pill.label}</span>
           <IconButton

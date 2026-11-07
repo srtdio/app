@@ -162,7 +162,7 @@ function AssetVideoThumb({
       <span
         data-asset-play-badge=""
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-0.5 left-0.5 inline-flex max-w-full items-center gap-0.5 rounded-full bg-overlay px-1 text-xs text-overlay-fg lit-media"
+        className="pointer-events-none absolute bottom-0.5 left-0.5 inline-flex max-w-full items-center gap-1 rounded-full bg-overlay px-1 text-xs text-overlay-fg lit-media"
       >
         <IconPlay size={ICON_SIZE.text} />
         {length !== null ? (

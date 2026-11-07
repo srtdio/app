@@ -304,7 +304,7 @@ export function PostSheetMedia(props: {
         <span
           aria-hidden="true"
           data-strip-dots=""
-          className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-1.5"
+          className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-2"
         >
           {items.map((item, index) => (
             <span

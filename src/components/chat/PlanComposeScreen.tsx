@@ -485,7 +485,7 @@ export function PlanComposeScreen(props: {
         footer={footer}
       >
         <div className="flex flex-col gap-3 p-3">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Input
               id="plan-title"
               data-plan-title=""
@@ -531,7 +531,7 @@ export function PlanComposeScreen(props: {
               Items · <span className="font-mono tabular-nums">{items.length}</span>
             </h3>
             {items.length === 0 ? (
-              <p className="px-0.5 text-sm text-fg-3">{COMPOSE_NO_ITEMS}</p>
+              <p className="px-1 text-sm text-fg-3">{COMPOSE_NO_ITEMS}</p>
             ) : null}
             {items.map((item) => (
               <ComposeItemRow
@@ -696,7 +696,7 @@ export function ComposeItemRow(props: {
       >
         {item.kind === 'concept' ? 'C' : item.title.charAt(0).toUpperCase()}
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+      <span className="flex min-w-0 flex-1 flex-col gap-1 text-left">
         <span data-plan-item-title="" className="truncate text-lg font-semibold text-fg">
           {item.title}
         </span>
@@ -734,13 +734,13 @@ export function ComposeItemRow(props: {
           data-plan-compose-remove=""
           label={`Remove ${item.title}`}
           onClick={props.onRemove}
-          className="-my-1.5 -mr-1.5 shrink-0"
+          className="-my-2 -mr-2 shrink-0"
         >
           <IconTrash size={ICON_SIZE.control} />
         </IconButton>
       </div>
       {item.kind === 'concept' && item.description !== '' ? (
-        <p className="line-clamp-2 px-0.5 text-md text-fg-3">{item.description}</p>
+        <p className="line-clamp-2 px-1 text-md text-fg-3">{item.description}</p>
       ) : null}
       <Button
         type="button"
@@ -773,7 +773,7 @@ export function ComposeItemRow(props: {
       {note !== null ? (
         <p
           data-plan-compose-note={note.warn ? 'warn' : 'info'}
-          className={cn('px-0.5 text-sm', note.warn ? 'font-medium text-warn' : 'text-fg-3')}
+          className={cn('px-1 text-sm', note.warn ? 'font-medium text-warn' : 'text-fg-3')}
         >
           {note.text}
         </p>

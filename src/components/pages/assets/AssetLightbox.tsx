@@ -208,7 +208,7 @@ export function viewerName(items: readonly AssetListItem[], asset: AssetListItem
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1">
       <dt className={SECTION_LABEL}>{label}</dt>
       <dd className="text-base text-fg break-words">{value}</dd>
     </div>
@@ -704,7 +704,7 @@ export function AssetLightbox({
             </div>
 
             <dl className="mt-3 flex flex-col gap-3">
-              <div className="flex flex-col gap-0.5">
+              <div className="flex flex-col gap-1">
                 <dt className={SECTION_LABEL}>Name</dt>
                 {editingName ? (
                   <div className="mt-1 flex flex-col gap-2">

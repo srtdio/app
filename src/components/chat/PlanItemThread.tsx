@@ -324,7 +324,7 @@ function mentionNodes(text: string, ownTone: boolean, workspaceId: string | null
       <span
         data-plan-mention={segment.userId}
         className={cn(
-          'shrink-0 whitespace-nowrap rounded-full px-1.5 font-medium lit-tint',
+          'shrink-0 whitespace-nowrap rounded-full px-2 font-medium lit-tint',
           ownTone ? 'bg-accent-fg/[0.22] text-accent-fg' : 'bg-accent-soft text-accent',
         )}
       >
@@ -360,7 +360,7 @@ function PlanDayLine(props: { label: string }): ReactElement {
     <li role="separator" aria-label={props.label} data-plan-day="" className="flex justify-center">
       <span
         className={cn(
-          'mb-1.5 mt-2 self-center rounded-full border border-border bg-panel-2 px-3 py-0.5 text-fg-3 lit-pill',
+          'mb-2 mt-2 self-center rounded-full border border-border bg-panel-2 px-3 py-1 text-fg-3 lit-pill',
           sized(DATE_PILL_TYPE, layout),
         )}
       >
@@ -439,7 +439,7 @@ function PlanBubble(props: {
       {...(head ? { 'data-plan-run-head': '' } : {})}
       {...(tail ? { 'data-plan-run-tail': '' } : {})}
       {...(props.highlighted ? { 'data-plan-comment-highlight': '' } : {})}
-      className={cn('flex gap-2', mine ? 'justify-end' : 'justify-start', head ? 'mt-2' : 'mt-0.5')}
+      className={cn('flex gap-2', mine ? 'justify-end' : 'justify-start', head ? 'mt-2' : 'mt-1')}
     >
       {!mine ? (
         <span className="w-8 shrink-0">
@@ -457,7 +457,7 @@ function PlanBubble(props: {
       ) : null}
       <div
         className={cn(
-          'flex min-w-0 flex-col gap-0.5',
+          'flex min-w-0 flex-col gap-1',
           mine ? 'items-end' : 'items-start',
           'max-w-[80%]',
         )}

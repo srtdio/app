@@ -427,7 +427,7 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
           />
         </Field>
         <div>
-          <p className="mb-1.5 text-base font-medium">Members</p>
+          <p className="mb-2 text-base font-medium">Members</p>
           <MemberPicker
             options={options}
             selectedIds={selectedIds}

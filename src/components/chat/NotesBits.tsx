@@ -233,7 +233,7 @@ export function SavedFromLabel(props: {
     return (
       <span
         data-saved-from="unreadable"
-        className={cn('mb-1 flex items-center gap-1.5 text-md', ink)}
+        className={cn('mb-1 flex items-center gap-2 text-md', ink)}
       >
         {body}
       </span>
@@ -250,7 +250,7 @@ export function SavedFromLabel(props: {
         props.onOpen(line);
       }}
       className={cn(
-        '-mb-2 -mt-3 flex max-w-full items-center gap-1.5 text-md',
+        '-mb-2 -mt-3 flex max-w-full items-center gap-2 text-md',
         ink,
         props.mine && 'hover:bg-accent-hover',
       )}

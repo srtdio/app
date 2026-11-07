@@ -395,7 +395,7 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
             </Field>
             <div>
               <p id="workspace-platform-label" className="mb-2 block text-base font-medium">
-                Platform<span className="ml-0.5 text-bad">*</span>
+                Platform<span className="ml-1 text-bad">*</span>
               </p>
               <div
                 role="radiogroup"

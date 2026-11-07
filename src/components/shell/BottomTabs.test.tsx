@@ -187,7 +187,7 @@ describe('BottomTabs: floating pill plus Chat circle (CLAUDE.md phone nav)', () 
     const active = links[1];
     if (active === undefined) throw new Error('no Briefs tab');
     expect(classes(active)).toEqual(
-      expect.arrayContaining(['bg-panel-3', 'text-fg', 'gap-1.5', 'px-3', MOVE_CLASS.dock]),
+      expect.arrayContaining(['bg-panel-3', 'text-fg', 'gap-2', 'px-3', MOVE_CLASS.dock]),
     );
     expect(active.getAttribute('data-selected')).toBe('true');
     for (const c of ['bg-accent', 'text-accent-fg', 'lit-pill', 'bg-accent-soft']) {
@@ -357,12 +357,12 @@ describe('Plan tab unread comments badge', () => {
 });
 
 describe('tabClass: the flat pill tab', () => {
-  it('active at rest: the panel-3 fill in fg ink, label room (gap-1.5 px-3); never the ink fill', () => {
+  it('active at rest: the panel-3 fill in fg ink, label room (gap-2 px-3); never the ink fill', () => {
     const cls = tabClass(true).split(' ');
     expect(cls).toEqual(
       expect.arrayContaining(['h-11', 'min-w-11', 'rounded-full', 'bg-panel-3', 'text-fg']),
     );
-    expect(cls).toEqual(expect.arrayContaining(['gap-1.5', 'px-3', MOVE_CLASS.dock]));
+    expect(cls).toEqual(expect.arrayContaining(['gap-2', 'px-3', MOVE_CLASS.dock]));
     expect(cls).not.toContain('w-11');
     for (const c of ['bg-accent', 'text-accent-fg', 'lit-pill', 'mv-tint']) {
       expect(cls).not.toContain(c);
@@ -373,7 +373,7 @@ describe('tabClass: the flat pill tab', () => {
     const cls = tabClass(true, true).split(' ');
     expect(cls).toEqual(expect.arrayContaining(['bg-panel-3', 'text-fg', 'w-11', MOVE_CLASS.dock]));
     expect(cls).not.toContain('px-3');
-    expect(cls).not.toContain('gap-1.5');
+    expect(cls).not.toContain('gap-2');
   });
 
   it('inactive: the icon alone in fg-2 in a 44 box, shrunk or not', () => {

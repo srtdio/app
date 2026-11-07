@@ -291,9 +291,9 @@ describe('week list layout (L1-L4)', () => {
       /data-plan-day-number=""[^>]*font-mono[^>]*tabular-nums text-accent-fg">14</,
     );
     // The Today pill, centred under the tile in its 56px column, 6px below.
-    expect(today).toMatch(/^<div class="flex w-14 shrink-0 flex-col items-center gap-1.5">/);
+    expect(today).toMatch(/^<div class="flex w-14 shrink-0 flex-col items-center gap-2">/);
     expect(today).toMatch(
-      /data-plan-today-pill="" class="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-fg lit-pill">Today</,
+      /data-plan-today-pill="" class="rounded-full bg-accent px-2 py-1 text-xs font-semibold text-accent-fg lit-pill">Today</,
     );
     // The weekday is no longer accent text on the panel.
     expect(today).not.toMatch(/ text-accent">/);
@@ -428,7 +428,7 @@ describe('week list layout (L1-L4)', () => {
       /data-plan-day="[^"]+"[^>]*class="[^"]*rounded-xl border bg-panel lit-card[^"]*mx-4/,
     );
     expect(html).toContain('<div class="flex flex-col gap-4">');
-    expect(html).toContain('flex min-w-0 flex-1 flex-col gap-0.5');
+    expect(html).toContain('flex min-w-0 flex-1 flex-col gap-1');
     // A client sees no Add, no drag.
     expect(html).not.toContain('data-plan-add=');
     // One date tile per day: the No date day has three rows and one tile.

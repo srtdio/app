@@ -199,7 +199,7 @@ export function FileTileBody(props: FileTileBodyProps): ReactElement {
           'flex w-full shrink-0 flex-col border-t border-border',
           // The Assets card: the same 12px footer as a picture card, the meta
           // line one 20px row with room on the right for the card's ⋯.
-          card ? 'gap-2 p-3' : 'gap-0.5 px-2 py-2',
+          card ? 'gap-2 p-3' : 'gap-1 px-2 py-2',
         )}
       >
         <span

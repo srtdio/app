@@ -376,7 +376,7 @@ export function AssetTile(props: {
           />
           {props.active ? <SelectCheck checked className="absolute right-1 top-1" /> : null}
         </span>
-        <span className="truncate px-0.5 text-sm text-fg-2">{asset.name}</span>
+        <span className="truncate px-1 text-sm text-fg-2">{asset.name}</span>
       </PressableRow>
     </li>
   );

@@ -1070,12 +1070,12 @@ export function galleryView({
             >
               <GalleryThumb item={item} cache={cache} presignEnabled={presignEnabled} />
               {showIndex ? (
-                <span className="absolute left-2 bottom-2 rounded bg-overlay px-2 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media">
+                <span className="absolute left-2 bottom-2 rounded bg-overlay px-2 py-1 text-xs font-medium tabular-nums text-overlay-fg lit-media">
                   {index + 1}/{items.length}
                 </span>
               ) : null}
               {pinCount > 0 ? (
-                <span className="absolute right-2 top-2 inline-flex items-center gap-0.5 rounded bg-overlay px-2 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media">
+                <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded bg-overlay px-2 py-1 text-xs font-medium tabular-nums text-overlay-fg lit-media">
                   <IconPin size={ICON_SIZE.inline} />
                   {pinCount}
                 </span>
@@ -1185,7 +1185,7 @@ export function galleryView({
                 </PressableRow>
                 {pinsFor !== undefined ? framePins(pinsFor(item), IDENTITY_MAP, onPinClick) : null}
                 {pinsFor === undefined && pinCount > 0 ? (
-                  <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-0.5 rounded bg-overlay px-2 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media">
+                  <span className="pointer-events-none absolute left-2 top-2 inline-flex items-center gap-1 rounded bg-overlay px-2 py-1 text-xs font-medium tabular-nums text-overlay-fg lit-media">
                     <IconPin size={ICON_SIZE.inline} />
                     {pinCount}
                   </span>
@@ -1210,7 +1210,7 @@ export function galleryView({
         {showIndex ? (
           <span
             aria-live="polite"
-            className="pointer-events-none absolute left-2 bottom-2 rounded bg-overlay px-2 py-0.5 text-xs font-medium tabular-nums text-overlay-fg lit-media"
+            className="pointer-events-none absolute left-2 bottom-2 rounded bg-overlay px-2 py-1 text-xs font-medium tabular-nums text-overlay-fg lit-media"
           >
             {`${active + 1}/${items.length}`}
           </span>

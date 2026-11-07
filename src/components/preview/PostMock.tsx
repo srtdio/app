@@ -294,7 +294,7 @@ export function MediaStage(props: StageProps): ReactElement {
           data-preview-pill=""
           className={textRole(
             'meta',
-            'pointer-events-none absolute right-2 top-2 rounded-pill bg-overlay-badge px-2 py-0.5 text-overlay-fg lit-pill',
+            'pointer-events-none absolute right-2 top-2 rounded-pill bg-overlay-badge px-2 py-1 text-overlay-fg lit-pill',
           )}
         >
           {`${active + 1} / ${count}`}

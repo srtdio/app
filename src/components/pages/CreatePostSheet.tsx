@@ -1499,7 +1499,7 @@ export function CreatePostSheet({
                 aria-describedby="post-caption-count"
                 onChange={(event) => patchField('caption', { caption: event.target.value })}
                 placeholder="Write the caption"
-                className="pb-7 aria-[invalid=true]:border-bad aria-[invalid=true]:lit-bad"
+                className="pb-6 aria-[invalid=true]:border-bad aria-[invalid=true]:lit-bad"
               />
               <span
                 id="post-caption-count"

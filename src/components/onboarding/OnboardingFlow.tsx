@@ -773,7 +773,7 @@ export function OnboardingFlow({
               aria-checked={side === tile.side}
               onClick={() => setSide(tile.side)}
               className={cn(
-                'flex flex-col items-start justify-center gap-0.5 px-4 py-3',
+                'flex flex-col items-start justify-center gap-1 px-4 py-3',
                 side === tile.side ? 'border border-fg text-fg' : 'border border-border text-fg-2',
               )}
             >
@@ -1088,7 +1088,7 @@ export function OnboardingFlow({
               <div
                 ref={cardRef}
                 data-onboarding-card=""
-                className="flex flex-col gap-5 rounded-2xl border bg-panel p-6 lit-raised"
+                className="flex flex-col gap-6 rounded-2xl border bg-panel p-6 lit-raised"
               >
                 {body}
                 {photoNotice !== null && (step === 'brand' || readyForShell) ? (

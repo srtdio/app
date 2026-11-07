@@ -373,7 +373,7 @@ export function ChatTab({ source }: { source: Source<ChatData> | undefined }) {
                   {d.problems.map((p) => (
                     <li
                       key={p.id}
-                      className="flex flex-col gap-0.5 border-b border-border py-2 last:border-b-0"
+                      className="flex flex-col gap-1 border-b border-border py-2 last:border-b-0"
                     >
                       <span className="flex items-center gap-2">
                         <Tag label={p.eventType.replace(/_/g, ' ')} />
