@@ -28,7 +28,8 @@ import { createPortal } from 'react-dom';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconChat, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconChat, IconChevronLeft } from '@/components/ui/icons';
+import { LEADING_PULL } from '@/components/ui/layout';
 import { PersonMessageInput } from '@/components/ui/PersonMessageInput';
 import { PhotoViewer } from '@/components/ui/PhotoViewer';
 import { Sheet } from '@/components/ui/Sheet';
@@ -223,7 +224,7 @@ interface PersonMessageCardProps {
   /** The drafts key for this person and source. */
   draftKey: string;
   layout: 'touch' | 'laptop';
-  /** The name and X sit in the Sheet's own header on phone; the popover draws them here. */
+  /** The name and "<" back sit in the Sheet's own header on phone; the popover draws them here. */
   showHeader: boolean;
   onClose: () => void;
   onSend: (text: string) => void;
@@ -246,6 +247,17 @@ export function PersonMessageCard(props: PersonMessageCardProps): ReactElement {
   return (
     <div className="flex flex-col gap-3" data-person-card={data.userId} data-person-card-message="">
       <div className="flex min-w-0 items-center gap-3">
+        {props.showHeader ? (
+          // The one exit: "<" back leading, pulled out by 12 (LEADING_PULL).
+          <IconButton
+            type="button"
+            label="Back"
+            onClick={props.onClose}
+            className={cn(LEADING_PULL, 'shrink-0')}
+          >
+            <IconChevronLeft size={ICON_SIZE.control} />
+          </IconButton>
+        ) : null}
         {photo}
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           {props.showHeader ? (
@@ -256,16 +268,6 @@ export function PersonMessageCard(props: PersonMessageCardProps): ReactElement {
             {meta}
           </p>
         </div>
-        {props.showHeader ? (
-          <IconButton
-            type="button"
-            label="Close"
-            onClick={props.onClose}
-            className="-mr-2 shrink-0"
-          >
-            <IconX size={ICON_SIZE.control} />
-          </IconButton>
-        ) : null}
       </div>
       {props.context !== null ? (
         <p className="truncate text-md text-fg-2" data-person-context="">
