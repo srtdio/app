@@ -5,10 +5,11 @@ import { IconUser } from '@/components/ui/icons';
 /**
  * Where an avatar sits; the role alone decides its size. 'inline' (20) beside a
  * name in a meta line; 'header' (32) in a thread or detail header; 'row' (40)
- * in a list row (chat list, members, search, pickers); 'profile' (72) on a
- * profile or group info screen. No other sizes.
+ * in a list row (members, search, pickers); 'card' (48) as a list card's
+ * picture (ui/ListCard); 'profile' (72) on a profile or group info screen.
+ * No other sizes.
  */
-export type AvatarRole = 'inline' | 'header' | 'row' | 'profile';
+export type AvatarRole = 'inline' | 'header' | 'row' | 'card' | 'profile';
 
 /** Who the avatar stands for: people are circles, groups and personal notes rounded squares. */
 type AvatarKind = 'person' | 'group' | 'note';
@@ -39,6 +40,7 @@ export const AVATAR_PX: Record<AvatarRole, number> = {
   inline: 20,
   header: 32,
   row: 40,
+  card: 48,
   profile: 72,
 };
 
@@ -46,6 +48,7 @@ const INITIALS_TYPE: Record<AvatarRole, string> = {
   inline: 'text-xs',
   header: 'text-sm',
   row: 'text-base',
+  card: 'text-lg',
   profile: 'text-2xl',
 };
 
@@ -77,10 +80,10 @@ export function initialsFor(name: string): string {
   return (first + last).toUpperCase();
 }
 
-/** The shape class for a kind at a role: circle for people; rounded-lg at 40 and below, rounded-xl above. */
+/** The shape class for a kind at a role: circle for people; rounded-lg (8) at 48 and below, rounded-xl above. */
 export function avatarShapeClass(role: AvatarRole, kind: AvatarKind = 'person'): string {
   if (kind === 'person') return 'rounded-full';
-  return AVATAR_PX[role] <= 40 ? 'rounded-lg' : 'rounded-xl';
+  return AVATAR_PX[role] <= 48 ? 'rounded-lg' : 'rounded-xl';
 }
 
 const base = 'lit-avatar inline-flex shrink-0 items-center justify-center select-none';

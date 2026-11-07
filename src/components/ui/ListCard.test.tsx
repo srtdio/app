@@ -1,39 +1,28 @@
-import { describe, expect, it, vi } from 'vitest';
-// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => true,
-}));
+import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   LIST_CARD_BODY,
   LIST_CARD_COVER,
   LIST_CARD_GRID,
+  LIST_CARD_HEIGHT_PX,
   LIST_CARD_LINE1,
-  LIST_CARD_LINE3,
+  LIST_CARD_LINE2,
   LIST_CARD_PICTURE,
   LIST_CARD_PREVIEW,
   LIST_CARD_STACK,
+  LIST_CARD_TEXT,
   LIST_CARD_UNREAD_DOT,
   ListCard,
   ListCardBox,
   listCardFrame,
+  listCardTickClass,
   type ListCardProps,
+  type ListCardSelect,
 } from '@/components/ui/ListCard';
-import { ActionMenu, ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { tagClass } from '@/components/ui/Tag';
 import { IconBriefs } from '@/components/ui/icons';
 import { MOVE_CLASS } from '@/lib/motion';
-import { TRAILING_PULL } from '@/components/ui/layout';
 import tailwindConfig from '../../../tailwind.config';
-
-const menu = (
-  <ActionMenu
-    title="Card"
-    items={[{ id: 'x', label: 'Hide', icon: IconBriefs, onSelect: () => {} }]}
-    trigger={<ActionMenuTrigger type="button" label="Actions for Card" />}
-  />
-);
 
 function render(over: Partial<ListCardProps> = {}): string {
   return renderToStaticMarkup(
@@ -43,13 +32,21 @@ function render(over: Partial<ListCardProps> = {}): string {
       preview="Tease the drop"
       time="5m"
       tag="Open"
-      menu={menu}
       onPress={() => {}}
       press={{ 'aria-label': 'Open Spring launch' }}
       {...over}
     />,
   );
 }
+
+const noop = (): void => {};
+const select = (over: Partial<ListCardSelect> = {}): ListCardSelect => ({
+  active: false,
+  chosen: false,
+  onEnter: noop,
+  onToggle: noop,
+  ...over,
+});
 
 /** The class list of the element carrying `attr`. */
 function classOf(html: string, attr: string): string[] {
@@ -60,6 +57,8 @@ function classOf(html: string, attr: string): string[] {
 const spacing = tailwindConfig.theme?.spacing as Record<string, string>;
 const radius = tailwindConfig.theme?.borderRadius as Record<string, string>;
 const px = (rem: string): number => parseFloat(rem) * 16;
+const stepPx = (cls: string, prefix: string): number =>
+  px(spacing[cls.replace(prefix, '')] ?? 'NaN');
 
 describe('ListCard frame', () => {
   it('bordered card: the border token, radius 12, panel fill, lit-card, press on the whole card', () => {
@@ -68,31 +67,29 @@ describe('ListCard frame', () => {
       expect(root).toContain(cls);
     }
     expect(radius.xl).toBe('12px');
-    // The same border token the Briefs cards (ui/Card cardSurface) used: the plain `border` edge.
     expect(listCardFrame().split(' ')).toContain('border');
     expect(listCardFrame()).not.toMatch(/\bborder-/);
   });
 
-  it('padding 16, picture then text 12 apart, top-aligned', () => {
+  it('padding 12, picture then text 12 apart, vertically centred', () => {
     const body = classOf(render(), 'data-list-card-body=""');
-    expect(body).toEqual(expect.arrayContaining(['p-4', 'gap-3', 'items-start']));
-    expect(px(spacing['4'] ?? '')).toBe(16);
+    expect(body).toEqual(expect.arrayContaining(['p-3', 'gap-3', 'items-center']));
+    expect(body).not.toContain('p-4');
     expect(px(spacing['3'] ?? '')).toBe(12);
-    expect(LIST_CARD_BODY).toContain('p-4');
   });
 
-  it('cards stack 12 apart', () => {
-    expect(LIST_CARD_STACK.split(' ')).toContain('gap-3');
+  it('cards sit 8 apart (stack and grid)', () => {
+    expect(LIST_CARD_STACK.split(' ')).toContain('gap-2');
+    expect(LIST_CARD_GRID.split(' ')).toContain('gap-2');
+    expect(px(spacing['2'] ?? '')).toBe(8);
   });
 
-  it('the whole card is one button; the ⋮ is a sibling, never nested', () => {
+  it('the whole card is one button; there is no ⋮ and no other button', () => {
     const html = render();
-    expect(html.match(/<button/g)?.length).toBe(2);
-    const tap = html.indexOf('data-list-card-press');
-    expect(html.slice(tap, html.indexOf('Actions for Card'))).toContain('</button>');
-    // The content lets taps through to the card button; the ⋮ takes them back.
+    expect(html.match(/<button/g)?.length).toBe(1);
+    expect(html).not.toContain('data-list-card-more');
+    expect(html).not.toContain('aria-haspopup');
     expect(classOf(html, 'data-list-card-body=""')).toContain('pointer-events-none');
-    expect(classOf(html, 'data-list-card-more=""')).toContain('pointer-events-auto');
   });
 
   it('selected is lit-selected; muted is lit-card-muted; no tap means no press motion', () => {
@@ -106,25 +103,68 @@ describe('ListCard frame', () => {
   });
 });
 
-describe('ListCard picture: 72 on the left', () => {
-  it('the slot is 72x72 (h-18 w-18) and never shrinks', () => {
-    expect(px(spacing['18'] ?? '')).toBe(72);
+describe('ListCard height: exactly 74 (1 + 12 + 48 + 12 + 1)', () => {
+  it('the constant, and the classes that make it', () => {
+    expect(LIST_CARD_HEIGHT_PX).toBe(74);
+    const pad = LIST_CARD_BODY.split(' ').find((c) => /^p-\d/.test(c)) ?? '';
+    const pic = LIST_CARD_PICTURE.split(' ').find((c) => /^h-\d/.test(c)) ?? '';
+    const border = 1;
+    expect(border + stepPx(pad, 'p-') + stepPx(pic, 'h-') + stepPx(pad, 'p-') + border).toBe(
+      LIST_CARD_HEIGHT_PX,
+    );
+  });
+
+  it('the text column is 20 + 4 + 20 = 44, inside the 48 picture (it never sets the height)', () => {
+    const line = (cls: string): number =>
+      stepPx(cls.split(' ').find((c) => /^h-\d/.test(c)) ?? '', 'h-');
+    const gap = stepPx(LIST_CARD_TEXT.split(' ').find((c) => /^gap-/.test(c)) ?? '', 'gap-');
+    const text = line(LIST_CARD_LINE1) + gap + line(LIST_CARD_LINE2);
+    expect(text).toBe(44);
+    expect(text).toBeLessThanOrEqual(stepPx('h-12', 'h-'));
+  });
+
+  it('every variant has the identical height structure (no line 3, line 2 always there)', () => {
+    const variants = [
+      render(),
+      render({ unread: true, tag: undefined, time: undefined }),
+      render({ preview: 'x'.repeat(400) }),
+      render({ preview: '', tag: undefined }),
+      render({ picture: { kind: 'person', name: 'A' }, preview: '' }),
+      render({ select: select({ active: true, chosen: true }) }),
+    ];
+    const shape = (h: string): string[][] =>
+      [
+        'data-list-card-body=""',
+        'data-list-card-picture=',
+        'data-list-card-line="1"',
+        'data-list-card-line="2"',
+      ].map((attr) => classOf(h, attr).filter((c) => /^(h|w|min-h|p|gap)-/.test(c)));
+    for (const h of variants) {
+      expect(shape(h)).toEqual(shape(variants[0] ?? ''));
+      expect(h).toContain('data-list-card-line="2"');
+      expect(h).not.toContain('data-list-card-line="3"');
+    }
+  });
+});
+
+describe('ListCard picture: 48 on the left, centred', () => {
+  it('the slot is 48x48 (h-12 w-12) and never shrinks; it comes first', () => {
+    expect(px(spacing['12'] ?? '')).toBe(48);
     expect(LIST_CARD_PICTURE.split(' ')).toEqual(
-      expect.arrayContaining(['h-18', 'w-18', 'shrink-0']),
+      expect.arrayContaining(['h-12', 'w-12', 'shrink-0']),
     );
     const html = render();
-    // The picture comes first in the body (left).
     const body = html.indexOf('data-list-card-body');
     expect(html.indexOf('data-list-card-picture', body)).toBeLessThan(
       html.indexOf('data-list-card-title'),
     );
   });
 
-  it('person: a circle photo through ui/Avatar at 72 (initials when none)', () => {
+  it('person: a circle photo through ui/Avatar at 48 (initials when none)', () => {
     const html = render({ picture: { kind: 'person', name: 'Priya Shah' } });
     expect(html).toContain('data-list-card-picture="person"');
-    expect(html).toContain('data-avatar-role="profile"');
-    expect(html).toContain('width:72px;height:72px');
+    expect(html).toContain('data-avatar-role="card"');
+    expect(html).toContain('width:48px;height:48px');
     expect(html).toContain('rounded-full');
     expect(html).toContain('>PS<');
   });
@@ -136,8 +176,8 @@ describe('ListCard picture: 72 on the left', () => {
       { kind: 'placeholder' as const, placeholder: 'video' as const },
     ]) {
       const html = render({ picture });
-      expect(classOf(html, 'data-list-card-picture=')).toEqual(
-        expect.arrayContaining(['rounded-lg', 'overflow-hidden', 'h-18', 'w-18']),
+      expect(classOf(html, 'data-list-card-picture-box=""')).toEqual(
+        expect.arrayContaining(['rounded-lg', 'overflow-hidden', 'lit-media']),
       );
     }
     expect(radius.lg).toBe('8px');
@@ -148,92 +188,91 @@ describe('ListCard picture: 72 on the left', () => {
   });
 });
 
-describe('ListCard lines: three roles plus the tag', () => {
-  it('line 1: the heading title (one line, truncate) and nothing else when read', () => {
+describe('ListCard line 1: title, then the time on the right', () => {
+  it('the heading title (one line, truncate), then the meta time (mono, no wrap)', () => {
     const html = render();
     expect(classOf(html, 'data-list-card-title=""')).toEqual(
-      expect.arrayContaining(['text-lg', 'font-semibold', 'truncate']),
+      expect.arrayContaining(['text-lg', 'font-semibold', 'truncate', 'flex-1']),
+    );
+    expect(classOf(html, 'data-list-card-time=""')).toEqual(
+      expect.arrayContaining(['font-mono', 'tabular-nums', 'text-fg-3', 'whitespace-nowrap']),
+    );
+    const line1 = html.slice(
+      html.indexOf('data-list-card-line="1"'),
+      html.indexOf('data-list-card-line="2"'),
+    );
+    expect(line1.indexOf('data-list-card-title')).toBeLessThan(
+      line1.indexOf('data-list-card-time'),
     );
     expect(LIST_CARD_LINE1.split(' ')).toContain('h-5');
-    expect(html).not.toContain('data-list-card-unread');
   });
 
-  it('line 1: the 8px fg unread dot only when unread', () => {
+  it('timeBad paints the time in the bad token and marks it; height unchanged', () => {
+    const bad = render({ time: '2d late', timeBad: true });
+    const time = classOf(bad, 'data-list-card-time=""');
+    expect(time).toContain('text-bad');
+    expect(time).not.toContain('text-fg-3');
+    expect(bad).toContain('data-list-card-time-bad=""');
+    expect(bad).toMatch(/data-list-card-time=""[^>]*>2d late</);
+    const plain = render({ time: 'Fri' });
+    expect(classOf(plain, 'data-list-card-time=""')).not.toContain('text-bad');
+    expect(classOf(bad, 'data-list-card-line="1"')).toEqual(
+      classOf(plain, 'data-list-card-line="1"'),
+    );
+  });
+
+  it('no time: the title alone', () => {
+    for (const time of [undefined, '']) {
+      expect(render({ time })).not.toContain('data-list-card-time');
+    }
+  });
+});
+
+describe('ListCard line 2: preview, tag, unread dot', () => {
+  /** Line 2's slots in document order, by their data hooks. */
+  function line2Order(html: string): string[] {
+    const line = html.slice(html.indexOf('data-list-card-line="2"'));
+    return [...line.matchAll(/data-list-card-(preview|tag|unread)=""/g)].map((m) => m[1] ?? '');
+  }
+
+  it('order: preview (one line, truncate), ONE grey tag, then the unread dot', () => {
     const html = render({ unread: true });
-    expect(html).toMatch(/data-list-card-unread="" role="img" aria-label="Unread"/);
+    expect(line2Order(html)).toEqual(['preview', 'tag', 'unread']);
+    expect(classOf(html, 'data-list-card-preview=""')).toEqual(
+      expect.arrayContaining(['text-md', 'text-fg-2', 'truncate']),
+    );
+    expect(LIST_CARD_PREVIEW).not.toContain('line-clamp');
+    expect(html.match(/data-list-card-tag=""/g)).toHaveLength(1);
+    expect(html).toContain(tagClass('neutral'));
+    expect(LIST_CARD_LINE2.split(' ')).toContain('h-5');
+  });
+
+  it('the unread dot: 8px fg, only when unread', () => {
+    expect(render()).not.toContain('data-list-card-unread');
+    expect(render({ unread: true })).toMatch(
+      /data-list-card-unread="" role="img" aria-label="Unread"/,
+    );
     expect(LIST_CARD_UNREAD_DOT.split(' ')).toEqual(
       expect.arrayContaining(['h-2', 'w-2', 'rounded-full', 'bg-fg']),
     );
   });
 
-  it('line 2: secondary, line-clamp-2 and min-h-9 ALWAYS (even empty)', () => {
-    for (const preview of ['Tease the drop', '', undefined]) {
-      const html = render(preview === undefined ? { preview: undefined } : { preview });
-      const cls = classOf(html, 'data-list-card-preview=""');
-      expect(cls).toEqual(
-        expect.arrayContaining(['text-md', 'text-fg-2', 'line-clamp-2', 'min-h-9']),
-      );
-      expect(cls).not.toContain('truncate');
-    }
-    expect(px(spacing['9'] ?? '')).toBe(36);
-    expect(LIST_CARD_PREVIEW).toContain('min-h-9');
-  });
-
-  it('line 3: ONE grey Tag, meta time, then the ⋮ with the trailing pull', () => {
-    const html = render();
-    expect(classOf(html, 'data-list-card-time=""')).toEqual(
-      expect.arrayContaining(['font-mono', 'tabular-nums', 'text-fg-3']),
-    );
-    expect(html.match(/data-list-card-tag=""/g)).toHaveLength(1);
-    expect(html).toContain(tagClass('neutral'));
-    expect(html).toMatch(new RegExp(`aria-label="Actions for Card"[^>]*${TRAILING_PULL}`));
-    expect(classOf(html, 'data-list-card-more=""')).toContain('-my-3');
-    expect(LIST_CARD_LINE3.split(' ')).toContain('h-5');
-    // Order: tag, " · ", time, then the ⋮.
-    expect(html.indexOf('>Open<')).toBeLessThan(html.indexOf('data-list-card-sep'));
-    expect(html.indexOf('data-list-card-sep')).toBeLessThan(html.indexOf('data-list-card-time'));
-    expect(html.indexOf('data-list-card-time')).toBeLessThan(html.indexOf('Actions for Card'));
-  });
-
-  /** Line 3's slots in document order, by their data hooks. */
-  function line3Order(html: string): string[] {
-    const start = html.indexOf('data-list-card-line="3"');
-    const line = html.slice(start);
-    return [...line.matchAll(/data-list-card-(tag|sep|time|more)=""/g)].map((m) => m[1] ?? '');
-  }
-
-  it('line 3 order: tag, then the " · " separator, then the time, then the ⋮', () => {
-    const html = render({ time: '3h', tag: 'Review' });
-    expect(line3Order(html)).toEqual(['tag', 'sep', 'time', 'more']);
-    // The tag keeps its own lighting (ui/Tag's lit-pill).
-    expect(html).toMatch(/data-list-card-tag=""[^>]*><span class="[^"]*\blit-pill\b[^"]*">Review</);
-    // The separator is one middle dot in the meta role, hidden from screen readers.
-    expect(html).toMatch(/data-list-card-sep="" aria-hidden="true" class="[^"]*font-mono[^"]*">·</);
-    expect(html.match(/data-list-card-sep=""/g)).toHaveLength(1);
-    expect(html).toMatch(/data-list-card-time=""[^>]*>3h</);
-  });
-
-  it('no tag: the time starts line 3 and there is no separator', () => {
-    for (const tag of [undefined, '']) {
-      const html = render({ time: '3h', tag });
-      expect(line3Order(html)).toEqual(['time', 'more']);
-      expect(html).not.toContain('data-list-card-sep');
-      expect(html).not.toContain('data-list-card-tag');
+  it('no preview: the tag starts line 2', () => {
+    for (const preview of [undefined, '']) {
+      expect(line2Order(render({ preview, unread: true }))).toEqual(['tag', 'unread']);
     }
   });
 
-  it('no time: the tag alone, no separator', () => {
-    for (const time of [undefined, '']) {
-      const html = render({ time, tag: 'Open' });
-      expect(line3Order(html)).toEqual(['tag', 'more']);
-      expect(html).not.toContain('data-list-card-sep');
-    }
+  it('no tag and no preview: line 2 stays (empty)', () => {
+    const html = render({ preview: '', tag: undefined });
+    expect(html).toContain('data-list-card-line="2"');
+    expect(line2Order(html)).toEqual([]);
   });
 
-  it('the time never moves the tag: the tag sits first whatever the time says', () => {
-    const short = render({ time: 'just now' });
-    const long = render({ time: 'Overdue 3w', timeBad: true });
-    for (const html of [short, long]) expect(line3Order(html)[0]).toBe('tag');
+  it('the stage dot rides on the tag when given', () => {
+    const html = render({ tag: 'Review', tagDot: 'review' });
+    expect(html).toMatch(/data-list-card-tag=""[^>]*><span class="[^"]*lit-pill[^"]*">/);
+    expect(html).toContain('bg-stage-review');
   });
 
   it('at most three text roles (heading, secondary, meta) besides the tag', () => {
@@ -243,72 +282,79 @@ describe('ListCard lines: three roles plus the tag', () => {
     expect(html).toContain('font-mono text-sm');
     expect(html).not.toMatch(/text-3xl|text-base font-medium|uppercase/);
   });
-
-  it('a select check takes the ⋮ slot (same footprint)', () => {
-    const html = render({ check: <span data-check="" /> });
-    expect(html).toMatch(/data-list-card-more=""[^>]*><span data-check=""/);
-    expect(html).not.toContain('Actions for Card');
-  });
-
-  it('every card variant has the identical height structure', () => {
-    const variants = [
-      render(),
-      render({ unread: true, tag: undefined, time: undefined }),
-      render({ preview: 'x'.repeat(400), menu: undefined }),
-      render({ picture: { kind: 'person', name: 'A' }, preview: '' }),
-      render({ check: <span /> }),
-    ];
-    const shape = (h: string): string[][] =>
-      [
-        'data-list-card-body=""',
-        'data-list-card-picture=',
-        'data-list-card-line="1"',
-        'data-list-card-preview=""',
-        'data-list-card-line="3"',
-      ].map((attr) => classOf(h, attr).filter((c) => /^(h|w|min-h|p|gap|line-clamp)-/.test(c)));
-    for (const h of variants) expect(shape(h)).toEqual(shape(variants[0] ?? ''));
-  });
 });
 
-describe('ListCard line 3: timeBad (overdue)', () => {
-  it('timeBad paints the time in the bad token instead of fg-3, and marks it', () => {
-    const html = render({ time: 'Overdue 2d', timeBad: true });
-    const time = classOf(html, 'data-list-card-time=""');
-    expect(time).toContain('text-bad');
-    expect(time).not.toContain('text-fg-3');
-    expect(time).toEqual(expect.arrayContaining(['font-mono', 'tabular-nums']));
-    expect(html).toContain('data-list-card-time-bad=""');
-    expect(html).toMatch(/data-list-card-time=""[^>]*>Overdue 2d</);
+describe('ListCard select mode (long-press / right-click)', () => {
+  it('without select: no tick, no callout guard', () => {
+    const html = render();
+    expect(html).not.toContain('data-list-card-tick');
+    expect(classOf(html, 'data-list-card=""')).not.toContain('select-none');
   });
 
-  it('without timeBad the time is the plain meta ink, never bad', () => {
-    const html = render({ time: 'Due Fri' });
-    const time = classOf(html, 'data-list-card-time=""');
-    expect(time).toContain('text-fg-3');
-    expect(time).not.toContain('text-bad');
-    expect(html).not.toContain('data-list-card-time-bad');
+  it('a selectable card never selects text or shows the iOS callout', () => {
+    const root = classOf(render({ select: select() }), 'data-list-card=""');
+    expect(root).toEqual(expect.arrayContaining(['select-none', '[-webkit-touch-callout:none]']));
   });
 
-  it('timeBad never changes the line or the card height', () => {
-    const plain = render({ time: 'Due today' });
-    const bad = render({ time: 'Overdue 1d', timeBad: true });
-    expect(classOf(bad, 'data-list-card-line="3"')).toEqual(
-      classOf(plain, 'data-list-card-line="3"'),
+  it('the tick is a 20 round badge on the picture corner, hidden (scale 0) outside select mode', () => {
+    const html = render({ select: select() });
+    expect(html).toContain('data-list-card-tick="hidden"');
+    const tick = classOf(html, 'data-list-card-tick=');
+    expect(tick).toEqual(
+      expect.arrayContaining(['absolute', '-bottom-1', '-right-1', 'h-5', 'w-5', 'rounded-full']),
     );
-    expect(classOf(bad, 'data-list-card-body=""')).toEqual(
-      classOf(plain, 'data-list-card-body=""'),
+    expect(tick).toContain('scale-0');
+    // Inside the picture slot.
+    const pic = html.indexOf('data-list-card-picture=');
+    expect(html.indexOf('data-list-card-tick')).toBeGreaterThan(pic);
+    expect(html.indexOf('data-list-card-tick')).toBeLessThan(html.indexOf('data-list-card-title'));
+  });
+
+  it('chosen: filled ink with a check, lit-selected, aria-pressed; not chosen: an empty fg-3 ring', () => {
+    const on = render({ select: select({ active: true, chosen: true }) });
+    expect(on).toContain('data-list-card-tick="on"');
+    expect(classOf(on, 'data-list-card-tick=')).toEqual(
+      expect.arrayContaining(['bg-fg', 'text-panel', 'scale-100']),
     );
+    expect(on).toMatch(/data-list-card-tick="on"[^>]*><svg/);
+    expect(classOf(on, 'data-list-card=""')).toContain('lit-selected');
+    expect(on).toMatch(/<button[^>]*aria-pressed="true"/);
+    const off = render({ select: select({ active: true, chosen: false }) });
+    expect(off).toContain('data-list-card-tick="off"');
+    expect(classOf(off, 'data-list-card-tick=')).toEqual(
+      expect.arrayContaining(['border-fg-3', 'bg-panel', 'scale-100']),
+    );
+    expect(off).not.toMatch(/data-list-card-tick="off"[^>]*><svg/);
+    expect(classOf(off, 'data-list-card=""')).toContain('lit-card');
+    expect(off).toMatch(/<button[^>]*aria-pressed="false"/);
+  });
+
+  it('the tick scales in only (mv-slide on transform): no fade, no rotate, no X', () => {
+    for (const [a, c] of [
+      [true, true],
+      [true, false],
+      [false, false],
+    ] as const) {
+      const cls = listCardTickClass(a, c);
+      expect(cls).toContain(MOVE_CLASS.slide);
+      expect(cls).not.toMatch(/opacity|rotate|translate-x/);
+    }
+  });
+
+  it('the footprint never changes in select mode', () => {
+    const plain = render({ select: select() });
+    const on = render({ select: select({ active: true, chosen: true }) });
+    for (const attr of ['data-list-card-body=""', 'data-list-card-picture=']) {
+      expect(classOf(on, attr)).toEqual(classOf(plain, attr));
+    }
   });
 });
 
 describe('LIST_CARD_GRID: the page list', () => {
-  it('one column on phone, the named auto-fill columns on laptop, 12 between cards', () => {
-    const classes = LIST_CARD_GRID.split(' ');
-    expect(classes).toEqual(
-      expect.arrayContaining(['grid', 'grid-cols-1', 'gap-3', 'md:grid-cols-list-cards']),
+  it('one column on phone, the named auto-fill columns on laptop, 8 between cards', () => {
+    expect(LIST_CARD_GRID.split(' ')).toEqual(
+      expect.arrayContaining(['grid', 'grid-cols-1', 'gap-2', 'md:grid-cols-list-cards']),
     );
-    expect(px(spacing['3'] ?? '')).toBe(12);
-    // A named token, never an arbitrary value.
     expect(LIST_CARD_GRID).not.toContain('[');
   });
 
@@ -316,38 +362,41 @@ describe('LIST_CARD_GRID: the page list', () => {
     const columns = tailwindConfig.theme?.extend?.gridTemplateColumns as
       | Record<string, string>
       | undefined;
-    const value = columns?.['list-cards'];
-    expect(value).toBe('repeat(auto-fill, minmax(360px, 1fr))');
+    expect(columns?.['list-cards']).toBe('repeat(auto-fill, minmax(360px, 1fr))');
   });
 
   it('the chat pane keeps the one-column stack', () => {
     expect(LIST_CARD_STACK.split(' ')).toEqual(
-      expect.arrayContaining(['flex', 'flex-col', 'gap-3']),
+      expect.arrayContaining(['flex', 'flex-col', 'gap-2']),
     );
     expect(LIST_CARD_STACK).not.toContain('grid');
   });
 });
 
-describe('ListCardBox', () => {
-  it('the loading box keeps the card frame, the 72 picture and the 2-line preview height', () => {
+describe('ListCardBox: the 74 skeleton', () => {
+  it('keeps the card frame, the 48 picture, padding 12 and the two 20 lines', () => {
     const html = renderToStaticMarkup(<ListCardBox />);
     expect(html).toContain('data-list-card-box=""');
     expect(html).toContain('rounded-xl border bg-panel');
-    expect(html).toContain('h-18 w-18');
-    expect(html).toContain('min-h-9');
+    expect(html).toContain('h-12 w-12');
+    expect(html).toContain(LIST_CARD_BODY);
+    expect(html).toContain(LIST_CARD_LINE1);
+    expect(html).toContain(LIST_CARD_LINE2);
+    expect(html).not.toContain('min-h-9');
+    expect(html).not.toContain('h-18');
   });
 });
 
 describe('ListCard tap target', () => {
-  it('the cover button is named by the title, unread dot and preview (no copied text)', () => {
+  it('the cover button is named by the title, preview and unread dot (no copied text)', () => {
     const html = render({ onPress: () => {}, unread: true, press: {} });
     const button = /<button[^>]*data-list-card-press=""[^>]*>/.exec(html)?.[0] ?? '';
     expect(button).not.toContain('aria-label=');
     const ids = /aria-labelledby="([^"]+)"/.exec(button)?.[1]?.split(' ') ?? [];
     expect(ids).toHaveLength(3);
     expect(html).toContain(`id="${ids[0]}" data-list-card-title=""`);
-    expect(html).toContain(`id="${ids[1]}" data-list-card-unread=""`);
-    expect(html).toContain(`id="${ids[2]}" data-list-card-preview=""`);
+    expect(html).toContain(`id="${ids[1]}" data-list-card-preview=""`);
+    expect(html).toContain(`id="${ids[2]}" data-list-card-unread=""`);
   });
 
   it("a caller's own aria-label wins over the visible text", () => {
@@ -357,63 +406,45 @@ describe('ListCard tap target', () => {
     expect(button).not.toContain('aria-labelledby');
   });
 
-  it('the title is a real hit target on a tappable card (it hands the click to the card)', () => {
+  it('the title is a real hit target on a tappable card only', () => {
     const titleTag = (html: string): string =>
       /<span[^>]*data-list-card-title=""[^>]*>/.exec(html)?.[0] ?? '';
     expect(titleTag(render({ onPress: () => {} }))).toContain('pointer-events-auto');
     const still = titleTag(
-      renderToStaticMarkup(
-        <ListCard
-          picture={{ kind: 'icon', icon: IconBriefs }}
-          title="Spring launch"
-          preview="Tease the drop"
-          time="5m"
-          tag="Open"
-          menu={menu}
-        />,
-      ),
+      renderToStaticMarkup(<ListCard picture={{ kind: 'icon', icon: IconBriefs }} title="S" />),
     );
-    expect(still).toContain('data-list-card-title');
     expect(still).not.toContain('pointer-events-auto');
   });
 });
 
 describe('ListCard lighting: one lit height per surface', () => {
-  const pictures = [
-    { kind: 'image' as const, node: <img src="https://cdn/x.png" alt="" /> },
-    { kind: 'icon' as const, icon: IconBriefs },
-    { kind: 'placeholder' as const, placeholder: 'text' as const },
-  ];
-
-  it('a non-person picture box is lit-media', () => {
-    for (const picture of pictures) {
-      expect(classOf(render({ picture }), 'data-list-card-picture='), picture.kind).toContain(
-        'lit-media',
-      );
-    }
-  });
-
-  it('a person picture is ui/Avatar with lit-avatar (the slot itself is not lit-media)', () => {
+  it('a person picture is ui/Avatar with lit-avatar (the box is not lit-media)', () => {
     const html = render({ picture: { kind: 'person', name: 'Priya Shah' } });
-    expect(classOf(html, 'data-list-card-picture=')).not.toContain('lit-media');
-    expect(html).toMatch(/data-avatar-role="profile"[^>]*class="[^"]*\blit-avatar\b/);
+    expect(classOf(html, 'data-list-card-picture-box=""')).not.toContain('lit-media');
+    expect(html).toMatch(/data-avatar-role="card"[^>]*class="[^"]*\blit-avatar\b/);
   });
 
   it('the cover is lit-hover with the inset focus line', () => {
     expect(LIST_CARD_COVER.split(' ')).toEqual(
       expect.arrayContaining(['lit-hover', 'focus-visible:lit-focus-inset']),
     );
-    expect(classOf(render(), 'data-list-card-press=""')).toEqual(
-      expect.arrayContaining(['lit-hover', 'focus-visible:lit-focus-inset']),
-    );
   });
 
-  it('the frame is lit-card, lit-card-muted when muted, lit-selected when selected (one at a time)', () => {
+  it('the frame is lit-card, lit-card-muted, or lit-selected (one at a time)', () => {
     const lits = (html: string): string[] =>
       classOf(html, 'data-list-card=""').filter((c) => c.startsWith('lit-'));
     expect(lits(render())).toEqual(['lit-card']);
     expect(lits(render({ muted: true }))).toEqual(['lit-card-muted']);
     expect(lits(render({ selected: true }))).toEqual(['lit-selected']);
     expect(lits(render({ selected: true, muted: true }))).toEqual(['lit-selected']);
+    expect(lits(render({ muted: true, select: select({ active: true, chosen: true }) }))).toEqual(
+      ['lit-selected'],
+    );
+  });
+
+  it('the tag keeps lit-pill; no shadow, drop-shadow, blur or dark: anywhere', () => {
+    const html = render({ unread: true, select: select({ active: true, chosen: true }) });
+    expect(html).toContain('lit-pill');
+    expect(html).not.toMatch(/shadow-|drop-shadow|backdrop-blur|dark:/);
   });
 });

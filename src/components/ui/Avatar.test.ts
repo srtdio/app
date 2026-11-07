@@ -33,8 +33,8 @@ describe('initialsFor', () => {
 });
 
 describe('Avatar roles', () => {
-  it('has exactly four sizes: inline 20, header 32, row 40, profile 72', () => {
-    expect(AVATAR_PX).toEqual({ inline: 20, header: 32, row: 40, profile: 72 });
+  it('has exactly five sizes: inline 20, header 32, row 40, card 48, profile 72', () => {
+    expect(AVATAR_PX).toEqual({ inline: 20, header: 32, row: 40, card: 48, profile: 72 });
   });
 
   it('renders each role at its size', () => {
@@ -56,8 +56,9 @@ describe('Avatar shapes', () => {
     }
   });
 
-  it('draws groups and notes as rounded squares: lg at 40 and below, xl at 72', () => {
+  it('draws groups and notes as rounded squares: lg at 48 and below, xl at 72', () => {
     for (const kind of ['group', 'note'] as const) {
+      expect(avatarShapeClass('card', kind)).toBe('rounded-lg');
       expect(avatarShapeClass('inline', kind)).toBe('rounded-lg');
       expect(avatarShapeClass('header', kind)).toBe('rounded-lg');
       expect(avatarShapeClass('row', kind)).toBe('rounded-lg');
