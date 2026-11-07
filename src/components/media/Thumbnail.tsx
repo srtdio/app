@@ -53,6 +53,13 @@ interface ThumbnailProps {
   bodyLines?: 3 | 4;
   /** A caller-drawn tile shown instead of `fallback` when there is no usable image. */
   fallbackTile?: ReactNode;
+  /**
+   * 'list': the 72 picture on a ui/ListCard. Only the small stored copy ever
+   * loads; with no small copy (or when it fails) the tile shows its fallback,
+   * never the full-size original. Default 'tile' keeps the original as the
+   * last resort.
+   */
+  size?: 'tile' | 'list';
 }
 
 const ASPECT: Record<NonNullable<ThumbnailProps['aspect']>, string> = {
@@ -153,6 +160,7 @@ export function Thumbnail({
   children,
   bodyLines = 4,
   fallbackTile,
+  size = 'tile',
 }: ThumbnailProps) {
   const active = presignEnabled && assetVersionId !== null;
   const versionId = assetVersionId ?? '';
@@ -163,8 +171,11 @@ export function Thumbnail({
   const stored = useStoredThumbnail(versionId, cache, active && near);
   const [smallFailed, setSmallFailed] = useState<string | null>(null);
   const smallUrl = smallFailed === versionId ? null : (stored.url ?? knownSmall);
-  // The original loads only when there is no small copy to show.
-  const wantOriginal = active && (stored.missing || smallFailed === versionId);
+  const noSmall = stored.missing || smallFailed === versionId;
+  // The original loads only when there is no small copy to show, and never on
+  // a list card (size 'list'): a 72 picture is never worth the full file.
+  const listOnly = size === 'list';
+  const wantOriginal = active && !listOnly && noSmall;
   const original = useThumbnail<HTMLSpanElement>({
     assetVersionId: wantOriginal ? assetVersionId : null,
     cache,
@@ -175,7 +186,7 @@ export function Thumbnail({
     enabled: presignEnabled,
     hasVersion: assetVersionId !== null,
     url: smallUrl ?? originalUrl,
-    failed: smallUrl === null && original.failed,
+    failed: smallUrl === null && (listOnly ? noSmall : original.failed),
   });
   // Which url has painted: the onboarding guide waits for on-screen photos
   // (data-thumb-loading) before it points at anything.

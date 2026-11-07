@@ -399,12 +399,12 @@ describe('briefSections', () => {
         label: 'This week',
         days: [
           { label: 'Yesterday', className: DAY_HEADING_CLASS, cards: 1 },
-          { label: 'Mon', className: DAY_HEADING_CLASS, cards: 1 },
+          { label: 'Mon 6 Jul', className: DAY_HEADING_CLASS, cards: 1 },
         ],
       },
       {
         label: 'June',
-        days: [{ label: '10 Jun', className: DAY_HEADING_CLASS, cards: 1 }],
+        days: [{ label: 'Wed 10 Jun', className: DAY_HEADING_CLASS, cards: 1 }],
       },
     ]);
     const firstCard = (
@@ -424,7 +424,7 @@ describe('briefSections', () => {
     ]);
     expect(sections).toHaveLength(1);
     const { days } = readSection(sections[0]!);
-    expect(days.map((d) => d.label)).toEqual(['Today', 'Mon']);
+    expect(days.map((d) => d.label)).toEqual(['Today', 'Mon 6 Jul']);
     expect(days.map((d) => d.cards)).toEqual([2, 1]);
   });
 

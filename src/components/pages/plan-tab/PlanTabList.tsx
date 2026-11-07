@@ -190,6 +190,7 @@ export function PlanTabCard(props: {
               kind: 'image',
               node: (
                 <Thumbnail
+                  size="list"
                   assetVersionId={cover}
                   cache={sharedCardPresignCache()}
                   presignEnabled={PRESIGN_ENABLED}

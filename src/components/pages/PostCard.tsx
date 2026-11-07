@@ -234,6 +234,7 @@ function cardPicture(
         kind: 'image',
         node: (
           <Thumbnail
+            size="list"
             assetVersionId={post.thumbnailAssetVersionId}
             cache={cache}
             presignEnabled={presignEnabled}

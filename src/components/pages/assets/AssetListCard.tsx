@@ -110,6 +110,7 @@ function assetPicture(
       kind: 'image',
       node: (
         <Thumbnail
+          size="list"
           assetVersionId={item.currentVersionId}
           cache={cache}
           presignEnabled={presignEnabled}
