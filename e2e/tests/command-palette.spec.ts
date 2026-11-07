@@ -447,14 +447,20 @@ test.describe('search basics on a laptop @desktop', () => {
     );
     const dialog = page.getByRole('dialog', { name: 'Command palette' });
 
-    // Typing in another text field (the open DM's composer): the shortcut does nothing.
+    // Typing in another text field (the open DM's writing box): the palette
+    // never opens. The writing box takes Cmd/Ctrl+K as its own Add link
+    // (ui/WritingBox); Cancel gives the box its focus back.
     await page.goto(`/chat?channel=${encodeURIComponent(DM_CHANNEL)}`);
     const other = page.locator('form textarea').first();
     await other.waitFor({ state: 'visible' });
     await other.focus();
     await page.keyboard.press(`${mod}+k`);
     await expect(dialog).toHaveCount(0);
-    await expect(other).toBeFocused();
+    const addLink = page.getByRole('dialog', { name: 'Add link' });
+    await expect(addLink).toBeVisible();
+    await addLink.getByRole('button', { name: 'Cancel' }).click();
+    await expect(addLink).toHaveCount(0);
+    await expect(dialog).toHaveCount(0);
 
     // From anywhere else it opens, the field ready to type in.
     const from = page.getByRole('button', { name: 'Account menu' });
