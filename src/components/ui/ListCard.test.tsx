@@ -7,6 +7,7 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   LIST_CARD_BODY,
+  LIST_CARD_COVER,
   LIST_CARD_GRID,
   LIST_CARD_LINE1,
   LIST_CARD_LINE3,
@@ -204,6 +205,8 @@ describe('ListCard lines: three roles plus the tag', () => {
   it('line 3 order: tag, then the " · " separator, then the time, then the ⋮', () => {
     const html = render({ time: '3h', tag: 'Review' });
     expect(line3Order(html)).toEqual(['tag', 'sep', 'time', 'more']);
+    // The tag keeps its own lighting (ui/Tag's lit-pill).
+    expect(html).toMatch(/data-list-card-tag=""[^>]*><span class="[^"]*\blit-pill\b[^"]*">Review</);
     // The separator is one middle dot in the meta role, hidden from screen readers.
     expect(html).toMatch(/data-list-card-sep="" aria-hidden="true" class="[^"]*font-mono[^"]*">·</);
     expect(html.match(/data-list-card-sep=""/g)).toHaveLength(1);
@@ -372,5 +375,45 @@ describe('ListCard tap target', () => {
     );
     expect(still).toContain('data-list-card-title');
     expect(still).not.toContain('pointer-events-auto');
+  });
+});
+
+describe('ListCard lighting: one lit height per surface', () => {
+  const pictures = [
+    { kind: 'image' as const, node: <img src="https://cdn/x.png" alt="" /> },
+    { kind: 'icon' as const, icon: IconBriefs },
+    { kind: 'placeholder' as const, placeholder: 'text' as const },
+  ];
+
+  it('a non-person picture box is lit-media', () => {
+    for (const picture of pictures) {
+      expect(classOf(render({ picture }), 'data-list-card-picture='), picture.kind).toContain(
+        'lit-media',
+      );
+    }
+  });
+
+  it('a person picture is ui/Avatar with lit-avatar (the slot itself is not lit-media)', () => {
+    const html = render({ picture: { kind: 'person', name: 'Priya Shah' } });
+    expect(classOf(html, 'data-list-card-picture=')).not.toContain('lit-media');
+    expect(html).toMatch(/data-avatar-role="profile"[^>]*class="[^"]*\blit-avatar\b/);
+  });
+
+  it('the cover is lit-hover with the inset focus line', () => {
+    expect(LIST_CARD_COVER.split(' ')).toEqual(
+      expect.arrayContaining(['lit-hover', 'focus-visible:lit-focus-inset']),
+    );
+    expect(classOf(render(), 'data-list-card-press=""')).toEqual(
+      expect.arrayContaining(['lit-hover', 'focus-visible:lit-focus-inset']),
+    );
+  });
+
+  it('the frame is lit-card, lit-card-muted when muted, lit-selected when selected (one at a time)', () => {
+    const lits = (html: string): string[] =>
+      classOf(html, 'data-list-card=""').filter((c) => c.startsWith('lit-'));
+    expect(lits(render())).toEqual(['lit-card']);
+    expect(lits(render({ muted: true }))).toEqual(['lit-card-muted']);
+    expect(lits(render({ selected: true }))).toEqual(['lit-selected']);
+    expect(lits(render({ selected: true, muted: true }))).toEqual(['lit-selected']);
   });
 });
