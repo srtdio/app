@@ -14,6 +14,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ErrorNote } from '@/components/ui/ErrorNote';
 import { Textarea } from '@/components/ui/Textarea';
+import { WritingBox } from '@/components/ui/WritingBox';
 import { dispatchInductionDid, INDUCTION_KEYS } from '@/lib/induction';
 import { IconButton } from '@/components/ui/IconButton';
 import { LinkButton } from '@/components/ui/LinkButton';
@@ -1459,6 +1460,8 @@ export function Comments({
   const revealSelector = useRef<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
+  // The edit field, for its ui/WritingBox rows (Aa, emoji).
+  const editFieldRef = useRef<HTMLTextAreaElement | null>(null);
   // The edit box shows "@username"; these picks turn each back into its token on save.
   const [editPicks, setEditPicks] = useState<MentionPick[]>([]);
   // An edit Save in flight: the button shows busy, and a second tap (or Enter
@@ -2305,6 +2308,11 @@ export function Comments({
     toggleReply(id);
   }
 
+  // The writing boxes' expanded title: the post or brief title the page holds,
+  // else this section's own heading.
+  const expandTitle =
+    whereLabel !== '' ? whereLabel : entityType === 'post' ? CHECKPOINTS_TITLE : 'Comments';
+
   function renderReplyComposer(comment: CommentRow): ReactNode {
     const key = draftKey(comment.id);
     return (
@@ -2323,6 +2331,7 @@ export function Comments({
             ? { submitAnchor: INDUCTION_KEYS.postReplyPost }
             : {})}
           autoFocus
+          expandTitle={expandTitle}
           initialBody={replyDrafts.get(key) ?? replySeedFor(comment)}
           onBodyChange={(body) => replyDrafts.set(key, body)}
         />
@@ -2528,11 +2537,22 @@ export function Comments({
   function renderEditor(commentId: string): ReactNode {
     return (
       <div className="mt-2 flex flex-col gap-2">
-        <Textarea
-          formatting
-          value={editBody}
-          onChange={(event) => setEditBody(event.target.value)}
-          aria-label="Edit comment body"
+        {/* ui/WritingBox (comment mode) with no send: Save and Cancel stay
+            under it; focused, the row shows Aa and emoji. */}
+        <WritingBox
+          mode="comment"
+          field={() => editFieldRef.current}
+          hasText={editBody.trim() !== ''}
+          expandTitle={expandTitle}
+          input={
+            <Textarea
+              formatting
+              ref={editFieldRef}
+              value={editBody}
+              onChange={(event) => setEditBody(event.target.value)}
+              aria-label="Edit comment body"
+            />
+          }
         />
         <div className="flex items-center gap-2">
           <Button
@@ -3097,6 +3117,7 @@ export function Comments({
         canAttach={canAttach}
         uploadFile={uploadFile}
         startSeq={maxLedgerSeq + 1}
+        expandTitle={expandTitle}
       />
     ) : (
       <CommentComposer
@@ -3107,6 +3128,7 @@ export function Comments({
         canAttach={canAttach}
         uploadFile={uploadFile}
         placeholder="Write a comment"
+        expandTitle={expandTitle}
         {...(rootDrafts.has(entityKey) ? { initialBody: rootDrafts.get(entityKey) ?? '' } : {})}
         onBodyChange={(body) => {
           rootDrafts.set(entityKey, body);
