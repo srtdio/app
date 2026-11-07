@@ -177,17 +177,17 @@ describe('comment files open in-app', () => {
   });
 });
 
-describe('chat is unchanged (no backBar)', () => {
-  it('a chat file still opens with the X (Close) bar', () => {
+describe('chat viewers leave with "<" too (D3)', () => {
+  it('a chat file opens with the Back bar, never an X', () => {
     const [pdf] = toCommentFileAttachments(['v-pdf'], FILES);
     const host = mount(<FileBubble attachment={pdf!} cache={cache} presignEnabled />);
     openCard(host, 'Launch deck.pdf');
     const bar = viewer()?.querySelector('[data-viewer-bar]');
-    expect(bar?.querySelector('button[aria-label="Close"]')).not.toBeNull();
-    expect(bar?.querySelector('button[aria-label="Back"]')).toBeNull();
+    expect(bar?.querySelector('button[aria-label="Close"]')).toBeNull();
+    expect(bar?.querySelector('button[aria-label="Back"]')).not.toBeNull();
   });
 
-  it('the chat lightbox keeps "Close viewer" and no back bar', () => {
+  it('the chat lightbox has the back bar and no "Close viewer"', () => {
     const images = toCommentFileAttachments(['v-img1', 'v-img2'], FILES);
     mount(
       <ImageLightbox
@@ -199,7 +199,7 @@ describe('chat is unchanged (no backBar)', () => {
         onClose={() => {}}
       />,
     );
-    expect(document.body.querySelector('button[aria-label="Close viewer"]')).not.toBeNull();
-    expect(document.body.querySelector('[data-lightbox-back-bar]')).toBeNull();
+    expect(document.body.querySelector('button[aria-label="Close viewer"]')).toBeNull();
+    expect(document.body.querySelector('[data-lightbox-back-bar]')).not.toBeNull();
   });
 });

@@ -54,9 +54,9 @@ export interface MessageAttachment {
   /** PDFs with a stored thumbnail: the document's page count. */
   pageCount?: number;
   /**
-   * The stored thumbnail's pixel size (pdf/video), present only when the
-   * upload stored one. The file bubble reserves its thumbnail area from these,
-   * so its height is final on first paint.
+   * The stored thumbnail's pixel size (pdf/video), or a photo's natural size
+   * (read at pick time, or the recorded meta). The file bubble and the single
+   * photo tile reserve their box from these, so the height is final on first paint.
    */
   thumbW?: number;
   thumbH?: number;

@@ -2213,7 +2213,7 @@ for (const dark of [false, true]) {
     steps: async (page) => {
       const results = await openMediaChip(page, 'photo');
       await openFirstPhoto(page, results);
-      await waitFor([page.locator('[data-lightbox-details]')], 'viewer details');
+      await waitFor([page.locator('[data-lightbox-title]')], 'viewer title');
       await waitFor([page.locator('[data-show-in-chat]')], 'Show in chat');
     },
   });

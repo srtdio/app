@@ -1509,7 +1509,7 @@ function metaInk(mine: boolean): string {
 /** Each placement's position: two overlays at the bottom-right, the row in flow. */
 const META_POSITION: Record<MetaPlacement, string> = {
   inline: 'pointer-events-none absolute bottom-1 right-2 inline-flex',
-  pill: 'pointer-events-none absolute bottom-2 right-2 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-media-meta lit-media',
+  pill: 'pointer-events-none absolute bottom-3 right-3 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-media-meta lit-media',
   row: 'pointer-events-none mt-1 flex justify-end',
   // Inside ui/ChatCard's bottom-trailing time slot, which places and inks it.
   card: 'pointer-events-none inline-flex',
