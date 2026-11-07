@@ -133,6 +133,8 @@ import {
   type SavedSource,
 } from '@/lib/chat/saved-from';
 import type { ForwardSendResult } from '@/components/chat/ForwardPicker';
+import { forwardMessagesByIds } from '@/lib/chat/forward-by-ids';
+import type { HideItem } from '@/lib/chat/use-delete-for-me';
 import type { Result } from '@srtdio/rpc';
 
 interface ChatConnectedProps {
@@ -1883,6 +1885,19 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     },
     [ensureNotes, threadForward],
   );
+  // The chat home chip views forward items by message id: the rows are read on
+  // the picker's Send (never on a paint or an open), then forwarded as above.
+  const forwardByIds = useCallback(
+    (items: readonly HideItem[], targets: ChannelSummary[]): Promise<ForwardSendResult> =>
+      forwardMessagesByIds({
+        client: supabase,
+        currentUserId,
+        messageIds: items.map((item) => item.messageId),
+        targets,
+        forward: forwardWithNotes,
+      }),
+    [currentUserId, forwardWithNotes],
+  );
   const rosterById = useMemo(
     () => new Map(chatRoster.map((c) => [c.channelId, c] as const)),
     [chatRoster],
@@ -2053,6 +2068,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             onOpenSearchHit={openSearchHit}
             onOpenAtMessage={openAtMessage}
             notes={notesChat}
+            forwardChannels={chatRoster}
+            onForwardMessages={forwardByIds}
           />
         </div>
       ) : null}

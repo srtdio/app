@@ -25,7 +25,9 @@ import {
   IconCheckCircle,
   IconEyeOff,
   IconFile,
+  IconForward,
   IconPlus,
+  IconTrash,
 } from '@/components/ui/icons';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { cn } from '@/lib/cn';
@@ -53,6 +55,15 @@ import { summaryIconOfLine } from '@/lib/chat/thread';
 import { SummaryGlyph } from '@/components/chat/ReplyQuote';
 import { SearchResults, useMessageSearch } from '@/components/chat/SearchResults';
 import { MediaResults } from '@/components/chat/MediaResults';
+import { ForwardPicker, type ForwardSendResult } from '@/components/chat/ForwardPicker';
+import { DELETE_FOR_ME_LABEL } from '@/components/chat/DeleteSheet';
+import {
+  EMPTY_MEDIA_SELECTION,
+  mediaSelectionItems,
+  toggleMediaSelection,
+  type MediaSelection,
+} from '@/lib/chat/media-select';
+import { useDeleteForMe, type HideItem } from '@/lib/chat/use-delete-for-me';
 import {
   flattenHits,
   isMediaCacheValue,
@@ -134,8 +145,13 @@ export interface ChannelSelectMode {
   onStart: () => void;
   onCancel: () => void;
   onToggle: (channelId: string) => void;
-  /** Hides the checked chats (behind the Undo toast). */
+  /** Hides the checked chats (behind the Undo toast); a chip view: Delete for me. */
   onDelete: () => void;
+  /**
+   * A chip view selects items (messages), not chats: the bar is Forward (when
+   * `onForward` is set) and Delete for me, never Hide. Absent: chats.
+   */
+  media?: { onForward?: (() => void) | undefined };
 }
 
 interface ChannelListProps {
@@ -186,6 +202,13 @@ interface ChannelListProps {
   notes?: ChannelSummary;
   /** Rendered at the top of the home list (hidden while searching), e.g. the getting-started card. */
   lead?: ReactNode;
+  /** A chip view's Forward: the chats the picker lists (hidden ones included). */
+  forwardChannels?: readonly ChannelSummary[];
+  /** A chip view's Forward: send these messages (by id) to the chosen chats. Absent: no Forward. */
+  onForwardMessages?: (
+    items: readonly HideItem[],
+    targets: ChannelSummary[],
+  ) => Promise<ForwardSendResult>;
 }
 
 interface ChannelListBodyProps extends Omit<ChannelListProps, 'status' | 'onRetry'> {
@@ -1049,6 +1072,7 @@ function selectHeader(select: ChannelSelectMode, className = ''): ReactElement {
 
 /** Bottom bar in select mode (SelectionBar styling): one Hide, disabled at 0. */
 function selectBar(select: ChannelSelectMode, className = ''): ReactElement {
+  if (select.media !== undefined) return mediaSelectBar(select, select.media, className);
   return (
     <div className={cn('flex items-center gap-2 border-t bg-panel px-4 py-3 lit-dock', className)}>
       <Button
@@ -1059,6 +1083,41 @@ function selectBar(select: ChannelSelectMode, className = ''): ReactElement {
       >
         <IconEyeOff size={ICON_SIZE.inline} />
         Hide
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Bottom bar in a chip view's select mode (the same frame as the chats' bar):
+ * Forward, then Delete for me (danger), both disabled at 0. Never Hide.
+ */
+function mediaSelectBar(
+  select: ChannelSelectMode,
+  media: NonNullable<ChannelSelectMode['media']>,
+  className = '',
+): ReactElement {
+  const none = select.selectedIds.size === 0;
+  return (
+    <div
+      data-testid="media-select-bar"
+      className={cn('flex items-center gap-2 border-t bg-panel px-4 py-3 lit-dock', className)}
+    >
+      {media.onForward !== undefined ? (
+        <Button variant="ghost" data-selection-forward="" disabled={none} onClick={media.onForward}>
+          <IconForward size={ICON_SIZE.inline} />
+          Forward
+        </Button>
+      ) : null}
+      <Button
+        variant="danger"
+        data-selection-delete=""
+        className="ml-auto"
+        disabled={none}
+        onClick={select.onDelete}
+      >
+        <IconTrash size={ICON_SIZE.inline} />
+        {DELETE_FOR_ME_LABEL}
       </Button>
     </div>
   );
@@ -1216,6 +1275,10 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   const [kind, setKind] = useState<HomeChip | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // A chip view selects items by message (message id to chat id).
+  const [mediaSelection, setMediaSelection] = useState<MediaSelection>(EMPTY_MEDIA_SELECTION);
+  // The chip view's forward picker: the messages to forward, or null (closed).
+  const [forwardItems, setForwardItems] = useState<readonly HideItem[] | null>(null);
   // The chat whose row menu is open (ActionMenu: a sheet on phone, a popover at its ⋯ on laptop).
   const [menu, setMenu] = useState<ChannelSummary | null>(null);
   // Chats hidden behind the Undo toast: they leave the list at once and the
@@ -1251,6 +1314,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   const exitSelect = (): void => {
     setSelecting(false);
     setSelectedIds(new Set());
+    setMediaSelection(EMPTY_MEDIA_SELECTION);
   };
 
   // Hide (the row menu, or the select-mode bar): no confirm. The chats leave
@@ -1293,6 +1357,12 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   // from the loaded roster and the workspace's name registry, never per row.
   const { session } = useSession();
   const currentUserId = session?.user.id ?? null;
+  // A chip view's Delete for me: hidden at once, written when the Undo ends.
+  const deleteForMe = useDeleteForMe({ userId: currentUserId, workspaceId: listWorkspaceId });
+  const onForwardMessages = props.onForwardMessages;
+  const forwardChannels = props.forwardChannels;
+  const canForward = onForwardMessages !== undefined && forwardChannels !== undefined;
+  const mediaSelecting = selecting && kind !== null;
   const { state: searchState, runner: searchRunner } = useMessageSearch({
     workspaceId: listWorkspaceId,
   });
@@ -1373,9 +1443,19 @@ export function ChannelList(props: ChannelListProps): ReactElement {
         nowMs={nowMs}
         {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
         onClear={() => {
+          exitSelect();
           setSearch('');
           setKind(null);
         }}
+        {...(mediaSelecting
+          ? {
+              selecting: {
+                selection: mediaSelection,
+                onToggle: (item: HideItem) =>
+                  setMediaSelection((prev) => toggleMediaSelection(prev, item)),
+              },
+            }
+          : {})}
         onShowInChat={(channelId, messageId) => {
           const channel = channelsById.get(channelId);
           if (channel === undefined) return;
@@ -1424,10 +1504,11 @@ export function ChannelList(props: ChannelListProps): ReactElement {
           ? {
               select: {
                 active: selecting,
-                selectedIds,
+                selectedIds: mediaSelecting ? new Set(mediaSelection.keys()) : selectedIds,
                 onStart: () => {
                   setMenu(null);
                   setSelectedIds(new Set());
+                  setMediaSelection(EMPTY_MEDIA_SELECTION);
                   setSelecting(true);
                 },
                 onCancel: exitSelect,
@@ -1438,8 +1519,22 @@ export function ChannelList(props: ChannelListProps): ReactElement {
                     else next.add(channelId);
                     return next;
                   }),
-                onDelete: () =>
-                  hideChats(props.channels.filter((c) => selectedIds.has(c.channelId))),
+                onDelete: mediaSelecting
+                  ? () => {
+                      const items = mediaSelectionItems(mediaSelection);
+                      exitSelect();
+                      deleteForMe(items);
+                    }
+                  : () => hideChats(props.channels.filter((c) => selectedIds.has(c.channelId))),
+                ...(mediaSelecting
+                  ? {
+                      media: {
+                        onForward: canForward
+                          ? () => setForwardItems(mediaSelectionItems(mediaSelection))
+                          : undefined,
+                      },
+                    }
+                  : {}),
               },
               onLongPress: (channel: ChannelSummary) => setMenu(channel),
               menuOpenId: menu?.channelId ?? null,
@@ -1448,6 +1543,19 @@ export function ChannelList(props: ChannelListProps): ReactElement {
             }
           : {}),
       })}
+      {onForwardMessages !== undefined && forwardChannels !== undefined ? (
+        <ForwardPicker
+          historyStep
+          open={forwardItems !== null && forwardItems.length > 0}
+          onClose={() => setForwardItems(null)}
+          channels={forwardChannels}
+          onSend={(targets) => onForwardMessages(forwardItems ?? [], targets)}
+          onSent={() => {
+            setForwardItems(null);
+            exitSelect();
+          }}
+        />
+      ) : null}
     </>
   );
 }

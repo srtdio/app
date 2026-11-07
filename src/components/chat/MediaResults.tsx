@@ -6,6 +6,9 @@
 // and videos are a square grid (4 across, 6 from 1180px); files, links and
 // voice notes are rows. Thumbnails come from the app's one PresignCache (the
 // small copy first, kept on the device), asked for only near the viewport.
+// Select mode (the home ✓) selects ITEMS keyed by their message: each tile or
+// row shows the SelectCheckbox and a tap toggles; a message carrying several
+// photos is one selection (every tile of it shows checked).
 
 import {
   useCallback,
@@ -42,6 +45,7 @@ import { Thumbnail } from '@/components/media/Thumbnail';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { VoiceNote } from '@/components/chat/VoiceNote';
 import { SettleLanding } from '@/components/chat/SettleLanding';
+import { SelectCheckbox } from '@/components/chat/SelectionBar';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { RESULT_LABEL, noCallout, searchRetryRow } from '@/components/chat/SearchResults';
 import { cn } from '@/lib/cn';
@@ -64,6 +68,7 @@ import { OWN_PREFIX, type PreviewNameOf } from '@/lib/chat/chat-store';
 import { APP_ENTITY_ROUTES, classify, currentOrigin, displayUrl } from '@/lib/chat/message-links';
 import { isFileRemoved, removedFilesStore } from '@/lib/chat/remove-files';
 import { useHiddenIds, withoutHidden } from '@/lib/chat/hides';
+import type { MediaSelection } from '@/lib/chat/media-select';
 import {
   MEDIA_MIN_TILES,
   flattenHits,
@@ -106,6 +111,20 @@ export interface MediaResultsProps {
   onClear: () => void;
   /** Opens the chat at that message. The viewer closes first. */
   onShowInChat: (channelId: string, messageId: string) => void;
+  /**
+   * Select mode (the home ✓ while a chip is on): items show the
+   * SelectCheckbox and a tap toggles the item's message. Absent: taps open.
+   */
+  selecting?: {
+    selection: MediaSelection;
+    onToggle: (item: { messageId: string; channelId: string }) => void;
+  };
+}
+
+/** One selectable item's check state and toggle, in select mode. */
+interface ItemSelect {
+  checked: boolean;
+  onToggle: () => void;
 }
 
 /** Thumbnails presign only with the asset-read Worker configured. */
@@ -182,7 +201,11 @@ export function mediaSource(input: {
 }
 
 /** One photo tile: the small copy first (Thumbnail), a photo glyph without one. */
-function PhotoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement {
+function PhotoTile(props: {
+  item: MediaItem;
+  onOpen: () => void;
+  pressed?: boolean;
+}): ReactElement {
   const { item } = props;
   return (
     <PressableRow
@@ -191,6 +214,7 @@ function PhotoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement
       flat
       data-media-tile={item.key}
       aria-label={item.name !== '' ? item.name : 'Photo'}
+      {...(props.pressed !== undefined ? { 'aria-pressed': props.pressed } : {})}
       onClick={props.onOpen}
       onContextMenu={noCallout}
       className={cn('relative block aspect-square overflow-hidden bg-panel-3', NO_TOUCH_SELECT)}
@@ -214,7 +238,11 @@ function PhotoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement
 }
 
 /** One video tile: its stored thumbnail, the play glyph and the length bottom-left. */
-function VideoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement {
+function VideoTile(props: {
+  item: MediaItem;
+  onOpen: () => void;
+  pressed?: boolean;
+}): ReactElement {
   const { item } = props;
   const cache = appPresignCache();
   const ref = useRef<HTMLSpanElement>(null);
@@ -232,6 +260,7 @@ function VideoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement
       flat
       data-media-tile={item.key}
       aria-label={item.name !== '' ? item.name : 'Video'}
+      {...(props.pressed !== undefined ? { 'aria-pressed': props.pressed } : {})}
       onClick={props.onOpen}
       onContextMenu={noCallout}
       className={cn('relative block aspect-square overflow-hidden bg-panel-3', NO_TOUCH_SELECT)}
@@ -267,7 +296,12 @@ function VideoTile(props: { item: MediaItem; onOpen: () => void }): ReactElement
 }
 
 /** One file row: the stored thumbnail (PDF, video, Office) or the kind glyph, name, meta, date. */
-function FileRowItem(props: { item: MediaItem; date: string; onOpen: () => void }): ReactElement {
+function FileRowItem(props: {
+  item: MediaItem;
+  date: string;
+  onOpen: () => void;
+  pressed?: boolean;
+}): ReactElement {
   const { item } = props;
   const cache = appPresignCache();
   const ref = useRef<HTMLSpanElement>(null);
@@ -283,6 +317,7 @@ function FileRowItem(props: { item: MediaItem; date: string; onOpen: () => void 
     <PressableRow
       type="button"
       data-media-row={item.key}
+      {...(props.pressed !== undefined ? { 'aria-pressed': props.pressed } : {})}
       onClick={props.onOpen}
       onContextMenu={noCallout}
       className={ROW}
@@ -350,6 +385,8 @@ function LinkRowItem(props: {
   item: LinkItem;
   date: string;
   onShowInChat: () => void;
+  /** Select mode: a leading check, a tap toggles, no menu. */
+  select?: ItemSelect | undefined;
 }): ReactElement {
   const { item } = props;
   const navigate = useNavigate();
@@ -393,17 +430,29 @@ function LinkRowItem(props: {
     },
     { id: 'show-in-chat', label: 'Show in chat', icon: IconChat, onSelect: props.onShowInChat },
   ];
+  const select = props.select;
   return (
-    <li ref={ref} className="min-w-0">
+    <li
+      ref={ref}
+      className={select !== undefined ? 'flex min-w-0 items-center' : 'min-w-0'}
+      {...(select !== undefined ? { 'data-media-select-item': item.messageId } : {})}
+    >
+      {select !== undefined ? (
+        <SelectCheckbox checked={select.checked} onToggle={select.onToggle} />
+      ) : null}
       <PressableRow
         type="button"
         data-media-row={item.key}
-        {...gesture.handlers}
+        {...(select !== undefined ? { 'aria-pressed': select.checked } : gesture.handlers)}
         onClick={() => {
+          if (select !== undefined) {
+            select.onToggle();
+            return;
+          }
           if (gesture.consumeClickSuppression()) return;
           open();
         }}
-        className={ROW}
+        className={select !== undefined ? cn(ROW, 'flex-1') : ROW}
       >
         <span className={cn(ROW_ICON, unsafe && 'bg-warn-soft text-warn-ink')}>
           {unsafe ? (
@@ -687,6 +736,39 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
 
   const grid = kind === 'photo' || kind === 'video';
 
+  // Select mode: the item's message is the selection.
+  const selecting = props.selecting;
+  const selectOf = (item: ChipItem): ItemSelect | undefined =>
+    selecting === undefined
+      ? undefined
+      : {
+          checked: selecting.selection.has(item.messageId),
+          onToggle: () =>
+            selecting.onToggle({ messageId: item.messageId, channelId: item.channelId }),
+        };
+  /** A grid tile in select mode: the tile toggles, the check sits top right. */
+  const selectTile = (item: MediaItem, select: ItemSelect, tile: ReactElement): ReactElement => (
+    <li key={item.key} className="relative min-w-0" data-media-select-item={item.messageId}>
+      {tile}
+      <SelectCheckbox
+        checked={select.checked}
+        onToggle={select.onToggle}
+        className="absolute right-0 top-0"
+      />
+    </li>
+  );
+  /** A list row in select mode: the check leads, the row keeps its look. */
+  const selectRow = (item: MediaItem, select: ItemSelect, row: ReactElement): ReactElement => (
+    <li
+      key={item.key}
+      className="flex min-w-0 items-center"
+      data-media-select-item={item.messageId}
+    >
+      <SelectCheckbox checked={select.checked} onToggle={select.onToggle} />
+      <div className="min-w-0 flex-1">{row}</div>
+    </li>
+  );
+
   const body = loading ? (
     grid ? (
       <ul data-media-skeleton="" className={GRID}>
@@ -721,6 +803,7 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
         <MonthLabel groupKey={group.key} label={group.label} />
         <ul className={grid ? GRID : 'flex flex-col'}>
           {group.items.map((item) => {
+            const select = selectOf(item);
             if (isLinkItem(item)) {
               return (
                 <LinkRowItem
@@ -728,7 +811,31 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
                   item={item}
                   date={dateOf(item)}
                   onShowInChat={() => showInChat(item)}
+                  select={select}
                 />
+              );
+            }
+            if (select !== undefined && (kind === 'photo' || kind === 'video')) {
+              return selectTile(
+                item,
+                select,
+                kind === 'photo' ? (
+                  <PhotoTile item={item} onOpen={select.onToggle} pressed={select.checked} />
+                ) : (
+                  <VideoTile item={item} onOpen={select.onToggle} pressed={select.checked} />
+                ),
+              );
+            }
+            if (select !== undefined && kind === 'file') {
+              return selectRow(
+                item,
+                select,
+                <FileRowItem
+                  item={item}
+                  date={dateOf(item)}
+                  onOpen={select.onToggle}
+                  pressed={select.checked}
+                />,
               );
             }
             if (kind === 'photo') {
@@ -751,14 +858,18 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
                 channel?.channelType === 'dm' && channel.peerUserId === item.senderId
                   ? channel.avatarUrl
                   : null;
+              const voiceRow = (
+                <VoiceRowItem
+                  item={item}
+                  sender={mediaSenderName(item, names)}
+                  avatarUrl={avatarUrl}
+                  date={dateOf(item)}
+                />
+              );
+              if (select !== undefined) return selectRow(item, select, voiceRow);
               return (
                 <li key={item.key} className="min-w-0">
-                  <VoiceRowItem
-                    item={item}
-                    sender={mediaSenderName(item, names)}
-                    avatarUrl={avatarUrl}
-                    date={dateOf(item)}
-                  />
+                  {voiceRow}
                 </li>
               );
             }
