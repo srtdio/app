@@ -4,11 +4,14 @@ import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
-// Guard: ONE past-time format app-wide (src/lib/time.ts formatWhen: "10:27 AM"
-// today, "Yesterday", "Mon", "19 Oct", "19 Oct 2025"). Every visible date or
-// time reads through src/lib/time.ts; nothing outside it calls a locale date
-// formatter, Intl.DateTimeFormat / Intl.RelativeTimeFormat or a date-fns
-// format, and nothing reads relative ("5 min ago", "just now").
+// Guard: ONE relative time rule app-wide. Past moments read through
+// src/lib/time.ts formatRelative ("just now", "5 min ago", "3 hours ago",
+// "2 days ago", "4 months ago", "2 years ago"); due days through formatDue /
+// formatOverdue ("Due tomorrow", "Overdue 2 days"); absolute text only through
+// formatTime / formatDayLabel / formatDayRange / the picker helpers. Nothing
+// outside src/lib/time.ts calls a locale date formatter, Intl.DateTimeFormat /
+// Intl.RelativeTimeFormat or a date-fns format, or hand-rolls an "ago" string.
+// formatWhen and formatChatTime are gone, and so is the "Overdue ·" form.
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const SRC = join(ROOT, 'src');
 const CONFIG = readFileSync(join(ROOT, 'eslint.config.js'), 'utf8');
@@ -49,7 +52,14 @@ describe('time format rule: eslint.config.js', () => {
 
   it('bans the date-fns format family as an error', () => {
     expect(CONFIG).toContain("'no-restricted-imports': ['error', timeFormatImports]");
-    for (const name of ['format', 'formatDistance', 'formatDistanceToNow', 'formatRelative']) {
+    for (const name of [
+      'format',
+      'formatDistance',
+      'formatDistanceToNow',
+      'formatRelative',
+      'intlFormat',
+      'lightFormat',
+    ]) {
       expect(CONFIG).toContain(`'${name}'`);
     }
   });
@@ -82,6 +92,8 @@ describe('time format rule: lint severities', () => {
     toLocaleString: 'export const a = new Date().toLocaleString();\n',
     'Intl.DateTimeFormat': "export const a = new Intl.DateTimeFormat('en-US');\n",
     'Intl.RelativeTimeFormat': "export const a = new Intl.RelativeTimeFormat('en');\n",
+    'Intl.DateTimeFormat alias': 'export const F = Intl.DateTimeFormat;\n',
+    'Intl.DateTimeFormat call': "export const a = Intl.DateTimeFormat('en-US').format(0);\n",
     'date-fns format': "import { format } from 'date-fns';\nexport const a = format;\n",
     'date-fns formatDistanceToNow':
       "import { formatDistanceToNow } from 'date-fns';\nexport const a = formatDistanceToNow;\n",
@@ -120,15 +132,43 @@ describe('time format rule: source scan of src/**', () => {
     ).toEqual([]);
   });
 
-  it('no relative user strings ("5 min ago", "2 days ago", "just now")', () => {
+  it('no hand-rolled relative strings: "ago" and "just now" come only from formatRelative', () => {
     expect(offenders(/\bago(['"`]|\s*<\/)/)).toEqual([]);
     expect(offenders(/just now/i)).toEqual([]);
     expect(offenders(/\b(mins?|minutes?|hours?|days?|weeks?|months?|years?) ago\b/)).toEqual([]);
   });
 
-  it('src/lib/time.ts has no relative helper', () => {
-    expect(TIME).not.toMatch(/export function formatRelative\b/);
-    expect(code(TIME)).not.toMatch(/\bago['"`]|just now/);
-    expect(TIME).toContain('export function formatWhen(');
+  it('formatWhen and formatChatTime no longer exist anywhere in src/**', () => {
+    expect(TIME).not.toMatch(/\bformatWhen\b/);
+    expect(TIME).not.toMatch(/\bformatChatTime\b/);
+    expect(offenders(/\bformat(When|ChatTime)\b/)).toEqual([]);
+  });
+
+  it('no "Overdue ·" form remains (overdue reads "Overdue 2 days")', () => {
+    expect(code(TIME)).not.toMatch(/Overdue ·/);
+    expect(offenders(/Overdue ·/)).toEqual([]);
+  });
+});
+
+describe('time format rule: src/lib/time.ts is the one rule', () => {
+  it('exports the relative, due, overdue and plan-start helpers', () => {
+    for (const name of [
+      'formatRelative',
+      'formatDue',
+      'formatOverdue',
+      'formatPlanStart',
+      'daysFromToday',
+      'formatDayLabel',
+      'formatTime',
+      'formatDayRange',
+    ]) {
+      expect(TIME).toContain(`export function ${name}(`);
+    }
+  });
+
+  it('formatRelative owns the relative words', () => {
+    const body = code(TIME);
+    expect(body).toContain("'just now'");
+    expect(body).toMatch(/min ago/);
   });
 });
