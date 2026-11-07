@@ -238,7 +238,7 @@ describe('ListCardBox', () => {
 
 describe('ListCard tap target', () => {
   it('the cover button is named by the title, unread dot and preview (no copied text)', () => {
-    const html = render({ onPress: () => {}, unread: true });
+    const html = render({ onPress: () => {}, unread: true, press: {} });
     const button = /<button[^>]*data-list-card-press=""[^>]*>/.exec(html)?.[0] ?? '';
     expect(button).not.toContain('aria-label=');
     const ids = /aria-labelledby="([^"]+)"/.exec(button)?.[1]?.split(' ') ?? [];
@@ -256,11 +256,22 @@ describe('ListCard tap target', () => {
   });
 
   it('the title is a real hit target on a tappable card (it hands the click to the card)', () => {
-    const tappable = render({ onPress: () => {} });
-    expect(tappable).toMatch(
-      /<span[^>]*data-list-card-title=""[^>]*class="[^"]*pointer-events-auto/,
+    const titleTag = (html: string): string =>
+      /<span[^>]*data-list-card-title=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(titleTag(render({ onPress: () => {} }))).toContain('pointer-events-auto');
+    const still = titleTag(
+      renderToStaticMarkup(
+        <ListCard
+          picture={{ kind: 'icon', icon: IconBriefs }}
+          title="Spring launch"
+          preview="Tease the drop"
+          time="10:27 AM"
+          tag="Open"
+          menu={menu}
+        />,
+      ),
     );
-    const still = render({});
-    expect(still).not.toMatch(/data-list-card-title=""[^>]*pointer-events-auto/);
+    expect(still).toContain('data-list-card-title');
+    expect(still).not.toContain('pointer-events-auto');
   });
 });
