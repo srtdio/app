@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-// The checkpoint composer on ui/Composer (ComposerFrame): one comment composer
-// layout everywhere. "+", number, field, emoji and the round Send on ONE 44 row
-// (no paper clip); a
-// later slot keeps the same columns (its remove X in the send column); sending
-// keeps every row (the spinner sits in the send slot).
+// The checkpoint composer on ui/WritingBox (comment mode): each slot is one
+// box. The number and the field sit on the text line; at rest the round Send
+// (RowSend) sits beside them; focused or holding text, the row under the text:
+// + , Aa, emoji ... Send (no @: checkpoints carry no mentions; no mic). A later
+// slot holds its remove bin in the send slot; sending keeps every box (the
+// spinner sits in the send).
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -39,26 +40,25 @@ function button(label: string): HTMLButtonElement | undefined {
   );
 }
 
-function rows(): HTMLElement[] {
-  return Array.from(host?.querySelectorAll<HTMLElement>('[data-composer-row]') ?? []);
+function boxes(): HTMLElement[] {
+  return Array.from(host?.querySelectorAll<HTMLElement>('[data-writing-box]') ?? []);
 }
 
-/** A row's controls in order: 'field', or each button's name. */
-function order(row: HTMLElement): string[] {
-  // The side slot (data-composer-side) is a wrapper; its buttons keep their place in the row.
-  const cells = Array.from(row.children).flatMap((el) =>
-    el.hasAttribute('data-composer-side') ? Array.from(el.children) : [el],
+/** A box's row controls in order: each button's name ('send:<name>' for RowSend). */
+function rowOrder(box: HTMLElement): string[] {
+  const row = box.querySelector('[data-writing-row]');
+  if (row === null) return [];
+  return Array.from(row.querySelectorAll<HTMLButtonElement>('button')).map((b) =>
+    b.hasAttribute('data-row-send')
+      ? `send:${b.getAttribute('aria-label') ?? ''}`
+      : (b.getAttribute('aria-label') ?? ''),
   );
-  return cells.map((el) =>
-    el.hasAttribute('data-composer-field')
-      ? 'field'
-      : el.hasAttribute('data-slot-number')
-        ? 'number'
-        : (el.querySelector('[data-plus]')?.getAttribute('aria-label') ??
-          el.getAttribute('aria-label') ??
-          el.textContent ??
-          ''),
-  );
+}
+
+function focusIn(el: Element | null | undefined): void {
+  act(() => {
+    el?.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+  });
 }
 
 function type(area: HTMLTextAreaElement, value: string): void {
@@ -69,8 +69,17 @@ function type(area: HTMLTextAreaElement, value: string): void {
   });
 }
 
-describe('SlotComposer on ui/Composer', () => {
-  it('renders inside [data-composer]: "+", number, field, emoji, Send on one row', () => {
+describe('SlotComposer on ui/WritingBox', () => {
+  it('renders one WritingBox per slot in comment mode', () => {
+    act(() =>
+      root?.render(<SlotComposer onSubmit={async () => ({ ok: true })} canAttach={false} />),
+    );
+    act(() => button('+ Another')?.click());
+    expect(boxes()).toHaveLength(2);
+    for (const box of boxes()) expect(box.getAttribute('data-mode')).toBe('comment');
+  });
+
+  it('at rest: the number and the field on the text line, Send beside them', () => {
     act(() =>
       root?.render(
         <SlotComposer
@@ -80,57 +89,62 @@ describe('SlotComposer on ui/Composer', () => {
         />,
       ),
     );
-    expect(host?.querySelector('[data-composer]')).not.toBeNull();
-    const [row] = rows();
-    expect(row).toBeDefined();
-    expect(order(row as HTMLElement)).toEqual([
-      'Add attachment',
-      'number',
-      'field',
-      'Emoji',
-      'Send',
-    ]);
-    expect(button('Attach a file to checkpoint 1')).toBeUndefined();
-    expect(row?.querySelector('[data-composer-field] textarea')).not.toBeNull();
+    const [box] = boxes();
+    expect(box?.dataset.shape).toBe('line');
+    const field = box?.querySelector('[data-writing-field]');
+    expect(field?.querySelector('[data-slot-number="1"]')).not.toBeNull();
+    expect(field?.querySelector('textarea')?.getAttribute('aria-label')).toBe('Checkpoint 1');
+    expect(button('Aa')).toBeUndefined();
+    expect(button('Add attachment')).toBeUndefined();
     const send = button('Send');
-    expect(send?.className).toContain('rounded-full');
-    expect(send?.className).toContain('bg-accent');
-    for (const label of ['Emoji', 'Add attachment']) {
-      expect(button(label)?.className).toContain('rounded-full');
-      expect(button(label)?.className).not.toContain('bg-accent');
-    }
+    expect(send?.hasAttribute('data-row-send')).toBe(true);
+    expect(send?.disabled).toBe(true);
   });
 
-  it("keeps its hints and the field look is the frame's", () => {
+  it('focused: + Aa Emoji ... Send; no @, no laptop emoji popover, no paper clip', () => {
+    act(() =>
+      root?.render(
+        <SlotComposer
+          onSubmit={async () => ({ ok: true })}
+          canAttach
+          uploadFile={async () => ({ ok: true, reused: false, versionId: 'v1' })}
+        />,
+      ),
+    );
+    focusIn(host?.querySelector('textarea'));
+    const [box] = boxes();
+    expect(box?.dataset.shape).toBe('card');
+    expect(rowOrder(box as HTMLElement)).toEqual(['Add attachment', 'Aa', 'Emoji', 'send:Send']);
+    expect(button('Mention')).toBeUndefined();
+    expect(button('Attach a file to checkpoint 1')).toBeUndefined();
+  });
+
+  it("keeps its hints and the field look is the box's", () => {
     act(() =>
       root?.render(<SlotComposer onSubmit={async () => ({ ok: true })} canAttach={false} />),
     );
     const area = host?.querySelector('textarea');
     expect(area?.getAttribute('placeholder')).toBe('Add a checkpoint');
-    const field = host?.querySelector('[data-composer-field]');
-    expect(field?.className).toContain('border-field');
-    expect(field?.className).toContain('[&_textarea]:border-0');
+    const frame = host?.querySelector('[data-writing-frame]');
+    expect(frame?.className).toContain('[&_textarea]:border-0');
   });
 
-  it('a later slot keeps the columns: number, field, emoji, then its remove X in the send column', () => {
+  it('a later slot holds its remove bin in the send slot; "+ Another" sits under the boxes', () => {
     act(() =>
       root?.render(<SlotComposer onSubmit={async () => ({ ok: true })} canAttach={false} />),
     );
     act(() => button('+ Another')?.click());
-    const [first, second] = rows();
-    expect(order(first as HTMLElement)).toEqual(['number', 'field', 'Emoji', 'Send']);
-    expect(order(second as HTMLElement)).toEqual([
-      'number',
-      'field',
-      'Emoji',
-      'Remove checkpoint 2',
-    ]);
-    // "+ Another" sits under the rows, never inside one.
+    const areas = host?.querySelectorAll('textarea');
+    focusIn(areas?.[0]);
+    focusIn(areas?.[1]);
+    const [first, second] = boxes();
+    expect(rowOrder(first as HTMLElement)).toEqual(['Aa', 'Emoji', 'send:Send']);
+    expect(rowOrder(second as HTMLElement)).toEqual(['Aa', 'Emoji', 'Remove checkpoint 2']);
     const another = button('+ Another');
-    expect(rows().some((r) => r.contains(another ?? null))).toBe(false);
+    expect(boxes().some((b) => b.contains(another ?? null))).toBe(false);
   });
 
-  it('sending keeps every row; the spinner sits in the round Send', async () => {
+  it('sending keeps every box; the spinner sits in the round Send', async () => {
     let resolve: (r: { ok: true }) => void = () => undefined;
     const onSubmit = vi.fn(
       () =>
@@ -142,26 +156,23 @@ describe('SlotComposer on ui/Composer', () => {
     const area = host?.querySelector('textarea');
     if (area == null) throw new Error('no slot');
     type(area, 'Swap the cover photo');
+    expect(button('Send')?.disabled).toBe(false);
 
     await act(async () => {
       button('Send')?.click();
     });
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(rows()).toHaveLength(1);
-    expect(host?.querySelector('[data-composer]')?.getAttribute('data-composer-state')).toBe(
-      'sending',
-    );
+    expect(boxes()).toHaveLength(1);
+    expect(boxes()[0]?.getAttribute('data-composer-state')).toBe('sending');
     const send = button('Send');
     expect(send?.getAttribute('aria-busy')).toBe('true');
-    expect(send?.querySelector('[data-busy-arc]')).not.toBeNull();
-    expect(host?.querySelector('[data-composer-field] textarea')).not.toBeNull();
+    expect(send?.querySelector('[data-upload-arc]')).not.toBeNull();
+    expect(host?.querySelector('[data-writing-field] textarea')).not.toBeNull();
 
     await act(async () => {
       resolve({ ok: true });
     });
-    expect(rows()).toHaveLength(1);
-    expect(host?.querySelector('[data-composer]')?.getAttribute('data-composer-state')).toBe(
-      'idle',
-    );
+    expect(boxes()).toHaveLength(1);
+    expect(boxes()[0]?.getAttribute('data-composer-state')).toBe('idle');
   });
 });

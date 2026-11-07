@@ -1814,13 +1814,15 @@ function PresetFields(props: {
     const root = formatRef.current;
     if (root === null) return undefined;
     function mark(el: HTMLElement): void {
-      el
-        .querySelector('[aria-haspopup="listbox"]')
-        ?.setAttribute('data-induction', INDUCTION_KEYS.postSheetFormat);
+      el.querySelector('[aria-haspopup="listbox"]')?.setAttribute(
+        'data-induction',
+        INDUCTION_KEYS.postSheetFormat,
+      );
       if (singleIndex < 0) return;
-      el
-        .querySelectorAll('[role="option"]')
-        [singleIndex]?.setAttribute('data-induction', INDUCTION_KEYS.postSheetFormatSingle);
+      el.querySelectorAll('[role="option"]')[singleIndex]?.setAttribute(
+        'data-induction',
+        INDUCTION_KEYS.postSheetFormatSingle,
+      );
     }
     mark(root);
     const observer = new MutationObserver(() => mark(root));
