@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Every comment file opens in-app: a PDF, a docx and a photo from a comment
 // open the in-app viewers with the over-the-app bar ("<" Back, name or
-// "{Name} · {formatAgo}", Download), never a new tab. Chat (no backBar) keeps
-// its X bar unchanged.
+// "{Name} · {formatAgo}", Download), never a new tab. Chat viewers have the
+// same "<" bar (D3).
 import { act } from 'react';
 import type { ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -84,7 +84,7 @@ describe('comment files open in-app', () => {
     const opened = spyNewTab();
     const attachments = toCommentFileAttachments(['v-pdf'], FILES);
     const host = mount(
-      <MessageAttachments attachments={attachments} cache={cache} presignEnabled backBar />,
+      <MessageAttachments attachments={attachments} cache={cache} presignEnabled />,
     );
     expect(host.textContent).toContain('Launch deck.pdf');
     openCard(host, 'Launch deck.pdf');
@@ -102,7 +102,7 @@ describe('comment files open in-app', () => {
     const opened = spyNewTab();
     const attachments = toCommentFileAttachments(['v-doc'], FILES);
     const host = mount(
-      <MessageAttachments attachments={attachments} cache={cache} presignEnabled backBar />,
+      <MessageAttachments attachments={attachments} cache={cache} presignEnabled />,
     );
     openCard(host, 'Brief.docx');
     const sheet = viewer();
@@ -165,7 +165,7 @@ describe('comment files open in-app', () => {
       preview: async () => null,
     };
     const close = (): void => {};
-    mount(<FileViewerSheet name="deck.pdf" kind="pdf" source={source} onClose={close} backBar />);
+    mount(<FileViewerSheet name="deck.pdf" kind="pdf" source={source} onClose={close} />);
     for (let i = 0; i < 6; i++) {
       await act(async () => {
         await new Promise((r) => setTimeout(r, 0));

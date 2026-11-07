@@ -1105,12 +1105,6 @@ export interface FileViewerProps {
   sentAt?: string | undefined;
   /** Chat home: a "Show in chat" text button in a bottom bar opens the chat at the file's message. */
   onShowInChat?: (() => void) | undefined;
-  /**
-   * No longer needed: every viewer has the over-the-app bar ("<" Back on the
-   * leading edge, the title, a PDF's "Page {i} of {n}" under it). Ignored;
-   * kept only so callers that still pass it compile. Callers drop it.
-   */
-  backBar?: boolean | undefined;
 }
 
 /**
@@ -1438,8 +1432,6 @@ export function FileViewerFallback(props: {
   kind: ViewerKind;
   source: FileViewerSource;
   onClose: () => void;
-  /** No longer needed: the fallback always leaves with "<" (Back). Ignored. */
-  back?: boolean | undefined;
 }): ReactElement {
   const toneName = viewerTone(props.kind);
   const tone = TONES[toneName];

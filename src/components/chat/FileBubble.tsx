@@ -130,8 +130,6 @@ interface FileBubbleProps {
   attachment: MessageAttachment;
   cache: PresignCache;
   presignEnabled: boolean;
-  /** Comments: the viewer opens with the over-the-app bar ("<" Back). Chat omits it. */
-  backBar?: boolean | undefined;
   /** Stops this own send while the file uploads (the UploadRing's stop square). */
   onCancel?: (() => void) | undefined;
 }
@@ -345,7 +343,6 @@ export function FileBubble({
   attachment,
   cache,
   presignEnabled,
-  backBar,
   onCancel,
 }: FileBubbleProps): ReactElement {
   const kind = classifyFileKind(attachment.mime);
@@ -431,7 +428,6 @@ export function FileBubble({
           source={source}
           onClose={() => setOpen(false)}
           onLoadError={() => setOpenFailed(true)}
-          {...(backBar === true ? { backBar: true } : {})}
         />
       ) : null}
     </div>

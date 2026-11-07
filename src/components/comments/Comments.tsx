@@ -2723,7 +2723,6 @@ export function Comments({
                   attachments={attachments}
                   cache={presignCache}
                   presignEnabled={presignEnabled}
-                  backBar
                   onImageClick={(attachment) => {
                     const nav = commentImageNav(attachments, attachment.assetId);
                     if (nav.images.length > 0) {
