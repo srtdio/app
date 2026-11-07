@@ -583,69 +583,69 @@ function AppLayoutBody() {
           <BarTintSync tint={barTint} />
           <TopbarActionsProvider>
             <PalettePickProvider openPick={openPick}>
-            <div className={chrome.shellClassName}>
-              <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
-              <div className={chrome.columnClassName}>
-                <div className={chrome.topbarClassName}>
-                  <Topbar
-                    workspaceName={workspaceDisplayName}
-                    {...(profile !== null ? { currentUserName: profile.display_name } : {})}
-                    currentUserAvatarUrl={profile?.avatar_url ?? null}
-                    onOpenPalette={openPalette}
-                    onOpenAvatar={() => setAvatarOpen(true)}
-                    {...(isPlatformOperator
-                      ? {
-                          cockpitSlot: (
-                            <Suspense fallback={null}>
-                              <CockpitDot />
-                            </Suspense>
-                          ),
-                        }
-                      : {})}
-                  />
-                </div>
-                {/* Its own sibling above main: showing it never remounts the Outlet. */}
-                <StorageWarningBanner />
-                {/* Keyed by workspace: a switch remounts the route, so the new workspace
+              <div className={chrome.shellClassName}>
+                <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
+                <div className={chrome.columnClassName}>
+                  <div className={chrome.topbarClassName}>
+                    <Topbar
+                      workspaceName={workspaceDisplayName}
+                      {...(profile !== null ? { currentUserName: profile.display_name } : {})}
+                      currentUserAvatarUrl={profile?.avatar_url ?? null}
+                      onOpenPalette={openPalette}
+                      onOpenAvatar={() => setAvatarOpen(true)}
+                      {...(isPlatformOperator
+                        ? {
+                            cockpitSlot: (
+                              <Suspense fallback={null}>
+                                <CockpitDot />
+                              </Suspense>
+                            ),
+                          }
+                        : {})}
+                    />
+                  </div>
+                  {/* Its own sibling above main: showing it never remounts the Outlet. */}
+                  <StorageWarningBanner />
+                  {/* Keyed by workspace: a switch remounts the route, so the new workspace
                   paints its own kept view or skeleton and nothing of the old one stays. */}
-                <main className={chrome.mainClassName}>
-                  {switchPending ? null : <Outlet key={workspaceId ?? 'none'} />}
-                </main>
-                {/* The operator's Cockpit panel: fixed under the top bar on laptop
+                  <main className={chrome.mainClassName}>
+                    {switchPending ? null : <Outlet key={workspaceId ?? 'none'} />}
+                  </main>
+                  {/* The operator's Cockpit panel: fixed under the top bar on laptop
                   (main makes room through --side-panel-w), a Sheet on phone.
                   Nothing renders here for anyone else. */}
-                {isPlatformOperator ? (
-                  <Suspense fallback={null}>
-                    <CockpitPanel />
-                  </Suspense>
-                ) : null}
+                  {isPlatformOperator ? (
+                    <Suspense fallback={null}>
+                      <CockpitPanel />
+                    </Suspense>
+                  ) : null}
+                </div>
+                {chrome.showBottomTabs ? <BottomTabs /> : null}
+                <BodyToastViewport />
+                <CommandPalette
+                  open={paletteOpen}
+                  onClose={closePalette}
+                  inputRef={paletteInputRef}
+                  workspaceId={workspaceId}
+                  workspaceKey={workspaceKey}
+                  userId={userId}
+                  {...(pick !== null
+                    ? {
+                        pickKinds: pick.pickKinds,
+                        multi: pick.multi,
+                        verb: pick.verb,
+                        onPick: pick.onPick,
+                        ...(pick.label !== undefined ? { pickLabel: pick.label } : {}),
+                      }
+                    : {})}
+                />
+                <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
+                <PersonCardHost />
+                <WorkspaceSwitcher />
+                <WorkspaceFullSheet />
+                <InductionGuide />
+                <MarksPanel />
               </div>
-              {chrome.showBottomTabs ? <BottomTabs /> : null}
-              <BodyToastViewport />
-              <CommandPalette
-                open={paletteOpen}
-                onClose={closePalette}
-                inputRef={paletteInputRef}
-                workspaceId={workspaceId}
-                workspaceKey={workspaceKey}
-                userId={userId}
-                {...(pick !== null
-                  ? {
-                      pickKinds: pick.pickKinds,
-                      multi: pick.multi,
-                      verb: pick.verb,
-                      onPick: pick.onPick,
-                      ...(pick.label !== undefined ? { pickLabel: pick.label } : {}),
-                    }
-                  : {})}
-              />
-              <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
-              <PersonCardHost />
-              <WorkspaceSwitcher />
-              <WorkspaceFullSheet />
-              <InductionGuide />
-              <MarksPanel />
-            </div>
             </PalettePickProvider>
           </TopbarActionsProvider>
         </InboxStoreProvider>

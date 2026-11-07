@@ -2,9 +2,10 @@
 // The post picker's link mode (a plan concept's "Link a post"): the same-day
 // section first, then other dates newest first; single select (accent row and
 // check); "Link this post" with nothing picked shows "Pick a post first.";
-// search across every post (no stage filter, drafts included); an empty
-// search is NoResults with Clear search. Plus the regression guard: the post
-// and draft modes keep their titles, Done footer, reads and stage filters.
+// no search box: the header's search opens the palette in pick mode (posts,
+// one pick) and the pick links like a tap and Link this post. Plus the
+// regression guard: the post and draft modes keep their titles, Done footer,
+// reads and stage filters.
 
 import { act } from 'react';
 import type { ReactNode } from 'react';
@@ -63,11 +64,18 @@ vi.mock('@/lib/chat/post-covers', () => ({
   requestPostCovers: async () => undefined,
   coverFor: () => null,
 }));
-// The Sheet renders its title, body and footer inline (no portal or motion).
+// The Sheet renders its title, header verb, body and footer inline (no portal or motion).
 vi.mock('@/components/ui/Sheet', () => ({
-  Sheet: (p: { open: boolean; title: string; children: ReactNode; footer?: ReactNode }) =>
+  Sheet: (p: {
+    open: boolean;
+    title: string;
+    headerAction?: ReactNode;
+    children: ReactNode;
+    footer?: ReactNode;
+  }) =>
     p.open ? (
       <div data-sheet-title={p.title}>
+        <div data-sheet-actions="">{p.headerAction}</div>
         {p.children}
         <div data-sheet-footer="">{p.footer}</div>
       </div>
@@ -75,6 +83,8 @@ vi.mock('@/components/ui/Sheet', () => ({
 }));
 
 import { PostPicker, LINK_CONFIRM, LINK_PICK_FIRST_HINT } from '@/components/chat/PostPicker';
+import { PalettePickProvider, type PalettePickRequest } from '@/components/shell/CommandPalette';
+import type { WorkspaceHit } from '@/lib/search/workspace-search';
 import { searchStageFilter, pickerReads } from '@/components/chat/post-picker';
 import type { PostCardFields } from '@srtdio/posts';
 import type { PostPickerPageRow } from '../../../packages/posts/src/reads';
@@ -122,6 +132,8 @@ beforeEach(() => {
   db.reads = [];
   db.reply = (read) => {
     if (hasFilter(read, 'gte', 'target_date')) return { data: [SAME] };
+    // readPostsByIds: a palette pick not on screen.
+    if (hasFilter(read, 'in', 'id')) return { data: [row('Diwali promo', { stage: 'draft' })] };
     const search = read.filters.find((f) => f.method === 'or');
     if (search !== undefined) {
       const text = String(search.args[0]);
@@ -146,23 +158,31 @@ interface LinkProps {
   onConfirm?: () => void;
 }
 
+const asked: { request: PalettePickRequest | null } = { request: null };
+
 async function renderLink(props: LinkProps = {}): Promise<void> {
   await act(async () => {
     root = createRoot(host!);
     root.render(
-      <PostPicker
-        open
-        mode="link"
-        onClose={() => undefined}
-        selected={[]}
-        onToggle={() => undefined}
-        selectedBriefs={[]}
-        onToggleBrief={() => undefined}
-        linkDay="2026-11-06"
-        linkSelectedId={props.selectedId ?? null}
-        onLinkSelect={props.onSelect ?? (() => undefined)}
-        onLinkConfirm={props.onConfirm ?? (() => undefined)}
-      />,
+      <PalettePickProvider
+        openPick={(request) => {
+          asked.request = request;
+        }}
+      >
+        <PostPicker
+          open
+          mode="link"
+          onClose={() => undefined}
+          selected={[]}
+          onToggle={() => undefined}
+          selectedBriefs={[]}
+          onToggleBrief={() => undefined}
+          linkDay="2026-11-06"
+          linkSelectedId={props.selectedId ?? null}
+          onLinkSelect={props.onSelect ?? (() => undefined)}
+          onLinkConfirm={props.onConfirm ?? (() => undefined)}
+        />
+      </PalettePickProvider>,
     );
   });
   await act(async () => {
@@ -178,15 +198,30 @@ function text(el: Element | null): string {
   return el?.textContent ?? '';
 }
 
-async function typeSearch(value: string): Promise<void> {
-  const input = document.querySelector<HTMLInputElement>('input')!;
+function postHit(id: string): WorkspaceHit {
+  return {
+    kind: 'post',
+    id,
+    parentId: null,
+    channelId: null,
+    entityType: 'post',
+    number: 1,
+    title: id,
+    snippet: '',
+    actorUserId: null,
+    actorIsMember: false,
+    createdAt: '2026-10-01T00:00:00Z',
+  };
+}
+
+/** Tap the header search, then hand the palette's picks back. */
+async function pickFromPalette(hits: WorkspaceHit[]): Promise<void> {
+  asked.request = null;
+  const button = document.querySelector<HTMLButtonElement>('[data-palette-pick-open]')!;
+  await act(async () => button.click());
   await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-    setter?.call(input, value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, 260));
+    asked.request?.onPick(hits);
+    await new Promise((r) => setTimeout(r, 0));
   });
 }
 
@@ -246,19 +281,37 @@ describe('link mode', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it('search reaches every post on any date; an empty search is NoResults with Clear search', async () => {
+  it('no search box; the header search asks the palette for one post', async () => {
     await renderLink();
-    await typeSearch('Bhai');
-    expect(rowButtons().map((b) => text(b.querySelector('.text-lg')))).toEqual(['Bhai Dooj']);
-    const search = db.reads.find((r) => r.filters.some((f) => f.method === 'or'));
-    expect(search !== undefined && hasFilter(search, 'neq', 'stage')).toBe(false);
-    expect(search !== undefined && hasFilter(search, 'eq', 'stage')).toBe(false);
-    await typeSearch('laddoo');
-    expect(document.body.textContent).toContain('Try another word for "laddoo".');
-    const clear = [...document.querySelectorAll('button')].find((b) => text(b) === 'Clear search');
-    expect(clear).toBeDefined();
-    expect(document.body.textContent?.toLowerCase()).not.toContain('no matches');
-    expect(document.body.textContent?.toLowerCase()).not.toContain('empty');
+    expect(document.querySelector('input')).toBeNull();
+    const button = document.querySelector<HTMLButtonElement>('[data-palette-pick-open]');
+    expect(button?.getAttribute('aria-label')).toBe('Search posts');
+    await act(async () => button?.click());
+    expect(asked.request?.pickKinds).toEqual(['post']);
+    expect(asked.request?.multi).toBe(false);
+    expect(asked.request?.verb).toBe('Add');
+  });
+
+  it('a palette pick on screen links it with no read: select, then Link this post', async () => {
+    const onSelect = vi.fn();
+    const onConfirm = vi.fn();
+    await renderLink({ onSelect, onConfirm });
+    const before = db.reads.length;
+    await pickFromPalette([postHit('Bhai Dooj')]);
+    expect(db.reads.length).toBe(before);
+    expect((onSelect.mock.calls[0]?.[0] as PostCardFields).id).toBe('Bhai Dooj');
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('a palette pick not on screen comes through one by-id read (any stage in link mode)', async () => {
+    const onSelect = vi.fn();
+    const onConfirm = vi.fn();
+    await renderLink({ onSelect, onConfirm });
+    await pickFromPalette([postHit('Diwali promo')]);
+    const byId = db.reads.filter((r) => hasFilter(r, 'in', 'id'));
+    expect(byId).toHaveLength(1);
+    expect((onSelect.mock.calls[0]?.[0] as PostCardFields).id).toBe('Diwali promo');
+    expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 });
 

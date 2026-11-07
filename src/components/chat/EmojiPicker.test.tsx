@@ -82,7 +82,10 @@ describe('EmojiPicker parts', () => {
     const top = EmojiPickerTop({ trailing: close });
     expect(all(top).some((e) => e.type === 'input')).toBe(false);
     expect(all(top).some((e) => e.props['data-emoji-close'] !== undefined)).toBe(true);
-    const source = readFileSync(fileURLToPath(new URL('./EmojiPicker.tsx', import.meta.url)), 'utf8');
+    const source = readFileSync(
+      fileURLToPath(new URL('./EmojiPicker.tsx', import.meta.url)),
+      'utf8',
+    );
     expect(source).not.toContain('data-emoji-search');
     expect(source).not.toContain('<input');
   });

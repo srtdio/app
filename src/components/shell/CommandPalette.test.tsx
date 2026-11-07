@@ -60,7 +60,12 @@ import {
   namesNeeded,
   PaletteBody,
   paletteSections,
+  pickFooterLabel,
+  pickMatches,
+  pickPillLabel,
+  pickZeroCopy,
   resolvePaletteNames,
+  togglePicked,
   type PaletteItem,
   type PaletteSection,
   type ResultGroup,
@@ -851,8 +856,194 @@ describe('recent titles freshness pass', () => {
   it('a workspace key arriving while the palette is open does not start a second pass', () => {
     // The key is read through a ref at pass time, never an effect dependency.
     expect(effect).toContain('workspaceKey: workspaceKeyRef.current');
-    expect(effect).toContain('}, [open, workspaceId, userId]);');
+    expect(effect).toContain('}, [open, pickMode, workspaceId, userId]);');
     expect(effect).not.toMatch(/\}, \[[^\]]*workspaceKey[^\]]*\]\);/);
     expect(src).toContain('workspaceKeyRef.current = workspaceKey;');
+  });
+});
+
+describe("CommandPalette pick mode (a picker's search)", () => {
+  const props = {
+    open: true,
+    onClose: () => {},
+    workspaceId: WS,
+    workspaceKey: 'GBL',
+    userId: ME,
+  };
+
+  function pickSections(
+    query: string,
+    search: PaletteSearchState,
+    kinds: Parameters<typeof pickMatches>[1],
+  ) {
+    return paletteSections({
+      query,
+      search,
+      recents: [],
+      expanded: new Set(),
+      workspaceId: WS,
+      workspaceKey: 'GBL',
+      nowMs: NOW,
+      timeZone: 'UTC',
+      pick: kinds,
+    });
+  }
+
+  const mixed = ready(
+    'diwali',
+    [
+      wsHit('person', 0, { title: 'Diwali Das', snippet: 'ddas' }),
+      wsHit('post', 1),
+      wsHit('post', 2),
+      wsHit('post', 3),
+      wsHit('post', 4),
+      wsHit('post', 5),
+      wsHit('post', 6),
+      wsHit('brief', 7),
+      wsHit('chat_group', 8),
+      wsHit('plan_item', 9),
+      wsHit('plan_item', 10, { parentId: null }),
+    ],
+    [chatHit],
+    { post: 40 },
+  );
+
+  it('shows only the picked kinds, in the RESULT_GROUPS order, no chat, no "Show all"', () => {
+    const s = pickSections('diwali', mixed, ['chat_group', 'person']);
+    expect(s.map((x) => x.label)).toEqual(['People', 'Groups']);
+    const posts = pickSections('diwali', mixed, ['post']);
+    expect(posts.map((x) => x.label)).toEqual(['Posts']);
+    // Every fetched row (the full page), never a "more" row.
+    expect(posts[0]?.items).toHaveLength(6);
+    expect(posts[0]?.items.some((i) => i.type === 'more')).toBe(false);
+    // Each row carries its hit for onPick.
+    const first = posts[0]?.items[0];
+    expect(first?.type === 'result' ? first.hit?.id : null).toBe('post1');
+  });
+
+  it('a bank idea is a plan item with no plan', () => {
+    expect(pickMatches(wsHit('plan_item', 10, { parentId: null }), ['bank_idea'])).toBe(true);
+    expect(pickMatches(wsHit('plan_item', 9), ['bank_idea'])).toBe(false);
+    expect(pickMatches(wsHit('post', 1), ['bank_idea'])).toBe(false);
+    const s = pickSections('diwali', mixed, ['bank_idea']);
+    expect(s.map((x) => x.label)).toEqual(['Plan items']);
+    expect(s[0]?.items.map((i) => i.id)).toEqual(['plan_item-plan_item10']);
+  });
+
+  it('an empty search shows no Recent, only the pick zero line', () => {
+    expect(pickSections('', mixed, ['post'])).toEqual([]);
+    const tree = PaletteBody({
+      query: '',
+      search: IDLE,
+      sections: [],
+      active: 0,
+      onHover: () => {},
+      onPick: () => {},
+      onRetry: () => {},
+      pick: { picked: new Set(), zeroCopy: pickZeroCopy(['person', 'chat_group'], 'Chats') },
+    });
+    expect(texts(tree)).toContain('Chats show up here.');
+    expect(texts(tree)).not.toContain(RECENT_ZERO_COPY);
+  });
+
+  it('the pill reads "<Kind> only"; the footer "Send N" / "Add N"', () => {
+    expect(pickPillLabel(['person', 'chat_group'], 'Chats')).toBe('Chats only');
+    expect(pickPillLabel(['plan'])).toBe('Plans only');
+    expect(pickPillLabel(['bank_idea'])).toBe('Ideas only');
+    expect(pickFooterLabel('Send', 2)).toBe('Send 2');
+    expect(pickFooterLabel('Add', 1)).toBe('Add 1');
+  });
+
+  it('a tap ticks with ui/SelectCheck instead of opening', () => {
+    const s = pickSections('diwali', mixed, ['post']);
+    const picked: PaletteItem[] = [];
+    const tree = PaletteBody({
+      query: 'diwali',
+      search: mixed,
+      sections: s,
+      active: 0,
+      onHover: () => {},
+      onPick: (item) => picked.push(item),
+      onRetry: () => {},
+      pick: { picked: new Set(['post-post2']), zeroCopy: '' },
+    });
+    const rows = findAll(tree, 'data-palette-pick');
+    expect(rows).toHaveLength(6);
+    const states = rows.map((el) => (el.props as Record<string, string>)['data-palette-pick']);
+    expect(states.filter((x) => x === 'on')).toHaveLength(1);
+    // The one select circle (ui/SelectCheck) on every row, on for the ticked one.
+    const checks = findAll(tree, 'data-select-check').map(
+      (el) => (el.props as Record<string, string>)['data-select-check'],
+    );
+    expect(checks).toHaveLength(6);
+    expect(checks.filter((x) => x === 'on')).toHaveLength(1);
+    // Selected is the tick in pick mode.
+    const ticked = rows.find(
+      (el) => (el.props as Record<string, unknown>)['aria-selected'] === true,
+    );
+    expect((ticked?.props as Record<string, string>)['data-palette-item']).toBe('post-post2');
+    (rows[0]?.props as { onClick: () => void }).onClick();
+    expect(picked.map((i) => i.id)).toEqual(['post-post1']);
+  });
+
+  it('ticks keep tick order; single pick replaces; a second tap clears', () => {
+    const a = wsHit('post', 1);
+    const b = wsHit('post', 2);
+    const multi = togglePicked(togglePicked(new Map(), 'b', b, true), 'a', a, true);
+    expect([...multi.values()]).toEqual([b, a]);
+    expect([...togglePicked(multi, 'b', b, true).keys()]).toEqual(['a']);
+    const single = togglePicked(togglePicked(new Map(), 'a', a, false), 'b', b, false);
+    expect([...single.keys()]).toEqual(['b']);
+    expect(togglePicked(single, 'b', b, false).size).toBe(0);
+  });
+
+  it('opens over the picker sheet with the pill and a disabled "Send 0", reading nothing', () => {
+    spy.clientCalls.length = 0;
+    const onPick = vi.fn();
+    const tree = CommandPalette({
+      ...props,
+      pickKinds: ['person', 'chat_group'],
+      multi: true,
+      verb: 'Send',
+      pickLabel: 'Chats',
+      onPick,
+    });
+    const overlay = findAll(tree, 'data-palette-overlay')[0];
+    expect((overlay?.props as { className: string }).className).toContain('z-dialog');
+    expect((overlay?.props as Record<string, string>)['data-palette-mode']).toBe('pick');
+    const all = texts(tree);
+    expect(all).toContain('Chats only');
+    expect(all).toContain('Send 0');
+    expect(all).toContain('Chats show up here.');
+    expect(all).not.toContain('Recent');
+    const footer = findAll(tree, 'data-palette-pick-footer')[0];
+    const button = findAll(footer, 'disabled')[0];
+    expect((button?.props as { disabled: boolean }).disabled).toBe(true);
+    // Nothing ticked: the footer hands nothing back.
+    (button?.props as { onClick: () => void }).onClick();
+    expect(onPick).not.toHaveBeenCalled();
+    const input = findAll(tree, 'placeholder')[0];
+    expect((input?.props as { placeholder: string }).placeholder).toBe('Search chats');
+    expect(spy.clientCalls).toEqual([]);
+  });
+
+  it('normal mode is unchanged: no pill, no footer, the sheet layer', () => {
+    const tree = CommandPalette(props);
+    expect(findAll(tree, 'data-palette-pick-pill')).toHaveLength(0);
+    expect(findAll(tree, 'data-palette-pick-footer')).toHaveLength(0);
+    const overlay = findAll(tree, 'data-palette-overlay')[0];
+    expect((overlay?.props as { className: string }).className).toContain('z-sheet');
+  });
+
+  it('pick mode reads less: full page, no counts, no chat search (source)', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('./CommandPalette.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(src).toContain('perKind: full || pickMode ? PER_KIND_FULL : PER_KIND_PREVIEW');
+    expect(src).toContain('counts: !full && !pickMode');
+    expect(src).toMatch(
+      /pickMode\s*\?\s*Promise\.resolve\(\{ ok: true as const, data: \{ hits: \[\], next: null \} \}\)/,
+    );
   });
 });

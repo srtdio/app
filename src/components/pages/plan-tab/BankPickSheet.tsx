@@ -287,7 +287,10 @@ export function BankPickSheet(props: {
     );
     const idea = res.ok ? res.data.find((i) => i.id === found.find.id) : undefined;
     if (idea === undefined) {
-      showToast({ title: errorText('load the idea', res.ok ? null : res.error.message), tone: 'error' });
+      showToast({
+        title: errorText('load the idea', res.ok ? null : res.error.message),
+        tone: 'error',
+      });
       return;
     }
     await pick(idea);

@@ -54,7 +54,11 @@ function channel(id: string, type: ChannelSummary['channelType'], peer: string |
   } satisfies ChannelSummary;
 }
 
-function hit(kind: WorkspaceHit['kind'], id: string, channelId: string | null = null): WorkspaceHit {
+function hit(
+  kind: WorkspaceHit['kind'],
+  id: string,
+  channelId: string | null = null,
+): WorkspaceHit {
   return {
     kind,
     id,
@@ -96,7 +100,10 @@ describe('ForwardPicker search: the palette in pick mode', () => {
   });
 
   it('asks for people and groups, many at once, "Send N"', () => {
-    const src = readFileSync(fileURLToPath(new URL('./ForwardPicker.tsx', import.meta.url)), 'utf8');
+    const src = readFileSync(
+      fileURLToPath(new URL('./ForwardPicker.tsx', import.meta.url)),
+      'utf8',
+    );
     expect(src).toContain("pickKinds: ['person', 'chat_group']");
     expect(src).toContain('multi: true');
     expect(src).toContain("verb: 'Send'");

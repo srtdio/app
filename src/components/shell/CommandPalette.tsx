@@ -118,7 +118,9 @@ export function PalettePickProvider(props: {
   children: ReactNode;
 }): ReactElement {
   return (
-    <PalettePickContext.Provider value={props.openPick}>{props.children}</PalettePickContext.Provider>
+    <PalettePickContext.Provider value={props.openPick}>
+      {props.children}
+    </PalettePickContext.Provider>
   );
 }
 
