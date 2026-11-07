@@ -278,6 +278,8 @@ test.describe('iPhone', () => {
     await expect(row).toBeVisible();
     await hold(page, bubbleWith(page, line));
     await menu(page).locator('[data-menu-item="delete"]').click();
+    // Delete opens the delete sheet; a fresh own message offers Delete for everyone.
+    await page.getByTestId('delete-sheet').locator('[data-delete-choice="everyone"]').click();
     // X7 FT39: a text message deletes behind a 4s Undo instead of the confirm.
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeVisible();
