@@ -60,13 +60,13 @@ export interface ListCardProps {
   preview?: ReactNode;
   /** data-* hooks on the preview line. */
   previewHooks?: ListCardHooks;
-  /** Line 3: the time or date (meta role); '' or absent shows none. */
+  /** Line 3, after the tag and " · ": the time (meta role); '' or absent shows none. */
   time?: ReactNode;
   /** data-* hooks on the time. */
   timeHooks?: ListCardHooks;
   /** The time is overdue: the bad token instead of fg-3 (never for approved). */
   timeBad?: boolean;
-  /** Line 3: the one grey tag (ui/Tag neutral). */
+  /** Line 3 first: the one grey tag (ui/Tag neutral). */
   tag?: string | undefined;
   /** data-* hooks on the tag. */
   tagHooks?: ListCardHooks;
@@ -134,7 +134,7 @@ export const LIST_CARD_PREVIEW = cn(
   'line-clamp-2 min-h-9 break-words [overflow-wrap:anywhere]',
 );
 
-/** Line 3: time, tag, space, ⋮; one 20 line (the 44 ⋮ keeps its box, CONTROL_IN_LINE). */
+/** Line 3: tag, " · ", time, space, ⋮; one 20 line (the 44 ⋮ keeps its box, CONTROL_IN_LINE). */
 export const LIST_CARD_LINE3 = 'flex h-5 min-w-0 items-center gap-2';
 
 /** The unread dot: 8px, round, fg ink. */
@@ -204,7 +204,7 @@ function Picture({
  * Left: the 72 picture. Right, three lines:
  *   1. title (heading) + the unread dot;
  *   2. preview (secondary), 2 lines, always 2 lines tall;
- *   3. time (meta) + one grey Tag + space + ⋮ (the trailing rule).
+ *   3. one grey Tag + " · " + time (meta) + space + ⋮ (the trailing rule).
  * Three roles (heading, secondary, meta) plus the tag. Every card is the same
  * height: 1 + 16 + max(72, 20 + 4 + 36 + 4 + 20) + 16 + 1 = 118 (border, padding,
  * the text column; the 72 picture never sets it).
@@ -247,6 +247,10 @@ export function ListCard({
   ...rest
 }: ListCardProps) {
   const tapped = onPress !== undefined || cover !== undefined;
+  // Line 3 reads tag, " · ", time: the tag comes first so a ticking time never
+  // moves it; with no tag the time starts the line.
+  const hasTag = tag !== undefined && tag !== '';
+  const hasTime = time !== undefined && time !== '';
   const trailing = check ?? menu;
   // The cover button is named by what the card shows (title, unread, preview)
   // unless the caller gives its own aria-label; no copied text.
@@ -315,7 +319,21 @@ export function ListCard({
             {preview}
           </span>
           <div data-list-card-line="3" className={LIST_CARD_LINE3}>
-            {time !== undefined && time !== '' ? (
+            {hasTag ? (
+              <span data-list-card-tag="" {...tagHooks} className="flex min-w-0 shrink">
+                <Tag label={tag} tone="neutral" className="truncate" />
+              </span>
+            ) : null}
+            {hasTag && hasTime ? (
+              <span
+                data-list-card-sep=""
+                aria-hidden="true"
+                className={textRole('meta', 'shrink-0')}
+              >
+                ·
+              </span>
+            ) : null}
+            {hasTime ? (
               <span
                 data-list-card-time=""
                 {...(timeBad ? { 'data-list-card-time-bad': '' } : {})}
@@ -323,11 +341,6 @@ export function ListCard({
                 className={textRole('meta', cn('shrink-0', timeBad && 'text-bad'))}
               >
                 {time}
-              </span>
-            ) : null}
-            {tag !== undefined && tag !== '' ? (
-              <span data-list-card-tag="" {...tagHooks} className="flex min-w-0 shrink">
-                <Tag label={tag} tone="neutral" className="truncate" />
               </span>
             ) : null}
             <span className="flex-1" />
