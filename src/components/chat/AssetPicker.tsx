@@ -291,7 +291,7 @@ export function AssetGridSkeleton(): ReactElement {
         <li
           key={`bone-${i}`}
           data-skeleton-tile=""
-          className="aspect-square rounded-xl border bg-panel lit-card"
+          className="aspect-square rounded-lg bg-panel-2"
         />
       ))}
     </ul>
@@ -362,8 +362,8 @@ export function AssetTile(props: {
         card
         onClick={() => props.onToggle(asset)}
         className={cn(
-          'flex flex-col gap-1 border bg-panel p-1 mv-tint',
-          props.active ? 'lit-selected' : 'lit-card',
+          'flex flex-col gap-1 border p-1 mv-tint',
+          props.active ? 'lit-selected' : 'border-transparent',
         )}
       >
         <span className="relative block overflow-hidden rounded-lg lit-pill">

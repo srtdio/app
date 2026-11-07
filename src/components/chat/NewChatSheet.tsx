@@ -382,23 +382,27 @@ export function NewChatSheet(props: NewChatSheetProps): ReactElement {
     if (mode === 'choose') {
       return (
         <div className="flex flex-col gap-2">
-          <PressableRow
-            className="flex items-center gap-2 border border-border bg-panel px-4 text-base font-medium text-fg lit-card"
-            onClick={() => setMode('dm')}
-          >
-            <IconUser size={ICON_SIZE.inline} />
-            New direct message
-          </PressableRow>
-          <PressableRow
-            className="flex items-center gap-2 border border-border bg-panel px-4 text-base font-medium text-fg lit-card disabled:cursor-not-allowed disabled:text-fg-2 disabled:hover:bg-panel"
-            disabled={blocked}
-            aria-describedby={blocked ? 'group-limit-note' : undefined}
-            data-new-group-row=""
-            onClick={() => setMode('group')}
-          >
-            <IconChat size={ICON_SIZE.inline} />
-            New group
-          </PressableRow>
+          <div className="flex flex-col divide-y divide-border border-y border-border">
+            <PressableRow
+              flat
+              className="flex items-center gap-3 px-1 text-base font-medium text-fg"
+              onClick={() => setMode('dm')}
+            >
+              <IconUser size={ICON_SIZE.inline} />
+              New direct message
+            </PressableRow>
+            <PressableRow
+              flat
+              className="flex items-center gap-3 px-1 text-base font-medium text-fg disabled:cursor-not-allowed disabled:text-fg-2"
+              disabled={blocked}
+              aria-describedby={blocked ? 'group-limit-note' : undefined}
+              data-new-group-row=""
+              onClick={() => setMode('group')}
+            >
+              <IconChat size={ICON_SIZE.inline} />
+              New group
+            </PressableRow>
+          </div>
           {blocked ? groupLimitNote() : null}
         </div>
       );

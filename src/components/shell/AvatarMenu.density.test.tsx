@@ -81,10 +81,12 @@ describe('AvatarMenu: the Density row', () => {
     const row = document.querySelector('[data-density-row]');
     expect(row).not.toBeNull();
     expect(row!.textContent).toContain('Density');
-    const appearance = Array.from(document.querySelectorAll('[role="menuitem"]')).find(
-      (el) => el.textContent === 'Appearance',
-    );
-    expect(appearance?.nextElementSibling).toBe(row);
+    const items = Array.from(document.querySelectorAll('[role="menuitem"]'));
+    const appearance = items.find((el) => el.textContent === 'Appearance')!;
+    const help = items.find((el) => el.textContent === 'Help')!;
+    // Between Appearance and Help.
+    expect(appearance.compareDocumentPosition(row!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(row!.compareDocumentPosition(help) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const group = row!.querySelector('[role="radiogroup"]');
     expect(group?.getAttribute('aria-label')).toBe('Density');
     expect(group?.className.split(' ')).toEqual(expect.arrayContaining(['grid', 'grid-cols-3']));

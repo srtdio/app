@@ -58,6 +58,15 @@ interface ChipProps extends Omit<
  */
 export const CHIP_FACE_SIZE = 'min-h-9 px-4 compact:min-h-8 compact:px-3 calm:min-h-10';
 
+/**
+ * The face size classes; a call site's own px-* (the Due chip's px-2) also
+ * drops the Compact side pad so it wins in every density. Pure.
+ */
+export function chipFaceSize(size: NonNullable<ChipProps['size']>, className?: string): string {
+  const own = className !== undefined && /(^|\s)px-/.test(className);
+  return own ? sizes[size].replace(/\s?compact:px-3/g, '') : sizes[size];
+}
+
 const sizes: Record<NonNullable<ChipProps['size']>, string> = {
   sm: CHIP_FACE_SIZE,
   tap: cn(CHIP_FACE_SIZE, 'justify-center text-center'),
@@ -136,7 +145,7 @@ export function Chip({
           // pick is the ink line (black light, white dark) and fg ink, no fill.
           // Hover/press: the lit-hover overlay. Disabled: fg-3 ink, never a fade.
           'inline-flex min-w-0 flex-1 items-center gap-2 rounded-full border text-md font-medium lit-hover group-disabled:text-fg-3',
-          sizes[size],
+          chipFaceSize(size, className),
           variant === 'add'
             ? 'border-dashed border-border-strong text-fg-3'
             : selected

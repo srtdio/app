@@ -40,18 +40,21 @@ export interface CardProps {
   meta?: ReactNode;
   /** Free body content. */
   children?: ReactNode;
-  /** A picture. Bleeds to the card edge with top corners only, or sits inset (radius 4). */
+  /** A picture. Spans the section width (the picture radius), or sits inset (radius 4). */
   media?: ReactNode;
   mediaInset?: boolean;
   /** Footer leading badge (a Tag). */
   badge?: ReactNode;
   /** Footer trailing: meta text or a Button. */
   footerTrailing?: ReactNode;
-  /** 12 inside instead of 16 (chat tiles). */
+  /** 12 above and below instead of 16 (a tighter row: an upload row in a sheet). */
   dense?: boolean;
-  /** The quieter card surface (lit-card-muted). */
+  /**
+   * Kept for callers; the flat look has no quieter box, so a muted section is
+   * the same flat section (hairline under).
+   */
   muted?: boolean;
-  /** Current / chosen card (today's day card): lit-selected in place of the card height. */
+  /** Current / chosen section: the outline family's ink line (lit-selected) around it. */
   selected?: boolean;
   as?: 'div' | 'article' | 'li' | 'section';
   /** The card opens something: one tap surface behind the content. */
@@ -75,21 +78,24 @@ export interface CardProps {
   [hook: `data-${string}`]: string | undefined;
 }
 
-/** The card surface classes: radius 12, edge, panel fill, one lit height. */
-export function cardSurface(muted = false, selected = false): string {
-  return cn(
-    'rounded-xl border bg-panel',
-    selected ? 'lit-selected' : muted ? 'lit-card-muted' : 'lit-card',
-  );
+/**
+ * The card surface classes (flat look, 7 Nov 2026): no frame on the page. A
+ * card is a flat section on the page fill, a --border hairline under it; no
+ * radius, no panel fill, no lit-card / lit-card-muted. Muted is the same flat
+ * section. Selected keeps only the outline family's ink line (lit-selected,
+ * which needs a whole 1px edge, so it takes border + the card radius).
+ */
+export function cardSurface(_muted = false, selected = false): string {
+  return selected ? 'rounded-xl border lit-selected' : 'border-b border-border';
 }
 
 /**
- * The classes of a `cover` link: the press surface's look at the card's
- * corners, its focus line drawn inside the edge (the card clips overflow).
+ * The classes of a `cover` link: the press surface's look over the whole flat
+ * section (square, edge to edge), its focus line drawn inside the edge.
  */
 export const CARD_COVER = cn(
   PRESSABLE_ROW_BASE.replace('focus-visible:lit-focus', 'focus-visible:lit-focus-inset'),
-  'absolute inset-0 w-full rounded-xl',
+  'absolute inset-0 w-full',
 );
 
 /**
@@ -98,9 +104,12 @@ export const CARD_COVER = cn(
  */
 export const CARD_GRID = 'grid gap-3 md:grid-cols-cards';
 
-/** Inner padding: 16, or 12 for the dense (chat tile) variant. */
+/**
+ * Inner padding of the flat section: 16 above and below (12 dense). No side
+ * padding: the content sits on the page / sheet edge (GUTTER), like a list row.
+ */
 export function cardPad(dense = false): string {
-  return dense ? 'p-3' : 'p-4';
+  return dense ? 'py-3' : 'py-4';
 }
 
 /**
@@ -151,14 +160,17 @@ export function Card({
       )}
     >
       {press !== undefined ? (
-        <PressableRow {...press} card data-card-press="" className="absolute inset-0" />
+        <PressableRow {...press} flat data-card-press="" className="absolute inset-0" />
       ) : (
         cover
       )}
       {media !== undefined && !mediaInset ? (
         <div
           data-card-media="bleed"
-          className={cn('overflow-hidden rounded-t-xl', tapped && 'pointer-events-none relative')}
+          className={cn(
+            'overflow-hidden rounded-picture',
+            tapped && 'pointer-events-none relative',
+          )}
         >
           {media}
         </div>

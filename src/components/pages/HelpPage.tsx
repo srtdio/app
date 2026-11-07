@@ -160,7 +160,7 @@ export function HelpPage() {
     <>
       <PageHead title="Help" />
       <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6 md:py-8">
-        <section className="rounded-xl border bg-panel-2 lit-card-muted p-4 md:p-6">
+        <section>
           <p className="text-base font-medium text-accent">Sorted Help Center</p>
           <Text as="h2" role="title" className="mt-2">
             Find your way through the workflow
@@ -223,12 +223,9 @@ export function HelpPage() {
           </div>
 
           {articles.length > 0 ? (
-            <div className="mt-2 space-y-2">
+            <div className="mt-2 flex flex-col">
               {articles.map((article) => (
-                <details
-                  key={article.id}
-                  className="group rounded-xl border bg-panel lit-card px-4"
-                >
+                <details key={article.id} className="group border-b border-border">
                   <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 text-left text-base font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                     <span>{article.title}</span>
                     <IconChevronDown

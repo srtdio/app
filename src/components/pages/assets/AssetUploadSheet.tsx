@@ -16,6 +16,7 @@ import {
   IconUpload,
 } from '@/components/ui/icons';
 import { Card } from '@/components/ui/Card';
+import { PressableRow } from '@/components/ui/PressableRow';
 import { UploadRetry, UploadRing, uploadSizeMeta } from '@/components/ui/UploadRing';
 import { humanizeSize } from '@/lib/assets';
 import {
@@ -721,15 +722,15 @@ export function AssetUploadSheet({
             );
           })}
 
-          <Button
+          <PressableRow
             type="button"
             onClick={() => inputRef.current?.click()}
             disabled={running}
-            className="border-dashed text-fg-2"
+            className="flex items-center gap-3 px-3 text-base font-medium text-fg"
           >
             <IconPlus size={ICON_SIZE.inline} />
             Add more files
-          </Button>
+          </PressableRow>
         </div>
       )}
       {stopAsk && running ? (
