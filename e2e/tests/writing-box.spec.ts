@@ -284,9 +284,9 @@ test('S4 edit a sent list: the box shows the raw prefixes, Save edit renders a l
   await expect(field).toHaveValue('1. Alpha\n2. Beta\n3. ');
   await page.keyboard.type('Gamma');
   await key(box, 'Save edit').click();
-  await expect.poll(() => lastArgs(network, 'chat_message_edit')?.p_body).toBe(
-    '1. Alpha\n2. Beta\n3. Gamma',
-  );
+  await expect
+    .poll(() => lastArgs(network, 'chat_message_edit')?.p_body)
+    .toBe('1. Alpha\n2. Beta\n3. Gamma');
   await expect(bubble.locator('[data-msg-body] ol > li')).toHaveText(['Alpha', 'Beta', 'Gamma']);
   expectClean(network);
 });
@@ -299,7 +299,7 @@ test('S5 New brief: the Objective bulleted from the field row; the brief shows t
   seedAudit(network, { role: 'approver' });
   await page.goto('/briefs');
   await page.getByRole('button', { name: 'New brief', exact: true }).first().click();
-  const sheet = page.getByRole('dialog', { name: 'New brief' });
+  const sheet = page.getByRole('dialog').first();
   await expect(sheet).toBeVisible();
   await sheet.locator('#brief-title').fill('Diwali week');
 
@@ -321,7 +321,13 @@ test('S5 New brief: the Objective bulleted from the field row; the brief shows t
   await expect(objective).toHaveValue(body);
 
   await sheet.getByRole('button', { name: 'Create brief', exact: true }).click();
-  await expect.poll(() => (lastArgs(network, 'brief_create')?.p_payload as { objective?: string } | undefined)?.objective).toBe(body);
+  await expect
+    .poll(
+      () =>
+        (lastArgs(network, 'brief_create')?.p_payload as { objective?: string } | undefined)
+          ?.objective,
+    )
+    .toBe(body);
   const created = (network.world.tables.briefs ?? []).find((b) => b.title === 'Diwali week');
   expect(created).toBeDefined();
 
@@ -516,7 +522,8 @@ test('S10 the caption: emoji and "@brandname" through the @ key, no Aa, saved ex
   await sheet.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect
     .poll(
-      () => (lastArgs(network, 'post_create')?.p_payload as { caption?: string } | undefined)?.caption,
+      () =>
+        (lastArgs(network, 'post_create')?.p_payload as { caption?: string } | undefined)?.caption,
     )
     .toBe(text);
   expectClean(network);

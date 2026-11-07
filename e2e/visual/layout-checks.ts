@@ -875,7 +875,10 @@ export async function assertWritingBox(page: Page, screenName: string): Promise<
     message,
   }));
   if (boxes.length === 0) {
-    violations.push({ check: 'writing-box', message: 'no [data-writing-box] on a writing box screen' });
+    violations.push({
+      check: 'writing-box',
+      message: 'no [data-writing-box] on a writing box screen',
+    });
   }
   settleFindings(screenName, violations);
 }
