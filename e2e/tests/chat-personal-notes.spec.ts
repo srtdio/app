@@ -176,7 +176,7 @@ test.describe('laptop', () => {
     const network = await installHarnessNetwork(page);
     seedNotes(network.world);
     await firstPaintTile(page);
-    // The search box keeps a usable width beside Select, the bell and +.
+    // The search box keeps a usable width beside New chat.
     const box = await page.getByRole('searchbox', { name: 'Search chats' }).boundingBox();
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(200);
     // One clear control only: the native search cancel button is hidden.
@@ -239,13 +239,13 @@ for (const photo of [true, false]) {
     await page.goto('/chat');
     const tile = page.locator('[data-notes-tile]');
     await tile.waitFor({ state: 'visible', timeout: 30_000 });
-    // The notes card is ui/ListCard's person slot at 72: the own photo, round,
+    // The notes card is ui/ListCard's person slot at 48: the own photo, round,
     // with the notes badge; the notebook (no badge) without a photo.
     const picture = tile.locator('[data-notes-picture]');
     await expect(picture).toBeVisible();
     const box = await picture.boundingBox();
-    expect(Math.round(box?.width ?? 0)).toBe(72);
-    expect(Math.round(box?.height ?? 0)).toBe(72);
+    expect(Math.round(box?.width ?? 0)).toBe(48);
+    expect(Math.round(box?.height ?? 0)).toBe(48);
     const tileAvatar = tile.locator('[data-notes-avatar]');
     await expect(tileAvatar).toHaveAttribute('data-notes-avatar', photo ? 'photo' : 'notebook');
     await expect(tileAvatar).toHaveClass(/rounded-full/);
