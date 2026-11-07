@@ -65,11 +65,11 @@ describe('chat visual pass', () => {
     expect(html).toContain('pr-10');
   });
 
-  it('the list search is "Search chats", placeholder and name', () => {
+  it('the list has no search field: search lives only in the top bar', () => {
     const list = read('../ChannelList.tsx');
-    expect(list).toContain("placeholder: 'Search chats',");
-    expect(list).toContain("label: 'Search chats',");
-    expect(read('../../shell/SectionHeader.tsx')).toContain('aria-label={search.label}');
+    expect(list).not.toContain('Search chats');
+    expect(list).not.toContain('onSearchChange');
+    expect(read('../../shell/SectionHeader.tsx')).not.toContain('aria-label={search.label}');
   });
 
   it('the hold tip names right-click on laptop and waits for a first message', () => {
