@@ -733,9 +733,9 @@ describe('Brief detail polish', () => {
     await mount();
     for (const section of [phone(), desktop()]) {
       expect(section?.querySelectorAll('dt')).toHaveLength(0);
-      // Relative to the shared minute clock (formatRelative), whatever today is.
+      // Short on the shared minute clock (formatAgo), whatever today is.
       expect(section?.querySelector('[data-brief-raised]')?.textContent).toMatch(
-        /^Raised \d+ (min|hours?|days?|months?|years?) ago by Asha Rao$/,
+        /^Raised (just now|\d+[mh]|Yesterday|Mon|Tue|Wed|Thu|Fri|Sat|Sun|\d{1,2} [A-Z][a-z]{2}( \d{4})?) by Asha Rao$/,
       );
       expect(section?.querySelector('[data-brief-format]')?.textContent).toBe('Format Carousel');
       expect(section?.textContent).not.toContain('carousel');
@@ -765,7 +765,7 @@ describe('Brief detail polish', () => {
     h.getBrief.mockResolvedValue(detail({ target_date: '2026-08-14' }));
     await mount();
     const line = document.querySelector<HTMLElement>('[data-brief-status-line]');
-    expect(line?.textContent).toBe('Open · Due in 13 days');
+    expect(line?.textContent).toBe('Open · Due 14 Aug');
     expect(line?.querySelector('[data-status-dot="open"]')?.className).toContain('h-2 w-2');
     expect(line?.closest('[data-header-bar]')).not.toBeNull();
     expect(line?.closest('.text-lg')?.className).toContain('font-semibold');
@@ -778,7 +778,7 @@ describe('Brief detail polish', () => {
     h.getBrief.mockResolvedValue(detail({ target_date: '2026-08-14' }));
     await mount();
     const line = document.querySelector<HTMLElement>('[data-brief-status-line]');
-    expect(line?.textContent).toBe('Open · Overdue 2 months');
+    expect(line?.textContent).toBe('Open · Overdue 2mo');
     expect(line?.querySelector('[data-brief-due]')?.className).toContain('text-bad');
   });
 
@@ -794,7 +794,7 @@ describe('Brief detail polish', () => {
     const now = new Date('2026-08-01T09:00:00Z');
     expect(briefStatusLine('open', '2026-08-14', 'UTC', now)).toEqual({
       status: 'Open',
-      due: 'Due in 13 days',
+      due: 'Due 14 Aug',
       overdue: false,
     });
     expect(briefStatusLine('open', '2026-08-01', 'UTC', now)).toEqual({
@@ -804,10 +804,10 @@ describe('Brief detail polish', () => {
     });
     expect(briefStatusLine('open', '2026-08-02', 'UTC', now).due).toBe('Due tomorrow');
     expect(briefStatusLine('open', '2026-12-12', 'UTC', now).due).toBe('Due 12 Dec');
-    expect(briefStatusLine('open', '2026-05-20', 'UTC', now).due).toBe('Overdue 2 months');
+    expect(briefStatusLine('open', '2026-05-20', 'UTC', now).due).toBe('Overdue 2mo');
     expect(briefStatusLine('open', '2026-07-31', 'UTC', now)).toEqual({
       status: 'Open',
-      due: 'Overdue 1 day',
+      due: 'Overdue 1d',
       overdue: true,
     });
     expect(briefStatusLine('open', null, 'UTC', now)).toEqual({

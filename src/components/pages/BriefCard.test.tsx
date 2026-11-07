@@ -144,7 +144,7 @@ describe('BriefCard on ui/ListCard', () => {
     expect(out).toContain('Due 1 Jul');
   });
 
-  it('a brief with no due date shows when it was raised (formatRelative)', () => {
+  it('a brief with no due date shows when it was raised (formatAgo)', () => {
     const { cache } = makeCache(null);
     const out = render(
       makeBrief({ target_date: null, created_at: '2026-11-06T09:00:00Z' }),
@@ -153,11 +153,11 @@ describe('BriefCard on ui/ListCard', () => {
       new Date('2026-11-06T12:00:00Z'),
     );
     expect(out).toContain('data-brief-date=""');
-    expect(out).toContain('3 hours ago');
+    expect(out).toContain('>3h<');
     expect(out).not.toContain('data-list-card-time-bad');
   });
 
-  it('an open brief past its due day reads "Overdue N days" in the bad tone', () => {
+  it('an open brief past its due day reads "Overdue 2d" in the bad tone', () => {
     const { cache } = makeCache(null);
     const out = render(
       makeBrief({ status: 'open', target_date: '2026-07-01' }),
@@ -165,7 +165,7 @@ describe('BriefCard on ui/ListCard', () => {
       true,
       new Date('2026-07-03T12:00:00Z'),
     );
-    expect(out).toContain('Overdue 2 days');
+    expect(out).toContain('Overdue 2d');
     expect(out).toContain('data-list-card-time-bad=""');
     expect(out).toMatch(/data-list-card-time=""[^>]*class="[^"]*text-bad/);
   });
@@ -183,7 +183,7 @@ describe('BriefCard on ui/ListCard', () => {
     expect(out).not.toContain('data-list-card-time-bad');
   });
 
-  it('upcoming due days read relative: today, tomorrow, in N days', () => {
+  it('upcoming due days read short: today, tomorrow, the weekday', () => {
     const now = new Date('2026-06-28T12:00:00Z');
     const at = (target_date: string) =>
       briefCardTime(
@@ -193,8 +193,8 @@ describe('BriefCard on ui/ListCard', () => {
       );
     expect(at('2026-06-28')).toEqual({ text: 'Due today', bad: false });
     expect(at('2026-06-29')).toEqual({ text: 'Due tomorrow', bad: false });
-    expect(at('2026-07-01')).toEqual({ text: 'Due in 3 days', bad: false });
-    expect(at('2026-06-27')).toEqual({ text: 'Overdue 1 day', bad: true });
+    expect(at('2026-07-01')).toEqual({ text: 'Due Wed', bad: false });
+    expect(at('2026-06-27')).toEqual({ text: 'Overdue 1d', bad: true });
   });
 
   it('shows the Closed tag for a closed brief', () => {

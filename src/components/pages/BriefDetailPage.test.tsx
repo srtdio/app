@@ -7,22 +7,23 @@ import {
 } from '@/components/pages/BriefDetailPage';
 import type { BriefGalleryItem } from '@srtdio/briefs';
 
-// The Details "Raised" row: when the brief was raised, in the app's one
-// past-time format (formatRelative).
+// The Details "Raised" row: when the brief was raised, short (formatAgo).
+// Day-level cases sit at noon UTC so the civil gap is the same in any zone.
 describe('briefRaisedLabel', () => {
   const now = new Date('2026-10-23T12:00:00Z');
 
-  it('reads relative to now: just now, minutes, hours', () => {
+  it('reads short against now: just now, minutes, hours', () => {
     expect(briefRaisedLabel('2026-10-23T11:59:40Z', now)).toBe('just now');
-    expect(briefRaisedLabel('2026-10-23T11:01:00Z', now)).toBe('59 min ago');
-    expect(briefRaisedLabel('2026-10-23T04:57:00Z', now)).toBe('7 hours ago');
+    expect(briefRaisedLabel('2026-10-23T11:01:00Z', now)).toBe('59m');
+    expect(briefRaisedLabel('2026-10-23T04:57:00Z', now)).toBe('7h');
   });
 
-  it('then days, months and years, singular and plural', () => {
-    expect(briefRaisedLabel('2026-10-22T06:00:00Z', now)).toBe('1 day ago');
-    expect(briefRaisedLabel('2026-09-22T12:00:00Z', now)).toBe('1 month ago');
-    expect(briefRaisedLabel('2025-12-31T19:00:00Z', now)).toBe('9 months ago');
-    expect(briefRaisedLabel('2024-10-01T12:00:00Z', now)).toBe('2 years ago');
+  it('then Yesterday, the weekday, the day, and the year off the current year', () => {
+    expect(briefRaisedLabel('2026-10-22T12:00:00Z', now)).toBe('Yesterday');
+    expect(briefRaisedLabel('2026-10-19T12:00:00Z', now)).toBe('Mon');
+    expect(briefRaisedLabel('2026-09-22T12:00:00Z', now)).toBe('22 Sep');
+    expect(briefRaisedLabel('2025-12-31T12:00:00Z', now)).toBe('31 Dec 2025');
+    expect(briefRaisedLabel('2024-10-01T12:00:00Z', now)).toBe('1 Oct 2024');
   });
 
   it('returns an unparseable created_at unchanged', () => {

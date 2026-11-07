@@ -107,10 +107,38 @@ export interface TapTarget {
    * a search field, a back button over a header image).
    */
   layeredWith?: readonly number[];
+  /**
+   * The innermost scroll container (overflow auto or scroll) it scrolls in,
+   * as an id shared by every target in it; null or absent = none.
+   */
+  scroller?: number | null;
+  /**
+   * The scroll containers it floats over by design: it sits in a lifted
+   * layer (a positioned element with its own z-index: a bar over a list, an
+   * in-page popover) that neither holds that scroller nor is held by it.
+   * Content scrolling in such a scroller passes under it, as it passes under
+   * a sticky head, and is never paired with it.
+   */
+  liftedOver?: readonly number[];
   /** pointer-events:none, or inside an aria-hidden / inert subtree: never a target. */
   passive?: boolean;
   /** The rect it shows through (viewport and overflow-clipping ancestors); null = no clip. */
   clip?: Box | null;
+}
+
+/**
+ * Whether `top` floats over `under` by design: `under` scrolls in a scroll
+ * container that `top`'s lifted layer sits outside of (the chat thread's
+ * status bar over its message list, a composer popover over the thread).
+ */
+export function floatsOver(top: TapTarget, under: TapTarget): boolean {
+  const scroller = under.scroller ?? null;
+  return scroller !== null && top.liftedOver?.includes(scroller) === true;
+}
+
+/** Whether a computed style starts a lifted layer: positioned, with a z-index of its own. */
+export function isLiftedLayer(style: { position: string; zIndex: string }): boolean {
+  return style.position !== 'static' && style.zIndex !== 'auto' && style.zIndex !== '';
 }
 
 /** Every pair of unrelated tap targets that overlap: [i, j] with i < j. */
@@ -127,6 +155,7 @@ export function overlappingPairs(targets: readonly TapTarget[]): Array<[number, 
       if (a.related.includes(j) || b.related.includes(i)) continue;
       if ((a.layer ?? null) !== (b.layer ?? null)) continue;
       if (a.layeredWith?.includes(j) === true || b.layeredWith?.includes(i) === true) continue;
+      if (floatsOver(a, b) || floatsOver(b, a)) continue;
       const bBox = clipBox(b.box, b.clip);
       if (bBox === null) continue;
       if (overlaps(aBox, bBox)) out.push([i, j]);

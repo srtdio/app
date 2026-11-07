@@ -5,6 +5,7 @@ import {
   distinctRoles,
   edgeViolations,
   formatViolations,
+  isLiftedLayer,
   layoutMode,
   lineHeightPx,
   listCardViolations,
@@ -27,8 +28,10 @@ import {
 //   2 no two visible tap targets (button, a, [role=button], input) overlap by
 //     more than 1px, each cut to its overflow clip; ancestors and
 //     descendants, targets in different fixed/sticky layers, absolute
-//     layering by design (a control whose containing block holds the other)
-//     and pointer-events:none / aria-hidden / inert targets aside;
+//     layering by design (a control whose containing block holds the other),
+//     a lifted layer (positioned, own z-index) over a scroller it sits
+//     outside of (content scrolls under it, as under a sticky head) and
+//     pointer-events:none / aria-hidden / inert targets aside;
 //   3 nothing painted (text runs, icons, fields) within 12px of a side edge,
 //     measured on what shows through its overflow clip, except full-bleed
 //     media (img, video, [data-full-bleed]), full-width bars, content that
@@ -73,6 +76,8 @@ interface RawTarget {
   related: number[];
   layer: number | null;
   layeredWith: number[];
+  scroller: number | null;
+  liftedOver: number[];
   clip: Box;
 }
 
@@ -92,7 +97,13 @@ interface RawPage {
 
 /** Reads every box the checks need in one pass over the page. */
 async function readPage(page: Page): Promise<RawPage> {
-  return page.evaluate((): RawPage => {
+  // isLiftedLayer is pure (layout-checks-core.ts, unit tested); its source
+  // goes into the page so the browser side applies the same rule.
+  return page.evaluate((liftedSource: string): RawPage => {
+    const lifted = new Function(`return (${liftedSource});`)() as (style: {
+      position: string;
+      zIndex: string;
+    }) => boolean;
     const vw = document.documentElement.clientWidth || window.innerWidth;
     const vh = window.innerHeight;
 
@@ -208,6 +219,40 @@ async function readPage(page: Page): Promise<RawPage> {
       !abs.wrapper.contains(other) &&
       (abs.block === other || abs.block.contains(other));
 
+    /** Scroll containers (overflow auto or scroll), each with an id. */
+    const scrollsContent = (el: Element): boolean => {
+      const s = getComputedStyle(el);
+      return /^(auto|scroll)$/.test(s.overflowY) || /^(auto|scroll)$/.test(s.overflowX);
+    };
+    const scrollerEls = Array.from(document.querySelectorAll('*')).filter(
+      (el) => el !== document.documentElement && el !== document.body && scrollsContent(el),
+    );
+    /** The innermost scroll container holding el, by index into scrollerEls; null = none. */
+    const scrollerOf = (el: Element): number | null => {
+      for (let at = el.parentElement; at !== null; at = at.parentElement) {
+        const i = scrollerEls.indexOf(at);
+        if (i !== -1) return i;
+      }
+      return null;
+    };
+    /**
+     * The scrollers el floats over: its nearest lifted layer (positioned,
+     * own z-index; never a fixed/sticky one, those are layers already) and
+     * every scroller that layer neither holds nor sits in.
+     */
+    const liftedOverOf = (el: Element): number[] => {
+      for (let at: Element | null = el; at !== null; at = at.parentElement) {
+        const s = getComputedStyle(at);
+        if (s.position === 'fixed' || s.position === 'sticky') return [];
+        if (!lifted({ position: s.position, zIndex: s.zIndex })) continue;
+        const layer = at;
+        return scrollerEls.flatMap((sc, i) =>
+          !layer.contains(sc) && !sc.contains(layer) ? [i] : [],
+        );
+      }
+      return [];
+    };
+
     /** Inside an aria-hidden or inert subtree. */
     const hiddenFromUse = (el: Element): boolean =>
       el.closest('[inert], [aria-hidden="true"]') !== null;
@@ -270,6 +315,8 @@ async function readPage(page: Page): Promise<RawPage> {
           ? [j]
           : [],
       ),
+      scroller: scrollerOf(el),
+      liftedOver: liftedOverOf(el),
       clip: clipOf(el),
     }));
 
@@ -356,7 +403,7 @@ async function readPage(page: Page): Promise<RawPage> {
     }
 
     return { viewportWidth: vw, lines, targets, edges, parts, listCards };
-  });
+  }, isLiftedLayer.toString());
 }
 
 /**
