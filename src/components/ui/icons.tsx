@@ -11,8 +11,6 @@ import {
   ArrowUpTrayIcon,
   ArrowUturnLeftIcon,
   ArrowUturnRightIcon,
-  ArrowsPointingInIcon,
-  ArrowsPointingOutIcon,
   ArrowsRightLeftIcon,
   ArrowsUpDownIcon,
   AtSymbolIcon,
@@ -270,14 +268,30 @@ export function IconSort(props: IconProps) {
   return <Hero icon={ArrowsUpDownIcon} {...props} />;
 }
 
-/** Make a sheet fill the screen (the Tasks sheet's full screen). */
+/**
+ * Expand (the writing box's full-screen editor): one diagonal arrow, heads
+ * out at both corners (the common "open in full" glyph), never a four-arrow cross.
+ */
 export function IconExpand(props: IconProps) {
-  return <Hero icon={ArrowsPointingOutIcon} {...props} />;
+  return (
+    <Svg {...props}>
+      <path d="M5 19 19 5" />
+      <path d="M13 5h6v6" />
+      <path d="M11 19H5v-6" />
+    </Svg>
+  );
 }
 
-/** Return a full-screen sheet to its half height. */
+/** Collapse: the same diagonal, heads pointing in to the middle ("close full"). */
 export function IconCollapse(props: IconProps) {
-  return <Hero icon={ArrowsPointingInIcon} {...props} />;
+  return (
+    <Svg {...props}>
+      <path d="M20 4l-6 6" />
+      <path d="M14 4v6h6" />
+      <path d="M4 20l6-6" />
+      <path d="M10 20v-6H4" />
+    </Svg>
+  );
 }
 
 /** Writing box Aa row (ui/WritingBox): Bold. */

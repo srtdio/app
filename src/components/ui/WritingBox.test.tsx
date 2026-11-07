@@ -332,3 +332,14 @@ describe('WritingBox overlay', () => {
     expect(picker?.closest('[data-writing-overlay]')?.nextElementSibling).toBe(row);
   });
 });
+
+describe('WritingBox expand icon', () => {
+  it('is one diagonal arrow (open in full), not the four-arrow cross', async () => {
+    const { renderToStaticMarkup } = await import('react-dom/server');
+    const { IconExpand, IconCollapse } = await import('@/components/ui/icons');
+    const expand = renderToStaticMarkup(<IconExpand size={20} />);
+    expect(expand).toContain('d="M5 19 19 5"');
+    expect(expand.match(/<path/g)).toHaveLength(3);
+    expect(renderToStaticMarkup(<IconCollapse size={20} />).match(/<path/g)).toHaveLength(4);
+  });
+});
