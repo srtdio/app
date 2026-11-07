@@ -129,7 +129,7 @@ import {
   sized,
   type ChatLayout,
 } from '@/components/chat/chat-type';
-import { formatRelative, formatTime } from '@/lib/time';
+import { formatAgo, formatTime } from '@/lib/time';
 import { Link } from 'react-router-dom';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { UploadRing } from '@/components/chat/UploadRing';
@@ -1427,7 +1427,7 @@ describe('image album and viewer', () => {
     expect(onOpenImage).toHaveBeenCalledWith(2);
   });
 
-  it('the viewer gets the image list only, with sender and when it was sent (formatRelative)', () => {
+  it('the viewer gets the image list only, with sender and when it was sent (formatAgo)', () => {
     const now = new Date('2026-11-06T12:00:00Z');
     const { images, details } = threadLightbox(albumMessage, PROFILES, now);
     expect(images).toEqual([
@@ -1437,7 +1437,7 @@ describe('image album and viewer', () => {
     ]);
     expect(details).toEqual({
       sender: 'Alice',
-      time: formatRelative(albumMessage.createdAt, now),
+      time: formatAgo(albumMessage.createdAt, now),
     });
   });
 

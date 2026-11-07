@@ -424,13 +424,13 @@ describe('item 6: Approved by', () => {
     expect(approverIds(bundle('team'))).toEqual([]);
   });
 
-  it('"just now" / "1 hour ago" / "1 day ago" / "10 days ago" (formatRelative)', () => {
+  it('"just now" / "1h" / "Yesterday" / "2 Oct" (formatAgo)', () => {
     const now = new Date('2026-10-12T15:00:00Z');
     expect(approvedWhen('2026-10-12T15:00:00Z', now)).toBe('just now');
-    expect(approvedWhen('2026-10-12T13:15:00Z', now)).toBe('1 hour ago');
-    expect(approvedWhen('2026-10-11T13:15:00Z', now)).toBe('1 day ago');
-    expect(approvedWhen('2026-10-02T13:15:00Z', now)).toBe('10 days ago');
-    expect(approvedByLine('Riya Shah', '1 hour ago')).toBe('Approved by Riya Shah · 1 hour ago');
+    expect(approvedWhen('2026-10-12T13:15:00Z', now)).toBe('1h');
+    expect(approvedWhen('2026-10-11T13:15:00Z', now)).toBe('Yesterday');
+    expect(approvedWhen('2026-10-02T13:15:00Z', now)).toBe('2 Oct');
+    expect(approvedByLine('Riya Shah', '1h')).toBe('Approved by Riya Shah · 1h');
   });
 
   it('the row shows no Approved by line any more: the PLAN line reads OK', () => {

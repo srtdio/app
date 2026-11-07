@@ -1,5 +1,5 @@
 import { devices, expect, test, type Page } from '@playwright/test';
-import { installHarnessNetwork } from '../fixtures/harness-routes';
+import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 
 // Whole-page scrolling on touch tablets (src/lib/scroll-mode.ts,
 // TOUCH_TABLET_QUERY: md width and up, hover none, pointer coarse). Every
@@ -38,6 +38,26 @@ async function scrollState(page: Page): Promise<ScrollState> {
   }, TOUCH_TABLET_QUERY);
 }
 
+/**
+ * More Pipeline posts, so the list overflows the screen whatever the card
+ * layout: the harness has only a few posts, and since Pipeline lays its list
+ * cards in laptop columns (LIST_CARD_GRID) they no longer fill an iPad height.
+ * Clones of the harness's first post under new ids and titles.
+ */
+function seedScrollPosts(network: HarnessNetwork, count = 24): void {
+  const posts = (network.world.tables.posts ??= []);
+  const base = posts[0];
+  if (base === undefined) return;
+  for (let i = 0; i < count; i += 1) {
+    posts.push({
+      ...base,
+      id: `0190dc00-0000-7000-8c00-${String(i + 1).padStart(12, '0')}`,
+      number: 800 + i,
+      title: `Scroll filler ${i + 1}`,
+    });
+  }
+}
+
 async function openPipeline(page: Page): Promise<void> {
   await page.goto('/pipeline?stage=all');
   await expect(page.getByRole('button', { name: 'Open post Monday carousel' }).first()).toBeVisible(
@@ -46,8 +66,8 @@ async function openPipeline(page: Page): Promise<void> {
 }
 
 for (const size of [
-  // Heights short enough that the harness Pipeline (a few cards) overflows:
-  // at a full 1180px it fits on one screen and the document has nothing to scroll.
+  // Short heights plus seedScrollPosts, so Pipeline always overflows and the
+  // document has something to scroll.
   { name: 'portrait', width: 820, height: 600 },
   { name: 'landscape', width: 1180, height: 560 },
 ]) {
@@ -56,6 +76,7 @@ for (const size of [
   }) => {
     await page.setViewportSize({ width: size.width, height: size.height });
     const network = await installHarnessNetwork(page);
+    seedScrollPosts(network);
     await openPipeline(page);
 
     const state = await scrollState(page);
@@ -86,6 +107,7 @@ for (const size of [
 
 test('iPad: Chat stays locked; Pipeline keeps its position across the trip', async ({ page }) => {
   const network = await installHarnessNetwork(page);
+    seedScrollPosts(network);
   await page.setViewportSize({ width: 820, height: 600 });
   await openPipeline(page);
   const kept = await page.evaluate(() => {
@@ -114,6 +136,7 @@ test('iPad: Chat stays locked; Pipeline keeps its position across the trip', asy
 
 test('iPad: an open overlay holds the page still and closing never jumps', async ({ page }) => {
   const network = await installHarnessNetwork(page);
+    seedScrollPosts(network);
   await page.setViewportSize({ width: 820, height: 600 });
   await openPipeline(page);
   await page.evaluate(() => window.scrollTo(0, 180));
