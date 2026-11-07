@@ -84,3 +84,16 @@ describe('composer buttons', () => {
     expect(src).not.toMatch(/size="lg"/);
   });
 });
+
+describe('ComposerTray compact (ui/WritingBox rows)', () => {
+  it('a 36 grey circle on a 44 tall hit; the plus still turns into the X', () => {
+    const html = renderToStaticMarkup(
+      <ComposerTray compact layout="touch" onPick={() => undefined} />,
+    );
+    expect(html).toContain('h-11');
+    expect(html).toContain('w-9 min-w-9');
+    expect(html).toContain('h-9 w-9 items-center justify-center rounded-full');
+    expect(html).toContain('bg-panel-3 text-fg-2');
+    expect(html).toContain('aria-label="Add attachment"');
+  });
+});

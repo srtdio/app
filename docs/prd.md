@@ -595,3 +595,13 @@ Not covered in MVP PRD. Defer to lawyer review pre-launch.
 - Schema changes: SQL in chat, approval, execute via Supabase MCP with project_id="movnexawfhsyuluspxoc" passed explicitly, verify via information_schema, PR notes 'Schema already applied. Do NOT execute.'
 - Auto-merge disabled. Shubham merges manually.
 - Every prompt ends with: 'Return your entire response in ONE code block, most token-efficient form, no prose outside it.' and 'After pushing, reply with the exact GitHub PR URL.'
+
+## Formatting and the writing box (decided 8 Nov 2026)
+
+- Every multi-line writing surface uses one Slack-style writing box (ui/WritingBox): chat, post comments and checkpoints, plan item / bank idea / brief comments, pin and caption notes, reject reason, stage-move note, person card message, brief fields, idea and plan item notes, post caption. Single-line fields, search, email, invites and sign-in stay plain inputs.
+- Chat on a phone rests as one pill (+, "Message", mic); focused or holding a draft it is a card: text on top, + Aa emoji @ on the left, send on the right (no mic). Laptop and iPad: the card always, mic while empty.
+- Aa replaces the row with the format row: Close, Bold, Italic, Underline, Strike, Link, Numbered list, Bullet list, Quote. Shortcuts Cmd/Ctrl+B/I/U, +Shift+X strike, +Shift+C mono, +Shift+7 numbered, +Shift+8 bullet, +Shift+9 quote, Cmd/Ctrl+K link.
+- Stored as plain text: "N. " numbered, "- " bullet, "> " quote, [text](url) link (http(s) only; a bare domain gets https://). Return continues a list or quote; Return on an empty item ends it. Rendered as lists, a quote bar and tappable link text; plain-text readers show display text.
+- Emoji opens the emoji sheet (search, Frequently used, every group, category bar). Add link is a small sheet (Text, Link, Cancel / Save). The floating select-text format strip is gone.
+- Expand (Reddit style) on every box: phone opens a full-screen editor, laptop grows the box in place; collapse keeps the text, caret, reply bars and attachments.
+- Post captions stay plain: no Aa row and no formatting; emoji, a plain "@" (no mention token) and expand only.

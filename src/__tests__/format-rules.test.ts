@@ -86,11 +86,11 @@ describe('format rules', () => {
     );
   });
 
-  it('CLAUDE.md carries the rule and lists FormatStrip', () => {
+  it('CLAUDE.md carries the rule and lists WritingBox', () => {
     const doc = readFileSync(fileURLToPath(new URL('../../CLAUDE.md', import.meta.url)), 'utf8');
     expect(doc).toContain(
       'Saved free text renders through parseFormat; one-line previews use stripFormat; post captions never format.',
     );
-    expect(doc).toContain('ui/FormatStrip');
+    expect(doc).toContain('ui/WritingBox');
   });
 });

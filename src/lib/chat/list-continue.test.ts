@@ -77,3 +77,15 @@ describe('listPickerOpen', () => {
     ).toBe(false);
   });
 });
+
+describe('continueList: bullets and quotes', () => {
+  it('"- " continues and an empty item ends the list', () => {
+    expect(continueList('- a', 3)).toEqual({ value: '- a\n- ', caret: 6 });
+    expect(continueList('- a\n- ', 6)).toEqual({ value: '- a\n', caret: 4 });
+  });
+
+  it('"> " continues a quote and an empty quote line ends it', () => {
+    expect(continueList('> a', 3)).toEqual({ value: '> a\n> ', caret: 6 });
+    expect(continueList('> a\n> ', 6)).toEqual({ value: '> a\n', caret: 4 });
+  });
+});
