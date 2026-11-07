@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/Input';
 import { Sheet, SheetActions } from '@/components/ui/Sheet';
 import { Text } from '@/components/ui/Text';
 import { Textarea } from '@/components/ui/Textarea';
+import { WritingBox } from '@/components/ui/WritingBox';
 import { ICON_SIZE, IconPaperclip, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
@@ -77,6 +78,8 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The description's writing box (ui/WritingBox) acts on this field.
+  const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const uploadRef = useRef<AttachmentUploader>(uploadFile);
   uploadRef.current = uploadFile;
   const controllerRef = useRef<ConceptUploads | null>(null);
@@ -187,12 +190,22 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
             </Field>
             <Field label="Description">
               {(id) => (
-                <Textarea
-                  id={id}
-                  data-bank-add-description=""
-                  value={description}
-                  rows={3}
-                  onChange={(e) => setDescription(e.target.value)}
+                <WritingBox
+                  mode="field"
+                  field={() => descriptionRef.current}
+                  hasText={description !== ''}
+                  expandTitle="Description"
+                  input={
+                    <Textarea
+                      formatting
+                      ref={descriptionRef}
+                      id={id}
+                      data-bank-add-description=""
+                      value={description}
+                      rows={3}
+                      onChange={(e) => setDescription(e.target.value)}
+                    />
+                  }
                 />
               )}
             </Field>

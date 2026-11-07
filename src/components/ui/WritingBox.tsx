@@ -233,6 +233,8 @@ export interface WritingBoxProps {
   /** Laptop: the card always (chat), ignoring the phone pill. Defaults to useIsLaptop. */
   laptop?: boolean;
   className?: string;
+  /** Field / caption: the field is invalid (the box's edge reads bad, as the field's did). */
+  invalid?: boolean;
   /** Field mode: the box's own min height class (as the field had). */
   'data-surface'?: string;
 }
@@ -253,6 +255,7 @@ export function WritingBox(props: WritingBoxProps) {
     state = { kind: 'idle' },
     discard,
     className,
+    invalid = false,
   } = props;
   const isLaptopHook = useIsLaptop();
   const laptop = props.laptop ?? isLaptopHook;
@@ -474,13 +477,18 @@ export function WritingBox(props: WritingBoxProps) {
     shape === 'pill' && 'min-h-11 items-center gap-2 rounded-full pl-1 pr-1',
     shape === 'line' && 'min-h-11 items-end gap-2 rounded-2xl pl-3 pr-1',
     shape === 'card' && 'flex-col rounded-2xl px-3 pt-1 focus-within:lit-focus',
-    shape === 'field' && 'lit-well flex-col rounded-lg border-field px-3 focus-within:lit-focus',
+    shape === 'field' &&
+      cn(
+        'lit-well flex-col rounded-lg px-3 focus-within:lit-focus',
+        invalid ? 'border-bad lit-bad' : 'border-field',
+      ),
     phoneExpanded && 'flex-1 rounded-none border-0',
   );
 
   const box = (
     <div
       data-writing-frame=""
+      data-invalid={invalid ? '' : undefined}
       className={frameClass}
       onFocus={() => setFocused(true)}
       onBlur={(e) => {
