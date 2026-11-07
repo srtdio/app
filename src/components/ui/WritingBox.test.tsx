@@ -236,3 +236,27 @@ describe('WritingBox comment line', () => {
     expect(q(host, '[data-testid="send"]')).not.toBeNull();
   });
 });
+
+describe('WritingBox sheets', () => {
+  it('a submit inside the sheets never reaches the composer form around the box', () => {
+    let sent = 0;
+    const host = mount(
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          sent += 1;
+        }}
+      >
+        <Harness mode="chat" initial="draft" />
+      </form>,
+    );
+    const sheets = q(host, '[data-writing-sheets]');
+    expect(sheets).not.toBeNull();
+    const inner = document.createElement('form');
+    sheets?.appendChild(inner);
+    act(() => {
+      inner.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(sent).toBe(0);
+  });
+});

@@ -304,7 +304,10 @@ test('S5 New brief: the Objective bulleted from the field row; the brief shows t
   await sheet.locator('#brief-title').fill('Diwali week');
 
   const objective = sheet.locator('#brief-objective');
-  const box = sheet.locator('[data-writing-box][data-mode="field"]', { has: objective });
+  // `has` is queried inside each box: root its locator at the page.
+  const box = sheet.locator('[data-writing-box][data-mode="field"]', {
+    has: page.locator('#brief-objective'),
+  });
   // At rest a plain field: no row until it is focused.
   await expect(box.locator('[data-writing-row]')).toHaveCount(0);
   await objective.click();
@@ -358,7 +361,10 @@ test('S6 a plan item comment: a mention chip inside a bullet', async ({ page }) 
   const comment = item.getByRole('textbox', { name: 'Comment' });
   await comment.scrollIntoViewIfNeeded();
   await comment.click();
-  const box = item.locator('[data-writing-box]', { has: comment });
+  // `has` is queried inside each box: a page-rooted locator for the field.
+  const box = item.locator('[data-writing-box]', {
+    has: page.getByRole('textbox', { name: 'Comment' }),
+  });
   await key(box, 'Bullet list').click();
   await expect(comment).toHaveValue('- ');
   await page.keyboard.type('@Le');

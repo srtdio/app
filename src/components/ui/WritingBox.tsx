@@ -583,33 +583,38 @@ export function WritingBox(props: WritingBoxProps) {
         </div>
       ) : null}
       {box}
-      {emojiLoaded ? (
-        <Suspense fallback={null}>
-          <EmojiSheet
-            open={emojiOpen}
-            closeOnPick={!laptop}
-            onClose={() => setEmojiOpen(false)}
-            onPick={(emoji) => insert(emoji)}
-          />
-        </Suspense>
-      ) : null}
-      {linkLoaded ? (
-        <Suspense fallback={null}>
-          <AddLinkSheet
-            open={link !== null}
-            initialText={link?.text ?? ''}
-            onCancel={() => setLink(null)}
-            onSave={(markup) => {
-              const el = field();
-              const at = link;
-              setLink(null);
-              if (el === null || at === null) return;
-              restoreSelection(el, at.start, at.end);
-              insertText(el, markup);
-            }}
-          />
-        </Suspense>
-      ) : null}
+      {/* The sheets are portalled, but React events still bubble through the
+          box's own tree: the Add link sheet's submit must never reach the chat
+          composer's <form> (it would send the half-written message). */}
+      <div data-writing-sheets="" className="contents" onSubmit={(e) => e.stopPropagation()}>
+        {emojiLoaded ? (
+          <Suspense fallback={null}>
+            <EmojiSheet
+              open={emojiOpen}
+              closeOnPick={!laptop}
+              onClose={() => setEmojiOpen(false)}
+              onPick={(emoji) => insert(emoji)}
+            />
+          </Suspense>
+        ) : null}
+        {linkLoaded ? (
+          <Suspense fallback={null}>
+            <AddLinkSheet
+              open={link !== null}
+              initialText={link?.text ?? ''}
+              onCancel={() => setLink(null)}
+              onSave={(markup) => {
+                const el = field();
+                const at = link;
+                setLink(null);
+                if (el === null || at === null) return;
+                restoreSelection(el, at.start, at.end);
+                insertText(el, markup);
+              }}
+            />
+          </Suspense>
+        ) : null}
+      </div>
     </div>
   );
 }
