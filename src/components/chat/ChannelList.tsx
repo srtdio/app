@@ -893,7 +893,8 @@ export function toggleHomeChip(current: HomeChip | null, tapped: HomeChip): Home
 
 /**
  * The chips under the search box: Photos, Videos, Links, Files,
- * Voice notes (WhatsApp's order). One at a time (tap again to clear). Each is ui/Chip with its
+ * Voice notes (WhatsApp's order). One at a time: tap it again, or its X,
+ * to clear and return to the list (no All chip). Each is ui/Chip with its
  * selected style, as on the other list pages (no counts: these filter
  * messages, nothing is tallied); the row scrolls on X when it overflows (no
  * scrollbar), chips never wrap or shrink. Tokens only, no motion. Hook-free.
@@ -920,6 +921,7 @@ export function searchChips(props: {
             data-search-chip={chip.kind}
             aria-pressed={on}
             onClick={() => props.onChange(toggleHomeChip(props.kind, chip.kind))}
+            onClear={on ? () => props.onChange(null) : undefined}
             className={cn('shrink-0 whitespace-nowrap', NO_TOUCH_SELECT)}
           />
         );

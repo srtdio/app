@@ -4,6 +4,7 @@ vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
 }));
 
+import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ActionMenuTrigger } from '@/components/ui/ActionMenu';
 import { ROW_MORE_INK, searchChips } from '@/components/chat/ChannelList';
@@ -27,6 +28,31 @@ describe('ChannelList buttons (design system)', () => {
     const on = tags.find((t) => t.includes('data-search-chip="photo"')) ?? '';
     expect(on).toContain('bg-accent text-accent-fg lit-pill');
     expect(on).toContain('aria-pressed="true"');
+  });
+
+  it('only the picked chip carries the X: "Clear <chip> filter", 44x44, the chip ink', () => {
+    const html = renderToStaticMarkup(searchChips({ kind: 'photo', onChange: noop }));
+    const clears = buttonTags(html).filter((t) => t.includes('data-chip-clear'));
+    expect(clears).toHaveLength(1);
+    expect(clears[0]).toContain('aria-label="Clear Photos filter"');
+    expect(clears[0]).toContain('min-h-11 w-11');
+    expect(clears[0]).toContain('text-accent-fg');
+    expect(html).not.toMatch(/>All</);
+    const none = renderToStaticMarkup(searchChips({ kind: null, onChange: noop }));
+    expect(none).not.toContain('data-chip-clear');
+  });
+
+  it('the X and the picked chip body both clear the filter', () => {
+    const onChange = vi.fn();
+    const tree = searchChips({ kind: 'video', onChange });
+    const chips = (tree.props as { children: ReactElement[] }).children;
+    const video = chips.find((c) => (c.props as { label: string }).label === 'Videos');
+    const props = video?.props as { onClear?: () => void; onClick: () => void };
+    props.onClear?.();
+    props.onClick();
+    expect(onChange.mock.calls).toEqual([[null], [null]]);
+    const idle = chips.find((c) => (c.props as { label: string }).label === 'Photos');
+    expect((idle?.props as { onClear?: () => void }).onClear).toBeUndefined();
   });
 
   it('the row menu button is the shared ActionMenuTrigger: 44x44, 8px radius, fg-3 at rest', () => {

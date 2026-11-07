@@ -2128,6 +2128,8 @@ async function seedMediaChips(network: HarnessNetwork, page: Page, now: number):
 async function openMediaChip(page: Page, kind: MediaKind): Promise<Locator> {
   await chatListReady(page);
   await tap([page.locator(`[data-search-chip="${kind}"]`)], `${kind} chip`);
+  // The picked chip shows its X (Clear <chip> filter) in every chip screen.
+  await waitFor([page.locator('[data-chip-clear]')], `${kind} chip X`);
   const results = page.locator(`[data-media-results="${kind}"]`);
   await waitFor([results], `${kind} results`);
   await waitFor(
