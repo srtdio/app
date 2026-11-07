@@ -3,7 +3,7 @@
 // account on the same device never inherits the first one's choices, and they
 // never touch the network (the device is the only owner).
 //
-// Every sound (chat tone, Activity tone, reminder chime) and every tab flash
+// Every sound (chat tone, Activity tone) and every tab flash
 // and favicon dot asks the gates below at the moment it would play, so a pause
 // set in another tab or a moment ago is obeyed without a reload. A gate check
 // is one synchronous getItem plus a cached parse (by raw string): cheap enough

@@ -141,7 +141,7 @@ export const UNREAD_DOT_CLASS = LIST_CARD_UNREAD_DOT;
 export type ActivityKind = 'Mention' | 'Post' | 'Brief' | 'Plan' | 'Reminder';
 
 /**
- * What one entry is, in one word: a reminder (or a missed due time), a
+ * What one entry is, in one word: a reminder (a task's missed due time), a
  * mention (a comment's or a chat's), a plan (plan alerts, plan items, plan
  * events), a brief, a post. A chat message, an invite, a file or the welcome
  * row names none. Pure.
@@ -149,7 +149,7 @@ export type ActivityKind = 'Mention' | 'Post' | 'Brief' | 'Plan' | 'Reminder';
 export function activityKind(item: ActivityItem): ActivityKind | undefined {
   const alert = item.alert ?? null;
   if (isWelcome(item)) return undefined;
-  if (alert?.kind === 'reminder' || item.eventType === 'task_due') return 'Reminder';
+  if (item.eventType === 'task_due') return 'Reminder';
   if (item.eventType === MENTION_EVENT_TYPE || isChatMention(item)) return 'Mention';
   if (
     alert?.kind === 'plan' ||
@@ -245,7 +245,7 @@ export function activityPreviewText(group: readonly ActivityItem[]): string {
 
 /** An alert's glyph: what kind of alert at a glance. */
 function alertIcon(item: ActivityItem, alert: AlertInfo): ComponentType<IconProps> {
-  if (alert.kind === 'reminder' || item.eventType === 'task_due') return IconAlarmClock;
+  if (item.eventType === 'task_due') return IconAlarmClock;
   if (alert.kind === 'sent') return IconTickSingle;
   if (alert.kind === 'failed') return IconCalendarClock;
   if (alert.kind === 'plan' || alert.kind === 'bank') return IconPlan;
@@ -480,22 +480,14 @@ export function ActivityCard({
   );
 }
 
-/** A pending reminder's edit: the bell's "Change time" (the reminder sheet in change mode). */
-export const CHANGE_TIME_LABEL = 'Change time';
-
-/** An Upcoming row's Edit label: "Change time" on a reminder, "Edit" on a scheduled message. */
-export function upcomingEditLabel(item: Pick<UpcomingItem, 'kind'>): string {
-  return item.kind === 'reminder' ? CHANGE_TIME_LABEL : 'Edit';
-}
-
-/** An Upcoming card's menu rows: Edit (Change time on a reminder), then Cancel. Pure. */
+/** An Upcoming card's menu rows: Edit, then Cancel. Pure. */
 export function upcomingMenuItems(
   item: UpcomingItem,
   onEdit: (item: UpcomingItem) => void,
   onCancel: (item: UpcomingItem) => void,
 ): ActionMenuItem[] {
   return [
-    { id: 'edit', label: upcomingEditLabel(item), icon: IconEdit, onSelect: () => onEdit(item) },
+    { id: 'edit', label: 'Edit', icon: IconEdit, onSelect: () => onEdit(item) },
     {
       id: 'cancel',
       label: 'Cancel',
@@ -507,12 +499,10 @@ export function upcomingMenuItems(
 }
 
 /**
- * One Upcoming row on ui/ListCard, like every Activity card: the alarm clock
- * (a reminder) or calendar clock (a scheduled message) as the picture, the
- * chat as the title, the message as the preview, the due time and the tag
- * (Reminder or Scheduled); the ⋯ holds Edit (Change time on a reminder) and
- * Cancel. Never unread. A tap opens the chat at the reminded message (a
- * scheduled message opens its chat). Hook-free.
+ * One Upcoming row on ui/ListCard, like every Activity card: the calendar
+ * clock as the picture, the chat as the title, the message as the preview,
+ * the due time and the Scheduled tag; the ⋯ holds Edit and Cancel. Never
+ * unread. A tap opens its chat. Hook-free.
  */
 export function UpcomingCard({
   item,
@@ -532,15 +522,12 @@ export function UpcomingCard({
     <ListCard
       data-upcoming-row={item.kind}
       data-upcoming-id={item.id}
-      picture={{
-        kind: 'icon',
-        icon: item.kind === 'reminder' ? IconAlarmClock : IconCalendarClock,
-      }}
+      picture={{ kind: 'icon', icon: IconCalendarClock }}
       title={chat}
       preview={stripFormat(item.preview)}
       time={formatSendLabel(new Date(item.dueAt), now)}
       timeHooks={{ 'data-upcoming-due': '' }}
-      tag={upcomingTag(item)}
+      tag={upcomingTag()}
       tagHooks={{ 'data-upcoming-tag': '' }}
       onPress={() => onOpen(item)}
       press={{ 'aria-label': `Open ${chat}`, 'data-upcoming-open': '' }}

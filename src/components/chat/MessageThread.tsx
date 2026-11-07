@@ -4816,7 +4816,6 @@ function ThreadBody(
         open={menu !== null}
         onClose={() => setMenu(null)}
         anchor={menu?.rect ?? null}
-        held={menu?.held ?? null}
         mine={menu?.message.mine ?? false}
         canReact={menu !== null && menu.message.state === 'sent'}
         reactionsOnly={menu?.reactionsOnly === true}

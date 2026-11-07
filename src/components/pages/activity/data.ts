@@ -31,6 +31,7 @@ import {
   BELL_CHAT_ENTITY,
   BELL_PLAN_EVENT_TYPES,
   INBOX_SNOOZE_OPTIONS,
+  RETIRED_EVENT_LIST,
   chatMessageHref,
   isBellPlanEvent,
   planHref,
@@ -48,10 +49,8 @@ import { planItemFocusHref } from '@/lib/focus-target';
 import {
   BANK_LABEL,
   CHAT_LABEL,
-  MESSAGE_LABEL,
   PLAN_DELETED_TOAST,
   PLAN_LABEL,
-  REMINDER_LABEL,
   SCHEDULED_LABEL,
   TASK_ALERT_LABEL,
   alertKindOf,
@@ -88,7 +87,6 @@ import {
   updateScheduledMessage,
   type ScheduledRow,
 } from '@/lib/chat/scheduled';
-import { readPendingReminders, type ReminderRow } from '@/lib/chat/reminders';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isPostPlatform } from '@srtdio/posts';
 import { workspaceDisplayName } from '@/lib/workspace-context';
@@ -1045,14 +1043,12 @@ export function scheduledReceiver(alert: Pick<AlertInfo, 'chatName' | 'chatType'
 
 /**
  * An alert card's top line, beside the actor's photo: the actor's name (a
- * reminder's message sender, a plan or task change's author), else the
- * alert's label ("Reminder", "Scheduled", "Plan", "Tasks"). Pure.
+ * plan or task change's author), else the alert's label ("Scheduled",
+ * "Plan", "Tasks"). Pure.
  */
 export function alertTopLine(item: Pick<ActivityItem, 'actorName'>, alert: AlertInfo): string {
   if (item.actorName !== null) return item.actorName;
   switch (alert.kind) {
-    case 'reminder':
-      return REMINDER_LABEL;
     case 'sent':
     case 'failed':
       return SCHEDULED_LABEL;
@@ -1066,7 +1062,7 @@ export function alertTopLine(item: Pick<ActivityItem, 'actorName'>, alert: Alert
 }
 
 /**
- * An alert card's title, in the bell's words: a reminder's message preview;
+ * An alert card's title, in the bell's words:
  * "Your scheduled message was sent to <receiver>"; "Couldn't send your
  * scheduled message to <receiver>." (its reason is the body); the plan alert's
  * line (side-aware for plan_opened); the task alert's line. Pure.
@@ -1077,8 +1073,6 @@ export function alertTitle(
   side: ViewerSide,
 ): string {
   switch (alert.kind) {
-    case 'reminder':
-      return alert.preview ?? MESSAGE_LABEL;
     case 'sent':
       return scheduledSentTitle(scheduledReceiver(alert));
     case 'failed':
@@ -1098,14 +1092,13 @@ export function alertTitle(
 }
 
 /**
- * An alert card's second line: the chat for a reminder or a task alert, the
+ * An alert card's second line: the chat for a task alert, the
  * message preview for a sent scheduled message, a failed send's reason in
  * plain words (never its preview), the item a plan alert names (never
  * the plan twice), or null when there is none. Pure.
  */
 export function alertBody(alert: AlertInfo): string | null {
   switch (alert.kind) {
-    case 'reminder':
     case 'task':
       return alertChat(alert);
     case 'sent':
@@ -1126,8 +1119,6 @@ export function alertBody(alert: AlertInfo): string | null {
  */
 function alertHref(item: ActivityItem, alert: AlertInfo, side: ViewerSide): string | null {
   switch (alert.kind) {
-    case 'reminder':
-      return alert.channelId !== null ? chatMessageHref(alert.channelId, item.messageId) : null;
     case 'sent':
       return alert.channelId !== null
         ? chatMessageHref(alert.channelId, item.messageId ?? alert.scheduledId)
@@ -1177,15 +1168,14 @@ function bankOpensFor(eventType: BankEventType, side: ViewerSide): boolean {
 interface OpenAction {
   /** Where it goes; null opens nothing. */
   href: string | null;
-  /** Whether the tap marks the row read (a reminder stays until Mark as read). */
+  /** Whether the tap marks the row read. */
   markRead: boolean;
   /** A toast the tap shows (a deleted plan's); null for none. */
   toast: string | null;
 }
 
 /**
- * The tap on a row, in the bell's rules for the alerts: a reminder opens the
- * chat at its message and never marks it read; a deleted plan (or one with no
+ * The tap on a row, in the bell's rules for the alerts: a deleted plan (or one with no
  * id) marks read, opens nothing and toasts "This plan was deleted"; every
  * other row marks read, then opens its link (entityHref). Pure.
  */
@@ -1195,7 +1185,6 @@ export function openAction(
   side: ViewerSide = 'unknown',
 ): OpenAction {
   const href = entityHref(item, workspaceKey, side);
-  if (item.alert?.kind === 'reminder') return { href, markRead: false, toast: null };
   if (item.alert?.kind === 'plan' && href === null) {
     return { href: null, markRead: true, toast: PLAN_DELETED_TOAST };
   }
@@ -1821,7 +1810,7 @@ function stitchAlert(
     const peer = dmPeerOf(channel, viewerId);
     if (peer !== null) alert.chatName = from.personNameOf(peer);
   }
-  if (alert.kind === 'reminder' || alert.kind === 'sent') {
+  if (alert.kind === 'sent') {
     const message = messageId !== null ? from.messages.get(messageId) : undefined;
     alert.preview = messagePreview(message, from.chatNames);
   } else if (alert.kind === 'failed') {
@@ -1922,6 +1911,7 @@ export async function fetchActivityEntries(
       .select(SELECT_COLS)
       .eq('workspace_id', workspaceId)
       .is('deleted_at', null)
+      .not('event_type', 'in', RETIRED_EVENT_LIST)
       .gte('created_at', bounds.from);
     const capped =
       bounds.to === null
@@ -2051,7 +2041,7 @@ async function enrichInboxRows(
     ),
   );
   // Chat rows (mentions and the chat alerts): the chats (kind + group), one IN
-  // read; the messages a mention, reminder or sent row previews, one IN read.
+  // read; the messages a mention or sent row previews, one IN read.
   const chatMentions = items.filter(isChatMention);
   const alerts = items.flatMap((i) => (i.alert != null ? [{ item: i, alert: i.alert }] : []));
   const channelIds = unique([
@@ -2061,7 +2051,7 @@ async function enrichInboxRows(
   const messageIds = unique([
     ...chatMentions.flatMap((i) => (i.messageId !== null ? [i.messageId] : [])),
     ...alerts.flatMap(({ item, alert }) =>
-      (alert.kind === 'reminder' || alert.kind === 'sent') && item.messageId !== null
+      alert.kind === 'sent' && item.messageId !== null
         ? [item.messageId]
         : [],
     ),
@@ -2240,14 +2230,6 @@ async function enrichInboxRows(
       const peer = dmPeerOf(channel, viewerOf.get(item.id) ?? '');
       return peer !== null ? [peer] : [];
     }),
-    // A reminder names its message's sender.
-    ...alerts.flatMap(({ item, alert }) => {
-      const sender =
-        alert.kind === 'reminder' && item.messageId !== null
-          ? chatRes.messages.get(item.messageId)?.senderUserId
-          : null;
-      return sender != null ? [sender] : [];
-    }),
     ...[...planRes.comments.values()].flatMap((c) =>
       c.authorId !== null ? [c.authorId, ...parseMentions(c.body)] : parseMentions(c.body),
     ),
@@ -2284,13 +2266,8 @@ async function enrichInboxRows(
         item.messageId !== null ? (chatRes.messages.get(item.messageId)?.body ?? null) : null;
       item.body = chatMentionPreview(body, chatNames);
     } else if (item.alert != null) {
-      // A reminder names its message's sender; every other alert its own actor.
-      actorUserId =
-        item.alert.kind === 'reminder'
-          ? ((item.messageId !== null
-              ? chatRes.messages.get(item.messageId)?.senderUserId
-              : null) ?? null)
-          : item.actorId;
+      // Every alert names its own actor.
+      actorUserId = item.actorId;
     } else if (COMMENT_EVENTS.includes(item.eventType) && !isPlanMention(item)) {
       actorUserId =
         (item.commentId !== null ? (commentAuthors.get(item.commentId) ?? null) : null) ??
@@ -2581,25 +2558,23 @@ export function snoozeEntry(
 // --- Upcoming ----------------------------------------------------------------
 
 /**
- * One Upcoming row: a scheduled message of the viewer's not yet sent, or a
- * pending reminder. Never an inbox row: it never counts toward the unread
- * badge and "Mark all read" never touches it.
+ * One Upcoming row: a scheduled message of the viewer's not yet sent. Never
+ * an inbox row: it never counts toward the unread badge and "Mark all read"
+ * never touches it.
  */
-export type UpcomingItem =
-  | (UpcomingBase & { kind: 'reminder'; row: ReminderRow })
-  | (UpcomingBase & { kind: 'scheduled'; row: ScheduledRow });
+export type UpcomingItem = UpcomingBase & { kind: 'scheduled'; row: ScheduledRow };
 
 interface UpcomingBase {
-  /** The reminder's or scheduled row's id. */
+  /** The scheduled row's id. */
   id: string;
   channelId: string;
-  /** When it fires: remind_at, or send_at. */
+  /** When it sends: send_at. */
   dueAt: string;
   /** The chat's name for a group; null for a direct chat or an unread one (reads "Chat"). */
   chatName: string | null;
   /** The chat's kind, for a scheduled edit's mention list; null when the read failed. */
   channelType: 'group' | 'dm' | null;
-  /** The reminded message's preview, or the scheduled body's. */
+  /** The scheduled body's preview. */
   preview: string;
 }
 
@@ -2607,13 +2582,12 @@ interface UpcomingBase {
 interface UpcomingSources {
   channels: ReadonlyMap<string, ChatRowChannel>;
   groupNames: ReadonlyMap<string, string>;
-  messages: ReadonlyMap<string, ChatMessagePreview>;
   nameOf: NameOf;
 }
 
-/** An Upcoming row's tag: "Reminder" or "Scheduled". Pure. */
-export function upcomingTag(item: Pick<UpcomingItem, 'kind'>): string {
-  return item.kind === 'reminder' ? REMINDER_LABEL : SCHEDULED_LABEL;
+/** An Upcoming row's tag: "Scheduled". Pure. */
+export function upcomingTag(): string {
+  return SCHEDULED_LABEL;
 }
 
 /** An Upcoming row's chat: the group's name, else "Chat". Pure. */
@@ -2622,21 +2596,18 @@ export function upcomingChat(item: Pick<UpcomingItem, 'chatName'>): string {
 }
 
 /**
- * Where tapping an Upcoming row goes: a reminder opens its chat at the
- * message; a scheduled message (not sent, so no message yet) opens its chat.
- * Pure.
+ * Where tapping an Upcoming row goes: a scheduled message (not sent, so no
+ * message yet) opens its chat. Pure.
  */
 export function upcomingHref(item: UpcomingItem): string {
-  return chatMessageHref(item.channelId, item.kind === 'reminder' ? item.row.message_id : null);
+  return chatMessageHref(item.channelId, null);
 }
 
 /**
- * The Upcoming rows from the pending reminders and the scheduled messages not
- * yet sent, joined with the batched reads, soonest first (a tie keeps
- * reminders first). Pure.
+ * The Upcoming rows from the scheduled messages not yet sent, joined with
+ * the batched reads, soonest first. Pure.
  */
 export function buildUpcoming(
-  reminders: readonly ReminderRow[],
   scheduled: readonly ScheduledRow[],
   from: UpcomingSources,
 ): UpcomingItem[] {
@@ -2648,19 +2619,6 @@ export function buildUpcoming(
     };
   };
   const items: UpcomingItem[] = [
-    ...reminders
-      .filter((r) => r.fired_at === null && r.cancelled_at === null)
-      .map(
-        (r): UpcomingItem => ({
-          kind: 'reminder',
-          row: r,
-          id: r.id,
-          channelId: r.channel_id,
-          dueAt: r.remind_at,
-          ...chatOf(r.channel_id),
-          preview: messagePreview(from.messages.get(r.message_id), from.nameOf),
-        }),
-      ),
     ...scheduled
       .filter((r) => r.status === 'scheduled')
       .map(
@@ -2685,57 +2643,41 @@ export function buildUpcoming(
 type UpcomingResult = { ok: true; data: UpcomingItem[] } | { ok: false; error: string };
 
 /**
- * Load the Upcoming chip: the viewer's pending reminders and their scheduled
- * messages not yet sent (one read each, a page of up to 1000, in parallel;
- * either failing fails the load), then the chats and the reminded messages
- * (chat_channels and chat_messages IN reads), the group names (one IN read)
+ * Load the Upcoming chip: the viewer's scheduled messages not yet sent (one
+ * read, a page of up to 1000), then the chats (a chat_channels IN read),
+ * the group names (one IN read)
  * and every person a preview names (one batched read). Never one read per row.
  * The enrichment reads are best-effort: a failure leaves a row's chat or
  * preview generic, never failed.
  */
 export async function fetchUpcoming(client: Client, workspaceId: string): Promise<UpcomingResult> {
-  const [remindersRes, scheduledRes] = await Promise.all([
-    readPendingReminders(client, { workspaceId }),
-    readUpcomingScheduled(client, { workspaceId }),
-  ]);
-  if (!remindersRes.ok) return { ok: false, error: remindersRes.error.message };
+  const scheduledRes = await readUpcomingScheduled(client, { workspaceId });
   if (!scheduledRes.ok) return { ok: false, error: scheduledRes.error.message };
-  const reminders = remindersRes.data;
   const scheduled = scheduledRes.data;
   const chat = await readChatSources(client, {
-    channelIds: unique([
-      ...reminders.map((r) => r.channel_id),
-      ...scheduled.map((r) => r.channel_id),
-    ]),
-    messageIds: unique(reminders.map((r) => r.message_id)),
+    channelIds: unique(scheduled.map((r) => r.channel_id)),
+    messageIds: [],
   });
   const groupIds = unique(
     [...chat.channels.values()].flatMap((c) => (c.groupId !== null ? [c.groupId] : [])),
   );
-  const peopleIds = unique([
-    ...[...chat.messages.values()].flatMap((m) => mentionIds(m.body ?? '')),
-    ...scheduled.flatMap((r) => mentionIds(r.body ?? '')),
-  ]);
+  const peopleIds = unique(scheduled.flatMap((r) => mentionIds(r.body ?? '')));
   const [, groupNames] = await Promise.all([
     resolvePeople(client, workspaceId, peopleIds),
     readGroupNames(client, groupIds),
   ]);
   return {
     ok: true,
-    data: buildUpcoming(reminders, scheduled, {
+    data: buildUpcoming(scheduled, {
       channels: chat.channels,
       groupNames,
-      messages: chat.messages,
       nameOf: mentionNamesIn(workspaceId),
     }),
   };
 }
 
 /** Upcoming's empty state, in the bell's words. */
-export const UPCOMING_EMPTY = 'Reminders and scheduled messages show up here.';
-
-/** The confirm before a pending reminder is cancelled, in the bell's words. */
-export const CANCEL_REMINDER_TITLE = 'Cancel this reminder?';
+export const UPCOMING_EMPTY = 'Scheduled messages show up here.';
 
 /** What the scheduled writes need: injected so tests drive them with a recording client. */
 interface UpcomingWriteDeps {

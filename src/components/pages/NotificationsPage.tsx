@@ -24,16 +24,12 @@ import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar
 import { cn } from '@/lib/cn';
 import { Text, textRole } from '@/components/ui/Text';
 import { GUTTER } from '@/components/ui/layout';
-import { REMINDER_CANCELLED_COPY, createReminderActions } from '@/components/chat/ReminderContext';
-import { CANCEL_REMINDER_LABEL, ReminderSheet } from '@/components/chat/ReminderSheet';
 import {
   CANCEL_CONFIRM_TITLE,
   DONT_SEND_LABEL,
   ScheduledListSheet,
 } from '@/components/chat/ScheduledListSheet';
 import { mentionHandle, mentionNamesIn } from '@/lib/chat/mentions';
-import { newMessageId } from '@/lib/chat/message-id';
-import { REMINDERS_CHANGED_EVENT, announceRemindersChanged } from '@/lib/chat/reminders';
 import { errorText } from '@/lib/error-copy';
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import { chatMessageHref } from '@/lib/inbox/bell-types';
@@ -65,7 +61,6 @@ import {
   groupDigest,
   upcomingHref,
   ACTIVITY_LOAD_FAILED,
-  CANCEL_REMINDER_TITLE,
   MARKED_READ_LABEL,
   UPCOMING_EMPTY,
   markAllTargets,
@@ -664,15 +659,6 @@ export function NotificationsPage() {
     return () => window.clearTimeout(timer);
   }, [nowMs, tz]);
 
-  // A reminder set, cancelled or rung anywhere (and the shell's poll tick)
-  // reloads Upcoming while it is on screen.
-  useEffect(() => {
-    if (state !== 'upcoming') return;
-    const reload = (): void => void loadUpcoming();
-    window.addEventListener(REMINDERS_CHANGED_EVENT, reload);
-    return () => window.removeEventListener(REMINDERS_CHANGED_EVENT, reload);
-  }, [state, loadUpcoming]);
-
   useEffect(() => {
     void loadMentionCount(true);
   }, [loadMentionCount]);
@@ -770,7 +756,7 @@ export function NotificationsPage() {
   );
 
   // Open one entry by its tap rule (openAction): mark it read (optimistic, and
-  // reverted with a toast if the save fails) unless it is a reminder, toast a
+  // reverted with a toast if the save fails), toast a
   // deleted plan, then navigate to its link.
   const handleOpenEntry = useCallback(
     (entry: ActivityItem) => {
@@ -784,7 +770,7 @@ export function NotificationsPage() {
   );
 
   // Open a thread: every unread entry in the group is marked read in one batch
-  // (a reminder stays), then it opens from `entry` (the card's groupOpenEntry:
+  // then it opens from `entry` (the card's groupOpenEntry:
   // the newest entry that links to a comment, else the lead).
   const handleOpenGroup = useCallback(
     (group: ActivityItem[], entry: ActivityItem) => {
@@ -954,9 +940,7 @@ export function NotificationsPage() {
     [handleMarkRead, navigate],
   );
 
-  // Upcoming's Edit and Cancel, as the bell had them: a reminder's Change time
-  // (the reminder sheet in change mode, with Cancel reminder) and Cancel (a
-  // confirm); a scheduled message's Edit ("Scheduled in this chat": Send now,
+  // Upcoming's Edit and Cancel, as the bell had them: a scheduled message's Edit ("Scheduled in this chat": Send now,
   // Edit, Time, Don't send) and Cancel (a confirm). Every write carries its
   // own trace id; a failure toasts "Couldn't do that. {reason}" (a "not
   // found" stays silent) and the rows reload.
@@ -972,20 +956,6 @@ export function NotificationsPage() {
     },
     [toast],
   );
-  const reminderActions = useMemo(
-    () =>
-      createReminderActions({
-        client: supabase,
-        newTraceId: newTrace,
-        newId: newMessageId,
-        failed: upcomingFailed,
-        notify: (title) => toast?.show({ title }),
-        // Every reminder reader reloads, Upcoming included (the listener above).
-        remindersChanged: announceRemindersChanged,
-        reminderChanged: () => undefined,
-      }),
-    [newTrace, upcomingFailed, toast],
-  );
   const upcomingRef = useRef(upcoming);
   upcomingRef.current = upcoming;
   const scheduledWrites = useMemo(
@@ -1000,7 +970,6 @@ export function NotificationsPage() {
       }),
     [newTrace, loadUpcoming, upcomingFailed],
   );
-  const [reminderEdit, setReminderEdit] = useState<UpcomingItem | null>(null);
   const [scheduledChat, setScheduledChat] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<UpcomingItem | null>(null);
   // The confirm keeps its words while it slides away (the target clears first).
@@ -1027,23 +996,19 @@ export function NotificationsPage() {
     [navigate],
   );
   const handleEditUpcoming = useCallback((item: UpcomingItem) => {
-    if (item.kind === 'reminder') setReminderEdit(item);
-    else setScheduledChat(item.channelId);
+    setScheduledChat(item.channelId);
   }, []);
 
   const cancelUpcoming = useCallback(
     async (item: UpcomingItem): Promise<boolean> => {
       setHiddenUpcoming((prev) => new Set([...prev, item.id]));
-      const ok =
-        item.kind === 'reminder'
-          ? await reminderActions.cancelReminder(item.row)
-          : await scheduledWrites.onCancel(item.row);
+      const ok = await scheduledWrites.onCancel(item.row);
       if (!ok) {
         setHiddenUpcoming((prev) => new Set([...prev].filter((id) => id !== item.id)));
       }
       return ok;
     },
-    [reminderActions, scheduledWrites],
+    [scheduledWrites],
   );
 
   const confirmCancel = useCallback(() => {
@@ -1051,28 +1016,6 @@ export function NotificationsPage() {
     setCancelTarget(null);
     if (target !== null) void cancelUpcoming(target);
   }, [cancelTarget, cancelUpcoming]);
-
-  const pickReminderTime = useCallback(
-    (at: Date) => {
-      const target = reminderEdit;
-      setReminderEdit(null);
-      if (target?.kind !== 'reminder') return;
-      void reminderActions.setReminderAt(
-        { messageId: target.row.message_id, channelId: target.row.channel_id },
-        at,
-      );
-    },
-    [reminderEdit, reminderActions],
-  );
-
-  const cancelFromReminderSheet = useCallback(() => {
-    const target = reminderEdit;
-    setReminderEdit(null);
-    if (target === null) return;
-    void cancelUpcoming(target).then((ok) => {
-      if (ok) toast?.show({ title: REMINDER_CANCELLED_COPY });
-    });
-  }, [reminderEdit, cancelUpcoming, toast]);
 
   const listLoading = workspaceId === null || (loading && items.length === 0);
   if (!listLoading) mark('activity:paint');
@@ -1262,13 +1205,6 @@ export function NotificationsPage() {
         </div>
       )}
 
-      <ReminderSheet
-        open={reminderEdit !== null}
-        onClose={() => setReminderEdit(null)}
-        preview={reminderEdit?.preview ?? null}
-        onPick={pickReminderTime}
-        change={{ onCancelReminder: cancelFromReminderSheet }}
-      />
       <ScheduledListSheet
         open={scheduledChat !== null && scheduledSheetRows.length > 0}
         onClose={() => setScheduledChat(null)}
@@ -1279,7 +1215,7 @@ export function NotificationsPage() {
       <Sheet
         open={cancelTarget !== null}
         onClose={() => setCancelTarget(null)}
-        title={cancelShown?.kind === 'scheduled' ? CANCEL_CONFIRM_TITLE : CANCEL_REMINDER_TITLE}
+        title={CANCEL_CONFIRM_TITLE}
         footer={
           <div className="flex w-full justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setCancelTarget(null)}>
@@ -1291,7 +1227,7 @@ export function NotificationsPage() {
               data-confirm-cancel-upcoming=""
               onClick={confirmCancel}
             >
-              {cancelShown?.kind === 'scheduled' ? DONT_SEND_LABEL : CANCEL_REMINDER_LABEL}
+              {DONT_SEND_LABEL}
             </Button>
           </div>
         }

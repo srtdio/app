@@ -507,9 +507,8 @@ export function activityToneWanted(
 /**
  * Split new rows: the activity toast's own, and the chat mentions that toast
  * on their own. Plan comments, plan reviews and plan mentions are activity:
- * they toast, tone and blink like a post comment. Reminders, scheduled
- * outcomes, plan edits and task alerts get no live toast here (the ring owns
- * reminders); they show on Notifications. A row lands in at most one list. Pure.
+ * they toast, tone and blink like a post comment. Scheduled outcomes, plan
+ * edits and task alerts get no live toast here; they show on Notifications. A row lands in at most one list. Pure.
  */
 export function splitNewRows(rows: readonly InboxRow[]): NewRowsSplit {
   return {

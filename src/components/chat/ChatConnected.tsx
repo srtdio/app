@@ -134,8 +134,6 @@ import {
   rememberMentionRead,
 } from '@/lib/chat/mentions';
 import { useToast } from '@/components/ui/toast';
-import { ReminderProvider } from '@/components/chat/ReminderContext';
-import { ChatReminderSheet } from '@/components/chat/ReminderSheet';
 import { SavedFromProvider, type SavedFromWiring } from '@/components/chat/NotesBits';
 import { useNotes } from '@/lib/chat/use-notes';
 import { useCurrentProfile } from '@/lib/use-current-profile';
@@ -2294,7 +2292,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     ((openPlan !== null && planShown) || (planComposeOpen && !notesOpen));
   const infoGroupId = isGroup ? (selected?.groupId ?? null) : null;
 
-  const surface = (
+  return (
     <div className="relative flex h-full min-h-0">
       {showList ? (
         <div ref={listPaneRef} className={chatListPaneClass(planPanelOpen, listPageScroll)}>
@@ -2574,19 +2572,5 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
         onGroupCreated={onGroupCreated}
       />
     </div>
-  );
-
-  // The message menu's Remind me and its sheet.
-  return (
-    <ReminderProvider
-      workspaceId={workspaceId}
-      currentUserId={currentUserId}
-      openChannelId={selected?.channelId ?? null}
-      messages={threadCurrent ? threadMessages : NO_MESSAGES}
-      nameOf={scheduleNameOf}
-    >
-      {surface}
-      <ChatReminderSheet />
-    </ReminderProvider>
   );
 }

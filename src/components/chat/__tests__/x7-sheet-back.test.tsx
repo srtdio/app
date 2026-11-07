@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// X7 fix 6 (FT40): Forward, Schedule, Who reacted, Message info and
-// Reminder are history steps, so system Back closes only the sheet and the
+// X7 fix 6 (FT40): Forward, Schedule, Who reacted and Message info are
+// history steps, so system Back closes only the sheet and the
 // chat under it stays open.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
@@ -97,7 +97,7 @@ describe('X7 FT40: system Back closes only the sheet', () => {
     expect(stepMarkerOf(window.history.state, HISTORY_STEP_KEYS.threadView)).not.toBeNull();
   });
 
-  it('Forward, Schedule, Who reacted and Reminder push their own step; Message info has one', () => {
+  it('Forward, Schedule and Who reacted push their own step; Message info has one', () => {
     expect(source('../ForwardPicker.tsx')).toContain(
       'useHistoryStep(props.open && props.historyStep === true, SHEET_STEP_KEYS.forward, props.onClose)',
     );
@@ -109,10 +109,7 @@ describe('X7 FT40: system Back closes only the sheet', () => {
     expect(source('../ReadingLayer.tsx')).toContain(
       'useHistoryStep(messageId !== null, SHEET_STEP_KEYS.whoReacted, props.onClose)',
     );
-    expect(source('../ReminderSheet.tsx')).toContain(
-      'useHistoryStep(props.open, SHEET_STEP_KEYS.reminder, props.onClose)',
-    );
     expect(source('../MessageThread.tsx')).toContain('HISTORY_STEP_KEYS.readInfo');
-    expect(new Set(Object.values(SHEET_STEP_KEYS)).size).toBe(4);
+    expect(new Set(Object.values(SHEET_STEP_KEYS)).size).toBe(3);
   });
 });

@@ -1,6 +1,5 @@
 // The Notifications page's chat, plan and task alerts: the rows the chat bell
-// used to show beside Activity's (bell-types.ts names them). Reminders,
-// scheduled sends (sent and failed), the plan alerts that name a plan
+// used to show beside Activity's (bell-types.ts names them). Scheduled sends (sent and failed), the plan alerts that name a plan
 // (plan_opened, plan_deleted, plan_date_changed, plan_updated) and the task
 // alerts (task_changed, task_due) map here into the fields their Notifications
 // card reads, and so do the five idea bank events (bank_idea_*, worded by
@@ -48,11 +47,10 @@ export const PLAN_ALERT_EVENT_TYPES = [
 const PLAN_ALERT = new Set<string>(PLAN_ALERT_EVENT_TYPES);
 
 /** What an alert row is: the card's icon, its top line and its tap follow from it. */
-export type AlertKind = 'reminder' | 'sent' | 'failed' | 'plan' | 'task' | 'bank';
+export type AlertKind = 'sent' | 'failed' | 'plan' | 'task' | 'bank';
 
 /** The alert kind of an event type; null for every other row. Pure. */
 export function alertKindOf(eventType: string): AlertKind | null {
-  if (eventType === 'reminder') return 'reminder';
   if (eventType === 'scheduled_sent') return 'sent';
   if (eventType === 'scheduled_failed') return 'failed';
   if (PLAN_ALERT.has(eventType)) return 'plan';
@@ -289,9 +287,6 @@ export function taskAlertLine(
     f?.kind != null && TASK_KINDS.has(f.kind) ? (f.kind as TaskEventKind) : 'note';
   return `${who} · ${eventText({ kind, oldValue: f?.old ?? null, newValue: f?.new ?? null }, ref)}`;
 }
-
-/** A reminder row's top line when its message's sender did not resolve. */
-export const REMINDER_LABEL = 'Reminder';
 
 /** A scheduled send's top line (sent or failed). */
 export const SCHEDULED_LABEL = 'Scheduled';

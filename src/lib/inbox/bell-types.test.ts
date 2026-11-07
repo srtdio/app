@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   BELL_ONLY_EVENT_TYPES,
+  RETIRED_EVENT_LIST,
+  RETIRED_EVENT_TYPES,
   BELL_PLAN_EVENT_TYPES,
   BELL_TASK_EVENT_TYPES,
   NOT_CHAT_MENTION_OR,
@@ -120,6 +122,14 @@ describe('isBellEntry: the rows the live layer toasts apart', () => {
     }
     // A chat mention keeps its own toast path.
     expect(isLiveActivityRow({ event_type: 'mention', entity_type: 'chat_channel' })).toBe(false);
+  });
+
+  it('retired reminders stay silent bell rows and are listed for the page filter', () => {
+    expect(RETIRED_EVENT_TYPES).toContain('reminder');
+    expect(RETIRED_EVENT_LIST).toBe('(reminder)');
+    for (const eventType of RETIRED_EVENT_TYPES) {
+      expect(BELL_ONLY_EVENT_TYPES).toContain(eventType);
+    }
   });
 
   it('reads raw snake_case rows the same way', () => {

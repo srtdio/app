@@ -24,10 +24,7 @@
 // until the new workspace's count lands, never the old workspace's number.
 //
 // TOASTS: the rows the bell used to own (bell-types.ts) never word the activity
-// toast. A new chat mention toasts "<name> mentioned you" with Open instead,
-// and a tick that found new rows asks the reminder readers to reload.
-// ReminderRing (the reminder ring, chime and missed-on-open toast) is mounted
-// here so it runs on every page from app start.
+// toast. A new chat mention toasts "<name> mentioned you" with Open instead.
 //
 // OWN ROWS: since 20261018140000 every action also writes the actor one
 // already-read row of their own (inbox_self_entry). Those are history, not news:
@@ -35,7 +32,7 @@
 //
 // TONE: new Activity rows from someone else play the chat's notification tone
 // (shared throttle, notify-sound.ts), except while Notifications is open. The
-// tone, chime and tab alert obey the signed-in user's device alert prefs
+// tone and tab alert obey the signed-in user's device alert prefs
 // (alert-prefs.ts); this provider tells that module who is signed in.
 //
 // PUSH: one private broadcast channel per signed-in user (inbox-push.ts). A
@@ -75,9 +72,7 @@ import {
 } from '@/lib/inbox/inbox-reads';
 import { generateTraceId } from '@/lib/trace';
 import { readProfiles } from '@/lib/chat-reads';
-import { announceRemindersChanged } from '@/lib/chat/reminders';
 import { listenForNameSignout, resetMentionNames } from '@/lib/chat/mentions';
-import { ReminderRing } from '@/components/chat/ReminderRing';
 import { playToneShared } from '@/lib/chat/notify-sound';
 import { pushTabAlert } from '@/lib/tab-alert';
 import { setAlertPrefsUser } from '@/lib/alert-prefs';
@@ -222,9 +217,6 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     highWaterRef.current = summary.nextHighWaterMs;
     if (summary.newRows.length > 0) {
       window.dispatchEvent(new CustomEvent(INBOX_CHANGED_EVENT, { detail: POLL_CHANGE_SOURCE }));
-      // New rows (a reminder that fired, one set on another device): the
-      // reminder readers reload. A tick that found nothing asks nothing.
-      announceRemindersChanged();
     }
     const fresh = unseenRows(summary.newRows, toastedRef.current);
     const { activity, chatMentions } = splitNewRows(fresh);
@@ -337,7 +329,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
     namesUserRef.current = userId;
   }
 
-  // The device alert prefs the tones, chime and tab alert obey are this user's
+  // The device alert prefs the tones and tab alert obey are this user's
   // (keyed by user id); signed out reads the defaults, so an account switch
   // never carries one person's mute or pause to the next. Set during render
   // (a module variable, idempotent) so it is in place before any arrival.
@@ -435,9 +427,6 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
   return (
     <InboxStoreContext.Provider value={value}>
       {children}
-      {workspaceId !== null && userId !== null ? (
-        <ReminderRing key={`${workspaceId}:${userId}`} workspaceId={workspaceId} userId={userId} />
-      ) : null}
     </InboxStoreContext.Provider>
   );
 }

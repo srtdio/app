@@ -73,8 +73,8 @@ function scheduledRow(over: Partial<ScheduledRow> = {}): ScheduledRow {
 }
 
 describe('alert kinds', () => {
-  it('reminders, scheduled sends, the four plan alerts and the task alerts are alerts', () => {
-    expect(alertKindOf('reminder')).toBe('reminder');
+  it('scheduled sends, the four plan alerts and the task alerts are alerts; reminders are retired', () => {
+    expect(alertKindOf('reminder')).toBeNull();
     expect(alertKindOf('scheduled_sent')).toBe('sent');
     expect(alertKindOf('scheduled_failed')).toBe('failed');
     for (const t of PLAN_ALERT_EVENT_TYPES) expect(alertKindOf(t)).toBe('plan');

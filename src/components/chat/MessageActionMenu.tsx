@@ -5,7 +5,6 @@ import { menuOrigin } from '@/components/ui/popover-classes';
 import { createPortal } from 'react-dom';
 import {
   ICON_SIZE,
-  IconAlarmClock,
   IconChevronLeft,
   IconChevronRight,
   IconCopy,
@@ -28,11 +27,9 @@ import { Sheet } from '@/components/ui/Sheet';
 import { MenuPopover } from '@/components/shell/MenuPopover';
 import { useIsLaptop, viewportSize } from '@/lib/use-is-laptop';
 import { useChatLayout, type ChatLayout } from '@/components/chat/chat-type';
-import { useReminderOptional } from '@/components/chat/ReminderContext';
 import { logger } from '@/lib/logger';
 import { DELETE_SELECTION_WINDOW_MS } from '@/lib/chat/forward';
 import type { ThreadMessage } from '@/lib/chat/thread';
-import { formatClock, formatSendLabel } from '@/lib/chat/scheduled';
 import { cn } from '@/lib/cn';
 import { REMOVE_FILE_MENU_LABEL } from '@/lib/chat/remove-files';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -152,8 +149,6 @@ interface MessageActionMenuProps {
   open: boolean;
   onClose: () => void;
   anchor: DOMRect | null;
-  /** The pressed bubble: "Remind me" finds its message through it. */
-  held?: HTMLElement | null;
   mine: boolean;
   currentReaction: string | null;
   /** Offers the reaction row (a recorded message); false hides it. */
@@ -196,7 +191,7 @@ interface MessageActionMenuProps {
    */
   failedSend?: boolean;
   /**
-   * Offers "Save to notes", between Copy and Remind me (a recorded, live
+   * Offers "Save to notes" (a recorded, live
    * message in any chat but notes).
    */
   canSaveToNotes?: boolean;
@@ -209,18 +204,6 @@ interface MessageActionMenuProps {
    */
   canSelectText?: boolean;
   onSelectText?: () => void;
-  /**
-   * Offers "Remind me" (a recorded message). When absent, the menu offers it
-   * itself for the held bubble's message inside a ReminderProvider.
-   */
-  canRemind?: boolean;
-  onRemind?: () => void;
-  /**
-   * The viewer's pending reminder on this message (its remind_at): the same
-   * slot then reads "Reminder · <time>" and opens the sheet to change or
-   * cancel it. Never shown on the bubble itself.
-   */
-  reminderAt?: string | null;
   /**
    * Offers "Remove file", last under More: an own, unmarked message with
    * exactly one file that is not a voice note (canRemoveSingleFile). The
@@ -243,8 +226,6 @@ export interface MessageMenuItem {
   hint?: string;
   /** Opens the in-place submenu instead of running and closing. */
   submenu?: boolean;
-  /** A time after the label, in mono ("Reminder · 9:00 AM"). */
-  mono?: string;
 }
 
 type MenuItemProps = Pick<
@@ -269,9 +250,6 @@ type MenuItemProps = Pick<
   | 'notes'
   | 'canSelectText'
   | 'onSelectText'
-  | 'canRemind'
-  | 'onRemind'
-  | 'reminderAt'
   | 'canRemoveFile'
   | 'onRemoveFile'
 >;
@@ -397,7 +375,7 @@ export function messageMenuItems(
 
 /**
  * The rows under More, in display order: Transcribe, Select, "Save to notes",
- * "Remind me" (or "Reminder · <time>"), then "Remove file" last (danger). Rows that do not apply are not
+ * then "Remove file" last (danger). Rows that do not apply are not
  * rendered; empty hides More. Pure.
  */
 export function moreMenuItems(
@@ -430,19 +408,6 @@ export function moreMenuItems(
       label: SAVE_TO_NOTES_LABEL,
       icon: <IconFile size={size} />,
       run: () => props.onSaveToNotes?.(),
-    });
-  }
-  if (props.canRemind === true) {
-    const at = props.reminderAt != null ? new Date(props.reminderAt) : null;
-    items.push({
-      kind: 'action',
-      key: 'remind',
-      label: at !== null && !Number.isNaN(at.getTime()) ? REMINDER_SET_LABEL : 'Remind me',
-      icon: <IconAlarmClock size={size} />,
-      run: () => props.onRemind?.(),
-      ...(at !== null && !Number.isNaN(at.getTime())
-        ? { mono: reminderMenuTime(at, new Date()) }
-        : {}),
     });
   }
   if (props.canRemoveFile === true) {
@@ -529,11 +494,6 @@ export function MenuRow(props: {
       </span>
       <span className="min-w-0 flex-1 truncate">
         {item.label}
-        {item.mono !== undefined ? (
-          <span data-menu-mono="" className="font-mono text-md tabular-nums">
-            {item.mono}
-          </span>
-        ) : null}
       </span>
       {item.hint !== undefined ? (
         <span className="shrink-0 text-sm text-fg-3">{item.hint}</span>
@@ -992,46 +952,6 @@ export function EmojiPickerShell(props: {
   );
 }
 
-/** The reminder row's label when one is pending; the time follows in mono. */
-export const REMINDER_SET_LABEL = 'Reminder · ';
-
-/**
- * A pending reminder's time for the menu, device-local: "3:20 PM" today, else
- * "Tomorrow 9:00 AM" or "Wed 7 Oct, 11:30 AM". Pure.
- */
-export function reminderMenuTime(at: Date, now: Date): string {
-  const label = formatSendLabel(at, now);
-  return label.startsWith('Today ') ? formatClock(at) : label;
-}
-
-type ChatRemind = Pick<
-  NonNullable<ReturnType<typeof useReminderOptional>>,
-  'canRemind' | 'openReminderFor'
-> &
-  Partial<Pick<NonNullable<ReturnType<typeof useReminderOptional>>, 'pendingReminderFor'>>;
-
-/**
- * "Remind me" for the menu: the caller's own wiring when given, else the
- * chat's reminders for the held bubble's row (its data-msg-id). With a pending
- * reminder on that message (the already-loaded list, no read here) the row
- * carries its time and opens the sheet in change mode. Pure but for the lookup.
- */
-export function remindProps(
-  props: Pick<MessageActionMenuProps, 'canRemind' | 'onRemind' | 'reminderAt'>,
-  reminders: ChatRemind | null,
-  held: HTMLElement | null | undefined,
-): Pick<MessageActionMenuProps, 'canRemind' | 'onRemind' | 'reminderAt'> {
-  if (props.canRemind !== undefined) return props;
-  const messageId = held?.closest('[data-msg-id]')?.getAttribute('data-msg-id') ?? null;
-  if (reminders === null || messageId === null || !reminders.canRemind(messageId)) return {};
-  const pending = reminders.pendingReminderFor?.(messageId) ?? null;
-  return {
-    canRemind: true,
-    onRemind: () => reminders.openReminderFor(messageId),
-    ...(pending !== null ? { reminderAt: pending.remind_at } : {}),
-  };
-}
-
 /**
  * The message action menu, opened by long-press (touch), right-click, the
  * hover ⋯ control (pointer devices) or Enter / Space on a focused bubble. The
@@ -1044,7 +964,7 @@ export function remindProps(
  * picker is open). Tokens only, so light and dark stay at parity.
  */
 export function MessageActionMenu(props: MessageActionMenuProps): ReactElement | null {
-  const { open, onClose, anchor, mine, currentReaction, onReact, held } = props;
+  const { open, onClose, anchor, mine, currentReaction, onReact } = props;
   const isLaptop = useIsLaptop();
   const containerRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<'main' | 'more'>('main');
@@ -1053,7 +973,6 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   pickingRef.current = picking;
   const moreRef = useRef<HTMLButtonElement>(null);
   const layout = useChatLayout();
-  const reminders = useReminderOptional();
   // Laptop: how far the popover lifts so its bottom stays on screen.
   const [lift, setLift] = useState(0);
 
@@ -1146,12 +1065,8 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     : reactionsOnly
       ? []
       : view === 'more'
-        ? moreSubmenuItems(
-            { ...props, ...remindProps(props, reminders, held) },
-            () => setView('main'),
-            size,
-          )
-        : messageMenuItems({ ...props, ...remindProps(props, reminders, held) }, size);
+        ? moreSubmenuItems(props, () => setView('main'), size)
+        : messageMenuItems(props, size);
   const run = (item: MessageMenuItem): void => {
     runMenuItem(item, {
       openMore: () => setView('more'),
