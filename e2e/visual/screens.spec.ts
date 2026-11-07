@@ -246,11 +246,11 @@ async function chatListAllRows(page: Page): Promise<void> {
   await chatListReady(page);
   await waitFor([page.locator('[data-notes-tile]')], 'Personal notes row');
   await waitFor(
-    [page.locator('[data-section="groups"]').getByText(GROUP_NAME, { exact: true })],
+    [page.locator('[data-chat-list]').getByText(GROUP_NAME, { exact: true })],
     'group row',
   );
   await waitFor(
-    [page.locator('[data-section="people"]').getByText(PEER_NAME, { exact: true })],
+    [page.locator('[data-chat-list]').getByText(PEER_NAME, { exact: true })],
     'person row',
   );
 }

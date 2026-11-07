@@ -107,10 +107,9 @@ describe('X7 FT43: Hide is not a destructive action', () => {
     expect(items[0]?.icon).toBe(IconEyeOff);
     expect(items[0]?.tone).toBeUndefined();
     expect(list).not.toContain('IconTrash');
-    const confirm = list.slice(list.indexOf('export function deleteChatsConfirm('));
-    expect(confirm.slice(0, confirm.indexOf('export function ChannelList('))).not.toContain(
-      'destructive',
-    );
+    // No confirm at all: Hide runs behind the Undo toast.
+    expect(list).not.toContain('ConfirmDialog');
+    expect(list).toContain('useUndoableAction');
   });
 
   it('the failure toast reads "Couldn\'t hide"', () => {

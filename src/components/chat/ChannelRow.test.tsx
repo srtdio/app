@@ -18,11 +18,9 @@ import {
   DEFAULT_LIST_INPUT,
   CHAT_ROW_LIST,
   EMPTY_PREVIEW,
-  SECTION_LABEL_TYPE,
   channelListView,
   channelRowSelected,
   chatRowContextMenu,
-  splitSections,
   tileKind,
   unreadPillText,
   unreadTagText,
@@ -101,9 +99,9 @@ function view(channels: ChannelSummary[]): ReactElement {
   });
 }
 
-/** The ids of the chats inside one section's list, in order. */
-function sectionIds(markup: string, section: 'groups' | 'people'): string[] {
-  const m = markup.match(new RegExp(`data-section="${section}"[^>]*>(.*?)</ul>`));
+/** The ids of the chats in the one list, in order. */
+function listIds(markup: string): string[] {
+  const m = markup.match(/data-chat-list=""[^>]*>(.*?)<\/ul>/);
   if (m === null) return [];
   return [...(m[1] ?? '').matchAll(/aria-label="Open ([^"]*)"/g)].map((x) => x[1] ?? '');
 }
@@ -111,61 +109,24 @@ function sectionIds(markup: string, section: 'groups' | 'people'): string[] {
 const dm2: ChannelSummary = { ...dm, channelId: 'c2', title: 'Ravi Menon' };
 const group2: ChannelSummary = { ...group, channelId: 'g2', title: 'Brand' };
 
-describe('chat home sections', () => {
-  it('group channel -> a ListCard in Groups; DM channel -> a ListCard in People', () => {
+describe('chat home: one list', () => {
+  it('groups and DMs share one list in the given (recency) order, no section labels', () => {
     expect(tileKind(group)).toBe('wide');
     expect(tileKind(dm)).toBe('square');
     const markup = html(view([dm, group, dm2, group2]));
-    expect(sectionIds(markup, 'groups')).toEqual(['Launch', 'Brand']);
-    expect(sectionIds(markup, 'people')).toEqual(['Asha Rao', 'Ravi Menon']);
-    // Groups first, then People; labels in that order.
-    expect(markup.indexOf('>Groups<')).toBeLessThan(markup.indexOf('>People<'));
-    expect(markup).toContain(`data-section="groups" class="${CHAT_ROW_LIST}"`);
-    expect(markup).toContain(`data-section="people" class="${CHAT_ROW_LIST}"`);
+    expect(listIds(markup)).toEqual(['Asha Rao', 'Launch', 'Ravi Menon', 'Brand']);
+    expect(markup).toContain(`data-chat-list="" class="${CHAT_ROW_LIST}"`);
+    expect(markup).not.toContain('data-section-label');
+    expect(markup).not.toContain('data-section=');
+    expect(markup).not.toContain('>Groups<');
+    expect(markup).not.toContain('>People<');
     expect(markup).not.toContain('data-tile');
     expect((view([group, dm]).props as { className: string }).className).toBe(CHAT_HOME_STACK);
-  });
-
-  it('keeps the recency order within each section', () => {
-    expect(splitSections([dm2, group2, dm, group])).toEqual({
-      groups: [group2, group],
-      people: [dm2, dm],
-    });
-  });
-
-  it('zero groups -> no Groups label; People label takes the first padding', () => {
-    const markup = html(view([dm, dm2]));
-    expect(markup).not.toContain('data-section-label="groups"');
-    expect(markup).not.toContain('>Groups<');
-    expect(markup).not.toContain('data-section="groups"');
-    expect(markup).toContain(
-      `data-section-label="people" class="${SECTION_LABEL_TYPE} ${CHAT_HOME_EDGE} pt-1"`,
-    );
-  });
-
-  it('zero DMs -> no People label', () => {
-    const markup = html(view([group, group2]));
-    expect(markup).not.toContain('data-section-label="people"');
-    expect(markup).not.toContain('>People<');
-    expect(markup).not.toContain('data-section="people"');
-    expect(markup).toContain(
-      `data-section-label="groups" class="${SECTION_LABEL_TYPE} ${CHAT_HOME_EDGE} pt-1"`,
-    );
-  });
-
-  it('second label gets 12px top padding; labels are 12/600 uppercase secondary on the 16 edge', () => {
-    const markup = html(view([group, dm]));
-    expect(markup).toContain(
-      `data-section-label="people" class="${SECTION_LABEL_TYPE} ${CHAT_HOME_EDGE} pt-3"`,
-    );
-    for (const t of ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2']) {
-      expect(SECTION_LABEL_TYPE.split(' ')).toContain(t);
-    }
     expect(CHAT_HOME_EDGE).toBe('px-4');
     tokenOnly(markup);
   });
 
-  it('People: a stacked list of cards like Groups, 12 apart on the 16 edge, no grid', () => {
+  it('a stacked list of cards, 12 apart on the 16 edge, no grid', () => {
     expect(CHAT_ROW_LIST.split(' ')).toEqual(expect.arrayContaining(LIST_CARD_STACK.split(' ')));
     expect(CHAT_ROW_LIST.split(' ')).toContain('gap-3');
     expect(CHAT_ROW_LIST.split(' ')).toContain(CHAT_HOME_EDGE);

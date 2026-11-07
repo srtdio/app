@@ -10,8 +10,9 @@ import {
 } from '../fixtures/notes-data';
 import { checkStep } from '../fixtures/thread-checks';
 
-// Personal notes: the tile pinned above Groups from the first paint, the notes
-// thread (one composer, no Schedule, the "Saved from" line), Save to notes
+// Personal notes: the notes card from the first paint, sorted into the one
+// list by its last note once the list is in, the notes thread (one composer,
+// the "Saved from" line), Save to notes
 // from a DM's long-press menu with its tappable toast, and the Photos chip.
 // Linux WebKit approximates iOS WebKit; it is not iOS.
 
@@ -38,15 +39,12 @@ async function holdBubble(page: Page, text: string): Promise<void> {
   await bubble.dispatchEvent('pointerup', { ...at, pointerType: 'touch', isPrimary: true });
 }
 
-async function tileAboveGroups(page: Page): Promise<void> {
-  const tile = page.locator('[data-notes-tile]');
-  const groups = page.locator('[data-section-label="groups"]');
-  await groups.waitFor({ state: 'visible' });
-  const tileBox = await tile.boundingBox();
-  const groupsBox = await groups.boundingBox();
-  expect(tileBox).not.toBeNull();
-  expect(groupsBox).not.toBeNull();
-  expect((tileBox?.y ?? 0) + (tileBox?.height ?? 0)).toBeLessThanOrEqual(groupsBox?.y ?? 0);
+/** Once the list is in, the notes card is one of its cards (sorted by its last note). */
+async function tileInList(page: Page): Promise<void> {
+  const list = page.locator('[data-chat-list]');
+  await list.waitFor({ state: 'visible' });
+  await expect(list.locator('[data-notes-tile]')).toHaveCount(1);
+  await expect(page.locator('[data-section-label]')).toHaveCount(0);
 }
 
 /**
@@ -59,7 +57,7 @@ async function watchFirstPaint(page: Page): Promise<void> {
     const observer = new MutationObserver(() => {
       if (w.__tileAtFirstList !== undefined) return;
       const list = document.querySelector(
-        '[aria-label="Loading conversations"], [data-chat-home], [data-section-label]',
+        '[aria-label="Loading conversations"], [data-chat-home]',
       );
       if (list === null) return;
       w.__tileAtFirstList = document.querySelector('[data-notes-tile]') !== null;
@@ -82,7 +80,7 @@ async function firstPaintTile(page: Page): Promise<void> {
     () => (window as unknown as { __tileAtFirstList?: boolean }).__tileAtFirstList,
   );
   expect(atFirst, 'tile present when the list first painted').toBe(true);
-  await tileAboveGroups(page);
+  await tileInList(page);
 }
 
 test('personal notes: phone', async ({ page }) => {

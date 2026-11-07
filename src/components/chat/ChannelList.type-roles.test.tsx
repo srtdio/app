@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Type roles on the chat home list: the Groups / People section labels (12,
-// 600, uppercase, .06em, fg-2), group and person names as the Row heading
+// Type roles on the chat home list (one list, no section labels): group and
+// person names as the Row heading
 // role (one row style for both), the time as meta (12, tabular) and the
 // no-match state (title lg/600, description base fg-2).
 // Pure renders; nothing reads.
@@ -64,14 +64,11 @@ function paint(node: ReactElement, selector: string, text: string): HTMLElement[
 }
 
 const classes = (el: Element): string[] => el.className.split(/\s+/);
-const SECTION_LABEL = ['text-sm', 'font-semibold', 'uppercase', 'tracking-label', 'text-fg-2'];
 
 describe('chat list type roles', () => {
-  it('section labels: Groups and People are sm, 600, uppercase, .06em, fg-2', () => {
+  it('one list: no Groups / People section labels', () => {
     for (const text of ['Groups', 'People']) {
-      const [label] = paint(list([group, dm]), 'h3', text);
-      expect(classes(label as Element)).toEqual(expect.arrayContaining(SECTION_LABEL));
-      expect(classes(label as Element)).not.toContain('text-xs');
+      expect(() => paint(list([group, dm]), 'h3', text)).toThrow();
     }
   });
 

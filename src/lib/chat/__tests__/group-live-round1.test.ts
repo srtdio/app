@@ -48,7 +48,7 @@ import {
   rememberBodyNames,
   rosterCmdTriggersReload,
 } from '@/components/chat/ChatStoreProvider';
-import { recencyKey, splitSections, visibleChannels } from '@/components/chat/ChannelList';
+import { recencyKey, visibleChannels } from '@/components/chat/ChannelList';
 
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
@@ -251,7 +251,7 @@ describe('H2 new tile paints once, final', () => {
       : undefined;
   const none = (): boolean => false;
 
-  it('H2b a just-created group or DM appears at the top of its section', () => {
+  it('H2b a just-created group or DM appears at the top of the list', () => {
     const newGroup = summary({ channelId: 'g-new', createdAt: new Date(now).toISOString() });
     const newDm = summary({
       channelId: 'd-new',
@@ -261,9 +261,8 @@ describe('H2 new tile paints once, final', () => {
       createdAt: new Date(now).toISOString(),
     });
     const list = visibleChannels([oldGroup, busyGroup, dm, newGroup, newDm], lookup, none, '');
-    const { groups, people } = splitSections(list);
-    expect(groups[0]?.channelId).toBe('g-new');
-    expect(people[0]?.channelId).toBe('d-new');
+    // One list: the two just created lead it.
+    expect(list.slice(0, 2).map((c) => c.channelId).sort()).toEqual(['d-new', 'g-new']);
     expect(recencyKey(newGroup, lookup)).toBe(now);
   });
 

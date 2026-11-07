@@ -148,25 +148,17 @@ test('chat thread: every visible button is at least a 44x44 touch target', async
 });
 
 // Type roles around the chat thread (design rules, locked 24 Oct 2026). The
-// chat list's section labels are the shared section label (12px/600,
-// uppercase). The thread itself keeps its chat-type.ts sizes (WhatsApp lock):
+// chat list is one list (no section labels). The thread itself keeps its chat-type.ts sizes (WhatsApp lock):
 // a bubble body is 17px on touch, not the 14px app body. The Seen time is meta
 // in the sans face with tabular numbers, never mono.
 test(
-  'chat thread type roles: list section label 12px uppercase, bubble 17px, Seen not mono',
+  'chat thread type roles: one list with no section labels, bubble 17px, Seen not mono',
   { tag: '@theme' },
   async ({ page }) => {
     const network = await installHarnessNetwork(page);
     await page.goto('/chat');
-    const label = page.locator('[data-section-label]').first();
-    await label.waitFor({ state: 'visible', timeout: 15_000 });
-    const labelType = await label.evaluate((el) => {
-      const s = getComputedStyle(el);
-      return { size: s.fontSize, weight: s.fontWeight, transform: s.textTransform };
-    });
-    expect(labelType.size).toBe('12px');
-    expect(labelType.weight).toBe('600');
-    expect(labelType.transform).toBe('uppercase');
+    await page.locator('[data-chat-list]').waitFor({ state: 'visible', timeout: 15_000 });
+    await expect(page.locator('[data-section-label]')).toHaveCount(0);
 
     const row = page.getByText(PEER_NAME, { exact: true }).first();
     await row.click();

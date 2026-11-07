@@ -17,7 +17,6 @@ import {
   CHAT_HOME_EDGE,
   CHAT_HOME_STACK,
   CHAT_ROW_LIST,
-  sectionLabelClass,
 } from '@/components/chat/ChannelList';
 import { chatListPaneClass } from '@/components/chat/ChatConnected';
 import { OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
@@ -156,17 +155,12 @@ describe('11f "1 selected" on the 16px edge', () => {
 });
 
 describe('11g phone chat list edges', () => {
-  it('cards and section labels sit on the 16px edge with search and chips', () => {
-    // The stack has no side padding; the card lists and the labels carry the 16 edge.
+  it('cards sit on the 16px edge with search and chips', () => {
+    // The stack has no side padding; the card list carries the 16 edge.
     expect(classes(CHAT_HOME_STACK).some((c) => /^(px|pl|pr)-/.test(c))).toBe(false);
     expect(CHAT_HOME_EDGE).toBe('px-4');
     expect(classes(CHAT_ROW_LIST)).toContain('px-4');
     expect(read('../ChannelList.tsx')).toContain('<ListCard');
-    for (const first of [true, false]) {
-      const label = classes(sectionLabelClass(first));
-      expect(label).toContain('px-4');
-      expect(label.some((c) => /^(pl|pr|mx|ml)-/.test(c))).toBe(false);
-    }
     // The search box and the chip row sit in the SectionHeader's px-4 rows.
     expect(read('../../shell/SectionHeader.tsx')).toContain("'px-4 md:px-6");
   });
