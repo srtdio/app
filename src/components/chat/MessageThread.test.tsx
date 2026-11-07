@@ -3786,11 +3786,13 @@ describe('T12: the ring in light and dark, on own and peer bubbles and over a ph
     ['own bubble', [pdf], true],
     ['peer bubble', [pdf], false],
     ['over a photo', [photo], true],
-  ] as const)('%s: same ring markup in light and dark (snapshot)', (_label, attachments, mine) => {
+  ] as const)('%s: same ring markup in light and dark', (_label, attachments, mine) => {
     const light = ring(paint([...attachments], mine, 'light'));
     const dark = ring(paint([...attachments], mine, 'dark'));
     expect(light).toBe(dark);
-    expect(light).toMatchSnapshot();
+    // D5: the stop square (solid, no stroke cross) and its label.
+    expect(light).toContain('aria-label="Stop sending"');
+    expect(light).not.toContain('M6 18 18 6M6 6l12 12');
   });
 
   it('draws only on overlay tokens that exist in both themes', () => {
@@ -3819,18 +3821,19 @@ describe('T12: the ring in light and dark, on own and peer bubbles and over a ph
     expect(OWN_BUBBLE_CONTENT).not.toContain('[&_button:hover]');
   });
 
-  it('the tap target is at least 44x44 and the unknown arc turns (never a pulse)', () => {
+  it('the tap target is at least 44x44 and the unknown arc starts empty (never a spin or pulse)', () => {
     const html = ring(
       paint([{ ...pdf, local: { ...pdf.local!, uploading: false } }], false, 'light'),
     );
     expect(html).toContain('h-11 w-11');
-    expect(html).toContain('mv-spin');
+    expect(html).toContain('data-upload-progress="unknown"');
+    expect(html).not.toContain('mv-spin');
     expect(html).not.toContain('animate-pulse');
     expect(html).not.toContain('animate-spin');
   });
 });
 
-describe('the X on an own uploading bubble', () => {
+describe('the stop square on an own uploading bubble', () => {
   const uploading: MessageAttachment = {
     assetId: '',
     name: 'brief.pdf',
