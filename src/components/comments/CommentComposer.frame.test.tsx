@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// The comment composer on ui/Composer (ComposerFrame): field, emoji, clip and
-// the round Send on one 44 row; sending keeps the row (the spinner sits in the
-// send slot); the field look is the frame's, never the editor's own.
+// The comment composer on ui/Composer (ComposerFrame): chat's "+", field,
+// emoji and the round Send on one 44 row (no paper clip); sending keeps the
+// row (the spinner sits in the send slot); the field look is the frame's,
+// never the editor's own.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -69,7 +70,7 @@ function mount(
 }
 
 describe('CommentComposer on ui/Composer', () => {
-  it('renders inside [data-composer]: field, emoji, clip, then the round Send on one row', async () => {
+  it('renders inside [data-composer]: "+", field, emoji, then the round Send', async () => {
     mount();
     await settle();
     const frame = q('[data-composer]');
@@ -91,18 +92,22 @@ describe('CommentComposer on ui/Composer', () => {
           el.getAttribute('aria-label') ??
           ''),
     );
-    expect(order).toEqual(['field', 'Emoji', 'Attach a file', 'Post']);
+    expect(order).toEqual(['Add attachment', 'field', 'Emoji', 'Post']);
+    // The paper clip is gone: attaching is the "+" tray only.
+    expect(byLabel('Attach a file')).toBeNull();
 
     const send = byLabel('Post');
     expect(send?.className).toContain('rounded-full');
     expect(send?.className).toContain('bg-accent');
-    // Side buttons share one treatment: bare 44 circles.
-    for (const label of ['Emoji', 'Attach a file']) {
-      const side = byLabel(label);
-      expect(side?.className).toContain('rounded-full');
-      expect(side?.className).toContain('h-11');
-      expect(side?.className).not.toContain('bg-accent');
-    }
+    // The side button is a bare 44 circle; the "+" is chat's round secondary.
+    const emoji = byLabel('Emoji');
+    expect(emoji?.className).toContain('rounded-full');
+    expect(emoji?.className).toContain('h-11');
+    expect(emoji?.className).not.toContain('bg-accent');
+    const plus = byLabel('Add attachment');
+    expect(plus?.className).toContain('rounded-full');
+    expect(plus?.className).toContain('h-11');
+    expect(plus?.className).toContain('lit-btn-secondary');
   });
 
   it("the field look is the frame's: the editor draws no line, well or focus line", async () => {

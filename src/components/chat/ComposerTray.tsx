@@ -44,7 +44,15 @@ const TRAY_SLIDE_PX = 8;
 type TileIcon = ComponentType<{ size?: number; className?: string }>;
 
 /** Every tray tile id, in display order. */
-type TrayTileId = 'photos' | 'file' | 'assets' | 'brief' | 'post' | 'draft' | 'plan' | 'tasks';
+export type TrayTileId =
+  | 'photos'
+  | 'file'
+  | 'assets'
+  | 'brief'
+  | 'post'
+  | 'draft'
+  | 'plan'
+  | 'tasks';
 
 /** One tray tile. A disabled tile renders faded, has no tap action and says why. */
 interface TrayTile {
@@ -162,6 +170,12 @@ export function ComposerTray(props: {
    * bar under it takes lit-dock-joined and no seam shows between the two.
    */
   onShownChange?: (shown: boolean) => void;
+  /**
+   * A composer outside chat (the comment composers): only these tiles (kept in
+   * the tray's order), its own tray id (several can be on one screen) and no
+   * chat tour keys. Absent: the chat tray, unchanged.
+   */
+  only?: { tiles: readonly TrayTileId[]; trayId: string };
 }): ReactElement {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -204,12 +218,16 @@ export function ComposerTray(props: {
     };
   }, [open]);
 
-  const tiles = trayTiles(props.layout, {
+  const allTiles = trayTiles(props.layout, {
     notes: props.notes === true,
     draft: props.draft === true,
     plan: props.plan === true,
     tasks: props.tasks,
   });
+  const only = props.only;
+  const tiles =
+    only === undefined ? allTiles : allTiles.filter((tile) => only.tiles.includes(tile.id));
+  const trayId = only === undefined ? 'composer-tray' : only.trayId;
   return (
     <div ref={rootRef} className={cn('shrink-0', NO_TOUCH_SELECT)} onContextMenu={preventDefault}>
       <Button
@@ -218,10 +236,10 @@ export function ComposerTray(props: {
         buttonRef={buttonRef}
         type="button"
         data-plus=""
-        data-induction={INDUCTION_KEYS.chatPlus}
+        data-induction={only === undefined ? INDUCTION_KEYS.chatPlus : undefined}
         aria-label={open ? 'Close attachments' : 'Add attachment'}
         aria-expanded={open}
-        aria-controls="composer-tray"
+        aria-controls={trayId}
         onClick={() => setOpen((o) => !o)}
         // Round secondary, primary while the tray is open; buttonRef returns
         // focus on Escape.
@@ -238,11 +256,11 @@ export function ComposerTray(props: {
       {tray.rendered ? (
         <div
           ref={tray.ref}
-          id="composer-tray"
+          id={trayId}
           role="group"
           aria-label="Attach"
           data-tray=""
-          data-induction={INDUCTION_KEYS.chatAttachTray}
+          data-induction={only === undefined ? INDUCTION_KEYS.chatAttachTray : undefined}
           className="absolute inset-x-0 bottom-full z-sticky border-t bg-panel lit-dock px-3 pb-2 pt-3"
         >
           <TrayGrid

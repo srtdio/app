@@ -1,17 +1,21 @@
-// The client checkpoint composer: single-line slots that grow as typed (numbered
-// only once there are two or more), one point per slot, added with the small
+// The client checkpoint composer: single-line slots that grow as typed, each
+// numbered with the checkpoint number it will take (continuing after the
+// post's existing ledger_seq; the empty next slot is a dashed ring), one point
+// per slot, added with the small
 // "+ Another" ghost under the slots, all sent in ONE comment_batch_create
 // call (the round Send, named "Send" for one, "Send N checkpoints" for more). It
 // replaces only the CLIENT-role TOP-LEVEL composer on posts; replies (any
 // role), the agency composer, and brief comments keep the free-text
 // CommentComposer untouched. Checkpoints carry no mentions, so a slot is a
-// plain textarea, never MentionInput. Attachments reuse the existing comment
+// plain textarea, never MentionInput. Each slot has the comment composer's "+"
+// (chat's tray: Photos, File, Assets). Uploads reuse the existing comment
 // attachment flow (uploadFile -> asset-upload worker, returning asset VERSION
-// ids); each slot's completed version ids ride with that slot's point. The
+// ids) and Assets picks are library versions; each slot's completed version
+// ids (uploads, then picks) ride with that slot's point. The
 // composer owns no trace and no write wrapper: it hands the points back
 // through onSubmit and the panel mints one trace per batch.
 
-import { useLayoutEffect, useRef, useState } from 'react';
+import { Suspense, useId, useLayoutEffect, useRef, useState } from 'react';
 import { itemIn, useFreshKeys } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -20,15 +24,25 @@ import { ErrorNote } from '@/components/ui/ErrorNote';
 import { IconButton } from '@/components/ui/IconButton';
 import { Textarea } from '@/components/ui/Textarea';
 import { cn } from '@/lib/cn';
-import { IconPaperclip, IconSend, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconSend, IconX, ICON_SIZE } from '@/components/ui/icons';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
-import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
+import { IMAGE_ACCEPT, precheckImage, type ChatAttachmentUpload } from '@/lib/chat/attachments';
+import type { LibraryAsset } from '@/lib/chat/asset-picker';
+import { ComposerTray, type TrayTileId } from '@/components/chat/ComposerTray';
+import { useChatLayout } from '@/components/chat/chat-type';
 import {
+  COMMENT_TRAY_TILES,
   COMPOSER_SIDE,
+  LazyAssetPicker,
+  LibraryChip,
   PendingChip,
+  attachmentIdsOf,
   canRetryPending,
-  doneVersionIds,
+  libraryChipKey,
+  mergeLibraryPicks,
+  warmAssetPicker,
 } from '@/components/comments/CommentComposer';
+import { CheckpointCircle } from '@/components/comments/CheckpointCircle';
 import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
 import type { Pending } from '@/components/comments/CommentComposer';
 
@@ -104,9 +118,20 @@ export function sendLabel(count: number): string {
 /** The small ghost button under the slots that adds another slot. */
 export const ADD_SLOT_LABEL = '+ Another';
 
-/** Slot numbers show only once there is more than one slot. Pure. */
-export function showSlotNumbers(slotCount: number): boolean {
-  return slotCount > 1;
+/**
+ * Each slot's checkpoint number: the post's next ledger_seq (startSeq) plus its
+ * place, as the proc numbers the batch's points in order after the post's
+ * highest ledger_seq. A slot with text is `open`; an empty one is the dashed
+ * `next`. Pure.
+ */
+export function slotNumbers(
+  bodies: readonly string[],
+  startSeq: number,
+): { n: number; state: 'open' | 'next' }[] {
+  return bodies.map((body, index) => ({
+    n: startSeq + index,
+    state: countWords(body) > 0 ? 'open' : 'next',
+  }));
 }
 
 type SubmitResult = { ok: true } | { ok: false; error: string };
@@ -118,29 +143,48 @@ interface SlotComposerProps {
   canAttach: boolean;
   /** Upload one picked file via the shared asset pipeline; never throws. */
   uploadFile?: (file: File) => Promise<ChatAttachmentUpload>;
+  /**
+   * The number the first new checkpoint takes: the post's highest ledger_seq
+   * (every checkpoint row, deleted ones too, as comment_batch_create counts)
+   * plus one. Absent: 1 (a post with no checkpoints yet).
+   */
+  startSeq?: number;
 }
 
-/** One slot: its draft body plus its own attachment upload lifecycle. */
+/** One slot: its draft body plus its own attachments (uploads and library picks). */
 interface Slot {
   id: string;
   body: string;
   pending: Pending[];
+  library: LibraryAsset[];
 }
 
 let slotSeq = 0;
 let pendingSeq = 0;
 
 function newSlot(): Slot {
-  return { id: `slot-${(slotSeq += 1)}`, body: '', pending: [] };
+  return { id: `slot-${(slotSeq += 1)}`, body: '', pending: [], library: [] };
 }
 
-export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerProps): ReactElement {
+export function SlotComposer({
+  onSubmit,
+  canAttach,
+  uploadFile,
+  startSeq = 1,
+}: SlotComposerProps): ReactElement {
   const [slots, setSlots] = useState<Slot[]>(() => [newSlot()]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The library picker mounts on the first Assets tap only (nothing on paint),
+  // then stays mounted so it can slide out.
+  const [assetsMounted, setAssetsMounted] = useState(false);
+  const [assetsOpen, setAssetsOpen] = useState(false);
+  const layout = useChatLayout();
+  const trayBaseId = useId();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // The slot whose paperclip opened the shared hidden file input.
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  // The slot whose "+" opened the shared pickers (file, photo or library).
   const attachSlotId = useRef<string | null>(null);
   // Each slot's textarea, so its emoji button inserts at that slot's caret.
   const textareas = useRef(new Map<string, HTMLTextAreaElement>());
@@ -158,7 +202,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
     slot.pending.some((item) => item.status.state === 'uploading'),
   );
   const canSend = slotsSendable(slots.map((slot) => slot.body)) && !uploading && !submitting;
-  const numbered = showSlotNumbers(slots.length);
+  const numbers = slotNumbers(slots.map((slot) => slot.body), startSeq);
 
   function updateBody(slotId: string, body: string): void {
     setSlots((prev) => prev.map((slot) => (slot.id === slotId ? { ...slot, body } : slot)));
@@ -181,11 +225,12 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
     setSlots((prev) => (prev.length >= MAX_POINTS ? prev : [...prev, newSlot()]));
   }
 
-  async function addFiles(slotId: string, list: FileList | null): Promise<void> {
+  // Photos is image-only (precheckImage); File takes the full allowlist.
+  async function addFiles(slotId: string, list: FileList | null, imageOnly = false): Promise<void> {
     if (list === null || uploadFile === undefined) return;
     for (const file of Array.from(list)) {
       const id = `s-att-${(pendingSeq += 1)}`;
-      const check = precheckFile(file);
+      const check = imageOnly ? precheckImage(file) : precheckFile(file);
       if (!check.ok) {
         const item: Pending = {
           id,
@@ -269,6 +314,44 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
     );
   }
 
+  function addLibrary(slotId: string, picks: LibraryAsset[]): void {
+    setSlots((prev) =>
+      prev.map((slot) =>
+        slot.id === slotId ? { ...slot, library: mergeLibraryPicks(slot.library, picks) } : slot,
+      ),
+    );
+  }
+
+  function removeLibrary(slotId: string, versionId: string): void {
+    setSlots((prev) =>
+      prev.map((slot) =>
+        slot.id === slotId
+          ? { ...slot, library: slot.library.filter((asset) => asset.versionId !== versionId) }
+          : slot,
+      ),
+    );
+  }
+
+  // A slot's tray tile: Photos / File open the shared pickers, Assets the
+  // library picker, each for that slot. Nothing opens while a send is on its way.
+  function pickTile(slotId: string, id: TrayTileId): void {
+    if (submitting) return;
+    attachSlotId.current = slotId;
+    if (id === 'photos') photoInputRef.current?.click();
+    else if (id === 'file') fileInputRef.current?.click();
+    else if (id === 'assets') {
+      setAssetsMounted(true);
+      setAssetsOpen(true);
+    }
+  }
+
+  // One shared hidden input per kind: the change lands in the slot that opened it.
+  function onPicked(list: FileList | null, imageOnly: boolean): void {
+    const slotId = attachSlotId.current;
+    attachSlotId.current = null;
+    if (slotId !== null) void addFiles(slotId, list, imageOnly);
+  }
+
   async function submit(): Promise<void> {
     if (!canSend) return;
     setSubmitting(true);
@@ -276,7 +359,7 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
     const points = buildPoints(
       slots.map((slot) => ({
         body: slot.body,
-        attachmentVersionIds: doneVersionIds(slot.pending),
+        attachmentVersionIds: attachmentIdsOf(slot.pending, slot.library),
       })),
     );
     const result = await onSubmit(points);
@@ -315,6 +398,8 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
         {slots.map((slot, index) => {
           const words = countWords(slot.body);
           const tone = counterTone(words);
+          const number = numbers[index] ?? { n: startSeq + index, state: 'next' as const };
+          const chipCount = slot.pending.length + slot.library.length;
           return (
             <li
               key={slot.id}
@@ -322,23 +407,32 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                 if (el === null) slotEls.current.delete(slot.id);
                 else slotEls.current.set(slot.id, el);
               }}
-              className="flex flex-col gap-2"
+              // relative: the slot's "+" tray sits above this slot, across its width.
+              className="relative flex flex-col gap-2"
             >
-              {/* ui/Composer: field, emoji, clip, then Send on one row (the
-                  comment composer's layout). A later slot holds its remove X
-                  in the send column, so every field keeps one width. */}
+              {/* ui/Composer: "+", number, field, emoji, then Send on one row
+                  (the comment composer's layout). A later slot holds its
+                  remove X in the send column, so every field keeps one width. */}
               <ComposerFrame
                 state={submitting && index === 0 ? { kind: 'sending' } : { kind: 'idle' }}
                 leading={
-                  numbered ? (
+                  <>
+                    {attachEnabled ? (
+                      <ComposerTray
+                        layout={layout}
+                        only={{ tiles: COMMENT_TRAY_TILES, trayId: `${trayBaseId}-${slot.id}` }}
+                        onShownChange={warmAssetPicker}
+                        onPick={(id) => pickTile(slot.id, id)}
+                      />
+                    ) : null}
                     <span
                       aria-hidden
-                      data-slot-number=""
-                      className="flex h-11 w-5 shrink-0 items-center justify-center text-sm font-medium tabular-nums text-fg-3"
+                      data-slot-number={number.n}
+                      className="flex h-11 shrink-0 items-center"
                     >
-                      {index + 1}
+                      <CheckpointCircle n={number.n} state={number.state} />
                     </span>
-                  ) : undefined
+                  </>
                 }
                 input={
                   <Textarea
@@ -358,33 +452,18 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                   />
                 }
                 side={
-                  <>
-                    <CommentEmojiButton
-                      disabled={submitting}
-                      className={COMPOSER_SIDE}
-                      onPick={(char) =>
-                        insertIntoTextarea(
-                          () => textareas.current.get(slot.id) ?? null,
-                          slot.body,
-                          char,
-                          (next) => updateBody(slot.id, next),
-                        )
-                      }
-                    />
-                    {attachEnabled ? (
-                      <IconButton
-                        label={`Attach a file to checkpoint ${index + 1}`}
-                        className={COMPOSER_SIDE}
-                        disabled={submitting}
-                        onClick={() => {
-                          attachSlotId.current = slot.id;
-                          fileInputRef.current?.click();
-                        }}
-                      >
-                        <IconPaperclip size={ICON_SIZE.control} />
-                      </IconButton>
-                    ) : null}
-                  </>
+                  <CommentEmojiButton
+                    disabled={submitting}
+                    className={COMPOSER_SIDE}
+                    onPick={(char) =>
+                      insertIntoTextarea(
+                        () => textareas.current.get(slot.id) ?? null,
+                        slot.body,
+                        char,
+                        (next) => updateBody(slot.id, next),
+                      )
+                    }
+                  />
                 }
                 send={
                   index === 0 ? (
@@ -412,18 +491,25 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
                 </span>
               ) : null}
               {tone === 'over' ? (
-                <p role="alert" className={cn('text-sm text-bad', numbered ? 'pl-7' : '')}>
+                <p role="alert" className="text-sm text-bad">
                   {OVER_LIMIT_MESSAGE}
                 </p>
               ) : null}
-              {slot.pending.length > 0 ? (
-                <ul className={cn('flex flex-wrap gap-2', numbered ? 'pl-7' : '')}>
+              {chipCount > 0 ? (
+                <ul className="flex flex-wrap gap-2">
                   {slot.pending.map((item) => (
                     <PendingChip
                       key={item.id}
                       item={item}
                       onRemove={() => removePending(slot.id, item.id)}
                       onRetry={() => retryPending(slot.id, item.id)}
+                    />
+                  ))}
+                  {slot.library.map((asset) => (
+                    <LibraryChip
+                      key={libraryChipKey(asset)}
+                      asset={asset}
+                      onRemove={() => removeLibrary(slot.id, asset.versionId)}
                     />
                   ))}
                 </ul>
@@ -449,19 +535,47 @@ export function SlotComposer({ onSubmit, canAttach, uploadFile }: SlotComposerPr
       {error !== null ? <ErrorNote>{error}</ErrorNote> : null}
 
       {attachEnabled ? (
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={UPLOAD_ACCEPT}
-          className="sr-only"
-          onChange={(event) => {
-            const slotId = attachSlotId.current;
-            attachSlotId.current = null;
-            if (slotId !== null) void addFiles(slotId, event.target.files);
-            event.target.value = '';
-          }}
-        />
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={UPLOAD_ACCEPT}
+            className="sr-only"
+            onChange={(event) => {
+              onPicked(event.target.files, false);
+              event.target.value = '';
+            }}
+          />
+          <input
+            ref={photoInputRef}
+            type="file"
+            multiple
+            accept={IMAGE_ACCEPT}
+            data-photo-input=""
+            className="sr-only"
+            onChange={(event) => {
+              onPicked(event.target.files, true);
+              event.target.value = '';
+            }}
+          />
+        </>
+      ) : null}
+
+      {assetsMounted ? (
+        <Suspense fallback={null}>
+          <LazyAssetPicker
+            open={assetsOpen}
+            onClose={() => {
+              setAssetsOpen(false);
+              attachSlotId.current = null;
+            }}
+            onConfirm={(picks) => {
+              const slotId = attachSlotId.current;
+              if (slotId !== null) addLibrary(slotId, picks);
+            }}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

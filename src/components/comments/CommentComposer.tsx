@@ -1,16 +1,19 @@
-// The extracted comment composer: textarea + an
-// attachment picker, used by both the root composer and the per-thread reply
-// composer (the reply passes a parentCommentId-bearing onSubmit). Attachments
+// The extracted comment composer: the chat composer's row (leading "+", field,
+// emoji, round Send), used by both the root composer and the per-thread reply
+// composer (the reply passes a parentCommentId-bearing onSubmit). The "+" is
+// chat's ComposerTray limited to Photos, File and Assets. Photos and File
 // reuse the existing chat upload path verbatim (uploadFile -> asset-upload
 // worker, which returns asset VERSION ids); picked files show as removable chips
-// with per-file progress and inline failure, and never throw. The composer owns
+// with per-file progress and inline failure, and never throw. Assets is chat's
+// AssetPicker: a library pick is already uploaded, so its chip carries the
+// pick's current version id and sends with the uploads. The composer owns
 // no trace and no write wrapper: it hands the body + completed version ids back
 // through onSubmit, and the panel mints one trace per action and writes through
 // the SECURITY DEFINER createComment wrapper.
 
 import { mark } from '@/lib/perf-marks';
 import { linkTypedUsernames } from '@/lib/chat/mentions';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { itemIn, useFreshKeys } from '@/lib/motion';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -21,10 +24,17 @@ import { MentionInput } from '@/components/comments/MentionInput';
 import type { MentionInputHandle } from '@/components/comments/MentionInput';
 import { CommentEmojiButton } from '@/components/comments/CommentEmojiButton';
 import type { MentionCandidate } from '@/lib/workspace-members';
-import { IconFile, IconPaperclip, IconSend, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconFile, IconSend, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { ComposerTray, type TrayTileId } from '@/components/chat/ComposerTray';
+import { useChatLayout } from '@/components/chat/chat-type';
+import type { AssetPicker as AssetPickerPart } from '@/components/chat/AssetPicker';
+import { Thumbnail } from '@/components/media/Thumbnail';
+import { env } from '@/lib/env';
+import { appPresignCache } from '@/lib/shared-presign';
 import { fileExtension } from '@/lib/assets';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
-import type { ChatAttachmentUpload } from '@/lib/chat/attachments';
+import { IMAGE_ACCEPT, precheckImage, type ChatAttachmentUpload } from '@/lib/chat/attachments';
+import { isLibraryImage, type LibraryAsset } from '@/lib/chat/asset-picker';
 
 // The proc enforces a body length of 1..10000; mirror it client-side so submit
 // disables and a friendly message shows before the request runs.
@@ -101,12 +111,68 @@ let pendingSeq = 0;
 /** A side button in the composer row: a bare 44 circle (one treatment, B3). */
 export const COMPOSER_SIDE = 'shrink-0 rounded-full';
 
+/** The comment composers' "+" tray: these tiles only, in this order. */
+export const COMMENT_TRAY_TILES: readonly TrayTileId[] = ['photos', 'file', 'assets'];
+
+/** Whether a library chip's image thumb can presign (the asset-read worker is configured). */
+const LIBRARY_PRESIGN = env.VITE_ASSET_READ_URL !== undefined && env.VITE_ASSET_READ_URL !== '';
+
+// Chat's library picker, loaded apart: it pulls chat's card modules, which the
+// post screen never needs on paint (and which import this file back). The load
+// starts when a "+" tray opens, so it is in hand by the Assets tap.
+let assetPickerLoad: Promise<{ AssetPicker: typeof AssetPickerPart }> | null = null;
+function loadAssetPicker(): Promise<{ AssetPicker: typeof AssetPickerPart }> {
+  assetPickerLoad ??= import('@/components/chat/AssetPicker');
+  return assetPickerLoad;
+}
+
+/** Chat's AssetPicker, as is (mounted only after the first Assets tap). */
+export const LazyAssetPicker = lazy(() =>
+  loadAssetPicker().then((mod) => ({ default: mod.AssetPicker })),
+);
+
+/** A "+" tray's onShownChange: warm the library picker when the tray shows. Stable. */
+export function warmAssetPicker(shown: boolean): void {
+  if (shown) void loadAssetPicker();
+}
+
 export function doneVersionIds(pending: readonly Pending[]): string[] {
   const ids: string[] = [];
   for (const item of pending) {
     if (item.status.state === 'done') ids.push(item.status.versionId);
   }
   return ids;
+}
+
+/**
+ * Confirmed library picks added after the ones already held, in pick order; a
+ * pick already held (same version) is not added twice. Pure.
+ */
+export function mergeLibraryPicks(
+  held: readonly LibraryAsset[],
+  picks: readonly LibraryAsset[],
+): LibraryAsset[] {
+  const have = new Set(held.map((asset) => asset.versionId));
+  const out = [...held];
+  for (const pick of picks) {
+    if (have.has(pick.versionId)) continue;
+    have.add(pick.versionId);
+    out.push(pick);
+  }
+  return out;
+}
+
+/** What a send carries: the finished uploads, then the library picks. Pure. */
+export function attachmentIdsOf(
+  pending: readonly Pending[],
+  library: readonly LibraryAsset[],
+): string[] {
+  return [...doneVersionIds(pending), ...library.map((asset) => asset.versionId)];
+}
+
+/** A library chip's list key (apart from an upload chip's). Pure. */
+export function libraryChipKey(asset: Pick<LibraryAsset, 'versionId'>): string {
+  return `lib-${asset.versionId}`;
 }
 
 export function CommentComposer({
@@ -127,21 +193,30 @@ export function CommentComposer({
   // after a successful submit remounts it via this incrementing key.
   const [composerKey, setComposerKey] = useState(0);
   const [pending, setPending] = useState<Pending[]>([]);
+  // Library picks (Assets): already uploaded, sent by their current version id.
+  const [library, setLibrary] = useState<LibraryAsset[]>([]);
   // A new attach chip rises into place (itemIn) over its final state; chips
-  // render in `pending` order, so the list's children line up with it.
-  const freshChips = useFreshKeys(pending.map((item) => item.id));
+  // render uploads then library picks, so the list's children line up with it.
+  const chipKeys = [...pending.map((item) => item.id), ...library.map(libraryChipKey)];
+  const freshChips = useFreshKeys(chipKeys);
   const chipsRef = useRef<HTMLUListElement>(null);
   useLayoutEffect(() => {
     if (freshChips.size === 0) return;
-    pending.forEach((item, index) => {
-      if (freshChips.has(item.id)) itemIn(chipsRef.current?.children[index] ?? null);
+    chipKeys.forEach((key, index) => {
+      if (freshChips.has(key)) itemIn(chipsRef.current?.children[index] ?? null);
     });
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The library picker mounts on the first Assets tap only (nothing on paint),
+  // then stays mounted so it can slide out.
+  const [assetsMounted, setAssetsMounted] = useState(false);
+  const [assetsOpen, setAssetsOpen] = useState(false);
+  const layout = useChatLayout();
+  const trayId = useId();
 
   // The chip count up to the parent (its Back guard); after commit, never on paint.
-  const chipCount = pending.length;
+  const chipCount = pending.length + library.length;
   const onAttachmentCountRef = useRef(onAttachmentCountChange);
   onAttachmentCountRef.current = onAttachmentCountChange;
   useEffect(() => {
@@ -149,12 +224,14 @@ export function CommentComposer({
   }, [chipCount]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<MentionInputHandle>(null);
 
   const trimmed = body.trim();
   const tooLong = body.length > MAX_BODY;
   const uploading = pending.some((item) => item.status.state === 'uploading');
-  const hasReadyAttachment = pending.some((item) => item.status.state === 'done');
+  const hasReadyAttachment =
+    pending.some((item) => item.status.state === 'done') || library.length > 0;
   const attachEnabled = canAttach && uploadFile !== undefined;
   const canSubmit =
     (trimmed.length > 0 || hasReadyAttachment) && !tooLong && !uploading && !submitting;
@@ -178,11 +255,12 @@ export function CommentComposer({
     );
   }
 
-  async function addFiles(list: FileList | null): Promise<void> {
+  // Photos is image-only (precheckImage); File takes the full allowlist.
+  async function addFiles(list: FileList | null, imageOnly = false): Promise<void> {
     if (list === null || uploadFile === undefined) return;
     for (const file of Array.from(list)) {
       const id = `c-att-${(pendingSeq += 1)}`;
-      const check = precheckFile(file);
+      const check = imageOnly ? precheckImage(file) : precheckFile(file);
       if (!check.ok) {
         setPending((prev) => [
           ...prev,
@@ -220,6 +298,22 @@ export function CommentComposer({
     });
   }
 
+  function removeLibrary(versionId: string): void {
+    setLibrary((prev) => prev.filter((asset) => asset.versionId !== versionId));
+  }
+
+  // A tray tile: Photos / File open their pickers, Assets the library picker.
+  // Nothing opens while a send is on its way.
+  function pickTile(id: TrayTileId): void {
+    if (submitting) return;
+    if (id === 'photos') photoInputRef.current?.click();
+    else if (id === 'file') fileInputRef.current?.click();
+    else if (id === 'assets') {
+      setAssetsMounted(true);
+      setAssetsOpen(true);
+    }
+  }
+
   async function submit(): Promise<void> {
     if (!canSubmit) return;
     mark('comment:send:tap');
@@ -231,7 +325,7 @@ export function CommentComposer({
       members.map((m) => ({ userId: m.id, username: m.username })),
     );
     const result = await onSubmit(linked, {
-      attachmentVersionIds: doneVersionIds(pending),
+      attachmentVersionIds: attachmentIdsOf(pending, library),
     });
     if (result.ok) {
       for (const item of pending) {
@@ -240,6 +334,7 @@ export function CommentComposer({
       setBody('');
       setComposerKey((key) => key + 1);
       setPending([]);
+      setLibrary([]);
       setSubmitting(false);
       return;
     }
@@ -249,10 +344,21 @@ export function CommentComposer({
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      {/* ui/Composer: field, emoji, clip, then the round Send on one row (B1). */}
+    // relative: the "+" tray sits above the composer, across its width.
+    <div className="relative flex flex-col gap-2">
+      {/* ui/Composer: "+", field, emoji, then the round Send on one row (chat's row). */}
       <ComposerFrame
         state={submitting ? { kind: 'sending' } : { kind: 'idle' }}
+        leading={
+          attachEnabled ? (
+            <ComposerTray
+              layout={layout}
+              only={{ tiles: COMMENT_TRAY_TILES, trayId }}
+              onShownChange={warmAssetPicker}
+              onPick={pickTile}
+            />
+          ) : undefined
+        }
         input={
           <MentionInput
             bare
@@ -270,23 +376,11 @@ export function CommentComposer({
           />
         }
         side={
-          <>
-            <CommentEmojiButton
-              disabled={submitting}
-              className={COMPOSER_SIDE}
-              onPick={(char) => editorRef.current?.insertText(char)}
-            />
-            {attachEnabled ? (
-              <IconButton
-                label="Attach a file"
-                className={COMPOSER_SIDE}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={submitting}
-              >
-                <IconPaperclip size={ICON_SIZE.control} />
-              </IconButton>
-            ) : null}
-          </>
+          <CommentEmojiButton
+            disabled={submitting}
+            className={COMPOSER_SIDE}
+            onPick={(char) => editorRef.current?.insertText(char)}
+          />
         }
         send={
           <Button
@@ -310,7 +404,7 @@ export function CommentComposer({
         </p>
       ) : null}
 
-      {pending.length > 0 ? (
+      {chipCount > 0 ? (
         <ul ref={chipsRef} className="flex flex-wrap gap-2">
           {pending.map((item) => (
             <PendingChip
@@ -320,11 +414,19 @@ export function CommentComposer({
               onRetry={() => retryPending(item.id)}
             />
           ))}
+          {library.map((asset) => (
+            <LibraryChip
+              key={libraryChipKey(asset)}
+              asset={asset}
+              onRemove={() => removeLibrary(asset.versionId)}
+            />
+          ))}
         </ul>
       ) : null}
 
       {error !== null ? <ErrorNote>{error}</ErrorNote> : null}
 
+      {/* File first: the full allowlist (its own picker); then Photos, images only. */}
       <input
         ref={fileInputRef}
         type="file"
@@ -336,7 +438,73 @@ export function CommentComposer({
           event.target.value = '';
         }}
       />
+      <input
+        ref={photoInputRef}
+        type="file"
+        multiple
+        accept={IMAGE_ACCEPT}
+        data-photo-input=""
+        className="sr-only"
+        onChange={(event) => {
+          void addFiles(event.target.files, true);
+          event.target.value = '';
+        }}
+      />
+
+      {assetsMounted ? (
+        <Suspense fallback={null}>
+          <LazyAssetPicker
+            open={assetsOpen}
+            onClose={() => setAssetsOpen(false)}
+            onConfirm={(picks) => setLibrary((prev) => mergeLibraryPicks(prev, picks))}
+          />
+        </Suspense>
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * One library pick (Assets) as a removable chip: the same chip as an upload's,
+ * done from the start (it is already uploaded). The thumb is the image through
+ * the shared presign cache (chat's library chip), else the file glyph.
+ */
+export function LibraryChip({
+  asset,
+  onRemove,
+}: {
+  asset: LibraryAsset;
+  onRemove: () => void;
+}): ReactElement {
+  const image = isLibraryImage(asset);
+  return (
+    <li
+      data-library-chip={asset.versionId}
+      className="flex items-center gap-2 rounded-xl border bg-panel-2 py-1 pl-1 pr-1 lit-card-muted"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3">
+        {image ? (
+          <Thumbnail
+            assetVersionId={asset.versionId}
+            cache={appPresignCache()}
+            presignEnabled={LIBRARY_PRESIGN}
+            fallback={{ kind: 'glyph' }}
+            alt={asset.name}
+          />
+        ) : (
+          <IconFile size={ICON_SIZE.inline} />
+        )}
+      </span>
+      <span className="flex min-w-0 max-w-44 flex-col">
+        <span className="truncate text-sm font-medium text-fg" title={asset.name}>
+          {asset.name}
+        </span>
+        <span className="text-xs text-fg-3">{fileExtension(asset.filename)}</span>
+      </span>
+      <IconButton label={`Remove ${asset.name}`} onClick={onRemove}>
+        <IconX size={ICON_SIZE.control} />
+      </IconButton>
+    </li>
   );
 }
 

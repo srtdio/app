@@ -9,7 +9,7 @@ import {
   countWords,
   filledCount,
   sendLabel,
-  showSlotNumbers,
+  slotNumbers,
   slotsSendable,
   ADD_SLOT_LABEL,
 } from '@/components/comments/SlotComposer';
@@ -135,10 +135,21 @@ describe('sendLabel and limits', () => {
     expect(sendLabel(20)).toBe('Send 20 checkpoints');
   });
 
-  it('adds a slot with "+ Another" and numbers slots only once there are two', () => {
+  it('adds a slot with "+ Another"', () => {
     expect(ADD_SLOT_LABEL).toBe('+ Another');
-    expect(showSlotNumbers(1)).toBe(false);
-    expect(showSlotNumbers(2)).toBe(true);
+  });
+
+  it('numbers slots after the existing checkpoints; an empty slot takes the next number', () => {
+    expect(slotNumbers([''], 1)).toEqual([{ n: 1, state: 'next' }]);
+    expect(slotNumbers(['first', ''], 8)).toEqual([
+      { n: 8, state: 'open' },
+      { n: 9, state: 'next' },
+    ]);
+    // Two empty slots never share a number.
+    expect(slotNumbers(['', ''], 4)).toEqual([
+      { n: 4, state: 'next' },
+      { n: 5, state: 'next' },
+    ]);
   });
 
   it('pins the proc limits: 20 points per batch, counter from 35, cap at 50', () => {
