@@ -139,7 +139,7 @@ describe('Open / All filter (item 2)', () => {
 });
 
 describe('caption quote inside the comment (item 3)', () => {
-  it('a live quote is an ink rail (border-l-2 fg) that still flashes the mark', () => {
+  it('a live quote is an ink rail (border-l-rail fg) that still flashes the mark', () => {
     const onClick = vi.fn();
     const tree = annotationChip(
       'c1',
@@ -148,7 +148,7 @@ describe('caption quote inside the comment (item 3)', () => {
     );
     const button = elements(tree).find(isButtonEl)!;
     const className = (button.props as { className: string }).className;
-    expect(className).toContain('border-l-2');
+    expect(className).toContain('border-l-rail');
     expect(className).toContain('border-fg');
     expect(className).not.toContain('annotation-');
     expect(className).not.toContain('rounded-md');
@@ -161,7 +161,7 @@ describe('caption quote inside the comment (item 3)', () => {
     const tree = annotationChip('c2', { n: 0, quote: 'old copy', stale: true, versionNumber: 1 });
     expect(elements(tree).some(isButtonEl)).toBe(false);
     const root = tree as ReactElement<{ className: string }>;
-    expect(root.props.className).toContain('border-l-2');
+    expect(root.props.className).toContain('border-l-rail');
     expect(text(tree)).toContain('copy changed · v1');
     expect(text(tree)).toContain('old copy');
   });

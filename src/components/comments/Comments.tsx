@@ -401,7 +401,7 @@ export function commentImageNav(
 /**
  * What a comment row shows above its body for its annotation. A photo pin on
  * the current version reads "On photo {n}" in meta. A live caption quote is an
- * ink rail (border-l-2 fg) with the small numbered ink circle; its tap flashes
+ * ink rail (border-l-rail fg) with the small numbered ink circle; its tap flashes
  * the caption mark. A stale one (either kind) is inert and reads "copy changed"
  * with the version it was made on. Absent annotation (every brief comment)
  * renders nothing. `circle` is the checkpoint's own circle state when the row
@@ -418,7 +418,7 @@ export function annotationChip(
     return (
       <div
         data-caption-quote="stale"
-        className="mb-2 min-w-0 border-l-2 border-border pl-3 text-base text-fg-2"
+        className="mb-2 min-w-0 border-l-rail border-border pl-3 text-base text-fg-2"
       >
         <span className="block text-xs text-fg-3">copy changed · v{annotation.versionNumber}</span>
         {annotation.quote !== '' ? (
@@ -440,7 +440,7 @@ export function annotationChip(
       flat
       data-caption-quote="live"
       onClick={() => onClick?.(commentId)}
-      className="mb-2 flex min-w-0 items-start gap-2 border-l-2 border-fg pl-3 text-base text-fg-2 mv-tint hover:text-fg"
+      className="mb-2 flex min-w-0 items-start gap-2 border-l-rail border-fg pl-3 text-base text-fg-2 mv-tint hover:text-fg"
     >
       <CheckpointCircle n={annotation.n} state={circle} size="inline" className="mt-0.5" />
       <span className="min-w-0 [overflow-wrap:anywhere]">{annotation.quote}</span>

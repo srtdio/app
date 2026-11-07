@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { ViewerBackButton } from '@/components/ui/ViewerBackButton';
 import { useAttachmentUrl } from '@/components/chat/MessageAttachments';
 import { cn } from '@/lib/cn';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
@@ -518,15 +519,11 @@ function BackBar(props: {
       data-lightbox-back-bar=""
       className={cn('relative flex shrink-0 items-center gap-1 px-1', SAFE_TOP_BAR_CLASS)}
     >
-      <button
-        ref={props.closeRef}
-        type="button"
-        aria-label="Back"
+      <ViewerBackButton
+        buttonRef={props.closeRef}
         onClick={props.onClose}
         className={TOOLBAR_BUTTON}
-      >
-        <IconChevronLeft size={ICON_SIZE.control} />
-      </button>
+      />
       <p
         data-lightbox-title=""
         title={props.title}

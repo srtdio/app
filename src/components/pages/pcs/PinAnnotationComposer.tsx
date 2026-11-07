@@ -9,7 +9,7 @@ import { COMMENT_DISCARD } from '@/components/pages/pcs/CaptionAnnotationCompose
 // shows the slide the pin landed on (filename or "Slide N") instead of a caption
 // quote, and owns no RPC. PostDetailPage passes onSubmit, which mints the comment
 // and the image_pin annotation on one trace. The context line is the same ink
-// rail (border-l-2 fg) as the caption composer's quote. Draft, dirty, busy and
+// rail (border-l-rail fg) as the caption composer's quote. Draft, dirty, busy and
 // failure handling match the caption composer.
 
 interface PinAnnotationComposerProps {
@@ -76,7 +76,7 @@ export function PinAnnotationComposer({
       }
     >
       <div className="flex flex-col gap-3">
-        <div className="min-w-0 border-l-2 border-fg pl-3 text-base text-fg-2 [overflow-wrap:anywhere]">
+        <div className="min-w-0 border-l-rail border-fg pl-3 text-base text-fg-2 [overflow-wrap:anywhere]">
           {context}
         </div>
         <Textarea

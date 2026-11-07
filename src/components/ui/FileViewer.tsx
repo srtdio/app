@@ -40,7 +40,8 @@ import type { MutableRefObject, ReactElement, ReactNode, RefObject } from 'react
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { IconChevronLeft, IconDownload, IconFile, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconDownload, IconFile, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { ViewerBackButton } from '@/components/ui/ViewerBackButton';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
 import { riseIn, riseOut, type Box, type Played } from '@/lib/motion';
@@ -1154,15 +1155,23 @@ function TopBar(props: {
         NO_SELECT,
       )}
     >
-      <button
-        ref={props.closeRef}
-        type="button"
-        aria-label={back ? 'Back' : 'Close'}
-        onClick={props.onClose}
-        className={tone.bar}
-      >
-        {back ? <IconChevronLeft size={ICON_SIZE.control} /> : <IconX size={ICON_SIZE.control} />}
-      </button>
+      {back ? (
+        <ViewerBackButton
+          buttonRef={props.closeRef}
+          onClick={props.onClose}
+          className={tone.bar}
+        />
+      ) : (
+        <button
+          ref={props.closeRef}
+          type="button"
+          aria-label="Close"
+          onClick={props.onClose}
+          className={tone.bar}
+        >
+          <IconX size={ICON_SIZE.control} />
+        </button>
+      )}
       {props.actions !== undefined || back ? (
         <div className="min-w-0 flex-1 px-1 text-center">
           <p title={props.name} className={cn('truncate text-base font-medium', tone.fg)}>
@@ -1483,19 +1492,19 @@ export function FileViewerFallback(props: {
       className={cn('fixed inset-0 z-viewer flex flex-col', tone.backdrop, NO_SELECT)}
     >
       <div className="flex shrink-0 items-center px-1 pt-[max(env(safe-area-inset-top),4px)]">
-        <button
-          ref={closeRef}
-          type="button"
-          aria-label={props.back === true ? 'Back' : 'Close'}
-          onClick={props.onClose}
-          className={tone.bar}
-        >
-          {props.back === true ? (
-            <IconChevronLeft size={ICON_SIZE.control} />
-          ) : (
+        {props.back === true ? (
+          <ViewerBackButton buttonRef={closeRef} onClick={props.onClose} className={tone.bar} />
+        ) : (
+          <button
+            ref={closeRef}
+            type="button"
+            aria-label="Close"
+            onClick={props.onClose}
+            className={tone.bar}
+          >
             <IconX size={ICON_SIZE.control} />
-          )}
-        </button>
+          </button>
+        )}
       </div>
       <div className="flex flex-1 items-center justify-center">
         <ViewerError

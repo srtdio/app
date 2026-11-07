@@ -193,7 +193,7 @@ describe('annotationChip (F4/F5 seam)', () => {
   it('a live quote is an ink rail (border-fg) with the numbered circle, no gold', () => {
     const tree = annotationChip('c4', { n: 5, quote: 'q', stale: false, versionNumber: 1 });
     const markup = html(tree);
-    expect(markup).toContain('border-l-2');
+    expect(markup).toContain('border-l-rail');
     expect(markup).toContain('border-fg');
     expect(markup).toContain('data-checkpoint-circle="open"');
     expect(markup).toContain('>5<');
