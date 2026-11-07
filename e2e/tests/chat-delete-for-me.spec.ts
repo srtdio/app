@@ -143,6 +143,8 @@ test('Delete for me on a message: gone at once, Undo restores, recorded after th
   sheet = await openDeleteSheet(page, peer.id);
   await sheet.locator('[data-delete-choice="me"]').click();
   await expect(row(page, peer.id)).toHaveCount(0);
+  // Off the Undo strip (it holds its window while hovered).
+  await page.mouse.move(1, 1);
   await expect.poll(() => hideCalls(network).length, { timeout: COMMIT_WAIT_MS }).toBe(1);
   const args = hideCalls(network)[0];
   expect(args?.p_message_ids).toEqual([peer.id]);
@@ -196,6 +198,8 @@ test('a tombstone: its one-row menu hides it for me @theme @desktop', async ({ p
 
   await expect(row(page, peer.id)).toHaveCount(0);
   await expect(undoStrip(page, 'Deleted for you')).toBeVisible();
+  // Off the Undo strip (it holds its window while hovered).
+  await page.mouse.move(1, 1);
   await expect.poll(() => hideCalls(network).length, { timeout: COMMIT_WAIT_MS }).toBe(1);
   expect(hideCalls(network)[0]?.p_message_ids).toEqual([peer.id]);
   expect(network.blocked).toEqual([]);
@@ -275,6 +279,9 @@ test('Photos chip: select picks a whole message; Delete for me hides it behind U
   await page.getByRole('button', { name: 'Select', exact: true }).first().click();
   await tickAlbum(results);
   await page.getByTestId('media-select-bar').locator('[data-selection-delete]').click();
+  // The Undo strip rises where the bar was and holds its window while hovered:
+  // move the desktop pointer off it so the window can end.
+  await page.mouse.move(1, 1);
   await expect(albumTiles(results)).toHaveCount(0);
   await expect.poll(() => hideCalls(network).length, { timeout: COMMIT_WAIT_MS }).toBe(1);
   expect(hideCalls(network)[0]?.p_message_ids).toEqual([MEDIA_MSG.photoAlbum]);
@@ -324,6 +331,8 @@ test('the photo viewer: Forward, Delete and Download; Delete for me moves to the
   const left = total - 3;
   if (left > 1) await expect(viewer).toContainText(` / ${left}`);
   await expect(viewer).not.toContainText(` / ${total}`);
+  // Off the Undo strip (it holds its window while hovered).
+  await page.mouse.move(1, 1);
   await expect.poll(() => hideCalls(network).length, { timeout: COMMIT_WAIT_MS }).toBe(1);
   expect(hideCalls(network)[0]?.p_message_ids).toEqual([MEDIA_MSG.photoAlbum]);
   expect(network.blocked).toEqual([]);
