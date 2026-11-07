@@ -759,7 +759,7 @@ export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
               key={`${item.messageId}-${index}`}
               item={item}
               sender={props.senderName(item.senderUserId)}
-              date={formatAgo(item.createdAt, now)}
+              date={formatAgo(item.createdAt, now, props.timeZone)}
             />
           ))}
         </ul>
