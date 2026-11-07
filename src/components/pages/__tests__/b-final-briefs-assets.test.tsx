@@ -1,10 +1,10 @@
 // Layout B-final, Briefs + Assets: the screens render the shared parts. Asset
-// items are ui/ListCard (picture, name, facts, time + tab tag, the ⋮ with the
-// trailing rule; the tick in its place while selecting), brief cards are ui/Card (the cover
-// link, the footer status and due), both grids fill the laptop width through
-// the parts' named auto-fill columns, and a tile keeps its height across states.
+// items and brief cards are ui/ListCard (picture; line 1 title + time; line 2
+// preview + one grey tag; no ⋮, the tick on the picture while selecting),
+// both grids fill the laptop width through the parts' named auto-fill
+// columns, and a card keeps its lines and slots across states.
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { AssetList, AssetListCard } from '@/components/pages/assets/AssetListCard';
@@ -12,17 +12,10 @@ import { BriefCard } from '@/components/pages/BriefCard';
 import { Card } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/IconButton';
 import { StatusDot } from '@/components/ui/StatusDot';
-import { LIST_CARD_GRID } from '@/components/ui/ListCard';
-import { TRAILING_PULL } from '@/components/ui/layout';
+import { LIST_CARD_GRID, type ListCardSelect } from '@/components/ui/ListCard';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
 import type { BriefWithThumbnail } from '@srtdio/briefs';
-
-// Phone layout for the ⋯ menus (ui/ActionMenu); no matchMedia here.
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => false,
-}));
 
 const cache = {
   peek: () => null,
@@ -93,7 +86,6 @@ function tile(props: Partial<Parameters<typeof AssetListCard>[0]> = {}): string 
       presignEnabled={false}
       now={NOW}
       onOpen={() => {}}
-      onStartSelect={() => {}}
       {...props}
     />,
   );
@@ -101,13 +93,17 @@ function tile(props: Partial<Parameters<typeof AssetListCard>[0]> = {}): string 
 
 /** The card's line wrappers and text slots, in markup order: the footprint every state keeps. */
 function slots(html: string): string[] {
-  return [...html.matchAll(/data-list-card-(line="\d"|title=""|preview=""|time=""|more="")/g)].map(
+  return [...html.matchAll(/data-list-card-(line="\d"|title=""|preview=""|time=""|tag="")/g)].map(
     (m) => m[1]!,
   );
 }
 
+function selectState(active: boolean, chosen: boolean): ListCardSelect {
+  return { active, chosen, onEnter: () => {}, onToggle: () => {} };
+}
+
 describe('Assets item is ui/ListCard', () => {
-  it('renders the part: the picture first, then the name, the facts, the tab tag and the time', () => {
+  it('renders the part: the picture first, then the name and time, then the facts and the tab tag', () => {
     const out = tile();
     expect(out).toContain('data-list-card=""');
     expect(out).toContain('data-list-card-press=""');
@@ -118,29 +114,25 @@ describe('Assets item is ui/ListCard', () => {
     const tag = out.indexOf('data-asset-tag=""');
     expect(picture).toBeGreaterThan(-1);
     expect(name).toBeGreaterThan(picture);
-    expect(meta).toBeGreaterThan(name);
-    // Line 3 is the tag first, then " · " and the time.
+    // Line 1: the name, then the time on the right; line 2: the facts, then the tag.
+    expect(time).toBeGreaterThan(name);
+    expect(meta).toBeGreaterThan(time);
     expect(tag).toBeGreaterThan(meta);
-    expect(time).toBeGreaterThan(tag);
     // formatAdded on the device zone: uploaded the same day reads its clock time.
     expect(out).toMatch(/data-asset-uploaded=""[^>]*>\d{1,2}:\d{2} (AM|PM)</);
     expect(out).not.toContain('data-tile');
   });
 
-  it('the ⋮ sits on line 3 and takes the trailing rule (ends on the card edge)', () => {
+  it('has no ⋮: the old menu rows live on the select bar', () => {
     const out = tile();
-    expect(out).toMatch(/data-list-card-line="3"[^]*data-list-card-more=""[^]*?data-card-menu=""/);
-    const trigger = /<button[^>]*data-card-menu=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(trigger).toContain(TRAILING_PULL);
-    // The ⋮ is a sibling of the card's tap surface (buttons never nest).
-    const pressStart = out.indexOf('data-list-card-press=""');
-    const pressEnd = out.indexOf('</button>', pressStart);
-    expect(out.indexOf('data-card-menu=""')).toBeGreaterThan(pressEnd);
+    expect(out).not.toContain('data-card-menu');
+    expect(out).not.toContain('data-list-card-more');
+    expect(out).not.toContain('More actions');
   });
 
-  it('select mode puts the tick box where the ⋮ sits; no corner overlay', () => {
-    const ticked = tile({ selectMode: true, selected: true, onToggleSelect: () => {} });
-    expect(ticked).toMatch(/data-list-card-more=""[^>]*>\s*<span[^>]*data-card-tick="on"/);
+  it('select mode ticks the picture; no corner overlay, no menu', () => {
+    const ticked = tile({ select: selectState(true, true) });
+    expect(ticked).toMatch(/data-list-card-picture="[^"]*"[^]*data-list-card-tick="on"/);
     expect(ticked).not.toContain('data-card-menu');
     expect(ticked).not.toContain('data-card-select');
     expect(ticked).toContain('lit-selected');
@@ -149,12 +141,13 @@ describe('Assets item is ui/ListCard', () => {
   it('keeps its footprint across states: the same lines and slots', () => {
     const states = [
       tile(),
-      tile({ selectMode: true, selected: false, onToggleSelect: () => {} }),
-      tile({ selectMode: true, selected: true, onToggleSelect: () => {} }),
+      tile({ select: selectState(false, false) }),
+      tile({ select: selectState(true, false) }),
+      tile({ select: selectState(true, true) }),
       tile({ item: asset({ sizeBytes: null, pageCount: 4 }) }),
     ];
     const first = slots(states[0]!);
-    expect(first).toEqual(['line="1"', 'title=""', 'preview=""', 'line="3"', 'time=""', 'more=""']);
+    expect(first).toEqual(['line="1"', 'title=""', 'time=""', 'line="2"', 'preview=""', 'tag=""']);
     for (const out of states) expect(slots(out)).toEqual(first);
   });
 
@@ -170,7 +163,7 @@ describe('Assets item is ui/ListCard', () => {
 });
 
 describe('Brief card is ui/ListCard', () => {
-  // Two months before the default due day (1 Jul), so it reads "Due 1 Jul".
+  // Two months before the default due day (1 Jul), so it reads "1 Jul".
   const BRIEF_NOW = new Date('2026-05-01T12:00:00Z');
   function card(overrides: Partial<BriefWithThumbnail> = {}, now: Date = BRIEF_NOW): string {
     return renderToStaticMarkup(
@@ -187,12 +180,21 @@ describe('Brief card is ui/ListCard', () => {
     );
   }
 
-  it('fills the slots: line 1 title, line 2 objective, line 3 the status tag then Due', () => {
+  it('fills the slots: line 1 title and due words, line 2 the brief text then the status tag', () => {
     const out = card();
     expect(out).toMatch(/^<div data-brief-card=""[^>]*data-list-card=""/);
-    expect(out).toMatch(/data-list-card-line="1"[^]*data-list-card-title=""[^]*Spring launch/);
-    expect(out).toMatch(/data-list-card-line="3"[^]*data-brief-status="open"[^]*Due 1 Jul/);
+    expect(out).toMatch(
+      /data-list-card-line="1"[^]*data-list-card-title=""[^]*Spring launch[^]*>1 Jul<[^]*data-list-card-line="2"/,
+    );
+    expect(out).toMatch(
+      /data-list-card-line="2"[^]*data-list-card-preview=""[^>]*>Tease the spring drop.<[^]*data-brief-status="open"/,
+    );
+    expect(out).not.toContain('data-list-card-line="3"');
     expect(out).not.toContain('Target');
+    expect(out).not.toContain('Due ');
+    // No select mode on Briefs: no tick, no menu.
+    expect(out).not.toContain('data-list-card-tick');
+    expect(out).not.toContain('data-card-menu');
     // The cover link is the card's one link, at its corners.
     expect(out.match(/<a /g) ?? []).toHaveLength(1);
     expect(out).toMatch(/<a [^>]*class="[^"]*absolute inset-0/);
@@ -204,16 +206,22 @@ describe('Brief card is ui/ListCard', () => {
     expect(out).not.toContain('opacity');
   });
 
-  it('line 3 reads the due words: Due today, Due Wed, else Overdue in the bad tone', () => {
+  it('the time reads words only: Today, Wed, 8 Oct, else "2d late" in the bad tone', () => {
     expect(card({}, new Date('2026-07-01T09:00:00Z'))).toMatch(
-      /data-brief-due="[^"]*"[^>]*>Due today</,
+      /data-brief-due="[^"]*"[^>]*>Today</,
     );
-    expect(card({}, new Date('2026-06-28T09:00:00Z'))).toContain('>Due Wed<');
+    expect(card({}, new Date('2026-06-28T09:00:00Z'))).toContain('>Wed<');
+    expect(card({ target_date: '2026-10-08' })).toContain('>8 Oct<');
     const late = card({}, new Date('2026-07-03T09:00:00Z'));
-    expect(late).toMatch(/data-list-card-time=""[^>]*class="[^"]*text-bad[^"]*">Overdue 2d</);
-    // A closed brief is never overdue.
+    expect(late).toMatch(/data-list-card-time=""[^>]*class="[^"]*text-bad[^"]*">2d late</);
+    for (const out of [late, card()]) {
+      expect(out).not.toContain('Due ');
+      expect(out).not.toContain('Overdue');
+    }
+    // A closed brief is never late.
     const closed = card({ status: 'closed' }, new Date('2026-07-03T09:00:00Z'));
-    expect(closed).not.toContain('Overdue');
+    expect(closed).toContain('>1 Jul<');
+    expect(closed).not.toContain('late<');
     expect(closed).not.toContain('text-bad');
   });
 

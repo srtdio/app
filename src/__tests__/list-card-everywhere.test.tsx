@@ -256,8 +256,6 @@ const SCREENS: Record<string, string> = {
       presignEnabled={false}
       onOpenGroup={() => {}}
       onOpenEntry={() => {}}
-      onSnooze={() => {}}
-      onMarkRead={() => {}}
       selfName={null}
     />,
   ),

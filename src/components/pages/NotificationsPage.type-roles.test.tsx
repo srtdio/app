@@ -57,7 +57,7 @@ globalThis.ResizeObserver ??= class {
   disconnect(): void {}
 } as unknown as typeof ResizeObserver;
 
-// The card menus and the sort pick popover vs sheet by width; jsdom has no matchMedia.
+// Shared parts read media queries (laptop vs phone); jsdom has no matchMedia.
 window.matchMedia ??= ((query: string) => ({
   matches: false,
   media: query,
@@ -143,7 +143,7 @@ beforeEach(() => {
   try {
     window.localStorage.clear();
   } catch {
-    // Storage can be unavailable; the sort falls back to its default.
+    // Storage can be unavailable.
   }
   h.fetchActivityEntries.mockReset().mockResolvedValue({
     ok: true,
@@ -192,5 +192,54 @@ describe('Notifications type roles', () => {
     const count = document.querySelector('[data-bucket-count]');
     expect(count?.textContent).toBe('1 update');
     expectRole(count as HTMLElement, ['text-sm', 'text-fg-3']);
+  });
+});
+
+describe('Activity header, order and the Unread zero state', () => {
+  it('the search row runs the full width: no sort control', async () => {
+    await mount();
+    const search = document.querySelector('input[aria-label="Search activity"]');
+    expect(search).not.toBeNull();
+    expect(document.querySelector('[data-search-controls]')).toBeNull();
+    expect(document.querySelector('[aria-label="Sort activity"]')).toBeNull();
+    expect(document.body.textContent).not.toContain('Oldest first');
+    expect(document.querySelector('[data-search-group]')?.className).toContain('flex-1');
+  });
+
+  it('reads newest first, even with an old Oldest first sort on the device', async () => {
+    try {
+      window.localStorage.setItem('sorted:sort:activity', 'oldest');
+    } catch {
+      // Storage can be unavailable.
+    }
+    await mount();
+    const directions = h.fetchActivityEntries.mock.calls.map(
+      (call) => (call[2] as { direction?: string } | undefined)?.direction,
+    );
+    expect(directions.length).toBeGreaterThan(0);
+    for (const direction of directions) expect(direction).toBe('newest');
+  });
+
+  it('the Unread chip with nothing unread says "New updates show up here."', async () => {
+    h.fetchActivityEntries.mockReset().mockResolvedValue({ ok: true, data: [] });
+    await mount();
+    const unread = [...document.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+      b.textContent?.trim().startsWith('Unread'),
+    );
+    expect(unread).toBeDefined();
+    await act(async () => unread?.click());
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    expect(document.body.textContent).toContain('New updates show up here.');
+    expect(document.body.textContent).not.toContain(
+      'Activity across posts, briefs and people shows up here.',
+    );
+  });
+
+  it('the chips are All, Unread, Mentions, Briefs, Plans (no Snoozed)', async () => {
+    await mount();
+    const chips = [...document.querySelectorAll('[data-activity-chips] button')].map((b) =>
+      (b.textContent ?? '').replace(/\d+/g, '').trim(),
+    );
+    expect(chips).toEqual(['All', 'Unread', 'Mentions', 'Briefs', 'Plans']);
   });
 });

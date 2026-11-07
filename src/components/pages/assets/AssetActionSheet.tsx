@@ -150,7 +150,13 @@ export function assetSelectActions(
               single: true,
             };
       case 'copy':
-        return { id: 'copy-link', label: 'Copy link', icon: IconLink, onSelect: copy, single: true };
+        return {
+          id: 'copy-link',
+          label: 'Copy link',
+          icon: IconLink,
+          onSelect: copy,
+          single: true,
+        };
       case 'rename':
         return {
           id: 'rename',

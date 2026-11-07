@@ -34,7 +34,6 @@ describe('X5 empty pipeline', () => {
           activeStage={stage}
           cache={cache}
           presignEnabled={false}
-          onLongPressPost={() => {}}
         />,
       );
       expect(out).toContain(emptyStageMessage(stage));

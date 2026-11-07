@@ -177,9 +177,7 @@ describe('the select bar carries the old file menu rows, no Move to folder', () 
   });
 
   it('several files: Delete only (the single rows hide)', async () => {
-    await mount(
-      fileBar(asset(), { canRename: true, onRename: () => {}, onDelete: () => {} }, 3),
-    );
+    await mount(fileBar(asset(), { canRename: true, onRename: () => {}, onDelete: () => {} }, 3));
     expect(barActions()).toEqual(['Delete']);
     expect(document.querySelector('[data-select-bar-count]')?.textContent).toBe('3 selected');
   });

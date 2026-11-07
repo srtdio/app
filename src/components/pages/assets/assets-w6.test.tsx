@@ -99,8 +99,8 @@ describe('3. Copy link copies a lasting in-app link', () => {
 
 const NOW = new Date('2026-10-01T03:00:00Z');
 
-describe('4. every card shows a visible 44px ⋯ button', () => {
-  it('on asset cards, the tick in its place in select mode', () => {
+describe('4. no card ⋯: long-press / right-click selects', () => {
+  it('asset cards carry no menu trigger; select mode ticks the picture', () => {
     const card = renderToStaticMarkup(
       <AssetListCard
         item={asset()}
@@ -110,8 +110,8 @@ describe('4. every card shows a visible 44px ⋯ button', () => {
         onOpen={() => {}}
       />,
     );
-    expect(card).toContain('aria-label="More actions for photo.png"');
-    expect(card).toMatch(/class="[^"]*h-11 w-11[^"]*"[^>]*data-card-menu=""/);
+    expect(card).not.toContain('More actions');
+    expect(card).not.toContain('data-card-menu');
     const selecting = renderToStaticMarkup(
       <AssetListCard
         item={asset()}
@@ -119,15 +119,15 @@ describe('4. every card shows a visible 44px ⋯ button', () => {
         presignEnabled={false}
         now={NOW}
         onOpen={() => {}}
-        selectMode
+        select={{ active: true, chosen: false, onEnter: () => {}, onToggle: () => {} }}
       />,
     );
     expect(selecting).not.toContain('data-card-menu');
-    expect(selecting).toMatch(/data-list-card-more=""[^>]*>\s*<span[^>]*data-card-tick="off"/);
+    expect(selecting).toContain('data-list-card-tick="off"');
   });
 });
 
-describe('5. menu rows in order: Open, Copy link, the rest, Delete last', () => {
+describe('5. action rows in order: Open, Copy link, the rest, Delete last', () => {
   it('file and link menus, with no Move to folder row', () => {
     expect(assetMenuRows(false, true)).toEqual(['copy', 'primary', 'rename', 'info', 'delete']);
     expect(assetMenuRows(false, false)).toEqual(['copy', 'primary', 'info', 'delete']);
@@ -179,9 +179,9 @@ describe('5b. the old card ⋮ rows are the select bar actions', () => {
 
   it('several files ticked: Delete only', () => {
     expect(assetSelectActions(undefined, deps).map((row) => row.id)).toEqual(['delete']);
-    expect(
-      visibleSelectActions(assetSelectActions(asset(), deps), 2).map((row) => row.id),
-    ).toEqual(['delete']);
+    expect(visibleSelectActions(assetSelectActions(asset(), deps), 2).map((row) => row.id)).toEqual(
+      ['delete'],
+    );
   });
 
   it('Delete runs the page delete at once (Undo strip, no dialog)', () => {

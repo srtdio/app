@@ -9,6 +9,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssetsPage } from '@/components/pages/AssetsPage';
 import { resetSessionReads } from '@/lib/session-read';
+import { resetHistorySteps } from '@/lib/chat/use-history-step';
 import type { AssetListItem } from '@/lib/assets';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -119,6 +120,30 @@ async function mount(path = '/assets'): Promise<void> {
 }
 
 const text = () => document.body.textContent ?? '';
+
+/** Right-click a card (laptop): select mode starts with that card ticked. */
+async function rightClick(assetId: string): Promise<void> {
+  await act(async () => {
+    document
+      .querySelector<HTMLElement>(`[data-asset-card="${assetId}"]`)
+      ?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  });
+  await flush();
+}
+
+/** A tap on a card (its whole-card button); in select mode it toggles. */
+async function tapCard(name: string): Promise<void> {
+  await act(async () =>
+    document.querySelector<HTMLElement>(`[aria-label="View ${name}"]`)?.click(),
+  );
+}
+
+const barAction = (id: string) =>
+  document.querySelector<HTMLButtonElement>(`[data-select-bar-action="${id}"]`);
+const barActionIds = () =>
+  [...document.querySelectorAll<HTMLElement>('[data-select-bar-action]')].map((el) =>
+    el.getAttribute('data-select-bar-action'),
+  );
 const button = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('button')].find(
     (b) => b.textContent?.trim() === label,
@@ -140,6 +165,8 @@ afterEach(() => {
   vi.useRealTimers();
   // The kept list and tab outlive the page; each test starts a fresh session.
   resetSessionReads();
+  // Select mode holds a history entry; each test starts with none.
+  resetHistorySteps();
 });
 
 describe('X6 files read failure', () => {
@@ -211,23 +238,11 @@ describe('X6 bulk delete keeps the files in use', () => {
     assetDeleteMany.mockResolvedValue({ ok: true, data: null });
     await mount();
 
-    // Selecting starts from the first card's ⋮ Select row (ui/ListCard has no corner box);
-    // in select mode each card toggles.
-    await act(async () =>
-      document.querySelector<HTMLElement>('[aria-label="More actions for one.png"]')?.click(),
-    );
-    await flush();
-    await act(async () =>
-      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-        .find((row) => row.textContent?.trim() === 'Select')
-        ?.click(),
-    );
-    for (const name of ['two.png', 'three.png']) {
-      await act(async () =>
-        document.querySelector<HTMLElement>(`[aria-label="Select ${name}"]`)?.click(),
-      );
-    }
-    await act(async () => button('Delete')?.click());
+    // A right-click on the first card starts selecting with it ticked; in
+    // select mode a tap on each card toggles it.
+    await rightClick('a1');
+    for (const name of ['two.png', 'three.png']) await tapCard(name);
+    await act(async () => barAction('delete')?.click());
 
     const undo = showToast.mock.calls.find(
       ([options]) =>
@@ -302,21 +317,94 @@ describe('Assets has no folders', () => {
     });
     await mount();
 
-    // Selecting starts from the card's ⋮ Select row (ui/ListCard has no corner box).
+    await rightClick('a1');
+
+    expect(barAction('delete')).not.toBeNull();
+    expect(button('Move')).toBeUndefined();
+    const labels = [...document.querySelectorAll('button')].map(
+      (b) => `${b.textContent ?? ''} ${b.getAttribute('aria-label') ?? ''}`,
+    );
+    expect(labels.some((label) => label.includes('Move'))).toBe(false);
+  });
+});
+
+describe('Assets select mode (long-press / right-click, ui/SelectBar)', () => {
+  const three = () =>
+    listAssets.mockResolvedValue({
+      ok: true,
+      data: [
+        asset({ id: 'a1', filename: 'one.png', folderId: null }),
+        asset({ id: 'a2', filename: 'two.png', folderId: null }),
+        asset({ id: 'a3', filename: 'three.png', folderId: null }),
+      ],
+    });
+
+  it('no card has a ⋮ and nothing selects until a right-click', async () => {
+    three();
+    await mount();
+    expect(document.querySelector('[data-card-menu]')).toBeNull();
+    expect(document.querySelector('[aria-label^="More actions for"]')).toBeNull();
+    expect(document.querySelector('[data-select-bar]')).toBeNull();
+    expect(text()).toContain('Recently deleted');
+  });
+
+  it('shows the SelectBar with the single-file actions only at count 1, Delete at any count', async () => {
+    three();
+    await mount();
+    await rightClick('a1');
+
+    const bar = document.querySelector('[data-select-bar]');
+    expect(bar).not.toBeNull();
+    expect(bar?.getAttribute('role')).toBe('toolbar');
+    expect(document.querySelector('[data-select-bar-count]')?.textContent).toBe('1 selected');
+    expect(barActionIds()).toEqual(['copy-link', 'rename', 'info', 'delete']);
+    expect(barAction('delete')?.className).toContain('text-bad');
+    // Select all is the bar's extra; the header keeps its tabs (no in-header select row).
+    expect(document.querySelector('[data-assets-select-all]')?.textContent).toBe('Select all');
+    expect(document.querySelector('[role="tablist"]')).not.toBeNull();
+    expect(text()).not.toContain('Recently deleted');
+
+    await tapCard('two.png');
+    expect(document.querySelector('[data-select-bar-count]')?.textContent).toBe('2 selected');
+    expect(barActionIds()).toEqual(['delete']);
+
+    // Unticking back to one brings the single rows back.
+    await tapCard('two.png');
+    expect(barActionIds()).toEqual(['copy-link', 'rename', 'info', 'delete']);
+  });
+
+  it('Cancel and unticking the last card both leave select mode', async () => {
+    three();
+    await mount();
+    await rightClick('a1');
     await act(async () =>
-      document.querySelector<HTMLElement>('[aria-label="More actions for one.png"]')?.click(),
+      document.querySelector<HTMLButtonElement>('[data-select-bar-cancel]')?.click(),
     );
     await flush();
-    await act(async () =>
-      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-        .find((row) => row.textContent?.trim() === 'Select')
-        ?.click(),
-    );
+    expect(document.querySelector('[data-select-bar]')).toBeNull();
 
-    expect(button('Delete')).toBeDefined();
-    expect(button('Move')).toBeUndefined();
-    const labels = [...document.querySelectorAll('button')].map((b) => b.textContent ?? '');
-    expect(labels.some((label) => label.includes('Move'))).toBe(false);
+    await rightClick('a2');
+    expect(document.querySelector('[data-select-bar]')).not.toBeNull();
+    await tapCard('two.png');
+    await flush();
+    expect(document.querySelector('[data-select-bar]')).toBeNull();
+  });
+
+  it('Delete from the bar hides the ticked files with the Undo toast', async () => {
+    three();
+    await mount();
+    await rightClick('a2');
+    await act(async () => barAction('delete')?.click());
+    await flush();
+    expect(
+      showToast.mock.calls.some(
+        ([options]) =>
+          (options as { title?: string }).title ===
+          'File deleted. Undo or find it in Recently deleted.',
+      ),
+    ).toBe(true);
+    expect(text()).not.toContain('two.png');
+    expect(document.querySelector('[data-select-bar]')).toBeNull();
   });
 });
 

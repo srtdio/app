@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// Activity's first frame (blink B3): with a page one saved for the chip and
-// sort (this session, or on the device and seeded at boot) the first frame is
+// Activity's first frame (blink B3): with a page one saved for the chip
+// (this session, or on the device and seeded at boot) the first frame is
 // the rows, never the loading line; with nothing saved it is the loading line,
 // never a zero state. A cold open that mounts the page before the device's
 // saved screens are seeded paints them the moment they land (before the read),
@@ -215,7 +215,7 @@ beforeEach(async () => {
   try {
     window.localStorage.clear();
   } catch {
-    // Storage can be unavailable; the sort falls back to its default.
+    // Storage can be unavailable.
   }
   h.fetchActivityEntries.mockReset();
   h.readActivityBadge.mockReset().mockResolvedValue({ ok: true, data: { unread: 0, mentions: 0 } });

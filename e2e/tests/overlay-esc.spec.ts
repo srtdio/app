@@ -95,15 +95,6 @@ test('Escape: the Empty now ConfirmDialog closes and focus returns to Empty now 
   await escReturnsFocus(page, trigger, page.getByRole('alertdialog'));
 });
 
-test('Escape: the Activity SortMenu popover closes and focus returns to Sort activity @desktop', async ({
-  page,
-}) => {
-  await installHarnessNetwork(page);
-  await page.goto('/notifications');
-  const trigger = page.getByRole('button', { name: 'Sort activity', exact: true });
-  await escReturnsFocus(page, trigger, page.getByRole('menu', { name: 'Sort activity' }));
-});
-
 test('Escape: the Pipeline Filter and sort dropdown closes and focus returns to its button @desktop', async ({
   page,
 }) => {

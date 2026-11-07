@@ -839,7 +839,6 @@ export function AssetsPage() {
     [uploadEndpoint, workspaceId, newTrace, setItemsAndKeep],
   );
 
-
   const searchFailed = searching && assetSearch.status === 'error' && assetSearch.data === null;
   const listLoading = searching
     ? workspaceId === null || (assetSearch.data === null && !searchFailed)

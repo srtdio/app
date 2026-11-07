@@ -49,7 +49,12 @@ import { sortChannelsByRecency } from '@/lib/chat/sort-conversations';
 import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { draftText, draftsVersion, subscribeDrafts } from '@/lib/chat/drafts';
-import { mentionNamesIn, resolveMentionPreview, splitAllMentions } from '@/lib/chat/mentions';
+import {
+  mentionNamesIn,
+  personName,
+  resolveMentionPreview,
+  splitAllMentions,
+} from '@/lib/chat/mentions';
 import { leaveSelectionThen } from '@/lib/chat/forward';
 import { summaryIconOfLine } from '@/lib/chat/thread';
 import { SummaryGlyph } from '@/components/chat/ReplyQuote';
@@ -1032,8 +1037,12 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
   const hasChannels = ready && props.channels.some((c) => !isHidden(c.channelId));
   const select = ready ? props.select : undefined;
   const selecting = select?.active === true ? select : undefined;
-  // New chat from a thread selecting messages exits that first (history.back()).
-  const newChat = (): void => leaveSelectionThen(props.onNewChat);
+  // New chat leaves the list's select mode, and a thread selecting messages
+  // exits that first (history.back()).
+  const newChat = (): void => {
+    selecting?.onCancel();
+    leaveSelectionThen(props.onNewChat);
+  };
   const kind = props.kind ?? null;
   // The chip view's Select: media items are not cards, so they have no long-press.
   const mediaSelectEntry = select !== undefined && hasChannels && kind !== null && !selecting;
@@ -1047,49 +1056,45 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
     notesInList && props.notes !== undefined ? [...props.channels, props.notes] : props.channels;
   return (
     <div className={layout.column}>
-      {selecting !== undefined ? (
-        selectHeader(selecting, layout.header)
-      ) : (
-        // The app's own Clear (X) is the only one: the browser's native
-        // search cancel button is hidden.
-        <div
-          className={cn(
-            'border-b border-border pb-3 [&_input::-webkit-search-cancel-button]:hidden',
-            layout.header,
-          )}
+      {/* The app's own Clear (X) is the only one: the browser's native search
+          cancel button is hidden. */}
+      <div
+        className={cn(
+          'border-b border-border pb-3 [&_input::-webkit-search-cancel-button]:hidden',
+          layout.header,
+        )}
+      >
+        <SectionHeader
+          stackSearchMd
+          search={{
+            value: props.search,
+            onChange: props.onSearchChange,
+            placeholder: 'Search chats',
+            label: 'Search chats',
+          }}
+          primaryAction={{
+            node: (
+              <>
+                {mediaSelectEntry && select !== undefined ? (
+                  <IconButton label="Select" onClick={select.onStart}>
+                    <IconCheckCircle size={ICON_SIZE.control} />
+                  </IconButton>
+                ) : null}
+                <Button
+                  variant="primary"
+                  className="shrink-0 whitespace-nowrap"
+                  onClick={newChat}
+                >
+                  <IconPlus size={ICON_SIZE.inline} />
+                  New chat
+                </Button>
+              </>
+            ),
+          }}
         >
-          <SectionHeader
-            stackSearchMd
-            search={{
-              value: props.search,
-              onChange: props.onSearchChange,
-              placeholder: 'Search chats',
-              label: 'Search chats',
-            }}
-            primaryAction={{
-              node: (
-                <>
-                  {select !== undefined && hasChannels ? (
-                    <IconButton label="Select" onClick={select.onStart}>
-                      <IconCheckCircle size={ICON_SIZE.control} />
-                    </IconButton>
-                  ) : null}
-                  <Button
-                    variant="primary"
-                    className="shrink-0 whitespace-nowrap"
-                    onClick={newChat}
-                  >
-                    <IconPlus size={ICON_SIZE.inline} />
-                    New chat
-                  </Button>
-                </>
-              ),
-            }}
-          >
-            {onKindChange !== undefined ? searchChips({ kind, onChange: onKindChange }) : undefined}
-          </SectionHeader>
-        </div>
-      )}
+          {onKindChange !== undefined ? searchChips({ kind, onChange: onKindChange }) : undefined}
+        </SectionHeader>
+      </div>
       <div className={layout.body}>
         {props.lead !== undefined && !searching ? props.lead : null}
         {props.notes !== undefined && !searching && !notesInList
@@ -1101,6 +1106,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
               selected: props.notes.channelId === props.selectedChannelId,
               selecting: selecting !== undefined,
               onSelect: props.onSelect,
+              ownName: props.ownName,
             })
           : null}
         <SettleLanding boxes={props.status === 'loading'} selector="[data-chat-home] li">
@@ -1122,24 +1128,19 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                     onNewChat: newChat,
                     summaryFor,
                     ...(props.draftFor !== undefined ? { draftFor: props.draftFor } : {}),
-                    ...(selecting !== undefined
+                    // The chat cards' select mode (a chip view's bar selects
+                    // messages, so the cards are not shown then).
+                    ...(select !== undefined && select.media === undefined
                       ? {
-                          selecting: {
-                            selectedIds: selecting.selectedIds,
-                            onToggle: selecting.onToggle,
+                          select: {
+                            active: selecting !== undefined,
+                            selectedIds: select.selectedIds,
+                            onEnter: select.onEnter,
+                            onToggle: select.onToggle,
                           },
                         }
                       : {}),
-                    ...(props.onLongPress !== undefined && selecting === undefined
-                      ? {
-                          onLongPress: props.onLongPress,
-                          menuOpenId: props.menuOpenId ?? null,
-                          ...(props.onMenuClose !== undefined
-                            ? { onMenuClose: props.onMenuClose }
-                            : {}),
-                          ...(props.onHide !== undefined ? { onHide: props.onHide } : {}),
-                        }
-                      : {}),
+                    ...(props.ownName !== undefined ? { ownName: props.ownName } : {}),
                     ...(props.nowMs !== undefined ? { nowMs: props.nowMs } : {}),
                     ...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {}),
                     ...(props.input !== undefined ? { input: props.input } : {}),
@@ -1175,8 +1176,6 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   const [mediaSelection, setMediaSelection] = useState<MediaSelection>(EMPTY_MEDIA_SELECTION);
   // The chip view's forward picker: the messages to forward, or null (closed).
   const [forwardItems, setForwardItems] = useState<readonly HideItem[] | null>(null);
-  // The chat whose row menu is open (ActionMenu: a sheet on phone, a popover at its ⋯ on laptop).
-  const [menu, setMenu] = useState<ChannelSummary | null>(null);
   // Chats hidden behind the Undo toast: they leave the list at once and the
   // hide (chat_channel_clear) runs only when the toast ends; Undo puts them back.
   const [pendingHidden, setPendingHidden] = useState<ReadonlySet<string>>(new Set());
@@ -1206,14 +1205,13 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     [drafts, listWorkspaceId],
   );
   const onDeleteChats = props.onDeleteChats;
-  const closeMenu = useCallback(() => setMenu(null), []);
   const exitSelect = (): void => {
     setSelecting(false);
     setSelectedIds(new Set());
     setMediaSelection(EMPTY_MEDIA_SELECTION);
   };
 
-  // Hide (the row menu, or the select-mode bar): no confirm. The chats leave
+  // Hide chat (the select bar, any count): no confirm. The chats leave
   // the list at once behind the Undo toast (UNDO_MS); the hide is written when
   // the toast ends. Undo, or a hide that fails, puts them back in place (the
   // list is sorted, so they land where they were).
@@ -1293,9 +1291,20 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     });
     primeRead<MediaCacheValue>(mediaKey, { kind: mediaKind, items });
   }, [mediaKey, mediaKind, searchState]);
+  // The header stays up while selecting: a new chip or search leaves select
+  // mode first (the ticked chats or items may no longer be on screen).
   const onKindChange = useCallback((next: HomeChip | null) => {
     if (next !== null) mark('chat:chip:tap');
+    setSelecting(false);
+    setSelectedIds(new Set());
+    setMediaSelection(EMPTY_MEDIA_SELECTION);
     setKind(next);
+  }, []);
+  const onSearchChange = useCallback((value: string) => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+    setMediaSelection(EMPTY_MEDIA_SELECTION);
+    setSearch(value);
   }, []);
   // Hits in notes carry its name ("Personal notes") and notebook.
   const notes = props.notes;
@@ -1394,7 +1403,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
         ...props,
         input,
         search,
-        onSearchChange: setSearch,
+        onSearchChange,
         kind,
         onKindChange,
         ...(searchResults !== undefined ? { searchResults } : {}),
@@ -1402,25 +1411,34 @@ export function ChannelList(props: ChannelListProps): ReactElement {
         isHidden,
         draftFor,
         nowMs,
+        // Personal notes' picture: the caller's own initials when there is no photo.
+        ...(currentUserId !== null ? { ownName: personName(listWorkspaceId, currentUserId) } : {}),
         ...(onDeleteChats !== undefined
           ? {
               select: {
                 active: selecting,
                 selectedIds: mediaSelecting ? new Set(mediaSelection.keys()) : selectedIds,
+                // A chat's long-press or right-click: select mode with that chat ticked.
+                onEnter: (channelId: string) => {
+                  setMediaSelection(EMPTY_MEDIA_SELECTION);
+                  setSelectedIds(new Set([channelId]));
+                  setSelecting(true);
+                },
+                // A chip view's header Select: nothing ticked yet.
                 onStart: () => {
-                  setMenu(null);
                   setSelectedIds(new Set());
                   setMediaSelection(EMPTY_MEDIA_SELECTION);
                   setSelecting(true);
                 },
                 onCancel: exitSelect,
-                onToggle: (channelId: string) =>
-                  setSelectedIds((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(channelId)) next.delete(channelId);
-                    else next.add(channelId);
-                    return next;
-                  }),
+                // Unticking the last chat leaves select mode.
+                onToggle: (channelId: string) => {
+                  const next = new Set(selectedIds);
+                  if (next.has(channelId)) next.delete(channelId);
+                  else next.add(channelId);
+                  if (next.size === 0) exitSelect();
+                  else setSelectedIds(next);
+                },
                 onDelete: mediaSelecting
                   ? () => {
                       const items = mediaSelectionItems(mediaSelection);
@@ -1438,10 +1456,6 @@ export function ChannelList(props: ChannelListProps): ReactElement {
                     }
                   : {}),
               },
-              onLongPress: (channel: ChannelSummary) => setMenu(channel),
-              menuOpenId: menu?.channelId ?? null,
-              onMenuClose: closeMenu,
-              onHide: (channel: ChannelSummary) => hideChats([channel]),
             }
           : {}),
       })}

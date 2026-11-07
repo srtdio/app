@@ -251,13 +251,7 @@ function useGrowingCount(total: number): {
  * auto-fill columns on laptop). One minute clock for the whole list ages every
  * card's "added" time together; no timer per card.
  */
-export function AssetList({
-  items,
-  presignEnabled,
-  cache,
-  onOpen,
-  selectFor,
-}: AssetListProps) {
+export function AssetList({ items, presignEnabled, cache, onOpen, selectFor }: AssetListProps) {
   const { count, sentinelRef } = useGrowingCount(items.length);
   const nowMs = useMinuteClock();
   const now = new Date(nowMs);

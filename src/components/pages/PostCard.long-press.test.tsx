@@ -201,7 +201,7 @@ describe('Pipeline select mode', () => {
   it('a right-click ticks the card too; a known role lists its moves', () => {
     mount({ role: 'agency', approverFirstNames: [] });
     rightClick(card('Post p1'));
-    expect(barLabels()).toEqual(['Open', 'Copy link', 'Send for review']);
+    expect(barLabels()).toEqual(['Open', 'Copy link', 'Send for review', 'Park']);
   });
 
   it('a second ticked card hides Open, Copy link and the per-post moves', () => {

@@ -90,6 +90,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { parsePipelineQuery } from '@/components/pages/pipeline/pipeline-query';
 import type { UndoableAction } from '@/lib/use-undoable-action';
 import { NoResults } from '@/components/ui/NoResults';
+import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import type { PresignCache } from '@/lib/asset-presign';
 import {
@@ -1081,6 +1082,7 @@ describe('E: no jumps while loading', () => {
     expect(out).toContain('data-posts-skeleton=""');
     expect(out).toContain('md:grid-cols-list-cards');
     expect((out.match(/data-list-card-box=""/g) ?? []).length).toBe(6);
+    expect(out).toContain(`aria-hidden="true" class="${LIST_CARD_GRID}"`);
     expect(out).not.toContain('kanban');
     expect(out).not.toContain('aspect-ratio');
     expect(out).toContain('<span class="sr-only">Loading posts</span>');

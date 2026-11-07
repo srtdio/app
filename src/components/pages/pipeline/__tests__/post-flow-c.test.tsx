@@ -1,5 +1,5 @@
 // Post flow C: one regression test per Pipeline fix (cards, status line, the
-// corner move button, due line, search fields, chips, the narrowing count and
+// select bar rows (the old ⋮), due words, search fields, chips, the narrowing count and
 // undated hint, the two header buttons, the move sheet actions, the ask-first
 // confirms, the plain move error) plus the empty pipeline copy. Node env: cards
 // render to static markup, hookless views are walked as element trees, and
@@ -24,7 +24,7 @@ vi.mock('@/components/pages/pipeline/PipelineDateRangeCalendar', () => ({
   PipelineDateRangeCalendar: () => null,
 }));
 
-import { PostCard, cardCoverKind, cardDue, cardMenuItems } from '@/components/pages/PostCard';
+import { PostCard, cardCoverKind, cardDue } from '@/components/pages/PostCard';
 import type { PostCardProps } from '@/components/pages/PostCard';
 import {
   hasAllowedMove,
@@ -63,6 +63,7 @@ import {
   headerCountLabel,
   moveErrorMessage,
   pipelineHeader,
+  pipelineSelectActions,
   postSearchFields,
   runUndoableMove,
   stageChipItems,
@@ -195,61 +196,67 @@ describe('post flow C: Pipeline card', () => {
     expect(card({ post: x5Post({ stage: 'review' }) })).not.toContain('data-post-card-status');
   });
 
-  it('fix 3: the ⋯ ends the title line, off the picture; Move hides when the viewer has no move', () => {
-    const out = card({ post: x5Post({ stage: 'review' }), onMove: () => {} });
-    const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(button).toContain('aria-label="Actions for Post title"');
-    expect(button).not.toContain('absolute');
-    // The ⋮ ends line 3 (ListCard's trailing slot).
-    const line3At = out.indexOf('data-list-card-line="3"');
-    expect(line3At).toBeGreaterThan(-1);
-    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(line3At);
-    // Nothing of the move control sits on the picture.
-    const picture = out.slice(out.indexOf('data-list-card-picture'), line3At);
-    expect(picture).not.toContain('data-post-card-move');
+  it('fix 3: no ⋮ on the card; the select bar carries Open, Copy link and the moves', () => {
+    const out = card({ post: x5Post({ stage: 'review' }), viewer: viewer('agency') });
+    expect(out).not.toContain('data-post-card-move');
+    expect(out).not.toContain('Actions for');
+    expect(out).not.toContain('data-list-card-line="3"');
+    // Nothing of a move control sits on the picture.
+    const picture = out.slice(
+      out.indexOf('data-list-card-picture'),
+      out.indexOf('data-list-card-line="1"'),
+    );
     expect(picture).not.toContain('bg-overlay-badge-hover');
     // The title is one line (ListCard line 1).
     const title = /<span[^>]*data-list-card-title=""[^>]*>/.exec(out)?.[0] ?? '';
     expect(title).toContain('truncate');
 
-    // An approver can do nothing with a Draft, Parked or Rejected post: the ⋯
-    // keeps Open and Copy link, and its Move row is hidden (never disabled).
+    // An approver can do nothing with a Draft, Parked or Rejected post: the bar
+    // keeps Open and Copy link, and no move row shows (never disabled).
     for (const stage of ['draft', 'parked', 'rejected'] as const) {
       expect(hasAllowedMove('client', stage)).toBe(false);
     }
     const noop = (): void => {};
-    expect(cardMenuItems({ onOpen: noop, onCopyLink: noop }).map((i) => i.label)).toEqual([
+    const rows = (stage: Stage, v: CardViewer): string[] =>
+      pipelineSelectActions({
+        post: x5Post({ stage }),
+        count: 1,
+        viewer: v,
+        onOpen: noop,
+        onCopyLink: noop,
+        onMove: noop,
+      }).map((a) => a.label);
+    expect(rows('draft', viewer('client'))).toEqual(['Open', 'Copy link']);
+    expect(rows('draft', { role: null, approverFirstNames: [], pending: true })).toEqual([
       'Open',
       'Copy link',
+      'Move',
     ]);
-    expect(
-      cardMenuItems({ onOpen: noop, onCopyLink: noop, onMove: noop }).map((i) => i.label),
-    ).toEqual(['Open', 'Copy link', 'Move']);
+    expect(rows('draft', viewer('agency'))).toEqual([
+      'Open',
+      'Copy link',
+      'Send for review',
+      'Park',
+    ]);
     expect(hasAllowedMove('client', 'review')).toBe(true);
     expect(hasAllowedMove('client', 'approved')).toBe(true);
     for (const stage of ['draft', 'review', 'approved', 'parked', 'rejected'] as const) {
       expect(hasAllowedMove('agency', stage)).toBe(true);
       expect(hasAllowedMove(null, stage)).toBe(false);
     }
-    const shown = card({
-      post: x5Post({ stage: 'draft' }),
-      onMove: () => {},
-      viewer: viewer('agency'),
-    });
-    expect(shown).toContain('data-post-card-move');
   });
 
-  it('fix 4: the due time is short (formatDue) on the workspace day; overdue reads late', () => {
+  it('fix 4: the due time is words only (formatDue) on the workspace day; past reads late', () => {
     const now = new Date('2026-03-01T12:00:00Z');
     const due = (value: string, zone: string | null | undefined): string =>
       cardDue(value, 'review', zone, now).text;
-    expect(due('2026-03-15T02:00:00Z', 'Asia/Kolkata')).toBe('Due 15 Mar');
-    expect(due('2026-03-15T02:00:00Z', 'America/New_York')).toBe('Due 14 Mar');
-    expect(due('2026-03-01T12:00:00Z', 'UTC')).toBe('Due today');
-    expect(due('2026-03-02T12:00:00Z', 'UTC')).toBe('Due tomorrow');
-    expect(due('2026-12-01T00:00:00Z', 'UTC')).toBe('Due 1 Dec');
-    expect(due('2027-01-04T00:00:00Z', 'UTC')).toBe('Due 4 Jan 2027');
-    expect(due('2026-02-27T12:00:00Z', 'UTC')).toBe('Overdue 2d');
+    expect(due('2026-03-15T02:00:00Z', 'Asia/Kolkata')).toBe('15 Mar');
+    expect(due('2026-03-15T02:00:00Z', 'America/New_York')).toBe('14 Mar');
+    expect(due('2026-03-01T12:00:00Z', 'UTC')).toBe('Today');
+    expect(due('2026-03-02T12:00:00Z', 'UTC')).toBe('Tomorrow');
+    expect(due('2026-12-01T00:00:00Z', 'UTC')).toBe('1 Dec');
+    expect(due('2027-01-04T00:00:00Z', 'UTC')).toBe('4 Jan 2027');
+    expect(due('2026-02-27T12:00:00Z', 'UTC')).toBe('2d late');
     expect(due('2026-03-15T02:00:00Z', 'Not/AZone')).toBe(due('2026-03-15T02:00:00Z', undefined));
     expect(due('soon', 'UTC')).toBe('');
     const out = card({
@@ -257,8 +264,9 @@ describe('post flow C: Pipeline card', () => {
       timeZone: 'UTC',
       now,
     });
-    expect(out).toMatch(/<span[^>]*data-post-card-due=""[^>]*>Due 15 Mar<\/span>/);
+    expect(out).toMatch(/<span[^>]*data-post-card-due=""[^>]*>15 Mar<\/span>/);
     expect(out).not.toContain('2026');
+    expect(out).not.toMatch(/>Due /);
     expect(card({ post: x5Post({ target_date: null }) })).not.toContain('data-post-card-due');
   });
 

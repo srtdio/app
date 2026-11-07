@@ -225,7 +225,10 @@ function selectState(active: boolean, chosen: boolean): ListCardSelect {
 
 describe('select mode (ListCard select)', () => {
   it('no ⋮ ever: no menu trigger, no More actions', () => {
-    for (const out of [card(makeAsset()), card(makeAsset(), { select: selectState(false, false) })]) {
+    for (const out of [
+      card(makeAsset()),
+      card(makeAsset(), { select: selectState(false, false) }),
+    ]) {
       expect(out).not.toContain('data-card-menu');
       expect(out).not.toContain('More actions');
       expect(out).not.toContain('data-list-card-more');

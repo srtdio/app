@@ -17,7 +17,7 @@ import type { PipelinePost, Stage } from '@srtdio/posts';
 const h = vi.hoisted(() => ({
   listPosts: vi.fn(),
   lists: [] as PipelinePost[][],
-  onLongPressPost: null as null | ((post: PipelinePost, to?: string) => void),
+  selectFor: null as null | ((postId: string) => { onEnter: () => void }),
   onConfirm: null as null | ((postId: string, to: string, reason: string | null) => void),
 }));
 
@@ -62,10 +62,10 @@ vi.mock('@/components/pages/pipeline/member-role', async (orig) => ({
 vi.mock('@/components/pages/pipeline/PipelineFeed', () => ({
   PipelineFeed: (props: {
     posts: PipelinePost[];
-    onLongPressPost: (post: PipelinePost, to?: string) => void;
+    selectFor?: (postId: string) => { onEnter: () => void };
   }) => {
     h.lists.push(props.posts);
-    h.onLongPressPost = props.onLongPressPost;
+    h.selectFor = props.selectFor ?? null;
     return null;
   },
 }));
@@ -236,9 +236,16 @@ describe('Pipeline tab return', () => {
   it("the list's own move updates the kept posts, never drops them", async () => {
     h.listPosts.mockResolvedValue({ ok: true, data: OLD });
     await visit();
-    // The card's ⋮ Park row asks first; its Confirm moves.
-    const card = lastList().find((p) => p.id === 'old')!;
-    await act(async () => h.onLongPressPost?.(card, 'parked'));
+    // A long-press ticks the card; the select bar's Park row asks first (after
+    // select mode leaves); its Confirm moves.
+    expect(lastList().some((p) => p.id === 'old')).toBe(true);
+    await act(async () => h.selectFor?.('old').onEnter());
+    const park = document.querySelector<HTMLButtonElement>(
+      '[data-select-bar][aria-label="Selected posts"] [data-select-bar-action="move-parked"]',
+    );
+    expect(park).not.toBeNull();
+    await act(async () => park?.click());
+    await vi.waitFor(() => expect(document.querySelector('[data-select-bar]')).toBeNull());
     await act(async () => h.onConfirm?.('old', 'parked', null));
     expect(lastBoardStage('old')).toBe('parked');
     expect(keptPipelinePosts('u1', 'ws-1')?.[0]?.stage).toBe('parked');
