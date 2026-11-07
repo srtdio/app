@@ -9,7 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { AssetList, AssetListCard } from '@/components/pages/assets/AssetListCard';
 import { BriefCard } from '@/components/pages/BriefCard';
-import { Card, CARD_GRID } from '@/components/ui/Card';
+import { Card } from '@/components/ui/Card';
 import { IconButton } from '@/components/ui/IconButton';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
@@ -168,10 +168,19 @@ describe('Assets item is ui/ListCard', () => {
 });
 
 describe('Brief card is ui/ListCard', () => {
-  function card(overrides: Partial<BriefWithThumbnail> = {}): string {
+  // Two months before the default due day (1 Jul), so it reads "Due 1 Jul".
+  const BRIEF_NOW = new Date('2026-05-01T12:00:00Z');
+  function card(overrides: Partial<BriefWithThumbnail> = {}, now: Date = BRIEF_NOW): string {
     return renderToStaticMarkup(
       <MemoryRouter>
-        <BriefCard brief={brief(overrides)} cache={cache} presignEnabled={false} href="/b/1" />
+        <BriefCard
+          brief={brief(overrides)}
+          cache={cache}
+          presignEnabled={false}
+          href="/b/1"
+          timeZone="UTC"
+          now={now}
+        />
       </MemoryRouter>,
     );
   }
@@ -193,8 +202,29 @@ describe('Brief card is ui/ListCard', () => {
     expect(out).not.toContain('opacity');
   });
 
-  it('the card grid fills the laptop width with the named auto-fill columns', () => {
-    expect(CARD_GRID).toContain('md:grid-cols-cards');
+  it('line 3 reads the due words: Due today, Due in N days, else Overdue in the bad tone', () => {
+    expect(card({}, new Date('2026-07-01T09:00:00Z'))).toMatch(/data-brief-due="[^"]*"[^>]*>Due today</);
+    expect(card({}, new Date('2026-06-28T09:00:00Z'))).toContain('>Due in 3 days<');
+    const late = card({}, new Date('2026-07-03T09:00:00Z'));
+    expect(late).toMatch(/data-list-card-time=""[^>]*class="[^"]*text-bad[^"]*">Overdue 2 days</);
+    // A closed brief is never overdue.
+    const closed = card({ status: 'closed' }, new Date('2026-07-03T09:00:00Z'));
+    expect(closed).not.toContain('Overdue');
+    expect(closed).not.toContain('text-bad');
+  });
+
+  it('the Open / Closed tag is the one grey tag', () => {
+    for (const status of ['open', 'closed'] as const) {
+      const out = card({ status });
+      expect(out.match(/data-list-card-tag=""/g)).toHaveLength(1);
+      expect(out).toContain('bg-panel-2 text-fg-2');
+      expect(out).not.toContain('bg-accent-soft');
+    }
+  });
+
+  it('the Briefs list is LIST_CARD_GRID: one column on phone, auto-fill (360 min) on laptop', () => {
+    expect(LIST_CARD_GRID).toContain('grid-cols-1');
+    expect(LIST_CARD_GRID).toContain('md:grid-cols-list-cards');
   });
 });
 
