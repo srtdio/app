@@ -79,6 +79,7 @@ import {
 import { SIGNOUT_EVENT } from '@/lib/events';
 import { onSessionReadsHydrated, peekKept, primeRead, readKey } from '@/lib/session-read';
 import { flushDeviceCache } from '@/lib/device-cache';
+import { startHides } from '@/lib/chat/hides';
 import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { clearAllDrafts, pruneDrafts, setDraftScope, stripDeletedReplies } from '@/lib/chat/drafts';
 import { clearEmojiRecents } from '@/lib/chat/emoji-list';
@@ -989,6 +990,13 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
   const afterIncomingRef = useRef<(row: ChatMessageRow, text: string) => void>(() => {});
   const scope =
     workspaceId && currentUserId !== null ? store.loadScope(workspaceId, currentUserId) : null;
+
+  // Delete for me: the caller's hidden ids, seeded from the device and read
+  // once in idle time after paint (src/lib/chat/hides.ts). Never awaited.
+  useEffect(() => {
+    if (!workspaceId || currentUserId === null) return;
+    return startHides({ userId: currentUserId, workspaceId });
+  }, [workspaceId, currentUserId]);
 
   // The live handler reads these refs so the global subscription registers once
   // and never goes stale: roster summaries, the active channel, and the ids

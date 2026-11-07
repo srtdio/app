@@ -4,6 +4,7 @@ import type { PointerEvent as ReactPointerEvent, ReactElement } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
+import { useHiddenIds, withoutHidden } from '@/lib/chat/hides';
 import { cn } from '@/lib/cn';
 import {
   DUR_BACK_MS,
@@ -1663,6 +1664,9 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // Every row once painted stays painted (ids are unique across chats), so a
   // switch, a retry or a held row ahead never takes one off the screen.
   const painted = useRef(new Set<string>());
+  // Delete for me: the caller's hidden ids leave the thread at render (a Set
+  // lookup over what the device holds; never a read).
+  const hiddenIds = useHiddenIds(workspaceId);
   const threadMessages = useMemo(() => {
     const rows = paintableMessages(
       thread.messages,
@@ -1671,8 +1675,8 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       painted.current,
     );
     for (const row of rows) painted.current.add(row.id);
-    return rows;
-  }, [thread.messages, profiles, nameReads, workspaceId]);
+    return withoutHidden(rows, hiddenIds, (row) => row.id);
+  }, [thread.messages, profiles, nameReads, workspaceId, hiddenIds]);
   // Settled names latch in an effect; a first page whose names are all known
   // is ready in the same render (a reopen paints in its first frame).
   const namesReady = namesSettled === selectedChannelId || firstPageSettled;

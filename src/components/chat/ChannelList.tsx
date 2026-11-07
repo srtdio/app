@@ -74,6 +74,8 @@ import {
 import { NOTES_TILE_LINE } from '@/lib/chat/notes';
 import { chatDisplayName } from '@/lib/chat/chat-name';
 import { useSession } from '@/lib/session-context';
+import { summaryWithoutHidden, useHiddenIds } from '@/lib/chat/hides';
+import { openCache } from '@/lib/chat/open-cache';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import {
   DRAFT_PREFIX_TYPE,
@@ -1221,9 +1223,17 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   const [pendingHidden, setPendingHidden] = useState<ReadonlySet<string>>(new Set());
   const undoable = useUndoableAction();
   const { state } = useChatStore();
+  // Delete for me: a card whose last message is hidden reads the latest
+  // visible one the device holds (no read), else the empty line.
+  const hiddenIds = useHiddenIds(listWorkspaceId);
   const summaryFor = useCallback<SummaryLookup>(
-    (channelId) => selectConversation(state, channelId),
-    [state],
+    (channelId) =>
+      summaryWithoutHidden(
+        selectConversation(state, channelId),
+        hiddenIds,
+        () => openCache.holding('thread').find((h) => h.key.channelId === channelId)?.value.rows,
+      ),
+    [state, hiddenIds],
   );
   const isHidden = useCallback<HiddenLookup>(
     (channelId) => pendingHidden.has(channelId) || selectHidden(state, channelId),

@@ -63,6 +63,7 @@ import { chatDisplayName } from '@/lib/chat/chat-name';
 import { OWN_PREFIX, type PreviewNameOf } from '@/lib/chat/chat-store';
 import { APP_ENTITY_ROUTES, classify, currentOrigin, displayUrl } from '@/lib/chat/message-links';
 import { isFileRemoved, removedFilesStore } from '@/lib/chat/remove-files';
+import { useHiddenIds, withoutHidden } from '@/lib/chat/hides';
 import {
   MEDIA_MIN_TILES,
   flattenHits,
@@ -566,15 +567,21 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
     [source, flatten, state.hits],
   );
   const cachedItems = props.cached?.items;
+  // Delete for me: hidden messages' items drop out at render (a Set lookup).
+  const hiddenIds = useHiddenIds();
   const items: ChipItem[] | null = useMemo(() => {
-    if (networkItems !== null) return networkItems;
+    if (networkItems !== null) return withoutHidden(networkItems, hiddenIds, (i) => i.messageId);
     if (source === 'cache' && cachedItems !== undefined) {
-      return cachedItems.filter(
-        (i) => isLinkItem(i) || !isRemoved(i.channelId, i.messageId, i.versionId),
+      return withoutHidden(
+        cachedItems.filter(
+          (i) => isLinkItem(i) || !isRemoved(i.channelId, i.messageId, i.versionId),
+        ),
+        hiddenIds,
+        (i) => i.messageId,
       );
     }
     return null;
-  }, [networkItems, source, cachedItems, isRemoved]);
+  }, [networkItems, source, cachedItems, isRemoved, hiddenIds]);
 
   const current = state.query === query && state.kind === kind;
   const failed = current && state.status === 'error';

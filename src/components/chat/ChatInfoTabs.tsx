@@ -52,6 +52,7 @@ import type { MessageCursor } from '@/lib/chat/thread';
 import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { classifyFileKind } from '@/lib/chat/attachments';
+import { useHiddenIds, withoutHidden } from '@/lib/chat/hides';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { APP_ENTITY_ROUTES, currentOrigin, displayUrl } from '@/lib/chat/message-links';
 import {
@@ -872,14 +873,23 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
     () => removedFilesStore.get(channelId),
     () => removedFilesStore.get(channelId),
   );
+  // Delete for me: hidden messages' files and links drop out at render.
+  const hiddenIds = useHiddenIds();
   const attachmentsFeed = useMemo(() => {
     const feed = attachments.feed;
     if (feed === null) return null;
     const items = feed.items.filter(
-      (item) => !isFileRemoved(overlay, item.messageId, item.versionId),
+      (item) =>
+        !hiddenIds.has(item.messageId) && !isFileRemoved(overlay, item.messageId, item.versionId),
     );
     return items.length === feed.items.length ? feed : { ...feed, items };
-  }, [attachments.feed, overlay]);
+  }, [attachments.feed, overlay, hiddenIds]);
+  const linksFeed = useMemo(() => {
+    const feed = links.feed;
+    if (feed === null) return null;
+    const items = withoutHidden(feed.items, hiddenIds, (item) => item.messageId);
+    return items === feed.items ? feed : { ...feed, items };
+  }, [links.feed, hiddenIds]);
 
   const images = splitMediaFiles(attachmentsFeed?.items ?? []).images;
   const current = viewer !== null ? images[Math.min(viewer, images.length - 1)] : undefined;
@@ -965,7 +975,7 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
       tab={tab}
       onTab={onTab}
       attachments={attachmentsFeed}
-      links={links.feed}
+      links={linksFeed}
       onLoadMore={(kind) => (kind === 'attachments' ? attachments.loadMore() : links.loadMore())}
       onRetry={(kind) => (kind === 'attachments' ? attachments.retry() : links.retry())}
       cache={props.cache}
