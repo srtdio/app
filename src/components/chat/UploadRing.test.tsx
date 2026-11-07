@@ -214,9 +214,10 @@ describe('T6: upload states in light and dark', () => {
     expect(dark).toMatchSnapshot('dark');
   });
 
-  it('voice done draws the real waveform, not the flat line', () => {
+  it('voice done draws the real waveform at full emphasis', () => {
     const html = paint([voiceDone], 'light');
-    expect(html).toContain('data-voice-flat="hidden"');
+    expect(html).not.toContain('data-voice-flat');
+    expect(html).not.toMatch(/data-voice-bars="peaks" class="[^"]*opacity-\[\.45\]/);
     expect(html).toContain('data-voice-bars="peaks"');
   });
 });
