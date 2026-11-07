@@ -51,7 +51,6 @@ const CHAT_SPECS = [
   'chat-remove-files',
   'chat-reply-focus',
   'chat-format',
-  'chat-scheduled',
   'chat-search',
   'search-placeholder-fit',
   'chat-select-text',

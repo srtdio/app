@@ -81,27 +81,9 @@ import { ICON_SIZE, IconChat } from '@/components/ui/icons';
 import { ChannelList, visibleChannels } from '@/components/chat/ChannelList';
 import {
   MessageThread,
-  profileNameOf,
   threadCardIds,
   threadOpeningSkeleton,
 } from '@/components/chat/MessageThread';
-import {
-  ChatScheduleProvider,
-  type ChatSchedule,
-  type ScheduleOutcome,
-} from '@/components/chat/ScheduleContext';
-import { ScheduledListSheet } from '@/components/chat/ScheduledListSheet';
-import {
-  cancelScheduledMessage,
-  mapScheduleError,
-  readScheduledMessages,
-  rowMentions,
-  scheduleMessage,
-  sendScheduledNow,
-  updateScheduledMessage,
-  type ScheduledRow,
-  type ScheduleWriteResult,
-} from '@/lib/chat/scheduled';
 import { newMessageId } from '@/lib/chat/message-id';
 import { SharedCardsProvider } from '@/components/chat/PostCard';
 import { PlanCardsProvider, type OpenPlanRequest } from '@/components/chat/PlanCardsProvider';
@@ -129,7 +111,6 @@ import { channelHasClient } from '@/components/chat/ComposerTray';
 import {
   knownMentionName,
   mentionIds,
-  mentionTargets,
   rememberMentionProfiles,
   rememberMentionRead,
 } from '@/lib/chat/mentions';
@@ -171,7 +152,6 @@ if (typeof window !== 'undefined') {
 const NO_MESSAGES: ThreadMessage[] = [];
 const NO_PLAN_IDS: readonly string[] = [];
 
-const NO_SCHEDULED: ScheduledRow[] = [];
 
 /**
  * A chat tap: the open's one chat_open_bundle call starts now (open-cache's
@@ -638,7 +618,6 @@ export function chatThreadLoading(input: {
   notesFailed: boolean;
   pageLoading: boolean;
   namesReady: boolean;
-  scheduledSettled: boolean;
   notesOpen: boolean;
   notesStatusReady: boolean;
   notesReady: boolean;
@@ -649,7 +628,6 @@ export function chatThreadLoading(input: {
     (!input.notesFailed &&
       (input.pageLoading ||
         !input.namesReady ||
-        !input.scheduledSettled ||
         (input.notesOpen && !input.notesStatusReady) ||
         (input.notesReady && !input.savedReady)))
   );
@@ -1435,7 +1413,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // the tile in the same commit.
   const shown = useMemo(() => shownChannel(selected, chatRoster), [selected, chatRoster]);
   // The open chat is Personal notes: no Agora at all (no client handed to the
-  // thread or typing), no schedule, @ picker or reading layer.
+  // thread or typing), no @ picker or reading layer.
   const notesOpen = isNotes(selected);
   const notesReady = notesOpen && notes.status === 'ready';
   // Opening notes after its ensure failed tries again (the open waits 5s).
@@ -1485,13 +1463,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   const targetRef = useRef(computedTarget);
   if (!sameTarget(targetRef.current, computedTarget)) targetRef.current = computedTarget;
   const target = targetRef.current;
-  // A chat whose messages page is remembered reopens without waiting on reads
-  // whose last answer is already on screen: its scheduled rows (remembered),
-  // re-read in place.
-  const rememberedOpen = useMemo(() => {
-    const key = chatKey(currentUserId, workspaceId, selectedChannelId);
-    return key !== null && openCache.recall(key, 'thread') !== undefined;
-  }, [currentUserId, workspaceId, selectedChannelId]);
   // Every catch-up refreshes the unread counts.
   const onCaughtUp = useCallback(() => {
     refreshUnreadCounts();
@@ -1707,94 +1678,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // is ready in the same render (a reopen paints in its first frame).
   const namesReady = namesSettled === selectedChannelId || firstPageSettled;
 
-  // The viewer's scheduled messages in the open chat (RLS: own rows only).
-  // Read in parallel with the thread's first page; the thread keeps its
-  // skeleton until this read settles too, so the strip paints in the same
-  // frame as the messages and never pops in after. A failed or timed-out read
-  // settles with what was known. Re-read on chat open, every schedule action
-  // and the tab becoming visible.
-  const [scheduled, setScheduled] = useState<{
-    channelId: string | null;
-    rows: ScheduledRow[];
-    settled: boolean;
-  }>({ channelId: null, rows: NO_SCHEDULED, settled: false });
-  const scheduledSeq = useRef(0);
-  const refetchScheduled = useCallback((channelId: string, open = false): void => {
-    scheduledSeq.current += 1;
-    const seq = scheduledSeq.current;
-    const key = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
-    // An open's read is the open's chat bundle's part (no read of its own);
-    // every later one (a schedule action, the tab returning) reads.
-    const joined = open && key !== null ? openCache.join(key, 'scheduled') : null;
-    void (
-      joined ?? withReadTimeout((signal) => readScheduledMessages(supabase, { channelId, signal }))
-    ).then((result) => {
-      if (!mountedRef.current || seq !== scheduledSeq.current) return;
-      // Remembered only for the user and workspace still open (a late answer
-      // never re-scopes the memory).
-      const current = chatKey(currentUserIdRef.current, workspaceIdRef.current, channelId);
-      if (key !== null && current !== null && result.ok && current.userId === key.userId) {
-        if (current.workspaceId === key.workspaceId) {
-          openCache.remember(key, 'scheduled', result.data);
-        }
-      }
-      if (!result.ok) {
-        logger.warn('chat: scheduled read failed', {
-          channel_id: channelId,
-          error: result.error.message,
-        });
-      }
-      mark('chat:scheduled:end');
-      setScheduled((prev) => ({
-        channelId,
-        rows: result.ok ? result.data : prev.channelId === channelId ? prev.rows : NO_SCHEDULED,
-        settled: true,
-      }));
-    });
-  }, []);
-  useEffect(() => {
-    if (selectedChannelId !== null && !notesOpen) refetchScheduled(selectedChannelId, true);
-  }, [selectedChannelId, refetchScheduled, notesOpen]);
-  useEffect(() => {
-    if (selectedChannelId === null || notesOpen) return;
-    const channelId = selectedChannelId;
-    function onVisible(): void {
-      if (document.visibilityState === 'visible') refetchScheduled(channelId);
-    }
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [selectedChannelId, refetchScheduled, notesOpen]);
-  // The open's bundle failed (the thread showed Retry) and a later one landed:
-  // the parts that failed with it (scheduled rows) are read again.
-  const threadFailedRef = useRef<{ channelId: string | null; failed: boolean }>({
-    channelId: null,
-    failed: false,
-  });
-  const threadLoadFailed = thread.loadFailed;
-  useEffect(() => {
-    const prev = threadFailedRef.current;
-    threadFailedRef.current = { channelId: selectedChannelId, failed: threadLoadFailed };
-    if (selectedChannelId === null || notesOpen) return;
-    if (prev.channelId !== selectedChannelId || !prev.failed || threadLoadFailed) return;
-    refetchScheduled(selectedChannelId);
-  }, [threadLoadFailed, selectedChannelId, notesOpen, refetchScheduled]);
-  // A remembered chat's scheduled rows as last read, for its first frame
-  // (until this open's own state for it is set), only while fresh: older rows
-  // are never painted, the open waits for its read as a cold open does.
-  const rememberedScheduled = useMemo(() => {
-    if (!rememberedOpen) return undefined;
-    const key = chatKey(currentUserId, workspaceId, selectedChannelId);
-    return key !== null ? openCache.recallFresh(key, 'scheduled') : undefined;
-  }, [rememberedOpen, currentUserId, workspaceId, selectedChannelId]);
-  const scheduledOwn = scheduled.settled && scheduled.channelId === selectedChannelId;
-  // Notes never schedule: nothing to read, nothing to wait for.
-  const scheduledSettled = notesOpen || scheduledOwn || rememberedScheduled !== undefined;
-  const scheduledRows =
-    scheduledSettled && !notesOpen
-      ? scheduledOwn
-        ? scheduled.rows
-        : (rememberedScheduled ?? NO_SCHEDULED)
-      : NO_SCHEDULED;
   // Notes: the saved copies' "Saved from" lines of the first page paint with
   // it. One batched source read per loaded page (and one batched name read
   // for their senders), never one per row.
@@ -1865,22 +1748,16 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     notesFailed,
     pageLoading: thread.loading,
     namesReady,
-    scheduledSettled,
     notesOpen,
     notesStatusReady: notes.status === 'ready',
     notesReady,
     savedReady,
   });
-  const [scheduledListOpen, setScheduledListOpen] = useState(false);
   // The chat's own sheets are history steps too: back closes only the sheet.
-  useHistoryStep(scheduledListOpen && selected !== null, HISTORY_STEP_KEYS.scheduledList, () =>
-    setScheduledListOpen(false),
-  );
   useHistoryStep(groupInfoOpen && selected !== null, HISTORY_STEP_KEYS.groupInfo, () =>
     setGroupInfoOpen(false),
   );
   useHistoryStep(newChatOpen, HISTORY_STEP_KEYS.newChat, () => setNewChatOpen(false));
-  useEffect(() => setScheduledListOpen(false), [selectedChannelId]);
   // Plans: the New plan screen and the Plan screen (the Item screen is the
   // Plan screen's own step). Each open layer is one history step; a chat
   // switch closes both.
@@ -1925,126 +1802,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   } | null>(null);
   // A chat switch drops it, so returning to that chat never jumps again.
   useEffect(() => setCardJump(null), [selectedChannelId]);
-  // The last one sent or cancelled: nothing left to show.
-  useEffect(() => {
-    if (scheduledSettled && scheduledRows.length === 0) setScheduledListOpen(false);
-  }, [scheduledSettled, scheduledRows.length]);
-  const selectedChannelType = selected?.channelType ?? undefined;
-
-  /** A schedule write's failure: logged, refetched, and mapped (null: silent). */
-  const scheduleFailure = useCallback(
-    (channelId: string, traceId: string, what: string, message: string): string | null => {
-      logger.warn(`chat: ${what} failed`, {
-        trace_id: traceId,
-        channel_id: channelId,
-        error: message,
-      });
-      return mapScheduleError(message);
-    },
-    [],
-  );
-  const runScheduledWrite = useCallback(
-    async <T,>(
-      channelId: string,
-      what: string,
-      write: (traceId: string) => Promise<ScheduleWriteResult<T>>,
-    ): Promise<{ ok: true; row: T; traceId: string } | { ok: false; copy: string | null }> => {
-      const traceId = generateTraceId();
-      const result = await write(traceId);
-      refetchScheduled(channelId);
-      if (result.ok) return { ok: true, row: result.row, traceId };
-      return { ok: false, copy: scheduleFailure(channelId, traceId, what, result.message) };
-    },
-    [refetchScheduled, scheduleFailure],
-  );
-
-  const scheduleDraft = useCallback<ChatSchedule['schedule']>(
-    async (draft, sendAt): Promise<ScheduleOutcome> => {
-      const channelId = selectedRef.current?.channelId;
-      if (channelId === undefined) return { ok: false, copy: mapScheduleError('no chat') };
-      const result = await runScheduledWrite(channelId, 'schedule', (traceId) =>
-        scheduleMessage({
-          client: supabase,
-          id: newMessageId(),
-          channelId,
-          sendAt,
-          traceId,
-          body: draft.body,
-          mentions: mentionTargets(draft.body, selectedRef.current?.channelType),
-          attachmentAssetIds: draft.attachmentAssetIds,
-          attachmentMeta: draft.attachmentMeta,
-          sharedPostIds: draft.sharedPostIds,
-          sharedBriefIds: draft.sharedBriefIds,
-          replyToMessageId: draft.replyToMessageId,
-        }),
-      );
-      return result.ok ? { ok: true } : { ok: false, copy: result.copy };
-    },
-    [runScheduledWrite],
-  );
-
-  const showScheduleError = useCallback(
-    (copy: string | null): void => {
-      if (copy !== null) toast.show({ title: copy });
-    },
-    [toast],
-  );
-  const addSentRow = thread.addSentRow;
-  const scheduledActions = useMemo(
-    () => ({
-      onSendNow: async (row: ScheduledRow): Promise<void> => {
-        const result = await runScheduledWrite(row.channel_id, 'scheduled send now', (traceId) =>
-          sendScheduledNow({ client: supabase, id: row.id, traceId }),
-        );
-        if (!result.ok) {
-          showScheduleError(result.copy);
-          return;
-        }
-        await addSentRow(result.row, result.traceId);
-      },
-      onSaveBody: async (row: ScheduledRow, body: string): Promise<boolean> => {
-        const result = await runScheduledWrite(row.channel_id, 'scheduled edit', (traceId) =>
-          updateScheduledMessage({
-            client: supabase,
-            id: row.id,
-            sendAt: new Date(row.send_at),
-            body,
-            mentions: mentionTargets(body, selectedChannelType),
-            traceId,
-          }),
-        );
-        if (!result.ok) showScheduleError(result.copy);
-        return result.ok;
-      },
-      onRetime: async (row: ScheduledRow, sendAt: Date): Promise<boolean> => {
-        const result = await runScheduledWrite(row.channel_id, 'scheduled retime', (traceId) =>
-          updateScheduledMessage({
-            client: supabase,
-            id: row.id,
-            sendAt,
-            body: row.body ?? '',
-            mentions: rowMentions(row),
-            traceId,
-          }),
-        );
-        if (!result.ok) showScheduleError(result.copy);
-        return result.ok;
-      },
-      onCancel: async (row: ScheduledRow): Promise<boolean> => {
-        const result = await runScheduledWrite(row.channel_id, 'scheduled cancel', (traceId) =>
-          cancelScheduledMessage({
-            client: supabase,
-            id: row.id,
-            channelId: row.channel_id,
-            traceId,
-          }),
-        );
-        if (!result.ok) showScheduleError(result.copy);
-        return result.ok;
-      },
-    }),
-    [runScheduledWrite, showScheduleError, addSentRow, selectedChannelType],
-  );
   // Every shared post and brief across the loaded messages: the thread's cards
   // read them in one batch per kind and share the results.
   const cardIds = useMemo(() => threadCardIds(threadMessages), [threadMessages]);
@@ -2078,38 +1835,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
       prev !== null && prev.channelId !== selectedChannelForSearch ? null : prev,
     );
   }, [selectedChannelForSearch]);
-
-  const chatName = selected !== null ? chatDisplayName(shown ?? selected) : '';
-  const readsLoading = thread.readState.status === 'loading';
-  const scheduleWiring = useMemo<ChatSchedule | null>(
-    () =>
-      selectedChannelId === null || notesOpen
-        ? null
-        : {
-            channelId: selectedChannelId,
-            chatName,
-            rows: scheduledRows,
-            // The strip paints with the thread's first page, never after it.
-            stripVisible: !threadLoading && !readsLoading,
-            schedule: scheduleDraft,
-            openList: () => setScheduledListOpen(true),
-            refetch: () => refetchScheduled(selectedChannelId),
-          },
-    [
-      selectedChannelId,
-      notesOpen,
-      chatName,
-      scheduledRows,
-      threadLoading,
-      readsLoading,
-      scheduleDraft,
-      refetchScheduled,
-    ],
-  );
-  const scheduleNameOf = useMemo(
-    () => profileNameOf(profiles, workspaceId),
-    [profiles, workspaceId],
-  );
 
   // Save to notes: through the store's outbox (the same retries as any send,
   // never a visible failure), after this session's ensure (a failed one still
@@ -2359,8 +2084,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                 onRowHere={(row, traceId) => void thread.addSentRow(row, traceId)}
                 status={status}
               >
-                <ChatScheduleProvider value={scheduleWiring}>
-                  <SavedFromProvider value={savedWiring}>
+                <SavedFromProvider value={savedWiring}>
                     <MessageThread
                       key={selected.channelId}
                       title={chatDisplayName(shown ?? selected)}
@@ -2475,15 +2199,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
                           }
                         : {})}
                     />
-                  </SavedFromProvider>
-                </ChatScheduleProvider>
-                <ScheduledListSheet
-                  open={scheduledListOpen}
-                  onClose={() => setScheduledListOpen(false)}
-                  rows={scheduledRows}
-                  nameOf={scheduleNameOf}
-                  {...scheduledActions}
-                />
+                </SavedFromProvider>
                 {!notesOpen ? (
                   <PlanPickerSheet
                     open={planPicker !== null}

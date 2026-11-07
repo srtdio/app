@@ -29,7 +29,6 @@ const READY = {
   notesFailed: false,
   pageLoading: false,
   namesReady: true,
-  scheduledSettled: true,
   notesOpen: false,
   notesStatusReady: false,
   notesReady: false,
@@ -45,7 +44,6 @@ describe('B: the first-paint gate', () => {
     expect(chatThreadLoading({ ...READY, threadCurrent: false })).toBe(true);
     expect(chatThreadLoading({ ...READY, pageLoading: true })).toBe(true);
     expect(chatThreadLoading({ ...READY, namesReady: false })).toBe(true);
-    expect(chatThreadLoading({ ...READY, scheduledSettled: false })).toBe(true);
     expect(chatThreadLoading({ ...READY, notesOpen: true })).toBe(true);
     expect(chatThreadLoading({ ...READY, notesReady: true, savedReady: false })).toBe(true);
     // Notes whose ensure failed show Retry, never the skeleton.

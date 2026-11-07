@@ -1,21 +1,20 @@
 // The Notifications page's chat, plan and task alerts: the rows the chat bell
-// used to show beside Activity's (bell-types.ts names them). Scheduled sends (sent and failed), the plan alerts that name a plan
-// (plan_opened, plan_deleted, plan_date_changed, plan_updated) and the task
-// alerts (task_changed, task_due) map here into the fields their Notifications
-// card reads, and so do the five idea bank events (bank_idea_*, worded by
-// @srtdio/inbox bankEventLine so Activity and the catch-up email agree); chat
-// mentions, plan_review and plan_comment keep the Activity
-// row they always had.
+// used to show beside Activity's (bell-types.ts names them). The plan alerts
+// that name a plan (plan_opened, plan_deleted, plan_date_changed,
+// plan_updated) and the task alerts (task_changed, task_due) map here into the
+// fields their Notifications card reads, and so do the five idea bank events
+// (bank_idea_*, worded by @srtdio/inbox bankEventLine so Activity and the
+// catch-up email agree); chat mentions, plan_review and plan_comment keep the
+// Activity row they always had.
 //
 // Pure: the payload mappers and the wording (the bell's lines, unchanged).
-// Reads: the chat messages a row previews and the scheduled rows behind failed
-// sends, each one IN read per chunk of ids (never one per row). Each read is
-// best-effort: a failure leaves its field empty and the row still renders.
+// Reads: the chat messages a row previews, one IN read per chunk of ids (never
+// one per row). The read is best-effort: a failure leaves its field empty and
+// the row still renders.
 
 import type { Client } from '@srtdio/rpc';
 import type { Database, InboxEventTypeValue, Json } from '@srtdio/schemas';
 import { ALL_MARK, resolveMentionPreview, type NameOf } from '@/lib/chat/mentions';
-import type { ScheduledRow } from '@/lib/chat/scheduled';
 import {
   addedLabel,
   editedTasksLabel,
@@ -28,7 +27,6 @@ import { isBellTaskEvent } from '@/lib/inbox/bell-types';
 import { bankEventLine, isBankEvent, type BankEventFields, type BankViewer } from '@srtdio/inbox';
 import { formatDate } from '@/lib/time';
 import { formatCivilDayHeader } from '@/lib/plan-week';
-import { errorText } from '@/lib/error-copy';
 
 type InboxEntryRow = Database['public']['Tables']['inbox_entries']['Row'];
 
@@ -47,12 +45,10 @@ export const PLAN_ALERT_EVENT_TYPES = [
 const PLAN_ALERT = new Set<string>(PLAN_ALERT_EVENT_TYPES);
 
 /** What an alert row is: the card's icon, its top line and its tap follow from it. */
-export type AlertKind = 'sent' | 'failed' | 'plan' | 'task' | 'bank';
+export type AlertKind = 'plan' | 'task' | 'bank';
 
 /** The alert kind of an event type; null for every other row. Pure. */
 export function alertKindOf(eventType: string): AlertKind | null {
-  if (eventType === 'scheduled_sent') return 'sent';
-  if (eventType === 'scheduled_failed') return 'failed';
   if (PLAN_ALERT.has(eventType)) return 'plan';
   if (isBellTaskEvent(eventType)) return 'task';
   if (isBankEvent(eventType)) return 'bank';
@@ -288,9 +284,6 @@ export function taskAlertLine(
   return `${who} · ${eventText({ kind, oldValue: f?.old ?? null, newValue: f?.new ?? null }, ref)}`;
 }
 
-/** A scheduled send's top line (sent or failed). */
-export const SCHEDULED_LABEL = 'Scheduled';
-
 /** A plan alert's top line when no actor resolved. */
 export const PLAN_LABEL = 'Plan';
 
@@ -330,33 +323,6 @@ export function bankAlertLine(
 /** A chat row's chat when its name did not resolve (a direct chat, or a failed read). */
 export const CHAT_LABEL = 'Chat';
 
-/**
- * A scheduled send's footer chip: the alert went to the sender alone (the
- * message itself went only to its chat).
- */
-export const ONLY_YOU_LABEL = 'Only you got this alert';
-
-/** A sent scheduled message's title; {chat} is chatDisplayName's. Pure. */
-export function scheduledSentTitle(chat: string): string {
-  return `Your scheduled message was sent to ${chat}`;
-}
-
-/** A failed send's title (its reason is the body line); {chat} is chatDisplayName's. Pure. */
-export function scheduledFailedLead(chat: string): string {
-  return `Couldn't send your scheduled message to ${chat}.`;
-}
-
-/** A failed send's reason in plain words (never the raw proc text). Pure. */
-export function failureInPlainWords(reason: string | null): string {
-  const r = reason ?? '';
-  if (/not a member/i.test(r)) return "You're no longer in this chat";
-  if (/attachment not available/i.test(r)) return 'An attachment is no longer available';
-  if (/exceeds 5000/i.test(r)) return 'The message is too long';
-  if (/no body, attachments/i.test(r)) return 'The message was empty';
-  if (/reply target/i.test(r)) return 'The message it replied to is gone';
-  return errorText('send', r);
-}
-
 /** A previewed chat message. */
 export interface ChatMessagePreview {
   id: string;
@@ -387,23 +353,6 @@ export function messagePreview(message: ChatMessagePreview | undefined, nameOf: 
   if (message.hasPosts) return 'Shared post';
   if (message.hasPlans === true) return 'Plan';
   return MESSAGE_LABEL;
-}
-
-/** A scheduled row's preview (its body, names shown), else what it carries. Pure. */
-export function scheduledPreview(row: ScheduledRow | undefined, nameOf: NameOf): string {
-  if (row === undefined) return 'Scheduled message';
-  return messagePreview(
-    {
-      id: row.id,
-      channelId: row.channel_id,
-      senderUserId: row.sender_user_id,
-      body: row.body,
-      hasAttachments: (row.attachment_asset_ids ?? []).length > 0,
-      hasPosts: (row.shared_post_ids ?? []).length > 0,
-      hasBriefs: (row.shared_brief_ids ?? []).length > 0,
-    },
-    nameOf,
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -456,45 +405,4 @@ export async function readChatMessages(
     }
   }
   return out;
-}
-
-/** The scheduled rows behind failed sends, by id. */
-export interface ScheduledRead {
-  rows: Map<string, ScheduledRow>;
-  /**
-   * Every chunk read succeeded: a row missing from `rows` (or no longer
-   * 'failed') was really sent, cancelled or edited elsewhere.
-   */
-  ok: boolean;
-}
-
-/** The scheduled rows by id, one IN read per chunk (RLS: own rows only). Never throws. */
-export async function readScheduledRows(
-  client: Client,
-  ids: readonly string[],
-): Promise<ScheduledRead> {
-  const rows = new Map<string, ScheduledRow>();
-  if (ids.length === 0) return { rows, ok: true };
-  const results = await Promise.all(
-    chunked(ids).map((chunk) => client.from('chat_scheduled_messages').select('*').in('id', chunk)),
-  );
-  let ok = true;
-  for (const res of results) {
-    if (res.error !== null) {
-      ok = false;
-      continue;
-    }
-    for (const r of (res.data ?? []) as ScheduledRow[]) rows.set(r.id, r);
-  }
-  return { rows, ok };
-}
-
-/**
- * Whether a failed send's row was resolved elsewhere (sent, cancelled or
- * edited): only when the read succeeded and the row is gone or no longer
- * 'failed'. A failed read is never stale. Pure.
- */
-export function isStaleFailed(read: ScheduledRead, scheduledId: string | null): boolean {
-  if (scheduledId === null || !read.ok) return false;
-  return read.rows.get(scheduledId)?.status !== 'failed';
 }

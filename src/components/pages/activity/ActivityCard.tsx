@@ -6,7 +6,6 @@ import type { ComponentType, ReactElement, ReactNode } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
 import { ListCard, LIST_CARD_UNREAD_DOT, type ListCardPicture } from '@/components/ui/ListCard';
 import { PostPlaceholder, postPlaceholderKind } from '@/components/ui/PostPlaceholder';
-import { ActionMenu, ActionMenuTrigger, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { splitAllMentions } from '@/lib/chat/mentions';
 import { Thumbnail } from '@/components/media';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -14,15 +13,10 @@ import {
   ICON_SIZE,
   IconActivity,
   IconAlarmClock,
-  IconBan,
   IconBriefs,
-  IconCalendarClock,
-  IconEdit,
   IconFile,
   IconPlan,
-  IconRotateCcw,
   IconTaskSquare,
-  IconTickSingle,
   type IconProps,
 } from '@/components/ui/icons';
 import { ActivityRowMenu } from '@/components/pages/activity/ActivityRowMenu';
@@ -43,17 +37,13 @@ import {
   isWelcome,
   opensNothing,
   segmentSelfMentions,
-  upcomingChat,
-  upcomingTag,
   updatesLabel,
   welcomeTitle,
   type ActivityItem,
   type AlertInfo,
   type SnoozeKind,
-  type UpcomingItem,
 } from '@/components/pages/activity/data';
-import { ONLY_YOU_LABEL, alertDisplayTime } from '@/lib/inbox/alerts';
-import { formatSendLabel } from '@/lib/chat/scheduled';
+import { alertDisplayTime } from '@/lib/inbox/alerts';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { formatAgo } from '@/lib/time';
 
@@ -80,10 +70,6 @@ interface ActivityCardProps {
   selfName: string | null;
   /** The viewer's side: a plan_opened alert reads "shared with you" for a client. */
   side?: ViewerSide;
-  /** A failed scheduled send's Retry (send it now; a stale row just clears). */
-  onRetry?: (item: ActivityItem) => void;
-  /** A failed scheduled send's Edit (open its chat; a stale row just clears). */
-  onEdit?: (item: ActivityItem) => void;
   /** A card a live refresh just added: it slides up into place (never sideways). */
   entering?: boolean;
 }
@@ -166,16 +152,13 @@ export function activityKind(item: ActivityItem): ActivityKind | undefined {
 }
 
 /**
- * The card's ONE grey tag on line 3: a scheduled send went to its sender
- * alone ("Only you got this alert"); a digest group of several entries counts
+ * The card's ONE grey tag on line 3: a digest group of several entries counts
  * them ("3 updates"); else what the entry is (activityKind: Mention, Post,
  * Brief, Plan, Reminder). None for the welcome row or a kindless entry. Pure.
  */
 export function activityCardTag(group: readonly ActivityItem[]): string | undefined {
   const lead = group[0];
   if (lead === undefined) return undefined;
-  const alert = lead.alert ?? null;
-  if (alert !== null && (alert.kind === 'sent' || alert.kind === 'failed')) return ONLY_YOU_LABEL;
   if (group.length > 1) return updatesLabel(group.length);
   return activityKind(lead);
 }
@@ -246,8 +229,6 @@ export function activityPreviewText(group: readonly ActivityItem[]): string {
 /** An alert's glyph: what kind of alert at a glance. */
 function alertIcon(item: ActivityItem, alert: AlertInfo): ComponentType<IconProps> {
   if (item.eventType === 'task_due') return IconAlarmClock;
-  if (alert.kind === 'sent') return IconTickSingle;
-  if (alert.kind === 'failed') return IconCalendarClock;
   if (alert.kind === 'plan' || alert.kind === 'bank') return IconPlan;
   return IconTaskSquare;
 }
@@ -333,32 +314,15 @@ function activityPicture(
   return { kind: 'icon', icon: IconActivity };
 }
 
-/** A failed scheduled send's menu rows: Edit (opens its chat) and Retry. Pure. */
-export function failedSendItems(
-  lead: ActivityItem,
-  onEdit: ((item: ActivityItem) => void) | undefined,
-  onRetry: ((item: ActivityItem) => void) | undefined,
-): ActionMenuItem[] {
-  if (lead.alert?.kind !== 'failed') return [];
-  return [
-    ...(onEdit !== undefined
-      ? [{ id: 'edit', label: 'Edit', icon: IconEdit, onSelect: () => onEdit(lead) }]
-      : []),
-    ...(onRetry !== undefined
-      ? [{ id: 'retry', label: 'Retry', icon: IconRotateCcw, onSelect: () => onRetry(lead) }]
-      : []),
-  ];
-}
-
 /**
  * One digest group as one ui/ListCard: the picture (the thing, or the
  * person), the who-did-what title with the unread dot, the comment or alert
  * line as the preview, then the time (formatAgo on the list's clock), the
  * one tag (activityCardTag: "3 updates", else Mention, Post, Brief, Plan,
- * Reminder) and the ⋯ (Mark as read, Snooze; a failed
- * send's Edit and Retry). A tap opens the group (the newest entry that links
- * to a comment, else the lead). A threaded group is one card ("+N more" when
- * it has no line of its own); its entries open from the page it lands on.
+ * Reminder) and the ⋯ (Mark as read, Snooze). A tap opens the group (the
+ * newest entry that links to a comment, else the lead). A threaded group is
+ * one card ("+N more" when it has no line of its own); its entries open from
+ * the page it lands on.
  */
 export function ActivityCard({
   group,
@@ -371,8 +335,6 @@ export function ActivityCard({
   onMarkRead,
   selfName,
   side = 'unknown',
-  onRetry,
-  onEdit,
   entering = false,
 }: ActivityCardProps) {
   // itemIn (docs/motion.md): a live-added card renders in place and rises
@@ -411,7 +373,7 @@ export function ActivityCard({
     new Date(nowMs),
     timeZone ?? undefined,
   );
-  const bad = alert?.kind === 'failed' || lead.eventType === 'task_due';
+  const bad = lead.eventType === 'task_due';
 
   return (
     <ListCard
@@ -434,7 +396,7 @@ export function ActivityCard({
         : lead.entityType === PLAN_ITEM_ENTITY
           ? { pictureHooks: { 'data-activity-plan-icon': '' } }
           : {})}
-      // A failed send's lead and a missed due time read in bad.
+      // A missed due time reads in bad.
       title={bad ? <span className="text-bad">{title}</span> : title}
       unread={unread}
       preview={preview}
@@ -443,11 +405,7 @@ export function ActivityCard({
       timeHooks={{ 'data-activity-time': '' }}
       tag={tag}
       tagHooks={
-        tag === ONLY_YOU_LABEL
-          ? { 'data-activity-only-you': '' }
-          : group.length > 1
-            ? { 'data-activity-updates-tag': '' }
-            : { 'data-activity-scope-tag': '' }
+        group.length > 1 ? { 'data-activity-updates-tag': '' } : { 'data-activity-scope-tag': '' }
       }
       menu={
         <div data-activity-menu="" className="flex">
@@ -456,7 +414,6 @@ export function ActivityCard({
             onOpenChange={setMenuOpen}
             snoozed={snoozed}
             unread={unread}
-            extra={failedSendItems(lead, onEdit, onRetry)}
             onSnooze={(kind) => {
               for (const entry of group) onSnooze(entry, kind);
             }}
@@ -480,71 +437,3 @@ export function ActivityCard({
   );
 }
 
-/** An Upcoming card's menu rows: Edit, then Cancel. Pure. */
-export function upcomingMenuItems(
-  item: UpcomingItem,
-  onEdit: (item: UpcomingItem) => void,
-  onCancel: (item: UpcomingItem) => void,
-): ActionMenuItem[] {
-  return [
-    { id: 'edit', label: 'Edit', icon: IconEdit, onSelect: () => onEdit(item) },
-    {
-      id: 'cancel',
-      label: 'Cancel',
-      icon: IconBan,
-      tone: 'danger',
-      onSelect: () => onCancel(item),
-    },
-  ];
-}
-
-/**
- * One Upcoming row on ui/ListCard, like every Activity card: the calendar
- * clock as the picture, the chat as the title, the message as the preview,
- * the due time and the Scheduled tag; the ⋯ holds Edit and Cancel. Never
- * unread. A tap opens its chat. Hook-free.
- */
-export function UpcomingCard({
-  item,
-  now,
-  onOpen,
-  onEdit,
-  onCancel,
-}: {
-  item: UpcomingItem;
-  now: Date;
-  onOpen: (item: UpcomingItem) => void;
-  onEdit: (item: UpcomingItem) => void;
-  onCancel: (item: UpcomingItem) => void;
-}): ReactElement {
-  const chat = upcomingChat(item);
-  return (
-    <ListCard
-      data-upcoming-row={item.kind}
-      data-upcoming-id={item.id}
-      picture={{ kind: 'icon', icon: IconCalendarClock }}
-      title={chat}
-      preview={stripFormat(item.preview)}
-      time={formatSendLabel(new Date(item.dueAt), now)}
-      timeHooks={{ 'data-upcoming-due': '' }}
-      tag={upcomingTag()}
-      tagHooks={{ 'data-upcoming-tag': '' }}
-      onPress={() => onOpen(item)}
-      press={{ 'aria-label': `Open ${chat}`, 'data-upcoming-open': '' }}
-      menu={
-        <ActionMenu
-          title={chat}
-          items={upcomingMenuItems(item, onEdit, onCancel)}
-          trigger={
-            <ActionMenuTrigger
-              type="button"
-              label={`Actions for ${chat}`}
-              data-upcoming-more=""
-              className="text-fg-3"
-            />
-          }
-        />
-      }
-    />
-  );
-}

@@ -13,7 +13,6 @@ import {
   type LibraryAsset,
 } from '@/lib/chat/asset-picker';
 import { buildAttachmentMeta, toMessageAttachment } from '@/lib/chat/attachments';
-import { scheduleAttachmentArgs } from '@/lib/chat/scheduled';
 
 interface Read {
   table: string;
@@ -185,11 +184,6 @@ describe('library picks as attachments', () => {
     expect(buildAttachmentMeta(attachments)).toEqual({
       v1: { mime: 'image/png', name: 'Hero.png', size: 101 },
       v2: { mime: 'application/pdf', name: 'Deck.pdf', size: 2048 },
-    });
-    // The schedule write builds the same args from them.
-    expect(scheduleAttachmentArgs(attachments)).toEqual({
-      attachmentAssetIds: ['v1', 'v2'],
-      attachmentMeta: buildAttachmentMeta(uploaded),
     });
   });
 

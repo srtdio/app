@@ -190,7 +190,6 @@ function recordingClient(page: readonly ChatMessageRow[]): { db: Client; queries
       cursor_messages:
         peerRead !== undefined ? [{ id: peerRead.id, created_at: peerRead.created_at }] : [],
       reply_counts: [],
-      scheduled: [],
       open_posts: [],
       open_post_count: 0,
       shared_plan_ids: [],

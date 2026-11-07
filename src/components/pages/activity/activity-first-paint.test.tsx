@@ -16,7 +16,6 @@ import type { ActivityItem, LoadResult } from '@/components/pages/activity/data'
 
 const h = vi.hoisted(() => ({
   fetchActivityEntries: vi.fn(),
-  fetchUpcoming: vi.fn(),
   readActivityBadge: vi.fn(),
   markEntryRead: vi.fn(),
 }));
@@ -56,7 +55,6 @@ vi.mock('@/lib/inbox/inbox-reads', async (importOriginal) => ({
 vi.mock('@/components/pages/activity/data', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/pages/activity/data')>()),
   fetchActivityEntries: (...args: unknown[]) => h.fetchActivityEntries(...args),
-  fetchUpcoming: (...args: unknown[]) => h.fetchUpcoming(...args),
   markEntryRead: (...args: unknown[]) => h.markEntryRead(...args),
 }));
 
@@ -220,7 +218,6 @@ beforeEach(async () => {
     // Storage can be unavailable; the sort falls back to its default.
   }
   h.fetchActivityEntries.mockReset();
-  h.fetchUpcoming.mockReset().mockResolvedValue({ ok: true, data: [] });
   h.readActivityBadge.mockReset().mockResolvedValue({ ok: true, data: { unread: 0, mentions: 0 } });
   h.markEntryRead.mockReset().mockResolvedValue({ ok: true, data: null });
 });

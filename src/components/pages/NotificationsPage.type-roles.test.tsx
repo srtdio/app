@@ -14,7 +14,6 @@ import type { ActivityItem } from '@/components/pages/activity/data';
 
 const h = vi.hoisted(() => ({
   fetchActivityEntries: vi.fn(),
-  fetchUpcoming: vi.fn(),
 }));
 
 vi.mock('agora-chat', () => ({
@@ -49,7 +48,6 @@ vi.mock('@/lib/inbox/inbox-reads', async (importOriginal) => ({
 vi.mock('@/components/pages/activity/data', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/pages/activity/data')>()),
   fetchActivityEntries: (...args: unknown[]) => h.fetchActivityEntries(...args),
-  fetchUpcoming: (...args: unknown[]) => h.fetchUpcoming(...args),
 }));
 
 // The filter bar measures its row; jsdom has no ResizeObserver.
@@ -151,7 +149,6 @@ beforeEach(() => {
     ok: true,
     data: [item({ id: 'e1', title: 'Q3 Launch', body: 'Looks good to me' })],
   });
-  h.fetchUpcoming.mockReset().mockResolvedValue({ ok: true, data: [] });
 });
 
 afterEach(() => {

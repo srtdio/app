@@ -78,7 +78,6 @@ function bundleOf(rows: readonly ChatMessageRow[]): Record<string, unknown> {
     read_cursors: [],
     cursor_messages: [],
     reply_counts: [],
-    scheduled: [],
     open_posts: [],
     open_post_count: 0,
     shared_plan_ids: [],

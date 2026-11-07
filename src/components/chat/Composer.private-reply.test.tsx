@@ -6,7 +6,7 @@ vi.mock('@/lib/logger', () => ({
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import { isValidElement, type ReactElement } from 'react';
-import { dispatchSend, PrivateReplyBar, scheduleOfferedFor } from '@/components/chat/Composer';
+import { dispatchSend, PrivateReplyBar } from '@/components/chat/Composer';
 import { IconButton } from '@/components/ui/IconButton';
 import { getDraft, resetDrafts, setPrivateReplyDraft } from '@/lib/chat/drafts';
 import { privateReplyFromDraft, type PrivateReplyDraft } from '@/lib/chat/private-reply';
@@ -52,14 +52,6 @@ describe('PrivateReplyBar (the composer quote strip)', () => {
     setPrivateReplyDraft('dm-1', null);
     expect(getDraft('dm-1').privateReply).toBeNull();
     resetDrafts();
-  });
-});
-
-describe('Schedule while a quote is attached', () => {
-  it('is hidden with a quote, offered without one', () => {
-    expect(scheduleOfferedFor({ wired: true, quoteAttached: true })).toBe(false);
-    expect(scheduleOfferedFor({ wired: true, quoteAttached: false })).toBe(true);
-    expect(scheduleOfferedFor({ wired: false, quoteAttached: false })).toBe(false);
   });
 });
 

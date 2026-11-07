@@ -1,6 +1,6 @@
 // Button system regression: the composer's plus, task, emoji and voice draft
 // controls render the shared 44px recipe (round for plus / task / send), and
-// the composer source keeps mic, send and the schedule chevron round.
+// the composer source keeps mic and send round.
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -67,16 +67,13 @@ describe('composer buttons', () => {
     expect(send).toContain('bg-accent');
   });
 
-  it('the composer source keeps mic, send and the chevron round and primary', () => {
+  it('the composer source keeps mic and send round and primary', () => {
     const src = readFileSync(fileURLToPath(new URL('./Composer.tsx', import.meta.url)), 'utf8');
     expect(src).toMatch(/variant="primary"\s+shape="round"\s+aria-label="Record voice note"/);
-    expect(src).toMatch(/variant="primary"\s+shape="round"\s+aria-label="Schedule options"/);
-    // Send stays round in every state (scheduling spins in place, ui/Composer).
+    // Send stays round in every state (an edit save spins in place, ui/Composer).
     expect(src).toMatch(/type="submit"\s+variant="primary"\s+shape="round"/);
-    expect(src).not.toContain("scheduleBusy ? 'default' : 'round'");
-    expect(src).toContain("showChevron && 'rounded-r-none'");
-    // Split send/schedule: one lit primary on the shared wrapper.
-    expect(src).toContain("showChevron && 'lit-btn-primary rounded-full'");
+    // No schedule chevron: Send is one plain round button.
+    expect(src).not.toContain('Schedule options');
     // The composer dock is lit, its neutral top border colour dropped.
     expect(src).toContain('border-t bg-panel px-3 py-2 lit-dock');
     expect(src).not.toMatch(/size="lg"/);

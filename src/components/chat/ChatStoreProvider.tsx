@@ -1454,7 +1454,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }): ReactE
   useEffect(() => listenForChatSignout(window), []);
 
   // A workspace switch or sign-out forgets every remembered chat (pages,
-  // marks, scheduled rows, cursors) now, not at the next open.
+  // cursors) now, not at the next open.
   const chatScopeRef = useRef<{ userId: string; workspaceId: string } | null>(null);
   useEffect(() => {
     const next =

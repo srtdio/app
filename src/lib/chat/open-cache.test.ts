@@ -270,13 +270,11 @@ describe('recallFresh: an old answer is never painted', () => {
     let t = 1_000;
     const cache = createOpenCache({ now: () => t });
     cache.remember(A, 'status', STATUS);
-    cache.remember(A, 'scheduled', []);
     expect(cache.recallFresh(A, 'status')).toBe(STATUS);
     t += READ_FRESH_MS;
     expect(cache.recallFresh(A, 'status')).toBe(STATUS);
     t += 1;
     expect(cache.recallFresh(A, 'status')).toBeUndefined();
-    expect(cache.recallFresh(A, 'scheduled')).toBeUndefined();
     // Still held (a new read replaces it); only painting it is refused.
     expect(cache.recall(A, 'status')).toBe(STATUS);
   });
@@ -294,8 +292,8 @@ describe('recallFresh: an old answer is never painted', () => {
 
   it('a forgotten part is absent', () => {
     const cache = createOpenCache();
-    cache.remember(A, 'scheduled', []);
-    cache.forget(A, 'scheduled');
-    expect(cache.recallFresh(A, 'scheduled')).toBeUndefined();
+    cache.remember(A, 'status', STATUS);
+    cache.forget(A, 'status');
+    expect(cache.recallFresh(A, 'status')).toBeUndefined();
   });
 });

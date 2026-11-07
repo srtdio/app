@@ -141,7 +141,7 @@ describe('chat Composer on ui/Composer', () => {
     expect(row({ kind: 'scheduling' })).toContain('Scheduling…');
     // Scheduling keeps the field mounted (its text and ref come back).
     expect(row({ kind: 'scheduling' })).toContain('aria-label="Message"');
-    expect(FRAME).toContain('busy={editBusy || scheduleBusy}');
+    expect(FRAME).toContain('busy={editBusy}');
     expect(FRAME).toMatch(/type="submit"\s+variant="primary"\s+shape="round"/);
   });
 
@@ -220,7 +220,7 @@ describe('chat Composer on ui/Composer', () => {
   it('keeps the tour and test hooks on its controls', () => {
     expect(FRAME).toContain('data-induction={INDUCTION_KEYS.chatHash}');
     expect(FRAME).toContain('data-induction={INDUCTION_KEYS.chatMic}');
-    expect(FRAME).toContain('data-schedule-chevron=""');
+    expect(FRAME).not.toContain('data-schedule-chevron');
     expect(FRAME).toContain('onShownChange={setTrayShown}');
     expect(FRAME).toContain('formatting');
     expect(FRAME).toContain('compact');

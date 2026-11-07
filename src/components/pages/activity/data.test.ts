@@ -2188,30 +2188,20 @@ describe('notifications fixes: pure helpers', () => {
     expect(SNOOZE_FAILED).not.toMatch(/error|rpc|permission|violates/i);
   });
 
-  it('fix 26: a failed scheduled send is an All and Unread target, not a Mentions or Briefs one', () => {
+  it('fix 26: All and Unread mark the whole inbox; every other chip only its own rows', () => {
     const now = Date.parse('2026-10-20T12:00:00.000Z');
-    const failed = mapEntry(
-      row({
-        id: 'fail',
-        event_type: 'scheduled_failed',
-        entity_type: 'chat_channel',
-        entity_id: 'c1',
-        scope: 'groups',
-        tier: 'urgent',
-        payload: { scheduled_id: 's1' },
-      }),
-    );
+    const comment = item({ id: 'c', eventType: 'comment' });
     const mention = item({ id: 'm', eventType: 'mention' });
     const brief = item({ id: 'b', entityType: 'brief', entityId: 'b1', scope: BRIEFS_SCOPE });
-    const rows = [failed, mention, brief];
+    const rows = [comment, mention, brief];
     expect(marksWholeInbox('all')).toBe(true);
     expect(marksWholeInbox('unread')).toBe(true);
     for (const state of ['all', 'unread'] as const) {
-      expect(markAllTargets(rows, state, now).map((i) => i.id)).toContain('fail');
+      expect(markAllTargets(rows, state, now).map((i) => i.id)).toEqual(['c', 'm', 'b']);
     }
-    for (const state of ['mentions', 'briefs', 'plans', 'snoozed', 'upcoming'] as const) {
+    for (const state of ['mentions', 'briefs', 'plans', 'snoozed'] as const) {
       expect(marksWholeInbox(state)).toBe(false);
-      expect(markAllTargets(rows, state, now).map((i) => i.id)).not.toContain('fail');
+      expect(markAllTargets(rows, state, now).map((i) => i.id)).not.toContain('c');
     }
     expect(markAllTargets(rows, 'mentions', now).map((i) => i.id)).toEqual(['m']);
     expect(markAllTargets(rows, 'briefs', now).map((i) => i.id)).toEqual(['b']);

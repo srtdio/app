@@ -2259,7 +2259,6 @@ const ACTIVITY_CHIP_SCREENS = [
   { chip: 'mentions', label: 'Mentions' },
   { chip: 'briefs', label: 'Briefs' },
   { chip: 'plans', label: 'Plans' },
-  { chip: 'upcoming', label: 'Upcoming' },
   { chip: 'snoozed', label: 'Snoozed' },
 ] as const;
 for (const { chip, label } of ACTIVITY_CHIP_SCREENS) {
@@ -2275,7 +2274,7 @@ for (const { chip, label } of ACTIVITY_CHIP_SCREENS) {
         [chips.locator('button[aria-pressed="true"]', { hasText: label })],
         `${label} chip on`,
       );
-      await listOrZero(page, `activity ${chip}`, [page.locator('[data-upcoming-list]')]);
+      await listOrZero(page, `activity ${chip}`);
     },
   });
 }
@@ -2820,11 +2819,8 @@ SCREENS.push(
 );
 
 // The composer's pickers and sheets in the DM (creator: Plan is live), the
-// Forward and Remind me sheets from a message's menu, an own message carrying
+// Forward sheet from a message's menu, an own message carrying
 // a post card, and the guest homepage. Phone light/dark and laptop light.
-
-/** The draft the Schedule sheet previews ("To Priya Raman: ..."). */
-const SCHEDULE_DRAFT = 'Can we move the shoot to Monday?';
 
 /** Serve the homepage fixture for "/" (the harness keeps "/" as its smoke page); clips 404. */
 async function serveHomepage(_network: HarnessNetwork, page: Page): Promise<void> {
@@ -2903,35 +2899,6 @@ SCREENS.push(
         ],
         'forward picker rows',
       );
-    },
-  },
-  {
-    // A message's menu, More, Remind me: the presets under the preview.
-    name: 'reminder-sheet',
-    seed: creator,
-    url: '/chat',
-    steps: async (page) => {
-      await openDmMessageMenu(page);
-      await tap([page.locator('[data-menu-item="more"]')], 'More');
-      await tap([page.locator('[data-menu-item="remind"]')], 'Remind me');
-      const sheet = page.getByRole('dialog', { name: 'Remind me' });
-      await waitFor([sheet.locator('[data-reminder-row="1h"]')], 'reminder presets');
-    },
-  },
-  {
-    // A typed draft, then the tray's Schedule tile: the sheet on phone, the
-    // menu under the Send chevron on laptop (both "Schedule message").
-    name: 'schedule-sheet',
-    seed: creator,
-    url: '/chat',
-    steps: async (page) => {
-      await openDm(page);
-      const draft = page.locator('form:has(textarea)').first().locator('textarea');
-      await draft.fill(SCHEDULE_DRAFT);
-      await pickTrayTile(page, 'schedule');
-      const sheet = page.getByRole('dialog', { name: 'Schedule message' });
-      await waitFor([sheet.locator('[data-schedule-options]')], 'schedule options');
-      await waitFor([sheet.locator('[data-schedule-preview]')], 'schedule preview');
     },
   },
   {
@@ -3212,27 +3179,6 @@ SCREENS.push(
         await expect(
           page.getByRole('button', { name: 'Sending voice note', exact: true }),
         ).toHaveAttribute('aria-busy', 'true');
-      });
-    },
-  },
-  {
-    // A typed draft scheduled for tomorrow, the write held: the field reads
-    // "Scheduling…" and the send slot spins at its own width.
-    name: 'chat-composer-scheduling',
-    seed: creator,
-    extra: (network) => {
-      network.holdRpc('chat_message_schedule');
-    },
-    url: '/chat',
-    steps: async (page) => {
-      await openDm(page);
-      await dmComposer(page).locator('textarea').fill(SCHEDULE_DRAFT);
-      await pickTrayTile(page, 'schedule');
-      const sheet = page.getByRole('dialog', { name: 'Schedule message' });
-      await waitFor([sheet.locator('[data-schedule-row="tomorrow"]')], 'schedule options');
-      await assertSameWidth(sendSlot(page), async () => {
-        await tap([sheet.locator('[data-schedule-row="tomorrow"]')], 'Tomorrow');
-        await waitFor([page.locator('[data-composer-state="scheduling"]')], 'scheduling');
       });
     },
   },
@@ -3532,7 +3478,6 @@ const LAPTOP_DARK_SCREENS = new Set([
   // Moment states: phone and laptop, light and dark.
   'chat-composer-recording',
   'chat-voice-sending',
-  'chat-composer-scheduling',
   'asset-rename-saving',
   'chat-tasks-saving',
   'chat-upload-progress',
@@ -3559,7 +3504,6 @@ const LAPTOP_DARK_SCREENS = new Set([
   'activity-chip-mentions',
   'activity-chip-briefs',
   'activity-chip-plans',
-  'activity-chip-upcoming',
   'activity-chip-snoozed',
   'plan-tab-chip-next',
   'plan-tab-chip-later',

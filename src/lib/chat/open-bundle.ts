@@ -1,6 +1,6 @@
 // One chat open is ONE chat_open_bundle call. It replaces the separate open
 // reads (the latest page and its paging floor, the quoted and cursor
-// messages, reactions, read cursors, reply counts, scheduled rows,
+// messages, reactions, read cursors, reply counts,
 // open posts with their thumbnails and count, the current shared plan ids,
 // open briefs and their count).
 //
@@ -9,7 +9,7 @@
 // for a part) and stashed in the open cache as 'bundle'. The parts the other
 // hooks read first are stashed beside it at the same moment, each derived
 // from that one call and bounded at READ_TIMEOUT_MS as their own reads were:
-// 'scheduled' and 'positions' in the open cache, and the
+// 'positions' in the open cache, and the
 // workspace-wide parts (open posts, plan ids, briefs, brief count) as the
 // workspace's shared session reads, so the hooks' first rounds join them and
 // never ask again. A failed bundle fails every part (all or nothing).
@@ -21,8 +21,7 @@
 // A chat the pre-warm read (prewarmChats) and kept within PREWARM_FRESH_MS
 // opens from that bundle: it is stashed as this open's own (every part beside
 // it, as above), nothing is read, and the thread's reopen re-reads nothing
-// (openedFromPrewarm). Later than that, the reopen above, unchanged. Taking
-// it also remembers its scheduled rows, so the open's first frame holds them.
+// (openedFromPrewarm). Later than that, the reopen above, unchanged.
 //
 // A press on a chat row (pressChatBundle, pointerdown) starts the open's
 // bundle before the tap; the tap and the thread join it. A held pre-warm is
@@ -127,12 +126,6 @@ export function startChatBundle(
     // The pre-warm's answer is this open's bundle: nothing is read.
     mark('chat:bundle:prewarmed');
     promise = Promise.resolve({ ok: true, data: warm });
-    // Its scheduled rows are this open's part, already in hand:
-    // remembered now (before the thread renders), so the open's first frame
-    // has them and nothing holds the remembered rows for their parts to
-    // settle. The same rows the parts below resolve with; takePrewarm already
-    // refused a pre-warm with a scheduled row due since.
-    store.remember(key, 'scheduled', warm.scheduled);
   } else {
     const traceId = deps.traceId();
     mark('chat:bundle:start');
@@ -160,12 +153,6 @@ export function startChatBundle(
   }
   byChat.set(slotKey(key), since);
   const t = deps.partTimeoutMs;
-  store.stash(
-    key,
-    'scheduled',
-    partOf(promise, (b) => b.scheduled, t),
-    true,
-  );
   store.stash(
     key,
     'positions',

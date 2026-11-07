@@ -213,9 +213,6 @@ test.describe('laptop', () => {
     });
     expect(report.failures, report.failures.join('; ')).toEqual([]);
     await expect(page.locator('[data-saved-from="source"]').first()).toBeVisible();
-    // No schedule chevron beside Send in notes.
-    await page.locator('form textarea').fill('A quick note');
-    await expect(page.locator('[data-schedule-chevron]')).toHaveCount(0);
     expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
   });
 });

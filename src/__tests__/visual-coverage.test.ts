@@ -26,7 +26,6 @@ const REQUIRED: readonly string[] = [
   'activity-chip-plans',
   'activity-chip-snoozed',
   'activity-chip-unread',
-  'activity-chip-upcoming',
   'approve-confirm-approver',
   'asset-more-menu',
   'asset-picker',
@@ -54,7 +53,6 @@ const REQUIRED: readonly string[] = [
   'chat-actions-menu',
   'chat-composer-keyboard',
   'chat-composer-recording',
-  'chat-composer-scheduling',
   'chat-dm-private-reply-bubble',
   'chat-dm-private-reply-long',
   'chat-dm-private-reply-long-sent',
@@ -215,8 +213,6 @@ const REQUIRED: readonly string[] = [
   'post-picker',
   'recently-deleted',
   'recently-deleted-empty',
-  'reminder-sheet',
-  'schedule-sheet',
   'select-open',
   'settings-profile',
   'settings-profile-paused',
@@ -255,14 +251,9 @@ const GENERATED: Readonly<Record<string, readonly string[]>> = {
   'name: `assets-tab-${tab}`': ['media', 'pdf', 'docs', 'sheets', 'links'].map(
     (tab) => `assets-tab-${tab}`,
   ),
-  'name: `activity-chip-${chip}`': [
-    'unread',
-    'mentions',
-    'briefs',
-    'plans',
-    'upcoming',
-    'snoozed',
-  ].map((chip) => `activity-chip-${chip}`),
+  'name: `activity-chip-${chip}`': ['unread', 'mentions', 'briefs', 'plans', 'snoozed'].map(
+    (chip) => `activity-chip-${chip}`,
+  ),
   'name: `plan-tab-chip-${chip}`': ['next', 'later', 'earlier', 'all'].map(
     (chip) => `plan-tab-chip-${chip}`,
   ),

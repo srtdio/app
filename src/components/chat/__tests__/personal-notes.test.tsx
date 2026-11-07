@@ -383,8 +383,8 @@ describe('menu matrix', () => {
     expect(deleteSelectionBlock(ids, [own], new Map(), NOW, true)).toBeNull();
   });
 
-  it('notes tray has no Schedule tile (7 tiles); other chats keep it', () => {
-    expect(trayTiles('touch', { schedule: false }).map((t) => t.id)).toEqual([
+  it('the tray has no Schedule tile (7 tiles); notes says why Plan is off', () => {
+    expect(trayTiles('touch', { notes: true }).map((t) => t.id)).toEqual([
       'photos',
       'file',
       'assets',
@@ -394,25 +394,25 @@ describe('menu matrix', () => {
       'plan',
     ]);
     // Notes never shares a plan: the tile stays faded there and says why.
-    expect(trayTiles('touch', { schedule: false }).find((t) => t.id === 'plan')?.ariaLabel).toBe(
+    expect(trayTiles('touch', { notes: true }).find((t) => t.id === 'plan')?.ariaLabel).toBe(
       'Plan, not available in Personal notes',
     );
-    expect(trayTiles('touch', { schedule: false }).find((t) => t.id === 'plan')?.disabled).toBe(
+    expect(trayTiles('touch', { notes: true }).find((t) => t.id === 'plan')?.disabled).toBe(
       true,
     );
-    expect(trayTiles('touch').map((t) => t.id)).toContain('schedule');
+    expect(trayTiles('touch').map((t) => t.id)).not.toContain('schedule');
   });
 
   it('notes: Draft is live for an agency-side viewer (no other members, so no client)', () => {
     const hasClient = channelHasClient([]);
     expect(hasClient).toBe(false);
     const tiles = trayTiles('touch', {
-      schedule: false,
+      notes: true,
       draft: draftTileEnabled('agency', hasClient),
     });
     expect(tiles.find((t) => t.id === 'draft')?.disabled).toBeUndefined();
     const asClient = trayTiles('touch', {
-      schedule: false,
+      notes: true,
       draft: draftTileEnabled('client', hasClient),
     });
     expect(asClient.find((t) => t.id === 'draft')?.disabled).toBe(true);

@@ -161,7 +161,6 @@ describe('thread loading boxes', () => {
     notesFailed: false,
     pageLoading: false,
     namesReady: true,
-    scheduledSettled: true,
     notesOpen: false,
     notesStatusReady: false,
     notesReady: false,

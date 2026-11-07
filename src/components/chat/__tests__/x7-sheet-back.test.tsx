@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// X7 fix 6 (FT40): Forward, Schedule, Who reacted and Message info are
+// X7 fix 6 (FT40): Forward, Who reacted and Message info are
 // history steps, so system Back closes only the sheet and the
 // chat under it stays open.
 import { readFileSync } from 'node:fs';
@@ -97,19 +97,16 @@ describe('X7 FT40: system Back closes only the sheet', () => {
     expect(stepMarkerOf(window.history.state, HISTORY_STEP_KEYS.threadView)).not.toBeNull();
   });
 
-  it('Forward, Schedule and Who reacted push their own step; Message info has one', () => {
+  it('Forward and Who reacted push their own step; Message info has one', () => {
     expect(source('../ForwardPicker.tsx')).toContain(
       'useHistoryStep(props.open && props.historyStep === true, SHEET_STEP_KEYS.forward, props.onClose)',
     );
     // The chat's own picker opts in; the Tasks sheet's nested one (X4) does not.
     expect(source('../MessageThread.tsx')).toMatch(/<ForwardPicker\s+historyStep\s/);
-    expect(source('../ScheduleSheet.tsx')).toContain(
-      'useHistoryStep(props.open, SHEET_STEP_KEYS.schedule, props.onClose)',
-    );
     expect(source('../ReadingLayer.tsx')).toContain(
       'useHistoryStep(messageId !== null, SHEET_STEP_KEYS.whoReacted, props.onClose)',
     );
     expect(source('../MessageThread.tsx')).toContain('HISTORY_STEP_KEYS.readInfo');
-    expect(new Set(Object.values(SHEET_STEP_KEYS)).size).toBe(3);
+    expect(new Set(Object.values(SHEET_STEP_KEYS)).size).toBe(2);
   });
 });

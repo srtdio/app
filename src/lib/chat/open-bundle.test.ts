@@ -72,7 +72,6 @@ function bundle(over: Partial<ChatOpenBundle> = {}): ChatOpenBundle {
     reactions: [],
     readPositions: { rows: [], times: new Map() },
     replyCounts: new Map(),
-    scheduled: [],
     openPosts: [],
     openPostCount: 0,
     sharedPlanIds: [],
@@ -119,8 +118,7 @@ describe('one chat_open_bundle call per open', () => {
       since: null,
     });
     const positions = await store.join(KEY, 'positions');
-    const scheduled = await store.join(KEY, 'scheduled');
-    expect([positions?.ok, scheduled?.ok]).toEqual([true, true]);
+    expect(positions?.ok).toBe(true);
     expect(d.asked).toHaveLength(1);
   });
 
@@ -175,7 +173,7 @@ describe('one chat_open_bundle call per open', () => {
     const d = deps(store, () => Promise.resolve(refused));
     const outcome = await runLatestLoad(() => joinChatBundle(KEY, { deps: d }));
     expect(outcome.kind).toBe('failed');
-    for (const name of ['scheduled', 'positions'] as const) {
+    for (const name of ['positions'] as const) {
       expect((await store.join(KEY, name))?.ok).toBe(false);
     }
   });

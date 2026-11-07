@@ -33,7 +33,7 @@ describe('isBellEntry: the rows the live layer toasts apart', () => {
     expect(isBellEntry({ eventType: 'mention', entityType: null })).toBe(false);
   });
 
-  it('reminder and scheduled outcomes are bell rows whatever the entity', () => {
+  it('retired, plan and task types are bell rows whatever the entity', () => {
     for (const eventType of BELL_ONLY_EVENT_TYPES) {
       expect(isBellEntry({ eventType, entityType: 'chat_channel' })).toBe(true);
       expect(isBellEntry({ eventType, entityType: null })).toBe(true);
@@ -124,9 +124,9 @@ describe('isBellEntry: the rows the live layer toasts apart', () => {
     expect(isLiveActivityRow({ event_type: 'mention', entity_type: 'chat_channel' })).toBe(false);
   });
 
-  it('retired reminders stay silent bell rows and are listed for the page filter', () => {
-    expect(RETIRED_EVENT_TYPES).toContain('reminder');
-    expect(RETIRED_EVENT_LIST).toBe('(reminder)');
+  it('retired reminders and scheduled sends stay silent bell rows and are listed for the page filter', () => {
+    expect([...RETIRED_EVENT_TYPES]).toEqual(['reminder', 'scheduled_sent', 'scheduled_failed']);
+    expect(RETIRED_EVENT_LIST).toBe('(reminder,scheduled_sent,scheduled_failed)');
     for (const eventType of RETIRED_EVENT_TYPES) {
       expect(BELL_ONLY_EVENT_TYPES).toContain(eventType);
     }

@@ -3,12 +3,8 @@
 // every row into a render-ready ActivityItem: Activity's rows and the chat,
 // plan and task alerts the chat bell used to show (alerts.ts), on one feed.
 // The per-user read-state and snooze mutations go through the @srtdio/rpc
-// wrappers, and Retry on a failed send through chat_scheduled_send_now (each
-// carries an explicit p_trace_id). The Upcoming chip is not inbox rows: it
-// reads the viewer's scheduled messages not yet sent and pending reminders
-// (fetchUpcoming), with the bell's Edit and Cancel writes. Everything here that
-// does not touch the network is a pure, unit-tested function so the page stays
-// thin.
+// wrappers (each carries an explicit p_trace_id). Everything here that does not
+// touch the network is a pure, unit-tested function so the page stays thin.
 
 import { mark } from '@/lib/perf-marks';
 import type { Client, Result } from '@srtdio/rpc';
@@ -19,12 +15,9 @@ import { parseMentions } from '@srtdio/comments';
 import { entityUrlPath } from '@/lib/entityRef';
 import { logger } from '@/lib/logger';
 import {
-  mentionIds,
   mentionNamesIn,
-  mentionTargets,
   resolveMentionPreview,
   resolvePersonMentionText,
-  type NameOf,
 } from '@/lib/chat/mentions';
 import { FORMER_MEMBER, personAvatar, personName, resolvePeople } from '@/lib/people-names';
 import {
@@ -51,42 +44,22 @@ import {
   CHAT_LABEL,
   PLAN_DELETED_TOAST,
   PLAN_LABEL,
-  SCHEDULED_LABEL,
   TASK_ALERT_LABEL,
   alertKindOf,
   bankAlertLine,
-  failureInPlainWords,
-  isStaleFailed,
   isTaskBatch,
-  messagePreview,
   planAlertLine,
   planFieldsOf,
   readChatMessages,
-  readScheduledRows,
-  scheduledFailedLead,
-  scheduledPreview,
-  scheduledSentTitle,
   taskAlertLine,
   taskFieldsOf,
   type AlertKind,
   type ChatMessagePreview,
   type PlanAlertFields,
-  type ScheduledRead,
   type TaskAlertFields,
 } from '@/lib/inbox/alerts';
 import { TASKS_SHEET_ONLY } from '@/lib/chat/tasks';
-import { chatDisplayName } from '@/lib/chat/chat-name';
-import { dmPeerId } from '@/lib/chat-reads';
 import { errorText } from '@/lib/error-copy';
-import {
-  cancelScheduledMessage,
-  mapScheduleError,
-  readUpcomingScheduled,
-  rowMentions,
-  sendScheduledNow,
-  updateScheduledMessage,
-  type ScheduledRow,
-} from '@/lib/chat/scheduled';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
 import { isPostPlatform } from '@srtdio/posts';
 import { workspaceDisplayName } from '@/lib/workspace-context';
@@ -191,20 +164,8 @@ export function warnUnknownEventType(eventType: string): void {
  */
 export const MENTION_EVENT_TYPE: InboxEventTypeValue = 'mention';
 
-/**
- * The chips (single-select): which slice of the inbox is shown. Upcoming is
- * not an inbox slice: it lists the viewer's scheduled messages and pending
- * reminders (fetchUpcoming), so no inbox row ever shows, counts or is marked
- * read under it.
- */
-export type ActivityState =
-  | 'all'
-  | 'unread'
-  | 'mentions'
-  | 'briefs'
-  | 'plans'
-  | 'upcoming'
-  | 'snoozed';
+/** The chips (single-select): which slice of the inbox is shown. */
+export type ActivityState = 'all' | 'unread' | 'mentions' | 'briefs' | 'plans' | 'snoozed';
 
 /** The display event type of a row: a 'system' brief reopen is BRIEF_REOPENED_EVENT. */
 function displayEventType(row: InboxEntryRow, payload: unknown): string {
@@ -320,29 +281,15 @@ export interface ActivityItem {
 }
 
 /**
- * The fields a chat, plan or task alert card reads: reminders, scheduled sends
- * (sent and failed), the plan alerts that name a plan and the task alerts.
+ * The fields a plan, task or idea bank alert card reads: the plan alerts that
+ * name a plan, the task alerts and the idea bank alerts.
  */
 export interface AlertInfo {
   kind: AlertKind;
-  /** Chat rows (reminder, sent, failed, task): the chat (entity_id). */
+  /** Chat rows (task): the chat (entity_id). */
   channelId: string | null;
-  /**
-   * The chat's name for a group; for a scheduled send (sent, failed) also a
-   * direct chat's other person. Null for an unread one (reads "Chat", or
-   * chatDisplayName's fallback on a scheduled send).
-   */
+  /** The chat's name for a group; null for a direct chat or an unread one (reads "Chat"). */
   chatName: string | null;
-  /** The chat's kind (chat rows), null when the chat read failed. */
-  chatType: 'group' | 'dm' | 'notes' | null;
-  /** Scheduled rows: the scheduled message (payload.scheduled_id). */
-  scheduledId: string | null;
-  /** failed: why it failed (the scheduled row's reason, else the payload's). */
-  reason: string | null;
-  /** failed: resolved elsewhere (sent, cancelled or edited): Retry clears the entry. */
-  stale: boolean;
-  /** The message preview (reminder, sent), resolved by the loader; a failed send has none. */
-  preview: string | null;
   /** plan: the payload's fields, and the plan and item titles the loader resolved. */
   plan?: PlanAlertFields;
   planTitle: string | null;
@@ -361,11 +308,6 @@ function alertOf(row: InboxEntryRow, payload: unknown): AlertInfo | null {
     kind,
     channelId: row.entity_type === BELL_CHAT_ENTITY ? row.entity_id : null,
     chatName: null,
-    chatType: null,
-    scheduledId: payloadStr(payload, 'scheduled_id'),
-    reason: kind === 'failed' ? payloadStr(payload, 'reason') : null,
-    stale: false,
-    preview: null,
     ...(kind === 'plan' ? { plan: planFieldsOf(row) } : {}),
     planTitle: null,
     itemTitle: null,
@@ -1033,25 +975,13 @@ function alertChat(alert: AlertInfo): string {
 }
 
 /**
- * Who a scheduled send went to, as chatDisplayName names the chat: a direct
- * chat's other person, a group's name, "Personal notes"; its fallbacks
- * ("Direct message", "Group") when a name did not resolve. Never "Chat". Pure.
- */
-export function scheduledReceiver(alert: Pick<AlertInfo, 'chatName' | 'chatType'>): string {
-  return chatDisplayName({ channelType: alert.chatType ?? 'dm', title: alert.chatName ?? '' });
-}
-
-/**
  * An alert card's top line, beside the actor's photo: the actor's name (a
- * plan or task change's author), else the alert's label ("Scheduled",
- * "Plan", "Tasks"). Pure.
+ * plan or task change's author), else the alert's label ("Plan", "Tasks",
+ * "Idea bank"). Pure.
  */
 export function alertTopLine(item: Pick<ActivityItem, 'actorName'>, alert: AlertInfo): string {
   if (item.actorName !== null) return item.actorName;
   switch (alert.kind) {
-    case 'sent':
-    case 'failed':
-      return SCHEDULED_LABEL;
     case 'plan':
       return PLAN_LABEL;
     case 'task':
@@ -1062,10 +992,9 @@ export function alertTopLine(item: Pick<ActivityItem, 'actorName'>, alert: Alert
 }
 
 /**
- * An alert card's title, in the bell's words:
- * "Your scheduled message was sent to <receiver>"; "Couldn't send your
- * scheduled message to <receiver>." (its reason is the body); the plan alert's
- * line (side-aware for plan_opened); the task alert's line. Pure.
+ * An alert card's title, in the bell's words: the plan alert's line
+ * (side-aware for plan_opened); the task alert's line; the idea bank's line.
+ * Pure.
  */
 export function alertTitle(
   item: Pick<ActivityItem, 'eventType' | 'actorName'>,
@@ -1073,10 +1002,6 @@ export function alertTitle(
   side: ViewerSide,
 ): string {
   switch (alert.kind) {
-    case 'sent':
-      return scheduledSentTitle(scheduledReceiver(alert));
-    case 'failed':
-      return scheduledFailedLead(scheduledReceiver(alert));
     case 'plan':
       return planAlertLine(
         item.eventType,
@@ -1092,19 +1017,13 @@ export function alertTitle(
 }
 
 /**
- * An alert card's second line: the chat for a task alert, the
- * message preview for a sent scheduled message, a failed send's reason in
- * plain words (never its preview), the item a plan alert names (never
- * the plan twice), or null when there is none. Pure.
+ * An alert card's second line: the chat for a task alert, the item a plan
+ * alert names (never the plan twice), or null when there is none. Pure.
  */
 export function alertBody(alert: AlertInfo): string | null {
   switch (alert.kind) {
     case 'task':
       return alertChat(alert);
-    case 'sent':
-      return alert.preview;
-    case 'failed':
-      return failureInPlainWords(alert.reason);
     case 'plan':
       return alert.itemTitle ?? alert.plan?.itemTitle ?? null;
     case 'bank':
@@ -1114,17 +1033,11 @@ export function alertBody(alert: AlertInfo): string | null {
 }
 
 /**
- * The link an alert opens, or null (a failed send, a deleted plan, a row
- * without its chat, a moved idea read by a client). Pure.
+ * The link an alert opens, or null (a deleted plan, a row without its chat,
+ * a moved idea read by a client). Pure.
  */
 function alertHref(item: ActivityItem, alert: AlertInfo, side: ViewerSide): string | null {
   switch (alert.kind) {
-    case 'sent':
-      return alert.channelId !== null
-        ? chatMessageHref(alert.channelId, item.messageId ?? alert.scheduledId)
-        : null;
-    case 'failed':
-      return null;
     case 'plan': {
       const plan = alert.plan;
       if (item.eventType === 'plan_deleted' || plan?.planId == null) return null;
@@ -1192,16 +1105,16 @@ export function openAction(
 }
 
 /**
- * Rows with nowhere to open, whose card is not tappable: a deleted post, a
- * failed send, and an idea moved to the bank read by a client (the agency's
- * bank is not theirs to open). Pure.
+ * Rows with nowhere to open, whose card is not tappable: a deleted post and
+ * an idea moved to the bank read by a client (the agency's bank is not theirs
+ * to open). Pure.
  */
 export function opensNothing(
   item: Pick<ActivityItem, 'eventType'>,
   side: ViewerSide = 'unknown',
 ): boolean {
   if (isBankEvent(item.eventType) && !bankOpensFor(item.eventType, side)) return true;
-  return item.eventType === 'post_deleted' || item.eventType === 'scheduled_failed';
+  return item.eventType === 'post_deleted';
 }
 
 /**
@@ -1296,9 +1209,8 @@ export function isSnoozed(item: ActivityItem, nowMs: number): boolean {
  * Mentions is every mention (post, brief and chat; read AND unread) that is
  * not snoozed; Briefs is every brief event (scope 'briefs') that is not
  * snoozed; Plans is every plan alert (the six plan_* types) that is not
- * snoozed; Upcoming shows no inbox row (its rows are fetchUpcoming's);
- * Snoozed is only snoozed. Reminders, scheduled sends and task alerts have no
- * chip of their own. Input order is preserved, so a newest-first page stays
+ * snoozed; Snoozed is only snoozed. Task and idea bank alerts have no chip
+ * of their own. Input order is preserved, so a newest-first page stays
  * newest-first through the filter.
  */
 export function filterByState(
@@ -1319,8 +1231,6 @@ export function filterByState(
       return items.filter((item) => item.scope === BRIEFS_SCOPE && !isSnoozed(item, nowMs));
     case 'plans':
       return items.filter((item) => isBellPlanEvent(item.eventType) && !isSnoozed(item, nowMs));
-    case 'upcoming':
-      return [];
     case 'all':
     default:
       return items.filter((item) => !isSnoozed(item, nowMs));
@@ -1344,7 +1254,7 @@ export function updatesLabel(n: number): string {
   return `${n} ${n === 1 ? 'update' : 'updates'}`;
 }
 
-/** The one positive line each chip's empty state shows (All and Upcoming keep their own). */
+/** The one positive line each chip's empty state shows (All keeps its own). */
 export const EMPTY_LINES = {
   plans: 'Plan updates show up here.',
   mentions: 'Mentions of you show up here.',
@@ -1366,21 +1276,15 @@ export function marksWholeInbox(state: ActivityState): boolean {
 /**
  * The entries "Mark all read" clears: the unread items the active chip shows
  * whose snooze is unset or has run out (snoozed_until <= now, as the server
- * marks them). On All and Unread that includes a failed scheduled send, since
- * inbox_mark_all_read marks it read too; on any other chip a failed send stays
- * until it is retried, edited or opened. Upcoming has none. Pure.
+ * marks them). Pure.
  */
 export function markAllTargets(
   items: readonly ActivityItem[],
   state: ActivityState,
   nowMs: number,
 ): ActivityItem[] {
-  const whole = marksWholeInbox(state);
   return filterByState(items, state, nowMs).filter(
-    (item) =>
-      item.readAt === null &&
-      !isSnoozed(item, nowMs) &&
-      (whole || item.eventType !== 'scheduled_failed'),
+    (item) => item.readAt === null && !isSnoozed(item, nowMs),
   );
 }
 
@@ -1643,22 +1547,17 @@ interface FirstImageRow {
 }
 
 /** A chat row's chat: its kind, and the Sorted group id for a group. */
-export interface ChatRowChannel {
-  /** 'dm' also for the Personal notes chat (`notes` tells it apart). */
+interface ChatRowChannel {
+  /** 'dm' also for the Personal notes chat. */
   type: 'group' | 'dm';
   groupId: string | null;
-  /** The caller's Personal notes chat. */
-  notes?: boolean;
-  /** A direct chat's two people (the other one is its name). */
-  dmUserA?: string | null;
-  dmUserB?: string | null;
 }
 
 /**
- * The chats and messages behind a page's chat rows (mentions, reminders,
- * scheduled sends, task alerts): one chat_channels IN read and the chat_messages
- * IN read (RLS: members only), in parallel. Each is best-effort; a failure
- * leaves its map empty (the row degrades, never fails).
+ * The chats and messages behind a page's chat rows (mentions, task alerts):
+ * one chat_channels IN read and the chat_messages IN read (RLS: members
+ * only), in parallel. Each is best-effort; a failure leaves its map empty (the
+ * row degrades, never fails).
  */
 async function readChatSources(
   client: Client,
@@ -1671,7 +1570,7 @@ async function readChatSources(
     ids.channelIds.length > 0
       ? client
           .from('chat_channels')
-          .select('channel_id, channel_type, entity_id, dm_user_a, dm_user_b')
+          .select('channel_id, channel_type, entity_id')
           .in('channel_id', ids.channelIds)
       : Promise.resolve(null),
     readChatMessages(client, ids.messageIds),
@@ -1680,13 +1579,7 @@ async function readChatSources(
   if (channelsRes !== null && channelsRes.error === null) {
     for (const r of channelsRes.data ?? []) {
       const type = r.channel_type === 'group' ? 'group' : 'dm';
-      channels.set(r.channel_id, {
-        type,
-        groupId: type === 'group' ? r.entity_id : null,
-        notes: r.channel_type === 'notes',
-        dmUserA: r.dm_user_a,
-        dmUserB: r.dm_user_b,
-      });
+      channels.set(r.channel_id, { type, groupId: type === 'group' ? r.entity_id : null });
     }
   }
   return { channels, messages };
@@ -1768,56 +1661,20 @@ async function readGroupNames(client: Client, groupIds: string[]): Promise<Map<s
 interface AlertSources {
   channels: ReadonlyMap<string, ChatRowChannel>;
   groupNames: ReadonlyMap<string, string>;
-  messages: ReadonlyMap<string, ChatMessagePreview>;
-  failed: ScheduledRead;
   planItems: ReadonlyMap<string, PlanItemInfo>;
   planTitles: ReadonlyMap<string, string>;
   postTitles: ReadonlyMap<string, string>;
-  chatNames: NameOf;
-  /** A person's name (the people read above), for a direct chat's other person. */
-  personNameOf: (id: string) => string | null;
-}
-
-/**
- * A direct chat's other person: whichever of its two people is not the
- * viewer (the inbox row's owner). Null for a group, notes or an unread chat.
- * Pure.
- */
-function dmPeerOf(channel: ChatRowChannel | undefined, viewerId: string): string | null {
-  if (channel === undefined || channel.type !== 'dm' || channel.notes === true) return null;
-  return dmPeerId(
-    { dm_user_a: channel.dmUserA ?? null, dm_user_b: channel.dmUserB ?? null },
-    viewerId,
-  );
 }
 
 /**
  * Fill an alert's resolved fields from the batched reads: its group chat's
- * name (a scheduled send's direct chat: the other person's), the message or scheduled body preview, a failed send's reason and
- * staleness, a plan alert's plan and item titles. A field whose read failed
- * stays empty and the row still renders.
+ * name, a plan alert's plan and item titles. A field whose read failed stays
+ * empty and the row still renders.
  */
-function stitchAlert(
-  alert: AlertInfo,
-  messageId: string | null,
-  viewerId: string,
-  from: AlertSources,
-): void {
+function stitchAlert(alert: AlertInfo, from: AlertSources): void {
   const channel = alert.channelId !== null ? from.channels.get(alert.channelId) : undefined;
-  alert.chatType = channel === undefined ? null : channel.notes === true ? 'notes' : channel.type;
   alert.chatName = channel?.groupId != null ? (from.groupNames.get(channel.groupId) ?? null) : null;
-  if (alert.kind === 'sent' || alert.kind === 'failed') {
-    const peer = dmPeerOf(channel, viewerId);
-    if (peer !== null) alert.chatName = from.personNameOf(peer);
-  }
-  if (alert.kind === 'sent') {
-    const message = messageId !== null ? from.messages.get(messageId) : undefined;
-    alert.preview = messagePreview(message, from.chatNames);
-  } else if (alert.kind === 'failed') {
-    const row = alert.scheduledId !== null ? from.failed.rows.get(alert.scheduledId) : undefined;
-    alert.reason = row?.failure_reason ?? alert.reason;
-    alert.stale = isStaleFailed(from.failed, alert.scheduledId);
-  } else if (alert.plan !== undefined) {
+  if (alert.plan !== undefined) {
     const f = alert.plan;
     alert.planTitle =
       f.planTitle ?? (f.planId !== null ? (from.planTitles.get(f.planId) ?? null) : null);
@@ -1881,14 +1738,13 @@ async function readInboxPage(
  * one (comments / posts / briefs by id) and wave two (users by id). Every join is
  * best-effort: a failed sub-query leaves its field null rather than failing the
  * feed. Soft-deleted rows are excluded; the inbox is a permanent surface. Every
- * row shows, the chat, plan and task alerts included (their chats, messages,
- * failed sends and plan titles join in the same batched waves). Rows are
+ * row shows, the plan, task and idea bank alerts included (their chats and
+ * plan titles join in the same batched waves). Rows are
  * ordered by (created_at, id) in `direction` (newest first by default) on the
  * server; pass `cursor` (the last loaded row's pair, cursorAfter) to fetch the
  * next page in that same direction. Pass `state` to filter server-side to the
- * active chip (Unread, Mentions, Briefs, Plans, Snoozed; All has no filter;
- * Upcoming is not an inbox slice, so the page loads fetchUpcoming for it
- * instead), so older matches are never hidden behind the page cap. `nowIso` is
+ * active chip (Unread, Mentions, Briefs, Plans, Snoozed; All has no filter),
+ * so older matches are never hidden behind the page cap. `nowIso` is
  * the snooze cut-off (defaults to now). The page is read through
  * partition-bounded windows (readInboxPage), so only recent months are opened.
  */
@@ -2041,38 +1897,26 @@ async function enrichInboxRows(
     ),
   );
   // Chat rows (mentions and the chat alerts): the chats (kind + group), one IN
-  // read; the messages a mention or sent row previews, one IN read.
+  // read; the messages a mention previews, one IN read.
   const chatMentions = items.filter(isChatMention);
-  const alerts = items.flatMap((i) => (i.alert != null ? [{ item: i, alert: i.alert }] : []));
+  const alerts = items.flatMap((i) => (i.alert != null ? [i.alert] : []));
   const channelIds = unique([
     ...chatMentions.flatMap((i) => (i.entityId !== null ? [i.entityId] : [])),
-    ...alerts.flatMap(({ alert }) => (alert.channelId !== null ? [alert.channelId] : [])),
+    ...alerts.flatMap((alert) => (alert.channelId !== null ? [alert.channelId] : [])),
   ]);
-  const messageIds = unique([
-    ...chatMentions.flatMap((i) => (i.messageId !== null ? [i.messageId] : [])),
-    ...alerts.flatMap(({ item, alert }) =>
-      alert.kind === 'sent' && item.messageId !== null
-        ? [item.messageId]
-        : [],
-    ),
-  ]);
-  // Failed sends: the scheduled rows behind them (reason, body, still failed?).
-  const failedIds = unique(
-    alerts.flatMap(({ alert }) =>
-      alert.kind === 'failed' && alert.scheduledId !== null ? [alert.scheduledId] : [],
-    ),
+  const messageIds = unique(
+    chatMentions.flatMap((i) => (i.messageId !== null ? [i.messageId] : [])),
   );
   // Plan events and plan alerts: the items, the plans and the plan comments,
   // one IN read each, alongside the chat reads (the posts read below needs the
   // post items' ids). An alert reads only the titles its payload lacks.
   const planEvents = items.filter(isPlanEvent);
-  const planAlerts = alerts.flatMap(({ alert }) => (alert.plan !== undefined ? [alert.plan] : []));
-  // Every join starts at once: the chat, failed-send and plan reads alongside
+  const planAlerts = alerts.flatMap((alert) => (alert.plan !== undefined ? [alert.plan] : []));
+  // Every join starts at once: the chat and plan reads alongside
   // the comments, briefs, first-image and batch reads (none needs another's
   // answer). Only the posts read waits, for the plan reads alone: a post item
   // names its post there, and the one posts read covers both.
   const chatSources = readChatSources(client, { channelIds, messageIds });
-  const failedSources = readScheduledRows(client, failedIds);
   const planSources = readPlanSources(client, {
     itemIds: unique([
       ...planEvents.flatMap((i) => (i.entityId !== null ? [i.entityId] : [])),
@@ -2111,7 +1955,6 @@ async function enrichInboxRows(
   // every thumbnailAssetVersionId to null rather than failing the feed.
   const [
     chatRes,
-    failedRes,
     planRes,
     commentsRes,
     postsRes,
@@ -2120,7 +1963,6 @@ async function enrichInboxRows(
     batchCommentsRes,
   ] = await Promise.all([
     chatSources,
-    failedSources,
     planSources,
     commentIds.length > 0
       ? client.from('comments').select('id, author_user_id, body').in('id', commentIds)
@@ -2207,8 +2049,6 @@ async function enrichInboxRows(
   // shared name registry: users + workspace_members, one .in() each. A person a
   // successful read found without a current membership reads "Former member";
   // anyone not resolved (a failed read) names nobody, never "Former member".
-  // Whose inbox each row is (the viewer): a direct chat's other person is the one not them.
-  const viewerOf = new Map(rows.map((row) => [row.id, row.user_id]));
   const userIds = unique([
     ...items
       .flatMap((item) =>
@@ -2223,13 +2063,6 @@ async function enrichInboxRows(
     ...batchAuthors.values(),
     ...[...batchBodies.values()].flatMap((body) => parseMentions(body)),
     ...[...chatRes.messages.values()].flatMap((m) => parseMentions(m.body ?? '')),
-    // A scheduled send's direct chat names its other person.
-    ...alerts.flatMap(({ item, alert }) => {
-      if (alert.kind !== 'sent' && alert.kind !== 'failed') return [];
-      const channel = alert.channelId !== null ? chatRes.channels.get(alert.channelId) : undefined;
-      const peer = dmPeerOf(channel, viewerOf.get(item.id) ?? '');
-      return peer !== null ? [peer] : [];
-    }),
     ...[...planRes.comments.values()].flatMap((c) =>
       c.authorId !== null ? [c.authorId, ...parseMentions(c.body)] : parseMentions(c.body),
     ),
@@ -2298,16 +2131,12 @@ async function enrichInboxRows(
     if (isChatMention(item)) return;
 
     if (item.alert != null) {
-      stitchAlert(item.alert, item.messageId, rows[idx]?.user_id ?? '', {
+      stitchAlert(item.alert, {
         channels: chatRes.channels,
         groupNames,
-        messages: chatRes.messages,
-        failed: failedRes,
         planItems: planRes.items,
         planTitles: planRes.planTitles,
         postTitles,
-        chatNames,
-        personNameOf: nameOf,
       });
       item.title = null;
       item.format = null;
@@ -2411,50 +2240,6 @@ export function markEntryRead(
   });
 }
 
-/** What Retry on a failed scheduled send did. */
-type RetryOutcome =
-  | { kind: 'sent' }
-  /** Resolved elsewhere (sent, cancelled or edited): the stale entry was marked read. */
-  | { kind: 'cleared' }
-  /** `copy` is the toast ("Couldn't update that activity. {reason}"); null is silent. */
-  | { kind: 'failed'; message: string; copy: string | null };
-
-/**
- * Retry a failed scheduled send, as the bell did: a send already resolved
- * elsewhere only marks its stale entry read (inbox_mark_read); otherwise
- * chat_scheduled_send_now sends it now (the proc clears the failed entry).
- * Both carry the explicit trace id. Never throws.
- */
-export async function retryFailedSend(
-  client: Client,
-  item: ActivityItem,
-  workspaceId: string,
-  traceId: string,
-): Promise<RetryOutcome> {
-  const alert = item.alert;
-  if (alert?.kind !== 'failed' || alert.scheduledId === null) {
-    return { kind: 'failed', message: 'not a failed send', copy: null };
-  }
-  if (alert.stale) {
-    const res = await markEntryRead(client, item, workspaceId, traceId);
-    return res.ok
-      ? { kind: 'cleared' }
-      : {
-          kind: 'failed',
-          message: res.error.message,
-          copy: errorText('update that activity', res.error),
-        };
-  }
-  const res = await sendScheduledNow({ client, id: alert.scheduledId, traceId });
-  if (res.ok) return { kind: 'sent' };
-  const silent = mapScheduleError(res.message) === null;
-  return {
-    kind: 'failed',
-    message: res.message,
-    copy: silent ? null : errorText('update that activity', res.message),
-  };
-}
-
 /** Mark every unread, non-snoozed entry read (workspace-wide). */
 export function markAllEntriesRead(
   client: Client,
@@ -2555,210 +2340,6 @@ export function snoozeEntry(
   });
 }
 
-// --- Upcoming ----------------------------------------------------------------
-
-/**
- * One Upcoming row: a scheduled message of the viewer's not yet sent. Never
- * an inbox row: it never counts toward the unread badge and "Mark all read"
- * never touches it.
- */
-export type UpcomingItem = UpcomingBase & { kind: 'scheduled'; row: ScheduledRow };
-
-interface UpcomingBase {
-  /** The scheduled row's id. */
-  id: string;
-  channelId: string;
-  /** When it sends: send_at. */
-  dueAt: string;
-  /** The chat's name for a group; null for a direct chat or an unread one (reads "Chat"). */
-  chatName: string | null;
-  /** The chat's kind, for a scheduled edit's mention list; null when the read failed. */
-  channelType: 'group' | 'dm' | null;
-  /** The scheduled body's preview. */
-  preview: string;
-}
-
-/** What buildUpcoming joins in: the batched reads' maps. */
-interface UpcomingSources {
-  channels: ReadonlyMap<string, ChatRowChannel>;
-  groupNames: ReadonlyMap<string, string>;
-  nameOf: NameOf;
-}
-
-/** An Upcoming row's tag: "Scheduled". Pure. */
-export function upcomingTag(): string {
-  return SCHEDULED_LABEL;
-}
-
-/** An Upcoming row's chat: the group's name, else "Chat". Pure. */
-export function upcomingChat(item: Pick<UpcomingItem, 'chatName'>): string {
-  return item.chatName ?? CHAT_LABEL;
-}
-
-/**
- * Where tapping an Upcoming row goes: a scheduled message (not sent, so no
- * message yet) opens its chat. Pure.
- */
-export function upcomingHref(item: UpcomingItem): string {
-  return chatMessageHref(item.channelId, null);
-}
-
-/**
- * The Upcoming rows from the scheduled messages not yet sent, joined with
- * the batched reads, soonest first. Pure.
- */
-export function buildUpcoming(
-  scheduled: readonly ScheduledRow[],
-  from: UpcomingSources,
-): UpcomingItem[] {
-  const chatOf = (channelId: string): Pick<UpcomingBase, 'chatName' | 'channelType'> => {
-    const channel = from.channels.get(channelId);
-    return {
-      chatName: channel?.groupId != null ? (from.groupNames.get(channel.groupId) ?? null) : null,
-      channelType: channel?.type ?? null,
-    };
-  };
-  const items: UpcomingItem[] = [
-    ...scheduled
-      .filter((r) => r.status === 'scheduled')
-      .map(
-        (r): UpcomingItem => ({
-          kind: 'scheduled',
-          row: r,
-          id: r.id,
-          channelId: r.channel_id,
-          dueAt: r.send_at,
-          ...chatOf(r.channel_id),
-          preview: scheduledPreview(r, from.nameOf),
-        }),
-      ),
-  ];
-  return items
-    .map((item, index) => ({ item, index }))
-    .sort((a, b) => Date.parse(a.item.dueAt) - Date.parse(b.item.dueAt) || a.index - b.index)
-    .map(({ item }) => item);
-}
-
-/** Upcoming's load result. */
-type UpcomingResult = { ok: true; data: UpcomingItem[] } | { ok: false; error: string };
-
-/**
- * Load the Upcoming chip: the viewer's scheduled messages not yet sent (one
- * read, a page of up to 1000), then the chats (a chat_channels IN read),
- * the group names (one IN read)
- * and every person a preview names (one batched read). Never one read per row.
- * The enrichment reads are best-effort: a failure leaves a row's chat or
- * preview generic, never failed.
- */
-export async function fetchUpcoming(client: Client, workspaceId: string): Promise<UpcomingResult> {
-  const scheduledRes = await readUpcomingScheduled(client, { workspaceId });
-  if (!scheduledRes.ok) return { ok: false, error: scheduledRes.error.message };
-  const scheduled = scheduledRes.data;
-  const chat = await readChatSources(client, {
-    channelIds: unique(scheduled.map((r) => r.channel_id)),
-    messageIds: [],
-  });
-  const groupIds = unique(
-    [...chat.channels.values()].flatMap((c) => (c.groupId !== null ? [c.groupId] : [])),
-  );
-  const peopleIds = unique(scheduled.flatMap((r) => mentionIds(r.body ?? '')));
-  const [, groupNames] = await Promise.all([
-    resolvePeople(client, workspaceId, peopleIds),
-    readGroupNames(client, groupIds),
-  ]);
-  return {
-    ok: true,
-    data: buildUpcoming(scheduled, {
-      channels: chat.channels,
-      groupNames,
-      nameOf: mentionNamesIn(workspaceId),
-    }),
-  };
-}
-
-/** Upcoming's empty state, in the bell's words. */
-export const UPCOMING_EMPTY = 'Scheduled messages show up here.';
-
-/** What the scheduled writes need: injected so tests drive them with a recording client. */
-interface UpcomingWriteDeps {
-  client: Client;
-  newTraceId: () => string;
-  /** After every write, landed or not: Upcoming reloads. */
-  reload: () => void;
-  /** Log a failure; toast `copy`, null stays silent. */
-  failed: (what: string, traceId: string, message: string, copy: string | null) => void;
-  /** The chat's kind (a group's "@all" is a mention), null when unknown. */
-  channelTypeOf: (channelId: string) => 'group' | 'dm' | null;
-}
-
-/** The "Scheduled in this chat" sheet's writes (ScheduledListSheet's actions). */
-interface UpcomingScheduledWrites {
-  onSendNow: (row: ScheduledRow) => Promise<void>;
-  onSaveBody: (row: ScheduledRow, body: string) => Promise<boolean>;
-  onRetime: (row: ScheduledRow, sendAt: Date) => Promise<boolean>;
-  onCancel: (row: ScheduledRow) => Promise<boolean>;
-}
-
-/**
- * The scheduled writes an Upcoming row's Edit and Cancel make, as the bell
- * made them: chat_scheduled_send_now, chat_scheduled_update (a new body at
- * the row's time, or a new time with the body and mentions unchanged) and
- * chat_scheduled_cancel, each with an explicit p_trace_id. Every write
- * reloads; a failure logs and toasts the mapped copy ("not found" stays
- * silent).
- */
-export function createUpcomingScheduledWrites(deps: UpcomingWriteDeps): UpcomingScheduledWrites {
-  const write = async <T>(
-    what: string,
-    run: (traceId: string) => Promise<{ ok: true; row: T } | { ok: false; message: string }>,
-  ): Promise<boolean> => {
-    const traceId = deps.newTraceId();
-    const res = await run(traceId);
-    deps.reload();
-    if (res.ok) return true;
-    deps.failed(what, traceId, res.message, mapScheduleError(res.message));
-    return false;
-  };
-  return {
-    onSendNow: async (row) => {
-      await write('scheduled send now', (traceId) =>
-        sendScheduledNow({ client: deps.client, id: row.id, traceId }),
-      );
-    },
-    onSaveBody: (row, body) =>
-      write('scheduled edit', (traceId) =>
-        updateScheduledMessage({
-          client: deps.client,
-          id: row.id,
-          sendAt: new Date(row.send_at),
-          body,
-          mentions: mentionTargets(body, deps.channelTypeOf(row.channel_id) ?? undefined),
-          traceId,
-        }),
-      ),
-    onRetime: (row, sendAt) =>
-      write('scheduled retime', (traceId) =>
-        updateScheduledMessage({
-          client: deps.client,
-          id: row.id,
-          sendAt,
-          body: row.body ?? '',
-          mentions: rowMentions(row),
-          traceId,
-        }),
-      ),
-    onCancel: (row) =>
-      write('scheduled cancel', (traceId) =>
-        cancelScheduledMessage({
-          client: deps.client,
-          id: row.id,
-          channelId: row.channel_id,
-          traceId,
-        }),
-      ),
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Session-shared reads: page one per chip, and the Mentions count
 // ---------------------------------------------------------------------------
@@ -2774,9 +2355,6 @@ export function createUpcomingScheduledWrites(deps: UpcomingWriteDeps): Upcoming
 // inbox change (the shell's poll, a mark read, a snooze, Mark all read:
 // INBOX_CHANGED_EVENT) marks them all stale before the page's own listener
 // reloads, so a reload never joins an answer the change made old.
-// Upcoming is not an inbox slice (scheduled messages and reminders change
-// outside these events): it always reads, and its last good rows are kept
-// (keepUpcoming) for a return to paint.
 
 /** The keys made this session (the inbox change event marks exactly these stale). */
 const activityKeys = new Set<string>();
@@ -2831,7 +2409,7 @@ export function invalidateActivityReads(key?: string): void {
   for (const k of key !== undefined ? [key] : activityKeys) invalidateReads(k);
 }
 
-/** Every inbox chip with a page one (Upcoming is not an inbox slice). */
+/** Every inbox chip with a page one. */
 const PAGE_STATES: readonly ActivityState[] = [
   'all',
   'unread',
@@ -2868,21 +2446,6 @@ export function editKeptActivityPages(
     primeRead(key, { ok: true, data: edit(kept.data) } satisfies LoadResult);
     if (!fresh) invalidateReads(key);
   }
-}
-
-/** The session key of the viewer's Upcoming rows. */
-export function upcomingKey(userId: string, workspaceId: string): string {
-  return readKey(userId, workspaceId, 'activity-upcoming');
-}
-
-/** The last Upcoming rows read this session, or undefined (never reads). */
-export function peekUpcoming(key: string): UpcomingItem[] | undefined {
-  return peekKept<UpcomingItem[]>(key);
-}
-
-/** Keep the Upcoming rows just read, for a return to paint. */
-export function keepUpcoming(key: string, items: UpcomingItem[]): void {
-  primeRead(key, items);
 }
 
 if (typeof window !== 'undefined') {

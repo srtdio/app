@@ -69,7 +69,6 @@ function bundle(channelId: string, pagePlans: string[], shared: string[]): ChatO
     reactions: [],
     readPositions: { rows: [], times: new Map() },
     replyCounts: new Map(),
-    scheduled: [],
     openPosts: [],
     openPostCount: 0,
     sharedPlanIds: shared,

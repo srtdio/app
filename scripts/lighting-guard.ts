@@ -101,6 +101,12 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
       why: 'Skeleton status bone retired with the old card; ListCardBox draws the card.',
     },
   },
+  'src/components/pages/NotificationsPage.tsx': {
+    'lit-overlay': {
+      count: 1,
+      why: "Upcoming's cancel confirm <Sheet> retired with the Upcoming chip (no scheduled send).",
+    },
+  },
   'src/components/pages/PipelinePage.tsx': {
     'lit-header': { count: 1, why: 'Board column skeleton header retired with the board view.' },
     'lit-well-soft': { count: 1, why: 'Board column skeleton retired with the board view.' },
@@ -129,6 +135,10 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
   },
   'src/components/pages/activity/ActivityBoxes.tsx': {
     'lit-media': { count: 1, why: 'Skeleton card is ListCardBox; its picture box is lit-media.' },
+    'lit-card': {
+      count: 1,
+      why: "UpcomingBoxes' <ListCardBox> retired with the Upcoming chip (scheduled send removed).",
+    },
   },
   'src/components/pages/activity/ActivityCard.tsx': {
     'lit-hover': { count: 3, why: 'Card taps are the ListCard cover (lit-hover).' },
@@ -141,6 +151,10 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
     'lit-pill': {
       count: 4,
       why: "Scope / Only you tags are ListCard's one tag (Tag, lit-pill); the +N files badge left with the old media grid.",
+    },
+    'lit-card': {
+      count: 1,
+      why: "UpcomingCard's <ListCard> retired with the Upcoming chip (scheduled send removed).",
     },
   },
   'src/components/pages/assets/AssetUploadSheet.tsx': {

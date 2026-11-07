@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 // B2: a pre-warmed chat's first frame is its rows, never the skeleton. The
-// pre-warm kept the page; the tap takes its bundle and, with it, the open's
-// scheduled rows and marks; the names come from the held members in the tap's
-// own commit; and the open hold (the plan bundles, the ticker) is a cold
-// open's only. So the thread's first commit already has the rows, and none
-// of the parts that paint the skeleton (the page, the names, the scheduled
-// rows, the open hold) is waiting. A cold open still paints its skeleton, and
-// every guard (a due scheduled row, names the held members cannot answer) is
-// unchanged.
+// pre-warm kept the page; the tap takes its bundle; the names come from the
+// held members in the tap's own commit; and the open hold (the plan bundles,
+// the ticker) is a cold open's only. So the thread's first commit already has
+// the rows, and none of the parts that paint the skeleton (the page, the
+// names, the open hold) is waiting. A cold open still paints its skeleton,
+// and the names guard (names the held members cannot answer) is unchanged.
 import { act, useLayoutEffect, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,7 +24,6 @@ import { joinChatBundle, type ChatBundleDeps } from '@/lib/chat/open-bundle';
 import type { ChatOpenBundle } from '@/lib/chat/history';
 import type { ChatMessageRow } from '@/lib/chat/thread';
 import type { ChannelOutbox } from '@/lib/chat/chat-store';
-import type { ScheduledRow } from '@/lib/chat/scheduled';
 import type { MentionProfile } from '@/lib/chat-reads';
 import { chatThreadLoading, heldOpenNames } from '@/components/chat/ChatConnected';
 import { openHoldApplies } from '@/components/chat/MessageThread';
@@ -68,29 +65,7 @@ function row(i: number): ChatMessageRow {
   };
 }
 
-function scheduledAt(sendAt: string): ScheduledRow {
-  return {
-    id: 's-1',
-    channel_id: CHANNEL,
-    workspace_id: WS,
-    sender_user_id: ME,
-    body: 'later',
-    mentions: null,
-    attachment_asset_ids: null,
-    attachment_meta: null,
-    shared_post_ids: null,
-    shared_brief_ids: null,
-    reply_to_message_id: null,
-    send_at: sendAt,
-    sent_at: null,
-    status: 'scheduled',
-    failure_reason: null,
-    created_at: '2026-10-25T11:00:00.000Z',
-    updated_at: '2026-10-25T11:00:00.000Z',
-  } as unknown as ScheduledRow;
-}
-
-function bundle(scheduled: ScheduledRow[] = []): ChatOpenBundle {
+function bundle(): ChatOpenBundle {
   return {
     serverNow: '2026-10-25T12:00:00.000Z',
     page: { rows: Array.from({ length: ROWS }, (_, i) => row(i)), hasMore: false },
@@ -98,7 +73,6 @@ function bundle(scheduled: ScheduledRow[] = []): ChatOpenBundle {
     reactions: [],
     readPositions: { rows: [], times: new Map() },
     replyCounts: new Map(),
-    scheduled,
     openPosts: [],
     openPostCount: 0,
     sharedPlanIds: ['plan-1'],
@@ -225,9 +199,8 @@ function heldMembers(ids: readonly string[]): MentionProfile[] {
 function skeletonOn(input: {
   commit: Commit;
   namesReady: boolean;
-  scheduledSettled: boolean;
   keptOpen: boolean;
-  /** The kept open's row-moving parts (its marks, its plan card shapes) are in hand. */
+  /** The kept open's row-moving parts (its plan card shapes) are in hand. */
   keptPartsSettled: boolean;
 }): boolean {
   const threadLoading = chatThreadLoading({
@@ -235,7 +208,6 @@ function skeletonOn(input: {
     notesFailed: false,
     pageLoading: input.commit.loading,
     namesReady: input.namesReady,
-    scheduledSettled: input.scheduledSettled,
     notesOpen: false,
     notesStatusReady: false,
     notesReady: false,
@@ -270,14 +242,12 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
   it('first commit: rows, cursors, parts in hand, no skeleton, nothing read', async () => {
     const memory = createOpenCache();
     const { db, reads } = countingClient();
-    expect(await prewarm(memory, bundle([scheduledAt('2026-10-25T18:00:00.000Z')]))).toBe(1);
+    expect(await prewarm(memory, bundle())).toBe(1);
     vi.setSystemTime(new Date('2026-10-25T12:00:10.000Z'));
     // The tap: its kickoff takes the pre-warm (nothing read) and its parts.
     const d = tapDeps(memory);
     void joinChatBundle(KEY, { deps: d });
     expect(d.asked()).toBe(0);
-    const scheduled = memory.recallFresh(KEY, 'scheduled');
-    expect(scheduled?.map((r) => r.id)).toEqual(['s-1']);
     // The tap's names from the held members, in the same commit as the open.
     const named = heldOpenNames({
       page: memory.recall(KEY, 'thread'),
@@ -294,7 +264,6 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
       skeletonOn({
         commit: first as Commit,
         namesReady: named !== null,
-        scheduledSettled: scheduled !== undefined,
         keptOpen: memory.recall(KEY, 'thread') !== undefined,
         // No plan card is on this page.
         keptPartsSettled: planCardsSized(ME, WS, []),
@@ -352,24 +321,10 @@ describe('B2: a pre-warmed chat paints its rows in the first frame', () => {
       skeletonOn({
         commit: first as Commit,
         namesReady: true,
-        scheduledSettled: memory.recallFresh(KEY, 'scheduled') !== undefined,
         keptOpen: memory.recall(KEY, 'thread') !== undefined,
         keptPartsSettled: false,
       }),
     ).toBe(true);
-  });
-
-  it('a scheduled row due since the pre-warm: not taken, nothing remembered', async () => {
-    const memory = createOpenCache();
-    await prewarm(memory, bundle([scheduledAt('2026-10-25T12:00:20.000Z')]));
-    vi.setSystemTime(new Date('2026-10-25T12:00:30.000Z'));
-    const d = tapDeps(memory);
-    // Not taken: the tap starts its own read (withReadTimeout runs it one
-    // microtask later), and none of the pre-warm's parts is remembered.
-    const read = joinChatBundle(KEY, { deps: d });
-    expect(memory.recallFresh(KEY, 'scheduled')).toBeUndefined();
-    await read;
-    expect(d.asked()).toBe(1);
   });
 
   it('names the held members cannot answer: none seeded (the read runs)', async () => {

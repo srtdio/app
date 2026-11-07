@@ -1,6 +1,6 @@
 // One list item part (decisions locked 6 and 7 Nov 2026): every list item in
 // Pipeline, Briefs, Assets, the Chat list (Personal notes, Groups, People),
-// Activity (and Upcoming) and the Plan tab (plans and the Bank) renders
+// Activity and the Plan tab (plans and the Bank) renders
 // through ui/ListCard, and every card has the identical height structure
 // (padding 16, the 72 picture, a 20 title line, a 2-line preview that always
 // reserves 36, a 20 meta line). The page lists sit in LIST_CARD_GRID (one

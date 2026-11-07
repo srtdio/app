@@ -25,8 +25,6 @@ import { Textarea } from '@/components/ui/Textarea';
 import {
   ICON_SIZE,
   IconBriefs,
-  IconCalendarClock,
-  IconChevronDown,
   IconFile,
   IconMic,
   IconSend,
@@ -34,21 +32,8 @@ import {
   IconX,
 } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
-import { useLongPress } from '@/components/ui/useLongPress';
 import { isCoarsePointer } from '@/lib/use-is-laptop';
 import { bottomAnchorProps } from '@/lib/bottom-inset';
-import { useChatSchedule, type ScheduleOutcome } from '@/components/chat/ScheduleContext';
-import { ScheduleMenu, ScheduleSheet, schedulePreview } from '@/components/chat/ScheduleSheet';
-import { ScheduledStrip, ScheduleModeStrip } from '@/components/chat/ScheduledStrip';
-import {
-  formatSendLabel,
-  inSentence,
-  SCHEDULE_UPLOAD_FAILED_COPY,
-  scheduleAttachmentArgs,
-  scheduleWithFiles,
-  type ScheduleFile,
-  type ScheduledRow,
-} from '@/lib/chat/scheduled';
 import {
   MIN_VOICE_NOTE_MS,
   useAudioRecorder,
@@ -188,8 +173,6 @@ export interface ComposerProps {
    * the user's own tap or click (decision 128).
    */
   inputRef?: MutableRefObject<HTMLTextAreaElement | null> | undefined;
-  /** Personal notes: no Schedule tile (the hold and the chevron need schedule wiring). */
-  noSchedule?: boolean | undefined;
   /**
    * Whether the open chat has a client among its other active members; null
    * or absent while unknown. The Draft tile is live only when this is false
@@ -269,6 +252,8 @@ export interface ComposerProps {
   mentions?: ComposerMentions | undefined;
   /** The placeholder in place of the chat's ("Reply in thread" in a thread view); editing keeps its own. */
   placeholder?: string | undefined;
+  /** Personal notes: the tray's disabled Plan says why. */
+  notes?: boolean | undefined;
 }
 
 /** The draft link card appears once typing has paused this long. */
@@ -932,104 +917,10 @@ export function composerCanSend(input: {
 }
 
 /**
- * Whether the draft may be scheduled from the hold, the chevron or the tray
- * with its preview: it can be sent, picked photos and files included (they
- * upload first, then the schedule write carries them). Never while editing;
- * voice notes are never scheduled (they send from the recorder). Pure.
- */
-export function canScheduleDraft(input: {
-  scheduling: boolean;
-  editing: boolean;
-  canSend: boolean;
-}): boolean {
-  return input.scheduling && !input.editing && input.canSend;
-}
-
-/**
- * Whether Schedule is offered (the tray tile, the hold, the chevron): the chat
- * has schedule wiring and no Reply privately quote is attached (a quoted
- * reply sends now, never later). Pure.
- */
-export function scheduleOfferedFor(input: { wired: boolean; quoteAttached: boolean }): boolean {
-  return input.wired && !input.quoteAttached;
-}
-
-/** One picked file's upload while its draft is being scheduled. */
-export interface ScheduleUpload {
-  /** 0..1 while it uploads. */
-  progress: number;
-  /** Set once uploaded; a retry never uploads it again. */
-  versionId: string | null;
-  uploading: boolean;
-  failed: boolean;
-}
-
-export type ScheduleUploads = Readonly<Record<string, ScheduleUpload>>;
-
-const IDLE_UPLOAD: ScheduleUpload = {
-  progress: 0,
-  versionId: null,
-  uploading: false,
-  failed: false,
-};
-
-/** The picked files as the schedule upload takes them, with any version id already known. Pure. */
-export function scheduleFilesFor(
-  pending: readonly Pending[],
-  uploads: ScheduleUploads,
-): ScheduleFile[] {
-  return pending.map((item) => ({
-    key: item.id,
-    file: item.file,
-    versionId: uploads[item.id]?.versionId ?? null,
-  }));
-}
-
-/** One chip's upload state with `patch` applied. Pure. */
-export function withScheduleUpload(
-  uploads: ScheduleUploads,
-  key: string,
-  patch: Partial<ScheduleUpload>,
-): ScheduleUploads {
-  return { ...uploads, [key]: { ...(uploads[key] ?? IDLE_UPLOAD), ...patch } };
-}
-
-/** Counts of picked photos and other files (the schedule preview's "2 photos"). Pure. */
-export function pendingCounts(pending: readonly Pending[]): { photos: number; others: number } {
-  const photos = pending.filter((item) => item.file.type.startsWith('image/')).length;
-  return { photos, others: pending.length - photos };
-}
-
-/**
  * Library picks per chat for the session (they need no File, so they sit beside
  * the draft store), so leaving a chat and coming back keeps them like picked files.
  */
 const libraryDrafts = new Map<string, MessageAttachment[]>();
-
-/** Counts of picked photos and other files, library picks included. Pure. */
-export function draftFileCounts(
-  pending: readonly Pending[],
-  library: readonly MessageAttachment[],
-): { photos: number; others: number } {
-  const base = pendingCounts(pending);
-  const photos = library.filter((a) => classifyAttachment(a.mime) === 'image').length;
-  return { photos: base.photos + photos, others: base.others + library.length - photos };
-}
-
-/**
- * The schedule write's attachment args: the uploaded files' args, then the
- * library picks' (already uploaded), ids and meta built the same way. Pure.
- */
-export function withLibraryArgs(
-  uploaded: ReturnType<typeof scheduleAttachmentArgs>,
-  library: readonly MessageAttachment[],
-): ReturnType<typeof scheduleAttachmentArgs> {
-  const lib = scheduleAttachmentArgs(library);
-  return {
-    attachmentAssetIds: [...uploaded.attachmentAssetIds, ...lib.attachmentAssetIds],
-    attachmentMeta: { ...uploaded.attachmentMeta, ...lib.attachmentMeta },
-  };
-}
 
 /** A send draft with the library picks after its picked files. Pure. */
 export function withLibraryAttachments<T extends { attachments: MessageAttachment[] }>(
@@ -1044,82 +935,17 @@ export function withLibraryAttachments<T extends { attachments: MessageAttachmen
 /** What a tray tile opens: the share picker in a mode, or the library picker. */
 type TrayPicker = Exclude<PickerMode, 'inline'> | 'assets';
 
-/** The scheduled strip's rows before the thread paints: none. */
-const NO_SCHEDULED_ROWS: readonly ScheduledRow[] = [];
-
-/**
- * A picked file's chip thumbnail: its preview (or the file glyph), dimmed with
- * a thin progress bar along the bottom while it uploads for a schedule, the
- * same treatment as a sending bubble's tile.
- */
-function PendingThumb(props: {
-  previewUrl: string | null;
-  upload: ScheduleUpload | undefined;
-}): ReactElement {
-  const uploading = props.upload?.uploading === true;
-  const progress = Math.round(Math.min(Math.max(props.upload?.progress ?? 0, 0), 1) * 100);
+/** A picked file's chip thumbnail: its preview, or the file glyph. */
+function PendingThumb(props: { previewUrl: string | null }): ReactElement {
   return (
     <span className="relative flex h-full w-full items-center justify-center">
       {props.previewUrl !== null ? (
-        <img
-          src={props.previewUrl}
-          alt=""
-          className={cn('h-full w-full object-cover', uploading && 'opacity-50')}
-        />
+        <img src={props.previewUrl} alt="" className="h-full w-full object-cover" />
       ) : (
-        <IconFile size={ICON_SIZE.inline} className={cn(uploading && 'text-fg-3')} />
+        <IconFile size={ICON_SIZE.inline} />
       )}
-      {uploading ? (
-        <span
-          data-schedule-upload-bar={progress}
-          aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-1 bg-panel-3 lit-well"
-        >
-          <span className="block h-full bg-accent lit-fill" style={{ width: `${progress}%` }} />
-        </span>
-      ) : null}
     </span>
   );
-}
-
-/**
- * What the composer reads while a schedule uploads and writes: ui/Composer's
- * scheduling state shows it in the field, the round Send keeps its shape and
- * spins.
- */
-export const SCHEDULING_LABEL = 'Scheduling…';
-
-/** The toast after a draft was scheduled: "Scheduled for tomorrow 9:00 AM". Pure. */
-export function scheduledToast(sendAt: Date, now: Date): string {
-  return `Scheduled for ${inSentence(formatSendLabel(sendAt, now))}`;
-}
-
-/**
- * Swallow the click that trails a long-press (it lands on the Send button, or
- * on the sheet's backdrop that opened under the finger): neither may submit or
- * close anything. Armed until shortly after the finger lifts.
- */
-function swallowTrailingClick(): void {
-  if (typeof window === 'undefined') return;
-  let fallback: ReturnType<typeof setTimeout> | undefined;
-  const swallow = (event: Event): void => {
-    event.preventDefault();
-    event.stopPropagation();
-    done();
-  };
-  const afterUp = (): void => {
-    window.removeEventListener('pointerup', afterUp, true);
-    if (fallback !== undefined) clearTimeout(fallback);
-    fallback = setTimeout(done, 400);
-  };
-  function done(): void {
-    window.removeEventListener('click', swallow, true);
-    window.removeEventListener('pointerup', afterUp, true);
-    if (fallback !== undefined) clearTimeout(fallback);
-  }
-  window.addEventListener('click', swallow, true);
-  window.addEventListener('pointerup', afterUp, true);
-  fallback = setTimeout(done, 10_000);
 }
 
 /** The pointer fields a Send press reads; React's PointerEvent and MouseEvent satisfy it. */
@@ -1129,11 +955,6 @@ interface SendPressEvent {
   pointerType?: string;
   currentTarget?: unknown;
   preventDefault: () => void;
-}
-
-/** The hold-to-schedule press a Send press composes with (useLongPress handlers). */
-interface SendHoldPress {
-  onPointerDown: (event: SendPressEvent) => void;
 }
 
 interface SendPressHandlers {
@@ -1156,14 +977,12 @@ export function keepsComposerFocus(area: unknown, active: unknown): boolean {
  * Phone: a press on Send keeps the textarea focused, so the keyboard never
  * starts closing (and the composer never moves) before the click lands; one
  * tap sends. Only when the textarea has focus: a press with the keyboard down
- * never opens it. Spread after the hold handlers: its pointerdown still
- * starts the hold. Laptop gets nothing (focus unchanged).
+ * never opens it. Laptop gets nothing (focus unchanged).
  */
 export function sendPressHandlers(input: {
   enabled: boolean;
   textarea: () => unknown;
   activeElement: () => unknown;
-  hold: SendHoldPress | null;
   onPress: (keptFocus: boolean) => void;
 }): SendPressHandlers {
   if (!input.enabled) return {};
@@ -1175,7 +994,6 @@ export function sendPressHandlers(input: {
   return {
     onPointerDown(event) {
       input.onPress(keep(event));
-      input.hold?.onPointerDown(event);
     },
     onMouseDown(event) {
       keep(event);
@@ -1332,41 +1150,14 @@ export function Composer(props: ComposerProps): ReactElement {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Scheduling: the open chat's wiring (absent in the thread view), schedule
-  // mode's send time, which surface is open and what a pick does there.
-  const schedule = useChatSchedule(channelId);
   // Reply privately: this DM's pending quote, from the draft store (Reply
   // privately writes it before the DM opens, so the first frame holds it; no
-  // read). While it is attached, Schedule is hidden: the quote sends now.
+  // read).
   const privateReply = useSyncExternalStore(
     subscribeDrafts,
     () => (channelId !== undefined ? getDraft(channelId).privateReply : null),
     () => null,
   );
-  const scheduleOffered = scheduleOfferedFor({
-    wired: schedule !== null,
-    quoteAttached: privateReply !== null,
-  });
-  const [scheduleAt, setScheduleAt] = useState<Date | null>(null);
-  const [scheduleOpen, setScheduleOpen] = useState<{
-    purpose: 'draft' | 'mode';
-    preview: string | null;
-  } | null>(null);
-  const [scheduleBusy, setScheduleBusy] = useState(false);
-  const chevronRef = useRef<HTMLSpanElement>(null);
-  // Picked files upload before a schedule write: each chip's progress, its
-  // version id once uploaded (a retry skips it) and its failure. One run at a
-  // time; leaving the chat (or unmounting) aborts it, and nothing is scheduled.
-  const [scheduleUploads, setScheduleUploads] = useState<ScheduleUploads>({});
-  const scheduleRunRef = useRef<AbortController | null>(null);
-  useEffect(
-    () => () => {
-      scheduleRunRef.current?.abort();
-      scheduleRunRef.current = null;
-    },
-    [channelId],
-  );
-
   // Keep this chat's library picks for the session (a chat switch remounts).
   useEffect(() => {
     if (channelId === undefined) return;
@@ -1379,20 +1170,12 @@ export function Composer(props: ComposerProps): ReactElement {
     editing !== undefined
       ? !props.disabled && !editBusy
       : composerCanSend({
-          disabled: props.disabled || resolvingLinks || scheduleBusy,
+          disabled: props.disabled || resolvingLinks,
           text,
           fileCount: pending.length + library.length,
           sharedPostCount: sharedPosts.length,
           sharedBriefCount: sharedBriefs.length,
         });
-  const schedulable = canScheduleDraft({
-    scheduling: scheduleOffered,
-    editing: editing !== undefined,
-    canSend,
-  });
-  const scheduling = scheduleAt !== null && scheduleOffered && editing === undefined;
-  const schedulableRef = useRef(schedulable);
-  schedulableRef.current = schedulable;
 
   // Write the draft back as it changes (not while editing: the map keeps the
   // draft typed before the edit, which is what leaving the edit restores).
@@ -1465,7 +1248,6 @@ export function Composer(props: ComposerProps): ReactElement {
 
   function addFiles(list: FileList | null, imageOnly: boolean): void {
     if (list === null || list.length === 0 || props.uploadFile === undefined) return;
-    if (scheduleBusy) return;
     const accepted: Pending[] = [];
     for (const file of Array.from(list)) {
       // The Photo path is image-only; the File path takes the full allowlist.
@@ -1483,7 +1265,6 @@ export function Composer(props: ComposerProps): ReactElement {
   // Laptop emoji: inserted at the caret (a selection is replaced), which then
   // sits right after it.
   function insertEmoji(emoji: string): void {
-    if (scheduleBusy) return;
     const el = textareaRef.current;
     const at =
       el !== null
@@ -1502,14 +1283,6 @@ export function Composer(props: ComposerProps): ReactElement {
   }
 
   function removePending(id: string): void {
-    // Locked while a schedule uploads.
-    if (scheduleBusy) return;
-    setScheduleUploads((prev) => {
-      if (prev[id] === undefined) return prev;
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
     setPending((prev) => {
       const target = prev.find((item) => item.id === id);
       if (target?.previewUrl != null) URL.revokeObjectURL(target.previewUrl);
@@ -1525,13 +1298,10 @@ export function Composer(props: ComposerProps): ReactElement {
 
   /** Add confirmed library picks as already uploaded attachment chips. */
   function addLibrary(picks: LibraryAsset[]): void {
-    if (scheduleBusy) return;
     setLibrary((prev) => [...prev, ...libraryAttachments(picks, prev)]);
   }
 
   function removeLibrary(versionId: string): void {
-    // Locked while a schedule runs.
-    if (scheduleBusy) return;
     setLibrary((prev) => prev.filter((item) => item.assetId !== versionId));
   }
 
@@ -1569,7 +1339,6 @@ export function Composer(props: ComposerProps): ReactElement {
     // Nothing else about Enter changes.
     if (
       !held &&
-      !scheduleBusy &&
       isListNewlineKeydown({
         key: event.key,
         shiftKey: event.shiftKey,
@@ -1644,10 +1413,6 @@ export function Composer(props: ComposerProps): ReactElement {
       submitEdit(editing);
       return;
     }
-    if (scheduling) {
-      if (schedulable) void scheduleDraft(scheduleAt);
-      return;
-    }
     const body = sendBody(text);
     const draft: LinkCardDraft = {
       text: body,
@@ -1718,190 +1483,12 @@ export function Composer(props: ComposerProps): ReactElement {
     props.onCancelReply?.();
   }
 
-  /** Open the Schedule sheet (phone) or menu (laptop): a draft schedules at once on a pick. */
-  function openSchedule(): void {
-    if (schedule === null || !scheduleOffered) return;
-    setScheduleOpen(
-      schedulableRef.current
-        ? {
-            purpose: 'draft',
-            preview: schedulePreview(schedule.chatName, text, draftFileCounts(pending, library)),
-          }
-        : { purpose: 'mode', preview: null },
-    );
-  }
-
-  function pickSchedule(sendAt: Date): void {
-    const purpose = scheduleOpen?.purpose;
-    setScheduleOpen(null);
-    if (purpose === 'draft' && schedulableRef.current) void scheduleDraft(sendAt);
-    else setScheduleAt(sendAt);
-  }
-
-  // Schedule the draft with the same parts the normal send carries (pasted
-  // links resolved to cards the same way). Picked files upload first, all in
-  // parallel through the normal send's uploader; only when every one is up does
-  // chat_message_schedule run, carrying their version ids and attachment_meta
-  // built as the normal send builds it. Any failed upload schedules nothing:
-  // the files stay, the failed chips say so, and a retry uploads only those.
-  // Success clears the draft, the reply and schedule mode; a failure keeps
-  // everything and says why. Leaving the chat mid-run aborts the uploads and
-  // schedules nothing.
-  async function scheduleDraft(sendAt: Date): Promise<void> {
-    if (schedule === null || scheduleBusy || scheduleRunRef.current !== null) return;
-    const run = new AbortController();
-    scheduleRunRef.current = run;
-    setScheduleBusy(true);
-    const picked = pending;
-    const pickedLibrary = library;
-    const files = scheduleFilesFor(picked, scheduleUploads);
-    setScheduleUploads((prev) =>
-      files.reduce(
-        (next, item) =>
-          item.versionId !== null
-            ? next
-            : withScheduleUpload(next, item.key, { progress: 0, uploading: true, failed: false }),
-        prev,
-      ),
-    );
-    const body = sendBody(text);
-    const base: LinkCardDraft = {
-      text: body,
-      sharedPostIds: sharedPosts.map((post) => post.id),
-      sharedBriefIds: sharedBriefs.map((brief) => brief.id),
-    };
-    const replyToMessageId = props.reply?.quote.id ?? null;
-    let result: Awaited<ReturnType<typeof scheduleWithFiles<ScheduleOutcome | null>>>;
-    try {
-      result = await scheduleWithFiles<ScheduleOutcome | null>({
-        files,
-        upload: props.uploadFile,
-        signal: run.signal,
-        onProgress: (key, fraction) =>
-          setScheduleUploads((prev) => withScheduleUpload(prev, key, { progress: fraction })),
-        onUploaded: (key, versionId) =>
-          setScheduleUploads((prev) =>
-            withScheduleUpload(prev, key, { versionId, progress: 1, uploading: false }),
-          ),
-        write: async (uploadedArgs) => {
-          // The uploaded files' ids and meta, then the library picks' (already up).
-          const attachmentArgs = withLibraryArgs(uploadedArgs, pickedLibrary);
-          const origin = currentOrigin();
-          const draft =
-            workspaceId === null || !hasLinkCards(body, workspaceKey, origin)
-              ? base
-              : await withLinkCards(
-                  base,
-                  { workspaceKey, origin },
-                  {
-                    postIds: (numbers) => readPostIdsByNumbers(supabase, { workspaceId, numbers }),
-                    briefIds: (numbers) =>
-                      readBriefIdsByNumbers(supabase, { workspaceId, numbers }),
-                  },
-                ).catch(() => base);
-          // Left the chat while the links resolved: schedule nothing.
-          if (run.signal.aborted) return null;
-          return schedule
-            .schedule(
-              {
-                body: draft.text,
-                sharedPostIds: draft.sharedPostIds,
-                sharedBriefIds: draft.sharedBriefIds,
-                replyToMessageId,
-                ...attachmentArgs,
-              },
-              sendAt,
-            )
-            .catch((error: unknown) => {
-              logger.error('chat composer: schedule threw', { error: String(error) });
-              return { ok: false as const, copy: errorText('schedule', error) };
-            });
-        },
-      });
-    } catch (error) {
-      logger.error('chat composer: schedule threw', { error: String(error) });
-      result = { kind: 'written', result: { ok: false, copy: errorText('schedule', error) } };
-    } finally {
-      // Never left locked, whatever the run did.
-      if (scheduleRunRef.current === run) scheduleRunRef.current = null;
-      setScheduleBusy(false);
-    }
-    if (result.kind === 'aborted') return;
-    if (result.kind === 'upload-failed') {
-      logger.warn('chat composer: schedule upload failed', {
-        failed: result.failedKeys.length,
-        files: files.length,
-      });
-      setScheduleUploads((prev) =>
-        result.failedKeys.reduce(
-          (next, key) => withScheduleUpload(next, key, { uploading: false, failed: true }),
-          prev,
-        ),
-      );
-      // Keep the picked time: Send in schedule mode retries at it.
-      setScheduleAt(sendAt);
-      toast.show({ title: SCHEDULE_UPLOAD_FAILED_COPY });
-      return;
-    }
-    const outcome = result.result;
-    if (outcome === null) return;
-    if (outcome.ok) {
-      if (channelId !== undefined) {
-        clearDraft(channelId);
-        libraryDrafts.delete(channelId);
-      }
-      // The previews belong to no bubble: the message sends later from storage.
-      // After leaving the chat they are left alone: a composer that came back
-      // may already show them again from the draft.
-      if (!run.signal.aborted) {
-        for (const item of picked) {
-          if (item.previewUrl !== null) URL.revokeObjectURL(item.previewUrl);
-        }
-      }
-    }
-    // Left the chat while the write ran: this composer is gone, but the
-    // message is scheduled, so the app-level toast still says so.
-    if (run.signal.aborted) {
-      if (outcome.ok) toast.show({ title: scheduledToast(sendAt, new Date()) });
-      return;
-    }
-    if (!outcome.ok) {
-      if (outcome.copy !== null) toast.show({ title: outcome.copy });
-      return;
-    }
-    setText('');
-    setCardText('');
-    setDismissedCardUrl(null);
-    setPicks([]);
-    setCaret(0);
-    setPending([]);
-    setLibrary([]);
-    setScheduleUploads({});
-    setSharedPosts([]);
-    setSharedBriefs([]);
-    setScheduleAt(null);
-    props.onCancelReply?.();
-    toast.show({ title: scheduledToast(sendAt, new Date()) });
-  }
-
-  // Phone: a hold on Send opens the sheet; a tap still sends. The trailing
-  // click is swallowed so the hold never also submits.
-  const sendHold = useLongPress(() => {
-    sendHold.clearClickSuppression();
-    if (!schedulableRef.current) return;
-    swallowTrailingClick();
-    openSchedule();
-  });
-  const holdToSchedule = layout === 'touch' && schedulable;
-  // Scheduling keeps the chevron (disabled) so the send slot keeps its width.
-  const showChevron = layout === 'laptop' && (schedulable || scheduleBusy);
   // Phone: Send keeps the keyboard up; see sendPressHandlers.
   const sendKeptFocusRef = useRef(false);
   const sendPress = sendPressHandlers({
     enabled: layout === 'touch',
     textarea: () => textareaRef.current,
     activeElement: () => (typeof document === 'undefined' ? null : document.activeElement),
-    hold: holdToSchedule ? sendHold.handlers : null,
     onPress: (kept) => {
       sendKeptFocusRef.current = kept;
     },
@@ -2103,9 +1690,7 @@ export function Composer(props: ComposerProps): ReactElement {
     about: props.about !== undefined,
   });
 
-  const showMic =
-    !scheduling &&
-    shouldShowMic({
+  const showMic = shouldShowMic({
       hasUpload: props.uploadFile !== undefined && editing === undefined,
       disabled: props.disabled,
       text,
@@ -2115,36 +1700,10 @@ export function Composer(props: ComposerProps): ReactElement {
       voiceBusy,
     });
 
-  const scheduleSurface =
-    scheduleOpen !== null && layout === 'laptop' ? (
-      <ScheduleMenu
-        open
-        onClose={() => setScheduleOpen(null)}
-        preview={scheduleOpen.preview}
-        onPick={pickSchedule}
-        anchorRef={chevronRef}
-      />
-    ) : schedule !== null && layout === 'touch' ? (
-      <ScheduleSheet
-        open={scheduleOpen !== null}
-        onClose={() => setScheduleOpen(null)}
-        preview={scheduleOpen?.preview ?? null}
-        onPick={pickSchedule}
-      />
-    ) : null;
-
   const draftCardUrl = draftCardUrlFor(cardText, dismissedCardUrl, editing !== undefined);
 
   return (
     <>
-      {schedule !== null ? (
-        <ScheduledStrip
-          rows={schedule.stripVisible ? schedule.rows : NO_SCHEDULED_ROWS}
-          onOpen={schedule.openList}
-          channelId={schedule.channelId}
-          onChanged={schedule.refetch}
-        />
-      ) : null}
       <form
         ref={formRef}
         onSubmit={submit}
@@ -2201,16 +1760,9 @@ export function Composer(props: ComposerProps): ReactElement {
             {pending.map((item) => (
               <PendingChip
                 key={item.id}
-                thumb={
-                  <PendingThumb previewUrl={item.previewUrl} upload={scheduleUploads[item.id]} />
-                }
+                thumb={<PendingThumb previewUrl={item.previewUrl} />}
                 title={item.file.name}
-                meta={
-                  scheduleUploads[item.id]?.failed === true
-                    ? "Couldn't upload"
-                    : fileExtension(item.file.name)
-                }
-                error={scheduleUploads[item.id]?.failed === true}
+                meta={fileExtension(item.file.name)}
                 onRemove={() => removePending(item.id)}
               />
             ))}
@@ -2250,13 +1802,6 @@ export function Composer(props: ComposerProps): ReactElement {
             url={draftCardUrl}
             size="draft"
             onRemove={() => setDismissedCardUrl(draftCardUrl)}
-          />
-        ) : null}
-
-        {scheduling ? (
-          <ScheduleModeStrip
-            label={inSentence(formatSendLabel(scheduleAt, new Date()))}
-            onStop={() => setScheduleAt(null)}
           />
         ) : null}
 
@@ -2347,9 +1892,7 @@ export function Composer(props: ComposerProps): ReactElement {
           state={
             recorder.recording
               ? { kind: 'recording', elapsed: recordingElapsed(recorder.seconds) }
-              : scheduleBusy
-                ? { kind: 'scheduling' }
-                : voiceBusy || editBusy
+              : voiceBusy || editBusy
                   ? { kind: 'sending' }
                   : { kind: 'idle' }
           }
@@ -2369,16 +1912,13 @@ export function Composer(props: ComposerProps): ReactElement {
             canAttach ? (
               <ComposerTray
                 layout={layout}
-                schedule={scheduleOfferedFor({
-                  wired: props.noSchedule !== true,
-                  quoteAttached: privateReply !== null,
-                })}
+                notes={props.notes === true}
                 draft={draftEnabled}
                 plan={planEnabled}
                 onShownChange={setTrayShown}
                 onPick={(id) => {
-                  // A schedule or a voice note on its way: the tray opens nothing.
-                  if (scheduleBusy || voiceBusy) return;
+                  // A voice note on its way: the tray opens nothing.
+                  if (voiceBusy) return;
                   switch (id) {
                     case 'photos':
                       photoInputRef.current?.click();
@@ -2401,9 +1941,6 @@ export function Composer(props: ComposerProps): ReactElement {
                     case 'plan':
                       if (planEnabled) props.onOpenPlanCompose?.();
                       return;
-                    case 'schedule':
-                      openSchedule();
-                      return;
                   }
                 }}
               />
@@ -2419,7 +1956,7 @@ export function Composer(props: ComposerProps): ReactElement {
               // A chat message, not an AutoFill target: off stops the iOS AutoFill bar.
               autoComplete="off"
               value={held ? resolveMentionText(text, nameOf) : text}
-              readOnly={held || scheduleBusy || voiceBusy}
+              readOnly={held || voiceBusy}
               onChange={(event) => {
                 setText(event.target.value);
                 setMentionActive(0);
@@ -2485,75 +2022,27 @@ export function Composer(props: ComposerProps): ReactElement {
                 <IconMic size={ICON_SIZE.control} />
               </Button>
             ) : (
-              <div
-                className={cn(
-                  'flex shrink-0',
-                  // Split send/schedule: one lit button on the shared wrapper.
-                  showChevron && 'lit-btn-primary rounded-full',
-                )}
-              >
+              <div className="flex shrink-0">
                 <Button
                   type="submit"
                   variant="primary"
                   shape="round"
-                  aria-label={
-                    editing !== undefined
-                      ? 'Save edit'
-                      : scheduleBusy
-                        ? 'Scheduling'
-                        : scheduling
-                          ? 'Schedule message'
-                          : 'Send'
-                  }
-                  // Saving an edit or scheduling: the spinner in the send slot.
-                  busy={editBusy || scheduleBusy}
-                  className={cn(
-                    'shrink-0',
-                    showChevron && 'rounded-r-none',
-                    holdToSchedule && NO_TOUCH_SELECT,
-                  )}
-                  disabled={!canSend || (scheduling && !schedulable)}
-                  {...(holdToSchedule ? sendHold.handlers : {})}
+                  aria-label={editing !== undefined ? 'Save edit' : 'Send'}
+                  // Saving an edit: the spinner in the send slot.
+                  busy={editBusy}
+                  className="shrink-0"
+                  disabled={!canSend}
                   {...sendPress}
-                  onClick={(event) => {
+                  onClick={() => {
                     const keptAtPress = sendKeptFocusRef.current;
                     sendKeptFocusRef.current = false;
-                    if (sendHold.consumeClickSuppression()) event.preventDefault();
-                    else if (layout === 'touch') {
+                    if (layout === 'touch') {
                       refocusComposer(textareaRef.current, keptAtPress, document.activeElement);
                     }
                   }}
-                  onContextMenu={holdToSchedule ? (event) => event.preventDefault() : undefined}
                 >
-                  {scheduling ? (
-                    <IconCalendarClock size={ICON_SIZE.control} />
-                  ) : (
-                    <IconSend size={ICON_SIZE.control} />
-                  )}
+                  <IconSend size={ICON_SIZE.control} />
                 </Button>
-                {showChevron ? (
-                  <>
-                    <span aria-hidden="true" className="w-px shrink-0 self-stretch bg-panel" />
-                    <span ref={chevronRef} className="flex">
-                      <Button
-                        type="button"
-                        variant="primary"
-                        shape="round"
-                        aria-label="Schedule options"
-                        aria-haspopup="dialog"
-                        aria-expanded={scheduleOpen !== null}
-                        data-schedule-chevron=""
-                        disabled={scheduleBusy}
-                        className="shrink-0 rounded-l-none"
-                        onClick={() =>
-                          scheduleOpen !== null ? setScheduleOpen(null) : openSchedule()
-                        }
-                      >
-                        <IconChevronDown size={ICON_SIZE.nav} />
-                      </Button>
-                    </span>
-                  </>
-                ) : null}
               </div>
             )
           }
@@ -2598,7 +2087,6 @@ export function Composer(props: ComposerProps): ReactElement {
           onClose={() => setPicker(null)}
           onConfirm={addLibrary}
         />
-        {scheduleSurface}
       </form>
     </>
   );

@@ -1,9 +1,9 @@
 // Notifications: Activity and the chat bell on one feed. The chips (Mentions
-// takes chat mentions, Plans the six plan alerts, reminders / scheduled sends /
-// task alerts only under All and Unread), Mark all read (one inbox_mark_all_read
-// call on All; a failed send stays), every former bell tap rule, Retry on
-// a failed send, the alert cards, and the batched enrichment (one IN read per
-// table, never per row).
+// takes chat mentions, Plans the six plan alerts, task alerts only under All
+// and Unread), Mark all read (one inbox_mark_all_read call on All), every
+// former bell tap rule, the alert cards, and the batched enrichment (one IN
+// read per table, never per row). Reminders and scheduled sends are retired:
+// their rows map to no alert and the feed read leaves them out.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
@@ -35,10 +35,8 @@ import {
   mapEntry,
   EMPTY_LINES,
   markAllTargets,
-  unreadCount,
   openAction,
   opensNothing,
-  retryFailedSend,
   type ActivityItem,
   type ActivityState,
 } from '@/components/pages/activity/data';
@@ -77,37 +75,6 @@ function row(over: Partial<InboxEntryRow>): InboxEntryRow {
 
 const item = (over: Partial<InboxEntryRow>): ActivityItem => mapEntry(row(over));
 
-const reminder = (over: Partial<InboxEntryRow> = {}) =>
-  item({
-    id: 'rem',
-    event_type: 'reminder',
-    entity_type: 'chat_channel',
-    entity_id: 'c1',
-    scope: 'people',
-    payload: { message_id: 'm1', reminder_id: 'r1' },
-    ...over,
-  });
-const sent = (over: Partial<InboxEntryRow> = {}) =>
-  item({
-    id: 'sent',
-    event_type: 'scheduled_sent',
-    entity_type: 'chat_channel',
-    entity_id: 'c1',
-    scope: 'groups',
-    payload: { scheduled_id: 's2', message_id: 'm2' },
-    ...over,
-  });
-const failed = (over: Partial<InboxEntryRow> = {}) =>
-  item({
-    id: 'fail',
-    event_type: 'scheduled_failed',
-    entity_type: 'chat_channel',
-    entity_id: 'c1',
-    scope: 'groups',
-    tier: 'urgent',
-    payload: { scheduled_id: 's1', reason: 'not a member of this chat' },
-    ...over,
-  });
 const chatMention = (over: Partial<InboxEntryRow> = {}) =>
   item({
     id: 'cm',
@@ -169,9 +136,6 @@ const PLAN_TYPES = [
 ];
 
 const feed: ActivityItem[] = [
-  reminder(),
-  sent(),
-  failed(),
   chatMention(),
   postMention(),
   ...['plan_opened', 'plan_deleted', 'plan_date_changed', 'plan_updated'].map((t) => plan(t)),
@@ -225,37 +189,32 @@ describe('chips', () => {
     expect(ids('plans')).toEqual(PLAN_TYPES);
   });
 
-  it('reminders, scheduled sends and task alerts show only under All and Unread', () => {
-    const alertIds = ['rem', 'sent', 'fail', 'task', 'due'];
+  it('task alerts show only under All and Unread', () => {
+    const alertIds = ['task', 'due'];
     for (const id of alertIds) {
       expect(ids('all')).toContain(id);
       expect(ids('unread')).toContain(id);
-      for (const state of ['mentions', 'briefs', 'plans', 'upcoming', 'snoozed'] as const) {
+      for (const state of ['mentions', 'briefs', 'plans', 'snoozed'] as const) {
         expect(ids(state)).not.toContain(id);
       }
     }
   });
 
   it('a snoozed alert moves to Snoozed', () => {
-    const snoozed = [reminder({ snoozed_until: LATER }), task({ snoozed_until: LATER })];
-    expect(ids('snoozed', snoozed)).toEqual(['rem', 'task']);
+    const snoozed = [
+      plan('plan_opened', { snoozed_until: LATER }),
+      task({ snoozed_until: LATER }),
+    ];
+    expect(ids('snoozed', snoozed)).toEqual(['plan_opened', 'task']);
     expect(ids('all', snoozed)).toEqual([]);
     expect(ids('unread', snoozed)).toEqual([]);
   });
 });
 
 describe('Mark all read', () => {
-  it('targets a failed scheduled send on All and Unread (the proc marks it read too)', () => {
-    for (const state of ['all', 'unread'] as const) {
-      const targets = markAllTargets(feed, state, NOW).map((i) => i.id);
-      expect(targets).toContain('fail');
-      expect(targets).toContain('rem');
-    }
-  });
-
   it('the All chip targets every unread row of every type (one proc call covers them)', () => {
     const targets = markAllTargets(feed, 'all', NOW).map((i) => i.id);
-    for (const id of ['rem', 'sent', 'fail', 'cm', 'pm', ...PLAN_TYPES, 'task', 'due', 'comment']) {
+    for (const id of ['cm', 'pm', ...PLAN_TYPES, 'task', 'due', 'comment']) {
       expect(targets).toContain(id);
     }
   });
@@ -288,39 +247,15 @@ describe('Mark all read', () => {
     expect(page).not.toContain('ActionMenu');
     expect(count(page, 'onClick={handleMarkAll}')).toBe(1);
   });
-
-  it('Upcoming has no inbox rows: nothing to mark, nothing counted', () => {
-    expect(ids('upcoming')).toEqual([]);
-    expect(markAllTargets(feed, 'upcoming', NOW)).toEqual([]);
-    // The unread badge counts inbox rows only; the Upcoming chip adds none.
-    expect(unreadCount(feed, NOW)).toBe(feed.length);
-  });
 });
 
 describe('taps: every former bell row keeps its behaviour', () => {
-  it('a reminder opens the chat at the message and does NOT mark it read', () => {
-    expect(openAction(reminder())).toEqual({
-      href: '/chat?channel=c1&message=m1',
-      markRead: false,
-      toast: null,
-    });
-  });
-
-  it('a chat mention and a sent row mark read, then open the message', () => {
+  it('a chat mention marks read, then opens the message', () => {
     expect(openAction(chatMention())).toEqual({
       href: '/chat?channel=c1&message=m9',
       markRead: true,
       toast: null,
     });
-    expect(openAction(sent())).toEqual({
-      href: '/chat?channel=c1&message=m2',
-      markRead: true,
-      toast: null,
-    });
-    // An older sent row without its message id opens through the scheduled id.
-    expect(openAction(sent({ payload: { scheduled_id: 's2' } })).href).toBe(
-      '/chat?channel=c1&message=s2',
-    );
   });
 
   it('a plan alert marks read, then opens /plan/{id} with ?item= (not when the item left)', () => {
@@ -361,134 +296,49 @@ describe('taps: every former bell row keeps its behaviour', () => {
     expect(openAction(batch).href).toBe(`/chat?channel=c1&task=${TASKS_SHEET_ONLY}`);
   });
 
-  it('a failed send has no tap (Retry and Edit instead); a deleted post neither', () => {
-    expect(opensNothing(failed())).toBe(true);
-    expect(openAction(failed()).href).toBeNull();
+  it('a deleted post has no tap; every alert keeps one', () => {
     expect(opensNothing(item({ event_type: 'post_deleted' }))).toBe(true);
-    expect(opensNothing(reminder())).toBe(false);
+    expect(opensNothing(task())).toBe(false);
     expect(opensNothing(plan('plan_deleted'))).toBe(false);
   });
 });
 
-describe('Retry on a failed send', () => {
-  function recorder(error: { message: string } | null = null) {
-    const rpcs: { name: string; args: Record<string, unknown> }[] = [];
-    const client = {
-      rpc(name: string, args: Record<string, unknown>) {
-        rpcs.push({ name, args });
-        const result = Promise.resolve({ data: error === null ? { id: 'x' } : null, error });
-        return Object.assign(result, { abortSignal: () => result });
-      },
-    } as unknown as Parameters<typeof retryFailedSend>[0];
-    return { client, rpcs };
-  }
-
-  it('calls chat_scheduled_send_now on the scheduled id with the trace id', async () => {
-    const { client, rpcs } = recorder();
-    expect(await retryFailedSend(client, failed(), 'w1', 'trace-x')).toEqual({ kind: 'sent' });
-    expect(rpcs).toEqual([
-      { name: 'chat_scheduled_send_now', args: { p_id: 's1', p_trace_id: 'trace-x' } },
-    ]);
-  });
-
-  it('a row resolved elsewhere (stale) only marks its entry read', async () => {
-    const { client, rpcs } = recorder();
-    const stale = failed();
-    if (stale.alert != null) stale.alert.stale = true;
-    expect(await retryFailedSend(client, stale, 'w1', 'trace-y')).toEqual({ kind: 'cleared' });
-    expect(rpcs).toEqual([
-      {
-        name: 'inbox_mark_read',
-        args: {
-          p_entry_id: 'fail',
-          p_workspace_id: 'w1',
-          p_created_at: '2026-10-20T11:00:00.000Z',
-          p_trace_id: 'trace-y',
-        },
-      },
-    ]);
-  });
-
-  it('a refusal toasts the action copy; "not found" stays silent', async () => {
-    const refused = await retryFailedSend(
-      recorder({ message: 'not a member of this chat' }).client,
-      failed(),
-      'w1',
-      't',
-    );
-    expect(refused).toMatchObject({
-      kind: 'failed',
-      copy: "Couldn't update that activity. Try again.",
-    });
-    const gone = await retryFailedSend(
-      recorder({ message: 'scheduled message not found' }).client,
-      failed(),
-      'w1',
-      't',
-    );
-    expect(gone).toMatchObject({ kind: 'failed', copy: null });
+describe('retired rows: reminders and scheduled sends', () => {
+  it('map to no alert card (the feed read leaves them out)', () => {
+    for (const eventType of ['reminder', 'scheduled_sent', 'scheduled_failed']) {
+      const retired = item({
+        id: eventType,
+        event_type: eventType,
+        entity_type: 'chat_channel',
+        entity_id: 'c1',
+        payload: { message_id: 'm1', scheduled_id: 's1' },
+      });
+      expect(retired.alert ?? null, eventType).toBeNull();
+    }
   });
 });
 
 describe('alert wording (the bell lines on Activity cards)', () => {
   it('top line: the actor, else the alert label', () => {
-    const r = reminder();
-    if (r.alert == null) throw new Error('fixture');
-    expect(alertTopLine(r, r.alert)).toBe('Reminder');
-    expect(alertTopLine({ actorName: 'Priya' }, r.alert)).toBe('Priya');
-    const s = sent();
-    if (s.alert == null) throw new Error('fixture');
-    expect(alertTopLine(s, s.alert)).toBe('Scheduled');
+    const t = task();
+    if (t.alert == null) throw new Error('fixture');
+    expect(alertTopLine(t, t.alert)).toBe('Tasks');
+    expect(alertTopLine({ actorName: 'Priya' }, t.alert)).toBe('Priya');
+    const p = plan('plan_opened');
+    if (p.alert == null) throw new Error('fixture');
+    expect(alertTopLine(p, p.alert)).toBe('Plan');
   });
 
   it('titles and bodies', () => {
-    const s = sent();
-    const f = failed();
     const p = { ...plan('plan_opened'), actorName: 'Priya' };
     const t = { ...task(), actorName: 'Leo' };
-    if (s.alert == null || f.alert == null || p.alert == null || t.alert == null) {
-      throw new Error('fixture');
-    }
-    // An unread chat: chatDisplayName's fallback, never "Chat".
-    expect(alertTitle(s, s.alert, 'agency')).toBe(
-      'Your scheduled message was sent to Direct message',
-    );
-    expect(
-      alertTitle(s, { ...s.alert, chatType: 'group', chatName: 'Launch crew' }, 'agency'),
-    ).toBe('Your scheduled message was sent to Launch crew');
-    expect(alertTitle(s, { ...s.alert, chatType: 'dm', chatName: 'Priya Shah' }, 'agency')).toBe(
-      'Your scheduled message was sent to Priya Shah',
-    );
-    expect(alertTitle(s, { ...s.alert, chatType: 'notes' }, 'agency')).toBe(
-      'Your scheduled message was sent to Personal notes',
-    );
-    expect(alertTitle(s, { ...s.alert, chatType: 'group' }, 'agency')).toBe(
-      'Your scheduled message was sent to Group',
-    );
-    // A failed send: the lead is the title, its reason the body (never its preview).
-    expect(alertTitle(f, f.alert, 'agency')).toBe(
-      "Couldn't send your scheduled message to Direct message.",
-    );
-    expect(alertTitle(f, { ...f.alert, chatType: 'dm', chatName: 'Priya Shah' }, 'agency')).toBe(
-      "Couldn't send your scheduled message to Priya Shah.",
-    );
-    expect(
-      alertTitle(f, { ...f.alert, chatType: 'group', chatName: 'Launch crew' }, 'agency'),
-    ).toBe("Couldn't send your scheduled message to Launch crew.");
-    expect(alertTitle(f, { ...f.alert, chatType: 'notes' }, 'agency')).toBe(
-      "Couldn't send your scheduled message to Personal notes.",
-    );
-    expect(alertBody(f.alert)).toBe("You're no longer in this chat");
-    expect(alertBody({ ...f.alert, preview: 'See you at 5' })).toBe(
-      "You're no longer in this chat",
-    );
-    expect(alertBody({ ...s.alert, preview: 'See you at 5' })).toBe('See you at 5');
+    if (p.alert == null || t.alert == null) throw new Error('fixture');
     expect(alertTitle(p, p.alert, 'client')).toBe('Priya shared Week of 12 Oct with you');
     expect(alertTitle(p, p.alert, 'agency')).toBe('Priya opened Week of 12 Oct for approvers');
     expect(alertTitle(t, t.alert, 'agency')).toBe(`Leo · added ${String.fromCharCode(35)}3 Hook`);
     expect(alertBody(t.alert)).toBe('Chat');
     expect(alertBody({ ...p.alert, itemTitle: 'Carousel' })).toBe('Carousel');
-    expect(alertBody(s.alert)).toBeNull();
+    expect(alertBody(p.alert)).toBeNull();
   });
 });
 
@@ -511,76 +361,8 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
     );
   }
 
-  it('a failed send: the lead in bad, the reason, Retry and Edit in its ⋯, and no tap', () => {
-    const html = card([failed()], { onRetry: () => {}, onEdit: () => {} });
-    expect(html).toContain('data-activity-event="scheduled_failed"');
-    expect(html).toMatch(
-      /class="text-bad">Couldn&#x27;t send your scheduled message to Direct message\.</,
-    );
-    expect(html).not.toContain('Not sent');
-    // The reason is the preview line, below the title, exactly once.
-    expect(html).toMatch(
-      /data-list-card-preview="" data-activity-preview="" class="[^"]*line-clamp-2[^"]*">You&#x27;re no longer in this chat</,
-    );
-    expect(html.split('no longer in this chat')).toHaveLength(2);
-    // Edit and Retry are rows of the card's ⋯ (failedSendItems), never buttons on the card,
-    // so every card keeps the one ListCard height.
-    expect(html).not.toContain('data-activity-action');
-    expect(html).not.toContain('data-activity-lead');
-    expect(html).toContain('data-activity-alert-icon="failed"');
-  });
-
-  it('a failed card body is its reason, never the message preview; a sent card keeps it', () => {
-    const f = failed();
-    const s = sent();
-    if (f.alert == null || s.alert == null) throw new Error('fixture');
-    const failedHtml = card([{ ...f, alert: { ...f.alert, preview: 'See you at 5' } }], {
-      onRetry: () => {},
-      onEdit: () => {},
-    });
-    expect(failedHtml).not.toContain('See you at 5');
-    expect(failedHtml.split('no longer in this chat')).toHaveLength(2);
-    const sentHtml = card([{ ...s, alert: { ...s.alert, preview: 'See you at 5' } }]);
-    expect(sentHtml).toContain('See you at 5');
-    expect(sentHtml).not.toContain('no longer in this chat');
-  });
-
-  it('scheduled sends: the title names the receiver on the one title line', () => {
-    const named = (i: ActivityItem): ActivityItem =>
-      i.alert == null ? i : { ...i, alert: { ...i.alert, chatType: 'dm', chatName: 'Priya Shah' } };
-    const sentHtml = card([named(sent())]);
-    const failedHtml = card([named(failed())]);
-    expect(sentHtml).toContain('Your scheduled message was sent to Priya Shah');
-    expect(failedHtml).toContain('Couldn&#x27;t send your scheduled message to Priya Shah.');
-    for (const html of [sentHtml, failedHtml, card([reminder()])]) {
-      expect(html).toMatch(/data-list-card-title="" class="[^"]*truncate/);
-      expect(html).not.toContain('Sent in');
-      expect(html).not.toMatch(/sent to Chat\b|message to Chat\b/);
-    }
-  });
-
-  it('scheduled sends never read "Sent in Chat" or name the bare "Chat", read or unread', () => {
-    for (const i of [sent(), failed(), sent({ scope: 'people' }), failed({ scope: 'people' })]) {
-      const html = card([i], { onRetry: () => {}, onEdit: () => {} });
-      expect(html).not.toContain('Sent in Chat');
-      expect(html).not.toMatch(/(sent|message) to Chat\b/);
-    }
-  });
-
-  it('footer: scheduled sends show the privacy chip in place of the scope tag', () => {
-    for (const i of [sent({ scope: 'people' }), failed({ scope: 'people' }), sent(), failed()]) {
-      const html = card([i], { onRetry: () => {}, onEdit: () => {} });
-      expect(html).toContain('data-activity-only-you');
-      expect(html).toContain('Only you got this alert');
-      expect(html).not.toContain('data-activity-scope-tag');
-      expect(html).not.toContain('>People<');
-      expect(html).not.toContain('>Groups<');
-    }
-  });
-
-  it('footer: every other kind names its kind in the one tag and has no privacy chip', () => {
+  it('footer: every kind names its kind in the one tag', () => {
     const others: [ActivityItem, string][] = [
-      [reminder(), 'Reminder'],
       [taskDue(), 'Reminder'],
       [plan('plan_opened', { scope: 'posts' }), 'Plan'],
       [item({ id: 'post', event_type: 'stage_change', scope: 'posts' }), 'Post'],
@@ -596,21 +378,19 @@ describe('alert cards: Activity cards, not the old bell panel', () => {
       expect(html, i.eventType).toMatch(
         new RegExp(`data-activity-scope-tag=""[^>]*>[^]*?">${kind}<`),
       );
-      expect(html, i.eventType).not.toContain('data-activity-only-you');
-      expect(html, i.eventType).not.toContain('Only you got this alert');
     }
     // A chat task change is none of those kinds: no tag at all.
     expect(card([task()])).not.toContain('data-list-card-tag');
   });
 
-  it('a reminder: the card frame, the menu, the unread dot and its icon', () => {
-    const html = card([reminder()]);
-    expect(html).toContain('data-activity-event="reminder"');
+  it('a missed task due time: the card frame, the menu, the unread dot and its icon', () => {
+    const html = card([taskDue()]);
+    expect(html).toContain('data-activity-event="task_due"');
     expect(html).toContain('data-list-card=""');
     expect(html).toContain('data-activity-menu');
     expect(html).toContain('data-list-card-unread');
-    expect(html).toContain('data-activity-alert-icon="reminder"');
-    // The one tag names the kind: a reminder reads Reminder.
+    expect(html).toContain('data-activity-alert-icon="task"');
+    // The one tag names the kind: a missed due time reads Reminder.
     expect(html).toContain('>Reminder<');
     expect(html).not.toContain('data-activity-action');
   });
@@ -727,29 +507,6 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
 
   it('one IN read per table for every alert on the page; fields resolved', async () => {
     const rows = [
-      ...Array.from({ length: 3 }, (_, i) =>
-        raw({
-          id: `rem${i}`,
-          event_type: 'reminder',
-          entity_type: 'chat_channel',
-          entity_id: 'g-chan',
-          payload: { message_id: `m${i}` },
-        }),
-      ),
-      raw({
-        id: 'sent',
-        event_type: 'scheduled_sent',
-        entity_type: 'chat_channel',
-        entity_id: 'dm-chan',
-        payload: { scheduled_id: 's2', message_id: 'm9' },
-      }),
-      raw({
-        id: 'fail',
-        event_type: 'scheduled_failed',
-        entity_type: 'chat_channel',
-        entity_id: 'g-chan',
-        payload: { scheduled_id: 's1' },
-      }),
       raw({
         id: 'moved',
         event_type: 'plan_date_changed',
@@ -769,63 +526,18 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
     ];
     const { client, ins } = recordingClient({
       inbox_entries: ok(rows),
-      chat_channels: ok([
-        { channel_id: 'g-chan', channel_type: 'group', entity_id: 'g1' },
-        {
-          channel_id: 'dm-chan',
-          channel_type: 'dm',
-          entity_id: null,
-          dm_user_a: 'u1',
-          dm_user_b: 'u-priya',
-        },
-      ]),
+      chat_channels: ok([{ channel_id: 'g-chan', channel_type: 'group', entity_id: 'g1' }]),
       groups: ok([{ id: 'g1', name: 'Launch crew' }]),
-      chat_messages: ok([
-        { id: 'm0', channel_id: 'g-chan', sender_user_id: 'u-ana', body: 'Ship the reel' },
-        { id: 'm9', channel_id: 'dm-chan', sender_user_id: 'u1', body: 'See you at 5' },
-      ]),
-      chat_scheduled_messages: ok([
-        { id: 's1', status: 'failed', failure_reason: 'exceeds 5000', body: 'Long one' },
-      ]),
       plans: ok([{ id: 'plan2', title: 'Launch' }]),
       plan_items: ok([{ id: 'i2', plan_id: 'plan2', kind: 'post', title: null, post_id: 'post2' }]),
       posts: ok([{ id: 'post2', title: 'Carousel', format: 'text', caption: null, number: 2 }]),
-      users: ok([
-        { id: 'u-ana', display_name: 'Ana', avatar_url: null },
-        { id: 'u-cy', display_name: 'Cy', avatar_url: null },
-        { id: 'u-priya', display_name: 'Priya Shah', avatar_url: null },
-      ]),
+      users: ok([{ id: 'u-cy', display_name: 'Cy', avatar_url: null }]),
     });
     const res = await fetchActivityEntries(client, 'w1');
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     const byId = new Map(res.data.map((i) => [i.id, i]));
 
-    const rem = byId.get('rem0');
-    expect(rem?.actorName).toBe('Ana');
-    expect(rem?.alert).toMatchObject({ chatName: 'Launch crew', preview: 'Ship the reel' });
-    // A message that did not load still reads, never blank.
-    expect(byId.get('rem1')?.alert?.preview).toBe('Message');
-    // A scheduled send's direct chat names the other person (not the viewer, u1)
-    // from the one batched people read; a group send names the group.
-    const sentRow = byId.get('sent');
-    expect(sentRow?.alert).toMatchObject({
-      chatType: 'dm',
-      chatName: 'Priya Shah',
-      preview: 'See you at 5',
-    });
-    if (sentRow?.alert == null) throw new Error('fixture');
-    expect(alertTitle(sentRow, sentRow.alert, 'agency')).toBe(
-      'Your scheduled message was sent to Priya Shah',
-    );
-    const failRow = byId.get('fail');
-    if (failRow?.alert == null) throw new Error('fixture');
-    expect(alertTitle(failRow, failRow.alert, 'agency')).toBe(
-      "Couldn't send your scheduled message to Launch crew.",
-    );
-    // The reason comes from the scheduled row; the failed card shows no preview.
-    expect(failRow.alert).toMatchObject({ reason: 'exceeds 5000', preview: null, stale: false });
-    expect(alertBody(failRow.alert)).toBe('The message is too long');
     const moved = byId.get('moved');
     expect(moved?.actorName).toBe('Cy');
     expect(moved?.alert).toMatchObject({ planTitle: 'Launch', itemTitle: 'Carousel' });
@@ -835,63 +547,13 @@ describe('fetchActivityEntries: alert enrichment is batched', () => {
     expect(alertBody(t.alert)).toBe('Launch crew');
 
     const perTable = (table: string) => ins.filter((c) => c.table === table);
-    for (const table of [
-      'chat_channels',
-      'chat_messages',
-      'chat_scheduled_messages',
-      'groups',
-      'plans',
-      'plan_items',
-      'posts',
-    ]) {
+    for (const table of ['chat_channels', 'groups', 'plans', 'plan_items', 'posts']) {
       expect(perTable(table), table).toHaveLength(1);
     }
-    expect(perTable('chat_channels')[0]?.vals.sort()).toEqual(['dm-chan', 'g-chan']);
-    expect(perTable('chat_messages')[0]?.vals.sort()).toEqual(['m0', 'm1', 'm2', 'm9']);
-    expect(perTable('chat_scheduled_messages')[0]?.vals).toEqual(['s1']);
-  });
-
-  it('a failed-rows read that fails never marks a failed send stale', async () => {
-    const { client } = recordingClient({
-      inbox_entries: ok([
-        raw({
-          id: 'fail',
-          event_type: 'scheduled_failed',
-          entity_type: 'chat_channel',
-          entity_id: 'c1',
-          payload: { scheduled_id: 's1', reason: 'not a member of this chat' },
-        }),
-      ]),
-      chat_scheduled_messages: { data: null, error: { message: 'boom' } },
-    });
-    const res = await fetchActivityEntries(client, 'w1');
-    expect(res.ok).toBe(true);
-    if (!res.ok) return;
-    expect(res.data[0]?.alert).toMatchObject({
-      stale: false,
-      reason: 'not a member of this chat',
-      preview: null,
-    });
-    // The payload's reason still reads as the body line.
-    const alert = res.data[0]?.alert;
-    if (alert == null) throw new Error('fixture');
-    expect(alertBody(alert)).toBe("You're no longer in this chat");
-  });
-
-  it('a gone failed send (read ok, no row) is stale', async () => {
-    const { client } = recordingClient({
-      inbox_entries: ok([
-        raw({
-          id: 'fail',
-          event_type: 'scheduled_failed',
-          entity_type: 'chat_channel',
-          entity_id: 'c1',
-          payload: { scheduled_id: 's1' },
-        }),
-      ]),
-    });
-    const res = await fetchActivityEntries(client, 'w1');
-    expect(res.ok && res.data[0]?.alert?.stale).toBe(true);
+    expect(perTable('chat_channels')[0]?.vals).toEqual(['g-chan']);
+    // No alert previews a message or reads a scheduled row any more.
+    expect(perTable('chat_messages')).toHaveLength(0);
+    expect(perTable('chat_scheduled_messages')).toHaveLength(0);
   });
 });
 
@@ -952,7 +614,7 @@ describe('notifications fixes: page and provider wiring', () => {
     expect(page).not.toContain('Loading notifications');
     // Loading is the card-shaped boxes (ActivityBoxes), labelled "Loading activity".
     expect(page).toContain('<ActivityBoxes />');
-    expect(page).toContain('<UpcomingBoxes />');
+    expect(page).not.toContain('Upcoming');
     expect(page).toContain('{updatesLabel(entries.length)}');
   });
 
@@ -995,8 +657,7 @@ describe('notifications fixes: page and provider wiring', () => {
   });
 
   it('fix 18: only a load bumps the sequence, so the first page is never dropped on mount', () => {
-    // The workspace-reset effect runs right after the first 'reset' load starts:
-    // a bump there would drop page one and leave the feed empty.
+    // A bump anywhere but the load itself would drop page one and leave the feed empty.
     expect(count(page, 'activitySeqRef.current += 1')).toBe(1);
     expect(page).toContain("if (mode !== 'merge') activitySeqRef.current += 1;");
   });
@@ -1039,7 +700,7 @@ describe('notifications fixes: page and provider wiring', () => {
       "if (itemsRef.current.length > 0) push(errorText('refresh', result.error));",
     );
     expect(page).toContain('else setError(true);');
-    expect(page).toContain(') : error && items.length === 0 ? (');
+    expect(page).toContain('{error && items.length === 0 ? (');
   });
 
   it('fix 25: a failed snooze toasts errorCopy and logs the trace id, never the raw error', () => {

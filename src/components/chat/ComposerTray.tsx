@@ -2,13 +2,12 @@
 // the panel showing a plus (the tray opener); while the tray is open it turns
 // accent and the plus turns 45deg into an X (mv-turn). The tray sits above the
 // composer: a 4-column grid of tiles (Photos, File, Assets, Brief, Post,
-// Draft, Plan, Schedule on touch and laptop alike) that slides up on Y from
+// Draft, Plan on touch and laptop alike) that slides up on Y from
 // the composer and back down (edgeStrip above the composer, never a fade, no
 // X and no scale). A tap outside, Escape, or picking a tile closes it.
 // Photos / File run the composer's attach paths (the Photos picker still offers
 // Take Photo on phones); Assets opens the library picker; Brief, Post and Draft
-// open the share picker in that mode; Plan opens the New plan screen; Schedule
-// opens the Schedule sheet. Draft is live only for an agency-side viewer in a
+// open the share picker in that mode; Plan opens the New plan screen. Draft is live only for an agency-side viewer in a
 // chat with no client, Plan only for an agency-side viewer: otherwise (or while
 // either is unknown) they render faded and disabled from the first frame. Tokens only, so light and dark stay at parity.
 
@@ -19,7 +18,6 @@ import {
   ICON_SIZE,
   IconAssets,
   IconBriefs,
-  IconCalendarClock,
   IconDraft,
   IconFile,
   IconPhoto,
@@ -43,7 +41,7 @@ const TRAY_SLIDE_PX = 8;
 type TileIcon = ComponentType<{ size?: number; className?: string }>;
 
 /** Every tray tile id, in display order. */
-type TrayTileId = 'photos' | 'file' | 'assets' | 'brief' | 'post' | 'draft' | 'plan' | 'schedule';
+type TrayTileId = 'photos' | 'file' | 'assets' | 'brief' | 'post' | 'draft' | 'plan';
 
 /** One tray tile. A disabled tile renders faded, has no tap action and says why. */
 interface TrayTile {
@@ -85,14 +83,14 @@ export function draftTileEnabled(side: ViewerSide, hasClient: boolean | null): b
 }
 
 /**
- * The tiles: the same set on touch and laptop, Schedule last. A chat that
- * cannot schedule (Personal notes) leaves Schedule out. Draft and Plan are
- * disabled unless `draft` / `plan` is true (absent counts as unknown, so
- * disabled). Pure.
+ * The tiles: the same set on touch and laptop. Draft and Plan are disabled
+ * unless `draft` / `plan` is true (absent counts as unknown, so disabled);
+ * in Personal notes (`notes`) the disabled Plan says a plan is never shared
+ * there. Pure.
  */
 export function trayTiles(
   layout: ChatLayout,
-  opts: { schedule?: boolean; draft?: boolean; plan?: boolean } = {},
+  opts: { notes?: boolean; draft?: boolean; plan?: boolean } = {},
 ): TrayTile[] {
   void layout;
   const tiles: TrayTile[] = [
@@ -117,21 +115,18 @@ export function trayTiles(
           label: 'Plan',
           Icon: IconPlan,
           disabled: true,
-          // No Schedule means Personal notes, where a plan is never shared.
-          ariaLabel: opts.schedule === false ? PLAN_NOTES_LABEL : PLAN_UNAVAILABLE_LABEL,
+          // Personal notes, where a plan is never shared.
+          ariaLabel: opts.notes === true ? PLAN_NOTES_LABEL : PLAN_UNAVAILABLE_LABEL,
         },
   ];
-  if (opts.schedule !== false) {
-    tiles.push({ id: 'schedule', label: 'Schedule', Icon: IconCalendarClock });
-  }
   return tiles;
 }
 
 export function ComposerTray(props: {
   layout: ChatLayout;
   onPick: (id: TrayTileId) => void;
-  /** False: the chat cannot schedule, so no Schedule tile. Absent is true. */
-  schedule?: boolean;
+  /** Personal notes: the disabled Plan says why. */
+  notes?: boolean;
   /** True: the Draft tile is live. Absent or false: faded and disabled. */
   draft?: boolean;
   /** True: the Plan tile is live. Absent or false: faded and disabled. */
@@ -184,7 +179,7 @@ export function ComposerTray(props: {
   }, [open]);
 
   const tiles = trayTiles(props.layout, {
-    schedule: props.schedule !== false,
+    notes: props.notes === true,
     draft: props.draft === true,
     plan: props.plan === true,
   });
@@ -237,7 +232,7 @@ export function ComposerTray(props: {
 }
 
 /**
- * The tray's tile grid, 4 columns (8 tiles: two rows of 4; 7 in notes). A
+ * The tray's tile grid, 4 columns (7 tiles: two rows). A
  * disabled tile takes fg-3 ink (never a fade), carries the disabled attribute and aria-disabled,
  * says why in its name, and never calls onPick.
  */

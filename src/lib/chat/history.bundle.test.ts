@@ -182,10 +182,9 @@ describe('parseChatOpenBundle: every key mapped once', () => {
     ]);
     expect(b.readPositions.times.get('m1')).toBe(Date.parse('2026-10-26T10:00:01Z'));
     expect(b.replyCounts.get('m1')).toEqual({ count: 3 });
-    // The proc's marks key is ignored (marks are retired in the app).
+    // The proc's marks and scheduled keys are ignored (both retired in the app).
     expect('marks' in b).toBe(false);
-    // Soonest first.
-    expect(b.scheduled.map((s) => s.id)).toEqual(['s1', 's2']);
+    expect('scheduled' in b).toBe(false);
     expect(b.openPosts).toEqual([
       {
         id: 'post-1',
@@ -229,7 +228,6 @@ describe('parseChatOpenBundle: every key mapped once', () => {
     'read_cursors',
     'cursor_messages',
     'reply_counts',
-    'scheduled',
     'open_posts',
     'open_post_count',
     'shared_plan_ids',
@@ -243,9 +241,10 @@ describe('parseChatOpenBundle: every key mapped once', () => {
     if (!result.ok) expect(result.error.message).toContain(key);
   });
 
-  it('a missing marks key is ignored (the proc may still send it)', () => {
+  it('missing marks and scheduled keys are ignored (the proc may still send them)', () => {
     const data = raw();
     delete data.marks;
+    delete data.scheduled;
     expect(parseChatOpenBundle(data).ok).toBe(true);
   });
 

@@ -463,7 +463,6 @@ export const HISTORY_STEP_KEYS = {
   readInfo: 'chatReadInfo',
   search: 'chatSearch',
   groupInfo: 'chatGroupInfo',
-  scheduledList: 'chatScheduledList',
   newChat: 'chatNewChat',
   planCompose: 'chatPlanCompose',
   plan: 'chatPlan',

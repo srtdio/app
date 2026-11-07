@@ -23,8 +23,8 @@ const ROOT = fileURLToPath(new URL('../components/', import.meta.url));
  * to send (the chat and comment send convention).
  *
  * Debt outside the forms-and-drafts pass (each still needs the tap-says-why
- * treatment): the schedule and reminder time pickers, the plan rename row,
- * the concept sheet, the username field and New post's footer.
+ * treatment): the plan rename row, the concept sheet, the username field
+ * and New post's footer.
  */
 const ALLOWED: Readonly<Record<string, number>> = {
   // Legit: composer Send.
@@ -32,8 +32,6 @@ const ALLOWED: Readonly<Record<string, number>> = {
   'comments/SlotComposer.tsx': 1,
   'chat/Composer.tsx': 1,
   // Debt.
-  // The schedule and reminder time pickers' one shared frame.
-  'chat/WhenOptions.tsx': 1,
   'chat/PlanScreen.tsx': 1,
   'chat/ConceptSheet.tsx': 1,
   'settings/UsernameField.tsx': 1,

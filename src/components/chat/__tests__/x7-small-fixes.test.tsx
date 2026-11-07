@@ -32,8 +32,6 @@ import {
   GROUP_PHOTO_UPLOAD_FAILED,
   canEditGroupInfo,
 } from '@/components/chat/GroupInfoSheet';
-import { SCHEDULING_LABEL } from '@/components/chat/Composer';
-import { CANCEL_CONFIRM_TITLE, DONT_SEND_LABEL } from '@/components/chat/ScheduledListSheet';
 import { BAR_INPUT } from '@/components/chat/InChatSearchBar';
 import { listSkeleton } from '@/components/chat/ListSkeleton';
 import { nextMenuIndex } from '@/lib/chat/menu-keys';
@@ -86,13 +84,6 @@ describe('X7 FN22-FN24: copy, inputs and skeletons', () => {
   it('notes empty state', () => {
     expect(NOTES_EMPTY_TITLE).toBe('Your private notes live here.');
     expect(NOTES_EMPTY_LINE).not.toMatch(/—/);
-  });
-
-  it('"Scheduling…" with the ellipsis, "Don\'t send" on scheduled cards', () => {
-    expect(SCHEDULING_LABEL).toBe('Scheduling…');
-    expect(DONT_SEND_LABEL).toBe("Don't send");
-    expect(CANCEL_CONFIRM_TITLE).toBe("Don't send this message?");
-    expect(source('../ScheduledListSheet.tsx')).not.toContain('Cancel message');
   });
 
   it('in-chat search input is 16px on a phone', () => {

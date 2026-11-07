@@ -6,8 +6,8 @@
 // A chat open is ONE chat_open_bundle RPC (readChatOpenBundle, at the bottom
 // of this file; SECURITY INVOKER, so RLS applies): the latest page, its quoted
 // and thread root rows, its reactions, the channel's read cursors, reply
-// counts, the viewer's scheduled rows, open posts, open briefs and the
-// shared plan ids, in one round trip (the proc's marks key is ignored). With p_since it is also the reopen
+// counts, open posts, open briefs and the shared plan ids, in one round trip
+// (the proc's marks and scheduled keys are ignored). With p_since it is also the reopen
 // revalidation (every row from the remembered page's contiguous end). It
 // replaced the separate per-open reads (latest page prefetch, quoted ids,
 // reactions, read positions, marks, open posts, briefs, plan ids). The
@@ -62,7 +62,6 @@ import {
 import type { ChatMessageRow, MessageCursor, MessageReaction } from '@/lib/chat/thread';
 import type { ReadCursorRow } from '@/lib/chat/read-receipts';
 import { THREAD_COUNT_ROOT_LIMIT } from '@/lib/chat/thread-rail';
-import { soonestFirst, type ScheduledRow } from '@/lib/chat/scheduled';
 import type { OpenBriefRow } from '@/lib/chat/use-status-counts';
 import { parsePrivateReply } from '@/lib/chat/private-reply';
 import type { OpenPostRow } from '../../../packages/posts/src/reads';
@@ -847,8 +846,6 @@ export interface ChatOpenBundle {
   readPositions: ReadPositionsRead;
   /** Live replies per page root, within the page's window. */
   replyCounts: Map<string, ThreadReplyCount>;
-  /** The viewer's scheduled messages in the chat, soonest first. */
-  scheduled: ScheduledRow[];
   openPosts: OpenPostRow[];
   openPostCount: number;
   /** The workspace's current shared plan ids (ending soonest first). */
@@ -955,29 +952,6 @@ function privateReplyJson(value: unknown, at: string): JsonValue {
   return asJson(value);
 }
 
-function scheduledRow(value: unknown, at: string): ScheduledRow {
-  const o = asRecord(value, at);
-  return {
-    id: asString(need(o, 'id', at), `${at}.id`),
-    channel_id: asString(need(o, 'channel_id', at), `${at}.channel_id`),
-    workspace_id: asString(need(o, 'workspace_id', at), `${at}.workspace_id`),
-    sender_user_id: asString(need(o, 'sender_user_id', at), `${at}.sender_user_id`),
-    send_at: asString(need(o, 'send_at', at), `${at}.send_at`),
-    status: asString(need(o, 'status', at), `${at}.status`),
-    created_at: asString(need(o, 'created_at', at), `${at}.created_at`),
-    updated_at: asString(need(o, 'updated_at', at), `${at}.updated_at`),
-    body: asStringOrNull(o.body, `${at}.body`),
-    mentions: asJson(o.mentions),
-    attachment_asset_ids: asStringsOrNull(o.attachment_asset_ids, `${at}.attachment_asset_ids`),
-    attachment_meta: asJson(o.attachment_meta),
-    shared_post_ids: asStringsOrNull(o.shared_post_ids, `${at}.shared_post_ids`),
-    shared_brief_ids: asStringsOrNull(o.shared_brief_ids, `${at}.shared_brief_ids`),
-    reply_to_message_id: asStringOrNull(o.reply_to_message_id, `${at}.reply_to_message_id`),
-    failure_reason: asStringOrNull(o.failure_reason, `${at}.failure_reason`),
-    sent_at: asStringOrNull(o.sent_at, `${at}.sent_at`),
-  };
-}
-
 function list<T>(
   record: Record<string, unknown>,
   key: string,
@@ -990,7 +964,7 @@ function list<T>(
  * Map chat_open_bundle's jsonb to the store's shapes, once. Pure. Every key
  * must be present and well formed: a missing key or a malformed row refuses
  * the whole bundle (a failed Result), so the open shows its failed-load state
- * rather than a part read wrong. The proc's marks key is ignored.
+ * rather than a part read wrong. The proc's marks and scheduled keys are ignored.
  */
 export function parseChatOpenBundle(data: unknown): Result<ChatOpenBundle> {
   try {
@@ -1041,7 +1015,6 @@ export function parseChatOpenBundle(data: unknown): Result<ChatOpenBundle> {
     })) {
       replyCounts.set(c.rootId, { count: c.count });
     }
-    const scheduled = soonestFirst(list(o, 'scheduled', scheduledRow));
     const openPosts = list(o, 'open_posts', (v, at): OpenPostRow => {
       const r = asRecord(v, at);
       return {
@@ -1083,7 +1056,6 @@ export function parseChatOpenBundle(data: unknown): Result<ChatOpenBundle> {
         reactions,
         readPositions: { rows: cursors, times },
         replyCounts,
-        scheduled,
         openPosts,
         openPostCount,
         sharedPlanIds,

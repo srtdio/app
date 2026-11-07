@@ -7048,7 +7048,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             : {})}
           {...(aboutDraft !== null && !aboutGone ? { about: aboutPost ?? null } : {})}
           {...(notes && replyDraft === null ? { placeholder: NOTES_PLACEHOLDER } : {})}
-          {...(notes ? { noSchedule: true } : {})}
+          {...(notes ? { notes: true } : {})}
           onCancelAbout={() => setAboutDraft(null)}
           {...(taskChannel !== null
             ? {

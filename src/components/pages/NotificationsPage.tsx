@@ -5,7 +5,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
-import { Sheet } from '@/components/ui/Sheet';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import {
@@ -14,25 +13,18 @@ import {
   IconAlarmClock,
   IconAt,
   IconBriefs,
-  IconCalendarClock,
   IconPlan,
 } from '@/components/ui/icons';
-import { ActivityCard, UpcomingCard } from '@/components/pages/activity/ActivityCard';
+import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
 import { cn } from '@/lib/cn';
 import { Text, textRole } from '@/components/ui/Text';
 import { GUTTER } from '@/components/ui/layout';
-import {
-  CANCEL_CONFIRM_TITLE,
-  DONT_SEND_LABEL,
-  ScheduledListSheet,
-} from '@/components/chat/ScheduledListSheet';
-import { mentionHandle, mentionNamesIn } from '@/lib/chat/mentions';
+import { mentionHandle } from '@/lib/chat/mentions';
 import { errorText } from '@/lib/error-copy';
 import { useViewerSide } from '@/lib/chat/viewer-role';
-import { chatMessageHref } from '@/lib/inbox/bell-types';
 import { logger } from '@/lib/logger';
 import { INBOX_CHANGED_EVENT } from '@/lib/events';
 import { POLL_CHANGE_SOURCE } from '@/lib/inbox/inbox-live';
@@ -42,27 +34,20 @@ import {
   activityPageKey,
   editKeptActivityPages,
   invalidateActivityReads,
-  keepUpcoming,
   mentionCountKey,
   peekActivityPage,
   peekMentionCount,
-  peekUpcoming,
   sharedActivityPage,
   sharedMentionCount,
-  upcomingKey,
   type LoadResult,
   appendUnique,
   cursorAfter,
-  createUpcomingScheduledWrites,
   fetchActivityEntries,
   searchActivityEntries,
-  fetchUpcoming,
   filterByState,
   groupDigest,
-  upcomingHref,
   ACTIVITY_LOAD_FAILED,
   MARKED_READ_LABEL,
-  UPCOMING_EMPTY,
   markAllTargets,
   markAllEntriesRead,
   markChipRead,
@@ -72,7 +57,6 @@ import {
   mergeFresh,
   msUntilZonedMidnight,
   openAction,
-  retryFailedSend,
   snoozeEntry,
   unreadCount,
   updatesLabel,
@@ -80,7 +64,6 @@ import {
   type ActivityItem,
   type ActivityState,
   type SnoozeKind,
-  type UpcomingItem,
 } from '@/components/pages/activity/data';
 import { readActivityBadge } from '@/lib/inbox/inbox-reads';
 import { generateTraceId } from '@/lib/trace';
@@ -99,7 +82,7 @@ import { useWorkspaceDataChanged } from '@/lib/use-workspace-data-changed';
 import { useOptionalToast } from '@/components/ui/toast';
 import { undoFailureTitle } from '@/lib/use-undoable-action';
 import { useHadBoxes, useSettleOnLanding } from '@/lib/motion';
-import { ActivityBoxes, UpcomingBoxes } from '@/components/pages/activity/ActivityBoxes';
+import { ActivityBoxes } from '@/components/pages/activity/ActivityBoxes';
 
 /** Failure copy for Mark all read: "Couldn't mark as read. {reason}" */
 const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
@@ -190,7 +173,7 @@ function restoreAnchor(list: HTMLElement | null, anchor: ScrollAnchor): void {
   else window.scrollBy(0, delta);
 }
 
-/** A load failure: the plain copy and Retry (the feed's and Upcoming's). */
+/** A load failure: the plain copy and Retry. */
 function LoadFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="px-4 md:px-6 mt-4">
@@ -516,67 +499,6 @@ export function NotificationsPage() {
     [workspaceId, userId],
   );
 
-  // Upcoming: the viewer's scheduled messages not yet sent and pending
-  // reminders, soonest first (fetchUpcoming). Never inbox rows: they never
-  // count toward the unread badge and Mark all read never touches them. A
-  // reload that fails keeps the rows on screen; only a first load shows the error.
-  // The rows an earlier visit this session read paint at once; the arrival's
-  // reload follows the feed's quiet rule.
-  const keptUpcoming = (): UpcomingItem[] | undefined =>
-    userId !== null && workspaceId !== null
-      ? peekUpcoming(upcomingKey(userId, workspaceId))
-      : undefined;
-  const [upcoming, setUpcoming] = useState<UpcomingItem[]>(() => keptUpcoming() ?? []);
-  const [upcomingLoaded, setUpcomingLoaded] = useState(() => keptUpcoming() !== undefined);
-  const [upcomingError, setUpcomingError] = useState(false);
-  // Rows a cancel is removing, hidden at once until the reload drops them.
-  const [hiddenUpcoming, setHiddenUpcoming] = useState<ReadonlySet<string>>(new Set());
-  const upcomingSeqRef = useRef(0);
-  const upcomingLoadedRef = useRef(upcomingLoaded);
-  const loadUpcoming = useCallback(
-    async (arrival = false) => {
-      if (workspaceId === null) return;
-      upcomingSeqRef.current += 1;
-      const seq = upcomingSeqRef.current;
-      mark('upcoming:start');
-      const result = await fetchUpcoming(supabase, workspaceId);
-      mark('upcoming:end');
-      if (seq !== upcomingSeqRef.current) return;
-      setNowMs(Date.now());
-      if (!result.ok) {
-        logger.warn('notifications: upcoming load failed', { error: result.error });
-        if (!upcomingLoadedRef.current) setUpcomingError(true);
-        return;
-      }
-      if (userId !== null) keepUpcoming(upcomingKey(userId, workspaceId), result.data);
-      if (arrival && upcomingLoadedRef.current && !untouched()) return;
-      upcomingLoadedRef.current = true;
-      setUpcomingLoaded(true);
-      setUpcomingError(false);
-      setUpcoming(result.data);
-      const present = new Set(result.data.map((item) => item.id));
-      setHiddenUpcoming((prev) => new Set([...prev].filter((id) => present.has(id))));
-    },
-    [workspaceId, userId, untouched],
-  );
-
-  // Reset Upcoming when the active workspace changes, before that workspace's
-  // first load below starts (the chip follows its own kept key). The feed's
-  // own 'reset' load (loadActivity changes with the workspace) clears the old
-  // workspace's rows first and drops its in-flight loads; bumping the feed's
-  // sequence here too would drop that new load.
-  const shownWorkspaceRef = useRef(workspaceId);
-  useEffect(() => {
-    if (shownWorkspaceRef.current === workspaceId) return;
-    shownWorkspaceRef.current = workspaceId;
-    upcomingSeqRef.current += 1;
-    upcomingLoadedRef.current = false;
-    setUpcoming([]);
-    setUpcomingLoaded(false);
-    setUpcomingError(false);
-    setHiddenUpcoming(new Set());
-  }, [workspaceId]);
-
   // The first load of this mount is the arrival (the identity of the first
   // loadActivity: a chip, sort or workspace change makes a new one).
   const arrivalLoadRef = useRef<typeof loadActivity | null>(null);
@@ -586,32 +508,20 @@ export function NotificationsPage() {
     if (searching) return;
     arrivalLoadRef.current ??= loadActivity;
     const arrival = arrivalLoadRef.current === loadActivity && !searchedRef.current;
-    if (state === 'upcoming') void loadUpcoming(arrival);
-    else void loadActivity('reset', arrival);
-  }, [state, loadActivity, loadUpcoming, searching]);
+    void loadActivity('reset', arrival);
+  }, [loadActivity, searching]);
 
   // A cold open can mount this page before the device's saved screens are
   // seeded (hydrateSessionReads runs beside the boot; nothing waits on it).
   // When they land, a list still on its loading line paints the saved page one
   // at once, and the read already running lands over it as a quiet refresh.
-  // Upcoming and the Mentions count take their saved values the same way.
+  // The Mentions count takes its saved value the same way.
   // Adds no read and no wait: it only paints sooner than the read would.
   useEffect(() => {
     if (userId === null || workspaceId === null) return undefined;
     return onSessionReadsHydrated(() => {
       const count = peekMentionCount(mentionCountKey(userId, workspaceId));
       if (count !== undefined) setMentionCount(count);
-      if (stateRef.current === 'upcoming') {
-        if (upcomingLoadedRef.current) return;
-        const rows = peekUpcoming(upcomingKey(userId, workspaceId));
-        if (rows === undefined) return;
-        upcomingLoadedRef.current = true;
-        setUpcoming(rows);
-        setUpcomingLoaded(true);
-        setUpcomingError(false);
-        mark('activity:kept-paint');
-        return;
-      }
       if (searchingRef.current) return;
       if (!loadingRef.current || itemsRef.current.length > 0) return;
       const key = activityPageKey(userId, workspaceId, stateRef.current, sortRef.current);
@@ -631,7 +541,6 @@ export function NotificationsPage() {
   // scroll jump) and refresh the Mentions count. A local write's event is not
   // the poll's, so the page never reloads for its own mark-read.
   useEffect(() => {
-    if (state === 'upcoming') return;
     const onChanged = (event: Event): void => {
       if (!(event instanceof CustomEvent) || event.detail !== POLL_CHANGE_SOURCE) return;
       // A search's results are never merged into; the feed folds them in on return.
@@ -641,7 +550,7 @@ export function NotificationsPage() {
     };
     window.addEventListener(INBOX_CHANGED_EVENT, onChanged);
     return () => window.removeEventListener(INBOX_CHANGED_EVENT, onChanged);
-  }, [state, loadActivity, loadMentionCount]);
+  }, [loadActivity, loadMentionCount]);
 
   // Relative times keep moving on the shared minute clock (clockMs above); the
   // return to a hidden tab re-stamps at once so nothing reads a stale minute.
@@ -664,7 +573,6 @@ export function NotificationsPage() {
   }, [loadMentionCount]);
   useWorkspaceDataChanged(() => {
     if (searchingRef.current) activitySearch.refresh();
-    else if (state === 'upcoming') void loadUpcoming();
     else void loadActivity();
     void loadMentionCount();
   });
@@ -806,11 +714,11 @@ export function NotificationsPage() {
   // The active chip only: mark its unread rows (no snooze, or one that has run
   // out) read at once and write immediately; no Undo and no confirmation toast.
   // All and Unread are ONE call to inbox_mark_all_read (every unread row of
-  // every type, run-out snoozes and failed sends included). Mentions, Briefs
+  // every type, run-out snoozes included). Mentions, Briefs
   // and Plans mark every matching row on the server, loaded or not, 500 ids
   // per inbox_mark_read_ids call (markChipRead); a failure part way reloads
   // the list, so only the rows that did not save show unread again. Then the
-  // Mentions count and the nav badge refetch. Upcoming has no targets.
+  // Mentions count and the nav badge refetch.
   const handleMarkAll = useCallback(() => {
     if (workspaceId === null) return;
     const targets = markAllTargets(items, state, nowMs);
@@ -904,135 +812,19 @@ export function NotificationsPage() {
     [workspaceId, newTrace, editItems, push],
   );
 
-  // A failed scheduled send's Retry: send it now (the proc clears the entry),
-  // or clear an entry already resolved elsewhere; then reload the feed.
-  const handleRetry = useCallback(
-    (item: ActivityItem) => {
-      if (workspaceId === null) return;
-      const traceId = newTrace();
-      void retryFailedSend(supabase, item, workspaceId, traceId).then((outcome) => {
-        if (outcome.kind === 'failed') {
-          logger.warn('notifications: retry failed', {
-            trace_id: traceId,
-            error: outcome.message,
-          });
-          if (outcome.copy !== null) toast?.show({ title: outcome.copy });
-        }
-        void loadActivity();
-        window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
-      });
-    },
-    [workspaceId, newTrace, toast, loadActivity],
-  );
-
-  // A failed scheduled send's Edit: open its chat (the composer lists the
-  // chat's scheduled messages); an entry resolved elsewhere just clears.
-  const handleEdit = useCallback(
-    (item: ActivityItem) => {
-      const alert = item.alert;
-      if (alert == null) return;
-      if (alert.stale) {
-        handleMarkRead(item);
-        return;
-      }
-      if (alert.channelId !== null) navigate(chatMessageHref(alert.channelId, null));
-    },
-    [handleMarkRead, navigate],
-  );
-
-  // Upcoming's Edit and Cancel, as the bell had them: a scheduled message's Edit ("Scheduled in this chat": Send now,
-  // Edit, Time, Don't send) and Cancel (a confirm). Every write carries its
-  // own trace id; a failure toasts "Couldn't do that. {reason}" (a "not
-  // found" stays silent) and the rows reload.
-  const upcomingFailed = useCallback(
-    (
-      what: string,
-      traceId: string,
-      message: string,
-      copy: string | null = errorText('do that', message),
-    ) => {
-      logger.warn(`notifications: ${what} failed`, { trace_id: traceId, error: message });
-      if (copy !== null) toast?.show({ title: copy });
-    },
-    [toast],
-  );
-  const upcomingRef = useRef(upcoming);
-  upcomingRef.current = upcoming;
-  const scheduledWrites = useMemo(
-    () =>
-      createUpcomingScheduledWrites({
-        client: supabase,
-        newTraceId: newTrace,
-        reload: () => void loadUpcoming(),
-        failed: upcomingFailed,
-        channelTypeOf: (channelId) =>
-          upcomingRef.current.find((item) => item.channelId === channelId)?.channelType ?? null,
-      }),
-    [newTrace, loadUpcoming, upcomingFailed],
-  );
-  const [scheduledChat, setScheduledChat] = useState<string | null>(null);
-  const [cancelTarget, setCancelTarget] = useState<UpcomingItem | null>(null);
-  // The confirm keeps its words while it slides away (the target clears first).
-  const cancelShownRef = useRef<UpcomingItem | null>(null);
-  if (cancelTarget !== null) cancelShownRef.current = cancelTarget;
-  const cancelShown = cancelShownRef.current;
-
-  const visibleUpcoming = useMemo(
-    () => upcoming.filter((item) => !hiddenUpcoming.has(item.id)),
-    [upcoming, hiddenUpcoming],
-  );
-  const scheduledSheetRows = useMemo(
-    () =>
-      scheduledChat === null
-        ? []
-        : visibleUpcoming.flatMap((item) =>
-            item.kind === 'scheduled' && item.channelId === scheduledChat ? [item.row] : [],
-          ),
-    [visibleUpcoming, scheduledChat],
-  );
-
-  const handleOpenUpcoming = useCallback(
-    (item: UpcomingItem) => navigate(upcomingHref(item)),
-    [navigate],
-  );
-  const handleEditUpcoming = useCallback((item: UpcomingItem) => {
-    setScheduledChat(item.channelId);
-  }, []);
-
-  const cancelUpcoming = useCallback(
-    async (item: UpcomingItem): Promise<boolean> => {
-      setHiddenUpcoming((prev) => new Set([...prev, item.id]));
-      const ok = await scheduledWrites.onCancel(item.row);
-      if (!ok) {
-        setHiddenUpcoming((prev) => new Set([...prev].filter((id) => id !== item.id)));
-      }
-      return ok;
-    },
-    [scheduledWrites],
-  );
-
-  const confirmCancel = useCallback(() => {
-    const target = cancelTarget;
-    setCancelTarget(null);
-    if (target !== null) void cancelUpcoming(target);
-  }, [cancelTarget, cancelUpcoming]);
-
   const listLoading = workspaceId === null || (loading && items.length === 0);
   if (!listLoading) mark('activity:paint');
   // What the first frame painted (?paintlog): the kept or device-saved page,
   // or the loading line (nothing saved for this chip and sort yet).
   const firstPaintRef = useRef<string | null>(null);
-  const keptOnScreen = state === 'upcoming' ? upcomingLoaded : !listLoading;
-  firstPaintRef.current ??= keptOnScreen ? 'activity:kept-paint' : 'activity:loading-paint';
+  firstPaintRef.current ??= listLoading ? 'activity:loading-paint' : 'activity:kept-paint';
   useLayoutEffect(() => {
     if (firstPaintRef.current !== null) mark(firstPaintRef.current);
   }, []);
-  useKeptScroll(keptKey('scroll'), state === 'upcoming' ? upcomingLoaded : !listLoading);
+  useKeptScroll(keptKey('scroll'), !listLoading);
   // Boxes only while nothing is held for the list; the cards settle once when
   // they land after them (a kept or device-saved page paints at once).
-  const hadBoxes = useHadBoxes(
-    state !== 'upcoming' && listLoading && !(error && items.length === 0),
-  );
+  const hadBoxes = useHadBoxes(listLoading && !(error && items.length === 0));
   useSettleOnLanding(listRef, !listLoading, hadBoxes);
 
   return (
@@ -1072,28 +864,7 @@ export function NotificationsPage() {
         />
       )}
 
-      {state === 'upcoming' && !searching ? (
-        upcomingError ? (
-          <LoadFailed onRetry={() => void loadUpcoming()} />
-        ) : workspaceId === null || !upcomingLoaded ? (
-          <UpcomingBoxes />
-        ) : visibleUpcoming.length === 0 ? (
-          <EmptyState icon={<IconCalendarClock size={ICON_SIZE.status} />} title={UPCOMING_EMPTY} />
-        ) : (
-          <div data-upcoming-list="" className={cn('mt-4 pb-6', LIST_CARD_GRID, GUTTER)}>
-            {visibleUpcoming.map((item) => (
-              <UpcomingCard
-                key={item.id}
-                item={item}
-                now={new Date(nowMs)}
-                onOpen={handleOpenUpcoming}
-                onEdit={handleEditUpcoming}
-                onCancel={setCancelTarget}
-              />
-            ))}
-          </div>
-        )
-      ) : error && items.length === 0 ? (
+      {error && items.length === 0 ? (
         <LoadFailed onRetry={() => (searching ? activitySearch.refresh() : void loadActivity())} />
       ) : listLoading ? (
         <ActivityBoxes />
@@ -1172,8 +943,6 @@ export function NotificationsPage() {
                         onMarkRead={handleMarkRead}
                         selfName={selfName}
                         side={side}
-                        onRetry={handleRetry}
-                        onEdit={handleEdit}
                         entering={entering.has(group[0]?.id ?? '')}
                       />
                     );
@@ -1204,36 +973,6 @@ export function NotificationsPage() {
           ) : null}
         </div>
       )}
-
-      <ScheduledListSheet
-        open={scheduledChat !== null && scheduledSheetRows.length > 0}
-        onClose={() => setScheduledChat(null)}
-        rows={scheduledSheetRows}
-        nameOf={mentionNamesIn(workspaceId)}
-        {...scheduledWrites}
-      />
-      <Sheet
-        open={cancelTarget !== null}
-        onClose={() => setCancelTarget(null)}
-        title={CANCEL_CONFIRM_TITLE}
-        footer={
-          <div className="flex w-full justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setCancelTarget(null)}>
-              Keep
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              data-confirm-cancel-upcoming=""
-              onClick={confirmCancel}
-            >
-              {DONT_SEND_LABEL}
-            </Button>
-          </div>
-        }
-      >
-        <p className="truncate text-base text-fg-2">{cancelShown?.preview ?? ''}</p>
-      </Sheet>
     </>
   );
 }
