@@ -1,6 +1,6 @@
 // The one search highlight. matchRuns (src/lib/chat/search.ts) is the single
 // matching rule (case-insensitive word prefix, any script), the same rule the
-// search itself uses; Highlight draws its hit runs with the annotation fill and
+// search itself uses; Highlight draws its hit runs with the search-mark fill and
 // --fg ink, readable in light and dark. The palette and every jump destination
 // render through here. glowTarget is the arrival tint a jumped-to row gets; it
 // wipes away left to right (wipeAway), never fades.

@@ -38,7 +38,7 @@ export interface PlatformSpec {
   video: readonly PlatformSize[];
   /** Shown instead of a preview when an image is attached but the platform takes none. */
   imageUnsupported?: string;
-  /** One-line platform notes shown under the size picker. */
+  /** One-line platform notes shown on the post screen. */
   imageNote?: string;
   videoNote?: string;
   /** PDF/document posts: pages are shown as-is, never cropped. */

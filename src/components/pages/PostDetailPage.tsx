@@ -333,11 +333,6 @@ export function PostDetailPage({
   actionsOpen?: boolean;
   /** Embedded only: the sheet asks to open or close. */
   onActionsOpenChange?: (open: boolean) => void;
-  /**
-   * Retired with the sheet's Open in pipeline row: accepted and ignored until
-   * the plan item hosts stop passing it.
-   */
-  onOpenInPipeline?: () => void;
 } = {}) {
   const params = useParams();
   // The pretty-link resolver (/p/:ref) passes the resolved id as a prop; the

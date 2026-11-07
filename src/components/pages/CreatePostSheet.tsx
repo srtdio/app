@@ -252,7 +252,8 @@ export function draftGalleryItem(item: AttachmentItem): GalleryItem {
 
 /**
  * The live preview's input from the unsaved form: platform, format, caption and
- * the first local photo or video. null until the platform and format resolve.
+ * every local photo or video in order (a carousel swipes them all; the first
+ * is firstMedia). null until the platform and format resolve.
  */
 export function draftPreview(input: {
   platform: PostPlatform | null;
@@ -262,7 +263,8 @@ export function draftPreview(input: {
   attachments: readonly AttachmentItem[];
 }): PreviewBodyProps | null {
   if (input.platform === null || input.format === '') return null;
-  const first = input.attachments.find(isMediaItem);
+  const media = input.attachments.filter(isMediaItem);
+  const first = media[0];
   return {
     platform: input.platform,
     format: input.format,
@@ -270,6 +272,10 @@ export function draftPreview(input: {
     handle: input.handle,
     firstMedia: first !== undefined ? draftGalleryItem(first) : null,
     localUrl: first?.previewUrl ?? null,
+    slides: media.map((item) => ({
+      item: draftGalleryItem(item),
+      localUrl: item.previewUrl ?? null,
+    })),
   };
 }
 

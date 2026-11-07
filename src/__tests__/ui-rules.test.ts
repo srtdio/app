@@ -380,13 +380,8 @@ describe('ui rules: one checkbox', () => {
 });
 
 describe('ui rules: no white literals', () => {
-  it('no text-white / bg-white without /opacity outside preview/PlatformPreviewPanel.tsx', () => {
-    expect(
-      offendersOf(
-        /\b(?:text|bg)-white(?![\w/-])/,
-        (rel) => rel === 'preview/PlatformPreviewPanel.tsx',
-      ),
-    ).toEqual([]);
+  it('no text-white / bg-white without /opacity anywhere (the preview draws with pv-* tokens)', () => {
+    expect(offendersOf(/\b(?:text|bg)-white(?![\w/-])/, () => false)).toEqual([]);
   });
 });
 
