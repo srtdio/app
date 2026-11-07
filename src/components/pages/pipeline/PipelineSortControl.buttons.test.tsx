@@ -85,15 +85,17 @@ describe('Pipeline controls buttons', () => {
     const faces = html.match(/<span data-chip-face=""[^>]*>/g) ?? [];
     expect(faces).toHaveLength(3);
     for (const face of faces) {
-      expect(classOf(face)).toEqual(expect.arrayContaining(['min-h-8', 'px-3', 'rounded-lg']));
+      expect(classOf(face)).toEqual(expect.arrayContaining(['min-h-8', 'px-3', 'rounded-full']));
     }
     const active = /aria-current="true"[^>]*><span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
-    expect(classOf(active.slice(active.indexOf('<span')))).toEqual(
-      expect.arrayContaining(['bg-accent', 'text-accent-fg', 'lit-pill']),
-    );
-    expect(html).toContain('<span class="tabular-nums">3</span>');
-    expect(html).toContain('<span class="tabular-nums">1</span>');
-    expect(html).not.toContain('<span class="tabular-nums">0</span>');
+    const activeFace = classOf(active.slice(active.indexOf('<span')));
+    expect(activeFace).toEqual(expect.arrayContaining(['border-fg', 'text-fg']));
+    for (const c of ['bg-accent', 'text-accent-fg', 'lit-pill']) {
+      expect(activeFace).not.toContain(c);
+    }
+    expect(html).toContain('<span class="tabular-nums text-fg-3">3</span>');
+    expect(html).toContain('<span class="tabular-nums text-fg-3">1</span>');
+    expect(html).not.toContain('<span class="tabular-nums text-fg-3">0</span>');
   });
 
   it('the stage chip row is not inset: no own left pad or right bleed (the header row pads it)', () => {

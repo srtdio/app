@@ -95,7 +95,7 @@ describe('BriefCard on ui/ListCard', () => {
     expect(out).not.toContain('data-card-title');
   });
 
-  it('renders the small copy as the 48 picture when thumbnailAssetVersionId is present', () => {
+  it('renders the small copy as the 40 picture when thumbnailAssetVersionId is present', () => {
     const { cache, peekThumbnail } = makeCache('https://cdn.example/thumb.jpg');
     const out = render(makeBrief({ thumbnailAssetVersionId: 'av1' }), cache);
     expect(out).toContain('<img');
@@ -234,10 +234,13 @@ describe('BriefCard on ui/ListCard', () => {
     expect(out).not.toContain('data-list-card-line="3"');
   });
 
-  it('a closed brief keeps the muted card', () => {
+  it('a closed brief keeps the muted row: the title greys to fg-3, no lit height', () => {
     const { cache } = makeCache(null);
-    expect(render(makeBrief({ status: 'closed' }), cache)).toContain('lit-card-muted');
-    expect(render(makeBrief({ status: 'open' }), cache)).not.toContain('lit-card-muted');
+    const mutedTitle = /data-list-card-title=""[^>]*class="[^"]*\btext-fg-3\b/;
+    const closed = render(makeBrief({ status: 'closed' }), cache);
+    expect(closed).toMatch(mutedTitle);
+    expect(closed).not.toContain('lit-card-muted');
+    expect(render(makeBrief({ status: 'open' }), cache)).not.toMatch(mutedTitle);
   });
 
   it('has no select mode and no menu: no tick, no ⋮, no long-press hooks', () => {

@@ -545,6 +545,8 @@ export const MOVE_CLASS = {
   lift: 'mv-lift',
   /** Busy spinner rotation. */
   spin: 'mv-spin',
+  /** Phone nav dock: shrinks on scroll down, grows on scroll up, 240 ms. */
+  dock: 'mv-dock',
 } as const;
 
 /** Exit/enter durations exposed for unmount timers that must match a move. */

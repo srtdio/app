@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Type roles on the chat home list (one list, no section labels): group and
-// person names as the Row heading
-// role (one row style for both), the time as meta (12, tabular) and the
+// person names in the heading size, regular when read and bold unread (one
+// row style for both), the time as meta (12, tabular) and the
 // zero state (title lg/600 fg). The list has no search field, so no no-match
 // state.
 // Pure renders; nothing reads.
@@ -72,21 +72,21 @@ describe('chat list type roles', () => {
     }
   });
 
-  it('titles: group and person rows both name in the Row heading role (lg/600)', () => {
+  it('titles: group and person rows both name in the heading size (lg), regular weight when read', () => {
     const wide = paint(list([group]), 'span', 'Launch').find((e) =>
       e.classList.contains('truncate'),
     );
     expect(classes(wide as Element)).toEqual(
-      expect.arrayContaining(['truncate', 'text-lg', 'font-semibold']),
+      expect.arrayContaining(['truncate', 'text-lg', 'font-normal']),
     );
     const square = paint(list([dm]), 'span', 'Asha Rao').find((e) =>
       e.classList.contains('truncate'),
     );
     expect(classes(square as Element)).toEqual(
-      expect.arrayContaining(['truncate', 'text-lg', 'font-semibold']),
+      expect.arrayContaining(['truncate', 'text-lg', 'font-normal']),
     );
     for (const el of [wide, square]) {
-      expect((el as Element).className).not.toMatch(/text-\[|leading-\[|font-bold/);
+      expect((el as Element).className).not.toMatch(/text-\[|leading-\[|font-bold|font-semibold/);
     }
   });
 

@@ -22,12 +22,12 @@ import { useSelectGesture, type SelectGesture } from '@/components/ui/useLongPre
 export type ListCardHooks = { [hook: `data-${string}`]: string | undefined };
 
 /**
- * The picture slot (48x48, left, vertically centred, 12 to the text):
- * - person: the person's photo, a circle (ui/Avatar 'card', 48; initials on their colour when none);
- *   `node` replaces the Avatar with a caller's 48 circle;
- * - image: a caller's picture (a thumbnail, a group photo or mark) in the radius 8 box;
- * - icon: a 24 glyph in fg-2 on the panel-2 radius 8 box (a brief, an activity kind);
- * - placeholder: ui/PostPlaceholder ("Aa", the play glyph) filling the radius 8 box.
+ * The picture slot (40x40, left, vertically centred, 12 to the text):
+ * - person: the person's photo, a circle (ui/Avatar 'card', 40; initials on their colour when none);
+ *   `node` replaces the Avatar with a caller's 40 circle;
+ * - image: a caller's picture (a thumbnail, a group photo or mark) in the rounded-picture (10) squircle;
+ * - icon: a 20 glyph in fg-2 on the panel-2 squircle (a brief, an activity kind);
+ * - placeholder: ui/PostPlaceholder ("Aa", the play glyph) filling the squircle.
  */
 export type ListCardPicture =
   | { kind: 'person'; name: string; src?: string | null | undefined; node?: ReactNode }
@@ -41,7 +41,7 @@ export type ListCardPicture =
  * old ⋮ actions live on the list's SelectBar.
  */
 export type ListCardSelect = SelectGesture & {
-  /** This card is ticked (lit-selected, the filled tick). */
+  /** This card is ticked (the panel-2 fill, the filled tick). */
   chosen: boolean;
 };
 
@@ -99,9 +99,9 @@ export interface ListCardProps {
   cover?: ReactNode;
   /** The card is unavailable (an inert card in select mode): no tap. */
   disabled?: boolean;
-  /** Current card (the open chat): lit-selected. A chosen card is selected too. */
+  /** Current row (the open chat): the panel-2 fill. A chosen row is selected too. */
   selected?: boolean;
-  /** The quieter card surface (a closed brief). */
+  /** The quieter row (a closed brief): the title greys to fg-3. */
   muted?: boolean;
   as?: 'div' | 'li' | 'article';
   rootRef?: Ref<HTMLElement> | undefined;
@@ -110,35 +110,36 @@ export interface ListCardProps {
   [hook: `data-${string}`]: string | undefined;
 }
 
-/** The frame: border token, radius 12, panel fill; one lit height. */
-export function listCardFrame(selected = false, muted = false): string {
-  return cn(
-    'relative flex min-w-0 overflow-hidden rounded-xl border bg-panel',
-    selected ? 'lit-selected' : muted ? 'lit-card-muted' : 'lit-card',
-  );
+/**
+ * The row frame (flat look, 7 Nov 2026): no border, no radius, no lit height.
+ * It bleeds -mx-4 / px-4 so the selected, chosen and pressed fill runs edge to
+ * edge on phone, never boxed inside the 16 gutter. Selected: the panel-2 fill.
+ */
+export function listCardFrame(selected = false): string {
+  return cn('relative -mx-4 flex h-15 min-w-0 px-4', selected && 'bg-panel-2');
 }
 
 /**
- * The card's exact height: 1 border + 12 padding + 48 picture + 12 padding +
- * 1 border. The text column (20 + 4 + 20 = 44) centres against the 48 picture.
+ * The row's exact height: 10 + 40 picture + 10. The text column
+ * (20 + 2 + 20 = 42) centres against the 40 picture.
  */
-export const LIST_CARD_HEIGHT_PX = 74;
+export const LIST_CARD_HEIGHT_PX = 60;
 
 /**
- * The inner row: padding 12, picture then text, 12 apart, vertically centred.
- * No text selection, callout or magnifier on a hold (iOS long-press selects).
+ * The inner row: picture then text, 12 apart, vertically centred (the frame
+ * carries the 16 side padding). No text selection, callout or magnifier on a
+ * hold (iOS long-press selects).
  */
-export const LIST_CARD_BODY =
-  'pointer-events-none relative flex min-w-0 flex-1 items-center gap-3 p-3';
+export const LIST_CARD_BODY = 'pointer-events-none relative flex min-w-0 flex-1 items-center gap-3';
 
-/** The picture box: 48x48 (h-12 w-12), never shrinks. */
-export const LIST_CARD_PICTURE = 'relative flex h-12 w-12 shrink-0 items-center justify-center';
+/** The picture box: 40x40 (h-10 w-10), never shrinks. */
+export const LIST_CARD_PICTURE = 'relative flex h-10 w-10 shrink-0 items-center justify-center';
 
-/** The radius 8 box a non-person picture sits in, lit as media. */
-const PICTURE_BOX = 'lit-media overflow-hidden rounded-lg';
+/** The rounded-picture (10) squircle a non-person picture sits in; flat. */
+const PICTURE_BOX = 'overflow-hidden rounded-picture';
 
-/** The text column: two 20 lines, 4 apart (44). */
-export const LIST_CARD_TEXT = 'flex min-w-0 flex-1 flex-col gap-1';
+/** The text column: two 20 lines, 2 apart (42). */
+export const LIST_CARD_TEXT = 'flex min-w-0 flex-1 flex-col gap-0.5';
 
 /** Line 1: title then the time on the right; one 20 line. */
 export const LIST_CARD_LINE1 = 'flex h-5 min-w-0 items-center gap-2';
@@ -155,23 +156,26 @@ export const LIST_CARD_PREVIEW = textRole('secondary', 'min-w-0 flex-1 truncate'
 /** The unread dot: 8px, round, fg ink. */
 export const LIST_CARD_UNREAD_DOT = 'inline-block h-2 w-2 shrink-0 rounded-full bg-fg';
 
-/** The list the cards stack in: 8 between cards (phone, and the chat list pane). */
-export const LIST_CARD_STACK = 'flex flex-col gap-2';
+/** The list the rows stack in: rows touching, no divider (phone, and the chat list pane). */
+export const LIST_CARD_STACK = 'flex flex-col';
 
 /**
  * The page list: one column on phone, auto-fill columns at least 360 wide on
- * laptop (grid-cols-list-cards), 8 between cards both ways. Pipeline, Briefs,
- * Assets, Activity, the Plan tab and Bank; the chat list stays LIST_CARD_STACK.
+ * laptop (grid-cols-list-cards); rows touching, 32 between laptop columns: the
+ * rows' -mx-4 bleed (16 each side) meets exactly in the gap, so neighbouring
+ * columns' fills and tap targets never overlap.
+ * Pipeline, Briefs, Assets, Activity, the Plan tab and Bank; the chat list
+ * stays LIST_CARD_STACK.
  */
-export const LIST_CARD_GRID = 'grid grid-cols-1 gap-2 md:grid-cols-list-cards';
+export const LIST_CARD_GRID = 'grid grid-cols-1 md:grid-cols-list-cards md:gap-x-8';
 
 /**
- * The tap surface laid over the whole card: the hover / press overlay and the
- * focus line inside the edge (the card clips overflow). The card itself sinks
- * (MOVE_CLASS.press on the root), so the overlay carries no press of its own.
+ * The tap surface laid over the whole row: the hover / press fill edge to edge
+ * and the focus line inside the edge. The row itself sinks (MOVE_CLASS.press
+ * on the root), so the overlay carries no press of its own.
  */
 export const LIST_CARD_COVER =
-  'absolute inset-0 w-full rounded-xl text-left lit-hover focus-visible:lit-focus-inset disabled:pointer-events-none disabled:cursor-default';
+  'absolute inset-0 w-full text-left lit-hover focus-visible:lit-focus-inset disabled:pointer-events-none disabled:cursor-default';
 
 /** No text selection, callout or magnifier on a long-press (iOS). */
 export const LIST_CARD_NO_CALLOUT = 'select-none [-webkit-touch-callout:none]';
@@ -234,10 +238,10 @@ function Picture({
             aria-hidden="true"
             className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2"
           >
-            <picture.icon size={ICON_SIZE.picture} />
+            <picture.icon size={ICON_SIZE.control} />
           </span>
         ) : (
-          <PostPlaceholder kind={picture.placeholder} size={ICON_SIZE.picture} fill />
+          <PostPlaceholder kind={picture.placeholder} size={ICON_SIZE.control} fill />
         )}
       </span>
       {select !== undefined ? <Tick active={select.active} chosen={select.chosen} /> : null}
@@ -257,15 +261,16 @@ function clickCover(event: MouseEvent<HTMLElement>): void {
 }
 
 /**
- * The one list card (Pipeline, Briefs, Assets, the Chat list, Activity, the
- * Plan tab and Bank), WhatsApp style: a bordered radius 12 card, padding 12,
- * the whole card one tap target that sinks when pressed. Left: the 48 picture,
- * vertically centred. Right, two lines:
- *   1. title (heading, one line) ... time (meta, right, the bad token when late);
+ * The one list row (Pipeline, Briefs, Assets, the Chat list, Activity, the
+ * Plan tab and Bank), flat Slack style (7 Nov 2026): no border, no radius, rows
+ * touching with no divider, the whole row one tap target that sinks when
+ * pressed. Left: the 40 picture, vertically centred. Right, two lines:
+ *   1. title (heading, bold unread, regular read, one line) ... time (meta,
+ *      right, the bad token when late);
  *   2. preview (secondary, one line) then the one grey Tag then the unread dot;
  *      with no preview the tag sits on the right end, under the time.
  * No third line and no ⋮: a card's actions live on its list's select bar
- * (long-press / right-click selects). Every card is exactly 74 tall
+ * (long-press / right-click selects). Every row is exactly 60 tall
  * (LIST_CARD_HEIGHT_PX); line 2 stays even when it is empty.
  */
 export function ListCard({
@@ -324,7 +329,7 @@ export function ListCard({
       data-list-card=""
       {...(select !== undefined && select.active ? { 'data-list-card-selecting': '' } : {})}
       className={cn(
-        listCardFrame(selected || chosen, muted),
+        listCardFrame(selected || chosen),
         select !== undefined && LIST_CARD_NO_CALLOUT,
         tapped && !disabled && MOVE_CLASS.press,
       )}
@@ -353,7 +358,12 @@ export function ListCard({
               {...(tapped && !disabled ? { onClick: clickCover } : {})}
               className={textRole(
                 'heading',
-                cn('min-w-0 flex-1 truncate', tapped && !disabled && 'pointer-events-auto'),
+                cn(
+                  'min-w-0 flex-1 truncate',
+                  !unread && 'font-normal',
+                  muted && 'text-fg-3',
+                  tapped && !disabled && 'pointer-events-auto',
+                ),
               )}
             >
               {title}
@@ -413,8 +423,8 @@ export function ListCard({
 }
 
 /**
- * A loading box in ListCard's own frame and slots (the 48 picture, the title
- * line with its time, the preview line), exactly 74 tall, so nothing moves
+ * A loading box in ListCard's own frame and slots (the 40 picture, the title
+ * line with its time, the preview line), exactly 60 tall, so nothing moves
  * when the cards land. Pure render; the screen's BoxSkeleton decides when it shows.
  */
 export function ListCardBox({

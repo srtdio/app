@@ -10,7 +10,8 @@ import {
 } from '@/components/shell/NotificationsButton';
 import { selectTotalUnread } from '@/lib/chat/chat-store';
 import { CountBadge } from '@/components/ui/CountBadge';
-import { useNudgeOnRise } from '@/lib/motion';
+import { useEffect, useState } from 'react';
+import { MOVE_CLASS, useNudgeOnRise } from '@/lib/motion';
 import {
   planTabHref,
   unreadCommentsLabel,
@@ -29,11 +30,69 @@ const PILL_NAV = PRIMARY_NAV.filter((item) => item.showChatBadge !== true);
 const CHAT_NAV = PRIMARY_NAV.find((item) => item.showChatBadge === true);
 
 /**
- * The floating row: 12px from both sides and the bottom, each past the safe
- * area (home indicator; the notch and rounded corners in landscape).
+ * The floating row: centred, only as wide as its tabs (never edge to edge),
+ * 16px above the bottom past the safe area (home indicator).
  */
 export const PHONE_BAR_OFFSETS =
-  'left-[calc(12px+env(safe-area-inset-left))] right-[calc(12px+env(safe-area-inset-right))] bottom-[calc(12px+env(safe-area-inset-bottom))]';
+  'left-1/2 -translate-x-1/2 bottom-[calc(16px+env(safe-area-inset-bottom))]';
+
+/** Scrolled less than this from the top, the dock is always at rest. */
+const DOCK_TOP_PX = 24;
+/** A scroll step past this flips the dock (down shrinks, up grows). */
+const DOCK_STEP_PX = 8;
+
+/**
+ * The dock's next state from one scroll step (iOS 26 tabBarMinimizeBehavior
+ * .onScrollDown): near the top it rests; a step down past 8 shrinks, a step up
+ * past 8 grows; smaller steps keep the state. Pure.
+ */
+export function dockShrinkNext(shrunk: boolean, prevTop: number, top: number): boolean {
+  if (top <= DOCK_TOP_PX) return false;
+  if (top - prevTop > DOCK_STEP_PX) return true;
+  if (top - prevTop < -DOCK_STEP_PX) return false;
+  return shrunk;
+}
+
+/** The scrollTop of a scroll event's target: the window's scroller or an inner one. */
+function scrollTopOf(target: EventTarget | null): { el: object; top: number } | null {
+  if (target instanceof Document) {
+    const root = target.scrollingElement ?? target.documentElement;
+    return { el: root, top: root.scrollTop };
+  }
+  if (target instanceof Element) return { el: target, top: target.scrollTop };
+  return null;
+}
+
+/**
+ * The phone dock shrinks while a page scrolls down and grows on scroll up or
+ * near the top. One passive capture 'scroll' listener on document covers the
+ * window and every inner scroller (a horizontal chip row never changes
+ * scrollTop, so it never flips the dock). It reads scrollTop only, keeps the
+ * last one per element in a WeakMap and sets state only on a flip. No await,
+ * no timer, no measuring.
+ */
+export function useDockShrunk(): boolean {
+  const [shrunk, setShrunk] = useState(false);
+  useEffect(() => {
+    const last = new WeakMap<object, number>();
+    let current = false;
+    const onScroll = (event: Event): void => {
+      const read = scrollTopOf(event.target);
+      if (read === null) return;
+      const prev = last.get(read.el) ?? read.top;
+      last.set(read.el, read.top);
+      const next = dockShrinkNext(current, prev, read.top);
+      if (next !== current) {
+        current = next;
+        setShrunk(next);
+      }
+    };
+    const options: AddEventListenerOptions = { capture: true, passive: true };
+    document.addEventListener('scroll', onScroll, options);
+    return () => document.removeEventListener('scroll', onScroll, options);
+  }, []);
+  return shrunk;
+}
 
 /** The Plan tab's accessible name: the label, plus its unread comments. Pure. */
 export function planTabLabel(label: string, unread: number): string {
@@ -46,19 +105,22 @@ export function chatTabLabel(unread: number): string {
 }
 
 /**
- * A pill tab: inactive is the icon alone in a 44x44 target; active is icon and
- * label on the solid ink fill (bg-accent, lit-pill: the one picked look).
+ * A pill tab, always a 44x44 target or wider: inactive is the icon alone in
+ * fg-2; active is the panel-3 fill in fg ink with its label (the label hides
+ * while the dock is shrunk). Flat: no ink fill, no pill light.
  */
-function tabClass(active: boolean): string {
+export function tabClass(active: boolean, shrunk = false): string {
   return cn(
-    'relative flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full focus-visible:lit-focus mv-tint',
-    active ? 'gap-2 bg-accent pl-3 pr-3 text-accent-fg lit-pill' : 'w-11 text-fg',
+    'relative flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full focus-visible:lit-focus',
+    MOVE_CLASS.dock,
+    active ? 'bg-panel-3 text-fg' : 'w-11 text-fg-2',
+    active && (shrunk ? 'w-11' : 'gap-1.5 px-3'),
   );
 }
 
 /** One pill tab of the primary nav (Pipeline, Briefs, Assets, Plan). */
-function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number }) {
-  const { item, planUnread } = props;
+function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number; shrunk: boolean }) {
+  const { item, planUnread, shrunk } = props;
   const active = useMatch({ path: item.to, end: false }) !== null;
   // Plan with unread comments: the tap lands on the newest one (jump to latest).
   const newest = useNewestPlanUnread();
@@ -69,7 +131,7 @@ function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number })
       data-selected={active ? 'true' : undefined}
       aria-label={item.showPlanBadge === true ? planTabLabel(item.label, planUnread) : item.label}
       {...navPrefetchProps(item.to)}
-      className={() => tabClass(active)}
+      className={() => tabClass(active, shrunk)}
     >
       {item.showPlanBadge === true ? (
         // Plan: the icon carries the unread plan comments badge.
@@ -85,21 +147,23 @@ function PillTab(props: { item: (typeof PILL_NAV)[number]; planUnread: number })
       ) : (
         <item.Icon size={ICON_SIZE.control} />
       )}
-      <TabLabel active={active} label={item.label} />
+      <TabLabel active={active && !shrunk} label={item.label} />
     </NavLink>
   );
 }
 
 function TabLabel({ active, label }: { active: boolean; label: string }) {
   return active ? (
-    <span className="shrink-0 whitespace-nowrap text-md font-semibold">{label}</span>
+    <span className="shrink-0 whitespace-nowrap text-md font-medium">{label}</span>
   ) : null;
 }
 
 /**
- * Phone nav (below md): a floating pill (Pipeline, Briefs, Assets, Plan,
- * Activity) and a separate Chat circle, 12px from the sides and bottom; only
- * the active tab shows its label. A fade strip behind it keeps content that
+ * Phone nav (below md): a centred floating pill (Pipeline, Briefs, Assets,
+ * Plan, Activity) and a separate Chat circle, 16px above the bottom, only as
+ * wide as its tabs; only the active tab shows its label. Flat: hairline edge,
+ * no shadow. 52 at rest, 44 while scrolling down (labels hide, icons stay),
+ * back at rest on scroll up or near the top (useDockShrunk, MOVE_CLASS.dock). A fade strip behind it keeps content that
  * scrolls under the bar readable. Badges read the chat and inbox stores the
  * shell already holds: no read, no effect, no measuring.
  */
@@ -112,26 +176,34 @@ export function BottomTabs() {
   const activityActive = onNotifications(pathname);
   const activityNudgeRef = useNudgeOnRise(unreadCount);
   const chatNudgeRef = useNudgeOnRise(total);
+  const shrunk = useDockShrunk();
   return (
     <>
       <div
         aria-hidden
-        className="md:hidden pointer-events-none fixed inset-x-0 bottom-0 z-sticky h-32 bg-gradient-to-t from-bg to-bg/0"
+        className="md:hidden pointer-events-none fixed inset-x-0 bottom-0 z-sticky h-24 bg-gradient-to-t from-bg to-bg/0"
       />
       <nav
         {...bottomAnchorProps}
         aria-label="Primary"
+        data-dock={shrunk ? 'shrunk' : 'rest'}
         className={cn(
           'md:hidden fixed z-nav flex items-center gap-2 select-none [-webkit-touch-callout:none]',
           PHONE_BAR_OFFSETS,
+          MOVE_CLASS.dock,
+          shrunk && 'translate-y-1',
         )}
       >
         <div
           data-tab-pill=""
-          className="flex h-15 min-w-0 flex-1 items-center justify-between rounded-full border bg-panel p-1 lit-raised"
+          className={cn(
+            'flex shrink-0 items-center rounded-full border border-border bg-panel',
+            MOVE_CLASS.dock,
+            shrunk ? 'h-11' : 'h-13 px-1',
+          )}
         >
           {PILL_NAV.map((item) => (
-            <PillTab key={item.to} item={item} planUnread={planUnread} />
+            <PillTab key={item.to} item={item} planUnread={planUnread} shrunk={shrunk} />
           ))}
           {/* Activity: last in the pill on phone (the top bar's button is laptop only). */}
           <NavLink
@@ -142,7 +214,7 @@ export function BottomTabs() {
             {...(activityActive ? { 'aria-current': 'page' as const } : {})}
             {...activityPrefetchProps()}
             data-selected={activityActive ? 'true' : undefined}
-            className={tabClass(activityActive)}
+            className={tabClass(activityActive, shrunk)}
           >
             <span className="relative">
               <span ref={activityNudgeRef} className="inline-flex">
@@ -155,7 +227,7 @@ export function BottomTabs() {
                 />
               ) : null}
             </span>
-            <TabLabel active={activityActive} label={NOTIFICATIONS_TITLE} />
+            <TabLabel active={activityActive && !shrunk} label={NOTIFICATIONS_TITLE} />
           </NavLink>
         </div>
         {CHAT_NAV !== undefined ? (
@@ -166,13 +238,15 @@ export function BottomTabs() {
             data-induction={INDUCTION_KEYS.chatTab}
             {...navPrefetchProps(CHAT_NAV.to)}
             // Opaque in every state, so the chat rows never show through the
-            // circle on /chat. Active is the one picked look: the solid ink fill.
+            // circle on /chat. Active is the ink fill; it shrinks with the dock.
             className={({ isActive }) =>
               cn(
-                'relative flex h-15 w-15 shrink-0 items-center justify-center rounded-full border focus-visible:lit-focus mv-tint',
+                'relative flex shrink-0 items-center justify-center rounded-full border focus-visible:lit-focus',
+                MOVE_CLASS.dock,
+                shrunk ? 'h-11 w-11' : 'h-13 w-13',
                 isActive
-                  ? 'border-transparent bg-accent text-accent-fg lit-pill'
-                  : 'bg-panel lit-raised text-fg',
+                  ? 'border-transparent bg-accent text-accent-fg'
+                  : 'border-border bg-panel text-fg-2',
               )
             }
           >

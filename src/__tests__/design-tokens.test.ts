@@ -38,6 +38,8 @@ describe('design tokens: type and radius scales', () => {
       card: '8px',
       sheet: '16px',
       pill: '9999px',
+      // rounded-picture: a list row's 40 picture squircle (flat look, 7 Nov 2026).
+      picture: '10px',
     });
     expect(extend).not.toHaveProperty('borderRadius');
   });

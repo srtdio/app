@@ -144,7 +144,7 @@ export function BriefCard({ brief, cache, presignEnabled, href, timeZone, now }:
                   fallback={{ kind: 'glyph' }}
                   fallbackTile={
                     <span className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2">
-                      <IconBriefs size={ICON_SIZE.picture} />
+                      <IconBriefs size={ICON_SIZE.control} />
                     </span>
                   }
                   alt={brief.title}

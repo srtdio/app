@@ -29,7 +29,18 @@ import { PlanCardBody, PlanCardSkeleton } from '@/components/chat/PlanCard';
 import { IconPipeline } from '@/components/ui/icons';
 
 // Radius roles (CLAUDE.md): every card's outer box is 12px (rounded-xl);
-// thumbnails inside a card stay 8px (rounded-lg).
+// thumbnails inside a card stay 8px (rounded-lg). List rows (ui/ListCard:
+// Pipeline, Briefs, Activity) are the flat look (7 Nov 2026): no radius, no
+// border, the 60 row bled 16 each side; their picture is rounded-picture (10).
+
+/** A flat list row: no radius and no border on the frame; the h-15 row bled -mx-4 / px-4. */
+function expectFlatRow(cls: string[]): void {
+  expect(cls).toContain('h-15');
+  expect(cls).toEqual(expect.arrayContaining(['-mx-4', 'px-4']));
+  expect(cls.filter((c) => /^rounded/.test(c))).toEqual([]);
+  expect(cls.filter((c) => /^border/.test(c))).toEqual([]);
+  expect(cls.filter((c) => /^lit-/.test(c))).toEqual([]);
+}
 
 const cache = {
   peek: () => null,
@@ -94,8 +105,8 @@ const brief: BriefWithThumbnail = {
   thumbnailAssetVersionId: null,
 };
 
-describe('cards use the 12px card radius', () => {
-  it('Pipeline post card', () => {
+describe('cards use the 12px card radius; list rows are flat', () => {
+  it('Pipeline post row (flat)', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <PipelineCard
@@ -106,20 +117,21 @@ describe('cards use the 12px card radius', () => {
         />
       </MemoryRouter>,
     );
-    expect(outer(html)).toContain('rounded-xl');
-    expect(outer(html)).not.toContain('rounded-lg');
+    expectFlatRow(outer(html));
   });
 
-  it('Briefs list card', () => {
+  it('Briefs list row (flat; its non-person picture is the rounded-picture squircle)', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <BriefCard brief={brief} cache={cache} presignEnabled={false} href="/briefs/b1" />
       </MemoryRouter>,
     );
-    expect(outer(html)).toContain('rounded-xl');
+    expectFlatRow(outer(html));
+    expect(html).toMatch(/data-list-card-picture-box=""[^>]*class="[^"]*\brounded-picture\b/);
+    expect(html).not.toMatch(/data-list-card-picture-box=""[^>]*class="[^"]*\brounded-lg\b/);
   });
 
-  it('Activity card', () => {
+  it('Activity row (flat)', () => {
     const html = renderToStaticMarkup(
       <ActivityCard
         group={[
@@ -162,8 +174,9 @@ describe('cards use the 12px card radius', () => {
         selfName={null}
       />,
     );
-    // ui/ListCard: the 12px card radius whether unread or read.
-    expect(html).toMatch(/data-list-card="" class="[^"]*rounded-xl border bg-panel[^"]*lit-card/);
+    // ui/ListCard: the flat row whether unread or read.
+    const row = (/data-list-card="" class="([^"]*)"/.exec(html)?.[1] ?? '').split(' ');
+    expectFlatRow(row);
   });
 
   it('chat brief card, tappable and unavailable', () => {

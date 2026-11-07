@@ -167,7 +167,7 @@ function cardPicture(
             fallbackTile={
               <PostPlaceholder
                 kind={postPlaceholderKind(post.format)}
-                size={ICON_SIZE.picture}
+                size={ICON_SIZE.control}
                 fill
               />
             }

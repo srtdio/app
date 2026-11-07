@@ -159,10 +159,20 @@ describe('viewport rules', () => {
     }
   });
 
-  it('the phone tab bar keeps clear of the side insets (landscape notch)', () => {
+  it('the phone tab bar keeps clear of the side insets (landscape notch): centred, only as wide as its tabs', () => {
     const tabs = src('shell/BottomTabs.tsx');
     const offsets = /PHONE_BAR_OFFSETS\s*=\s*([^;]+);/.exec(tabs)?.[1] ?? '';
-    expect(SAFE_SIDES(offsets || tabs)).toBe(true);
+    // Flat look (7 Nov 2026): the dock is centred and hugs its tabs, so it
+    // never reaches a side edge (or a landscape notch); it clears the home
+    // indicator by 16 past the bottom inset.
+    expect(offsets).toContain(
+      "'left-1/2 -translate-x-1/2 bottom-[calc(16px+env(safe-area-inset-bottom))]'",
+    );
+    expect(offsets).not.toMatch(/\b(right-|inset-x-|w-full)/);
+    // The pill hugs its tabs (shrink-0), never stretches to the sides (flex-1).
+    const pill = /data-tab-pill=""[\s\S]*?className=\{cn\(\s*'([^']*)'/.exec(tabs)?.[1] ?? '';
+    expect(pill).toContain('shrink-0');
+    expect(pill).not.toMatch(/\bflex-1\b|\bw-full\b/);
   });
 
   it('every fixed bottom dock (lit-dock) keeps clear of the side insets', () => {

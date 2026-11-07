@@ -5,8 +5,8 @@ import { IconUser } from '@/components/ui/icons';
 /**
  * Where an avatar sits; the role alone decides its size. 'inline' (20) beside a
  * name in a meta line; 'header' (32) in a thread or detail header; 'row' (40)
- * in a list row (members, search, pickers); 'card' (48) as a list card's
- * picture (ui/ListCard); 'profile' (72) on a profile or group info screen.
+ * in a list row (members, search, pickers); 'card' (40) as a list row's
+ * picture (ui/ListCard, flat look 7 Nov 2026); 'profile' (72) on a profile or group info screen.
  * No other sizes.
  */
 export type AvatarRole = 'inline' | 'header' | 'row' | 'card' | 'profile';
@@ -40,7 +40,7 @@ export const AVATAR_PX: Record<AvatarRole, number> = {
   inline: 20,
   header: 32,
   row: 40,
-  card: 48,
+  card: 40,
   profile: 72,
 };
 
@@ -48,7 +48,7 @@ const INITIALS_TYPE: Record<AvatarRole, string> = {
   inline: 'text-xs',
   header: 'text-sm',
   row: 'text-base',
-  card: 'text-lg',
+  card: 'text-base',
   profile: 'text-2xl',
 };
 

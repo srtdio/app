@@ -91,6 +91,7 @@ import {
   type BankData,
 } from './use-bank-data';
 import type { BankSelection } from './use-bank-select';
+import { getFillCount } from '@/lib/use-fill-count';
 
 // ---------------------------------------------------------------------------
 // Small parts
@@ -98,8 +99,8 @@ import type { BankSelection } from './use-bank-select';
 
 /**
  * From bank's small tile (BankPickSheet, 44): first picture, else its first
- * link's picture, else a file glyph, else a dashed box. The Bank's own cards
- * take ListCard's 72 picture (bankCardPicture).
+ * link's picture, else a file glyph, else a dashed box. The Bank's own rows
+ * take ListCard's 40 squircle picture (bankCardPicture).
  */
 export function BankThumb(props: { idea: BankIdea; size: 44 }): ReactElement {
   const box = 'h-11 w-11';
@@ -227,7 +228,7 @@ function PictureIcon(props: { icon: typeof IconBank }): ReactElement {
       aria-hidden="true"
       className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2"
     >
-      <props.icon size={ICON_SIZE.picture} />
+      <props.icon size={ICON_SIZE.control} />
     </span>
   );
 }
@@ -268,7 +269,7 @@ function BankLinkPicture(props: { url: string; fileCount: number }): ReactElemen
       ) : settled ? (
         <PictureIcon icon={props.fileCount > 0 ? IconFile : IconBank} />
       ) : (
-        <Bone lit="lit-media" as="span" className="absolute inset-0" />
+        <Bone lit="flat" as="span" className="absolute inset-0" />
       )}
     </span>
   );
@@ -661,7 +662,7 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
 function BankBoxes(): ReactElement {
   return (
     <BoxSkeleton lit="flat" label="Loading ideas" data-bank-loading="" className={LIST_CARD_GRID}>
-      {[0, 1, 2].map((k) => (
+      {Array.from({ length: getFillCount() }, (_unused, k) => (
         <ListCardBox key={k} />
       ))}
     </BoxSkeleton>

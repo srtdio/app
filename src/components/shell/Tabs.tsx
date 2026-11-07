@@ -77,7 +77,7 @@ export function Tabs({ items, active, onChange, label }: TabsProps) {
             onClick={() => onChange(tab.key)}
             className={cn(
               'flex shrink-0 items-center justify-center px-3 text-base font-medium whitespace-nowrap',
-              isActive ? 'bg-accent text-accent-fg lit-pill' : 'bg-panel-3 text-fg lit-well-soft',
+              isActive ? 'border border-fg text-fg' : 'border border-border text-fg-2',
             )}
           >
             {tab.label}

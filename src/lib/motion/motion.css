@@ -55,6 +55,13 @@
   scale: 0;
 }
 
+/* Phone nav dock: shrinks on scroll down, grows on scroll up. Axis: size and translateY, 240 ms. */
+.mv-dock {
+  transition-property: height, width, padding, gap, transform, translate, background-color;
+  transition-duration: var(--dur-back);
+  transition-timing-function: var(--ease-enter);
+}
+
 /* Board drag: the lifted card scales to 1.02 (it also takes one lit height up). Axis: scale. */
 .mv-lift {
   scale: 1.02;

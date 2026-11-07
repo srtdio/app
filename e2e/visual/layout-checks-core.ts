@@ -289,29 +289,35 @@ export function boxText(box: Box): string {
   return `${r(box.x)},${r(box.y)} ${r(box.width)}x${r(box.height)}`;
 }
 
-/** ui/ListCard's geometry (src/components/ui/ListCard.tsx). */
-export const LIST_CARD_PICTURE_PX = 48;
-/** The card's inner padding: the picture sits this far inside the border (left, and top: centred in 74). */
-export const LIST_CARD_INSET_PX = 12;
+/** ui/ListCard's geometry (src/components/ui/ListCard.tsx, flat look 7 Nov 2026). */
+export const LIST_CARD_PICTURE_PX = 40;
+/**
+ * The picture's left inset inside the row box: the row bleeds -mx-4 past the
+ * gutter and pads px-4 back, so the picture sits 16 inside the bled row (on
+ * the page gutter). No border.
+ */
+export const LIST_CARD_INSET_X_PX = 16;
+/** The picture's top inset: centred in the 60 row, 10 above and below the 40. */
+export const LIST_CARD_INSET_Y_PX = 10;
 /** Picture to text column. */
 export const LIST_CARD_GAP_PX = 12;
 /**
  * Every ui/ListCard in all seven lists (Pipeline, Briefs, Assets, the Chat list,
- * Activity, the Plan tab and its Bank) is this tall: 1 + 12 + 48 + 12 + 1
- * (border, padding, the 48 picture; the two 20 lines and the 4 between, 44,
- * centre inside it).
+ * Activity, the Plan tab and its Bank) is this tall: the flat h-15 row, 10 +
+ * the 40 picture + 10 (the two 20 lines and the 2 between, 42, centre inside
+ * it). No border, no radius.
  */
-export const LIST_CARD_HEIGHT_PX = 74;
+export const LIST_CARD_HEIGHT_PX = 60;
 /** Cards are the same height (on a screen, and LIST_CARD_HEIGHT_PX) within this many px. */
 export const LIST_CARD_HEIGHT_TOLERANCE_PX = 1;
 /** Sizes and offsets within this many px are equal (sub-pixel layout rounding). */
 const LIST_CARD_PX_TOLERANCE = 0.5;
 
-/** One ui/ListCard as measured: its box, its border, its picture and its text column. */
+/** One ui/ListCard as measured: its (bled) row box, its border (0 on the flat row), its picture and its text column. */
 export interface ListCardGeom {
   label: string;
   card: Box;
-  /** The card's left and top border widths (the box includes them). */
+  /** The row's left and top border widths (the box includes them; the flat row has none). */
   borderLeft: number;
   borderTop: number;
   picture: Box | null;
@@ -331,9 +337,10 @@ const near = (a: number, b: number, tolerance = LIST_CARD_PX_TOLERANCE): boolean
 
 /**
  * The list card rule: every card on a screen has the same height (within 1px),
- * and that height is LIST_CARD_HEIGHT_PX (74) on every screen, so the seven lists'
- * cards are one height across the app; each card's picture is 48x48, on the left, 12 inside the card's border
- * (left and top), with the text column 12 after it. Pure.
+ * and that height is LIST_CARD_HEIGHT_PX (60) on every screen, so the seven lists'
+ * rows are one height across the app; each row's picture is 40x40, on the left,
+ * 16 inside the bled row (x) and 10 from its top (y), with the text column 12
+ * after it. Pure.
  */
 export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
   const out: string[] = [];
@@ -358,12 +365,16 @@ export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
     }
     const p = c.picture;
     if (!near(p.width, LIST_CARD_PICTURE_PX) || !near(p.height, LIST_CARD_PICTURE_PX)) {
-      out.push(`${c.label} picture is ${p.width}x${p.height}, not 48x48`);
+      out.push(
+        `${c.label} picture is ${p.width}x${p.height}, not ${LIST_CARD_PICTURE_PX}x${LIST_CARD_PICTURE_PX}`,
+      );
     }
     const left = p.x - c.card.x - c.borderLeft;
     const top = p.y - c.card.y - c.borderTop;
-    if (!near(left, LIST_CARD_INSET_PX) || !near(top, LIST_CARD_INSET_PX)) {
-      out.push(`${c.label} picture sits ${left},${top} inside the card, not 12,12 (left, top)`);
+    if (!near(left, LIST_CARD_INSET_X_PX) || !near(top, LIST_CARD_INSET_Y_PX)) {
+      out.push(
+        `${c.label} picture sits ${left},${top} inside the row, not ${LIST_CARD_INSET_X_PX},${LIST_CARD_INSET_Y_PX} (left, top)`,
+      );
     }
     if (c.text !== null) {
       const gap = c.text.x - (p.x + p.width);

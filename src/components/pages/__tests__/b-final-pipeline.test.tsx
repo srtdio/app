@@ -1,5 +1,5 @@
 // Layout B-final, Pipeline + post screen: the Pipeline card renders
-// ui/ListCard (slots, no ⋮, the one 74 height, select mode), the list is
+// ui/ListCard (slots, no ⋮, the one 60 height, select mode), the list is
 // LIST_CARD_GRID on phone and laptop, the one post placeholder, the post
 // screen's top bar is ui/HeaderBar, and a running decision keeps its button
 // width (Button busy).
@@ -63,12 +63,13 @@ function card(props: Partial<PostCardProps> = {}): string {
 }
 
 describe('Pipeline card is ui/ListCard', () => {
-  it('renders the part: frame, 12 inset, one press surface behind the content', () => {
+  it('renders the part: the flat row frame, 16 sides, one press surface behind the content', () => {
     const out = card({ viewer: { role: 'agency', approverFirstNames: [] } });
     expect(out).toContain('data-list-card=""');
-    expect(out).toContain('lit-card');
-    expect(out).toContain('rounded-xl');
-    expect(out).toMatch(/data-list-card-body=""[^>]*class="[^"]*\bp-3\b/);
+    expect(out).toMatch(/data-list-card=""[^>]*class="relative -mx-4 flex h-15 min-w-0 px-4\b/);
+    expect(out).not.toContain('lit-card');
+    expect(out).not.toContain('rounded-xl');
+    expect(out).not.toMatch(/data-list-card-body=""[^>]*class="[^"]*\bp-3\b/);
     expect(out).not.toMatch(/\bp-4\b/);
     expect(out).not.toContain('data-card=""');
     expect(out).toContain('data-list-card-press=""');

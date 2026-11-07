@@ -191,11 +191,12 @@ describe('Notifications type roles', () => {
     expect(label.className).not.toContain('tracking-wide');
   });
 
-  it('the card title is the ListCard heading role', async () => {
+  it('the card title is the ListCard heading role (unread: the bold heading)', async () => {
     await mount();
     const title = document.querySelector('[data-list-card-title]');
     expect(title?.textContent).toContain('Q3 Launch');
     expectRole(title as HTMLElement, ['text-lg', 'font-semibold', 'truncate']);
+    expect(title?.className).not.toContain('font-normal');
     expect(title?.className).not.toMatch(/leading-\[/);
   });
 

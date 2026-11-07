@@ -105,6 +105,25 @@ const OPACITY_ALLOW: readonly (readonly [string, string, string])[] = [
 ];
 
 const DEFINED = new Set([...CSS.matchAll(/\.(lit-[a-z-]+)/g)].map((m) => m[1]));
+
+/** The theme block that opens at `sel {` (the first match: :root, then \n.dark). */
+const themeBlockOf = (sel: string): string => {
+  const start = CSS.indexOf(`${sel} {`);
+  return CSS.slice(start, CSS.indexOf('\n}', start));
+};
+/**
+ * The FLAT LOOK block (7 Nov 2026): ':root,\n.dark { ... }' after the .dark
+ * block. Its values win over both themes (same specificity, later in source).
+ */
+const FLAT_BLOCK = (() => {
+  const start = CSS.search(/:root,\s*\.dark\s*\{/);
+  return start < 0 ? '' : CSS.slice(start, CSS.indexOf('\n}', start));
+})();
+/** The token names the flat block sets. */
+const FLAT_TOKENS = new Set([...FLAT_BLOCK.matchAll(/(--lit-[\w-]+):/g)].map((m) => m[1] ?? ''));
+/** A token's value inside one block, whitespace folded. */
+const tokenIn = (body: string, name: string): string =>
+  (new RegExp(`--${name}:([^;]+);`).exec(body)?.[1] ?? '').replace(/\s+/g, ' ').trim();
 const src = (rel: string) => FILES.find((f) => f.rel === rel)?.src ?? '';
 
 describe('lighting rules', () => {
@@ -168,7 +187,11 @@ describe('lighting rules', () => {
       expect(DEFINED.has(c), c).toBe(true);
       // lit-card-muted reuses the --lit-card shadow over its own panel-2 fill.
       const token = `--${c === 'lit-card-muted' ? 'lit-muted-shine' : c}:`;
-      expect(CSS.split(token).length - 1, token).toBe(2);
+      // Once in :root and once in .dark; a third time only in the FLAT LOOK block.
+      expect(themeBlockOf(':root').split(token).length - 1, `:root ${token}`).toBe(1);
+      expect(themeBlockOf('\n.dark').split(token).length - 1, `.dark ${token}`).toBe(1);
+      const flat = FLAT_BLOCK.split(token).length - 1;
+      expect(CSS.split(token).length - 1, token).toBe(2 + flat);
     }
     expect(CSS).not.toMatch(/transition[^;]*box-shadow/);
   });
@@ -184,9 +207,11 @@ describe('lighting rules', () => {
       // No top inset highlight, no top line, no upward (negative y) shade.
       expect(value, sel.trim()).not.toMatch(/inset 0 1px/);
       expect(value, sel.trim()).not.toMatch(/(^|,)\s*-?\d+(\.\d+)?(px)? -\d/);
-      // The dock itself keeps its top edge.
-      expect(block(sel), sel.trim()).toMatch(/--lit-dock:[^;]*inset 0 1px 0/);
+      // The flat block leaves lit-dock-joined alone.
+      expect(FLAT_TOKENS.has('--lit-dock-joined')).toBe(false);
     }
+    // The dock itself keeps its top edge: flat, the --border hairline above it.
+    expect(tokenIn(FLAT_BLOCK, 'lit-dock')).toBe('0 -1px 0 var(--border)');
     const flat = CSS.replace(/\s+/g, ' ');
     const own = flat.split('.lit-dock-joined {')[1]?.split('}')[0] ?? '';
     expect(own).toContain('box-shadow: var(--lit-dock-joined)');
@@ -207,7 +232,7 @@ describe('lighting rules', () => {
     expect(CSS).toContain('--shadow-spotlight:');
   });
 
-  it('selected days keep the solid accent and take a pill light, never a glow or tint', () => {
+  it('selected days keep the solid accent (the lit-pill class, flat by token), never a glow or tint', () => {
     const picker = src('ui/DatePicker.tsx');
     expect(picker).toContain("'bg-accent text-accent-fg lit-pill'");
     expect(src('pages/pipeline/PipelineDateRangeCalendar.tsx')).toContain(
@@ -225,7 +250,7 @@ describe('lighting rules', () => {
     }
   });
 
-  it('every single-choice pick is the ink fill, switched instantly; idle options rest on the grey fill', () => {
+  it('every single-choice pick is the ink outline (flat look), switched instantly; idle options rest on the hairline', () => {
     for (const rel of [
       'shell/Tabs.tsx',
       'support/BookCallSheet.tsx',
@@ -235,27 +260,33 @@ describe('lighting rules', () => {
       'ui/viewers/SheetViewer.tsx',
       'chat/ReadingLayer.tsx',
       'chat/EmojiPicker.tsx',
-      'chat/PlanDayPickerSheet.tsx',
     ]) {
       const code = src(rel);
       expect(code, rel).not.toContain('selectionSlideRef');
       expect(code, rel).not.toContain('data-fill-slide');
-      expect(code, rel).toMatch(/bg-accent[^'"]*text-accent-fg[^'"]*lit-pill/);
+      // The pick: the fg line and fg ink, no fill.
+      expect(code, rel).toMatch(/border-fg[^'"]*text-fg\b/);
+      expect(code, rel).not.toMatch(/bg-accent[^'"]*text-accent-fg[^'"]*lit-pill/);
     }
     for (const rel of [
       'shell/Tabs.tsx',
       'support/BookCallSheet.tsx',
       'shell/WorkspaceSwitcher.tsx',
       'onboarding/OnboardingFlow.tsx',
+      'cockpit/Cockpit.tsx',
       'ui/viewers/SheetViewer.tsx',
       'chat/ReadingLayer.tsx',
-      'chat/PlanDayPickerSheet.tsx',
     ]) {
       const code = src(rel);
-      expect(code, rel).toContain('bg-panel-3');
-      expect(code, rel).toContain('lit-well-soft');
+      // Idle: the --border hairline and fg-2 ink; never the old grey well.
+      expect(code, rel).toMatch(/border-border[^'"]*text-fg-2/);
+      expect(code, rel).not.toContain('bg-panel-3 text-fg lit-well-soft');
       expect(code, rel).not.toContain('lit-chip');
     }
+    // The day picker keeps the ink fill for a picked day (a date, not a choice row).
+    const days = src('chat/PlanDayPickerSheet.tsx');
+    expect(days).toMatch(/bg-accent[^'"]*text-accent-fg[^'"]*lit-pill/);
+    expect(days).not.toContain('selectionSlideRef');
   });
 
   it('hover keeps the light: the hover rules stack --hover-fill over --lit-bg', () => {
@@ -375,20 +406,28 @@ describe('lighting rules', () => {
     }
   });
 
-  it('dark raised tokens carry a bottom rim dimmer than the top edge; light has none', () => {
-    const block = (sel: string): string => {
-      const start = CSS.indexOf(`${sel} {`);
-      return CSS.slice(start, CSS.indexOf('\n}', start));
-    };
-    const value = (body: string, name: string): string =>
-      (new RegExp(`--${name}:([^;]+);`).exec(body)?.[1] ?? '').replace(/\s+/g, ' ');
-    const light = block(':root');
-    const dark = block('\n.dark');
+  it('dark floating tokens carry a bottom rim dimmer than the top edge; light has none; in-content tokens are flat', () => {
+    const light = themeBlockOf(':root');
+    const dark = themeBlockOf('\n.dark');
+    // Floating layers (sheets, menus, toasts) keep their light: the flat block never touches them.
+    for (const name of ['lit-float', 'lit-overlay']) {
+      expect(FLAT_TOKENS.has(`--${name}`), name).toBe(false);
+      const d = tokenIn(dark, name);
+      expect(d, name).toContain('inset 0 -1px 0');
+      // Top edge: a white highlight (#fff / #ffffff is full strength).
+      const topHit = /inset 0 1px 0 (?:rgba\(255, 255, 255, ([\d.]+)\)|#fff(?:fff)?\b)/.exec(d);
+      const top = topHit === null ? Number.NaN : Number(topHit[1] ?? 1);
+      const darkRim = /inset 0 -1px 0 rgba\(0, 0, 0, [\d.]+\)/.test(d);
+      const rim = darkRim
+        ? 0
+        : Number(/inset 0 -1px 0 rgba\(255, 255, 255, ([\d.]+)\)/.exec(d)?.[1]);
+      expect(rim, name).toBeLessThan(top);
+      expect(tokenIn(light, name), name).not.toContain('inset 0 -1px 0');
+    }
+    // In-content surfaces: the flat block sets them to no shadow in both themes.
     for (const name of [
       'lit-raised',
       'lit-card',
-      'lit-float',
-      'lit-overlay',
       'lit-btn-primary',
       'lit-btn-success',
       'lit-btn-danger',
@@ -397,19 +436,7 @@ describe('lighting rules', () => {
       'lit-bubble-own',
       'lit-bubble-other',
     ]) {
-      const d = value(dark, name);
-      expect(d, name).toContain('inset 0 -1px 0');
-      // Top edge: a white highlight (#fff / #ffffff is full strength).
-      const topHit = /inset 0 1px 0 (?:rgba\(255, 255, 255, ([\d.]+)\)|#fff(?:fff)?\b)/.exec(d);
-      const top = topHit === null ? Number.NaN : Number(topHit[1] ?? 1);
-      // Bottom rim: a fainter white, or a dark rim under a white fill (the
-      // off-white primary button and own bubble), which is dimmer by definition.
-      const darkRim = /inset 0 -1px 0 rgba\(0, 0, 0, [\d.]+\)/.test(d);
-      const rim = darkRim
-        ? 0
-        : Number(/inset 0 -1px 0 rgba\(255, 255, 255, ([\d.]+)\)/.exec(d)?.[1]);
-      expect(rim, name).toBeLessThan(top);
-      expect(value(light, name), name).not.toContain('inset 0 -1px 0');
+      expect(tokenIn(FLAT_BLOCK, name), name).toBe('0 0 #0000');
     }
   });
 
@@ -461,13 +488,21 @@ describe('lighting rules', () => {
     for (const c of ['lit-btn-primary', 'lit-btn-secondary', 'lit-btn-success', 'lit-btn-danger']) {
       expect(button, c).toContain(c);
     }
-    // Chips rest on the quiet grey well; the pick is the ink fill (5 Nov 2026).
-    expect(src('ui/Chip.tsx')).toContain('bg-panel-3 text-fg lit-well-soft');
-    expect(src('ui/Chip.tsx')).toContain('bg-accent text-accent-fg lit-pill');
+    // Chips are the flat outline pill (7 Nov 2026): rest on the hairline in
+    // fg-2, the pick is the fg line in fg ink; no fill, no lit-pill.
+    const chip = src('ui/Chip.tsx');
+    expect(chip).toContain("'border-border text-fg-2'");
+    expect(chip).toContain("'border-fg text-fg'");
+    expect(chip).not.toContain('bg-accent text-accent-fg lit-pill');
+    expect(chip).not.toContain('lit-well-soft');
     expect(src('ui/Input.tsx')).toContain('lit-well');
     expect(src('ui/Sheet.tsx')).toContain('lit-overlay');
     expect(src('ui/popover-classes.ts')).toContain('lit-overlay');
-    expect(src('shell/BottomTabs.tsx')).toContain('lit-raised');
+    // The phone dock is flat: the --border hairline on the panel, no lit height.
+    const tabs = src('shell/BottomTabs.tsx');
+    expect(tabs).toContain('rounded-full border border-border bg-panel');
+    expect(tabs).not.toContain('lit-raised');
+    expect(tabs).not.toContain('lit-pill');
     expect(src('ui/toast/Toast.tsx')).toContain('lit-float');
     // The dark undo strip takes its own faint top line, not lit-float's
     // .95 white hairline.

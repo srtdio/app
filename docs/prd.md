@@ -178,6 +178,13 @@ Manual Skip per item and manual Dismiss for the whole card.
 | Profile / avatar menu | Switch workspace, Recently deleted, Settings, profile. |
 | Mobile | Web-only at MVP. Bottom tab bar on small screens. Native deferred. |
 
+### Flat look (7 Nov 2026)
+
+- Lighting: in-content surfaces flat, a `--border` hairline separates them; only floating layers (sheets, menus, dialogs, toasts, the unread pill) keep a soft shadow. All values in the FLAT LOOK block of `src/index.css`.
+- List row (ui/ListCard, every list): flat, 60 tall, rows touching, no divider, no border; bleeds edge to edge so the selected / pressed fill spans the screen on phone; 40 picture (people round, else a 10 squircle); title bold when unread, regular when read.
+- Chips and single-choice picks: outline pill, 32 visible / 44 tap; rest hairline + fg-2; picked = ink line + fg, no fill.
+- Phone nav: centred, as wide as its tabs; 52 at rest, 44 while scrolling down (labels hide), grows back on scroll up or at the top; Chat circle shrinks with it.
+
 ### Iconography
 
 | Item | Decision |

@@ -8,9 +8,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
 import type { Stage } from '@srtdio/posts';
 
-/** Cards shown before the list's Show more control. */
-export const BOARD_CAP = 6;
-
 /** Title-case a single workflow stage for display. */
 export function stageLabel(stage: Stage): string {
   return stage.charAt(0).toUpperCase() + stage.slice(1);

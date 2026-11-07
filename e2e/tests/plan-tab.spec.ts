@@ -102,7 +102,7 @@ test('the Plan tab lists plans as ListCards in sections and a tap opens the plan
   await expect(draft.locator('[data-plan-tab-dates]')).toContainText(
     '1 post · only your team sees this',
   );
-  // Every card in the list is the same height (ListCard's 74).
+  // Every card in the list is the same height (ListCard's 60).
   const heights = await list
     .locator('[data-list-card]')
     .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));

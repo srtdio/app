@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { checkKeyframes } from '@/lib/motion/run';
 import * as moves from '@/lib/motion/moves';
+import { MOVE_CLASS } from '@/lib/motion/react';
 
 // Motion: only src/lib/motion moves (docs/motion.md). Outside it no file
 // carries its own transition or animation (Tailwind transition-*, animate-*,
@@ -195,6 +196,27 @@ describe('motion rules', () => {
       expect(readFileSync(join(SRC, rel), 'utf8'), rel).toContain(needle);
       expect(reason.length, rel).toBeGreaterThan(10);
     }
+  });
+
+  it('the phone dock move (mv-dock) is size and translate only, --dur-back, off under Reduce Motion', () => {
+    expect(MOVE_CLASS.dock).toBe('mv-dock');
+    const css = readFileSync(join(SRC, 'lib/motion/motion.css'), 'utf8').replace(/\s+/g, ' ');
+    const body = /\.mv-dock \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(body).toContain(
+      'transition-property: height, width, padding, gap, transform, translate, background-color;',
+    );
+    expect(body).toContain('transition-duration: var(--dur-back);');
+    expect(body).toContain('transition-timing-function: var(--ease-enter);');
+    // Never a fade, never a shadow (the flat dock has none to move).
+    expect(body).not.toMatch(/opacity|box-shadow/);
+    // The blanket Reduce Motion rule covers every mv-* class, the dock included.
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{ \[class\*='mv-'\][^{]*\{ transition: none !important;/,
+    );
+    // The dock is the only user, and it takes the class from the module.
+    const tabs = readFileSync(join(SRC, 'components/shell/BottomTabs.tsx'), 'utf8');
+    expect(tabs).toContain('MOVE_CLASS.dock');
+    expect(tabs).not.toMatch(/['"`][^'"`]*\bmv-dock\b/);
   });
 
   it('index.css keeps no keyframes of its own and imports the module stylesheet', () => {

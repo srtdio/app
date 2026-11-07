@@ -34,6 +34,10 @@ async function holdBubble(page: Page, text: string): Promise<void> {
   const box = await bubble.boundingBox();
   if (box === null) throw new Error('bubble has no box');
   const at = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
+  // Park Playwright's cursor on the bubble: left where the last click landed,
+  // WebKit sends a pointermove from it when the thread moves under it, and
+  // that move cancels the hold. A finger never leaves a cursor behind.
+  await page.mouse.move(at.clientX, at.clientY);
   await bubble.dispatchEvent('pointerdown', { ...at, pointerType: 'touch', isPrimary: true });
   await page.waitForTimeout(700);
   await bubble.dispatchEvent('pointerup', { ...at, pointerType: 'touch', isPrimary: true });
@@ -222,13 +226,13 @@ for (const photo of [true, false]) {
     await page.goto('/chat');
     const tile = page.locator('[data-notes-tile]');
     await tile.waitFor({ state: 'visible', timeout: 30_000 });
-    // The notes card is ui/ListCard's person slot at 48 (ui/Avatar 'card'):
+    // The notes row is ui/ListCard's person slot at 40 (ui/Avatar 'card'):
     // the user's own photo, round; their initials (no image) without one.
     const picture = tile.locator('[data-notes-picture]');
     await expect(picture).toBeVisible();
     const box = await picture.boundingBox();
-    expect(Math.round(box?.width ?? 0)).toBe(48);
-    expect(Math.round(box?.height ?? 0)).toBe(48);
+    expect(Math.round(box?.width ?? 0)).toBe(40);
+    expect(Math.round(box?.height ?? 0)).toBe(40);
     const tileAvatar = tile.locator('[data-avatar-role="card"]');
     await expect(tileAvatar).toHaveClass(/rounded-full/);
     await expect(tile.locator('img')).toHaveCount(photo ? 1 : 0);

@@ -115,7 +115,7 @@ export function assetTypeTag(item: Pick<AssetListItem, 'kind' | 'mimeType'>): st
 }
 
 /**
- * A video's 48 picture: its stored frame (asked once near the viewport, the
+ * A video's 40 picture: its stored frame (asked once near the viewport, the
  * same shared thumbnail read the file tiles use), else the video glyph, with
  * the media play badge and its length (when stored) at the bottom left, as in
  * the chat media grid. Paints the cached frame on first render.
@@ -156,7 +156,7 @@ function AssetVideoThumb({
         />
       ) : (
         <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
-          <IconVideo size={ICON_SIZE.picture} />
+          <IconVideo size={ICON_SIZE.control} />
         </span>
       )}
       <span
@@ -209,7 +209,7 @@ function assetPicture(
           fallback={{ kind: 'file', extension: fileExtension(item.filename) }}
           fallbackTile={
             <span className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2">
-              <IconImage size={ICON_SIZE.picture} />
+              <IconImage size={ICON_SIZE.control} />
             </span>
           }
           alt={name}

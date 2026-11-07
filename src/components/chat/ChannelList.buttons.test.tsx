@@ -15,13 +15,14 @@ function buttonTags(html: string): string[] {
 }
 
 describe('ChannelList buttons (design system)', () => {
-  it('search chips are ui/Chip: 44 tap box, 32 visible, 8px radius, its selected style', () => {
+  it('search chips are ui/Chip: 44 tap box, 32 visible, full pill, its selected style', () => {
     const html = renderToStaticMarkup(searchChips({ kind: 'photo', onChange: noop }));
     const tags = buttonTags(html);
     expect(tags.length).toBeGreaterThan(0);
     for (const tag of tags) {
       expect(tag).toContain('min-h-11');
-      expect(tag).not.toContain('rounded-full');
+      // The chip's tap box is the full pill; the Clear ghost button beside it keeps its own radius.
+      if (tag.includes('data-search-chip')) expect(tag).toContain('rounded-full');
       expect(tag).not.toMatch(/\bh-8\b|\bh-9\b|\bh-12\b|rounded-md|font-semibold/);
     }
     const faces = html.match(/<span data-chip-face=""[^>]*>/g) ?? [];
@@ -29,13 +30,15 @@ describe('ChannelList buttons (design system)', () => {
     for (const face of faces) {
       expect(face).toContain('min-h-8');
       expect(face).toContain('px-3');
-      expect(face).toContain('rounded-lg');
+      expect(face).toContain('rounded-full');
       expect(face).toContain('text-md');
     }
     const on =
       /<button[^>]*data-search-chip="photo"[^>]*><span data-chip-face=""[^>]*>/.exec(html)?.[0] ??
       '';
-    expect(on).toContain('bg-accent text-accent-fg lit-pill');
+    // The pick is the flat ink outline, no fill.
+    expect(on).toContain('border-fg text-fg');
+    expect(on).not.toMatch(/bg-accent|lit-pill/);
     expect(on).toContain('aria-pressed="true"');
   });
 

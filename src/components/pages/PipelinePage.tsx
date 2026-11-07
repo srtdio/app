@@ -62,7 +62,8 @@ import {
   type CoverLookup,
 } from '@/lib/chat/post-covers';
 import { generateTraceId } from '@/lib/trace';
-import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
+import { stageLabel } from '@/components/pages/pipeline/stage-meta';
+import { getFillCount } from '@/lib/use-fill-count';
 import {
   dateChipLabel,
   dateFilterActive,
@@ -367,13 +368,11 @@ export function listedCovers(
   return out;
 }
 
-/** Loading boxes: one list page's worth. */
-const SKELETON_CARDS = BOARD_CAP;
-
 /**
  * ui/ListCardBox placeholders while the first read is in flight, in the real
  * list's container and grid (LIST_CARD_GRID, phone and laptop alike), so
- * nothing moves when the cards land.
+ * nothing moves when the cards land: one first page's worth, the screen's fill
+ * count (getFillCount, read once per app load).
  */
 export function postsSkeleton(): ReactElement {
   mark('pipeline:skeleton');
@@ -387,7 +386,7 @@ export function postsSkeleton(): ReactElement {
     >
       <span className="sr-only">Loading posts</span>
       <div aria-hidden="true" className={LIST_CARD_GRID}>
-        {Array.from({ length: SKELETON_CARDS }, (_unused, index) => (
+        {Array.from({ length: getFillCount() }, (_unused, index) => (
           <ListCardBox key={`skeleton-${index}`} data-skeleton-card="" />
         ))}
       </div>

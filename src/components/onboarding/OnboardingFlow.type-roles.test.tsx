@@ -226,24 +226,25 @@ describe('OnboardingFlow type roles', () => {
     expect(tile).not.toContain('font-semibold');
   });
 
-  it('side radios follow every chip: idle grey fill, the pick is the ink fill, never a ring', async () => {
+  it('side radios follow every chip: idle hairline, the pick is the ink outline, never a ring', async () => {
     await render({});
     const radios = [...document.querySelectorAll<HTMLElement>('[role="radio"]')];
     expect(radios.length).toBeGreaterThan(0);
     for (const radio of radios) {
       const classes = radio.className.split(/\s+/);
       if (radio.getAttribute('aria-checked') === 'true') {
-        expect(classes).toEqual(
-          expect.arrayContaining(['bg-accent', 'text-accent-fg', 'lit-pill']),
-        );
+        expect(classes).toEqual(expect.arrayContaining(['border', 'border-fg', 'text-fg']));
         expect(radio.getAttribute('data-selected')).toBe('true');
-        expect(classes).not.toContain('lit-selected');
+        for (const c of ['bg-accent', 'text-accent-fg', 'lit-pill', 'lit-selected']) {
+          expect(classes).not.toContain(c);
+        }
         expect(classes).not.toContain('bg-accent-soft');
       } else {
-        expect(classes).toEqual(expect.arrayContaining(['bg-panel-3', 'lit-well-soft']));
+        expect(classes).toEqual(expect.arrayContaining(['border', 'border-border', 'text-fg-2']));
         expect(classes).not.toContain('lit-chip');
         expect(classes).not.toContain('bg-panel-2');
-        expect(classes).not.toContain('border-border');
+        expect(classes).not.toContain('bg-panel-3');
+        expect(classes).not.toContain('lit-well-soft');
       }
       expect(radio.className).not.toMatch(/(^|\s)ring-/);
     }

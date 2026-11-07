@@ -355,12 +355,13 @@ describe('PostCard has no ⋮', () => {
     expect(src).not.toMatch(/ActionMenu|useMenuGesture|onMove/);
   });
 
-  it('select mode: the tick shows on the picture and the chosen card is lit-selected', () => {
+  it('select mode: the tick shows on the picture and the chosen row is the panel-2 fill', () => {
     const select = { active: true, chosen: true, onEnter: () => {}, onToggle: () => {} };
     const out = renderWith({ post: makePost({}), select });
     expect(out).toContain('data-list-card-selecting=""');
     expect(out).toContain('data-list-card-tick="on"');
-    expect(tag(out, 'data-list-card=""')).toContain('lit-selected');
+    expect(tag(out, 'data-list-card=""')).toMatch(/class="[^"]*\bbg-panel-2\b/);
+    expect(tag(out, 'data-list-card=""')).not.toContain('lit-selected');
     // Without select mode: no tick at all.
     expect(renderWith({ post: makePost({}) })).not.toContain('data-list-card-tick');
   });

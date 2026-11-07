@@ -305,15 +305,17 @@ describe('select mode (ListCard select)', () => {
     }
   });
 
-  it('selecting: aria-pressed on the card, the tick on the picture, lit-selected when chosen', () => {
+  it('selecting: aria-pressed on the card, the tick on the picture, the panel-2 row fill when chosen', () => {
     const on = card(makeAsset(), { select: selectState(true, true) });
     expect(on).toMatch(/<button[^>]*aria-label="View report.pdf"[^>]*aria-pressed="true"/);
     expect(on).toContain('data-list-card-tick="on"');
-    expect(on).toContain('lit-selected');
+    const chosenRow = /data-list-card=""[^>]*class="[^"]*\bbg-panel-2\b/;
+    expect(on).toMatch(chosenRow);
+    expect(on).not.toContain('lit-selected');
     const off = card(makeAsset(), { select: selectState(true, false) });
     expect(off).toContain('aria-pressed="false"');
     expect(off).toContain('data-list-card-tick="off"');
-    expect(off).not.toContain('lit-selected');
+    expect(off).not.toMatch(chosenRow);
   });
 
   it('out of select mode: no pressed state, the tick hidden, no text callout on a hold', () => {

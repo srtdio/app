@@ -20,6 +20,10 @@ const ALLOW: ReadonlyMap<string, string> = new Map([
   ['ui/ImageLightbox.tsx', 'media viewer: full-screen media, no lit surface'],
   ['ui/PhotoViewer.tsx', 'media viewer: full-screen person photo'],
   ['ui/FileViewer.tsx', 'media viewer; the PDF page is paper and stays flat'],
+  [
+    'shell/BottomTabs.tsx',
+    'flat look (7 Nov 2026): the phone dock is a --border hairline on bg-panel with no lit height; lighting-rules and flat-look guard it',
+  ],
 ]);
 const allowed = (rel: string): boolean =>
   ALLOW.has(rel) || rel.startsWith('ui/viewers/') || rel.startsWith('home/');

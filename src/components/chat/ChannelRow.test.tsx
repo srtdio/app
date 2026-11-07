@@ -128,16 +128,16 @@ describe('chat home: one list', () => {
     tokenOnly(markup);
   });
 
-  it('a stacked list of cards, 8 apart on the 16 edge, no grid', () => {
+  it('a stacked list of rows, touching, on the 16 edge, no grid', () => {
     expect(CHAT_ROW_LIST.split(' ')).toEqual(expect.arrayContaining(LIST_CARD_STACK.split(' ')));
-    expect(CHAT_ROW_LIST.split(' ')).toContain('gap-2');
+    expect(CHAT_ROW_LIST.split(' ').filter((c) => c.startsWith('gap'))).toEqual([]);
     expect(CHAT_ROW_LIST.split(' ')).toContain(CHAT_HOME_EDGE);
     const markup = html(view([dm, dm2, { ...dm, channelId: 'c3', title: 'Neha' }]));
     expect(markup).not.toContain('grid-cols');
     expect(CHAT_HOME_STACK).toBe('flex flex-col gap-2');
   });
 
-  it('cards never draw a divider (8 between cards)', () => {
+  it('rows never draw a divider (rows touch)', () => {
     const markup = html(view([group, group2, dm, dm2]));
     expect(markup).not.toContain('data-row-divider');
     expect(markup.match(/data-list-card=""/g)).toHaveLength(4);
@@ -162,15 +162,15 @@ describe('chat home: one list', () => {
 });
 
 describe('group chat: ui/ListCard', () => {
-  it('48 picture (group photo or mark), name + time on line 1, preview + "3 new" + dot on line 2', () => {
+  it('40 picture (group photo or mark), name + time on line 1, preview + "3 new" + dot on line 2', () => {
     const h = card(group, { ...read, unread: 3 });
     expect(h).toContain('data-chat-list-item="card"');
     expect(h).toContain('data-list-card=""');
     expect(h).toMatch(/data-list-card-picture="image"[^>]*data-group-photo=""/);
-    // The shared Avatar at its card role (48), group kind, clipped to radius 8.
+    // The shared Avatar at its card role (40), group kind, clipped to radius 8.
     expect(h).toContain('data-avatar-role="card"');
-    expect(h).toContain('width:48px;height:48px');
-    expect(h).toMatch(/data-list-card-picture="image"[^>]*class="[^"]*h-12 w-12/);
+    expect(h).toContain('width:40px;height:40px');
+    expect(h).toMatch(/data-list-card-picture="image"[^>]*class="[^"]*h-10 w-10/);
     expect(h).toContain('rounded-lg');
     // formatAgo on the list's clock (sent an hour before NOW), meta role, line 1.
     const time = '1h';
@@ -199,14 +199,14 @@ describe('group chat: ui/ListCard', () => {
 });
 
 describe('person chat: ui/ListCard, the same card as a group', () => {
-  it('48 circle, name, preview, time + "99+ new"', () => {
+  it('40 circle, name, preview, time + "99+ new"', () => {
     const h = card(dm, { ...read, unread: 120 });
     expect(h).toContain('data-chat-list-item="card"');
     expect(h).toContain('data-chat-kind="person"');
     expect(h).not.toContain('data-tile');
     expect(h).toMatch(/data-list-card-picture="person"[^>]*data-person-photo=""/);
     expect(h).toContain('data-avatar-role="card"');
-    expect(h).toContain('width:48px;height:48px');
+    expect(h).toContain('width:40px;height:40px');
     expect(h).toContain('rounded-full');
     expect(h).toContain('>Asha Rao<');
     // formatAgo on the list's clock: sent an hour before NOW.
@@ -226,14 +226,19 @@ describe('person chat: ui/ListCard, the same card as a group', () => {
 });
 
 describe('selected and select mode', () => {
-  it('open on desktop or ticked while selecting: the one selected look, lit-selected', () => {
+  it('open on desktop or ticked while selecting: the one selected look, the panel-2 row fill', () => {
+    /** The row root's classes. */
+    const row = (h: string): string[] =>
+      (/<[a-z]+[^>]*data-list-card=""[^>]*class="([^"]*)"/.exec(h)?.[1] ?? '').split(' ');
     for (const c of [dm, group]) {
-      expect(card(c, read, { selected: true })).toContain('lit-selected');
-      expect(card(c, read)).not.toContain('lit-selected');
-      // Selecting: only the ticked cards are lit, the open chat is not.
-      expect(card(c, read, { selected: true, selecting: true })).not.toContain('lit-selected');
+      expect(row(card(c, read, { selected: true }))).toContain('bg-panel-2');
+      expect(row(card(c, read))).not.toContain('bg-panel-2');
+      // Selecting: only the ticked rows are filled, the open chat is not.
+      expect(row(card(c, read, { selected: true, selecting: true }))).not.toContain('bg-panel-2');
       const checked = card(c, read, { selecting: true, checked: true });
-      expect(checked).toContain('lit-selected');
+      expect(row(checked)).toContain('bg-panel-2');
+      // Flat rows: no lit height in any state.
+      expect(checked).not.toContain('lit-selected');
       // ListCard draws the tick on the picture: ui/SelectCheck, the one select circle.
       expect(checked).toContain('data-list-card-tick="on"');
       expect(checked.match(/data-select-check=/g)).toHaveLength(1);

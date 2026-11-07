@@ -35,6 +35,7 @@ import type { ConversationSummary } from '@/lib/chat/chat-store';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { getFillCount } from '@/lib/use-fill-count';
 
 function summary(over: Partial<ChannelSummary>): ChannelSummary {
   return {
@@ -408,28 +409,21 @@ describe('load status', () => {
     expect(texts(tree)).not.toContain('Chats with your team show up here.');
   });
 
-  it('skeleton shapes are the real part (6 round cards, one list): ListCardBox', () => {
+  it('skeleton shapes are the real part (fill count round cards, one list): ListCardBox', () => {
     const shells = findAll(
       withStatus('loading'),
       (el) => (el.props as Record<string, unknown>)['data-skeleton-row'] !== undefined,
     );
     const kinds = shells.map((t) => (t.props as Record<string, unknown>)['data-skeleton-row']);
-    expect(kinds).toEqual(['card', 'card', 'card', 'card', 'card', 'card']);
+    expect(kinds).toEqual(Array.from({ length: getFillCount() }, () => 'card'));
     const boxes = shells.map((shell) => findAll(shell, (el) => el.type === ListCardBox));
     for (const box of boxes) expect(box).toHaveLength(1);
-    // One list, no sections: six round boxes.
-    expect(boxes.map((b) => (b[0]!.props as { round?: boolean }).round === true)).toEqual([
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-    ]);
+    // One list, no sections: one round box per row.
+    expect(boxes.every((b) => (b[0]!.props as { round?: boolean }).round === true)).toBe(true);
     // Boxes sweep (motion Bone, in the card's slots); never a pulse, fade or spinner.
     const html = renderToStaticMarkup(<ListCardBox />);
     expect(html).toContain('data-list-card-box=""');
-    expect(html).toContain('h-12 w-12');
+    expect(html).toContain('h-10 w-10');
     expect(html).not.toContain('animate-pulse');
     expect(
       findAll(withStatus('loading'), (el) =>

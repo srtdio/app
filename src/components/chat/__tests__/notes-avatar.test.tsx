@@ -146,13 +146,13 @@ describe('the same notes avatar on the list card, header, picker and search', ()
       expect(html).toContain(`src="${PHOTO}"`);
     }
     // The chat list's Personal notes card is ui/ListCard's person slot: the
-    // caller's own photo, round at 48 (Avatar 'card') like every person card,
-    // from the summary; never the 72 notes avatar squeezed into the 48 slot.
+    // caller's own photo, round at 40 (Avatar 'card') like every person card,
+    // from the summary; never the 72 notes avatar squeezed into the 40 slot.
     expect(tile).toContain(`src="${PHOTO}"`);
     expect(tile).toContain('data-list-card-picture="person"');
     expect(tile).toContain('data-notes-picture=""');
     expect(tile).toContain('data-avatar-role="card"');
-    expect(tile).toContain('width:48px;height:48px');
+    expect(tile).toContain('width:40px;height:40px');
     expect(tile).toContain('rounded-full');
     expect(tile).not.toContain('data-notes-avatar');
     // Header 32 and picker 40 keep the note rounded square; search rows match the card (round).

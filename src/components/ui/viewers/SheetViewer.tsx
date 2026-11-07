@@ -304,8 +304,8 @@ export function SheetViewer(props: {
                 'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center whitespace-nowrap rounded-lg px-3 text-base',
                 'focus-visible:lit-focus',
                 selected
-                  ? 'bg-accent font-medium text-accent-fg lit-pill'
-                  : 'bg-panel-3 text-fg lit-well-soft lit-hover',
+                  ? 'border border-fg font-medium text-fg lit-hover'
+                  : 'border border-border text-fg-2 lit-hover',
               )}
             >
               {s.name}

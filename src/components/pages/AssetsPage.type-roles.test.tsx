@@ -135,7 +135,9 @@ describe('Assets page type roles', () => {
       (el) => el.getAttribute('title') === 'inside-brand.png',
     );
     expect(title).toBeDefined();
-    expectRole(title?.parentElement as HTMLElement, ['text-lg', 'font-semibold', 'truncate']);
+    // The heading size; a row with nothing unread reads at regular weight.
+    expectRole(title?.parentElement as HTMLElement, ['text-lg', 'font-normal', 'truncate']);
+    expect(title?.parentElement?.className).not.toContain('font-semibold');
     const facts = byText(`PNG · ${humanizeSize(2048)}`);
     expect(facts.hasAttribute('data-asset-meta')).toBe(true);
     expectRole(facts, ['text-md', 'text-fg-2', 'truncate']);

@@ -279,7 +279,7 @@ function activityPicture(
           presignEnabled={presignEnabled}
           aspect="square"
           fallback={{ kind: 'glyph' }}
-          fallbackTile={<PostPlaceholder kind={placeholder} size={ICON_SIZE.picture} fill />}
+          fallbackTile={<PostPlaceholder kind={placeholder} size={ICON_SIZE.control} fill />}
           alt={alt}
         />
       ),
@@ -305,7 +305,7 @@ function activityPicture(
           fallback={{ kind: 'glyph' }}
           fallbackTile={
             <span className="flex h-full w-full items-center justify-center bg-panel-2 text-fg-2">
-              <IconFile size={ICON_SIZE.picture} />
+              <IconFile size={ICON_SIZE.control} />
             </span>
           }
           alt={file.filename}
@@ -323,7 +323,7 @@ function activityPicture(
 }
 
 /**
- * One digest group as one ui/ListCard (two lines, 74 tall):
+ * One digest group as one ui/ListCard (two lines, 60 tall):
  *   1. the who-did-what title, the actor first ... the time (formatAgo on the
  *      list's clock; the bad token for a missed due time);
  *   2. the comment, quote or alert line as the preview, the one tag

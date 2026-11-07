@@ -72,7 +72,7 @@ test('Pipeline: every button is 44 tall with an 8px radius or round', async ({ p
 });
 
 test(
-  'Pipeline tab bar: five 20px pill icons and the 22px Chat circle, the active one the ink fill',
+  'Pipeline tab bar: five 20px pill icons and the 22px Chat circle, the active one the flat panel-3 fill',
   { tag: '@theme' },
   async ({ page }) => {
     await installHarnessNetwork(page);
@@ -88,8 +88,8 @@ test(
       expect(box?.width).toBeCloseTo(size, 0);
       expect(box?.height).toBeCloseTo(size, 0);
     }
-    // The picked tab is the solid ink fill: accent fill, accent-fg ink, read from
-    // probes in this theme.
+    // Flat look (7 Nov 2026): the picked pill tab is the panel-3 fill in fg ink
+    // (no ink fill, no lit-pill), read from probes in this theme.
     const probe = (cls: string, prop: 'color' | 'backgroundColor') =>
       page.evaluate(
         ([c, p]) => {
@@ -102,8 +102,8 @@ test(
         },
         [cls, prop] as const,
       );
-    const ink = await probe('text-accent-fg', 'color');
-    const fill = await probe('bg-accent', 'backgroundColor');
+    const ink = await probe('text-fg', 'color');
+    const fill = await probe('bg-panel-3', 'backgroundColor');
     const active = page.locator('nav[data-undo-anchor] a[aria-current="page"]');
     await expect(active).toHaveCount(1);
     expect(
@@ -141,7 +141,8 @@ test(
     await expect(cardTitle).toBeVisible({ timeout: 15_000 });
     const cardType = await typeOf(cardTitle);
     expect(cardType.size).toBe('15px');
-    expect(cardType.weight).toBe('600');
+    // Flat look (7 Nov 2026): a read row's title is regular; only unread rows are bold.
+    expect(cardType.weight).toBe('400');
 
     await expect(page.locator('input[type="search"]')).toHaveCount(0);
 

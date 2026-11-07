@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The Bank's data: a page of 12 with a keyset cursor (starred first), Load
+// The Bank's data: a page of max(12, the screen's fill count) with a keyset cursor (starred first), Load
 // more appends without duplicates, and a return paints the kept page on its
 // first frame (no read before paint).
 import { act } from 'react';
@@ -29,6 +29,7 @@ import {
   withFlags,
   type BankData,
 } from './use-bank-data';
+import { getFillCount } from '@/lib/use-fill-count';
 
 function row(id: string, at: string, starred = false): PlanItemRow {
   return {
@@ -66,12 +67,15 @@ const rows = (prefix: string, n: number, starred = false): PlanItemRow[] =>
 
 describe('a page and its cursor', () => {
   it('fills a first page with starred ideas, then the rest', () => {
-    const page = bankPageOf('active', null, rows('s', 2, true), rows('r', BANK_PAGE_SIZE + 1));
+    const rest = rows('r', BANK_PAGE_SIZE + 1);
+    const page = bankPageOf('active', null, rows('s', 2, true), rest);
     expect(page.rows).toHaveLength(BANK_PAGE_SIZE);
     expect(page.rows.slice(0, 2).map((r) => r.id)).toEqual(['s0', 's1']);
+    // The page's last row is the rest group's (BANK_PAGE_SIZE - 2)th.
+    const last = rest[BANK_PAGE_SIZE - 3]!;
     expect(page.nextCursor).toEqual({
       starred: false,
-      after: { key: '2026-10-19T00:00:00Z', id: 'r9' },
+      after: { key: last.last_active_at, id: `r${BANK_PAGE_SIZE - 3}` },
     });
   });
 
@@ -174,5 +178,22 @@ describe('kept paint', () => {
     expect(data?.ideas?.map((i) => i.id)).toEqual(['kept']);
     expect(data !== null && 'search' in data).toBe(false);
     act(() => root.unmount());
+  });
+});
+
+describe('Bank page size fills the screen', () => {
+  it('the page limit is max(12, the fill count), read once per app load', () => {
+    expect(BANK_PAGE_SIZE).toBe(Math.max(12, getFillCount()));
+    expect(BANK_PAGE_SIZE).toBeGreaterThanOrEqual(12);
+  });
+
+  it('a page holds exactly BANK_PAGE_SIZE ideas and reads one extra to know more remain', () => {
+    const many = Array.from({ length: BANK_PAGE_SIZE + 1 }, (_unused, i) => ({
+      id: `r${String(i).padStart(3, '0')}`,
+      last_active_at: `2026-01-01T00:00:${String(59 - (i % 60)).padStart(2, '0')}Z`,
+    }));
+    const page = bankPageOf('active', null, [], many as never);
+    expect(page.rows).toHaveLength(BANK_PAGE_SIZE);
+    expect(page.nextCursor).not.toBeNull();
   });
 });

@@ -35,10 +35,11 @@ describe('AssetTabs', () => {
     // The 44 tap box around the 32 visible chip (12 side padding).
     expect(html).toContain('min-h-11');
     expect(html).toContain('min-h-8 px-3');
-    // The shared Chip selected style on the selected tab's visible chip.
+    // The shared Chip selected style on the selected tab's visible chip (ink outline).
     expect(html).toMatch(
-      /aria-selected="true"[^>]*><span data-chip-face="" class="[^"]*bg-accent text-accent-fg lit-pill/,
+      /aria-selected="true"[^>]*><span data-chip-face="" class="[^"]*border-fg text-fg\b/,
     );
+    expect(html).not.toContain('lit-pill');
     // Tokens only, no hex, no dark: literals: light and dark are the same markup.
     expect(html).not.toMatch(/#[0-9a-fA-F]{3,8}\b|dark:/);
   });

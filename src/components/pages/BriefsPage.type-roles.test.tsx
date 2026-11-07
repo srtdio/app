@@ -158,7 +158,9 @@ describe('Briefs list type roles', () => {
   it('the card title is the ui/ListCard heading role and the objective is secondary fg-2', async () => {
     await mount();
     const title = byText('Launch reel');
-    expectRole(title.parentElement as HTMLElement, ['text-lg', 'font-semibold', 'truncate']);
+    // The heading size; a row with nothing unread reads at regular weight.
+    expectRole(title.parentElement as HTMLElement, ['text-lg', 'font-normal', 'truncate']);
+    expect(title.parentElement?.className).not.toContain('font-semibold');
     expectRole(byText('Build hype for the drop'), ['text-md', 'text-fg-2', 'truncate']);
   });
 

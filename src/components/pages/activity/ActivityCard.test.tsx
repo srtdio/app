@@ -115,8 +115,9 @@ describe('ActivityCard on ui/ListCard', () => {
     expect(unread).toContain('data-list-card-unread');
     const read = renderCard([item({ readAt: '2026-06-14T00:30:00.000Z' })]);
     expect(read).not.toContain('data-list-card-unread');
-    // Unread is the dot, never a picked card.
+    // Unread is the dot (and the bold title), never a picked row.
     expect(unread).not.toContain('lit-selected');
+    expect(unread).not.toMatch(/data-list-card=""[^>]*class="[^"]*\bbg-panel-2\b/);
   });
 
   it('the time is formatAgo on the list clock (mono meta), never a clock time', () => {
@@ -274,7 +275,7 @@ describe('ActivityCard pictures', () => {
     expect(video).toContain('data-post-placeholder="video"');
   });
 
-  it('a mention is that person: the actor photo circle at 48', () => {
+  it('a mention is that person: the actor photo circle at 40', () => {
     const html = renderCard([
       item({
         eventType: 'mention',

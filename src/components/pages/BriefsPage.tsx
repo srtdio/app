@@ -76,6 +76,7 @@ import type { BriefWithThumbnail } from '@srtdio/briefs';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { errorText } from '@/lib/error-copy';
 import { Text } from '@/components/ui/Text';
+import { getFillCount } from '@/lib/use-fill-count';
 
 // Filter chips: All shows everything; Open/Closed key off brief.status. The
 // status keys come from the @srtdio/briefs type, never inline literals.
@@ -279,7 +280,7 @@ export function briefsLoadMore(
 
 /**
  * The loading state: a static skeleton in the real list's shape (a section
- * header bar, a day label, then ui/ListCardBox: the ListCard's 74 frame, 48
+ * header bar, a day label, then ui/ListCardBox: the ListCard's 60 frame, 40
  * picture and two lines), in the same container and grid, so nothing
  * jumps when the cards arrive. Shared Bone boxes (a top-lit sweep, never a pulse).
  */
@@ -299,7 +300,7 @@ export function BriefsListSkeleton(): ReactElement {
           <Bone lit="flat" as="div" className="h-4 w-14 rounded" />
         </div>
         <div className={GRID_CLASS}>
-          {[0, 1, 2].map((key) => (
+          {Array.from({ length: getFillCount() }, (_unused, key) => (
             <ListCardBox key={key} data-brief-card-skeleton="" />
           ))}
         </div>
