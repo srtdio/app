@@ -412,7 +412,12 @@ export function WritingBox(props: WritingBoxProps) {
     // The live format mirror follows the field's new size (Textarea listens).
     window.dispatchEvent(new Event('resize'));
   }, [phoneExpanded, host, field]);
-  useEffect(() => () => host?.remove(), [host]);
+  useEffect(
+    () => () => {
+      if (host !== null) host.parentNode?.removeChild(host);
+    },
+    [host],
+  );
 
   // Send closes the format row and the expanded editor (Slack keeps neither).
   // On a phone the box goes back into its form first, so the send button's
