@@ -117,6 +117,7 @@ import {
   IconTrash,
 } from '@/components/ui/icons';
 import { useLongPress } from '@/components/ui';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import {
   cancelPendingLongPressesWithin,
   LONG_PRESS_MS,
@@ -1735,17 +1736,89 @@ export function bubbleClass(
 }
 
 /**
- * A deleted message's bubble: same side, radius and tail as a live one, but a
- * muted card (panel-2 fill, hairline border), muted italic ink, and no focus (no
- * menu).
+ * A deleted message's bubble: the same shell, side, radius, tail, padding and
+ * light as a peer bubble (panel-2 fill, lit-bubble-other) in secondary ink
+ * (fg-3). Its text takes the body size (italic) and its time the normal meta
+ * (TombstoneBubble). Focusable for its one-row menu (Delete for me).
  */
 export function tombstoneClass(shape: BubbleShape): string {
   return cn(
-    'relative flex min-w-0 items-center gap-1.5 border border-border bg-panel-2 italic text-fg-3 lit-card-muted',
+    'relative flex min-w-0 max-w-full items-center gap-1.5 bg-panel-2 text-fg-3 lit-bubble-other focus-visible:lit-focus',
     NO_TOUCH_SELECT,
-    sized(BUBBLE_BODY_TYPE, shape.layout),
     bubbleCorners(shape),
     sized(BUBBLE_PAD, shape.layout),
+  );
+}
+
+/** The tombstone's one menu row. */
+export const DELETE_FOR_ME_ROW = 'Delete for me';
+
+/**
+ * A tombstone's bubble and its one-row menu (ui/ActionMenu: a sheet on a
+ * phone, a popover on a laptop): long-press, right-click, Shift+F10 or the
+ * ContextMenu key open "Delete for me". Without `onDeleteForMe` it is inert.
+ */
+function TombstoneBubble(props: {
+  className: string;
+  label: string;
+  onDeleteForMe?: (() => void) | undefined;
+  children: ReactNode;
+}): ReactElement {
+  const [open, setOpen] = useState(false);
+  const onDeleteForMe = props.onDeleteForMe;
+  const enabled = onDeleteForMe !== undefined;
+  const press = useLongPress(() => {
+    if (enabled) setOpen(true);
+  });
+  const bubble = (
+    <div
+      data-bubble=""
+      data-tombstone=""
+      data-testid="tombstone"
+      role="group"
+      aria-label={props.label}
+      className={props.className}
+      {...(enabled
+        ? {
+            tabIndex: 0,
+            'aria-haspopup': 'menu' as const,
+            ...press.handlers,
+            onContextMenu: (event: { preventDefault: () => void }) => {
+              event.preventDefault();
+              press.cancel();
+              setOpen(true);
+            },
+            onKeyDown: (event: { key: string; shiftKey: boolean; preventDefault: () => void }) => {
+              if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
+              event.preventDefault();
+              setOpen(true);
+            },
+          }
+        : {})}
+    >
+      {props.children}
+    </div>
+  );
+  if (onDeleteForMe === undefined) return bubble;
+  return (
+    <>
+      {bubble}
+      <ActionMenu
+        title="Message actions"
+        trigger={null}
+        open={open}
+        onOpenChange={setOpen}
+        items={[
+          {
+            id: 'delete-for-me',
+            label: DELETE_FOR_ME_ROW,
+            icon: IconTrash,
+            tone: 'danger',
+            onSelect: onDeleteForMe,
+          },
+        ]}
+      />
+    </>
   );
 }
 
@@ -2240,6 +2313,8 @@ export function MessageBubble(props: {
   onRetry?: (messageId: string) => void;
   /** Deletes this failed own send (the "Not sent" line's Delete). */
   onDiscard?: (messageId: string) => void;
+  /** A tombstone's one menu row: hide it for the viewer (Delete for me); absent: inert. */
+  onDeleteForMe?: (() => void) | undefined;
   /** Cancels this own send while its files upload (the UploadRing's X). */
   onCancelUpload?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
@@ -2434,20 +2509,18 @@ export function MessageBubble(props: {
         <div className={column}>
           {senderLine}
           {withRailBox(
-            <div
-              data-bubble=""
-              data-tombstone=""
-              role="group"
-              aria-label={`${mine ? 'Your message' : `Message from ${name}`}, deleted, ${bubbleTimeLabel(message, timeZone)}`}
+            <TombstoneBubble
+              label={`${mine ? 'Your message' : `Message from ${name}`}, deleted, ${bubbleTimeLabel(message, timeZone)}`}
               className={tombstoneClass(shape)}
+              onDeleteForMe={selecting ? undefined : props.onDeleteForMe}
             >
               <IconBan size={ICON_SIZE.inline} />
-              <span>
+              <span className={cn(bodyText(layout), 'italic')}>
                 {deletedMessageLabel({ mine })}
                 <MetaSpacer meta={tombMeta} />
               </span>
               <BubbleMetaView meta={tombMeta} mine={false} placement="inline" />
-            </div>,
+            </TombstoneBubble>,
             rail,
             railEdge,
           )}
@@ -3105,6 +3178,8 @@ interface MessageRowProps {
   ) => void;
   onRetry?: (messageId: string) => void;
   onDiscard?: (messageId: string) => void;
+  /** A tombstone's Delete for me (hide it for the viewer). */
+  onHideMessage?: (message: ThreadMessage) => void;
   onCancelUpload?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
   onOpenPrivateReply?: (reply: PrivateReply) => void;
@@ -3294,6 +3369,9 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       }}
       {...(props.onRetry !== undefined ? { onRetry: props.onRetry } : {})}
       {...(props.onDiscard !== undefined ? { onDiscard: props.onDiscard } : {})}
+      {...(props.onHideMessage !== undefined && tombstone
+        ? { onDeleteForMe: () => props.onHideMessage?.(props.message) }
+        : {})}
       {...(props.onCancelUpload !== undefined ? { onCancelUpload: props.onCancelUpload } : {})}
       {...(props.onJumpToMessage !== undefined ? { onJumpToMessage: props.onJumpToMessage } : {})}
       {...(props.onOpenPrivateReply !== undefined
@@ -3583,6 +3661,8 @@ function ThreadBody(
     onDeleteMessage?: (message: ThreadMessage, nowMs: number) => void;
     /** Delete for me is available: Delete shows on every sent message, not only own ones. */
     canDeleteForMe?: boolean;
+    /** A tombstone's Delete for me (its one menu row); absent leaves tombstones inert. */
+    onHideMessage?: (message: ThreadMessage) => void;
     onChangePriority?: (messageId: string) => void;
     /** A jump-to request (seq makes a repeat of the same id fire again). */
     /** quiet: a search jump whose message is gone opens the chat with no toast. */
@@ -4411,6 +4491,7 @@ function ThreadBody(
   const onSwipeReply = useStableCallback(props.onReply);
   const onTranscribeRow = useOptionalCallback(props.onTranscribe);
   const onRetryRow = useOptionalCallback(props.onRetry);
+  const onHideRow = useOptionalCallback(props.onHideMessage);
   const onDiscardRow = useOptionalCallback(props.onDiscard);
   const onCancelUploadRow = useOptionalCallback(props.onCancelUpload);
   const onOpenReactionsRow = useOptionalCallback(props.onOpenReactions);
@@ -4776,6 +4857,9 @@ function ThreadBody(
                       {...(onRetryRow !== undefined ? { onRetry: onRetryRow } : {})}
                       {...(onDiscardRow !== undefined && props.selection === undefined
                         ? { onDiscard: onDiscardRow }
+                        : {})}
+                      {...(onHideRow !== undefined && props.selection === undefined
+                        ? { onHideMessage: onHideRow }
                         : {})}
                       {...(onCancelUploadRow !== undefined
                         ? { onCancelUpload: onCancelUploadRow }
@@ -6919,6 +7003,9 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           },
           canDeleteForMe,
         }
+      : {}),
+    ...(canDeleteForMe && !selecting
+      ? { onHideMessage: (message: ThreadMessage) => hideForMe([message]) }
       : {}),
     ...(onEditMessage !== undefined && !selecting ? { onEditMessage: startEdit } : {}),
     ...(onRemoveFiles !== undefined && !selecting ? { onRemoveFiles } : {}),
