@@ -277,6 +277,8 @@ export default {
       gridTemplateColumns: {
         tiles: 'repeat(auto-fill, minmax(158px, 1fr))',
         cards: 'repeat(auto-fill, minmax(320px, 1fr))',
+        // ui/ListCard LIST_CARD_GRID: list cards in columns on laptop, 360 wide at least.
+        'list-cards': 'repeat(auto-fill, minmax(360px, 1fr))',
       },
       fontFamily: {
         sans: [

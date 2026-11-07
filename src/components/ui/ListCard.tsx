@@ -64,6 +64,8 @@ export interface ListCardProps {
   time?: ReactNode;
   /** data-* hooks on the time. */
   timeHooks?: ListCardHooks;
+  /** The time is overdue: the bad token instead of fg-3 (never for approved). */
+  timeBad?: boolean;
   /** Line 3: the one grey tag (ui/Tag neutral). */
   tag?: string | undefined;
   /** data-* hooks on the tag. */
@@ -135,8 +137,15 @@ export const LIST_CARD_LINE3 = 'flex h-5 min-w-0 items-center gap-2';
 /** The unread dot: 8px, round, fg ink. */
 export const LIST_CARD_UNREAD_DOT = 'inline-block h-2 w-2 shrink-0 rounded-full bg-fg';
 
-/** The list the cards stack in: 12 between cards. */
+/** The list the cards stack in: 12 between cards (phone, and the chat list pane). */
 export const LIST_CARD_STACK = 'flex flex-col gap-3';
+
+/**
+ * The page list: one column on phone, auto-fill columns at least 360 wide on
+ * laptop (grid-cols-list-cards), 12 between cards both ways. Pipeline, Briefs,
+ * Assets, Activity and the Plan tab; the chat list stays LIST_CARD_STACK.
+ */
+export const LIST_CARD_GRID = 'grid grid-cols-1 gap-3 md:grid-cols-list-cards';
 
 /**
  * The tap surface laid over the whole card: the hover / press overlay and the
@@ -186,7 +195,8 @@ function Picture({
 }
 
 /**
- * The one list card (Briefs, Activity, the Chat list): a bordered radius 12
+ * The one list card (Pipeline, Briefs, Assets, the Chat list, Activity, the
+ * Plan tab and Bank): a bordered radius 12
  * card, padding 16, the whole card one tap target that sinks when pressed.
  * Left: the 72 picture. Right, three lines:
  *   1. title (heading) + the unread dot;
@@ -216,6 +226,7 @@ export function ListCard({
   previewHooks,
   time,
   timeHooks,
+  timeBad = false,
   tag,
   tagHooks,
   menu,
@@ -302,7 +313,12 @@ export function ListCard({
           </span>
           <div data-list-card-line="3" className={LIST_CARD_LINE3}>
             {time !== undefined && time !== '' ? (
-              <span data-list-card-time="" {...timeHooks} className={textRole('meta', 'shrink-0')}>
+              <span
+                data-list-card-time=""
+                {...(timeBad ? { 'data-list-card-time-bad': '' } : {})}
+                {...timeHooks}
+                className={textRole('meta', cn('shrink-0', timeBad && 'text-bad'))}
+              >
                 {time}
               </span>
             ) : null}
