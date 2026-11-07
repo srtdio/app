@@ -2716,7 +2716,7 @@ export function MessageBubble(props: {
                         nextVoiceId: props.nextVoiceId ?? null,
                         // The time sits in the note's last row (Transcribe row / length row).
                         meta: <BubbleMetaView meta={meta} mine={mine} placement={placement} />,
-                        ...(!mine && props.onTranscribe !== undefined && isTranscribable(message)
+                        ...(props.onTranscribe !== undefined && isTranscribable(message)
                           ? { onTranscribe: props.onTranscribe }
                           : {}),
                       }}
