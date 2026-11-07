@@ -13,6 +13,7 @@ import {
   assertProgressRowUnderBar,
   assertSameWidth,
   assertTopbarSlotsStill,
+  assertWritingBox,
   checkLayout,
   readTopbarSlots,
 } from './layout-checks';
@@ -60,6 +61,7 @@ import {
   installLinkPreviewStub,
   TEXT_LINE,
   TEXT_TITLE,
+  TEXT_URL,
   YOUTUBE_LINE,
   YOUTUBE_TITLE,
 } from '../fixtures/link-previews';
@@ -4793,6 +4795,362 @@ const UPLOAD_SCREENS = new Set([
   'onboarding-first-post-uploading',
 ]);
 
+// ---------------------------------------------------------------------------
+// The writing box (ui/WritingBox, Slack style, 8 Nov 2026): one box for chat,
+// comments, sheet fields and the post caption. Chat: the phone's idle pill
+// (+, "Message", mic), the card focused (empty and typing), the Aa row, the @
+// list, the + drawer from the card, the emoji sheet and the Add link sheet, the
+// expanded editor (phone: full screen; laptop: the box grown in place), and
+// bubbles that render a numbered list, a quote with a bullet list, and a
+// [text](url) link. Then a comment box on the post screen, the New brief
+// Objective field focused with its row, and the New post caption box (emoji
+// and "@" only, no Aa). Phone light/dark and laptop light come from the
+// projects; LAPTOP_DARK_SCREENS adds laptop dark for the row and the bubbles.
+
+const chatBox = (page: Page): Locator =>
+  page.locator('[data-writing-box][data-mode="chat"]').first();
+
+const chatField = (page: Page): Locator => chatBox(page).locator('textarea').first();
+
+/** A writing box key by its aria-label ("Aa", "Emoji", "Mention", "Expand", ...). */
+const boxKey = (box: Locator, name: string): Locator =>
+  box.getByRole('button', { name, exact: true });
+
+/**
+ * The chat's writing box focused (phone: the pill turns into the card; laptop:
+ * the card always), with `text` typed when given. `open` lands on the chat.
+ */
+async function focusChatBox(
+  page: Page,
+  text = '',
+  open: (page: Page) => Promise<void> = openDm,
+): Promise<Locator> {
+  await open(page);
+  const field = chatField(page);
+  await field.click();
+  await expect(field).toBeFocused();
+  await waitFor(
+    [page.locator('[data-writing-box][data-mode="chat"][data-shape="card"]')],
+    'chat card',
+  );
+  if (text !== '') {
+    await field.fill(text);
+    await expect(chatBox(page).locator('[data-row-send]')).toBeEnabled();
+  }
+  return field;
+}
+
+/** Puts the caret in a textarea at `start` (to `end`), as a finger or a drag would. */
+async function selectIn(field: Locator, start: number, end = start): Promise<void> {
+  await field.evaluate(
+    (el: HTMLTextAreaElement, at: { start: number; end: number }) => {
+      el.focus();
+      el.setSelectionRange(at.start, at.end);
+      el.dispatchEvent(new Event('select', { bubbles: true }));
+      document.dispatchEvent(new Event('selectionchange'));
+    },
+    { start, end },
+  );
+}
+
+/** The emoji sheet's recents, held on the device before the page loads. */
+async function seedEmojiRecents(_network: HarnessNetwork, page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      window.localStorage.setItem(
+        'srtd.chat.emoji-recents',
+        JSON.stringify(['🔥', '👍', '❤️', '😂', '🎉', '🙏']),
+      );
+    } catch {
+      // Blocked storage: the sheet opens without its recents row.
+    }
+  });
+}
+
+/** The three DM bubbles that carry Slack blocks: a list, a quote with bullets, a link. */
+const BLOCK_MESSAGES = {
+  list: MEDIA_MESSAGE(0x40),
+  quote: MEDIA_MESSAGE(0x41),
+  link: MEDIA_MESSAGE(0x42),
+} as const;
+
+function seedBlockBubbles(network: HarnessNetwork): void {
+  const at = (minutesAgo: number): string => new Date(NOW - minutesAgo * 60_000).toISOString();
+  pushDmRow(network, BLOCK_MESSAGES.list, {
+    sender: PEER,
+    body: 'Shot list for Friday:\n1. Hamper unboxing\n2. Lamp close-up\n3. Team toast',
+    created_at: at(3),
+  });
+  pushDmRow(network, BLOCK_MESSAGES.quote, {
+    body: '> Can the hook land in 2 seconds?\nYes, cutting to:\n- Lid lift\n- *Logo* last',
+    created_at: at(2),
+  });
+  pushDmRow(network, BLOCK_MESSAGES.link, {
+    sender: PEER,
+    body: `The reel brief is [here](${TEXT_URL}), notes inside.`,
+    created_at: at(1),
+  });
+}
+
+/** The New brief sheet open (the approver's "New brief"). */
+async function openNewBrief(page: Page): Promise<Locator> {
+  await briefsReady(page);
+  await tap([page.getByRole('button', { name: 'New brief', exact: true })], 'New brief');
+  return firstVisible([page.getByRole('dialog')], 'create brief sheet');
+}
+
+/** The New post sheet open (Pipeline's "New post"). */
+async function openNewPost(page: Page): Promise<Locator> {
+  await pipelineReady(page);
+  await tap([page.getByRole('button', { name: 'New post', exact: true })], 'New post');
+  return firstVisible([page.getByRole('dialog')], 'create post sheet');
+}
+
+SCREENS.push(
+  {
+    // Phone at rest: the pill (+, "Message", the mic), no rows.
+    name: 'chat-box-idle',
+    seed: creator,
+    only: 'phone',
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      const pill = page.locator('[data-writing-box][data-mode="chat"][data-shape="pill"]');
+      await waitFor([pill], 'idle pill');
+      await waitFor([boxKey(pill, 'Record voice note')], 'pill mic');
+      await expect(pill.locator('[data-writing-row]')).toHaveCount(0);
+    },
+  },
+  {
+    // Focused, nothing typed: the card (text on top; + Aa emoji @ ... send,
+    // grey; laptop: the mic in the send slot while empty).
+    name: 'chat-box-focused',
+    seed: creator,
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await focusChatBox(page);
+      await waitFor([chatBox(page).locator('[data-action-row]')], 'action row');
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // Typing: the send solid ink, the quiet Expand top right.
+    name: 'chat-box-typing',
+    seed: creator,
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await focusChatBox(page, 'Cover is locked, sending the cut tonight');
+      await waitFor([boxKey(chatBox(page), 'Expand')], 'Expand');
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // Aa: the format row in place of the action row (Close formatting, Bold,
+    // Italic, Underline, Strike, Link, Numbered list, Bullet list, Quote ... send).
+    name: 'chat-box-format-row',
+    seed: creator,
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await focusChatBox(page, 'Three hooks for Friday');
+      await tap([boxKey(chatBox(page), 'Aa')], 'Aa');
+      const row = chatBox(page).getByRole('toolbar', { name: 'Format' });
+      await waitFor([row], 'format row');
+      await waitFor([boxKey(row, 'Close formatting')], 'Close formatting');
+      await expect(chatBox(page).locator('[data-action-row]')).toHaveCount(0);
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // @ (the row's Mention key types "@"): the group's people above the box.
+    name: 'chat-box-mention',
+    seed: creator,
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await focusChatBox(page, '', (p) => openChat(p, GROUP_NAME));
+      await tap([boxKey(chatBox(page), 'Mention')], 'Mention');
+      await expect(chatField(page)).toHaveValue('@');
+      await waitFor([page.locator('[data-mention-option]')], 'mention list');
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // The + drawer opened from the card with a draft typed (the pill's +
+    // drawer is composer-tray).
+    name: 'chat-box-tray',
+    seed: creator,
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await focusChatBox(page, 'Files for the cut');
+      await tap([boxKey(chatBox(page), 'Add attachment')], '+');
+      await waitFor([page.locator('[data-tray]')], 'composer tray');
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // The emoji sheet (ui/EmojiSheet): the search pill, Frequently used (held
+    // on the device), the groups and the category bar.
+    name: 'emoji-sheet',
+    seed: creator,
+    prepare: seedEmojiRecents,
+    url: '/chat',
+    steps: async (page) => {
+      await focusChatBox(page);
+      await tap([boxKey(chatBox(page), 'Emoji')], 'Emoji');
+      const sheet = page.locator('[data-emoji-sheet]');
+      await waitFor([sheet], 'emoji sheet');
+      await waitFor([sheet.getByPlaceholder('Search emoji')], 'emoji search');
+      await waitFor([sheet.getByText('Frequently used', { exact: true })], 'recents');
+    },
+  },
+  {
+    // Aa, Link with a word selected: the Add link sheet (Text prefilled, Link
+    // empty; Cancel and Save).
+    name: 'add-link-sheet',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      const text = 'The reel brief is here';
+      const field = await focusChatBox(page, text);
+      await tap([boxKey(chatBox(page), 'Aa')], 'Aa');
+      await selectIn(field, text.length - 4, text.length);
+      await tap([boxKey(chatBox(page), 'Link')], 'Link');
+      const sheet = page.getByRole('dialog', { name: 'Add link' });
+      await waitFor([sheet], 'Add link sheet');
+      await expect(sheet.getByLabel('Text', { exact: true })).toHaveValue('here');
+      await waitFor([sheet.getByRole('button', { name: 'Save', exact: true })], 'Save');
+    },
+  },
+  {
+    // Phone: Expand turns the same box into the full-screen editor (Collapse
+    // and the chat's name in its bar, the rows at the bottom).
+    name: 'chat-box-expanded',
+    seed: creator,
+    only: 'phone',
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await focusChatBox(page, 'Plan for the week:\n1. Hamper reel\n2. Lamp stills\n3. Toast');
+      await tap([boxKey(chatBox(page), 'Expand')], 'Expand');
+      await waitFor([page.locator('[data-writing-box][data-expanded="phone"]')], 'editor');
+      await waitFor([page.locator('[data-expanded-bar]')], 'editor bar');
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // Laptop: Expand grows the box in place over the thread; Collapse top right.
+    name: 'chat-box-expanded-laptop',
+    seed: creator,
+    only: 'laptop',
+    hold: true,
+    url: '/chat',
+    steps: async (page) => {
+      await focusChatBox(page, 'Plan for the week:\n1. Hamper reel\n2. Lamp stills\n3. Toast');
+      await tap([boxKey(chatBox(page), 'Expand')], 'Expand');
+      await waitFor([page.locator('[data-writing-box][data-expanded="laptop"]')], 'grown box');
+      await waitFor([boxKey(chatBox(page), 'Collapse')], 'Collapse');
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // Saved text renders its blocks: a numbered list (a peer), a quote over a
+    // bullet list (own), and a [text](url) link showing its text (a peer).
+    name: 'chat-bubble-blocks',
+    seed: creator,
+    extra: seedBlockBubbles,
+    prepare: async (_network, page) => {
+      await installLinkPreviewStub(page);
+    },
+    url: '/chat',
+    steps: async (page) => {
+      const link = await openDmOn(page, BLOCK_MESSAGES.link);
+      const list = page.locator(`[data-msg-id="${BLOCK_MESSAGES.list}"] [data-msg-body]`);
+      const quote = page.locator(`[data-msg-id="${BLOCK_MESSAGES.quote}"] [data-msg-body]`);
+      await expect(list.locator('ol > li')).toHaveCount(3);
+      await expect(quote.locator('.fmt-quote')).toHaveCount(1);
+      await expect(quote.locator('ul > li')).toHaveCount(2);
+      await expect(link.locator('[data-msg-body] [data-msg-link]')).toHaveText('here');
+      await expect(link.locator('[data-msg-body]')).not.toContainText('](');
+      await threadStill(page);
+      await list.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // The post screen's comment box focused with a line typed: the card with
+    // its row (+ Aa emoji @ ... send).
+    name: 'post-comment-box',
+    seed: creator,
+    hold: true,
+    url: `/posts/${POST}`,
+    steps: async (page) => {
+      await postDetailReady(page);
+      const box = page.locator('[data-writing-box][data-mode="comment"]').first();
+      await box.scrollIntoViewIfNeeded();
+      const field = box.locator('[contenteditable="true"], textarea').first();
+      await field.click();
+      await page.keyboard.type('Can the hook land sooner?');
+      await waitFor([box.locator('[data-writing-row]')], 'comment row');
+      await waitFor([boxKey(box, 'Aa')], 'comment Aa');
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // New brief, Objective focused: a plain field at rest; focused, the format
+    // keys and emoji sit inside its bottom edge (no +, no send).
+    name: 'brief-field-row',
+    seed: approver,
+    hold: true,
+    url: '/briefs',
+    steps: async (page) => {
+      const sheet = await openNewBrief(page);
+      const field = sheet.locator('#brief-objective');
+      await field.click();
+      await page.keyboard.type('Three posts that sell the gift boxes.');
+      const box = sheet.locator('[data-writing-box][data-mode="field"]', { has: field });
+      await waitFor([box.locator('[data-writing-row]')], 'field row');
+      await waitFor([boxKey(box, 'Bullet list')], 'Bullet list');
+      await expect(boxKey(box, 'Add attachment')).toHaveCount(0);
+      await page.mouse.move(0, 0);
+    },
+  },
+  {
+    // New post, Caption focused: emoji and "@" only (captions never format).
+    name: 'post-caption-box',
+    seed: creator,
+    hold: true,
+    url: '/pipeline',
+    steps: async (page) => {
+      const sheet = await openNewPost(page);
+      const field = sheet.locator('#post-caption');
+      await field.click();
+      await page.keyboard.type('Festive hampers are here ');
+      const box = sheet.locator('[data-writing-box][data-mode="caption"]');
+      await waitFor([boxKey(box, 'Emoji')], 'caption emoji');
+      await waitFor([boxKey(box, 'Mention')], 'caption @');
+      await expect(boxKey(box, 'Aa')).toHaveCount(0);
+      await expect(box.getByRole('toolbar', { name: 'Format' })).toHaveCount(0);
+      await page.mouse.move(0, 0);
+    },
+  },
+);
+
+/** The writing box screens: check 11 (the row's keys, the send, no format strip) runs on each. */
+const WRITING_BOX_SCREENS = new Set([
+  'chat-box-focused',
+  'chat-box-typing',
+  'chat-box-format-row',
+  'chat-box-mention',
+  'chat-box-expanded',
+  'chat-box-expanded-laptop',
+  'post-comment-box',
+  'brief-field-row',
+  'post-caption-box',
+]);
+
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
 
@@ -4886,6 +5244,9 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   if (LIST_CARD_SCREENS.has(screen.name)) await assertListCards(page, screen.name);
   // An upload screen shows the ring or Retry only: no visible bar, no % figure.
   if (UPLOAD_SCREENS.has(screen.name)) await assertNoUploadBar(page, screen.name);
+  // A writing box screen: the row's keys are 44 tall, the send ends inside the
+  // box, and the old floating format strip never shows.
+  if (WRITING_BOX_SCREENS.has(screen.name)) await assertWritingBox(page, screen.name);
   await checkLayout(page, screen.name);
   await expect(page).toHaveScreenshot(`${screen.name}.png`, {
     maxDiffPixelRatio: 0.002,
