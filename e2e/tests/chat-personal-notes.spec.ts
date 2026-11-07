@@ -242,6 +242,7 @@ for (const photo of [true, false]) {
     // The notes card is ui/ListCard's person slot at 72: the own photo, round,
     // with the notes badge; the notebook (no badge) without a photo.
     const picture = tile.locator('[data-notes-picture]');
+    await expect(picture).toBeVisible();
     const box = await picture.boundingBox();
     expect(Math.round(box?.width ?? 0)).toBe(72);
     expect(Math.round(box?.height ?? 0)).toBe(72);
