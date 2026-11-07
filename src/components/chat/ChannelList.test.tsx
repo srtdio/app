@@ -288,7 +288,7 @@ describe('select mode', () => {
     };
   }
 
-  function tree(mode: ChannelSelectMode, kind: 'photos' | null = null): ReactElement {
+  function tree(mode: ChannelSelectMode, kind: 'photo' | null = null): ReactElement {
     return channelListContent({
       channels,
       selectedChannelId: null,
@@ -331,7 +331,7 @@ describe('select mode', () => {
 
   it('a chip view keeps the header Select (media items have no long-press)', () => {
     const mode = select({});
-    const button = findAll(tree(mode, 'photos'), isSelectButton)[0];
+    const button = findAll(tree(mode, 'photo'), isSelectButton)[0];
     expect(button).toBeDefined();
     (button!.props as { onClick: () => void }).onClick();
     expect(mode.onStart).toHaveBeenCalledTimes(1);

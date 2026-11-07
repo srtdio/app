@@ -132,8 +132,6 @@ function chat(channel: ChannelSummary): string {
       timeZone="UTC"
       onSelect={() => {}}
       input={DEFAULT_LIST_INPUT}
-      onLongPress={() => {}}
-      onHide={() => {}}
     />,
   );
 }

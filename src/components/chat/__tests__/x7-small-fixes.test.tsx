@@ -141,9 +141,7 @@ describe('X7 FB2: popover menus move with the arrow keys', () => {
     expect(nextMenuIndex('End', 0, 3)).toBe(2);
     expect(nextMenuIndex('Tab', 0, 3)).toBeNull();
     expect(nextMenuIndex('ArrowDown', 0, 0)).toBeNull();
-    // The chat row menu is the shared ActionMenu, whose laptop popover moves
-    // focus with the arrow keys.
-    expect(source('../ChannelList.tsx')).toContain('<ActionMenu');
+    // The shared ActionMenu's laptop popover moves focus with the arrow keys.
     expect(source('../../ui/ActionMenu.tsx')).toContain(
       'moveMenuFocus(event.currentTarget, event.key)',
     );

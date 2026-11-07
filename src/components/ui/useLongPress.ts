@@ -293,18 +293,28 @@ export interface SelectGestureHandlers extends MenuGestureHandlers {
 export function useSelectGesture(select: SelectGesture | undefined): SelectGestureHandlers | undefined {
   const selectRef = useRef(select);
   selectRef.current = select;
+  // When the hold last fired: Android sends its own contextmenu right after a
+  // touch hold, which must not toggle the item straight back.
+  const heldAt = useRef(0);
   const pick = (): void => {
     const current = selectRef.current;
     if (current === undefined) return;
     if (current.active) current.onToggle();
     else current.onEnter();
   };
-  const press = useLongPress(pick, { ignoreMouse: true });
+  const press = useLongPress(
+    () => {
+      heldAt.current = Date.now();
+      pick();
+    },
+    { ignoreMouse: true },
+  );
   if (select === undefined) return undefined;
   return {
     ...press.handlers,
     onContextMenu(event) {
       event.preventDefault();
+      if (Date.now() - heldAt.current < LONG_PRESS_MS * 2) return;
       press.cancel();
       press.clearClickSuppression();
       pick();

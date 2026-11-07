@@ -141,15 +141,20 @@ describe('the same notes avatar on the list card, header, picker and search', ()
         onRetry: () => {},
       }),
     );
-    for (const html of [tile, header, picker, search]) {
+    for (const html of [header, picker, search]) {
       expect(html).toContain('data-notes-avatar');
       expect(html).toContain(`src="${PHOTO}"`);
     }
     // The chat list's Personal notes card is ui/ListCard's person slot: the
-    // caller's own photo, round at 72 like every person card, from the summary.
+    // caller's own photo, round at 48 (Avatar 'card') like every person card,
+    // from the summary; never the 72 notes avatar squeezed into the 48 slot.
+    expect(tile).toContain(`src="${PHOTO}"`);
     expect(tile).toContain('data-list-card-picture="person"');
     expect(tile).toContain('data-notes-picture=""');
-    expect(tile).toContain('h-18 w-18 rounded-full');
+    expect(tile).toContain('data-avatar-role="card"');
+    expect(tile).toContain('width:48px;height:48px');
+    expect(tile).toContain('rounded-full');
+    expect(tile).not.toContain('data-notes-avatar');
     // Header 32 and picker 40 keep the note rounded square; search rows match the card (round).
     expect(header).toContain('h-8 w-8 rounded-lg');
     expect(picker).toContain('h-10 w-10 rounded-lg');
@@ -186,7 +191,7 @@ describe('header second line', () => {
 });
 
 describe('U9: the notes card picture', () => {
-  it('own photo with the notes badge once loaded; the notebook without a photo', () => {
+  it('the notes avatar: own photo with the badge once loaded', () => {
     const photo = renderToStaticMarkup(
       notesAvatarView({
         role: 'profile',
@@ -200,18 +205,28 @@ describe('U9: the notes card picture', () => {
     expect(photo).toContain('data-notes-avatar="photo"');
     expect(photo).toContain('data-notes-badge');
     expect(photo).toContain('h-18 w-18 rounded-full');
-    const none = renderToStaticMarkup(
-      notesTile({
-        notes: notesSummary(WS, ME),
-        selected: false,
-        selecting: false,
-        onSelect: () => {},
-      }),
-    );
-    expect(none).toContain('data-notes-avatar="notebook"');
-    expect(none).not.toContain('data-notes-badge');
-    expect(none).not.toContain('<img');
-    expect(none).toContain('data-list-card-picture="person"');
+  });
+
+  it("the list card without a photo: the caller's initials (ownName), else the person glyph", () => {
+    const tile = (ownName?: string): string =>
+      renderToStaticMarkup(
+        notesTile({
+          notes: notesSummary(WS, ME),
+          selected: false,
+          selecting: false,
+          onSelect: () => {},
+          ...(ownName !== undefined ? { ownName } : {}),
+        }),
+      );
+    const named = tile('Asha Rao');
+    expect(named).not.toContain('<img');
+    expect(named).toContain('>AR<');
+    expect(named).toContain('data-avatar-role="card"');
+    expect(named).toContain('data-list-card-picture="person"');
+    const unnamed = tile();
+    expect(unnamed).not.toContain('<img');
+    expect(unnamed).not.toMatch(/>[A-Z]{1,2}</);
+    expect(unnamed).toContain('data-avatar-role="card"');
   });
 
   it('the header and picker keep the note shape by default', () => {

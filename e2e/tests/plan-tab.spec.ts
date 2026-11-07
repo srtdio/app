@@ -85,14 +85,18 @@ test('the Plan tab lists plans as ListCards in sections and a tap opens the plan
   await expect(shared).toHaveAttribute('data-list-card', '');
   await expect(shared.locator('[data-list-card-title]')).toHaveText(TAB_SHARED_PLAN_TITLE);
   await expect(shared.locator('[data-plan-tab-dates]')).toContainText('3 posts');
-  await expect(shared.locator('[data-plan-tab-start]')).toHaveText(/^(Starts|Started) /);
+  // When it starts, in words: a day up to the start, Live while it runs, the
+  // end day once over (formatPlanStart; never "Starts" / "Started").
+  await expect(shared.locator('[data-plan-tab-start]')).toHaveText(
+    /^(Today|Tomorrow|Mon|Tue|Wed|Thu|Fri|Sat|Sun|Live|\d{1,2} [A-Z][a-z]{2})$/,
+  );
   await expect(shared.locator('[data-plan-tab-progress]')).toHaveText('1 of 3 OK');
   const draft = thisWeek.locator(`[data-plan-tab-card="${TAB_DRAFT_PLAN_ID}"]`);
   await expect(draft.locator('[data-plan-tab-draft]')).toHaveText('Draft');
   await expect(draft.locator('[data-plan-tab-dates]')).toContainText(
     '1 post · only your team sees this',
   );
-  // Every card in the list is the same height (ListCard's 118).
+  // Every card in the list is the same height (ListCard's 74).
   const heights = await list
     .locator('[data-list-card]')
     .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
