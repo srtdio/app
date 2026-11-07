@@ -100,10 +100,12 @@ import {
   type AssetTab,
 } from '@/lib/assets';
 import { errorText } from '@/lib/error-copy';
+import { getFillCount } from '@/lib/use-fill-count';
 
-const SKELETON_COUNT = 12;
-/** Stable keys for the fixed set of loading cards (ui/ListCardBox). */
-const SKELETON_KEYS = Array.from({ length: SKELETON_COUNT }, (_, n) => `skeleton-${n}`);
+/** Stable keys for the loading cards (ui/ListCardBox): the screen's fill count. */
+function skeletonKeys(): string[] {
+  return Array.from({ length: getFillCount() }, (_, n) => `skeleton-${n}`);
+}
 
 /** The Load more failure toast: "Couldn't {action}. {reason}". */
 export const LOAD_MORE_FAILED = errorText('load more files', null);
@@ -860,7 +862,7 @@ export function AssetsPage() {
             label="Loading files"
             className={cn(GUTTER, 'py-4', LIST_CARD_GRID)}
           >
-            {SKELETON_KEYS.map((key) => (
+            {skeletonKeys().map((key) => (
               <ListCardBox key={key} data-skeleton-tile="" />
             ))}
           </BoxSkeleton>

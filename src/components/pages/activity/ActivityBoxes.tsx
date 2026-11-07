@@ -10,12 +10,12 @@ import { cn } from '@/lib/cn';
 import { GUTTER } from '@/components/ui/layout';
 import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
 import { LOADING_NOTIFICATIONS } from '@/components/pages/activity/data';
+import { getFillCount } from '@/lib/use-fill-count';
 
-/** Cards drawn: about one phone screen. */
-export const ACTIVITY_BOX_CARDS = 4;
-
-/** Stable keys for the fixed placeholder cards. */
-const CARD_KEYS = Array.from({ length: ACTIVITY_BOX_CARDS }, (_unused, n) => `card-${n}`);
+/** Stable keys for the placeholder cards: the screen's fill count (one first page). */
+function cardKeys(): string[] {
+  return Array.from({ length: getFillCount() }, (_unused, n) => `card-${n}`);
+}
 
 /** The Activity list's boxes; the label is the screen reader's "Loading activity". */
 export function ActivityBoxes(): ReactElement {
@@ -27,7 +27,7 @@ export function ActivityBoxes(): ReactElement {
           <Bone lit="flat" className="h-3 w-20 rounded" />
         </div>
         <div className={cn(LIST_CARD_GRID, GUTTER)}>
-          {CARD_KEYS.map((key) => (
+          {cardKeys().map((key) => (
             <ListCardBox key={key} data-activity-box="" />
           ))}
         </div>

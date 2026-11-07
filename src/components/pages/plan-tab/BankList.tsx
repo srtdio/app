@@ -91,6 +91,7 @@ import {
   type BankData,
 } from './use-bank-data';
 import type { BankSelection } from './use-bank-select';
+import { getFillCount } from '@/lib/use-fill-count';
 
 // ---------------------------------------------------------------------------
 // Small parts
@@ -661,7 +662,7 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
 function BankBoxes(): ReactElement {
   return (
     <BoxSkeleton lit="flat" label="Loading ideas" data-bank-loading="" className={LIST_CARD_GRID}>
-      {[0, 1, 2].map((k) => (
+      {Array.from({ length: getFillCount() }, (_unused, k) => (
         <ListCardBox key={k} />
       ))}
     </BoxSkeleton>

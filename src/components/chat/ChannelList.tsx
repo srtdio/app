@@ -91,6 +91,7 @@ import {
   useChatLayout,
   type ChatLayout,
 } from '@/components/chat/chat-type';
+import { getFillCount } from '@/lib/use-fill-count';
 
 /** Per-channel draft text lookup ('' when the chat has no draft). */
 type DraftLookup = (channelId: string) => string;
@@ -363,8 +364,10 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
   );
 }
 
-/** Skeleton tiles shown while the list loads; enough to fill a phone screen. */
-export const SKELETON_ROWS = 6;
+/** Loading rows: the screen's fill count (lib/use-fill-count, read once per app load). */
+export function skeletonRowCount(): number {
+  return getFillCount();
+}
 
 /** One loading card: ui/ListCardBox, the ListCard's own frame and slots. */
 function skeletonRow(i: number): ReactElement {
@@ -386,7 +389,7 @@ export function channelListSkeleton(): ReactElement {
   return (
     <BoxSkeleton lit="flat" className={CHAT_HOME_STACK} label="Loading conversations">
       <ul className={CHAT_ROW_LIST}>
-        {Array.from({ length: SKELETON_ROWS }, (_, i) => skeletonRow(i))}
+        {Array.from({ length: skeletonRowCount() }, (_, i) => skeletonRow(i))}
       </ul>
     </BoxSkeleton>
   );

@@ -35,6 +35,7 @@ import { openPlans } from '@/lib/chat/status-bar';
 import { getPrefetchContext } from '@/lib/prefetch-context';
 import { civilDayOf, civilDaysBetween, formatCivilDayHeader } from '@/lib/plan-week';
 import { errorText } from '@/lib/error-copy';
+import { getFillCount } from '@/lib/use-fill-count';
 
 /** Ids per IN read (the PostgREST URL stays short). */
 export const PLAN_READ_CHUNK = 100;
@@ -1785,8 +1786,12 @@ export function bankItemReadWhat(itemId: string): string {
 /** The Bank's sorts: Recently active (default), Newest first, Oldest first, Name. */
 export type BankSort = 'active' | 'newest' | 'oldest' | 'name';
 
-/** Ideas a Bank page holds. */
-export const BANK_PAGE_SIZE = 12;
+/**
+ * Ideas a Bank page holds: the screen's fill count (lib/use-fill-count, read
+ * once per app load), at least 12. Load more reads the next page of the same
+ * size with the same .limit(n + 1) query.
+ */
+export const BANK_PAGE_SIZE = Math.max(12, getFillCount());
 /** Search answers at most this many ideas (one read, no pages). */
 export const BANK_SEARCH_LIMIT = 50;
 

@@ -8,7 +8,8 @@ import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
 import { LIST_CARD_GRID, type ListCardSelect } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { PostCard } from '@/components/pages/PostCard';
-import { BOARD_CAP, StageEmpty } from '@/components/pages/pipeline/stage-meta';
+import { StageEmpty } from '@/components/pages/pipeline/stage-meta';
+import { useFillCount } from '@/lib/use-fill-count';
 import { readShown, writeShown } from '@/components/pages/pipeline/pipeline-query';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { CoverLookup } from '@/lib/chat/post-covers';
@@ -82,12 +83,13 @@ function cardGrid(
 
 /**
  * The Pipeline list, phone and laptop alike: the active stage's posts as
- * ui/ListCard cards in LIST_CARD_GRID, capped at BOARD_CAP with an in-place
+ * ui/ListCard cards in LIST_CARD_GRID, capped at the screen's fill count
+ * (useFillCount: as many rows as the first screen holds) with an in-place
  * Show more control that reveals another page rather than navigating away. The
  * 'all' chip shows every post; a stage chip shows just that stage, or the
  * stage's one-line empty state when it holds nothing. The shown count is keyed
  * by the filter query (shownKey) in sessionStorage: a new chip or filter starts
- * at the cap, and Back to the same filters restores the same depth. One minute
+ * at the fill count, Show more adds the same count again, and Back to the same filters restores the same depth. One minute
  * clock (useMinuteClock) for every card's due and status time.
  */
 export function PipelineFeed({
@@ -104,15 +106,14 @@ export function PipelineFeed({
 }: PipelineFeedProps): ReactElement {
   const nowMs = useMinuteClock();
   const depthKey = shownKey ?? null;
-  const [shown, setShown] = useState(() =>
-    depthKey === null ? BOARD_CAP : readShown(depthKey, BOARD_CAP),
-  );
+  const page = useFillCount();
+  const [shown, setShown] = useState(() => (depthKey === null ? page : readShown(depthKey, page)));
   useEffect(
-    () => setShown(depthKey === null ? BOARD_CAP : readShown(depthKey, BOARD_CAP)),
-    [activeStage, depthKey],
+    () => setShown(depthKey === null ? page : readShown(depthKey, page)),
+    [activeStage, depthKey, page],
   );
   const showMore = (): void => {
-    const next = shown + BOARD_CAP;
+    const next = shown + page;
     setShown(next);
     if (depthKey !== null) writeShown(depthKey, next);
   };
@@ -144,7 +145,7 @@ export function PipelineFeed({
           {list.length > shown ? (
             <div className="mt-4 flex justify-center">
               <Button variant="default" onClick={showMore}>
-                Show {Math.min(BOARD_CAP, list.length - shown)} more
+                Show {Math.min(page, list.length - shown)} more
               </Button>
             </div>
           ) : null}

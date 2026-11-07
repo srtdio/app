@@ -35,6 +35,7 @@ import {
 } from '@/lib/plan-tab';
 import { formatPlanStart } from '@/lib/time';
 import { Text } from '@/components/ui/Text';
+import { getFillCount } from '@/lib/use-fill-count';
 
 /**
  * Load more's copy. It never swaps while the page is in flight: busy shows on
@@ -246,7 +247,7 @@ export function PlanTabBoxes(props: { heading?: boolean } = {}): ReactElement {
           </div>
         ) : null}
         <div className={LIST_CARD_GRID}>
-          {[0, 1, 2].map((key) => (
+          {Array.from({ length: getFillCount() }, (_unused, key) => (
             <ListCardBox key={key} data-plan-tab-box="" />
           ))}
         </div>

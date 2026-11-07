@@ -118,6 +118,7 @@ import { INDUCTION_KEYS } from '@/lib/induction';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
+import { getFillCount } from '@/lib/use-fill-count';
 
 const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
 const stMock = vi.mocked(stageTransition);
@@ -1022,7 +1023,7 @@ describe('E: no jumps while loading', () => {
     const out = renderToStaticMarkup(postsSkeleton());
     expect(out).toContain('data-posts-skeleton=""');
     expect(out).toContain('md:grid-cols-list-cards');
-    expect((out.match(/data-list-card-box=""/g) ?? []).length).toBe(6);
+    expect((out.match(/data-list-card-box=""/g) ?? []).length).toBe(getFillCount());
     expect(out).toContain(`aria-hidden="true" class="${LIST_CARD_GRID}"`);
     expect(out).not.toContain('kanban');
     expect(out).not.toContain('aspect-ratio');
