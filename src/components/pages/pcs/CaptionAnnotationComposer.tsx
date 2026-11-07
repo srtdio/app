@@ -2,7 +2,8 @@ import { useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { Textarea } from '@/components/ui/Textarea';
-import { CommentEmojiButton, insertIntoTextarea } from '@/components/comments/CommentEmojiButton';
+import { RowSend, WritingBox } from '@/components/ui/WritingBox';
+import { ICON_SIZE, IconSend } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { errorText } from '@/lib/error-copy';
 
@@ -25,6 +26,9 @@ export const COMMENT_DISCARD = {
 
 /** Failure copy for both annotation composers; the typed text stays. */
 export const COMMENT_POST_FAILED = errorText('post your comment', null);
+
+/** The sheet's title, also the writing box's expanded title. */
+const SHEET_TITLE = 'Comment on caption';
 
 interface CaptionAnnotationComposerProps {
   open: boolean;
@@ -62,47 +66,50 @@ export function CaptionAnnotationComposer({
     <Sheet
       open={open}
       onClose={onDiscard}
-      title="Comment on caption"
+      title={SHEET_TITLE}
       dirty={body.trim() !== ''}
       discard={COMMENT_DISCARD}
       busy={submitting}
       footer={
-        <>
-          <Button disabled={submitting} onClick={onCancel}>
-            Cancel
-          </Button>
-          <CommentEmojiButton
-            disabled={submitting}
-            onPick={(char) =>
-              insertIntoTextarea(() => textareaRef.current, body, char, onBodyChange)
-            }
-          />
-          <Button
-            variant="primary"
-            className="ml-auto"
-            data-induction={INDUCTION_KEYS.postCommentPost}
-            busy={submitting}
-            disabled={!canPost}
-            onClick={() => void onSubmit(body)}
-          >
-            Post
-          </Button>
-        </>
+        <Button disabled={submitting} onClick={onCancel}>
+          Cancel
+        </Button>
       }
     >
       <div className="flex flex-col gap-3">
         <div className="min-w-0 border-l-rail border-fg pl-3 text-base text-fg-2 [overflow-wrap:anywhere]">
           {quote}
         </div>
-        <Textarea
-          formatting
-          ref={textareaRef}
-          value={body}
-          onChange={(event) => onBodyChange(event.target.value)}
-          placeholder="Add your comment"
-          aria-label="Caption comment body"
-          disabled={submitting}
-          autoFocus
+        {/* ui/WritingBox (comment mode): text on top; focused, the row
+            under it: Aa, emoji ... the round Post (no +, no @ here). */}
+        <WritingBox
+          mode="comment"
+          field={() => textareaRef.current}
+          hasText={body.trim() !== ''}
+          expandTitle={SHEET_TITLE}
+          input={
+            <Textarea
+              formatting
+              ref={textareaRef}
+              value={body}
+              onChange={(event) => onBodyChange(event.target.value)}
+              placeholder="Add your comment"
+              aria-label="Caption comment body"
+              disabled={submitting}
+              autoFocus
+            />
+          }
+          send={
+            <RowSend
+              type="button"
+              label="Post"
+              icon={<IconSend size={ICON_SIZE.control} />}
+                data-induction={INDUCTION_KEYS.postCommentPost}
+              busy={submitting}
+              disabled={!canPost}
+              onClick={() => void onSubmit(body)}
+            />
+          }
         />
         {error !== null ? (
           <p role="alert" className="text-base text-bad">
