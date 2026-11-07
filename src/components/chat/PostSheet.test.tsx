@@ -152,7 +152,7 @@ describe('PostSheetExtras', () => {
   });
 
   it("the agency's waiting line in review", () => {
-    expect(extras('agency', row())).toContain('Waiting on approvers · 3 days ago');
+    expect(extras('agency', row())).toContain('Waiting on approvers · Sun');
     expect(extras('agency', row({ stage: 'draft' }))).toBe('');
   });
 
@@ -315,8 +315,10 @@ describe('PostSheetDetails', () => {
       />,
     );
     expect(html).toContain('data-sheet-row="approved"');
-    // The approval reads relative on the shared minute clock (formatRelative).
-    expect(html).toMatch(/Asha · \d+ (min|hours?|days?|months?|years?) ago|Asha · just now/);
+    // The approval reads short on the shared minute clock (formatAgo).
+    expect(html).toMatch(
+      /Asha · (just now|\d+[mh]|Yesterday|Mon|Tue|Wed|Thu|Fri|Sat|Sun|\d{1,2} [A-Z][a-z]{2}( \d{4})?)/,
+    );
   });
 });
 

@@ -647,14 +647,14 @@ describe('briefPickerDue: the brief row due text (formatDue / formatOverdue)', (
       bad: false,
     });
     expect(briefPickerDue('2026-11-06', 'open', IST, NOW)?.text).toBe('Due tomorrow');
-    expect(briefPickerDue('2026-11-08', 'open', IST, NOW)?.text).toBe('Due in 3 days');
+    expect(briefPickerDue('2026-11-08', 'open', IST, NOW)?.text).toBe('Due Sun');
     expect(briefPickerDue('2027-01-20', 'open', IST, NOW)?.text).toBe('Due 20 Jan 2027');
     expect(briefPickerDue(null, 'open', IST, NOW)).toBeNull();
   });
 
   it('an open brief past its day is overdue in the bad token; a closed one never is', () => {
     expect(briefPickerDue('2026-11-03', 'open', IST, NOW)).toEqual({
-      text: 'Overdue 2 days',
+      text: 'Overdue 2d',
       bad: true,
     });
     expect(briefPickerDue('2026-11-03', 'closed', IST, NOW)).toEqual({

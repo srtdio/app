@@ -250,7 +250,7 @@ describe('shared Tasks sheet', () => {
         el.getAttribute('data-task-section'),
       );
       expect(sections).toEqual(['open', 'done']);
-      expect(q('[data-task-row-id="p1"] [data-task-when]')?.textContent).toBe('Overdue 2 days');
+      expect(q('[data-task-row-id="p1"] [data-task-when]')?.textContent).toBe('Overdue 2d');
       expect(q('[data-task-row-id="p2"] [data-task-when]')?.textContent).toContain(
         'Due 2 Nov · done',
       );
