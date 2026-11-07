@@ -607,6 +607,10 @@ export function AttachmentsField({
   const limiter = useRef(createLimiter(UPLOAD_CONCURRENCY));
   // Each finished file's pick order, so it lands at its picked place.
   const seqs = useRef(new Map<string, number>());
+  // The running request per row: the tile ring's X aborts it. A row cancelled
+  // while it still waits its turn never starts.
+  const aborts = useRef(new Map<string, AbortController>());
+  const cancelled = useRef(new Set<string>());
   // An upload that finishes after the sheet closed frees its preview instead of
   // handing it to a form that is gone.
   const alive = useRef(true);
@@ -646,7 +650,11 @@ export function AttachmentsField({
   // composer's path) over XHR so its tile shows progress, returning an asset
   // VERSION id. Never throws.
   const uploadFile = useCallback(
-    async (file: File, onProgress: (fraction: number) => void): Promise<ChatAttachmentUpload> => {
+    async (
+      file: File,
+      onProgress: (fraction: number) => void,
+      signal: AbortSignal,
+    ): Promise<ChatAttachmentUpload> => {
       if (uploadEndpoint === undefined || uploadEndpoint === '' || workspaceId === null) {
         return { ok: false, message: errorText('upload', null) };
       }
@@ -661,7 +669,7 @@ export function AttachmentsField({
         token,
         endpoint: uploadEndpoint,
         attachThumbnail: attachLateThumbnail,
-        xhr: { traceId: newTrace(), onProgress },
+        xhr: { traceId: newTrace(), onProgress, signal },
       });
     },
     [uploadEndpoint, workspaceId, newTrace],
@@ -728,11 +736,15 @@ export function AttachmentsField({
   // Upload one row's file; success moves it to the completed list at its picked
   // place, failure keeps the row (with its file and picture) so Retry can run it.
   async function uploadRow(row: Pending): Promise<AttachmentItem | null> {
-    if (!alive.current || row.file === undefined) return null;
+    if (!alive.current || row.file === undefined || cancelled.current.has(row.id)) return null;
+    const abort = new AbortController();
+    aborts.current.set(row.id, abort);
     const result = await runFileAttachment(row.file, row.isPhoto === true, (file) =>
-      uploadFile(file, (fraction) => setProgress(row.id, fraction)),
+      uploadFile(file, (fraction) => setProgress(row.id, fraction), abort.signal),
     );
-    if (!alive.current) return null;
+    if (aborts.current.get(row.id) === abort) aborts.current.delete(row.id);
+    // Cancelled: its tile is already gone; a late result is dropped.
+    if (!alive.current || abort.signal.aborted) return null;
     if (result.ok) {
       const item: AttachmentItem = {
         ...result.item,
@@ -851,6 +863,14 @@ export function AttachmentsField({
     onChange(next);
   }
 
+  // The tile ring's X: stop the request and drop the tile (no confirm).
+  function cancelPending(id: string): void {
+    cancelled.current.add(id);
+    aborts.current.get(id)?.abort();
+    aborts.current.delete(id);
+    dismissPending(id);
+  }
+
   function dismissPending(id: string): void {
     const row = pending.find((item) => item.id === id);
     if (row?.previewUrl !== null && row?.previewUrl !== undefined) {
@@ -957,6 +977,8 @@ export function AttachmentsField({
             if (target !== undefined) removeCompleted(target.index);
           }}
           onReorder={reorderMedia}
+          onCancelPending={cancelPending}
+          onRetryPending={retryPending}
         />
       ) : null}
 

@@ -18,7 +18,8 @@ import { NoResults } from '@/components/ui/NoResults';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import { PageHead } from '@/components/shell/PageHead';
-import { SectionHeader } from '@/components/shell/SectionHeader';
+import { SectionHeader, SectionSelect } from '@/components/shell/SectionHeader';
+import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import {
   ICON_SIZE,
   IconArrowUpRight,
@@ -28,7 +29,6 @@ import {
   IconLink,
   IconPause,
   IconPipeline,
-  IconPlus,
   IconSwitch,
   type IconProps,
 } from '@/components/ui/icons';
@@ -38,6 +38,7 @@ import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
 import { PipelineFilterControl } from '@/components/pages/pipeline/PipelineSortControl';
 import { MoveSheet, moveActions } from '@/components/pages/pipeline/MoveSheet';
+import { useSelectMode } from '@/components/pages/pipeline/use-select-mode';
 import { openPostCard, postCardHref } from '@/components/pages/PostCard';
 import {
   StageMoveConfirm,
@@ -65,7 +66,6 @@ import { BOARD_CAP, stageLabel } from '@/components/pages/pipeline/stage-meta';
 import {
   dateChipLabel,
   dateFilterActive,
-  filtersActive,
   parsePipelineQuery,
   pipelineQueryParams,
   showMoreKey,
@@ -87,11 +87,9 @@ import {
   keptPipelinePosts,
   primePipelinePosts,
   readPipelinePosts,
-  searchPipelinePosts,
   stalePipelinePosts,
   PIPELINE_POSTS_LIMIT,
 } from '@/lib/pipeline-posts';
-import { useServerSearch } from '@/lib/search/server-search';
 import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/kept-view';
 import { readMemberRole, type RoleStatus } from '@/components/pages/pipeline/member-role';
 import { canRoleMove } from '@/components/pages/pcs/stage-actions';
@@ -124,29 +122,16 @@ const STAGES = Object.keys(STAGE_TRANSITIONS) as Stage[];
 const ALL_KEY = 'all';
 
 interface PipelineHeaderProps {
-  search: string;
-  onSearchChange: (value: string) => void;
-  sort: PostSort;
-  onSortChange: (value: PostSort) => void;
-  /** Target-date window state, folded into the consolidated sort control. */
-  dateWindow: DateWindow;
-  onDateWindowChange: (value: DateWindow) => void;
-  customRange: DateRange | null;
-  onCustomRangeChange: (range: DateRange | null) => void;
-  weekStartDay: number;
   stage: string;
   onStageChange: (key: string) => void;
   /** Per-tab post counts keyed by tab ('all' plus each Stage), shown as badges. */
   counts: Record<string, number>;
-  /** post.create granted: only then does the header carry the "+" create button. */
-  canCreate: boolean;
-  /**
-   * The post.create read is still in flight: the New post button's space is
-   * held (an invisible, inert copy) so the header does not jump when it lands.
-   */
-  createPending?: boolean;
   /** Approvers never see the Draft chip. */
   hideDraft?: boolean;
+  /** Select mode is on: the chip row's Select is pressed (decision E). */
+  selectMode: boolean;
+  /** The chip row's Select tap: enter select mode with none ticked, or leave. */
+  onSelectToggle: () => void;
 }
 
 /** The stage chips in transition-map order (Draft left out for approvers), All last. */
@@ -165,18 +150,14 @@ export function stageChipItems(
   ];
 }
 
-/** The New post button's classes: one row on every screen, never wraps or shrinks. */
-const NEW_POST_CLASS = 'shrink-0 whitespace-nowrap';
-
 /**
- * The Pipeline header chrome: the shared SectionHeader with, on ONE row at
- * every width, the search field (flex-1, shrinks), the single filter-and-sort
- * icon button, and the labelled New post button (plus icon + "New post"); the
- * horizontal stage chip bar sits in the filter-chips slot. Each chip carries
- * its label and post count as discrete fields (StageChips renders the count as
- * a trailing badge). Pure (no hooks) so the wiring is unit-tested by walking
- * the returned tree, mirroring SectionHeader's own tests; the page owns the
- * state and re-fetch.
+ * The Pipeline chip row (decisions A, B, E): the shared SectionHeader with the
+ * stage chips and the visible Select pinned at its end. Sort and New post live
+ * in the app top bar ({@link pipelineTopbarActions}); search lives only in the
+ * top bar's command palette. Each chip carries its label and post count as
+ * discrete fields (StageChips renders the count as a trailing badge). Pure (no
+ * hooks) so the wiring is unit-tested by walking the returned tree; the page
+ * owns the state.
  */
 export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
   // The stages keep their transition-map order, All closes the row.
@@ -184,61 +165,8 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
   const items = stageChipItems(props.counts, hideDraft);
   return (
     <div data-pipeline-toolbar="">
-      <SectionHeader<PostSort>
-        search={{
-          value: props.search,
-          onChange: props.onSearchChange,
-          placeholder: 'Search posts',
-          label: 'Search posts',
-        }}
-        sort={{
-          node: (
-            <PipelineFilterControl
-              order={props.sort}
-              onOrderChange={props.onSortChange}
-              dateWindow={props.dateWindow}
-              onDateWindowChange={props.onDateWindowChange}
-              customRange={props.customRange}
-              onCustomRangeChange={props.onCustomRangeChange}
-              weekStartDay={props.weekStartDay}
-            />
-          ),
-        }}
-        {...(props.canCreate
-          ? {
-              primaryAction: {
-                node: (
-                  <Button
-                    variant="primary"
-                    data-induction={INDUCTION_KEYS.pipelineCreate}
-                    className={NEW_POST_CLASS}
-                    onClick={() => dispatchSorted('sorted:create-post')}
-                  >
-                    <IconPlus size={ICON_SIZE.inline} />
-                    New post
-                  </Button>
-                ),
-              },
-            }
-          : props.createPending === true
-            ? {
-                primaryAction: {
-                  node: (
-                    <Button
-                      variant="primary"
-                      aria-hidden="true"
-                      tabIndex={-1}
-                      disabled
-                      data-create-placeholder=""
-                      className={cn('invisible', NEW_POST_CLASS)}
-                    >
-                      <IconPlus size={ICON_SIZE.inline} />
-                      New post
-                    </Button>
-                  ),
-                },
-              }
-            : {})}
+      <SectionHeader
+        select={<SectionSelect active={props.selectMode} onToggle={props.onSelectToggle} />}
       >
         <StageRow hideDraft={hideDraft}>
           <StageChips items={items} active={props.stage} onChange={props.onStageChange} />
@@ -246,6 +174,53 @@ export function pipelineHeader(props: PipelineHeaderProps): ReactElement {
       </SectionHeader>
     </div>
   );
+}
+
+/** What the Pipeline publishes into the app top bar. */
+export interface PipelineTopbarProps {
+  sort: PostSort;
+  onSortChange: (value: PostSort) => void;
+  /** Due-date window state, folded into the one sort control. */
+  dateWindow: DateWindow;
+  onDateWindowChange: (value: DateWindow) => void;
+  customRange: DateRange | null;
+  onCustomRangeChange: (range: DateRange | null) => void;
+  weekStartDay: number;
+  /** post.create granted: only then is there a "+" (clients and approvers get none). */
+  canCreate: boolean;
+}
+
+/**
+ * The top bar's sort and primary for the Pipeline (decision A): sort is the
+ * one Sort + Due date control (PipelineFilterControl, an IconSort IconButton);
+ * primary is the filled "+" labelled "New post", carrying the old New post
+ * induction key, and only for a person who can create posts (the slot keeps its
+ * width otherwise). Pure (no hooks).
+ */
+export function pipelineTopbarActions(props: PipelineTopbarProps): {
+  sort: ReactElement;
+  primary: ReactElement | undefined;
+} {
+  return {
+    sort: (
+      <PipelineFilterControl
+        order={props.sort}
+        onOrderChange={props.onSortChange}
+        dateWindow={props.dateWindow}
+        onDateWindowChange={props.onDateWindowChange}
+        customRange={props.customRange}
+        onCustomRangeChange={props.onCustomRangeChange}
+        weekStartDay={props.weekStartDay}
+      />
+    ),
+    primary: props.canCreate ? (
+      <TopbarPlus
+        label="New post"
+        induction={INDUCTION_KEYS.pipelineCreate}
+        onClick={() => dispatchSorted('sorted:create-post')}
+      />
+    ) : undefined,
+  };
 }
 
 /**
@@ -319,7 +294,7 @@ function moveFailure(copy: ErrorCopy, retry: () => void): MoveToastFailure {
  * Per-tab counts over the ALREADY-FILTERED, grouped list: each stage's column
  * length plus an `all` that is the FILTERED TOTAL (the sum across stages), not the
  * raw unfiltered post count and not the per-stage display cap. Reused for both the
- * tab badges and the header "N posts" counter so the counter tracks the search.
+ * tab badges and the "{shown} of {total} posts" line under a date filter.
  */
 export function stageCounts(
   grouped: Record<Stage, PipelinePost[]>,
@@ -342,17 +317,17 @@ export function postCountLabel(count: number): string {
 
 /**
  * The honest narrowing count, "{shown} of {total} posts", shown only while a
- * search or date filter is on (the chips carry the counts otherwise). Without
- * `filtered` it is the plain total.
+ * date filter is on (the chips carry the counts otherwise). Without `filtered`
+ * it is the plain total.
  */
 export function headerCountLabel(shown: number, total: number, filtered: boolean): string {
   if (!filtered) return postCountLabel(total);
   return `${shown} of ${total} ${total === 1 ? 'post' : 'posts'}`;
 }
 
-/** Whether a stage chip, search or date window narrows the view. */
+/** Whether a stage chip or date window narrows the view. */
 export function viewFiltered(query: PipelineQuery): boolean {
-  return query.stage !== ALL_KEY || filtersActive(query);
+  return query.stage !== ALL_KEY || dateFilterActive(query);
 }
 
 /** The board's load failure: the shared plain line and a Retry that re-reads. */
@@ -420,7 +395,7 @@ export function postsSkeleton(): ReactElement {
 
 /**
  * The pipeline with no posts at all (not a filter): one positive line. An
- * empty page has no create button of its own; the header's New post (the
+ * empty page has no create button of its own; the top bar's "+" (the
  * induction's pipeline-create anchor) is the only one.
  */
 export function emptyPipeline(): ReactElement {
@@ -431,16 +406,11 @@ export function emptyPipeline(): ReactElement {
   );
 }
 
-/** The searchable fields of a post: title and caption (the workspace has one platform). */
-export function postSearchFields(post: PipelinePost): (string | null)[] {
-  return [post.title, post.caption];
-}
-
 /** Everything {@link pipelineSurface} needs to wire the list. */
 export interface PipelineSurfaceProps {
   /** The active chip: ALL_KEY or a Stage. */
   stage: string;
-  /** Search + window + sort: the list. */
+  /** Window + sort: the list. */
   sorted: PipelinePost[];
   cache: PresignCache;
   presignEnabled: boolean;
@@ -569,19 +539,14 @@ export function pipelineSelectActions(input: PipelineSelectInput): SelectBarActi
 }
 
 /**
- * The filtered empty state: search or a date window hides every post on this
- * view. The shared NoResults names what narrows it; its button resets both
- * (the stage chip stays). The unfiltered empty states (feed and board) are
- * untouched.
+ * The filtered empty state: a date window hides every post on this view. The
+ * shared NoResults says so; its button resets the window (the stage chip
+ * stays). The unfiltered empty states (feed and board) are untouched.
  */
-export function filteredEmpty(
-  search: string,
-  dateActive: boolean,
-  onClear: () => void,
-): ReactElement {
+export function filteredEmpty(onClear: () => void): ReactElement {
   return (
     <div data-filtered-empty="" className={GUTTER}>
-      <NoResults query={search} filtersActive={dateActive} onClear={onClear} />
+      <NoResults filtersActive onClear={onClear} />
     </div>
   );
 }
@@ -755,7 +720,8 @@ export function leavingToPost(pathname: string): boolean {
 /**
  * The query the board shows: the URL's, or, when the URL names no filter (a
  * tab return lands on a clean /pipeline), the chip and date filter kept from
- * this session's last visit. The search is never kept. Pure.
+ * this session's last visit. Only those three keys are taken from the kept
+ * copy (an older session's kept search is dropped). Pure.
  */
 export function shownPipelineQuery(
   params: URLSearchParams,
@@ -763,7 +729,9 @@ export function shownPipelineQuery(
 ): PipelineQuery {
   const fromUrl = parsePipelineQuery(params, INITIAL_STAGE);
   const clean = pipelineQueryParams(fromUrl, INITIAL_STAGE).toString() === '';
-  return clean && kept !== null ? { ...kept, search: '' } : fromUrl;
+  return clean && kept !== null
+    ? { stage: kept.stage, dateWindow: kept.dateWindow, customRange: kept.customRange }
+    : fromUrl;
 }
 
 export function PipelinePage() {
@@ -775,7 +743,7 @@ export function PipelinePage() {
       userId !== null && workspaceId !== null ? keptViewKey(userId, workspaceId, part) : null,
     [userId, workspaceId],
   );
-  // Stage, search, date window and custom range live in the URL query so Back
+  // Stage, date window and custom range live in the URL query so Back
   // restores them. Opens on Review when the query names no stage (a stale
   // ?view=plan link included: only the pipeline's own keys are read), or on
   // the chip and date filter kept from this session's last visit.
@@ -785,7 +753,7 @@ export function PipelinePage() {
     null,
   );
   const query = useMemo(() => shownPipelineQuery(params, keptQuery), [params, keptQuery]);
-  const { stage: queryStage, search, dateWindow, customRange } = query;
+  const { stage: queryStage, dateWindow, customRange } = query;
   // Patches compose through a ref: the sort control's Apply sets the range and
   // the window back to back, before the URL re-renders the page.
   const latestQuery = useRef(query);
@@ -794,16 +762,12 @@ export function PipelinePage() {
     (patch: Partial<PipelineQuery>): void => {
       const next = { ...latestQuery.current, ...patch };
       latestQuery.current = next;
-      setKeptQuery({ ...next, search: '' });
+      setKeptQuery(next);
       setParams(pipelineQueryParams(next, INITIAL_STAGE), { replace: true });
     },
     [setParams, setKeptQuery],
   );
   const setStage = useCallback((key: string): void => updateQuery({ stage: key }), [updateQuery]);
-  const setSearch = useCallback(
-    (value: string): void => updateQuery({ search: value }),
-    [updateQuery],
-  );
   const setDateWindow = useCallback(
     (value: DateWindow): void => updateQuery({ dateWindow: value }),
     [updateQuery],
@@ -813,12 +777,12 @@ export function PipelinePage() {
     [updateQuery],
   );
   const clearFilters = useCallback(
-    (): void => updateQuery({ search: '', dateWindow: DATE_WINDOW_DEFAULT, customRange: null }),
+    (): void => updateQuery({ dateWindow: DATE_WINDOW_DEFAULT, customRange: null }),
     [updateQuery],
   );
   const shownKey = showMoreKey(pipelineQueryParams(query, INITIAL_STAGE).toString());
-  const createCapability = useWorkspaceCapability('post.create');
-  const canCreate = createCapability === true;
+  // post.create: only then is there a "+" in the top bar (none for clients).
+  const canCreate = useWorkspaceCapability('post.create') === true;
   const { value: sort, setValue: setSort } = useSort<PostSort>('pipeline', POST_SORT_DEFAULT);
   // Sanitize the persisted sort: a live workspace may hold a value the trimmed
   // menu no longer lists ('newest'/'title'). Fall back to the default for the
@@ -1061,37 +1025,16 @@ export function PipelinePage() {
     setParams(next, { replace: true });
   }, [params, setParams]);
 
-  // Search runs on the server (posts_search, src/lib/search/server-search.ts):
-  // from 2 characters, 250ms after the last keystroke, a newer query aborting
-  // the one in flight; under 2 characters the board is the normal list. The
-  // search covers every stage, so each chip's count is its matches and the
-  // chip still filters them; the date window and the sort below apply as
-  // before. A result also on the board shows the board's copy, so an
-  // optimistic move lands in the right column. Sort is pure, derived in
-  // memory: the date window (undated posts kept once "Show them" is tapped for
-  // this window), then order, then group into columns. groupByStage is generic
-  // over the element type, so it preserves PipelinePost with no assertion.
-  const postSearch = useServerSearch<PipelinePost[]>(
-    search,
-    (q, signal) =>
-      workspaceId === null
-        ? Promise.resolve({ ok: true as const, data: [] })
-        : searchPipelinePosts(supabase, { workspaceId, query: q }, signal),
-    workspaceId ?? '',
-  );
-  const searchActive = postSearch.active;
-  const searchPending = searchActive && postSearch.data === null && postSearch.status !== 'error';
+  // Sort is pure, derived in memory: the date window (undated posts kept
+  // once "Show them" is tapped for this window), then order, then group into
+  // columns. groupByStage is generic over the element type, so it preserves
+  // PipelinePost with no assertion.
   const dateKey = `${dateWindow}:${customRange?.start ?? ''}:${customRange?.end ?? ''}`;
   const includeUndated = undatedShownFor === dateKey;
-  const searched = useMemo(() => {
-    if (!searchActive) return shownPosts;
-    const onBoard = new Map(shownPosts.map((post) => [post.id, post]));
-    return (postSearch.data ?? []).map((post) => onBoard.get(post.id) ?? post);
-  }, [shownPosts, searchActive, postSearch.data]);
   const sorted = useMemo(
     () =>
       sortPosts(
-        filterByWindow(searched, dateWindow, {
+        filterByWindow(shownPosts, dateWindow, {
           now: new Date(),
           timeZone,
           weekStartDay,
@@ -1100,26 +1043,26 @@ export function PipelinePage() {
         }),
         activeSort,
       ),
-    [searched, dateWindow, customRange, activeSort, timeZone, weekStartDay, includeUndated],
+    [shownPosts, dateWindow, customRange, activeSort, timeZone, weekStartDay, includeUndated],
   );
   const grouped = useMemo(() => groupByStage(sorted, STAGES), [sorted]);
 
   // Per-tab counts over the filtered list: each stage plus the 'all' total.
   const counts = useMemo(() => stageCounts(grouped, STAGES), [grouped]);
 
-  // The empty view under active search/date filters gets NoResults ("Try fewer filters.").
+  // The empty view under an active date filter gets NoResults ("Try fewer filters.").
   const visibleCount = (stage === ALL_KEY ? counts.all : counts[stage]) ?? 0;
   const inStage = (list: PipelinePost[]): PipelinePost[] =>
     stage === ALL_KEY ? list : list.filter((post) => post.stage === stage);
 
-  // Counts live on the chips. Only while a search or date filter narrows the
-  // view does a line say "{shown} of {total} posts" (total: this chip's posts).
-  const narrowed = searchActive || dateFilterActive(query);
+  // Counts live on the chips. Only while a date filter narrows the view does
+  // a line say "{shown} of {total} posts" (total: this chip's posts).
+  const narrowed = dateFilterActive(query);
   const countLabel = headerCountLabel(visibleCount, inStage(shownPosts).length, true);
-  const showFilteredEmpty = narrowed && visibleCount === 0 && !searchPending;
-  // Undated posts the date window hides on this chip (after the search).
+  const showFilteredEmpty = narrowed && visibleCount === 0;
+  // Undated posts the date window hides on this chip.
   const hiddenUndated =
-    dateFilterActive(query) && !includeUndated ? inStage(searched).filter(isUndated).length : 0;
+    narrowed && !includeUndated ? inStage(shownPosts).filter(isUndated).length : 0;
 
   // Card covers (first photo or video with its stored size) for the platform
   // frame, served by the chat cover store; cached on the device. The one
@@ -1127,7 +1070,7 @@ export function PipelinePage() {
   // only a row that came without a cover (none today) is read here, in batches.
   // The key is the id SET (sorted), not the display order, so a re-sort or an
   // optimistic stage move never re-runs the request loop; only a different set
-  // of posts (a load, a search) asks again, and the store skips ids it holds.
+  // of posts (a load) asks again, and the store skips ids it holds.
   const covers = usePostCovers(NO_IDS);
   const coverKey = useMemo(
     () => coverIdsKey(sorted.filter((post) => post.firstMedia === undefined)),
@@ -1214,9 +1157,11 @@ export function PipelinePage() {
     },
     [role, roleStatus, requestSheetMove],
   );
-  // Select mode (long-press / right-click on a card): the old ⋮ rows ride the
-  // SelectBar. Pure client state; no await or read on the tap path.
+  // Select mode (long-press / right-click on a card, or the chip row's Select):
+  // the old ⋮ rows ride the SelectBar. Pure client state; no await or read on
+  // the tap path.
   const selection = useListSelection();
+  const selectMode = useSelectMode(selection);
   const tickedPost =
     selection.count === 1 ? (shownPosts.find((post) => selection.ids.has(post.id)) ?? null) : null;
   const selectActions = pipelineSelectActions({
@@ -1234,7 +1179,7 @@ export function PipelinePage() {
             ok ? { title: 'Link copied' } : { title: COPY_FAILED, tone: 'error' },
           ),
       );
-      selection.clear();
+      selectMode.clear();
     },
     onMove: (post, to) => selection.leaveThen(() => openMove(post, to)),
   });
@@ -1246,10 +1191,7 @@ export function PipelinePage() {
         );
 
   const boardLoading =
-    workspaceId === null ||
-    !live ||
-    (postsLoading && posts.length === 0 && !postsFailed) ||
-    searchPending;
+    workspaceId === null || !live || (postsLoading && posts.length === 0 && !postsFailed);
   // No posts at all (not a filter hiding them) once a read has succeeded.
   const pipelineEmpty = !boardLoading && !postsFailed && !postsLoading && shownPosts.length === 0;
   // Back on the board, the scroll lands where it was once the posts painted.
@@ -1260,12 +1202,11 @@ export function PipelinePage() {
   const landRef = useRef<HTMLDivElement>(null);
   useSettleOnLanding(landRef, !boardLoading && !postsFailed, hadBoxes);
 
-  return (
-    <>
-      <PageHead title="Pipeline" hidden />
-      {pipelineHeader({
-        search,
-        onSearchChange: setSearch,
+  // Sort and New post ride the app top bar (decision A); memoised so the bar
+  // only re-renders when one of them changes. Pure render plumbing, no read.
+  const topbar = useMemo(
+    () =>
+      pipelineTopbarActions({
         sort: activeSort,
         onSortChange: setSort,
         dateWindow,
@@ -1273,15 +1214,25 @@ export function PipelinePage() {
         customRange,
         onCustomRangeChange: setCustomRange,
         weekStartDay,
+        canCreate,
+      }),
+    [activeSort, setSort, dateWindow, setDateWindow, customRange, setCustomRange, weekStartDay, canCreate],
+  );
+  useTopbarActions(topbar);
+
+  return (
+    <>
+      <PageHead title="Pipeline" hidden />
+      {pipelineHeader({
         stage,
         onStageChange: setStage,
         counts,
-        canCreate,
-        createPending: createCapability === null,
         hideDraft: isClient(role),
+        selectMode: selectMode.on,
+        onSelectToggle: selectMode.toggle,
       })}
 
-      {/* Counts live on the chips. While a search or date filter narrows the
+      {/* Counts live on the chips. While a date filter narrows the
           view: the honest "{shown} of {total} posts", and the undated posts the
           date filter hides with "Show them". */}
       {narrowed && !boardLoading && !postsFailed ? (
@@ -1294,16 +1245,14 @@ export function PipelinePage() {
       ) : null}
 
       {/* The chips and filters above stay usable through a failed read. */}
-      {live && searchActive && postSearch.status === 'error' && postSearch.data === null ? (
-        postsLoadError(() => postSearch.refresh(), false)
-      ) : live && postsFailed ? (
+      {live && postsFailed ? (
         postsLoadError(() => void loadPosts(), postsLoading)
       ) : boardLoading ? (
         postsSkeleton()
       ) : pipelineEmpty ? (
         emptyPipeline()
       ) : showFilteredEmpty ? (
-        filteredEmpty(searchActive ? query.search : '', dateFilterActive(query), clearFilters)
+        filteredEmpty(clearFilters)
       ) : (
         <div ref={landRef} className="contents">
           {pipelineSurface({
@@ -1312,7 +1261,7 @@ export function PipelinePage() {
             cache,
             presignEnabled,
             workspaceKey,
-            selectFor: selection.selectFor,
+            selectFor: selectMode.selectFor,
             shownKey,
             timeZone,
             viewer,
@@ -1321,11 +1270,11 @@ export function PipelinePage() {
         </div>
       )}
 
-      {selection.active ? (
+      {selectMode.on ? (
         <SelectBar
           label="Selected posts"
           count={selection.count}
-          onCancel={selection.clear}
+          onCancel={selectMode.clear}
           actions={selectActions}
           data-pipeline-select-bar=""
         />

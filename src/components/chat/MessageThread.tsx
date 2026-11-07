@@ -110,7 +110,6 @@ import {
   IconForward,
   IconInfo,
   IconReply,
-  IconSearch,
   IconSmile,
   IconTickDouble,
   IconTickSingle,
@@ -358,7 +357,6 @@ import {
   JUMP_SETTLE_MS,
   SearchWordsContext,
 } from '@/components/ui/SearchHighlight';
-import { InChatSearchBar, SearchHighlightContext } from '@/components/chat/InChatSearchBar';
 import type { ThreadReadState } from '@/lib/chat/use-chat-thread';
 import {
   firstUnread,
@@ -548,15 +546,12 @@ interface MessageThreadProps {
   /** The thread took initialMessageId (its jump runs, found or miss): the caller drops it. */
   onInitialJumpTaken?: () => void;
   /**
-   * A message search hit: jump to the message and open the in-chat bar on the
-   * query. seq makes a repeat in the same chat run again.
+   * A jump to a message (a search hit, a link, Show in chat): the jump and its
+   * highlight. seq makes a repeat in the same chat run again.
    */
   searchRequest?: {
     messageId: string;
-    query: string;
     seq: number;
-    /** A plain jump (a link, Show in chat): the jump and its highlight only, no in-chat bar. */
-    jumpOnly?: boolean;
     /** A search jump: a message that is gone opens the chat with no toast. */
     quiet?: boolean;
   } | null;
@@ -564,7 +559,7 @@ interface MessageThreadProps {
   onSearchRequestTaken?: () => void;
   /**
    * A search jump's words (the palette): marked in the bubbles and the header's
-   * name until the chat closes, with no in-chat bar. Taken once on mount.
+   * name until the chat closes. Taken once on mount.
    */
   initialSearchWords?: readonly string[] | null;
   /** The thread took initialSearchWords: the caller drops them. */
@@ -1918,7 +1913,7 @@ export interface MentionRenderContext {
    * me or "@all" sit on the mention-of-me tint. Absent is the same as false.
    */
   mentionedMe?: boolean;
-  /** The in-chat search's words: matched words in the text runs draw as <mark>. */
+  /** A search jump's words: matched words in the text runs draw as <mark>. */
   highlight?: readonly string[];
 }
 
@@ -2287,7 +2282,7 @@ export function MessageBubble(props: {
   message: ThreadMessage;
   /** Notes only: a saved copy's "Saved from" line replaces "Forwarded". */
   savedFrom?: SavedFromWiring | null;
-  /** The open in-chat search's words; absent or [] draws no marks. */
+  /** A search jump's words; absent or [] draws no marks. */
   searchWords?: readonly string[];
   profiles: Map<string, ChatProfile>;
   cache: PresignCache;
@@ -3328,8 +3323,8 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
       swipe.handlers.onPointerCancel();
     },
   };
-  // The in-chat search's words: matched words in this bubble draw as <mark>.
-  const searchWords = useContext(SearchHighlightContext);
+  // A search jump's words: matched words in this bubble draw as <mark>.
+  const searchWords = useContext(SearchWordsContext);
   const personSource = useContext(PersonSourceContext);
   const savedFrom = useSavedFrom();
   const meta = props.meta;
@@ -5941,16 +5936,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     seq: number;
     quiet?: boolean;
   } | null>(null);
-  // The in-chat search bar (null: the header shows) and the words bubbles mark.
-  const [chatSearch, setChatSearch] = useState<{
-    query: string;
-    anchor: string | null;
-    key: number;
-    /** Opened from the header (a history step), not by a search hit's open. */
-    manual: boolean;
-  } | null>(null);
-  const [searchWords, setSearchWords] = useState<readonly string[]>([]);
-  // A palette jump's words on the header's name (a group found by name), until the chat closes.
+  // A palette jump's words: marked in the bubbles and on the header's name (a
+  // group found by name), until the chat closes.
   const [headerWords, setHeaderWords] = useState<readonly string[]>([]);
   const [forwardFor, setForwardFor] = useState<ThreadMessage[] | null>(null);
   // The own message being edited in the composer.
@@ -6399,7 +6386,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   useEffect(() => {
     if (initialSearchWords === null) return;
     if (initialSearchWords.length > 0) fromSearchRef.current = true;
-    setSearchWords(initialSearchWords);
     setHeaderWords(initialSearchWords);
     onInitialSearchWordsTaken?.();
   }, [initialSearchWords, onInitialSearchWordsTaken]);
@@ -6412,8 +6398,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     setJumpRequest((prev) => ({ id, seq: (prev?.seq ?? 0) + 1, quiet }));
     onInitialJumpTaken?.();
   }, [initialMessageId, bodyLoading, onInitialJumpTaken, initialSearchWords]);
-  // A message search hit: once the rows are on screen, jump to it (the same
-  // jump and highlight as a deep link) and open the bar on its query.
+  // A message jump: once the rows are on screen, jump to it (the same jump and
+  // highlight as a deep link).
   const searchRequest = props.searchRequest ?? null;
   const onSearchRequestTaken = props.onSearchRequestTaken;
   const searchSeqRef = useRef<number | null>(null);
@@ -6421,21 +6407,11 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     if (searchRequest === null || bodyLoading) return;
     if (searchSeqRef.current === searchRequest.seq) return;
     searchSeqRef.current = searchRequest.seq;
-    const { messageId, query, seq } = searchRequest;
-    if (searchRequest.jumpOnly !== true)
-      setChatSearch({ query, anchor: messageId, key: seq, manual: false });
+    const { messageId } = searchRequest;
     const quiet = searchRequest.quiet === true;
     setJumpRequest((prev) => ({ id: messageId, seq: (prev?.seq ?? 0) + 1, quiet }));
     onSearchRequestTaken?.();
   }, [searchRequest, bodyLoading, onSearchRequestTaken]);
-  const closeChatSearch = useCallback(() => {
-    setSearchWords([]);
-    setChatSearch(null);
-  }, []);
-  const searchJump = useCallback(
-    (id: string) => setJumpRequest((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 })),
-    [],
-  );
   const gatedIndex = useMemo(() => parentIndexOf(onScreen), [onScreen]);
   const shownMessages = onScreen;
   // A bell task row: once the first page is on screen, the sheet opens on
@@ -6705,7 +6681,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   useHistoryStep(readInfoOpen && readBy !== null, HISTORY_STEP_KEYS.readInfo, () =>
     setReadInfoOpen(false),
   );
-  useHistoryStep(chatSearch?.manual === true, HISTORY_STEP_KEYS.search, closeChatSearch);
   const threadPostOf = (rootId: string): PostRefPost | null => {
     const root = known.get(rootId);
     const postId =
@@ -7089,17 +7064,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             ) : null}
             <SelectionHeader count={selected.size} onCancel={cancelSelection} layout={layout} />
           </>
-        ) : chatSearch !== null && channelId !== undefined ? (
-          <InChatSearchBar
-            key={chatSearch.key}
-            workspaceId={workspaceId}
-            channelId={channelId}
-            initialQuery={chatSearch.query}
-            anchorMessageId={chatSearch.anchor}
-            onJump={searchJump}
-            onTermsChange={setSearchWords}
-            onClose={closeChatSearch}
-          />
         ) : (
           <>
             {props.onBack !== undefined ? (
@@ -7125,14 +7089,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
                   ? { onOpenContact: props.onOpenInfo }
                   : {})}
             />
-            {channelId !== undefined ? (
-              <IconButton
-                label="Search this chat"
-                onClick={() => setChatSearch({ query: '', anchor: null, key: 0, manual: true })}
-              >
-                <IconSearch size={ICON_SIZE.control} />
-              </IconButton>
-            ) : null}
             {/* FT46: no Info icon; the identity tap opens Group info. */}
           </>
         )}
@@ -7175,7 +7131,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           locationKey={props.locationKey}
         />
       ) : null}
-      <SearchHighlightContext.Provider value={searchWords}>
+      <SearchWordsContext.Provider value={headerWords}>
         <ThreadBody
           {...bodyActions}
           jumpRequest={jumpRequest}
@@ -7214,7 +7170,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
             ? { taskLines: { events: windowEvents, ctx: taskLineCtx } }
             : {})}
         />
-      </SearchHighlightContext.Provider>
+      </SearchWordsContext.Provider>
       <WhoReactedSheet
         messageId={reactionsFor}
         onClose={() => setReactionsFor(null)}

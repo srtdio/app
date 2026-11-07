@@ -1,5 +1,5 @@
 // Message search (UI-4): the chat_message_search wrapper, the debounced and
-// abortable search runner the chat home and the in-chat bar share, and the pure
+// abortable search runner the chat home uses, and the pure
 // pieces a result row draws (snippet, matched words, date label, sender prefix).
 //
 // chat_message_search is SECURITY INVOKER: chat_messages RLS keeps the rows to
@@ -75,7 +75,7 @@ function effectiveQuery(raw: string, kind: SearchKind | null): string {
 /** The failure row's copy (never connection wording). */
 export const SEARCH_FAILED_COPY = errorText('search', null);
 
-/** One message hit, as the result rows and the in-chat bar read it. */
+/** One message hit, as the result rows read it. */
 export interface SearchHit {
   id: string;
   channelId: string;
@@ -535,24 +535,4 @@ export function searchSenderPrefix(input: {
     nameOf: input.nameOf,
   });
   return prefix !== undefined ? `${prefix}: ` : '';
-}
-
-/** "N of M", with "+" while more pages exist; "0 of 0" with no hits. Pure. */
-export function searchCounterText(index: number, total: number, hasMore: boolean): string {
-  if (total === 0) return '0 of 0';
-  return `${Math.min(index + 1, total)} of ${total}${hasMore ? '+' : ''}`;
-}
-
-/**
- * The in-chat arrows over newest-first hits: older is the next index, newer
- * the previous. Null when there is no loaded hit that way (older may still
- * need the next page). Pure.
- */
-export function stepSearchIndex(
-  index: number,
-  direction: 'older' | 'newer',
-  total: number,
-): number | null {
-  const next = direction === 'older' ? index + 1 : index - 1;
-  return next >= 0 && next < total ? next : null;
 }

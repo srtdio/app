@@ -32,7 +32,6 @@ import {
   GROUP_PHOTO_UPLOAD_FAILED,
   canEditGroupInfo,
 } from '@/components/chat/GroupInfoSheet';
-import { BAR_INPUT } from '@/components/chat/InChatSearchBar';
 import { listSkeleton } from '@/components/chat/ListSkeleton';
 import { nextMenuIndex } from '@/lib/chat/menu-keys';
 
@@ -84,14 +83,6 @@ describe('X7 FN22-FN24: copy, inputs and skeletons', () => {
   it('notes empty state', () => {
     expect(NOTES_EMPTY_TITLE).toBe('Your private notes live here.');
     expect(NOTES_EMPTY_LINE).not.toMatch(/—/);
-  });
-
-  it('in-chat search input is 16px on a phone', () => {
-    // ui/Input owns the 16px phone text (text-input md:text-base).
-    expect(source('../InChatSearchBar.tsx')).toMatch(/<Input\s+type="search"/);
-    expect(source('../../ui/Input.tsx')).toContain('text-input md:text-base');
-    expect(BAR_INPUT).toBe('min-w-0 flex-1');
-    expect(BAR_INPUT).not.toContain('sm:text-');
   });
 
   it('ThreadView dismiss is the HeaderBar back: a 44px chevron named "Close thread"', () => {
