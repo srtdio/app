@@ -61,27 +61,30 @@ const stepPx = (cls: string, prefix: string): number =>
   px(spacing[cls.replace(prefix, '')] ?? 'NaN');
 
 describe('ListCard frame', () => {
-  it('bordered card: the border token, radius 12, panel fill, lit-card, press on the whole card', () => {
+  it('flat row: no border, no radius, no fill, no lit height; bleeds -mx-4 / px-4; press on the whole row', () => {
     const root = classOf(render(), 'data-list-card=""');
-    for (const cls of ['rounded-xl', 'border', 'bg-panel', 'lit-card', MOVE_CLASS.press]) {
+    for (const cls of ['relative', 'flex', 'h-15', 'min-w-0', '-mx-4', 'px-4', MOVE_CLASS.press]) {
       expect(root).toContain(cls);
     }
-    expect(radius.xl).toBe('12px');
-    expect(listCardFrame().split(' ')).toContain('border');
-    expect(listCardFrame()).not.toMatch(/\bborder-/);
+    expect(listCardFrame()).toBe('relative -mx-4 flex h-15 min-w-0 px-4');
+    for (const cls of listCardFrame().split(' ')) {
+      expect(cls).not.toMatch(/^(border|rounded|overflow-hidden|bg-|lit-)/);
+    }
+    expect(root.filter((c) => /^(border|rounded|bg-|lit-)/.test(c))).toEqual([]);
   });
 
-  it('padding 12, picture then text 12 apart, vertically centred', () => {
+  it('picture then text 12 apart, vertically centred; the frame carries the 16 sides, the body no padding', () => {
     const body = classOf(render(), 'data-list-card-body=""');
-    expect(body).toEqual(expect.arrayContaining(['p-3', 'gap-3', 'items-center']));
-    expect(body).not.toContain('p-4');
+    expect(body).toEqual(expect.arrayContaining(['gap-3', 'items-center']));
+    expect(body.filter((c) => /^p[xy]?-/.test(c))).toEqual([]);
     expect(px(spacing['3'] ?? '')).toBe(12);
+    expect(px(spacing['4'] ?? '')).toBe(16);
   });
 
-  it('cards sit 8 apart (stack and grid)', () => {
-    expect(LIST_CARD_STACK.split(' ')).toContain('gap-2');
-    expect(LIST_CARD_GRID.split(' ')).toContain('gap-2');
-    expect(px(spacing['2'] ?? '')).toBe(8);
+  it('rows touch (stack and grid): no gap between rows, 24 between laptop columns', () => {
+    expect(LIST_CARD_STACK.split(' ').filter((c) => c.startsWith('gap'))).toEqual([]);
+    expect(LIST_CARD_GRID.split(' ').filter((c) => /gap/.test(c))).toEqual(['md:gap-x-6']);
+    expect(px(spacing['6'] ?? '')).toBe(24);
   });
 
   it('the whole card is one button; there is no ⋮ and no other button', () => {
@@ -92,9 +95,14 @@ describe('ListCard frame', () => {
     expect(classOf(html, 'data-list-card-body=""')).toContain('pointer-events-none');
   });
 
-  it('selected is lit-selected; muted is lit-card-muted; no tap means no press motion', () => {
-    expect(classOf(render({ selected: true }), 'data-list-card=""')).toContain('lit-selected');
-    expect(classOf(render({ muted: true }), 'data-list-card=""')).toContain('lit-card-muted');
+  it('selected is the panel-2 fill; muted greys the title to fg-3; no tap means no press motion', () => {
+    expect(classOf(render({ selected: true }), 'data-list-card=""')).toContain('bg-panel-2');
+    expect(classOf(render(), 'data-list-card=""')).not.toContain('bg-panel-2');
+    expect(listCardFrame(true).split(' ')).toContain('bg-panel-2');
+    const muted = render({ muted: true });
+    expect(classOf(muted, 'data-list-card=""')).not.toContain('bg-panel-2');
+    expect(classOf(muted, 'data-list-card-title=""')).toContain('text-fg-3');
+    expect(classOf(render(), 'data-list-card-title=""')).not.toContain('text-fg-3');
     const still = renderToStaticMarkup(
       <ListCard picture={{ kind: 'icon', icon: IconBriefs }} title="Still" />,
     );
@@ -103,24 +111,24 @@ describe('ListCard frame', () => {
   });
 });
 
-describe('ListCard height: exactly 74 (1 + 12 + 48 + 12 + 1)', () => {
+describe('ListCard height: exactly 60 (10 + 40 + 10)', () => {
   it('the constant, and the classes that make it', () => {
-    expect(LIST_CARD_HEIGHT_PX).toBe(74);
-    const pad = LIST_CARD_BODY.split(' ').find((c) => /^p-\d/.test(c)) ?? '';
+    expect(LIST_CARD_HEIGHT_PX).toBe(60);
+    const frameH = listCardFrame().split(' ').find((c) => /^h-\d/.test(c)) ?? '';
+    expect(stepPx(frameH, 'h-')).toBe(LIST_CARD_HEIGHT_PX);
     const pic = LIST_CARD_PICTURE.split(' ').find((c) => /^h-\d/.test(c)) ?? '';
-    const border = 1;
-    expect(border + stepPx(pad, 'p-') + stepPx(pic, 'h-') + stepPx(pad, 'p-') + border).toBe(
-      LIST_CARD_HEIGHT_PX,
-    );
+    // The 40 picture centres in the row with 10 above and below.
+    expect((LIST_CARD_HEIGHT_PX - stepPx(pic, 'h-')) / 2).toBe(10);
   });
 
-  it('the text column is 20 + 4 + 20 = 44, inside the 48 picture (it never sets the height)', () => {
+  it('the text column is 20 + 2 + 20 = 42, inside the 40 picture row (it never sets the height)', () => {
     const line = (cls: string): number =>
       stepPx(cls.split(' ').find((c) => /^h-\d/.test(c)) ?? '', 'h-');
     const gap = stepPx(LIST_CARD_TEXT.split(' ').find((c) => /^gap-/.test(c)) ?? '', 'gap-');
+    expect(LIST_CARD_TEXT.split(' ')).toContain('gap-0.5');
     const text = line(LIST_CARD_LINE1) + gap + line(LIST_CARD_LINE2);
-    expect(text).toBe(44);
-    expect(text).toBeLessThanOrEqual(stepPx('h-12', 'h-'));
+    expect(text).toBe(42);
+    expect(text).toBeLessThanOrEqual(LIST_CARD_HEIGHT_PX);
   });
 
   it('every variant has the identical height structure (no line 3, line 2 always there)', () => {
@@ -147,12 +155,13 @@ describe('ListCard height: exactly 74 (1 + 12 + 48 + 12 + 1)', () => {
   });
 });
 
-describe('ListCard picture: 48 on the left, centred', () => {
-  it('the slot is 48x48 (h-12 w-12) and never shrinks; it comes first', () => {
-    expect(px(spacing['12'] ?? '')).toBe(48);
+describe('ListCard picture: 40 on the left, centred', () => {
+  it('the slot is 40x40 (h-10 w-10) and never shrinks; it comes first', () => {
+    expect(px(spacing['10'] ?? '')).toBe(40);
     expect(LIST_CARD_PICTURE.split(' ')).toEqual(
-      expect.arrayContaining(['h-12', 'w-12', 'shrink-0']),
+      expect.arrayContaining(['h-10', 'w-10', 'shrink-0']),
     );
+    expect(LIST_CARD_PICTURE).not.toContain('h-12');
     const html = render();
     const body = html.indexOf('data-list-card-body');
     expect(html.indexOf('data-list-card-picture', body)).toBeLessThan(
@@ -160,29 +169,30 @@ describe('ListCard picture: 48 on the left, centred', () => {
     );
   });
 
-  it('person: a circle photo through ui/Avatar at 48 (initials when none)', () => {
+  it('person: a circle photo through ui/Avatar at 40 (initials when none)', () => {
     const html = render({ picture: { kind: 'person', name: 'Priya Shah' } });
     expect(html).toContain('data-list-card-picture="person"');
     expect(html).toContain('data-avatar-role="card"');
-    expect(html).toContain('width:48px;height:48px');
+    expect(html).toContain('width:40px;height:40px');
     expect(html).toContain('rounded-full');
     expect(html).toContain('>PS<');
   });
 
-  it('image, icon and placeholder sit in the radius 8 box', () => {
+  it('image, icon and placeholder sit in the flat rounded-picture (10) squircle', () => {
     for (const picture of [
       { kind: 'image' as const, node: <img src="https://cdn/x.png" alt="" /> },
       { kind: 'icon' as const, icon: IconBriefs },
       { kind: 'placeholder' as const, placeholder: 'video' as const },
     ]) {
       const html = render({ picture });
-      expect(classOf(html, 'data-list-card-picture-box=""')).toEqual(
-        expect.arrayContaining(['rounded-lg', 'overflow-hidden', 'lit-media']),
-      );
+      const box = classOf(html, 'data-list-card-picture-box=""');
+      expect(box).toEqual(expect.arrayContaining(['rounded-picture', 'overflow-hidden']));
+      expect(box).not.toContain('lit-media');
+      expect(box).not.toContain('rounded-lg');
     }
-    expect(radius.lg).toBe('8px');
+    expect(radius.picture).toBe('10px');
     const icon = render({ picture: { kind: 'icon', icon: IconBriefs } });
-    expect(icon).toMatch(/bg-panel-2 text-fg-2"><svg[^>]*width="24"/);
+    expect(icon).toMatch(/bg-panel-2 text-fg-2"><svg[^>]*width="20"/);
     const video = render({ picture: { kind: 'placeholder', placeholder: 'video' } });
     expect(video).toContain('data-post-placeholder="video"');
   });
@@ -191,9 +201,13 @@ describe('ListCard picture: 48 on the left, centred', () => {
 describe('ListCard line 1: title, then the time on the right', () => {
   it('the heading title (one line, truncate), then the meta time (mono, no wrap)', () => {
     const html = render();
-    expect(classOf(html, 'data-list-card-title=""')).toEqual(
-      expect.arrayContaining(['text-lg', 'font-semibold', 'truncate', 'flex-1']),
-    );
+    // Read: the heading size at regular weight; unread: the heading's bold.
+    const read = classOf(html, 'data-list-card-title=""');
+    expect(read).toEqual(expect.arrayContaining(['text-lg', 'font-normal', 'truncate', 'flex-1']));
+    expect(read).not.toContain('font-semibold');
+    const unread = classOf(render({ unread: true }), 'data-list-card-title=""');
+    expect(unread).toEqual(expect.arrayContaining(['text-lg', 'font-semibold']));
+    expect(unread).not.toContain('font-normal');
     expect(classOf(html, 'data-list-card-time=""')).toEqual(
       expect.arrayContaining(['font-mono', 'tabular-nums', 'text-fg-3', 'whitespace-nowrap']),
     );
@@ -322,14 +336,14 @@ describe('ListCard select mode (long-press / right-click)', () => {
     expect(html.indexOf('data-list-card-tick')).toBeLessThan(html.indexOf('data-list-card-title'));
   });
 
-  it('chosen: the SelectCheck fill with a check, lit-selected, aria-pressed; not chosen: the empty SelectCheck ring', () => {
+  it('chosen: the SelectCheck fill with a check, the panel-2 row fill, aria-pressed; not chosen: the empty SelectCheck ring', () => {
     const on = render({ select: select({ active: true, chosen: true }) });
     expect(on).toContain('data-list-card-tick="on"');
     expect(classOf(on, 'data-list-card-tick=')).toEqual(
       expect.arrayContaining(['bg-accent', 'text-accent-fg', 'scale-100']),
     );
     expect(on).toMatch(/data-list-card-tick="on"[^>]*><svg/);
-    expect(classOf(on, 'data-list-card=""')).toContain('lit-selected');
+    expect(classOf(on, 'data-list-card=""')).toContain('bg-panel-2');
     expect(on).toMatch(/<button[^>]*aria-pressed="true"/);
     const off = render({ select: select({ active: true, chosen: false }) });
     expect(off).toContain('data-list-card-tick="off"');
@@ -337,7 +351,7 @@ describe('ListCard select mode (long-press / right-click)', () => {
       expect.arrayContaining(['border-border-strong', 'bg-panel', 'scale-100']),
     );
     expect(off).not.toMatch(/data-list-card-tick="off"[^>]*><svg/);
-    expect(classOf(off, 'data-list-card=""')).toContain('lit-card');
+    expect(classOf(off, 'data-list-card=""')).not.toContain('bg-panel-2');
     expect(off).toMatch(/<button[^>]*aria-pressed="false"/);
   });
 
@@ -359,10 +373,9 @@ describe('ListCard select mode (long-press / right-click)', () => {
 });
 
 describe('LIST_CARD_GRID: the page list', () => {
-  it('one column on phone, the named auto-fill columns on laptop, 8 between cards', () => {
-    expect(LIST_CARD_GRID.split(' ')).toEqual(
-      expect.arrayContaining(['grid', 'grid-cols-1', 'gap-2', 'md:grid-cols-list-cards']),
-    );
+  it('one column on phone, the named auto-fill columns on laptop; rows touch, 24 between columns', () => {
+    expect(LIST_CARD_GRID).toBe('grid grid-cols-1 md:grid-cols-list-cards md:gap-x-6');
+    expect(LIST_CARD_GRID.split(' ')).not.toContain('gap-2');
     expect(LIST_CARD_GRID).not.toContain('[');
   });
 
@@ -373,20 +386,20 @@ describe('LIST_CARD_GRID: the page list', () => {
     expect(columns?.['list-cards']).toBe('repeat(auto-fill, minmax(360px, 1fr))');
   });
 
-  it('the chat pane keeps the one-column stack', () => {
-    expect(LIST_CARD_STACK.split(' ')).toEqual(
-      expect.arrayContaining(['flex', 'flex-col', 'gap-2']),
-    );
+  it('the chat pane keeps the one-column stack, rows touching', () => {
+    expect(LIST_CARD_STACK).toBe('flex flex-col');
     expect(LIST_CARD_STACK).not.toContain('grid');
   });
 });
 
-describe('ListCardBox: the 74 skeleton', () => {
-  it('keeps the card frame, the 48 picture, padding 12 and the two 20 lines', () => {
+describe('ListCardBox: the 60 skeleton', () => {
+  it('keeps the flat row frame, the 40 picture and the two 20 lines', () => {
     const html = renderToStaticMarkup(<ListCardBox />);
     expect(html).toContain('data-list-card-box=""');
-    expect(html).toContain('rounded-xl border bg-panel');
-    expect(html).toContain('h-12 w-12');
+    expect(html).toContain(`class="${listCardFrame()}"`);
+    expect(html).not.toContain('rounded-xl border bg-panel');
+    expect(html).toContain('h-10 w-10');
+    expect(html).not.toContain('h-12 w-12');
     expect(html).toContain(LIST_CARD_BODY);
     expect(html).toContain(LIST_CARD_LINE1);
     expect(html).toContain(LIST_CARD_LINE2);
@@ -425,28 +438,39 @@ describe('ListCard tap target', () => {
   });
 });
 
-describe('ListCard lighting: one lit height per surface', () => {
+describe('ListCard lighting: flat rows', () => {
   it('a person picture is ui/Avatar with lit-avatar (the box is not lit-media)', () => {
     const html = render({ picture: { kind: 'person', name: 'Priya Shah' } });
     expect(classOf(html, 'data-list-card-picture-box=""')).not.toContain('lit-media');
     expect(html).toMatch(/data-avatar-role="card"[^>]*class="[^"]*\blit-avatar\b/);
   });
 
-  it('the cover is lit-hover with the inset focus line', () => {
+  it('the cover is lit-hover with the inset focus line, edge to edge (no radius)', () => {
     expect(LIST_CARD_COVER.split(' ')).toEqual(
       expect.arrayContaining(['lit-hover', 'focus-visible:lit-focus-inset']),
     );
+    expect(LIST_CARD_COVER).not.toMatch(/\brounded/);
   });
 
-  it('the frame is lit-card, lit-card-muted, or lit-selected (one at a time)', () => {
-    const lits = (html: string): string[] =>
-      classOf(html, 'data-list-card=""').filter((c) => c.startsWith('lit-'));
-    expect(lits(render())).toEqual(['lit-card']);
-    expect(lits(render({ muted: true }))).toEqual(['lit-card-muted']);
-    expect(lits(render({ selected: true }))).toEqual(['lit-selected']);
-    expect(lits(render({ selected: true, muted: true }))).toEqual(['lit-selected']);
-    expect(lits(render({ muted: true, select: select({ active: true, chosen: true }) }))).toEqual([
-      'lit-selected',
+  it('the frame carries no lit height in any state; selected and chosen are the panel-2 fill', () => {
+    const root = (html: string): string[] => classOf(html, 'data-list-card=""');
+    const lits = (html: string): string[] => root(html).filter((c) => c.startsWith('lit-'));
+    const fills = (html: string): string[] => root(html).filter((c) => c.startsWith('bg-'));
+    for (const html of [
+      render(),
+      render({ muted: true }),
+      render({ selected: true }),
+      render({ selected: true, muted: true }),
+      render({ muted: true, select: select({ active: true, chosen: true }) }),
+    ]) {
+      expect(lits(html)).toEqual([]);
+    }
+    expect(fills(render())).toEqual([]);
+    expect(fills(render({ muted: true }))).toEqual([]);
+    expect(fills(render({ selected: true }))).toEqual(['bg-panel-2']);
+    expect(fills(render({ selected: true, muted: true }))).toEqual(['bg-panel-2']);
+    expect(fills(render({ muted: true, select: select({ active: true, chosen: true }) }))).toEqual([
+      'bg-panel-2',
     ]);
   });
 

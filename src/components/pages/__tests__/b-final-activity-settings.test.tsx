@@ -168,10 +168,11 @@ describe('Activity: the day line and the card with no trailing ⋯', () => {
     expect(html).not.toContain('Activity options');
     expect(html).not.toContain('data-activity-menu');
     expect(html).not.toContain(TRAILING_PULL);
-    // The ListCard body is the 12 inset (no 14px one-offs left).
+    // The flat ListCard row carries the 16 sides; the body has no padding
+    // of its own (no 14px one-offs left).
     expect(html).toContain('data-list-card=""');
-    expect(html).toMatch(/data-list-card-body="" class="[^"]*\bp-3\b/);
-    expect(html).not.toMatch(/data-list-card-body="" class="[^"]*\bp-4\b/);
+    expect(html).toMatch(/data-list-card=""[^>]*class="[^"]*\bpx-4\b/);
+    expect(html).not.toMatch(/data-list-card-body="" class="[^"]*\bp-[34]\b/);
     expect(html).not.toContain('[14px]');
   });
 });

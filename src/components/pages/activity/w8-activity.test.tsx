@@ -101,6 +101,7 @@ describe('W8 fix 4: a card shows the unread dot when any entry is unread', () =>
     expect(groupHasUnread(group)).toBe(false);
     expect(renderCard(group)).not.toContain('data-list-card-unread');
     expect(renderCard(group)).not.toContain('lit-selected');
+    expect(renderCard(group)).not.toMatch(/data-list-card=""[^>]*class="[^"]*\bbg-panel-2\b/);
   });
 });
 

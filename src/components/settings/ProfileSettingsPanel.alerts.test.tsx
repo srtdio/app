@@ -117,7 +117,9 @@ describe('Alerts on this device', () => {
     expect(all).toHaveLength(6);
     const selected = all.filter((c) => c.getAttribute('aria-pressed') === 'true');
     expect(selected.map((c) => c.textContent)).toEqual(['2 hours']);
-    expect(selected[0]!.querySelector('[data-chip-face]')?.className).toContain('lit-pill');
+    const face = selected[0]!.querySelector('[data-chip-face]')?.className ?? '';
+    expect(face).toContain('border-fg text-fg');
+    expect(face).not.toContain('lit-pill');
   });
 
   it('an ended pause shows no banner and no selected chip', () => {

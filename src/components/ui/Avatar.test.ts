@@ -33,8 +33,14 @@ describe('initialsFor', () => {
 });
 
 describe('Avatar roles', () => {
-  it('has exactly five sizes: inline 20, header 32, row 40, card 48, profile 72', () => {
-    expect(AVATAR_PX).toEqual({ inline: 20, header: 32, row: 40, card: 48, profile: 72 });
+  it('has exactly five roles: inline 20, header 32, row 40, card 40 (the flat list row), profile 72', () => {
+    expect(AVATAR_PX).toEqual({ inline: 20, header: 32, row: 40, card: 40, profile: 72 });
+  });
+
+  it('the card role draws its initials at text-base (the row size), never text-lg', () => {
+    const html = renderToStaticMarkup(createElement(Avatar, { role: 'card', name: 'Priya Shah' }));
+    expect(html).toContain('text-base');
+    expect(html).not.toContain('text-lg');
   });
 
   it('renders each role at its size', () => {
@@ -56,7 +62,7 @@ describe('Avatar shapes', () => {
     }
   });
 
-  it('draws groups and notes as rounded squares: lg at 48 and below, xl at 72', () => {
+  it('draws groups and notes as rounded squares: lg at 40 and below, xl at 72', () => {
     for (const kind of ['group', 'note'] as const) {
       expect(avatarShapeClass('card', kind)).toBe('rounded-lg');
       expect(avatarShapeClass('inline', kind)).toBe('rounded-lg');

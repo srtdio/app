@@ -210,6 +210,17 @@ describe('(a) interrupt: any tap or key press finishes the move', () => {
       /\.mv-press:active:not\(:disabled\):not\(\[aria-disabled='true'\]\)\s*\{\s*scale:\s*0\.97;/,
     );
   });
+
+  it('the phone dock (mv-dock) is a CSS transition on size and transform at the back duration', () => {
+    const css = readFileSync(join(process.cwd(), 'src/lib/motion/motion.css'), 'utf8');
+    expect(MOVE_CLASS.dock).toBe('mv-dock');
+    const rule = /\.mv-dock\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toMatch(/transition-property:[^;]*\bheight\b[^;]*\bwidth\b[^;]*\btransform\b/);
+    expect(rule).toContain('transition-duration: var(--dur-back)');
+    expect(rule).toContain('transition-timing-function: var(--ease-enter)');
+    // Never a fade.
+    expect(rule).not.toContain('opacity');
+  });
 });
 
 describe('(b) instant under Reduce Motion and ?motion=0', () => {

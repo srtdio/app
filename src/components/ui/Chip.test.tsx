@@ -46,15 +46,23 @@ describe('Chip aria', () => {
     expect(html).not.toContain('aria-selected');
   });
 
-  it('the pick is the solid ink fill and marks itself for the slide', () => {
+  it('the pick is the ink outline (no fill) and marks itself for the slide', () => {
     const toggle = renderToStaticMarkup(<Chip label="Open" selected />);
-    expect(toggle).toContain('bg-accent text-accent-fg lit-pill');
+    expect(toggle).toContain('border-fg text-fg');
+    expect(toggle).not.toMatch(/bg-accent|lit-pill|bg-panel-3|lit-well-soft/);
     expect(toggle).toContain('data-selected="true"');
     const tab = renderToStaticMarkup(<Chip label="Open" tab selected />);
-    expect(tab).toContain('bg-accent text-accent-fg lit-pill');
+    expect(tab).toContain('border-fg text-fg');
+    expect(tab).not.toMatch(/bg-accent|lit-pill/);
     const idle = renderToStaticMarkup(<Chip label="Open" selected={false} />);
-    expect(idle).toContain('bg-panel-3 text-fg lit-well-soft');
+    expect(idle).toContain('border-border text-fg-2');
+    expect(idle).not.toMatch(/bg-panel-3|lit-well-soft|bg-accent|lit-pill/);
     expect(idle).not.toContain('data-selected');
+  });
+
+  it('the count reads quieter than the label: tabular fg-3', () => {
+    const html = renderToStaticMarkup(<Chip label="Open" count={3} selected={false} />);
+    expect(html).toContain('<span class="tabular-nums text-fg-3">3</span>');
   });
 });
 
@@ -82,7 +90,7 @@ describe('Chip onClear', () => {
     expect(html).toMatch(/>Clear<\/button><\/span>$/);
     expect(html).not.toContain('<svg');
     // The chip keeps its selected look, with no reserved glyph spacer.
-    expect(html).toContain('bg-accent text-accent-fg lit-pill');
+    expect(html).toContain('border-fg text-fg');
     expect(buttons[0]).toContain('min-h-11');
     expect(html).toContain('min-h-8 px-3');
     expect(html).not.toContain('w-4 shrink-0');
@@ -95,16 +103,21 @@ describe('Chip 32 visible, 44 tap box', () => {
       const html = renderToStaticMarkup(<Chip label="Open" size={size} selected={false} />);
       const button = /<button[^>]*>/.exec(html)?.[0] ?? '';
       expect(button).toContain('min-h-11 min-w-11');
-      // The box keeps the button system's 8px radius but draws nothing.
-      expect(button).toContain('rounded-lg');
+      // The box is a full pill like the face but draws nothing.
+      expect(button).toContain('rounded-full');
+      expect(button).not.toContain('rounded-lg');
       expect(button).not.toMatch(/\b(bg-|lit-well|lit-pill|lit-hover|border|px-)/);
       expect(button).toContain('[&amp;:focus-visible&gt;span]:lit-focus');
       const face = /<span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
       expect(face).toContain('min-h-8 px-3');
-      expect(face).toContain('rounded-lg');
+      expect(face).toContain('rounded-full');
+      expect(face).not.toContain('rounded-lg');
       expect(face).toContain('text-md font-medium');
-      expect(face).toContain('gap-2');
-      expect(face).toContain('bg-panel-3 text-fg lit-well-soft lit-hover');
+      expect(face).toContain('gap-1.5');
+      expect(face).not.toContain('gap-2');
+      expect(face).toContain('border text-md font-medium lit-hover');
+      expect(face).toContain('border-border text-fg-2');
+      expect(face).not.toMatch(/bg-panel-3|lit-well-soft/);
       expect(face).not.toContain('text-base');
     }
     expect(renderToStaticMarkup(<Chip label="Open" size="tap" />)).toMatch(
@@ -112,10 +125,11 @@ describe('Chip 32 visible, 44 tap box', () => {
     );
   });
 
-  it('the add chip keeps its dashed lit-chip on the face', () => {
+  it('the add chip keeps its dashed edge on the face, flat (no lit-chip)', () => {
     const html = renderToStaticMarkup(<Chip label="Add" variant="add" />);
     const face = /<span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
-    expect(face).toContain('lit-chip border-dashed border-border-strong text-fg-3');
+    expect(face).toContain('border-dashed border-border-strong text-fg-3');
+    expect(face).not.toContain('lit-chip');
   });
 
   it('a call site className reaches the face; only layout classes reach the tap box', () => {

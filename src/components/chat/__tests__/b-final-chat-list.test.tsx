@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // Chat list on ui/ListCard: Personal notes, groups and people are one card
-// style in one list. The 48 picture (person circle, group photo or mark, the
+// style in one list. The 40 picture (person circle, group photo or mark, the
 // caller's own photo for notes), the name + how long ago on line 1, the
 // one-line preview + "3 new" tag + unread dot on line 2. No ⋮: long-press
-// selects. Every card is the same 74 height. No ui/Tile and no ui/Row.
+// selects. Every row is the same 60 height. No ui/Tile and no ui/Row.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
@@ -113,17 +113,24 @@ describe('people cards are ui/ListCard, exactly like group cards', () => {
       expect(classOf(person, attr), attr).toEqual(classOf(grp, attr));
     }
     expect(classOf(person, 'data-list-card-body=""')).toEqual(
-      expect.arrayContaining(['p-3', 'gap-3', 'items-center']),
+      expect.arrayContaining(['gap-3', 'items-center']),
+    );
+    // The flat row frame carries the 16 sides; the body has no padding of its own.
+    expect(classOf(person, 'data-list-card-body=""')).not.toContain('p-3');
+    expect(classOf(person, 'data-list-card=""')).toEqual(
+      expect.arrayContaining(['-mx-4', 'px-4', 'h-15']),
     );
     expect(person).not.toContain('data-list-card-line="3"');
   });
 
-  it('slots: 48 picture, name heading + time meta, preview secondary + "4 new" tag + dot', () => {
+  it('slots: 40 picture, name heading + time meta, preview secondary + "4 new" tag + dot', () => {
     const h = card(dm, { ...read, unread: 4 });
     expect(h).toContain('data-chat-list-item="card"');
     expect(h).toContain('data-avatar-role="card"');
-    expect(h).toContain('width:48px;height:48px');
+    expect(h).toContain('width:40px;height:40px');
+    // Unread: the heading's bold; read: the same size at regular weight.
     expect(h).toMatch(/text-lg font-semibold[^"]*">Asha Rao</);
+    expect(card(dm, read)).toMatch(/text-lg[^"]*font-normal[^"]*">Asha Rao</);
     expect(h).toMatch(/font-mono[^"]*">1h</);
     expect(h).toMatch(
       /data-list-card-preview=""[^>]*class="[^"]*truncate[^"]*"><span>See you then</,
@@ -170,7 +177,7 @@ describe('people cards are ui/ListCard, exactly like group cards', () => {
     }
   });
 
-  it('cards stack 8 apart with no dividers', () => {
+  it('rows stack touching, with no dividers', () => {
     const html = renderToStaticMarkup(
       channelListView({
         channels: [dm, { ...dm, channelId: 'c2', title: 'Ravi' }, group],
@@ -183,7 +190,7 @@ describe('people cards are ui/ListCard, exactly like group cards', () => {
     expect(html).not.toContain('grid-cols');
     expect(html).not.toContain('data-row-divider');
     expect(html.match(/data-list-card=""/g)).toHaveLength(3);
-    expect(classOf(html, 'data-chat-list=""')).toContain('gap-2');
+    expect(classOf(html, 'data-chat-list=""').filter((c) => c.startsWith('gap'))).toEqual([]);
   });
 });
 
@@ -201,7 +208,7 @@ describe('notes, groups and people: one card style', () => {
     ]) {
       expect(classOf(h, attr)).toEqual(classOf(chat, attr));
     }
-    // The person picture slot (48, round): the caller's own picture, not the 72 notes avatar.
+    // The person picture slot (40, round): the caller's own picture, not the 72 notes avatar.
     expect(h).toContain('data-list-card-picture="person"');
     expect(h).toContain('data-avatar-role="card"');
     expect(h).not.toContain('data-notes-avatar');

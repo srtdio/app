@@ -29,13 +29,15 @@ describe('ChannelList buttons (design system)', () => {
     for (const face of faces) {
       expect(face).toContain('min-h-8');
       expect(face).toContain('px-3');
-      expect(face).toContain('rounded-lg');
+      expect(face).toContain('rounded-full');
       expect(face).toContain('text-md');
     }
     const on =
       /<button[^>]*data-search-chip="photo"[^>]*><span data-chip-face=""[^>]*>/.exec(html)?.[0] ??
       '';
-    expect(on).toContain('bg-accent text-accent-fg lit-pill');
+    // The pick is the flat ink outline, no fill.
+    expect(on).toContain('border-fg text-fg');
+    expect(on).not.toMatch(/bg-accent|lit-pill/);
     expect(on).toContain('aria-pressed="true"');
   });
 

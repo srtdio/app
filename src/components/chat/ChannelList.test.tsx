@@ -429,7 +429,7 @@ describe('load status', () => {
     // Boxes sweep (motion Bone, in the card's slots); never a pulse, fade or spinner.
     const html = renderToStaticMarkup(<ListCardBox />);
     expect(html).toContain('data-list-card-box=""');
-    expect(html).toContain('h-12 w-12');
+    expect(html).toContain('h-10 w-10');
     expect(html).not.toContain('animate-pulse');
     expect(
       findAll(withStatus('loading'), (el) =>

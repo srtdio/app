@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // B1b: the chat list and the chat headers render through the shared parts.
-// Group and people chats are ui/ListCard (74 tall, the 48 picture, no ⋮:
+// Group and people chats are ui/ListCard (60 tall, the 40 picture, no ⋮:
 // long-press selects); no chat is a Tile; Thread, Contact, Group
 // info and Tasks headers are ui/HeaderBar with one exit (Back "<"
 // on the left, never an X), glyphs 20.
@@ -59,11 +59,11 @@ function list(): string {
 }
 
 describe('ChannelList on ui/ListCard', () => {
-  it('group and people chats render [data-list-card] with the 48 picture, no dividers', () => {
+  it('group and people chats render [data-list-card] with the 40 picture, no dividers', () => {
     const out = list();
     expect(out.match(/data-list-card=""/g)).toHaveLength(3);
-    expect(out).toMatch(/data-list-card-picture="[a-z]+"[^>]*class="[^"]*h-12 w-12/);
-    expect(out).toContain('width:48px;height:48px');
+    expect(out).toMatch(/data-list-card-picture="[a-z]+"[^>]*class="[^"]*h-10 w-10/);
+    expect(out).toContain('width:40px;height:40px');
     expect(out).not.toContain('data-row-divider');
   });
 

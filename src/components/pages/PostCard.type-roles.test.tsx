@@ -63,10 +63,11 @@ function classes(el: Element | null): string[] {
 }
 
 describe('PostCard type roles', () => {
-  it('card title: the ListCard heading role (text-lg font-semibold)', () => {
+  it('card title: the ListCard heading size (text-lg), regular weight with no unread comments', () => {
     const host = paint(makePost());
     const title = classes(host.querySelector('[data-list-card-title]'));
-    expect(title).toEqual(expect.arrayContaining(['text-lg', 'font-semibold']));
+    expect(title).toEqual(expect.arrayContaining(['text-lg', 'font-normal']));
+    expect(title).not.toContain('font-semibold');
   });
 
   it('caption preview is the secondary role: text-md text-fg-2, one line', () => {

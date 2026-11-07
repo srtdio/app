@@ -135,7 +135,9 @@ describe('Assets item is ui/ListCard', () => {
     expect(ticked).toMatch(/data-list-card-picture="[^"]*"[^]*data-list-card-tick="on"/);
     expect(ticked).not.toContain('data-card-menu');
     expect(ticked).not.toContain('data-card-select');
-    expect(ticked).toContain('lit-selected');
+    // The chosen row is the flat panel-2 fill on the row root, no lit height.
+    expect(ticked).toMatch(/data-list-card=""[^>]*class="[^"]*\bbg-panel-2\b/);
+    expect(ticked).not.toContain('lit-selected');
   });
 
   it('keeps its footprint across states: the same lines and slots', () => {
@@ -200,9 +202,11 @@ describe('Brief card is ui/ListCard', () => {
     expect(out).toMatch(/<a [^>]*class="[^"]*absolute inset-0/);
   });
 
-  it('a closed brief is the muted card, never dimmed', () => {
+  it('a closed brief is the muted row (title in fg-3), never dimmed', () => {
     const out = card({ status: 'closed' });
-    expect(out).toContain('lit-card-muted');
+    expect(out).toMatch(/data-list-card-title=""[^>]*class="[^"]*\btext-fg-3\b/);
+    expect(card()).not.toMatch(/data-list-card-title=""[^>]*class="[^"]*\btext-fg-3\b/);
+    expect(out).not.toContain('lit-card-muted');
     expect(out).not.toContain('opacity');
   });
 
