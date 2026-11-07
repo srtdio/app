@@ -60,9 +60,9 @@ import { formatAgo } from '@/lib/time';
 interface ActivityCardProps {
   /** A digest group: one entry (solo) or several on the same entity (one card). */
   group: ActivityItem[];
-  /** The list's one clock (the shared minute clock); the time reads "5 min ago" against it. */
+  /** The list's one clock (the shared minute clock); the time reads "5m" against it. */
   nowMs: number;
-  /** Kept for callers: the relative time ("3 hours ago") reads the same in every zone. */
+  /** The zone "Yesterday" and the weekday read on (formatAgo). Absent: the device zone. */
   timeZone?: string | null | undefined;
   /** The page-owned presign cache, threaded into the picture. */
   cache: PresignCache;
@@ -365,6 +365,7 @@ export function failedSendItems(
 export function ActivityCard({
   group,
   nowMs,
+  timeZone,
   cache,
   presignEnabled,
   onOpenGroup,
@@ -410,6 +411,7 @@ export function ActivityCard({
   const time = formatAgo(
     alertDisplayTime(lead.eventType, lead.createdAt, lead.alert?.plan),
     new Date(nowMs),
+    timeZone ?? undefined,
   );
   const bad = alert?.kind === 'failed' || lead.eventType === 'task_due';
 

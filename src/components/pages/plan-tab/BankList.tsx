@@ -5,8 +5,8 @@
 // (use-bank-data.ts). A card: the idea's picture in bankThumbOf's order (its
 // first picture, else its first link's picture asked once the card is in view
 // through previewClient, else the file glyph, else the idea icon), its title,
-// its text (stripFormat) as the preview, then when it was last active
-// (formatRelative) and its first bucket as the one tag.
+// its text (stripFormat) as the preview, then when it was added (formatAdded:
+// "10:27 AM" today, else "2 Nov") and its first bucket as the one tag.
 // A card taps open its idea (/plan/bank?item=); its ⋯ menu (ui/ActionMenu,
 // right-click on laptop) holds Open, Select, Plan it, Send to chat (the chat
 // picker, then chat_plan_item_share; IdeaShareFlow), Show to client or Hide
@@ -69,7 +69,7 @@ import type { BucketOption } from '@/lib/buckets';
 import type { BankIdea, PlanRow } from '@/lib/chat/plans';
 import { cn } from '@/lib/cn';
 import { errorText } from '@/lib/error-copy';
-import { formatRelative } from '@/lib/time';
+import { formatAdded } from '@/lib/time';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { useWorkspaceMembers } from '@/lib/workspace-members';
 import { supabase } from '@/lib/supabase';
@@ -419,8 +419,8 @@ function BankCard(props: CardProps): ReactElement {
       pictureHooks={{ 'data-bank-thumb': thumb === null ? 'none' : thumb.kind }}
       title={idea.title ?? ''}
       preview={stripFormat(idea.description ?? '')}
-      time={formatRelative(idea.last_active_at ?? idea.created_at, props.now)}
-      timeHooks={{ 'data-bank-active': '' }}
+      time={formatAdded(idea.created_at, props.now)}
+      timeHooks={{ 'data-bank-added': '' }}
       tag={ideaBucketTag(idea, props.buckets)}
       tagHooks={{ 'data-bank-bucket-tag': '' }}
       {...(props.selecting && props.canWrite
@@ -461,7 +461,7 @@ export interface BankSurfaceProps {
   canWrite: boolean;
   workspaceId: string;
   today: string;
-  /** The page's one list clock (useMinuteClock): the cards' last active. */
+  /** The page's one list clock (useMinuteClock): the cards' added day (formatAdded). */
   now: Date;
   /** The open plans for Plan it: one read on the tap. */
   getPlans: () => Promise<

@@ -320,7 +320,7 @@ export function PostCard({
   const coverKind = cardCoverKind(post, cover);
   const clock = now ?? new Date();
   const status =
-    viewer !== undefined ? reviewStatus(stage, post.stage_entered_at, viewer, clock) : null;
+    viewer !== undefined ? reviewStatus(stage, post.stage_entered_at, viewer, clock, timeZone) : null;
   const canMove =
     onMove !== undefined && (viewer === undefined || hasAllowedMove(viewer.role, stage));
   const copyLink = (): void => {
