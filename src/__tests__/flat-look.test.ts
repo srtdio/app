@@ -153,7 +153,7 @@ describe('flat look: the list row frame (ui/ListCard)', () => {
     expect(tokens(LIST_CARD_STACK)).toEqual(['flex', 'flex-col']);
     expect(tokens(LIST_CARD_GRID)).not.toContain('gap-2');
     expect(tokens(LIST_CARD_GRID).filter((t) => /^gap-/.test(t))).toEqual([]);
-    expect(tokens(LIST_CARD_GRID)).toContain('md:gap-x-6');
+    expect(tokens(LIST_CARD_GRID)).toContain('md:gap-x-8');
   });
 
   it('the tap cover fills the row edge to edge (no radius of its own)', () => {

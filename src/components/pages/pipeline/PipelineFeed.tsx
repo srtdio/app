@@ -46,7 +46,7 @@ interface PipelineFeedProps {
 
 /**
  * The cards in ui/ListCard's page grid (LIST_CARD_GRID: one column on phone,
- * auto-fill columns at least 360 wide on laptop, rows touching, 24 between columns). A plain helper (not
+ * auto-fill columns at least 360 wide on laptop, rows touching, 32 between columns). A plain helper (not
  * a component) so each PostCard is inlined into the feed tree and walkable by
  * the structure tests. `now` is the feed's one minute clock.
  */

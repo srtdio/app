@@ -161,11 +161,13 @@ export const LIST_CARD_STACK = 'flex flex-col';
 
 /**
  * The page list: one column on phone, auto-fill columns at least 360 wide on
- * laptop (grid-cols-list-cards); rows touching, 24 between laptop columns.
+ * laptop (grid-cols-list-cards); rows touching, 32 between laptop columns: the
+ * rows' -mx-4 bleed (16 each side) meets exactly in the gap, so neighbouring
+ * columns' fills and tap targets never overlap.
  * Pipeline, Briefs, Assets, Activity, the Plan tab and Bank; the chat list
  * stays LIST_CARD_STACK.
  */
-export const LIST_CARD_GRID = 'grid grid-cols-1 md:grid-cols-list-cards md:gap-x-6';
+export const LIST_CARD_GRID = 'grid grid-cols-1 md:grid-cols-list-cards md:gap-x-8';
 
 /**
  * The tap surface laid over the whole row: the hover / press fill edge to edge

@@ -81,9 +81,9 @@ describe('ListCard frame', () => {
     expect(px(spacing['4'] ?? '')).toBe(16);
   });
 
-  it('rows touch (stack and grid): no gap between rows, 24 between laptop columns', () => {
+  it('rows touch (stack and grid): no gap between rows, 32 between laptop columns', () => {
     expect(LIST_CARD_STACK.split(' ').filter((c) => c.startsWith('gap'))).toEqual([]);
-    expect(LIST_CARD_GRID.split(' ').filter((c) => /gap/.test(c))).toEqual(['md:gap-x-6']);
+    expect(LIST_CARD_GRID.split(' ').filter((c) => /gap/.test(c))).toEqual(['md:gap-x-8']);
     expect(px(spacing['6'] ?? '')).toBe(24);
   });
 
@@ -376,8 +376,8 @@ describe('ListCard select mode (long-press / right-click)', () => {
 });
 
 describe('LIST_CARD_GRID: the page list', () => {
-  it('one column on phone, the named auto-fill columns on laptop; rows touch, 24 between columns', () => {
-    expect(LIST_CARD_GRID).toBe('grid grid-cols-1 md:grid-cols-list-cards md:gap-x-6');
+  it('one column on phone, the named auto-fill columns on laptop; rows touch, 32 between columns', () => {
+    expect(LIST_CARD_GRID).toBe('grid grid-cols-1 md:grid-cols-list-cards md:gap-x-8');
     expect(LIST_CARD_GRID.split(' ')).not.toContain('gap-2');
     expect(LIST_CARD_GRID).not.toContain('[');
   });
