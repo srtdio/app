@@ -99,6 +99,9 @@ async function openDeleteSheet(page: Page, messageId: string): Promise<Locator> 
   return sheet;
 }
 
+/** A tap near a tile's left edge, clear of the select check at its top right. */
+const TILE_CORNER = { position: { x: 8, y: 36 } } as const;
+
 test('Delete for me on a message: gone at once, Undo restores, recorded after the window @theme @desktop', async ({
   page,
 }) => {
@@ -238,7 +241,7 @@ test('Photos chip: select picks a whole message; Delete for me hides it behind U
   await expect(bar.getByText('Hide', { exact: true })).toHaveCount(0);
 
   // One tap on one photo picks its message: every tile of the album is checked.
-  await albumTiles(results).first().click();
+  await albumTiles(results).first().click(TILE_CORNER);
   for (let i = 0; i < 3; i += 1) {
     await expect(albumTiles(results).nth(i)).toHaveAttribute('aria-pressed', 'true');
   }
@@ -260,7 +263,7 @@ test('Photos chip: select picks a whole message; Delete for me hides it behind U
 
   // Again, and let the window end.
   await page.getByRole('button', { name: 'Select', exact: true }).first().click();
-  await albumTiles(results).first().click();
+  await albumTiles(results).first().click(TILE_CORNER);
   await page.getByTestId('media-select-bar').locator('[data-selection-delete]').click();
   await expect(albumTiles(results)).toHaveCount(0);
   await expect.poll(() => hideCalls(network).length, { timeout: COMMIT_WAIT_MS }).toBe(1);

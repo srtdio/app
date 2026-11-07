@@ -3432,7 +3432,13 @@ SCREENS.push(
       const results = await openMediaChip(page, 'photo');
       await tap([page.getByRole('button', { name: 'Select', exact: true })], 'Select');
       const first = results.locator('[data-media-tile]').first();
-      await tap([first], 'first photo tile');
+      // The check sits over the tile's top right (over its centre on a laptop
+      // tile): tap the check, which toggles the same message.
+      const check = results
+        .locator('[data-media-select-item]')
+        .first()
+        .locator('[data-select-circle]');
+      await tap([check], 'first photo check');
       await expect(first).toHaveAttribute('aria-pressed', 'true');
       await waitFor([page.getByTestId('media-select-bar')], 'chip select bar');
     },
