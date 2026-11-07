@@ -392,7 +392,8 @@ async function workspaceConfirm(page: Page): Promise<void> {
 }
 
 /** The first post's sheet through the guide's taps: caption, Single image, then the photo picked. */
-async function firstPostToPhoto(page: Page): Promise<void> {
+/** The first post's sheet up to the guide's media step (caption and format tapped). */
+async function firstPostToMedia(page: Page): Promise<void> {
   const step = (id: string): Step => routeStep('creator', id);
   await onGuideStep(page, 'c_post_create');
   await tapControl(page, step('c_post_create'));
@@ -401,7 +402,11 @@ async function firstPostToPhoto(page: Page): Promise<void> {
   await onGuideStep(page, 'c_post_format');
   await tapControl(page, step('c_post_format'));
   await onGuideStep(page, 'c_post_media');
-  await tapControl(page, step('c_post_media'));
+}
+
+async function firstPostToPhoto(page: Page): Promise<void> {
+  await firstPostToMedia(page);
+  await tapControl(page, routeStep('creator', 'c_post_media'));
 }
 
 /** The first post's sheet filled by the guide's taps (caption, Single image, photo): Send is boxed. */
@@ -414,9 +419,20 @@ async function firstPostFilled(page: Page): Promise<void> {
 /**
  * The first post's photo on its way (uploads held): its own picture under the
  * upload ring (ui/UploadRing, X named Cancel upload; no bar, no % figure).
+ * The guide's media tap attaches the sample photo locally (nothing uploads
+ * until Send, with no ring), so a picked photo goes in through the field's
+ * file input on the media step: that one uploads at once and shows the ring.
  */
 async function firstPostUploading(page: Page): Promise<void> {
-  await firstPostToPhoto(page);
+  await firstPostToMedia(page);
+  await page
+    .locator('input[type="file"][aria-label="Add a photo or video"]')
+    .first()
+    .setInputFiles({
+      name: 'first-post.png',
+      mimeType: 'image/png',
+      buffer: solidPng(640, 640, [96, 140, 120]),
+    });
   const ring = page.locator('[data-pending-photo="uploading"] [data-upload-ring]');
   await waitFor([ring], 'first post photo uploading');
   await expect(ring.first()).toHaveAccessibleName('Cancel upload');
