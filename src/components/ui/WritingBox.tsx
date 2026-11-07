@@ -525,7 +525,7 @@ export function WritingBox(props: WritingBoxProps) {
         // Listened to only between a blur and its press ending; a keyboard
         // blur (no press) collapses on the fallback.
         document.addEventListener('pointerup', done, true);
-        timer = window.setTimeout(done, 300);
+        timer = window.setTimeout(done, 200);
       }}
       onKeyUp={formatOpen ? refreshOn : undefined}
       onMouseUp={formatOpen ? refreshOn : undefined}
