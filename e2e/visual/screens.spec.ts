@@ -2141,6 +2141,24 @@ async function openMediaChip(page: Page, kind: MediaKind): Promise<Locator> {
   return results;
 }
 
+/**
+ * Open the photo viewer on the first tile. A tap that lands while the chip's
+ * cached page swaps for the network page can hit a tile that is being
+ * replaced, so tap again (at most three times) until the viewer is up.
+ */
+async function openFirstPhoto(page: Page, results: Locator): Promise<void> {
+  const viewer = page.getByRole('dialog', { name: 'Image viewer' });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await tap([results.locator('[data-media-tile]').first()], 'first photo tile');
+    const opened = await viewer
+      .waitFor({ state: 'visible', timeout: 5_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (opened) return;
+  }
+  throw new Error('not reached: photo viewer');
+}
+
 const MEDIA_CHIP_SCREENS: Array<{ kind: MediaKind; name: string }> = [
   { kind: 'photo', name: 'photos' },
   { kind: 'video', name: 'videos' },
@@ -2172,7 +2190,7 @@ for (const dark of [false, true]) {
     url: '/chat',
     steps: async (page) => {
       const results = await openMediaChip(page, 'photo');
-      await tap([results.locator('[data-media-tile]').first()], 'first photo tile');
+      await openFirstPhoto(page, results);
       await waitFor([page.locator('[data-lightbox-details]')], 'viewer details');
       await waitFor([page.locator('[data-show-in-chat]')], 'Show in chat');
     },
@@ -3361,7 +3379,7 @@ async function openDeleteSheetOn(page: Page, text: string): Promise<Locator> {
 /** The Photos chip with the photo viewer open on the first tile. */
 async function openPhotoViewer(page: Page): Promise<Locator> {
   const results = await openMediaChip(page, 'photo');
-  await tap([results.locator('[data-media-tile]').first()], 'first photo tile');
+  await openFirstPhoto(page, results);
   const bar = await firstVisible([page.getByTestId('viewer-bar')], 'viewer bar');
   await waitFor([bar.getByRole('button', { name: 'Forward', exact: true })], 'viewer Forward');
   await waitFor([bar.getByRole('button', { name: 'Delete', exact: true })], 'viewer Delete');
@@ -3401,6 +3419,7 @@ SCREENS.push(
     steps: async (page) => {
       await openDm(page);
       const tomb = await firstVisible([page.getByTestId('tombstone')], 'tombstone');
+      await threadStill(page);
       await tomb.scrollIntoViewIfNeeded();
     },
   },
@@ -3413,10 +3432,17 @@ SCREENS.push(
     steps: async (page) => {
       await openDm(page);
       const tomb = await firstVisible([page.getByTestId('tombstone')], 'tombstone');
+      await threadStill(page);
       const row = page.getByRole('menuitem', { name: 'Delete for me' });
+      // Open once and give the menu time to show before trying again: a second
+      // gesture while it is opening closes it or re-opens it at another spot.
       for (let attempt = 0; attempt < 3; attempt += 1) {
         await openMenuGesture(page, tomb);
-        if (await row.isVisible().catch(() => false)) break;
+        const shown = await row
+          .waitFor({ state: 'visible', timeout: 3_000 })
+          .then(() => true)
+          .catch(() => false);
+        if (shown) break;
       }
       await waitFor([row], 'tombstone menu');
     },
