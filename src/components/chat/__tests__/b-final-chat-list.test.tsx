@@ -188,7 +188,9 @@ describe('notes, groups and people: one card style', () => {
     ]) {
       expect(classOf(h, attr)).toEqual(classOf(chat, attr));
     }
-    expect(h).toContain('data-list-card-picture="icon"');
+    // The person picture slot (72, round) holding the notes avatar.
+    expect(h).toContain('data-list-card-picture="person"');
+    expect(h).toContain('data-notes-avatar');
     expect(h).toMatch(/data-notes-tile=""[^>]*data-list-card=""/);
     expect(h).toMatch(/<button[^>]*aria-label="Open Personal notes"/);
   });

@@ -85,7 +85,15 @@ const RESULT_ROW = cn(
 /** The result avatar (row role): a group's rounded square, a person's circle, the notes notebook. */
 function resultAvatar(channel: ChannelSummary): ReactElement {
   if (channel.channelType === 'notes') {
-    return <NotesAvatar role="row" src={channel.avatarUrl} surface="bg" hoverSurface="panel-2" />;
+    return (
+      <NotesAvatar
+        role="row"
+        src={channel.avatarUrl}
+        surface="bg"
+        hoverSurface="panel-2"
+        shape="round"
+      />
+    );
   }
   return (
     <span className="flex shrink-0">

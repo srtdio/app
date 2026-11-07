@@ -24,7 +24,6 @@ import {
   IconChat,
   IconCheckCircle,
   IconEyeOff,
-  IconFile,
   IconForward,
   IconPlus,
   IconTrash,
@@ -34,6 +33,7 @@ import { cn } from '@/lib/cn';
 import { SHELL_STICKY_TOP_CLASS } from '@/lib/scroll-mode';
 import { BoxSkeleton, GlideItem } from '@/lib/motion';
 import { SettleLanding } from '@/components/chat/SettleLanding';
+import { NotesAvatar } from '@/components/chat/NotesBits';
 import { useCoarsePointer, useHoverPointer } from '@/lib/use-is-laptop';
 import { filterChannelsByName } from '@/lib/channel-filter';
 import type { ChannelSummary } from '@/lib/chat-reads';
@@ -847,7 +847,9 @@ interface NotesCardProps {
 }
 
 /**
- * The Personal notes card: a ui/ListCard, the notebook icon as its picture,
+ * The Personal notes card: a ui/ListCard, the person picture slot holding
+ * NotesAvatar (round: the caller's own photo with the notes badge, else the
+ * notebook; the photo URL is the notes channel's avatarUrl, already in memory),
  * "Personal notes" over the last note (or "Only you can see this"), how long
  * ago the last note landed on line 3. In the list it sorts in with the chats
  * by its last note. No motion. Not selectable in Select mode (inert).
@@ -860,7 +862,11 @@ export function notesCard(props: NotesCardProps): ReactElement {
   return (
     <ListCard
       data-notes-tile=""
-      picture={{ kind: 'icon', icon: IconFile }}
+      picture={{
+        kind: 'person',
+        name,
+        node: <NotesAvatar role="profile" src={notes.avatarUrl} surface="panel" shape="round" />,
+      }}
       pictureHooks={{ 'data-notes-picture': '' }}
       title={name}
       preview={<span data-notes-preview="">{last !== null ? last.preview : NOTES_TILE_LINE}</span>}
