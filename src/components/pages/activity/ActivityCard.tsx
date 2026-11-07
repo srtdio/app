@@ -55,7 +55,7 @@ import {
 import { ONLY_YOU_LABEL, alertDisplayTime } from '@/lib/inbox/alerts';
 import { formatSendLabel } from '@/lib/chat/scheduled';
 import type { ViewerSide } from '@/lib/chat/viewer-role';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 
 interface ActivityCardProps {
   /** A digest group: one entry (solo) or several on the same entity (one card). */
@@ -355,7 +355,7 @@ export function failedSendItems(
 /**
  * One digest group as one ui/ListCard: the picture (the thing, or the
  * person), the who-did-what title with the unread dot, the comment or alert
- * line as the preview, then the time (formatRelative on the list's clock), the
+ * line as the preview, then the time (formatAgo on the list's clock), the
  * one tag (activityCardTag: "3 updates", else Mention, Post, Brief, Plan,
  * Reminder) and the ⋯ (Mark as read, Snooze; a failed
  * send's Edit and Retry). A tap opens the group (the newest entry that links
@@ -406,8 +406,8 @@ export function ActivityCard({
       : previewText;
   const tappable = !opensNothing(lead, side);
   const tag = activityCardTag(group);
-  // Line 3: how long ago, on the list's one clock ("just now", "3 hours ago").
-  const time = formatRelative(
+  // Line 3: how long ago, on the list's one clock ("just now", "3h", "Mon").
+  const time = formatAgo(
     alertDisplayTime(lead.eventType, lead.createdAt, lead.alert?.plan),
     new Date(nowMs),
   );

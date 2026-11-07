@@ -45,7 +45,7 @@ import {
 } from '@/lib/chat/chat-store';
 import { deleteChatFailedMessage, type ClearRunResult } from '@/lib/chat/clear-flow';
 import { sortChannelsByRecency } from '@/lib/chat/sort-conversations';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { draftText, draftsVersion, subscribeDrafts } from '@/lib/chat/drafts';
 import { mentionNamesIn, resolveMentionPreview, splitAllMentions } from '@/lib/chat/mentions';
@@ -594,8 +594,10 @@ export function channelRowParts(props: {
   // A media line ("Photo", "Voice message") leads with its glyph, as in the quote.
   const previewIcon = hasMessage ? summaryIconOfLine(summary.lastMessageText) : null;
   const draft = props.draft ?? null;
-  // Line 3: how long ago the last message landed ("just now", "5 min ago").
-  const time = hasMessage ? formatRelative(summary.lastMessageTs, new Date(props.nowMs)) : '';
+  // Line 3: how long ago the last message landed ("just now", "5m", "Yesterday").
+  const time = hasMessage
+    ? formatAgo(summary.lastMessageTs, new Date(props.nowMs), props.timeZone)
+    : '';
   const preview =
     draft !== null ? (
       <span data-draft-preview="">
@@ -871,7 +873,7 @@ export function notesTile(props: {
   onSelect: (channel: ChannelSummary) => void;
 }): ReactElement {
   const { notes, summary } = props;
-  const last = notesLastLine(summary, props.nowMs ?? 0);
+  const last = notesLastLine(summary, props.nowMs ?? 0, props.timeZone);
   const name = chatDisplayName(notes);
   return (
     <div className={cn('pb-2', CHAT_HOME_EDGE, NO_TOUCH_SELECT)}>
@@ -906,11 +908,12 @@ export function notesTile(props: {
 export function notesLastLine(
   summary: ConversationSummary | undefined,
   nowMs: number,
+  timeZone?: string,
 ): { preview: string; time: string } | null {
   if (summary === undefined || summary.lastMessageTs <= 0) return null;
   const preview = stripFormat(summary.lastMessageText);
   if (preview === '') return null;
-  return { preview, time: formatRelative(summary.lastMessageTs, new Date(nowMs)) };
+  return { preview, time: formatAgo(summary.lastMessageTs, new Date(nowMs), timeZone) };
 }
 
 /** A chat home chip: Starred, or one of the message search kinds. */
