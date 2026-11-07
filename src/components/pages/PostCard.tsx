@@ -88,9 +88,9 @@ export interface CardDue {
 }
 
 /**
- * Line 3's time: "Due today", "Due tomorrow", "Due in 3 days", "Due 12 Dec"
+ * Line 3's time: "Due today", "Due tomorrow", "Due Fri", "Due 12 Dec"
  * (formatDue) while the day is today or ahead; once the civil day (on the
- * workspace zone) has passed, "Overdue 1 day" / "Overdue 2 months"
+ * workspace zone) has passed, "Overdue 1d" / "Overdue 2mo"
  * (formatOverdue) in the bad tone. An approved post is done, so it never reads
  * overdue. An unparseable value reads '' (no time). Pure.
  */

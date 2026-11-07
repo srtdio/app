@@ -3,7 +3,7 @@
 // in the reject confirm. "Approver" is the client role, "creator" the agency
 // side (owner, admin, agency). No React, so every line is unit tested.
 
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
 import { canRoleMove } from '@/components/pages/pcs/stage-actions';
 import { STAGE_TRANSITIONS } from '@srtdio/posts';
@@ -38,8 +38,8 @@ export function firstNameOf(displayName: string | null | undefined): string {
  * The status line for a review post, or null for every other stage or an
  * unknown role. An approver sees "Waiting on you". A creator sees
  * "With {approver first name} · {when}" when the workspace has one approver,
- * else "With approvers · {when}": when it entered review in the app's one
- * past-time format (formatRelative: "3 hours ago").
+ * else "With approvers · {when}": when it entered review, short (formatAgo:
+ * "3h", "Yesterday", "Mon").
  */
 export function reviewStatus(
   stage: Stage,
@@ -52,7 +52,7 @@ export function reviewStatus(
   if (!isAgencySide(viewer.role)) return null;
   const only = viewer.approverFirstNames.length === 1 ? viewer.approverFirstNames[0] : undefined;
   const who = only !== undefined && only !== '' ? only : 'approvers';
-  return { tone: 'with', text: `With ${who} · ${formatRelative(stageEnteredAt, now)}` };
+  return { tone: 'with', text: `With ${who} · ${formatAgo(stageEnteredAt, now)}` };
 }
 
 /** Whether this viewer may make any move at all from `stage` (the card's ⋯ shows only then). */

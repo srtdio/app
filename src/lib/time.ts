@@ -198,7 +198,8 @@ function weekdayOf(civil: Civil): string {
  * status line, comments, post activity and versions). "just now" under a
  * minute, "5m" under an hour, "3h" under 24 hours, then by civil day on the
  * zone: "Yesterday", the weekday "Mon" 2-6 days back, else "2 Nov" ("2 Nov
- * 2025" off the current year). A future instant reads "just now".
+ * 2025" off the current year). A future instant reads "just now". Civil
+ * days read on `timeZone` (the viewer's device zone when omitted).
  */
 export function formatAgo(value: DateInput, now: Date = new Date(), timeZone?: string): string {
   const instant = instantOf(value);
@@ -211,7 +212,9 @@ export function formatAgo(value: DateInput, now: Date = new Date(), timeZone?: s
   const civil = civilOfInstant(instant, zone);
   const today = civilOfInstant(now, zone);
   const days = civilDaysBetween(civil, today);
-  if (days <= 1) return 'Yesterday';
+  // A 25-hour (DST fall-back) day can hold 24h+ on one civil day: still hours.
+  if (days <= 0) return `${Math.floor(diff / HOUR)}h`;
+  if (days === 1) return 'Yesterday';
   if (days <= 6) return weekdayOf(civil);
   return dayText(civil, today.year);
 }

@@ -8,7 +8,7 @@ import { tagClass } from '@/components/ui/Tag';
 import { cn } from '@/lib/cn';
 import { LIST_CARD_COVER, ListCard } from '@/components/ui/ListCard';
 import { Thumbnail } from '@/components/media';
-import { daysFromToday, formatDue, formatOverdue, formatRelative } from '@/lib/time';
+import { daysFromToday, formatAgo, formatDue, formatOverdue } from '@/lib/time';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { Brief, BriefWithThumbnail, ListBriefsFilters } from '@srtdio/briefs';
 
@@ -46,8 +46,8 @@ export function BriefStatusPill({ status }: { status: string }): ReactElement {
 }
 
 /**
- * The card's due words (formatDue): "Due today", "Due tomorrow", "Due in 3
- * days", "Due 8 Oct" ("Due 4 Jan 2027" outside now's year), on the workspace
+ * The card's due words (formatDue): "Due today", "Due tomorrow", "Due Fri",
+ * "Due 8 Oct" ("Due 4 Jan 2027" outside now's year), on the workspace
  * zone (due dates are workspace calendar days).
  */
 export function briefDueLabel(
@@ -79,11 +79,11 @@ export interface BriefCardTime {
 }
 
 /**
- * A brief's line 3 time. With a due date: "Due today" / "Due in 3 days" /
- * "Due 12 Dec" (formatDue), or "Overdue 2 days" in the bad tone once the day
+ * A brief's line 3 time. With a due date: "Due today" / "Due Fri" /
+ * "Due 12 Dec" (formatDue), or "Overdue 2d" in the bad tone once the day
  * has passed (formatOverdue); a closed brief is never overdue (it keeps its
- * "Due 12 Oct"). Without one: when it was raised, "3 hours ago"
- * (formatRelative). Due days read on the workspace zone. Pure.
+ * "Due 12 Oct"). Without one: when it was raised, "3h" (formatAgo, on the
+ * device zone). Due days read on the workspace zone. Pure.
  */
 export function briefCardTime(
   brief: Pick<Brief, 'target_date' | 'created_at' | 'status'>,
@@ -91,7 +91,7 @@ export function briefCardTime(
   now: Date = new Date(),
 ): BriefCardTime {
   if (brief.target_date === null) {
-    return { text: formatRelative(brief.created_at, now), bad: false };
+    return { text: formatAgo(brief.created_at, now), bad: false };
   }
   const days = daysFromToday(brief.target_date, timeZone, now);
   if (days !== undefined && days < 0 && brief.status !== BRIEF_STATUS.closed) {

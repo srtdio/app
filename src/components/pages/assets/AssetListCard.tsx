@@ -30,7 +30,7 @@ import { classifyFileKind } from '@/lib/chat/attachments';
 import { formatDurationMs } from '@/lib/chat/media-items';
 import { thumbnailKind } from '@/lib/files/thumbnail';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
-import { formatRelative } from '@/lib/time';
+import { formatAdded } from '@/lib/time';
 import {
   KIND_TAB,
   TAB_LABELS,
@@ -195,7 +195,7 @@ interface AssetListCardProps {
   /** Whether presigning is configured; when false, pictures show the icon. */
   presignEnabled: boolean;
   cache: PresignCache;
-  /** The list's one minute clock: line 3 reads "3 hours ago" against it. */
+  /** The list's clock: line 3 reads when it was added, "10:27 AM" today else "2 Nov" (formatAdded). */
   now: Date;
   /** Tap: open the lightbox (files) or the external link (links). */
   onOpen: () => void;
@@ -257,7 +257,7 @@ export function AssetListCard({
       }
       preview={assetFacts(item)}
       previewHooks={{ 'data-asset-meta': '' }}
-      time={formatRelative(item.uploadedAt, now)}
+      time={formatAdded(item.uploadedAt, now)}
       timeHooks={{ 'data-asset-uploaded': '' }}
       tag={assetTabTag(item)}
       tagHooks={{ 'data-asset-tag': '' }}

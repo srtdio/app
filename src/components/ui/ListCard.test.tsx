@@ -40,7 +40,7 @@ function render(over: Partial<ListCardProps> = {}): string {
       picture={{ kind: 'icon', icon: IconBriefs }}
       title="Spring launch"
       preview="Tease the drop"
-      time="5 min ago"
+      time="5m"
       tag="Open"
       menu={menu}
       onPress={() => {}}
@@ -178,7 +178,7 @@ describe('ListCard lines: three roles plus the tag', () => {
     expect(LIST_CARD_PREVIEW).toContain('min-h-9');
   });
 
-  it('line 3: meta time, ONE grey Tag, then the ⋮ with the trailing pull', () => {
+  it('line 3: ONE grey Tag, meta time, then the ⋮ with the trailing pull', () => {
     const html = render();
     expect(classOf(html, 'data-list-card-time=""')).toEqual(
       expect.arrayContaining(['font-mono', 'tabular-nums', 'text-fg-3']),
@@ -188,9 +188,49 @@ describe('ListCard lines: three roles plus the tag', () => {
     expect(html).toMatch(new RegExp(`aria-label="Actions for Card"[^>]*${TRAILING_PULL}`));
     expect(classOf(html, 'data-list-card-more=""')).toContain('-my-3');
     expect(LIST_CARD_LINE3.split(' ')).toContain('h-5');
-    // Order: time, tag, then the ⋮.
-    expect(html.indexOf('5 min ago')).toBeLessThan(html.indexOf('>Open<'));
-    expect(html.indexOf('>Open<')).toBeLessThan(html.indexOf('Actions for Card'));
+    // Order: tag, " · ", time, then the ⋮.
+    expect(html.indexOf('>Open<')).toBeLessThan(html.indexOf('data-list-card-sep'));
+    expect(html.indexOf('data-list-card-sep')).toBeLessThan(html.indexOf('data-list-card-time'));
+    expect(html.indexOf('data-list-card-time')).toBeLessThan(html.indexOf('Actions for Card'));
+  });
+
+  /** Line 3's slots in document order, by their data hooks. */
+  function line3Order(html: string): string[] {
+    const start = html.indexOf('data-list-card-line="3"');
+    const line = html.slice(start);
+    return [...line.matchAll(/data-list-card-(tag|sep|time|more)=""/g)].map((m) => m[1] ?? '');
+  }
+
+  it('line 3 order: tag, then the " · " separator, then the time, then the ⋮', () => {
+    const html = render({ time: '3h', tag: 'Review' });
+    expect(line3Order(html)).toEqual(['tag', 'sep', 'time', 'more']);
+    // The separator is one middle dot in the meta role, hidden from screen readers.
+    expect(html).toMatch(/data-list-card-sep="" aria-hidden="true" class="[^"]*font-mono[^"]*">·</);
+    expect(html.match(/data-list-card-sep=""/g)).toHaveLength(1);
+    expect(html).toMatch(/data-list-card-time=""[^>]*>3h</);
+  });
+
+  it('no tag: the time starts line 3 and there is no separator', () => {
+    for (const tag of [undefined, '']) {
+      const html = render({ time: '3h', tag });
+      expect(line3Order(html)).toEqual(['time', 'more']);
+      expect(html).not.toContain('data-list-card-sep');
+      expect(html).not.toContain('data-list-card-tag');
+    }
+  });
+
+  it('no time: the tag alone, no separator', () => {
+    for (const time of [undefined, '']) {
+      const html = render({ time, tag: 'Open' });
+      expect(line3Order(html)).toEqual(['tag', 'more']);
+      expect(html).not.toContain('data-list-card-sep');
+    }
+  });
+
+  it('the time never moves the tag: the tag sits first whatever the time says', () => {
+    const short = render({ time: 'just now' });
+    const long = render({ time: 'Overdue 3w', timeBad: true });
+    for (const html of [short, long]) expect(line3Order(html)[0]).toBe('tag');
   });
 
   it('at most three text roles (heading, secondary, meta) besides the tag', () => {
@@ -229,17 +269,17 @@ describe('ListCard lines: three roles plus the tag', () => {
 
 describe('ListCard line 3: timeBad (overdue)', () => {
   it('timeBad paints the time in the bad token instead of fg-3, and marks it', () => {
-    const html = render({ time: 'Overdue 2 days', timeBad: true });
+    const html = render({ time: 'Overdue 2d', timeBad: true });
     const time = classOf(html, 'data-list-card-time=""');
     expect(time).toContain('text-bad');
     expect(time).not.toContain('text-fg-3');
     expect(time).toEqual(expect.arrayContaining(['font-mono', 'tabular-nums']));
     expect(html).toContain('data-list-card-time-bad=""');
-    expect(html).toMatch(/data-list-card-time=""[^>]*>Overdue 2 days</);
+    expect(html).toMatch(/data-list-card-time=""[^>]*>Overdue 2d</);
   });
 
   it('without timeBad the time is the plain meta ink, never bad', () => {
-    const html = render({ time: 'Due in 3 days' });
+    const html = render({ time: 'Due Fri' });
     const time = classOf(html, 'data-list-card-time=""');
     expect(time).toContain('text-fg-3');
     expect(time).not.toContain('text-bad');
@@ -248,7 +288,7 @@ describe('ListCard line 3: timeBad (overdue)', () => {
 
   it('timeBad never changes the line or the card height', () => {
     const plain = render({ time: 'Due today' });
-    const bad = render({ time: 'Overdue 1 day', timeBad: true });
+    const bad = render({ time: 'Overdue 1d', timeBad: true });
     expect(classOf(bad, 'data-list-card-line="3"')).toEqual(
       classOf(plain, 'data-list-card-line="3"'),
     );
@@ -324,7 +364,7 @@ describe('ListCard tap target', () => {
           picture={{ kind: 'icon', icon: IconBriefs }}
           title="Spring launch"
           preview="Tease the drop"
-          time="5 min ago"
+          time="5m"
           tag="Open"
           menu={menu}
         />,
