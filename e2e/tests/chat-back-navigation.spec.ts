@@ -141,7 +141,8 @@ test(
     await expect(cardTitle).toBeVisible({ timeout: 15_000 });
     const cardType = await typeOf(cardTitle);
     expect(cardType.size).toBe('15px');
-    expect(cardType.weight).toBe('600');
+    // Flat look (7 Nov 2026): a read row's title is regular; only unread rows are bold.
+    expect(cardType.weight).toBe('400');
 
     await expect(page.locator('input[type="search"]')).toHaveCount(0);
 
