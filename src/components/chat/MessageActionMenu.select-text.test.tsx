@@ -91,7 +91,6 @@ function propsFor(
     canForward: true,
     canTranscribe: opts.transcribe === true,
     canSelectText: canSelectMessageText(message),
-    canStar: true,
     canSaveToNotes: opts.notes !== true,
     canRemind: true,
     markOptions: opts.notes === true || opts.mark !== undefined ? [] : ['decision'],
@@ -114,8 +113,8 @@ function moreKeysFor(message: ThreadMessage, opts: KeyOpts = {}): string[] {
 }
 
 describe('menu order', () => {
-  it('mine: Reply / Copy / Forward / Edit / Star / More / Delete', () => {
-    expect(keysFor(msg())).toEqual(['reply', 'copy', 'forward', 'edit', 'star', 'more', 'delete']);
+  it('mine: Reply / Copy / Forward / Edit / More / Delete', () => {
+    expect(keysFor(msg())).toEqual(['reply', 'copy', 'forward', 'edit', 'more', 'delete']);
   });
 
   it('mine, under More: Select / Save / Remind / Mark', () => {
@@ -123,7 +122,7 @@ describe('menu order', () => {
   });
 
   it('theirs: no Edit or Delete', () => {
-    expect(keysFor(msg({ mine: false }))).toEqual(['reply', 'copy', 'forward', 'star', 'more']);
+    expect(keysFor(msg({ mine: false }))).toEqual(['reply', 'copy', 'forward', 'more']);
     expect(moreKeysFor(msg({ mine: false }))).toEqual([
       'select-text',
       'save-notes',
@@ -134,7 +133,7 @@ describe('menu order', () => {
 
   it('voice only: Transcribe under More, no Copy and no Select', () => {
     const voice = msg({ mine: false, body: '', attachments: [VOICE] });
-    expect(keysFor(voice, { transcribe: true })).toEqual(['reply', 'forward', 'star', 'more']);
+    expect(keysFor(voice, { transcribe: true })).toEqual(['reply', 'forward', 'more']);
     expect(moreKeysFor(voice, { transcribe: true })).toEqual([
       'transcribe',
       'save-notes',
@@ -166,7 +165,6 @@ describe('menu order', () => {
       'reply',
       'copy',
       'forward',
-      'star',
       'more',
       'locked',
     ]);
@@ -185,7 +183,6 @@ describe('menu order', () => {
       'copy',
       'forward',
       'edit',
-      'star',
       'more',
       'delete',
     ]);
@@ -253,8 +250,6 @@ describe('menu style', () => {
     onCopy: () => {},
     canForward: true,
     canSelectText: true,
-    canStar: true,
-    starred: true,
     canSaveToNotes: true,
     canRemind: true,
     markOptions: ['decision'],
@@ -317,13 +312,12 @@ describe('menu style', () => {
     expect(del).toContain('text-bad');
   });
 
-  it('icon mapping: Select crop, filled star when starred, file page, bookmark', () => {
+  it('icon mapping: Select crop, file page, bookmark', () => {
     const html = (key: string): string =>
       renderToStaticMarkup(
         <MenuRow item={items.find((i) => i.key === key) as MessageMenuItem} onRun={() => {}} />,
       );
     expect(html('select-text')).toContain('M6 6.5V16a1 1 0 0 0 1 1h10.5');
-    expect(html('star')).toContain('fill="currentColor"');
     expect(html('save-notes')).toContain('M19.5 14.25v-2.625a3.375 3.375');
     expect(html('mark')).toContain('M17.593 3.322c1.1.128 1.907 1.');
   });

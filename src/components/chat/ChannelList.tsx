@@ -64,8 +64,6 @@ import { isFileRemoved, removedFilesStore } from '@/lib/chat/remove-files';
 import { APP_ENTITY_ROUTES, currentOrigin } from '@/lib/chat/message-links';
 import { peekKept, primeRead, readKey } from '@/lib/session-read';
 import { mark } from '@/lib/perf-marks';
-import { StarredList } from '@/components/chat/StarredList';
-import { STARRED_TITLE } from '@/lib/chat/stars';
 import {
   normalizeQuery,
   SEARCH_CHIPS,
@@ -177,8 +175,8 @@ interface ChannelListProps {
   workspaceId?: string | null;
   /** A message search hit tapped: open that chat at that message, the bar on the query. */
   onOpenSearchHit?: (channel: ChannelSummary, messageId: string, query: string) => void;
-  /** A starred row tapped: open that chat at that message (no search bar). */
-  onOpenStarred?: (channel: ChannelSummary, messageId: string) => void;
+  /** A media item's Show in chat: open that chat at that message (no search bar). */
+  onOpenAtMessage?: (channel: ChannelSummary, messageId: string) => void;
   /**
    * The caller's Personal notes (built from the session, never read): its
    * tile is pinned above Groups from the first paint, and search hits in it
@@ -916,27 +914,19 @@ export function notesLastLine(
   return { preview, time: formatAgo(summary.lastMessageTs, new Date(nowMs), timeZone) };
 }
 
-/** A chat home chip: Starred, or one of the message search kinds. */
-export type HomeChip = SearchKind | 'starred';
+/** A chat home chip: one of the message search kinds. */
+export type HomeChip = SearchKind;
 
-/** The chat home chips in order: Starred first, then the search kinds. */
-export const HOME_CHIPS: readonly { kind: HomeChip; label: string }[] = [
-  { kind: 'starred', label: STARRED_TITLE },
-  ...SEARCH_CHIPS,
-];
+/** The chat home chips in order: the search kinds. */
+export const HOME_CHIPS: readonly { kind: HomeChip; label: string }[] = SEARCH_CHIPS;
 
 /** One chip at a time: tapping the active one clears it, another replaces it. Pure. */
 export function toggleHomeChip(current: HomeChip | null, tapped: HomeChip): HomeChip | null {
   return current === tapped ? null : tapped;
 }
 
-/** The message search kind a chip runs (Starred runs none). Pure. */
-export function searchKindOf(chip: HomeChip | null): SearchKind | null {
-  return chip === null || chip === 'starred' ? null : chip;
-}
-
 /**
- * The chips under the search box: Starred, then Photos, Videos, Links, Files,
+ * The chips under the search box: Photos, Videos, Links, Files,
  * Voice notes (WhatsApp's order). One at a time (tap again to clear). Each is ui/Chip with its
  * selected style, as on the other list pages (no counts: these filter
  * messages, nothing is tallied); the row scrolls on X when it overflows (no
@@ -1271,9 +1261,6 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   const [search, setSearch] = useState('');
   // The filter chip: one at a time, tap again to clear.
   const [kind, setKind] = useState<HomeChip | null>(null);
-  // The Starred list's Edit mode; any chip change leaves it.
-  const [starEditing, setStarEditing] = useState(false);
-  useEffect(() => setStarEditing(false), [kind]);
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // The chat whose row menu is open (ActionMenu: a sheet on phone, a popover at its ⋯ on laptop).
@@ -1331,15 +1318,13 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   const { state: searchState, runner: searchRunner } = useMessageSearch({
     workspaceId: listWorkspaceId,
   });
-  // Starred lists stars, never message hits: the search stays idle under it.
   useEffect(() => {
-    if (kind === 'starred') searchRunner?.setQuery('', null);
-    else searchRunner?.setQuery(search, searchKindOf(kind));
+    searchRunner?.setQuery(search, kind);
   }, [searchRunner, search, kind]);
   // Media chips (WhatsApp): the items themselves. The chip's first page is
   // kept on the device (`chat:media:{kind}`), so a tap paints from it before
   // any read; the network page swaps in under the same keys (no blink).
-  const mediaKind = searchKindOf(kind);
+  const mediaKind = kind;
   const mediaKey =
     mediaKind !== null && currentUserId !== null && listWorkspaceId !== null
       ? readKey(currentUserId, listWorkspaceId, mediaCacheWhat(mediaKind))
@@ -1365,7 +1350,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     primeRead<MediaCacheValue>(mediaKey, { kind: mediaKind, items });
   }, [mediaKey, mediaKind, searchState]);
   const onKindChange = useCallback((next: HomeChip | null) => {
-    if (next !== null && next !== 'starred') mark('chat:chip:tap');
+    if (next !== null) mark('chat:chip:tap');
     setKind(next);
   }, []);
   // Hits in notes carry its name ("Personal notes") and notebook.
@@ -1392,37 +1377,12 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [props.onSelect],
   );
-  const onOpenStarred = props.onOpenStarred;
+  const onOpenAtMessage = props.onOpenAtMessage;
   // The list's one clock: every card's "5m" ages together, once a
   // minute, from one shared interval (no timer per card).
   const nowMs = useMinuteClock();
   const searchResults =
-    kind === 'starred' ? (
-      <div data-starred-home="" className="px-4 pb-4 pt-1">
-        <StarredList
-          channelId={null}
-          query={search}
-          onClearQuery={() => setSearch('')}
-          showChat
-          channelsById={channelsById}
-          currentUserId={currentUserId ?? ''}
-          {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
-          nowMs={nowMs}
-          inlineEdit
-          editing={starEditing}
-          onEditingChange={setStarEditing}
-          onOpen={(row) => {
-            const channel = channelsById.get(row.channelId);
-            if (channel === undefined) return;
-            leaveSelectionThen(() =>
-              onOpenStarred !== undefined
-                ? onOpenStarred(channel, row.id)
-                : props.onSelect(channel),
-            );
-          }}
-        />
-      </div>
-    ) : mediaKind !== null ? (
+    mediaKind !== null ? (
       <MediaResults
         kind={mediaKind}
         query={search}
@@ -1442,8 +1402,8 @@ export function ChannelList(props: ChannelListProps): ReactElement {
           const channel = channelsById.get(channelId);
           if (channel === undefined) return;
           leaveSelectionThen(() =>
-            onOpenStarred !== undefined
-              ? onOpenStarred(channel, messageId)
+            onOpenAtMessage !== undefined
+              ? onOpenAtMessage(channel, messageId)
               : props.onSelect(channel),
           );
         }}
@@ -1451,7 +1411,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     ) : showSearchResults(search, kind) ? (
       <SearchResults
         query={search}
-        kind={searchKindOf(kind)}
+        kind={kind}
         chats={visibleChannels(props.channels, summaryFor, isHidden, search)}
         state={searchState}
         runner={searchRunner}

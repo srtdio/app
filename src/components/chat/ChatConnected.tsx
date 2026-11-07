@@ -72,7 +72,6 @@ import { useChatMarks } from '@/lib/chat/use-chat-marks';
 import { chatKey, forgetRememberedThread, kickoffChatOpen, openCache } from '@/lib/chat/open-cache';
 import { joinChatBundle, pressChatBundle } from '@/lib/chat/open-bundle';
 import { resolveViewerSide } from '@/lib/chat/viewer-role';
-import { createStarStore, StarStoreContext, useChannelStars } from '@/lib/chat/stars';
 import { useChatTyping } from '@/lib/chat/use-chat-typing';
 import { visibleTypingIds } from '@/lib/chat/typing';
 import { useChatPresence } from '@/lib/chat/use-chat-presence';
@@ -636,11 +635,7 @@ export function earlyDeepLinkOpen(input: {
   return channel === input.started ? null : channel;
 }
 
-/**
- * Whether the open chat paints its skeleton. Stars are not a part: rows
- * paint, and star badges appear when the stars read settles (remembered
- * stars still paint in the first frame). Pure.
- */
+/** Whether the open chat paints its skeleton. Pure. */
 export function chatThreadLoading(input: {
   threadCurrent: boolean;
   notesFailed: boolean;
@@ -748,7 +743,7 @@ export type ChannelWrite = 'push' | 'replace';
 
 /**
  * Why ?channel= is written, and so how. An open (list, notes, search hit,
- * starred row, @mention, new DM, saved line, toast) pushes one step; a toast's
+ * Show in chat, @mention, new DM, saved line, toast) pushes one step; a toast's
  * pending open takes the /chat entry its press already pushed; a chat closing
  * on its own, a cold open's back arrow and an unknown link replace. Pure.
  */
@@ -977,9 +972,9 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     },
     [openChannel],
   );
-  // A starred row: the chat opens at that message (the same jump and
-  // highlight as a search hit), without the in-chat search bar.
-  const openStarredMessage = useCallback(
+  // A media item's Show in chat: the chat opens at that message (the same
+  // jump and highlight as a search hit), without the in-chat search bar.
+  const openAtMessage = useCallback(
     (channel: ChannelSummary, messageId: string) => {
       searchSeqRef.current += 1;
       setSearchRequest({
@@ -1501,16 +1496,9 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     workspaceId,
   });
   const refetchMarks = marks.refetch;
-  // Stars: one store per workspace (nothing carries across), the open chat's
-  // starred ids read with its first page (the thread waits for both), again
-  // on focus, the tab turning visible and every catch-up.
-  const starStore = useMemo(() => createStarStore({ workspaceId }), [workspaceId]);
-  const stars = useChannelStars({ store: starStore, channelId: selectedChannelId });
-  const refetchStars = stars.refetch;
   // A chat whose messages page is remembered reopens without waiting on reads
   // whose last answer is already on screen: its scheduled rows (remembered),
-  // re-read in place. Stars never hold the rows: the store's remembered stars
-  // paint in the first frame, the rest when the stars read settles.
+  // re-read in place.
   const rememberedOpen = useMemo(() => {
     const key = chatKey(currentUserId, workspaceId, selectedChannelId);
     return key !== null && openCache.recall(key, 'thread') !== undefined;
@@ -1524,12 +1512,11 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     const key = chatKey(currentUserId, workspaceId, selectedChannelId);
     return key !== null ? openCache.recallFresh(key, 'marks') : undefined;
   }, [rememberedOpen, marksLoaded, currentUserId, workspaceId, selectedChannelId]);
-  // Every catch-up refreshes the unread counts and re-reads the channel's marks and stars.
+  // Every catch-up refreshes the unread counts and re-reads the channel's marks.
   const onCaughtUp = useCallback(() => {
     refreshUnreadCounts();
     refetchMarks();
-    refetchStars();
-  }, [refreshUnreadCounts, refetchMarks, refetchStars]);
+  }, [refreshUnreadCounts, refetchMarks]);
   const onMessagesDeleted = useCallback(() => refreshPreviews(), [refreshPreviews]);
   const thread = useChatThread({
     client: liveClient,
@@ -1906,11 +1893,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
     notesReady,
     savedReady,
   });
-  // A message turned tombstone (deleted here or by its sender) loses its star.
-  useEffect(() => {
-    const gone = thread.messages.filter((m) => m.deleted === true).map((m) => m.id);
-    if (gone.length > 0) starStore.drop(gone);
-  }, [thread.messages, starStore]);
   const [scheduledListOpen, setScheduledListOpen] = useState(false);
   // The chat's own sheets are history steps too: back closes only the sheet.
   useHistoryStep(scheduledListOpen && selected !== null, HISTORY_STEP_KEYS.scheduledList, () =>
@@ -2363,7 +2345,7 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             onDeleteChats={onDeleteChats}
             workspaceId={workspaceId}
             onOpenSearchHit={openSearchHit}
-            onOpenStarred={openStarredMessage}
+            onOpenAtMessage={openAtMessage}
             notes={notesChat}
           />
         </div>
@@ -2626,17 +2608,15 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
 
   // The message menu's Remind me and its sheet.
   return (
-    <StarStoreContext.Provider value={starStore}>
-      <ReminderProvider
-        workspaceId={workspaceId}
-        currentUserId={currentUserId}
-        openChannelId={selected?.channelId ?? null}
-        messages={threadCurrent ? threadMessages : NO_MESSAGES}
-        nameOf={scheduleNameOf}
-      >
-        {surface}
-        <ChatReminderSheet />
-      </ReminderProvider>
-    </StarStoreContext.Provider>
+    <ReminderProvider
+      workspaceId={workspaceId}
+      currentUserId={currentUserId}
+      openChannelId={selected?.channelId ?? null}
+      messages={threadCurrent ? threadMessages : NO_MESSAGES}
+      nameOf={scheduleNameOf}
+    >
+      {surface}
+      <ChatReminderSheet />
+    </ReminderProvider>
   );
 }

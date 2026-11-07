@@ -112,8 +112,6 @@ import {
   IconReply,
   IconSearch,
   IconSmile,
-  IconStar,
-  IconStarFilled,
   IconTickDouble,
   IconTickSingle,
   IconTrash,
@@ -239,16 +237,6 @@ import { useViewerSide, type ViewerSide } from '@/lib/chat/viewer-role';
 import { ContactSheet } from '@/components/chat/ContactSheet';
 import type { GroupInfoTabsWiring } from '@/components/chat/GroupInfoSheet';
 import { SelectionBar, SelectionHeader, deleteOneConfirm } from '@/components/chat/SelectionBar';
-import { StarredSheet, useStarToggle } from '@/components/chat/StarredList';
-import {
-  canStar,
-  isStarredIn,
-  selectionStarAction,
-  STARRED_HEADER_LABEL,
-  useIsStarred,
-  useStarSnapshot,
-  useStarStore,
-} from '@/lib/chat/stars';
 import { quoteMedia, ReplyQuoteBox } from '@/components/chat/ReplyQuote';
 import {
   canReplyPrivatelyInChat,
@@ -572,7 +560,7 @@ interface MessageThreadProps {
     messageId: string;
     query: string;
     seq: number;
-    /** A starred row: the jump and its highlight only, no in-chat bar. */
+    /** A plain jump (a link, Show in chat): the jump and its highlight only, no in-chat bar. */
     jumpOnly?: boolean;
     /** A search jump: a message that is gone opens the chat with no toast. */
     quiet?: boolean;
@@ -1420,30 +1408,11 @@ export function bubbleStatus(
   return message.status === 'read' ? 'read' : 'delivered';
 }
 
-/** What every bubble shows at its bottom-right: the star, "edited", the time, the tick. */
+/** What every bubble shows at its bottom-right: "edited", the time, the tick. */
 export interface BubbleMeta {
   time: string;
   edited: boolean;
   status: BubbleStatus | null;
-  /** The viewer starred it: a small filled star before "edited" and the time. */
-  starred?: boolean;
-}
-
-/**
- * The meta's 12px filled star. Own bubbles: the meta ink (white, as the
- * time); peer bubbles: fg-3. No motion.
- */
-export function MetaStar({ mine }: { mine: boolean }): ReactElement {
-  return (
-    <span
-      role="img"
-      aria-label="Starred"
-      data-meta-star=""
-      className={cn('inline-flex', !mine && 'text-fg-3')}
-    >
-      <IconStarFilled size={ICON_SIZE.text} />
-    </span>
-  );
 }
 
 /**
@@ -1514,20 +1483,11 @@ export function FailedGlyph(): ReactElement {
   );
 }
 
-/** The meta's inner run: star, "edited", time, glyph. Shared by the meta and its spacer. */
-function metaParts(meta: BubbleMeta, mine = true, spacer = false): ReactElement {
+/** The meta's inner run: "edited", time, glyph. Shared by the meta and its spacer. */
+function metaParts(meta: BubbleMeta): ReactElement {
   const tick = metaTick(meta.status);
   return (
     <>
-      {meta.starred === true ? (
-        spacer ? (
-          <span className="inline-flex">
-            <IconStarFilled size={ICON_SIZE.text} />
-          </span>
-        ) : (
-          <MetaStar mine={mine} />
-        )
-      ) : null}
       {meta.edited ? <span data-edited="">{EDITED_LABEL}</span> : null}
       {meta.time !== '' ? (
         <span aria-hidden="true" className="font-mono">
@@ -1587,7 +1547,7 @@ export function BubbleMetaView(props: {
         props.className,
       )}
     >
-      {metaParts(props.meta, props.mine || props.placement === 'pill')}
+      {metaParts(props.meta)}
     </span>
   );
 }
@@ -1607,7 +1567,7 @@ export function MetaSpacer({ meta }: { meta: BubbleMeta }): ReactElement {
         BUBBLE_META_TYPE,
       )}
     >
-      {metaParts(meta, true, true)}
+      {metaParts(meta)}
     </span>
   );
 }
@@ -3311,14 +3271,11 @@ const MessageRow = memo(function MessageRow(props: MessageRowProps): ReactElemen
   const searchWords = useContext(SearchHighlightContext);
   const personSource = useContext(PersonSourceContext);
   const savedFrom = useSavedFrom();
-  // The viewer's star: read from the one star store, painted with the row.
-  const starred = useIsStarred(props.message.id) && canStar(props.message);
-  const meta = starred ? { ...props.meta, starred: true } : props.meta;
-  // Small touches (docs/motion.md, pop from .9, ease-pop): a star, a mark or
+  const meta = props.meta;
+  // Small touches (docs/motion.md, pop from .9, ease-pop): a mark or
   // a reaction that lands on a row already on screen. A row's first paint
   // never pops.
   const reactionCount = props.message.reactions.reduce((sum, r) => sum + r.count, 0);
-  usePopOnRise(props.message.id, '[data-meta-star]', starred ? 1 : 0);
   usePopOnChange(props.message.id, '[data-mark-badge]', markBadgeLabel(props.mark));
   usePopOnRise(props.message.id, '[data-reaction-emoji]', reactionCount);
   return (
@@ -3704,8 +3661,6 @@ function ThreadBody(
     };
     /** A bubble's Reply privately quote tapped (its href); absent: the quote is static. */
     onOpenPrivateReplyHref?: (href: string) => void;
-    /** Menu "Star" / "Unstar" picked (the new value); absent hides the row. */
-    onStar?: (message: ThreadMessage, starred: boolean) => void;
     /** The chat's task changes for the loaded window (thread lines); absent: none. */
     taskLines?: { events: readonly TaskEvent[]; ctx: TaskLineContext } | undefined;
     /**
@@ -3781,8 +3736,6 @@ function ThreadBody(
   // Users who asked for less motion: the swipe resets without a spring.
   const reducedMotion = usePrefersReducedMotion();
   const toast = useToast();
-  // The open menu's star reads the one star store.
-  const menuStarred = useIsStarred(menu?.message.id ?? '');
   const listRef = useRef<HTMLUListElement>(null);
   // itemIn (docs/motion.md): a message that arrives after first paint (sent
   // or received) rises 8px into place at the tail. The first paint, a kept or
@@ -4980,11 +4933,6 @@ function ThreadBody(
         onTranscribe={() => {
           if (menu) props.onTranscribe?.(menu.message);
         }}
-        canStar={menu !== null && props.onStar !== undefined && canStar(menu.message)}
-        starred={menuStarred}
-        onStar={() => {
-          if (menu) props.onStar?.(menu.message, !menuStarred);
-        }}
         markOptions={
           menu && props.onMark !== undefined
             ? markMenuOptions(menu.message, props.marks.get(menu.message.id))
@@ -5319,7 +5267,7 @@ function popRowPart(id: string, part: string): void {
   document.querySelectorAll(`${rowSelector(id)} ${part}`).forEach((el) => pop(el));
 }
 
-/** Pop a row's part when `value` grows after the row's first paint (a star, a reaction). */
+/** Pop a row's part when `value` grows after the row's first paint (a reaction). */
 function usePopOnRise(id: string, part: string, value: number): void {
   const prev = useRef(value);
   useLayoutEffect(() => {
@@ -5969,11 +5917,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const [forwardFor, setForwardFor] = useState<ThreadMessage[] | null>(null);
   // The own message being edited in the composer.
   const [editing, setEditing] = useState<EditingDraft | null>(null);
-  // Stars: the one store (absent outside the chat page: no star UI at all).
-  const starStore = useStarStore();
-  const starSnapshot = useStarSnapshot(starStore);
-  const toggleStar = useStarToggle();
-  const [starredOpen, setStarredOpen] = useState(false);
   // Server time for the delete window (device clock plus the store's offset).
   const serverNow = useServerNow();
 
@@ -6021,11 +5964,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   };
   const onForward = props.onForward;
   const forwardChannels = props.forwardChannels;
-  // Chat names for the Starred sheet's rows (already loaded, never read).
-  const starChannels = useMemo(
-    () => new Map((forwardChannels ?? []).map((c) => [c.channelId, c] as const)),
-    [forwardChannels],
-  );
   const canForwardHere = onForward !== undefined && forwardChannels !== undefined;
   const exitSelection = (): void => {
     setSelecting(false);
@@ -6226,8 +6164,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     workspaceName: props.subtitle,
   });
   const canOpenContact = !notes && props.isGroup !== true && props.channelId !== undefined;
-  // A group whose identity tap opens Group info: Starred is a tab there (FT46).
-  const groupInfoInHeader = props.isGroup === true && props.onOpenInfo !== undefined;
   // The Contact sheet's role line is the header's resting line: never typing,
   // so it reads "role · workspace" from the same source.
   const contactRoleLine = dmHeaderLine({
@@ -6747,7 +6683,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
     else closeThread();
   });
   useHistoryStep(contactOpen, HISTORY_STEP_KEYS.contact, () => setContactOpen(false));
-  useHistoryStep(starredOpen, HISTORY_STEP_KEYS.starred, () => setStarredOpen(false));
   useHistoryStep(marksOpen, HISTORY_STEP_KEYS.marks, () => setMarksOpen(false));
   useHistoryStep(readInfoOpen && readBy !== null, HISTORY_STEP_KEYS.readInfo, () =>
     setReadInfoOpen(false),
@@ -6908,31 +6843,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   };
   const openPlanHere = (planId: string): void =>
     statusPlanCards?.openPlan({ planId, senderName: planSender(planId) });
-  // Star or Unstar the selection: Unstar only when every one is starred. One
-  // write for the batch; selection ends once it is accepted, as Forward does.
-  const starTargets =
-    selecting && starStore !== null && channelId !== undefined
-      ? selectable.filter((m) => selected.has(m.id) && canStar(m))
-      : [];
-  const starAction = selectionStarAction(
-    starTargets.map((m) => m.id),
-    (id) => isStarredIn(starSnapshot, id),
-  );
-  const selectionStar =
-    selecting && starStore !== null && channelId !== undefined
-      ? {
-          action: starAction ?? 'star',
-          onRun: () => {
-            if (starAction === null) return;
-            void toggleStar(
-              starTargets.map((m) => ({ id: m.id, channelId })),
-              starAction === 'star',
-            ).then((result) => {
-              if (result.ok) exitSelection();
-            });
-          },
-        }
-      : null;
   // Selection mode's bar: in place of the composer, in the chat or the open thread.
   const selectionBar =
     selecting && onDeleteMessages !== undefined ? (
@@ -6943,7 +6853,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         {...(canForwardHere && selectionForwardable(selected, selectable)
           ? { onForward: () => setForwardFor(selectedForForward(selected, selectable)) }
           : {})}
-        {...(selectionStar !== null ? { star: selectionStar } : {})}
         notes={notes}
         confirmCopy={deleteConfirmCopy(
           [...selected].flatMap((id) => {
@@ -7108,12 +7017,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
         }
       : {}),
     ...(props.onNavigate !== undefined ? { onOpenPrivateReplyHref: props.onNavigate } : {}),
-    ...(starStore !== null && channelId !== undefined && !selecting
-      ? {
-          onStar: (message: ThreadMessage, starred: boolean) =>
-            void toggleStar([{ id: message.id, channelId }], starred),
-        }
-      : {}),
   };
   return (
     <div ref={rootRef} className="relative flex h-full flex-col bg-bg">
@@ -7169,12 +7072,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
                   ? { onOpenContact: props.onOpenInfo }
                   : {})}
             />
-            {/* FT46: a group's Starred lives in Group info (its Starred tab). */}
-            {channelId !== undefined && starStore !== null && !groupInfoInHeader ? (
-              <IconButton label={STARRED_HEADER_LABEL} onClick={() => setStarredOpen(true)}>
-                <IconStar size={ICON_SIZE.control} />
-              </IconButton>
-            ) : null}
             {channelId !== undefined ? (
               <IconButton
                 label="Search this chat"
@@ -7405,19 +7302,6 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
           marks={infoMarks}
           onJump={jumpTo}
           {...(onRemoveFiles !== undefined ? { onRemoveFiles } : {})}
-        />
-      ) : null}
-      {starStore !== null && props.channelId !== undefined ? (
-        <StarredSheet
-          key={`starred:${props.channelId}`}
-          open={starredOpen}
-          onClose={() => setStarredOpen(false)}
-          channelId={props.channelId}
-          chatName={props.title}
-          channelsById={starChannels}
-          profiles={props.profiles}
-          currentUserId={props.currentUserId ?? ''}
-          onJump={jumpTo}
         />
       ) : null}
       {props.isGroup === true && props.channelId !== undefined

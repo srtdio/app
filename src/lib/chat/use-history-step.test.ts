@@ -250,17 +250,17 @@ describe('N4: a layer is one step', () => {
     const win = queuedWindow([LIST, CHAT_A]);
     const contact = enterHistoryStep(win, HISTORY_STEP_KEYS.contact, vi.fn());
     contact.dispose();
-    const starredExit = vi.fn();
-    enterHistoryStep(win, HISTORY_STEP_KEYS.starred, starredExit);
+    const searchExit = vi.fn();
+    enterHistoryStep(win, HISTORY_STEP_KEYS.search, searchExit);
     // Not pushed yet: the pop is still queued.
     expect(win.index()).toBe(2);
     win.flush();
     expect(win.index()).toBe(2);
-    expect(stepMarkerOf(win.history.state, HISTORY_STEP_KEYS.starred)).not.toBeNull();
-    expect(starredExit).not.toHaveBeenCalled();
+    expect(stepMarkerOf(win.history.state, HISTORY_STEP_KEYS.search)).not.toBeNull();
+    expect(searchExit).not.toHaveBeenCalled();
     win.history.back();
     win.flush();
-    expect(starredExit).toHaveBeenCalledOnce();
+    expect(searchExit).toHaveBeenCalledOnce();
     expect(win.url()).toBe(CHAT_A);
     expect(win.index()).toBe(1);
   });

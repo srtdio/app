@@ -75,13 +75,10 @@ describe('X7 FT45: status ticker targets', () => {
 });
 
 describe('X7 FT46: group header', () => {
-  it('no Info icon (the identity tap opens Group info); Starred moves into Group info', () => {
+  it('no Info icon (the identity tap opens Group info); no Starred button', () => {
     const thread = source('../MessageThread.tsx');
     expect(thread).not.toContain('<IconButton label="Group info"');
-    expect(thread).toContain('!groupInfoInHeader ? (');
-    expect(thread).toContain(
-      'const groupInfoInHeader = props.isGroup === true && props.onOpenInfo !== undefined;',
-    );
+    expect(thread).not.toContain('Starred');
   });
 });
 

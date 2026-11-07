@@ -36,9 +36,8 @@ const READY = {
   savedReady: true,
 };
 
-describe('B: stars are off the first-paint gate', () => {
-  it('rows paint with every other part in, stars pending or not', () => {
-    // Stars are not an input: a pending stars read cannot hold the rows.
+describe('B: the first-paint gate', () => {
+  it('rows paint with every part in', () => {
     expect(chatThreadLoading(READY)).toBe(false);
   });
 

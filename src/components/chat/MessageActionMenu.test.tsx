@@ -274,13 +274,12 @@ describe('messageMenuItems: row set per case', () => {
     const all: Partial<ItemProps> = {
       canEdit: true,
       canDelete: true,
-      canStar: true,
       canTranscribe: true,
       canSaveToNotes: true,
       canRemind: true,
       onRemind: () => {},
     };
-    expect(menu(all)).toEqual(['Reply', 'Copy', 'Forward', 'Edit', 'Star', 'More', 'Delete']);
+    expect(menu(all)).toEqual(['Reply', 'Copy', 'Forward', 'Edit', 'More', 'Delete']);
     expect(more(all)).toEqual(['Transcribe', 'Select', 'Save to notes', 'Remind me', 'Mark as']);
   });
 

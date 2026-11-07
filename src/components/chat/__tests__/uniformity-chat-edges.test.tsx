@@ -169,7 +169,6 @@ describe('11g phone chat list edges', () => {
     }
     // The search box and the chip row sit in the SectionHeader's px-4 rows.
     expect(read('../../shell/SectionHeader.tsx')).toContain("'px-4 md:px-6");
-    expect(read('../ChannelList.tsx')).toContain('data-starred-home="" className="px-4');
   });
 });
 

@@ -137,7 +137,7 @@ describe('viewport rules', () => {
   it('the shared full-screen pages and viewers clear the status bar', () => {
     const bar = /SAFE_TOP_BAR_CLASS\s*=\s*([^;]+);/.exec(SCROLL_MODE)?.[1] ?? '';
     expect(bar, 'lib/scroll-mode.ts SAFE_TOP_BAR_CLASS').toContain('--shell-safe-top');
-    // Contact, Group info and Starred: the modal page header takes the safe bar.
+    // Contact and Group info: the modal page header takes the safe bar.
     expect(src('chat/ModalPanel.tsx')).toMatch(/MODAL_HEADER_SAFE\s*=\s*SAFE_TOP_BAR_CLASS/);
     for (const { rel, src: text } of TSX) {
       if (rel === 'chat/ModalPanel.tsx') continue;

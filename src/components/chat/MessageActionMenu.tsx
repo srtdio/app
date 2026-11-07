@@ -17,8 +17,6 @@ import {
   IconPlus,
   IconReply,
   IconSelectText,
-  IconStar,
-  IconStarFilled,
   IconText,
   IconTrash,
   IconUser,
@@ -40,7 +38,6 @@ import { TYPE_LABEL, type ChatMark, type MarkType } from '@/lib/chat/marks';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import { formatClock, formatSendLabel } from '@/lib/chat/scheduled';
 import { cn } from '@/lib/cn';
-import { STAR_LABEL, UNSTAR_LABEL } from '@/lib/chat/stars';
 import { REMOVE_FILE_MENU_LABEL } from '@/lib/chat/remove-files';
 import { useModalFocus } from '@/lib/modal-focus';
 import { moveMenuFocus } from '@/lib/chat/menu-keys';
@@ -185,14 +182,6 @@ interface MessageActionMenuProps {
    */
   canTranscribe?: boolean;
   onTranscribe?: () => void;
-  /**
-   * Offers "Star" (or "Unstar" when `starred`), after Copy or Transcribe: any
-   * recorded, live message, own or not, in every chat.
-   */
-  canStar?: boolean;
-  /** The message is starred: the row reads "Unstar". */
-  starred?: boolean;
-  onStar?: () => void;
   onReact: (emoji: string) => void;
   onReply: () => void;
   /**
@@ -291,9 +280,6 @@ type MenuItemProps = Pick<
   | 'onCopy'
   | 'canTranscribe'
   | 'onTranscribe'
-  | 'canStar'
-  | 'starred'
-  | 'onStar'
   | 'markOptions'
   | 'onMark'
   | 'markedAs'
@@ -358,7 +344,7 @@ export const MORE_LABEL = 'More';
 
 /**
  * The main view in display order: Reply, Reply privately (someone else's
- * message in a group), Copy, Forward, Edit, Star (or Unstar), More, then
+ * message in a group), Copy, Forward, Edit, More, then
  * Delete last (or the locked line). Everything else sits
  * under More (see moreMenuItems); More shows only when it has a row. No
  * dividers. Rows that do not apply are not rendered. Pure (no hooks) so the
@@ -415,16 +401,6 @@ export function messageMenuItems(
       icon: <IconEdit size={size} />,
       ...(props.notes === true ? {} : { hint: '15 min' }),
       run: () => props.onEdit?.(),
-    });
-  }
-  if (props.canStar === true) {
-    const starred = props.starred === true;
-    items.push({
-      kind: 'action',
-      key: 'star',
-      label: starred ? UNSTAR_LABEL : STAR_LABEL,
-      icon: starred ? <IconStarFilled size={size} /> : <IconStar size={size} />,
-      run: () => props.onStar?.(),
     });
   }
   if (moreMenuItems(props).length > 0) {

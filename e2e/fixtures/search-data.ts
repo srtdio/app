@@ -189,7 +189,7 @@ export const MEDIA_VOICE_DURATION_MS = 9_000;
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 /** Chips in order on the chat home, by data-search-chip value. */
-export const SEARCH_CHIP_ORDER = ['starred', 'photo', 'video', 'link', 'file', 'voice'] as const;
+export const SEARCH_CHIP_ORDER = ['photo', 'video', 'link', 'file', 'voice'] as const;
 export type MediaKind = 'photo' | 'video' | 'link' | 'file' | 'voice';
 
 function mediaRow(over: {

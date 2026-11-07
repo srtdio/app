@@ -55,7 +55,6 @@ const CHAT_SPECS = [
   'chat-search',
   'search-placeholder-fit',
   'chat-select-text',
-  'chat-stars',
   'chat-status-ticker',
   'chat-tasks',
   'chat-thread',
@@ -199,7 +198,6 @@ export const AREAS: Area[] = [
     routed: true,
     specs: [
       'search-placeholder-fit',
-      'chat-stars',
       'chat-status-ticker',
       'detail-frame',
       'files-open-in-viewer',

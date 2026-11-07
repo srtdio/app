@@ -100,7 +100,7 @@ async function runSearchFlow(page: Page): Promise<void> {
 }
 
 /**
- * The media chips: their order (Starred, Photos, Videos, Links, Files, Voice
+ * The media chips: their order (Photos, Videos, Links, Files, Voice
  * notes), then Photos alone (empty query, p_kind photo) lists photo tiles
  * newest first; the first tile opens the viewer with its details on top, and
  * Show in chat opens the thread at that message.

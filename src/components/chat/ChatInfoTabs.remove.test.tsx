@@ -104,7 +104,7 @@ describe('who may tick a file', () => {
     );
     expect(showSelect('media', [], ME, MARKS)).toBe(false);
     expect(showSelect('links', [item(1)], ME, MARKS)).toBe(false);
-    expect(showSelect('starred', [item(1)], ME, MARKS)).toBe(false);
+    expect(showSelect('marks', [item(1)], ME, MARKS)).toBe(false);
   });
 
   it('the ticked files map to message, asset id and mime, in list order', () => {

@@ -80,7 +80,6 @@ const everything = {
   onCopy: noop,
   canForward: true,
   canEdit: true,
-  canStar: true,
   canDelete: true,
   canTranscribe: true,
   canSelectText: true,
@@ -90,13 +89,12 @@ const everything = {
 };
 
 describe('fix 1: the long-press menu top level', () => {
-  it('reads Reply, Copy, Forward, Edit, Star, More, Delete; the rest sits under More', () => {
+  it('reads Reply, Copy, Forward, Edit, More, Delete; the rest sits under More', () => {
     expect(messageMenuItems(everything).map((i) => i.key)).toEqual([
       'reply',
       'copy',
       'forward',
       'edit',
-      'star',
       'more',
       'delete',
     ]);

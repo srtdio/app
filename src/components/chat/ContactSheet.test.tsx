@@ -146,18 +146,17 @@ describe('ContactSheetView page', () => {
 });
 
 describe('ContactSheetView tabs', () => {
-  it('renders Media, Files, Links, Starred, Marks as tap chips; Media selected by default', () => {
+  it('renders Media, Files, Links, Marks as tap chips; Media selected by default', () => {
     const tree = view(props());
     const chips = findAll(tree, (el) => el.type === Chip);
     expect(chips.map((c) => c.props.label)).toEqual([
       'Media',
       'Files',
       'Links',
-      'Starred',
       'Marks',
     ]);
     expect(chips.every((c) => c.props.size === 'tap')).toBe(true);
-    expect(chips.map((c) => c.props.selected)).toEqual([true, false, false, false, false]);
+    expect(chips.map((c) => c.props.selected)).toEqual([true, false, false, false]);
   });
 
   it('tapping a chip switches the tab, and the body follows the tab', () => {
@@ -166,7 +165,7 @@ describe('ContactSheetView tabs', () => {
     const links = findAll(tree, (el) => el.type === Chip && el.props.label === 'Links')[0];
     (links?.props.onClick as () => void)();
     expect(onTab).toHaveBeenCalledWith('links');
-    for (const tab of ['media', 'files', 'links', 'starred', 'marks'] as ContactTab[]) {
+    for (const tab of ['media', 'files', 'links', 'marks'] as ContactTab[]) {
       const t = view(props({ tab }));
       expect(findAll(t, (el) => el.props['data-contact-tab'] === tab)).toHaveLength(1);
     }
@@ -186,7 +185,6 @@ describe('ContactSheetView tabs', () => {
     expect(feedForTab('files')).toBe('attachments');
     expect(feedForTab('links')).toBe('links');
     expect(feedForTab('marks')).toBeNull();
-    expect(feedForTab('starred')).toBeNull();
   });
 });
 
@@ -199,9 +197,7 @@ describe('ContactSheetView states', () => {
       media: 'Photos in this chat show up here.',
       files: 'Files in this chat show up here.',
       links: 'Links in this chat show up here.',
-      starred: 'Starred messages show up here.',
     });
-    expect(emptyTitles(view(props({ tab: 'starred' })))).toEqual([CONTACT_EMPTY.starred]);
   });
 
   it('voice notes (audio) appear in neither Media nor Files', () => {
