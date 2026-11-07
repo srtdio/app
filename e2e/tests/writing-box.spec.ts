@@ -118,6 +118,20 @@ test('S1 phone: Aa, Numbered list, three lines, send: an <ol> of three, preview 
   await expect(box).toHaveAttribute('data-shape', 'card');
   await key(box, 'Aa').click();
   await expect(box.getByRole('toolbar', { name: 'Format' })).toBeVisible();
+  // The format row is wider than a phone: it scrolls inside the box, and the
+  // page never grows sideways (the thread and the box stay on screen).
+  const overflow = await page.evaluate(() => ({
+    page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    box: (() => {
+      const r = document
+        .querySelector('[data-writing-box][data-mode="chat"]')
+        ?.getBoundingClientRect();
+      return r === undefined ? 0 : r.right - window.innerWidth;
+    })(),
+  }));
+  expect(overflow.page).toBeLessThanOrEqual(0);
+  expect(overflow.box).toBeLessThanOrEqual(0);
+  await key(box, 'Numbered list').scrollIntoViewIfNeeded();
   await key(box, 'Numbered list').click();
   await expect(field).toHaveValue('1. ');
   await expect(key(box, 'Numbered list')).toHaveAttribute('aria-pressed', 'true');

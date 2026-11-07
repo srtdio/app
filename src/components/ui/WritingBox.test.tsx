@@ -260,3 +260,16 @@ describe('WritingBox sheets', () => {
     expect(sent).toBe(0);
   });
 });
+
+describe('WritingBox width', () => {
+  it('never sizes its container to its rows: inline-size containment, full width', () => {
+    const host = mount(<Harness mode="chat" initial="hi" />);
+    act(() => byLabel(host, 'Aa')?.click());
+    const cls = q(host, '[data-writing-box]')?.className ?? '';
+    expect(cls).toContain('[contain:inline-size]');
+    expect(cls).toContain('w-full');
+    expect(cls).toContain('max-w-full');
+    // The format row scrolls inside the box.
+    expect(q(host, '[data-format-row]')?.className).toContain('overflow-x-auto');
+  });
+});

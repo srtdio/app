@@ -563,7 +563,10 @@ export function WritingBox(props: WritingBoxProps) {
       data-composer-state={state.kind}
       onKeyDownCapture={onKeyDownCapture}
       className={cn(
-        'flex min-w-0 flex-col gap-2',
+        // contain inline-size: the box always takes its container's width and
+        // never sizes the page to its rows (the Aa row is wider than a phone:
+        // it scrolls inside the box instead of pushing the chat off screen).
+        'flex w-full min-w-0 max-w-full flex-col gap-2 [contain:inline-size]',
         phoneExpanded && 'fixed inset-x-0 top-0 z-sheet bg-panel px-3 pb-2 lit-overlay',
         className,
       )}
