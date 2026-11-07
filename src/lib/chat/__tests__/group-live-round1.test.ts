@@ -272,9 +272,7 @@ describe('H2 new tile paints once, final', () => {
   });
 
   it('H2c a reload moves no tile whose own key did not change', () => {
-    const before = visibleChannels([oldGroup, busyGroup, dm], lookup, none).map(
-      (c) => c.channelId,
-    );
+    const before = visibleChannels([oldGroup, busyGroup, dm], lookup, none).map((c) => c.channelId);
     const renamed = { ...busyGroup, title: 'Renamed' };
     const reloaded = [dm, renamed, oldGroup];
     const after = visibleChannels(reloaded, lookup, none).map((c) => c.channelId);
