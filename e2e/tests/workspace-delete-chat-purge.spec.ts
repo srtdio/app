@@ -74,6 +74,12 @@ async function deleteFromMenu(page: Page, text: string): Promise<void> {
   const remove = menu.locator('[data-menu-item="delete"]');
   expectMinTouchTarget(await remove.boundingBox());
   await remove.click();
+  // Delete opens the delete sheet; an own message inside 30 min offers
+  // "Delete for everyone", the existing delete path (confirm, Undo, purge).
+  const everyone = page.getByTestId('delete-sheet').locator('[data-delete-choice="everyone"]');
+  await expect(everyone).toBeVisible();
+  expectMinTouchTarget(await everyone.boundingBox());
+  await everyone.click();
   await expect(page.locator('[data-selection-bar]')).toHaveCount(0);
 }
 
