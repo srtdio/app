@@ -4,14 +4,17 @@ import { fileURLToPath } from 'node:url';
 import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
-// Guard: ONE relative time rule app-wide. Past moments read through
-// src/lib/time.ts formatRelative ("just now", "5 min ago", "3 hours ago",
-// "2 days ago", "4 months ago", "2 years ago"); due days through formatDue /
-// formatOverdue ("Due tomorrow", "Overdue 2 days"); absolute text only through
-// formatTime / formatDayLabel / formatDayRange / the picker helpers. Nothing
-// outside src/lib/time.ts calls a locale date formatter, Intl.DateTimeFormat /
+// Guard: list time by meaning, through src/lib/time.ts only. Things that just
+// happened read formatAgo ("just now", "5m", "3h", "Yesterday", "Mon", "2 Nov");
+// deadlines read formatDue ("Due today", "Due Fri", "Due 12 Nov"), late ones
+// formatOverdue ("Overdue 1d" / "3w" / "2mo" / "1y"), plan starts
+// formatPlanStart ("Starts Mon", "Started 2d ago"); records read formatAdded
+// ("10:27 AM" today, else "2 Nov"). Absolute text only through formatTime /
+// formatDayLabel / formatDayRange / the picker helpers. Nothing outside
+// src/lib/time.ts calls a locale date formatter, Intl.DateTimeFormat /
 // Intl.RelativeTimeFormat or a date-fns format, or hand-rolls an "ago" string.
-// formatWhen and formatChatTime are gone, and so is the "Overdue ·" form.
+// formatRelative, formatWhen and formatChatTime are gone, and so are the long
+// forms ("5 min ago", "Due in 3 days", "Starts in 9 days", "Overdue 2 days").
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const SRC = join(ROOT, 'src');
 const CONFIG = readFileSync(join(ROOT, 'eslint.config.js'), 'utf8');
@@ -32,6 +35,15 @@ function sourceFiles(dir: string): string[] {
 /** Source with comments removed, so a code comment that says "ago" is no hit. */
 function code(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
+}
+
+/** Every .ts/.tsx file under src/**, tests included (but not this guard, which names the dead ones). */
+function allFiles(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return allFiles(path);
+    return /\.tsx?$/.test(name) && name !== 'time-format-rules.test.ts' ? [path] : [];
+  });
 }
 
 const FILES = sourceFiles(SRC)
@@ -132,43 +144,83 @@ describe('time format rule: source scan of src/**', () => {
     ).toEqual([]);
   });
 
-  it('no hand-rolled relative strings: "ago" and "just now" come only from formatRelative', () => {
+  it('no hand-rolled relative strings: "ago" and "just now" come only from formatAgo', () => {
     expect(offenders(/\bago(['"`]|\s*<\/)/)).toEqual([]);
     expect(offenders(/just now/i)).toEqual([]);
     expect(offenders(/\b(mins?|minutes?|hours?|days?|weeks?|months?|years?) ago\b/)).toEqual([]);
   });
 
-  it('formatWhen and formatChatTime no longer exist anywhere in src/**', () => {
-    expect(TIME).not.toMatch(/\bformatWhen\b/);
-    expect(TIME).not.toMatch(/\bformatChatTime\b/);
-    expect(offenders(/\bformat(When|ChatTime)\b/)).toEqual([]);
+  it('none of the long forms appear in src/** source', () => {
+    expect(offenders(/min ago|hours ago|days ago/)).toEqual([]);
+    expect(offenders(/Due in /)).toEqual([]);
+    expect(offenders(/Starts in /)).toEqual([]);
+    expect(offenders(/Overdue \d+ day/)).toEqual([]);
+    expect(offenders(/Overdue \$\{[^}]*\} days?/)).toEqual([]);
+    const body = code(TIME);
+    for (const long of [/min ago/, /hours ago/, /days ago/, /Due in /, /Starts in /]) {
+      expect(body).not.toMatch(long);
+    }
   });
 
-  it('no "Overdue ·" form remains (overdue reads "Overdue 2 days")', () => {
+  it('formatRelative, formatWhen and formatChatTime exist nowhere in src/**', () => {
+    expect(TIME).not.toMatch(/\bformat(Relative|When|ChatTime)\b/);
+    const hits = allFiles(SRC)
+      .filter((path) => /\bformat(Relative|When|ChatTime)\b/.test(readFileSync(path, 'utf8')))
+      .map((path) => relative(SRC, path).split(sep).join('/'));
+    expect(hits).toEqual([]);
+  });
+
+  it('no "Overdue ·" form remains (overdue reads "Overdue 2d")', () => {
     expect(code(TIME)).not.toMatch(/Overdue ·/);
     expect(offenders(/Overdue ·/)).toEqual([]);
   });
 });
 
 describe('time format rule: src/lib/time.ts is the one rule', () => {
-  it('exports the relative, due, overdue and plan-start helpers', () => {
-    for (const name of [
-      'formatRelative',
+  const exported = [...TIME.matchAll(/^export function (\w+)\(/gm)].map((m) => m[1]);
+
+  it('exports exactly formatAgo, formatDue and formatAdded as the list-time functions', () => {
+    // A list-time function reads a moment or a day for a list line; the rest are
+    // absolute formatters, zone helpers, and formatDue's late / plan-start forms.
+    const LIST_TIME = /^format(Ago|Added|Due|Relative|When|ChatTime|Since|Elapsed|Moment|Age)$/;
+    expect(exported.filter((name) => LIST_TIME.test(name ?? '')).sort()).toEqual([
+      'formatAdded',
+      'formatAgo',
       'formatDue',
-      'formatOverdue',
-      'formatPlanStart',
-      'daysFromToday',
-      'formatDayLabel',
-      'formatTime',
-      'formatDayRange',
-    ]) {
-      expect(TIME).toContain(`export function ${name}(`);
-    }
+    ]);
+    expect(exported.sort()).toEqual(
+      [
+        'civilDay',
+        'daysFromToday',
+        'deviceTimeZone',
+        'formatAdded',
+        'formatAgo',
+        'formatDate',
+        'formatDateTime',
+        'formatDayLabel',
+        'formatDayRange',
+        'formatDue',
+        'formatDueDate',
+        'formatOverdue',
+        'formatPlanStart',
+        'formatSpokenDate',
+        'formatTime',
+        'isValidTimeZone',
+        'safeTimeZone',
+        'shortZoneName',
+        'zonedParts',
+      ].sort(),
+    );
   });
 
-  it('formatRelative owns the relative words', () => {
+  it('formatAgo owns the short past words; formatDue the deadline words', () => {
     const body = code(TIME);
     expect(body).toContain("'just now'");
-    expect(body).toMatch(/min ago/);
+    expect(body).toContain("'Yesterday'");
+    expect(body).toContain('`${Math.floor(diff / MINUTE)}m`');
+    expect(body).toContain('`${Math.floor(diff / HOUR)}h`');
+    expect(body).toContain('`Due ${');
+    expect(body).toContain('`Overdue ${late}`');
+    expect(body).toContain('`${months}mo`');
   });
 });

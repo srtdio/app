@@ -40,12 +40,13 @@ export const DELETED_ON_PURPOSE: Record<string, string> = {
 };
 
 /**
- * Lit-* classes that left a file on purpose while the element they lit is
- * still drawn by a part the file now uses (a part whose lighting is not one
- * fixed class, so PART_CARRIERS cannot credit it). Keyed by file, then role:
- * how many may leave and why. Never larger than the file's real drop.
+ * Lit-* classes that left a file on purpose, each checked by hand: the element
+ * is now drawn by a part whose lighting PART_CARRIERS cannot credit (a variant
+ * prop such as Card muted / selected, a ListCard slot), or the element itself
+ * is gone with a retired view. Keyed by file, then role: how many may leave
+ * and why. Never more than the file's real drop.
  */
-export const MOVED_ONTO_PART: Record<string, Record<string, { count: number; why: string }>> = {};
+export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why: string }>> = {};
 
 /**
  * Parts whose every use paints a lit role. A use at a call site counts as one
@@ -58,6 +59,9 @@ export const PART_CARRIERS: { use: string; roles: string[]; part: string }[] = [
   { use: '<ListCardBox', roles: ['lit-card'], part: 'src/components/ui/ListCard.tsx' },
   { use: '<Card', roles: ['lit-card'], part: 'src/components/ui/Card.tsx' },
   { use: 'cardSurface(', roles: ['lit-card'], part: 'src/components/ui/Card.tsx' },
+  { use: 'tagClass(', roles: ['lit-pill'], part: 'src/components/ui/Tag.tsx' },
+  { use: 'popoverClass(', roles: ['lit-overlay'], part: 'src/components/ui/popover-classes.ts' },
+  { use: 'SHEET_FRAME', roles: ['lit-overlay'], part: 'src/components/ui/Sheet.tsx' },
   { use: '<HeaderBar', roles: ['lit-header'], part: 'src/components/ui/HeaderBar.tsx' },
   { use: '<Tag', roles: ['lit-pill'], part: 'src/components/ui/Tag.tsx' },
   { use: '<Avatar', roles: ['lit-avatar'], part: 'src/components/ui/Avatar.tsx' },
@@ -106,7 +110,7 @@ const CARRIER_RES = PART_CARRIERS.map((c) => ({
   ...c,
   re: c.use.startsWith('<')
     ? new RegExp(`${escapeRe(c.use)}(?=[\\s>/]|$)`, 'g')
-    : new RegExp(`(?<![\\w.])${escapeRe(c.use)}`, 'g'),
+    : new RegExp(`(?<![\\w.])${escapeRe(c.use)}${c.use.endsWith('(') ? '' : '(?!\\w)'}`, 'g'),
 }));
 
 /**
@@ -163,9 +167,18 @@ export function stripComments(src: string): string {
   return out;
 }
 
+/** Blank out import / re-export statements (a part named in an import paints nothing). */
+export function blankImports(src: string): string {
+  return src.replace(/^(?:import|export)\b[^;]*?\bfrom\s*['"][^'"]*['"];?/gm, (m) =>
+    m.replace(/[^\n]/g, ' '),
+  );
+}
+
 export function scanSource(file: string, src: string): Occurrence[] {
   const out: Occurrence[] = [];
-  const lines = stripComments(src).split('\n');
+  const code = stripComments(src);
+  const lines = code.split('\n');
+  const useLines = blankImports(code).split('\n');
   const carriers = CARRIER_RES.filter((c) => c.part !== file);
   for (let i = 0; i < lines.length; i++) {
     const text = lines[i]!;
@@ -173,7 +186,7 @@ export function scanSource(file: string, src: string): Occurrence[] {
       out.push({ role: m[2]!, file, line: i + 1, token: `${m[1] ?? ''}${m[2]!}`, kind: 'class' });
     }
     for (const c of carriers) {
-      for (const _m of text.matchAll(c.re)) {
+      for (const _m of useLines[i]!.matchAll(c.re)) {
         const token = c.use.startsWith('<') ? `${c.use}>` : `${c.use})`;
         for (const role of c.roles) out.push({ role, file, line: i + 1, token, kind: 'part' });
       }
@@ -233,7 +246,7 @@ export function compareLighting(
   main: FileMap,
   branch: FileMap,
   retired: Record<string, string> = DELETED_ON_PURPOSE,
-  moved: Record<string, Record<string, { count: number; why: string }>> = MOVED_ONTO_PART,
+  explained: Record<string, Record<string, { count: number; why: string }>> = EXPLAINED_DROPS,
 ): Comparison {
   const mainOcc = scanFiles(main);
   const branchOcc = scanFiles(branch);
@@ -251,7 +264,7 @@ export function compareLighting(
       allowances.push({ file, role, count: drop, why });
       continue;
     }
-    const m = moved[file]?.[role];
+    const m = explained[file]?.[role];
     if (m !== undefined) allowances.push({ file, role, count: Math.min(drop, m.count), why: m.why });
   }
   const allowedCounts: Counts = {};
