@@ -1290,7 +1290,7 @@ export function CommandPalette({
             <Button
               type="button"
               variant="primary"
-              className="w-full sm:w-auto"
+              className="w-full md:w-auto"
               disabled={picked.size === 0}
               onMouseDown={keepFocus}
               onClick={confirmPick}
