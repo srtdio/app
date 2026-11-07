@@ -195,3 +195,13 @@ describe('WritingBox sending', () => {
     expect(q(host, '[data-testid="send"]')).not.toBeNull();
   });
 });
+
+describe('WritingBox pill keys', () => {
+  it('focusing the + in the phone pill keeps the pill (its tray stays mounted)', () => {
+    const host = mount(<Harness mode="chat" />);
+    const plus = document.createElement('button');
+    q(host, '[data-testid="plus"]')?.appendChild(plus);
+    act(() => plus.focus());
+    expect(q(host, '[data-writing-box]')?.dataset.shape).toBe('pill');
+  });
+});

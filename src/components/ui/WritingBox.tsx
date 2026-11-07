@@ -490,7 +490,12 @@ export function WritingBox(props: WritingBoxProps) {
       data-writing-frame=""
       data-invalid={invalid ? '' : undefined}
       className={frameClass}
-      onFocus={() => setFocused(true)}
+      onFocus={(e) => {
+        // Only the field itself opens the card: focusing the + (or any row
+        // key) in the pill must not move it, or its tray would remount closed.
+        const el = field();
+        if (el !== null && (e.target === el || el.contains(e.target))) setFocused(true);
+      }}
       onBlur={(e) => {
         const next = e.relatedTarget;
         if (next instanceof Node && e.currentTarget.contains(next)) return;
