@@ -62,9 +62,9 @@ function seedScrollPosts(network: HarnessNetwork, count = 24): void {
 
 async function openPipeline(page: Page): Promise<void> {
   await page.goto('/pipeline?stage=all');
-  await expect(page.getByRole('button', { name: 'Open post Monday carousel' }).first()).toBeVisible(
-    { timeout: 15_000 },
-  );
+  // Any Pipeline card: the seeded filler posts can sort ahead of the fixture
+  // posts, so the wait is for the list itself, not one named card.
+  await expect(page.locator('[data-list-card]').first()).toBeVisible({ timeout: 15_000 });
 }
 
 for (const size of [
