@@ -245,11 +245,14 @@ const source = (screen: keyof typeof SOURCES): string =>
   SOURCES[screen].map((rel) => read(rel)).join('\n');
 
 describe('all six lists (and the Bank) render ui/ListCard', () => {
-  it.each(Object.keys(SOURCES) as (keyof typeof SOURCES)[])('%s draws its cards with <ListCard', (screen) => {
-    const src = source(screen);
-    expect(src).toContain("from '@/components/ui/ListCard'");
-    expect(src).toContain('<ListCard');
-  });
+  it.each(Object.keys(SOURCES) as (keyof typeof SOURCES)[])(
+    '%s draws its cards with <ListCard',
+    (screen) => {
+      const src = source(screen);
+      expect(src).toContain("from '@/components/ui/ListCard'");
+      expect(src).toContain('<ListCard');
+    },
+  );
 
   it.each(['pipeline', 'briefs', 'assets', 'activity', 'planTab', 'bank'] as const)(
     '%s lays its list out in LIST_CARD_GRID',

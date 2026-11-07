@@ -203,7 +203,9 @@ describe('Brief card is ui/ListCard', () => {
   });
 
   it('line 3 reads the due words: Due today, Due in N days, else Overdue in the bad tone', () => {
-    expect(card({}, new Date('2026-07-01T09:00:00Z'))).toMatch(/data-brief-due="[^"]*"[^>]*>Due today</);
+    expect(card({}, new Date('2026-07-01T09:00:00Z'))).toMatch(
+      /data-brief-due="[^"]*"[^>]*>Due today</,
+    );
     expect(card({}, new Date('2026-06-28T09:00:00Z'))).toContain('>Due in 3 days<');
     const late = card({}, new Date('2026-07-03T09:00:00Z'));
     expect(late).toMatch(/data-list-card-time=""[^>]*class="[^"]*text-bad[^"]*">Overdue 2 days</);

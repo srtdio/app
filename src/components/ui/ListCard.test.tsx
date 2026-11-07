@@ -281,7 +281,9 @@ describe('LIST_CARD_GRID: the page list', () => {
   });
 
   it('the chat pane keeps the one-column stack', () => {
-    expect(LIST_CARD_STACK.split(' ')).toEqual(expect.arrayContaining(['flex', 'flex-col', 'gap-3']));
+    expect(LIST_CARD_STACK.split(' ')).toEqual(
+      expect.arrayContaining(['flex', 'flex-col', 'gap-3']),
+    );
     expect(LIST_CARD_STACK).not.toContain('grid');
   });
 });

@@ -186,7 +186,11 @@ describe('BriefCard on ui/ListCard', () => {
   it('upcoming due days read relative: today, tomorrow, in N days', () => {
     const now = new Date('2026-06-28T12:00:00Z');
     const at = (target_date: string) =>
-      briefCardTime({ target_date, created_at: '2026-01-01T00:00:00Z', status: 'open' }, 'UTC', now);
+      briefCardTime(
+        { target_date, created_at: '2026-01-01T00:00:00Z', status: 'open' },
+        'UTC',
+        now,
+      );
     expect(at('2026-06-28')).toEqual({ text: 'Due today', bad: false });
     expect(at('2026-06-29')).toEqual({ text: 'Due tomorrow', bad: false });
     expect(at('2026-07-01')).toEqual({ text: 'Due in 3 days', bad: false });

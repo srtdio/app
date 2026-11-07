@@ -220,9 +220,9 @@ describe('ActivityCard on ui/ListCard', () => {
     expect(activityKind(item({ eventType: 'mention', entityType: 'post', scope: 'posts' }))).toBe(
       'Mention',
     );
-    expect(activityKind(item({ eventType: 'task_due', entityType: 'chat_channel', scope: 'people' }))).toBe(
-      'Reminder',
-    );
+    expect(
+      activityKind(item({ eventType: 'task_due', entityType: 'chat_channel', scope: 'people' })),
+    ).toBe('Reminder');
     expect(activityKind(item({ eventType: 'invite', entityType: null, scope: 'people' }))).toBe(
       undefined,
     );

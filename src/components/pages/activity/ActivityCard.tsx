@@ -171,9 +171,7 @@ export function activityKind(item: ActivityItem): ActivityKind | undefined {
  * them ("3 updates"); else what the entry is (activityKind: Mention, Post,
  * Brief, Plan, Reminder). None for the welcome row or a kindless entry. Pure.
  */
-export function activityCardTag(
-  group: readonly ActivityItem[],
-): string | undefined {
+export function activityCardTag(group: readonly ActivityItem[]): string | undefined {
   const lead = group[0];
   if (lead === undefined) return undefined;
   const alert = lead.alert ?? null;
