@@ -107,7 +107,7 @@ export function chatTabLabel(unread: number): string {
 /**
  * A pill tab, always a 44x44 target or wider: inactive is the icon alone in
  * fg-2; active is the panel-3 fill in fg ink with its label (the label hides
- * while the dock is shrunk). Flat: no ink fill, no lit-pill.
+ * while the dock is shrunk). Flat: no ink fill, no pill light.
  */
 export function tabClass(active: boolean, shrunk = false): string {
   return cn(

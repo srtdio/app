@@ -128,8 +128,10 @@ describe('guard: every row is 60 tall', () => {
     const line1 = px(pick(cls(html, 'data-list-card-line="1"'), /^h-\d/), 'h-');
     const line2 = px(pick(cls(html, 'data-list-card-line="2"'), /^h-\d/), 'h-');
     const text = line1 + 2 + line2;
-    // The content (picture or the two lines) fits inside the frame with 10 above and below.
-    expect(Math.max(picture, text) + 10 + 10).toBeLessThanOrEqual(frame);
+    // The 40 picture sits 10 below the top and 10 above the bottom; the 42 text
+    // column (20 + 2 + 20) centres against it and still fits the frame.
+    expect(picture + 10 + 10).toBe(frame);
+    expect(text).toBeLessThanOrEqual(frame);
     return frame;
   }
 

@@ -468,7 +468,7 @@ const spacing = tailwindConfig.theme?.spacing as Record<string, string>;
 const px = (rem: string): number => parseFloat(rem) * 16;
 
 describe('equal height: 60 on every list (Pipeline, Briefs, Assets, Chat, Activity, Plan tab, Bank)', () => {
-  it('the arithmetic: the h-15 row is 10 + max(40, 20 + 2 + 20) + 10 = 60, no border', () => {
+  it('the arithmetic: the h-15 row is 10 + 40 picture + 10 = 60, the 42 text column centred inside, no border', () => {
     const row = px(spacing['15'] ?? '');
     const picture = px(spacing['10'] ?? '');
     const line = px(spacing['5'] ?? '');
@@ -477,7 +477,8 @@ describe('equal height: 60 on every list (Pipeline, Briefs, Assets, Chat, Activi
     expect(picture).toBe(40);
     const text = line + gap + line;
     expect(text).toBe(42);
-    expect(10 + Math.max(picture, text) + 10).toBeLessThanOrEqual(row);
+    expect(10 + picture + 10).toBe(row);
+    expect(text).toBeLessThanOrEqual(row);
     expect((row - picture) / 2).toBe(10);
   });
 
