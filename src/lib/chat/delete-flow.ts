@@ -85,9 +85,9 @@ export function deleteChoices(input: {
  * message qualifies on its own (each one's deleteChoices offers it), "Delete
  * for me" always. Pure.
  */
-export function selectionDeleteChoices(
-  items: readonly { mine: boolean; ageMs: number | null }[],
-): { everyone: boolean } {
+export function selectionDeleteChoices(items: readonly { mine: boolean; ageMs: number | null }[]): {
+  everyone: boolean;
+} {
   const offers = (item: { mine: boolean; ageMs: number | null }): boolean => {
     const choices = deleteChoices({ ...item, notes: false, failed: false });
     return choices.kind === 'sheet' && choices.everyone;

@@ -225,9 +225,7 @@ export async function readHiddenMessages(
     }
     return { ok: true, data: readHiddenRows(res.data ?? []) ?? [] };
   });
-  return result.ok
-    ? { ok: true, data: result.data }
-    : { ok: false, error: result.error.message };
+  return result.ok ? { ok: true, data: result.data } : { ok: false, error: result.error.message };
 }
 
 /**
