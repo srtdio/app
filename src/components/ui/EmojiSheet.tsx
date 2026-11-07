@@ -128,7 +128,8 @@ export default function EmojiSheet(props: {
     <Sheet open={open} onClose={onClose} title={SHEET_TITLE} fixedHeight>
       <div data-emoji-sheet="" className="flex flex-col gap-4">
         <Input
-          type="search"
+          type="text"
+          inputMode="search"
           data-emoji-search=""
           aria-label="Search emoji"
           placeholder="Search emoji"
