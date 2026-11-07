@@ -38,8 +38,7 @@ describe('X5 chips fade, caption preview, skeletons', () => {
           />
         </MemoryRouter>,
       );
-      const caption =
-        /<span[^>]*data-post-card-caption=""[^>]*>.*?<\/span>/.exec(out)?.[0] ?? '';
+      const caption = /<span[^>]*data-post-card-caption=""[^>]*>.*?<\/span>/.exec(out)?.[0] ?? '';
       expect(caption).toContain('data-list-card-preview=""');
       expect(caption).toContain('text-fg-2');
       expect(caption).not.toContain('Caption');

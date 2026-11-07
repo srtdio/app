@@ -23,7 +23,6 @@ import {
   seedTeamAndHiddenPlans,
   TEAM_PLAN_ID,
   planMessage,
-  TAB_OK_ITEM_TITLE,
   TAB_SHARED_PLAN_ID,
   WORKSPACE_ID,
 } from '../fixtures/chat-data';
@@ -841,7 +840,7 @@ function seedBank(network: HarnessNetwork): void {
   );
 }
 
-/** The Plan tab on the Bank (phone: the chip's list; laptop: the side panel). */
+/** The Plan tab on the Bank chip (phone and laptop: the idea cards in the grid). */
 async function bankReady(page: Page): Promise<void> {
   await waitFor([page.locator('[data-bank-row]').getByText(BANK_FIRST_TITLE)], 'bank');
 }
@@ -858,18 +857,6 @@ async function bankRowMenu(page: Page, name: RegExp): Promise<void> {
     'idea more',
   );
   await tap([page.getByRole('menuitem', { name })], 'idea menu item');
-}
-
-/** The laptop Plan tab switched to Week (the week of today), today's column filled. */
-async function planTabWeek(page: Page): Promise<void> {
-  await waitFor([page.locator('[data-plan-tab-month]')], 'plan tab month');
-  await tap([page.locator('[data-plan-tab-view="week"]')], 'Week');
-  await waitFor([page.locator('[data-plan-tab-week]')], 'plan tab week');
-  await waitFor([page.locator('[data-plan-tab-today-head] [data-plan-tab-today-pill]')], 'today');
-  await waitFor(
-    [page.locator('[data-plan-tab-today-cell]').getByText(TAB_OK_ITEM_TITLE)],
-    'today items',
-  );
 }
 
 /** The shared plan "Autumn launch" (/plan/:id) with today's tile and pill in view. */
@@ -1364,7 +1351,7 @@ const SCREENS: Screen[] = [
     steps: async (page) => waitFor([page.locator('[data-activity-boxes]')], 'activity boxes'),
   },
   {
-    // Plan tab: plan-card boxes on the phone, the month grid's entry boxes on laptop.
+    // Plan tab: ListCard boxes in the list grid (phone and laptop).
     name: 'boxes-plan-tab',
     seed: creator,
     extra: (network) => {
@@ -1637,22 +1624,6 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // Laptop month: the trace line in today's cell (dense, like item lines).
-    name: 'plan-tab-month-trace',
-    only: 'laptop',
-    seed: creator,
-    extra: (network) => {
-      seedTab(network);
-      // Moved on Monday: today's cell is full (its lines fold into "+N more").
-      seedTrace(network, TAB_SHARED_PLAN_ID, 'Monsoon teaser', NOW - 2 * 86_400_000);
-    },
-    url: '/plan',
-    steps: async (page) => {
-      await waitFor([page.locator('[data-plan-tab-month]')], 'plan tab month');
-      await waitFor([page.locator(`[data-plan-tab-trace="${TRACE_ITEM}"]`)], 'month trace');
-    },
-  },
-  {
     name: 'plan-tab',
     seed: creator,
     extra: seedTab,
@@ -1661,7 +1632,7 @@ const SCREENS: Screen[] = [
       waitFor([page.locator('[data-plan-tab-list]'), page.getByText('Autumn launch')], 'plan'),
   },
   {
-    // The phone's week chips: a chip with no plans in it shows the zero line.
+    // The week chips: a chip with no plans in it shows the zero line.
     name: 'plan-tab-week-zero',
     only: 'phone',
     seed: creator,
@@ -1674,7 +1645,7 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // The Bank chip: idea cards (thumbnail, star, tags, meta).
+    // The Bank chip: idea ListCards (picture, title, text, last active, bucket).
     name: 'plan-tab-bank',
     seed: creator,
     extra: seedBank,
@@ -1747,31 +1718,6 @@ const SCREENS: Screen[] = [
     steps: async (page) => {
       await bankRowMenu(page, /^Plan it/);
       await waitFor([page.locator('[data-bank-plan-it]')], 'plan it sheet');
-    },
-  },
-  {
-    // Laptop: the Bank chip opens the side panel beside the calendar.
-    name: 'plan-tab-bank-panel',
-    only: 'laptop',
-    seed: creator,
-    extra: seedBank,
-    url: '/plan?week=bank',
-    steps: async (page) => {
-      await bankReady(page);
-      await waitFor([page.locator('[data-bank="panel"] [data-bank-drag-hint]')], 'panel');
-    },
-  },
-  {
-    // Laptop: Expand swaps the calendar for the Bank table.
-    name: 'plan-tab-bank-table',
-    only: 'laptop',
-    seed: creator,
-    extra: seedBank,
-    url: '/plan?week=bank',
-    steps: async (page) => {
-      await bankReady(page);
-      await tap([page.locator('[data-bank-expand]')], 'Expand');
-      await waitFor([page.locator('[data-bank-table]').getByText(BANK_FIRST_TITLE)], 'bank table');
     },
   },
   { name: 'post-detail', seed: creator, url: `/posts/${POST}`, steps: postDetailReady },
@@ -2073,21 +2019,9 @@ SCREENS.push({
   steps: (page) => openCockpit(page, 'green', 'Traffic', 'Home to sign-up'),
 });
 
-// The Plan tab's Week (laptop) and a plan screen holding today (Wed 21 Oct, the
-// solid accent tile and its "Today" pill): laptop light and dark; the plan
-// screen also on the phone (iPhone light and dark projects).
-for (const dark of [false, true]) {
-  const suffix = dark ? '-dark' : '';
-  SCREENS.push({
-    name: `plan-tab-week${suffix}`,
-    seed: creator,
-    extra: seedTab,
-    only: 'laptop',
-    dark,
-    url: '/plan',
-    steps: planTabWeek,
-  });
-}
+// A plan screen holding today (Wed 21 Oct, the solid accent tile and its
+// "Today" pill): laptop light and dark, and the phone (iPhone light and dark
+// projects).
 SCREENS.push({
   name: 'plan-screen-today',
   seed: creator,

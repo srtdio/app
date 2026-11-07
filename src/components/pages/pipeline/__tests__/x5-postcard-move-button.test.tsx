@@ -73,7 +73,9 @@ describe('X5 PostCard move button placement (the ⋮ at the right end of line 3)
     expect(glyph).toContain('width="20"');
     expect(glyph).toContain('height="20"');
     // It sits after the picture and the time, at the end of the card.
-    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(out.indexOf('data-list-card-line="3"'));
+    expect(out.indexOf('data-post-card-move')).toBeGreaterThan(
+      out.indexOf('data-list-card-line="3"'),
+    );
     expect(out.indexOf('data-post-card-move')).toBeGreaterThan(out.indexOf('data-post-card-thumb'));
   });
 });
