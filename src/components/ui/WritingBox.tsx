@@ -261,6 +261,10 @@ export function WritingBox(props: WritingBoxProps) {
   const laptop = props.laptop ?? isLaptopHook;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [focused, setFocused] = useState(false);
+  // A blur collapses the box only after the press that caused it has landed:
+  // collapsing on pointerdown would move what the finger is on (the button
+  // under the box) before its click. Bumped by every focus to drop a stale one.
+  const blurToken = useRef(0);
   const [formatOpen, setFormatOpen] = useState(false);
   const [on, setOn] = useState<ReadonlySet<FormatAction>>(() => new Set());
   const [expanded, setExpanded] = useState(false);
@@ -494,12 +498,28 @@ export function WritingBox(props: WritingBoxProps) {
         // Only the field itself opens the card: focusing the + (or any row
         // key) in the pill must not move it, or its tray would remount closed.
         const el = field();
-        if (el !== null && (e.target === el || el.contains(e.target))) setFocused(true);
+        if (el !== null && (e.target === el || el.contains(e.target))) {
+          blurToken.current += 1;
+          setFocused(true);
+        }
       }}
       onBlur={(e) => {
         const next = e.relatedTarget;
         if (next instanceof Node && e.currentTarget.contains(next)) return;
-        setFocused(false);
+        const token = ++blurToken.current;
+        let timer = 0;
+        const done = (): void => {
+          document.removeEventListener('pointerup', done, true);
+          window.clearTimeout(timer);
+          // After the click that follows this pointerup (same task).
+          window.setTimeout(() => {
+            if (blurToken.current === token) setFocused(false);
+          }, 0);
+        };
+        // Listened to only between a blur and its press ending; a keyboard
+        // blur (no press) collapses on the fallback.
+        document.addEventListener('pointerup', done, true);
+        timer = window.setTimeout(done, 300);
       }}
       onKeyUp={formatOpen ? refreshOn : undefined}
       onMouseUp={formatOpen ? refreshOn : undefined}

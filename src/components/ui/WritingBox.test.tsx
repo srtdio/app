@@ -4,7 +4,7 @@
 // expand / collapse keeping the same field (no remount).
 import { act, useRef, useState, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WritingBox, type WritingMode } from '@/components/ui/WritingBox';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -203,5 +203,27 @@ describe('WritingBox pill keys', () => {
     q(host, '[data-testid="plus"]')?.appendChild(plus);
     act(() => plus.focus());
     expect(q(host, '[data-writing-box]')?.dataset.shape).toBe('pill');
+  });
+});
+
+describe('WritingBox blur', () => {
+  it('keeps its rows until the press that blurred it ends (the button under it does not move)', () => {
+    vi.useFakeTimers();
+    try {
+      const host = mount(<Harness mode="field" />);
+      const area = byLabel(host, 'Message') as HTMLTextAreaElement;
+      act(() => area.focus());
+      expect(q(host, '[data-writing-row]')).not.toBeNull();
+      act(() => area.blur());
+      // Still there while the finger is down.
+      expect(q(host, '[data-writing-row]')).not.toBeNull();
+      act(() => {
+        document.dispatchEvent(new Event('pointerup', { bubbles: true }));
+        vi.runAllTimers();
+      });
+      expect(q(host, '[data-writing-row]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
