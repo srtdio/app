@@ -74,6 +74,7 @@ import {
   PauseIcon as PauseSolid,
   PlayIcon as PlaySolid,
   StarIcon as StarSolid,
+  StopIcon as StopSolid,
 } from '@heroicons/react/24/solid';
 
 /**
@@ -418,6 +419,11 @@ export function IconPause(props: IconProps) {
 
 export function IconPauseFill(props: IconProps) {
   return <Hero icon={PauseSolid} solid {...props} />;
+}
+
+/** Stop a send, upload or recording: a solid square, drawn inside the progress ring. */
+export function IconStop(props: IconProps) {
+  return <Hero icon={StopSolid} solid {...props} />;
 }
 
 export function IconCalendar(props: IconProps) {
