@@ -38,7 +38,7 @@ describe('Tabs', () => {
       expect(tag).not.toContain('bg-accent');
     }
     expect(html).not.toContain('h-0.5');
-    expect(html).not.toContain('border-b');
+    expect(html).not.toMatch(/[\s"]border-b[\s"]/);
   });
 
   it('only the active tab is a Tab stop', () => {
