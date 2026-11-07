@@ -113,9 +113,11 @@ test(
     await expect(card(page, 'plan_opened')).toBeVisible();
 
     // The chips (their order is a unit check): the counted ones carry their counts.
-    for (const name of ['All', 'Unread 2', 'Mentions 1', 'Briefs', 'Plans', 'Snoozed']) {
+    for (const name of ['All', 'Unread 2', 'Mentions 1', 'Briefs', 'Plans']) {
       await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
     }
+    // Snooze is gone: no Snoozed chip.
+    await expect(page.getByRole('button', { name: /^Snoozed/ })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Upcoming', exact: true })).toHaveCount(0);
 
     // Mentions: the chat mention, nothing else.
@@ -191,7 +193,7 @@ function seedTiles(world: ChatWorld): void {
   );
 }
 
-test('fix 3: at 390px the chip row ends with a full gutter after Snoozed and no fade', async ({
+test('fix 3: at 390px the chip row ends with a full gutter after Plans and no fade', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -206,15 +208,22 @@ test('fix 3: at 390px the chip row ends with a full gutter after Snoozed and no 
   const overflows = await row.evaluate((el) => el.scrollWidth - el.clientWidth > 2);
   if (overflows) await expect.poll(maskOf).not.toBe('none');
 
-  await row.evaluate((el) => {
-    el.scrollLeft = el.scrollWidth;
-  });
-  await expect.poll(maskOf).toBe('none');
+  // Scroll to the end inside the poll: the chip counts can land after the
+  // first scroll and widen the row, so each try scrolls to the new end.
+  await expect
+    .poll(async () => {
+      await row.evaluate((el) => {
+        el.scrollLeft = el.scrollWidth;
+      });
+      return maskOf();
+    })
+    .toBe('none');
 
-  const snoozed = row.getByRole('button', { name: 'Snoozed', exact: true });
-  await expect(snoozed).toBeVisible();
-  const box = await snoozed.boundingBox();
-  if (box === null) throw new Error('Snoozed chip has no box');
+  // Plans is the last chip (Snoozed is gone).
+  const last = row.getByRole('button', { name: 'Plans', exact: true });
+  await expect(last).toBeVisible();
+  const box = await last.boundingBox();
+  if (box === null) throw new Error('Plans chip has no box');
   // The trailing spacer plus the chip gap: a 16px right gutter, like the left one.
   expect(Math.floor(box.x + box.width)).toBeLessThanOrEqual(390 - 16);
   expectClean(network);
@@ -234,8 +243,8 @@ test('fix 6 and 30 on ui/ListCard: a brief row shows the brief icon picture; del
   await expect(briefPicture).toBeVisible();
   const briefBox = await briefPicture.boundingBox();
   if (briefBox === null) throw new Error('brief picture has no box');
-  expect(Math.round(briefBox.width)).toBe(72);
-  expect(Math.round(briefBox.height)).toBe(72);
+  expect(Math.round(briefBox.width)).toBe(48);
+  expect(Math.round(briefBox.height)).toBe(48);
   await expect(brief.locator('[data-activity-scope-tag]')).toHaveText('Brief');
 
   const files = card(page, 'assets_deleted');

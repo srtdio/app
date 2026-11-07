@@ -205,49 +205,49 @@ describe('formatDayLabel: chat day dividers only', () => {
 
 describe('formatDue: a due day on the workspace zone', () => {
   it('today, tomorrow, the weekday 2-6 days ahead, then the day', () => {
-    expect(formatDue('2026-10-25', IST, NOW)).toBe('Due today');
-    expect(formatDue('2026-10-26', IST, NOW)).toBe('Due tomorrow');
-    expect(formatDue('2026-10-27', IST, NOW)).toBe('Due Tue');
-    expect(formatDue('2026-10-28', IST, NOW)).toBe('Due Wed');
-    expect(formatDue('2026-12-12', IST, NOW)).toBe('Due 12 Dec');
-    expect(formatDue('2027-01-05', IST, NOW)).toBe('Due 5 Jan 2027');
+    expect(formatDue('2026-10-25', IST, NOW)).toBe('Today');
+    expect(formatDue('2026-10-26', IST, NOW)).toBe('Tomorrow');
+    expect(formatDue('2026-10-27', IST, NOW)).toBe('Tue');
+    expect(formatDue('2026-10-28', IST, NOW)).toBe('Wed');
+    expect(formatDue('2026-12-12', IST, NOW)).toBe('12 Dec');
+    expect(formatDue('2027-01-05', IST, NOW)).toBe('5 Jan 2027');
   });
   it('week boundary: 6 days ahead is the weekday, 7 days ahead is the day', () => {
-    expect(formatDue('2026-10-31', IST, NOW)).toBe('Due Sat');
-    expect(formatDue('2026-11-01', IST, NOW)).toBe('Due 1 Nov');
+    expect(formatDue('2026-10-31', IST, NOW)).toBe('Sat');
+    expect(formatDue('2026-11-01', IST, NOW)).toBe('1 Nov');
   });
   it('a past day reads its date (callers show formatOverdue unless approved)', () => {
-    expect(formatDue('2026-10-20', IST, NOW)).toBe('Due 20 Oct');
+    expect(formatDue('2026-10-20', IST, NOW)).toBe('20 Oct');
   });
   it('a stored instant reads its day on the workspace zone', () => {
     // Noon IST on 28 Oct is still 27 Oct 23:30 in Los Angeles.
-    expect(formatDue('2026-10-28T06:30:00Z', IST, NOW)).toBe('Due Wed');
-    expect(formatDue('2026-10-28T06:30:00Z', LA, NOW)).toBe('Due Tue');
+    expect(formatDue('2026-10-28T06:30:00Z', IST, NOW)).toBe('Wed');
+    expect(formatDue('2026-10-28T06:30:00Z', LA, NOW)).toBe('Tue');
   });
   it('across midnight: Los Angeles is still on the 5th, Kolkata on the 6th', () => {
     const beforeLa = new Date('2026-11-06T07:59:00Z'); // 5 Nov 23:59 PST
     const afterLa = new Date('2026-11-06T08:01:00Z'); // 6 Nov 00:01 PST
-    expect(formatDue('2026-11-06', LA, beforeLa)).toBe('Due tomorrow');
-    expect(formatDue('2026-11-06', LA, afterLa)).toBe('Due today');
-    expect(formatDue('2026-11-06', IST, beforeLa)).toBe('Due today');
-    expect(formatDue('2026-11-12', LA, beforeLa)).toBe('Due 12 Nov');
-    expect(formatDue('2026-11-12', LA, afterLa)).toBe('Due Thu');
+    expect(formatDue('2026-11-06', LA, beforeLa)).toBe('Tomorrow');
+    expect(formatDue('2026-11-06', LA, afterLa)).toBe('Today');
+    expect(formatDue('2026-11-06', IST, beforeLa)).toBe('Today');
+    expect(formatDue('2026-11-12', LA, beforeLa)).toBe('12 Nov');
+    expect(formatDue('2026-11-12', LA, afterLa)).toBe('Thu');
   });
   it('across a month end', () => {
     const now = new Date('2026-10-31T12:00:00Z');
-    expect(formatDue('2026-11-01', 'UTC', now)).toBe('Due tomorrow');
-    expect(formatDue('2026-11-03', 'UTC', now)).toBe('Due Tue');
-    expect(formatDue('2026-11-06', 'UTC', now)).toBe('Due Fri');
-    expect(formatDue('2026-11-07', 'UTC', now)).toBe('Due 7 Nov');
+    expect(formatDue('2026-11-01', 'UTC', now)).toBe('Tomorrow');
+    expect(formatDue('2026-11-03', 'UTC', now)).toBe('Tue');
+    expect(formatDue('2026-11-06', 'UTC', now)).toBe('Fri');
+    expect(formatDue('2026-11-07', 'UTC', now)).toBe('7 Nov');
   });
   it("across a year change: the year shows only off now's year in that zone", () => {
     const now = new Date('2026-12-31T20:00:00Z'); // LA 31 Dec 12:00; IST 1 Jan 01:30
-    expect(formatDue('2027-01-01', LA, now)).toBe('Due tomorrow');
-    expect(formatDue('2027-01-01', IST, now)).toBe('Due today');
-    expect(formatDue('2027-01-02', LA, now)).toBe('Due Sat');
-    expect(formatDue('2027-01-03', IST, now)).toBe('Due Sun');
-    expect(formatDue('2027-02-15', IST, now)).toBe('Due 15 Feb');
-    expect(formatDue('2027-02-15', LA, now)).toBe('Due 15 Feb 2027');
+    expect(formatDue('2027-01-01', LA, now)).toBe('Tomorrow');
+    expect(formatDue('2027-01-01', IST, now)).toBe('Today');
+    expect(formatDue('2027-01-02', LA, now)).toBe('Sat');
+    expect(formatDue('2027-01-03', IST, now)).toBe('Sun');
+    expect(formatDue('2027-02-15', IST, now)).toBe('15 Feb');
+    expect(formatDue('2027-02-15', LA, now)).toBe('15 Feb 2027');
   });
   it('unparseable is empty', () => {
     expect(formatDue('nope', IST, NOW)).toBe('');
@@ -257,25 +257,26 @@ describe('formatDue: a due day on the workspace zone', () => {
 
 describe('formatOverdue and daysFromToday', () => {
   it('days under a week, then weeks, months, years; singular forms; always bad', () => {
-    expect(formatOverdue('2026-10-24', IST, NOW)).toEqual({ text: 'Overdue 1d', bad: true });
-    expect(formatOverdue('2026-10-23', IST, NOW)).toEqual({ text: 'Overdue 2d', bad: true });
-    expect(formatOverdue('2026-10-11', IST, NOW).text).toBe('Overdue 2w');
-    expect(formatOverdue('2026-09-26', IST, NOW).text).toBe('Overdue 4w');
-    expect(formatOverdue('2026-09-25', IST, NOW).text).toBe('Overdue 1mo');
-    expect(formatOverdue('2026-08-26', IST, NOW).text).toBe('Overdue 1mo');
-    expect(formatOverdue('2026-08-25', IST, NOW).text).toBe('Overdue 2mo');
-    expect(formatOverdue('2026-05-01', IST, NOW).text).toBe('Overdue 5mo');
-    expect(formatOverdue('2025-10-26', IST, NOW).text).toBe('Overdue 11mo');
-    expect(formatOverdue('2025-10-25', IST, NOW).text).toBe('Overdue 1y');
-    expect(formatOverdue('2024-10-01', IST, NOW).text).toBe('Overdue 2y');
+    expect(formatOverdue('2026-10-24', IST, NOW)).toEqual({ text: '1d late', bad: true });
+    expect(formatOverdue('2026-10-23', IST, NOW)).toEqual({ text: '2d late', bad: true });
+    expect(formatOverdue('2026-10-11', IST, NOW).text).toBe('2w late');
+    expect(formatOverdue('2026-09-26', IST, NOW).text).toBe('4w late');
+    expect(formatOverdue('2026-09-25', IST, NOW).text).toBe('1mo late');
+    expect(formatOverdue('2026-08-26', IST, NOW).text).toBe('1mo late');
+    expect(formatOverdue('2026-08-25', IST, NOW).text).toBe('2mo late');
+    expect(formatOverdue('2026-05-01', IST, NOW).text).toBe('5mo late');
+    expect(formatOverdue('2025-10-26', IST, NOW).text).toBe('11mo late');
+    expect(formatOverdue('2025-10-25', IST, NOW).text).toBe('1y late');
+    expect(formatOverdue('2024-10-01', IST, NOW).text).toBe('2y late');
   });
   it('week boundary: 6 days late is "6d", 7 days late is "1w"', () => {
-    expect(formatOverdue('2026-10-19', IST, NOW).text).toBe('Overdue 6d');
-    expect(formatOverdue('2026-10-18', IST, NOW).text).toBe('Overdue 1w');
+    expect(formatOverdue('2026-10-19', IST, NOW).text).toBe('6d late');
+    expect(formatOverdue('2026-10-18', IST, NOW).text).toBe('1w late');
   });
-  it('never the old "Overdue ·" form, nor the long "Overdue N days"', () => {
+  it('never "Overdue", the old "·" form, nor the long "N days"', () => {
     for (const day of ['2026-10-24', '2026-10-12', '2026-09-25', '2026-05-01', 'nope']) {
       expect(formatOverdue(day, IST, NOW).text).not.toContain('·');
+      expect(formatOverdue(day, IST, NOW).text).not.toContain('Overdue');
       expect(formatOverdue(day, IST, NOW).text).not.toMatch(/\d+ (day|week|month|year)/);
     }
   });
@@ -287,29 +288,29 @@ describe('formatOverdue and daysFromToday', () => {
     expect(daysFromToday(due, IST, afterMidnight)).toBe(-1);
     // A Los Angeles viewer's own clock is still on the 24th; the workspace rule holds anyway.
     expect(civilDay(afterMidnight, LA)).toBe('2026-10-24');
-    expect(formatOverdue(due, IST, afterMidnight)).toEqual({ text: 'Overdue 1d', bad: true });
+    expect(formatOverdue(due, IST, afterMidnight)).toEqual({ text: '1d late', bad: true });
   });
   it('across midnight in America/Los_Angeles', () => {
     const now = new Date('2026-11-06T08:01:00Z'); // 6 Nov 00:01 PST
-    expect(formatOverdue('2026-11-05', LA, now).text).toBe('Overdue 1d');
-    expect(formatOverdue('2026-10-30', LA, now).text).toBe('Overdue 1w');
-    expect(formatOverdue('2026-10-31', LA, now).text).toBe('Overdue 6d');
+    expect(formatOverdue('2026-11-05', LA, now).text).toBe('1d late');
+    expect(formatOverdue('2026-10-30', LA, now).text).toBe('1w late');
+    expect(formatOverdue('2026-10-31', LA, now).text).toBe('6d late');
   });
   it('across a month end in America/Los_Angeles', () => {
     const now = new Date('2026-11-01T05:00:00Z'); // LA 31 Oct 22:00; UTC 1 Nov
     expect(daysFromToday('2026-10-31', LA, now)).toBe(0);
     expect(daysFromToday('2026-10-31', 'UTC', now)).toBe(-1);
-    expect(formatOverdue('2026-10-31', 'UTC', now).text).toBe('Overdue 1d');
-    expect(formatOverdue('2026-09-30', LA, now).text).toBe('Overdue 1mo');
+    expect(formatOverdue('2026-10-31', 'UTC', now).text).toBe('1d late');
+    expect(formatOverdue('2026-09-30', LA, now).text).toBe('1mo late');
   });
   it('across a year change', () => {
     const now = new Date('2027-01-01T03:00:00Z'); // IST 1 Jan 08:30; LA 31 Dec 19:00
     expect(daysFromToday('2026-12-31', IST, now)).toBe(-1);
     expect(daysFromToday('2026-12-31', LA, now)).toBe(0);
-    expect(formatOverdue('2026-12-31', IST, now).text).toBe('Overdue 1d');
-    expect(formatOverdue('2026-12-25', IST, now).text).toBe('Overdue 1w');
-    expect(formatOverdue('2026-11-30', IST, now).text).toBe('Overdue 1mo');
-    expect(formatOverdue('2026-01-01', IST, now).text).toBe('Overdue 1y');
+    expect(formatOverdue('2026-12-31', IST, now).text).toBe('1d late');
+    expect(formatOverdue('2026-12-25', IST, now).text).toBe('1w late');
+    expect(formatOverdue('2026-11-30', IST, now).text).toBe('1mo late');
+    expect(formatOverdue('2026-01-01', IST, now).text).toBe('1y late');
   });
   it('daysFromToday: 0 today, 1 tomorrow, -1 yesterday, undefined unparseable', () => {
     expect(daysFromToday('2026-10-25', IST, NOW)).toBe(0);
@@ -317,48 +318,57 @@ describe('formatOverdue and daysFromToday', () => {
     expect(daysFromToday('2026-10-24', IST, NOW)).toBe(-1);
     expect(daysFromToday('nope', IST, NOW)).toBeUndefined();
   });
-  it('unparseable reads plain "Overdue"', () => {
-    expect(formatOverdue('nope', IST, NOW)).toEqual({ text: 'Overdue', bad: true });
+  it('unparseable reads plain "Late"', () => {
+    expect(formatOverdue('nope', IST, NOW)).toEqual({ text: 'Late', bad: true });
   });
 });
 
-describe('formatPlanStart', () => {
-  it('ahead: today, tomorrow, the weekday 2-6 days ahead, then the day', () => {
-    expect(formatPlanStart('2026-10-25', IST, NOW)).toBe('Starts today');
-    expect(formatPlanStart('2026-10-26', IST, NOW)).toBe('Starts tomorrow');
-    expect(formatPlanStart('2026-10-27', IST, NOW)).toBe('Starts Tue');
-    expect(formatPlanStart('2026-10-31', IST, NOW)).toBe('Starts Sat');
-    expect(formatPlanStart('2026-11-01', IST, NOW)).toBe('Starts 1 Nov');
-    expect(formatPlanStart('2026-12-12', IST, NOW)).toBe('Starts 12 Dec');
-    expect(formatPlanStart('2027-03-01', IST, NOW)).toBe('Starts 1 Mar 2027');
+describe('formatPlanStart: plan words on the workspace zone', () => {
+  it('up to the start: Today, Tomorrow, the weekday 2-6 days ahead, then the day', () => {
+    expect(formatPlanStart('2026-10-25', IST, NOW)).toBe('Today');
+    expect(formatPlanStart('2026-10-26', IST, NOW)).toBe('Tomorrow');
+    expect(formatPlanStart('2026-10-27', IST, NOW)).toBe('Tue');
+    expect(formatPlanStart('2026-10-31', IST, NOW)).toBe('Sat');
+    expect(formatPlanStart('2026-11-01', IST, NOW)).toBe('1 Nov');
+    expect(formatPlanStart('2026-12-12', IST, NOW)).toBe('12 Dec');
+    expect(formatPlanStart('2027-03-01', IST, NOW)).toBe('1 Mar 2027');
   });
-  it('behind: "Started 1d ago" .. "6d", then weeks, months, years', () => {
-    expect(formatPlanStart('2026-10-24', IST, NOW)).toBe('Started 1d ago');
-    expect(formatPlanStart('2026-10-22', IST, NOW)).toBe('Started 3d ago');
-    expect(formatPlanStart('2026-10-19', IST, NOW)).toBe('Started 6d ago');
-    expect(formatPlanStart('2026-10-18', IST, NOW)).toBe('Started 1w ago');
-    expect(formatPlanStart('2026-09-25', IST, NOW)).toBe('Started 1mo ago');
-    expect(formatPlanStart('2026-08-20', IST, NOW)).toBe('Started 2mo ago');
-    expect(formatPlanStart('2025-09-01', IST, NOW)).toBe('Started 1y ago');
+  it('started and the end day not passed: "Live"', () => {
+    expect(formatPlanStart('2026-10-24', IST, NOW, '2026-10-30')).toBe('Live');
+    expect(formatPlanStart('2026-10-19', IST, NOW, '2026-10-25')).toBe('Live');
+    expect(formatPlanStart('2026-10-24', IST, NOW)).toBe('Live');
+    expect(formatPlanStart('2026-10-24', IST, NOW, null)).toBe('Live');
   });
-  it('across midnight in America/Los_Angeles and Asia/Kolkata', () => {
+  it('the end day passed: the end day as a date ("1 Nov"; the year off-year)', () => {
+    expect(formatPlanStart('2026-10-12', IST, NOW, '2026-10-18')).toBe('18 Oct');
+    expect(formatPlanStart('2026-10-18', IST, NOW, '2026-10-24')).toBe('24 Oct');
+    expect(formatPlanStart('2025-12-01', IST, NOW, '2025-12-07')).toBe('7 Dec 2025');
+  });
+  it('never the old "Starts" / "Started" words', () => {
+    for (const day of ['2026-10-25', '2026-10-27', '2026-12-12', '2026-10-24', '2026-09-01']) {
+      expect(formatPlanStart(day, IST, NOW, '2026-10-30')).not.toMatch(/Start/);
+    }
+  });
+  it('flips at workspace midnight in America/Los_Angeles and Asia/Kolkata', () => {
     const now = new Date('2026-11-06T07:59:00Z'); // LA 5 Nov 23:59; IST 6 Nov 13:29
-    expect(formatPlanStart('2026-11-06', LA, now)).toBe('Starts tomorrow');
-    expect(formatPlanStart('2026-11-06', IST, now)).toBe('Starts today');
-    expect(formatPlanStart('2026-11-05', IST, now)).toBe('Started 1d ago');
-    expect(formatPlanStart('2026-11-05', LA, now)).toBe('Starts today');
+    expect(formatPlanStart('2026-11-06', LA, now)).toBe('Tomorrow');
+    expect(formatPlanStart('2026-11-06', IST, now)).toBe('Today');
+    expect(formatPlanStart('2026-11-05', IST, now, '2026-11-11')).toBe('Live');
+    expect(formatPlanStart('2026-11-05', LA, now, '2026-11-11')).toBe('Today');
+    expect(formatPlanStart('2026-10-30', IST, now, '2026-11-05')).toBe('5 Nov');
+    expect(formatPlanStart('2026-10-30', LA, now, '2026-11-05')).toBe('Live');
   });
   it('across a month end', () => {
     const now = new Date('2026-10-31T12:00:00Z');
-    expect(formatPlanStart('2026-11-02', 'UTC', now)).toBe('Starts Mon');
-    expect(formatPlanStart('2026-10-30', 'UTC', now)).toBe('Started 1d ago');
+    expect(formatPlanStart('2026-11-02', 'UTC', now)).toBe('Mon');
+    expect(formatPlanStart('2026-10-30', 'UTC', now, '2026-11-05')).toBe('Live');
   });
   it('across a year change', () => {
     const now = new Date('2026-12-31T20:00:00Z'); // LA 31 Dec; IST 1 Jan 2027
-    expect(formatPlanStart('2027-01-01', LA, now)).toBe('Starts tomorrow');
-    expect(formatPlanStart('2027-01-01', IST, now)).toBe('Starts today');
-    expect(formatPlanStart('2026-12-30', IST, now)).toBe('Started 2d ago');
-    expect(formatPlanStart('2027-01-07', IST, now)).toBe('Starts Thu');
+    expect(formatPlanStart('2027-01-01', LA, now)).toBe('Tomorrow');
+    expect(formatPlanStart('2027-01-01', IST, now)).toBe('Today');
+    expect(formatPlanStart('2026-12-24', IST, now, '2026-12-30')).toBe('30 Dec 2026');
+    expect(formatPlanStart('2027-01-07', IST, now)).toBe('Thu');
   });
   it('unparseable is empty', () => {
     expect(formatPlanStart('nope', IST, NOW)).toBe('');
@@ -446,7 +456,7 @@ describe('due dates are calendar days on the workspace zone', () => {
 
   it('a noon-IST target date reads 28 Oct for every viewer', () => {
     expect(formatDueDate(TARGET, IST, NOW)).toBe('28 Oct');
-    expect(formatDue(TARGET, IST, NOW)).toBe('Due Wed');
+    expect(formatDue(TARGET, IST, NOW)).toBe('Wed');
     // On the device clock a Los Angeles viewer would have seen the 27th; Auckland the 28th.
     expect(formatDate(TARGET, NOW, LA)).toBe('27 Oct');
     expect(formatDate(TARGET, NOW, AKL)).toBe('28 Oct');
@@ -457,7 +467,7 @@ describe('due dates are calendar days on the workspace zone', () => {
   it('a null workspace zone degrades to the device zone, never throws', () => {
     expect(formatDueDate('2026-10-28', null, NOW)).toBe('28 Oct');
     // A date-only day 2-6 days ahead reads its own weekday on any zone.
-    expect(formatDue('2026-10-28', undefined, NOW)).toBe('Due Wed');
+    expect(formatDue('2026-10-28', undefined, NOW)).toBe('Wed');
   });
 
   it('plan ranges read on the workspace zone', () => {

@@ -139,7 +139,7 @@ function listProps(
   };
 }
 
-describe('Activity: the day line and the card trailing rule', () => {
+describe('Activity: the day line and the card with no trailing ⋯', () => {
   it('"YESTERDAY · 1 update" and Mark all read share one 44 line; no avatar beside the label', () => {
     const page = src('pages/NotificationsPage.tsx');
     expect(page).toMatch(/data-activity-bucket-head=""[\s\S]{0,120}?h-11/);
@@ -149,7 +149,7 @@ describe('Activity: the day line and the card trailing rule', () => {
     expect(page).not.toContain('AvatarStack');
   });
 
-  it("the card's ⋯ glyph ends on the 16 content edge: TRAILING_PULL only, no extra pull", () => {
+  it('the card has no ⋯ at all; the ListCard body is the 12 inset', () => {
     const html = renderToStaticMarkup(
       <ActivityCard
         group={[item({ id: 'a' })]}
@@ -158,16 +158,16 @@ describe('Activity: the day line and the card trailing rule', () => {
         presignEnabled={false}
         onOpenGroup={() => {}}
         onOpenEntry={() => {}}
-        onSnooze={() => {}}
-        onMarkRead={() => {}}
         selfName={null}
       />,
     );
-    expect(classOf(html, 'aria-label="Activity options"').split(' ')).toContain(TRAILING_PULL);
-    expect(classOf(html, 'data-activity-menu=""')).not.toMatch(/-mr-/);
-    // The ListCard body is the 16 inset (no 14px one-offs left).
+    expect(html).not.toContain('Activity options');
+    expect(html).not.toContain('data-activity-menu');
+    expect(html).not.toContain(TRAILING_PULL);
+    // The ListCard body is the 12 inset (no 14px one-offs left).
     expect(html).toContain('data-list-card=""');
-    expect(html).toMatch(/data-list-card-body="" class="[^"]*\bp-4\b/);
+    expect(html).toMatch(/data-list-card-body="" class="[^"]*\bp-3\b/);
+    expect(html).not.toMatch(/data-list-card-body="" class="[^"]*\bp-4\b/);
     expect(html).not.toContain('[14px]');
   });
 });

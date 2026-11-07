@@ -171,6 +171,9 @@ describe('copy', () => {
     expect(showToClientWarning(['Manisha'], 4)).toBe(
       'Manisha will see this idea and all 4 comments, team ones included.',
     );
+    expect(showToClientWarning(['Manisha'], 1, 3)).toBe(
+      'Manisha will see these 3 ideas and all 1 comment, team ones included.',
+    );
   });
 
   it('maps the known errors', () => {

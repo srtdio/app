@@ -2,11 +2,15 @@ import { expect, test, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
 import { WORKSPACE_ID } from '../fixtures/chat-data';
 import { expectMinTouchTarget } from '../helpers/touch-target';
+import { selectBar, selectBarAction, selectGesture } from '../helpers/select-mode';
+import { undoStrip } from '../helpers/undo-strip';
 
-// Assets multi-select starts from a card's ⋮ menu (ui/ListCard): its Select row
-// selects that file. While selecting, the 20 tick box takes the ⋮'s place, the
-// header shows Cancel, the count and Select all; on a phone Delete sits in a bar
-// at the bottom (there is no Move: Assets has no folders). The "New file" menu
+// Assets multi-select (ui/ListCard `select`, ui/SelectBar): a long-press (or a
+// right-click on laptop) on a card enters select mode with that file ticked.
+// No card carries a ⋮. While selecting, the tick sits on the picture, a tap
+// toggles, and the bottom bar shows Cancel, "N selected", Select all and the
+// old ⋮ rows: the one-file rows only with exactly one ticked, Delete for any
+// count (Undo). There is no Move (Assets has no folders). The "New file" menu
 // offers no Select. Tagged @theme for light and dark.
 
 const AT = Date.parse('2026-10-01T09:00:00Z');
@@ -49,14 +53,22 @@ function seedAssets(network: HarnessNetwork): void {
   });
 }
 
-const menus = (page: Page) => page.locator('[data-card-menu]');
-const ticks = (page: Page) => page.locator('[data-card-tick]');
+const cards = (page: Page) => page.locator('[data-asset-card]');
+const card = (page: Page, name: string) => cards(page).filter({ hasText: name });
+const ticks = (page: Page, state: 'on' | 'off' | 'hidden') =>
+  page.locator(`[data-asset-card] [data-list-card-tick="${state}"]`);
 
-test('a card ⋮ Select row selects it; Cancel, Select all and Delete @theme', async ({ page }) => {
+test('a long-press selects a file; tap toggles; Cancel, Select all and Delete @theme', async ({
+  page,
+}) => {
   const network = await installHarnessNetwork(page);
   seedAssets(network);
   await page.goto('/assets');
-  await expect(menus(page)).toHaveCount(3, { timeout: 15_000 });
+  await expect(cards(page)).toHaveCount(3, { timeout: 15_000 });
+
+  // No card carries a ⋮; the ticks are hidden until select mode.
+  await expect(page.locator('[data-asset-card] [aria-label^="More actions"]')).toHaveCount(0);
+  await expect(ticks(page, 'hidden')).toHaveCount(3);
 
   // The "New file" menu offers upload and link, and no Select.
   await page.getByRole('button', { name: 'New file' }).click();
@@ -65,48 +77,54 @@ test('a card ⋮ Select row selects it; Cancel, Select all and Delete @theme', a
   await expect(page.getByRole('menuitem', { name: 'Select' })).toHaveCount(0);
   await page.keyboard.press('Escape');
 
-  // Every ⋮ is a 44px target; nothing sits in the picture's corner.
-  for (const menu of await menus(page).all()) expectMinTouchTarget(await menu.boundingBox());
-  await expect(page.locator('[data-card-select]')).toHaveCount(0);
+  // The long-press: selecting, with that file ticked; the card keeps its height.
+  const first = card(page, 'Logo.png');
+  const heightBefore = (await first.boundingBox())?.height;
+  await selectGesture(page, first);
+  const bar = selectBar(page);
+  await expect(bar.locator('[data-select-bar-count]')).toHaveText('1 selected');
+  await expect(first).toHaveAttribute('data-list-card-selecting', '');
+  await expect(first.locator('[data-list-card-tick]')).toHaveAttribute('data-list-card-tick', 'on');
+  await expect(ticks(page, 'off')).toHaveCount(2);
+  expect((await first.boundingBox())?.height).toBe(heightBefore);
 
-  // The ⋮ Select row: selecting, with that file ticked.
-  const firstCard = page.locator('[data-asset-card]').first();
-  const heightBefore = (await firstCard.boundingBox())?.height;
-  await page.getByRole('button', { name: 'More actions for Logo.png', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Select' }).click();
-  const bar = page.locator('[data-select-bar]');
-  await expect(bar).toContainText('1 selected');
-  await expect(page.getByRole('button', { name: 'Select Logo.png' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
-  // The tick takes the ⋮'s place on every card; the card keeps its height.
-  await expect(menus(page)).toHaveCount(0);
-  await expect(ticks(page)).toHaveCount(3);
-  await expect(page.locator('[data-card-tick="on"]')).toHaveCount(1);
-  expect((await firstCard.boundingBox())?.height).toBe(heightBefore);
-
-  const actions = page.locator('[data-select-actions]');
-  await expect(actions).toBeVisible();
-  const del = actions.getByRole('button', { name: 'Delete 1' });
+  // One file ticked: its one-file rows (Copy link, Info) and Delete, each a 44 target.
+  await expect(selectBarAction(page, 'copy-link')).toBeVisible();
+  await expect(selectBarAction(page, 'info')).toBeVisible();
+  const del = selectBarAction(page, 'delete');
   await expect(del).toBeEnabled();
+  await expect(del).toHaveAccessibleName('Delete');
   expectMinTouchTarget(await del.boundingBox());
-  await expect(page.getByRole('button', { name: 'Move' })).toHaveCount(0);
+  await expect(bar.getByRole('button', { name: 'Move' })).toHaveCount(0);
 
-  // Tapping another card adds it; Select all takes the rest.
-  await page.getByRole('button', { name: 'Select Lookbook.pdf' }).click();
-  await expect(bar).toContainText('2 selected');
+  // A tap on another card adds it (it never opens the viewer); the one-file rows go.
+  await card(page, 'Lookbook.pdf').click();
+  await expect(bar.locator('[data-select-bar-count]')).toHaveText('2 selected');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(selectBarAction(page, 'copy-link')).toHaveCount(0);
+  await expect(selectBarAction(page, 'info')).toHaveCount(0);
+  await expect(selectBarAction(page, 'delete')).toBeVisible();
+
+  // Select all takes the rest.
   await bar.getByRole('button', { name: 'Select all' }).click();
-  await expect(bar).toContainText('3 selected');
-  await expect(actions.getByRole('button', { name: 'Delete 3' })).toBeVisible();
+  await expect(bar.locator('[data-select-bar-count]')).toHaveText('3 selected');
+  await expect(ticks(page, 'on')).toHaveCount(3);
 
-  // Cancel leaves selecting: the ⋮ and tabs come back, the bar goes.
-  const cancel = bar.getByRole('button', { name: 'Cancel' });
+  // Cancel leaves selecting: the bar goes, the ticks hide, the tabs stay.
+  const cancel = bar.locator('[data-select-bar-cancel]');
   expectMinTouchTarget(await cancel.boundingBox());
   await cancel.click();
-  await expect(actions).toHaveCount(0);
-  await expect(menus(page)).toHaveCount(3);
-  await expect(ticks(page)).toHaveCount(0);
+  await expect(bar).toHaveCount(0);
+  await expect(ticks(page, 'hidden')).toHaveCount(3);
   await expect(page.getByRole('tablist', { name: 'File types' })).toBeVisible();
+
+  // Delete from the bar: the file leaves the list at once, with Undo.
+  await selectGesture(page, card(page, 'Reel.mp4'));
+  await expect(bar.locator('[data-select-bar-count]')).toHaveText('1 selected');
+  await selectBarAction(page, 'delete').click();
+  await expect(bar).toHaveCount(0);
+  await expect(card(page, 'Reel.mp4')).toHaveCount(0);
+  await expect(cards(page)).toHaveCount(2);
+  await expect(undoStrip(page)).toBeVisible();
   expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
 });

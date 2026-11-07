@@ -265,10 +265,19 @@ export function approverNames(
     .sort((a, b) => a.localeCompare(b));
 }
 
-/** "{names} will see this idea and all {n} comments, team ones included." Pure. */
-export function showToClientWarning(names: readonly string[], comments: number): string {
+/**
+ * "{names} will see this idea and all {n} comments, team ones included."; for
+ * several ideas at once (the select bar) "{names} will see these 3 ideas and
+ * all {n} comments, team ones included." Pure.
+ */
+export function showToClientWarning(
+  names: readonly string[],
+  comments: number,
+  ideas: number = 1,
+): string {
   const who = joinNames(names);
-  return `${who} will see this idea and all ${comments} ${comments === 1 ? 'comment' : 'comments'}, team ones included.`;
+  const what = ideas > 1 ? `these ${ideas} ideas` : 'this idea';
+  return `${who} will see ${what} and all ${comments} ${comments === 1 ? 'comment' : 'comments'}, team ones included.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -298,11 +307,6 @@ export async function runLimited<T>(
   };
   await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()));
   return out;
-}
-
-/** "{n} selected". Pure. */
-export function selectedLabel(n: number): string {
-  return `${n} selected`;
 }
 
 /**

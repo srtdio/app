@@ -1,13 +1,9 @@
 // Layout B-final, Pipeline + post screen: the Pipeline card renders
-// ui/ListCard (slots, the trailing rule on its ⋮, the one height), the list is
+// ui/ListCard (slots, no ⋮, the one 74 height, select mode), the list is
 // LIST_CARD_GRID on phone and laptop, the one post placeholder, the post
 // screen's top bar is ui/HeaderBar, and a running decision keeps its button
 // width (Button busy).
-import { describe, expect, it, vi } from 'vitest';
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => true,
-}));
+import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { PostCard } from '@/components/pages/PostCard';
@@ -18,7 +14,6 @@ import { Card } from '@/components/ui/Card';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { PostPlaceholder, postPlaceholderKind } from '@/components/ui/PostPlaceholder';
 import { PostDecisionRow, type DecisionModel } from '@/components/pages/pcs/PostDecisionBar';
-import { TRAILING_PULL } from '@/components/ui/layout';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { PipelinePost } from '@srtdio/posts';
 
@@ -68,39 +63,50 @@ function card(props: Partial<PostCardProps> = {}): string {
 }
 
 describe('Pipeline card is ui/ListCard', () => {
-  it('renders the part: frame, 16 inset, one press surface behind the content', () => {
-    const out = card({ onMove: () => {} });
+  it('renders the part: frame, 12 inset, one press surface behind the content', () => {
+    const out = card({ viewer: { role: 'agency', approverFirstNames: [] } });
     expect(out).toContain('data-list-card=""');
     expect(out).toContain('lit-card');
     expect(out).toContain('rounded-xl');
-    expect(out).toContain('p-4');
+    expect(out).toMatch(/data-list-card-body=""[^>]*class="[^"]*\bp-3\b/);
+    expect(out).not.toMatch(/\bp-4\b/);
     expect(out).not.toContain('data-card=""');
     expect(out).toContain('data-list-card-press=""');
     expect(out).toContain('aria-label="Open post Post title"');
     expect(out.indexOf('data-list-card-press')).toBeLessThan(out.indexOf('data-list-card-body'));
   });
 
-  it('the ⋮ is the ListCard trailing slot with the trailing rule (glyph on the content edge)', () => {
-    const out = card({ onMove: () => {} });
-    const button = /<button[^>]*data-post-card-move=""[^>]*>/.exec(out)?.[0] ?? '';
-    expect(button).toContain(TRAILING_PULL);
-    expect(out).toMatch(/data-list-card-more="" class="[^"]*pointer-events-auto[^"]*-my-3/);
+  it('no ⋮ on the card: its rows live on the Pipeline select bar', () => {
+    const out = card({ viewer: { role: 'agency', approverFirstNames: [] } });
+    expect(out).not.toContain('data-post-card-move');
+    expect(out).not.toContain('data-list-card-more');
+    expect(out).not.toContain('Actions for');
   });
 
-  it('a text post shows "Aa"; the stage is the one grey ui/Tag on line 3', () => {
+  it('a text post shows "Aa"; the stage is the one grey ui/Tag with its dot on line 2', () => {
     const out = card({ post: post({ stage: 'draft' }) });
     expect(out).toContain('data-post-placeholder="text"');
     expect(out).toMatch(/data-post-card-stage="draft"[^>]*><span class="[^"]*lit-pill/);
     expect(out).not.toContain('bg-stage-draft');
+    const review = card({ post: post({ stage: 'review' }) });
+    expect(review).toMatch(/data-post-card-stage="review"[^>]*><span class="[^"]*bg-panel-2/);
+    expect(review).toContain('bg-stage-review');
+    const line2 = review.slice(review.indexOf('data-list-card-line="2"'));
+    expect(line2).toContain('data-post-card-stage="review"');
+    expect(review).not.toContain('data-list-card-line="3"');
   });
 
-  it('line 2 keeps its two-line height while the role loads, and once the status line lands', () => {
+  it('two lines whether the role is loading or known; no line-clamp-2, no min-h-9', () => {
     const pending = card({ viewer: { role: null, approverFirstNames: [], pending: true } });
     expect(pending).not.toContain('data-post-card-status');
-    expect(pending).toMatch(/data-list-card-preview=""[^>]*class="[^"]*\bmin-h-9\b/);
     const known = card({ viewer: { role: 'agency', approverFirstNames: ['Meera'] } });
     expect(known).toContain('data-post-card-status="with"');
-    expect(known).toMatch(/data-list-card-preview=""[^>]*class="[^"]*\bmin-h-9\b/);
+    for (const out of [pending, known]) {
+      expect(out).toContain('data-list-card-line="1"');
+      expect(out).toContain('data-list-card-line="2"');
+      expect(out).not.toContain('line-clamp-2');
+      expect(out).not.toMatch(/\bmin-h-9\b/);
+    }
   });
 
   it('a video with no poster shows the one post placeholder (play glyph)', () => {
@@ -119,7 +125,6 @@ describe('Pipeline list is LIST_CARD_GRID', () => {
           activeStage="all"
           cache={cache}
           presignEnabled={false}
-          onLongPressPost={() => {}}
         />
       </MemoryRouter>,
     );
@@ -127,6 +132,30 @@ describe('Pipeline list is LIST_CARD_GRID', () => {
     expect(out.match(/data-list-card=""/g)?.length).toBe(2);
     expect(out).not.toContain('data-board');
     expect(out).not.toContain('grid-cols-2');
+    // No select mode wired: no ticks.
+    expect(out).not.toContain('data-list-card-tick');
+  });
+
+  it('selectFor threads select mode to every card', () => {
+    const out = renderToStaticMarkup(
+      <MemoryRouter>
+        <PipelineFeed
+          posts={[post({ id: 'a' }), post({ id: 'b' })]}
+          activeStage="all"
+          cache={cache}
+          presignEnabled={false}
+          selectFor={(id) => ({
+            active: true,
+            chosen: id === 'a',
+            onEnter: () => {},
+            onToggle: () => {},
+          })}
+        />
+      </MemoryRouter>,
+    );
+    expect(out.match(/data-list-card-selecting=""/g)?.length).toBe(2);
+    expect(out.match(/data-list-card-tick="on"/g)?.length).toBe(1);
+    expect(out.match(/data-list-card-tick="off"/g)?.length).toBe(1);
   });
 });
 

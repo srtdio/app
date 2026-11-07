@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { KeyboardEvent, MouseEvent, PointerEvent, ReactElement, ReactNode } from 'react';
+import type { ComponentType, PointerEvent, ReactElement, ReactNode } from 'react';
 import { stripFormat } from '@srtdio/comments';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -11,13 +11,13 @@ import {
   ListCard,
   ListCardBox,
   type ListCardPicture,
+  type ListCardSelect,
 } from '@/components/ui/ListCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
-import { SelectCheck } from '@/components/ui/SelectCheck';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { useLongPress } from '@/components/ui';
-import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
+import { selectCountLabel } from '@/components/ui/SelectBar';
+import { textRole } from '@/components/ui/Text';
 import { Chip } from '@/components/ui/Chip';
 import {
   ICON_SIZE,
@@ -27,13 +27,13 @@ import {
   IconForward,
   IconPlus,
   IconTrash,
+  type IconProps,
 } from '@/components/ui/icons';
 import { useUndoableAction } from '@/lib/use-undoable-action';
 import { cn } from '@/lib/cn';
 import { SHELL_STICKY_TOP_CLASS } from '@/lib/scroll-mode';
 import { BoxSkeleton, GlideItem } from '@/lib/motion';
 import { SettleLanding } from '@/components/chat/SettleLanding';
-import { NotesAvatar } from '@/components/chat/NotesBits';
 import { useCoarsePointer, useHoverPointer } from '@/lib/use-is-laptop';
 import { filterChannelsByName } from '@/lib/channel-filter';
 import type { ChannelSummary } from '@/lib/chat-reads';
@@ -49,7 +49,12 @@ import { sortChannelsByRecency } from '@/lib/chat/sort-conversations';
 import { formatAgo } from '@/lib/time';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { draftText, draftsVersion, subscribeDrafts } from '@/lib/chat/drafts';
-import { mentionNamesIn, resolveMentionPreview, splitAllMentions } from '@/lib/chat/mentions';
+import {
+  mentionNamesIn,
+  personName,
+  resolveMentionPreview,
+  splitAllMentions,
+} from '@/lib/chat/mentions';
 import { leaveSelectionThen } from '@/lib/chat/forward';
 import { summaryIconOfLine } from '@/lib/chat/thread';
 import { SummaryGlyph } from '@/components/chat/ReplyQuote';
@@ -138,14 +143,23 @@ type SummaryLookup = (channelId: string) => ConversationSummary | undefined;
 /** Whether a channel is hidden (deleted for the caller, nothing newer since). */
 type HiddenLookup = (channelId: string) => boolean;
 
-/** Select mode (Apple Messages pattern): check chats, then delete them for me. */
+/**
+ * Select mode: a long-press (touch) or right-click / Shift-click / Cmd-click
+ * (laptop) on a chat enters with that chat ticked (onEnter); a tap toggles;
+ * unticking the last chat leaves. The bottom bar carries Cancel, "N selected"
+ * and the actions (Hide chat; a chip view: Forward, Delete for me).
+ */
 export interface ChannelSelectMode {
   active: boolean;
   selectedIds: ReadonlySet<string>;
+  /** Enter select mode with this chat ticked (a chat card's long-press or right-click). */
+  onEnter: (channelId: string) => void;
+  /** A chip view's header Select: enter with nothing ticked (media items have no long-press). */
   onStart: () => void;
   onCancel: () => void;
+  /** Tick or untick; unticking the last chat leaves select mode (the list's own wiring). */
   onToggle: (channelId: string) => void;
-  /** Hides the checked chats (behind the Undo toast); a chip view: Delete for me. */
+  /** Hide chat for the checked chats (behind the Undo toast); a chip view: Delete for me. */
   onDelete: () => void;
   /**
    * A chip view selects items (messages), not chats: the bar is Forward (when
@@ -222,20 +236,36 @@ interface ChannelListBodyProps extends Omit<ChannelListProps, 'status' | 'onRetr
   summaryFor?: SummaryLookup;
   /** Clock for relative-time labels; defaults to 0 when no summary is supplied. */
   nowMs?: number;
-  /** Present while select mode is on: rows show a leading check and tap toggles. */
-  selecting?: { selectedIds: ReadonlySet<string>; onToggle: (channelId: string) => void };
+  /**
+   * Select mode for the chat cards (absent: long-press and right-click do
+   * nothing). While `active` a tap toggles; outside it a long-press or
+   * right-click enters with that chat ticked. Personal notes is never selectable.
+   */
+  select?: ChatRowSelect;
   /** Unsent draft text per chat; absent in pure tests (no drafts). */
   draftFor?: DraftLookup;
-  /** A row was long-pressed (or right-clicked): open its menu at the row. */
-  onLongPress?: (channel: ChannelSummary, rect: DOMRect | null) => void;
-  /** The chat whose row menu is open, or null. */
-  menuOpenId?: string | null;
-  /** The open row menu closed without a pick. */
-  onMenuClose?: () => void;
-  /** The row menu's Hide chat. */
-  onHide?: (channel: ChannelSummary) => void;
   /** The list's input, read once per list (never per row); touch when absent. */
   input?: ChannelListInput;
+  /** The caller's own name: the Personal notes picture's initials when there is no photo. */
+  ownName?: string | undefined;
+}
+
+/** What the chat cards need of select mode. */
+export interface ChatRowSelect {
+  active: boolean;
+  selectedIds: ReadonlySet<string>;
+  onEnter: (channelId: string) => void;
+  onToggle: (channelId: string) => void;
+}
+
+/** One chat card's ListCard `select`: ticked when its id is selected. Pure. */
+export function chatRowSelectFor(select: ChatRowSelect, channelId: string): ListCardSelect {
+  return {
+    active: select.active,
+    chosen: select.selectedIds.has(channelId),
+    onEnter: () => select.onEnter(channelId),
+    onToggle: () => select.onToggle(channelId),
+  };
 }
 
 /**
@@ -245,9 +275,9 @@ interface ChannelListBodyProps extends Omit<ChannelListProps, 'status' | 'onRetr
 export interface ChannelListInput {
   /** The size table (touch or laptop). */
   layout: ChatLayout;
-  /** A fine hover pointer: the row's hover ⋯ shows. */
+  /** A fine hover pointer (read once for the list; the cards draw no hover control). */
   hoverMenu: boolean;
-  /** A touch-first pointer: long-press owns the row menu, contextmenu is suppressed. */
+  /** A touch-first pointer: the hold alone enters select mode, contextmenu is suppressed. */
   coarsePointer: boolean;
 }
 
@@ -312,8 +342,9 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
             nowMs,
             timeZone,
             selected: notes.channelId === props.selectedChannelId,
-            selecting: props.selecting !== undefined,
+            selecting: props.select?.active === true,
             onSelect: props.onSelect,
+            ownName: props.ownName,
           })}
         </GlideItem>
       );
@@ -341,19 +372,8 @@ export function channelListView(props: ChannelListBodyProps): ReactElement {
           onSelect={props.onSelect}
           {...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {})}
           input={props.input ?? DEFAULT_LIST_INPUT}
-          {...(props.selecting !== undefined
-            ? {
-                checked: props.selecting.selectedIds.has(channel.channelId),
-                onToggle: props.selecting.onToggle,
-              }
-            : {})}
-          {...(props.onLongPress !== undefined
-            ? {
-                onLongPress: props.onLongPress,
-                menuOpen: props.menuOpenId === channel.channelId,
-                ...(props.onMenuClose !== undefined ? { onMenuClose: props.onMenuClose } : {}),
-                ...(props.onHide !== undefined ? { onHide: props.onHide } : {}),
-              }
+          {...(props.select !== undefined
+            ? { select: chatRowSelectFor(props.select, channel.channelId) }
             : {})}
         />
       </GlideItem>
@@ -382,7 +402,7 @@ function skeletonRow(i: number): ReactElement {
 
 /**
  * The loading body: the real list's shape, drawn in the same frame (six
- * uniform cards, the ListCard's one height with its 72 picture, no labels),
+ * uniform cards, the ListCard's one 74 height with its round 48 picture, no labels),
  * so swapping in the list shifts nothing. Each box is a motion
  * Bone (top-lit sweep, never a pulse); no spinner. Shown only when the device
  * holds no list (the store paints a saved list at once).
@@ -444,11 +464,6 @@ export function channelTileLabel(props: {
   return parts.join(', ');
 }
 
-/** Shift+F10 or the ContextMenu key opens a focused row's menu (Enter still opens the chat). */
-export function rowMenuKey(event: { key: string; shiftKey: boolean }): boolean {
-  return event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10');
-}
-
 /** A chat's picture shape: a group is 'wide' (its photo or mark), a DM 'square' (a person). */
 export type TileKind = 'wide' | 'square';
 
@@ -472,54 +487,36 @@ export const CHAT_HOME_STACK = 'flex flex-col gap-2';
 export const CHAT_HOME_EDGE = 'px-4';
 
 /**
- * The one list: one ui/ListCard per chat, 12 between cards, on the home's 16
- * edge. Personal notes, groups and people are one card style.
+ * The one list: one ui/ListCard per chat, 8 between cards (LIST_CARD_STACK),
+ * on the home's 16 edge. Personal notes, groups and people are one card style.
  */
 export const CHAT_ROW_LIST = cn(LIST_CARD_STACK, CHAT_HOME_EDGE);
 
 /**
- * A chat card's photo slot (ListCard's 72 picture): a person's photo circle
- * (initials on their colour when none) or a group's photo or mark in the radius
- * 8 box, so the box is final on first paint.
- */
-export const CHAT_ROW_PHOTO = 'flex shrink-0';
-
-/**
  * A person card's preview when the DM has no message yet: a no-break space,
- * so the line is never collapsed (ListCard reserves its two lines anyway).
+ * so line 2 keeps its 20 line with nothing to read.
  */
 export const EMPTY_PREVIEW = '\u00a0';
 
-/** Row state that picks the row's selected look. */
-export interface ChannelRowState {
-  /** Desktop: this chat is open in the thread pane. */
-  selected: boolean;
-  /** Select mode is on. */
-  selecting: boolean;
-  /** Select mode: this tile is checked. */
-  checked: boolean;
-}
-
 /**
- * Whether the card takes the one selected look (lit-selected): a checked chat
- * in select mode, or the chat open on desktop. Pure.
- */
-export function channelRowSelected(state: ChannelRowState): boolean {
-  return state.selecting ? state.checked : state.selected;
-}
-
-/**
- * The tile's contextmenu on a touch-first pointer: the native menu and callout
- * never show (the long-press opens the tile menu). A laptop's right-click is
- * left alone here. Pure.
+ * The card's contextmenu, caught before the card on a touch-first pointer: the
+ * native menu and callout never show and the hold alone enters select mode (a
+ * contextmenu that trails the hold must not toggle the chat straight back
+ * off). A laptop's right-click is left to the card (it enters select mode).
+ * Pure.
  */
 export function chatRowContextMenu(
   coarsePointer: boolean,
-): ((event: { preventDefault: () => void }) => void) | undefined {
-  return coarsePointer ? (event) => event.preventDefault() : undefined;
+): ((event: { preventDefault: () => void; stopPropagation: () => void }) => void) | undefined {
+  return coarsePointer
+    ? (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    : undefined;
 }
 
-/** The unread tag on line 3: "3 new" ("99+ new"), or null when nothing is unread. Pure. */
+/** The unread tag on line 2: "3 new" ("99+ new"), or null when nothing is unread. Pure. */
 export function unreadTagText(unread: number): string | null {
   const count = unreadPillText(unread);
   return count === null ? null : `${count} new`;
@@ -531,28 +528,26 @@ export interface ChannelRowParts {
   kind: TileKind;
   /** The chat's display name (chatDisplayName). */
   name: string;
-  /** The last message time ('' when there is none): line 3. */
+  /** How long ago the last message landed (formatAgo; '' when there is none): line 1, right. */
   time: string;
-  /** The 72 picture: a person circle, or the group's photo or mark. */
+  /** The 48 picture: a person circle, or the group's photo or mark. */
   picture: ListCardPicture;
   /** The picture slot's hook (data-group-photo / data-person-photo). */
   pictureHooks: { 'data-group-photo': string } | { 'data-person-photo': string };
-  /** Line 2: the preview or "Draft: ..." (a DM with no message: a reserved empty line). */
+  /** Line 2: the preview or "Draft: ..." (a DM with no message: an empty line). */
   preview: ReactElement;
-  /** Something unread: the dot on line 1. */
+  /** Something unread: the dot at the end of line 2. */
   unread: boolean;
-  /** Line 3's tag: "3 new", or null. */
+  /** Line 2's tag: "3 new" only when unread, else null. */
   tag: string | null;
-  /** The select-mode check (where the ⋮ sits), or null. */
-  check: ReactElement | null;
 }
 
 /**
  * The slot contents of one chat. Group and person are the same ListCard: the
- * 72 picture (a person circle, a group's photo or mark), the name and the
- * unread dot, the 2-line preview (or "Draft: ..."), then the time and the
- * "3 new" tag. The avatar URL is on the summary before the card mounts (one
- * batched list read), so a photo paints first, never the initials.
+ * 48 picture (a person circle, a group's photo or mark), line 1 the name and
+ * how long ago, line 2 the one-line preview (or "Draft: ...") then the "3 new"
+ * tag and the unread dot. The avatar URL is on the summary before the card
+ * mounts (one batched list read), so a photo paints first, never the initials.
  */
 export function channelRowParts(props: {
   channel: ChannelSummary;
@@ -561,8 +556,6 @@ export function channelRowParts(props: {
   draft?: string | null;
   nowMs: number;
   timeZone?: string | undefined;
-  selecting: boolean;
-  checked: boolean;
 }): ChannelRowParts {
   const { channel, summary } = props;
   const kind = tileKind(channel);
@@ -574,7 +567,7 @@ export function channelRowParts(props: {
   // A media line ("Photo", "Voice message") leads with its glyph, as in the quote.
   const previewIcon = hasMessage ? summaryIconOfLine(summary.lastMessageText) : null;
   const draft = props.draft ?? null;
-  // Line 3: how long ago the last message landed ("just now", "5m", "Yesterday").
+  // Line 1, right: how long ago the last message landed ("just now", "5m", "Yesterday").
   const time = hasMessage
     ? formatAgo(summary.lastMessageTs, new Date(props.nowMs), props.timeZone)
     : '';
@@ -610,7 +603,7 @@ export function channelRowParts(props: {
           <Avatar
             name={name}
             {...(channel.avatarUrl !== null ? { src: channel.avatarUrl } : {})}
-            role="profile"
+            role="card"
             kind="group"
             decorative
           />
@@ -626,30 +619,16 @@ export function channelRowParts(props: {
     preview,
     unread: unread > 0,
     tag: unreadTagText(unread),
-    check: props.selecting ? <SelectCheck checked={props.checked} /> : null,
   };
 }
 
 /**
- * The ⋯ opener for a chat (H5): always visible, the trigger of the same
- * ActionMenu a long-press opens. ActionMenuTrigger owns the trailing rule, so
- * its glyph's visible edge sits on the card's content edge.
- * fg-3 at rest, full ink on hover, as before. Tokens only.
- */
-export const ROW_MORE_INK = 'text-fg-3 hover:text-fg';
-
-/** A chat row's menu rows: Hide chat (non-destructive: eye-off, never red; FT43). */
-export function chatRowMenuItems(onHide: () => void): ActionMenuItem[] {
-  return [{ id: 'hide', label: 'Hide chat', icon: IconEyeOff, onSelect: onHide }];
-}
-
-/**
  * One conversation, group or person: a ui/ListCard whose whole surface is one
- * button ("Open <name>"). A touch long-press (moving or scrolling cancels it),
- * right-click, Shift+F10, or the always-visible ⋯ (line 3's trailing slot)
- * opens the chat menu; the trailing click is swallowed so a long-press never
- * also opens the chat. In select mode a check sits where the ⋯ sits and a tap
- * toggles.
+ * button ("Open <name>"). No ⋮: with `select`, a touch long-press (moving or
+ * scrolling cancels it) or a right-click / Shift-click / Cmd-click enters the
+ * list's select mode with this chat ticked (ListCard wires the gesture and
+ * swallows the click that trails a hold); while selecting a tap toggles and
+ * ListCard draws the tick on the picture.
  */
 export function ChannelCard(props: {
   channel: ChannelSummary;
@@ -662,42 +641,17 @@ export function ChannelCard(props: {
   onSelect: (channel: ChannelSummary) => void;
   /** A primary press on the tile (pointerdown), outside select mode: before the tap. */
   onPressIn?: (channel: ChannelSummary) => void;
-  /** The list's input (hover, coarse), read once by the list. */
+  /** The list's input (coarse pointer), read once by the list. */
   input: ChannelListInput;
-  /** Kept for callers: cards are 12 apart, no divider. */
+  /** Kept for callers: cards are 8 apart, no divider. */
   divider?: boolean;
-  /** Present in select mode: whether this tile is checked. */
-  checked?: boolean;
-  onToggle?: (channelId: string) => void;
-  onLongPress?: (channel: ChannelSummary, rect: DOMRect | null) => void;
-  /** This tile's menu is open (the list holds which one). */
-  menuOpen?: boolean;
-  onMenuClose?: () => void;
-  /** The menu's Hide chat. */
-  onHide?: (channel: ChannelSummary) => void;
+  /** The list's select mode for this card; absent: long-press and right-click do nothing. */
+  select?: ListCardSelect | undefined;
 }): ReactElement {
   const { channel, summary } = props;
-  const rowRef = useRef<HTMLButtonElement>(null);
-  const selecting = props.onToggle !== undefined;
+  const select = props.select;
+  const selecting = select?.active === true;
   const { coarsePointer } = props.input;
-  const menuEnabled = !selecting && props.onLongPress !== undefined;
-  // This gesture's hold already opened the menu; reset on every pointerdown.
-  const holdFiredRef = useRef(false);
-  const openMenu = (anchor?: DOMRect): void => {
-    if (selecting || props.onLongPress === undefined) return;
-    // The menu's backdrop takes the trailing pointerup, so no click to swallow.
-    clearClickSuppression();
-    props.onLongPress(channel, anchor ?? rowRef.current?.getBoundingClientRect() ?? null);
-  };
-  // Mouse holds never open the menu (right-click and ⋯ do); touch is unchanged.
-  const { handlers, consumeClickSuppression, cancel, clearClickSuppression } = useLongPress(
-    () => {
-      holdFiredRef.current = true;
-      openMenu();
-    },
-    { ignoreMouse: true },
-  );
-  const checked = props.checked === true;
   // Press-in: a press held still for PRESS_SETTLE_MS (a ceiling, never a wait
   // on the paint or the tap) starts the open's reads before the lift. A
   // scroll, a pan (pointercancel), a lift or a move past PRESS_SLOP_PX reads
@@ -714,68 +668,22 @@ export function ChannelCard(props: {
     if (selecting || props.onPressIn === undefined || !e.isPrimary || e.button !== 0) return;
     press.down(e);
   };
-  const pressHandlers = {
-    onPointerMove: (e: PointerEvent<HTMLButtonElement>) => press.move(e),
-    onPointerUp: () => press.cancel(),
-    onPointerCancel: () => press.cancel(),
-  };
   const parts = channelRowParts({
     channel,
     summary,
     draft: props.draft ?? null,
     nowMs: props.nowMs,
     timeZone: props.timeZone,
-    selecting,
-    checked,
   });
-  const onTap = (): void => {
-    if (consumeClickSuppression()) return;
-    if (selecting) {
-      props.onToggle?.(channel.channelId);
-      return;
-    }
-    // A thread selecting messages exits that first (history.back()).
-    leaveSelectionThen(() => props.onSelect(channel));
-  };
-  // The tap surface's behaviour (the part draws it): long-press, press-in,
-  // right-click, Shift+F10, its name and its pressed state while selecting.
+  // A tap opens the chat; while selecting ListCard takes the tap (it toggles).
+  // A thread selecting messages exits that first (history.back()).
+  const onTap = (): void => leaveSelectionThen(() => props.onSelect(channel));
+  // The tap surface's own behaviour (the part draws it): press-in and its name.
   const surface = {
-    ...(menuEnabled
-      ? {
-          onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {
-            holdFiredRef.current = false;
-            handlers.onPointerDown(e);
-            pressDown(e);
-          },
-          onPointerMove: (e: PointerEvent<HTMLButtonElement>) => {
-            handlers.onPointerMove(e);
-            press.move(e);
-          },
-          onPointerUp: () => {
-            handlers.onPointerUp();
-            press.cancel();
-          },
-          onPointerCancel: () => {
-            handlers.onPointerCancel();
-            press.cancel();
-          },
-        }
-      : { ...pressHandlers, onPointerDown: pressDown }),
-    onContextMenu: (e: MouseEvent<HTMLButtonElement>) => {
-      if (coarsePointer) e.preventDefault();
-      if (!menuEnabled) return;
-      e.preventDefault();
-      cancel();
-      // Touch-first: a contextmenu that beats the hold timer acts as the hold, once.
-      if (coarsePointer && holdFiredRef.current) return;
-      holdFiredRef.current = true;
-      openMenu();
-    },
-    onKeyDown: (e: KeyboardEvent<HTMLButtonElement>) => {
-      if (!menuEnabled || !rowMenuKey(e)) return;
-      e.preventDefault();
-      openMenu();
-    },
+    onPointerDown: pressDown,
+    onPointerMove: (e: PointerEvent<HTMLButtonElement>) => press.move(e),
+    onPointerUp: () => press.cancel(),
+    onPointerCancel: () => press.cancel(),
     'aria-label': channelTileLabel({
       title: parts.name,
       unread: summary?.unread ?? 0,
@@ -783,36 +691,15 @@ export function ChannelCard(props: {
       time: parts.time,
       draft: props.draft ?? null,
     }),
-    ...(selecting ? { 'aria-pressed': checked } : {}),
   };
-  const isSelected = channelRowSelected({ selected: props.selected, selecting, checked });
-  const menu = menuEnabled ? (
-    <ActionMenu
-      title={parts.name}
-      items={chatRowMenuItems(() => props.onHide?.(channel))}
-      open={props.menuOpen === true}
-      onOpenChange={(open) => {
-        if (open) openMenu();
-        else props.onMenuClose?.();
-      }}
-      trigger={
-        <ActionMenuTrigger
-          type="button"
-          data-more=""
-          label={`Actions for ${parts.name}`}
-          aria-expanded={props.menuOpen === true}
-          className={ROW_MORE_INK}
-        />
-      }
-    />
-  ) : null;
   return (
     <div
       data-chat-list-item="card"
       data-chat-kind={parts.kind === 'wide' ? 'group' : 'person'}
       className={NO_TOUCH_SELECT}
-      // Touch-first: the native menu and callout never show on a chat.
-      onContextMenu={chatRowContextMenu(coarsePointer)}
+      // Touch-first: the native menu and callout never show on a chat, and the
+      // hold alone enters select mode (caught before the card's own handler).
+      onContextMenuCapture={chatRowContextMenu(coarsePointer)}
     >
       <ListCard
         picture={parts.picture}
@@ -822,12 +709,11 @@ export function ChannelCard(props: {
         preview={parts.preview}
         time={parts.time}
         {...(parts.tag !== null ? { tag: parts.tag, tagHooks: { 'data-unread-tag': '' } } : {})}
-        {...(menu !== null ? { menu } : {})}
-        {...(parts.check !== null ? { check: parts.check } : {})}
-        selected={isSelected}
+        {...(select !== undefined ? { select } : {})}
+        // The open chat (desktop) is lit; while selecting only the ticked ones are.
+        selected={props.selected && !selecting}
         onPress={onTap}
         press={surface}
-        pressRef={rowRef}
       />
     </div>
   );
@@ -844,16 +730,18 @@ interface NotesCardProps {
   /** Select mode is on: the tile is inert. */
   selecting: boolean;
   onSelect: (channel: ChannelSummary) => void;
+  /** The caller's own name: the picture's initials when there is no photo. */
+  ownName?: string | undefined;
 }
 
 /**
- * The Personal notes card: a ui/ListCard, the person picture slot holding
- * NotesAvatar (round: the caller's own photo with the notes badge, else the
- * notebook; the photo URL is the notes channel's avatarUrl, already in memory),
- * "Personal notes" over the last note (or "Only you can see this"), how long
- * ago the last note landed on line 3. In the list it sorts in with the chats
- * by its last note. No motion. Not selectable in Select mode (inert).
- * Hook-free so it is unit tested.
+ * The Personal notes card: a ui/ListCard whose person picture is the caller's
+ * own photo (Avatar 'card', 48; the notes channel's avatarUrl, already in
+ * memory), else their initials (ownName), else the person glyph. "Personal
+ * notes" and how long ago the last note landed on line 1, the last note (or
+ * "Only you can see this") on line 2. In the list it sorts in with the chats
+ * by its last note. No motion. Never selectable: no `select`, and inert while
+ * the list is selecting. Hook-free so it is unit tested.
  */
 export function notesCard(props: NotesCardProps): ReactElement {
   const { notes, summary } = props;
@@ -862,11 +750,7 @@ export function notesCard(props: NotesCardProps): ReactElement {
   return (
     <ListCard
       data-notes-tile=""
-      picture={{
-        kind: 'person',
-        name,
-        node: <NotesAvatar role="profile" src={notes.avatarUrl} surface="panel" shape="round" />,
-      }}
+      picture={{ kind: 'person', name: props.ownName ?? '', src: notes.avatarUrl }}
       pictureHooks={{ 'data-notes-picture': '' }}
       title={name}
       preview={<span data-notes-preview="">{last !== null ? last.preview : NOTES_TILE_LINE}</span>}
@@ -968,18 +852,14 @@ interface ChannelListContentProps extends ChannelListProps {
   nowMs?: number;
   /** Hidden-chat lookup; absent in pure tests (nothing is hidden). */
   isHidden?: HiddenLookup;
-  /** Select mode controls; absent hides the Select control. */
+  /** Select mode controls; absent: long-press does nothing and no select bar. */
   select?: ChannelSelectMode;
-  /** Row long-press; absent disables the row menu. */
-  onLongPress?: (channel: ChannelSummary, rect: DOMRect | null) => void;
-  /** The chat whose row menu is open, its close, and its Hide chat. */
-  menuOpenId?: string | null;
-  onMenuClose?: () => void;
-  onHide?: (channel: ChannelSummary) => void;
   /** Unsent draft text per chat; absent in pure tests (no drafts). */
   draftFor?: DraftLookup;
   /** The list's input, read once by ChannelList; touch when absent. */
   input?: ChannelListInput;
+  /** The caller's own name: the Personal notes picture's initials when there is no photo. */
+  ownName?: string | undefined;
   /**
    * The message search results; they replace the list (no old list under them)
    * while the box holds 2+ characters or a chip is on. Absent: the name filter only.
@@ -1060,80 +940,93 @@ export function channelListClasses(pageScroll: boolean): {
       };
 }
 
-/** Header in select mode: the checked count and Cancel. */
-function selectHeader(select: ChannelSelectMode, className = ''): ReactElement {
-  return (
-    <div
-      className={cn('flex items-center gap-2 border-b border-border px-4 py-3 md:px-6', className)}
-    >
-      <span className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
-        {`${select.selectedIds.size} selected`}
-      </span>
-      <Button variant="ghost" onClick={select.onCancel}>
-        Cancel
-      </Button>
-    </div>
-  );
-}
-
-/** Bottom bar in select mode (SelectionBar styling): one Hide, disabled at 0. */
-function selectBar(select: ChannelSelectMode, className = ''): ReactElement {
-  if (select.media !== undefined) return mediaSelectBar(select, select.media, className);
-  return (
-    <div className={cn('flex items-center gap-2 border-t bg-panel px-4 py-3 lit-dock', className)}>
-      <Button
-        variant="primary"
-        className="ml-auto"
-        disabled={select.selectedIds.size === 0}
-        onClick={select.onDelete}
-      >
-        <IconEyeOff size={ICON_SIZE.inline} />
-        Hide
-      </Button>
-    </div>
-  );
+/** One action on the chat list's select bar (an old row menu row, or a chip view's action). */
+export interface ChatSelectAction {
+  id: 'hide' | 'forward' | 'delete';
+  label: string;
+  icon: ComponentType<IconProps>;
+  onSelect: () => void;
+  /** Destructive: bad ink. */
+  bad?: boolean;
 }
 
 /**
- * Bottom bar in a chip view's select mode (the same frame as the chats' bar):
- * Forward, then Delete for me (danger), both disabled at 0. Never Hide.
+ * The select bar's actions. Chats: Hide chat (the old row ⋮ menu's one row;
+ * any count, non-destructive: eye-off, never red). A chip view selects
+ * messages: Forward (when there is a forward path) and Delete for me (bad
+ * ink); never Hide. Pure.
  */
-function mediaSelectBar(
-  select: ChannelSelectMode,
-  media: NonNullable<ChannelSelectMode['media']>,
-  className = '',
-): ReactElement {
-  const none = select.selectedIds.size === 0;
+export function chatSelectActions(select: ChannelSelectMode): ChatSelectAction[] {
+  const media = select.media;
+  if (media === undefined) {
+    return [{ id: 'hide', label: 'Hide chat', icon: IconEyeOff, onSelect: select.onDelete }];
+  }
+  return [
+    ...(media.onForward !== undefined
+      ? [{ id: 'forward' as const, label: 'Forward', icon: IconForward, onSelect: media.onForward }]
+      : []),
+    {
+      id: 'delete',
+      label: DELETE_FOR_ME_LABEL,
+      icon: IconTrash,
+      onSelect: select.onDelete,
+      bad: true,
+    },
+  ];
+}
+
+/**
+ * The bottom bar in select mode (ui/SelectBar's anatomy, kept in the list's
+ * own column so it never spans the thread pane on laptop): Cancel, the live
+ * "N selected", then one 44 IconButton per action, each disabled at 0.
+ */
+function selectBar(select: ChannelSelectMode, className = ''): ReactElement {
+  const count = select.selectedIds.size;
   return (
     <div
-      data-testid="media-select-bar"
-      className={cn('flex items-center gap-2 border-t bg-panel px-4 py-3 lit-dock', className)}
+      data-chat-select-bar=""
+      {...(select.media !== undefined ? { 'data-testid': 'media-select-bar' } : {})}
+      role="toolbar"
+      aria-label={select.media !== undefined ? 'Selected messages' : 'Selected chats'}
+      className={cn('flex items-center gap-1 border-t bg-panel px-4 py-3 lit-dock', className)}
     >
-      {media.onForward !== undefined ? (
-        <Button variant="ghost" data-selection-forward="" disabled={none} onClick={media.onForward}>
-          <IconForward size={ICON_SIZE.inline} />
-          Forward
-        </Button>
-      ) : null}
-      <Button
-        variant="danger"
-        data-selection-delete=""
-        className="ml-auto"
-        disabled={none}
-        onClick={select.onDelete}
-      >
-        <IconTrash size={ICON_SIZE.inline} />
-        {DELETE_FOR_ME_LABEL}
+      <Button type="button" variant="ghost" data-selection-cancel="" onClick={select.onCancel}>
+        Cancel
       </Button>
+      <span
+        data-selection-count=""
+        aria-live="polite"
+        className={textRole('heading', 'min-w-0 flex-1 truncate')}
+      >
+        {selectCountLabel(count)}
+      </span>
+      {chatSelectActions(select).map((action) => (
+        <IconButton
+          key={action.id}
+          label={action.label}
+          data-selection-action={action.id}
+          {...(action.id === 'forward' ? { 'data-selection-forward': '' } : {})}
+          {...(action.id === 'delete' ? { 'data-selection-delete': '' } : {})}
+          {...(action.id === 'hide' ? { 'data-selection-hide': '' } : {})}
+          disabled={count === 0}
+          className={action.bad === true ? 'text-bad hover:text-bad' : undefined}
+          onClick={action.onSelect}
+        >
+          <action.icon size={ICON_SIZE.control} />
+        </IconButton>
+      ))}
     </div>
   );
 }
 
 /**
  * The full channel list pane: the shared SectionHeader (controlled name search +
- * accent "+" New chat, no sort, no chips) above the body. While loading the body
- * is skeleton rows and on error a Retry state; Select, rows and the empty state
- * appear only once the store is ready, already hidden-filtered and sorted. Pure (no
+ * accent "+" New chat, the filter chips) above the body. While loading the body
+ * is skeleton rows and on error a Retry state; rows and the empty state appear
+ * only once the store is ready, already hidden-filtered and sorted. A chat's
+ * long-press or right-click enters select mode with it ticked; the header
+ * keeps a Select only while a chip view shows (media items have no
+ * long-press). In select mode the select bar sits under the body. Pure (no
  * hooks) so the search wiring and the single-header guarantee are unit tested by
  * walking the returned tree; ChannelList owns the search state.
  */
@@ -1144,9 +1037,15 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
   const hasChannels = ready && props.channels.some((c) => !isHidden(c.channelId));
   const select = ready ? props.select : undefined;
   const selecting = select?.active === true ? select : undefined;
-  // New chat from a thread selecting messages exits that first (history.back()).
-  const newChat = (): void => leaveSelectionThen(props.onNewChat);
+  // New chat leaves the list's select mode, and a thread selecting messages
+  // exits that first (history.back()).
+  const newChat = (): void => {
+    selecting?.onCancel();
+    leaveSelectionThen(props.onNewChat);
+  };
   const kind = props.kind ?? null;
+  // The chip view's Select: media items are not cards, so they have no long-press.
+  const mediaSelectEntry = select !== undefined && hasChannels && kind !== null && !selecting;
   const searching = props.searchResults !== undefined && showSearchResults(props.search, kind);
   const onKindChange = props.onKindChange;
   const layout = channelListClasses(props.pageScroll === true);
@@ -1157,49 +1056,41 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
     notesInList && props.notes !== undefined ? [...props.channels, props.notes] : props.channels;
   return (
     <div className={layout.column}>
-      {selecting !== undefined ? (
-        selectHeader(selecting, layout.header)
-      ) : (
-        // The app's own Clear (X) is the only one: the browser's native
-        // search cancel button is hidden.
-        <div
-          className={cn(
-            'border-b border-border pb-3 [&_input::-webkit-search-cancel-button]:hidden',
-            layout.header,
-          )}
+      {/* The app's own Clear (X) is the only one: the browser's native search
+          cancel button is hidden. */}
+      <div
+        className={cn(
+          'border-b border-border pb-3 [&_input::-webkit-search-cancel-button]:hidden',
+          layout.header,
+        )}
+      >
+        <SectionHeader
+          stackSearchMd
+          search={{
+            value: props.search,
+            onChange: props.onSearchChange,
+            placeholder: 'Search chats',
+            label: 'Search chats',
+          }}
+          primaryAction={{
+            node: (
+              <>
+                {mediaSelectEntry && select !== undefined ? (
+                  <IconButton label="Select" onClick={select.onStart}>
+                    <IconCheckCircle size={ICON_SIZE.control} />
+                  </IconButton>
+                ) : null}
+                <Button variant="primary" className="shrink-0 whitespace-nowrap" onClick={newChat}>
+                  <IconPlus size={ICON_SIZE.inline} />
+                  New chat
+                </Button>
+              </>
+            ),
+          }}
         >
-          <SectionHeader
-            stackSearchMd
-            search={{
-              value: props.search,
-              onChange: props.onSearchChange,
-              placeholder: 'Search chats',
-              label: 'Search chats',
-            }}
-            primaryAction={{
-              node: (
-                <>
-                  {select !== undefined && hasChannels ? (
-                    <IconButton label="Select" onClick={select.onStart}>
-                      <IconCheckCircle size={ICON_SIZE.control} />
-                    </IconButton>
-                  ) : null}
-                  <Button
-                    variant="primary"
-                    className="shrink-0 whitespace-nowrap"
-                    onClick={newChat}
-                  >
-                    <IconPlus size={ICON_SIZE.inline} />
-                    New chat
-                  </Button>
-                </>
-              ),
-            }}
-          >
-            {onKindChange !== undefined ? searchChips({ kind, onChange: onKindChange }) : undefined}
-          </SectionHeader>
-        </div>
-      )}
+          {onKindChange !== undefined ? searchChips({ kind, onChange: onKindChange }) : undefined}
+        </SectionHeader>
+      </div>
       <div className={layout.body}>
         {props.lead !== undefined && !searching ? props.lead : null}
         {props.notes !== undefined && !searching && !notesInList
@@ -1211,6 +1102,7 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
               selected: props.notes.channelId === props.selectedChannelId,
               selecting: selecting !== undefined,
               onSelect: props.onSelect,
+              ownName: props.ownName,
             })
           : null}
         <SettleLanding boxes={props.status === 'loading'} selector="[data-chat-home] li">
@@ -1232,24 +1124,19 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
                     onNewChat: newChat,
                     summaryFor,
                     ...(props.draftFor !== undefined ? { draftFor: props.draftFor } : {}),
-                    ...(selecting !== undefined
+                    // The chat cards' select mode (a chip view's bar selects
+                    // messages, so the cards are not shown then).
+                    ...(select !== undefined && select.media === undefined
                       ? {
-                          selecting: {
-                            selectedIds: selecting.selectedIds,
-                            onToggle: selecting.onToggle,
+                          select: {
+                            active: selecting !== undefined,
+                            selectedIds: select.selectedIds,
+                            onEnter: select.onEnter,
+                            onToggle: select.onToggle,
                           },
                         }
                       : {}),
-                    ...(props.onLongPress !== undefined && selecting === undefined
-                      ? {
-                          onLongPress: props.onLongPress,
-                          menuOpenId: props.menuOpenId ?? null,
-                          ...(props.onMenuClose !== undefined
-                            ? { onMenuClose: props.onMenuClose }
-                            : {}),
-                          ...(props.onHide !== undefined ? { onHide: props.onHide } : {}),
-                        }
-                      : {}),
+                    ...(props.ownName !== undefined ? { ownName: props.ownName } : {}),
                     ...(props.nowMs !== undefined ? { nowMs: props.nowMs } : {}),
                     ...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {}),
                     ...(props.input !== undefined ? { input: props.input } : {}),
@@ -1285,8 +1172,6 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   const [mediaSelection, setMediaSelection] = useState<MediaSelection>(EMPTY_MEDIA_SELECTION);
   // The chip view's forward picker: the messages to forward, or null (closed).
   const [forwardItems, setForwardItems] = useState<readonly HideItem[] | null>(null);
-  // The chat whose row menu is open (ActionMenu: a sheet on phone, a popover at its ⋯ on laptop).
-  const [menu, setMenu] = useState<ChannelSummary | null>(null);
   // Chats hidden behind the Undo toast: they leave the list at once and the
   // hide (chat_channel_clear) runs only when the toast ends; Undo puts them back.
   const [pendingHidden, setPendingHidden] = useState<ReadonlySet<string>>(new Set());
@@ -1316,14 +1201,13 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     [drafts, listWorkspaceId],
   );
   const onDeleteChats = props.onDeleteChats;
-  const closeMenu = useCallback(() => setMenu(null), []);
   const exitSelect = (): void => {
     setSelecting(false);
     setSelectedIds(new Set());
     setMediaSelection(EMPTY_MEDIA_SELECTION);
   };
 
-  // Hide (the row menu, or the select-mode bar): no confirm. The chats leave
+  // Hide chat (the select bar, any count): no confirm. The chats leave
   // the list at once behind the Undo toast (UNDO_MS); the hide is written when
   // the toast ends. Undo, or a hide that fails, puts them back in place (the
   // list is sorted, so they land where they were).
@@ -1403,9 +1287,20 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     });
     primeRead<MediaCacheValue>(mediaKey, { kind: mediaKind, items });
   }, [mediaKey, mediaKind, searchState]);
+  // The header stays up while selecting: a new chip or search leaves select
+  // mode first (the ticked chats or items may no longer be on screen).
   const onKindChange = useCallback((next: HomeChip | null) => {
     if (next !== null) mark('chat:chip:tap');
+    setSelecting(false);
+    setSelectedIds(new Set());
+    setMediaSelection(EMPTY_MEDIA_SELECTION);
     setKind(next);
+  }, []);
+  const onSearchChange = useCallback((value: string) => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+    setMediaSelection(EMPTY_MEDIA_SELECTION);
+    setSearch(value);
   }, []);
   // Hits in notes carry its name ("Personal notes") and notebook.
   const notes = props.notes;
@@ -1504,7 +1399,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
         ...props,
         input,
         search,
-        onSearchChange: setSearch,
+        onSearchChange,
         kind,
         onKindChange,
         ...(searchResults !== undefined ? { searchResults } : {}),
@@ -1512,25 +1407,34 @@ export function ChannelList(props: ChannelListProps): ReactElement {
         isHidden,
         draftFor,
         nowMs,
+        // Personal notes' picture: the caller's own initials when there is no photo.
+        ...(currentUserId !== null ? { ownName: personName(listWorkspaceId, currentUserId) } : {}),
         ...(onDeleteChats !== undefined
           ? {
               select: {
                 active: selecting,
                 selectedIds: mediaSelecting ? new Set(mediaSelection.keys()) : selectedIds,
+                // A chat's long-press or right-click: select mode with that chat ticked.
+                onEnter: (channelId: string) => {
+                  setMediaSelection(EMPTY_MEDIA_SELECTION);
+                  setSelectedIds(new Set([channelId]));
+                  setSelecting(true);
+                },
+                // A chip view's header Select: nothing ticked yet.
                 onStart: () => {
-                  setMenu(null);
                   setSelectedIds(new Set());
                   setMediaSelection(EMPTY_MEDIA_SELECTION);
                   setSelecting(true);
                 },
                 onCancel: exitSelect,
-                onToggle: (channelId: string) =>
-                  setSelectedIds((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(channelId)) next.delete(channelId);
-                    else next.add(channelId);
-                    return next;
-                  }),
+                // Unticking the last chat leaves select mode.
+                onToggle: (channelId: string) => {
+                  const next = new Set(selectedIds);
+                  if (next.has(channelId)) next.delete(channelId);
+                  else next.add(channelId);
+                  if (next.size === 0) exitSelect();
+                  else setSelectedIds(next);
+                },
                 onDelete: mediaSelecting
                   ? () => {
                       const items = mediaSelectionItems(mediaSelection);
@@ -1548,10 +1452,6 @@ export function ChannelList(props: ChannelListProps): ReactElement {
                     }
                   : {}),
               },
-              onLongPress: (channel: ChannelSummary) => setMenu(channel),
-              menuOpenId: menu?.channelId ?? null,
-              onMenuClose: closeMenu,
-              onHide: (channel: ChannelSummary) => hideChats([channel]),
             }
           : {}),
       })}

@@ -1,10 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
-// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => true,
-}));
+import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { PostCard } from '@/components/pages/PostCard';
@@ -12,7 +7,7 @@ import type { PresignCache } from '@/lib/asset-presign';
 import type { PipelinePost } from '@srtdio/posts';
 
 // Type roles on the Pipeline card (ui/ListCard): the title is the heading
-// role, the caption preview the secondary role, the due line the meta role.
+// role, the caption preview the secondary role, the due words the meta role.
 
 const NOW = new Date('2026-10-23T12:00:00Z');
 
@@ -74,19 +69,18 @@ describe('PostCard type roles', () => {
     expect(title).toEqual(expect.arrayContaining(['text-lg', 'font-semibold']));
   });
 
-  it('caption preview is the secondary role: text-md text-fg-2, two lines', () => {
+  it('caption preview is the secondary role: text-md text-fg-2, one line', () => {
     const host = paint(makePost());
     const preview = host.querySelector('[data-post-card-caption]');
     expect(preview?.textContent).toBe('Linen that breathes.');
-    expect(classes(preview)).toEqual(
-      expect.arrayContaining(['text-md', 'text-fg-2', 'line-clamp-2']),
-    );
+    expect(classes(preview)).toEqual(expect.arrayContaining(['text-md', 'text-fg-2', 'truncate']));
+    expect(classes(preview)).not.toContain('line-clamp-2');
   });
 
   it('due line is the ListCard meta role: text-sm text-fg-3 mono', () => {
     const host = paint(makePost());
     const due = host.querySelector('[data-post-card-due]');
-    expect(due?.textContent).toBe('Due 2 Nov');
+    expect(due?.textContent).toBe('2 Nov');
     expect(classes(due)).toEqual(expect.arrayContaining(['text-sm', 'text-fg-3', 'font-mono']));
   });
 

@@ -1,6 +1,7 @@
 // Activity's loading boxes (sweepBoxes, docs/motion.md): ui/ListCardBox, the
-// ListCard's own frame and slots (the 72 picture, title, two preview lines,
-// the meta line), under one bucket label, so nothing moves when the cards land.
+// ListCard's own 74 frame and slots (the 48 picture, the title line with its
+// time, the preview line) in LIST_CARD_GRID, under one bucket label, so
+// nothing moves when the cards land.
 // Rendered ONLY when the device or session holds nothing for the list; a kept
 // list paints at once.
 import type { ReactElement } from 'react';

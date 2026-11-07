@@ -5,7 +5,7 @@ import { ICON_SIZE, type IconProps } from '@/components/ui/icons';
 export type TagTone = 'neutral' | 'accent' | 'good' | 'warn' | 'bad';
 
 /** Leading dot colour for a post stage; 'draft' (no stage token) reads neutral. */
-type TagDot = 'draft' | 'review' | 'approved' | 'rejected' | 'parked';
+export type TagDot = 'draft' | 'review' | 'approved' | 'rejected' | 'parked';
 
 interface TagProps {
   label: string;

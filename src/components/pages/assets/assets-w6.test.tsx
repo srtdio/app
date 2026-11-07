@@ -4,10 +4,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { AssetListCard } from '@/components/pages/assets/AssetListCard';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
-import { orderActionItems } from '@/components/ui/ActionMenu';
+import { visibleSelectActions } from '@/components/ui/SelectBar';
 import {
-  assetMenuItems,
   assetMenuRows,
+  assetSelectActions,
   copyLinkTarget,
 } from '@/components/pages/assets/AssetActionSheet';
 import { uploadBusyLabel, uploadSummary } from '@/components/pages/assets/AssetUploadSheet';
@@ -16,16 +16,9 @@ import {
   assetLink,
   deleteToastLabel,
   selectAllIds,
-  selectedLabel,
 } from '@/components/pages/assets/assets-nav';
 import { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
-
-// Phone layout for the card's ⋯ menu (ui/ActionMenu); no matchMedia here.
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => false,
-}));
 
 // W6 Assets regressions, one block per fix. Node environment (no DOM): pure
 // helpers are driven directly and components are rendered to static markup.
@@ -106,8 +99,8 @@ describe('3. Copy link copies a lasting in-app link', () => {
 
 const NOW = new Date('2026-10-01T03:00:00Z');
 
-describe('4. every card shows a visible 44px ⋯ button', () => {
-  it('on asset cards, the tick in its place in select mode', () => {
+describe('4. no card ⋯: long-press / right-click selects', () => {
+  it('asset cards carry no menu trigger; select mode ticks the picture', () => {
     const card = renderToStaticMarkup(
       <AssetListCard
         item={asset()}
@@ -117,8 +110,8 @@ describe('4. every card shows a visible 44px ⋯ button', () => {
         onOpen={() => {}}
       />,
     );
-    expect(card).toContain('aria-label="More actions for photo.png"');
-    expect(card).toMatch(/class="[^"]*h-11 w-11[^"]*"[^>]*data-card-menu=""/);
+    expect(card).not.toContain('More actions');
+    expect(card).not.toContain('data-card-menu');
     const selecting = renderToStaticMarkup(
       <AssetListCard
         item={asset()}
@@ -126,15 +119,15 @@ describe('4. every card shows a visible 44px ⋯ button', () => {
         presignEnabled={false}
         now={NOW}
         onOpen={() => {}}
-        selectMode
+        select={{ active: true, chosen: false, onEnter: () => {}, onToggle: () => {} }}
       />,
     );
     expect(selecting).not.toContain('data-card-menu');
-    expect(selecting).toMatch(/data-list-card-more=""[^>]*>\s*<span[^>]*data-card-tick="off"/);
+    expect(selecting).toContain('data-list-card-tick="off"');
   });
 });
 
-describe('5. menu rows in order: Open, Copy link, the rest, Delete last', () => {
+describe('5. action rows in order: Open, Copy link, the rest, Delete last', () => {
   it('file and link menus, with no Move to folder row', () => {
     expect(assetMenuRows(false, true)).toEqual(['copy', 'primary', 'rename', 'info', 'delete']);
     expect(assetMenuRows(false, false)).toEqual(['copy', 'primary', 'info', 'delete']);
@@ -151,7 +144,7 @@ describe('5. menu rows in order: Open, Copy link, the rest, Delete last', () => 
   });
 });
 
-describe('5b. the card menu is ui/ActionMenu rows', () => {
+describe('5b. the old card ⋮ rows are the select bar actions', () => {
   const deps = {
     presignEnabled: true,
     requestDownloadUrl: async () => 'https://signed/d',
@@ -162,25 +155,52 @@ describe('5b. the card menu is ui/ActionMenu rows', () => {
     onToast: () => {},
   };
 
-  it('already in the one ⋯ order, Delete last in the danger tone', () => {
-    for (const item of [asset(), asset({ kind: 'link', externalUrl: 'https://x.io/a' })]) {
-      const items = assetMenuItems(item, deps);
-      expect(orderActionItems(items).map((row) => row.id)).toEqual(items.map((row) => row.id));
-      expect(items[items.length - 1]).toMatchObject({ id: 'delete', tone: 'danger' });
-      expect(items.filter((row) => row.tone === 'danger')).toHaveLength(1);
+  it('keeps the one order, Delete last in the bad tone; every other row is single-only', () => {
+    expect(assetSelectActions(asset(), deps).map((row) => row.id)).toEqual([
+      'copy-link',
+      'download',
+      'rename',
+      'info',
+      'delete',
+    ]);
+    const link = asset({ kind: 'link', externalUrl: 'https://x.io/a' });
+    for (const item of [asset(), link]) {
+      const rows = assetSelectActions(item, deps);
+      expect(rows[rows.length - 1]).toMatchObject({ id: 'delete', tone: 'bad' });
+      expect(rows.filter((row) => row.tone === 'bad')).toHaveLength(1);
+      expect(rows.filter((row) => row.id !== 'delete').every((row) => row.single === true)).toBe(
+        true,
+      );
+      expect(rows.find((row) => row.id === 'delete')?.single).toBeUndefined();
     }
-    expect(
-      assetMenuItems(asset({ kind: 'link', externalUrl: 'https://x.io/a' }), deps)[0]?.id,
-    ).toBe('open-link');
+    expect(assetSelectActions(link, deps)[0]?.id).toBe('open-link');
+    expect(assetSelectActions(link, deps)[0]?.label).toBe('Open x.io');
+  });
+
+  it('several files ticked: Delete only', () => {
+    expect(assetSelectActions(undefined, deps).map((row) => row.id)).toEqual(['delete']);
+    expect(visibleSelectActions(assetSelectActions(asset(), deps), 2).map((row) => row.id)).toEqual(
+      ['delete'],
+    );
   });
 
   it('Delete runs the page delete at once (Undo strip, no dialog)', () => {
     const onDelete = vi.fn();
-    const item = asset();
-    assetMenuItems(item, { ...deps, onDelete })
+    assetSelectActions(asset(), { ...deps, onDelete })
       .find((row) => row.id === 'delete')
       ?.onSelect();
-    expect(onDelete).toHaveBeenCalledWith(item);
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('Rename and Info hand the one file to the page', () => {
+    const onRename = vi.fn();
+    const onInfo = vi.fn();
+    const item = asset();
+    const rows = assetSelectActions(item, { ...deps, onRename, onInfo });
+    rows.find((row) => row.id === 'rename')?.onSelect();
+    rows.find((row) => row.id === 'info')?.onSelect();
+    expect(onRename).toHaveBeenCalledWith(item);
+    expect(onInfo).toHaveBeenCalledWith(item);
   });
 });
 
@@ -213,20 +233,21 @@ describe('6. delete hides now and commits after the Undo window', () => {
 });
 
 describe('7. select mode', () => {
-  it('starts from the card ⋮ Select row, with Cancel, a count and Select all up top and Delete below', () => {
-    expect(selectedLabel(2)).toBe('2 selected');
+  it('a long-press or right-click selects (ListCard select); the bar is ui/SelectBar with Select all', () => {
     expect(selectAllIds([{ id: 'a' }, { id: 'b' }, { id: 'c' }], 2)).toEqual(['a', 'b']);
     const menu = read('src/components/pages/assets/AssetAddMenu.tsx');
     expect(menu).not.toContain('<span>Select</span>');
-    expect(pageSource).toContain('onStartSelect={startSelectWith}');
-    for (const label of ['Cancel', 'Select all', 'Delete']) {
-      expect(pageSource).toContain(label);
-    }
+    expect(pageSource).toContain('useListSelection()');
+    expect(pageSource).toContain('<SelectBar');
+    expect(pageSource).toContain('selection.selectFor(item.id)');
+    expect(pageSource).toContain('Select all');
+    expect(pageSource).not.toContain('onStartSelect');
+    expect(pageSource).not.toContain('startSelectWith');
     expect(pageSource).not.toMatch(/>\s*Move\s*</);
     expect(pageSource).toContain('data-select-actions');
-    // The phone selection bar sits above the tab bar, never over it.
-    expect(pageSource).toContain('useBottomInset(selectBarRef)');
-    expect(pageSource).toContain('style={{ bottom: selectBarInset }}');
+    // The old hand-built bars are gone: SelectBar owns the inset and the count.
+    expect(pageSource).not.toContain('useBottomInset');
+    expect(pageSource).not.toContain('selectedLabel');
     expect(pageSource).not.toContain('Done\n');
   });
 });

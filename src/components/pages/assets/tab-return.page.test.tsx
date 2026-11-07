@@ -215,17 +215,16 @@ describe('Assets tab return', () => {
     listAssets.mockResolvedValue({ ok: true, data: { items: [ONE, TWO], next: { done: true } } });
     assetDelete.mockResolvedValue({ ok: true, data: null });
     await visit();
-    // Selecting starts from the card's ⋮ Select row (ui/ListCard has no corner box).
-    await act(async () =>
-      document.querySelector<HTMLElement>('[aria-label="More actions for two.png"]')?.click(),
-    );
+    // A right-click on the card selects it; the select bar's Delete deletes it.
+    await act(async () => {
+      document
+        .querySelector<HTMLElement>('[data-asset-card="a2"]')
+        ?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
     await flush();
     await act(async () =>
-      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-        .find((row) => row.textContent?.trim() === 'Select')
-        ?.click(),
+      document.querySelector<HTMLButtonElement>('[data-select-bar-action="delete"]')?.click(),
     );
-    await act(async () => button('Delete')?.click());
     const undo = showToast.mock.calls.find(
       ([options]) => (options as { onExpire?: () => void }).onExpire !== undefined,
     )?.[0] as { onExpire?: () => void };

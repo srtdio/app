@@ -159,8 +159,6 @@ describe('cards use the 12px card radius', () => {
         presignEnabled={false}
         onOpenGroup={() => {}}
         onOpenEntry={() => {}}
-        onSnooze={() => {}}
-        onMarkRead={() => {}}
         selfName={null}
       />,
     );

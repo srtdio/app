@@ -6,19 +6,11 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
-import {
-  ICON_SIZE,
-  IconActivity,
-  IconAlarmClock,
-  IconAt,
-  IconBriefs,
-  IconPlan,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconActivity, IconAt, IconBriefs, IconPlan } from '@/components/ui/icons';
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
-import { ActivityFilterBar } from '@/components/pages/activity/ActivityFilterBar';
+import { ActivityFilterBar, activityChip } from '@/components/pages/activity/ActivityFilterBar';
 import { cn } from '@/lib/cn';
 import { Text, textRole } from '@/components/ui/Text';
 import { GUTTER } from '@/components/ui/layout';
@@ -57,13 +49,11 @@ import {
   mergeFresh,
   msUntilZonedMidnight,
   openAction,
-  snoozeEntry,
   unreadCount,
   updatesLabel,
   type ActivityDirection,
   type ActivityItem,
   type ActivityState,
-  type SnoozeKind,
 } from '@/components/pages/activity/data';
 import { readActivityBadge } from '@/lib/inbox/inbox-reads';
 import { generateTraceId } from '@/lib/trace';
@@ -74,7 +64,6 @@ import { keptViewKey, useKeptScroll, useKeptState, useUntouched } from '@/lib/ke
 import { onSessionReadsHydrated } from '@/lib/session-read';
 import { useCurrentProfile } from '@/lib/use-current-profile';
 import { useWorkspace } from '@/lib/workspace-context';
-import { useSort } from '@/lib/use-sort';
 import { useServerSearch } from '@/lib/search/server-search';
 import { env } from '@/lib/env';
 import { INDUCTION_KEYS } from '@/lib/induction';
@@ -90,43 +79,15 @@ const MARK_READ_FAILED = undoFailureTitle(MARKED_READ_LABEL);
 /** The page title: the surface is Activity. */
 export const ACTIVITY_TITLE = 'Activity';
 
-export const SORT_OPTIONS: SortOption<ActivityDirection>[] = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'oldest', label: 'Oldest first' },
-];
-
-/**
- * The sort while a search is on: activity_search pages newest first only, so
- * Oldest first is taken off the menu (never faked by reversing loaded pages)
- * and the results read newest first. Pure.
- */
-export function activitySortOptions(searching: boolean): SortOption<ActivityDirection>[] {
-  return searching ? SORT_OPTIONS.filter((option) => option.value === 'newest') : SORT_OPTIONS;
-}
+/** The list's one order: newest first (no sort control; the search pages newest first too). */
+const ACTIVITY_SORT: ActivityDirection = 'newest';
 
 /** The list search's URL param (?q=), as on every list screen. */
 const SEARCH_PARAM = 'q';
 
-/** Optimistic snoozed_until for a kind; the proc returns the authoritative value
- * (workspace timezone), this only flips the row's local state until it lands. */
-function optimisticSnoozeUntil(kind: SnoozeKind, nowMs: number): string | null {
-  switch (kind) {
-    case '1h':
-      return new Date(nowMs + 3_600_000).toISOString();
-    case '4h':
-      return new Date(nowMs + 4 * 3_600_000).toISOString();
-    case 'tomorrow_9':
-      return new Date(nowMs + 86_400_000).toISOString();
-    case 'next_week':
-      return new Date(nowMs + 7 * 86_400_000).toISOString();
-    case 'clear':
-      return null;
-  }
-}
-
 /**
- * How a feed load lands: 'reset' clears the list first (a chip, sort or
- * workspace change); 'refresh' replaces it but keeps it on a failure; 'merge'
+ * How a feed load lands: 'reset' clears the list first (a chip or workspace
+ * change); 'refresh' replaces it but keeps it on a failure; 'merge'
  * folds a fresh page one into it (new rows from the shell's poll).
  */
 type LoadMode = 'reset' | 'refresh' | 'merge';
@@ -212,8 +173,9 @@ export function NotificationsPage() {
     userId !== null && workspaceId !== null
       ? keptViewKey(userId, workspaceId, `activity:${what}`)
       : null;
-  const [state, setState] = useKeptState<ActivityState>(keptKey('chip'), 'all');
-  const { value: storedSort, setValue: setSort } = useSort<ActivityDirection>('activity', 'newest');
+  const [keptChip, setState] = useKeptState<ActivityState>(keptKey('chip'), 'all');
+  // A chip kept from before Snoozed was retired reads as All.
+  const state = activityChip(keptChip);
   const untouched = useUntouched();
 
   // The search box lives in the URL (?q=), so Back lands on the same results.
@@ -255,8 +217,6 @@ export function NotificationsPage() {
   // longer the arrival's quiet refresh.
   const searchedRef = useRef(false);
   if (searching) searchedRef.current = true;
-  // Oldest first is not offered while searching: the results read newest first.
-  const sort: ActivityDirection = searching ? 'newest' : storedSort;
 
   // The chip's page one as the bell press or an earlier visit this session
   // read it: the first frame is the list, refreshed quietly behind it. Else
@@ -264,14 +224,14 @@ export function NotificationsPage() {
   // true: the load runs in an effect, after the first paint).
   const [items, setItems] = useState<ActivityItem[]>(() =>
     userId !== null && workspaceId !== null
-      ? (peekActivityPage(activityPageKey(userId, workspaceId, state, sort)) ?? [])
+      ? (peekActivityPage(activityPageKey(userId, workspaceId, state, ACTIVITY_SORT)) ?? [])
       : [],
   );
   const [loading, setLoading] = useState(
     () =>
       userId === null ||
       workspaceId === null ||
-      peekActivityPage(activityPageKey(userId, workspaceId, state, sort)) === undefined,
+      peekActivityPage(activityPageKey(userId, workspaceId, state, ACTIVITY_SORT)) === undefined,
   );
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -312,8 +272,6 @@ export function NotificationsPage() {
   const lateKeptRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
-  const sortRef = useRef(sort);
-  sortRef.current = sort;
   // Bumped by every reset or refresh: an older load, merge or load-more is dropped.
   const activitySeqRef = useRef(0);
   const loadingMoreRef = useRef(false);
@@ -322,10 +280,10 @@ export function NotificationsPage() {
   const listRef = useRef<HTMLDivElement>(null);
   const anchorRef = useRef<ScrollAnchor | null>(null);
 
-  // Load page one for the active chip and sort. Every chip filters server-side
-  // (All has no filter) and the server orders by the sort, so older matches are
-  // never hidden behind the page cap. A stale response (the chip, sort or
-  // workspace moved on) is dropped. A failure with rows on screen keeps them and
+  // Load page one for the active chip. Every chip filters server-side (All has
+  // no filter) and the server orders newest first, so older matches are never
+  // hidden behind the page cap. A stale response (the chip or workspace moved
+  // on) is dropped. A failure with rows on screen keeps them and
   // toasts; only a first load with nothing on screen shows the error box.
   // Page one is the chip's shared session read (activity/data.ts): a chip
   // switch (or the mount) paints the kept page at once and refreshes quietly
@@ -339,7 +297,8 @@ export function NotificationsPage() {
       if (workspaceId === null) return;
       if (mode !== 'merge') activitySeqRef.current += 1;
       const seq = activitySeqRef.current;
-      const key = userId !== null ? activityPageKey(userId, workspaceId, state, sort) : null;
+      const key =
+        userId !== null ? activityPageKey(userId, workspaceId, state, ACTIVITY_SORT) : null;
       if (mode !== 'merge') lateKeptRef.current = null;
       if (mode === 'refresh' && key !== null) invalidateActivityReads(key);
       // The kept page painted by this reset; its refresh is quiet.
@@ -362,7 +321,7 @@ export function NotificationsPage() {
       const read = (): Promise<LoadResult> =>
         fetchActivityEntries(supabase, workspaceId, {
           state,
-          direction: sort,
+          direction: ACTIVITY_SORT,
         });
       mark('activity:page1:start');
       const result = key !== null ? await sharedActivityPage(key, read) : await read();
@@ -389,13 +348,13 @@ export function NotificationsPage() {
         const added = result.data.filter((item) => !known.has(item.id));
         setEntering(new Set(added.map((item) => item.id)));
         anchorRef.current = captureAnchor(listRef.current);
-        setItems((prev) => mergeFresh(prev, result.data, sort));
+        setItems((prev) => mergeFresh(prev, result.data, ACTIVITY_SORT));
         return;
       }
       setItems(result.data);
       setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
     },
-    [workspaceId, userId, state, sort, push, untouched],
+    [workspaceId, userId, state, push, untouched],
   );
 
   // Hold the topmost visible card still when a merge adds cards above it.
@@ -405,16 +364,15 @@ export function NotificationsPage() {
     if (anchor !== null) restoreAnchor(listRef.current, anchor);
   }, [items]);
 
-  // Fetch the next page in the sort's direction after the last loaded
-  // (created_at, id) and append it without duplicates. It carries the chip and
-  // sort it started with and is ignored if either (or the list) changed since.
+  // Fetch the next page (newest first) after the last loaded (created_at, id)
+  // and append it without duplicates. It carries the chip it started with and
+  // is ignored if it (or the list) changed since.
   const loadMore = useCallback(async () => {
     if (workspaceId === null || loadingMoreRef.current) return;
     const cursor = cursorAfter(itemsRef.current);
     if (cursor === undefined) return;
     const seq = activitySeqRef.current;
     const chip = state;
-    const direction = sort;
     // While searching: the search's next page (keyset on created_at, id).
     const query = searching ? activitySearch.query : null;
     loadingMoreRef.current = true;
@@ -424,7 +382,7 @@ export function NotificationsPage() {
         ? await searchActivityEntries(supabase, workspaceId, { query, cursor })
         : await fetchActivityEntries(supabase, workspaceId, {
             state: chip,
-            direction,
+            direction: ACTIVITY_SORT,
             cursor,
           });
     loadingMoreRef.current = false;
@@ -432,7 +390,6 @@ export function NotificationsPage() {
     if (
       seq !== activitySeqRef.current ||
       stateRef.current !== chip ||
-      sortRef.current !== direction ||
       (query ?? '') !== searchQueryRef.current
     ) {
       return;
@@ -443,10 +400,10 @@ export function NotificationsPage() {
     }
     setItems((prev) => appendUnique(prev, result.data));
     setHasMore(result.data.length === ACTIVITY_PAGE_SIZE);
-  }, [workspaceId, state, sort, push, searching, activitySearch.query]);
+  }, [workspaceId, state, push, searching, activitySearch.query]);
 
   // The search's page one replaces the feed on screen (the same items state,
-  // so mark read, snooze and the rest work on the results as on the feed). A
+  // so open and mark read work on the results as on the feed). A
   // feed load that lands meanwhile is dropped (loadActivity checks
   // searchingRef), and a Load more for another query (searchQueryRef).
   // Leaving the search reloads the feed (the arrival effect below).
@@ -500,7 +457,7 @@ export function NotificationsPage() {
   );
 
   // The first load of this mount is the arrival (the identity of the first
-  // loadActivity: a chip, sort or workspace change makes a new one).
+  // loadActivity: a chip or workspace change makes a new one).
   const arrivalLoadRef = useRef<typeof loadActivity | null>(null);
   useEffect(() => {
     mark('activity:mount');
@@ -524,7 +481,7 @@ export function NotificationsPage() {
       if (count !== undefined) setMentionCount(count);
       if (searchingRef.current) return;
       if (!loadingRef.current || itemsRef.current.length > 0) return;
-      const key = activityPageKey(userId, workspaceId, stateRef.current, sortRef.current);
+      const key = activityPageKey(userId, workspaceId, stateRef.current, ACTIVITY_SORT);
       const kept = peekActivityPage(key);
       if (kept === undefined) return;
       lateKeptRef.current = key;
@@ -582,9 +539,9 @@ export function NotificationsPage() {
   const buckets = useMemo(
     () =>
       searching
-        ? groupDigest(items, sort, { nowMs, tz })
-        : groupDigest(filterByState(items, state, nowMs), sort, { nowMs, tz }),
-    [items, state, sort, nowMs, tz, searching],
+        ? groupDigest(items, ACTIVITY_SORT, { nowMs, tz })
+        : groupDigest(filterByState(items, state, nowMs), ACTIVITY_SORT, { nowMs, tz }),
+    [items, state, nowMs, tz, searching],
   );
 
   const totalUnread = useMemo(() => unreadCount(items, nowMs), [items, nowMs]);
@@ -599,19 +556,6 @@ export function NotificationsPage() {
       }
     },
     [userId, workspaceId],
-  );
-
-  // Mark one entry read in place, optimistically (read-state is best-effort).
-  const markReadLocal = useCallback(
-    (id: string) => {
-      const stamp = new Date().toISOString();
-      editItems((prev) =>
-        prev.map((item) =>
-          item.id === id && item.readAt === null ? { ...item, readAt: stamp } : item,
-        ),
-      );
-    },
-    [editItems],
   );
 
   // Put rows a failed save had marked back to unread (only those still carrying its stamp).
@@ -694,23 +638,6 @@ export function NotificationsPage() {
     [workspaceId, workspaceKey, side, navigate, markEntriesRead, toast],
   );
 
-  const handleMarkRead = useCallback(
-    (item: ActivityItem) => {
-      if (workspaceId === null || item.readAt !== null) return;
-      markReadLocal(item.id);
-      void markEntryRead(supabase, item, workspaceId, newTrace()).then((result) => {
-        if (!result.ok) {
-          push(errorText('mark as read', result.error));
-          void loadActivity();
-          return;
-        }
-        void loadMentionCount();
-        window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
-      });
-    },
-    [workspaceId, newTrace, markReadLocal, push, loadActivity, loadMentionCount],
-  );
-
   // The active chip only: mark its unread rows (no snooze, or one that has run
   // out) read at once and write immediately; no Undo and no confirmation toast.
   // All and Unread are ONE call to inbox_mark_all_read (every unread row of
@@ -785,37 +712,10 @@ export function NotificationsPage() {
     [items, state, nowMs, searching],
   );
 
-  // Optimistic snooze: flip the row's snoozed_until locally first, then call the
-  // proc; on failure revert and surface the error (matches handleMarkRead).
-  const handleSnooze = useCallback(
-    (item: ActivityItem, kind: SnoozeKind) => {
-      if (workspaceId === null) return;
-      const previous = item.snoozedUntil;
-      const next = optimisticSnoozeUntil(kind, Date.now());
-      editItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, snoozedUntil: next } : i)));
-      const traceId = newTrace();
-      void snoozeEntry(supabase, item, workspaceId, kind, traceId).then((result) => {
-        if (!result.ok) {
-          editItems((prev) =>
-            prev.map((i) => (i.id === item.id ? { ...i, snoozedUntil: previous } : i)),
-          );
-          logger.warn('notifications: snooze failed', {
-            trace_id: traceId,
-            error: result.error.message,
-          });
-          push(errorText('snooze', result.error));
-          return;
-        }
-        window.dispatchEvent(new CustomEvent('sorted:inbox-changed'));
-      });
-    },
-    [workspaceId, newTrace, editItems, push],
-  );
-
   const listLoading = workspaceId === null || (loading && items.length === 0);
   if (!listLoading) mark('activity:paint');
   // What the first frame painted (?paintlog): the kept or device-saved page,
-  // or the loading line (nothing saved for this chip and sort yet).
+  // or the loading line (nothing saved for this chip yet).
   const firstPaintRef = useRef<string | null>(null);
   firstPaintRef.current ??= listLoading ? 'activity:loading-paint' : 'activity:kept-paint';
   useLayoutEffect(() => {
@@ -835,23 +735,13 @@ export function NotificationsPage() {
         {ACTIVITY_TITLE}
       </h1>
 
-      {/* The shared list header: search left, sort right. */}
-      <SectionHeader<ActivityDirection>
+      {/* The shared list header: the search runs the full width (no sort, newest first). */}
+      <SectionHeader
         search={{
           value: search,
           onChange: setSearch,
           placeholder: 'Search activity',
           label: 'Search activity',
-        }}
-        sort={{
-          node: (
-            <SortMenu<ActivityDirection>
-              options={activitySortOptions(searching)}
-              value={sort}
-              onChange={setSort}
-              label="Sort activity"
-            />
-          ),
         }}
       />
 
@@ -881,11 +771,8 @@ export function NotificationsPage() {
           <EmptyState icon={<IconBriefs size={ICON_SIZE.status} />} title={EMPTY_LINES.briefs} />
         ) : state === 'plans' ? (
           <EmptyState icon={<IconPlan size={ICON_SIZE.status} />} title={EMPTY_LINES.plans} />
-        ) : state === 'snoozed' ? (
-          <EmptyState
-            icon={<IconAlarmClock size={ICON_SIZE.status} />}
-            title={EMPTY_LINES.snoozed}
-          />
+        ) : state === 'unread' ? (
+          <EmptyState icon={<IconActivity size={ICON_SIZE.status} />} title={EMPTY_LINES.unread} />
         ) : (
           <EmptyState
             icon={<IconActivity size={ICON_SIZE.status} />}
@@ -899,9 +786,9 @@ export function NotificationsPage() {
             return (
               <section key={bucket.key} className="mt-2">
                 {/* One 44 line on the page edge: "YESTERDAY · 1 update" left and, on the
-                    first day only, Mark all read right (the toolbar keeps one IconButton,
-                    Sort; the Unread chip already shows the count). The line is 44 with or
-                    without the link, so the list never shifts when it goes. */}
+                    first day only, Mark all read right (the Unread chip already shows the
+                    count). The line is 44 with or without the link, so the list never
+                    shifts when it goes. */}
                 <div
                   data-activity-bucket-head=""
                   className={cn('flex h-11 min-w-0 items-center gap-2', GUTTER)}
@@ -939,8 +826,6 @@ export function NotificationsPage() {
                         presignEnabled={presignEnabled}
                         onOpenGroup={handleOpenGroup}
                         onOpenEntry={handleOpenEntry}
-                        onSnooze={handleSnooze}
-                        onMarkRead={handleMarkRead}
                         selfName={selfName}
                         side={side}
                         entering={entering.has(group[0]?.id ?? '')}

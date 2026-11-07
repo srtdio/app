@@ -2,8 +2,8 @@
 // created_at, id; p_limit 50; a uuid_v7 p_trace_id), its rows through the
 // feed's own mapEntry + batched joins (enrichInboxRows), nothing under 2
 // characters, and a newer query aborting the call in flight (the shared
-// runner). The sort offers Newest first / Oldest first, and only Newest first
-// while searching (activity_search pages newest first; never reversed locally).
+// runner). Activity has no sort: the feed and the search both read newest
+// first (activity_search pages newest first; never reversed locally).
 import { describe, expect, it } from 'vitest';
 import type { Client } from '@srtdio/rpc';
 import type { Database } from '@srtdio/schemas';

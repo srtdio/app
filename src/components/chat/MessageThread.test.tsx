@@ -3640,8 +3640,6 @@ describe('J7 only a real "@[all]" token draws bold', () => {
         presignEnabled={false}
         onOpenGroup={() => {}}
         onOpenEntry={() => {}}
-        onSnooze={() => {}}
-        onMarkRead={() => {}}
         selfName={null}
       />,
     );

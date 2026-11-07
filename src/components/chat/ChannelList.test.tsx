@@ -12,6 +12,7 @@ vi.mock('agora-chat', () => ({
 
 import {
   ChannelCard,
+  chatSelectActions,
   channelListContent,
   channelListView,
   draftLine,
@@ -24,8 +25,8 @@ import {
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
-import { IconPlus } from '@/components/ui/icons';
-import { ListCardBox } from '@/components/ui/ListCard';
+import { IconEyeOff, IconPlus } from '@/components/ui/icons';
+import { ListCardBox, type ListCardSelect } from '@/components/ui/ListCard';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -278,6 +279,7 @@ describe('select mode', () => {
     return {
       active: false,
       selectedIds: new Set(),
+      onEnter: vi.fn(),
       onStart: vi.fn(),
       onCancel: vi.fn(),
       onToggle: vi.fn(),
@@ -286,7 +288,7 @@ describe('select mode', () => {
     };
   }
 
-  function tree(mode: ChannelSelectMode): ReactElement {
+  function tree(mode: ChannelSelectMode, kind: 'photo' | null = null): ReactElement {
     return channelListContent({
       channels,
       selectedChannelId: null,
@@ -297,69 +299,98 @@ describe('select mode', () => {
       search: '',
       onSearchChange: () => {},
       select: mode,
+      kind,
+      onKindChange: () => {},
     });
   }
 
-  it('offers Select next to search and new chat, which starts select mode', () => {
+  function barOf(t: ReactElement): ReactElement | undefined {
+    return findAll(
+      t,
+      (el) => (el.props as Record<string, unknown>)['data-chat-select-bar'] !== undefined,
+    )[0];
+  }
+
+  function actionsOf(t: ReactElement): ReactElement[] {
+    return findAll(barOf(t), (el) => el.type === IconButton);
+  }
+
+  it('no header Select on the chat list: a long-press or right-click on a card enters', () => {
     const mode = select({});
-    const selectButton = findAll(tree(mode), isSelectButton)[0];
-    expect(selectButton).toBeDefined();
-    (selectButton!.props as { onClick: () => void }).onClick();
-    expect(mode.onStart).toHaveBeenCalledTimes(1);
-    expect(findAll(tree(mode), isNewChat)).toHaveLength(1);
+    const t = tree(mode);
+    expect(findAll(t, isSelectButton)).toHaveLength(0);
+    expect(findAll(t, isNewChat)).toHaveLength(1);
+    expect(barOf(t)).toBeUndefined();
+    // Every chat card carries ListCard's select, off, entering with that chat ticked.
+    const cards = findAll(t, (el) => el.type === ChannelCard);
+    const selects = cards.map((c) => (c.props as { select?: ListCardSelect }).select);
+    expect(selects.map((s) => s?.active)).toEqual([false, false]);
+    selects[1]!.onEnter();
+    expect(mode.onEnter).toHaveBeenCalledWith('b');
   });
 
-  it('in select mode shows N selected + Cancel, checks rows, and taps toggle', () => {
+  it('a chip view keeps the header Select (media items have no long-press)', () => {
+    const mode = select({});
+    const button = findAll(tree(mode, 'photo'), isSelectButton)[0];
+    expect(button).toBeDefined();
+    (button!.props as { onClick: () => void }).onClick();
+    expect(mode.onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('in select mode the header stays, cards tick and taps toggle', () => {
     const mode = select({ active: true, selectedIds: new Set(['b']) });
     const t = tree(mode);
-    expect(texts(t)).toContain('1 selected');
-    expect(texts(t)).toContain('Cancel');
-    expect(findAll(t, (el) => el.type === SectionHeader)).toHaveLength(0);
+    expect(findAll(t, (el) => el.type === SectionHeader)).toHaveLength(1);
+    expect(findAll(t, isSelectButton)).toHaveLength(0);
     const cards = findAll(t, (el) => el.type === ChannelCard);
-    expect(cards.map((c) => (c.props as { checked?: boolean }).checked)).toEqual([false, true]);
-    (cards[0]!.props as { onToggle: (id: string) => void }).onToggle('a');
+    const selects = cards.map((c) => (c.props as { select: ListCardSelect }).select);
+    expect(selects.map((s) => s.active)).toEqual([true, true]);
+    expect(selects.map((s) => s.chosen)).toEqual([false, true]);
+    selects[0]!.onToggle();
     expect(mode.onToggle).toHaveBeenCalledWith('a');
   });
 
-  it('the bottom Hide is disabled at 0 and hides the checked chats otherwise (no confirm)', () => {
-    const deleteOf = (t: ReactElement): ReactElement =>
-      findAll(t, (el) => {
-        const c = (el.props as { children?: unknown }).children;
-        return Array.isArray(c) && c.includes('Hide');
-      })[0]!;
-    const empty = select({ active: true });
-    expect((deleteOf(tree(empty)).props as { disabled: boolean }).disabled).toBe(true);
-    const some = select({ active: true, selectedIds: new Set(['a']) });
-    const button = deleteOf(tree(some));
-    expect((button.props as { disabled: boolean }).disabled).toBe(false);
-    (button.props as { onClick: () => void }).onClick();
+  it('the bar: Cancel, "N selected", Hide chat (any count, eye-off, never red)', () => {
+    const some = select({ active: true, selectedIds: new Set(['a', 'b']) });
+    const t = tree(some);
+    expect(texts(barOf(t))).toContain('2 selected');
+    const cancel = findAll(
+      barOf(t),
+      (el) => (el.props as Record<string, unknown>)['data-selection-cancel'] !== undefined,
+    )[0]!;
+    (cancel.props as { onClick: () => void }).onClick();
+    expect(some.onCancel).toHaveBeenCalledTimes(1);
+    const actions = actionsOf(t);
+    expect(actions.map((a) => (a.props as { label: string }).label)).toEqual(['Hide chat']);
+    const hide = actions[0]!.props as Record<string, unknown>;
+    expect(hide['data-selection-hide']).toBe('');
+    expect(hide.disabled).toBe(false);
+    expect(hide.className).toBeUndefined();
+    (hide.onClick as () => void)();
     expect(some.onDelete).toHaveBeenCalledTimes(1);
+    expect(chatSelectActions(some)[0]!.icon).toBe(IconEyeOff);
+    // Never a confirm: the hide runs behind the Undo toast.
+    expect(texts(t)).not.toContain('Hide chats?');
   });
 
   it('a chip view selects items: Forward and Delete for me, never Hide, both disabled at 0', () => {
-    const barOf = (t: ReactElement): ReactElement | undefined =>
-      findAll(
-        t,
-        (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'media-select-bar',
-      )[0];
-    const buttonsOf = (t: ReactElement): ReactElement[] =>
-      findAll(barOf(t), (el) => el.type === Button);
     const onForward = vi.fn();
     const empty = select({ active: true, media: { onForward } });
-    expect(barOf(tree(empty))).toBeDefined();
-    expect(texts(tree(empty))).not.toContain('Hide');
-    const emptyButtons = buttonsOf(tree(empty));
-    expect(emptyButtons).toHaveLength(2);
-    for (const b of emptyButtons) expect((b.props as { disabled: boolean }).disabled).toBe(true);
+    const bar = barOf(tree(empty));
+    expect((bar!.props as Record<string, unknown>)['data-testid']).toBe('media-select-bar');
+    expect(texts(bar)).toContain('0 selected');
+    const emptyActions = actionsOf(tree(empty));
+    expect(emptyActions).toHaveLength(2);
+    for (const b of emptyActions) expect((b.props as { disabled: boolean }).disabled).toBe(true);
 
     const some = select({ active: true, selectedIds: new Set(['m1']), media: { onForward } });
-    const [forward, del] = buttonsOf(tree(some));
+    const [forward, del] = actionsOf(tree(some));
     const forwardProps = forward?.props as Record<string, unknown>;
     const deleteProps = del?.props as Record<string, unknown>;
     expect(forwardProps['data-selection-forward']).toBe('');
     expect(deleteProps['data-selection-delete']).toBe('');
-    expect(deleteProps.variant).toBe('danger');
-    expect(deleteProps.children).toContain('Delete for me');
+    expect(deleteProps.label).toBe('Delete for me');
+    expect(deleteProps.className).toContain('text-bad');
     expect(forwardProps.disabled).toBe(false);
     expect(deleteProps.disabled).toBe(false);
     (forwardProps.onClick as () => void)();
@@ -370,32 +401,15 @@ describe('select mode', () => {
 
   it('a chip view with no forward path shows Delete for me only', () => {
     const mode = select({ active: true, selectedIds: new Set(['m1']), media: {} });
-    const bar = findAll(
-      tree(mode),
-      (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'media-select-bar',
-    )[0];
-    const buttons = findAll(bar, (el) => el.type === Button);
-    expect(buttons).toHaveLength(1);
-    expect((buttons[0]?.props as { children?: unknown }).children).toContain('Delete for me');
+    const actions = actionsOf(tree(mode));
+    expect(actions).toHaveLength(1);
+    expect((actions[0]?.props as { label?: string }).label).toBe('Delete for me');
   });
 
-  it('no long-press menu on rows while selecting', () => {
-    const t = channelListContent({
-      channels,
-      selectedChannelId: null,
-      status: 'ready',
-      onRetry: () => {},
-      onSelect: () => {},
-      onNewChat: () => {},
-      search: '',
-      onSearchChange: () => {},
-      select: select({ active: true }),
-      onLongPress: () => {},
-    });
-    const cards = findAll(t, (el) => el.type === ChannelCard);
-    expect(
-      cards.every((c) => (c.props as { onLongPress?: unknown }).onLongPress === undefined),
-    ).toBe(true);
+  it('New chat leaves select mode', () => {
+    const mode = select({ active: true, selectedIds: new Set(['a']) });
+    (findAll(tree(mode), isNewChat)[0]!.props as { onClick: () => void }).onClick();
+    expect(mode.onCancel).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -415,6 +429,7 @@ describe('load status', () => {
       select: {
         active: false,
         selectedIds: new Set(),
+        onEnter: () => {},
         onStart: () => {},
         onCancel: () => {},
         onToggle: () => {},
@@ -457,7 +472,7 @@ describe('load status', () => {
     // Boxes sweep (motion Bone, in the card's slots); never a pulse, fade or spinner.
     const html = renderToStaticMarkup(<ListCardBox />);
     expect(html).toContain('data-list-card-box=""');
-    expect(html).toContain('h-18 w-18');
+    expect(html).toContain('h-12 w-12');
     expect(html).not.toContain('animate-pulse');
     expect(
       findAll(withStatus('loading'), (el) =>

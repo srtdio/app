@@ -8,7 +8,6 @@ import {
   LOADING_NOTIFICATIONS,
   REFRESH_FAILED,
   SELF_ACTOR,
-  SNOOZE_FAILED,
   UNKNOWN_ACTOR,
   activityLine,
   appendUnique,
@@ -2152,21 +2151,20 @@ describe('notifications fixes: pure helpers', () => {
     expect(updatesLabel(12)).toBe('12 updates');
   });
 
-  it('fix 12: loading, refresh and snooze copy is fixed, plain and has no em-dash', () => {
+  it('fix 12: loading and refresh copy is fixed, plain and has no em-dash', () => {
     expect(LOADING_NOTIFICATIONS).toBe('Loading activity');
     expect(REFRESH_FAILED).toBe("Couldn't refresh. Try again.");
-    expect(SNOOZE_FAILED).toBe("Couldn't snooze. Try again.");
-    for (const copy of [LOADING_NOTIFICATIONS, REFRESH_FAILED, SNOOZE_FAILED]) {
+    for (const copy of [LOADING_NOTIFICATIONS, REFRESH_FAILED]) {
       expect(copy).not.toContain('\u2014');
     }
   });
 
   it('fix 13: each chip empty state is one positive line', () => {
     expect(EMPTY_LINES).toEqual({
+      unread: 'New updates show up here.',
       plans: 'Plan updates show up here.',
       mentions: 'Mentions of you show up here.',
       briefs: 'Brief updates show up here.',
-      snoozed: 'Snoozed updates come back here.',
     });
     for (const line of Object.values(EMPTY_LINES)) expect(line).not.toContain('\u2014');
   });
@@ -2184,10 +2182,6 @@ describe('notifications fixes: pure helpers', () => {
 
   it('fix 24: a refresh failure has its own toast copy, not the load error', () => {
     expect(REFRESH_FAILED).not.toBe("Couldn't load activity. Try again.");
-  });
-
-  it('fix 25: a snooze failure is the fixed copy, never a raw error', () => {
-    expect(SNOOZE_FAILED).not.toMatch(/error|rpc|permission|violates/i);
   });
 
   it('fix 26: All and Unread mark the whole inbox; every other chip only its own rows', () => {

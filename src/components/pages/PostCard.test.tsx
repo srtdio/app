@@ -1,14 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
-// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => true,
-}));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { PostCard, cardDue, cardMenuLabel } from '@/components/pages/PostCard';
+import { PostCard, cardDue, postCardHref } from '@/components/pages/PostCard';
 import type { PostCardProps } from '@/components/pages/PostCard';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { PipelinePost } from '@srtdio/posts';
@@ -114,7 +109,7 @@ describe('PostCard is ui/ListCard', () => {
         const out = renderWith({
           post: makePost({ number: 12, stage, format, title: 'Launch teaser' }),
           workspaceKey: 'gbl',
-          onMove: () => {},
+          viewer: { role: 'agency', approverFirstNames: ['Maya'] },
         });
         expect(out).toContain('Launch teaser');
         expect(out).not.toContain('GBL-12');
@@ -198,7 +193,7 @@ describe('PostCard picture', () => {
 });
 
 describe('PostCard lines', () => {
-  it('line 1 is the title; the tag on line 3 is the stage label, grey', () => {
+  it('line 1 is the title; line 2 carries the stage tag (grey, with its stage dot)', () => {
     for (const [stage, label] of [
       ['draft', 'Draft'],
       ['review', 'Review'],
@@ -209,25 +204,27 @@ describe('PostCard lines', () => {
       const out = renderWith({ post: makePost({ stage }) });
       expect(textOf(out, 'data-list-card-title=""')).toBe('Post title');
       expect(tag(out, 'data-list-card-tag=""')).toContain(`data-post-card-stage="${stage}"`);
-      const line3 = out.slice(out.indexOf('data-list-card-line="3"'));
-      expect(line3).toContain(`>${label}<`);
+      const line2 = out.slice(out.indexOf('data-list-card-line="2"'));
+      expect(line2).toContain(`>${label}<`);
+      expect(out).not.toContain('data-list-card-line="3"');
     }
   });
 
-  it('with no status line the caption takes line 2 (two lines, plain text)', () => {
+  it('with no status line the caption is line 2 (one line, plain text)', () => {
     const out = renderWith({ post: makePost({ caption: 'Launch day is **here**' }) });
     const preview = tag(out, 'data-list-card-preview=""');
     expect(preview).toContain('data-post-card-caption=""');
-    expect(preview).toContain('line-clamp-2');
+    expect(preview).toContain('truncate');
+    expect(preview).not.toContain('line-clamp-2');
     // Captions never format: the stars stay as typed.
     expect(textOf(out, 'data-list-card-preview=""')).toBe('Launch day is **here**');
-    // A blank caption leaves line 2 empty.
+    // A blank caption leaves the preview empty.
     expect(renderWith({ post: makePost({ caption: '  ' }) })).not.toContain(
       'data-post-card-caption',
     );
   });
 
-  it('a review card leads line 2 with the status line, then the caption on one line', () => {
+  it('a review card reads "With <name> · <ago> · caption" on one line', () => {
     const out = renderWith({
       post: makePost({
         stage: 'review',
@@ -240,10 +237,10 @@ describe('PostCard lines', () => {
     const preview = out.slice(out.indexOf('data-list-card-preview'));
     expect(textOf(preview, 'data-post-card-status="with"')).toBe('With Maya · 3h');
     expect(textOf(preview, 'data-post-card-caption=""')).toBe('Linen that breathes.');
-    expect(tag(preview, 'data-post-card-caption=""')).toContain('truncate');
-    expect(preview.indexOf('data-post-card-status')).toBeLessThan(
-      preview.indexOf('data-post-card-caption'),
-    );
+    const text = preview.slice(0, preview.indexOf('</span></span>')).replace(/<[^>]*>/g, '');
+    expect(text).toContain('With Maya · 3h · Linen that breathes.');
+    // Inline spans in the one truncated preview line, never stacked blocks.
+    expect(out).not.toContain('block truncate');
     // An approver: "Waiting on you".
     const mine = renderWith({
       post: makePost({ stage: 'review' }),
@@ -251,54 +248,74 @@ describe('PostCard lines', () => {
       now: NOW,
     });
     expect(textOf(mine, 'data-post-card-status="you"')).toBe('Waiting on you');
-    // While the role loads there is no status line yet; the card keeps its height.
+    // While the role loads there is no status line yet: the caption alone.
     const pending = renderWith({
       post: makePost({ stage: 'review', caption: 'Hello' }),
       viewer: { role: null, approverFirstNames: [], pending: true },
       now: NOW,
     });
     expect(pending).not.toContain('data-post-card-status');
-    expect(tag(pending, 'data-list-card-preview=""')).toContain('min-h-9');
+    expect(textOf(pending, 'data-list-card-preview=""')).toBe('Hello');
   });
 
-  it('line 3: the due time (formatDue) on the ListCard time slot', () => {
+  it('line 1 time: the due words (formatDue) on the ListCard time slot, never "Due"', () => {
     const out = renderWith({ post: makePost({ target_date: '2026-11-02' }), now: NOW });
     const due = tag(out, 'data-post-card-due=""');
     expect(due).toContain('data-list-card-time=""');
     expect(due).toContain('font-mono');
     expect(due).not.toContain('text-bad');
-    expect(textOf(out, 'data-post-card-due=""')).toBe('Due 2 Nov');
+    expect(textOf(out, 'data-post-card-due=""')).toBe('2 Nov');
+    expect(out).not.toMatch(/>Due /);
+    // The time sits on line 1 with the title.
+    const line1 = out.slice(
+      out.indexOf('data-list-card-line="1"'),
+      out.indexOf('data-list-card-line="2"'),
+    );
+    expect(line1).toContain('data-post-card-due');
     // No due date: no time.
     expect(renderWith({ post: makePost({}), now: NOW })).not.toContain('data-list-card-time');
   });
 
-  it('a past due date reads overdue in the bad tone; approved is never overdue', () => {
-    expect(cardDue('2026-10-22', 'review', 'UTC', NOW)).toEqual({
-      text: 'Overdue 1d',
-      overdue: true,
-    });
-    expect(cardDue('2026-10-12', 'draft', 'UTC', NOW)).toEqual({
-      text: 'Overdue 1w',
-      overdue: true,
-    });
-    expect(cardDue('2026-05-20', 'draft', 'UTC', NOW)).toEqual({
-      text: 'Overdue 5mo',
-      overdue: true,
-    });
-    expect(cardDue('2026-10-23', 'review', 'UTC', NOW)).toEqual({
-      text: 'Due today',
+  it('due words: Today, Tomorrow, a weekday, then the date', () => {
+    expect(cardDue('2026-10-23', 'review', 'UTC', NOW)).toEqual({ text: 'Today', overdue: false });
+    expect(cardDue('2026-10-24', 'review', 'UTC', NOW)).toEqual({
+      text: 'Tomorrow',
       overdue: false,
     });
-    expect(cardDue('2026-10-24', 'review', 'UTC', NOW)).toEqual({
-      text: 'Due tomorrow',
+    // Monday 2 Nov 2026: Friday 6 Nov reads its weekday.
+    expect(cardDue('2026-11-06', 'draft', 'UTC', new Date('2026-11-02T12:00:00Z'))).toEqual({
+      text: 'Fri',
+      overdue: false,
+    });
+    expect(cardDue('2026-11-12', 'review', 'UTC', NOW)).toEqual({
+      text: '12 Nov',
       overdue: false,
     });
     expect(cardDue('2026-12-12', 'review', 'UTC', NOW)).toEqual({
-      text: 'Due 12 Dec',
+      text: '12 Dec',
       overdue: false,
     });
+  });
+
+  it('a past due date reads late in the bad tone; approved is never late', () => {
+    expect(cardDue('2026-10-22', 'review', 'UTC', NOW)).toEqual({
+      text: '1d late',
+      overdue: true,
+    });
+    expect(cardDue('2026-10-21', 'review', 'UTC', NOW)).toEqual({
+      text: '2d late',
+      overdue: true,
+    });
+    expect(cardDue('2026-10-12', 'draft', 'UTC', NOW)).toEqual({
+      text: '1w late',
+      overdue: true,
+    });
+    expect(cardDue('2026-05-20', 'draft', 'UTC', NOW)).toEqual({
+      text: '5mo late',
+      overdue: true,
+    });
     expect(cardDue('2026-10-12', 'approved', 'UTC', NOW)).toEqual({
-      text: 'Due 12 Oct',
+      text: '12 Oct',
       overdue: false,
     });
     expect(cardDue('not a date', 'review', 'UTC', NOW)).toEqual({ text: '', overdue: false });
@@ -311,96 +328,51 @@ describe('PostCard lines', () => {
     const due = tag(out, 'data-post-card-due="overdue"');
     expect(due).toContain('text-bad');
     expect(due).toContain('data-list-card-time-bad=""');
-    expect(textOf(out, 'data-post-card-due="overdue"')).toBe('Overdue 1w');
+    expect(textOf(out, 'data-post-card-due="overdue"')).toBe('1w late');
+    expect(out).not.toContain('Overdue');
+    // Approved: the date, never the bad tone.
+    const approved = renderWith({
+      post: makePost({ stage: 'approved', target_date: '2026-10-12' }),
+      timeZone: 'UTC',
+      now: NOW,
+    });
+    expect(approved).not.toContain('data-list-card-time-bad');
+    expect(textOf(approved, 'data-post-card-due=""')).toBe('12 Oct');
   });
 });
 
-describe('PostCard ⋮', () => {
-  it('a card with onMove carries the ActionMenu trigger on line 3, named with the title', () => {
-    const out = renderWith({ post: makePost({}), onMove: () => {} });
-    const button = tag(out, 'data-post-card-move=""');
-    expect(button).toContain('aria-label="Actions for Post title"');
-    expect(button).toContain('h-11');
-    expect(button).toContain('w-11');
-    // The trailing rule (ActionMenuTrigger) puts the glyph on the content edge.
-    expect(button).toContain('-mr-3');
-    expect(button).toContain('text-fg-3');
-    const line3 = out.slice(out.indexOf('data-list-card-line="3"'));
-    expect(line3).toContain('data-list-card-more=""');
-    expect(line3).toContain('data-post-card-move');
-    // No onMove, no ⋮.
-    expect(renderWith({ post: makePost({}) })).not.toContain('data-post-card-move');
+describe('PostCard has no ⋮', () => {
+  it('no menu trigger, no ActionMenu, no menu gesture', () => {
+    const out = renderWith({
+      post: makePost({}),
+      viewer: { role: 'agency', approverFirstNames: [] },
+    });
+    expect(out).not.toContain('data-post-card-move');
+    expect(out).not.toContain('data-post-card-menu');
+    expect(out).not.toContain('data-list-card-more');
+    expect(out).not.toContain('Actions for');
+    const src = readFileSync(fileURLToPath(new URL('./PostCard.tsx', import.meta.url)), 'utf8');
+    expect(src).not.toMatch(/ActionMenu|useMenuGesture|onMove/);
   });
 
-  it('the ⋮ name carries the unread comment count', () => {
-    expect(cardMenuLabel('X', 0)).toBe('Actions for X');
-    expect(cardMenuLabel('X', 1)).toBe('Actions for X, 1 unread comment');
-    expect(cardMenuLabel('X', 3)).toBe('Actions for X, 3 unread comments');
+  it('select mode: the tick shows on the picture and the chosen card is lit-selected', () => {
+    const select = { active: true, chosen: true, onEnter: () => {}, onToggle: () => {} };
+    const out = renderWith({ post: makePost({}), select });
+    expect(out).toContain('data-list-card-selecting=""');
+    expect(out).toContain('data-list-card-tick="on"');
+    expect(tag(out, 'data-list-card=""')).toContain('lit-selected');
+    // Without select mode: no tick at all.
+    expect(renderWith({ post: makePost({}) })).not.toContain('data-list-card-tick');
+  });
+
+  it('the open link: /p/KEY-N, else /posts/:id', () => {
+    expect(postCardHref({ id: 'p1', number: 7 }, 'gbl')).toBe('/p/gbl-7');
+    expect(postCardHref({ id: 'p1', number: 7 }, null)).toBe('/posts/p1');
   });
 
   it('PostCard hands its slots to ListCard and builds no frame of its own', () => {
     const src = readFileSync(fileURLToPath(new URL('./PostCard.tsx', import.meta.url)), 'utf8');
     expect(src).toContain('<ListCard');
     expect(src).not.toMatch(/rounded-xl|lit-card|\bborder\b|<Card\b/);
-  });
-});
-
-describe('menu gesture', () => {
-  it('a long-press (touch) or a right-click (laptop) opens the same ⋯ ActionMenu', () => {
-    const src = readFileSync(fileURLToPath(new URL('./PostCard.tsx', import.meta.url)), 'utf8');
-    expect(src).toContain('useMenuGesture(() => setMenuOpen(true))');
-    expect(src).toContain('...gesture.handlers');
-    expect(src).toContain('open={menuOpen}');
-    expect(src).toContain('onOpenChange={setMenuOpen}');
-  });
-});
-
-describe('PostCard ⋯ menu: every move the move sheet offers', () => {
-  it('lists each moveActions row for the role, in order, after Open and Copy link', async () => {
-    const { cardMenuItems } = await import('@/components/pages/PostCard');
-    const { moveActions } = await import('@/components/pages/pipeline/MoveSheet');
-    const noop = (): void => {};
-    for (const role of ['client', 'agency', 'creator', null]) {
-      for (const stage of ['draft', 'review', 'approved', 'parked', 'rejected'] as const) {
-        const moves = moveActions(role, stage);
-        const items = cardMenuItems({
-          onOpen: noop,
-          onCopyLink: noop,
-          onMove: noop,
-          moves: moves.map((m) => ({ ...m, onSelect: noop })),
-        });
-        const labels = items.map((i) => i.label);
-        expect(labels.slice(0, 2)).toEqual(['Open', 'Copy link']);
-        if (moves.length > 0) {
-          expect(labels.slice(2)).toEqual(moves.map((m) => m.label));
-          expect(labels).not.toContain('Move');
-        } else {
-          expect(labels.slice(2)).toEqual(['Move']);
-        }
-      }
-    }
-  });
-
-  it('Reject is the danger row; icons: review arrow, approve check, park pause, reject X', async () => {
-    const { cardMenuItems } = await import('@/components/pages/PostCard');
-    const icons = await import('@/components/ui/icons');
-    const noop = (): void => {};
-    const items = cardMenuItems({
-      onOpen: noop,
-      onCopyLink: noop,
-      moves: [
-        { to: 'review', label: 'Send for review', tone: 'default', onSelect: noop },
-        { to: 'approved', label: 'Approve', tone: 'default', onSelect: noop },
-        { to: 'parked', label: 'Park', tone: 'default', onSelect: noop },
-        { to: 'rejected', label: 'Reject', tone: 'bad', onSelect: noop },
-      ],
-    });
-    const byLabel = new Map(items.map((i) => [i.label, i]));
-    expect(byLabel.get('Send for review')?.icon).toBe(icons.IconArrowUpRight);
-    expect(byLabel.get('Approve')?.icon).toBe(icons.IconCheck);
-    expect(byLabel.get('Park')?.icon).toBe(icons.IconPause);
-    expect(byLabel.get('Reject')?.icon).toBe(icons.IconX);
-    expect(byLabel.get('Reject')?.tone).toBe('danger');
-    expect(byLabel.get('Park')?.tone).toBeUndefined();
   });
 });

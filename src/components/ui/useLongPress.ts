@@ -253,3 +253,87 @@ export function useMenuGesture(onOpen: () => void): UseMenuGestureResult {
     consumeClickSuppression: press.consumeClickSuppression,
   };
 }
+
+/** What a selectable list item needs: whether select mode is on, and its two moves. */
+export interface SelectGesture {
+  /** Select mode is on in this list: a tap toggles, it never opens. */
+  active: boolean;
+  /** Long-press, right-click, Shift-click or Cmd-click outside select mode: enter with this item ticked. */
+  onEnter: () => void;
+  /** A tap (or any of the gestures above) while select mode is on. */
+  onToggle: () => void;
+}
+
+/** The slice of a click the select gesture reads; React's MouseEvent satisfies it. */
+interface SelectClickSample {
+  shiftKey: boolean;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  preventDefault: () => void;
+  stopPropagation: () => void;
+}
+
+export interface SelectGestureHandlers extends MenuGestureHandlers {
+  /**
+   * Capture-phase click on the item's root: swallows the click that trailed a
+   * long-press, toggles while select mode is on, and enters on Shift / Cmd
+   * (Ctrl) click. Otherwise the click reaches the item's own tap (it opens).
+   */
+  onClickCapture: (event: SelectClickSample) => void;
+}
+
+/**
+ * The one select gesture for list cards (ui/ListCard `select`): long-press on
+ * touch (LONG_PRESS_MS; a scroll or a 10px move cancels the hold, mouse presses
+ * never start it) and right-click on laptop enter select mode with the item
+ * ticked; Shift-click / Cmd-click enter and toggle; inside select mode a tap
+ * toggles. Pure client state: no await, no read. `undefined` (a list with no
+ * select mode) returns undefined and the item keeps its plain tap.
+ */
+export function useSelectGesture(
+  select: SelectGesture | undefined,
+): SelectGestureHandlers | undefined {
+  const selectRef = useRef(select);
+  selectRef.current = select;
+  // When the hold last fired: Android sends its own contextmenu right after a
+  // touch hold, which must not toggle the item straight back.
+  const heldAt = useRef(0);
+  const pick = (): void => {
+    const current = selectRef.current;
+    if (current === undefined) return;
+    if (current.active) current.onToggle();
+    else current.onEnter();
+  };
+  const press = useLongPress(
+    () => {
+      heldAt.current = Date.now();
+      pick();
+    },
+    { ignoreMouse: true },
+  );
+  if (select === undefined) return undefined;
+  return {
+    ...press.handlers,
+    onContextMenu(event) {
+      event.preventDefault();
+      if (Date.now() - heldAt.current < LONG_PRESS_MS * 2) return;
+      press.cancel();
+      press.clearClickSuppression();
+      pick();
+    },
+    onClickCapture(event) {
+      const current = selectRef.current;
+      if (current === undefined) return;
+      if (press.consumeClickSuppression()) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (current.active || event.shiftKey || event.metaKey || event.ctrlKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        pick();
+      }
+    },
+  };
+}

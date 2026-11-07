@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { AssetLightbox } from '@/components/pages/assets/AssetLightbox';
-import { assetMenuItems } from '@/components/pages/assets/AssetActionSheet';
+import { assetSelectActions } from '@/components/pages/assets/AssetActionSheet';
 import { ICON_SIZE, IconCopy, IconLink } from '@/components/ui/icons';
 import { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
@@ -47,8 +47,8 @@ const cache = new PresignCache({
 });
 
 describe('asset Copy link uses IconLink', () => {
-  it('the file menu Copy link row uses IconLink', () => {
-    const items = assetMenuItems(item, {
+  it('the select bar Copy link action uses IconLink', () => {
+    const items = assetSelectActions(item, {
       presignEnabled: true,
       requestDownloadUrl: async () => 'https://signed/d',
       onInfo: () => {},

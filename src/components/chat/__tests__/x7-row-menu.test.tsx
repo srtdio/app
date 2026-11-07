@@ -1,6 +1,7 @@
-// X7 design 1 (H5) and FT43/FT44: every chat tile has a visible 44px ⋯ that
-// opens the long-press menu; Hide is non-destructive ("Hide", "Couldn't
-// hide"); the tile's accessible name carries unread, preview and time.
+// X7 (H5, FT43, FT44), on the new list card: a chat tile has no ⋮ (its one
+// action, Hide chat, lives on the select bar a long-press opens); Hide is
+// non-destructive ("Hide chat", "Couldn't hide"); the tile's accessible name
+// carries unread, preview and time.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -23,12 +24,12 @@ vi.mock('@/lib/logger', () => ({
 import {
   ChannelCard,
   DEFAULT_LIST_INPUT,
-  ROW_MORE_INK,
-  chatRowMenuItems,
+  chatSelectActions,
   channelTileLabel,
+  type ChannelSelectMode,
 } from '@/components/chat/ChannelList';
 import { deleteChatFailedMessage } from '@/lib/chat/clear-flow';
-import { IconEyeOff } from '@/components/ui/icons';
+import { IconEyeOff, IconTrash } from '@/components/ui/icons';
 import type { ChannelSummary } from '@/lib/chat-reads';
 
 const source = (path: string): string =>
@@ -40,80 +41,65 @@ const group = {
   channelType: 'group',
 } as unknown as ChannelSummary;
 
-describe('X7 H5: the row ⋯', () => {
-  it('row ⋯ opens actions: shown on touch too (no hover needed), 44px, fg-3', () => {
-    const out = renderToStaticMarkup(
-      <ChannelCard
-        channel={group}
-        selected={false}
-        summary={undefined}
-        nowMs={0}
-        timeZone="UTC"
-        onSelect={() => {}}
-        input={{ ...DEFAULT_LIST_INPUT, hoverMenu: false, coarsePointer: true }}
-        onLongPress={() => {}}
-      />,
-    );
-    // The ListCard's line 3 trailing slot holds the ActionMenuTrigger (a 44 IconButton).
-    expect(out).toContain('data-list-card-more=""');
-    expect(out).toContain('aria-label="Actions for Launch"');
-    expect(out).toContain('aria-haspopup="menu"');
-    expect(out).toMatch(/aria-label="Actions for Launch"[^>]*h-11 w-11/);
-    expect(ROW_MORE_INK).toContain('text-fg-3');
-    expect(ROW_MORE_INK).not.toContain('opacity-0');
+function card(selecting: boolean): string {
+  return renderToStaticMarkup(
+    <ChannelCard
+      channel={group}
+      selected={false}
+      summary={undefined}
+      nowMs={0}
+      timeZone="UTC"
+      onSelect={() => {}}
+      input={{ ...DEFAULT_LIST_INPUT, coarsePointer: true }}
+      select={{ active: selecting, chosen: false, onEnter: () => {}, onToggle: () => {} }}
+    />,
+  );
+}
+
+describe('X7 H5, new card: no row ⋯, long-press selects', () => {
+  it('a chat card carries no ⋯ and no menu, in or out of select mode', () => {
+    for (const out of [card(false), card(true)]) {
+      expect(out).not.toContain('data-list-card-more');
+      expect(out).not.toContain('Actions for Launch');
+      expect(out).not.toContain('aria-haspopup="menu"');
+      expect(out.match(/<button/g)).toHaveLength(1);
+    }
+    // ListCard draws the select tick on the picture once select mode is on.
+    expect(card(true)).toContain('data-list-card-tick="off"');
   });
 
-  it('no menu wiring (no hide action): no ⋯', () => {
-    const out = renderToStaticMarkup(
-      <ChannelCard
-        channel={group}
-        selected={false}
-        summary={undefined}
-        nowMs={0}
-        timeZone="UTC"
-        onSelect={() => {}}
-        input={DEFAULT_LIST_INPUT}
-      />,
-    );
-    expect(out).not.toContain('data-list-card-more');
-  });
-
-  it('the ⋯ is a sibling of the tap surface, its glyph on the card content edge (the trailing rule)', () => {
-    const out = renderToStaticMarkup(
-      <ChannelCard
-        channel={group}
-        selected={false}
-        summary={undefined}
-        nowMs={0}
-        timeZone="UTC"
-        onSelect={() => {}}
-        input={DEFAULT_LIST_INPUT}
-        onLongPress={() => {}}
-      />,
-    );
-    // The card pads 16; the trigger is pulled -mr-3, so the 20 glyph's edge sits on the 16 content edge.
-    expect(out).toMatch(/data-list-card-body="" class="[^"]*\bp-4\b/);
-    const tap = out.indexOf('data-list-card-press');
-    expect(out.slice(tap, out.indexOf('aria-label="Actions for Launch"'))).toContain('</button>');
-    expect(out).toMatch(/aria-label="Actions for Launch"[^>]*-mr-3/);
+  it('the list wires no row menu of its own', () => {
+    const list = source('../ChannelList.tsx');
+    expect(list).not.toContain('ActionMenu');
+    expect(list).not.toContain('useLongPress');
+    expect(list).not.toContain('chatRowMenuItems');
   });
 });
 
-describe('X7 FT43: Hide is not a destructive action', () => {
-  it('menu and bar use the eye-off icon, no danger red, no trash', () => {
-    const list = source('../ChannelList.tsx');
-    const items = chatRowMenuItems(() => {});
+describe('X7 FT43: Hide chat is not a destructive action', () => {
+  const mode = (over: Partial<ChannelSelectMode> = {}): ChannelSelectMode => ({
+    active: true,
+    selectedIds: new Set(['g1']),
+    onEnter: () => {},
+    onStart: () => {},
+    onCancel: () => {},
+    onToggle: () => {},
+    onDelete: () => {},
+    ...over,
+  });
+
+  it('the bar uses the eye-off icon, no danger red, no trash; Delete for me only in a chip view', () => {
+    const items = chatSelectActions(mode());
     expect(items.map((i) => i.label)).toEqual(['Hide chat']);
     expect(items[0]?.icon).toBe(IconEyeOff);
-    expect(items[0]?.tone).toBeUndefined();
-    // The only trash is the chip view's "Delete for me" bar (a real delete), never Hide.
-    const media = list.slice(list.indexOf('function mediaSelectBar('));
-    const mediaBar = media.slice(0, media.indexOf('\n}\n'));
-    const withoutMediaBar = list.replace(mediaBar, '');
-    expect(withoutMediaBar).not.toContain('<IconTrash');
-    expect(mediaBar).toContain('<IconTrash');
-    expect(mediaBar).not.toContain('Hide');
+    expect(items[0]?.bad).toBeUndefined();
+    // The only trash is the chip view's "Delete for me" (a real delete), never Hide.
+    const media = chatSelectActions(mode({ media: { onForward: () => {} } }));
+    expect(media.map((i) => i.label)).toEqual(['Forward', 'Delete for me']);
+    expect(media.find((i) => i.label === 'Delete for me')?.icon).toBe(IconTrash);
+    expect(media.map((i) => i.label)).not.toContain('Hide chat');
     // No confirm at all: Hide runs behind the Undo toast.
+    const list = source('../ChannelList.tsx');
     expect(list).not.toContain('ConfirmDialog');
     expect(list).toContain('useUndoableAction');
   });

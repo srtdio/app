@@ -251,7 +251,7 @@ test('Photos chip: select picks a whole message; Delete for me hides it behind U
   await expect(bar).toBeVisible();
   // Nothing picked: Forward and Delete for me wait, disabled.
   await expect(bar.locator('[data-selection-delete]')).toBeDisabled();
-  await expect(bar.locator('[data-selection-delete]')).toHaveText('Delete for me');
+  await expect(bar.locator('[data-selection-delete]')).toHaveAccessibleName('Delete for me');
   await expect(bar.getByText('Hide', { exact: true })).toHaveCount(0);
 
   // One tap on one photo picks its message: every tile of the album is checked.

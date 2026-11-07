@@ -1,63 +1,177 @@
-// The Bank's select bar: it replaces the 90-day nudge while select mode is on
-// (a long-press, or Select in a row's menu; on the laptop table, any ticked
-// row). Cancel (ghost), "{n} selected", All / None (ghost), then Archive and
-// Delete (bad ink) as IconButtons. The writes behind Archive and Delete sit
-// behind the Undo strip in BankList; a finished action leaves select mode.
+// The Bank's select bar (ui/SelectBar): a long-press (phone) or right-click /
+// Shift-click / Cmd-click (laptop) on an idea card enters select mode with it
+// ticked. The bar carries every row the card's old ⋮ menu held: Open, Plan it
+// and Send to chat for one idea only; Show to client / Hide from client, Star /
+// Unstar, Archive / Unarchive and Delete (last, bad ink) for any count. The
+// toggles follow the selection: every picked idea already starred reads
+// Unstar, else Star (it stars the rest); the same for Hide / Show and
+// Unarchive / Archive. All (ghost) ticks every loaded idea. The writes behind
+// them are BankList's bank-proc handlers; Delete, Archive and Hide sit behind
+// the Undo strip there, and a finished action leaves select mode.
 
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconArchive, IconTrash } from '@/components/ui/icons';
-import { selectedLabel } from './bank-parts';
+import { SelectBar, visibleSelectActions, type SelectBarAction } from '@/components/ui/SelectBar';
+import {
+  IconArchive,
+  IconArrowUpRight,
+  IconCalendar,
+  IconEye,
+  IconEyeOff,
+  IconForward,
+  IconStar,
+  IconStarFilled,
+  IconTrash,
+} from '@/components/ui/icons';
+import type { BankIdea } from '@/lib/chat/plans';
 
-export function BankSelectBar(props: {
-  count: number;
-  onCancel: () => void;
-  onAll: () => void;
-  onNone: () => void;
-  onArchive: () => void;
-  onDelete: () => void;
-}): ReactElement {
-  const none = props.count === 0;
+/** A select bar action; `single` rows show only with exactly one idea ticked. */
+export type BankSelectAction = SelectBarAction & { single?: boolean };
+
+/** The writes and flows behind the bar (BankSurface's existing handlers). */
+export interface BankSelectHandlers {
+  onOpen: (idea: BankIdea) => void;
+  onPlanIt: (idea: BankIdea) => void;
+  onSend: (idea: BankIdea) => void;
+  /** Show to client: the ideas not yet shown (the warning sheet first). */
+  onShow: (ideas: BankIdea[]) => void;
+  /** Hide from client: every picked idea (all shown). */
+  onHide: (ideas: BankIdea[]) => void;
+  /** Star the unstarred (on) or unstar every picked idea (off). */
+  onStar: (ideas: BankIdea[], on: boolean) => void;
+  /** Archive the live ones (on) or unarchive every picked idea (off). */
+  onArchive: (ideas: BankIdea[], on: boolean) => void;
+  onDelete: (ideas: BankIdea[]) => void;
+}
+
+/**
+ * Every bar action for the picked ideas, in the old menu's order (Delete
+ * last), before the count filter (visibleSelectActions). Pure.
+ */
+export function bankSelectActions(
+  picked: readonly BankIdea[],
+  handlers: BankSelectHandlers,
+): BankSelectAction[] {
+  const first = picked[0];
+  const some = picked.length > 0;
+  const allShown = some && picked.every((i) => i.show_to_client === true);
+  const allStarred = some && picked.every((i) => i.starred_at != null);
+  const allArchived = some && picked.every((i) => i.archived_at != null);
+  const single = (run: (idea: BankIdea) => void) => () => {
+    if (first !== undefined) run(first);
+  };
+  return [
+    {
+      id: 'open',
+      label: 'Open',
+      icon: IconArrowUpRight,
+      single: true,
+      hooks: { 'data-bank-select-open': '' },
+      onSelect: single(handlers.onOpen),
+    },
+    {
+      id: 'plan-it',
+      label: 'Plan it',
+      icon: IconCalendar,
+      single: true,
+      hooks: { 'data-bank-select-plan-it': '' },
+      onSelect: single(handlers.onPlanIt),
+    },
+    {
+      id: 'send-to-chat',
+      label: 'Send to chat',
+      icon: IconForward,
+      single: true,
+      hooks: { 'data-bank-select-send': '' },
+      onSelect: single(handlers.onSend),
+    },
+    allShown
+      ? {
+          id: 'hide',
+          label: 'Hide from client',
+          icon: IconEyeOff,
+          hooks: { 'data-bank-select-show': 'hide' },
+          onSelect: () => handlers.onHide([...picked]),
+        }
+      : {
+          id: 'show',
+          label: 'Show to client',
+          icon: IconEye,
+          hooks: { 'data-bank-select-show': 'show' },
+          onSelect: () => handlers.onShow(picked.filter((i) => i.show_to_client !== true)),
+        },
+    allStarred
+      ? {
+          id: 'unstar',
+          label: 'Unstar',
+          icon: IconStar,
+          hooks: { 'data-bank-select-star': 'unstar' },
+          onSelect: () => handlers.onStar([...picked], false),
+        }
+      : {
+          id: 'star',
+          label: 'Star',
+          icon: IconStarFilled,
+          hooks: { 'data-bank-select-star': 'star' },
+          onSelect: () =>
+            handlers.onStar(
+              picked.filter((i) => i.starred_at == null),
+              true,
+            ),
+        },
+    allArchived
+      ? {
+          id: 'unarchive',
+          label: 'Unarchive',
+          icon: IconArchive,
+          hooks: { 'data-bank-select-archive': 'unarchive' },
+          onSelect: () => handlers.onArchive([...picked], false),
+        }
+      : {
+          id: 'archive',
+          label: 'Archive',
+          icon: IconArchive,
+          hooks: { 'data-bank-select-archive': 'archive' },
+          onSelect: () =>
+            handlers.onArchive(
+              picked.filter((i) => i.archived_at == null),
+              true,
+            ),
+        },
+    {
+      id: 'delete',
+      label: 'Delete',
+      icon: IconTrash,
+      tone: 'bad',
+      hooks: { 'data-bank-select-delete': '' },
+      onSelect: () => handlers.onDelete([...picked]),
+    },
+  ];
+}
+
+export function BankSelectBar(
+  props: {
+    picked: readonly BankIdea[];
+    onCancel: () => void;
+    /** Tick every loaded idea; absent hides All. */
+    onAll?: () => void;
+  } & BankSelectHandlers,
+): ReactElement {
+  const { picked, onCancel, onAll, ...handlers } = props;
   return (
-    <div
+    <SelectBar
       data-bank-select-bar=""
-      role="toolbar"
-      aria-label="Selected ideas"
-      className="lit-card mx-4 flex items-center gap-1 rounded-xl border bg-panel px-1 md:mx-0"
-    >
-      <Button variant="ghost" type="button" data-bank-select-cancel="" onClick={props.onCancel}>
-        Cancel
-      </Button>
-      <span
-        data-bank-select-count=""
-        className="min-w-0 flex-1 truncate text-base font-medium text-fg"
-      >
-        {selectedLabel(props.count)}
-      </span>
-      <Button variant="ghost" type="button" data-bank-select-all="" onClick={props.onAll}>
-        All
-      </Button>
-      <Button variant="ghost" type="button" data-bank-select-none="" onClick={props.onNone}>
-        None
-      </Button>
-      <IconButton
-        label="Archive"
-        data-bank-select-archive=""
-        disabled={none}
-        onClick={props.onArchive}
-      >
-        <IconArchive size={ICON_SIZE.control} />
-      </IconButton>
-      <IconButton
-        label="Delete"
-        data-bank-select-delete=""
-        disabled={none}
-        className="text-bad hover:text-bad"
-        onClick={props.onDelete}
-      >
-        <IconTrash size={ICON_SIZE.control} />
-      </IconButton>
-    </div>
+      label="Selected ideas"
+      count={picked.length}
+      onCancel={onCancel}
+      actions={visibleSelectActions(bankSelectActions(picked, handlers), picked.length)}
+      extra={
+        onAll !== undefined ? (
+          <Button variant="ghost" type="button" data-bank-select-all="" onClick={onAll}>
+            All
+          </Button>
+        ) : null
+      }
+    />
   );
 }

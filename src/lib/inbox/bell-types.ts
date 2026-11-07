@@ -13,7 +13,7 @@
 // and plan reviews toast as activity (LIVE_PLAN_EVENT_TYPES; rule of 2 Nov
 // 2026: a comment or an OK / Not OK alerts everyone who can see the plan), and
 // the rest never toast (plan edits never pop up). Also here: the chat, task and plan deep links every surface
-// opens, and the shared snooze labels. Pure; the query helper only adds
+// opens. Pure; the query helper only adds
 // PostgREST filters.
 
 import type { InboxEventTypeValue } from '@srtdio/schemas';
@@ -206,14 +206,3 @@ const TASK_LINK_PREFIX = 'task:';
 export function taskLinkToken(taskId: string): string {
   return `${TASK_LINK_PREFIX}${taskId}`;
 }
-
-/** inbox_snooze kinds offered in the Notifications row menu, in menu order. */
-type InboxSnoozeKind = '1h' | '4h' | 'tomorrow_9' | 'next_week';
-
-/** The one set of snooze labels the Notifications row menu shows. */
-export const INBOX_SNOOZE_OPTIONS: readonly { kind: InboxSnoozeKind; label: string }[] = [
-  { kind: '1h', label: '1 hour' },
-  { kind: '4h', label: '4 hours' },
-  { kind: 'tomorrow_9', label: 'Tomorrow 9 AM' },
-  { kind: 'next_week', label: 'Next week' },
-];

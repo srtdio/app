@@ -2,16 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import { Chip } from '@/components/ui/Chip';
 import type { ActivityState } from '@/components/pages/activity/data';
 
+/** The chips the bar shows (Snoozed is gone; a kept 'snoozed' reads as All). */
+export type ActivityChip = Exclude<ActivityState, 'snoozed'>;
+
 // The only chips, single-select, in this order (no separate scope row).
 // Task and idea bank alerts have no chip: All and Unread show them.
-const STATE_CHIPS: { key: ActivityState; label: string }[] = [
+export const STATE_CHIPS: readonly { key: ActivityChip; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
   { key: 'mentions', label: 'Mentions' },
   { key: 'briefs', label: 'Briefs' },
   { key: 'plans', label: 'Plans' },
-  { key: 'snoozed', label: 'Snoozed' },
 ];
+
+/** The chip a kept chip value shows: a kept 'snoozed' (a retired chip) is All. Pure. */
+export function activityChip(state: ActivityState): ActivityChip {
+  return state === 'snoozed' ? 'all' : state;
+}
 
 /**
  * The chip's count: the live unread or mention count for the two counted chips

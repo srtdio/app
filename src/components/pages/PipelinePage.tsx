@@ -2,10 +2,16 @@ import { mark } from '@/lib/perf-marks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { appPresignCache } from '@/lib/shared-presign';
 import type { PresignCache } from '@/lib/asset-presign';
-import type { ReactElement, ReactNode } from 'react';
+import type { ComponentType, ReactElement, ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
-import { LIST_CARD_GRID, ListCardBox } from '@/components/ui/ListCard';
+import { LIST_CARD_GRID, ListCardBox, type ListCardSelect } from '@/components/ui/ListCard';
+import {
+  SelectBar,
+  useListSelection,
+  visibleSelectActions,
+  type SelectBarAction,
+} from '@/components/ui/SelectBar';
 import { GUTTER } from '@/components/ui/layout';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NoResults } from '@/components/ui/NoResults';
@@ -13,13 +19,26 @@ import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import { PageHead } from '@/components/shell/PageHead';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { ICON_SIZE, IconCalendar, IconPipeline, IconPlus } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconArrowUpRight,
+  IconCalendar,
+  IconCheck,
+  IconLink,
+  IconPause,
+  IconPipeline,
+  IconPlus,
+  IconSwitch,
+  IconX,
+  type IconProps,
+} from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
 import type { StageChipItem } from '@/components/pages/pipeline/StageChips';
 import { PipelineFilterControl } from '@/components/pages/pipeline/PipelineSortControl';
-import { MoveSheet } from '@/components/pages/pipeline/MoveSheet';
+import { MoveSheet, moveActions } from '@/components/pages/pipeline/MoveSheet';
+import { openPostCard, postCardHref } from '@/components/pages/PostCard';
 import {
   StageMoveConfirm,
   needsConfirm,
@@ -94,6 +113,8 @@ import type { Client, PipelinePost, Stage } from '@srtdio/posts';
 import { errorCopy, errorText, type ErrorCopy } from '@/lib/error-copy';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { COPY_FAILED, copyText } from '@/lib/clipboard';
+import { buildPostLink } from '@/lib/post-share';
 
 // The board columns are the workflow stages, in transition-map order. Stage
 // values come from the @srtdio/posts type, never hardcoded literals in JSX.
@@ -425,12 +446,13 @@ export interface PipelineSurfaceProps {
   presignEnabled: boolean;
   /** The active workspace key, threaded into every card for its pretty /p link. */
   workspaceKey: string | null;
-  onLongPressPost: (post: PipelinePost, to?: Stage) => void;
+  /** The page's select mode: each card's long-press / right-click ticks it. */
+  selectFor?: (postId: string) => ListCardSelect;
   /** sessionStorage key for the feed's Show more depth (keyed by the filter query). */
   shownKey: string;
   /** The workspace zone each card reads its target (due) day in. Absent: the device zone. */
   timeZone?: string;
-  /** The viewer's role and approvers: each card's status line and its ⋮. */
+  /** The viewer's role and approvers: each card's status line. */
   viewer?: CardViewer;
   /** Each post's first photo or video (a video with no poster shows the play placeholder). */
   covers?: CoverLookup;
@@ -456,13 +478,94 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
       cache={props.cache}
       presignEnabled={props.presignEnabled}
       workspaceKey={props.workspaceKey}
-      onLongPressPost={props.onLongPressPost}
+      {...(props.selectFor !== undefined ? { selectFor: props.selectFor } : {})}
       shownKey={props.shownKey}
       {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
       {...(props.viewer !== undefined ? { viewer: props.viewer } : {})}
       {...(props.covers !== undefined ? { covers: props.covers } : {})}
     />
   );
+}
+
+/** One icon per move: Send for review arrow, Approve check, Park pause, Reject X. */
+const MOVE_ICON: Record<Stage, ComponentType<IconProps>> = {
+  draft: IconSwitch,
+  review: IconArrowUpRight,
+  approved: IconCheck,
+  parked: IconPause,
+  rejected: IconX,
+};
+
+/** One select bar row; `single` rows show only while exactly one post is ticked. */
+export type PipelineSelectRow = SelectBarAction & { single?: boolean };
+
+/** What the Pipeline's select bar runs. */
+export interface PipelineSelectInput {
+  /** The one ticked post, or null while none or several are ticked. */
+  post: PipelinePost | null;
+  /** How many posts are ticked. */
+  count: number;
+  viewer: CardViewer;
+  onOpen: (post: PipelinePost) => void;
+  onCopyLink: (post: PipelinePost) => void;
+  /** A move row passes its target; Move (no target) opens the move sheet. */
+  onMove: (post: PipelinePost, to?: Stage) => void;
+}
+
+/**
+ * The Pipeline's select bar actions: the old card ⋮ rows, in their order.
+ * Open, Copy link, then every move this viewer can make from the post's stage
+ * (the move sheet's own list: Send for review, Approve, Park, Reject) once the
+ * role is known, else Move (the move sheet) while it loads. Every row is
+ * per-post (the move sheet takes one post and approval is never bulk), so all
+ * are `single`: with two or more ticked the bar holds Cancel and the count
+ * only. A viewer with no allowed move gets no move row. Pure.
+ */
+export function pipelineSelectActions(input: PipelineSelectInput): SelectBarAction[] {
+  const { post, count, viewer } = input;
+  if (post === null) return [];
+  const stage = post.stage as Stage;
+  // While the role loads the move sheet waits for it, so Move shows.
+  const canMove = viewer.pending === true || hasAllowedMove(viewer.role, stage);
+  const direct = viewer.pending !== true ? moveActions(viewer.role, stage) : [];
+  const moves: PipelineSelectRow[] = !canMove
+    ? []
+    : direct.length > 0
+      ? direct.map((move) => ({
+          id: `move-${move.to}`,
+          label: move.label,
+          icon: MOVE_ICON[move.to],
+          ...(move.tone === 'bad' ? { tone: 'bad' as const } : {}),
+          single: true,
+          onSelect: () => input.onMove(post, move.to),
+        }))
+      : [
+          {
+            id: 'move',
+            label: 'Move',
+            icon: IconSwitch,
+            single: true,
+            onSelect: () => input.onMove(post),
+          },
+        ];
+  const rows: PipelineSelectRow[] = [
+    {
+      id: 'open',
+      label: 'Open',
+      icon: IconArrowUpRight,
+      single: true,
+      onSelect: () => input.onOpen(post),
+    },
+    {
+      id: 'copy-link',
+      label: 'Copy link',
+      icon: IconLink,
+      single: true,
+      onSelect: () => input.onCopyLink(post),
+    },
+    ...moves,
+  ];
+  return visibleSelectActions(rows, count);
 }
 
 /**
@@ -542,8 +645,8 @@ export interface UndoableMoveDeps extends MovePostDeps {
 }
 
 /**
- * The single move handler, for every move (the move sheet and the card's ⋮
- * rows, also reached by long-press): flip the post locally at once, close the sheet, and hand the
+ * The single move handler, for every move (the move sheet and the select
+ * bar's move rows): flip the post locally at once, close the sheet, and hand the
  * proc call to the "Moved to {Stage}" Undo toast. Undo puts the post back and
  * nothing is sent; the window running out (or the toast closing) sends
  * stage_transition once, with the on-behalf approver for an agency approve. A
@@ -758,7 +861,7 @@ export function PipelinePage() {
   const [postsFailed, setPostsFailed] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [movePostTarget, setMovePostTarget] = useState<PipelinePost | null>(null);
-  // The ⋯ menu's Approve row: the move sheet opens on its approve confirm.
+  // The select bar's Approve row: the move sheet opens on its approve confirm.
   const [moveIntent, setMoveIntent] = useState<Stage | null>(null);
   // A Reject, Park or Send for review waiting on its ask-first sheet.
   const [confirmMove, setConfirmMove] = useState<{
@@ -784,7 +887,7 @@ export function PipelinePage() {
   // A post step of the induction opens the sheet with its preset.
   const postPreset = useInductionPostPreset();
   // The viewer's role, loaded once from the membership exactly as PCS does: it
-  // filters the cards' ⋮ moves and the move sheet.
+  // filters the select bar's moves and the move sheet.
   const [role, setRole] = useState<string | null>(null);
   // Where the role read stands: the move sheet waits while 'loading' and
   // offers Retry on 'error' instead of blaming the role.
@@ -1044,7 +1147,7 @@ export function PipelinePage() {
     [role, people.approverFirstNames, rolePending],
   );
 
-  // Single source for the move: the move sheet and the ⋮ rows call this. Every move flips at once and sends after the "Moved to {Stage}" Undo
+  // Single source for the move: the move sheet and the select bar's move rows call this. Every move flips at once and sends after the "Moved to {Stage}" Undo
   // window (see runUndoableMove, the authority for firing the proc once).
   const movePost = useCallback(
     (
@@ -1096,7 +1199,7 @@ export function PipelinePage() {
     [shownPosts, movePost, role],
   );
   // Move on a card this viewer cannot move does nothing.
-  // A ⋯ move row passes its target: Approve opens the move sheet straight on
+  // A select bar move row passes its target: Approve opens the move sheet straight on
   // its approve confirm, every other target takes the sheet's own path
   // (ask first where it asks). No target (the Move row): the move sheet.
   const openMove = useCallback(
@@ -1111,6 +1214,30 @@ export function PipelinePage() {
     },
     [role, roleStatus, requestSheetMove],
   );
+  // Select mode (long-press / right-click on a card): the old ⋮ rows ride the
+  // SelectBar. Pure client state; no await or read on the tap path.
+  const selection = useListSelection();
+  const tickedPost =
+    selection.count === 1 ? (shownPosts.find((post) => selection.ids.has(post.id)) ?? null) : null;
+  const selectActions = pipelineSelectActions({
+    post: tickedPost,
+    count: selection.count,
+    viewer,
+    // Open and the moves leave select mode (its Back entry popped) first, so
+    // the page or sheet they open owns the next Back.
+    onOpen: (post) => selection.leaveThen(() => openPostCard(navigate, post, workspaceKey)),
+    // The copy starts inside the tap (clipboard needs the gesture), then leaves.
+    onCopyLink: (post) => {
+      void copyText(buildPostLink(window.location.origin, postCardHref(post, workspaceKey))).then(
+        (ok) =>
+          toastRef.current?.show(
+            ok ? { title: 'Link copied' } : { title: COPY_FAILED, tone: 'error' },
+          ),
+      );
+      selection.clear();
+    },
+    onMove: (post, to) => selection.leaveThen(() => openMove(post, to)),
+  });
   const confirmCreator =
     confirmMove === null
       ? null
@@ -1185,7 +1312,7 @@ export function PipelinePage() {
             cache,
             presignEnabled,
             workspaceKey,
-            onLongPressPost: openMove,
+            selectFor: selection.selectFor,
             shownKey,
             timeZone,
             viewer,
@@ -1193,6 +1320,16 @@ export function PipelinePage() {
           })}
         </div>
       )}
+
+      {selection.active ? (
+        <SelectBar
+          label="Selected posts"
+          count={selection.count}
+          onCancel={selection.clear}
+          actions={selectActions}
+          data-pipeline-select-bar=""
+        />
+      ) : null}
 
       <MoveSheet
         open={movePostTarget !== null}

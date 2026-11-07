@@ -183,7 +183,7 @@ beforeEach(() => {
   try {
     window.localStorage.clear();
   } catch {
-    // Storage can be unavailable; the sort falls back to its default.
+    // Storage can be unavailable.
   }
   h.fetchActivityEntries.mockReset().mockResolvedValue({
     ok: true,
@@ -384,5 +384,30 @@ describe('Activity: the bell press prefetch', () => {
     await sharedMentionCount(mentionCountKey('u1', 'w1'), count);
     expect(page).not.toHaveBeenCalled();
     expect(count).not.toHaveBeenCalled();
+  });
+
+  it('reads newest first even when an old Oldest first sort is still on the device', async () => {
+    window.localStorage.setItem('sorted:sort:activity', 'oldest');
+    h.from.mockImplementation(() => {
+      const builder: object = new Proxy(
+        {},
+        {
+          get(_target, prop) {
+            if (prop === 'then') {
+              return (resolve: (v: unknown) => unknown) =>
+                Promise.resolve({ data: [], error: null, count: 0 }).then(resolve);
+            }
+            return () => builder;
+          },
+        },
+      );
+      return builder;
+    });
+    prefetchActivityData({ userId: 'u1', workspaceId: 'w1' });
+    await settle();
+    // The page (newest first, no sort) joins the prefetch: no second read.
+    const page = vi.fn(async (): Promise<LoadResult> => ({ ok: true, data: [] }));
+    await sharedActivityPage(activityPageKey('u1', 'w1', 'all', 'newest'), page);
+    expect(page).not.toHaveBeenCalled();
   });
 });

@@ -65,6 +65,17 @@ async function openPipeline(page: Page): Promise<void> {
   // Any Pipeline card: the seeded filler posts can sort ahead of the fixture
   // posts, so the wait is for the list itself, not one named card.
   await expect(page.locator('[data-list-card]').first()).toBeVisible({ timeout: 15_000 });
+  // The list shows BOARD_CAP (6) cards first; at 74 tall six no longer fill a
+  // short iPad screen, so reveal more until the document overflows.
+  const more = page.getByRole('button', { name: /^Show \d+ more$/ });
+  for (let i = 0; i < 4; i += 1) {
+    const overflows = await page.evaluate(() => {
+      const doc = document.scrollingElement ?? document.documentElement;
+      return doc.scrollHeight > doc.clientHeight + 1;
+    });
+    if (overflows || (await more.count()) === 0) break;
+    await more.first().click();
+  }
 }
 
 for (const size of [

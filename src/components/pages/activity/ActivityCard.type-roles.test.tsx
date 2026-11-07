@@ -5,11 +5,6 @@
 // chip. Fixtures and mocks mirror ActivityCard.test.tsx.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => true,
-}));
 import { ActivityCard } from '@/components/pages/activity/ActivityCard';
 import type { ActivityItem } from '@/components/pages/activity/data';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -67,8 +62,6 @@ function mount(group: ActivityItem[]): void {
       presignEnabled={false}
       onOpenGroup={() => {}}
       onOpenEntry={() => {}}
-      onSnooze={() => {}}
-      onMarkRead={() => {}}
       selfName={null}
     />,
   );
@@ -102,10 +95,11 @@ describe('ActivityCard type roles (ui/ListCard: heading, secondary, meta + one t
     expect(title?.className).not.toMatch(/leading-\[/);
   });
 
-  it('the preview is the secondary role, 2 lines, always 2 lines tall', () => {
+  it('the preview is the secondary role, one truncated line', () => {
     mount([item({ title: 'Q3 Launch', body: 'Looks good to me', actorName: 'Asha Rao' })]);
     const preview = byText('Looks good to me');
-    expectRole(preview, ['text-md', 'text-fg-2', 'line-clamp-2', 'min-h-9']);
+    expectRole(preview, ['text-md', 'text-fg-2', 'truncate']);
+    expect(preview.className).not.toContain('line-clamp-2');
   });
 
   it('the time is the meta role: mono, tabular, fg-3', () => {

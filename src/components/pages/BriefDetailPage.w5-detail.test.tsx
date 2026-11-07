@@ -607,11 +607,11 @@ describe('Brief detail content', () => {
   });
 
   it('the due date reads the picked day', async () => {
-    // A day more than a week ahead reads as the date (formatDue): "Due 8 Oct YYYY".
+    // A day more than a week ahead reads as the date (formatDue): "8 Oct YYYY".
     const year = new Date().getFullYear() + 1;
     h.getBrief.mockResolvedValue(detail({ target_date: `${year}-10-08` }));
     await mount();
-    expect(text()).toContain(`Due 8 Oct ${year}`);
+    expect(text()).toContain(`8 Oct ${year}`);
   });
 });
 
@@ -766,7 +766,7 @@ describe('Brief detail polish', () => {
     h.getBrief.mockResolvedValue(detail({ target_date: '2026-08-14' }));
     await mount();
     const line = document.querySelector<HTMLElement>('[data-brief-status-line]');
-    expect(line?.textContent).toBe('Open · Due 14 Aug');
+    expect(line?.textContent).toBe('Open · 14 Aug');
     expect(line?.querySelector('[data-status-dot="open"]')?.className).toContain('h-2 w-2');
     expect(line?.closest('[data-header-bar]')).not.toBeNull();
     expect(line?.closest('.text-lg')?.className).toContain('font-semibold');
@@ -797,7 +797,7 @@ describe('Brief detail polish', () => {
     h.getBrief.mockResolvedValue(detail({ target_date: '2026-08-14' }));
     await mount();
     const line = document.querySelector<HTMLElement>('[data-brief-status-line]');
-    expect(line?.textContent).toBe('Open · Overdue 2mo');
+    expect(line?.textContent).toBe('Open · 2mo late');
     expect(line?.querySelector('[data-brief-due]')?.className).toContain('text-bad');
   });
 
@@ -813,20 +813,20 @@ describe('Brief detail polish', () => {
     const now = new Date('2026-08-01T09:00:00Z');
     expect(briefStatusLine('open', '2026-08-14', 'UTC', now)).toEqual({
       status: 'Open',
-      due: 'Due 14 Aug',
+      due: '14 Aug',
       overdue: false,
     });
     expect(briefStatusLine('open', '2026-08-01', 'UTC', now)).toEqual({
       status: 'Open',
-      due: 'Due today',
+      due: 'Today',
       overdue: false,
     });
-    expect(briefStatusLine('open', '2026-08-02', 'UTC', now).due).toBe('Due tomorrow');
-    expect(briefStatusLine('open', '2026-12-12', 'UTC', now).due).toBe('Due 12 Dec');
-    expect(briefStatusLine('open', '2026-05-20', 'UTC', now).due).toBe('Overdue 2mo');
+    expect(briefStatusLine('open', '2026-08-02', 'UTC', now).due).toBe('Tomorrow');
+    expect(briefStatusLine('open', '2026-12-12', 'UTC', now).due).toBe('12 Dec');
+    expect(briefStatusLine('open', '2026-05-20', 'UTC', now).due).toBe('2mo late');
     expect(briefStatusLine('open', '2026-07-31', 'UTC', now)).toEqual({
       status: 'Open',
-      due: 'Overdue 1d',
+      due: '1d late',
       overdue: true,
     });
     expect(briefStatusLine('open', null, 'UTC', now)).toEqual({

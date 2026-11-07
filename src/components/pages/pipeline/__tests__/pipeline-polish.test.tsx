@@ -88,7 +88,6 @@ describe('Pipeline polish: empty stage', () => {
         activeStage="parked"
         cache={{} as unknown as PresignCache}
         presignEnabled={false}
-        onLongPressPost={() => {}}
       />,
     );
     expect(out).toContain('data-stage-empty="parked"');

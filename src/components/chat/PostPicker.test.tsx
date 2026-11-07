@@ -643,22 +643,22 @@ describe('briefPickerDue: the brief row due text (formatDue / formatOverdue)', (
 
   it('ahead reads Due; no date reads nothing', () => {
     expect(briefPickerDue('2026-11-05', 'open', IST, NOW)).toEqual({
-      text: 'Due today',
+      text: 'Today',
       bad: false,
     });
-    expect(briefPickerDue('2026-11-06', 'open', IST, NOW)?.text).toBe('Due tomorrow');
-    expect(briefPickerDue('2026-11-08', 'open', IST, NOW)?.text).toBe('Due Sun');
-    expect(briefPickerDue('2027-01-20', 'open', IST, NOW)?.text).toBe('Due 20 Jan 2027');
+    expect(briefPickerDue('2026-11-06', 'open', IST, NOW)?.text).toBe('Tomorrow');
+    expect(briefPickerDue('2026-11-08', 'open', IST, NOW)?.text).toBe('Sun');
+    expect(briefPickerDue('2027-01-20', 'open', IST, NOW)?.text).toBe('20 Jan 2027');
     expect(briefPickerDue(null, 'open', IST, NOW)).toBeNull();
   });
 
   it('an open brief past its day is overdue in the bad token; a closed one never is', () => {
     expect(briefPickerDue('2026-11-03', 'open', IST, NOW)).toEqual({
-      text: 'Overdue 2d',
+      text: '2d late',
       bad: true,
     });
     expect(briefPickerDue('2026-11-03', 'closed', IST, NOW)).toEqual({
-      text: 'Due 3 Nov',
+      text: '3 Nov',
       bad: false,
     });
   });

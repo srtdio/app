@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest';
 
 // Guard: list time by meaning, through src/lib/time.ts only. Things that just
 // happened read formatAgo ("just now", "5m", "3h", "Yesterday", "Mon", "2 Nov");
-// deadlines read formatDue ("Due today", "Due Fri", "Due 12 Nov"), late ones
-// formatOverdue ("Overdue 1d" / "3w" / "2mo" / "1y"), plan starts
-// formatPlanStart ("Starts Mon", "Started 2d ago"); records read formatAdded
+// deadlines read formatDue, words only ("Today", "Fri", "12 Nov"), late ones
+// formatOverdue ("1d late" / "3w late" / "2mo late" / "1y late"), plans
+// formatPlanStart ("Mon" ahead, "Live" while on, "1 Nov" once ended); records read formatAdded
 // ("10:27 AM" today, else "2 Nov"). Absolute text only through formatTime /
 // formatDayLabel / formatDayRange / the picker helpers. Nothing outside
 // src/lib/time.ts calls a locale date formatter, Intl.DateTimeFormat /
@@ -170,9 +170,16 @@ describe('time format rule: source scan of src/**', () => {
     expect(hits).toEqual([]);
   });
 
-  it('no "Overdue ·" form remains (overdue reads "Overdue 2d")', () => {
+  it('no "Overdue ·" form remains (overdue reads "2d late")', () => {
     expect(code(TIME)).not.toMatch(/Overdue ·/);
     expect(offenders(/Overdue ·/)).toEqual([]);
+  });
+
+  it('the card date words never say "Due", "Overdue", "Starts" or "Started" (time.ts)', () => {
+    const body = code(TIME);
+    expect(body).not.toMatch(/`Due \$\{|'Due today'|'Due tomorrow'/);
+    expect(body).not.toMatch(/`Overdue \$\{|'Overdue'/);
+    expect(body).not.toMatch(/`Starts? |`Started /);
   });
 });
 
@@ -219,8 +226,10 @@ describe('time format rule: src/lib/time.ts is the one rule', () => {
     expect(body).toContain("'Yesterday'");
     expect(body).toContain('`${Math.floor(diff / MINUTE)}m`');
     expect(body).toContain('`${Math.floor(diff / HOUR)}h`');
-    expect(body).toContain('`Due ${');
-    expect(body).toContain('`Overdue ${late}`');
+    expect(body).toContain("'Today'");
+    expect(body).toContain("'Tomorrow'");
+    expect(body).toContain('`${late} late`');
+    expect(body).toContain("'Live'");
     expect(body).toContain('`${months}mo`');
   });
 });

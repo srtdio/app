@@ -186,7 +186,10 @@ Manual Skip per item and manual Dismiss for the whole card.
 | Icon button | 44x44 frame with 20x20 SVG |
 | Touch targets | 44x44 minimum everywhere. No exceptions. |
 | Hover | No hover-only interactions |
-| Long-press | Right-click equivalent |
+| Long-press | Right-click equivalent. On a list card both enter select mode (decision 7 Nov 2026). |
+| List card | Every list (Pipeline, Briefs, Assets, Chat, Plan tab, Bank, Activity) uses one two-line card, 74px tall: 48px picture left; line 1 title with the time on the right; line 2 one-line preview, one grey tag, unread dot. No ⋮ on a card. Decision 7 Nov 2026. |
+| Select mode | Long-press (phone) or right-click / Shift-click / Cmd-click (laptop) ticks a card; a tap then toggles. Pipeline, Chat, Bank and Assets only. The select bar shows "N selected" and every action the old card menu had (Open, Copy link, Send to chat, Plan it only for one). Exit: Cancel, Esc, Back, or unticking the last card. Decision 7 Nov 2026. |
+| Card dates | Words only. Due: Today, Tomorrow, weekday (2-6 days), else "12 Nov". Late: "2d late", "3w late", "2mo late", "1y late" in red. Plan: before start Today / Tomorrow / weekday / date, "Live" while running, the end date once ended. Workspace timezone. Decision 7 Nov 2026. |
 
 ## 8. Activity
 
@@ -196,13 +199,15 @@ Permanent in-app event feed. Source of truth for what happened. The only permane
 
 | Element | Decision |
 | --- | --- |
-| Chips | All, Unread, Mentions, Briefs, Snoozed (single-select, in that order; no separate scope row; each filters server-side). Decision 18 Oct 2026. |
+| Chips | All, Unread, Mentions, Briefs, Plans (single-select, in that order; no separate scope row; each filters server-side). Snoozed chip removed 7 Nov 2026. |
+| Order | Newest first; no sort control (removed 7 Nov 2026). |
+| Row menu | None (removed 7 Nov 2026). Tap opens and marks read. |
 | Briefs chip | Brief created, brief closed, comments and mentions on briefs, posts created from a brief |
 | Own actions | The person who acted sees their own row ("You approved ..."), already read; never toasts or sounds |
 | New members | See only activity after they joined (from their welcome row) |
 | Sound | New activity from someone else plays the chat tone (shared 2s throttle with chat), never while Activity is open |
 | Tab alert (desktop) | While Sorted is a background tab, new activity or chat makes the tab title alternate every 1.4s between "(N) Sorted" and each event's words (Activity word for word; chat "Chat · <name> sent a message", never the text), and the tab icon gets a dot (amber Activity, blue chat). Stops when the tab is opened. Never for your own actions. Decision 18 Oct 2026. |
-| Snooze | 1h, 4h, tomorrow 9am, next week |
+| Snooze | Retired from the UI 7 Nov 2026 (no row menu, no chip). Rows whose snoozed_until is in the future stay hidden; the data and procs are unchanged. |
 | Inline approve | No. Click navigates to PCS. |
 | Inline reply (comments) | Lands on entity. |
 

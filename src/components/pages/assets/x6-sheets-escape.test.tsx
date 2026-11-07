@@ -4,8 +4,11 @@
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ActionMenu } from '@/components/ui/ActionMenu';
-import { assetMenuItems, type AssetMenuDeps } from '@/components/pages/assets/AssetActionSheet';
+import { SelectBar, visibleSelectActions } from '@/components/ui/SelectBar';
+import {
+  assetSelectActions,
+  type AssetActionDeps,
+} from '@/components/pages/assets/AssetActionSheet';
 import { AssetRenameSheet } from '@/components/pages/assets/AssetRenameSheet';
 import { AddLinkSheet, addLinkDirty } from '@/components/pages/assets/AddLinkSheet';
 import {
@@ -20,7 +23,7 @@ import { resetHistorySteps, stepMarkerOf } from '@/lib/chat/use-history-step';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// Phone: the ⋯ menu is a Sheet (Escape goes through the escape stack).
+// Phone layout (the lightbox's sheets go through the escape stack).
 vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
   useIsLaptop: () => false,
@@ -43,10 +46,6 @@ async function mount(node: ReactElement): Promise<void> {
   await settle();
 }
 
-const button = (label: string) =>
-  [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-    (b) => b.textContent?.trim() === label,
-  );
 const guarded = () => stepMarkerOf(window.history.state, BACK_GUARD_STEP_KEY) !== null;
 
 async function type(input: HTMLInputElement, value: string): Promise<void> {
@@ -141,67 +140,62 @@ const cache = new PresignCache({
   fetcher: async () => new Response(null, { status: 500 }),
 });
 
-const baseDeps: AssetMenuDeps = {
+const baseDeps: AssetActionDeps = {
   presignEnabled: true,
   requestDownloadUrl: async () => 'https://signed/d',
   onInfo: () => {},
   onToast: () => {},
 };
 
-/** A card's ⋮ menu, open, as AssetListCard renders it (ui/ActionMenu). */
-function fileMenu(
-  item: AssetListItem,
-  deps: Partial<AssetMenuDeps> = {},
-  onOpenChange: (open: boolean) => void = () => {},
-) {
+/** The Assets select bar with `count` files ticked (`item` the one, when count is 1). */
+function fileBar(item: AssetListItem, deps: Partial<AssetActionDeps> = {}, count = 1) {
+  const actions = assetSelectActions(count === 1 ? item : undefined, { ...baseDeps, ...deps });
   return (
-    <ActionMenu
-      title="photo.png"
-      items={assetMenuItems(item, { ...baseDeps, ...deps })}
-      trigger={null}
-      open
-      onOpenChange={onOpenChange}
+    <SelectBar
+      count={count}
+      onCancel={() => {}}
+      actions={visibleSelectActions(actions, count)}
+      label="Selected files"
     />
   );
 }
 
-describe('X6 Escape on the action sheets', () => {
-  it('the file menu closes on Escape', async () => {
-    const onOpenChange = vi.fn();
-    await mount(fileMenu(asset(), {}, onOpenChange));
-    await escape();
-    expect(onOpenChange).toHaveBeenCalledWith(false);
-  });
-});
+const barActions = () =>
+  [...document.querySelectorAll<HTMLButtonElement>('[data-select-bar-action]')].map((b) =>
+    b.getAttribute('aria-label'),
+  );
 
-describe('file menu has no Move to folder', () => {
-  it('renders Copy link, Download, Rename, Info and Delete only, Delete last in the bad tone', async () => {
-    await mount(fileMenu(asset(), { canRename: true, onRename: () => {}, onDelete: () => {} }));
-    const rows = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].map((b) =>
-      b.textContent?.trim(),
-    );
-    expect(rows).toEqual(['Copy link', 'Download', 'Rename', 'Info', 'Delete']);
-    expect(button('Delete')?.className).toContain('text-bad');
-    expect(button('Move to folder')).toBeUndefined();
+describe('the select bar carries the old file menu rows, no Move to folder', () => {
+  it('one file: Copy link, Download, Rename, Info and Delete, Delete last in the bad tone', async () => {
+    await mount(fileBar(asset(), { canRename: true, onRename: () => {}, onDelete: () => {} }));
+    expect(barActions()).toEqual(['Copy link', 'Download', 'Rename', 'Info', 'Delete']);
+    expect(
+      document.querySelector('[data-select-bar-action="delete"]')?.getAttribute('class'),
+    ).toContain('text-bad');
     expect(document.body.textContent).not.toContain('Move to folder');
+    expect(document.querySelector('[aria-label="Move to folder"]')).toBeNull();
+  });
+
+  it('several files: Delete only (the single rows hide)', async () => {
+    await mount(fileBar(asset(), { canRename: true, onRename: () => {}, onDelete: () => {} }, 3));
+    expect(barActions()).toEqual(['Delete']);
+    expect(document.querySelector('[data-select-bar-count]')?.textContent).toBe('3 selected');
   });
 
   it('hides Download when the file cannot be downloaded (never disabled)', async () => {
-    await mount(fileMenu(asset(), { presignEnabled: false, onDelete: () => {} }));
-    expect(button('Download')).toBeUndefined();
-    expect(button('Copy link')).toBeDefined();
+    await mount(fileBar(asset(), { presignEnabled: false, onDelete: () => {} }));
+    expect(barActions()).not.toContain('Download');
+    expect(barActions()).toContain('Copy link');
   });
 
-  it('a link menu opens the link first and has no Move to folder either', async () => {
+  it('a link opens the link first and has no Move to folder either', async () => {
     await mount(
-      fileMenu(asset({ kind: 'link', externalUrl: 'https://example.com/deck', mimeType: null }), {
+      fileBar(asset({ kind: 'link', externalUrl: 'https://example.com/deck', mimeType: null }), {
         onDelete: () => {},
       }),
     );
-    const rows = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].map((b) =>
-      b.textContent?.trim(),
-    );
-    expect(rows[0]).toMatch(/^Open /);
+    const rows = barActions();
+    expect(rows[0]).toBe('Open example.com');
     expect(rows[1]).toBe('Copy link');
     expect(rows[rows.length - 1]).toBe('Delete');
     expect(document.body.textContent).not.toContain('Move to folder');
@@ -267,20 +261,6 @@ describe('X6 lightbox', () => {
 
     await escape();
     expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it('a menu over the lightbox takes Escape for itself', async () => {
-    const onCloseLightbox = vi.fn();
-    const onCloseMenu = vi.fn();
-    await mount(
-      <>
-        {lightbox(onCloseLightbox)}
-        {fileMenu(asset(), {}, onCloseMenu)}
-      </>,
-    );
-    await escape();
-    expect(onCloseMenu).toHaveBeenCalledWith(false);
-    expect(onCloseLightbox).not.toHaveBeenCalled();
   });
 
   it('swipes only on a mostly horizontal move past the threshold', () => {

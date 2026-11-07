@@ -368,50 +368,50 @@ describe('messages', () => {
   });
 });
 
-describe('list cards (ui/ListCard): equal heights, the 72 picture 16 inside, 12 to the text', () => {
-  // A card at x 16 with a 1px border: picture at 16 + 1 + 16 = 33, text at 33 + 72 + 12 = 117.
-  const good = (y: number, height = 118): ListCardGeom => ({
+describe('list cards (ui/ListCard): 74 tall, the 48 picture 12 inside, 12 to the text', () => {
+  // A card at x 16 with a 1px border: picture at 16 + 1 + 12 = 29, text at 29 + 48 + 12 = 89.
+  const good = (y: number, height = 74): ListCardGeom => ({
     label: `card@${y}`,
     card: { x: 16, y, width: 358, height },
     borderLeft: 1,
     borderTop: 1,
-    picture: { x: 33, y: y + 17, width: 72, height: 72 },
-    text: { x: 117, y: y + 17, width: 240, height: 84 },
+    picture: { x: 29, y: y + 13, width: 48, height: 48 },
+    text: { x: 89, y: y + 15, width: 270, height: 44 },
   });
 
   it('passes cards of one height with the picture in place', () => {
-    expect(listCardViolations([good(0), good(130), good(260.6, 118.4)])).toEqual([]);
+    expect(listCardViolations([good(0), good(82), good(164.6, 74.4)])).toEqual([]);
   });
 
   it('fails a card more than 1px taller than the first', () => {
-    const out = listCardViolations([good(0), good(130, 140)]);
+    const out = listCardViolations([good(0), good(82, 90)]);
     expect(out.filter((m) => m.includes('cards differ'))).toHaveLength(1);
   });
 
-  it('every list card is 118 tall on every screen (the six lists are one height)', () => {
-    expect(LIST_CARD_HEIGHT_PX).toBe(118);
-    // Equal to each other but not 118: a screen whose cards all grew still fails.
-    const tall = listCardViolations([good(0, 130), good(140, 130)]);
+  it('every list card is 74 tall on every screen (the seven lists are one height)', () => {
+    expect(LIST_CARD_HEIGHT_PX).toBe(74);
+    // Equal to each other but not 74: a screen whose cards all grew (the old 118) still fails.
+    const tall = listCardViolations([good(0, 118), good(130, 118)]);
     expect(tall).toHaveLength(2);
-    for (const m of tall) expect(m).toContain('not 118');
-    expect(listCardViolations([good(0, 117.2)])).toEqual([]);
+    for (const m of tall) expect(m).toContain('not 74');
+    expect(listCardViolations([good(0, 73.2)])).toEqual([]);
   });
 
-  it('fails a picture that is not 72x72', () => {
+  it('fails a picture that is not 48x48 (the old 72 too)', () => {
     const card = good(0);
-    const out = listCardViolations([{ ...card, picture: { x: 33, y: 17, width: 40, height: 40 } }]);
-    expect(out.some((m) => m.includes('not 72x72'))).toBe(true);
+    const out = listCardViolations([{ ...card, picture: { x: 29, y: 13, width: 72, height: 72 } }]);
+    expect(out.some((m) => m.includes('not 48x48'))).toBe(true);
   });
 
-  it('fails a picture not 16 inside the card edge (left or top)', () => {
+  it('fails a picture not 12 inside the card edge (left or top)', () => {
     const card = good(0);
-    const out = listCardViolations([{ ...card, picture: { x: 29, y: 17, width: 72, height: 72 } }]);
-    expect(out.some((m) => m.includes('not 16,16'))).toBe(true);
+    const out = listCardViolations([{ ...card, picture: { x: 33, y: 13, width: 48, height: 48 } }]);
+    expect(out.some((m) => m.includes('not 12,12'))).toBe(true);
   });
 
   it('fails text not 12 after the picture', () => {
     const card = good(0);
-    const out = listCardViolations([{ ...card, text: { x: 125, y: 17, width: 200, height: 84 } }]);
+    const out = listCardViolations([{ ...card, text: { x: 97, y: 15, width: 200, height: 44 } }]);
     expect(out.some((m) => m.includes('not 12'))).toBe(true);
   });
 

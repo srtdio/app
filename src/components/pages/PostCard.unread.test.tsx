@@ -1,9 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-// ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.
-vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
-  useIsLaptop: () => true,
-}));
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
@@ -17,8 +12,8 @@ import {
 } from '@/lib/inbox/unread-entities';
 import type { PipelinePost } from '@srtdio/posts';
 
-// Unread comments on the Pipeline card (ui/ListCard, 7 Nov 2026): line 1's
-// unread dot, and the count in the ⋮ trigger's name ("Actions for {title}, 3
+// Unread comments on the Pipeline card (ui/ListCard, two lines): line 2's
+// unread dot, and the count in the card's open name ("Open post {title}, 3
 // unread comments"), only when the viewer has unread comments on that post.
 
 const CACHE = {
@@ -66,17 +61,16 @@ function render(map: UnreadEntities, p: PipelinePost = post()): string {
         post={p}
         cache={CACHE}
         presignEnabled={false}
-        onMove={() => undefined}
         now={new Date('2026-11-05T00:00:00Z')}
       />
     </MemoryRouter>,
   );
 }
 
-/** The ⋮ trigger's aria-label. */
-const menuLabel = (html: string): string =>
-  /<button[^>]*aria-label="([^"]*)"[^>]*data-post-card-move=""/.exec(html)?.[1] ??
-  /<button[^>]*data-post-card-move=""[^>]*aria-label="([^"]*)"/.exec(html)?.[1] ??
+/** The whole-card open button's aria-label. */
+const openLabel = (html: string): string =>
+  /<button[^>]*aria-label="([^"]*)"[^>]*data-list-card-press=""/.exec(html)?.[1] ??
+  /<button[^>]*data-list-card-press=""[^>]*aria-label="([^"]*)"/.exec(html)?.[1] ??
   '';
 
 afterEach(() => {
@@ -85,26 +79,28 @@ afterEach(() => {
 });
 
 describe('PostCard unread comments', () => {
-  it('the unread dot on line 1 and the count in the ⋮ name', () => {
+  it('the unread dot on line 2 and the count in the open name', () => {
     const html = render({ 'post:p1': 3 });
     expect(html).toContain('data-list-card-unread=""');
     expect(html).toContain('data-post-card-unread="3"');
-    expect(menuLabel(html)).toBe('Actions for Post title, 3 unread comments');
+    expect(openLabel(html)).toBe('Open post Post title, 3 unread comments');
+    const line2 = html.slice(html.indexOf('data-list-card-line="2"'));
+    expect(line2).toContain('data-list-card-unread=""');
     // The count is never painted: no count pill on the card.
     expect(html).not.toContain('data-count-badge');
   });
 
-  it('no dot and a plain ⋮ name with no unread comments, or for another post', () => {
+  it('no dot and a plain open name with no unread comments, or for another post', () => {
     for (const map of [{}, { 'post:other': 2 }, { 'plan_item:p1': 2 }]) {
       const html = render(map);
       expect(html).not.toContain('data-list-card-unread');
       expect(html).not.toContain('data-post-card-unread');
-      expect(menuLabel(html)).toBe('Actions for Post title');
+      expect(openLabel(html)).toBe('Open post Post title');
     }
   });
 
   it('one unread comment reads singular', () => {
-    expect(menuLabel(render({ 'post:p1': 1 }))).toBe('Actions for Post title, 1 unread comment');
+    expect(openLabel(render({ 'post:p1': 1 }))).toBe('Open post Post title, 1 unread comment');
   });
 
   it('works on a media card too', () => {
@@ -113,6 +109,6 @@ describe('PostCard unread comments', () => {
       post({ thumbnailAssetVersionId: 'av1', format: 'single_image' }),
     );
     expect(html).toContain('data-list-card-unread=""');
-    expect(menuLabel(html)).toBe('Actions for Post title, 1 unread comment');
+    expect(openLabel(html)).toBe('Open post Post title, 1 unread comment');
   });
 });

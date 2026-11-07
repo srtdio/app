@@ -19,7 +19,6 @@ import {
   CHAT_ROW_LIST,
   EMPTY_PREVIEW,
   channelListView,
-  channelRowSelected,
   chatRowContextMenu,
   tileKind,
   unreadPillText,
@@ -60,7 +59,6 @@ function card(
     selected?: boolean;
     selecting?: boolean;
     checked?: boolean;
-    menu?: boolean;
     divider?: boolean;
   } = {},
 ): string {
@@ -74,8 +72,12 @@ function card(
       onSelect={() => {}}
       input={DEFAULT_LIST_INPUT}
       divider={state.divider === true}
-      {...(state.selecting === true ? { onToggle: () => {}, checked: state.checked === true } : {})}
-      {...(state.menu === true ? { onLongPress: () => {}, onHide: () => {} } : {})}
+      select={{
+        active: state.selecting === true,
+        chosen: state.checked === true,
+        onEnter: () => {},
+        onToggle: () => {},
+      }}
     />,
   );
 }
@@ -126,16 +128,16 @@ describe('chat home: one list', () => {
     tokenOnly(markup);
   });
 
-  it('a stacked list of cards, 12 apart on the 16 edge, no grid', () => {
+  it('a stacked list of cards, 8 apart on the 16 edge, no grid', () => {
     expect(CHAT_ROW_LIST.split(' ')).toEqual(expect.arrayContaining(LIST_CARD_STACK.split(' ')));
-    expect(CHAT_ROW_LIST.split(' ')).toContain('gap-3');
+    expect(CHAT_ROW_LIST.split(' ')).toContain('gap-2');
     expect(CHAT_ROW_LIST.split(' ')).toContain(CHAT_HOME_EDGE);
     const markup = html(view([dm, dm2, { ...dm, channelId: 'c3', title: 'Neha' }]));
     expect(markup).not.toContain('grid-cols');
     expect(CHAT_HOME_STACK).toBe('flex flex-col gap-2');
   });
 
-  it('cards never draw a divider (12 between cards)', () => {
+  it('cards never draw a divider (8 between cards)', () => {
     const markup = html(view([group, group2, dm, dm2]));
     expect(markup).not.toContain('data-row-divider');
     expect(markup.match(/data-list-card=""/g)).toHaveLength(4);
@@ -160,32 +162,34 @@ describe('chat home: one list', () => {
 });
 
 describe('group chat: ui/ListCard', () => {
-  it('72 picture (group photo or mark), name, 2-line preview, time + "3 new" on line 3', () => {
+  it('48 picture (group photo or mark), name + time on line 1, preview + "3 new" + dot on line 2', () => {
     const h = card(group, { ...read, unread: 3 });
     expect(h).toContain('data-chat-list-item="card"');
     expect(h).toContain('data-list-card=""');
     expect(h).toMatch(/data-list-card-picture="image"[^>]*data-group-photo=""/);
-    // The shared Avatar at its profile role (72), group kind, clipped to radius 8.
-    expect(h).toContain('data-avatar-role="profile"');
-    expect(h).toContain('width:72px;height:72px');
-    expect(h).toMatch(/data-list-card-picture="image"[^>]*class="[^"]*h-18 w-18[^"]*rounded-lg/);
-    // Time in the meta role on line 3; the preview clamps to two lines.
-    // formatAgo on the list's clock: sent an hour before NOW.
+    // The shared Avatar at its card role (48), group kind, clipped to radius 8.
+    expect(h).toContain('data-avatar-role="card"');
+    expect(h).toContain('width:48px;height:48px');
+    expect(h).toMatch(/data-list-card-picture="image"[^>]*class="[^"]*h-12 w-12/);
+    expect(h).toContain('rounded-lg');
+    // formatAgo on the list's clock (sent an hour before NOW), meta role, line 1.
     const time = '1h';
-    expect(h).toMatch(new RegExp(`data-list-card-line="3"[^]*font-mono[^"]*">${time}<`));
-    expect(h).toContain('line-clamp-2');
+    expect(h).toMatch(
+      new RegExp(`data-list-card-line="1"[^]*font-mono[^"]*">${time}<[^]*data-list-card-line="2"`),
+    );
+    // One-line preview: no clamp, no third line.
+    expect(h).not.toContain('line-clamp-2');
+    expect(h).not.toContain('data-list-card-line="3"');
     expect(h.indexOf('3 new')).toBeGreaterThan(h.indexOf('See you then'));
+    expect(h.indexOf('data-list-card-unread')).toBeGreaterThan(h.indexOf('3 new'));
     tokenOnly(h);
   });
 
-  it('the ⋯ is line 3 trailing (ActionMenuTrigger, the trailing rule), never inside the tap surface', () => {
-    const h = card(group, read, { menu: true });
-    expect(h).toContain('data-list-card-more=""');
-    expect(h).toMatch(/aria-label="Actions for Launch"[^>]*-mr-3/);
-    // The tap surface closes before the ⋯ opens: buttons never nest.
-    const tap = h.indexOf('aria-label="Open Launch');
-    const more = h.indexOf('aria-label="Actions for Launch"');
-    expect(h.slice(tap, more)).toContain('</button>');
+  it('no ⋮ on the card: its one action (Hide chat) lives on the select bar', () => {
+    const h = card(group, read);
+    expect(h).not.toContain('data-list-card-more');
+    expect(h).not.toContain('Actions for');
+    expect(h.match(/<button/g)).toHaveLength(1);
   });
 
   it('no divider, asked or not', () => {
@@ -195,14 +199,14 @@ describe('group chat: ui/ListCard', () => {
 });
 
 describe('person chat: ui/ListCard, the same card as a group', () => {
-  it('72 circle, name, preview, time + "99+ new"', () => {
+  it('48 circle, name, preview, time + "99+ new"', () => {
     const h = card(dm, { ...read, unread: 120 });
     expect(h).toContain('data-chat-list-item="card"');
     expect(h).toContain('data-chat-kind="person"');
     expect(h).not.toContain('data-tile');
     expect(h).toMatch(/data-list-card-picture="person"[^>]*data-person-photo=""/);
-    expect(h).toContain('data-avatar-role="profile"');
-    expect(h).toContain('width:72px;height:72px');
+    expect(h).toContain('data-avatar-role="card"');
+    expect(h).toContain('width:48px;height:48px');
     expect(h).toContain('rounded-full');
     expect(h).toContain('>Asha Rao<');
     // formatAgo on the list's clock: sent an hour before NOW.
@@ -213,33 +217,26 @@ describe('person chat: ui/ListCard, the same card as a group', () => {
     tokenOnly(h);
   });
 
-  it('the ⋯ sits outside the one tap surface', () => {
-    const h = card(dm, read, { menu: true });
-    const tap = h.indexOf('aria-label="Open Asha Rao');
-    const close = h.indexOf('</button>', tap);
-    expect(h.indexOf('data-list-card-more')).toBeGreaterThan(close);
-    expect(h).toMatch(/aria-label="Actions for Asha Rao"[^>]*-mr-3/);
-  });
-
-  it('no message yet: line 2 is reserved and empty, the card keeps its height', () => {
+  it('no message yet: line 2 is there and empty, the card keeps its height', () => {
     const h = card(dm, undefined);
-    expect(h).toContain('min-h-9');
+    expect(h).toContain('data-list-card-line="2"');
     expect(h).toContain(`data-preview-empty="" aria-hidden="true">${EMPTY_PREVIEW}<`);
     expect(h).not.toContain('No messages yet');
   });
 });
 
 describe('selected and select mode', () => {
-  it('open on desktop or checked while selecting: the one selected look, lit-selected', () => {
-    expect(channelRowSelected({ selected: true, selecting: false, checked: false })).toBe(true);
-    expect(channelRowSelected({ selected: false, selecting: true, checked: true })).toBe(true);
-    expect(channelRowSelected({ selected: true, selecting: true, checked: false })).toBe(false);
+  it('open on desktop or ticked while selecting: the one selected look, lit-selected', () => {
     for (const c of [dm, group]) {
       expect(card(c, read, { selected: true })).toContain('lit-selected');
       expect(card(c, read)).not.toContain('lit-selected');
+      // Selecting: only the ticked cards are lit, the open chat is not.
+      expect(card(c, read, { selected: true, selecting: true })).not.toContain('lit-selected');
       const checked = card(c, read, { selecting: true, checked: true });
       expect(checked).toContain('lit-selected');
-      expect(checked).toContain('data-select-check="on"');
+      // ListCard draws the tick on the picture; no SelectCheck of the list's own.
+      expect(checked).toContain('data-list-card-tick="on"');
+      expect(checked).not.toContain('data-select-check');
       expect(checked).toContain('aria-pressed="true"');
       expect(checked).not.toContain('bg-accent-soft');
       tokenOnly(checked);
@@ -275,10 +272,12 @@ describe('D7: chat rows and tiles never select text or show the callout', () => 
     }
   });
 
-  it('contextmenu default is prevented on a coarse pointer only', () => {
+  it('contextmenu is caught on a coarse pointer only (the hold alone enters select mode)', () => {
     const preventDefault = vi.fn();
-    chatRowContextMenu(true)?.({ preventDefault });
+    const stopPropagation = vi.fn();
+    chatRowContextMenu(true)?.({ preventDefault, stopPropagation });
     expect(preventDefault).toHaveBeenCalledOnce();
+    expect(stopPropagation).toHaveBeenCalledOnce();
     expect(chatRowContextMenu(false)).toBeUndefined();
   });
 });
@@ -350,7 +349,16 @@ describe('People row photo opens the chat (no photo popup)', () => {
           timeZone="UTC"
           onSelect={props.onSelect}
           input={DEFAULT_LIST_INPUT}
-          {...(props.onToggle !== undefined ? { onToggle: props.onToggle, checked: false } : {})}
+          {...(props.onToggle !== undefined
+            ? {
+                select: {
+                  active: true,
+                  chosen: false,
+                  onEnter: () => {},
+                  onToggle: () => props.onToggle?.(dm.channelId),
+                },
+              }
+            : {})}
         />,
       );
     });

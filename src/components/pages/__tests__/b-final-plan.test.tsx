@@ -103,10 +103,17 @@ describe('trailing rule on the Plan bar actions', () => {
     expect(item).not.toMatch(/data-plan-more=""[\s\S]{0,120}className="shrink-0 text-fg"/);
   });
 
-  it("a Bank card's ⋯ is ListCard's menu slot (the part applies the trailing rule)", () => {
+  it('a Bank card has no ⋯: long-press selects and the old rows live on the select bar', () => {
     const bank = read('pages/plan-tab/BankList.tsx');
-    expect(bank).toMatch(/<ListCard[\s\S]*?menu: \(\s*<ActionMenu/);
+    expect(bank).not.toContain('ActionMenu');
+    expect(bank).not.toMatch(/\bmenu[=:]/);
+    expect(bank).not.toMatch(/\bcheck[=:]/);
+    expect(bank).toContain('select={canWrite ? selection.selectFor(idea.id) : undefined}');
+    expect(bank).toContain('<BankSelectBar');
     expect(bank).not.toContain('pr-4 pt-2');
+    const bar = read('pages/plan-tab/BankSelectBar.tsx');
+    expect(bar).toContain("from '@/components/ui/SelectBar'");
+    expect(bar).toContain('visibleSelectActions');
   });
 });
 
@@ -155,7 +162,12 @@ describe('the Plan tab and the Bank on ListCard (phone and laptop)', () => {
     const list = read('pages/plan-tab/PlanTabList.tsx');
     expect(list).toContain('<ListCard');
     expect(list).toContain('LIST_CARD_GRID');
-    expect(list).toContain('formatPlanStart');
+    expect(list).toContain(
+      'formatPlanStart(plan.starts_on, props.timeZone, props.now, plan.ends_on)',
+    );
+    // Plans have no select mode: long-press does nothing on a plan card.
+    expect(list).not.toMatch(/\bselect=\{/);
+    expect(list).toContain('<ListCardBox');
     const bank = read('pages/plan-tab/BankList.tsx');
     expect(bank).toContain('<ListCard');
     expect(bank).toContain('LIST_CARD_GRID');

@@ -1,35 +1,24 @@
 import { mark } from '@/lib/perf-marks';
-import { useState, type ComponentType, type MouseEvent, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { useNavigate, type NavigateOptions } from 'react-router-dom';
 import { Thumbnail } from '@/components/media';
-import {
-  ICON_SIZE,
-  IconArrowUpRight,
-  IconCarousel,
-  IconCheck,
-  IconLink,
-  IconPause,
-  IconPlay,
-  IconSwitch,
-  IconX,
-  type IconProps,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconCarousel, IconPlay } from '@/components/ui/icons';
 import type { PresignCache } from '@/lib/asset-presign';
 import { entityUrlPath, refOpenState } from '@/lib/entityRef';
 import { confirmPostOpen, prefetchPostOpen } from '@/lib/post-prefetch';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 import { stageLabel } from '@/components/pages/pipeline/stage-meta';
-import { moveActions } from '@/components/pages/pipeline/MoveSheet';
-import {
-  hasAllowedMove,
-  reviewStatus,
-  type CardViewer,
-} from '@/components/pages/pipeline/card-status';
+import { reviewStatus, type CardViewer } from '@/components/pages/pipeline/card-status';
 import { daysFromToday, formatDue, formatOverdue } from '@/lib/time';
-import { ActionMenu, type ActionMenuItem, ActionMenuTrigger } from '@/components/ui/ActionMenu';
-import { ListCard, type ListCardHooks, type ListCardPicture } from '@/components/ui/ListCard';
+import {
+  ListCard,
+  type ListCardHooks,
+  type ListCardPicture,
+  type ListCardSelect,
+} from '@/components/ui/ListCard';
 import { PostPlaceholder, postPlaceholderKind } from '@/components/ui/PostPlaceholder';
 import {
+  peekEntityUnreadComment,
   unreadCommentsLabel,
   useEntityUnread,
   useEntityUnreadComment,
@@ -37,10 +26,6 @@ import {
 } from '@/lib/inbox/unread-entities';
 import { rememberCard } from '@/lib/motion';
 import { useGrowBackIntoCard } from '@/lib/motion/pages';
-import { useMenuGesture } from '@/components/ui/useLongPress';
-import { useOptionalToast } from '@/components/ui/toast';
-import { COPY_FAILED, copyText } from '@/lib/clipboard';
-import { buildPostLink } from '@/lib/post-share';
 import type { CardFirstMedia } from '../../../packages/posts/src/reads';
 import type { PipelinePost, Stage } from '@srtdio/posts';
 
@@ -52,18 +37,16 @@ export interface PostCardProps {
    *  absent the card falls back to the classic /posts/:id route. */
   workspaceKey?: string | null;
   /**
-   * Renders the ⋮ (ui/ActionMenu) at the end of line 3. With a known role the
-   * menu lists each move this viewer can make (Send for review, Approve, Park,
-   * Reject) and calls this with its target; without one it has a single Move
-   * row that calls it with no target (the move sheet).
-   */
-  onMove?: (post: PipelinePost, to?: Stage) => void;
-  /**
-   * The viewer's role and the workspace approvers: drives the review status line
-   * and hides the ⋮ menu's Move row when this viewer has no allowed move.
-   * Absent: no status line, and Move shows whenever onMove is passed.
+   * The viewer's role and the workspace approvers: drives the review status
+   * line ("With Maya · 3h", "Waiting on you"). Absent: no status line.
    */
   viewer?: CardViewer;
+  /**
+   * The Pipeline's select mode (useListSelection().selectFor): long-press or
+   * right-click ticks this card; the old ⋮ rows live on the page's SelectBar.
+   * Absent: long-press and right-click do nothing.
+   */
+  select?: ListCardSelect | undefined;
   /**
    * The post's first photo or video (the chat card's cover read): a video with
    * no poster shows the play placeholder. undefined while unknown.
@@ -88,11 +71,11 @@ export interface CardDue {
 }
 
 /**
- * Line 3's time: "Due today", "Due tomorrow", "Due Fri", "Due 12 Dec"
- * (formatDue) while the day is today or ahead; once the civil day (on the
- * workspace zone) has passed, "Overdue 1d" / "Overdue 2mo"
- * (formatOverdue) in the bad tone. An approved post is done, so it never reads
- * overdue. An unparseable value reads '' (no time). Pure.
+ * Line 1's time: "Today", "Tomorrow", "Fri", "12 Nov" (formatDue) while the
+ * day is today or ahead; once the civil day (on the workspace zone) has
+ * passed, "2d late" / "2mo late" (formatOverdue) in the bad tone. An approved
+ * post is done, so it never reads late. An unparseable value reads '' (no
+ * time). Pure.
  */
 export function cardDue(
   value: string,
@@ -132,13 +115,6 @@ export function captionPreview(post: Pick<PipelinePost, 'caption'>): string | nu
   return post.caption !== null && post.caption.trim() !== '' ? post.caption : null;
 }
 
-/** The ⋮ trigger's name: "Actions for {title}", then the unread comments when any. Pure. */
-export function cardMenuLabel(title: string, unreadComments: number): string {
-  return unreadComments > 0
-    ? `Actions for ${title}, ${unreadCommentsLabel(unreadComments)}`
-    : `Actions for ${title}`;
-}
-
 /** A small "multiple images" badge (stacked squares) on a carousel post's picture. */
 function CarouselBadge() {
   return (
@@ -161,57 +137,6 @@ function PlayBadge() {
       <IconPlay size={ICON_SIZE.inline} />
     </span>
   );
-}
-
-/** One move row in the card's ⋮ menu (the move sheet's actions, moveActions). */
-export interface CardMoveRow {
-  to: Stage;
-  label: string;
-  tone: 'default' | 'bad';
-  onSelect: () => void;
-}
-
-/** What the card's ⋮ menu runs. */
-export interface CardMenuActions {
-  onOpen: () => void;
-  onCopyLink: () => void;
-  /** The viewer's moves, each its own row; when present, no Move row. */
-  moves?: readonly CardMoveRow[];
-  /** Absent: this viewer has no allowed move, so the Move row is hidden. */
-  onMove?: () => void;
-}
-
-/** One icon per move: Send for review arrow, Approve check, Park pause, Reject X. */
-const MOVE_ICON: Record<Stage, ComponentType<IconProps>> = {
-  draft: IconSwitch,
-  review: IconArrowUpRight,
-  approved: IconCheck,
-  parked: IconPause,
-  rejected: IconX,
-};
-
-/**
- * The card's ⋮ rows: Open, Copy link, then every move this viewer can make
- * (the same moves the move sheet lists), else Move when allowed. Pure.
- */
-export function cardMenuItems(actions: CardMenuActions): ActionMenuItem[] {
-  const moves: ActionMenuItem[] =
-    actions.moves !== undefined && actions.moves.length > 0
-      ? actions.moves.map((move) => ({
-          id: `move-${move.to}`,
-          label: move.label,
-          icon: MOVE_ICON[move.to],
-          ...(move.tone === 'bad' ? { tone: 'danger' as const } : {}),
-          onSelect: move.onSelect,
-        }))
-      : actions.onMove !== undefined
-        ? [{ id: 'move', label: 'Move', icon: IconSwitch, onSelect: actions.onMove }]
-        : [];
-  return [
-    { id: 'open', label: 'Open', icon: IconArrowUpRight, onSelect: actions.onOpen },
-    { id: 'copy-link', label: 'Copy link', icon: IconLink, onSelect: actions.onCopyLink },
-    ...moves,
-  ];
 }
 
 /**
@@ -265,37 +190,97 @@ function cardPicture(
 }
 
 /**
+ * Where a card opens: the pretty link (/p/KEY-N) with the post id in router
+ * state (so /p/:ref renders without looking the ref up), else the classic
+ * /posts/:id route while the key has not resolved. Pure.
+ */
+export function postCardHref(
+  post: Pick<PipelinePost, 'id' | 'number'>,
+  workspaceKey: string | null,
+): string {
+  return workspaceKey !== null
+    ? entityUrlPath('post', workspaceKey, post.number)
+    : `/posts/${post.id}`;
+}
+
+/** The router state the pretty link carries (the post id), or undefined. Pure. */
+export function postCardOpenOptions(
+  post: Pick<PipelinePost, 'id' | 'number'>,
+  workspaceKey: string | null,
+): NavigateOptions | undefined {
+  return workspaceKey !== null
+    ? { state: refOpenState('post', workspaceKey, post.number, post.id) }
+    : undefined;
+}
+
+/**
+ * Open a post from outside its card (the select bar's Open): it lands on the
+ * newest unread comment like a tap does and grows out of the card when it is
+ * on screen. Opens with the id (no ref lookup) but reads afresh: no press to join.
+ */
+export function openPostCard(
+  navigate: (to: string, options?: NavigateOptions) => void,
+  post: Pick<PipelinePost, 'id' | 'number'>,
+  workspaceKey: string | null,
+): void {
+  const card =
+    typeof document === 'undefined'
+      ? null
+      : document.querySelector(`[data-post-id="${CSS.escape(post.id)}"]`);
+  rememberCard(post.id, card);
+  navigate(
+    withCommentTarget(postCardHref(post, workspaceKey), peekEntityUnreadComment('post', post.id)),
+    postCardOpenOptions(post, workspaceKey),
+  );
+}
+
+/**
+ * Line 2's preview: the review status ("With Maya · 3h", "Waiting on you")
+ * then " · " and the caption, on one line; the caption alone when there is no
+ * status. Captions are plain text (never formatted).
+ */
+function cardPreview(
+  status: { tone: string; text: string } | null,
+  caption: string | null,
+): ReactNode {
+  if (status === null) return caption;
+  return (
+    <>
+      <span data-post-card-status={status.tone}>{status.text}</span>
+      {caption !== null ? (
+        <>
+          {' · '}
+          <span data-post-card-caption="">{caption}</span>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+/**
  * A Pipeline post on ui/ListCard. Picture: the post's picture, else the play
  * placeholder (a video with no poster) or "Aa" (a text post). Line 1: the
- * title and the unread dot (unread comments). Line 2: the review status line
- * ("With Maya · 3h", "Waiting on you") over the caption on one line,
- * or the caption on two lines when there is no status. Line 3: the due or
- * overdue time, the stage tag and the ⋮ (Open, Copy link and the viewer's
- * moves; its name carries the unread comment count). The whole card opens the
- * post (onPress); a long-press on touch or a right-click on laptop opens the
- * same ⋮ menu (useMenuGesture).
+ * title and the due words ("Today", "Fri", "12 Nov"; "2d late" in the bad
+ * tone unless approved). Line 2: the review status then the caption on one
+ * line, the stage tag with its dot, and the unread dot (unread comments). The
+ * whole card opens the post (onPress). No ⋮: with `select`, a long-press on
+ * touch or a right-click on laptop ticks the card (ListCard wires it) and the
+ * Pipeline's SelectBar carries Open, Copy link and the moves.
  */
 export function PostCard({
   post,
   cache,
   presignEnabled,
   workspaceKey = null,
-  onMove,
   viewer,
+  select,
   cover,
   now,
   timeZone,
 }: PostCardProps) {
   const navigate = useNavigate();
-  const toast = useOptionalToast();
-  // Prefer the pretty link (/p/KEY-N); the classic /posts/:id route remains a
-  // working fallback when the key has not resolved yet.
-  const href =
-    workspaceKey !== null ? entityUrlPath('post', workspaceKey, post.number) : `/posts/${post.id}`;
-  // The card already holds the post's id: the pretty link carries it in router
-  // state, so /p/:ref renders the post without looking the ref up.
-  const openState =
-    workspaceKey !== null ? refOpenState('post', workspaceKey, post.number, post.id) : undefined;
+  const href = postCardHref(post, workspaceKey);
+  const openOptions = postCardOpenOptions(post, workspaceKey);
   // A press starts the page chunk and its first reads (src/lib/post-prefetch.ts);
   // only the click that follows lets the page join them.
   const pressPrefetch = (): void => prefetchPostOpen(post.id);
@@ -309,10 +294,7 @@ export function PostCard({
     confirmPostOpen(post.id);
     rememberCard(post.id, cardRef.current);
     // Unread comments: land on the newest one (jump to latest), else the top.
-    navigate(
-      withCommentTarget(href, latestUnread),
-      openState === undefined ? undefined : { state: openState },
-    );
+    navigate(withCommentTarget(href, latestUnread), openOptions);
   };
   const caption = captionPreview(post);
   const stage = post.stage as Stage;
@@ -320,93 +302,12 @@ export function PostCard({
   const clock = now ?? new Date();
   const status =
     viewer !== undefined ? reviewStatus(stage, post.stage_entered_at, viewer, clock) : null;
-  const canMove =
-    onMove !== undefined && (viewer === undefined || hasAllowedMove(viewer.role, stage));
-  const copyLink = (): void => {
-    void copyText(buildPostLink(window.location.origin, href)).then((ok) =>
-      toast?.show(ok ? { title: 'Link copied' } : { title: COPY_FAILED, tone: 'error' }),
-    );
-  };
   const due = post.target_date !== null ? cardDue(post.target_date, stage, timeZone, clock) : null;
-  const [menuOpen, setMenuOpen] = useState(false);
-  const gesture = useMenuGesture(() => setMenuOpen(true));
-  const hasMenu = onMove !== undefined;
-  // A known role lists its moves in the menu; while it loads, the Move row.
-  const directMoves =
-    viewer !== undefined && viewer.pending !== true ? moveActions(viewer.role, stage) : [];
   // The viewer's unread comments on this post (the same rows Activity shows):
-  // the dot on line 1, the count in the ⋮'s name.
+  // the unread dot on line 2, the count in the card's name.
   const unreadComments = useEntityUnread('post', post.id);
 
-  const menu =
-    onMove !== undefined ? (
-      // Pointer down and right-click stop here (the menu rows included, through
-      // the React tree) so the card's own menu gesture never arms under it.
-      <span
-        data-post-card-menu=""
-        onPointerDown={(event) => event.stopPropagation()}
-        onContextMenu={(event) => event.stopPropagation()}
-        className="flex"
-      >
-        <ActionMenu
-          title={post.title}
-          open={menuOpen}
-          onOpenChange={setMenuOpen}
-          items={cardMenuItems({
-            // Opens with the id (no ref lookup) but reads afresh: no press to join.
-            onOpen: () => {
-              rememberCard(post.id, cardRef.current);
-              navigate(
-                withCommentTarget(href, latestUnread),
-                openState === undefined ? undefined : { state: openState },
-              );
-            },
-            onCopyLink: copyLink,
-            ...(canMove && directMoves.length > 0
-              ? {
-                  moves: directMoves.map((move) => ({
-                    ...move,
-                    onSelect: () => onMove(post, move.to),
-                  })),
-                }
-              : canMove
-                ? { onMove: () => onMove(post) }
-                : {}),
-          })}
-          trigger={
-            // ListCard's line 3 holds it; ActionMenuTrigger's trailing rule puts
-            // the glyph on the card's content edge.
-            <ActionMenuTrigger
-              type="button"
-              label={cardMenuLabel(post.title, unreadComments)}
-              data-post-card-move=""
-              draggable={false}
-              className="text-fg-3"
-            />
-          }
-        />
-      </span>
-    ) : undefined;
-
   const { picture, hooks: pictureHooks } = cardPicture(post, coverKind, cache, presignEnabled);
-
-  // Line 2: the status line over the caption on one line; the caption alone
-  // takes both lines. Captions are plain text (never formatted).
-  const preview =
-    status !== null ? (
-      <>
-        <span data-post-card-status={status.tone} className="block truncate">
-          {status.text}
-        </span>
-        {caption !== null ? (
-          <span data-post-card-caption="" className="block truncate">
-            {caption}
-          </span>
-        ) : null}
-      </>
-    ) : (
-      caption
-    );
 
   return (
     <ListCard
@@ -416,28 +317,14 @@ export function PostCard({
         'data-induction': INDUCTION_KEYS.pipelinePostRow,
         'data-induction-post': post.id,
         ...(unreadComments > 0 ? { 'data-post-card-unread': String(unreadComments) } : {}),
-        ...(hasMenu
-          ? {
-              ...gesture.handlers,
-              // A hold released with no click left its click guard set: a new
-              // press is never the tail of that hold. Capture, so menu rows
-              // (whose wrapper stops pointerdown) clear it too.
-              onPointerDownCapture: () => {
-                gesture.consumeClickSuppression();
-              },
-              // The click that trails a long-press never reaches Open post.
-              onClickCapture: (event: MouseEvent) => {
-                if (gesture.consumeClickSuppression()) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }
-              },
-            }
-          : {}),
       }}
+      select={select}
       onPress={open}
       press={{
-        'aria-label': `Open post ${post.title}`,
+        'aria-label':
+          unreadComments > 0
+            ? `Open post ${post.title}, ${unreadCommentsLabel(unreadComments)}`
+            : `Open post ${post.title}`,
         onPointerDown: pressPrefetch,
         onTouchStart: pressPrefetch,
       }}
@@ -445,7 +332,7 @@ export function PostCard({
       pictureHooks={pictureHooks}
       title={post.title}
       unread={unreadComments > 0}
-      preview={preview}
+      preview={cardPreview(status, caption)}
       {...(status === null && caption !== null
         ? { previewHooks: { 'data-post-card-caption': '' } }
         : {})}
@@ -457,8 +344,8 @@ export function PostCard({
           }
         : {})}
       tag={stageLabel(stage)}
+      tagDot={stage}
       tagHooks={{ 'data-post-card-stage': stage }}
-      {...(menu !== undefined ? { menu } : {})}
     />
   );
 }

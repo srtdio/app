@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ActivityFilterBar, moreToRight } from '@/components/pages/activity/ActivityFilterBar';
+import {
+  ActivityFilterBar,
+  activityChip,
+  moreToRight,
+} from '@/components/pages/activity/ActivityFilterBar';
 
 describe('ActivityFilterBar', () => {
-  it('shows exactly All, Unread, Mentions, Briefs, Plans, Snoozed in that order', () => {
+  it('shows exactly All, Unread, Mentions, Briefs, Plans in that order (no Snoozed)', () => {
     const html = renderToStaticMarkup(
       <ActivityFilterBar
         state="all"
@@ -15,7 +19,34 @@ describe('ActivityFilterBar', () => {
     const labels = [...html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((m) =>
       (m[1] ?? '').replace(/<[^>]+>/g, '').trim(),
     );
-    expect(labels).toEqual(['All', 'Unread', 'Mentions', 'Briefs', 'Plans', 'Snoozed']);
+    expect(labels).toEqual(['All', 'Unread', 'Mentions', 'Briefs', 'Plans']);
+    expect(html).not.toContain('Snoozed');
+  });
+
+  it('the Unread and Mentions chips keep their counts', () => {
+    const html = renderToStaticMarkup(
+      <ActivityFilterBar
+        state="all"
+        onStateChange={() => undefined}
+        totalUnread={4}
+        mentionCount={2}
+      />,
+    );
+    const labels = [...html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((m) =>
+      (m[1] ?? '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    );
+    expect(labels[1]).toContain('4');
+    expect(labels[2]).toContain('2');
+    expect(labels[0]).toBe('All');
+  });
+
+  it('a chip kept from before Snoozed was retired reads as All', () => {
+    expect(activityChip('snoozed')).toBe('all');
+    expect(activityChip('unread')).toBe('unread');
+    expect(activityChip('plans')).toBe('plans');
   });
 
   it('fix 3: fades only while chips remain to the right (2px slack)', () => {

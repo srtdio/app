@@ -79,11 +79,6 @@ export function partialDeleteLabel(notDeleted: number, deleted: number): string 
 /** The toast when Select all could not read the matching files. Pure. */
 export const SELECT_ALL_FAILED = errorText('select all files', null);
 
-/** The select-mode count line. */
-export function selectedLabel(count: number): string {
-  return `${count} selected`;
-}
-
 /** Ids for Select all: every shown file, capped at `cap` (the batch limit). */
 export function selectAllIds(visible: readonly { id: string }[], cap: number): string[] {
   return visible.slice(0, cap).map((item) => item.id);

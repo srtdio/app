@@ -47,8 +47,8 @@ import {
 //     (assertSameWidth);
 //   6 list cards (ui/ListCard, [data-list-card]: Pipeline, Briefs, Assets, the
 //     Chat list, Activity, the Plan tab and its Bank): every card on the screen
-//     is the same height (within 1px) and 118 tall on every screen, so all six
-//     lists match; each picture is 72x72, left, 16 inside the card edge, 12 to
+//     is the same height (within 1px) and 74 tall on every screen, so all seven
+//     lists match; each picture is 48x48, left, 12 inside the card edge, 12 to
 //     the text;
 //   7 post screens (after the shot, so the baseline never moves): the pinned
 //     exit bar keeps its top after the page scrolls (assertPinnedBarOnScroll),

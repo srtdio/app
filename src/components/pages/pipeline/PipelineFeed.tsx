@@ -5,7 +5,7 @@ import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ICON_SIZE, IconPipeline } from '@/components/ui/icons';
-import { LIST_CARD_GRID } from '@/components/ui/ListCard';
+import { LIST_CARD_GRID, type ListCardSelect } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
 import { PostCard } from '@/components/pages/PostCard';
 import { BOARD_CAP, StageEmpty } from '@/components/pages/pipeline/stage-meta';
@@ -25,8 +25,11 @@ interface PipelineFeedProps {
   presignEnabled: boolean;
   /** The active workspace key, threaded into every card for its pretty /p link. */
   workspaceKey?: string | null;
-  /** The card's ⋮ move rows (also reached by long-press or right-click). */
-  onLongPressPost: (post: PipelinePost, to?: Stage) => void;
+  /**
+   * The page's select mode (useListSelection().selectFor): each card's
+   * long-press / right-click ticks it. Absent: no select mode.
+   */
+  selectFor?: (postId: string) => ListCardSelect;
   /**
    * sessionStorage key for the Show more depth, built from the filter query, so
    * Back to the same filters restores the same depth. Absent: not remembered.
@@ -34,7 +37,7 @@ interface PipelineFeedProps {
   shownKey?: string;
   /** The workspace zone each card reads its target (due) day in. Absent: the device zone. */
   timeZone?: string | null;
-  /** The viewer's role and approvers: each card's status line and its ⋮. */
+  /** The viewer's role and approvers: each card's status line. */
   viewer?: CardViewer;
   /** Each post's first photo or video (a video with no poster shows the play placeholder). */
   covers?: CoverLookup;
@@ -42,7 +45,7 @@ interface PipelineFeedProps {
 
 /**
  * The cards in ui/ListCard's page grid (LIST_CARD_GRID: one column on phone,
- * auto-fill columns at least 360 wide on laptop, 12 apart). A plain helper (not
+ * auto-fill columns at least 360 wide on laptop, 8 apart). A plain helper (not
  * a component) so each PostCard is inlined into the feed tree and walkable by
  * the structure tests. `now` is the feed's one minute clock.
  */
@@ -50,7 +53,7 @@ function cardGrid(
   posts: PipelinePost[],
   cache: PresignCache,
   presignEnabled: boolean,
-  onLongPressPost: (post: PipelinePost, to?: Stage) => void,
+  selectFor: ((postId: string) => ListCardSelect) | undefined,
   workspaceKey: string | null,
   timeZone: string | null | undefined,
   viewer: CardViewer | undefined,
@@ -66,7 +69,7 @@ function cardGrid(
           cache={cache}
           presignEnabled={presignEnabled}
           workspaceKey={workspaceKey}
-          onMove={onLongPressPost}
+          {...(selectFor !== undefined ? { select: selectFor(post.id) } : {})}
           timeZone={timeZone}
           now={now}
           {...(viewer !== undefined ? { viewer } : {})}
@@ -93,7 +96,7 @@ export function PipelineFeed({
   cache,
   presignEnabled,
   workspaceKey = null,
-  onLongPressPost,
+  selectFor,
   shownKey,
   timeZone,
   viewer,
@@ -131,7 +134,7 @@ export function PipelineFeed({
             view,
             cache,
             presignEnabled,
-            onLongPressPost,
+            selectFor,
             workspaceKey,
             timeZone,
             viewer,
