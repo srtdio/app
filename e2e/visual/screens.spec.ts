@@ -16,6 +16,7 @@ import {
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
 import type { Row } from '../fixtures/postgrest';
 import {
+  assetId,
   buildWorld,
   COLLEAGUE_A,
   COLLEAGUE_B,
@@ -52,7 +53,14 @@ import {
   seedRemovableFiles,
   seedRemovedLine,
 } from '../fixtures/remove-files';
-import { installLinkPreviewStub } from '../fixtures/link-previews';
+import {
+  installLinkPreviewStub,
+  TEXT_LINE,
+  TEXT_TITLE,
+  YOUTUBE_LINE,
+  YOUTUBE_TITLE,
+} from '../fixtures/link-previews';
+import { PPTX_MIME } from '../fixtures/office-files';
 import { seedTasks, TASK_CHANNEL } from '../fixtures/tasks-data';
 import { installMediaSearch, type MediaKind } from '../fixtures/search-data';
 import {
@@ -1414,7 +1422,7 @@ const SCREENS: Screen[] = [
     },
   },
   {
-    // Laptop: "carousel" typed, the field focused (line and lift), clear X showing.
+    // Laptop: "carousel" typed, the field focused (line and lift), Clear showing.
     name: 'pipeline-search-typed',
     seed: creator,
     only: 'laptop',
@@ -2907,7 +2915,7 @@ SCREENS.push(
   },
   {
     // Inside a DM the header photo opens the photo only: dark overlay, the
-    // photo large, the full name, an X. Phone light/dark and laptop.
+    // photo large, the full name, a leading "<" (Back). Phone light/dark and laptop.
     name: 'person-photo-viewer',
     seed: creator,
     url: '/chat',
@@ -3305,8 +3313,9 @@ SCREENS.push(
     },
   },
   {
-    // A photo sent with its upload held: the own bubble shows the local
-    // preview under the upload ring (Cancel upload).
+    // A photo sent with its upload held (D5 uploading, photo): the own bubble
+    // shows the local preview under the upload ring, its stop square named
+    // "Stop sending".
     name: 'chat-upload-progress',
     seed: creator,
     extra: (network) => {
@@ -3326,6 +3335,7 @@ SCREENS.push(
       await waitFor([dmComposer(page).getByText('moodboard.png')], 'picked photo');
       await tap([page.getByRole('button', { name: 'Send', exact: true })], 'Send');
       const ring = await firstVisible([page.locator('[data-upload-ring]')], 'upload ring');
+      await expect(ring).toHaveAccessibleName('Stop sending');
       await attributeStill(ring, 'data-upload-progress');
     },
   },
@@ -3523,7 +3533,8 @@ SCREENS.push(
     },
   },
   {
-    // A deleted message: the peer bubble's shell in secondary ink, its time.
+    // A deleted message: the peer bubble's shell in secondary ink, its time,
+    // on one line (D8).
     name: 'chat-tombstone',
     seed: creator,
     extra: seedDmTombstone,
@@ -3533,6 +3544,7 @@ SCREENS.push(
       const tomb = await firstVisible([page.getByTestId('tombstone')], 'tombstone');
       await threadStill(page);
       await tomb.scrollIntoViewIfNeeded();
+      await expectOneLine(tomb, 'tombstone');
     },
   },
   {
@@ -3583,12 +3595,18 @@ SCREENS.push(
   },
   {
     // The photo viewer's bar: Show in chat, then Forward, Delete and Download.
+    // It leaves with the leading "<" (Back) beside the title (D2/D3), never an X.
     name: 'chat-viewer-bar',
     seed: creator,
     prepare: seedMediaChips,
     url: '/chat',
     steps: async (page) => {
       await openPhotoViewer(page);
+      const viewer = page.getByRole('dialog', { name: 'Image viewer' });
+      const top = viewer.locator('[data-lightbox-back-bar]');
+      await expect(top.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
+      await expect(top.locator('[data-lightbox-title]')).toBeVisible();
+      await expect(viewer.getByRole('button', { name: /^Close/ })).toHaveCount(0);
     },
   },
   {
@@ -3638,6 +3656,465 @@ SCREENS.push(
         [page.locator('[data-notes-tile] img[data-avatar-role="card"]')],
         'notes photo',
       );
+    },
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Chat media sweep (7 Nov 2026): a single photo at its own ratio, never cropped
+// (D1: portrait, landscape, square; the tile's box from thumb_w/thumb_h and
+// the served photo at that size), the 2, 3 and 4 photo albums, the sending
+// states of each type (D5: queued = the clock and an empty ring, uploading =
+// the ring with its stop square "Stop sending", failed = "Not sent"), the
+// YouTube link card with its picture and a link with no picture (D6: the
+// compact 64px row, no picture box), the Plan dates sheet on ui/DatePicker
+// (D9) and a sheet's header (D4a: the leading "<" Back, then the title).
+// Phone light/dark and laptop light come from the projects; LAPTOP_DARK_SCREENS
+// adds laptop dark. The uploading photo and voice note are chat-upload-progress
+// and chat-voice-uploading above; the tombstone and the viewer bar are
+// chat-tombstone and chat-viewer-bar.
+
+/** Its text on one line: the text runs span less than one and a half of their tallest run. */
+async function expectOneLine(target: Locator, what: string): Promise<void> {
+  const span = await target.evaluate((root) => {
+    let top = Infinity;
+    let bottom = -Infinity;
+    let tallest = 0;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n !== null; n = walker.nextNode()) {
+      if ((n.textContent ?? '').trim() === '') continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      for (const r of Array.from(range.getClientRects())) {
+        if (r.width === 0 || r.height === 0) continue;
+        top = Math.min(top, r.top);
+        bottom = Math.max(bottom, r.bottom);
+        tallest = Math.max(tallest, r.height);
+      }
+    }
+    return { height: bottom - top, tallest };
+  });
+  expect(span.tallest, `${what} has text`).toBeGreaterThan(0);
+  expect(span.height, `${what} on one line`).toBeLessThan(span.tallest * 1.5);
+}
+
+/** A sheet's header: the leading "<" (Back) first, then the title; no Close anywhere. */
+async function expectBackHeader(sheet: Locator, title: string): Promise<void> {
+  const head = sheet.locator('[data-sheet-grab]');
+  await expect(head.locator('button').first()).toHaveAccessibleName('Back');
+  await expect(head.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  const back = await head.getByRole('button', { name: 'Back', exact: true }).boundingBox();
+  const heading = await head.getByRole('heading', { name: title, exact: true }).boundingBox();
+  if (back === null || heading === null) throw new Error(`${title}: no header boxes`);
+  expect(back.x, `${title}: Back leads the title`).toBeLessThan(heading.x);
+  await expect(sheet.getByRole('button', { name: /^Close/ })).toHaveCount(0);
+}
+
+interface SeededPhoto {
+  id: string;
+  name: string;
+  w: number;
+  h: number;
+  rgb: [number, number, number];
+}
+
+const MEDIA_MESSAGE = (n: number): string =>
+  `0190b000-0000-7000-8100-0000000009${n.toString(16).padStart(2, '0')}`;
+
+/** The single photos (D1): portrait 600x900, landscape 900x600, square 700x700. */
+const SINGLE_PHOTOS: Record<'portrait' | 'landscape' | 'square', SeededPhoto> = {
+  portrait: { id: assetId(1, 961), name: 'tall.png', w: 600, h: 900, rgb: [176, 112, 72] },
+  landscape: { id: assetId(1, 962), name: 'wide.png', w: 900, h: 600, rgb: [72, 120, 160] },
+  square: { id: assetId(1, 963), name: 'square.png', w: 700, h: 700, rgb: [96, 144, 96] },
+};
+
+/** Album photos: one colour each, so the grid's tiles read apart. */
+const ALBUM_COLOURS: Array<[number, number, number]> = [
+  [176, 112, 72],
+  [72, 120, 160],
+  [96, 144, 96],
+  [150, 96, 150],
+];
+
+function albumPhotos(count: number): SeededPhoto[] {
+  return Array.from({ length: count }, (_, k) => ({
+    id: assetId(1, 970 + count * 10 + k),
+    name: `album-${count}-${k + 1}.png`,
+    w: 800,
+    h: 800,
+    rgb: ALBUM_COLOURS[k % ALBUM_COLOURS.length] ?? [128, 128, 128],
+  }));
+}
+
+/** One DM row a minute before NOW (the thread's newest), from ME unless `sender` says. */
+function pushDmRow(
+  network: HarnessNetwork,
+  id: string,
+  fields: Partial<Row> & { sender?: string },
+): void {
+  const { sender, ...rest } = fields;
+  (network.world.tables.chat_messages ??= []).push({
+    id,
+    channel_id: DM_CHANNEL,
+    workspace_id: WORKSPACE_ID,
+    sender_user_id: sender ?? ME,
+    body: null,
+    mentions: null,
+    attachment_asset_ids: null,
+    shared_post_ids: null,
+    shared_brief_ids: null,
+    reply_to_message_id: null,
+    forwarded_from_message_id: null,
+    attachment_meta: null,
+    agora_event_id: null,
+    created_at: new Date(NOW - 60_000).toISOString(),
+    edited_at: null,
+    deleted_at: null,
+    thread_root_message_id: null,
+    ...rest,
+  });
+}
+
+/** An own photo message (one photo: the single tile; 2+: the album), sizes stored. */
+function seedPhotoMessage(network: HarnessNetwork, id: string, photos: SeededPhoto[]): void {
+  pushDmRow(network, id, {
+    attachment_asset_ids: photos.map((p) => p.id),
+    attachment_meta: Object.fromEntries(
+      photos.map((p) => [
+        p.id,
+        { mime: 'image/png', name: p.name, size: 48_000, thumb_w: p.w, thumb_h: p.h },
+      ]),
+    ),
+  });
+}
+
+/**
+ * The asset-read blobs of these photos at their own pixel size (the harness
+ * serves one 64x48 PNG for every image). Registered after the harness, so it
+ * answers first; any other blob falls through to the harness.
+ */
+async function servePhotos(page: Page, photos: SeededPhoto[]): Promise<void> {
+  const bodies = new Map(photos.map((p) => [p.id, solidPng(p.w, p.h, p.rgb)]));
+  const isBlob = (url: URL): boolean =>
+    url.hostname === 'asset-read.harness.test' && url.pathname.startsWith('/blob/image/');
+  await page.route(isBlob, async (route) => {
+    const id = new URL(route.request().url()).pathname.split('/').pop() ?? '';
+    const body = bodies.get(id);
+    if (body === undefined) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      headers: { 'access-control-allow-origin': '*', 'content-type': 'image/png' },
+      body,
+    });
+  });
+}
+
+/** The DM open on a seeded message: in view, its photos decoded, the thread still. */
+async function openDmOn(page: Page, id: string): Promise<Locator> {
+  await openDm(page);
+  const message = await firstVisible([page.locator(`[data-msg-id="${id}"]`)], 'message');
+  await threadStill(page);
+  await message.scrollIntoViewIfNeeded();
+  return message;
+}
+
+/** Every photo of the message decoded at its served size, in tile order. */
+async function photosLoaded(message: Locator, photos: SeededPhoto[]): Promise<void> {
+  const images = message.locator('[data-album] img');
+  await expect(images).toHaveCount(photos.length, { timeout: READY_MS });
+  for (const [i, photo] of photos.entries()) {
+    await expect(images.nth(i)).toHaveJSProperty('naturalWidth', photo.w, { timeout: READY_MS });
+  }
+}
+
+/** The DM composer's photo input (Photos) or file input (File). */
+const composerInput = (page: Page, which: 'photo' | 'file'): Locator =>
+  dmComposer(page).locator('input[type="file"]').nth(which === 'photo' ? 0 : 1);
+
+interface PickedFile {
+  name: string;
+  mimeType: string;
+  buffer: Buffer;
+}
+
+/** Pick files in the DM composer, wait for their chips, then Send. */
+async function pickAndSend(
+  page: Page,
+  which: 'photo' | 'file',
+  files: PickedFile[],
+): Promise<void> {
+  await composerInput(page, which).setInputFiles(files);
+  for (const file of files) {
+    await waitFor([dmComposer(page).getByText(file.name, { exact: false })], file.name);
+  }
+  await tap([page.getByRole('button', { name: 'Send', exact: true })], 'Send');
+}
+
+function pngFile(name: string, w: number, h: number, rgb: [number, number, number]): PickedFile {
+  return { name, mimeType: 'image/png', buffer: solidPng(w, h, rgb) };
+}
+
+/** The own message holding a picked photo (its tile's image is named by the file). */
+const messageWithPhoto = (page: Page, name: string): Locator =>
+  page.locator('[data-msg-id]', { has: page.locator(`img[alt="${name}"]`) }).last();
+
+/** An uploading send: its ring up, named "Stop sending", the progress settled. */
+async function ringSettled(scope: Locator, what: string): Promise<Locator> {
+  const ring = await firstVisible([scope.locator('[data-upload-ring]')], `${what} ring`);
+  await expect(ring).toHaveAccessibleName('Stop sending');
+  await attributeStill(ring, 'data-upload-progress');
+  return ring;
+}
+
+/** A refused send: its "Not sent" line in view. */
+async function notSentInView(page: Page): Promise<void> {
+  const line = await firstVisible([page.locator('[data-failed="failed"]')], 'Not sent');
+  await expect(line).toHaveText('Not sent');
+  await threadStill(page);
+  await line.scrollIntoViewIfNeeded();
+}
+
+const YOUTUBE_MESSAGE = MEDIA_MESSAGE(0x30);
+const TEXT_MESSAGE = MEDIA_MESSAGE(0x31);
+
+const VIDEO_FILE: PickedFile = {
+  name: 'teaser-cut.mp4',
+  mimeType: 'video/mp4',
+  buffer: Buffer.alloc(2048),
+};
+const DECK_FILE: PickedFile = {
+  name: 'Pitch deck.pptx',
+  mimeType: PPTX_MIME,
+  buffer: Buffer.alloc(4096),
+};
+
+for (const [shape, photo] of Object.entries(SINGLE_PHOTOS)) {
+  const id = MEDIA_MESSAGE(0x10 + Object.keys(SINGLE_PHOTOS).indexOf(shape));
+  SCREENS.push({
+    // One photo: the whole photo at its own ratio (thumb_w / thumb_h), uncropped.
+    name: `chat-photo-single-${shape}`,
+    seed: creator,
+    extra: (network) => seedPhotoMessage(network, id, [photo]),
+    prepare: (_network, page) => servePhotos(page, [photo]),
+    url: '/chat',
+    steps: async (page) => {
+      const message = await openDmOn(page, id);
+      await photosLoaded(message, [photo]);
+      const tile = message.getByRole('button', { name: 'Open photo 1 of 1', exact: true });
+      const box = await tile.boundingBox();
+      if (box === null) throw new Error(`${shape}: no tile box`);
+      expect(box.width / box.height, `${shape} tile ratio`).toBeCloseTo(photo.w / photo.h, 1);
+      await expect(message.locator('[data-album] img')).toHaveCSS('object-fit', 'contain');
+    },
+  });
+}
+
+for (const count of [2, 3, 4]) {
+  const id = MEDIA_MESSAGE(0x20 + count);
+  const photos = albumPhotos(count);
+  SCREENS.push({
+    // An album: 2 squares; 3 = a wide tile over two squares; 4 = a 2x2 grid.
+    name: `chat-album-${count}`,
+    seed: creator,
+    extra: (network) => seedPhotoMessage(network, id, photos),
+    prepare: (_network, page) => servePhotos(page, photos),
+    url: '/chat',
+    steps: async (page) => {
+      const message = await openDmOn(page, id);
+      await waitFor([message.locator(`[data-album="${count}"]`)], `album of ${count}`);
+      await photosLoaded(message, photos);
+    },
+  });
+}
+
+SCREENS.push(
+  {
+    // Queued: a second photo sent while the first one's upload is held. It
+    // waits its turn: the clock in its time chip, its ring empty (unknown).
+    name: 'chat-send-queued-photo',
+    seed: creator,
+    extra: (network) => {
+      network.holdUploads();
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickAndSend(page, 'photo', [pngFile('first-cut.png', 640, 480, [200, 120, 60])]);
+      await ringSettled(messageWithPhoto(page, 'first-cut.png'), 'first photo');
+      await pickAndSend(page, 'photo', [pngFile('second-cut.png', 480, 640, [60, 120, 200])]);
+      const queued = messageWithPhoto(page, 'second-cut.png');
+      await waitFor([queued.locator('[data-status="sending"]')], 'queued clock');
+      const ring = await firstVisible([queued.locator('[data-upload-ring]')], 'queued ring');
+      await expect(ring).toHaveAttribute('data-upload-progress', 'unknown');
+      await threadStill(page);
+    },
+  },
+  {
+    // Uploading, album: three photos in one send, one ring over the grid.
+    name: 'chat-send-uploading-album',
+    seed: creator,
+    extra: (network) => {
+      network.holdUploads();
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickAndSend(page, 'photo', [
+        pngFile('set-1.png', 640, 640, [176, 112, 72]),
+        pngFile('set-2.png', 640, 640, [72, 120, 160]),
+        pngFile('set-3.png', 640, 640, [96, 144, 96]),
+      ]);
+      const album = await firstVisible([page.locator('[data-album="3"]')], 'sending album');
+      await expect(album.locator('[data-upload-ring]')).toHaveCount(1);
+      await ringSettled(album, 'album');
+      await threadStill(page);
+    },
+  },
+  {
+    // Uploading, video: the video card at the sending ratio, the ring on it.
+    name: 'chat-send-uploading-video',
+    seed: creator,
+    extra: (network) => {
+      network.holdUploads();
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickAndSend(page, 'file', [VIDEO_FILE]);
+      const card = await firstVisible(
+        [page.locator('[data-file-bubble="video"][data-file-state="sending"]')],
+        'sending video',
+      );
+      await ringSettled(card, 'video');
+      await threadStill(page);
+    },
+  },
+  {
+    // Uploading, file: the file card, the ring in its icon spot.
+    name: 'chat-send-uploading-file',
+    seed: creator,
+    extra: (network) => {
+      network.holdUploads();
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickAndSend(page, 'file', [DECK_FILE]);
+      const card = await firstVisible(
+        [page.locator('[data-file-state="sending"]', { hasText: DECK_FILE.name })],
+        'sending file',
+      );
+      await ringSettled(card, 'file');
+      await threadStill(page);
+    },
+  },
+  {
+    // Failed, photo: uploaded, then the record refused: "Not sent" under it.
+    name: 'chat-send-failed-photo',
+    seed: creator,
+    extra: (network) => {
+      network.refuseRpc.add('chat_message_send');
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickAndSend(page, 'photo', [pngFile('refused.png', 640, 480, [150, 96, 150])]);
+      await notSentInView(page);
+      await expect(page.locator('[data-upload-ring]')).toHaveCount(0);
+    },
+  },
+  {
+    // Failed, file: the file card with "Not sent" under it.
+    name: 'chat-send-failed-file',
+    seed: creator,
+    extra: (network) => {
+      network.refuseRpc.add('chat_message_send');
+    },
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickAndSend(page, 'file', [DECK_FILE]);
+      await notSentInView(page);
+      await expect(page.locator('[data-upload-ring]')).toHaveCount(0);
+    },
+  },
+  {
+    // A YouTube link (D6): the tall card, its picture (the i.ytimg.com frame,
+    // through the Worker's /image), the play badge, the title and "1:32".
+    name: 'chat-link-youtube',
+    seed: creator,
+    extra: (network) => pushDmRow(network, YOUTUBE_MESSAGE, { sender: PEER, body: YOUTUBE_LINE }),
+    prepare: async (_network, page) => {
+      await installLinkPreviewStub(page);
+    },
+    url: '/chat',
+    steps: async (page) => {
+      const message = await openDmOn(page, YOUTUBE_MESSAGE);
+      const card = message.locator('[data-link-card] [data-card-type="full"]');
+      await waitFor([card], 'YouTube card');
+      await waitFor([card.getByText(YOUTUBE_TITLE, { exact: true })], 'YouTube title');
+      // The 480x360 frame (i.ytimg.com's hqdefault size), decoded.
+      const picture = card.locator('[data-card-media] img');
+      await expect(picture).toHaveJSProperty('naturalWidth', 480, { timeout: READY_MS });
+      await message.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // A link whose page has a title and no picture: the compact 64px row
+    // (letter tile, title, domain), never an empty picture box.
+    name: 'chat-link-no-picture',
+    seed: creator,
+    extra: (network) => pushDmRow(network, TEXT_MESSAGE, { sender: PEER, body: TEXT_LINE }),
+    prepare: async (_network, page) => {
+      await installLinkPreviewStub(page);
+    },
+    url: '/chat',
+    steps: async (page) => {
+      const message = await openDmOn(page, TEXT_MESSAGE);
+      const row = message.locator('[data-link-card] [data-card-type="text"]');
+      await waitFor([row.getByText(TEXT_TITLE, { exact: true })], 'no-picture card');
+      await expect(message.locator('[data-card-media]')).toHaveCount(0);
+      const box = await row.boundingBox();
+      if (box === null) throw new Error('no-picture card has no box');
+      expect(Math.round(box.height), 'compact row height').toBe(64);
+      await message.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // New plan -> Change dates: Plan dates, From and To on ui/DatePicker (D9),
+    // never a native date input; the header's leading "<" then the title.
+    name: 'plan-dates-sheet',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDm(page);
+      await pickTrayTile(page, 'plan');
+      const plans = page.getByRole('dialog', { name: 'Plans' });
+      await tap([plans.locator('[data-plan-pick-new]')], 'New plan');
+      const compose = page.locator('[data-plan-page="compose"]');
+      await tap([compose.locator('[data-plan-dates-change]')], 'Change plan dates');
+      const sheet = page.getByRole('dialog', { name: 'Plan dates' });
+      await waitFor([sheet.locator('[data-plan-date="startsOn"]')], 'From');
+      await waitFor([sheet.locator('[data-plan-date="endsOn"]')], 'To');
+      await expect(sheet.locator('input[type="date"]')).toHaveCount(0);
+      await expectBackHeader(sheet, 'Plan dates');
+    },
+  },
+  {
+    // A common sheet's header (D4a): Rename file, the leading "<" (Back) on
+    // the content edge, then the title; no X or Close.
+    name: 'sheet-header-back',
+    seed: creator,
+    url: '/assets',
+    steps: async (page) => {
+      await assetsSelect(page);
+      await tap([page.locator('[data-select-bar-action="rename"]')], 'Rename');
+      const sheet = page.getByRole('dialog', { name: 'Rename file' });
+      await waitFor([sheet.getByRole('textbox')], 'rename field');
+      await expectBackHeader(sheet, 'Rename file');
     },
   },
 );
@@ -4089,6 +4566,23 @@ const LAPTOP_DARK_SCREENS = new Set([
   'chat-viewer-delete-sheet',
   'chat-voice-uploading',
   'chat-list-notes-photo',
+  // Chat media sweep: phone and laptop, light and dark.
+  'chat-photo-single-portrait',
+  'chat-photo-single-landscape',
+  'chat-photo-single-square',
+  'chat-album-2',
+  'chat-album-3',
+  'chat-album-4',
+  'chat-send-queued-photo',
+  'chat-send-uploading-album',
+  'chat-send-uploading-video',
+  'chat-send-uploading-file',
+  'chat-send-failed-photo',
+  'chat-send-failed-file',
+  'chat-link-youtube',
+  'chat-link-no-picture',
+  'plan-dates-sheet',
+  'sheet-header-back',
   // Post screen redo: phone and laptop, light and dark.
   'post-detail-approver',
   'post-detail-approved',
