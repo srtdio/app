@@ -74,7 +74,7 @@ import { reasonFailureTitle } from '@/components/pages/pcs/stage-move-commit';
 import { SectionHeader } from '@/components/shell/SectionHeader';
 import { filterByFields, filterByWindow, isUndated, sortPosts } from '@/lib/list-sort';
 import type { UndoableAction } from '@/lib/use-undoable-action';
-import { formatRelative } from '@/lib/time';
+import { formatAgo } from '@/lib/time';
 import type { PresignCache } from '@/lib/asset-presign';
 import { stageTransition } from '@srtdio/posts';
 import type { Client, DomainErrorCode, PipelinePost, Result, Stage } from '@srtdio/posts';
@@ -128,8 +128,8 @@ function text(node: ReactNode): string {
 
 const T0 = '2026-01-01T00:00:00Z';
 const TWO_HOURS_LATER = new Date('2026-01-01T02:00:00Z');
-// The status time is formatRelative: "2 hours ago".
-const WHEN = formatRelative(T0, TWO_HOURS_LATER);
+// The status time is formatAgo: "2h".
+const WHEN = formatAgo(T0, TWO_HOURS_LATER);
 
 describe('post flow C: Pipeline card', () => {
   it('fix 1: the picture is the post cover, the play placeholder or "Aa" (a text post)', () => {
@@ -158,7 +158,7 @@ describe('post flow C: Pipeline card', () => {
     });
     expect(reviewStatus('review', T0, viewer('agency', ['Meera']), TWO_HOURS_LATER)).toEqual({
       tone: 'with',
-      text: 'With Meera · 2 hours ago',
+      text: 'With Meera · 2h',
     });
     for (const role of ['owner', 'admin', 'agency']) {
       expect(reviewStatus('review', T0, viewer(role, ['Meera', 'Arjun']), TWO_HOURS_LATER)).toEqual(
@@ -168,7 +168,7 @@ describe('post flow C: Pipeline card', () => {
     expect(reviewStatus('review', T0, viewer('owner'), TWO_HOURS_LATER)?.text).toBe(
       `With approvers · ${WHEN}`,
     );
-    expect(WHEN).toBe('2 hours ago');
+    expect(WHEN).toBe('2h');
     // Only Review has a status line; an unknown role gets none.
     expect(reviewStatus('approved', T0, viewer('client'), TWO_HOURS_LATER)).toBeNull();
     expect(reviewStatus('draft', T0, viewer('agency', ['Meera']), TWO_HOURS_LATER)).toBeNull();
@@ -187,7 +187,7 @@ describe('post flow C: Pipeline card', () => {
       viewer: viewer('agency', ['Meera']),
       now: TWO_HOURS_LATER,
     });
-    expect(theirs).toMatch(/data-post-card-status="with"[^>]*>With Meera · 2 hours ago</);
+    expect(theirs).toMatch(/data-post-card-status="with"[^>]*>With Meera · 2h</);
     const draft = card({ post: x5Post({ stage: 'draft' }), viewer: viewer('agency') });
     expect(draft).not.toContain('data-post-card-status');
     expect(draft).toContain('data-post-card-stage="draft"');
@@ -239,17 +239,17 @@ describe('post flow C: Pipeline card', () => {
     expect(shown).toContain('data-post-card-move');
   });
 
-  it('fix 4: the due time is relative (formatDue) on the workspace day; overdue reads late', () => {
+  it('fix 4: the due time is short (formatDue) on the workspace day; overdue reads late', () => {
     const now = new Date('2026-03-01T12:00:00Z');
     const due = (value: string, zone: string | null | undefined): string =>
       cardDue(value, 'review', zone, now).text;
-    expect(due('2026-03-15T02:00:00Z', 'Asia/Kolkata')).toBe('Due in 14 days');
-    expect(due('2026-03-15T02:00:00Z', 'America/New_York')).toBe('Due in 13 days');
+    expect(due('2026-03-15T02:00:00Z', 'Asia/Kolkata')).toBe('Due 15 Mar');
+    expect(due('2026-03-15T02:00:00Z', 'America/New_York')).toBe('Due 14 Mar');
     expect(due('2026-03-01T12:00:00Z', 'UTC')).toBe('Due today');
     expect(due('2026-03-02T12:00:00Z', 'UTC')).toBe('Due tomorrow');
     expect(due('2026-12-01T00:00:00Z', 'UTC')).toBe('Due 1 Dec');
     expect(due('2027-01-04T00:00:00Z', 'UTC')).toBe('Due 4 Jan 2027');
-    expect(due('2026-02-27T12:00:00Z', 'UTC')).toBe('Overdue 2 days');
+    expect(due('2026-02-27T12:00:00Z', 'UTC')).toBe('Overdue 2d');
     expect(due('2026-03-15T02:00:00Z', 'Not/AZone')).toBe(due('2026-03-15T02:00:00Z', undefined));
     expect(due('soon', 'UTC')).toBe('');
     const out = card({
@@ -257,7 +257,7 @@ describe('post flow C: Pipeline card', () => {
       timeZone: 'UTC',
       now,
     });
-    expect(out).toMatch(/<span[^>]*data-post-card-due=""[^>]*>Due in 14 days<\/span>/);
+    expect(out).toMatch(/<span[^>]*data-post-card-due=""[^>]*>Due 15 Mar<\/span>/);
     expect(out).not.toContain('2026');
     expect(card({ post: x5Post({ target_date: null }) })).not.toContain('data-post-card-due');
   });
