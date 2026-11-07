@@ -8,9 +8,9 @@ import { COMMENT_DISCARD } from '@/components/pages/pcs/CaptionAnnotationCompose
 // F5 image-pin composer: the sibling of the F4 caption composer, pin-worded. It
 // shows the slide the pin landed on (filename or "Slide N") instead of a caption
 // quote, and owns no RPC. PostDetailPage passes onSubmit, which mints the comment
-// and the image_pin annotation on one trace. Amber accent is the F1 annotation
-// token, so the context block flips correctly in light and dark. Draft, dirty,
-// busy and failure handling match the caption composer.
+// and the image_pin annotation on one trace. The context line is the same ink
+// rail (border-l-2 fg) as the caption composer's quote. Draft, dirty, busy and
+// failure handling match the caption composer.
 
 interface PinAnnotationComposerProps {
   open: boolean;
@@ -76,7 +76,7 @@ export function PinAnnotationComposer({
       }
     >
       <div className="flex flex-col gap-3">
-        <div className="rounded-lg border-l-rail border-annotation-line bg-annotation-bg px-3 py-2 text-base text-fg">
+        <div className="min-w-0 border-l-2 border-fg pl-3 text-base text-fg-2 [overflow-wrap:anywhere]">
           {context}
         </div>
         <Textarea

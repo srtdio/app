@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
 import { IconButton } from '@/components/ui/IconButton';
+import { CheckpointCircle } from '@/components/comments/CheckpointCircle';
 import type { PinDot } from '@/components/pages/pcs/pin-annotations';
 
 // node test environment (no DOM renderer): PinOverlay is hookless, so call it as a
@@ -37,6 +38,7 @@ function dots(tree: ReactNode): ReactElement[] {
 
 const PIN = (over: Partial<PinDot>): PinDot => ({
   n: 1,
+  state: 'open',
   annotationId: 'an-1',
   commentId: 'c-1',
   x: 0.5,
@@ -86,5 +88,44 @@ describe('PinOverlay', () => {
     const className = (dots(tree)[0]!.props as { className: string }).className;
     expect(className).toContain('h-11');
     expect(className).toContain('w-11');
+  });
+
+  it('the marker is the checkpoint circle: number and state from the checkpoint', () => {
+    const tree = PinOverlay({
+      pins: [
+        PIN({ n: 2, state: 'open', annotationId: 'a' }),
+        PIN({ n: 3, state: 'resolved', annotationId: 'b' }),
+        PIN({ n: 4, state: 'confirmed', annotationId: 'c' }),
+      ],
+      onPinClick: () => {},
+    });
+    const circles = elements(tree)
+      .filter((el) => el.type === CheckpointCircle)
+      .map((el) => el.props);
+    expect(circles).toEqual([
+      { n: 2, state: 'open', size: 'marker' },
+      { n: 3, state: 'resolved', size: 'marker' },
+      { n: 4, state: 'confirmed', size: 'marker' },
+    ]);
+  });
+
+  it('an agency pin (no checkpoint) is the ink dot with no number, named "Pin"', () => {
+    const tree = PinOverlay({
+      pins: [PIN({ n: null, state: 'pin', annotationId: 'ag' })],
+      onPinClick: () => {},
+    });
+    const circle = elements(tree).find((el) => el.type === CheckpointCircle);
+    expect(circle?.props).toEqual({ state: 'pin', size: 'marker' });
+    const button = elements(tree).find((el) => el.type === IconButton);
+    expect((button?.props as { label: string }).label).toBe('Pin');
+  });
+
+  it('no gold: the marker carries no annotation token', () => {
+    const tree = PinOverlay({ pins: [PIN({})], onPinClick: () => {} });
+    for (const el of elements(tree)) {
+      expect(String((el.props as { className?: string }).className ?? '')).not.toContain(
+        'annotation',
+      );
+    }
   });
 });

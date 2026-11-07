@@ -36,9 +36,11 @@ import {
   frameMap,
   IDENTITY_MAP,
   originalToFrame,
+  pinName,
   type FrameMap,
   type PinDot,
 } from '@/components/pages/pcs/pin-annotations';
+import { pinMarker } from '@/components/pages/pcs/PinOverlay';
 import { isPostPlatform, type GalleryItem } from '@srtdio/posts';
 
 /** The gesture handlers a tile spreads for long-press + right-click. */
@@ -500,8 +502,9 @@ const EDGE_SHIFT: Record<string, string> = {
 /**
  * Pins over a slide. Stored points are relative to the original; each is mapped
  * through the shown window (the post ribbon shows the whole original, so it
- * passes {@link IDENTITY_MAP}). Inside: the numbered dot at its exact spot.
- * Outside: a small marker on the nearest frame edge, still a 44px button.
+ * passes {@link IDENTITY_MAP}). Inside: the checkpoint circle (or the agency
+ * pin's ink dot) at its exact spot. Outside: the small inline circle on the
+ * nearest frame edge, still a 44px button.
  */
 export function framePins(
   pins: readonly PinDot[],
@@ -517,23 +520,16 @@ export function framePins(
             key={pin.annotationId}
             type="button"
             data-pin-edge={at.edge ?? undefined}
-            label={at.edge === null ? `Pin ${pin.n}` : `Pin ${pin.n}, outside the frame`}
+            data-pin-state={pin.state}
+            label={at.edge === null ? pinName(pin) : `${pinName(pin)}, outside the frame`}
             onClick={() => onPinClick?.(pin.commentId)}
             style={{ left: `${at.x * 100}%`, top: `${at.y * 100}%` }}
             className={cn(
-              'pointer-events-auto absolute focus-visible:lit-focus focus-visible:outline-annotation-line',
+              'pointer-events-auto absolute focus-visible:lit-focus',
               at.edge === null ? '-translate-x-1/2 -translate-y-1/2' : EDGE_SHIFT[at.edge],
             )}
           >
-            {at.edge === null ? (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-annotation-line bg-annotation-bg text-sm font-semibold tabular-nums text-fg ring-2 ring-overlay-fg">
-                {pin.n}
-              </span>
-            ) : (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full border border-annotation-line bg-annotation-bg px-1 text-sm font-semibold tabular-nums text-fg ring-2 ring-overlay-fg">
-                {pin.n}
-              </span>
-            )}
+            {pinMarker(pin, at.edge === null ? 'marker' : 'inline')}
           </IconButton>
         );
       })}
@@ -698,6 +694,11 @@ export interface GalleryToolsModel {
   /** The Add pin (or Cancel while armed) button, from {@link pinButton}. */
   pin?: ReactElement | null;
   /**
+   * A client: the row is Add pin only (no edit tools, no lock, no v{n}). The
+   * agency row is Add, Replace, Reorder, Add pin and v{n}.
+   */
+  pinOnly?: boolean;
+  /**
    * Reorder mode is on: Reorder shows pressed and leaves it (each drop already
    * saved); Add, Replace and the pin wait until it is off.
    */
@@ -708,15 +709,18 @@ export interface GalleryToolsModel {
  * #26: the one toolbar row under the dots. Left: Add, Replace, Reorder (creators
  * on an editable stage), then Add pin (anyone who can comment); a creator on an
  * approved post sees one 14px lock in place of the edit tools. Right: the v{n}
- * button that opens the versions sheet. The left group wraps inside its own
- * column so v{n} stays on the right at 360px. Nothing when there is nothing to
- * show. Pure.
+ * button that opens the versions sheet. A client's row (pinOnly) is Add pin
+ * alone. The left group wraps inside its own column so v{n} stays on the right
+ * at 360px. Nothing when there is nothing to show. Pure.
  */
 export function galleryToolsRow(model: GalleryToolsModel): ReactElement | null {
-  const { canEdit, itemCount, versionNumber, saving, error } = model;
+  const { itemCount, saving, error } = model;
+  const pinOnly = model.pinOnly === true;
+  const canEdit = model.canEdit && !pinOnly;
+  const versionNumber = pinOnly ? null : model.versionNumber;
   const reordering = model.reordering === true;
   const pin = reordering ? null : (model.pin ?? null);
-  const locked = !canEdit && model.locked === true;
+  const locked = !canEdit && !pinOnly && model.locked === true;
   if (!canEdit && !locked && versionNumber === null && pin === null) return null;
   return (
     <div data-gallery-tools="" className="mt-2 flex flex-col gap-1">
@@ -1312,6 +1316,8 @@ interface GalleryTools {
   canEdit: boolean;
   /** Spec B4: an approved post, seen by a creator: the tools row shows a lock. */
   locked?: boolean;
+  /** A client: the tools row is Add pin only. */
+  pinOnly?: boolean;
   versionNumber: number | null;
   /** The inline line from the last failed gallery write, or null. */
   error: string | null;
@@ -1580,6 +1586,7 @@ export function PostGallery({
       ? galleryToolsRow({
           canEdit: tools.canEdit,
           locked: tools.locked === true,
+          pinOnly: tools.pinOnly === true,
           itemCount: items.length,
           versionNumber: tools.versionNumber,
           saving,

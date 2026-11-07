@@ -18,9 +18,6 @@ describe('cn: tailwind-merge on the custom scale', () => {
     expect(cn('w-full', 'w-side-panel')).toBe('w-side-panel');
     expect(cn('py-2', 'py-field-y')).toBe('py-field-y');
     expect(cn('border-cutout', 'border-bg')).toBe('border-cutout border-bg');
-    expect(cn('border-l-rail', 'border-annotation-line')).toBe(
-      'border-l-rail border-annotation-line',
-    );
     expect(cn('text-2xl', 'leading-emoji')).toBe('text-2xl leading-emoji');
     expect(cn('tracking-tight', 'tracking-label')).toBe('tracking-label');
   });

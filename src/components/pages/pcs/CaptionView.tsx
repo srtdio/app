@@ -1,17 +1,21 @@
 import { useCallback, useContext, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import {
+  CheckpointCircle,
+  type CheckpointCircleState,
+} from '@/components/comments/CheckpointCircle';
 import { Button } from '@/components/ui/Button';
 import { ICON_SIZE, IconChat } from '@/components/ui/icons';
 import { highlightNodes, SearchWordsContext } from '@/components/ui/SearchHighlight';
 import { INDUCTION_KEYS } from '@/lib/induction-keys';
 
-// F4 caption-highlight annotations: render a post caption with its caption_span
-// annotations as amber highlights, and let a fresh text selection start a new
-// caption comment. Image pins are F5 and live elsewhere; this file is caption
-// only. Colour comes exclusively from the F1 annotation tokens (annotation-bg /
-// annotation-line), so light and dark flip automatically.
+// Caption-highlight annotations: render a post caption with its caption_span
+// annotations as an ink underline (fg) plus the small numbered ink circle (the
+// checkpoint circle, good once resolved), and let a fresh text selection start
+// a new caption comment. Image pins live elsewhere; this file is caption only.
+// Ink and good are theme tokens, so light and dark flip together.
 
-/** Marks the superscript number node so the offset walker skips its text. */
+/** Marks the number circle node so the offset walker skips its text. */
 export const CAPTION_MARKER_ATTR = 'data-caption-marker';
 
 const ELEMENT_NODE = 1;
@@ -20,8 +24,12 @@ const TEXT_NODE = 3;
 /** One current-version, in-bounds caption_span highlight to draw. */
 export interface CaptionAnnotationView {
   id: string;
-  /** Stable display number shown as the superscript and in the comment chip. */
+  /** Stable display number shown in the circle and in the comment chip (a
+   *  checkpoint's ledger_seq when the comment is one). */
   n: number;
+  /** The circle state: the checkpoint's own (open / resolved / confirmed);
+   *  open when absent. */
+  state?: Extract<CheckpointCircleState, 'open' | 'resolved' | 'confirmed'>;
   captionStart: number;
   captionEnd: number;
   commentId: string;
@@ -45,14 +53,14 @@ export interface SelectionLike {
 }
 
 // nodeType === 1 guards the Element cast; getAttribute is the only Element
-// member used, and a non-null value means this subtree is a superscript marker.
+// member used, and a non-null value means this subtree is a number marker.
 function isMarker(node: Node): boolean {
   return (
     node.nodeType === ELEMENT_NODE && (node as Element).getAttribute(CAPTION_MARKER_ATTR) !== null
   );
 }
 
-/** Sum the caption-text length of a subtree, skipping superscript markers. */
+/** Sum the caption-text length of a subtree, skipping number markers. */
 function subtreeTextLength(node: Node): number {
   if (isMarker(node)) return 0;
   if (node.nodeType === TEXT_NODE) return (node.nodeValue ?? '').length;
@@ -67,8 +75,8 @@ function subtreeTextLength(node: Node): number {
 
 /**
  * Absolute caption offset of (`target`, `targetOffset`) by walking `root`'s text
- * nodes in document order and summing their lengths, skipping any superscript
- * marker subtree. Never uses indexOf, so repeated caption text is unambiguous.
+ * nodes in document order and summing their lengths, skipping any
+ * number marker subtree. Never uses indexOf, so repeated caption text is unambiguous.
  * Returns null when the target is not reachable under `root` (e.g. it lies
  * inside a marker), so a selection touching a marker is ignored rather than
  * mis-sliced.
@@ -146,7 +154,7 @@ interface CaptionViewModel {
 
 /**
  * Hookless renderer for the caption body: plain text with the annotated ranges
- * wrapped in an amber <mark> plus an unselectable superscript number. Every
+ * wrapped in an ink-underlined <mark> plus an unselectable numbered circle. Every
  * highlight is bounds-guarded against the live caption and out-of-range or
  * inverted ranges are skipped (never mis-sliced); overlapping ranges keep the
  * first. Returned as a walkable element tree so it can be unit-tested without a
@@ -199,7 +207,8 @@ export function captionView({
         role="button"
         tabIndex={0}
         aria-label={`Comment on "${quote}"`}
-        className="rounded-sm bg-annotation-bg px-0.5 text-fg cursor-pointer outline-none focus-visible:lit-focus"
+        data-caption-highlight={a.state ?? 'open'}
+        className="rounded-sm bg-transparent text-fg underline decoration-fg decoration-2 underline-offset-4 cursor-pointer outline-none focus-visible:lit-focus"
         onClick={() => onHighlightClick(a.commentId)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -209,13 +218,13 @@ export function captionView({
         }}
       >
         {quote}
-        <sup
+        <span
           {...{ [CAPTION_MARKER_ATTR]: '' }}
-          className="ml-0.5 align-super select-none text-xs font-semibold text-fg"
+          className="ml-0.5 inline-flex select-none align-middle"
           style={{ userSelect: 'none' }}
         >
-          {a.n}
-        </sup>
+          <CheckpointCircle n={a.n} state={a.state ?? 'open'} size="inline" />
+        </span>
       </mark>,
     );
     cursor = a.captionEnd;

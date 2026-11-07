@@ -1,16 +1,28 @@
-// F5 image-pin numbering + slide matching, kept as a pure module so it can be
-// unit-tested without mounting PostDetailPage. It runs AFTER the F4 caption pass:
-// caption highlights are numbered first, then current-version image pins continue
-// the SAME live counter, so a pin's number always follows the captions'. Stale
-// pins (made on an older version) are excluded from the live overlay and surface
-// only as the kind-agnostic "copy changed" comment chip.
+// Image-pin numbering + slide matching, kept as a pure module so it can be
+// unit-tested without mounting PostDetailPage. Pins are numbered like the
+// checkpoints they belong to: a pin whose comment is a checkpoint shows that
+// checkpoint's ledger_seq (never renumbered) and its circle state (open ink
+// ring, or good once resolved, as the list draws it). A pin on a plain comment
+// (an agency pin) is an ink dot with no number. Stale pins (made on an older
+// version) are excluded from the live overlay and surface only as the
+// kind-agnostic "copy changed" comment chip.
 
 import type { GalleryItem, PostAnnotation, PostVersion } from '@srtdio/posts';
 import type { CommentAnnotation } from '@/components/comments/Comments';
+import {
+  checkpointCircleState,
+  type CheckpointCircleState,
+} from '@/components/comments/CheckpointCircle';
 
-/** One current-version pin to draw as a numbered dot over its slide. */
+/** The circle state a photo pin can take (never the composer's dashed next). */
+export type PinState = Exclude<CheckpointCircleState, 'next'>;
+
+/** One current-version pin to draw over its slide. */
 export interface PinDot {
-  n: number;
+  /** The linked checkpoint's ledger_seq; null for a pin on a plain comment. */
+  n: number | null;
+  /** open / resolved / confirmed from the checkpoint; pin (ink dot) otherwise. */
+  state: PinState;
   annotationId: string;
   commentId: string;
   /** Normalised [0,1] position within the rendered image. */
@@ -18,13 +30,75 @@ export interface PinDot {
   y: number;
 }
 
+/** What a pin needs from its checkpoint: the number and the resolve state. */
+export interface CheckpointMark {
+  seq: number;
+  resolved_at: string | null;
+  accepted_at: string | null;
+}
+
+/** The comment fields {@link checkpointMarks} reads (a CommentRow fits). */
+interface CheckpointLike {
+  id: string;
+  ledger_seq: number | null;
+  resolved_at: string | null;
+  accepted_at: string | null;
+}
+
+/**
+ * Index the page's one checkpoint read by comment id. Pure; null (the read has
+ * not landed) gives an empty map, so pins draw as dots until it does.
+ */
+export function checkpointMarks(
+  rows: readonly CheckpointLike[] | null,
+): ReadonlyMap<string, CheckpointMark> {
+  const out = new Map<string, CheckpointMark>();
+  for (const row of rows ?? []) {
+    if (row.ledger_seq === null) continue;
+    out.set(row.id, {
+      seq: row.ledger_seq,
+      resolved_at: row.resolved_at,
+      accepted_at: row.accepted_at,
+    });
+  }
+  return out;
+}
+
+/**
+ * The checkpoint read, plus the numbers a client's own new pins got back from
+ * comment_batch_create before that read caught up. The read wins for any id it
+ * holds. Pure.
+ */
+export function withFreshMarks(
+  read: ReadonlyMap<string, CheckpointMark>,
+  fresh: Readonly<Record<string, CheckpointMark>>,
+): ReadonlyMap<string, CheckpointMark> {
+  const ids = Object.keys(fresh).filter((id) => !read.has(id));
+  if (ids.length === 0) return read;
+  const out = new Map(read);
+  for (const id of ids) {
+    const mark = fresh[id];
+    if (mark !== undefined) out.set(id, mark);
+  }
+  return out;
+}
+
+/** The marker a pin draws: its checkpoint's number and state, else an ink dot. */
+export function pinMark(mark: CheckpointMark | undefined): { n: number | null; state: PinState } {
+  if (mark === undefined) return { n: null, state: 'pin' };
+  return { n: mark.seq, state: checkpointCircleState(mark) };
+}
+
+/** The accessible name of a pin marker ("Pin 3", or "Pin" for an agency pin). */
+export function pinName(pin: Pick<PinDot, 'n'>): string {
+  return pin.n === null ? 'Pin' : `Pin ${pin.n}`;
+}
+
 interface PinData {
   /** Dots keyed by asset_attachment_id, so the overlay matches them to a slide. */
   pinsByAttachment: Record<string, PinDot[]>;
   /** Per-comment chips for every pin (stale included), merged into the caption map. */
   pinChipsByCommentId: Record<string, CommentAnnotation>;
-  /** The next live display number after captions + current-version pins. */
-  nextN: number;
 }
 
 /** A short, image-slice-free label for a pin's comment chip. */
@@ -40,30 +114,31 @@ function inUnit(value: number | null): value is number {
 }
 
 /**
- * Number the image_pin annotations and match them to gallery slides. Caption
- * highlights are already numbered 1..startN; current-version pins continue from
- * startN so captions keep their numbers and pins take the next. Out-of-range or
- * unmatched pins are skipped from the overlay (never thrown), but a current pin
- * still carries a comment chip; stale pins yield only a greyed chip.
+ * Match the image_pin annotations to gallery slides and give each its marker.
+ * A current-version pin's chip carries `slide` (1-based gallery index) so its
+ * row reads "On photo {n}", and `n` = its checkpoint's ledger_seq (0 for a pin
+ * on a plain comment). Out-of-range or unmatched pins are skipped from the
+ * overlay (never thrown) but keep their chip; stale pins yield only a greyed
+ * chip.
  */
 export function buildPinData(
-  annotations: PostAnnotation[],
+  annotations: readonly PostAnnotation[],
   currentVersionId: string | null,
-  versions: PostVersion[],
-  gallery: GalleryItem[],
-  startN: number,
+  versions: readonly PostVersion[],
+  gallery: readonly GalleryItem[],
+  marks: ReadonlyMap<string, CheckpointMark>,
 ): PinData {
   const pinsByAttachment: Record<string, PinDot[]> = {};
   const pinChipsByCommentId: Record<string, CommentAnnotation> = {};
   const versionById = new Map(versions.map((v) => [v.id, v]));
   const filenameByAttachment = new Map(gallery.map((g) => [g.assetAttachmentId, g.filename]));
+  const slideByAttachment = new Map(gallery.map((g, i) => [g.assetAttachmentId, i + 1]));
 
-  // Deterministic order: oldest pin numbers first, matching the caption pass.
+  // Deterministic order: oldest pins first, so a slide's dots stack the same way.
   const pins = annotations
     .filter((a) => a.kind === 'image_pin')
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
-  let liveN = startN;
   for (const a of pins) {
     const filename =
       a.asset_attachment_id !== null ? filenameByAttachment.get(a.asset_attachment_id) : undefined;
@@ -76,13 +151,22 @@ export function buildPinData(
       continue;
     }
 
-    liveN += 1;
-    pinChipsByCommentId[a.comment_id] = { n: liveN, quote, stale: false, versionNumber };
+    const { n, state } = pinMark(marks.get(a.comment_id));
+    const slide =
+      a.asset_attachment_id !== null ? slideByAttachment.get(a.asset_attachment_id) : undefined;
+    pinChipsByCommentId[a.comment_id] = {
+      n: n ?? 0,
+      quote,
+      stale: false,
+      versionNumber,
+      ...(slide !== undefined ? { slide } : {}),
+    };
 
     // Overlay dot only for a current-version pin matched to a slide and in range.
     if (a.asset_attachment_id !== null && inUnit(a.image_x) && inUnit(a.image_y)) {
       const dot: PinDot = {
-        n: liveN,
+        n,
+        state,
         annotationId: a.id,
         commentId: a.comment_id,
         x: a.image_x,
@@ -94,7 +178,7 @@ export function buildPinData(
     }
   }
 
-  return { pinsByAttachment, pinChipsByCommentId, nextN: liveN };
+  return { pinsByAttachment, pinChipsByCommentId };
 }
 
 /** A rectangle as fractions of its parent's width and height. */

@@ -8,8 +8,8 @@ import { errorText } from '@/lib/error-copy';
 
 // F4 caption annotation composer: a bottom sheet that shows the quoted caption
 // selection and a comment field. It owns no RPC; PostDetailPage passes onSubmit,
-// which mints the comment and the annotation. Amber accent is the F1 annotation
-// token, so the note block flips correctly in light and dark.
+// which mints the comment and the annotation. The quote is the ink rail
+// (border-l-2 fg) the comment row's quote chip uses, so light and dark match.
 //
 // The draft is owned by the page (one per selection, kept while the page is
 // open), so this sheet is controlled. Typed text makes the sheet dirty: X,
@@ -91,7 +91,7 @@ export function CaptionAnnotationComposer({
       }
     >
       <div className="flex flex-col gap-3">
-        <div className="rounded-lg border-l-rail border-annotation-line bg-annotation-bg px-3 py-2 text-base text-fg">
+        <div className="min-w-0 border-l-2 border-fg pl-3 text-base text-fg-2 [overflow-wrap:anywhere]">
           {quote}
         </div>
         <Textarea

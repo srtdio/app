@@ -177,8 +177,6 @@ export default {
         'good-soft': 'var(--good-soft)',
         'bad-soft': 'var(--bad-soft)',
         'warn-soft': 'rgb(var(--warn-soft-rgb) / <alpha-value>)',
-        'annotation-bg': 'rgb(var(--annotation-bg-rgb) / <alpha-value>)',
-        'annotation-line': 'rgb(var(--annotation-line-rgb) / <alpha-value>)',
         'search-mark': 'rgb(var(--search-mark-bg-rgb) / <alpha-value>)',
         'stage-review': 'rgb(var(--stage-review-rgb) / <alpha-value>)',
         'stage-approved': 'rgb(var(--stage-approved-rgb) / <alpha-value>)',

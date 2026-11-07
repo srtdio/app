@@ -26,12 +26,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { PersonTrigger } from '@/components/ui/PersonTrigger';
 import { Textarea } from '@/components/ui/Textarea';
 import { ErrorNote } from '@/components/ui/ErrorNote';
-import {
-  Comments,
-  fetchCheckpoints,
-  openCheckpointsLabel,
-  runCreateCommentBatch,
-} from '@/components/comments/Comments';
+import { Comments, fetchCheckpoints, openCheckpointsLabel } from '@/components/comments/Comments';
 import type { CommentCounts, SharedCheckpoints } from '@/components/comments/Comments';
 import { COPY_FAILED, copyText } from '@/lib/clipboard';
 import { dispatchInductionDid, dispatchInductionRefresh, INDUCTION_KEYS } from '@/lib/induction';
@@ -64,7 +59,14 @@ import {
 } from '@/components/pages/pcs/CaptionAnnotationComposer';
 import { PinAnnotationComposer } from '@/components/pages/pcs/PinAnnotationComposer';
 import { PinOverlay } from '@/components/pages/pcs/PinOverlay';
-import { buildPinData } from '@/components/pages/pcs/pin-annotations';
+import {
+  buildPinData,
+  checkpointMarks,
+  pinMark,
+  withFreshMarks,
+  type CheckpointMark,
+} from '@/components/pages/pcs/pin-annotations';
+import { createAnchoredComment, submitPin } from '@/components/pages/pcs/pin-annotations-submit';
 import type { PinDot } from '@/components/pages/pcs/pin-annotations';
 import { CheckpointProgress, type CheckpointCounts } from '@/components/pages/pcs/CheckpointStrip';
 import { PostDetailsSheet } from '@/components/pages/pcs/PostDetailsSheet';
@@ -132,7 +134,6 @@ import {
 } from '@srtdio/posts';
 import type { GalleryItem, PostDetail, PostUpdateInput, Stage } from '@srtdio/posts';
 import { errorText } from '@/lib/error-copy';
-import { createComment } from '@srtdio/comments';
 import type { CommentRow } from '@srtdio/comments';
 // Title only (no linked-posts count, which this page never shows); not on the
 // package index, so it is imported from the read module itself.
@@ -525,6 +526,9 @@ export function PostDetailPage({
     null,
   );
   const [pinSubmitting, setPinSubmitting] = useState(false);
+  // A client pin's checkpoint number from comment_batch_create's reply, held
+  // until the checkpoint read carries the row (that read wins).
+  const [freshMarks, setFreshMarks] = useState<Record<string, CheckpointMark>>({});
   const [pinError, setPinError] = useState<string | null>(null);
 
   // F7 editing state. The viewer's role gates every editing surface; it loads
@@ -959,7 +963,14 @@ export function PostDetailPage({
   // every caption_span (stale included) for the comment chips. Live highlights
   // are numbered in caption order; stale ones carry their original quote sliced
   // from their own version snapshot. Out-of-bounds or inverted ranges are
-  // skipped rather than mis-sliced.
+  // skipped rather than mis-sliced. A highlight or pin whose comment is a
+  // checkpoint takes that checkpoint's ledger_seq and circle state from the
+  // page's one checkpoint read (no read of its own), so the caption circle, the
+  // photo pin and the list never disagree.
+  const marks = useMemo(
+    () => withFreshMarks(checkpointMarks(checkpointRows), freshMarks),
+    [checkpointRows, freshMarks],
+  );
   const { highlights, annotationsByCommentId, pinsByAttachment } = useMemo(() => {
     const list: CaptionAnnotationView[] = [];
     const byComment: Record<string, CommentAnnotation> = {};
@@ -989,16 +1000,24 @@ export function PostDetailPage({
 
       if (!stale) {
         if (start !== null && end !== null && inRange(liveCaption)) {
-          liveN += 1;
+          const checkpoint = marks.get(a.comment_id);
+          const circle = pinMark(checkpoint);
+          let n: number;
+          if (circle.n !== null) n = circle.n;
+          else {
+            liveN += 1;
+            n = liveN;
+          }
           list.push({
             id: a.id,
-            n: liveN,
+            n,
+            ...(circle.state !== 'pin' ? { state: circle.state } : {}),
             captionStart: start,
             captionEnd: end,
             commentId: a.comment_id,
           });
           byComment[a.comment_id] = {
-            n: liveN,
+            n,
             quote: liveCaption.slice(start, end),
             stale: false,
             versionNumber,
@@ -1016,15 +1035,15 @@ export function PostDetailPage({
       byComment[a.comment_id] = { n: 0, quote, stale: true, versionNumber };
     }
 
-    // Second pass: number the image pins AFTER the captions (continuing liveN)
-    // and match current-version pins to their slides for the overlay. Caption
-    // numbering above is untouched.
+    // Second pass: the image pins, matched to their slides for the overlay
+    // ("On photo {n}" in the row) and numbered by their checkpoint (an agency
+    // pin is an ink dot with no number).
     const pinData = buildPinData(
       detail.annotations,
       currentVersionId,
       detail.versions,
       gallery,
-      liveN,
+      marks,
     );
     Object.assign(byComment, pinData.pinChipsByCommentId);
 
@@ -1033,7 +1052,7 @@ export function PostDetailPage({
       annotationsByCommentId: byComment,
       pinsByAttachment: pinData.pinsByAttachment,
     };
-  }, [detail, currentVersionId, gallery]);
+  }, [detail, currentVersionId, gallery, marks]);
 
   // Open the composer for a captured caption selection.
   const handleAnnotate = useCallback((start: number, end: number, quote: string): void => {
@@ -1047,38 +1066,6 @@ export function PostDetailPage({
   // a browser history entry.
   function flashTo(elementId: string): void {
     flashNode(elementId);
-  }
-
-  // The comment an annotation anchors to. A client's comment on a post is a
-  // checkpoint (comment_batch_create, one point); comment_create refuses a
-  // client's top-level comment (forbidden_role). Everyone else writes a plain
-  // comment. Both land on the same trace as the annotation that follows.
-  async function createAnchoredComment(
-    body: string,
-    traceId: string,
-  ): Promise<{ ok: true; data: string } | { ok: false; message: string }> {
-    if (detail === null) return { ok: false, message: 'not_found' };
-    if (clientRole) {
-      const batch = await runCreateCommentBatch(supabase, {
-        workspaceId: detail.post.workspace_id,
-        postId: detail.post.id,
-        points: [{ body }],
-        traceId,
-      });
-      if (!batch.ok) return { ok: false, message: batch.error.message };
-      const first = batch.data[0];
-      if (first === undefined) return { ok: false, message: 'invalid_payload' };
-      return { ok: true, data: first.id };
-    }
-    const result = await createComment(supabase, {
-      workspace_id: detail.post.workspace_id,
-      entity_type: 'post',
-      entity_id: detail.post.id,
-      body,
-      trace_id: traceId,
-    });
-    if (!result.ok) return { ok: false, message: result.error.message };
-    return { ok: true, data: result.data };
   }
 
   // Comment-first, annotation-second on one shared trace. If the annotation
@@ -1095,7 +1082,14 @@ export function PostDetailPage({
     setComposerError(null);
     const traceId = newTrace();
 
-    const commentResult = await createAnchoredComment(body, traceId);
+    // A client's comment is a checkpoint (one point); everyone else's is plain.
+    const commentResult = await createAnchoredComment(supabase, {
+      asCheckpoint: clientRole,
+      workspaceId: detail.post.workspace_id,
+      postId: detail.post.id,
+      body,
+      traceId,
+    });
     if (!commentResult.ok) {
       logger.warn('post page: caption comment failed', { error: commentResult.message });
       setAnnotating(false);
@@ -1105,12 +1099,19 @@ export function PostDetailPage({
     // The comment is saved: close the sheet and drop its draft.
     setComposer(null);
     dropDraft(draftKey);
+    const { commentId, seq } = commentResult;
+    if (seq !== null) {
+      setFreshMarks((prev) => ({
+        ...prev,
+        [commentId]: { seq, resolved_at: null, accepted_at: null },
+      }));
+    }
 
     const annotationResult = await annotationCreate(supabase, {
       kind: 'caption_span',
       postId: detail.post.id,
       postVersionId: currentVersionId,
-      commentId: commentResult.data,
+      commentId,
       captionStart: span.start,
       captionEnd: span.end,
       traceId,
@@ -1146,9 +1147,12 @@ export function PostDetailPage({
     setPinComposer({ index, x, y });
   }, []);
 
-  // Comment-first, image_pin-second on one shared trace, mirroring the caption
-  // write path. An annotation failure after the comment lands leaves a plain
-  // comment with an error notice and no retry.
+  // Comment-first, image_pin-second on one shared trace (submitPin). A
+  // client's pin is a checkpoint: comment_batch_create with one point, then
+  // annotation_create on the new comment id; its ledger_seq numbers the pin at
+  // once (freshMarks) until the checkpoint read brings the row. An annotation
+  // failure after the comment lands leaves a plain comment with an error
+  // notice and no retry.
   async function submitPinAnnotation(body: string): Promise<void> {
     if (pinComposer === null || detail === null || currentVersionId === null) return;
     const item = gallery[pinComposer.index];
@@ -1157,29 +1161,35 @@ export function PostDetailPage({
     setPinSubmitting(true);
     setPinError(null);
     setComposerError(null);
-    const traceId = newTrace();
 
-    const commentResult = await createAnchoredComment(body, traceId);
-    if (!commentResult.ok) {
-      logger.warn('post page: pin comment failed', { error: commentResult.message });
+    const result = await submitPin(supabase, {
+      asCheckpoint: clientRole,
+      workspaceId: detail.post.workspace_id,
+      postId: detail.post.id,
+      postVersionId: currentVersionId,
+      assetAttachmentId: item.assetAttachmentId,
+      x: pinComposer.x,
+      y: pinComposer.y,
+      body,
+      traceId: newTrace(),
+    });
+    if (result.status === 'comment_failed') {
+      logger.warn('post page: pin comment failed', { error: result.message });
       setPinSubmitting(false);
       setComposerError(COMMENT_POST_FAILED);
       return;
     }
     // The comment is saved: the draft goes; the sheet closes below.
     dropDraft(draftKey);
+    const { commentId, seq } = result;
+    if (seq !== null) {
+      setFreshMarks((prev) => ({
+        ...prev,
+        [commentId]: { seq, resolved_at: null, accepted_at: null },
+      }));
+    }
 
-    const annotationResult = await annotationCreate(supabase, {
-      kind: 'image_pin',
-      postId: detail.post.id,
-      postVersionId: currentVersionId,
-      commentId: commentResult.data,
-      assetAttachmentId: item.assetAttachmentId,
-      imageX: pinComposer.x,
-      imageY: pinComposer.y,
-      traceId,
-    });
-    if (!annotationResult.ok) {
+    if (result.status === 'annotation_failed') {
       setPinSubmitting(false);
       setPinComposer(null);
       setPinError("Couldn't anchor the comment to the image. It was posted as a plain comment.");
@@ -2154,6 +2164,8 @@ export function PostDetailPage({
                     // rejected only; an approved post is locked.
                     canEdit: canEditContent,
                     locked: agencySide && approvedLocked,
+                    // A client's row is Add pin only.
+                    pinOnly: clientRole,
                     versionNumber: currentVersionNumber,
                     error: galleryError,
                     onVersions: () => setHistoryOpen(true),
