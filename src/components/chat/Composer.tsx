@@ -14,11 +14,14 @@ import type {
   KeyboardEvent,
   MutableRefObject,
   ReactElement,
+  ReactNode,
   SyntheticEvent,
 } from 'react';
 import { logger } from '@/lib/logger';
 import { Button } from '@/components/ui/Button';
-import { ComposerFrame, composerHint } from '@/components/ui/Composer';
+import { composerHint } from '@/components/ui/Composer';
+import { RowKey, RowSend, WritingBox } from '@/components/ui/WritingBox';
+import { useIsLaptop } from '@/lib/use-is-laptop';
 import { Textarea } from '@/components/ui/Textarea';
 import {
   ICON_SIZE,
@@ -43,7 +46,6 @@ import { planTileEnabled } from '@/components/chat/plan-card';
 import { AssetPicker } from '@/components/chat/AssetPicker';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { Thumbnail } from '@/components/media';
-import { ComposerEmoji, showsEmojiButton } from '@/components/chat/ComposerEmoji';
 import { insertAtCaret } from '@/lib/chat/emoji-list';
 import { PostPicker, warmPostPicker } from '@/components/chat/PostPicker';
 import { MentionPicker, mentionComboboxProps, stepActive } from '@/components/chat/MentionPicker';
@@ -165,6 +167,8 @@ export interface ComposerProps {
    * a menu, sheet or lightbox is open over the thread.
    */
   focusOnMount?: boolean | undefined;
+  /** The expanded editor's title on a phone (the chat's name), ui/WritingBox. */
+  expandTitle?: ReactNode;
   /**
    * Handed the input element (null on unmount) so a Reply can focus it inside
    * the user's own tap or click (decision 128).
@@ -745,7 +749,8 @@ function workspaceLinks(
   if (workspaceKey === null) return [];
   const links: Array<{ url: string; kind: 'post' | 'brief'; number: number }> = [];
   for (const segment of tokenize(text)) {
-    if (segment.kind !== 'url') continue;
+    // A [text](url) link to a post or brief shares its card too.
+    if (segment.kind === 'text') continue;
     const target = classify(segment.url, origin, APP_ENTITY_ROUTES);
     if (target.kind === 'external') continue;
     if (target.ref.key !== workspaceKey.toUpperCase()) continue;
@@ -802,8 +807,11 @@ export async function withLinkCards(
     const ids = link.kind === 'post' ? sharedPostIds : sharedBriefIds;
     if (!ids.includes(id)) ids.push(id);
   }
+  // A [text](url) link keeps the body: its words are what the person wrote.
   const onlyLinks = tokenize(draft.text).every((segment) =>
-    segment.kind === 'url' ? resolved.has(segment.url) : segment.text.trim() === '',
+    segment.kind === 'url'
+      ? resolved.has(segment.url)
+      : segment.kind === 'text' && segment.text.trim() === '',
   );
   return { text: onlyLinks ? '' : draft.text, sharedPostIds, sharedBriefIds };
 }
@@ -1124,6 +1132,7 @@ export function Composer(props: ComposerProps): ReactElement {
   const [editBusy, setEditBusy] = useState(false);
   const editing = props.editing;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const laptopLayout = useIsLaptop();
   const inputRef = props.inputRef;
   const setTextarea = useCallback(
     (el: HTMLTextAreaElement | null): void => {
@@ -1730,6 +1739,23 @@ export function Composer(props: ComposerProps): ReactElement {
 
   const draftCardUrl = draftCardUrlFor(cardText, dismissedCardUrl, editing !== undefined);
 
+  // The writing box: the card always on a laptop / iPad, the idle pill on a phone.
+  const laptopBox = laptopLayout;
+  const hasDraft =
+    text !== '' ||
+    pending.length + library.length + sharedPosts.length + sharedBriefs.length > 0 ||
+    editing !== undefined;
+  // The mic: a bare 36 key in the pill (phone) and in the laptop card while empty.
+  const micKey = (
+    <RowKey
+      label="Record voice note"
+      data-induction={INDUCTION_KEYS.chatMic}
+      onPress={() => void start()}
+    >
+      <IconMic size={ICON_SIZE.control} />
+    </RowKey>
+  );
+
   return (
     <>
       <form
@@ -1874,10 +1900,19 @@ export function Composer(props: ComposerProps): ReactElement {
           />
         ) : null}
 
-        {/* ui/Composer: [plus] [field] [emoji, tasks] [send / mic] on one 44
-            row in every state; the reply, About, editing and Reply privately
-            bars stack in its strip above the row. */}
-        <ComposerFrame
+        {/* ui/WritingBox (chat mode): phone idle = the pill [+] Message [mic];
+            focused or holding a draft = the card (text on top, + Aa emoji @ ...
+            send); laptop = the card always (mic while empty). The reply,
+            About, editing and Reply privately bars stack in its strip above. */}
+        <WritingBox
+          mode="chat"
+          laptop={laptopBox}
+          field={() => textareaRef.current}
+          hasText={hasDraft}
+          mention={!held}
+          onInsert={insertEmoji}
+          expandTitle={props.expandTitle}
+          pillEnd={showMic ? micKey : undefined}
           strip={
             <>
               {bars.editing && editing !== undefined ? (
@@ -1943,6 +1978,7 @@ export function Composer(props: ComposerProps): ReactElement {
           leading={
             canAttach ? (
               <ComposerTray
+                compact
                 layout={layout}
                 notes={props.notes === true}
                 draft={draftEnabled}
@@ -2012,11 +2048,9 @@ export function Composer(props: ComposerProps): ReactElement {
               }
               rows={1}
               compact
+              listEnter={false}
               className={cn('min-w-0 flex-1 self-center', sized(COMPOSER_INPUT_TYPE, layout))}
             />
-          }
-          side={
-            <>{showsEmojiButton(layout) && !held ? <ComposerEmoji onPick={insertEmoji} /> : null}</>
           }
           send={
             recorder.recording ? (
@@ -2042,41 +2076,24 @@ export function Composer(props: ComposerProps): ReactElement {
               >
                 <IconMic size={ICON_SIZE.control} />
               </Button>
-            ) : showMic ? (
-              <Button
-                type="button"
-                variant="primary"
-                shape="round"
-                aria-label="Record voice note"
-                data-induction={INDUCTION_KEYS.chatMic}
-                className="shrink-0"
-                onClick={() => void start()}
-              >
-                <IconMic size={ICON_SIZE.control} />
-              </Button>
+            ) : showMic && laptopBox ? (
+              micKey
             ) : (
-              <div className="flex shrink-0">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  shape="round"
-                  aria-label={editing !== undefined ? 'Save edit' : 'Send'}
-                  // Saving an edit: the spinner in the send slot.
-                  busy={editBusy}
-                  className="shrink-0"
-                  disabled={!canSend}
-                  {...sendPress}
-                  onClick={() => {
-                    const keptAtPress = sendKeptFocusRef.current;
-                    sendKeptFocusRef.current = false;
-                    if (layout === 'touch') {
-                      refocusComposer(textareaRef.current, keptAtPress, document.activeElement);
-                    }
-                  }}
-                >
-                  <IconSend size={ICON_SIZE.control} />
-                </Button>
-              </div>
+              <RowSend
+                label={editing !== undefined ? 'Save edit' : 'Send'}
+                // Saving an edit: the spinner in the send slot.
+                busy={editBusy}
+                disabled={!canSend}
+                icon={<IconSend size={ICON_SIZE.control} />}
+                {...sendPress}
+                onClick={() => {
+                  const keptAtPress = sendKeptFocusRef.current;
+                  sendKeptFocusRef.current = false;
+                  if (layout === 'touch') {
+                    refocusComposer(textareaRef.current, keptAtPress, document.activeElement);
+                  }
+                }}
+              />
             )
           }
         />
