@@ -1693,8 +1693,15 @@ const SCREENS: Screen[] = [
     name: 'settings-workspace',
     seed: creator,
     url: '/settings?panel=workspace',
-    steps: async (page) =>
-      waitFor([page.getByText('Brand name', { exact: true })], 'settings workspace'),
+    steps: async (page) => {
+      await waitFor([page.getByText('Brand name', { exact: true })], 'settings workspace');
+      // The approved addresses list loads after the panel paints: shoot once it settles,
+      // so the frame never races the list read.
+      const addresses = page.locator('[data-approved-addresses]');
+      if ((await addresses.count()) > 0) {
+        await page.locator('[data-approved-addresses="ready"]').waitFor({ timeout: 15_000 });
+      }
+    },
   },
   { name: 'chat-post-sheet', seed: creator, url: '/chat', steps: openChatPostSheet },
   { name: 'chat-post-sheet-approver', seed: approver, url: '/chat', steps: openChatPostSheet },
