@@ -21,7 +21,6 @@ import type { Result } from '@srtdio/rpc';
 import {
   CONCEPT_FILES_LIMIT_HINT,
   CONCEPT_FILES_READ_FAILED,
-  CONCEPT_SAVE_UPLOADING,
   ConceptSheet,
   conceptFilesRoom,
   type ConceptFilesState,
@@ -303,6 +302,16 @@ describe('the sheet (U1, U2, U5)', () => {
     expect(sheet({ upload: false })).not.toContain('data-plan-concept-upload-pick');
   });
 
+  it('attached files are ui/PendingChip ready chips (type meta, trailing remove), no hand-built circle', () => {
+    const html = sheet({ files: 2 });
+    expect(html.match(/data-plan-concept-file="" data-pending-chip="ready"/g)).toHaveLength(2);
+    expect(html).toContain('aria-label="Remove File 1"');
+    expect(html).not.toContain('data-plan-concept-file-remove');
+    expect(src('ConceptSheet.tsx')).not.toContain('rounded-full');
+    // No upload bar or % text in the sheet.
+    expect(src('ConceptSheet.tsx')).not.toMatch(/role=["{']+progressbar/);
+  });
+
   it('20 files across picks and uploads: a hint, buttons still enabled', () => {
     expect(conceptFilesRoom(0, 0)).toBe(CONCEPT_FILES_MAX);
     expect(conceptFilesRoom(12, 5)).toBe(3);
@@ -345,10 +354,12 @@ describe('the sheet (U1, U2, U5)', () => {
     expect(html).not.toContain('data-plan-concept-upload-pick');
   });
 
-  it('Save reads "Uploading…" while it waits', () => {
-    expect(CONCEPT_SAVE_UPLOADING).toBe('Uploading…');
+  it('Save waits as busy on its Button, keeping its label (no "Uploading…")', () => {
     const sheetSrc = src('ConceptSheet.tsx');
-    expect(sheetSrc).toContain("{waiting ? CONCEPT_SAVE_UPLOADING : edit ? 'Save' : 'Add'}");
+    expect(sheetSrc).toContain('busy={busy || waiting}');
+    expect(sheetSrc).toContain("{edit ? 'Save' : 'Add'}");
+    expect(sheetSrc).not.toContain('Uploading');
+    expect(sheetSrc).not.toContain('CONCEPT_SAVE_UPLOADING');
     // A second tap while waiting does nothing.
     expect(sheetSrc).toMatch(/const save = \(\): void => \{\s*if \(waiting\) return;/);
   });

@@ -87,7 +87,7 @@ describe('busy sheets render a busy primary Button', () => {
     ['pages/pcs/PostDetailsSheet.tsx', /data-new-bucket-create=""\s+busy=\{newBucketBusy\}/],
     ['pages/assets/AssetUploadSheet.tsx', /busy=\{running\}\s+disabled=\{!canUpload\}/],
     ['ui/ApproveConfirm.tsx', /data-approve-confirm-button=""[^>]*?busy=\{props\.busy\}/s],
-    ['chat/ConceptSheet.tsx', /busy=\{busy && !waiting\}/],
+    ['chat/ConceptSheet.tsx', /busy=\{busy \|\| waiting\}/],
   ];
   for (const [file, re] of SOURCE) {
     it(`${file}: primary is Button busy (${re.source.slice(0, 32)}…)`, () => {

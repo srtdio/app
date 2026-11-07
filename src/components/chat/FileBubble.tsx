@@ -8,7 +8,7 @@
 // stored thumbnail's aspect from the message meta, so the height is final on
 // first paint and nothing moves when the image arrives. The sender's own file
 // shows its local thumbnail while it sends (same reserved box), dimmed, with
-// the shared UploadRing (D5 sending states: progress ring and stop square)
+// the shared ui/UploadRing (decision F: a filling ring with an X that cancels)
 // centred where the video play button sits, or over the icon card's icon spot.
 // No thumbnail: an icon card.
 //
@@ -29,7 +29,7 @@ import {
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { UploadRing } from '@/components/chat/UploadRing';
+import { UploadRing } from '@/components/ui/UploadRing';
 import { cn } from '@/lib/cn';
 import { humanizeSize } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -129,7 +129,7 @@ interface FileBubbleProps {
   attachment: MessageAttachment;
   cache: PresignCache;
   presignEnabled: boolean;
-  /** Stops this own send while the file uploads (the UploadRing's stop square). */
+  /** Stops this own send while the file uploads (the UploadRing's X). */
   onCancel?: (() => void) | undefined;
 }
 

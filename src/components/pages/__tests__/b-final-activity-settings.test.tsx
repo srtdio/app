@@ -140,12 +140,16 @@ function listProps(
 }
 
 describe('Activity: the day line and the card with no trailing ⋯', () => {
-  it('"YESTERDAY · 1 update" and Mark all read share one 44 line; no avatar beside the label', () => {
+  it('"YESTERDAY · 1 update" is one 44 line; Mark all read is the top bar\'s IconButton; no avatar beside the label', () => {
     const page = src('pages/NotificationsPage.tsx');
     expect(page).toMatch(/data-activity-bucket-head=""[\s\S]{0,120}?h-11/);
-    expect(page).toMatch(
-      /data-activity-bucket-head[\s\S]*?data-bucket-count[\s\S]*?data-activity-mark-all/,
-    );
+    expect(page).toMatch(/data-activity-bucket-head[\s\S]*?data-bucket-count/);
+    // Mark all read moved to the top bar: an IconButton published via useTopbarActions,
+    // never on the day line.
+    const head = page.slice(page.indexOf('data-activity-bucket-head=""'));
+    expect(head).not.toContain('data-activity-mark-all');
+    expect(page).toMatch(/<IconButton[\s\S]{0,120}?data-activity-mark-all=""/);
+    expect(page).toContain('useTopbarActions({ sort: sortNode, primary: markAllNode });');
     expect(page).not.toContain('AvatarStack');
   });
 

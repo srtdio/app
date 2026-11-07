@@ -14,7 +14,13 @@ import { Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-
 import { Sidebar } from '@/components/shell/Sidebar';
 import { BottomTabs } from '@/components/shell/BottomTabs';
 import { Topbar } from '@/components/shell/Topbar';
-import { CommandPalette, type PaletteCloseReason } from '@/components/shell/CommandPalette';
+import { TopbarActionsProvider } from '@/components/shell/topbar-actions';
+import {
+  CommandPalette,
+  PalettePickProvider,
+  type PaletteCloseReason,
+  type PalettePickRequest,
+} from '@/components/shell/CommandPalette';
 import { isPaletteShortcut, isTextEntry, usesCmdKey } from '@/lib/search/palette-keys';
 import { AvatarMenu } from '@/components/shell/AvatarMenu';
 import { approverSwitchShown, WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
@@ -266,12 +272,29 @@ function AppLayoutBody() {
     flushSync(() => setPaletteOpen(true));
     paletteInputRef.current?.focus({ preventScroll: true });
   }, []);
+  // Pick mode: a picker's request (usePalettePick) fed to the one palette.
+  // Pure state: opening it reads nothing.
+  const [pick, setPick] = useState<PalettePickRequest | null>(null);
+  const pickRef = useRef<PalettePickRequest | null>(null);
+  pickRef.current = pick;
+  const openPick = useCallback((request: PalettePickRequest): void => {
+    const was = document.activeElement;
+    returnFocusRef.current = was instanceof HTMLElement && was !== document.body ? was : null;
+    flushSync(() => {
+      setPick(request);
+      setPaletteOpen(true);
+    });
+    paletteInputRef.current?.focus({ preventScroll: true });
+  }, []);
   const closePalette = useCallback((reason: PaletteCloseReason): void => {
+    const picking = pickRef.current !== null;
     setPaletteOpen(false);
+    setPick(null);
     const back = returnFocusRef.current;
     returnFocusRef.current = null;
-    // A picked result moves on to its target; a dismiss returns where the user was.
-    if (reason === 'dismiss' && back !== null && back.isConnected) {
+    // A picked result moves on to its target; a dismiss returns where the user
+    // was. Pick mode always returns to the picker (when it is still there).
+    if ((reason === 'dismiss' || picking) && back !== null && back.isConnected) {
       back.focus({ preventScroll: true });
     }
   }, []);
@@ -558,60 +581,73 @@ function AppLayoutBody() {
         <InboxStoreProvider>
           <ShellScrollMode mode={scrollMode} />
           <BarTintSync tint={barTint} />
-          <div className={chrome.shellClassName}>
-            <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
-            <div className={chrome.columnClassName}>
-              <div className={chrome.topbarClassName}>
-                <Topbar
-                  workspaceName={workspaceDisplayName}
-                  {...(profile !== null ? { currentUserName: profile.display_name } : {})}
-                  currentUserAvatarUrl={profile?.avatar_url ?? null}
-                  onOpenPalette={openPalette}
-                  onOpenAvatar={() => setAvatarOpen(true)}
-                  {...(isPlatformOperator
+          <TopbarActionsProvider>
+            <PalettePickProvider openPick={openPick}>
+              <div className={chrome.shellClassName}>
+                <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
+                <div className={chrome.columnClassName}>
+                  <div className={chrome.topbarClassName}>
+                    <Topbar
+                      workspaceName={workspaceDisplayName}
+                      {...(profile !== null ? { currentUserName: profile.display_name } : {})}
+                      currentUserAvatarUrl={profile?.avatar_url ?? null}
+                      onOpenPalette={openPalette}
+                      onOpenAvatar={() => setAvatarOpen(true)}
+                      {...(isPlatformOperator
+                        ? {
+                            cockpitSlot: (
+                              <Suspense fallback={null}>
+                                <CockpitDot />
+                              </Suspense>
+                            ),
+                          }
+                        : {})}
+                    />
+                  </div>
+                  {/* Its own sibling above main: showing it never remounts the Outlet. */}
+                  <StorageWarningBanner />
+                  {/* Keyed by workspace: a switch remounts the route, so the new workspace
+                  paints its own kept view or skeleton and nothing of the old one stays. */}
+                  <main className={chrome.mainClassName}>
+                    {switchPending ? null : <Outlet key={workspaceId ?? 'none'} />}
+                  </main>
+                  {/* The operator's Cockpit panel: fixed under the top bar on laptop
+                  (main makes room through --side-panel-w), a Sheet on phone.
+                  Nothing renders here for anyone else. */}
+                  {isPlatformOperator ? (
+                    <Suspense fallback={null}>
+                      <CockpitPanel />
+                    </Suspense>
+                  ) : null}
+                </div>
+                {chrome.showBottomTabs ? <BottomTabs /> : null}
+                <BodyToastViewport />
+                <CommandPalette
+                  open={paletteOpen}
+                  onClose={closePalette}
+                  inputRef={paletteInputRef}
+                  workspaceId={workspaceId}
+                  workspaceKey={workspaceKey}
+                  userId={userId}
+                  {...(pick !== null
                     ? {
-                        cockpitSlot: (
-                          <Suspense fallback={null}>
-                            <CockpitDot />
-                          </Suspense>
-                        ),
+                        pickKinds: pick.pickKinds,
+                        multi: pick.multi,
+                        verb: pick.verb,
+                        onPick: pick.onPick,
+                        ...(pick.label !== undefined ? { pickLabel: pick.label } : {}),
                       }
                     : {})}
                 />
+                <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
+                <PersonCardHost />
+                <WorkspaceSwitcher />
+                <WorkspaceFullSheet />
+                <InductionGuide />
+                <MarksPanel />
               </div>
-              {/* Its own sibling above main: showing it never remounts the Outlet. */}
-              <StorageWarningBanner />
-              {/* Keyed by workspace: a switch remounts the route, so the new workspace
-                  paints its own kept view or skeleton and nothing of the old one stays. */}
-              <main className={chrome.mainClassName}>
-                {switchPending ? null : <Outlet key={workspaceId ?? 'none'} />}
-              </main>
-              {/* The operator's Cockpit panel: fixed under the top bar on laptop
-                  (main makes room through --side-panel-w), a Sheet on phone.
-                  Nothing renders here for anyone else. */}
-              {isPlatformOperator ? (
-                <Suspense fallback={null}>
-                  <CockpitPanel />
-                </Suspense>
-              ) : null}
-            </div>
-            {chrome.showBottomTabs ? <BottomTabs /> : null}
-            <BodyToastViewport />
-            <CommandPalette
-              open={paletteOpen}
-              onClose={closePalette}
-              inputRef={paletteInputRef}
-              workspaceId={workspaceId}
-              workspaceKey={workspaceKey}
-              userId={userId}
-            />
-            <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
-            <PersonCardHost />
-            <WorkspaceSwitcher />
-            <WorkspaceFullSheet />
-            <InductionGuide />
-            <MarksPanel />
-          </div>
+            </PalettePickProvider>
+          </TopbarActionsProvider>
         </InboxStoreProvider>
       </ChatStoreProvider>
     </InductionProvider>

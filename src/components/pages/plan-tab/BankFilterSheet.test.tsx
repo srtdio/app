@@ -41,7 +41,7 @@ vi.mock('@/components/ui/ActionMenu', () => ({
   },
 }));
 
-import { BucketChips, type BucketWrites } from './BankFilterSheet';
+import { BankFilterTrigger, BucketChips, type BucketWrites } from './BankFilterSheet';
 
 const PRODUCT: BucketOption = { id: 'b1', name: 'Product', colorHex: '#000000', position: 0 };
 
@@ -287,5 +287,19 @@ describe('phone: the bucket menu in place', () => {
     render();
     act(() => chip().click());
     expect(host.querySelector('[data-bank-bucket-delete-line]')).toBeNull();
+  });
+});
+
+describe('trigger (the top bar sort on the Bank chip)', () => {
+  it('is one IconButton with IconSort, named Filter and sort; a tap opens the sheet', () => {
+    const onOpen = vi.fn();
+    act(() => root.render(<BankFilterTrigger onOpen={onOpen} />));
+    const button = host.querySelector<HTMLButtonElement>('[data-bank-filter-open]');
+    expect(button).not.toBeNull();
+    expect(button?.getAttribute('aria-label')).toBe('Filter and sort');
+    expect(button?.textContent).toBe('');
+    expect(host.querySelectorAll('svg')).toHaveLength(1);
+    act(() => button?.click());
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 });

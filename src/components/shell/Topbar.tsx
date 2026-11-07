@@ -13,6 +13,35 @@ import { cn } from '@/lib/cn';
 import { textRole } from '@/components/ui/Text';
 import { GUTTER } from '@/components/ui/layout';
 import { SAFE_TOP_BAR_CLASS } from '@/lib/scroll-mode';
+import { useTopbarActionsValue } from '@/components/shell/topbar-actions';
+
+/**
+ * One fixed 44 slot: the page's control, or an empty box of the same width so
+ * search and sort never move between tabs (the "+" hides where a person can't
+ * create, and Mark all read hides at 0 unread, keeping the width).
+ */
+function Slot({ name, children }: { name: 'sort' | 'primary'; children: ReactNode }) {
+  return (
+    <span data-topbar-slot={name} className="inline-flex h-11 min-w-11 shrink-0 items-center">
+      {children ?? <span aria-hidden="true" className="h-11 w-11" />}
+    </span>
+  );
+}
+
+/**
+ * The page's published sort and primary (useTopbarActions), in two fixed
+ * slots. Pure render: a context read, no network read, no await. Its own
+ * component so Topbar itself stays hookless.
+ */
+export function TopbarSlots() {
+  const actions = useTopbarActionsValue();
+  return (
+    <>
+      <Slot name="sort">{actions.sort}</Slot>
+      <Slot name="primary">{actions.primary}</Slot>
+    </>
+  );
+}
 
 interface TopbarProps {
   /** The active workspace's display name ("<Brand> - <Platform>"). */
@@ -40,6 +69,7 @@ export function Topbar({
   onCreateWorkspace,
   cockpitSlot,
 }: TopbarProps) {
+  const inWorkspace = workspaceName !== null && onCreateWorkspace === undefined;
   return (
     // Sticky to <main> in locked mode (Chat, laptop) and to the window in page
     // mode on a phone or a touch tablet (src/lib/scroll-mode.ts), where the
@@ -47,7 +77,7 @@ export function Topbar({
     <header
       className={cn(
         // The page edge (GUTTER): 16 phone, 24 laptop, the same edge as the
-        // search row under it.
+        // chip row under it.
         'sticky top-0 z-nav flex items-center gap-2 border-b bg-panel lit-header',
         GUTTER,
         SAFE_TOP_BAR_CLASS,
@@ -119,6 +149,10 @@ export function Topbar({
             <NotificationsButton />
           </span>
         ) : null}
+
+        {/* Decision A: search | sort | filled "+" (always last) | avatar. The
+            workspace-less state has no sort and no "+". */}
+        {inWorkspace ? <TopbarSlots /> : null}
 
         {/* A press starts the Settings chunk and the members read it shows. */}
         <IconButton

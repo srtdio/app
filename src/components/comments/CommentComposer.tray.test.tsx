@@ -175,6 +175,9 @@ describe('CommentComposer "+" tray', () => {
     const chip = host?.querySelector('[data-library-chip="ver-lib-1"]');
     expect(chip).not.toBeNull();
     expect(chip?.textContent).toContain('Brand guide');
+    // ui/PendingChip, ready: "<TYPE> · <size>" and the trailing X removes it.
+    expect(chip?.getAttribute('data-pending-chip')).toBe('ready');
+    expect(chip?.querySelector('[data-pending-chip-meta]')?.textContent).toBe('PDF · 1 KB');
     expect(buttons('Remove Brand guide')).toHaveLength(1);
 
     // A pick alone is sendable, like a finished upload.

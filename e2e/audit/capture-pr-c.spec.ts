@@ -103,17 +103,6 @@ const SCREENS: Screen[] = [
     steps: async (page) => openChat(page, GROUP_NAME),
   },
   {
-    // A search with no hits: the zero state and the list avatars it replaces.
-    name: 'chat-search-empty',
-    seed: creator,
-    url: '/chat',
-    steps: async (page) => {
-      await chatListReady(page);
-      await page.getByRole('searchbox', { name: 'Search chats' }).fill('zqxvw');
-      await waitFor(page, [page.getByText(/Try another word/).first()], 'search zero state');
-    },
-  },
-  {
     name: 'chat-info-group',
     seed: creator,
     url: '/chat',

@@ -6,6 +6,7 @@ import {
   GROUP_NAME,
   ME,
   PEER,
+  THREAD_GROUP,
   WORKSPACE_ID,
 } from '../fixtures/chat-data';
 
@@ -446,8 +447,10 @@ test.describe('search basics on a laptop @desktop', () => {
     );
     const dialog = page.getByRole('dialog', { name: 'Command palette' });
 
-    // Typing in another text field: the shortcut does nothing.
-    const other = page.getByRole('searchbox', { name: 'Search chats' });
+    // Typing in another text field (the open DM's composer): the shortcut does nothing.
+    await page.goto(`/chat?channel=${encodeURIComponent(DM_CHANNEL)}`);
+    const other = page.locator('form textarea').first();
+    await other.waitFor({ state: 'visible' });
     await other.focus();
     await page.keyboard.press(`${mod}+k`);
     await expect(dialog).toHaveCount(0);
@@ -467,7 +470,7 @@ test.describe('search basics on a laptop @desktop', () => {
     await expect(dialog).toHaveCount(0);
     await expect(from).toBeFocused();
 
-    // Enter opens the first (default selected) result.
+    // Enter opens the first (default selected) result: newest first, so Thread crew.
     await page.keyboard.press(`${mod}+k`);
     await page.keyboard.type('crew');
     const first = page.locator('[role="option"]').first();
@@ -475,7 +478,7 @@ test.describe('search basics on a laptop @desktop', () => {
     const text = (await first.textContent()) ?? '';
     await page.keyboard.press('Enter');
     await expect(dialog).toHaveCount(0);
-    await expect(page).toHaveURL(/channel=/);
+    await expect(page).toHaveURL(new RegExp(`channel=${encodeURIComponent(THREAD_GROUP)}`));
     expect(text).toMatch(/crew/i);
   });
 });

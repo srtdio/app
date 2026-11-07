@@ -61,7 +61,6 @@ const DOCUMENTED = [
   'IconPaperclip',
   'IconPause',
   'IconPauseFill',
-  'IconStop',
   'IconPhoto',
   'IconPin',
   'IconPipeline',
@@ -93,10 +92,11 @@ const DOCUMENTED = [
   'IconUpload',
   'IconUser',
   'IconVideo',
+  'IconX',
 ];
 
 // 24/solid, filled states only: no stroke.
-const SOLID = new Set(['IconPlay', 'IconPauseFill', 'IconStarFilled', 'IconStop']);
+const SOLID = new Set(['IconPlay', 'IconPauseFill', 'IconStarFilled']);
 // Fixed-box glyphs whose size prop is ignored.
 const FIXED_BOX: Record<string, [string, string]> = {
   IconTickSingle: ['16', '12'],

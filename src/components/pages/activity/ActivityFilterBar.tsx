@@ -5,19 +5,20 @@ import type { ActivityState } from '@/components/pages/activity/data';
 /** The chips the bar shows (Snoozed is gone; a kept 'snoozed' reads as All). */
 export type ActivityChip = Exclude<ActivityState, 'snoozed'>;
 
-// The only chips, single-select, in this order (no separate scope row).
-// Task and idea bank alerts have no chip: All and Unread show them.
+// The only chips, single-select, in this order (no separate scope row, no search).
+// Brief, plan, task and idea bank rows have no chip: All and Unread show them.
 export const STATE_CHIPS: readonly { key: ActivityChip; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
   { key: 'mentions', label: 'Mentions' },
-  { key: 'briefs', label: 'Briefs' },
-  { key: 'plans', label: 'Plans' },
 ];
 
-/** The chip a kept chip value shows: a kept 'snoozed' (a retired chip) is All. Pure. */
-export function activityChip(state: ActivityState): ActivityChip {
-  return state === 'snoozed' ? 'all' : state;
+/**
+ * The chip a kept chip value shows: a retired chip ('snoozed', 'briefs',
+ * 'plans') or anything unknown is All. Pure.
+ */
+export function activityChip(kept: string): ActivityChip {
+  return kept === 'unread' || kept === 'mentions' ? kept : 'all';
 }
 
 /**
@@ -48,8 +49,8 @@ export function moreToRight(row: {
 }
 
 interface ActivityFilterBarProps {
-  state: ActivityState;
-  onStateChange: (state: ActivityState) => void;
+  state: ActivityChip;
+  onStateChange: (state: ActivityChip) => void;
   totalUnread: number;
   mentionCount: number;
 }

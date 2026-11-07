@@ -539,6 +539,17 @@ Plans: a shared object in chat holding concepts and posts with team and client a
 | Speed | 12 ideas a page, keyset cursor, Recently active default sort. No counts, no reads before first paint, no waits on tap paths. |
 | Not in v2.0 | Pipeline filter by bucket. One-query starred-first cursor. |
 
+### One search, one top bar, fewer chips, one upload look (decided 7 Nov 2026)
+
+| Item | Decision |
+| --- | --- |
+| A. Top bar | Phone and laptop: workspace switcher, Search (CommandPalette), Sort, filled "+" (always last), avatar. Laptop keeps the ⌘K button and the Activity bell. A page publishes its sort and "+" through useTopbarActions (pure render). "+" is icon only with the old label; hidden where a person can't create, keeping its width. Activity's slot is Mark all read (hidden at 0 unread). Sort opens what each screen opened before; Activity gains Newest first / Oldest first; Chat list gains Recent / Unread first / A to Z. |
+| B. One search | No search field on any screen: Pipeline, Briefs, Assets, Plan, Bank, Activity, Chat list, in-chat search and emoji search are gone, with their per-screen server search reads. CommandPalette is the one search; its group order is fixed. HelpPage and the operator Cockpit keep theirs. |
+| C. Pickers | Pickers search through CommandPalette pick mode (only the picker's kinds, a "<Kind> only" pill, tap ticks, footer "Send N" / "Add N"). Without search a picker shows its recent list and chips. |
+| D. Chips | Pipeline and Briefs unchanged. Assets: All, Media, Docs, Links (Docs = PDF + Docs + Sheets). Plan: Bank, Upcoming, Past (default Upcoming). Activity: All, Unread, Mentions. Chat list chips unchanged. |
+| E. Select | A visible Select at the end of every list's chip row, plus long-press / right-click. ui/SelectCheck is the only select circle. |
+| F. Upload | ui/UploadRing on the thing uploading (X cancels; Retry in the same spot on failure). ui/PendingChip is the one attached-file chip (uploading, ready, failed). No bars, no % text. Profile photo keeps busy on its button. |
+
 ## 24. Compliance
 
 Not covered in MVP PRD. Defer to lawyer review pre-launch.

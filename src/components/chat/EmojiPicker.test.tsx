@@ -1,24 +1,18 @@
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  EMOJI_NO_RESULTS,
   EMOJI_ROW_BUFFER,
   EMOJI_ROW_PX,
-  EmojiGrid,
-  EmojiSearchField,
+  EmojiPickerTop,
   EmojiTabs,
   EmojiVirtualGrid,
-  activeGroupAfterQuery,
   activeGroupAfterScroll,
-  createEmojiSearch,
   emojiRows,
   emojiSections,
   groupAtRow,
   groupRowIndex,
   gridColumns,
-  gridRows,
   renderedRowIndices,
-  searchEmoji,
   tabJumpTop,
   visibleRowRange,
 } from '@/components/chat/EmojiPicker';
@@ -82,31 +76,23 @@ describe('emoji data (Unicode 15.0, generated)', () => {
   });
 });
 
-describe('searchEmoji', () => {
-  it('matches the CLDR short name, every word, any case', () => {
-    expect(searchEmoji('unicorn').map((e) => e.char)).toEqual(['🦄']);
-    expect(searchEmoji('Tears JOY').map((e) => e.char)).toContain('😂');
-    expect(searchEmoji('heart red').map((e) => e.char)).toContain('❤️');
-    expect(searchEmoji('   ')).toEqual([]);
-    expect(searchEmoji('zzqx')).toEqual([]);
-  });
-});
-
 describe('EmojiPicker parts', () => {
-  it('search on top: a real input, never under 16px on touch', () => {
-    const onQuery = vi.fn();
-    const field = EmojiSearchField({ query: '', onQuery, layout: 'touch' });
-    const input = all(field).find((e) => e.type === 'input');
-    expect(String(input?.props.className)).toContain('text-xl');
-    (input?.props.onChange as (e: { target: { value: string } }) => void)({
-      target: { value: 'cat' },
-    });
-    expect(onQuery).toHaveBeenCalledWith('cat');
+  it('no search field: the top row holds only the close control; tabs only', () => {
+    const close = <button type="button" data-emoji-close="" />;
+    const top = EmojiPickerTop({ trailing: close });
+    expect(all(top).some((e) => e.type === 'input')).toBe(false);
+    expect(all(top).some((e) => e.props['data-emoji-close'] !== undefined)).toBe(true);
+    const source = readFileSync(
+      fileURLToPath(new URL('./EmojiPicker.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(source).not.toContain('data-emoji-search');
+    expect(source).not.toContain('<input');
   });
 
   it('one 44x44 tab per Unicode group; a tap goes to that group', () => {
     const onTab = vi.fn();
-    const tabs = EmojiTabs({ query: '', activeGroup: 'Smileys & Emotion', onTab });
+    const tabs = EmojiTabs({ activeGroup: 'Smileys & Emotion', onTab });
     // Each tab is an IconButton: expand it to the <button> it renders.
     const list = buttons(tabs).filter((e) => e.props.role === 'tab');
     expect(list.map((t) => t.props['aria-label'])).toEqual(emojiSections().map((s) => s.group));
@@ -115,30 +101,21 @@ describe('EmojiPicker parts', () => {
     expect(onTab).toHaveBeenCalledWith(emojiSections()[3]?.group);
   });
 
-  it('search by name shows only the matches; a pick hands the glyph back once', () => {
+  it('a pick hands the glyph back once', () => {
     const onPick = vi.fn();
-    const grid = EmojiGrid({
-      rows: gridRows('unicorn', 8, searchEmoji, emojiRows(emojiSections(), 8)),
+    const grid = EmojiVirtualGrid({
+      rows: emojiRows(emojiSections(), 8),
       onPick,
       scrollTop: 0,
       viewportHeight: 400,
     });
     const found = buttons(grid);
-    expect(found.map((b) => b.props['aria-label'])).toEqual(['unicorn']);
+    const first = EMOJI.find((e) => e.group === 'Smileys & Emotion');
+    expect(found[0]?.props['aria-label']).toBe(first?.name);
     expect(String(found[0]?.props.className)).toContain('h-11 w-11');
     (found[0]?.props.onClick as () => void)();
     expect(onPick).toHaveBeenCalledTimes(1);
-    expect(onPick).toHaveBeenCalledWith('🦄');
-  });
-
-  it('no match: the empty line', () => {
-    const grid = EmojiGrid({
-      rows: gridRows('zzqx', 8, searchEmoji, emojiRows(emojiSections(), 8)),
-      onPick: vi.fn(),
-      scrollTop: 0,
-      viewportHeight: 400,
-    });
-    expect(all(grid).some((e) => e.props.children === EMOJI_NO_RESULTS)).toBe(true);
+    expect(onPick).toHaveBeenCalledWith(first?.char);
   });
 
   it('the laptop popover sits above the menu when there is room, else below, inside the viewport', () => {
@@ -298,7 +275,7 @@ describe('R3: the picker chunk fails to load', () => {
   });
 });
 
-describe('R4: a tab tap while searching', () => {
+describe('R4: a tab tap', () => {
   const rows = emojiRows(emojiSections(), 8);
   const index = groupRowIndex(rows);
 
@@ -310,13 +287,12 @@ describe('R4: a tab tap while searching', () => {
       activeGroupAfterScroll({
         rows,
         scrollTop: top - 3 * EMOJI_ROW_PX,
-        searching: false,
         jumpTop: top - 3 * EMOJI_ROW_PX,
         current: 'Flags',
       }),
     ).toBe('Flags');
-    // With the query cleared the tab reads selected.
-    const tabs = buttons(EmojiTabs({ query: '', activeGroup: 'Flags', onTab: vi.fn() })).filter(
+    // The tapped tab reads selected.
+    const tabs = buttons(EmojiTabs({ activeGroup: 'Flags', onTab: vi.fn() })).filter(
       (e) => e.props.role === 'tab',
     );
     const selected = tabs.filter((t) => t.props['aria-selected'] === true);
@@ -326,7 +302,6 @@ describe('R4: a tab tap while searching', () => {
       activeGroupAfterScroll({
         rows,
         scrollTop: 0,
-        searching: false,
         jumpTop: top,
         current: 'Flags',
       }),
@@ -334,39 +309,7 @@ describe('R4: a tab tap while searching', () => {
   });
 });
 
-describe('R4b: clearing the query by typing', () => {
-  it('resets the highlighted tab to the first group', () => {
-    const first = emojiSections()[0]?.group ?? null;
-    // Scrolled to Flags, then typed a query: the highlight stays while searching.
-    expect(activeGroupAfterQuery({ query: 'cat', pendingTab: null, current: 'Flags', first })).toBe(
-      'Flags',
-    );
-    // Backspaced to empty: the grid is at the top, so the first group reads selected.
-    expect(activeGroupAfterQuery({ query: '', pendingTab: null, current: 'Flags', first })).toBe(
-      first,
-    );
-    // A tab tap that cleared the query keeps the tapped group.
-    expect(
-      activeGroupAfterQuery({ query: '', pendingTab: 'Travel & Places', current: 'Flags', first }),
-    ).toBe('Travel & Places');
-  });
-});
-
-describe('R5: picker perf and focus', () => {
-  it('search is memoized per query: scroll renders never re-run it', () => {
-    const spy = vi.fn(searchEmoji);
-    const search = createEmojiSearch(spy);
-    const sections = emojiRows(emojiSections(), 8);
-    const first = gridRows('cat', 8, search, sections);
-    gridRows('cat', 8, search, sections);
-    gridRows('Cat ', 8, search, sections);
-    expect(spy).toHaveBeenCalledOnce();
-    expect(search('cat')).toBe(search('cat'));
-    gridRows('dog', 8, search, sections);
-    expect(spy).toHaveBeenCalledTimes(2);
-    expect(first).not.toBeNull();
-  });
-
+describe('R5: picker focus', () => {
   it('the focused row stays rendered after it scrolls out of the window', () => {
     const rows = emojiRows(emojiSections(), 8);
     expect(renderedRowIndices({ start: 50, end: 60 }, 2, rows.length)[0]).toBe(2);

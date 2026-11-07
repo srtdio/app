@@ -8,10 +8,13 @@ import {
 import {
   assertCommentTray,
   assertListCards,
+  assertNoUploadBar,
   assertPinnedBarOnScroll,
   assertProgressRowUnderBar,
   assertSameWidth,
+  assertTopbarSlotsStill,
   checkLayout,
+  readTopbarSlots,
 } from './layout-checks';
 import { installDeletedRoutes } from '../fixtures/assets-recently-deleted';
 import type { Row } from '../fixtures/postgrest';
@@ -1043,7 +1046,7 @@ const SCREENS: Screen[] = [
     seed: { ...creator, noAssets: true },
     url: '/assets',
     steps: async (page) => {
-      await waitFor([page.getByPlaceholder('Search files')], 'assets');
+      await waitFor([page.locator('[data-chip-row]')], 'assets chip row');
       await waitFor([page.getByText('Files show up here.', { exact: false })], 'assets zero');
     },
   },
@@ -1058,15 +1061,6 @@ const SCREENS: Screen[] = [
         [page.getByRole('tab', { name: /^Media(\s\d+)?$/, selected: true })],
         'Media tab',
       );
-    },
-  },
-  {
-    name: 'assets-search-empty',
-    seed: creator,
-    url: '/assets',
-    steps: async (page) => {
-      await assetsReady(page);
-      await searchNoMatch(page, [page.getByPlaceholder('Search files')], 'assets');
     },
   },
   { name: 'brief-detail', seed: creator, url: `/briefs/${AUDIT_BRIEF_ID}`, steps: briefReady },
@@ -1092,17 +1086,8 @@ const SCREENS: Screen[] = [
     seed: { ...approver, noBriefs: true },
     url: '/briefs',
     steps: async (page) => {
-      await waitFor([page.getByPlaceholder('Search briefs')], 'briefs');
+      await waitFor([page.locator('[data-chip-row]')], 'briefs chip row');
       await waitFor([page.getByText('Briefs show up here.', { exact: false })], 'briefs zero');
-    },
-  },
-  {
-    name: 'briefs-search-empty',
-    seed: approver,
-    url: '/briefs',
-    steps: async (page) => {
-      await briefsReady(page);
-      await searchNoMatch(page, [page.getByPlaceholder('Search briefs')], 'briefs');
     },
   },
   { name: 'chat-list', seed: creator, url: '/chat', steps: chatListAllRows },
@@ -1113,15 +1098,6 @@ const SCREENS: Screen[] = [
     url: '/chat',
     steps: async (page) => {
       await openChatPlanCard(page);
-    },
-  },
-  {
-    name: 'chat-search-empty',
-    seed: creator,
-    url: '/chat',
-    steps: async (page) => {
-      await chatListReady(page);
-      await searchNoMatch(page, [page.getByRole('searchbox', { name: 'Search chats' })], 'chat');
     },
   },
   { name: 'chat-thread', seed: creator, url: '/chat', steps: openDm },
@@ -1331,7 +1307,14 @@ const SCREENS: Screen[] = [
     name: 'notifications',
     seed: creator,
     url: '/activity',
-    steps: async (page) => waitFor([page.getByText('Priya Raman mentioned you')], 'activity'),
+    steps: async (page) => {
+      await waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
+      // Unread rows on All: Mark all read fills the top bar's primary slot.
+      await waitFor(
+        [page.locator('[data-topbar-slot="primary"] [data-activity-mark-all]')],
+        'Mark all read',
+      );
+    },
   },
   {
     // The idea bank's Activity rows (team viewer): added, shown, hidden, moved, planned.
@@ -1358,7 +1341,7 @@ const SCREENS: Screen[] = [
     seed: creator,
     extra: (network) => {
       seedTab(network);
-      neverAnswers(network, { rpcs: ['plan_bundle_read', 'plan_search'] });
+      neverAnswers(network, { rpcs: ['plan_bundle_read'] });
     },
     url: '/plan',
     steps: async (page) => waitFor([page.locator('[data-plan-tab-loading]')], 'plan tab boxes'),
@@ -1398,44 +1381,6 @@ const SCREENS: Screen[] = [
   },
   { name: 'pipeline', seed: creator, url: '/pipeline', steps: pipelineReady },
   { name: 'pipeline-approver', seed: approver, url: '/pipeline', steps: pipelineReady },
-  {
-    name: 'pipeline-search-empty',
-    seed: creator,
-    url: '/pipeline',
-    steps: async (page) => {
-      await pipelineReady(page);
-      await searchNoMatch(page, [page.getByPlaceholder('Search posts')], 'pipeline');
-    },
-  },
-  {
-    // Phone: the search is the centre. Tapped: ink line, lift, full row, the
-    // sort and New glided aside, Cancel at the right end (keyboard not needed).
-    name: 'pipeline-search-focused',
-    seed: creator,
-    only: 'phone',
-    hold: true,
-    url: '/pipeline',
-    steps: async (page) => {
-      await pipelineReady(page);
-      await page.getByPlaceholder('Search posts').focus();
-      await waitFor([page.locator('[data-search-cancel]')], 'search cancel');
-    },
-  },
-  {
-    // Laptop: "carousel" typed, the field focused (line and lift), Clear showing.
-    name: 'pipeline-search-typed',
-    seed: creator,
-    only: 'laptop',
-    hold: true,
-    url: '/pipeline',
-    steps: async (page) => {
-      await pipelineReady(page);
-      const field = page.getByPlaceholder('Search posts');
-      await field.click();
-      await field.fill('carousel');
-      await waitFor([page.getByRole('button', { name: 'Clear search', exact: true })], 'clear');
-    },
-  },
   {
     name: 'plan-item',
     seed: creator,
@@ -1642,7 +1587,7 @@ const SCREENS: Screen[] = [
     url: '/plan',
     steps: async (page) => {
       await waitFor([page.getByText('Autumn launch')], 'plan');
-      await tap([page.locator('[data-plan-tab-when="earlier"]')], 'Past');
+      await tap([page.locator('[data-plan-tab-when="past"]')], 'Past');
       await waitFor([page.locator('[data-plan-tab-chip-zero]')], 'week zero');
     },
   },
@@ -1708,7 +1653,7 @@ const SCREENS: Screen[] = [
     url: '/plan?week=bank',
     steps: async (page) => {
       await bankReady(page);
-      await tap([page.locator('[data-bank-add-open]').first()], 'Add idea');
+      await tap([page.locator('[data-topbar-plus][aria-label="Add idea"]')], 'Add idea');
       await waitFor([page.locator('[data-bank-add]')], 'add idea sheet');
     },
   },
@@ -2231,7 +2176,7 @@ for (const dark of [false, true]) {
 // chip and All), Assets (each tab and select mode), Activity (each chip) and
 // the Plan tab (each chip; Bank is plan-tab-bank). The default chip of each is
 // its base screen (pipeline: Review, assets: All, notifications: All,
-// plan-tab: This week). Phone light/dark and laptop light come from the
+// plan-tab: Upcoming). Phone light/dark and laptop light come from the
 // projects; LAPTOP_DARK_SCREENS adds laptop dark. A chip with nothing under it
 // shows its zero line, which is shot as it is.
 
@@ -2267,11 +2212,10 @@ for (const stage of PIPELINE_CHIP_SCREENS) {
   });
 }
 
+// Docs holds PDFs, documents and sheets (?type=pdf and ?type=sheets land on it).
 const ASSET_TAB_SCREENS = [
   { tab: 'media', label: 'Media' },
-  { tab: 'pdf', label: 'PDF' },
   { tab: 'docs', label: 'Docs' },
-  { tab: 'sheets', label: 'Sheets' },
   { tab: 'links', label: 'Links' },
 ] as const;
 for (const { tab, label } of ASSET_TAB_SCREENS) {
@@ -2289,11 +2233,10 @@ for (const { tab, label } of ASSET_TAB_SCREENS) {
   });
 }
 
+// All, Unread, Mentions (the Briefs and Plans chips are gone; All is notifications).
 const ACTIVITY_CHIP_SCREENS = [
   { chip: 'unread', label: 'Unread' },
   { chip: 'mentions', label: 'Mentions' },
-  { chip: 'briefs', label: 'Briefs' },
-  { chip: 'plans', label: 'Plans' },
 ] as const;
 for (const { chip, label } of ACTIVITY_CHIP_SCREENS) {
   SCREENS.push({
@@ -2313,7 +2256,8 @@ for (const { chip, label } of ACTIVITY_CHIP_SCREENS) {
   });
 }
 
-const PLAN_TAB_CHIP_SCREENS = ['next', 'later', 'earlier', 'all'] as const;
+// Bank, Upcoming, Past: Upcoming is plan-tab, Bank is plan-tab-bank.
+const PLAN_TAB_CHIP_SCREENS = ['past'] as const;
 for (const chip of PLAN_TAB_CHIP_SCREENS) {
   SCREENS.push({
     name: `plan-tab-chip-${chip}`,
@@ -2400,7 +2344,7 @@ SCREENS.push(
 const ENDED_PLAN_ID = '0190d000-0000-7000-8000-00000000d0e1';
 
 // The Plan tab's time words (formatPlanStart): a plan whose start has passed
-// and whose end has not reads "Live" (This week); one whose end day passed
+// and whose end has not reads "Live" (Upcoming); one whose end day passed
 // reads its end day ("11 Oct") on the Past chip.
 SCREENS.push(
   {
@@ -2433,7 +2377,7 @@ SCREENS.push(
         ends_on: civilPlus(monday, -8),
       });
     },
-    url: '/plan?week=earlier',
+    url: '/plan?week=past',
     steps: async (page) => {
       const time = page.locator(`[data-plan-tab-card="${ENDED_PLAN_ID}"] [data-plan-tab-start]`);
       await waitFor([time], 'ended plan');
@@ -3580,7 +3524,8 @@ SCREENS.push(
     url: '/chat',
     steps: async (page) => {
       const results = await openMediaChip(page, 'photo');
-      await tap([page.getByRole('button', { name: 'Select', exact: true })], 'Select');
+      // The chip row's Select, pinned at the row's end.
+      await tap([page.locator('[data-chip-row-select] [data-section-select]')], 'Select');
       const first = results.locator('[data-media-tile]').first();
       // The check sits over the tile's top right (over its centre on a laptop
       // tile): tap the check, which toggles the same message.
@@ -4403,6 +4348,353 @@ SCREENS.push(
   ),
 );
 
+// ---------------------------------------------------------------------------
+// One search, the top bar and the chip row (7 Nov 2026, decisions A to F). The
+// top bar reads search | sort | "+" | avatar on every screen (layout-checks.ts
+// check 8 runs on each); the six list screens' own shots are their base
+// screens (pipeline, briefs, assets, plan-tab, notifications, chat-list),
+// phone and laptop, light and dark (LAPTOP_DARK_SCREENS), and the slots hold
+// one x across them (the top bar test below). Each screen's sort opens its
+// menu (phone: the sheet; laptop: the popover); the Bank's sort is its Filter
+// and sort sheet (plan-tab-bank-filter). Activity's primary is Mark all read
+// (notifications), its slot empty at 0 unread (activity-all-read). A picker's
+// search opens the palette in pick mode ("Chats only", ticks, "Send 1"); the
+// pickers themselves are forward-picker, post-picker, plan-picker,
+// asset-picker and plan-from-bank. The chip row's Select sits pinned at the
+// row's end (each base screen) and pressed in select mode (*-select-on). Every
+// upload shows ui/UploadRing or Retry, never a bar or a % (check 10:
+// UPLOAD_SCREENS).
+
+/** The top bar's slot (sort or primary). */
+const topbarSlot = (page: Page, name: 'sort' | 'primary'): Locator =>
+  page.locator(`header [data-topbar-slot="${name}"]`);
+
+/** The top bar's sort opened: its options painted (the phone sheet or the laptop popover). */
+async function openTopbarSort(page: Page): Promise<void> {
+  await tap([topbarSlot(page, 'sort').locator('button')], 'top bar sort');
+  await waitFor([page.locator('[role="menuitemradio"]')], 'sort options');
+}
+
+/** The chip row's Select tapped: select mode on, nothing ticked, Select pressed. */
+async function chipRowSelectOn(page: Page): Promise<void> {
+  await tap([page.locator('[data-chip-row-select] [data-section-select="off"]')], 'Select');
+  await waitFor([page.locator('[data-chip-row-select] [data-section-select="on"]')], 'Select on');
+}
+
+const planTabReady = async (page: Page): Promise<void> =>
+  waitFor([page.locator('[data-plan-tab-list]'), page.getByText('Autumn launch')], 'plan');
+
+const activityReady = async (page: Page): Promise<void> =>
+  waitFor([page.getByText('Priya Raman mentioned you')], 'activity');
+
+/** Every Activity row read: nothing to mark, so the primary slot is empty (its width kept). */
+function seedActivityAllRead(network: HarnessNetwork): void {
+  for (const row of network.world.tables.inbox_entries ?? []) {
+    row.read_at ??= new Date(NOW - 5 * 60_000).toISOString();
+  }
+}
+
+/** The DM's Plan tile, New plan, then Add concept with a title typed. */
+async function openAddConcept(page: Page): Promise<Locator> {
+  await openDm(page);
+  await pickTrayTile(page, 'plan');
+  const plans = page.getByRole('dialog', { name: 'Plans' });
+  await tap([plans.locator('[data-plan-pick-new]')], 'New plan');
+  const compose = page.locator('[data-plan-page="compose"]');
+  await tap([compose.locator('[data-plan-add-concept]')], 'Add concept');
+  const sheet = page.getByRole('dialog', { name: 'Add concept' });
+  await waitFor([sheet.locator('[data-plan-concept-title]')], 'Add concept sheet');
+  await sheet.locator('[data-plan-concept-title]').fill('Opening reel');
+  return sheet;
+}
+
+/** A fresh file picked in the Add concept sheet (its upload starts at once). */
+async function pickConceptFile(sheet: Locator): Promise<void> {
+  await sheet.locator('[data-plan-concept-upload-input]').setInputFiles({
+    name: 'storyboard.png',
+    mimeType: 'image/png',
+    buffer: solidPng(64, 48, [200, 120, 80]),
+  });
+}
+
+/** The asset-upload Worker refuses every original (a thumbnail still answers). */
+async function refuseUploads(page: Page): Promise<void> {
+  await page.route(
+    (url) => url.hostname === 'asset-upload.harness.test',
+    async (route) => {
+      const request = route.request();
+      const path = new URL(request.url()).pathname;
+      if (request.method() !== 'POST' || path === '/thumbnail') {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        status: 400,
+        headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
+        body: JSON.stringify({ error: 'upload_refused' }),
+      });
+    },
+  );
+}
+
+SCREENS.push(
+  // Briefs for the agency (the sort in the top bar; no "+": the slot keeps
+  // its width). briefs-approver is the client's (the "+", no sort).
+  { name: 'briefs', seed: creator, url: '/briefs', steps: briefsReady },
+  // Each screen's sort, open.
+  {
+    name: 'pipeline-sort',
+    seed: creator,
+    url: '/pipeline',
+    steps: async (page) => {
+      await pipelineReady(page);
+      await openTopbarSort(page);
+    },
+  },
+  {
+    name: 'briefs-sort',
+    seed: creator,
+    url: '/briefs',
+    steps: async (page) => {
+      await briefsReady(page);
+      await openTopbarSort(page);
+    },
+  },
+  {
+    name: 'assets-sort',
+    seed: creator,
+    url: '/assets',
+    steps: async (page) => {
+      await assetsReady(page);
+      await openTopbarSort(page);
+    },
+  },
+  {
+    name: 'plan-tab-sort',
+    seed: creator,
+    extra: seedTab,
+    url: '/plan',
+    steps: async (page) => {
+      await planTabReady(page);
+      await openTopbarSort(page);
+    },
+  },
+  {
+    name: 'activity-sort',
+    seed: creator,
+    url: '/activity',
+    steps: async (page) => {
+      await activityReady(page);
+      await openTopbarSort(page);
+    },
+  },
+  {
+    name: 'chat-list-sort',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await chatListAllRows(page);
+      await openTopbarSort(page);
+    },
+  },
+  {
+    // Nothing unread: no Mark all read, the primary slot empty at its 44 width.
+    name: 'activity-all-read',
+    seed: creator,
+    extra: seedActivityAllRead,
+    url: '/activity',
+    steps: async (page) => {
+      await activityReady(page);
+      await waitFor([topbarSlot(page, 'primary')], 'primary slot');
+      await expect(page.locator('[data-activity-mark-all]')).toHaveCount(0);
+    },
+  },
+  {
+    // Forward's search: the palette in pick mode over the picker ("Chats
+    // only"), "crew" typed, Launch crew ticked, the footer "Send 1".
+    name: 'palette-pick',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await openDmMessageMenu(page);
+      await tap([page.locator('[data-menu-item="forward"]')], 'Forward');
+      await tap([page.getByRole('button', { name: 'Forward', exact: true }).last()], 'Forward bar');
+      await tap([page.getByRole('dialog').locator('[data-palette-pick-open]')], 'picker search');
+      const palette = page.locator('[data-palette-overlay][data-palette-mode="pick"]');
+      await waitFor([palette.locator('[data-palette-pick-pill]')], 'pick pill');
+      await expect(palette.locator('[data-palette-pick-pill]')).toHaveText('Chats only');
+      await palette.getByRole('combobox').fill('crew');
+      const row = palette.locator('[data-palette-pick]', { hasText: GROUP_NAME }).first();
+      await tap([row], `${GROUP_NAME} row`);
+      await expect(row).toHaveAttribute('data-palette-pick', 'on');
+      await expect(palette.locator('[data-palette-pick-footer] button')).toHaveText('Send 1');
+    },
+  },
+  // The chip row's Select tapped: select mode with nothing ticked, Select pressed.
+  {
+    name: 'pipeline-select-on',
+    seed: creator,
+    url: '/pipeline',
+    steps: async (page) => {
+      await pipelineReady(page);
+      await chipRowSelectOn(page);
+    },
+  },
+  {
+    name: 'assets-select-on',
+    seed: creator,
+    url: '/assets',
+    steps: async (page) => {
+      await assetsReady(page);
+      await chipRowSelectOn(page);
+    },
+  },
+  {
+    name: 'plan-tab-bank-select-on',
+    seed: creator,
+    extra: seedBank,
+    url: '/plan?week=bank',
+    steps: async (page) => {
+      await bankReady(page);
+      await chipRowSelectOn(page);
+    },
+  },
+  {
+    name: 'chat-list-select-on',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      await chatListAllRows(page);
+      await chipRowSelectOn(page);
+    },
+  },
+  // Uploads (decision F): the ring with its X, or Retry, in the same spot.
+  {
+    // Assets: Upload files, one file going up (held): the ring on the row's
+    // thumb, its X named Stop upload; the size line, no bar.
+    name: 'assets-upload-uploading',
+    seed: creator,
+    extra: (network) => {
+      network.holdUploads();
+    },
+    url: '/assets',
+    steps: async (page) => {
+      await assetsReady(page);
+      await tap([page.locator('[data-topbar-plus][aria-label="New file"]')], 'New file');
+      await tap([page.getByRole('menuitem', { name: 'Upload files' })], 'Upload files');
+      const sheet = page.getByRole('dialog', { name: 'Upload files' });
+      await waitFor([sheet], 'upload sheet');
+      await sheet.locator('input[type="file"]').setInputFiles({
+        name: 'launch-poster.png',
+        mimeType: 'image/png',
+        buffer: solidPng(64, 48, [176, 112, 72]),
+      });
+      await tap([sheet.getByRole('button', { name: 'Upload 1', exact: true })], 'Upload 1');
+      const ring = await firstVisible(
+        [sheet.locator('[data-upload-thumb="uploading"] [data-upload-ring]')],
+        'row ring',
+      );
+      await expect(ring).toHaveAccessibleName('Stop upload');
+      await attributeStill(ring, 'data-upload-progress');
+    },
+  },
+  {
+    // New post: a photo going up (held): the tile under the ring, its X named Cancel upload.
+    // Tiles are the framed sheet's (a format with a media frame): on Instagram the
+    // untouched sheet opens on Single image. LinkedIn's Text default has no frame,
+    // so its pick is a ui/PendingChip (ring + X on the thumb) instead of a tile.
+    name: 'post-tile-uploading',
+    seed: creator,
+    extra: (network) => {
+      onPlatform(network, 'instagram', 'single_image');
+      network.holdUploads();
+    },
+    url: '/pipeline',
+    steps: async (page) => {
+      await pipelineReady(page);
+      await tap([page.locator('[data-topbar-plus][aria-label="New post"]')], 'New post');
+      const sheet = await firstVisible([page.getByRole('dialog')], 'create post sheet');
+      await sheet.locator('input[type="file"][aria-label="Add a photo or video"]').setInputFiles({
+        name: 'cover.png',
+        mimeType: 'image/png',
+        buffer: solidPng(640, 640, [72, 120, 160]),
+      });
+      const ring = await firstVisible(
+        [sheet.locator('[data-pending-tile]:not([data-failed]) [data-upload-ring]')],
+        'tile ring',
+      );
+      await expect(ring).toHaveAccessibleName('Cancel upload');
+      await attributeStill(ring, 'data-upload-progress');
+    },
+  },
+  {
+    // Add concept: the fresh file's chip uploading (ring + X on its thumb, the size line).
+    name: 'concept-chip-uploading',
+    seed: creator,
+    extra: (network) => {
+      network.holdUploads();
+    },
+    url: '/chat',
+    steps: async (page) => {
+      const sheet = await openAddConcept(page);
+      await pickConceptFile(sheet);
+      const chip = sheet.locator('[data-plan-concept-chips] [data-pending-chip="uploading"]');
+      await waitFor([chip.locator('[data-upload-ring]')], 'uploading chip');
+      await expect(chip.locator('[data-upload-ring]')).toHaveAccessibleName('Cancel upload');
+    },
+  },
+  {
+    // The upload done: the chip ready ("PNG · size", the trailing X removes).
+    name: 'concept-chip-ready',
+    seed: creator,
+    url: '/chat',
+    steps: async (page) => {
+      const sheet = await openAddConcept(page);
+      await pickConceptFile(sheet);
+      await waitFor(
+        [sheet.locator('[data-plan-concept-chips] [data-pending-chip="ready"]')],
+        'ready chip',
+      );
+      await expect(sheet.locator('[data-pending-chip="uploading"]')).toHaveCount(0);
+    },
+  },
+  {
+    // The upload refused: the chip failed ("Couldn't upload", Retry, the trailing X).
+    name: 'concept-chip-failed',
+    seed: creator,
+    prepare: (_network, page) => refuseUploads(page),
+    url: '/chat',
+    steps: async (page) => {
+      const sheet = await openAddConcept(page);
+      await pickConceptFile(sheet);
+      const chip = sheet.locator('[data-plan-concept-chips] [data-pending-chip="failed"]');
+      await waitFor([chip], 'failed chip');
+      await expect(chip.locator('[data-pending-chip-meta]')).toHaveText("Couldn't upload");
+    },
+  },
+);
+
+/**
+ * The upload screens: check 10 (no visible bar, no % figure) runs on each.
+ * The chat sends are chat-upload-progress (photo), chat-send-uploading-* and
+ * chat-send-queued-photo; the voice note is chat-voice-uploading; the
+ * onboarding photo is onboarding-first-post-uploading (onboarding-steps.ts).
+ */
+const UPLOAD_SCREENS = new Set([
+  'chat-upload-progress',
+  'chat-send-queued-photo',
+  'chat-send-uploading-album',
+  'chat-send-uploading-video',
+  'chat-send-uploading-file',
+  'chat-voice-uploading',
+  'assets-upload-uploading',
+  'post-tile-uploading',
+  'concept-chip-uploading',
+  'concept-chip-ready',
+  'concept-chip-failed',
+  'onboarding-first-post-uploading',
+]);
+
 // The onboarding screens (onboarding-steps.ts), on the fixture world as built.
 SCREENS.push(...ONBOARDING_SCREENS.map((screen): Screen => ({ ...screen, seed: null })));
 
@@ -4494,6 +4786,8 @@ async function capture(screen: Screen, page: Page): Promise<void> {
   // screen must show its ui/ListCards, so the list-card rule (equal heights,
   // the 48 picture 12 inside the edge and 12 to the text) runs on it.
   if (LIST_CARD_SCREENS.has(screen.name)) await assertListCards(page, screen.name);
+  // An upload screen shows the ring or Retry only: no visible bar, no % figure.
+  if (UPLOAD_SCREENS.has(screen.name)) await assertNoUploadBar(page, screen.name);
   await checkLayout(page, screen.name);
   await expect(page).toHaveScreenshot(`${screen.name}.png`, {
     maxDiffPixelRatio: 0.002,
@@ -4514,6 +4808,7 @@ const LIST_CARD_SCREENS = new Set([
   'chat-list-notes-photo',
   'pipeline',
   'pipeline-approver',
+  'briefs',
   'briefs-approver',
   'assets',
   'assets-approver',
@@ -4530,6 +4825,10 @@ const LIST_CARD_SCREENS = new Set([
   'pipeline-select-1',
   'pipeline-select-2',
   'pipeline-overdue',
+  'pipeline-select-on',
+  'assets-select-on',
+  'plan-tab-bank-select-on',
+  'chat-list-select-on',
 ]);
 
 // Laptop dark: these screens also run in the laptop-dark project
@@ -4608,9 +4907,7 @@ const LAPTOP_DARK_SCREENS = new Set([
   'pipeline-chip-parked',
   'pipeline-chip-rejected',
   'assets-tab-media',
-  'assets-tab-pdf',
   'assets-tab-docs',
-  'assets-tab-sheets',
   'assets-tab-links',
   'assets-select',
   'pipeline-select-1',
@@ -4622,18 +4919,76 @@ const LAPTOP_DARK_SCREENS = new Set([
   'plan-tab-ended',
   'activity-chip-unread',
   'activity-chip-mentions',
-  'activity-chip-briefs',
-  'activity-chip-plans',
-  'plan-tab-chip-next',
-  'plan-tab-chip-later',
-  'plan-tab-chip-earlier',
-  'plan-tab-chip-all',
+  'plan-tab-chip-past',
+  // One search, the top bar and the chip row (decisions A to F): phone and
+  // laptop, light and dark. The top bar of the six list screens is shot on
+  // their base screens above (pipeline, briefs-approver, assets, plan-tab,
+  // notifications, chat-list) plus briefs for the agency.
+  'briefs',
+  'pipeline-sort',
+  'briefs-sort',
+  'assets-sort',
+  'plan-tab-sort',
+  'plan-tab-bank-filter',
+  'activity-sort',
+  'chat-list-sort',
+  'activity-all-read',
+  'palette-pick',
+  'forward-picker',
+  'plan-picker',
+  'asset-picker',
+  'plan-from-bank',
+  'pipeline-select-on',
+  'assets-select-on',
+  'plan-tab-bank-select-on',
+  'chat-list-select-on',
+  'assets-upload-uploading',
+  'post-tile-uploading',
+  'concept-chip-uploading',
+  'concept-chip-ready',
+  'concept-chip-failed',
+  'onboarding-first-post-uploading',
 ]);
 
 for (const screen of SCREENS) {
   const tag = LAPTOP_DARK_SCREENS.has(screen.name) ? ' @laptop-dark' : '';
   test(`${screen.name}${tag}`, async ({ page }) => capture(screen, page));
 }
+
+// The top bar across the six list screens (decision A): the sort and "+"
+// slots sit at one x on Pipeline, Briefs, Assets, Plan, Activity and the Chat
+// list (layout-checks.ts check 8b). One page walks them in turn on the
+// fixture world; no screenshot (each screen's shot is its base screen).
+const TOPBAR_LIST_SCREENS: ReadonlyArray<{ url: string; ready: (page: Page) => Promise<void> }> = [
+  { url: '/pipeline', ready: pipelineReady },
+  { url: '/briefs', ready: briefsReady },
+  { url: '/assets', ready: assetsReady },
+  { url: '/plan', ready: planTabReady },
+  { url: '/activity', ready: activityReady },
+  { url: '/chat', ready: chatListReady },
+];
+
+test('top bar: sort and "+" hold one x on the six list screens', async ({ page }) => {
+  await page.clock.setFixedTime(NOW);
+  await page.routeWebSocket(
+    (url) => url.protocol === 'ws:' && url.hostname === 'localhost',
+    () => undefined,
+  );
+  const network = await installHarnessNetwork(page);
+  Object.assign(network.world, buildWorld(NOW));
+  seedAudit(network, creator, NOW);
+  seedTab(network);
+  await installDeletedRoutes(page, network);
+  const rows: Array<Awaited<ReturnType<typeof readTopbarSlots>>> = [];
+  for (const screen of TOPBAR_LIST_SCREENS) {
+    await page.goto(screen.url);
+    await screen.ready(page);
+    await waitFor([page.locator('header [data-topbar-slot="primary"]')], `${screen.url} top bar`);
+    rows.push(await readTopbarSlots(page, screen.url));
+  }
+  assertTopbarSlotsStill('top bar across the six list screens', rows);
+  expect(network.blocked, 'blocked non-fixture requests').toEqual([]);
+});
 
 // Touch tablet page mode (src/lib/scroll-mode.ts TOUCH_TABLET_QUERY): the
 // document scrolls on these screens. Only the ipad-* projects run @tablet

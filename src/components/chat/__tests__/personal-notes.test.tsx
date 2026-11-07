@@ -43,7 +43,7 @@ import { deleteSelectionBlock, forwardPickerChannels } from '@/lib/chat/forward'
 import { messageMenuItems, ownMessageActions } from '@/components/chat/MessageActionMenu';
 import { channelHasClient, draftTileEnabled, trayTiles } from '@/components/chat/ComposerTray';
 import { ThreadHeaderIdentity, threadStripSlot } from '@/components/chat/MessageThread';
-import { channelListContent, showSearchResults } from '@/components/chat/ChannelList';
+import { channelListContent, toggleHomeChip } from '@/components/chat/ChannelList';
 
 const WS = '0190a000-0000-7000-8000-00000000a001';
 const WS2 = '0190a000-0000-7000-8000-00000000a002';
@@ -173,8 +173,6 @@ describe('notes_channel_ensure', () => {
       selectedChannelId: null,
       onSelect: () => {},
       onNewChat: () => {},
-      search: '',
-      onSearchChange: () => {},
       notes: notesSummary(WS, ME),
     });
     const html = renderToStaticMarkup(tree);
@@ -194,8 +192,6 @@ describe('notes_channel_ensure', () => {
         selectedChannelId: null,
         onSelect: () => {},
         onNewChat: () => {},
-        search: '',
-        onSearchChange: () => {},
         notes: notesSummary(WS, ME),
         select: {
           active: true,
@@ -473,8 +469,8 @@ describe('search chips', () => {
     expect(toggleSearchKind(null, 'photo')).toBe('photo');
     expect(toggleSearchKind('photo', 'file')).toBe('file');
     expect(toggleSearchKind('file', 'file')).toBeNull();
-    expect(showSearchResults('', 'voice')).toBe(true);
-    expect(showSearchResults('', null)).toBe(false);
+    expect(toggleHomeChip(null, 'voice')).toBe('voice');
+    expect(toggleHomeChip('voice', 'voice')).toBeNull();
   });
 
   it('the runner fetches a chip alone and a chip with text', async () => {

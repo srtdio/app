@@ -234,9 +234,9 @@ describe('selected and select mode', () => {
       expect(card(c, read, { selected: true, selecting: true })).not.toContain('lit-selected');
       const checked = card(c, read, { selecting: true, checked: true });
       expect(checked).toContain('lit-selected');
-      // ListCard draws the tick on the picture; no SelectCheck of the list's own.
+      // ListCard draws the tick on the picture: ui/SelectCheck, the one select circle.
       expect(checked).toContain('data-list-card-tick="on"');
-      expect(checked).not.toContain('data-select-check');
+      expect(checked.match(/data-select-check=/g)).toHaveLength(1);
       expect(checked).toContain('aria-pressed="true"');
       expect(checked).not.toContain('bg-accent-soft');
       tokenOnly(checked);

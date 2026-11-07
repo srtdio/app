@@ -1,4 +1,4 @@
-// Shared, pure search/sort derivations for list surfaces (Pipeline posts,
+// Shared, pure sort and date-window derivations for list surfaces (Pipeline posts,
 // Briefs). Both rows carry a created_at and a nullable target_date, so a single
 // generic helper serves both pages without duplicating the comparators. Pure and
 // non-mutating: the page holds the full in-memory list (one unpaginated read),
@@ -219,27 +219,4 @@ export function filterByWindow<T extends { target_date: string | null }>(
 /** Whether a row has no readable target date (null or unparseable). Pure. */
 export function isUndated(item: { target_date: string | null }): boolean {
   return item.target_date === null || Number.isNaN(new Date(item.target_date).getTime());
-}
-
-/**
- * Case-insensitive, trimmed substring filter over one or more text fields per
- * item. Null fields are skipped; an item matches if ANY field contains the
- * query. Empty/whitespace query passes all. Generic over a field accessor so
- * each surface picks its own searchable fields without widening the others.
- */
-export function filterByFields<T>(
-  items: T[],
-  query: string,
-  fields: (item: T) => (string | null)[],
-): T[] {
-  const q = query.trim().toLowerCase();
-  if (q === '') return items;
-  return items.filter((item) =>
-    fields(item).some((field) => field !== null && field.toLowerCase().includes(q)),
-  );
-}
-
-/** Case-insensitive, trimmed title substring filter. Empty query passes all. */
-export function filterByTitle<T extends { title: string }>(items: T[], query: string): T[] {
-  return filterByFields(items, query, (item) => [item.title]);
 }

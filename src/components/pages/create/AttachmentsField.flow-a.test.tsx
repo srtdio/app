@@ -119,12 +119,66 @@ describe('AttachmentsField flow A (framed)', () => {
     expect(onPendingChange).toHaveBeenLastCalledWith(4);
     // Photo picks are tiles, not rows.
     expect(document.querySelectorAll('[data-file-tiles] [data-pending-tile]')).toHaveLength(4);
+    // One upload ring per tile (its own sr-only progressbar), never a bar.
+    expect(document.querySelectorAll('[data-pending-tile] [data-upload-ring]')).toHaveLength(4);
     expect(document.querySelectorAll('[role="progressbar"]')).toHaveLength(4);
     expect(empty()?.disabled).toBe(true);
 
     await act(async () => params.xhr.onProgress(0.5));
-    const bar = document.querySelector('[role="progressbar"][aria-label="Uploading a.png"]');
-    expect(bar?.getAttribute('aria-valuenow')).toBe('50');
+    const ring = document.querySelector('[aria-label="Uploading a.png"] [data-upload-ring]');
+    expect(ring?.getAttribute('data-upload-progress')).toBe('50');
+    expect(
+      document
+        .querySelector('[aria-label="Uploading a.png"] [role="progressbar"]')
+        ?.getAttribute('aria-valuenow'),
+    ).toBe('50');
+    // No % text anywhere on the tiles.
+    expect(document.querySelector('[data-file-tiles]')?.textContent ?? '').not.toMatch(/%/);
+  });
+
+  it("the ring's X cancels the upload: the request aborts and the tile goes", async () => {
+    mockUpload.mockImplementation(() => new Promise(() => {}));
+    const onPendingChange = vi.fn();
+    await act(async () => {
+      root!.render(
+        <AttachmentsField
+          workspaceId="ws-1"
+          value={[]}
+          onChange={() => {}}
+          frame={FRAME}
+          onPendingChange={onPendingChange}
+        />,
+      );
+    });
+    await act(async () => pick(mediaInput(), photos('a.png', 'b.png')));
+    const params = mockUpload.mock.calls[0]![0] as { xhr: { signal: AbortSignal } };
+    expect(params.xhr.signal.aborted).toBe(false);
+    const x = document.querySelector<HTMLButtonElement>(
+      '[aria-label="Uploading a.png"] button[aria-label="Cancel upload"]',
+    );
+    expect(x).not.toBeNull();
+    await act(async () => x!.click());
+    expect(params.xhr.signal.aborted).toBe(true);
+    expect(document.querySelectorAll('[data-pending-tile]')).toHaveLength(1);
+    expect(document.querySelector('[aria-label="Uploading a.png"]')).toBeNull();
+    expect(onPendingChange).toHaveBeenLastCalledWith(1);
+  });
+
+  it('a failed tile shows Retry in the ring spot, which runs that upload again', async () => {
+    mockUpload.mockResolvedValue({ ok: false, message: "Couldn't upload. Try again." });
+    await act(async () => {
+      root!.render(
+        <AttachmentsField workspaceId="ws-1" value={[]} onChange={() => {}} frame={FRAME} />,
+      );
+    });
+    await act(async () => pick(mediaInput(), photos('a.png')));
+    const tile = document.querySelector('[data-pending-tile][data-failed]');
+    expect(tile?.querySelector('[data-upload-ring]')).toBeNull();
+    const retry = tile?.querySelector<HTMLButtonElement>('button[data-upload-retry]');
+    expect(retry).not.toBeNull();
+    mockUpload.mockClear();
+    await act(async () => retry!.click());
+    expect(mockUpload).toHaveBeenCalledTimes(1);
   });
 
   it('fix 14: failed files show "{n} files didn\'t upload." with Retry and Remove', async () => {

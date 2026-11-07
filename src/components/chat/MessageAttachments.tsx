@@ -7,10 +7,10 @@
 // An own instant send renders from its local preview (the picked file's object
 // URL) for the whole session, before and after it records, so the tile never
 // swaps to the presigned URL. While its upload runs the image is dimmed and an
-// UploadRing (the stop square in a filling ring; tap stops the send) sits
+// UploadRing (an X in a filling ring; tap X stops the send) sits
 // centred on it (56px): one ring over a whole album (progress across every
 // attachment's bytes), one in a voice note's play spot (40px). The ring never
-// positions itself; each spot here does. When the upload finishes the square
+// positions itself; each spot here does. When the upload finishes the X
 // is gone: the ring scales to 0 and the tile settles (ease-pop); nothing fades
 // and nothing changes size.
 //
@@ -42,7 +42,7 @@ import { ICON_SIZE, IconBan, IconDownload, IconFile, IconImage } from '@/compone
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { downloadFile, remoteFileSource } from '@/components/ui/FileViewer';
 import { VoiceNote, type VoiceUrlError, type VoiceUrlResult } from '@/components/chat/VoiceNote';
-import { TileUploadRing } from '@/components/chat/UploadRing';
+import { TileUploadRing } from '@/components/ui/UploadRing';
 import { BUBBLE_FILL, FileBubble } from '@/components/chat/FileBubble';
 import {
   BUBBLE_BODY_TYPE,
@@ -284,7 +284,7 @@ function AttachmentItem({
   onImageClick?: (() => void) | undefined;
   voiceSpacer?: ReactNode;
   voice?: VoiceContext | undefined;
-  /** An own send that can still be cancelled: the ring's stop square stops it. */
+  /** An own send that can still be cancelled: the ring's X stops it. */
   onCancelUpload?: (() => void) | undefined;
 }): ReactElement {
   const ring = ringFor([attachment], onCancelUpload);
@@ -381,7 +381,7 @@ function AttachmentItem({
         </div>
       );
     case 'file':
-      // Sends with its own 44px ring (IconStop inside; a tap stops the send);
+      // Sends with its own 44px ring (an X inside; a tap stops the send);
       // tap the card to open the in-app viewer.
       return (
         <FileBubble
@@ -702,7 +702,7 @@ export interface MessageAttachmentsProps {
   voice?: VoiceContext | undefined;
   /**
    * An own send whose upload can still be cancelled: each uploading photo,
-   * album, file or voice note shows the UploadRing, whose stop square calls this.
+   * album, file or voice note shows the UploadRing, whose X calls this.
    */
   onCancelUpload?: (() => void) | undefined;
   /** Album mode: the bubble's corner classes, passed on to the album (AlbumGrid). */

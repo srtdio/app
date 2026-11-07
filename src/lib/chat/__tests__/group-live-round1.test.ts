@@ -260,7 +260,7 @@ describe('H2 new tile paints once, final', () => {
       peerUserId: B,
       createdAt: new Date(now).toISOString(),
     });
-    const list = visibleChannels([oldGroup, busyGroup, dm, newGroup, newDm], lookup, none, '');
+    const list = visibleChannels([oldGroup, busyGroup, dm, newGroup, newDm], lookup, none);
     // One list: the two just created lead it.
     expect(
       list
@@ -272,12 +272,10 @@ describe('H2 new tile paints once, final', () => {
   });
 
   it('H2c a reload moves no tile whose own key did not change', () => {
-    const before = visibleChannels([oldGroup, busyGroup, dm], lookup, none, '').map(
-      (c) => c.channelId,
-    );
+    const before = visibleChannels([oldGroup, busyGroup, dm], lookup, none).map((c) => c.channelId);
     const renamed = { ...busyGroup, title: 'Renamed' };
     const reloaded = [dm, renamed, oldGroup];
-    const after = visibleChannels(reloaded, lookup, none, '').map((c) => c.channelId);
+    const after = visibleChannels(reloaded, lookup, none).map((c) => c.channelId);
     expect(after).toEqual(before);
   });
 });

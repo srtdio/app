@@ -68,12 +68,12 @@ import {
   TrashIcon,
   UserIcon,
   ViewColumnsIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import {
   PauseIcon as PauseSolid,
   PlayIcon as PlaySolid,
   StarIcon as StarSolid,
-  StopIcon as StopSolid,
 } from '@heroicons/react/24/solid';
 
 /**
@@ -416,9 +416,12 @@ export function IconPauseFill(props: IconProps) {
   return <Hero icon={PauseSolid} solid {...props} />;
 }
 
-/** Stop a send, upload or recording: a solid square, drawn inside the progress ring. */
-export function IconStop(props: IconProps) {
-  return <Hero icon={StopSolid} solid {...props} />;
+/**
+ * Cancel an upload (inside ui/UploadRing), remove an attached file (ui/PendingChip)
+ * or clear a typed query. Nowhere else: "<" leaves, the bin deletes.
+ */
+export function IconX(props: IconProps) {
+  return <Hero icon={XMarkIcon} {...props} />;
 }
 
 export function IconCalendar(props: IconProps) {

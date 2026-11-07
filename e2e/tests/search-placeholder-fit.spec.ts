@@ -1,11 +1,12 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { installHarnessNetwork } from '../fixtures/harness-routes';
-import { GROUP_NAME } from '../fixtures/chat-data';
+import { GROUP_NAME, PEER_NAME } from '../fixtures/chat-data';
 
-// Audit A1-01: the shared SectionHeader search field cut its placeholder short
-// on a phone ("Search pos", "Search fil"). At 360px wide, with the field empty,
-// every page's placeholder shows in full beside its sort and New controls.
-// Linux WebKit approximates iOS WebKit; it is not iOS.
+// Audit A1-01, after decision B (7 Nov 2026): the screens have no search
+// field of their own; the one search is the top bar's palette. At 360px wide,
+// with the field empty, its placeholder shows in full: "Search anything" beside
+// Cancel, and in a picker's pick mode "Search posts" beside the "Posts only"
+// pill and Cancel. Linux WebKit approximates iOS WebKit; it is not iOS.
 
 test.use({ viewport: { width: 360, height: 800 } });
 
@@ -46,7 +47,7 @@ async function measure(input: Locator): Promise<Fit> {
 }
 
 async function expectPlaceholderFits(page: Page, copy: string): Promise<void> {
-  const input = page.locator('input[type="search"]').first();
+  const input = page.getByRole('dialog', { name: 'Command palette' }).getByRole('combobox').first();
   await expect(input).toBeVisible();
   await expect(input).toHaveValue('');
   await expect(input).toHaveAttribute('placeholder', copy);
@@ -60,37 +61,45 @@ async function expectPlaceholderFits(page: Page, copy: string): Promise<void> {
   );
 }
 
-test('Pipeline: "Search posts" fits at 360px', async ({ page }) => {
+test('every screen: no search field of its own at 360px', async ({ page }) => {
   await installHarnessNetwork(page);
-  await page.goto('/pipeline');
-  await expect(page.getByText('Monday carousel', { exact: true }).first()).toBeVisible({
-    timeout: 15_000,
-  });
-  await expectPlaceholderFits(page, 'Search posts');
+  for (const [path, ready] of [
+    ['/pipeline', page.getByText('Monday carousel', { exact: true }).first()],
+    ['/assets', page.getByRole('button', { name: 'New file' })],
+    ['/chat', page.getByText(GROUP_NAME, { exact: true }).first()],
+  ] as const) {
+    await page.goto(path);
+    await expect(ready).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('input[type="search"]')).toHaveCount(0);
+    await expect(page.getByRole('searchbox')).toHaveCount(0);
+  }
 });
 
-test('Briefs: "Search briefs" fits at 360px', async ({ page }) => {
-  await installHarnessNetwork(page);
-  await page.goto('/briefs');
-  await expect(page.getByRole('button', { name: /^Closed(\s\d+)?$/ }).first()).toBeVisible({
-    timeout: 15_000,
-  });
-  await expectPlaceholderFits(page, 'Search briefs');
-});
-
-test('Assets: "Search files" fits at 360px', async ({ page }) => {
-  await installHarnessNetwork(page);
-  await page.goto('/assets');
-  await expect(page.getByRole('button', { name: 'New file' })).toBeVisible({
-    timeout: 15_000,
-  });
-  await expectPlaceholderFits(page, 'Search files');
-});
-
-test('Chat list: "Search chats" fits at 360px', async ({ page }) => {
+test('Palette: "Search anything" fits at 360px', async ({ page }) => {
   await installHarnessNetwork(page);
   await page.goto('/chat');
   await page.getByText(GROUP_NAME, { exact: true }).first().waitFor({ state: 'visible' });
-  await expect(page.getByRole('button', { name: 'New chat' })).toBeVisible();
-  await expectPlaceholderFits(page, 'Search chats');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible();
+  await expectPlaceholderFits(page, 'Search anything');
+});
+
+test('Palette pick mode: "Search posts" fits beside its pill at 360px', async ({ page }) => {
+  await installHarnessNetwork(page);
+  await page.goto('/chat');
+  await page.getByText(PEER_NAME, { exact: true }).first().click();
+  await page.locator('[data-msg-id]').first().waitFor({ state: 'visible', timeout: 8000 });
+  await page.getByRole('button', { name: 'Add attachment', exact: true }).click();
+  await page.locator('[data-tray-tile="post"]').click();
+  const picker = page.getByRole('dialog', { name: 'Share a post' });
+  await expect(picker).toBeVisible();
+  await picker.locator('[data-palette-pick-open]').click();
+  const palette = page.locator('[data-palette-overlay][data-palette-mode="pick"]');
+  await expect(palette).toBeVisible();
+  await expect(palette.locator('[data-palette-pick-pill]')).toHaveText('Posts only');
+  await expectPlaceholderFits(page, 'Search posts');
+  // The pill sits inside the screen, on the same line as the field.
+  const pill = await palette.locator('[data-palette-pick-pill]').boundingBox();
+  if (pill === null) throw new Error('pick pill has no box');
+  expect(pill.x + pill.width).toBeLessThanOrEqual(360);
 });

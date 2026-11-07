@@ -44,7 +44,7 @@ test('a normal user: no dot, no cockpit chunk, no ops-cockpit request @theme @de
   expect(network.cockpitCalls).toEqual([]);
   // Chat still opens.
   await page.goto('/chat');
-  await expect(page.getByRole('searchbox', { name: 'Search chats' })).toBeVisible();
+  await expect(page.locator('[data-topbar-plus][aria-label="New chat"]')).toBeVisible();
   await expect(dot(page)).toHaveCount(0);
   expect(chunks).toEqual([]);
   expectClean(network);
@@ -161,7 +161,7 @@ test('the operator opens the panel, walks every tab, and closes it @theme @deskt
 test('the operator: chat still opens instantly with the dot on @desktop', async ({ page }) => {
   const network = await installHarnessNetwork(page, { operator: true });
   await page.goto('/chat');
-  await expect(page.getByRole('searchbox', { name: 'Search chats' })).toBeVisible({
+  await expect(page.locator('[data-topbar-plus][aria-label="New chat"]')).toBeVisible({
     timeout: 15_000,
   });
   await expect(dot(page)).toBeVisible();

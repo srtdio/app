@@ -84,7 +84,9 @@ async function mount(initial: ConceptForm, initialState: ConceptFilesState) {
 const cancel = () => document.querySelector<HTMLButtonElement>('[data-plan-concept-cancel]');
 const confirm = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
 const removeFirst = () =>
-  document.querySelector<HTMLButtonElement>('[data-plan-concept-file-remove]');
+  document.querySelector<HTMLButtonElement>(
+    '[data-plan-concept-file] button[aria-label^="Remove "]',
+  );
 
 beforeEach(() => resetHistorySteps());
 

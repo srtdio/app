@@ -33,9 +33,9 @@ import { useChatLayout } from '@/components/chat/chat-type';
 import {
   COMMENT_TRAY_TILES,
   COMPOSER_SIDE,
+  FileUploadChip,
   LazyAssetPicker,
-  LibraryChip,
-  PendingChip,
+  LibraryPickChip,
   attachmentIdsOf,
   canRetryPending,
   libraryChipKey,
@@ -501,7 +501,7 @@ export function SlotComposer({
               {chipCount > 0 ? (
                 <ul className="flex flex-wrap gap-2">
                   {slot.pending.map((item) => (
-                    <PendingChip
+                    <FileUploadChip
                       key={item.id}
                       item={item}
                       onRemove={() => removePending(slot.id, item.id)}
@@ -509,7 +509,7 @@ export function SlotComposer({
                     />
                   ))}
                   {slot.library.map((asset) => (
-                    <LibraryChip
+                    <LibraryPickChip
                       key={libraryChipKey(asset)}
                       asset={asset}
                       onRemove={() => removeLibrary(slot.id, asset.versionId)}

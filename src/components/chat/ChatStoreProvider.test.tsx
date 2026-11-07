@@ -168,8 +168,6 @@ function paint(state: ChatStoreState, scope: string, onRetry: () => void = () =>
     selectedChannelId: null,
     onSelect: () => {},
     onNewChat: () => {},
-    search: '',
-    onSearchChange: () => {},
     summaryFor: (id) => selectConversation(state, id),
     isHidden: (id) => selectHidden(state, id),
   });

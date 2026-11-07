@@ -90,10 +90,10 @@ const OPACITY_ALLOW: readonly (readonly [string, string, string])[] = [
   [
     'pages/create/FileTiles.tsx',
     "'opacity-40'",
-    'uploading / failed thumbnail: opacity on the image box only; its lit-badge label reads the state',
+    'uploading / failed thumbnail: opacity on the image box only; ui/UploadRing or UploadRetry on it reads the state',
   ],
   [
-    'chat/UploadRing.tsx',
+    'ui/UploadRing.tsx',
     'bg-overlay opacity-60',
     'the dim layer over an uploading thumbnail (a media overlay, no text)',
   ],

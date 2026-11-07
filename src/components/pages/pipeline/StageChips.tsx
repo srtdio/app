@@ -38,7 +38,7 @@ export function chipRowMask(fadeStart: boolean, fadeEnd: boolean): string {
  * the shared ui/Chip (the stages, each with its stage dot, plus the UI-only All), the same chip and
  * selected style as Briefs, Activity and Help. A chip shows its count only when
  * above 0. The SectionHeader row already pads it, so the first chip lines up
- * with the search field and the cards; an edge-cut fade applies only when the
+ * with the cards; an edge-cut fade applies only when the
  * row overflows. Each chip is a 44px touch target; the active chip is
  * selected and carries aria-current.
  */

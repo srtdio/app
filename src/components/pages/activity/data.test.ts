@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { RETIRED_EVENT_LIST } from '@/lib/inbox/bell-types';
 import type { Database } from '@srtdio/schemas';
 import {
+  ACTIVITY_SORT_DEFAULT,
+  ACTIVITY_SORT_OPTIONS,
+  ACTIVITY_SORT_PAGE,
+  ACTIVITY_SORT_STORAGE_KEY,
   BRIEF_REOPENED_EVENT,
   BRIEFS_SCOPE,
   EMPTY_LINES,
@@ -9,7 +13,9 @@ import {
   REFRESH_FAILED,
   SELF_ACTOR,
   UNKNOWN_ACTOR,
+  activityHitLine,
   activityLine,
+  activitySort,
   appendUnique,
   bucketActorNames,
   cardBodyLine,
@@ -43,6 +49,7 @@ import {
   resolveBodyMentions,
   segmentSelfMentions,
   shortLine,
+  storedActivitySort,
   unreadCount,
   updatesLabel,
   welcomeTitle,
@@ -502,15 +509,58 @@ describe('segmentSelfMentions', () => {
   });
 });
 
-describe('filterByState briefs', () => {
-  it('keeps only brief-scope rows that are not snoozed', () => {
+describe('brief and plan rows (no chip of their own)', () => {
+  it('stay in All and Unread when not snoozed', () => {
     const now = Date.parse('2026-06-14T12:00:00.000Z');
     const all = [
       item({ id: 'a', scope: 'posts' }),
       item({ id: 'b', scope: 'briefs' }),
+      item({ id: 'p', eventType: 'plan_opened', entityType: 'plan' }),
       item({ id: 'c', scope: 'briefs', snoozedUntil: '2026-06-15T00:00:00.000Z' }),
     ];
-    expect(filterByState(all, 'briefs', now).map((i) => i.id)).toEqual(['b']);
+    expect(filterByState(all, 'all', now).map((i) => i.id)).toEqual(['a', 'b', 'p']);
+    expect(filterByState(all, 'unread', now).map((i) => i.id)).toEqual(['a', 'b', 'p']);
+    expect(filterByState(all, 'mentions', now)).toEqual([]);
+  });
+});
+
+describe('the sort (top bar): Newest first / Oldest first', () => {
+  beforeEach(() => {
+    try {
+      window.localStorage.clear();
+    } catch {
+      // Node: no storage.
+    }
+  });
+
+  it('offers exactly Newest first then Oldest first; Newest first is the default', () => {
+    expect(ACTIVITY_SORT_OPTIONS).toEqual([
+      { value: 'newest', label: 'Newest first' },
+      { value: 'oldest', label: 'Oldest first' },
+    ]);
+    expect(ACTIVITY_SORT_DEFAULT).toBe('newest');
+  });
+
+  it('persists under the useSort key for the activity page', () => {
+    expect(ACTIVITY_SORT_PAGE).toBe('activity');
+    expect(ACTIVITY_SORT_STORAGE_KEY).toBe('sorted:sort:activity');
+  });
+
+  it('a stale or unknown stored value reads as Newest first', () => {
+    expect(activitySort('oldest')).toBe('oldest');
+    expect(activitySort('newest')).toBe('newest');
+    expect(activitySort('updated')).toBe('newest');
+    expect(activitySort(null)).toBe('newest');
+  });
+
+  it('the stored order reads Newest first when nothing (or no storage) is there', () => {
+    expect(storedActivitySort()).toBe('newest');
+  });
+
+  it('the keyset runs the same way as the sort (gt for Oldest first, lt for Newest first)', () => {
+    const cursor = { createdAt: '2026-06-14T12:00:00.000Z', id: 'e9' };
+    expect(keysetFilter(cursor, true)).toContain('created_at.gt.');
+    expect(keysetFilter(cursor, false)).toContain('created_at.lt.');
   });
 });
 
@@ -1338,33 +1388,11 @@ describe('fetchActivityEntries query composition', () => {
     expect(calls.some((c) => c.method === 'or')).toBe(false);
   });
 
-  it('filters the Plans chip server-side to the plan alert and idea bank types', async () => {
+  it('All reads brief and plan rows with no scope or type filter (no Briefs or Plans chip)', async () => {
     const { client, calls } = recordingClient([]);
-    await fetchActivityEntries(client, 'w1', { state: 'plans' });
-    expect(
-      hasCall(calls, 'in', [
-        'event_type',
-        [
-          'plan_opened',
-          'plan_deleted',
-          'plan_date_changed',
-          'plan_updated',
-          'plan_review',
-          'plan_comment',
-          'bank_idea_added',
-          'bank_idea_moved',
-          'bank_idea_planned',
-          'bank_idea_shown',
-          'bank_idea_hidden',
-        ],
-      ]),
-    ).toBe(true);
-  });
-
-  it('filters the Briefs chip server-side by scope', async () => {
-    const { client, calls } = recordingClient([]);
-    await fetchActivityEntries(client, 'w1', { state: 'briefs' });
-    expect(hasCall(calls, 'eq', ['scope', 'briefs'])).toBe(true);
+    await fetchActivityEntries(client, 'w1', { state: 'all' });
+    expect(hasCall(calls, 'eq', ['scope', 'briefs'])).toBe(false);
+    expect(calls.some((c) => c.method === 'in' && c.args[0] === 'event_type')).toBe(false);
   });
 
   it('filters the Unread and Snoozed chips server-side against the snooze cut-off', async () => {
@@ -2085,7 +2113,7 @@ describe('brief reopened rows', () => {
     expect(mapped.scope).toBe(BRIEFS_SCOPE);
     expect(mapped.title).toBe('Diwali brief');
     expect(mapped.actorId).toBe('u-asha');
-    expect(filterByState([mapped], 'briefs', Date.now())).toHaveLength(1);
+    expect(filterByState([mapped], 'all', Date.now())).toHaveLength(1);
     expect(entityHref(mapped)).toBe('/briefs/b1');
   });
 
@@ -2162,9 +2190,7 @@ describe('notifications fixes: pure helpers', () => {
   it('fix 13: each chip empty state is one positive line', () => {
     expect(EMPTY_LINES).toEqual({
       unread: 'New updates show up here.',
-      plans: 'Plan updates show up here.',
       mentions: 'Mentions of you show up here.',
-      briefs: 'Brief updates show up here.',
     });
     for (const line of Object.values(EMPTY_LINES)) expect(line).not.toContain('\u2014');
   });
@@ -2195,12 +2221,11 @@ describe('notifications fixes: pure helpers', () => {
     for (const state of ['all', 'unread'] as const) {
       expect(markAllTargets(rows, state, now).map((i) => i.id)).toEqual(['c', 'm', 'b']);
     }
-    for (const state of ['mentions', 'briefs', 'plans', 'snoozed'] as const) {
+    for (const state of ['mentions', 'snoozed'] as const) {
       expect(marksWholeInbox(state)).toBe(false);
       expect(markAllTargets(rows, state, now).map((i) => i.id)).not.toContain('c');
     }
     expect(markAllTargets(rows, 'mentions', now).map((i) => i.id)).toEqual(['m']);
-    expect(markAllTargets(rows, 'briefs', now).map((i) => i.id)).toEqual(['b']);
   });
 
   describe('fix 27: Today and Yesterday follow the workspace timezone', () => {
@@ -2441,27 +2466,50 @@ describe('fix 23: chip Mark all read covers every matching row, not just the loa
     ).toBe(true);
   });
 
-  it('filters Briefs by scope and stops at an empty page with no rpc call', async () => {
+  it('stops at an empty page with no rpc call', async () => {
     const { client, recorded } = fakeClient([[]]);
-    const res = await markChipRead(client, { workspaceId: 'w1', state: 'briefs', traceId: 't1' });
+    const res = await markChipRead(client, { workspaceId: 'w1', state: 'mentions', traceId: 't1' });
     expect(res).toEqual({ ok: true, data: 0 });
     expect(recorded.rpcs).toHaveLength(0);
-    expect(recorded.reads[0]).toContainEqual({ method: 'eq', args: ['scope', 'briefs'] });
+    expect(recorded.reads[0]).toContainEqual({ method: 'eq', args: ['event_type', 'mention'] });
   });
 
   it('stops at the first failed batch and reports it', async () => {
     const { client, recorded } = fakeClient([fullPage('a'), ['b1']], 'boom');
-    const res = await markChipRead(client, { workspaceId: 'w1', state: 'plans', traceId: 't1' });
+    const res = await markChipRead(client, { workspaceId: 'w1', state: 'mentions', traceId: 't1' });
     expect(res.ok).toBe(false);
     expect(recorded.rpcs).toHaveLength(1);
   });
 
-  it('only Mentions, Briefs and Plans page through the server', () => {
+  it('only Mentions pages through the server', () => {
     expect(marksChipOnServer('mentions')).toBe(true);
-    expect(marksChipOnServer('briefs')).toBe(true);
-    expect(marksChipOnServer('plans')).toBe(true);
     expect(marksChipOnServer('all')).toBe(false);
     expect(marksChipOnServer('unread')).toBe(false);
     expect(marksChipOnServer('snoozed')).toBe(false);
+  });
+});
+
+describe('activityHitLine (the palette words an activity hit as the feed does)', () => {
+  it('reuses the feed line for the event type and subject', () => {
+    expect(
+      activityHitLine({
+        id: 'e1',
+        workspaceId: 'w1',
+        eventType: 'comment',
+        entityType: 'post',
+        title: 'Launch reel',
+        actorName: null,
+      }),
+    ).toBe('New comment on Launch reel');
+    expect(
+      activityHitLine({
+        id: 'e1',
+        workspaceId: 'w1',
+        eventType: 'comment',
+        entityType: 'post',
+        title: 'Launch reel',
+        actorName: 'Asha',
+      }),
+    ).toBe('Asha commented on Launch reel');
   });
 });

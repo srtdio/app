@@ -155,10 +155,11 @@ describe('people cards are ui/ListCard, exactly like group cards', () => {
         expect(classOf(h, attr)).toEqual(classOf(base, attr));
       }
     }
-    // Select mode: ListCard's tick on the picture, no ⋮ and no check of the list's own.
+    // Select mode: ListCard's tick (ui/SelectCheck, the one select circle) on the picture.
     const selecting = card(dm, read, { selecting: true });
     expect(selecting).toMatch(/data-list-card-picture="person"[^]*?data-list-card-tick="off"/);
-    expect(selecting).not.toContain('data-select-check');
+    expect(selecting.match(/data-select-check=/g)).toHaveLength(1);
+    expect(selecting).toMatch(/data-select-check="off" data-list-card-tick="off"/);
   });
 
   it('no ⋮ on any card: one button, the whole-card tap surface', () => {

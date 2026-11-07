@@ -214,7 +214,8 @@ describe('motion rules', () => {
     const motion = readFileSync(join(SRC, 'lib/motion/moves.ts'), 'utf8');
     const body = motion.slice(motion.indexOf('export function glideAside'));
     expect(body.slice(0, body.indexOf('\n}\n'))).toContain('duration: DUR_BASE_MS');
+    // Decision B (7 Nov): no screen search row is left to glide aside.
     const header = readFileSync(join(SRC, 'components/shell/SectionHeader.tsx'), 'utf8');
-    expect(header).toMatch(/import \{[^}]*\bglideAside\b[^}]*\} from '@\/lib\/motion'/);
+    expect(header).not.toContain('glideAside');
   });
 });

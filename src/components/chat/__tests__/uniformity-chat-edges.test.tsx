@@ -151,14 +151,16 @@ describe('11f "1 selected" on the 16px edge', () => {
 });
 
 describe('11g phone chat list edges', () => {
-  it('cards sit on the 16px edge with search and chips', () => {
+  it('cards sit on the 16px edge with the chips', () => {
     // The stack has no side padding; the card list carries the 16 edge.
     expect(classes(CHAT_HOME_STACK).some((c) => /^(px|pl|pr)-/.test(c))).toBe(false);
     expect(CHAT_HOME_EDGE).toBe('px-4');
     expect(classes(CHAT_ROW_LIST)).toContain('px-4');
     expect(read('../ChannelList.tsx')).toContain('<ListCard');
-    // The search box and the chip row sit in the SectionHeader's px-4 rows.
-    expect(read('../../shell/SectionHeader.tsx')).toContain("'px-4 md:px-6");
+    // The chip row starts on the SectionHeader's 16 edge (no search row above it).
+    expect(read('../../shell/SectionHeader.tsx')).toContain(
+      "'flex items-center gap-2 pl-4 md:pl-6'",
+    );
   });
 });
 

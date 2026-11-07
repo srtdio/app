@@ -155,7 +155,7 @@ const SCREENS: Screen[] = [
     seed: { ...approver, noBriefs: true },
     url: '/briefs',
     steps: async (page) => {
-      await waitFor(page, [page.getByRole('searchbox', { name: 'Search briefs' })], 'briefs');
+      await waitFor(page, [page.getByText('Briefs show up here.', { exact: false })], 'briefs');
       await page.waitForTimeout(2500);
     },
   },
@@ -170,7 +170,7 @@ const SCREENS: Screen[] = [
     seed: { ...creator, noAssets: true },
     url: '/assets',
     steps: async (page) => {
-      await waitFor(page, [page.getByRole('searchbox', { name: 'Search files' })], 'assets');
+      await waitFor(page, [page.getByText('Files show up here.', { exact: false })], 'assets');
       await page.waitForTimeout(2500);
     },
   },

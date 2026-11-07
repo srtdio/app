@@ -169,7 +169,7 @@ describe('Sheet: the fixed-height box is additive', () => {
 
   it('every plan sheet that loads or filters a list uses it; the Day picker keeps content height', () => {
     expect(read('PlanAddSheet.tsx')).toContain('fixedHeight');
-    expect(read('PlanPickerSheet.tsx')).toContain('title={PICKER_TITLE} fixedHeight');
+    expect(read('PlanPickerSheet.tsx')).toMatch(/title=\{PICKER_TITLE\}\s+fixedHeight/);
     expect(read('PlanMoveSheet.tsx')).toContain('title="Move to" fixedHeight');
     expect(read('PostPicker.tsx')).toMatch(
       /title=\{PICKER_TITLES\[sheetMode\]\}[\s\S]*?fixedHeight/,

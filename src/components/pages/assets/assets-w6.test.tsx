@@ -239,7 +239,11 @@ describe('7. select mode', () => {
     expect(menu).not.toContain('<span>Select</span>');
     expect(pageSource).toContain('useListSelection()');
     expect(pageSource).toContain('<SelectBar');
-    expect(pageSource).toContain('selection.selectFor(item.id)');
+    expect(pageSource).toContain('selectMode.selectFor(item.id)');
+    // Decision E: the chip row's visible Select toggles the same select mode.
+    expect(pageSource).toContain(
+      'select={<SectionSelect active={selectMode.on} onToggle={selectMode.toggle} />}',
+    );
     expect(pageSource).toContain('Select all');
     expect(pageSource).not.toContain('onStartSelect');
     expect(pageSource).not.toContain('startSelectWith');
@@ -253,9 +257,11 @@ describe('7. select mode', () => {
 });
 
 describe('7b. the "New file" add menu', () => {
-  it('is a "New file" text button offering upload and link only; no New folder sheet', () => {
+  it('is the top bar "+" named "New file", offering upload and link only; no New folder sheet', () => {
     const menu = read('src/components/pages/assets/AssetAddMenu.tsx');
-    expect(menu).toContain('New file');
+    expect(menu).toContain('<TopbarPlus');
+    expect(menu).toContain('label="New file"');
+    expect(menu).toContain('aria-haspopup="menu"');
     expect(menu).not.toContain('aria-label="Add asset"');
     expect(menu).not.toContain('New folder');
     expect(menu).toContain('<span>Upload files</span>');

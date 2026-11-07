@@ -1,5 +1,5 @@
 // X5 fix 5 (FT21): an empty pipeline has a headline and no create button of its
-// own (the header's New post is the only one); an empty stage chip uses
+// own (the top bar's New post "+" is the only one); an empty stage chip uses
 // emptyStageMessage, not "Empty".
 import { describe, expect, it, vi } from 'vitest';
 // ActionMenu picks popover vs Sheet by width; the node env has no matchMedia.

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   buildUploadPlan,
@@ -96,5 +98,36 @@ describe('from a post page: the name box starts as the post title', () => {
       count: 3,
     });
     expect(names).toEqual([`${TITLE} 5`, `${TITLE} 6`, `${TITLE} 7`]);
+  });
+});
+
+describe('upload progress is the ring on the row thumb (decision F)', () => {
+  const src = readFileSync(
+    fileURLToPath(new URL('./AssetUploadSheet.tsx', import.meta.url)),
+    'utf8',
+  );
+
+  it('the row thumb carries ui/UploadRing (file) while uploading and UploadRetry when failed', () => {
+    expect(src).toContain("from '@/components/ui/UploadRing'");
+    expect(src).toMatch(/<UploadRing[^>]*variant="file"/);
+    expect(src).toMatch(/<UploadRetry[^>]*variant="file"/);
+    expect(src).toContain('label="Stop upload"');
+    // The X cancels through the existing Stop (its confirm), not a new path.
+    expect(src).toContain('onCancel={() => setStopAsk(true)}');
+    // The thumb is the file ring's own 44 box in every state.
+    expect(src).toMatch(/data-upload-thumb=\{status\.state\}\s+className="relative flex h-11 w-11/);
+  });
+
+  it('the size meta reads bytes ("1.2 of 3.4 MB"), never a percent', () => {
+    expect(src).toContain('uploadSizeMeta(status.progress * item.file.size, item.file.size)');
+    expect(src).not.toContain('fractionToPercent');
+    expect(src).not.toMatch(/%`|\{percent\}/);
+  });
+
+  it('no bar is left: no role="progressbar", no fill, no Retry text button', () => {
+    expect(src).not.toContain('role="progressbar"');
+    expect(src).not.toContain('lit-fill');
+    expect(src).not.toContain('mv-fill');
+    expect(src).not.toMatch(/>\s*Retry\s*</);
   });
 });

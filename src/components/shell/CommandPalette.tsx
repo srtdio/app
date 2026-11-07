@@ -1,5 +1,5 @@
 import { mark } from '@/lib/perf-marks';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
@@ -13,6 +13,8 @@ import { Text } from '@/components/ui/Text';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
+import { SelectCheck } from '@/components/ui/SelectCheck';
+import { Tag } from '@/components/ui/Tag';
 import { NoResults, noResultsCopy } from '@/components/ui/NoResults';
 import { IconSearch, IconTrash, ICON_SIZE } from '@/components/ui/icons';
 import { highlightNodes } from '@/components/ui/SearchHighlight';
@@ -20,6 +22,7 @@ import { useToast } from '@/components/ui/toast';
 import { startDmChannel } from '@/components/chat/chat-actions';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
+import { createPortal } from 'react-dom';
 import { dropIn } from '@/lib/motion';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
@@ -87,6 +90,73 @@ import {
 /** Why the palette closed: a picked result moves on; anything else returns focus. */
 export type PaletteCloseReason = 'dismiss' | 'pick';
 
+/**
+ * What pick mode can offer: a workspace kind, or a bank idea (no own search
+ * kind: a plan_item hit whose plan is null, the concept in the Idea bank).
+ */
+export type PalettePickKind = WorkspaceKind | 'bank_idea';
+
+/** The pick footer's verb: "Send N" (forwarding, sharing) or "Add N" (attaching). */
+export type PalettePickVerb = 'Send' | 'Add';
+
+/** A picker's ask: the one palette in pick mode, offering only these kinds. */
+export interface PalettePickRequest {
+  pickKinds: readonly PalettePickKind[];
+  /** Tick many (true) or one (false: a new tick replaces the old). */
+  multi: boolean;
+  verb: PalettePickVerb;
+  /** The pill's word ("Chats" reads "Chats only"); absent: the first kind's group. */
+  label?: string;
+  /** The ticked hits, in tick order; the palette closes right after. */
+  onPick: (hits: WorkspaceHit[]) => void;
+}
+
+const PalettePickContext = createContext<((request: PalettePickRequest) => void) | null>(null);
+
+/** AppLayout's host: feeds a picker's request to the one mounted palette. */
+export function PalettePickProvider(props: {
+  openPick: (request: PalettePickRequest) => void;
+  children: ReactNode;
+}): ReactElement {
+  return (
+    <PalettePickContext.Provider value={props.openPick}>
+      {props.children}
+    </PalettePickContext.Provider>
+  );
+}
+
+/**
+ * A picker's search: openPick opens the palette in pick mode (call it inside
+ * the tap, so the phone raises its keyboard). Null outside the shell: the
+ * picker then hides its search button.
+ */
+export function usePalettePick(): { openPick: ((request: PalettePickRequest) => void) | null } {
+  return { openPick: useContext(PalettePickContext) };
+}
+
+/**
+ * A picker's search button (IconSearch, 44) for its sheet header: opens the
+ * palette in pick mode with the request built at tap time. Renders nothing
+ * outside the shell (no host to open).
+ */
+export function PalettePickButton(props: {
+  label: string;
+  request: () => PalettePickRequest;
+}): ReactElement | null {
+  const { openPick } = usePalettePick();
+  if (openPick === null) return null;
+  return (
+    <IconButton
+      type="button"
+      label={props.label}
+      data-palette-pick-open=""
+      onClick={() => openPick(props.request())}
+    >
+      <IconSearch size={ICON_SIZE.control} />
+    </IconButton>
+  );
+}
+
 interface CommandPaletteProps {
   open: boolean;
   onClose: (reason: PaletteCloseReason) => void;
@@ -101,6 +171,16 @@ interface CommandPaletteProps {
   workspaceKey: string | null;
   /** The signed-in user: recents are theirs, and their own row opens Notes. */
   userId: string | null;
+  /** Pick mode (with onPick): only these kinds show, a tap ticks instead of opening. */
+  pickKinds?: readonly PalettePickKind[];
+  /** Pick mode: tick many, or one. */
+  multi?: boolean;
+  /** Pick mode: the footer's verb. Default Send. */
+  verb?: PalettePickVerb;
+  /** Pick mode: the pill's word. */
+  pickLabel?: string;
+  /** Pick mode: the ticked hits when the footer is pressed. */
+  onPick?: (hits: WorkspaceHit[]) => void;
 }
 
 export type ResultGroup =
@@ -151,6 +231,58 @@ const KIND_GROUP: Record<WorkspaceKind, ResultGroup> = {
 const GROUP_KIND = new Map<ResultGroup, WorkspaceKind>(
   (Object.entries(KIND_GROUP) as Array<[WorkspaceKind, ResultGroup]>).map(([k, g]) => [g, k]),
 );
+
+/** Whether a hit is one of the kinds pick mode offers. Pure. */
+export function pickMatches(hit: WorkspaceHit, kinds: readonly PalettePickKind[]): boolean {
+  return kinds.some((kind) =>
+    kind === 'bank_idea'
+      ? hit.kind === 'plan_item' && (hit.parentId === null || hit.parentId === '')
+      : hit.kind === kind,
+  );
+}
+
+/** The word pick mode names its kinds by: the given label, else the first kind's group. Pure. */
+export function pickWord(kinds: readonly PalettePickKind[], label?: string): string {
+  if (label !== undefined && label !== '') return label;
+  const first = kinds[0];
+  if (first === undefined) return 'Results';
+  return first === 'bank_idea' ? 'Ideas' : KIND_GROUP[first];
+}
+
+/** The pick-mode pill: "<Kind> only". Pure. */
+export function pickPillLabel(kinds: readonly PalettePickKind[], label?: string): string {
+  return `${pickWord(kinds, label)} only`;
+}
+
+/** The pick footer: "Send N" / "Add N". Pure. */
+export function pickFooterLabel(verb: PalettePickVerb, count: number): string {
+  return `${verb} ${count}`;
+}
+
+/** Pick mode with an empty search: the zero line ("Chats show up here."). Pure. */
+export function pickZeroCopy(kinds: readonly PalettePickKind[], label?: string): string {
+  return `${pickWord(kinds, label)} show up here.`;
+}
+
+/**
+ * A tick in pick mode: multi toggles the row; single ticks only this row (a
+ * second tap on it clears it). Keeps tick order. Pure.
+ */
+export function togglePicked(
+  picked: ReadonlyMap<string, WorkspaceHit>,
+  id: string,
+  hit: WorkspaceHit,
+  multi: boolean,
+): Map<string, WorkspaceHit> {
+  if (picked.has(id)) {
+    const next = new Map(picked);
+    next.delete(id);
+    return next;
+  }
+  const next = multi ? new Map(picked) : new Map<string, WorkspaceHit>();
+  next.set(id, hit);
+  return next;
+}
 
 /** Rows a group shows before "Show all". */
 const GROUP_PREVIEW = PER_KIND_PREVIEW;
@@ -225,6 +357,8 @@ export type PaletteItem =
       snippet: string;
       time: string;
       target: HitTarget;
+      /** The workspace hit behind the row (pick mode hands it back); absent for chat hits. */
+      hit?: WorkspaceHit;
     }
   | {
       id: string;
@@ -305,6 +439,7 @@ function workspaceRow(
     snippet,
     time: hit.kind === 'person' ? '' : time,
     target: workspaceHitTarget(hit, ctx.workspaceKey, ctx.query),
+    hit,
   };
 }
 
@@ -323,7 +458,8 @@ function chatSenderTitle(hit: SearchHit, workspaceId: string | null): string {
  * are no recents. From 2 characters, once
  * results are in: People, Posts, Briefs, Comments, Files, Plans, Plan items,
  * Plan comments, Tasks, Groups, Chat, Activity; empty groups hidden; each capped at 5 with "Show all
- * (N)" (N the server's total) unless expanded. Pure.
+ * (N)" (N the server's total) unless expanded. Pick mode: no Recent, only the
+ * picked kinds' workspace hits (no chat), every fetched row, no "Show all". Pure.
  */
 export function paletteSections(input: {
   query: string;
@@ -337,8 +473,12 @@ export function paletteSections(input: {
   nowMs: number;
   /** The zone result times read "Yesterday" / the weekday on (formatAgo). Absent: the device zone. */
   timeZone?: string;
+  /** Pick mode: the kinds on offer. */
+  pick?: readonly PalettePickKind[];
 }): PaletteSection[] {
   const query = normalizeQuery(input.query);
+  const pick = input.pick;
+  if (query === '' && pick !== undefined) return [];
   if (query === '') {
     if (input.recents.length === 0) return [];
     const all = input.recents;
@@ -371,9 +511,10 @@ export function paletteSections(input: {
   };
   const byGroup = new Map<ResultGroup, PaletteItem[]>(RESULT_GROUPS.map((g) => [g, []]));
   for (const hit of search.workspace) {
+    if (pick !== undefined && !pickMatches(hit, pick)) continue;
     byGroup.get(KIND_GROUP[hit.kind])?.push(workspaceRow(hit, ctx, time(hit.createdAt)));
   }
-  for (const hit of search.chat) {
+  for (const hit of pick !== undefined ? [] : search.chat) {
     byGroup.get('Chat')?.push({
       id: `chat-${hit.id}`,
       type: 'result',
@@ -391,6 +532,10 @@ export function paletteSections(input: {
   for (const group of RESULT_GROUPS) {
     const all = (byGroup.get(group) ?? []).slice(0, Math.max(PER_KIND_FULL, CHAT_SEARCH_LIMIT));
     if (all.length === 0) continue;
+    if (pick !== undefined) {
+      sections.push({ label: group, items: all });
+      continue;
+    }
     const kind = GROUP_KIND.get(group);
     const total = kind !== undefined ? Math.max(search.counts[kind] ?? 0, all.length) : all.length;
     const open = input.expanded.has(group);
@@ -454,6 +599,8 @@ interface PaletteBodyProps {
   onClearRecents?: () => void;
   /** The listbox's id: each row's id is paletteOptionId(listId, index). */
   listId?: string;
+  /** Pick mode: the ticked row ids (a SelectCheck on every result row) and the zero line. */
+  pick?: { picked: ReadonlySet<string>; zeroCopy: string };
 }
 
 /** A palette row's id (the field's aria-activedescendant). Pure. */
@@ -500,6 +647,12 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
         )}
       </div>
     );
+  } else if (normalizeQuery(props.query) === '' && props.pick !== undefined) {
+    status = (
+      <p data-palette-state="pick-zero" className="px-4 py-6 text-center text-base text-fg-3">
+        {props.pick.zeroCopy}
+      </p>
+    );
   } else if (normalizeQuery(props.query) === '' && sections.length === 0) {
     status = (
       <p data-palette-state="recents-zero" className="px-4 py-6 text-center text-base text-fg-3">
@@ -543,10 +696,12 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
             const index = flat.indexOf(item);
             const isActive = index === props.active;
             const tone = isActive ? ACTIVE_ROW : 'border-transparent text-fg-2';
+            const ticked = props.pick?.picked.has(item.id) === true;
             const common = {
               type: 'button' as const,
               role: 'option',
-              'aria-selected': isActive,
+              // Pick mode: selected is the tick; the keyboard row is data-active.
+              'aria-selected': props.pick !== undefined ? ticked : isActive,
               ...(props.listId !== undefined ? { id: paletteOptionId(props.listId, index) } : {}),
               'data-palette-item': item.id,
               'data-active': isActive ? '' : undefined,
@@ -597,6 +752,29 @@ export function PaletteBody(props: PaletteBodyProps): ReactElement {
                     </IconButton>
                   ) : null}
                 </div>
+              );
+            }
+            if (props.pick !== undefined) {
+              // A tap ticks: the select circle trails the row's lines.
+              return (
+                <PressableRow
+                  key={`${section.label}:${item.id}`}
+                  {...common}
+                  data-palette-pick={ticked ? 'on' : 'off'}
+                  className={cn(ROW, 'gap-3 py-1', tone)}
+                >
+                  <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+                    <span className="min-w-0 truncate font-medium text-fg">
+                      {highlightNodes(item.title, words)}
+                    </span>
+                    {item.snippet !== '' ? (
+                      <span className="truncate text-sm text-fg-3">
+                        {highlightNodes(item.snippet, words)}
+                      </span>
+                    ) : null}
+                  </span>
+                  <SelectCheck checked={ticked} />
+                </PressableRow>
               );
             }
             return (
@@ -652,8 +830,17 @@ export function CommandPalette({
   workspaceId,
   workspaceKey,
   userId,
+  pickKinds,
+  multi = false,
+  verb = 'Send',
+  pickLabel,
+  onPick,
 }: CommandPaletteProps) {
   const navigate = useNavigate();
+  // Pick mode: a picker asked (usePalettePick); only its kinds, taps tick.
+  const pickOn: readonly PalettePickKind[] | null =
+    pickKinds !== undefined && onPick !== undefined ? pickKinds : null;
+  const pickMode = pickOn !== null;
   const ownInputRef = useRef<HTMLInputElement>(null);
   const inputRef = givenInputRef ?? ownInputRef;
   const listRef = useRef<HTMLDivElement>(null);
@@ -682,6 +869,8 @@ export function CommandPalette({
     ReadonlyMap<string, { title: string; target: RecentTarget }>
   >(new Map());
   const [recentsExpanded, setRecentsExpanded] = useState(false);
+  // Pick mode: the ticked hits by row id, in tick order.
+  const [picked, setPicked] = useState<ReadonlyMap<string, WorkspaceHit>>(new Map());
   const runnerRef = useRef<PaletteSearchRunner | null>(null);
   useEffect(() => {
     if (open) mark('palette:open');
@@ -689,6 +878,8 @@ export function CommandPalette({
 
   // One runner per open palette and workspace: every search stays inside the
   // active workspace, and closing or switching aborts whatever is in flight.
+  // Pick mode reads less: the grouped search at the full page (no counts call,
+  // no "Show all"), and no chat search at all.
   useEffect(() => {
     if (!open || workspaceId === null) return;
     const runner = createPaletteSearchRunner({
@@ -698,17 +889,19 @@ export function CommandPalette({
           workspaceId,
           query: q,
           signal,
-          perKind: full ? PER_KIND_FULL : PER_KIND_PREVIEW,
-          counts: !full,
+          perKind: full || pickMode ? PER_KIND_FULL : PER_KIND_PREVIEW,
+          counts: !full && !pickMode,
         }),
       searchChat: (q, signal) =>
-        searchMessages({
-          client: supabase,
-          workspaceId,
-          query: q,
-          signal,
-          limit: CHAT_SEARCH_LIMIT,
-        }),
+        pickMode
+          ? Promise.resolve({ ok: true as const, data: { hits: [], next: null } })
+          : searchMessages({
+              client: supabase,
+              workspaceId,
+              query: q,
+              signal,
+              limit: CHAT_SEARCH_LIMIT,
+            }),
       prepare: (ws, chat) => resolvePaletteNames(workspaceId, namesNeeded(ws, chat)),
       onChange: setSearch,
     });
@@ -718,17 +911,18 @@ export function CommandPalette({
       runner.dispose();
       if (runnerRef.current === runner) runnerRef.current = null;
     };
-  }, [open, workspaceId]);
+  }, [open, workspaceId, pickMode]);
 
   // Recents: this device's list for me in this workspace, read from storage
   // during the open render with the cached titles, so Recent paints on the
   // first frame with no read. One snapshot per open: storage writes after it
   // (the refresh below) show on the next open, never repaint these rows.
   const storedRecents = useMemo(() => {
-    if (!open || workspaceId === null || userId === null) return [];
+    // Pick mode shows no Recent (and so reads no titles for it).
+    if (!open || pickMode || workspaceId === null || userId === null) return [];
     const scope = recentKey(userId, workspaceId);
     return readRecents(deviceStorage(), userId, workspaceId).filter((i) => !heldBack(scope, i));
-  }, [open, workspaceId, userId]);
+  }, [open, pickMode, workspaceId, userId]);
   const recents = useMemo(
     () => recentEntriesOf(storedRecents, hiddenRecents, fetchedTitles),
     [storedRecents, hiddenRecents, fetchedTitles],
@@ -773,7 +967,7 @@ export function CommandPalette({
   // in idle time, re-read every stored title into storage (one batched read
   // per type). Storage only; closing or switching workspace aborts it.
   useEffect(() => {
-    if (!open || workspaceId === null || userId === null) return;
+    if (!open || pickMode || workspaceId === null || userId === null) return;
     if (recentsRefreshed(userId, workspaceId)) return;
     const controller = new AbortController();
     let cancelIdle = (): void => {};
@@ -795,7 +989,7 @@ export function CommandPalette({
       cancelIdle();
       controller.abort();
     };
-  }, [open, workspaceId, userId]);
+  }, [open, pickMode, workspaceId, userId]);
 
   useEffect(() => {
     runnerRef.current?.setQuery(query);
@@ -812,8 +1006,9 @@ export function CommandPalette({
         workspaceId,
         workspaceKey,
         nowMs: Date.now(),
+        ...(pickOn !== null ? { pick: pickOn } : {}),
       }),
-    [query, search, recents, expanded, recentsExpanded, workspaceKey, workspaceId],
+    [query, search, recents, expanded, recentsExpanded, workspaceKey, workspaceId, pickOn],
   );
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections]);
 
@@ -826,6 +1021,7 @@ export function CommandPalette({
     setHiddenRecents(new Set());
     setFetchedTitles(new Map());
     setRecentsExpanded(false);
+    setPicked(new Map());
     if (open && document.activeElement !== inputRef.current) inputRef.current?.focus();
   }, [open, inputRef]);
 
@@ -872,6 +1068,12 @@ export function CommandPalette({
 
   function pick(item: PaletteItem | undefined): void {
     if (item === undefined) {
+      return;
+    }
+    if (pickMode) {
+      // A tap ticks (SelectCheck); nothing opens.
+      const hit = item.type === 'result' ? item.hit : undefined;
+      if (hit !== undefined) setPicked((prev) => togglePicked(prev, item.id, hit, multi));
       return;
     }
     if (item.type === 'more') {
@@ -934,6 +1136,14 @@ export function CommandPalette({
     });
   }
 
+  // The pick footer: hand the ticked hits back, then close.
+  function confirmPick(): void {
+    if (onPick === undefined || picked.size === 0) return;
+    const hits = [...picked.values()];
+    onClose('pick');
+    onPick(hits);
+  }
+
   function onKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {
     if (event.key === 'Escape') {
       event.preventDefault();
@@ -956,10 +1166,23 @@ export function CommandPalette({
     }
   }
 
-  return (
+  const fieldLabel =
+    pickOn !== null
+      ? `Search ${pickWord(pickOn, pickLabel).toLowerCase()}`
+      : 'Search this workspace';
+
+  // Pick mode opens over a picker's Sheet, which holds #root aria-hidden
+  // (app-inert.ts): there the palette renders on <body>, outside #root, like
+  // every Sheet. The ⌘K palette stays where it is (nothing hides the root then).
+  const palette = (
     <div
       data-palette-overlay=""
-      className="fixed inset-0 z-sheet bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12svh] sm:px-4"
+      data-palette-mode={pickMode ? 'pick' : 'search'}
+      // Pick mode opens over the picker's sheet: the sheet-over-sheet layer.
+      className={cn(
+        'fixed inset-0 bg-scrim flex items-stretch justify-center sm:items-start sm:pt-[12svh] sm:px-4',
+        pickMode ? 'z-dialog' : 'z-sheet',
+      )}
       onClick={onOverlayClick}
     >
       <div
@@ -985,8 +1208,8 @@ export function CommandPalette({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="Search anything"
-              aria-label="Search this workspace"
+              placeholder={pickMode ? fieldLabel : 'Search anything'}
+              aria-label={fieldLabel}
               role="combobox"
               aria-expanded={flat.length > 0}
               aria-controls={listId}
@@ -1015,6 +1238,11 @@ export function CommandPalette({
               </Button>
             ) : null}
           </div>
+          {pickOn !== null ? (
+            <span data-palette-pick-pill="" className="shrink-0">
+              <Tag label={pickPillLabel(pickOn, pickLabel)} />
+            </span>
+          ) : null}
           <kbd className="hidden sm:inline text-xs text-fg-3 border border-border rounded px-1 py-0.5">
             Esc
           </kbd>
@@ -1031,7 +1259,8 @@ export function CommandPalette({
           ref={listRef}
           id={listId}
           role="listbox"
-          aria-label="Search this workspace"
+          aria-label={fieldLabel}
+          {...(pickMode && multi ? { 'aria-multiselectable': true } : {})}
           className="flex-1 overflow-y-auto py-2 sm:flex-none sm:max-h-[60dvh]"
         >
           <PaletteBody
@@ -1047,11 +1276,37 @@ export function CommandPalette({
               setQuery('');
               inputRef.current?.focus({ preventScroll: true });
             }}
-            onRemoveRecent={removeOneRecent}
-            onClearRecents={clearAllRecents}
+            {...(pickOn !== null
+              ? {
+                  pick: {
+                    picked: new Set(picked.keys()),
+                    zeroCopy: pickZeroCopy(pickOn, pickLabel),
+                  },
+                }
+              : { onRemoveRecent: removeOneRecent, onClearRecents: clearAllRecents })}
           />
         </div>
+        {pickMode ? (
+          <div
+            data-palette-pick-footer=""
+            className="flex shrink-0 justify-end border-t border-border px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:pb-3"
+          >
+            <Button
+              type="button"
+              variant="primary"
+              className="w-full md:w-auto"
+              disabled={picked.size === 0}
+              onMouseDown={keepFocus}
+              onClick={confirmPick}
+            >
+              {pickFooterLabel(verb, picked.size)}
+            </Button>
+          </div>
+        ) : null}
       </div>
     </div>
   );
+  return pickMode && typeof document !== 'undefined'
+    ? createPortal(palette, document.body)
+    : palette;
 }

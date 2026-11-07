@@ -1,8 +1,9 @@
 // The forward picker: a sheet listing every chat the caller is in (hidden ones
-// included, most recent first), a name search, multi-select with checkmarks,
-// and a sticky "Send to N chats" footer button disabled at 0. The same visual
-// language as NewChatSheet and MemberPicker (Sheet, Input, 44px avatar rows,
-// accent-soft selected state). The send runs through the caller's forward
+// included, most recent first), multi-select with checkmarks, and a sticky
+// "Send to N chats" footer button disabled at 0. Search is the palette in pick
+// mode (the header's search button: people and groups); its picks forward
+// the same way. The same visual language as NewChatSheet and MemberPicker
+// (Sheet, 44px avatar rows, accent-soft selected state). The send runs through the caller's forward
 // action; a failure toasts "Couldn't forward to [chat name]. Try again." and keeps the
 // sheet open. Design tokens only, so light and dark stay at parity.
 
@@ -12,10 +13,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { NotesAvatar } from '@/components/chat/NotesBits';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { SelectCheck } from '@/components/ui/SelectCheck';
-import { NoResults } from '@/components/ui/NoResults';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
 import type { ChannelSummary } from '@/lib/chat-reads';
@@ -28,6 +27,8 @@ import {
   toggleForwardTarget,
 } from '@/lib/chat/forward';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
+import { PalettePickButton } from '@/components/shell/CommandPalette';
+import type { WorkspaceHit } from '@/lib/search/workspace-search';
 import { useHistoryStep } from '@/lib/chat/use-history-step';
 import { SHEET_STEP_KEYS } from '@/lib/chat/sheet-steps';
 
@@ -75,10 +76,34 @@ export function forwardRowAvatar(channel: ChannelSummary, selected: boolean): Re
   );
 }
 
+/** The header's search button (the palette in pick mode, people and groups). */
+export const SEARCH_CHATS_LABEL = 'Search chats';
+
+/**
+ * Palette picks as forward targets, in tick order: a person their DM, a group
+ * its chat; a pick with no chat here (no DM yet) is left out, and a chat
+ * picked twice counts once. Pure.
+ */
+export function forwardTargetsFromHits(
+  hits: readonly WorkspaceHit[],
+  channels: readonly ChannelSummary[],
+): ChannelSummary[] {
+  const out: ChannelSummary[] = [];
+  for (const hit of hits) {
+    const channel =
+      hit.kind === 'person'
+        ? channels.find((c) => c.channelType === 'dm' && c.peerUserId === hit.id)
+        : hit.kind === 'chat_group'
+          ? channels.find((c) => c.channelId === hit.channelId)
+          : undefined;
+    if (channel !== undefined && !out.includes(channel)) out.push(channel);
+  }
+  return out;
+}
+
 export function ForwardPicker(props: ForwardPickerProps): ReactElement {
   const { state } = useChatStore();
   const toast = useToast();
-  const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   // System Back closes only the picker; the chat (or task sheet) under it stays.
@@ -86,7 +111,6 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
 
   useEffect(() => {
     if (!props.open) return;
-    setSearch('');
     setSelected(new Set());
   }, [props.open]);
 
@@ -94,13 +118,16 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
     (channelId: string) => selectConversation(state, channelId),
     [state],
   );
-  const listed = forwardPickerChannels(props.channels, summaryFor, search);
+  const listed = forwardPickerChannels(props.channels, summaryFor, '');
 
   async function send(): Promise<void> {
-    if (busy || selected.size === 0) return;
-    const targets = forwardPickerChannels(props.channels, summaryFor, '').filter((c) =>
-      selected.has(c.channelId),
-    );
+    if (selected.size === 0) return;
+    await sendTo(listed.filter((c) => selected.has(c.channelId)));
+  }
+
+  // The one send: the ticked rows, or the palette's picks (the same forward).
+  async function sendTo(targets: ChannelSummary[]): Promise<void> {
+    if (busy || targets.length === 0) return;
     setBusy(true);
     const result = await props.onSend(targets);
     setBusy(false);
@@ -120,6 +147,18 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
         if (!busy) props.onClose();
       }}
       title="Forward to"
+      headerAction={
+        <PalettePickButton
+          label={SEARCH_CHATS_LABEL}
+          request={() => ({
+            pickKinds: ['person', 'chat_group'],
+            multi: true,
+            verb: 'Send',
+            label: 'Chats',
+            onPick: (hits) => void sendTo(forwardTargetsFromHits(hits, props.channels)),
+          })}
+        />
+      }
       footer={
         <Button
           variant="primary"
@@ -134,22 +173,10 @@ export function ForwardPicker(props: ForwardPickerProps): ReactElement {
         </Button>
       }
     >
-      <Input
-        tone="search"
-        type="search"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search chats"
-        aria-label="Search chats"
-      />
       {listed.length === 0 ? (
-        search.trim() !== '' ? (
-          <NoResults query={search} filtersActive={false} onClear={() => setSearch('')} />
-        ) : (
-          <p className="px-1 py-3 text-base text-fg-3">Chats show up here.</p>
-        )
+        <p className="px-1 py-3 text-base text-fg-3">Chats show up here.</p>
       ) : (
-        <ul className="mt-3 flex flex-col gap-2">
+        <ul className="flex flex-col gap-2">
           {listed.map((channel) => {
             const isSelected = selected.has(channel.channelId);
             return (

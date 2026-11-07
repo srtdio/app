@@ -6,13 +6,11 @@ import {
   nextCursor,
   queryWords,
   searchArgs,
-  searchCounterText,
   searchDateLabel,
   searchMessages,
   searchQueryReady,
   searchSenderPrefix,
   snippetText,
-  stepSearchIndex,
   SEARCH_PAGE_SIZE,
   type SearchPageFetch,
   type SearchResult,
@@ -299,21 +297,6 @@ describe('searchSenderPrefix', () => {
     expect(
       searchSenderPrefix({ senderUserId: 'u9', currentUserId: 'me', isGroup: true, nameOf }),
     ).toBe('');
-  });
-});
-
-describe('in-chat counter and arrows', () => {
-  it('up is older (next index), down is newer (previous index)', () => {
-    // Hits are newest first: index 0 is the newest match.
-    expect(stepSearchIndex(0, 'older', 3)).toBe(1);
-    expect(stepSearchIndex(1, 'newer', 3)).toBe(0);
-    expect(stepSearchIndex(0, 'newer', 3)).toBeNull();
-    expect(stepSearchIndex(2, 'older', 3)).toBeNull();
-  });
-  it('reads "N of M", "+" while more pages exist', () => {
-    expect(searchCounterText(0, 4, false)).toBe('1 of 4');
-    expect(searchCounterText(2, 30, true)).toBe('3 of 30+');
-    expect(searchCounterText(0, 0, false)).toBe('0 of 0');
   });
 });
 

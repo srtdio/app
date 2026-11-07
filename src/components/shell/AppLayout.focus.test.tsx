@@ -40,7 +40,10 @@ vi.mock('@/lib/session-context', () => ({
 vi.mock('@/components/shell/Sidebar', () => ({ Sidebar: nothing }));
 vi.mock('@/components/shell/BottomTabs', () => ({ BottomTabs: nothing }));
 vi.mock('@/components/shell/Topbar', () => ({ Topbar: nothing }));
-vi.mock('@/components/shell/CommandPalette', () => ({ CommandPalette: nothing }));
+vi.mock('@/components/shell/CommandPalette', () => ({
+  CommandPalette: nothing,
+  PalettePickProvider: passthrough,
+}));
 vi.mock('@/components/shell/AvatarMenu', () => ({ AvatarMenu: nothing }));
 vi.mock('@/components/shell/WorkspaceSwitcher', () => ({ WorkspaceSwitcher: nothing }));
 vi.mock('@/components/storage/WorkspaceFullSheet', () => ({ WorkspaceFullSheet: nothing }));

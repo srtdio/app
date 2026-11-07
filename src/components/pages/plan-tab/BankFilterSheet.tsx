@@ -1,5 +1,6 @@
-// The Bank's Filter and sort sheet (the toolbar's one IconButton): three
-// lit cards on the grey sheet.
+// The Bank's Filter and sort sheet, opened by the top bar's sort control on the
+// Bank chip (BankFilterTrigger: one IconButton, IconSort): three lit cards on
+// the grey sheet.
 // - Buckets: All buckets, then each bucket (single pick, the pick is the ink
 //   fill), then the add chip (dashed +) that turns into an inline Input
 //   (Enter or the tick adds through createBucket and picks it; Esc cancels).
@@ -34,6 +35,7 @@ import {
   IconChevronLeft,
   IconEdit,
   IconPlus,
+  IconSort,
   IconTrash,
 } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
@@ -63,6 +65,24 @@ export interface BucketWrites {
 }
 
 const CARD = 'lit-card flex flex-col gap-3 rounded-xl border bg-panel p-4';
+
+/**
+ * The sheet's trigger, the Bank's sort in the top bar (useTopbarActions sort):
+ * one 44 IconButton with IconSort, named for the sheet it opens. The sheet's
+ * content is unchanged.
+ */
+export function BankFilterTrigger(props: { onOpen: () => void }): ReactElement {
+  return (
+    <IconButton
+      label="Filter and sort"
+      data-bank-filter-open=""
+      onClick={props.onOpen}
+      className="shrink-0"
+    >
+      <IconSort size={ICON_SIZE.control} />
+    </IconButton>
+  );
+}
 
 export function BankFilterSheet(props: {
   open: boolean;

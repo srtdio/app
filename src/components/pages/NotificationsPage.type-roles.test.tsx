@@ -71,6 +71,18 @@ window.matchMedia ??= ((query: string) => ({
 
 import { NotificationsPage } from '@/components/pages/NotificationsPage';
 import { resetSessionReads } from '@/lib/session-read';
+import { TopbarActionsProvider, useTopbarActionsValue } from '@/components/shell/topbar-actions';
+
+/** Stands in for Topbar: renders what the page published into its two slots. */
+function TopbarProbe() {
+  const { sort, primary } = useTopbarActionsValue();
+  return (
+    <div data-test-topbar="">
+      <span data-test-topbar-sort="">{sort}</span>
+      <span data-test-topbar-primary="">{primary}</span>
+    </div>
+  );
+}
 
 function item(over: Partial<ActivityItem>): ActivityItem {
   return {
@@ -115,7 +127,10 @@ async function mount() {
   await act(async () => {
     root?.render(
       <MemoryRouter initialEntries={['/notifications']}>
-        <NotificationsPage />
+        <TopbarActionsProvider>
+          <TopbarProbe />
+          <NotificationsPage />
+        </TopbarActionsProvider>
       </MemoryRouter>,
     );
   });
@@ -196,22 +211,48 @@ describe('Notifications type roles', () => {
 });
 
 describe('Activity header, order and the Unread zero state', () => {
-  it('the search row runs the full width: no sort control', async () => {
+  it('no search field on the page: the sort and Mark all read live in the top bar', async () => {
     await mount();
-    const search = document.querySelector('input[aria-label="Search activity"]');
-    expect(search).not.toBeNull();
-    expect(document.querySelector('[data-search-controls]')).toBeNull();
-    expect(document.querySelector('[aria-label="Sort activity"]')).toBeNull();
-    expect(document.body.textContent).not.toContain('Oldest first');
-    expect(document.querySelector('[data-search-group]')?.className).toContain('flex-1');
+    expect(document.querySelector('input[aria-label="Search activity"]')).toBeNull();
+    expect(document.querySelector('[data-search-group]')).toBeNull();
+    const bar = document.querySelector('[data-test-topbar]');
+    const sort = document.querySelector('[data-test-topbar-sort] [aria-label="Sort activity"]');
+    expect(sort).not.toBeNull();
+    // One sort control, and it is the top bar's.
+    expect(document.querySelectorAll('[aria-label="Sort activity"]')).toHaveLength(1);
+    const markAll = document.querySelectorAll('[data-activity-mark-all]');
+    expect(markAll).toHaveLength(1);
+    expect(bar?.contains(markAll[0] as Element)).toBe(true);
+    expect(markAll[0]?.getAttribute('aria-label')).toBe('Mark all read');
   });
 
-  it('reads newest first, even with an old Oldest first sort on the device', async () => {
+  it('Mark all read leaves the top bar empty when nothing is unread', async () => {
+    h.fetchActivityEntries.mockReset().mockResolvedValue({
+      ok: true,
+      data: [item({ id: 'e1', title: 'Q3 Launch', readAt: new Date().toISOString() })],
+    });
+    await mount();
+    expect(document.querySelector('[data-activity-mark-all]')).toBeNull();
+    expect(
+      document.querySelector('[data-test-topbar-sort] [aria-label="Sort activity"]'),
+    ).not.toBeNull();
+  });
+
+  it('reads in the stored order: Oldest first on the device reads oldest', async () => {
     try {
       window.localStorage.setItem('sorted:sort:activity', 'oldest');
     } catch {
       // Storage can be unavailable.
     }
+    await mount();
+    const directions = h.fetchActivityEntries.mock.calls.map(
+      (call) => (call[2] as { direction?: string } | undefined)?.direction,
+    );
+    expect(directions.length).toBeGreaterThan(0);
+    for (const direction of directions) expect(direction).toBe('oldest');
+  });
+
+  it('reads newest first when nothing is stored', async () => {
     await mount();
     const directions = h.fetchActivityEntries.mock.calls.map(
       (call) => (call[2] as { direction?: string } | undefined)?.direction,
@@ -235,11 +276,11 @@ describe('Activity header, order and the Unread zero state', () => {
     );
   });
 
-  it('the chips are All, Unread, Mentions, Briefs, Plans (no Snoozed)', async () => {
+  it('the chips are All, Unread, Mentions only (no Snoozed, Briefs or Plans)', async () => {
     await mount();
     const chips = [...document.querySelectorAll('[data-activity-chips] button')].map((b) =>
       (b.textContent ?? '').replace(/\d+/g, '').trim(),
     );
-    expect(chips).toEqual(['All', 'Unread', 'Mentions', 'Briefs', 'Plans']);
+    expect(chips).toEqual(['All', 'Unread', 'Mentions']);
   });
 });

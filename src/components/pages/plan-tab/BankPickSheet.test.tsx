@@ -8,8 +8,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('agora-chat', () => ({ default: {} }));
 
-import type { PlanRow } from '@/lib/chat/plans';
-import { fromBankDay, fromBankQuery, fromBankStep } from './BankPickSheet';
+import type { BankIdea, PlanRow } from '@/lib/chat/plans';
+import type { WorkspaceHit } from '@/lib/search/workspace-search';
+import { bankPickOf, fromBankDay, fromBankQuery, fromBankStep } from './BankPickSheet';
 
 /** A source file next to this test (read as text). */
 function here(rel: string): string {
@@ -86,9 +87,40 @@ describe('From bank branches', () => {
     const src = readFileSync(here('./BankPickSheet.tsx'), 'utf8');
     expect(src).toMatch(/useEffect\(\(\) => \{\s*if \(!open\) return;[\s\S]*?readFirst\(\);/);
     expect(src).toContain('PlanTabLoadMore');
-    expect(src).toContain('tone="search"');
     expect(src).toContain("kind: 'undo'");
     expect(src).toContain('unplanBankIdea');
+  });
+
+  it('no search well of its own: the header search opens the palette for bank ideas, one pick', () => {
+    const src = readFileSync(here('./BankPickSheet.tsx'), 'utf8');
+    expect(src).not.toContain('tone="search"');
+    expect(src).not.toContain('useServerSearch');
+    expect(src).not.toContain('NoResults');
+    expect(src).toContain('headerAction={');
+    expect(src).toContain("pickKinds: ['bank_idea']");
+    expect(src).toContain('multi: false');
+    expect(src).toContain("verb: 'Add'");
+  });
+
+  it('a palette pick maps to the loaded idea, else to the hit to find; plan items with a plan are not ideas', () => {
+    const hit = (id: string, parentId: string | null): WorkspaceHit => ({
+      kind: 'plan_item',
+      id,
+      parentId,
+      channelId: null,
+      entityType: '',
+      number: null,
+      title: `Idea ${id}`,
+      snippet: '',
+      actorUserId: null,
+      actorIsMember: false,
+      createdAt: '2026-11-01T00:00:00Z',
+    });
+    const loaded = [{ id: 'i1', title: 'Idea i1' } as unknown as BankIdea];
+    expect(bankPickOf([hit('i1', null)], loaded)).toEqual({ idea: loaded[0] });
+    expect(bankPickOf([hit('i9', null)], loaded)).toEqual({ find: hit('i9', null) });
+    expect(bankPickOf([hit('i1', 'plan1')], loaded)).toBeNull();
+    expect(bankPickOf([], loaded)).toBeNull();
   });
 
   it('From bank is the third Add entry after New concept and Pick a post', () => {

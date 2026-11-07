@@ -4,7 +4,7 @@
 // token classes only, so light and dark stay at parity). Progress null draws
 // a partial arc of `arc`. Only the arc's stroke offset ever changes, and it
 // eases to each real progress value (MOVE_CLASS.fill, the fill axis; never runs
-// ahead of the upload). Used by chat/UploadRing.
+// ahead of the upload). Used by ui/UploadRing.
 
 import type { ReactElement } from 'react';
 import { cn } from '@/lib/cn';

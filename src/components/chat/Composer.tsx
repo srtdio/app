@@ -48,7 +48,7 @@ import { insertAtCaret } from '@/lib/chat/emoji-list';
 import { PostPicker, warmPostPicker } from '@/components/chat/PostPicker';
 import { MentionPicker, mentionComboboxProps, stepActive } from '@/components/chat/MentionPicker';
 import { ComposerStrip } from '@/components/chat/ComposerStrip';
-import { PendingChip } from '@/components/chat/PendingChip';
+import { PendingChip, readyChipMeta } from '@/components/ui/PendingChip';
 import { PostRefThumb, type PostRefPost } from '@/components/chat/PostRefChip';
 import {
   ReplyQuoteBox,
@@ -63,7 +63,6 @@ import { libraryAttachments, type LibraryAsset } from '@/lib/chat/asset-picker';
 import { useViewerSide } from '@/lib/chat/viewer-role';
 import { attachmentMenuItems } from '@/lib/chat/attachment-menu';
 import { caretHashQuery, stripHashToken } from '@/lib/chat/post-refs';
-import { fileExtension } from '@/lib/assets';
 import { precheckFile } from '@/lib/asset-upload';
 import {
   canSendAttachmentMessage,
@@ -1791,7 +1790,11 @@ export function Composer(props: ComposerProps): ReactElement {
                 key={item.id}
                 thumb={<PendingThumb previewUrl={item.previewUrl} />}
                 title={item.file.name}
-                meta={fileExtension(item.file.name)}
+                meta={readyChipMeta({
+                  name: item.file.name,
+                  mime: item.file.type,
+                  size: item.file.size,
+                })}
                 onRemove={() => removePending(item.id)}
               />
             ))}
@@ -1800,7 +1803,7 @@ export function Composer(props: ComposerProps): ReactElement {
                 key={item.assetId}
                 thumb={<LibraryThumb attachment={item} />}
                 title={item.name}
-                meta={fileExtension(item.name) || 'File'}
+                meta={readyChipMeta({ name: item.name, mime: item.mime, size: item.size })}
                 onRemove={() => removeLibrary(item.assetId)}
               />
             ))}

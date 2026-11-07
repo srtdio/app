@@ -7,13 +7,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { NoResults } from '@/components/ui/NoResults';
+import { SortMenu } from '@/components/ui/SortMenu';
 import { LoadError } from '@/components/ui/LoadError';
 import { useOptionalToast } from '@/components/ui/toast';
 import type { ToastOptions } from '@/components/ui/toast/types';
 import { PageHead } from '@/components/shell/PageHead';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { ICON_SIZE, IconBriefs, IconPlus } from '@/components/ui/icons';
+import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
+import { ICON_SIZE, IconBriefs } from '@/components/ui/icons';
 import { BriefCard, BRIEF_STATUS } from '@/components/pages/BriefCard';
 import { CreateBriefSheet, type BriefCreated } from '@/components/pages/CreateBriefSheet';
 import { dispatchSorted } from '@/lib/events';
@@ -23,7 +24,6 @@ import { supabase } from '@/lib/supabase';
 import { useWorkspace } from '@/lib/workspace-context';
 import { useWorkspaceCapability } from '@/lib/workspace-context-capability';
 import { entityUrlPath } from '@/lib/entityRef';
-import { filterByTitle } from '@/lib/list-sort';
 import { useSort } from '@/lib/use-sort';
 import {
   BRIEF_SORT_DEFAULT,
@@ -46,7 +46,6 @@ import {
   type BriefPageNext,
 } from '@/lib/brief-list';
 import { countBriefsByFilter } from '@/lib/brief-counts';
-import { serverSearchQuery, useServerSearch } from '@/lib/search/server-search';
 import {
   briefsPaintNeedsThumbs,
   keptBriefCounts,
@@ -87,67 +86,25 @@ const FILTERS: { key: BriefFilter; label: string }[] = [
 ];
 
 interface BriefsHeaderProps {
-  search: string;
-  onSearchChange: (value: string) => void;
   filter: BriefFilter;
   onFilterChange: (filter: BriefFilter) => void;
   /**
-   * Per-chip brief counts (after the search), read on the server, never from
-   * the loaded page; a chip shows its count only above 0, as plain text.
+   * Per-chip brief counts, read on the server, never from the loaded page; a
+   * chip shows its count only above 0, as plain text.
    */
   counts?: Partial<Record<BriefFilter, number>>;
-  /** Whether the viewer holds brief.create; the "+" shows only then (same gate as Topbar). */
-  canCreate: boolean;
-  /**
-   * The agency-side sort (Due date / Newest first), in the same SortMenu as
-   * Pipeline. Omitted for client approvers: their list stays grouped by time.
-   */
-  sort?: { value: BriefSort; onChange: (value: BriefSort) => void };
 }
 
 /**
- * The Briefs header chrome: the shared SectionHeader (search, sort for the
- * agency side, accent create) with the All / Open / Closed chips in the filter
- * slot. Client approvers get no sort: their list is grouped inline by time (see
- * {@link groupBriefsByTime}). Pure (no hooks) so the wiring is unit-tested by
- * walking the returned tree.
+ * The Briefs chip row (decisions A, B): the shared SectionHeader with the All
+ * / Open / Closed chips. Sort and New brief live in the app top bar
+ * ({@link briefsTopbarActions}); search lives only in the top bar's command
+ * palette. Pure (no hooks) so the wiring is unit-tested by walking the
+ * returned tree.
  */
 export function briefsHeader(props: BriefsHeaderProps): ReactElement {
   return (
-    <SectionHeader
-      search={{
-        value: props.search,
-        onChange: props.onSearchChange,
-        placeholder: 'Search briefs',
-        label: 'Search briefs',
-      }}
-      {...(props.sort !== undefined
-        ? {
-            sort: {
-              options: BRIEF_SORT_OPTIONS,
-              value: props.sort.value,
-              onChange: props.sort.onChange,
-            },
-          }
-        : {})}
-      {...(props.canCreate
-        ? {
-            primaryAction: {
-              node: (
-                <Button
-                  variant="primary"
-                  data-induction={INDUCTION_KEYS.briefsNew}
-                  className="shrink-0 whitespace-nowrap"
-                  onClick={() => dispatchSorted('sorted:create-brief')}
-                >
-                  <IconPlus size={ICON_SIZE.inline} />
-                  New brief
-                </Button>
-              ),
-            },
-          }
-        : {})}
-    >
+    <SectionHeader>
       {FILTERS.map((item) => (
         <Chip
           key={item.key}
@@ -161,6 +118,47 @@ export function briefsHeader(props: BriefsHeaderProps): ReactElement {
       ))}
     </SectionHeader>
   );
+}
+
+/** What Briefs publishes into the app top bar. */
+export interface BriefsTopbarProps {
+  /** Whether the viewer holds brief.create; the "+" shows only then. */
+  canCreate: boolean;
+  /**
+   * The agency-side sort (Due date / Newest first). Omitted for client
+   * approvers: their list stays grouped by time, so they get no sort.
+   */
+  sort?: { value: BriefSort; onChange: (value: BriefSort) => void };
+}
+
+/**
+ * The top bar's sort and primary for Briefs (decision A): sort is the shared
+ * SortMenu over BRIEF_SORT_OPTIONS (agency side only); primary is the filled
+ * "+" labelled "New brief", carrying the old New brief induction key, only
+ * where the person holds brief.create. Pure (no hooks).
+ */
+export function briefsTopbarActions(props: BriefsTopbarProps): {
+  sort: ReactElement | undefined;
+  primary: ReactElement | undefined;
+} {
+  return {
+    sort:
+      props.sort !== undefined ? (
+        <SortMenu
+          options={BRIEF_SORT_OPTIONS}
+          value={props.sort.value}
+          onChange={props.sort.onChange}
+          label="Sort"
+        />
+      ) : undefined,
+    primary: props.canCreate ? (
+      <TopbarPlus
+        label="New brief"
+        induction={INDUCTION_KEYS.briefsNew}
+        onClick={() => dispatchSorted('sorted:create-brief')}
+      />
+    ) : undefined,
+  };
 }
 
 interface BriefCardListDeps {
@@ -198,31 +196,23 @@ export function briefCardList(deps: BriefCardListDeps): ReactElement[] {
 
 /** Which empty state the list shows when no card is visible. */
 export type BriefsEmpty =
-  /** A typed search matched nothing: NoResults + Clear search (clears the search only). */
-  | { kind: 'no-results'; query: string }
   /** A client with no open briefs: one line (the header's New brief is the only create). */
   | { kind: 'client-empty' }
   /** The agency side with no briefs at all: one line, no heading. */
   | { kind: 'agency-empty' }
-  /** A chip with nothing under it (no search typed): one line only. */
+  /** A chip with nothing under it: one line only. */
   | { kind: 'filtered'; title: string };
 
 /**
- * Pick the empty state. A typed search always wins and is the only state with
- * Clear. Then a workspace with no briefs at all (client or agency copy), then
- * the chip: Closed has its own heading; a client on Open (nothing open) gets the
- * "Open briefs show up here." state. Pure.
+ * Pick the empty state. A workspace with no briefs at all (client or agency
+ * copy), then the chip: Closed has its own heading; a client on Open (nothing
+ * open) gets the "Open briefs show up here." state. Pure.
  */
 export function briefsEmptyState(
   filter: BriefFilter,
-  search: string,
   total: number,
   canCreate: boolean,
 ): BriefsEmpty {
-  const query = search.trim();
-  if (query !== '') {
-    return { kind: 'no-results', query };
-  }
   if (total === 0) return canCreate ? { kind: 'client-empty' } : { kind: 'agency-empty' };
   if (filter === BRIEF_STATUS.closed)
     return { kind: 'filtered', title: 'Closed briefs show up here.' };
@@ -231,18 +221,17 @@ export function briefsEmptyState(
 }
 
 /**
- * The agency-side flat list: status chip, then title search, then the chosen
- * sort. Re-narrows each surviving row back to its BriefWithThumbnail (same
- * object reference) via an id map, as {@link deriveBriefGroups} does. Pure.
+ * The agency-side flat list: status chip, then the chosen sort. Re-narrows
+ * each surviving row back to its BriefWithThumbnail (same object reference)
+ * via an id map, as {@link deriveBriefGroups} does. Pure.
  */
 export function deriveSortedBriefs(
   briefs: BriefWithThumbnail[],
   filter: BriefFilter,
-  search: string,
   sort: BriefSort,
 ): BriefWithThumbnail[] {
   const byId = new Map(briefs.map((brief) => [brief.id, brief]));
-  const filtered = filterByTitle(filterBriefsByStatus(briefs, filter), search);
+  const filtered = filterBriefsByStatus(briefs, filter);
   const narrowed = filtered.flatMap((brief) => {
     const full = byId.get(brief.id);
     return full !== undefined ? [full] : [];
@@ -254,17 +243,6 @@ const LIST_CLASS = cn(GUTTER, 'py-4 flex flex-col gap-6');
 // ui/ListCard's page grid: one column on phone, auto-fill columns (at least 360)
 // on laptop, 12 between cards.
 const GRID_CLASS = cn('pt-3', LIST_CARD_GRID);
-
-/**
- * One search answer (2+ characters): the first page of matches (title or
- * objective, on the server) with their thumbnails, where the next page starts
- * (its cursor carries the query), and the chips' counts for the same match.
- */
-interface BriefSearchPage {
-  items: BriefWithThumbnail[];
-  next: BriefPageNext;
-  counts: Partial<Record<BriefFilter, number>>;
-}
 
 /** The longest the first paint waits for the chip counts once the rows are in. */
 export const BRIEF_COUNTS_PAINT_WAIT_MS = 5_000;
@@ -332,10 +310,10 @@ export function BriefsListSkeleton(): ReactElement {
 
 /**
  * Derive the rendered time sections from the loaded list: status chip, then
- * title search, then time grouping (newest-first, workspace weeks, month
- * buckets). `calendar` carries the workspace zone and week start, so the
- * sections read the same on every machine. Section counts therefore reflect the
- * active chip + search. filterBriefsByStatus is typed over the bare Brief, so
+ * time grouping (newest-first, workspace weeks, month buckets). `calendar`
+ * carries the workspace zone and week start, so the sections read the same on
+ * every machine. Section counts therefore reflect the active chip.
+ * filterBriefsByStatus is typed over the bare Brief, so
  * re-narrow each surviving row back to its BriefWithThumbnail (same object
  * reference) via an id map; the cards need thumbnailAssetVersionId. Pure so the
  * wiring is unit-tested without rendering.
@@ -343,12 +321,11 @@ export function BriefsListSkeleton(): ReactElement {
 export function deriveBriefGroups(
   briefs: BriefWithThumbnail[],
   filter: BriefFilter,
-  search: string,
   now: Date,
   calendar: BriefCalendar,
 ): BriefGroup<BriefWithThumbnail>[] {
   const byId = new Map(briefs.map((brief) => [brief.id, brief]));
-  const filtered = filterByTitle(filterBriefsByStatus(briefs, filter), search);
+  const filtered = filterBriefsByStatus(briefs, filter);
   const narrowed = filtered.flatMap((brief) => {
     const full = byId.get(brief.id);
     return full !== undefined ? [full] : [];
@@ -436,16 +413,13 @@ export function createdToast(created: BriefCreated, navigate: (to: string) => vo
 }
 
 /**
- * Render a {@link BriefsEmpty}: the shared EmptyState with its one line, or
- * NoResults for a typed search. Clear only on a typed search and it clears the
- * search only (the chip stays). An empty page has no create button of its own;
- * the header's New brief is the only one. Pure (no hooks).
+ * Render a {@link BriefsEmpty}: the shared EmptyState with its one line. An
+ * empty page has no create button of its own; the top bar's "+" is the only
+ * one. Pure (no hooks).
  */
-export function briefsEmptyView(state: BriefsEmpty, onClearSearch: () => void): ReactElement {
+export function briefsEmptyView(state: BriefsEmpty): ReactElement {
   const icon = <IconBriefs size={ICON_SIZE.status} />;
   switch (state.kind) {
-    case 'no-results':
-      return <NoResults query={state.query} filtersActive={false} onClear={onClearSearch} />;
     case 'client-empty':
       return <EmptyState icon={icon} title="Open briefs show up here." />;
     case 'agency-empty':
@@ -487,8 +461,8 @@ export function BriefsPage() {
   const viewKey = (part: string): string | null =>
     viewUserId !== null && workspaceId !== null ? keptViewKey(viewUserId, workspaceId, part) : null;
 
-  // The chip and the search live in the URL (?status=&q=), so a Back from a
-  // brief lands on the same filtered list. Default chip: Open, or the chip
+  // The chip lives in the URL (?status=), so a Back from a brief lands on the
+  // same filtered list. Default chip: Open, or the chip
   // kept this session when the URL names none (a tab return).
   const [searchParams, setSearchParams] = useSearchParams();
   const [keptFilter, setKeptFilter] = useKeptState<BriefFilter>(
@@ -497,19 +471,17 @@ export function BriefsPage() {
   );
   const statusParam = searchParams.get('status');
   const filter = statusParam === null ? keptFilter : parseBriefFilter(statusParam);
-  const search = searchParams.get('q') ?? '';
-  const setListState = useCallback(
-    (nextFilter: BriefFilter, nextSearch: string) => {
+  // A stale ?q= from the old screen search is dropped on the next chip tap.
+  const setFilter = useCallback(
+    (nextFilter: BriefFilter) => {
       setKeptFilter(nextFilter);
-      setSearchParams((prev) => briefListParams(prev, nextFilter, nextSearch), { replace: true });
+      setSearchParams((prev) => briefListParams(prev, nextFilter, ''), { replace: true });
     },
     [setSearchParams, setKeptFilter],
   );
 
   // A return to Briefs paints the list (every page loaded) and the chip counts
-  // this session kept, at any age, then the mount refreshes them quietly. A
-  // search (2+ characters) is its own server read (briefSearch below) and is
-  // never kept.
+  // this session kept, at any age, then the mount refreshes them quietly.
   const [kept] = useState(() =>
     viewUserId !== null && workspaceId !== null
       ? {
@@ -549,40 +521,6 @@ export function BriefsPage() {
   );
   const countsGeneration = useRef(0);
 
-  // The search (src/lib/search/server-search.ts): from 2 characters, 250ms
-  // after the last keystroke, the first page of matches (title or objective
-  // ILIKE on the server) and the chips' counts for the same match, together;
-  // a newer query aborts the page read in flight. Under 2 characters the
-  // list is the normal one and nothing is sent.
-  const briefSearch = useServerSearch<BriefSearchPage>(
-    search,
-    async (q, signal) => {
-      if (workspaceId === null) {
-        return {
-          ok: true as const,
-          data: { items: [], next: { done: true as const }, counts: {} },
-        };
-      }
-      const [page, counts] = await Promise.all([
-        listBriefsFirstPage(supabase, workspaceId, q, signal),
-        countBriefsByFilter(supabase, workspaceId, q),
-      ]);
-      if (!page.ok) return page;
-      const thumbs = await page.data.thumbs;
-      return {
-        ok: true as const,
-        data: {
-          items: thumbs.ok ? withBriefThumbnails(page.data.items, thumbs.data) : page.data.items,
-          next: page.data.next,
-          counts: counts.ok ? counts.data : {},
-        },
-      };
-    },
-    workspaceId ?? '',
-  );
-  const searchActive = briefSearch.active;
-  const searchQuery = serverSearchQuery(search);
-
   // One presign cache + presignEnabled for the WHOLE list (the wiring fix: the page
   // previously built none, so image thumbnails could never resolve). Built exactly as
   // BriefDetailPage builds it, and shared across every card so they share one
@@ -590,20 +528,20 @@ export function BriefsPage() {
   const presignEnabled = env.VITE_ASSET_READ_URL !== undefined;
   const cache = appPresignCache();
 
-  // Every chip's count for the search, in parallel; only the newest read lands.
+  // Every chip's count, in parallel; only the newest read lands.
   // The first load (`join`) joins the counts a nav press already started. A
   // `quiet` run (the kept counts painted) keeps them through a failure and
   // lands only while untouched.
   const loadCounts = useCallback(
-    async (forSearch: string, join = false, quiet = false) => {
+    async (join = false, quiet = false) => {
       if (workspaceId === null) return;
       countsGeneration.current += 1;
       const generation = countsGeneration.current;
       const userId = join ? sharedUserId() : null;
       const result =
         userId === null
-          ? await countBriefsByFilter(supabase, workspaceId, forSearch)
-          : await readBriefCounts(supabase, userId, workspaceId, forSearch, countBriefsByFilter);
+          ? await countBriefsByFilter(supabase, workspaceId, '')
+          : await readBriefCounts(supabase, userId, workspaceId, '', countBriefsByFilter);
       mark('briefs:counts-in');
       if (generation !== countsGeneration.current) return;
       if (quiet && (!result.ok || !untouched())) return;
@@ -652,8 +590,7 @@ export function BriefsPage() {
       if (userId !== null && !join) staleBriefsReads(userId, workspaceId);
       const quiet = join && shownFor.current === workspaceId;
       // The counts reload on every event the list reloads on, alongside it.
-      // They are the plain list's; a search reads its own with its matches.
-      const counted = loadCounts('', true, quiet);
+      const counted = loadCounts(true, quiet);
       loadGeneration.current += 1;
       const generation = loadGeneration.current;
       if (!quiet) {
@@ -776,35 +713,9 @@ export function BriefsPage() {
   }, [loadBriefs]);
   useWorkspaceDataChanged(() => {
     void loadBriefs();
-    briefSearch.refresh();
   });
 
-  // Load more while searching: the next page of the same search (its cursor
-  // carries the query, so a page of another search is never appended).
-  const searchNext: BriefPageNext = briefSearch.data?.next ?? { done: true };
-  const loadMoreSearch = useCallback(async () => {
-    if (workspaceId === null || searchNext.done || loadingMore) return;
-    const cursor = searchNext.cursor;
-    if ((cursor.query ?? '') !== briefSearch.query) return;
-    setLoadingMore(true);
-    const result = await listBriefsPage(supabase, workspaceId, cursor);
-    setLoadingMore(false);
-    if (!result.ok) {
-      showToast?.({ title: errorText('load more briefs', result.error), tone: 'error' });
-      return;
-    }
-    briefSearch.update((data) =>
-      data.next.done || data.next.cursor !== cursor
-        ? data
-        : {
-            ...data,
-            items: mergeBriefPages(data.items, result.data.items),
-            next: result.data.next,
-          },
-    );
-  }, [workspaceId, searchNext, loadingMore, briefSearch, showToast]);
-
-  // The New brief button and the command palette dispatch this event; the sheet
+  // The top bar's "+" and the command palette dispatch this event; the sheet
   // lives here so the list can re-fetch on success.
   useEffect(() => {
     function openCreate(): void {
@@ -823,22 +734,16 @@ export function BriefsPage() {
     [briefs, workspaceId],
   );
 
-  // The rows shown: the search's matches while searching (already matched on
-  // the server, so no device filter runs on them), else the loaded list.
-  // Grouping is pure, derived over them (no refetch, no N+1): status chip,
-  // then time grouping. Section counts therefore reflect the chip + search.
-  const shownBriefs = useMemo(
-    () => (searchActive ? (briefSearch.data?.items ?? []) : workspaceBriefs),
-    [searchActive, briefSearch.data, workspaceBriefs],
-  );
+  // Grouping is pure, derived over the loaded list (no refetch, no N+1):
+  // status chip, then time grouping. Section counts therefore reflect the chip.
   const groups = useMemo(
-    () => deriveBriefGroups(shownBriefs, filter, '', new Date(), { timeZone, weekStartDay }),
-    [shownBriefs, filter, timeZone, weekStartDay],
+    () => deriveBriefGroups(workspaceBriefs, filter, new Date(), { timeZone, weekStartDay }),
+    [workspaceBriefs, filter, timeZone, weekStartDay],
   );
 
   const sortedBriefs = useMemo(
-    () => (showSort ? deriveSortedBriefs(shownBriefs, filter, '', sort) : []),
-    [showSort, shownBriefs, filter, sort],
+    () => (showSort ? deriveSortedBriefs(workspaceBriefs, filter, sort) : []),
+    [showSort, workspaceBriefs, filter, sort],
   );
 
   // The list's one clock: every card's time ("Today", "2d late", "3h")
@@ -862,21 +767,17 @@ export function BriefsPage() {
   function onCreated(created: BriefCreated): void {
     setCreateOpen(false);
     void loadBriefs();
-    briefSearch.refresh();
     toast?.show(createdToast(created, navigate));
   }
 
-  const searchFailed = searchActive && briefSearch.status === 'error' && briefSearch.data === null;
-  const listLoading = searchActive
-    ? workspaceId === null || (briefSearch.data === null && !searchFailed)
-    : workspaceId === null || (loading && briefs.length === 0);
-  const listFailed = searchActive ? searchFailed : loadFailed;
-  if (!listLoading && !listFailed && !searchActive) mark('briefs:paint');
+  const listLoading = workspaceId === null || (loading && briefs.length === 0);
+  const listFailed = loadFailed;
+  if (!listLoading && !listFailed) mark('briefs:paint');
   // Back on Briefs, the scroll lands where it was once the cards painted.
   useKeptScroll(viewKey('briefs:scroll'), !listLoading && !loadFailed);
 
   // BriefCard renders its own root, so the first rendered card is marked for the
-  // induction from here (attribute only). Re-run each render: the chip or search
+  // induction from here (attribute only). Re-run each render: the chip or sort
   // can change which card is first, so a stale mark is cleared first.
   const listRef = useRef<HTMLDivElement>(null);
   // Boxes only while nothing is held; the cards settle once when they land
@@ -895,34 +796,35 @@ export function BriefsPage() {
     });
   });
 
+  // Sort (agency side) and New brief ride the app top bar (decision A);
+  // memoised so the bar only re-renders when one of them changes.
+  const topbar = useMemo(
+    () =>
+      briefsTopbarActions({
+        canCreate: canCreateBrief,
+        ...(showSort ? { sort: { value: sort, onChange: setSort } } : {}),
+      }),
+    [canCreateBrief, showSort, sort, setSort],
+  );
+  useTopbarActions(topbar);
+
   return (
     <>
       <PageHead title="Briefs" hidden />
       {briefsHeader({
-        search,
-        onSearchChange: (value) => setListState(filter, value),
         filter,
-        onFilterChange: (value) => setListState(value, search),
-        counts: searchActive ? (briefSearch.data?.counts ?? {}) : chipCounts,
-        canCreate: canCreateBrief,
-        ...(showSort ? { sort: { value: sort, onChange: setSort } } : {}),
+        onFilterChange: setFilter,
+        counts: chipCounts,
       })}
 
       {listFailed ? (
         <div className={cn(GUTTER, 'mt-4')}>
-          <LoadError
-            title="briefs"
-            onRetry={() => (searchActive ? briefSearch.refresh() : void loadBriefs())}
-            retrying={searchActive ? briefSearch.status === 'loading' : loading}
-          />
+          <LoadError title="briefs" onRetry={() => void loadBriefs()} retrying={loading} />
         </div>
       ) : listLoading ? (
         <BriefsListSkeleton />
       ) : shownCount === 0 ? (
-        briefsEmptyView(
-          briefsEmptyState(filter, searchQuery, workspaceBriefs.length, canCreateBrief),
-          () => setListState(filter, ''),
-        )
+        briefsEmptyView(briefsEmptyState(filter, workspaceBriefs.length, canCreateBrief))
       ) : showSort ? (
         <div ref={listRef} className={LIST_CLASS}>
           <div className={GRID_CLASS}>
@@ -949,12 +851,10 @@ export function BriefsPage() {
         </div>
       )}
 
-      {/* Older briefs load a page at a time; chips, search and sort narrow
-          what is loaded, while the chip counts are server totals. */}
+      {/* Older briefs load a page at a time; chips and sort narrow what is
+          loaded, while the chip counts are server totals. */}
       {!listFailed && !listLoading
-        ? searchActive
-          ? briefsLoadMore(searchNext, loadingMore, () => void loadMoreSearch())
-          : briefsLoadMore(next, loadingMore, () => void loadMore())
+        ? briefsLoadMore(next, loadingMore, () => void loadMore())
         : null}
 
       <CreateBriefSheet

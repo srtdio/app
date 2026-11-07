@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   POST_SORT_OPTIONS,
-  filterByFields,
-  filterByTitle,
   filterByWindow,
   sortByDate,
   sortPosts,
@@ -58,34 +56,6 @@ describe('sortByDate', () => {
     const input = [a, b, c];
     sortByDate(input, 'newest');
     expect(input.map((r) => r.id)).toEqual(['a', 'b', 'c']);
-  });
-});
-
-describe('filterByTitle', () => {
-  const items = [row({ id: 'a', title: 'Launch teaser' }), row({ id: 'b', title: 'Recap reel' })];
-
-  it('matches case-insensitively on a trimmed substring', () => {
-    expect(filterByTitle(items, '  TEASER ').map((r) => r.id)).toEqual(['a']);
-  });
-
-  it('returns the full list for an empty or whitespace query', () => {
-    expect(filterByTitle(items, '')).toHaveLength(2);
-    expect(filterByTitle(items, '   ')).toHaveLength(2);
-  });
-
-  it('returns nothing when no title matches', () => {
-    expect(filterByTitle(items, 'zzz')).toHaveLength(0);
-  });
-
-  // Briefs keeps the title-only path: widening the post search (filterByFields)
-  // must not silently add post fields here.
-  it('matches on title alone, ignoring other fields the caller does not pass', () => {
-    const briefs = [
-      { id: 'a', title: 'Launch', caption: 'teaser', created_at: '2026-01-01', target_date: null },
-      { id: 'b', title: 'Recap', caption: 'launch', created_at: '2026-01-01', target_date: null },
-    ];
-    // "launch" appears in b's caption but filterByTitle only sees the title.
-    expect(filterByTitle(briefs, 'launch').map((r) => r.id)).toEqual(['a']);
   });
 });
 
@@ -337,49 +307,11 @@ describe('filterByWindow', () => {
   });
 });
 
-describe('filterByFields (Pipeline search scope)', () => {
-  const posts = [
-    post({ id: 'a', title: 'Launch teaser', caption: 'Big reveal', platform: 'instagram' }),
-    post({ id: 'b', title: 'Recap reel', caption: 'Behind the scenes', platform: 'tiktok' }),
-    post({ id: 'c', title: 'Promo', caption: null, platform: 'youtube' }),
-  ];
-  const fields = (p: PostRow): (string | null)[] => [p.title, p.caption, p.platform];
-
-  it('matches on title', () => {
-    expect(filterByFields(posts, 'launch', fields).map((p) => p.id)).toEqual(['a']);
-  });
-
-  it('matches on caption (not just title)', () => {
-    expect(filterByFields(posts, 'behind', fields).map((p) => p.id)).toEqual(['b']);
-  });
-
-  it('matches on platform (not just title)', () => {
-    expect(filterByFields(posts, 'youtube', fields).map((p) => p.id)).toEqual(['c']);
-  });
-
-  it('returns empty when nothing matches across any field', () => {
-    expect(filterByFields(posts, 'zzz', fields)).toHaveLength(0);
-  });
-
-  it('is case-insensitive and trims the query', () => {
-    expect(filterByFields(posts, '  TIKTOK ', fields).map((p) => p.id)).toEqual(['b']);
-  });
-
-  it('skips null fields without throwing', () => {
-    expect(filterByFields(posts, 'promo', fields).map((p) => p.id)).toEqual(['c']);
-  });
-
-  it('returns the full list for an empty query', () => {
-    expect(filterByFields(posts, '', fields)).toHaveLength(3);
-  });
-
-  // Guard: if the scope ever narrows back to title-only, caption/platform-only
-  // matches would disappear and these expectations would fail.
-  it('would fail if scope narrowed back to title-only', () => {
-    const captionOnly = filterByFields(posts, 'behind', fields);
-    const platformOnly = filterByFields(posts, 'youtube', fields);
-    expect(captionOnly).toHaveLength(1);
-    expect(platformOnly).toHaveLength(1);
+describe('decision B: the screen search helpers are gone', () => {
+  it('list-sort exports no text filter (search lives only in the command palette)', async () => {
+    const mod: Record<string, unknown> = await import('@/lib/list-sort');
+    expect(mod.filterByFields).toBeUndefined();
+    expect(mod.filterByTitle).toBeUndefined();
   });
 });
 

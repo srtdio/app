@@ -76,6 +76,7 @@ import {
   moveErrorMessage,
   pipelineHeader,
   pipelineSelectActions,
+  pipelineTopbarActions,
   pipelineSurface,
   postCountLabel,
   postsSkeleton,
@@ -90,6 +91,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { parsePipelineQuery } from '@/components/pages/pipeline/pipeline-query';
 import type { UndoableAction } from '@/lib/use-undoable-action';
 import { NoResults } from '@/components/ui/NoResults';
+import { SectionSelect } from '@/components/shell/SectionHeader';
+import { TopbarPlus } from '@/components/shell/topbar-actions';
 import { LIST_CARD_GRID } from '@/components/ui/ListCard';
 import { PipelineFeed } from '@/components/pages/pipeline/PipelineFeed';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -109,16 +112,8 @@ import { dispatchSorted } from '@/lib/events';
 import { STAGE_TRANSITIONS, stageTransition } from '@srtdio/posts';
 import type { Client, PipelinePost, Result, Stage } from '@srtdio/posts';
 import { groupByStage } from '@/lib/post-board';
-import {
-  POST_SORT_DEFAULT,
-  filterByFields,
-  filterByTitle,
-  filterByWindow,
-  sortByDate,
-  type DateWindow,
-} from '@/lib/list-sort';
+import { POST_SORT_DEFAULT, filterByWindow, sortPosts, type DateWindow } from '@/lib/list-sort';
 import { SectionHeader } from '@/components/shell/SectionHeader';
-import { IconPlus } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 import { SortMenu } from '@/components/ui/SortMenu';
 import { StageChips } from '@/components/pages/pipeline/StageChips';
@@ -195,7 +190,7 @@ function isElement(node: ReactNode): node is ReactElement {
   return typeof node === 'object' && node !== null && 'props' in node;
 }
 
-// SectionHeader is hookless and holds search/sort/primaryAction in props, so it
+// SectionHeader is hookless and holds the chips and Select in props, so it
 // is expanded by calling its render once (mirroring SectionHeader's own tests)
 // while leaving stateful children (SortMenu, StageChips) as unexpanded elements.
 function expandSectionHeader(el: ReactElement): ReactElement {
@@ -222,12 +217,6 @@ function findAll(tree: ReactNode, predicate: (el: ReactElement) => boolean): Rea
   return all.filter(predicate);
 }
 
-/** The labelled New post button: its last child is the label, the plus icon leads. */
-function isNewPost(el: ReactElement): boolean {
-  const children = (el.props as { children?: ReactNode }).children;
-  return Array.isArray(children) && children[children.length - 1] === 'New post';
-}
-
 function texts(tree: ReactNode): string[] {
   const out: string[] = [];
   const all: ReactElement[] = [];
@@ -239,89 +228,70 @@ function texts(tree: ReactNode): string[] {
   return out;
 }
 
-function header(canCreate = true): ReactElement {
+function header(selectMode = false, onSelectToggle: () => void = () => {}): ReactElement {
   return pipelineHeader({
-    search: '',
-    onSearchChange: () => {},
-    sort: 'updated',
+    stage: 'all',
+    onStageChange: () => {},
+    counts: { all: 3, draft: 2, review: 1 },
+    selectMode,
+    onSelectToggle,
+  });
+}
+
+function topbar(canCreate = true, sort: 'updated' | 'oldest' | 'target' = 'updated') {
+  return pipelineTopbarActions({
+    sort,
     onSortChange: () => {},
     dateWindow: 'any',
     onDateWindowChange: () => {},
     customRange: null,
     onCustomRangeChange: () => {},
     weekStartDay: 1,
-    stage: 'all',
-    onStageChange: () => {},
-    counts: { all: 3, draft: 2, review: 1 },
     canCreate,
   });
 }
 
-describe('pipelineHeader', () => {
-  it('uses the shared SectionHeader with the one combined filter control (no raw SortMenu)', () => {
+describe('pipelineHeader (decisions A, B, E: chips + Select only)', () => {
+  it('is the shared SectionHeader with no search, no sort and no New post in the row', () => {
     const tree = header();
-    expect(findAll(tree, (el) => el.type === SectionHeader)).toHaveLength(1);
+    const headers = findAll(tree, (el) => el.type === SectionHeader);
+    expect(headers).toHaveLength(1);
+    const props = headers[0]!.props as Record<string, unknown>;
+    for (const gone of ['search', 'sort', 'primaryAction', 'title']) {
+      expect(props).not.toHaveProperty(gone);
+    }
     expect(findAll(tree, (el) => el.type === SortMenu)).toHaveLength(0);
-    expect(findAll(tree, (el) => el.type === PipelineFilterControl)).toHaveLength(1);
-    // The two standalone buttons are gone from the row.
+    expect(findAll(tree, (el) => el.type === PipelineFilterControl)).toHaveLength(0);
     expect(findAll(tree, (el) => el.type === PipelineSortControl)).toHaveLength(0);
     expect(findAll(tree, (el) => el.type === PipelineDateControl)).toHaveLength(0);
+    expect(findAll(tree, (el) => el.type === TopbarPlus)).toHaveLength(0);
+    expect(texts(tree)).not.toContain('New post');
   });
 
-  it('passes the sort to SectionHeader as a { node } that IS the combined control', () => {
-    const headers = findAll(header(), (el) => el.type === SectionHeader);
-    expect(headers).toHaveLength(1);
-    const sort = (headers[0]!.props as { sort: { node?: ReactElement } }).sort;
-    expect(sort.node).toBeDefined();
-    expect(sort.node!.type).toBe(PipelineFilterControl);
-  });
-
-  it('wires the active order and the date-window state to the combined control', () => {
-    const controls = findAll(header(), (el) => el.type === PipelineFilterControl);
-    expect(controls).toHaveLength(1);
-    const props = controls[0]!.props as {
-      order: string;
-      dateWindow: string;
-      customRange: unknown;
-      weekStartDay: number;
-    };
-    expect(props.order).toBe('updated');
-    expect(props.dateWindow).toBe('any');
-    expect(props.customRange).toBeNull();
-    expect(props.weekStartDay).toBe(1);
-  });
-
-  it('is one row on every screen: no phone wrap class, search shrinks, New post never wraps', () => {
+  it('keeps the toolbar hook on its wrapper', () => {
     const tree = header();
     const props = tree.props as { className?: string; 'data-pipeline-toolbar'?: string };
     expect(tree.type).toBe('div');
     expect(props['data-pipeline-toolbar']).toBe('');
     expect(props.className).toBeUndefined();
-    const newPost = findAll(tree, isNewPost)[0]!;
-    const cls = (newPost.props as { className: string }).className;
-    expect(cls).toContain('shrink-0');
-    expect(cls).toContain('whitespace-nowrap');
-    expect(cls).not.toContain('max-md:');
-    // Labelled, with the plus icon leading: never an icon-only button.
-    const children = (newPost.props as { children: ReactNode[] }).children;
-    expect(children).toHaveLength(2);
-    expect((children[0] as ReactElement).type).toBe(IconPlus);
-    expect(children[1]).toBe('New post');
-    // The search is still the one SectionHeader field, first in its row.
-    const section = findAll(tree, (el) => el.type === SectionHeader)[0]!;
-    expect((section.props as { search: { placeholder: string } }).search.placeholder).toBe(
-      'Search posts',
-    );
   });
 
-  it('dispatches sorted:create-post from the New post action', () => {
-    const button = findAll(header(), isNewPost);
-    expect(button).toHaveLength(1);
-    (button[0]!.props as { onClick: () => void }).onClick();
-    expect(dispatchSorted).toHaveBeenCalledWith('sorted:create-post');
+  it('puts the visible Select in the select slot, wired to select mode', () => {
+    const toggle = vi.fn();
+    const off = findAll(header(false, toggle), (el) => el.type === SectionHeader)[0]!;
+    const select = (off.props as { select: ReactElement }).select;
+    expect(select.type).toBe(SectionSelect);
+    const props = select.props as { active: boolean; onToggle: () => void };
+    expect(props.active).toBe(false);
+    props.onToggle();
+    expect(toggle).toHaveBeenCalledTimes(1);
+    const on = findAll(header(true), (el) => el.type === SectionHeader)[0]!;
+    expect(
+      ((on.props as { select: ReactElement }).select.props as { active: boolean }).active,
+    ).toBe(true);
   });
 
-  it('keeps the stage chip bar in the filter slot', () => {
+  it('keeps the stage chip bar in the chip slot', () => {
     const chips = findAll(header(), (el) => el.type === StageChips);
     expect(chips).toHaveLength(1);
     const items = (chips[0]!.props as { items: { key: string; label: string; count: number }[] })
@@ -342,6 +312,64 @@ describe('pipelineHeader', () => {
   });
 });
 
+describe('pipelineTopbarActions (decision A: sort and "+" in the top bar)', () => {
+  it('sort is the one combined Sort + Due date control, wired to the order and window', () => {
+    const { sort } = topbar();
+    expect(sort.type).toBe(PipelineFilterControl);
+    const props = sort.props as {
+      order: string;
+      dateWindow: string;
+      customRange: unknown;
+      weekStartDay: number;
+    };
+    expect(props.order).toBe('updated');
+    expect(props.dateWindow).toBe('any');
+    expect(props.customRange).toBeNull();
+    expect(props.weekStartDay).toBe(1);
+  });
+
+  it('primary is TopbarPlus "New post" with the old induction key, dispatching create-post', () => {
+    const { primary } = topbar(true);
+    expect(primary).toBeDefined();
+    expect(primary!.type).toBe(TopbarPlus);
+    const props = primary!.props as { label: string; induction?: string; onClick: () => void };
+    expect(props.label).toBe('New post');
+    expect(props.induction).toBe(INDUCTION_KEYS.pipelineCreate);
+    props.onClick();
+    expect(dispatchSorted).toHaveBeenCalledWith('sorted:create-post');
+  });
+
+  it('a person who cannot create posts (a client) gets no "+"; the sort stays', () => {
+    const { sort, primary } = topbar(false);
+    expect(primary).toBeUndefined();
+    expect(sort.type).toBe(PipelineFilterControl);
+  });
+
+  it('the page publishes them with useTopbarActions and gates "+" on post.create', () => {
+    const src = readFileSync(fileURLToPath(new URL('./PipelinePage.tsx', import.meta.url)), 'utf8');
+    expect(src).toContain('useTopbarActions(topbar)');
+    expect(src).toContain("useWorkspaceCapability('post.create') === true");
+    expect(src).toMatch(/pipelineTopbarActions\(\{[\s\S]*?canCreate,[\s\S]*?\}\)/);
+  });
+});
+
+describe('decision B: no screen search on the Pipeline', () => {
+  it('the page holds no search state, search read, debounce or ?q= param', () => {
+    const src = readFileSync(fileURLToPath(new URL('./PipelinePage.tsx', import.meta.url)), 'utf8');
+    for (const gone of [
+      'useServerSearch',
+      'searchPipelinePosts',
+      'postSearchFields',
+      'setSearch',
+      'searchActive',
+      'searchPending',
+      'Search posts',
+    ]) {
+      expect(src).not.toContain(gone);
+    }
+  });
+});
+
 describe('opens on the Review chip by default', () => {
   it('initializes the stage filter to review, the stages in order and All closing the row (no Plan chip)', () => {
     // (a) A query naming no stage (the stage lives in the URL now) opens on 'review'.
@@ -352,19 +380,11 @@ describe('opens on the Review chip by default', () => {
     // the review default only shifts which chip is selected, never the list.
     const chips = findAll(
       pipelineHeader({
-        search: '',
-        onSearchChange: () => {},
-        sort: 'updated',
-        onSortChange: () => {},
-        dateWindow: 'any',
-        onDateWindowChange: () => {},
-        customRange: null,
-        onCustomRangeChange: () => {},
-        weekStartDay: 1,
         stage: initial,
         onStageChange: () => {},
         counts: { all: 3, draft: 2, review: 1 },
-        canCreate: true,
+        selectMode: false,
+        onSelectToggle: () => {},
       }),
       (el) => el.type === StageChips,
     );
@@ -383,7 +403,7 @@ describe('opens on the Review chip by default', () => {
     // A stale ?view=plan link still opens Review: only the pipeline keys are read.
     expect(
       parsePipelineQuery(new URLSearchParams('view=plan&week=2026-06-15'), INITIAL_STAGE),
-    ).toEqual({ stage: 'review', search: '', dateWindow: 'any', customRange: null });
+    ).toEqual({ stage: 'review', dateWindow: 'any', customRange: null });
   });
 });
 
@@ -435,11 +455,11 @@ describe('the surface', () => {
 });
 
 describe('honest post counter (fix 3)', () => {
-  // Mirror PipelinePage's derivation exactly: filter -> sort -> group -> count ->
-  // label. The header counter must read this filtered total (counts.all), never
-  // the raw unfiltered posts.length and never a per-stage display cap.
-  function deriveLabel(posts: PipelinePost[], search: string): string {
-    const grouped = groupByStage(sortByDate(filterByTitle(posts, search), 'newest'), STAGES);
+  // Mirror PipelinePage's derivation exactly: sort -> group -> count -> label.
+  // The counter reads the grouped total (counts.all), never a per-stage
+  // display cap.
+  function deriveLabel(posts: PipelinePost[]): string {
+    const grouped = groupByStage(sortPosts(posts, 'updated'), STAGES);
     return postCountLabel(stageCounts(grouped, STAGES).all ?? 0);
   }
 
@@ -451,17 +471,9 @@ describe('honest post counter (fix 3)', () => {
     { ...makePost('5', 'rejected'), title: 'Delta note' },
   ];
 
-  it('reflects the full total when the search is empty', () => {
-    expect(deriveLabel(posts, '')).toBe('5 posts');
-  });
-
-  it('reflects the FILTERED total under an active search (not the unfiltered length)', () => {
-    // "beta" matches two posts spread across two stages.
-    expect(deriveLabel(posts, 'beta')).toBe('2 posts');
-    // A single match is singularised.
-    expect(deriveLabel(posts, 'alpha')).toBe('1 post');
-    // Guard: the counter must move with the search, never revert to posts.length.
-    expect(deriveLabel(posts, 'alpha')).not.toBe(postCountLabel(posts.length));
+  it('reflects the full total across every stage', () => {
+    expect(deriveLabel(posts)).toBe('5 posts');
+    expect(deriveLabel(posts.slice(0, 1))).toBe('1 post');
   });
 
   it('counts the filtered total across stages, never the per-stage display cap', () => {
@@ -469,8 +481,8 @@ describe('honest post counter (fix 3)', () => {
       ...makePost(`m${i}`, 'draft'),
       title: 'Capped item',
     }));
-    // 25 matches in one stage: the filtered total, not a cap of 10.
-    expect(deriveLabel(many, 'capped')).toBe('25 posts');
+    // 25 posts in one stage: the total, not a cap of 10.
+    expect(deriveLabel(many)).toBe('25 posts');
   });
 });
 
@@ -667,27 +679,11 @@ describe('persisted sort sanitization (fix 1)', () => {
     expect(sanitizePostSort('target')).toBe('target');
   });
 
-  it("the header's active order is the sanitized default for a stale persisted value", () => {
+  it("the top bar's active order is the sanitized default for a stale persisted value", () => {
     // Mirror the page: a stale localStorage value (seed sorted:sort:pipeline =
     // 'newest') is sanitized before it reaches the consolidated control's order.
-    const activeSort = sanitizePostSort('newest');
-    const tree = pipelineHeader({
-      search: '',
-      onSearchChange: () => {},
-      sort: activeSort,
-      onSortChange: () => {},
-      dateWindow: 'any',
-      onDateWindowChange: () => {},
-      customRange: null,
-      onCustomRangeChange: () => {},
-      weekStartDay: 1,
-      stage: 'all',
-      onStageChange: () => {},
-      counts: { all: 0 },
-      canCreate: true,
-    });
-    const controls = findAll(tree, (el) => el.type === PipelineFilterControl);
-    expect((controls[0]!.props as { order: string }).order).toBe(POST_SORT_DEFAULT);
+    const { sort } = topbar(true, sanitizePostSort('newest'));
+    expect((sort.props as { order: string }).order).toBe(POST_SORT_DEFAULT);
   });
 });
 
@@ -868,16 +864,12 @@ describe('PipelineSortControl and PipelineDateControl (two buttons)', () => {
 });
 
 describe('target-date window narrows every surface (fix A)', () => {
-  // Mirror PipelinePage's derivation: filterByFields -> filterByWindow -> count.
+  // Mirror PipelinePage's derivation: filterByWindow -> count.
   // Fixed now: Wed 2026-06-17 12:00 UTC, so the Mon-Sun week is 2026-06-15..21
   // and the month is June 2026.
   const now = new Date('2026-06-17T12:00:00Z');
   function deriveCount(posts: PipelinePost[], dateWindow: DateWindow): number {
-    const filtered = filterByWindow(
-      filterByFields(posts, '', (p) => [p.title, p.caption, p.platform]),
-      dateWindow,
-      { now, timeZone: 'UTC', weekStartDay: 1 },
-    );
+    const filtered = filterByWindow(posts, dateWindow, { now, timeZone: 'UTC', weekStartDay: 1 });
     return stageCounts(groupByStage(filtered, STAGES), STAGES).all ?? 0;
   }
   const posts: PipelinePost[] = [
@@ -901,55 +893,37 @@ describe('target-date window narrows every surface (fix A)', () => {
 
   it("'custom' narrows the derivation to the inclusive picked range", () => {
     // Mirror the page derivation with a custom range covering only post 'a'.
-    const filtered = filterByWindow(
-      filterByFields(posts, '', (p) => [p.title, p.caption, p.platform]),
-      'custom',
-      {
-        now,
-        timeZone: 'UTC',
-        weekStartDay: 1,
-        customRange: { start: '2026-06-16', end: '2026-06-16' },
-      },
-    );
+    const filtered = filterByWindow(posts, 'custom', {
+      now,
+      timeZone: 'UTC',
+      weekStartDay: 1,
+      customRange: { start: '2026-06-16', end: '2026-06-16' },
+    });
     const count = stageCounts(groupByStage(filtered, STAGES), STAGES).all ?? 0;
     expect(count).toBe(1);
   });
 });
 
 describe('W4 fix 3: create gating', () => {
-  it('hides the New post button unless post.create is granted', () => {
-    expect(findAll(header(false), isNewPost)).toHaveLength(0);
-    expect(findAll(header(true), isNewPost)).toHaveLength(1);
-  });
-
-  it('shows New post as visible text, not an icon-only button', () => {
-    const button = findAll(header(true), isNewPost)[0]!;
-    const props = button.props as {
-      'aria-label'?: string;
-      'data-induction'?: string;
-      className?: string;
-    };
-    expect(props['aria-label']).toBeUndefined();
-    expect(props['data-induction']).toBe(INDUCTION_KEYS.pipelineCreate);
-    expect(props.className).toContain('whitespace-nowrap');
-    // The plus icon leads the label; the button is never icon-only.
-    expect(findAll(button, (el) => el.type === IconPlus)).toHaveLength(1);
-    expect(
-      findAll(
-        header(true),
-        (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Create post',
-      ),
-    ).toHaveLength(0);
+  it('the "+" is icon-only with "New post" as its accessible label, only with post.create', () => {
+    expect(topbar(false).primary).toBeUndefined();
+    const plus = topbar(true).primary!;
+    expect((plus.props as { label: string }).label).toBe('New post');
+    // The old labelled header button and its loading placeholder are gone.
+    const src = readFileSync(fileURLToPath(new URL('./PipelinePage.tsx', import.meta.url)), 'utf8');
+    expect(src).not.toContain('NEW_POST_CLASS');
+    expect(src).not.toContain('data-create-placeholder');
+    expect(src).not.toContain('createPending');
   });
 });
 
 describe('W4 fix 4: filtered empty state', () => {
-  it('renders the shared NoResults with the search and date filter, wired to the reset', () => {
+  it('renders the shared NoResults for the date filter, wired to the reset', () => {
     const onClear = vi.fn();
-    const tree = filteredEmpty('launch', true, onClear);
+    const tree = filteredEmpty(onClear);
     const empty = findAll(tree, (el) => el.type === NoResults)[0]!;
-    const props = empty.props as { query: string; filtersActive: boolean; onClear: () => void };
-    expect(props.query).toBe('launch');
+    const props = empty.props as { query?: string; filtersActive: boolean; onClear: () => void };
+    expect(props.query).toBeUndefined();
     expect(props.filtersActive).toBe(true);
     props.onClear();
     expect(onClear).toHaveBeenCalledTimes(1);
@@ -1044,39 +1018,6 @@ describe('E: clients never see Draft', () => {
 });
 
 describe('E: no jumps while loading', () => {
-  it('the New post space is held while post.create is still loading', () => {
-    const tree = pipelineHeader({
-      search: '',
-      onSearchChange: () => {},
-      sort: 'updated',
-      onSortChange: () => {},
-      dateWindow: 'any',
-      onDateWindowChange: () => {},
-      customRange: null,
-      onCustomRangeChange: () => {},
-      weekStartDay: 1,
-      stage: 'all',
-      onStageChange: () => {},
-      counts: { all: 0 },
-      canCreate: false,
-      createPending: true,
-    });
-    const held = findAll(tree, isNewPost);
-    expect(held).toHaveLength(1);
-    const props = held[0]!.props as {
-      className: string;
-      'aria-hidden'?: string;
-      tabIndex?: number;
-      disabled?: boolean;
-      onClick?: unknown;
-    };
-    expect(props.className).toContain('invisible');
-    expect(props['aria-hidden']).toBe('true');
-    expect(props.tabIndex).toBe(-1);
-    expect(props.disabled).toBe(true);
-    expect(props.onClick).toBeUndefined();
-  });
-
   it('the skeleton is ListCardBox boxes in the list grid, the same on phone and laptop', () => {
     const out = renderToStaticMarkup(postsSkeleton());
     expect(out).toContain('data-posts-skeleton=""');
