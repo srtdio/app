@@ -8,6 +8,7 @@
 import type { Client, Result } from '@srtdio/rpc';
 import { olderThanFilter } from '@/lib/chat/history';
 import { parseAttachmentMeta } from '@/lib/chat/attachments';
+import { withoutGone } from '@/lib/chat/media-gone';
 import { classify, tokenize, type EntityRoutes } from '@/lib/chat/message-links';
 import type { MessageCursor } from '@/lib/chat/thread';
 
@@ -76,7 +77,8 @@ function pageOf<T>(
 
 /** Flatten attachment rows (already newest first) to one item per asset version id. */
 export function toAttachmentItems(rows: readonly AttachmentRow[]): ChannelAttachmentItem[] {
-  return rows.flatMap((row) =>
+  // A message deleted for everyone, or hidden for me and written, lists nothing.
+  return withoutGone(rows, (row) => row.id).flatMap((row) =>
     parseAttachmentMeta(row.attachment_meta, row.attachment_asset_ids ?? []).map((a) => ({
       messageId: row.id,
       versionId: a.assetId,
@@ -112,7 +114,7 @@ export function toLinkItems(
   appOrigin: string | null,
   routes: EntityRoutes,
 ): ChannelLinkItem[] {
-  return rows.flatMap((row) =>
+  return withoutGone(rows, (row) => row.id).flatMap((row) =>
     tokenize(row.body ?? '').flatMap((segment) =>
       segment.kind === 'url' && classify(segment.url, appOrigin, routes).kind === 'external'
         ? [

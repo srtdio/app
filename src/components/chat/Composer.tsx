@@ -151,6 +151,7 @@ import {
 } from '@/lib/chat/voice-draft';
 import { StopRecordingDialog, VoiceDraftBar, leaveAfterGuard } from '@/components/chat/VoiceDraft';
 import { isSendKeydown } from '@/lib/chat/send-key';
+import { pickedSizeFields, readPickedSize } from '@/lib/chat/media-size';
 import { errorText } from '@/lib/error-copy';
 
 export interface ComposerProps {
@@ -858,7 +859,12 @@ export function draftAttachments(
   pending: readonly Pending[],
   upload: AttachmentUploader | undefined,
 ): MessageAttachment[] {
-  return pending.map((item) => toLocalAttachment(item.file, item.previewUrl, upload));
+  // A photo's natural size, read at pick (readPickedSize), rides the send as
+  // thumbW/thumbH so its bubble paints its final box on the first frame.
+  return pending.map((item) => ({
+    ...toLocalAttachment(item.file, item.previewUrl, upload),
+    ...pickedSizeFields(item.file),
+  }));
 }
 
 /**
@@ -1278,6 +1284,8 @@ export function Composer(props: ComposerProps): ReactElement {
         continue;
       }
       const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+      // At pick, never at paint: the photo's natural size, for its bubble box.
+      readPickedSize(file, previewUrl);
       accepted.push({ id: `att-${(pendingSeq += 1)}`, file, previewUrl });
     }
     if (accepted.length > 0) setPending((prev) => [...prev, ...accepted]);
