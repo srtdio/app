@@ -129,18 +129,14 @@ test('personal notes: phone', async ({ page }) => {
     menu
       .locator('[data-menu-item]')
       .evaluateAll((els) => els.map((el) => el.getAttribute('data-menu-item')));
-  // Copy is top level; Save to notes sits under More, after Select and before Remind me.
-  const top = await menuKeys();
-  expect(top).toContain('copy');
-  expect(top).not.toContain('save-notes');
-  expect(top.indexOf('more')).toBeGreaterThan(top.indexOf('copy'));
-  await menu.locator('[data-menu-item="more"]').click();
+  // One level: Copy, Select, then Save to notes after Forward.
   const keys = await menuKeys();
+  expect(keys).toContain('copy');
+  expect(keys).not.toContain('more');
   const selectAt = keys.indexOf('select-text');
   const saveAt = keys.indexOf('save-notes');
-  const remindAt = keys.indexOf('remind');
+  expect(selectAt).toBeGreaterThan(keys.indexOf('copy'));
   expect(saveAt).toBeGreaterThan(selectAt);
-  expect(remindAt).toBeGreaterThan(saveAt);
   const sends = rpcCalls(page, 'chat_message_send');
   await menu.locator('[data-menu-item="save-notes"]').click();
   const toast = page.getByRole('button', { name: /Saved to Personal notes/ });

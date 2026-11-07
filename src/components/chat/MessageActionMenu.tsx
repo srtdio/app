@@ -1,12 +1,18 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+// The message action menu: the quick reactions on top, then ONE level of
+// rows (no More submenu): Reply, Reply privately, Copy, Select, Transcribe,
+// Forward, Save to notes, Edit, then one hairline divider and the danger
+// rows, Remove file and Delete (last). The divider shows only when a danger
+// row does. Each row shows only when it applies (the same conditions as
+// before); Edit and Delete keep their "15 min" / "30 min" hints. A phone gets
+// a ui/Sheet, a laptop a MenuPopover at the bubble.
+
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode, RefObject } from 'react';
 import { growFromTrigger, riseIn, trackDim } from '@/lib/motion';
 import { menuOrigin } from '@/components/ui/popover-classes';
 import { createPortal } from 'react-dom';
 import {
   ICON_SIZE,
-  IconChevronLeft,
-  IconChevronRight,
   IconCopy,
   IconEdit,
   IconFile,
@@ -224,8 +230,6 @@ export interface MessageMenuItem {
   danger?: boolean;
   /** Muted note at the right ("15 min"). */
   hint?: string;
-  /** Opens the in-place submenu instead of running and closing. */
-  submenu?: boolean;
 }
 
 type MenuItemProps = Pick<
@@ -260,21 +264,9 @@ export const SAVE_TO_NOTES_LABEL = 'Save to notes';
 /**
  * A row's tap, inside its click: the action runs before the menu closes, so
  * Reply focuses the composer within the user's own tap (decision 128) and the
- * menu's focus return finds focus already taken. More opens its
- * submenu; Back returns from it; neither closes. Pure.
+ * menu's focus return finds focus already taken. Pure.
  */
-export function runMenuItem(
-  item: MessageMenuItem,
-  menu: { openMore?: () => void; close: () => void },
-): void {
-  if (item.key === 'more') {
-    menu.openMore?.();
-    return;
-  }
-  if (item.key === 'back') {
-    item.run();
-    return;
-  }
+export function runMenuItem(item: MessageMenuItem, menu: { close: () => void }): void {
   item.run();
   menu.close();
 }
@@ -285,16 +277,13 @@ export const MENU_ICON_SIZE = ICON_SIZE.tray;
 /** The row that selects part of one message's text in place. */
 export const SELECT_TEXT_LABEL = 'Select';
 
-/** The top-level row that opens the rest of the actions. */
-export const MORE_LABEL = 'More';
-
 /**
- * The main view in display order: Reply, Reply privately (someone else's
- * message in a group), Copy, Forward, Edit, More, then
- * Delete last (or the locked line). Everything else sits
- * under More (see moreMenuItems); More shows only when it has a row. No
- * dividers. Rows that do not apply are not rendered. Pure (no hooks) so the
- * row set is unit-tested without a DOM.
+ * The rows in display order, one level: Reply, Reply privately (someone else's
+ * message in a group), Copy, Select, Transcribe, Forward, Save to notes,
+ * Edit, then the danger rows: Remove file, Delete (last). Rows that do not
+ * apply are not rendered; the divider before the danger rows is the
+ * renderer's (dividerBefore). Pure (no hooks) so the row set is unit-tested
+ * without a DOM.
  */
 export function messageMenuItems(
   props: MenuItemProps,
@@ -329,6 +318,24 @@ export function messageMenuItems(
       run: props.onCopy,
     });
   }
+  if (props.canSelectText === true) {
+    items.push({
+      kind: 'action',
+      key: 'select-text',
+      label: SELECT_TEXT_LABEL,
+      icon: <IconSelectText size={size} />,
+      run: () => props.onSelectText?.(),
+    });
+  }
+  if (props.canTranscribe === true) {
+    items.push({
+      kind: 'action',
+      key: 'transcribe',
+      label: 'Transcribe',
+      icon: <IconText size={size} />,
+      run: () => props.onTranscribe?.(),
+    });
+  }
   if (props.canForward === true) {
     items.push({
       kind: 'action',
@@ -336,6 +343,15 @@ export function messageMenuItems(
       label: 'Forward',
       icon: <IconForward size={size} />,
       run: () => props.onForward?.(),
+    });
+  }
+  if (props.canSaveToNotes === true) {
+    items.push({
+      kind: 'action',
+      key: 'save-notes',
+      label: SAVE_TO_NOTES_LABEL,
+      icon: <IconFile size={size} />,
+      run: () => props.onSaveToNotes?.(),
     });
   }
   if (props.canEdit === true) {
@@ -348,15 +364,14 @@ export function messageMenuItems(
       run: () => props.onEdit?.(),
     });
   }
-  if (moreMenuItems(props).length > 0) {
-    // The ⋯ glyph is the menu opener's alone; More leads with the chevron Back mirrors.
+  if (props.canRemoveFile === true) {
     items.push({
       kind: 'action',
-      key: 'more',
-      label: MORE_LABEL,
-      icon: <IconChevronRight size={size} />,
-      run: () => {},
-      submenu: true,
+      key: 'remove-file',
+      label: REMOVE_FILE_MENU_LABEL,
+      icon: <IconTrash size={size} />,
+      danger: true,
+      run: () => props.onRemoveFile?.(),
     });
   }
   if (props.canDelete === true) {
@@ -374,72 +389,12 @@ export function messageMenuItems(
 }
 
 /**
- * The rows under More, in display order: Transcribe, Select, "Save to notes",
- * then "Remove file" last (danger). Rows that do not apply are not
- * rendered; empty hides More. Pure.
+ * Where the one divider goes: before the first danger row, when one follows
+ * another row; null when no danger row shows (or a danger row is alone). Pure.
  */
-export function moreMenuItems(
-  props: MenuItemProps,
-  size: number = MENU_ICON_SIZE,
-): MessageMenuItem[] {
-  const items: MessageMenuItem[] = [];
-  if (props.canTranscribe === true) {
-    items.push({
-      kind: 'action',
-      key: 'transcribe',
-      label: 'Transcribe',
-      icon: <IconText size={size} />,
-      run: () => props.onTranscribe?.(),
-    });
-  }
-  if (props.canSelectText === true) {
-    items.push({
-      kind: 'action',
-      key: 'select-text',
-      label: SELECT_TEXT_LABEL,
-      icon: <IconSelectText size={size} />,
-      run: () => props.onSelectText?.(),
-    });
-  }
-  if (props.canSaveToNotes === true) {
-    items.push({
-      kind: 'action',
-      key: 'save-notes',
-      label: SAVE_TO_NOTES_LABEL,
-      icon: <IconFile size={size} />,
-      run: () => props.onSaveToNotes?.(),
-    });
-  }
-  if (props.canRemoveFile === true) {
-    items.push({
-      kind: 'action',
-      key: 'remove-file',
-      label: REMOVE_FILE_MENU_LABEL,
-      icon: <IconTrash size={size} />,
-      danger: true,
-      run: () => props.onRemoveFile?.(),
-    });
-  }
-  return items;
-}
-
-/** The More submenu: Back, then its rows (see moreMenuItems). */
-export function moreSubmenuItems(
-  props: MenuItemProps,
-  onBack: () => void,
-  size: number = MENU_ICON_SIZE,
-): MessageMenuItem[] {
-  return [
-    {
-      kind: 'action',
-      key: 'back',
-      label: 'Back',
-      icon: <IconChevronLeft size={size} />,
-      run: onBack,
-      submenu: true,
-    },
-    ...moreMenuItems(props, size),
-  ];
+export function dividerBefore(items: readonly MessageMenuItem[]): number | null {
+  const at = items.findIndex((item) => item.danger === true);
+  return at > 0 ? at : null;
 }
 
 /** Whether a keydown while the menu is open closes it. */
@@ -468,8 +423,8 @@ export function focusFirstMenuItem(root: MenuRoot | null): boolean {
 export const MENU_ROW = 'flex min-h-11 w-full items-center gap-3 px-4';
 
 /**
- * One row, ActionMenu's row look: base text, the icon (or dot) left in the
- * row's ink, Delete in bad, a muted sm hint or a submenu chevron right.
+ * One row, ActionMenu's row look: base text, the icon left in the row's ink,
+ * Delete in bad, a muted sm hint right.
  */
 export function MenuRow(props: {
   item: MessageMenuItem;
@@ -497,11 +452,6 @@ export function MenuRow(props: {
       </span>
       {item.hint !== undefined ? (
         <span className="shrink-0 text-sm text-fg-3">{item.hint}</span>
-      ) : null}
-      {item.submenu === true && item.key !== 'back' && item.key !== 'more' ? (
-        <span className="shrink-0 text-fg-3">
-          <IconChevronRight />
-        </span>
       ) : null}
     </PressableRow>
   );
@@ -958,8 +908,7 @@ export function EmojiPickerShell(props: {
  * one ⋯ container rule (ui/ActionMenu): phone (useIsLaptop false) a ui/Sheet,
  * laptop a shell/MenuPopover anchored under the bubble on its side (lifted to
  * stay on screen). The quick reactions sit on top (hairline under them), then
- * the rows; More swaps the rows for its submenu in place, Back
- * returns. It focuses the first row on open and hands focus back on close.
+ * the rows, one level, a hairline before the danger rows. It focuses the first row on open and hands focus back on close.
  * The laptop popover also closes on scroll or resize (never while the emoji
  * picker is open). Tokens only, so light and dark stay at parity.
  */
@@ -967,7 +916,6 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   const { open, onClose, anchor, mine, currentReaction, onReact } = props;
   const isLaptop = useIsLaptop();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState<'main' | 'more'>('main');
   const [picking, setPicking] = useState(false);
   const pickingRef = useRef(false);
   pickingRef.current = picking;
@@ -986,7 +934,6 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
 
   useEffect(() => {
     if (open) return;
-    setView('main');
     setPicking(false);
   }, [open]);
 
@@ -1001,9 +948,9 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
     if (panel === null) return;
     const overflow = anchor.bottom + 8 + panel.offsetHeight - (visibleViewportHeight(window) - 8);
     setLift(overflow > 0 ? Math.min(overflow, Math.max(0, anchor.bottom - 8)) : 0);
-  }, [open, isLaptop, anchor, view]);
+  }, [open, isLaptop, anchor]);
 
-  // Focus the first row on open and on each submenu swap; hand it back on close.
+  // Focus the first row on open; hand it back on close.
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement;
@@ -1021,7 +968,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   useEffect(() => {
     if (!open) return;
     focusFirstMenuItem(containerRef.current);
-  }, [open, view]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -1060,18 +1007,10 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
   const active = open && anchor !== null;
   const reactionsOnly = props.reactionsOnly === true;
   const size = MENU_ICON_SIZE;
-  const items = !active
-    ? []
-    : reactionsOnly
-      ? []
-      : view === 'more'
-        ? moreSubmenuItems(props, () => setView('main'), size)
-        : messageMenuItems(props, size);
+  const items = !active || reactionsOnly ? [] : messageMenuItems(props, size);
+  const divider = dividerBefore(items);
   const run = (item: MessageMenuItem): void => {
-    runMenuItem(item, {
-      openMore: () => setView('more'),
-      close: onClose,
-    });
+    runMenuItem(item, { close: onClose });
   };
 
   const body = (
@@ -1091,7 +1030,7 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
           : undefined
       }
     >
-      {props.canReact !== false && view === 'main' ? (
+      {props.canReact !== false ? (
         <ReactionsRow
           currentReaction={currentReaction}
           reactionsOnly={reactionsOnly}
@@ -1103,8 +1042,13 @@ export function MessageActionMenu(props: MessageActionMenuProps): ReactElement |
           moreRef={moreRef}
         />
       ) : null}
-      {items.map((item) => (
-        <MenuRow key={item.key} item={item} onRun={run} />
+      {items.map((item, index) => (
+        <Fragment key={item.key}>
+          {index === divider ? (
+            <div aria-hidden="true" data-menu-divider="" className="border-t border-border" />
+          ) : null}
+          <MenuRow item={item} onRun={run} />
+        </Fragment>
       ))}
     </div>
   );

@@ -3288,7 +3288,6 @@ SCREENS.push(
     url: '/chat',
     steps: async (page) => {
       await openDmMessageMenu(page);
-      await tap([page.locator('[data-menu-item="more"]')], 'More');
       await tap([page.locator('[data-menu-item="select-text"]')], 'Select');
       await waitFor([page.locator('[data-selecting-text]')], 'select mode');
       await page.mouse.move(0, 0);

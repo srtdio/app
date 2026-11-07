@@ -80,14 +80,9 @@ async function userSelect(target: Locator): Promise<string> {
   });
 }
 
-/** Select sits under More. */
-async function openMore(page: Page): Promise<void> {
-  await menu(page).locator('[data-menu-item="more"]').click();
-  await expect(menu(page).locator('[data-menu-item="back"]')).toBeVisible();
-}
-
+/** Select is a top-level row (the menu is one level). */
 async function pickSelect(page: Page): Promise<void> {
-  await openMore(page);
+  await expect(menu(page).locator('[data-menu-item="more"]')).toHaveCount(0);
   await menu(page).locator('[data-menu-item="select-text"]').click();
   await expect(menu(page)).toHaveCount(0);
 }
@@ -149,7 +144,6 @@ test.describe('iPhone', () => {
     const viewport = page.viewportSize();
     if (viewport !== null) expect(panel.y + panel.height).toBeLessThanOrEqual(viewport.height);
     await expectMenuStyle(page);
-    await openMore(page);
     await expect(menu(page).locator('[data-menu-item="select-text"]')).toBeVisible();
     await expect(menu(page).locator('[data-menu-item="select"]')).toHaveCount(0);
   });
