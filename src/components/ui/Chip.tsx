@@ -29,8 +29,8 @@ interface ChipProps extends Omit<
   tab?: boolean;
   variant?: 'default' | 'add';
   /**
-   * Both sizes render the one 44px button height (design system); 'sm' stays
-   * accepted so call sites compile.
+   * Both sizes render the one 32px visible chip inside a 44px tap box (design
+   * system); 'tap' also centres the label. 'sm' stays accepted so call sites compile.
    */
   size?: 'sm' | 'tap';
   /**
@@ -50,10 +50,29 @@ interface ChipProps extends Omit<
   onClear?: (() => void) | undefined;
 }
 
+/** The visible chip: 32 tall (min-h-8, borders included), 12 side padding. */
 const sizes: Record<NonNullable<ChipProps['size']>, string> = {
-  sm: 'min-h-11 px-4',
-  tap: 'min-h-11 px-4 justify-center',
+  sm: 'min-h-8 px-3',
+  tap: 'min-h-8 px-3 justify-center',
 };
+
+/**
+ * The 44 tap box around the 32 chip: no look of its own (transparent, no
+ * padding), so a chip row keeps its 44 height. Its focus line is drawn on the
+ * visible chip, the box's one child span.
+ */
+export const CHIP_HIT =
+  'group relative inline-flex min-h-11 items-center outline-none [&:focus-visible>span]:lit-focus disabled:pointer-events-none disabled:cursor-default';
+
+/** A call site's layout classes that also apply to the tap box (it sits in their row). */
+const LAYOUT = /^(flex|shrink|grow|basis-|self-|order-|w-|min-w-|max-w-)/;
+
+/** The caller's className split: layout classes for the tap box (the chip face gets all). Pure. */
+export function chipHitLayout(className: string | undefined): string | undefined {
+  if (className === undefined) return undefined;
+  const kept = className.split(/\s+/).filter((t) => LAYOUT.test(t));
+  return kept.length > 0 ? kept.join(' ') : undefined;
+}
 
 /**
  * The chip's state for assistive tech: a tab chip is role="tab" with
@@ -93,36 +112,41 @@ export function Chip({
       ref={buttonRef}
       data-selected={selected ? 'true' : undefined}
       onClick={onClick}
-      className={cn(
-        // At rest a quiet grey fill (no edge); the pick is the solid ink fill
-        // (bg-accent, lit-pill), the same look as a picked day. Hover/press: the
-        // lit-hover overlay, no flat swap. Disabled: fg-3 ink, never a fade.
-        'inline-flex items-center gap-2 rounded-lg border text-base font-medium focus-visible:lit-focus disabled:text-fg-3 disabled:pointer-events-none disabled:cursor-default',
-        MOVE_CLASS.press,
-        sizes[size],
-        variant === 'add'
-          ? 'lit-chip border-dashed border-border-strong text-fg-3'
-          : selected
-            ? 'border-transparent bg-accent text-accent-fg lit-pill'
-            : 'border-transparent bg-panel-3 text-fg lit-well-soft lit-hover',
-        className,
-      )}
+      className={cn(CHIP_HIT, MOVE_CLASS.press, chipHitLayout(className))}
     >
-      {dot}
-      {trailing === undefined ? label : <span className="truncate">{label}</span>}
-      {trailing}
-      {count !== undefined && count > 0 ? (
-        <>
-          {' '}
-          <span className="tabular-nums">{count}</span>
-        </>
-      ) : null}
-      {onClear !== undefined ? <span aria-hidden="true" className="w-4 shrink-0" /> : null}
+      <span
+        data-chip-face=""
+        className={cn(
+          // At rest a quiet grey fill (no edge); the pick is the solid ink fill
+          // (bg-accent, lit-pill), the same look as a picked day. Hover/press: the
+          // lit-hover overlay, no flat swap. Disabled: fg-3 ink, never a fade.
+          'inline-flex min-w-0 flex-1 items-center gap-2 rounded-lg border text-md font-medium group-disabled:text-fg-3',
+          sizes[size],
+          variant === 'add'
+            ? 'lit-chip border-dashed border-border-strong text-fg-3'
+            : selected
+              ? 'border-transparent bg-accent text-accent-fg lit-pill'
+              : 'border-transparent bg-panel-3 text-fg lit-well-soft lit-hover',
+          className,
+        )}
+      >
+        {dot}
+        {trailing === undefined ? label : <span className="truncate">{label}</span>}
+        {trailing}
+        {count !== undefined && count > 0 ? (
+          <>
+            {' '}
+            <span className="tabular-nums">{count}</span>
+          </>
+        ) : null}
+        {onClear !== undefined ? <span aria-hidden="true" className="w-4 shrink-0" /> : null}
+      </span>
     </button>
   );
   if (onClear === undefined) return chip;
   // The X is a sibling (never a button in a button): a 44x44 box on the
-  // chip's right end whose glyph sits where the chip reserved its width.
+  // chip's right end whose glyph sits where the chip reserved its width,
+  // vertically centred on the 32 chip, 12 in from its right edge.
   return (
     <span data-chip-clearable="" className="relative inline-flex shrink-0">
       {chip}
@@ -132,7 +156,7 @@ export function Chip({
         aria-label={`Clear ${label} filter`}
         onClick={onClear}
         className={cn(
-          'absolute inset-y-0 right-0 inline-flex min-h-11 w-11 items-center justify-end rounded-lg pr-4 focus-visible:lit-focus',
+          'absolute inset-y-0 right-0 inline-flex min-h-11 w-11 items-center justify-end rounded-lg pr-3 focus-visible:lit-focus',
           selected ? 'text-accent-fg' : 'text-fg',
         )}
       >

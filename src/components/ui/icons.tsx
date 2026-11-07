@@ -31,7 +31,6 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  ClipboardDocumentIcon,
   ClockIcon,
   Cog6ToothIcon,
   DocumentIcon,
@@ -63,6 +62,7 @@ import {
   RectangleStackIcon,
   Squares2X2Icon,
   ScaleIcon,
+  Square2StackIcon,
   StarIcon,
   SunIcon,
   TrashIcon,
@@ -302,8 +302,25 @@ export function IconDownload(props: IconProps) {
   return <Hero icon={ArrowDownTrayIcon} {...props} />;
 }
 
+/** Copy: two squares (Square2Stack), the one icon for Copy and Copy email. */
 export function IconCopy(props: IconProps) {
-  return <Hero icon={ClipboardDocumentIcon} {...props} />;
+  return <Hero icon={Square2StackIcon} {...props} />;
+}
+
+/**
+ * Reply privately: a speech bubble with an out-arrow (comment rows and the
+ * chat message menu). Hand-drawn: Heroicons has no bubble-with-arrow.
+ * Paths from Tabler Icons message-circle-share (outline), MIT licence,
+ * Copyright (c) 2020-2024 Paweł Kuna.
+ */
+export function IconReplyPrivately(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M12.58 19.963a9.906 9.906 0 0 1 -4.88 -.963l-4.7 1l1.3 -3.9c-2.324 -3.437 -1.426 -7.872 2.1 -10.374c3.526 -2.501 8.59 -2.296 11.845 .48c2.13 1.817 3.055 4.368 2.692 6.82" />
+      <path d="M16 22l5 -5" />
+      <path d="M21 21.5v-4.5h-4.5" />
+    </Svg>
+  );
 }
 
 export function IconChevronRight(props: IconProps) {

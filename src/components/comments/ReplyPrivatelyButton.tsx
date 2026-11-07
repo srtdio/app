@@ -7,7 +7,7 @@
 import type { ReactElement } from 'react';
 import { flushSync } from 'react-dom';
 import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconUser } from '@/components/ui/icons';
+import { ICON_SIZE, IconReplyPrivately } from '@/components/ui/icons';
 import { openPersonCardFrom } from '@/components/ui/PersonTrigger';
 import { REPLY_PRIVATELY, type PrivateReplyDraft } from '@/lib/chat/private-reply';
 
@@ -20,8 +20,9 @@ export function openReplyPrivatelyCard(el: HTMLElement | null, draft: PrivateRep
 }
 
 /**
- * The comment row's Reply privately: a 44x44 icon (IconUser, the one icon for
- * Reply privately, as in the chat message menu) named "Reply privately". The
+ * The comment row's Reply privately: a 44x44 icon (IconReplyPrivately, the
+ * bubble with an out-arrow, the one icon for Reply privately, as in the chat
+ * message menu) named "Reply privately". The
  * draft is built at tap time from what the row already holds (no read). The
  * caller shows it only where canReplyPrivately allows.
  */
@@ -33,7 +34,7 @@ export function ReplyPrivatelyButton(props: { draft: () => PrivateReplyDraft }):
       data-row-action="reply-privately"
       onClick={(event) => openReplyPrivatelyCard(event.currentTarget, props.draft())}
     >
-      <IconUser size={ICON_SIZE.inline} />
+      <IconReplyPrivately size={ICON_SIZE.inline} />
     </IconButton>
   );
 }

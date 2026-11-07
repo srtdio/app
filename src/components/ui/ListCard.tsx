@@ -142,7 +142,10 @@ export const LIST_CARD_TEXT = 'flex min-w-0 flex-1 flex-col gap-1';
 /** Line 1: title then the time on the right; one 20 line. */
 export const LIST_CARD_LINE1 = 'flex h-5 min-w-0 items-center gap-2';
 
-/** Line 2: preview, the tag, the unread dot; one 20 line, always there. */
+/**
+ * Line 2: preview, the tag, the unread dot; one 20 line, always there. With no
+ * preview the tag sits on the right end, under the time.
+ */
 export const LIST_CARD_LINE2 = 'flex h-5 min-w-0 items-center gap-2';
 
 /** The preview: secondary role, one line, truncated. */
@@ -264,7 +267,8 @@ function clickCover(event: MouseEvent<HTMLElement>): void {
  * the whole card one tap target that sinks when pressed. Left: the 48 picture,
  * vertically centred. Right, two lines:
  *   1. title (heading, one line) ... time (meta, right, the bad token when late);
- *   2. preview (secondary, one line) then the one grey Tag then the unread dot.
+ *   2. preview (secondary, one line) then the one grey Tag then the unread dot;
+ *      with no preview the tag sits on the right end, under the time.
  * No third line and no ⋮: a card's actions live on its list's select bar
  * (long-press / right-click selects). Every card is exactly 74 tall
  * (LIST_CARD_HEIGHT_PX); line 2 stays even when it is empty.
@@ -384,6 +388,9 @@ export function ListCard({
                 {preview}
               </span>
             ) : null}
+            {/* No preview: the spacer leads, so the tag sits on line 2's right
+                end, right under the time (the unread dot after it). */}
+            {!hasPreview ? <span data-list-card-spacer="" className="flex-1" /> : null}
             {hasTag ? (
               <span data-list-card-tag="" {...tagHooks} className="flex min-w-0 shrink-0">
                 <Tag
@@ -394,7 +401,6 @@ export function ListCard({
                 />
               </span>
             ) : null}
-            {!hasPreview ? <span className="flex-1" /> : null}
             {unread ? (
               <span
                 id={unreadId}

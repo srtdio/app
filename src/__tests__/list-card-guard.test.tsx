@@ -5,6 +5,9 @@
 // 2. Every card is 74 tall: border 1 + padding + the 48 picture + padding +
 //    border 1, with the two 20 text lines (and the 4 between) inside the 48.
 //    The real measure runs in e2e/visual/layout-checks.ts (listCardHeight).
+// 3. Line 2 (follow-up, 7 Nov 2026): with a preview it reads preview, tag,
+//    unread dot; with no preview the tag sits on the right end, right under
+//    the time (a spacer leads), the unread dot after it.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -159,5 +162,35 @@ describe('guard: every card is 74 tall', () => {
     const box = renderToStaticMarkup(<ListCardBox />);
     expect(box).toContain('p-3');
     expect(box).toContain('h-12 w-12');
+  });
+});
+
+describe('guard: line 2 tag position', () => {
+  const base: ListCardProps = {
+    picture: { kind: 'icon', icon: IconBriefs },
+    title: 'Spring launch',
+    time: 'Fri',
+    tag: 'Open',
+    unread: true,
+    onPress: () => {},
+  };
+  /** Line 2's children in order, by their data hooks. */
+  function line2(html: string): string[] {
+    const line = html.slice(html.indexOf('data-list-card-line="2"'));
+    return [...line.matchAll(/data-list-card-(preview|spacer|tag|unread)=""/g)].map(
+      (m) => m[1] ?? '',
+    );
+  }
+
+  it('with a preview: preview, tag, unread dot (no spacer)', () => {
+    const html = renderToStaticMarkup(<ListCard {...base} preview="Tease the drop" />);
+    expect(line2(html)).toEqual(['preview', 'tag', 'unread']);
+  });
+
+  it('no preview: the spacer leads, the tag sits on the right end under the time', () => {
+    for (const preview of [undefined, '']) {
+      const html = renderToStaticMarkup(<ListCard {...base} preview={preview} />);
+      expect(line2(html)).toEqual(['spacer', 'tag', 'unread']);
+    }
   });
 });
