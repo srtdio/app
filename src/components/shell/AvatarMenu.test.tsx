@@ -17,7 +17,10 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/use-is-laptop')>()),
   useIsLaptop: () => true,
 }));
-vi.mock('@/lib/events', () => ({ dispatchSorted: vi.fn() }));
+vi.mock('@/lib/events', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/events')>()),
+  dispatchSorted: vi.fn(),
+}));
 
 import { AvatarMenu } from '@/components/shell/AvatarMenu';
 import { GUIDE_CHROME } from '@/lib/induction-copy';
