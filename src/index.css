@@ -264,8 +264,10 @@
   --panel-2-rgb: 22 23 26;
   --panel-3: #1d1e21;
   --panel-3-rgb: 29 30 33;
-  --border: #1c1d1e;
-  --border-rgb: 28 29 30;
+  /* Lifted so the hairline reads on near-black with no shadows (flat look,
+     7 Nov 2026). */
+  --border: #2a2c30;
+  --border-rgb: 42 44 48;
   --border-strong: #6b7079;
   --border-strong-rgb: 107 112 121;
   --field-line: rgba(255, 255, 255, 0.92);
@@ -436,6 +438,48 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(255, 255, 255, 0.04),
     0 1px 2px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.1);
   --lit-strip: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+/* FLAT LOOK (Slack style, decided 7 Nov 2026). In-content surfaces are flat:
+   no gloss, no gradient, no shadow; a --border hairline separates them (rows,
+   chips, cards, buttons, bubbles, headers, the dock). Only floating layers
+   (sheets, menus, dialogs, toasts, the unread pill: lit-float / lit-overlay)
+   keep their soft shadow. Every lit-* class stays in use; only these token
+   values change. The outline family (lit-selected, lit-focus, lit-bad,
+   lit-drop, lit-today) keeps its crisp --sel-edge line. Light and dark share
+   this block. */
+:root,
+.dark {
+  --lit-hl: 0 0 #0000;
+  --lit-raised: 0 0 #0000;
+  --lit-card: 0 0 #0000;
+  --lit-btn-primary: 0 0 #0000;
+  --lit-btn-success: 0 0 #0000;
+  --lit-btn-danger: 0 0 #0000;
+  --lit-btn-secondary: 0 0 #0000;
+  --lit-chip: 0 0 #0000;
+  --lit-well: 0 0 #0000;
+  --lit-well-soft: 0 0 #0000;
+  --lit-pill: 0 0 #0000;
+  --lit-tint: 0 0 #0000;
+  --lit-active: 0 0 #0000;
+  --lit-media: 0 0 #0000;
+  --lit-avatar: 0 0 #0000;
+  --lit-badge: 0 0 #0000;
+  --lit-bubble-own: 0 0 #0000;
+  --lit-bubble-other: 0 0 #0000;
+  --lit-strip: 0 0 #0000;
+  --lit-surface: none;
+  --lit-chip-bg: none;
+  --lit-overlay-bg: none;
+  --lit-bubble-other-bg: none;
+  --lit-shine: none;
+  --lit-muted-shine: none;
+  --lit-edge-top: var(--border);
+  --lit-edge-side: var(--border);
+  --lit-edge-bottom: var(--border);
+  --lit-header: 0 1px 0 var(--border);
+  --lit-side: 1px 0 0 var(--border);
+  --lit-dock: 0 -1px 0 var(--border);
 }
 @layer base {
   html,
