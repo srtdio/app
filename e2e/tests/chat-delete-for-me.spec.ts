@@ -280,6 +280,8 @@ test('the photo viewer: Forward, Delete and Download; Delete for me moves to the
   await albumTiles(results).first().click();
   const viewer = page.getByRole('dialog', { name: 'Image viewer' });
   await expect(viewer).toBeVisible();
+  // Three album photos and the single photo: the counter reads 1 / 4.
+  await expect(viewer).toContainText('1 / 4');
   const bar = page.getByTestId('viewer-bar');
   await expect(bar).toBeVisible();
   const labels = await bar
@@ -303,7 +305,9 @@ test('the photo viewer: Forward, Delete and Download; Delete for me moves to the
   await expect(undoStrip(page, 'Deleted for you')).toBeVisible();
   await expect(albumTiles(results)).toHaveCount(0);
   await expect(viewer).toBeVisible();
-  await expect(viewer.locator('img[alt="moodboard.png"]').first()).toBeAttached();
+  // Only the single photo is left: one image, so the viewer drops its counter.
+  await expect(viewer).not.toContainText(' / 4');
+  await expect(viewer).not.toContainText(' / 3');
   await expect.poll(() => hideCalls(network).length, { timeout: COMMIT_WAIT_MS }).toBe(1);
   expect(hideCalls(network)[0]?.p_message_ids).toEqual([MEDIA_MSG.photoAlbum]);
   expect(network.blocked).toEqual([]);
