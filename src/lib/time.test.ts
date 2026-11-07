@@ -138,6 +138,11 @@ describe('formatAdded: records, never ticks', () => {
     expect(formatAdded('2026-10-31T23:59:00Z', now, 'UTC')).toBe('31 Oct');
     expect(formatAdded('2026-11-01T00:00:00Z', now, 'UTC')).toBe('12:00 AM');
   });
+  it('across a year end: an earlier year reads its year', () => {
+    const now = new Date('2027-01-01T10:00:00Z');
+    expect(formatAdded('2026-12-31T23:59:00Z', now, 'UTC')).toBe('31 Dec 2026');
+    expect(formatAdded('2027-01-01T00:00:00Z', now, 'UTC')).toBe('12:00 AM');
+  });
   it("across a year change: the year shows only off now's year", () => {
     const now = new Date('2027-01-01T10:00:00Z'); // IST 1 Jan 15:30
     expect(formatAdded('2026-12-31T23:00:00Z', now, 'UTC')).toBe('31 Dec 2026');
