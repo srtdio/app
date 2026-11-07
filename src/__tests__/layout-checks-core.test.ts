@@ -5,8 +5,10 @@ import {
   distinctRoles,
   edgeHit,
   edgeViolations,
+  floatsOver,
   formatViolations,
   intersection,
+  isLiftedLayer,
   layoutMode,
   lineCount,
   lineHeightPx,
@@ -153,6 +155,65 @@ describe('tap targets', () => {
       { label: 'in scroller', box: box(200, 200, 44, 44), related: [], clip: scroller },
     ];
     expect(overlappingPairs(targets)).toEqual([[0, 4]]);
+  });
+
+  it('a lifted bar or popover outside a scroller floats over what scrolls in it', () => {
+    // Laptop chat thread: the status bar (relative z-raised) sits above the
+    // message list (scroller 0); its 44 chevron overhangs the list by 4. A
+    // post card scrolled to the list's top shows through the list's clip
+    // under that 4. The composer's schedule menu (absolute z-nav) opens
+    // over the same list.
+    const list = box(240, 148, 1040, 500);
+    const targets: TapTarget[] = [
+      {
+        label: 'status chevron',
+        box: box(1248, 107.5, 16, 44),
+        related: [],
+        scroller: null,
+        liftedOver: [0],
+      },
+      { label: 'post card', box: box(968, 12.5, 288, 448), related: [], scroller: 0, clip: list },
+      {
+        label: 'schedule row',
+        box: box(937, 400, 322, 56),
+        related: [],
+        scroller: null,
+        liftedOver: [0],
+      },
+    ];
+    expect(floatsOver(targets[0]!, targets[1]!)).toBe(true);
+    expect(floatsOver(targets[1]!, targets[0]!)).toBe(false);
+    expect(overlappingPairs(targets)).toEqual([]);
+    // Without the lift (an in-flow control overhanging the list) it is a fault.
+    const flat = targets.map((t) => ({ ...t, liftedOver: [] }));
+    expect(overlappingPairs(flat)).toEqual([
+      [0, 1],
+      [1, 2],
+    ]);
+  });
+
+  it('a lift never excuses targets scrolling in the same scroller', () => {
+    const list = box(0, 100, 400, 500);
+    const targets: TapTarget[] = [
+      // A lifted ⋮ inside the list: the list holds its layer, so it floats over nothing there.
+      { label: 'row ⋮', box: box(300, 200, 44, 44), related: [], scroller: 0, liftedOver: [1] },
+      { label: 'next row', box: box(0, 220, 400, 60), related: [], scroller: 0, clip: list },
+      // A lifted bar over another scroller (1) does not float over list 0.
+      { label: 'bar btn', box: box(0, 150, 44, 44), related: [], scroller: null, liftedOver: [1] },
+    ];
+    expect(overlappingPairs(targets)).toEqual([
+      [0, 1],
+      [1, 2],
+    ]);
+  });
+
+  it('a lifted layer is positioned with a z-index of its own', () => {
+    expect(isLiftedLayer({ position: 'relative', zIndex: '10' })).toBe(true);
+    expect(isLiftedLayer({ position: 'absolute', zIndex: '30' })).toBe(true);
+    expect(isLiftedLayer({ position: 'absolute', zIndex: '0' })).toBe(true);
+    expect(isLiftedLayer({ position: 'relative', zIndex: 'auto' })).toBe(false);
+    expect(isLiftedLayer({ position: 'static', zIndex: '10' })).toBe(false);
+    expect(isLiftedLayer({ position: 'absolute', zIndex: '' })).toBe(false);
   });
 
   it('clips a box to a rect', () => {
