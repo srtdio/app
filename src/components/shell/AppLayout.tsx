@@ -15,7 +15,12 @@ import { Sidebar } from '@/components/shell/Sidebar';
 import { BottomTabs } from '@/components/shell/BottomTabs';
 import { Topbar } from '@/components/shell/Topbar';
 import { TopbarActionsProvider } from '@/components/shell/topbar-actions';
-import { CommandPalette, type PaletteCloseReason } from '@/components/shell/CommandPalette';
+import {
+  CommandPalette,
+  PalettePickProvider,
+  type PaletteCloseReason,
+  type PalettePickRequest,
+} from '@/components/shell/CommandPalette';
 import { isPaletteShortcut, isTextEntry, usesCmdKey } from '@/lib/search/palette-keys';
 import { AvatarMenu } from '@/components/shell/AvatarMenu';
 import { approverSwitchShown, WorkspaceSwitcher } from '@/components/shell/WorkspaceSwitcher';
@@ -267,12 +272,29 @@ function AppLayoutBody() {
     flushSync(() => setPaletteOpen(true));
     paletteInputRef.current?.focus({ preventScroll: true });
   }, []);
+  // Pick mode: a picker's request (usePalettePick) fed to the one palette.
+  // Pure state: opening it reads nothing.
+  const [pick, setPick] = useState<PalettePickRequest | null>(null);
+  const pickRef = useRef<PalettePickRequest | null>(null);
+  pickRef.current = pick;
+  const openPick = useCallback((request: PalettePickRequest): void => {
+    const was = document.activeElement;
+    returnFocusRef.current = was instanceof HTMLElement && was !== document.body ? was : null;
+    flushSync(() => {
+      setPick(request);
+      setPaletteOpen(true);
+    });
+    paletteInputRef.current?.focus({ preventScroll: true });
+  }, []);
   const closePalette = useCallback((reason: PaletteCloseReason): void => {
+    const picking = pickRef.current !== null;
     setPaletteOpen(false);
+    setPick(null);
     const back = returnFocusRef.current;
     returnFocusRef.current = null;
-    // A picked result moves on to its target; a dismiss returns where the user was.
-    if (reason === 'dismiss' && back !== null && back.isConnected) {
+    // A picked result moves on to its target; a dismiss returns where the user
+    // was. Pick mode always returns to the picker (when it is still there).
+    if ((reason === 'dismiss' || picking) && back !== null && back.isConnected) {
       back.focus({ preventScroll: true });
     }
   }, []);
@@ -560,6 +582,7 @@ function AppLayoutBody() {
           <ShellScrollMode mode={scrollMode} />
           <BarTintSync tint={barTint} />
           <TopbarActionsProvider>
+            <PalettePickProvider openPick={openPick}>
             <div className={chrome.shellClassName}>
               <Sidebar workspaceName={workspaceDisplayName} clientName={workspaceName} />
               <div className={chrome.columnClassName}>
@@ -606,6 +629,15 @@ function AppLayoutBody() {
                 workspaceId={workspaceId}
                 workspaceKey={workspaceKey}
                 userId={userId}
+                {...(pick !== null
+                  ? {
+                      pickKinds: pick.pickKinds,
+                      multi: pick.multi,
+                      verb: pick.verb,
+                      onPick: pick.onPick,
+                      ...(pick.label !== undefined ? { pickLabel: pick.label } : {}),
+                    }
+                  : {})}
               />
               <AvatarMenu open={avatarOpen} onClose={() => setAvatarOpen(false)} />
               <PersonCardHost />
@@ -614,6 +646,7 @@ function AppLayoutBody() {
               <InductionGuide />
               <MarksPanel />
             </div>
+            </PalettePickProvider>
           </TopbarActionsProvider>
         </InboxStoreProvider>
       </ChatStoreProvider>

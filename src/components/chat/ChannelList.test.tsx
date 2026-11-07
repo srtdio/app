@@ -11,23 +11,29 @@ vi.mock('agora-chat', () => ({
 }));
 
 import {
+  CHAT_SORT_DEFAULT,
+  CHAT_SORT_OPTIONS,
+  CHAT_SORT_PAGE,
   ChannelCard,
   chatSelectActions,
+  chatSort,
   channelListContent,
   channelListView,
   draftLine,
   notesLastLine,
+  orderChannels,
   previewLine,
-  showSearchResults,
   visibleChannels,
   type ChannelSelectMode,
 } from '@/components/chat/ChannelList';
-import { SectionHeader } from '@/components/shell/SectionHeader';
+import { SectionHeader, SectionSelect } from '@/components/shell/SectionHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { NoResults } from '@/components/ui/NoResults';
-import { IconEyeOff, IconPlus } from '@/components/ui/icons';
+import { IconEyeOff } from '@/components/ui/icons';
 import { ListCardBox, type ListCardSelect } from '@/components/ui/ListCard';
 import type { ChannelSummary } from '@/lib/chat-reads';
+import type { ConversationSummary } from '@/lib/chat/chat-store';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 function summary(over: Partial<ChannelSummary>): ChannelSummary {
@@ -51,8 +57,8 @@ function isElement(node: ReactNode): node is ReactElement {
   return typeof node === 'object' && node !== null && 'props' in node;
 }
 
-// SectionHeader is hookless and holds search/primaryAction in props, so it is
-// expanded by calling its render once (mirroring SectionHeader's own tests).
+// SectionHeader is hookless and holds the chips and the Select in props, so it
+// is expanded by calling its render once (mirroring SectionHeader's own tests).
 function expandSectionHeader(el: ReactElement): ReactElement {
   return (el.type as unknown as (props: unknown) => ReactElement)(el.props);
 }
@@ -92,30 +98,27 @@ function ariaLabel(el: ReactElement): string | undefined {
   return (el.props as { 'aria-label'?: string })['aria-label'];
 }
 
-function isSelectButton(el: ReactElement): boolean {
-  return el.type === IconButton && (el.props as { label?: string }).label === 'Select';
+function isSectionSelect(el: ReactElement): boolean {
+  return el.type === SectionSelect;
 }
 
 function isNewChat(el: ReactElement): boolean {
   const children = (el.props as { children?: ReactNode }).children;
-  return Array.isArray(children) && children.includes('New chat');
+  return (
+    ariaLabel(el) === 'New chat' ||
+    (Array.isArray(children) && children.includes('New chat')) ||
+    children === 'New chat'
+  );
 }
 
-function content(over: {
-  channels: ChannelSummary[];
-  search?: string;
-  onNewChat?: () => void;
-  onSearchChange?: (value: string) => void;
-}): ReactElement {
+function content(over: { channels: ChannelSummary[] }): ReactElement {
   return channelListContent({
     channels: over.channels,
     selectedChannelId: null,
     status: 'ready',
     onRetry: () => {},
     onSelect: () => {},
-    onNewChat: over.onNewChat ?? (() => {}),
-    search: over.search ?? '',
-    onSearchChange: over.onSearchChange ?? (() => {}),
+    onNewChat: () => {},
   });
 }
 
@@ -132,21 +135,6 @@ describe('channelListView', () => {
     const props = view.props as { title: string; action?: unknown };
     expect(props.title).toBe('Chats with your team show up here.');
     expect(props.action).toBeUndefined();
-  });
-
-  it('renders NoResults, not the zero-state, when search hides all', () => {
-    const view = channelListView({
-      channels: [],
-      hasChannels: true,
-      search: ' zzz ',
-      selectedChannelId: null,
-      onSelect: () => {},
-      onNewChat: () => {},
-    });
-    expect(view.type).not.toBe(EmptyState);
-    expect(view.type).toBe(NoResults);
-    expect((view.props as { query: string; filtersActive: boolean }).query).toBe(' zzz ');
-    expect((view.props as { query: string; filtersActive: boolean }).filtersActive).toBe(false);
   });
 
   it('renders one row per channel when there are matches', () => {
@@ -169,24 +157,14 @@ describe('channelListContent', () => {
     summary({ channelId: 'b', title: 'Client Acme' }),
   ];
 
-  it('filters the conversation list by name and restores all on empty query', () => {
-    const lists = findAll(content({ channels, search: 'acme' }), (el) => el.type === 'ul');
-    expect((lists[0]!.props as { children: ReactElement[] }).children).toHaveLength(1);
-
-    const allLists = findAll(content({ channels, search: '' }), (el) => el.type === 'ul');
-    expect((allLists[0]!.props as { children: ReactElement[] }).children).toHaveLength(2);
+  it('lists every chat, most recent first (no name search on the list)', () => {
+    const lists = findAll(content({ channels }), (el) => el.type === 'ul');
+    expect((lists[0]!.props as { children: ReactElement[] }).children).toHaveLength(2);
+    expect(findAll(content({ channels }), (el) => el.type === 'input')).toHaveLength(0);
   });
 
-  it('names the query (not the zero-state) when a search matches nothing', () => {
-    const tree = content({ channels, search: 'zzz' });
-    expect(findAll(tree, (el) => el.type === EmptyState)).toHaveLength(0);
-    const none = findAll(tree, (el) => el.type === NoResults);
-    expect(none).toHaveLength(1);
-    expect((none[0]!.props as { query: string }).query).toBe('zzz');
-  });
-
-  it('still shows the zero-state with New chat when there are no channels', () => {
-    const tree = content({ channels: [], search: '' });
+  it('still shows the zero-state when there are no channels', () => {
+    const tree = content({ channels: [] });
     const empties = findAll(tree, (el) => el.type === EmptyState);
     expect(empties).toHaveLength(1);
     expect((empties[0]!.props as { title: string }).title).toBe(
@@ -194,23 +172,8 @@ describe('channelListContent', () => {
     );
   });
 
-  it('fires onNewChat from the header New chat text button', () => {
-    const onNewChat = vi.fn();
-    const tree = content({ channels, onNewChat });
-    const buttons = findAll(tree, isNewChat);
-    expect(buttons).toHaveLength(1);
-    (buttons[0]!.props as { onClick: () => void }).onClick();
-    expect(onNewChat).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows New chat as visible text with IconPlus before it, not an icon-only button', () => {
-    const tree = content({ channels });
-    const button = findAll(tree, isNewChat)[0]!;
-    expect(ariaLabel(button)).toBeUndefined();
-    expect(findAll(tree, (el) => ariaLabel(el) === 'New chat')).toHaveLength(0);
-    const children = (button.props as { children: ReactNode[] }).children;
-    expect((children[0] as ReactElement).type).toBe(IconPlus);
-    expect(children[1]).toBe('New chat');
+  it('has no New chat of its own: the "+" lives in the app top bar', () => {
+    expect(findAll(content({ channels }), isNewChat)).toHaveLength(0);
   });
 
   it('renders exactly one header and no "Chat" title text', () => {
@@ -229,14 +192,8 @@ describe('hidden chats (deleted for me)', () => {
   const isHidden = (id: string): boolean => id === 'h';
   const none = (): undefined => undefined;
 
-  it('leaves a hidden chat out of the plain list', () => {
-    expect(visibleChannels(channels, none, isHidden, '').map((c) => c.channelId)).toEqual(['a']);
-  });
-
-  it('search still finds a hidden chat', () => {
-    expect(visibleChannels(channels, none, isHidden, 'hidden').map((c) => c.channelId)).toEqual([
-      'h',
-    ]);
+  it('leaves a hidden chat out of the list', () => {
+    expect(visibleChannels(channels, none, isHidden).map((c) => c.channelId)).toEqual(['a']);
   });
 
   it('renders only the visible rows and the zero-state when every chat is hidden', () => {
@@ -247,8 +204,6 @@ describe('hidden chats (deleted for me)', () => {
       onRetry: () => {},
       onSelect: () => {},
       onNewChat: () => {},
-      search: '',
-      onSearchChange: () => {},
       isHidden,
     });
     const lists = findAll(tree, (el) => el.type === 'ul');
@@ -261,8 +216,6 @@ describe('hidden chats (deleted for me)', () => {
       onRetry: () => {},
       onSelect: () => {},
       onNewChat: () => {},
-      search: '',
-      onSearchChange: () => {},
       isHidden: () => true,
     });
     expect(findAll(allHidden, (el) => el.type === EmptyState)).toHaveLength(1);
@@ -296,8 +249,6 @@ describe('select mode', () => {
       onRetry: () => {},
       onSelect: () => {},
       onNewChat: () => {},
-      search: '',
-      onSearchChange: () => {},
       select: mode,
       kind,
       onKindChange: () => {},
@@ -315,33 +266,44 @@ describe('select mode', () => {
     return findAll(barOf(t), (el) => el.type === IconButton);
   }
 
-  it('no header Select on the chat list: a long-press or right-click on a card enters', () => {
+  it('the chip row ends in Select (off); a long-press or right-click on a card enters too', () => {
     const mode = select({});
     const t = tree(mode);
-    expect(findAll(t, isSelectButton)).toHaveLength(0);
-    expect(findAll(t, isNewChat)).toHaveLength(1);
+    const selects = findAll(t, isSectionSelect);
+    expect(selects).toHaveLength(1);
+    expect((selects[0]!.props as { active: boolean }).active).toBe(false);
+    (selects[0]!.props as { onToggle: () => void }).onToggle();
+    expect(mode.onStart).toHaveBeenCalledTimes(1);
+    expect(findAll(t, isNewChat)).toHaveLength(0);
     expect(barOf(t)).toBeUndefined();
+    // The old Select IconButton beside New chat is gone.
+    expect(
+      findAll(t, (el) => el.type === IconButton && (el.props as { label?: string }).label === 'Select'),
+    ).toHaveLength(0);
     // Every chat card carries ListCard's select, off, entering with that chat ticked.
     const cards = findAll(t, (el) => el.type === ChannelCard);
-    const selects = cards.map((c) => (c.props as { select?: ListCardSelect }).select);
-    expect(selects.map((s) => s?.active)).toEqual([false, false]);
-    selects[1]!.onEnter();
+    const cardSelects = cards.map((c) => (c.props as { select?: ListCardSelect }).select);
+    expect(cardSelects.map((s) => s?.active)).toEqual([false, false]);
+    cardSelects[1]!.onEnter();
     expect(mode.onEnter).toHaveBeenCalledWith('b');
   });
 
-  it('a chip view keeps the header Select (media items have no long-press)', () => {
+  it('a chip view keeps the same Select at the chip row end', () => {
     const mode = select({});
-    const button = findAll(tree(mode, 'photo'), isSelectButton)[0];
+    const button = findAll(tree(mode, 'photo'), isSectionSelect)[0];
     expect(button).toBeDefined();
-    (button!.props as { onClick: () => void }).onClick();
+    (button!.props as { onToggle: () => void }).onToggle();
     expect(mode.onStart).toHaveBeenCalledTimes(1);
   });
 
-  it('in select mode the header stays, cards tick and taps toggle', () => {
+  it('in select mode the header stays, Select is on (a tap ends it), cards tick and taps toggle', () => {
     const mode = select({ active: true, selectedIds: new Set(['b']) });
     const t = tree(mode);
     expect(findAll(t, (el) => el.type === SectionHeader)).toHaveLength(1);
-    expect(findAll(t, isSelectButton)).toHaveLength(0);
+    const on = findAll(t, isSectionSelect)[0]!.props as { active: boolean; onToggle: () => void };
+    expect(on.active).toBe(true);
+    on.onToggle();
+    expect(mode.onCancel).toHaveBeenCalledTimes(1);
     const cards = findAll(t, (el) => el.type === ChannelCard);
     const selects = cards.map((c) => (c.props as { select: ListCardSelect }).select);
     expect(selects.map((s) => s.active)).toEqual([true, true]);
@@ -405,12 +367,6 @@ describe('select mode', () => {
     expect(actions).toHaveLength(1);
     expect((actions[0]?.props as { label?: string }).label).toBe('Delete for me');
   });
-
-  it('New chat leaves select mode', () => {
-    const mode = select({ active: true, selectedIds: new Set(['a']) });
-    (findAll(tree(mode), isNewChat)[0]!.props as { onClick: () => void }).onClick();
-    expect(mode.onCancel).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('load status', () => {
@@ -424,8 +380,6 @@ describe('load status', () => {
       selectedChannelId: null,
       onSelect: () => {},
       onNewChat: () => {},
-      search: '',
-      onSearchChange: () => {},
       select: {
         active: false,
         selectedIds: new Set(),
@@ -447,7 +401,7 @@ describe('load status', () => {
     expect(skeletons.length).toBeGreaterThan(0);
     expect(findAll(tree, (el) => el.type === EmptyState)).toHaveLength(0);
     expect(findAll(tree, (el) => el.type === ChannelCard)).toHaveLength(0);
-    expect(findAll(tree, isSelectButton)).toHaveLength(0);
+    expect(findAll(tree, isSectionSelect)).toHaveLength(0);
     expect(texts(tree)).not.toContain('Chats with your team show up here.');
   });
 
@@ -485,7 +439,7 @@ describe('load status', () => {
     const onRetry = vi.fn();
     const tree = withStatus('error', onRetry);
     expect(findAll(tree, (el) => el.type === ChannelCard)).toHaveLength(0);
-    expect(findAll(tree, isSelectButton)).toHaveLength(0);
+    expect(findAll(tree, isSectionSelect)).toHaveLength(0);
     const empty = findAll(tree, (el) => el.type === EmptyState)[0]!;
     const retry = (empty.props as { action: ReactElement }).action;
     // A Button: 44 tall by the design system.
@@ -496,13 +450,13 @@ describe('load status', () => {
   });
 });
 
-describe('message search wiring (S1)', () => {
+describe('chip view wiring', () => {
   const channels = [
     summary({ channelId: 'g1', title: 'Shoot crew' }),
     summary({ channelId: 'g2', title: 'Accounts' }),
   ];
   const results = <div data-testid-results="">results</div>;
-  const content = (search: string) =>
+  const view = (kind: 'photo' | null) =>
     channelListContent({
       channels,
       selectedChannelId: null,
@@ -510,49 +464,113 @@ describe('message search wiring (S1)', () => {
       onRetry: () => {},
       onSelect: () => {},
       onNewChat: () => {},
-      search,
-      onSearchChange: () => {},
-      searchResults: results,
+      chipResults: results,
+      kind,
+      onKindChange: () => {},
     });
 
-  it('shows results only from 2 trimmed characters', () => {
-    expect(showSearchResults('')).toBe(false);
-    expect(showSearchResults(' s ')).toBe(false);
-    expect(showSearchResults('sh')).toBe(true);
-  });
-
-  it('2+ characters replace the list with the results (no old list under them)', () => {
-    const tree = content('sh');
+  it('a chip on replaces the list with its items (no old list under them)', () => {
+    const tree = view('photo');
     expect(findAll(tree, (el) => el === results)).toHaveLength(1);
     expect(findAll(tree, (el) => el.props['data-chat-home'] === '')).toHaveLength(0);
   });
 
-  it('under 2 characters keeps the name filter only', () => {
-    const tree = content('a');
+  it('no chip keeps the list', () => {
+    const tree = view(null);
     expect(findAll(tree, (el) => el === results)).toHaveLength(0);
-    const titles = findAll(tree, (el) => el.type === ChannelCard).map(
-      (el) => (el.props as { channel: ChannelSummary }).channel.title,
-    );
-    expect(titles).toEqual(['Accounts']);
+    expect(findAll(tree, (el) => el.type === ChannelCard)).toHaveLength(2);
   });
 
-  it('clearing restores the list exactly as before', () => {
-    const before = findAll(content(''), (el) => el.type === ChannelCard).map(
-      (el) => (el.props as { channel: ChannelSummary }).channel.channelId,
-    );
-    content('shoot');
-    const after = findAll(content(''), (el) => el.type === ChannelCard).map(
-      (el) => (el.props as { channel: ChannelSummary }).channel.channelId,
-    );
-    expect(after).toEqual(before);
-  });
-
-  it('the SectionHeader search box is untouched (one header, "Search chats")', () => {
-    const headers = findAll(content('sh'), (el) => el.type === SectionHeader);
+  it('one header: the chips, no search box', () => {
+    const headers = findAll(view(null), (el) => el.type === SectionHeader);
     expect(headers).toHaveLength(1);
-    expect((headers[0]!.props as { search: { placeholder: string } }).search.placeholder).toBe(
-      'Search chats',
+    expect(Object.keys(headers[0]!.props as object)).not.toContain('search');
+  });
+});
+
+describe('chat sort (top bar): Recent / Unread first / A to Z', () => {
+  const at = (ts: number, unread = 0): ConversationSummary => ({
+    lastMessageText: 'hi',
+    lastMessageTs: ts,
+    unread,
+  });
+  const zed = summary({ channelId: 'z', title: 'Zed crew' });
+  const amy = summary({ channelId: 'a', title: 'amy', channelType: 'dm' });
+  const bob = summary({ channelId: 'b', title: 'Bob' });
+  const notes = summary({ channelId: 'n', title: 'Personal notes', channelType: 'notes' });
+  const summaries: Record<string, ConversationSummary> = {
+    z: at(400),
+    n: at(300),
+    a: at(200, 2),
+    b: at(100),
+  };
+  const summaryFor = (id: string): ConversationSummary | undefined => summaries[id];
+  const recent = [zed, notes, amy, bob];
+  const ids = (list: ChannelSummary[]): string[] => list.map((c) => c.channelId);
+
+  it('offers exactly Recent, Unread first, A to Z (Recent is the default)', () => {
+    expect(CHAT_SORT_OPTIONS.map((o) => o.label)).toEqual(['Recent', 'Unread first', 'A to Z']);
+    expect(CHAT_SORT_DEFAULT).toBe('recent');
+    expect(CHAT_SORT_PAGE).toBe('chat');
+  });
+
+  it('a stale or unknown stored value reads as Recent', () => {
+    expect(chatSort('unread')).toBe('unread');
+    expect(chatSort('az')).toBe('az');
+    expect(chatSort('newest')).toBe('recent');
+    expect(chatSort('')).toBe('recent');
+  });
+
+  it('Recent keeps the recency order', () => {
+    expect(ids(orderChannels(recent, 'recent', summaryFor, 'n'))).toEqual(['z', 'n', 'a', 'b']);
+  });
+
+  it('Unread first lifts unread chats; Personal notes keeps its place', () => {
+    expect(ids(orderChannels(recent, 'unread', summaryFor, 'n'))).toEqual(['a', 'n', 'z', 'b']);
+  });
+
+  it('A to Z orders by name (case-insensitive); Personal notes keeps its place', () => {
+    expect(ids(orderChannels(recent, 'az', summaryFor, 'n'))).toEqual(['a', 'n', 'b', 'z']);
+  });
+
+  it('without notes the whole list re-orders', () => {
+    expect(ids(orderChannels([zed, amy, bob], 'az', summaryFor))).toEqual(['a', 'b', 'z']);
+  });
+
+  it('visibleChannels applies the sort after the hidden filter', () => {
+    const list = visibleChannels(
+      [bob, amy, zed],
+      summaryFor,
+      (id) => id === 'z',
+      'az',
     );
+    expect(ids(list)).toEqual(['a', 'b']);
+  });
+
+  it('channelListContent renders the rows in the chosen order', () => {
+    const tree = channelListContent({
+      channels: [zed, amy, bob],
+      selectedChannelId: null,
+      status: 'ready',
+      onRetry: () => {},
+      onSelect: () => {},
+      onNewChat: () => {},
+      summaryFor,
+      sort: 'az',
+    });
+    const rows = findAll(tree, (el) => el.type === ChannelCard).map(
+      (el) => (el.props as { channel: ChannelSummary }).channel.channelId,
+    );
+    expect(rows).toEqual(['a', 'b', 'z']);
+  });
+
+  it('ChannelList publishes the sort and New chat into the top bar, persisted via useSort', () => {
+    const src = readFileSync(fileURLToPath(new URL('./ChannelList.tsx', import.meta.url)), 'utf8');
+    expect(src).toContain('useTopbarActions({ sort: sortNode, primary: plusNode });');
+    expect(src).toContain('<TopbarPlus label="New chat" onClick={newChat} />');
+    expect(src).toContain('useSort<ChatSort>(');
+    expect(src).not.toContain('stackSearchMd');
+    expect(src).not.toContain("placeholder: 'Search chats'");
   });
 });
 

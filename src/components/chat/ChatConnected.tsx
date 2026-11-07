@@ -936,19 +936,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
   // Only ever counts up: a taken request goes back to null, and the next tap
   // in the same open chat must still read as new.
   const searchSeqRef = useRef(0);
-  const openSearchHit = useCallback(
-    (channel: ChannelSummary, messageId: string, query: string) => {
-      searchSeqRef.current += 1;
-      setSearchRequest({
-        channelId: channel.channelId,
-        messageId,
-        query,
-        seq: searchSeqRef.current,
-      });
-      openChannel(channel);
-    },
-    [openChannel],
-  );
   // A media item's Show in chat: the chat opens at that message (the same
   // jump and highlight as a search hit), without the in-chat search bar.
   const openAtMessage = useCallback(
@@ -1328,7 +1315,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
           listed,
           (id) => listState.conversations[id],
           (id) => selectHidden(listState, id),
-          '',
         ).flatMap((channel) => {
           const key = chatKey(currentUserId, workspaceId, channel.channelId);
           return key !== null ? [key] : [];
@@ -2065,7 +2051,6 @@ export function ChatConnected(props: ChatConnectedProps): ReactElement {
             onNewChat={() => setNewChatOpen(true)}
             onDeleteChats={onDeleteChats}
             workspaceId={workspaceId}
-            onOpenSearchHit={openSearchHit}
             onOpenAtMessage={openAtMessage}
             notes={notesChat}
             forwardChannels={chatRoster}

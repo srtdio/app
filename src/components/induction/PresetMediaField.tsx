@@ -1,8 +1,9 @@
 // The post sheet's media field on an induction post step. It runs the existing
 // upload path (uploadChatAttachment over the asset-upload Worker, XHR for
-// progress) and adds what a first upload on a weak connection needs: a progress
-// bar from the real upload progress, three automatic retries, then a plain
-// reason with Retry. File names are never shown (phones name photos
+// progress) and adds what a first upload on a weak connection needs: the one
+// upload look (ui/UploadRing on the photo, filling with the real progress; its
+// X cancels) with a size line ("1.2 of 3.4 MB"), three automatic retries, then
+// a plain reason with Retry in the ring's spot (UploadRetry). File names are never shown (phones name photos
 // IMG_4821.HEIC). The rest of the sheet keeps everything typed whatever
 // happens here. Chunked background upload is a later backend PR. On the
 // first post (fillOnTap) a tap attaches the bundled sample photo instead of
@@ -13,6 +14,7 @@ import { isImageMime } from '@srtdio/storage';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconTrash, IconVideo, ICON_SIZE } from '@/components/ui/icons';
+import { UploadRetry, UploadRing, uploadSizeMeta } from '@/components/ui/UploadRing';
 import {
   ComposerMediaFrame,
   firstMedia,
@@ -37,9 +39,10 @@ const NOT_STARTED = errorText('start the upload', null);
 
 type Upload =
   | { phase: 'idle' }
-  | { phase: 'sending'; percent: number; retrying: boolean }
+  /** sent: the share of the bytes sent so far, 0..1. */
+  | { phase: 'sending'; file: File; previewUrl: string | null; sent: number; retrying: boolean }
   /** file null: the sample photo did not load; Try again loads it again. */
-  | { phase: 'failed'; file: File | null; reason: string };
+  | { phase: 'failed'; file: File | null; previewUrl: string | null; reason: string };
 
 /** The placeholder version id of the sample photo until Send uploads it. */
 export const SAMPLE_VERSION_ID = 'local-first-post';
@@ -64,6 +67,7 @@ async function attemptUpload(input: {
   token: string;
   traceId: string;
   onProgress: (fraction: number) => void;
+  signal?: AbortSignal;
 }): Promise<{ ok: true; value: string } | { ok: false }> {
   const result = await uploadChatAttachment({
     file: input.file,
@@ -72,7 +76,11 @@ async function attemptUpload(input: {
     token: input.token,
     endpoint: input.endpoint,
     attachThumbnail: attachLateThumbnail,
-    xhr: { traceId: input.traceId, onProgress: input.onProgress },
+    xhr: {
+      traceId: input.traceId,
+      onProgress: input.onProgress,
+      ...(input.signal !== undefined ? { signal: input.signal } : {}),
+    },
   });
   return result.ok ? { ok: true, value: result.versionId } : { ok: false };
 }
@@ -138,74 +146,96 @@ export function PresetMediaField({
   const valueRef = useRef(value);
   valueRef.current = value;
   const alive = useRef(true);
+  // The running upload: the ring's X aborts it (and stops its retries).
+  const abortRef = useRef<AbortController | null>(null);
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
+      abortRef.current?.abort();
     };
   }, []);
 
-  async function send(file: File): Promise<void> {
+  /** previewUrl: the failed photo's own picture, reused when it is retried. */
+  async function send(file: File, previewUrl: string | null = previewOf(file)): Promise<void> {
     const check = precheckFile(file);
     if (!check.ok) {
-      setUpload({ phase: 'failed', file, reason: check.message });
+      setUpload({ phase: 'failed', file, previewUrl, reason: check.message });
       return;
     }
     const endpoint = env.VITE_ASSET_UPLOAD_URL;
     const token = (await supabase.auth.getSession()).data.session?.access_token ?? '';
     if (endpoint === undefined || endpoint === '' || workspaceId === null || token === '') {
-      setUpload({ phase: 'failed', file, reason: NOT_STARTED });
+      setUpload({ phase: 'failed', file, previewUrl, reason: NOT_STARTED });
       return;
     }
+    const abort = new AbortController();
+    abortRef.current = abort;
     onBusyChange(true);
-    setUpload({ phase: 'sending', percent: 0, retrying: false });
+    setUpload({ phase: 'sending', file, previewUrl, sent: 0, retrying: false });
     const outcome = await withRetries(
-      () => attemptOnce({ file, workspaceId, endpoint, token }),
+      () => attemptOnce({ file, workspaceId, endpoint, token, signal: abort.signal }),
       UPLOAD_RETRIES,
       () => {
-        if (alive.current) setUpload({ phase: 'sending', percent: 0, retrying: true });
+        if (alive.current && !abort.signal.aborted) {
+          setUpload({ phase: 'sending', file, previewUrl, sent: 0, retrying: true });
+        }
       },
     );
-    if (!alive.current) return;
+    // Cancelled: the field is already back at rest.
+    if (!alive.current || abort.signal.aborted) return;
+    abortRef.current = null;
     onBusyChange(false);
     if (!outcome.ok) {
-      setUpload({ phase: 'failed', file, reason: uploadFailedReason(outcome.failures) });
+      setUpload({
+        phase: 'failed',
+        file,
+        previewUrl,
+        reason: uploadFailedReason(outcome.failures),
+      });
       return;
     }
     setUpload({ phase: 'idle' });
-    const previewUrl =
-      isImageMime(file.type) || file.type.startsWith('video/')
-        ? URL.createObjectURL(file)
-        : undefined;
     onChange([
       ...valueRef.current,
       {
         versionId: outcome.value,
         kind: isImageMime(file.type) ? 'image' : 'file',
         name: file.name,
-        ...(previewUrl !== undefined ? { previewUrl } : {}),
+        ...(previewUrl !== null ? { previewUrl } : {}),
         ...(file.type !== '' ? { mime: file.type } : {}),
       },
     ]);
   }
 
-  /** One attempt; its real progress drives the bar. */
-  function attemptOnce(input: {
+  /** One attempt; its real progress fills the ring. A cancelled upload sends nothing more. */
+  async function attemptOnce(input: {
     file: File;
     workspaceId: string;
     endpoint: string;
     token: string;
+    signal: AbortSignal;
   }): Promise<{ ok: true; value: string } | { ok: false }> {
+    if (input.signal.aborted) return { ok: false };
     return attemptUpload({
       ...input,
       traceId: newTrace(),
       onProgress: (fraction) => {
         if (!alive.current) return;
-        setUpload((prev) =>
-          prev.phase === 'sending' ? { ...prev, percent: sendingPercent(fraction) } : prev,
-        );
+        setUpload((prev) => (prev.phase === 'sending' ? { ...prev, sent: fraction } : prev));
       },
     });
+  }
+
+  /** The ring's X: stop the upload at once (no confirm) and drop the photo. */
+  function cancel(): void {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (upload.phase !== 'idle' && upload.previewUrl !== null) {
+      URL.revokeObjectURL(upload.previewUrl);
+    }
+    setUpload({ phase: 'idle' });
+    onBusyChange(false);
   }
 
   /** The sample photo, shown from its local copy; the sheet uploads it at Send. */
@@ -213,7 +243,7 @@ export function PresetMediaField({
     const file = await loadSamplePhoto(newTrace());
     if (!alive.current) return;
     if (file === null) {
-      setUpload({ phase: 'failed', file: null, reason: NOT_STARTED });
+      setUpload({ phase: 'failed', file: null, previewUrl: null, reason: NOT_STARTED });
       return;
     }
     setUpload({ phase: 'idle' });
@@ -241,8 +271,8 @@ export function PresetMediaField({
     else void attachSample(fillOnTap.onFilled);
   }
 
-  function retry(failed: File | null): void {
-    if (failed !== null) void send(failed);
+  function retry(failed: File | null, previewUrl: string | null): void {
+    if (failed !== null) void send(failed, previewUrl);
     else if (fillOnTap !== undefined) void attachSample(fillOnTap.onFilled);
   }
 
@@ -288,7 +318,17 @@ export function PresetMediaField({
           ))}
         </ul>
       ) : null}
-      {upload.phase === 'sending' ? <UploadBar percent={upload.percent} /> : null}
+      {upload.phase === 'sending' || (upload.phase === 'failed' && upload.file !== null) ? (
+        <ul className="flex flex-wrap gap-2">
+          <PendingPhoto
+            previewUrl={upload.previewUrl}
+            video={upload.file?.type.startsWith('video/') === true}
+            {...(upload.phase === 'sending'
+              ? { progress: ringProgress(upload.sent), onCancel: cancel }
+              : { onRetry: () => retry(upload.file, upload.previewUrl) })}
+          />
+        </ul>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
@@ -298,8 +338,10 @@ export function PresetMediaField({
         >
           {value.length > 0 ? 'Add another' : 'Add a photo or video'}
         </Button>
-        {upload.phase === 'failed' ? (
-          <Button type="button" variant="ghost" onClick={() => retry(upload.file)}>
+        {/* A photo that failed retries from the ring spot on it; the sample
+            photo that did not load has no picture, so it retries here. */}
+        {upload.phase === 'failed' && upload.file === null ? (
+          <Button type="button" variant="ghost" onClick={() => retry(null, null)}>
             Retry
           </Button>
         ) : null}
@@ -309,7 +351,7 @@ export function PresetMediaField({
         className={upload.phase === 'failed' ? 'text-base text-bad' : 'text-base text-fg'}
       >
         {upload.phase === 'sending'
-          ? uploadLine(upload.percent, upload.retrying)
+          ? uploadLine(upload.sent, upload.file.size, upload.retrying)
           : upload.phase === 'failed'
             ? upload.reason
             : required
@@ -332,40 +374,71 @@ export function PresetMediaField({
   );
 }
 
+/** The photo's own picture while it uploads (images only; a video shows its glyph). */
+function previewOf(file: File): string | null {
+  return isImageMime(file.type) || file.type.startsWith('video/')
+    ? URL.createObjectURL(file)
+    : null;
+}
+
 /**
- * The bar's share for the bytes sent so far. Sending ends at 90%: the server
- * still checks and stores the photo after the last byte, and only its answer
- * fills the bar, so 100% always means the photo is in the post.
+ * The ring's fill for the bytes sent so far (0..1). Sending ends at 0.9: the
+ * server still checks and stores the photo after the last byte, so a full ring
+ * never shows before the photo is in the post (it then leaves the field).
  */
-export function sendingPercent(fraction: number): number {
-  return Math.round(Math.min(Math.max(fraction, 0), 1) * SENT_SHARE);
+export function ringProgress(fraction: number): number {
+  return Math.min(Math.max(fraction, 0), 1) * SENT_SHARE;
 }
 
-const SENT_SHARE = 90;
+const SENT_SHARE = 0.9;
 
-/** The line under the bar. */
-export function uploadLine(percent: number, retrying: boolean): string {
-  if (retrying) return `Uploading again, ${percent}%`;
-  if (percent >= SENT_SHARE) return 'Almost done, saving your photo';
-  return `Uploading, ${percent}%`;
+/** The line under the photo: sizes, never a % figure. */
+export function uploadLine(sent: number, totalBytes: number, retrying: boolean): string {
+  const share = Math.min(Math.max(sent, 0), 1);
+  if (retrying) return `Uploading again, ${uploadSizeMeta(share * totalBytes, totalBytes)}`;
+  if (share >= 1) return 'Almost done, saving your photo';
+  return `Uploading, ${uploadSizeMeta(share * totalBytes, totalBytes)}`;
 }
 
-/** The upload's real progress as a bar. */
-function UploadBar({ percent }: { percent: number }): ReactElement {
+/**
+ * The photo on its way: its own picture with the upload ring on it (X
+ * cancels), or Retry in the same spot once it failed. The tile never changes size.
+ */
+function PendingPhoto(props: {
+  previewUrl: string | null;
+  video: boolean;
+  progress?: number;
+  onCancel?: () => void;
+  onRetry?: () => void;
+}): ReactElement {
   return (
-    <div
-      role="progressbar"
-      aria-label="Upload progress"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={percent}
-      className="h-2 w-full overflow-hidden rounded-full bg-panel-3 lit-well"
+    <li
+      data-pending-photo={props.onRetry !== undefined ? 'failed' : 'uploading'}
+      className={
+        props.onRetry !== undefined
+          ? 'relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-bad bg-panel-3 lit-bad'
+          : 'relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border bg-panel-3 lit-pill'
+      }
     >
-      <div
-        className="h-full rounded-full bg-accent lit-fill mv-fill"
-        style={{ width: `${percent}%` }}
-      />
-    </div>
+      {props.previewUrl !== null && !props.video ? (
+        <img src={props.previewUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center text-fg-3">
+          <IconVideo size={ICON_SIZE.status} />
+        </span>
+      )}
+      {props.onRetry !== undefined ? (
+        <UploadRetry variant="image" onRetry={props.onRetry} className="absolute inset-0 m-auto" />
+      ) : (
+        <UploadRing
+          variant="image"
+          label="Cancel upload"
+          progress={props.progress ?? null}
+          onCancel={props.onCancel}
+          className="absolute inset-0 m-auto"
+        />
+      )}
+    </li>
   );
 }
 

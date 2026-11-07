@@ -7,7 +7,7 @@ import {
   AssetList,
   AssetListCard,
   assetFacts,
-  assetTabTag,
+  assetTypeTag,
 } from '@/components/pages/assets/AssetListCard';
 import { LIST_CARD_GRID, type ListCardSelect } from '@/components/ui/ListCard';
 import type { PresignCache } from '@/lib/asset-presign';
@@ -16,7 +16,7 @@ import type { AssetListItem } from '@/lib/assets';
 // SSR to static markup: useState initializers run (a warm cache peek shows the
 // image) while effects do not. Every Assets item is ui/ListCard: the picture;
 // line 1 the name and the added time; line 2 the type and size facts and the
-// tab tag. No ⋮: long-press / right-click selects.
+// type tag (PDF, Doc, Sheet, Image, Video). No ⋮: long-press / right-click selects.
 
 const NOW = new Date('2026-01-01T03:00:00Z');
 
@@ -162,16 +162,88 @@ describe('line 2 facts, only from fields the item holds', () => {
   });
 });
 
-describe('line 2 tag is the tab label', () => {
-  it('Media, PDF, Docs, Sheets, Links; none for an unknown kind', () => {
-    expect(assetTabTag({ kind: 'image' })).toBe('Media');
-    expect(assetTabTag({ kind: 'video' })).toBe('Media');
-    expect(assetTabTag({ kind: 'pdf' })).toBe('PDF');
-    expect(assetTabTag({ kind: 'document' })).toBe('Docs');
-    expect(assetTabTag({ kind: 'spreadsheet' })).toBe('Sheets');
-    expect(assetTabTag({ kind: 'link' })).toBe('Links');
-    expect(assetTabTag({ kind: null })).toBeUndefined();
-    expect(card(makeAsset({ kind: null }))).not.toContain('data-asset-tag');
+describe('line 2 tag is the file type', () => {
+  it('PDF, Doc, Sheet, Image, Video from the stored kind', () => {
+    const tag = (kind: AssetListItem['kind']) => assetTypeTag({ kind, mimeType: null });
+    expect(tag('pdf')).toBe('PDF');
+    expect(tag('document')).toBe('Doc');
+    expect(tag('presentation')).toBe('Doc');
+    expect(tag('spreadsheet')).toBe('Sheet');
+    expect(tag('image')).toBe('Image');
+    expect(tag('video')).toBe('Video');
+    expect(tag('audio')).toBe('Audio');
+    expect(tag('link')).toBe('Link');
+  });
+
+  it('an unknown kind reads its MIME type; none when that says nothing either', () => {
+    const tag = (mimeType: string | null) => assetTypeTag({ kind: null, mimeType });
+    expect(tag('application/pdf')).toBe('PDF');
+    expect(tag('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe(
+      'Doc',
+    );
+    expect(tag('application/msword')).toBe('Doc');
+    expect(tag('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe('Sheet');
+    expect(tag('text/csv')).toBe('Sheet');
+    expect(tag('image/heic')).toBe('Image');
+    expect(tag('video/quicktime')).toBe('Video');
+    expect(tag('application/zip')).toBeUndefined();
+    expect(tag(null)).toBeUndefined();
+    expect(card(makeAsset({ kind: null, mimeType: null }))).not.toContain('data-asset-tag');
+  });
+
+  it('the card shows the one grey tag on line 2, never a tab name', () => {
+    expect(card(makeAsset({ kind: 'spreadsheet', mimeType: null }))).toMatch(
+      /data-list-card-line="2"[^]*data-asset-tag=""[^]*>Sheet</,
+    );
+    const video = card(makeAsset({ kind: 'video', mimeType: 'video/mp4' }));
+    expect(video).toMatch(/data-asset-tag=""[^]*>Video</);
+    expect(video).not.toMatch(/>(Media|Docs|Sheets|Links)</);
+  });
+});
+
+describe('a video picture: the play badge and its length', () => {
+  it('the stored frame with the play badge and the stored length', () => {
+    const { cache, peekThumbnail } = makeCache('https://cdn.example/frame.jpg');
+    const out = card(
+      makeAsset({ kind: 'video', mimeType: 'video/mp4', durationMs: 15_000 }),
+      {},
+      true,
+      cache,
+    );
+    expect(out).toContain('data-list-card-picture="image"');
+    expect(out).toMatch(/data-asset-video-thumb=""[^]*<img[^>]*frame\.jpg/);
+    expect(peekThumbnail).toHaveBeenCalledWith('av1');
+    expect(out).toMatch(/data-asset-play-badge=""[^]*<svg[^]*data-asset-duration=""[^>]*>0:15</);
+    // One play mark: not the file tile's centre play disc as well.
+    expect(out).not.toContain('data-file-tile');
+  });
+
+  it('no stored length: the play badge alone', () => {
+    const out = card(makeAsset({ kind: 'video', mimeType: 'video/mp4', durationMs: null }));
+    expect(out).toContain('data-asset-play-badge=""');
+    expect(out).not.toContain('data-asset-duration');
+  });
+
+  it('no frame (presign off): the video glyph under the badge, nothing asked', () => {
+    const { cache, peekThumbnail } = makeCache('https://cdn.example/frame.jpg');
+    const out = card(
+      makeAsset({ kind: 'video', mimeType: 'video/mp4', durationMs: 4_000 }),
+      {},
+      false,
+      cache,
+    );
+    expect(out).not.toContain('<img');
+    expect(out).toContain('data-asset-play-badge=""');
+    expect(out).toContain('>0:04<');
+    expect(peekThumbnail).not.toHaveBeenCalled();
+  });
+
+  it('tokens only on the badge: overlay scrim and ink, no hex, no px, no dark:', () => {
+    const out = card(makeAsset({ kind: 'video', mimeType: 'video/mp4', durationMs: 4_000 }));
+    const badge = (out.match(/<span data-asset-play-badge=""[^>]*>/) ?? [''])[0];
+    expect(badge).toContain('bg-overlay');
+    expect(badge).toContain('text-overlay-fg');
+    expect(badge).not.toMatch(/#[0-9a-fA-F]{3,8}\b|\[\d+px\]|dark:/);
   });
 });
 
@@ -188,13 +260,11 @@ describe('the picture slot', () => {
     expect(peekThumbnail).toHaveBeenCalledWith('av1');
   });
 
-  it('a PDF or video with a stored preview: the stored thumbnail tile, asked near the viewport', () => {
+  it('a PDF with a stored preview: the stored thumbnail tile, asked near the viewport', () => {
     const { cache } = makeCache();
     const pdf = card(makeAsset(), {}, true, cache);
     expect(pdf).toContain('data-list-card-picture="image"');
     expect(pdf).toContain('data-file-tile="pdf"');
-    const video = card(makeAsset({ kind: 'video', mimeType: 'video/mp4' }), {}, true, cache);
-    expect(video).toContain('data-file-tile="video"');
   });
 
   it('a file with no preview, or presign off: the file-type icon in the icon box', () => {

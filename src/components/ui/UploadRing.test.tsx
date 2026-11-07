@@ -459,8 +459,9 @@ describe('D5: sending states, one look across photo, album, video, file, voice n
 });
 
 describe('D4b: no close X in the sending-state files', () => {
+  // ui/UploadRing (and ui/PendingChip) own the one X (decision F); every
+  // other sending-state file reaches it only through them.
   const OWNED = [
-    'ui/UploadRing.tsx',
     'chat/VoiceNote.tsx',
     'chat/FileBubble.tsx',
     'ui/ProgressRing.tsx',

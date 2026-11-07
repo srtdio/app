@@ -147,10 +147,9 @@ export function filterApplied(filter: BankFilter): boolean {
   );
 }
 
-/** The zero line: a search or bucket with nothing, archived, or the plain bank. Pure. */
-export function bankZeroCopy(filter: BankFilter, searching: boolean): string {
-  if (searching || filter.bucketId !== null || filter.review)
-    return 'Try another search or bucket.';
+/** The zero line: a bucket or review filter with nothing, archived, or the plain bank. Pure. */
+export function bankZeroCopy(filter: BankFilter): string {
+  if (filter.bucketId !== null || filter.review) return 'Try another bucket.';
   if (filter.archived) return 'Archived ideas show up here.';
   return 'Ideas show up here.';
 }

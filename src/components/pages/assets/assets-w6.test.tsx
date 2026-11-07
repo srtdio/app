@@ -253,9 +253,11 @@ describe('7. select mode', () => {
 });
 
 describe('7b. the "New file" add menu', () => {
-  it('is a "New file" text button offering upload and link only; no New folder sheet', () => {
+  it('is the top bar "+" named "New file", offering upload and link only; no New folder sheet', () => {
     const menu = read('src/components/pages/assets/AssetAddMenu.tsx');
-    expect(menu).toContain('New file');
+    expect(menu).toContain('<TopbarPlus');
+    expect(menu).toContain('label="New file"');
+    expect(menu).toContain('aria-haspopup="menu"');
     expect(menu).not.toContain('aria-label="Add asset"');
     expect(menu).not.toContain('New folder');
     expect(menu).toContain('<span>Upload files</span>');

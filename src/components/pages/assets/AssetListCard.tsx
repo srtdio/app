@@ -1,11 +1,19 @@
 import { mark } from '@/lib/perf-marks';
-import { useEffect, useRef, useState, type ComponentType, type RefObject } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactElement,
+  type RefObject,
+} from 'react';
 import { Thumbnail } from '@/components/media';
 import {
   ICON_SIZE,
   IconFile,
   IconImage,
   IconLink,
+  IconPlay,
   IconVideo,
   type IconProps,
 } from '@/components/ui/icons';
@@ -16,7 +24,13 @@ import {
   type ListCardSelect,
 } from '@/components/ui/ListCard';
 import { useMinuteClock } from '@/components/ui/use-minute-clock';
-import { FileTile, fileTileMeta, storedThumbnailMeta } from '@/components/ui/FileTile';
+import {
+  FileTile,
+  fileTileMeta,
+  storedThumbnailMeta,
+  useNearViewport,
+  useStoredThumbnail,
+} from '@/components/ui/FileTile';
 import { GlideItem } from '@/lib/motion';
 import type { PresignCache } from '@/lib/asset-presign';
 import { classifyFileKind } from '@/lib/chat/attachments';
@@ -25,13 +39,12 @@ import { thumbnailKind } from '@/lib/files/thumbnail';
 import { VIEWER_NAME_BUDGET, middleTruncate } from '@/lib/files/display-name';
 import { formatAdded } from '@/lib/time';
 import {
-  KIND_TAB,
-  TAB_LABELS,
   displayLabel,
   fileExtension,
   humanizeSize,
   linkDomain,
   mimeBadge,
+  type AssetKind,
   type AssetListItem,
 } from '@/lib/assets';
 
@@ -71,24 +84,110 @@ export function assetFacts(item: AssetListItem): string {
     .join(' · ');
 }
 
-/** Line 2's one grey tag: the item's tab label (Media, PDF, Docs, Sheets, Links); none when unknown. */
-export function assetTabTag(item: Pick<AssetListItem, 'kind'>): string | undefined {
-  return item.kind === null ? undefined : TAB_LABELS[KIND_TAB[item.kind]];
+/** Line 2's tag per stored kind (decision D): what the file is, not which chip holds it. */
+const KIND_TAG: Record<AssetKind, string> = {
+  image: 'Image',
+  video: 'Video',
+  audio: 'Audio',
+  pdf: 'PDF',
+  document: 'Doc',
+  presentation: 'Doc',
+  spreadsheet: 'Sheet',
+  link: 'Link',
+};
+
+/**
+ * Line 2's one grey tag: PDF, Doc, Sheet, Image or Video (Audio, Link), from
+ * the stored kind, else from the MIME type; none when neither says. Pure.
+ */
+export function assetTypeTag(item: Pick<AssetListItem, 'kind' | 'mimeType'>): string | undefined {
+  if (item.kind !== null) return KIND_TAG[item.kind];
+  const mime = (item.mimeType ?? '').toLowerCase();
+  if (mime.startsWith('image/')) return 'Image';
+  if (mime.startsWith('video/')) return 'Video';
+  if (mime.startsWith('audio/')) return 'Audio';
+  if (mime === 'application/pdf') return 'PDF';
+  if (mime.includes('spreadsheet') || mime.includes('excel') || mime === 'text/csv') return 'Sheet';
+  if (mime.includes('word') || mime.includes('document') || mime.includes('presentation')) {
+    return 'Doc';
+  }
+  return undefined;
+}
+
+/**
+ * A video's 48 picture: its stored frame (asked once near the viewport, the
+ * same shared thumbnail read the file tiles use), else the video glyph, with
+ * the media play badge and its length (when stored) at the bottom left, as in
+ * the chat media grid. Paints the cached frame on first render.
+ */
+function AssetVideoThumb({
+  item,
+  cache,
+  presignEnabled,
+}: {
+  item: AssetListItem;
+  cache: PresignCache;
+  presignEnabled: boolean;
+}): ReactElement {
+  const versionId = item.currentVersionId ?? '';
+  const mime = item.mimeType ?? '';
+  const ref = useRef<HTMLSpanElement>(null);
+  const near = useNearViewport(ref);
+  const wantsThumb = presignEnabled && versionId !== '' && thumbnailKind(mime) !== null;
+  const stored = useStoredThumbnail(versionId, cache, wantsThumb && near);
+  const cached = wantsThumb ? (cache.peekThumbnail(versionId)?.url ?? null) : null;
+  const [failedVersion, setFailedVersion] = useState<string | null>(null);
+  const url = wantsThumb && failedVersion !== versionId ? (stored.url ?? cached) : null;
+  const length =
+    item.durationMs !== null && item.durationMs > 0 ? formatDurationMs(item.durationMs) : null;
+  return (
+    <span
+      ref={ref}
+      data-asset-video-thumb=""
+      className="relative block h-full w-full overflow-hidden bg-panel-2 text-fg-2"
+    >
+      {url !== null ? (
+        <img
+          src={url}
+          alt=""
+          draggable={false}
+          onError={() => setFailedVersion(versionId)}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
+          <IconVideo size={ICON_SIZE.picture} />
+        </span>
+      )}
+      <span
+        data-asset-play-badge=""
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0.5 left-0.5 inline-flex max-w-full items-center gap-0.5 rounded-full bg-overlay px-1 text-xs text-overlay-fg lit-media"
+      >
+        <IconPlay size={ICON_SIZE.text} />
+        {length !== null ? (
+          <span data-asset-duration="" className="font-mono tabular-nums">
+            {length}
+          </span>
+        ) : null}
+      </span>
+    </span>
+  );
 }
 
 /** The file-type glyph for the icon picture (one icon per concept). */
 function assetIcon(item: AssetListItem): ComponentType<IconProps> {
   if (item.kind === 'link') return IconLink;
   if (item.kind === 'image') return IconImage;
-  if (item.kind === 'video') return IconVideo;
   return IconFile;
 }
 
 /**
- * The picture slot: a picture's thumbnail; a file with a stored preview (PDF,
- * video, Word, Excel) its stored thumbnail, asked once near the viewport as
- * before; else the file-type icon in the icon box. A link has no picture of its
- * own on the item, so it shows the link icon.
+ * The picture slot: a picture's thumbnail; a video its frame with the play
+ * badge and length (AssetVideoThumb); a file with a stored preview (PDF,
+ * Word, Excel) its stored thumbnail, asked once near the viewport as before;
+ * else the file-type icon in the icon box. A link has no picture of its own on
+ * the item, so it shows the link icon.
  */
 function assetPicture(
   item: AssetListItem,
@@ -116,6 +215,12 @@ function assetPicture(
           alt={name}
         />
       ),
+    };
+  }
+  if (item.kind === 'video') {
+    return {
+      kind: 'image',
+      node: <AssetVideoThumb item={item} cache={cache} presignEnabled={presignEnabled} />,
     };
   }
   const mime = item.mimeType ?? '';
@@ -159,8 +264,8 @@ interface AssetListCardProps {
 
 /**
  * One Assets item on ui/ListCard: the picture; line 1 the file name and when
- * it was added (formatAdded); line 2 the type and size facts and its tab as
- * the one grey tag. A tap opens it (the lightbox, or the link in a new tab).
+ * it was added (formatAdded); line 2 the type and size facts and its type
+ * (PDF, Doc, Sheet, Image, Video) as the one grey tag. A tap opens it (the lightbox, or the link in a new tab).
  * No ⋮: a long-press or right-click selects it (ListCard `select`) and the
  * old menu rows live on the page's SelectBar.
  */
@@ -190,7 +295,7 @@ export function AssetListCard({
       previewHooks={{ 'data-asset-meta': '' }}
       time={formatAdded(item.uploadedAt, now)}
       timeHooks={{ 'data-asset-uploaded': '' }}
-      tag={assetTabTag(item)}
+      tag={assetTypeTag(item)}
       tagHooks={{ 'data-asset-tag': '' }}
       // In select mode ListCard takes the tap (it toggles), so this only opens.
       onPress={onOpen}

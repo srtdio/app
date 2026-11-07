@@ -67,9 +67,7 @@ function callsOf(calls: Call[], method: string): unknown[][] {
 describe('tabKinds', () => {
   it('reads KIND_TAB backwards', () => {
     expect(tabKinds('media')).toEqual(['image', 'video', 'audio']);
-    expect(tabKinds('docs')).toEqual(['document', 'presentation']);
-    expect(tabKinds('pdf')).toEqual(['pdf']);
-    expect(tabKinds('sheets')).toEqual(['spreadsheet']);
+    expect(tabKinds('docs')).toEqual(['pdf', 'document', 'spreadsheet', 'presentation']);
     expect(tabKinds('links')).toEqual(['link']);
   });
 });
@@ -107,13 +105,13 @@ describe('countAssetsInTab (HEAD count, list filters)', () => {
   });
 
   it('a null count is 0; an error or a throw is { ok: false }', async () => {
-    expect(await countAssetsInTab(fakeClient(() => ({ count: null })).client, 'w1', 'pdf')).toEqual(
+    expect(await countAssetsInTab(fakeClient(() => ({ count: null })).client, 'w1', 'docs')).toEqual(
       { ok: true, data: 0 },
     );
     const failed = await countAssetsInTab(
       fakeClient(() => ({ error: { message: 'boom' } })).client,
       'w1',
-      'pdf',
+      'docs',
     );
     expect(failed.ok).toBe(false);
     const thrown = await countAssetsInTab({} as unknown as Client, 'w1', 'all');
@@ -141,7 +139,7 @@ describe('countAssetTabs (parallel)', () => {
     const result = await pending;
     expect(result).toEqual({
       ok: true,
-      data: { all: 100, media: 3, pdf: 1, docs: 2, sheets: 1, links: 1 },
+      data: { all: 100, media: 3, docs: 4, links: 1 },
     });
     // Every request carries the list's filters.
     for (const calls of requests) {
@@ -149,6 +147,33 @@ describe('countAssetTabs (parallel)', () => {
       expect(callsOf(calls, 'is')).toEqual([['deleted_at', null]]);
       expect(callsOf(calls, 'select')[0]?.[1]).toEqual({ count: 'exact', head: true });
     }
+  });
+
+  it('Docs is the sum of the old PDF, Docs and Sheets totals, in one request', async () => {
+    // The server holds 2 PDFs, 3 documents, 1 presentation and 4 spreadsheets.
+    const byKind: Record<string, number> = {
+      pdf: 2,
+      document: 3,
+      presentation: 1,
+      spreadsheet: 4,
+      image: 5,
+      link: 6,
+    };
+    const { client, requests } = fakeClient((calls) => {
+      const kinds = callsOf(calls, 'in')[0]?.[1] as string[] | undefined;
+      const count =
+        kinds === undefined
+          ? 21
+          : kinds.reduce((sum, kind) => sum + (byKind[kind] ?? 0), 0);
+      return { count };
+    });
+    const result = await countAssetTabs(client, 'w1');
+    expect(result).toEqual({ ok: true, data: { all: 21, media: 5, docs: 10, links: 6 } });
+    const docsReads = requests.filter((calls) =>
+      (callsOf(calls, 'in')[0]?.[1] as string[] | undefined)?.includes('pdf'),
+    );
+    expect(docsReads).toHaveLength(1);
+    expect(callsOf(docsReads[0] ?? [], 'in')).toEqual([['current_version.kind', ['pdf', 'document', 'spreadsheet', 'presentation']]]);
   });
 
   it('one failed count fails the read (never a mix of fresh and stale)', async () => {
@@ -227,7 +252,7 @@ describe('listAssetIds (Select all, keyset pages of 1000)', () => {
     expect(callsOf(calls, 'select')[0]?.[0]).toBe(
       'id, uploaded_at, current_version:asset_versions!assets_current_version_id_fkey!inner(kind)',
     );
-    expect(callsOf(calls, 'in')).toEqual([['current_version.kind', ['document', 'presentation']]]);
+    expect(callsOf(calls, 'in')).toEqual([['current_version.kind', ['pdf', 'document', 'spreadsheet', 'presentation']]]);
   });
 
   it('a failed page fails the whole read', async () => {

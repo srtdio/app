@@ -20,7 +20,7 @@ vi.mock('@/lib/fetch', () => ({ fetchWithTrace: mockFetch }));
 import {
   PresetMediaField,
   SAMPLE_VERSION_ID,
-  sendingPercent,
+  ringProgress,
   uploadLine,
   uploadLocalFile,
 } from './PresetMediaField';
@@ -123,7 +123,7 @@ describe('PresetMediaField', () => {
     expect(anchors[0]?.textContent).toBe('Add a photo or video');
   });
 
-  it('shows a progress bar from the real upload progress, and never the file name', async () => {
+  it('shows the upload ring on the photo from the real progress, a size line, and never the file name', async () => {
     let finish: (value: { ok: true; reused: false; versionId: string }) => void = () => {};
     mockUpload.mockImplementation(
       (params: { xhr: { onProgress: (f: number) => void } }) =>
@@ -147,13 +147,19 @@ describe('PresetMediaField', () => {
       );
     });
     await pickFile('IMG_4821.HEIC.png');
-    const bar = document.querySelector('[role="progressbar"]');
-    // 42% of the bytes is 38% of the bar: the last 10% waits for the server's answer.
-    expect(bar?.getAttribute('aria-valuenow')).toBe('38');
-    expect(document.body.textContent).toContain('Uploading, 38%');
+    const tile = document.querySelector('[data-pending-photo="uploading"]');
+    expect(tile?.querySelector('img')?.getAttribute('src')).toBe('blob:photo');
+    const ring = tile?.querySelector('[data-upload-ring]');
+    // 42% of the bytes is 38% of the ring: the last 10% waits for the server's answer.
+    expect(ring?.getAttribute('data-upload-progress')).toBe('38');
+    // The ring's own sr-only progressbar is the only one; no bar, no % text.
+    expect(document.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+    expect(document.body.textContent).toContain('Uploading, 0 of 1 KB');
+    expect(document.body.textContent).not.toMatch(/%/);
     expect(document.body.textContent).not.toContain('IMG_4821');
 
     await act(async () => finish({ ok: true, reused: false, versionId: 'v-1' }));
+    expect(document.querySelector('[data-upload-ring]')).toBeNull();
     expect(document.querySelector('[role="progressbar"]')).toBeNull();
     expect(onChange).toHaveBeenCalledWith([
       {
@@ -166,7 +172,41 @@ describe('PresetMediaField', () => {
     ]);
   });
 
-  it('retries three times, then gives the plain reason with Try again', async () => {
+  it("the ring's X cancels the upload: the request aborts and the field is at rest", async () => {
+    let signal: AbortSignal | undefined;
+    mockUpload.mockImplementation((params: { xhr: { signal?: AbortSignal } }) => {
+      signal = params.xhr.signal;
+      return new Promise(() => {});
+    });
+    const onBusyChange = vi.fn();
+    const onChange = vi.fn();
+    root = createRoot(host!);
+    await act(async () => {
+      root!.render(
+        <PresetMediaField
+          workspaceId="ws-1"
+          value={[]}
+          onChange={onChange}
+          required
+          onBusyChange={onBusyChange}
+          frame={null}
+        />,
+      );
+    });
+    URL.revokeObjectURL = vi.fn();
+    await pickFile('a.png');
+    expect(onBusyChange).toHaveBeenLastCalledWith(true);
+    const x = document.querySelector<HTMLButtonElement>('button[aria-label="Cancel upload"]');
+    expect(x).not.toBeNull();
+    await act(async () => x!.click());
+    expect(signal?.aborted).toBe(true);
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+    expect(document.querySelector('[data-pending-photo]')).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries three times, then gives the plain reason with Retry on the photo', async () => {
     mockUpload.mockResolvedValue({ ok: false, message: 'network' });
     root = createRoot(host!);
     await act(async () => {
@@ -184,16 +224,23 @@ describe('PresetMediaField', () => {
     await pickFile('a.png');
     expect(mockUpload).toHaveBeenCalledTimes(4);
     expect(document.body.textContent).toContain('The file did not reach us.');
-    const retry = Array.from(document.querySelectorAll('button')).find(
-      (b) => b.textContent === 'Retry',
-    );
-    expect(retry).toBeDefined();
+    const tile = document.querySelector('[data-pending-photo="failed"]');
+    expect(tile?.querySelector('[data-upload-ring]')).toBeNull();
+    const retry = tile?.querySelector<HTMLButtonElement>('button[data-upload-retry]');
+    expect(retry?.getAttribute('aria-label')).toBe('Retry');
+    mockUpload.mockClear();
+    await act(async () => retry!.click());
+    expect(mockUpload).toHaveBeenCalledTimes(4);
   });
 
-  it('never reads 100% before the server answers', () => {
-    expect(sendingPercent(1)).toBe(90);
-    expect(uploadLine(90, false)).toBe('Almost done, saving your photo');
-    expect(uploadLine(10, true)).toBe('Uploading again, 10%');
+  it('never fills the ring before the server answers; the line reads sizes, never %', () => {
+    const MB = 1024 * 1024;
+    expect(ringProgress(1)).toBeCloseTo(0.9);
+    expect(ringProgress(2)).toBeCloseTo(0.9);
+    expect(ringProgress(-1)).toBe(0);
+    expect(uploadLine(1, 3 * MB, false)).toBe('Almost done, saving your photo');
+    expect(uploadLine(0.5, 3 * MB, false)).toBe('Uploading, 1.5 of 3.0 MB');
+    expect(uploadLine(0.4, 3 * MB, true)).toBe('Uploading again, 1.2 of 3.0 MB');
   });
 
   it('regression: an Instagram Reel with no media shows the empty 9:16 frame as the upload target', async () => {

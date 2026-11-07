@@ -14,28 +14,27 @@ import {
   type ListCardSelect,
 } from '@/components/ui/ListCard';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { NoResults } from '@/components/ui/NoResults';
-import { SectionHeader } from '@/components/shell/SectionHeader';
+import { SectionHeader, SectionSelect } from '@/components/shell/SectionHeader';
+import { TopbarPlus, useTopbarActions } from '@/components/shell/topbar-actions';
 import { selectCountLabel } from '@/components/ui/SelectBar';
+import { SortMenu, type SortOption } from '@/components/ui/SortMenu';
 import { textRole } from '@/components/ui/Text';
 import { Chip } from '@/components/ui/Chip';
 import {
   ICON_SIZE,
   IconChat,
-  IconCheckCircle,
   IconEyeOff,
   IconForward,
-  IconPlus,
   IconTrash,
   type IconProps,
 } from '@/components/ui/icons';
 import { useUndoableAction } from '@/lib/use-undoable-action';
+import { useSort } from '@/lib/use-sort';
 import { cn } from '@/lib/cn';
 import { SHELL_STICKY_TOP_CLASS } from '@/lib/scroll-mode';
 import { BoxSkeleton, GlideItem } from '@/lib/motion';
 import { SettleLanding } from '@/components/chat/SettleLanding';
 import { useCoarsePointer, useHoverPointer } from '@/lib/use-is-laptop';
-import { filterChannelsByName } from '@/lib/channel-filter';
 import type { ChannelSummary } from '@/lib/chat-reads';
 import { useChatStore } from '@/components/chat/ChatStoreProvider';
 import {
@@ -58,7 +57,7 @@ import {
 import { leaveSelectionThen } from '@/lib/chat/forward';
 import { summaryIconOfLine } from '@/lib/chat/thread';
 import { SummaryGlyph } from '@/components/chat/ReplyQuote';
-import { SearchResults, useMessageSearch } from '@/components/chat/SearchResults';
+import { useMessageSearch } from '@/components/chat/SearchResults';
 import { MediaResults } from '@/components/chat/MediaResults';
 import { ForwardPicker, type ForwardSendResult } from '@/components/chat/ForwardPicker';
 import { DELETE_FOR_ME_LABEL } from '@/components/chat/DeleteSheet';
@@ -79,14 +78,7 @@ import { isFileRemoved, removedFilesStore } from '@/lib/chat/remove-files';
 import { APP_ENTITY_ROUTES, currentOrigin } from '@/lib/chat/message-links';
 import { peekKept, primeRead, readKey } from '@/lib/session-read';
 import { mark } from '@/lib/perf-marks';
-import {
-  normalizeQuery,
-  SEARCH_CHIPS,
-  SEARCH_MIN_CHARS,
-  SEARCH_PAGE_SIZE,
-  type SearchHit,
-  type SearchKind,
-} from '@/lib/chat/search';
+import { SEARCH_CHIPS, SEARCH_PAGE_SIZE, type SearchKind } from '@/lib/chat/search';
 import { NOTES_TILE_LINE } from '@/lib/chat/notes';
 import { chatDisplayName } from '@/lib/chat/chat-name';
 import { useSession } from '@/lib/session-context';
@@ -154,7 +146,7 @@ export interface ChannelSelectMode {
   selectedIds: ReadonlySet<string>;
   /** Enter select mode with this chat ticked (a chat card's long-press or right-click). */
   onEnter: (channelId: string) => void;
-  /** A chip view's header Select: enter with nothing ticked (media items have no long-press). */
+  /** The chip row's Select (SectionSelect): enter with nothing ticked. */
   onStart: () => void;
   onCancel: () => void;
   /** Tick or untick; unticking the last chat leaves select mode (the list's own wiring). */
@@ -192,7 +184,7 @@ interface ChannelListProps {
    * start now. Never selects; the tap (onSelect) still opens.
    */
   onPressIn?: (channel: ChannelSummary) => void;
-  /** Opens the New chat sheet (header "+" and empty-state action). */
+  /** Opens the New chat sheet (the top bar's "+"). */
   onNewChat: () => void;
   /** For tests: the zone card times render in. The app passes none (the viewer's device zone). */
   timeZone?: string;
@@ -203,18 +195,16 @@ interface ChannelListProps {
   onDeleteChats?: (channels: ChannelSummary[]) => Promise<ClearRunResult<ChannelSummary>>;
   /** The open workspace: a Draft line resolves names from its registry only. */
   workspaceId?: string | null;
-  /** A message search hit tapped: open that chat at that message, the bar on the query. */
-  onOpenSearchHit?: (channel: ChannelSummary, messageId: string, query: string) => void;
   /** A media item's Show in chat: open that chat at that message (no search bar). */
   onOpenAtMessage?: (channel: ChannelSummary, messageId: string) => void;
   /**
    * The caller's Personal notes (built from the session, never read): its
    * card paints from the first frame and, once the list is in, sorts in with
-   * the chats by its last note; search hits in it carry its name. Absent: no
+   * the chats by its last note; chip items in it carry its name. Absent: no
    * card.
    */
   notes?: ChannelSummary;
-  /** Rendered at the top of the home list (hidden while searching), e.g. the getting-started card. */
+  /** Rendered at the top of the home list (hidden while a chip view shows), e.g. the getting-started card. */
   lead?: ReactNode;
   /** A chip view's Forward: the chats the picker lists (hidden ones included). */
   forwardChannels?: readonly ChannelSummary[];
@@ -226,12 +216,8 @@ interface ChannelListProps {
 }
 
 interface ChannelListBodyProps extends Omit<ChannelListProps, 'status' | 'onRetry'> {
-  /** Whether any conversations exist before the search filter is applied. */
+  /** Whether any conversation is listed (not hidden). */
   hasChannels: boolean;
-  /** The name search; the no-match line names it. */
-  search?: string;
-  /** Clears the name search (the no-match state's Clear search). */
-  onClearSearch?: () => void;
   /** Read-only store summaries; absent in pure tests (every card reads empty). */
   summaryFor?: SummaryLookup;
   /** Clock for relative-time labels; defaults to 0 when no summary is supplied. */
@@ -297,27 +283,16 @@ export function useChannelListInput(): ChannelListInput {
 }
 
 /**
- * The channel list body. Pure and exported so its three states are unit tested:
- * the zero-state when no conversations exist (the header's New chat is the
- * only create button), a
- * NoResults state when a search hides every conversation, and one row
- * per channel otherwise.
+ * The channel list body. Pure and exported so its two states are unit tested:
+ * the zero-state when no conversations exist (the top bar's New chat is the
+ * only create button), and one row per channel otherwise.
  */
 export function channelListView(props: ChannelListBodyProps): ReactElement {
-  if (!props.hasChannels) {
+  if (!props.hasChannels || props.channels.length === 0) {
     return (
       <EmptyState
         icon={<IconChat size={ICON_SIZE.status} />}
         title="Chats with your team show up here."
-      />
-    );
-  }
-  if (props.channels.length === 0) {
-    return (
-      <NoResults
-        query={props.search ?? ''}
-        filtersActive={false}
-        onClear={props.onClearSearch ?? (() => undefined)}
       />
     );
   }
@@ -479,7 +454,7 @@ export function unreadPillText(unread: number): string | null {
 
 /**
  * The home stack inside the one scroll container, 8px between blocks. The card
- * list sits on the 16 edge (CHAT_HOME_EDGE), like the search box above.
+ * list sits on the 16 edge (CHAT_HOME_EDGE), like the chip row above.
  */
 export const CHAT_HOME_STACK = 'flex flex-col gap-2';
 
@@ -805,7 +780,7 @@ export function toggleHomeChip(current: HomeChip | null, tapped: HomeChip): Home
 }
 
 /**
- * The chips under the search box: Photos, Videos, Links, Files,
+ * The chips in the chip row: Photos, Videos, Links, Files,
  * Voice notes (WhatsApp's order). One at a time: tap it again, or its X,
  * to clear and return to the list (no All chip). Each is ui/Chip with its
  * selected style, as on the other list pages (no counts: these filter
@@ -844,15 +819,13 @@ export function searchChips(props: {
 }
 
 interface ChannelListContentProps extends ChannelListProps {
-  search: string;
-  onSearchChange: (value: string) => void;
   /** Read-only store summaries; absent in pure tests (every card reads empty). */
   summaryFor?: SummaryLookup;
   /** Clock for relative-time labels, threaded to the cards. */
   nowMs?: number;
   /** Hidden-chat lookup; absent in pure tests (nothing is hidden). */
   isHidden?: HiddenLookup;
-  /** Select mode controls; absent: long-press does nothing and no select bar. */
+  /** Select mode controls; absent: long-press does nothing, no Select and no select bar. */
   select?: ChannelSelectMode;
   /** Unsent draft text per chat; absent in pure tests (no drafts). */
   draftFor?: DraftLookup;
@@ -860,19 +833,16 @@ interface ChannelListContentProps extends ChannelListProps {
   input?: ChannelListInput;
   /** The caller's own name: the Personal notes picture's initials when there is no photo. */
   ownName?: string | undefined;
+  /** The list order (the top bar's sort); Recent when absent. */
+  sort?: ChatSort;
   /**
-   * The message search results; they replace the list (no old list under them)
-   * while the box holds 2+ characters or a chip is on. Absent: the name filter only.
+   * The chip view (MediaResults); it replaces the list (no old list under it)
+   * while a chip is on. Absent: the list.
    */
-  searchResults?: ReactNode;
+  chipResults?: ReactNode;
   /** The active filter chip and its setter; absent shows no chips. */
   kind?: HomeChip | null;
   onKindChange?: (kind: HomeChip | null) => void;
-}
-
-/** Whether the search box (or a chip) holds enough to show the message results. Pure. */
-export function showSearchResults(search: string, kind: HomeChip | null = null): boolean {
-  return kind !== null || normalizeQuery(search).length >= SEARCH_MIN_CHARS;
 }
 
 /**
@@ -888,30 +858,83 @@ export function recencyKey(channel: ChannelSummary, summaryFor: SummaryLookup): 
   return Number.isNaN(created) ? 0 : created;
 }
 
+/** The chat list orders (the top bar's sort), in menu order. */
+export type ChatSort = 'recent' | 'unread' | 'az';
+
+export const CHAT_SORT_DEFAULT: ChatSort = 'recent';
+
+export const CHAT_SORT_OPTIONS: SortOption<ChatSort>[] = [
+  { value: 'recent', label: 'Recent' },
+  { value: 'unread', label: 'Unread first' },
+  { value: 'az', label: 'A to Z' },
+];
+
+/** The useSort page key the chat list's order persists under. */
+export const CHAT_SORT_PAGE = 'chat';
+
+/** A stored sort value as a ChatSort: anything stale or unknown reads as Recent. Pure. */
+export function chatSort(value: string): ChatSort {
+  return value === 'unread' || value === 'az' ? value : CHAT_SORT_DEFAULT;
+}
+
 /**
- * The rows the list shows, most recent first. A hidden chat (deleted for the
- * caller, nothing newer since) is left out of the plain list, but a name
- * search still finds it so it can be reopened.
+ * Re-order a most-recent-first list for the chosen sort. Recent keeps it;
+ * Unread first lifts the chats with something unread (each group keeps its
+ * recency order); A to Z orders by the chat's display name (ties by id).
+ * Personal notes (`notesId`) keeps its place: the index it holds in the
+ * recent order, whatever the sort. Client-side over what the list already
+ * holds; no read. Pure and stable.
+ */
+export function orderChannels(
+  recent: readonly ChannelSummary[],
+  sort: ChatSort,
+  summaryFor: SummaryLookup,
+  notesId: string | null = null,
+): ChannelSummary[] {
+  if (sort === 'recent') return [...recent];
+  const notesAt = notesId !== null ? recent.findIndex((c) => c.channelId === notesId) : -1;
+  const notes = notesAt !== -1 ? recent[notesAt] : undefined;
+  const chats = recent.filter((c) => c.channelId !== notesId);
+  const ordered =
+    sort === 'unread'
+      ? [
+          ...chats.filter((c) => (summaryFor(c.channelId)?.unread ?? 0) > 0),
+          ...chats.filter((c) => (summaryFor(c.channelId)?.unread ?? 0) <= 0),
+        ]
+      : [...chats].sort(
+          (a, b) =>
+            chatDisplayName(a).localeCompare(chatDisplayName(b), undefined, {
+              sensitivity: 'base',
+            }) || (a.channelId < b.channelId ? -1 : a.channelId > b.channelId ? 1 : 0),
+        );
+  if (notes === undefined) return ordered;
+  return [...ordered.slice(0, notesAt), notes, ...ordered.slice(notesAt)];
+}
+
+/**
+ * The rows the list shows, in the chosen order (most recent first by
+ * default). A hidden chat (deleted for the caller, nothing newer since) is
+ * left out.
  */
 export function visibleChannels(
   channels: readonly ChannelSummary[],
   summaryFor: SummaryLookup,
   isHidden: HiddenLookup,
-  search: string,
+  sort: ChatSort = CHAT_SORT_DEFAULT,
+  notesId: string | null = null,
 ): ChannelSummary[] {
   const byId = new Map(channels.map((c) => [c.channelId, c]));
-  const ordered = sortChannelsByRecency(channels, (id) => {
+  const recent = sortChannelsByRecency(channels, (id) => {
     const channel = byId.get(id);
     return { lastMessageTs: channel !== undefined ? recencyKey(channel, summaryFor) : 0 };
-  });
-  if (search.trim() === '') return ordered.filter((c) => !isHidden(c.channelId));
-  return filterChannelsByName(ordered, search);
+  }).filter((c) => !isHidden(c.channelId));
+  return orderChannels(recent, sort, summaryFor, notesId);
 }
 
 /**
  * The list's layout classes. Locked (default): a full-height column whose body
  * scrolls itself. Page scroll (phone): the column and body grow with the rows
- * and the document scrolls them; the header row (search or select header)
+ * and the document scrolls them; the chip row
  * pins below the sticky Topbar on the page background it already sits on, and
  * the select bar pins above the floating tab bar (the same 84px + home
  * indicator room <main> keeps for it, AppLayout shellChrome). Only position
@@ -1020,15 +1043,15 @@ function selectBar(select: ChannelSelectMode, className = ''): ReactElement {
 }
 
 /**
- * The full channel list pane: the shared SectionHeader (controlled name search +
- * accent "+" New chat, the filter chips) above the body. While loading the body
+ * The full channel list pane: the shared SectionHeader (the filter chips, the
+ * Select pinned at the chip row's end) above the body; New chat and the sort
+ * live in the app top bar (ChannelList publishes them). While loading the body
  * is skeleton rows and on error a Retry state; rows and the empty state appear
  * only once the store is ready, already hidden-filtered and sorted. A chat's
- * long-press or right-click enters select mode with it ticked; the header
- * keeps a Select only while a chip view shows (media items have no
- * long-press). In select mode the select bar sits under the body. Pure (no
- * hooks) so the search wiring and the single-header guarantee are unit tested by
- * walking the returned tree; ChannelList owns the search state.
+ * long-press or right-click enters select mode with it ticked, as does a chip
+ * view item's; the Select enters with nothing ticked. In select mode the
+ * select bar sits under the body. Pure (no hooks) so the wiring and the
+ * single-header guarantee are unit tested by walking the returned tree.
  */
 export function channelListContent(props: ChannelListContentProps): ReactElement {
   const summaryFor: SummaryLookup = props.summaryFor ?? (() => undefined);
@@ -1037,16 +1060,16 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
   const hasChannels = ready && props.channels.some((c) => !isHidden(c.channelId));
   const select = ready ? props.select : undefined;
   const selecting = select?.active === true ? select : undefined;
-  // New chat leaves the list's select mode, and a thread selecting messages
-  // exits that first (history.back()).
-  const newChat = (): void => {
-    selecting?.onCancel();
-    leaveSelectionThen(props.onNewChat);
-  };
   const kind = props.kind ?? null;
-  // The chip view's Select: media items are not cards, so they have no long-press.
-  const mediaSelectEntry = select !== undefined && hasChannels && kind !== null && !selecting;
-  const searching = props.searchResults !== undefined && showSearchResults(props.search, kind);
+  // The chip row's Select: on the chat list and on a chip view alike.
+  const sectionSelect =
+    select !== undefined && hasChannels ? (
+      <SectionSelect
+        active={selecting !== undefined}
+        onToggle={selecting !== undefined ? select.onCancel : select.onStart}
+      />
+    ) : undefined;
+  const chipView = props.chipResults !== undefined && kind !== null;
   const onKindChange = props.onKindChange;
   const layout = channelListClasses(props.pageScroll === true);
   // Personal notes sorts in with the chats once the list is in; while it is
@@ -1056,44 +1079,14 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
     notesInList && props.notes !== undefined ? [...props.channels, props.notes] : props.channels;
   return (
     <div className={layout.column}>
-      {/* The app's own Clear (X) is the only one: the browser's native search
-          cancel button is hidden. */}
-      <div
-        className={cn(
-          'border-b border-border pb-3 [&_input::-webkit-search-cancel-button]:hidden',
-          layout.header,
-        )}
-      >
-        <SectionHeader
-          stackSearchMd
-          search={{
-            value: props.search,
-            onChange: props.onSearchChange,
-            placeholder: 'Search chats',
-            label: 'Search chats',
-          }}
-          primaryAction={{
-            node: (
-              <>
-                {mediaSelectEntry && select !== undefined ? (
-                  <IconButton label="Select" onClick={select.onStart}>
-                    <IconCheckCircle size={ICON_SIZE.control} />
-                  </IconButton>
-                ) : null}
-                <Button variant="primary" className="shrink-0 whitespace-nowrap" onClick={newChat}>
-                  <IconPlus size={ICON_SIZE.inline} />
-                  New chat
-                </Button>
-              </>
-            ),
-          }}
-        >
+      <div className={cn('border-b border-border pb-3', layout.header)}>
+        <SectionHeader {...(sectionSelect !== undefined ? { select: sectionSelect } : {})}>
           {onKindChange !== undefined ? searchChips({ kind, onChange: onKindChange }) : undefined}
         </SectionHeader>
       </div>
       <div className={layout.body}>
-        {props.lead !== undefined && !searching ? props.lead : null}
-        {props.notes !== undefined && !searching && !notesInList
+        {props.lead !== undefined && !chipView ? props.lead : null}
+        {props.notes !== undefined && !chipView && !notesInList
           ? notesTile({
               notes: props.notes,
               summary: summaryFor(props.notes.channelId),
@@ -1110,18 +1103,22 @@ export function channelListContent(props: ChannelListContentProps): ReactElement
             ? channelListSkeleton()
             : props.status === 'error'
               ? channelListError(props.onRetry)
-              : searching
-                ? props.searchResults
+              : chipView
+                ? props.chipResults
                 : channelListView({
-                    channels: visibleChannels(listed, summaryFor, isHidden, props.search),
+                    channels: visibleChannels(
+                      listed,
+                      summaryFor,
+                      isHidden,
+                      props.sort ?? CHAT_SORT_DEFAULT,
+                      notesInList && props.notes !== undefined ? props.notes.channelId : null,
+                    ),
                     ...(notesInList && props.notes !== undefined ? { notes: props.notes } : {}),
-                    hasChannels: hasChannels || props.search.trim() !== '',
-                    search: props.search,
-                    onClearSearch: () => props.onSearchChange(''),
+                    hasChannels,
                     selectedChannelId: props.selectedChannelId,
                     onSelect: props.onSelect,
                     ...(props.onPressIn !== undefined ? { onPressIn: props.onPressIn } : {}),
-                    onNewChat: newChat,
+                    onNewChat: props.onNewChat,
                     summaryFor,
                     ...(props.draftFor !== undefined ? { draftFor: props.draftFor } : {}),
                     // The chat cards' select mode (a chip view's bar selects
@@ -1160,10 +1157,20 @@ class HideFailed extends Error {
   }
 }
 
-/** Scrollable channel list pane with the shared search/create header. */
+/**
+ * Scrollable channel list pane under the chip row. It is the Chat route's
+ * list (ChatConnected mounts it only there: the phone's list screen, the
+ * laptop's list pane), so it publishes New chat and the sort into the app top
+ * bar; on the phone a thread replaces it and the bar clears with it.
+ */
 export function ChannelList(props: ChannelListProps): ReactElement {
   const listWorkspaceId = props.workspaceId ?? null;
-  const [search, setSearch] = useState('');
+  // The list order: persisted per page like the other sorts; a stale value heals.
+  const { value: storedSort, setValue: setSort } = useSort<ChatSort>(
+    CHAT_SORT_PAGE,
+    CHAT_SORT_DEFAULT,
+  );
+  const sort = chatSort(storedSort);
   // The filter chip: one at a time, tap again to clear.
   const [kind, setKind] = useState<HomeChip | null>(null);
   const [selecting, setSelecting] = useState(false);
@@ -1242,9 +1249,9 @@ export function ChannelList(props: ChannelListProps): ReactElement {
   // One layout listener (and hover / coarse query) for the whole list.
   const input = useChannelListInput();
 
-  // Message search: 2+ characters run the server search (debounced, each
-  // keystroke aborting the last); under 2 the name filter alone. Names come
-  // from the loaded roster and the workspace's name registry, never per row.
+  // A chip lists its items through the message search runner (the chip alone,
+  // no words). Names come from the loaded roster and the workspace's name
+  // registry, never per row.
   const { session } = useSession();
   const currentUserId = session?.user.id ?? null;
   // A chip view's Delete for me: hidden at once, written when the Undo ends.
@@ -1257,8 +1264,8 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     workspaceId: listWorkspaceId,
   });
   useEffect(() => {
-    searchRunner?.setQuery(search, kind);
-  }, [searchRunner, search, kind]);
+    searchRunner?.setQuery('', kind);
+  }, [searchRunner, kind]);
   // Media chips (WhatsApp): the items themselves. The chip's first page is
   // kept on the device (`chat:media:{kind}`), so a tap paints from it before
   // any read; the network page swaps in under the same keys (no blink).
@@ -1287,8 +1294,8 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     });
     primeRead<MediaCacheValue>(mediaKey, { kind: mediaKind, items });
   }, [mediaKey, mediaKind, searchState]);
-  // The header stays up while selecting: a new chip or search leaves select
-  // mode first (the ticked chats or items may no longer be on screen).
+  // The header stays up while selecting: a new chip leaves select mode first
+  // (the ticked chats or items may no longer be on screen).
   const onKindChange = useCallback((next: HomeChip | null) => {
     if (next !== null) mark('chat:chip:tap');
     setSelecting(false);
@@ -1296,13 +1303,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     setMediaSelection(EMPTY_MEDIA_SELECTION);
     setKind(next);
   }, []);
-  const onSearchChange = useCallback((value: string) => {
-    setSelecting(false);
-    setSelectedIds(new Set());
-    setMediaSelection(EMPTY_MEDIA_SELECTION);
-    setSearch(value);
-  }, []);
-  // Hits in notes carry its name ("Personal notes") and notebook.
+  // Items in notes carry its name ("Personal notes").
   const notes = props.notes;
   const channelsById = useMemo(() => {
     const byId = new Map(props.channels.map((c) => [c.channelId, c] as const));
@@ -1310,31 +1311,23 @@ export function ChannelList(props: ChannelListProps): ReactElement {
     return byId;
   }, [props.channels, notes]);
   const nameOf = useMemo(() => mentionNamesIn(listWorkspaceId), [listWorkspaceId]);
-  const onOpenSearchHit = props.onOpenSearchHit;
-  const openHit = useCallback(
-    (channel: ChannelSummary, hit: SearchHit, query: string) =>
-      leaveSelectionThen(() =>
-        onOpenSearchHit !== undefined
-          ? onOpenSearchHit(channel, hit.id, query)
-          : props.onSelect(channel),
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onOpenSearchHit, props.onSelect],
-  );
-  const openChat = useCallback(
-    (channel: ChannelSummary) => leaveSelectionThen(() => props.onSelect(channel)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [props.onSelect],
-  );
   const onOpenAtMessage = props.onOpenAtMessage;
   // The list's one clock: every card's "5m" ages together, once a
   // minute, from one shared interval (no timer per card).
   const nowMs = useMinuteClock();
-  const searchResults =
+  // A chip view item's long-press or right-click: select mode with that item ticked.
+  const enterMediaSelect =
+    onDeleteChats !== undefined
+      ? (item: HideItem): void => {
+          setSelectedIds(new Set());
+          setMediaSelection(toggleMediaSelection(EMPTY_MEDIA_SELECTION, item));
+          setSelecting(true);
+        }
+      : undefined;
+  const chipResults =
     mediaKind !== null ? (
       <MediaResults
         kind={mediaKind}
-        query={search}
         state={searchState}
         runner={searchRunner}
         cached={mediaCached}
@@ -1345,7 +1338,6 @@ export function ChannelList(props: ChannelListProps): ReactElement {
         {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
         onClear={() => {
           exitSelect();
-          setSearch('');
           setKind(null);
         }}
         {...(mediaSelecting
@@ -1357,6 +1349,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
               },
             }
           : {})}
+        {...(enterMediaSelect !== undefined ? { onEnterSelect: enterMediaSelect } : {})}
         {...(canForward
           ? { onForwardItems: setForwardItems, forwarding: forwardItems !== null }
           : {})}
@@ -1373,36 +1366,35 @@ export function ChannelList(props: ChannelListProps): ReactElement {
           );
         }}
       />
-    ) : showSearchResults(search, kind) ? (
-      <SearchResults
-        query={search}
-        kind={kind}
-        chats={visibleChannels(props.channels, summaryFor, isHidden, search)}
-        state={searchState}
-        runner={searchRunner}
-        channelsById={channelsById}
-        currentUserId={currentUserId}
-        nameOf={nameOf}
-        nowMs={nowMs}
-        {...(props.timeZone !== undefined ? { timeZone: props.timeZone } : {})}
-        onOpenChat={openChat}
-        onOpenHit={openHit}
-        onClear={() => {
-          setSearch('');
-          setKind(null);
-        }}
-      />
     ) : undefined;
+  // The top bar: the sort and New chat. New chat leaves the list's select
+  // mode, and a thread selecting messages exits that first (history.back()).
+  // The latest New chat through a ref, so the published "+" stays one element.
+  const onNewChatRef = useRef(props.onNewChat);
+  onNewChatRef.current = props.onNewChat;
+  const newChat = useCallback((): void => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+    setMediaSelection(EMPTY_MEDIA_SELECTION);
+    leaveSelectionThen(() => onNewChatRef.current());
+  }, []);
+  const sortNode = useMemo(
+    () => (
+      <SortMenu options={CHAT_SORT_OPTIONS} value={sort} onChange={setSort} label="Sort chats" />
+    ),
+    [sort, setSort],
+  );
+  const plusNode = useMemo(() => <TopbarPlus label="New chat" onClick={newChat} />, [newChat]);
+  useTopbarActions({ sort: sortNode, primary: plusNode });
   return (
     <>
       {channelListContent({
         ...props,
         input,
-        search,
-        onSearchChange,
+        sort,
         kind,
         onKindChange,
-        ...(searchResults !== undefined ? { searchResults } : {}),
+        ...(chipResults !== undefined ? { chipResults } : {}),
         summaryFor,
         isHidden,
         draftFor,
@@ -1420,7 +1412,7 @@ export function ChannelList(props: ChannelListProps): ReactElement {
                   setSelectedIds(new Set([channelId]));
                   setSelecting(true);
                 },
-                // A chip view's header Select: nothing ticked yet.
+                // The chip row's Select: nothing ticked yet.
                 onStart: () => {
                   setSelectedIds(new Set());
                   setMediaSelection(EMPTY_MEDIA_SELECTION);

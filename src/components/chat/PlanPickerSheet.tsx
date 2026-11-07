@@ -3,7 +3,8 @@
 // at most 100), one plans select then their bundles through the batched plan
 // reads, never one read per plan. Each row: the plan icon, title, date range
 // in mono, chips (concepts, posts, "Draft", "In this chat") and a chevron; the
-// last row opens the New plan screen. A tap opens that plan's Plan screen
+// last row opens the New plan screen. The header's search opens the palette
+// in pick mode (plans only). A tap opens that plan's Plan screen
 // (the same as a card's "Open plan"); this sheet never sends. The body keeps
 // one fixed height in every state: a skeleton until the read settles, so the
 // list never reorders or shortens. Tokens only; translateY motion only.
@@ -23,7 +24,9 @@ import {
   todayInZone,
   type PlanChip,
 } from '@/components/chat/plan-card';
+import { PalettePickButton } from '@/components/shell/CommandPalette';
 import { readUpcomingPlans, type PlanBundle } from '@/lib/chat/plans';
+import type { WorkspaceHit } from '@/lib/search/workspace-search';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase';
 import { errorText } from '@/lib/error-copy';
@@ -31,6 +34,12 @@ import { errorText } from '@/lib/error-copy';
 export const PICKER_TITLE = 'Plans';
 export const PICKER_EMPTY = 'Upcoming plans show up here.';
 export const NEW_PLAN_LABEL = 'New plan';
+export const SEARCH_PLANS_LABEL = 'Search plans';
+
+/** The plan a palette pick names (plan hits only); null when none. Pure. */
+export function pickedPlanId(hits: readonly WorkspaceHit[]): string | null {
+  return hits.find((hit) => hit.kind === 'plan')?.id ?? null;
+}
 
 /**
  * The list's fixed height in every state (loading, list, empty, error); at sm+
@@ -87,7 +96,30 @@ export function PlanPickerSheet(props: {
   const inChat = useMemo(() => new Set(props.inChatPlanIds), [props.inChatPlanIds]);
 
   return (
-    <Sheet open={props.open} onClose={props.onClose} title={PICKER_TITLE} fixedHeight>
+    <Sheet
+      open={props.open}
+      onClose={props.onClose}
+      title={PICKER_TITLE}
+      fixedHeight
+      headerAction={
+        // Search is the palette in pick mode: plans only, one tick, the same open.
+        <PalettePickButton
+          label={SEARCH_PLANS_LABEL}
+          request={() => ({
+            pickKinds: ['plan'],
+            multi: false,
+            verb: 'Add',
+            label: 'Plans',
+            onPick: (hits) => {
+              const planId = pickedPlanId(hits);
+              if (planId === null) return;
+              props.onClose();
+              props.onOpenPlan(planId);
+            },
+          })}
+        />
+      }
+    >
       <div
         data-plan-picker=""
         className={cn(

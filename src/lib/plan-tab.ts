@@ -218,24 +218,25 @@ export type PlanSectionKey = 'this' | 'next' | 'later' | 'earlier';
 export const PLAN_SECTION_LABELS: Readonly<Record<PlanSectionKey, string>> = {
   this: 'This week',
   next: 'Next week',
-  later: 'Upcoming',
+  later: 'Later',
   earlier: 'Past',
 };
 
 export const SECTION_ORDER: readonly PlanSectionKey[] = ['this', 'next', 'later', 'earlier'];
 
 /**
- * The Plan tab's chip row, phone and laptop (the same line as Pipeline's stage chips):
- * Bank (the idea bank) first, then the four week groups (Upcoming and Past
- * named 5 Nov 2026), then All (prototype approved 6 Nov 2026). One pick; This
- * week by default. A client sees Bank only when their bank read holds an idea.
+ * The Plan tab's chip row, phone and laptop (the same line as Pipeline's stage
+ * chips): Bank (the idea bank), Upcoming, Past (decision D, 7 Nov 2026). One
+ * pick; Upcoming by default. Upcoming holds This week, Next week and Later
+ * (each under its heading, in date order); Past holds the rest. A client sees
+ * Bank only when their bank read holds an idea.
  */
-export type PlanWeekChip = 'all' | PlanSectionKey | 'bank';
-export const PLAN_WEEK_CHIPS: readonly PlanWeekChip[] = ['bank', ...SECTION_ORDER, 'all'];
+export type PlanWeekChip = 'bank' | 'upcoming' | 'past';
+export const PLAN_WEEK_CHIPS: readonly PlanWeekChip[] = ['bank', 'upcoming', 'past'];
 /** The idea bank's chip id and label. */
 export const PLAN_BANK_CHIP = 'bank' satisfies PlanWeekChip;
 export const PLAN_BANK_CHIP_LABEL = 'Bank';
-export const PLAN_WEEK_CHIP_DEFAULT: PlanWeekChip = 'this';
+export const PLAN_WEEK_CHIP_DEFAULT: PlanWeekChip = 'upcoming';
 /** The chip's URL param (?week=), so Back lands on the same chip. */
 export const PLAN_WEEK_PARAM = 'week';
 /** The chips a viewer sees: Bank only for a creator or a client whose bank holds an idea. Pure. */
@@ -243,42 +244,54 @@ export function visiblePlanChips(showBank: boolean): PlanWeekChip[] {
   return PLAN_WEEK_CHIPS.filter((c) => c !== PLAN_BANK_CHIP || showBank);
 }
 
-/** A chip's label: All, or its week group's heading. Pure. */
+const PLAN_WEEK_CHIP_LABELS: Readonly<Record<PlanWeekChip, string>> = {
+  bank: PLAN_BANK_CHIP_LABEL,
+  upcoming: 'Upcoming',
+  past: 'Past',
+};
+
+/** A chip's label. Pure. */
 export function planWeekChipLabel(chip: PlanWeekChip): string {
-  if (chip === 'all') return 'All';
-  if (chip === 'bank') return PLAN_BANK_CHIP_LABEL;
-  return PLAN_SECTION_LABELS[chip];
+  return PLAN_WEEK_CHIP_LABELS[chip];
 }
 
-/** A URL value as a chip, or null when it names none. Pure. */
+/**
+ * A URL or kept value as a chip, or null when it names none. The retired
+ * chips still land: this, next, later and all on Upcoming, earlier on Past.
+ * Pure.
+ */
 export function parsePlanWeekChip(value: string | null): PlanWeekChip | null {
-  return PLAN_WEEK_CHIPS.find((c) => c === value) ?? null;
+  switch (value) {
+    case 'bank':
+      return 'bank';
+    case 'upcoming':
+    case 'this':
+    case 'next':
+    case 'later':
+    case 'all':
+      return 'upcoming';
+    case 'past':
+    case 'earlier':
+      return 'past';
+    default:
+      return null;
+  }
+}
+
+/** Whether a list section belongs under a chip: Upcoming holds This week, Next week and Later; Past the rest. Pure. */
+export function planChipHolds(chip: PlanWeekChip, section: PlanSectionKey): boolean {
+  if (chip === 'upcoming') return section !== 'earlier';
+  if (chip === 'past') return section === 'earlier';
+  return false;
 }
 
 /** The zero line under a picked chip with no plans in it (as Pipeline's "Posts show up here."). */
 export const PLAN_WEEK_CHIP_ZERO = 'Plans show up here.';
 
 /**
- * The read a chip asks for (phone and laptop): This week and Next week read just
- * that Mon to Sun week (so the week's plans land on the first page however
- * many plans the workspace has); All, Upcoming and Past read every plan, a
- * page at a time, and Upcoming and Past keep their group. Pure.
- */
-export function planWeekChipRange(
-  chip: PlanWeekChip,
-  today: string,
-): { start: string; end: string } | null {
-  if (chip !== 'this' && chip !== 'next') return null;
-  const thisWeek = weekRangeOf(today);
-  const week =
-    chip === 'this' ? thisWeek : weekRangeOf(addCivilDays(thisWeek.startsOn, PLAN_WEEK_DAYS));
-  return { start: week.startsOn, end: week.endsOn };
-}
-
-/**
  * A plan's section from `today` (Mon to Sun weeks, workspace zone): overlapping
  * this week, else overlapping next week, else starting after next week
- * (Upcoming), else Past. Pure.
+ * (Later), else Past. Pure.
  */
 export function planSectionOf(
   plan: Pick<PlanRow, 'starts_on' | 'ends_on'>,
@@ -295,7 +308,7 @@ export function planSectionOf(
 }
 
 /**
- * The list's sections in order (This week, Next week, Upcoming, Past),
+ * The list's sections in order (This week, Next week, Later, Past),
  * empty ones left out; within one, start date ascending (Past: the most
  * recent first). Ties by id. Pure.
  */

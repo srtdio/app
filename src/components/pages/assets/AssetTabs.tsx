@@ -29,7 +29,8 @@ interface AssetTabsProps {
 }
 
 /**
- * All, Media, PDF, Docs, Sheets, Links: a real tablist (roving tabindex, arrow
+ * All, Media, Docs, Links (Docs holds PDFs, documents and sheets; its count is
+ * their sum): a real tablist (roving tabindex, arrow
  * keys select) of ui/Chip with the shared selected style, every tab always
  * shown, its count only when above 0, 44px tall. The row scrolls sideways
  * inside SectionHeader on a narrow phone.

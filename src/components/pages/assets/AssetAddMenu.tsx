@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { MenuPopover } from '@/components/shell/MenuPopover';
-import { Button } from '@/components/ui/Button';
+import { TopbarPlus } from '@/components/shell/topbar-actions';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { ICON_SIZE, IconLink, IconPlus, IconUpload } from '@/components/ui/icons';
+import { ICON_SIZE, IconLink, IconUpload } from '@/components/ui/icons';
 import { INDUCTION_KEYS } from '@/lib/induction';
 
 /** A menu row: the shared pressable row, full width, text from the left. */
@@ -17,30 +17,26 @@ interface AssetAddMenuProps {
 }
 
 /**
- * The Assets toolbar add control: a 44px-tall "New file" primary trigger (IconPlus before the label) that
- * opens a small menu anchored beneath it. "Upload files" opens the upload sheet;
- * "Add link" opens the link sheet. Selecting starts from the round box on each
- * file card. Outside tap and Esc dismiss
- * via MenuPopover. Themed with tokens so light and dark match; no hover-only
- * behaviour (tap toggles the menu).
+ * The Assets "+" in the app top bar (decision A): the filled TopbarPlus,
+ * labelled "New file" (aria-haspopup="menu"), carrying the old add control's
+ * tour key, that opens a small menu anchored beneath it. "Upload files" opens
+ * the upload sheet; "Add link" opens the link sheet. Outside tap and Esc
+ * dismiss via MenuPopover. Themed with tokens so light and dark match; no
+ * hover-only behaviour (tap toggles the menu). The page publishes it with
+ * useTopbarActions({ primary }).
  */
 export function AssetAddMenu({ onUploadFiles, onAddLink }: AssetAddMenuProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <div className="relative shrink-0">
-      <Button
-        variant="primary"
-        type="button"
+      <TopbarPlus
+        label="New file"
         aria-haspopup="menu"
         aria-expanded={open}
-        data-induction={INDUCTION_KEYS.assetsAdd}
+        induction={INDUCTION_KEYS.assetsAdd}
         onClick={() => setOpen((prev) => !prev)}
-        className="shrink-0 whitespace-nowrap"
-      >
-        <IconPlus size={ICON_SIZE.inline} />
-        New file
-      </Button>
+      />
 
       <MenuPopover open={open} onClose={() => setOpen(false)} align="right" label="New file">
         <PressableRow

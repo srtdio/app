@@ -9,7 +9,8 @@
 // "10:27 AM" today, else "2 Nov") and its first bucket as the one tag.
 // A card taps open its idea (/plan/bank?item=). No ⋮: a long-press (phone)
 // or right-click / Shift-click / Cmd-click (laptop) enters select mode with
-// the idea ticked (ListCard `select`, useListSelection); a tap then toggles.
+// the idea ticked (ListCard `select`), and the chip row's Select starts it
+// with nothing ticked (the page's useBankSelect); a tap then toggles.
 // The bottom select bar (BankSelectBar on ui/SelectBar) holds "N selected"
 // and every old menu row: Open, Plan it, Send to chat (the chat picker, then
 // chat_plan_item_share; IdeaShareFlow) for one idea; Show to client or Hide
@@ -41,7 +42,6 @@ import {
   type ListCardPicture,
   type ListCardSelect,
 } from '@/components/ui/ListCard';
-import { useListSelection } from '@/components/ui/SelectBar';
 import { useInView } from '@/lib/use-in-view';
 import { PREVIEW_ROOT_MARGIN, previewClient, type LinkPreview } from '@/lib/links/preview';
 import { NoResults } from '@/components/ui/NoResults';
@@ -90,6 +90,7 @@ import {
   withFlags,
   type BankData,
 } from './use-bank-data';
+import type { BankSelection } from './use-bank-select';
 
 // ---------------------------------------------------------------------------
 // Small parts
@@ -406,6 +407,8 @@ export interface BankSurfaceProps {
   onOpenIdea: (id: string) => void;
   /** Bumped by the page on a chip change: select mode ends. */
   epoch: string;
+  /** The page's select mode (useBankSelect), shared with the chip row's Select. */
+  selection: BankSelection;
 }
 
 /** What Plan it is showing. */
@@ -416,10 +419,9 @@ export type PlanItStep =
   | { kind: 'shared'; idea: BankIdea; day: string; plan: PlanRow };
 
 export function BankSurface(props: BankSurfaceProps): ReactElement {
-  const { data, filter, canWrite, now } = props;
+  const { data, filter, canWrite, now, selection } = props;
   const showToast = useToast().show;
   const undoable = useUndoableAction();
-  const selection = useListSelection();
   const [showAsk, setShowAsk] = useState<readonly BankIdea[] | null>(null);
   const [sendIdea, setSendIdea] = useState<IdeaShareTarget | null>(null);
   const ideas = data.ideas;
@@ -530,7 +532,6 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
   });
 
   const pickedIdeas = (ideas ?? []).filter((i) => selection.ids.has(i.id));
-  const searching = data.search.active;
 
   // The select bar: every old ⋮ row. Open and the sheet flows leave select
   // mode first (its Back entry popped), so their own history steps sit clean.
@@ -564,7 +565,7 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
     ) : null;
   // Untouched for 90 days: Archive all {n} after the rows (n = the rows loaded).
   const archiveAll =
-    canWrite && filter.review && !searching && ideas !== null && ideas.length > 0 ? (
+    canWrite && filter.review && ideas !== null && ideas.length > 0 ? (
       <div>
         <Button type="button" data-bank-archive-all="" onClick={() => archiveMany(ideas, true)}>
           {archiveAllLabel(ideas.length)}
@@ -575,9 +576,9 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
   let body: ReactElement;
   if (ideas === null) {
     body =
-      data.load.status === 'failed' || data.search.status === 'error' ? (
+      data.load.status === 'failed' ? (
         <div className="py-6">
-          <Button type="button" onClick={searching ? data.search.refresh : data.retry}>
+          <Button type="button" onClick={data.retry}>
             Retry
           </Button>
         </div>
@@ -585,13 +586,12 @@ export function BankSurface(props: BankSurfaceProps): ReactElement {
         <BankBoxes />
       );
   } else if (ideas.length === 0) {
-    const copy = bankZeroCopy(filter, searching);
+    const copy = bankZeroCopy(filter);
     body =
-      searching || filter.bucketId !== null || filter.review ? (
+      filter.bucketId !== null || filter.review ? (
         <div data-bank-zero="">
           <NoResults
-            {...(searching ? { query: data.search.query } : {})}
-            filtersActive={filter.bucketId !== null || filter.review}
+            filtersActive
             onClear={() => props.onFilter({ ...filter, bucketId: null, review: false })}
           />
           <p className="sr-only">{copy}</p>

@@ -904,3 +904,36 @@ describe('phone Send: one tap sends and the keyboard stays up', () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 });
+
+describe('decision F: the pending-file chips are ui/PendingChip, ready', () => {
+  it('picked files and library picks read "<TYPE> · <size>" (readyChipMeta)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const source = readFileSync(fileURLToPath(new URL('./Composer.tsx', import.meta.url)), 'utf8');
+    expect(source).toContain("import { PendingChip, readyChipMeta } from '@/components/ui/PendingChip';");
+    expect(source.split('meta={readyChipMeta(').length - 1).toBe(2);
+    expect(source).not.toContain('fileExtension');
+    // No upload bar or % text: a chat send uploads after Send (the bubble's ring).
+    expect(source).not.toMatch(/role=["{']+progressbar/);
+  });
+
+  it('a picked file renders the ready chip with its type and size', async () => {
+    const { PendingChip, readyChipMeta } = await import('@/components/ui/PendingChip');
+    const file = new File([new Uint8Array(2048)], 'brief.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    const html = renderToStaticMarkup(
+      <ul>
+        <PendingChip
+          thumb={null}
+          title={file.name}
+          meta={readyChipMeta({ name: file.name, mime: file.type, size: file.size })}
+          onRemove={() => {}}
+        />
+      </ul>,
+    );
+    expect(html).toContain('data-pending-chip="ready"');
+    expect(html).toContain('DOCX · 2 KB');
+    expect(html).toContain('aria-label="Remove brief.docx"');
+  });
+});

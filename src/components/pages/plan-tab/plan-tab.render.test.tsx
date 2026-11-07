@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import type { PlanBundle, PlanItemRow, PlanRow } from '@/lib/chat/plans';
@@ -14,6 +15,14 @@ const env = vi.hoisted(() => ({
   data: null as PlanTabData | null,
   moreBusy: false,
   loadMore: (): void => {},
+  // What the page last published into the app top bar (useTopbarActions).
+  topbar: null as { sort?: ReactNode; primary?: ReactNode } | null,
+}));
+vi.mock('@/components/shell/topbar-actions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/shell/topbar-actions')>()),
+  useTopbarActions: (actions: { sort?: ReactNode; primary?: ReactNode }) => {
+    env.topbar = actions;
+  },
 }));
 vi.mock('agora-chat', () => ({
   default: { connection: vi.fn(), message: { create: vi.fn() } },
@@ -53,23 +62,23 @@ vi.mock('@/components/media/Thumbnail', () => ({ Thumbnail: () => null }));
 
 import { PlanTabLoadMore } from '@/components/pages/plan-tab/PlanTabList';
 import { ToastProvider } from '@/components/ui/toast';
-import {
-  PlanSearchResults,
-  PlanTabPage,
-  itemRoute,
-  matchedItemTitle,
-} from '@/components/pages/PlanTabPage';
+import { PlanTabPage } from '@/components/pages/PlanTabPage';
 import { civilToday } from '@/lib/plan-week';
 
 const TODAY = civilToday(new Date(), 'UTC');
 
-function plan(id: string, title: string, audience: 'team' | 'client'): PlanRow {
+function plan(
+  id: string,
+  title: string,
+  audience: 'team' | 'client',
+  day: string = TODAY,
+): PlanRow {
   return {
     id,
     workspace_id: 'ws',
     title,
-    starts_on: TODAY,
-    ends_on: TODAY,
+    starts_on: day,
+    ends_on: day,
     audience,
     created_by: null,
   };
@@ -109,8 +118,9 @@ const DATA: PlanTabData = {
   nextCursor: null,
 };
 
-/** The page at /plan, This week picked (the default chip) unless `url` says otherwise. */
+/** The page at /plan, Upcoming picked (the default chip) unless `url` says otherwise. */
 function render(url = '/plan'): string {
+  env.topbar = null;
   return renderToStaticMarkup(
     <MemoryRouter initialEntries={[url]}>
       <ToastProvider>
@@ -118,6 +128,18 @@ function render(url = '/plan'): string {
       </ToastProvider>
     </MemoryRouter>,
   );
+}
+
+/** The markup of what the page published into the top bar: its sort, then its "+". */
+function topbar(): { sort: string; primary: string } {
+  const node = (n: ReactNode): string =>
+    n === undefined || n === null ? '' : renderToStaticMarkup(<MemoryRouter>{n}</MemoryRouter>);
+  return { sort: node(env.topbar?.sort), primary: node(env.topbar?.primary) };
+}
+
+/** Where each chip sits in the markup (-1: not shown). */
+function chipAt(html: string, chip: string): number {
+  return html.indexOf(`data-plan-tab-when="${chip}"`);
 }
 
 describe('PlanTabPage', () => {
@@ -132,8 +154,12 @@ describe('PlanTabPage', () => {
       expect(html).not.toContain('data-plan-tab-card="draft"');
       expect(html).not.toContain('Secret drafts');
       expect(html).not.toContain('data-plan-tab-draft');
-      expect(html).not.toContain('data-plan-tab-new');
       expect(html).not.toContain('compose-mounted');
+      // The top bar: the sort, and no "+" for anyone who can't create.
+      const bar = topbar();
+      expect(bar.sort).toContain('aria-label="Sort plans"');
+      expect(bar.primary).toBe('');
+      expect(html).not.toContain('data-topbar-plus');
     });
 
     it(`${width}: creators get every plan and New plan; the cards are ListCards in the grid`, () => {
@@ -142,23 +168,75 @@ describe('PlanTabPage', () => {
       expect(html).toContain('data-plan-tab-card="shared"');
       expect(html).toContain('data-plan-tab-card="draft"');
       expect(html).toContain('data-plan-tab-draft');
-      expect(html).toContain('data-plan-tab-new');
       expect(html).toContain('compose-mounted');
       // One ListCard per plan (not per post), in LIST_CARD_GRID.
       expect(html.match(/data-list-card=""/g)).toHaveLength(2);
       expect(html).toMatch(/class="grid grid-cols-1 gap-2 md:grid-cols-list-cards"/);
-      // The same chips on both widths; no calendar, legend or Month | Week.
-      for (const chip of ['bank', 'this', 'next', 'later', 'earlier', 'all']) {
-        expect(html).toContain(`data-plan-tab-when="${chip}"`);
+      // The same chips on both widths, Bank, Upcoming, Past in that order; no
+      // calendar, legend or Month | Week.
+      expect(chipAt(html, 'bank')).toBeGreaterThan(-1);
+      expect(chipAt(html, 'bank')).toBeLessThan(chipAt(html, 'upcoming'));
+      expect(chipAt(html, 'upcoming')).toBeLessThan(chipAt(html, 'past'));
+      for (const old of ['this', 'next', 'later', 'earlier', 'all']) {
+        expect(html).not.toContain(`data-plan-tab-when="${old}"`);
       }
       expect(html).not.toContain('data-plan-tab-month');
       expect(html).not.toContain('data-plan-tab-week');
       expect(html).not.toContain('data-plan-tab-view');
       expect(html).not.toContain('data-plan-tab-legend');
       expect(html).not.toContain('data-plan-tab-entry');
-      // No visible page title: the tab's top bar is the shared SectionHeader; the
-      // only h1 is the sr-only one screen readers and route focus land on.
+      // No visible page title; the only h1 is the sr-only one screen readers
+      // and route focus land on. No search field of its own.
       expect(html).not.toMatch(/<h1(?![^>]*class="sr-only")/);
+      expect(html).not.toContain('Search plans');
+      expect(html).not.toContain('type="search"');
+    });
+
+    it(`${width}: creators get the top bar's sort and New plan (the filled +), not in the page`, () => {
+      Object.assign(env, { desktop, side: 'agency', data: DATA, guide: 'off' });
+      const html = render();
+      const bar = topbar();
+      expect(bar.sort).toContain('aria-label="Sort plans"');
+      expect(bar.primary).toContain('data-topbar-plus=""');
+      expect(bar.primary).toContain('aria-label="New plan"');
+      expect(html).not.toContain('data-topbar-plus');
+      // The plan list has no select mode: no Select on its chip row.
+      expect(html).not.toContain('data-section-select');
+    });
+
+    it(`${width}: Upcoming (the default) groups This week under its heading; Past holds the rest`, () => {
+      const past = bundle(plan('old', 'Old week', 'client', '2020-01-06'), []);
+      const withPast: PlanTabData = { ...DATA, bundles: [...DATA.bundles, past] };
+      Object.assign(env, { desktop, side: 'agency', data: withPast, guide: 'off' });
+      let html = render();
+      expect(html).toMatch(
+        /aria-pressed="true"[^>]*data-plan-tab-when="upcoming"|data-plan-tab-when="upcoming"[^>]*aria-pressed="true"/,
+      );
+      expect(html).toContain('data-plan-tab-section="this"');
+      expect(html).toContain('>This week</h2>');
+      expect(html).toContain('data-plan-tab-card="shared"');
+      expect(html).not.toContain('data-plan-tab-card="old"');
+      html = render('/plan?week=past');
+      expect(html).toContain('data-plan-tab-card="old"');
+      expect(html).not.toContain('data-plan-tab-card="shared"');
+      expect(html).toContain('data-plan-tab-section="earlier"');
+      expect(html).not.toMatch(/<h2[^>]*>Past<\/h2>/);
+    });
+
+    it(`${width}: a retired chip in the URL lands on Upcoming or Past`, () => {
+      const past = bundle(plan('old', 'Old week', 'client', '2020-01-06'), []);
+      Object.assign(env, {
+        desktop,
+        side: 'agency',
+        data: { ...DATA, bundles: [...DATA.bundles, past] },
+        guide: 'off',
+      });
+      for (const old of ['this', 'next', 'later', 'all']) {
+        expect(render(`/plan?week=${old}`)).toContain('data-plan-tab-card="shared"');
+      }
+      const html = render('/plan?week=earlier');
+      expect(html).toContain('data-plan-tab-card="old"');
+      expect(html).not.toContain('data-plan-tab-card="shared"');
     });
 
     it(`${width}: Load more ends the list while more plans remain; busy keeps the label; none when all are in`, () => {
@@ -190,7 +268,7 @@ describe('PlanTabPage', () => {
       expect(html).toContain('Plan the content together, week by week');
       // The top bar's New plan is the only create control on an empty page.
       expect(html).not.toContain('Create plan');
-      expect(html).toContain('data-plan-tab-new');
+      expect(topbar().primary).toContain('aria-label="New plan"');
       Object.assign(env, { side: 'client', guide: 'off' });
       html = render();
       expect(html).toContain('No plans shared yet');
@@ -198,13 +276,28 @@ describe('PlanTabPage', () => {
       expect(html).not.toContain('Create plan');
     });
 
-    it(`${width}: the Bank chip shows the Bank's toolbar (search, Filter and sort, Add idea)`, () => {
+    it(`${width}: a client on the Bank: Filter and sort, no Add idea, no Select`, () => {
+      Object.assign(env, { desktop, side: 'client', data: DATA, guide: 'off' });
+      const html = render('/plan?week=bank');
+      const bar = topbar();
+      expect(bar.sort).toContain('data-bank-filter-open');
+      expect(bar.primary).toBe('');
+      expect(html).not.toContain('data-section-select');
+    });
+
+    it(`${width}: the Bank chip publishes Filter and sort (IconSort) and Add idea; Select on its chip row`, () => {
       Object.assign(env, { desktop, side: 'agency', data: DATA, guide: 'off' });
       const html = render('/plan?week=bank');
-      expect(html).toContain('placeholder="Search ideas"');
-      expect(html).toContain('data-bank-filter-open');
-      expect(html).toContain('data-bank-add-open');
-      expect(html).not.toContain('data-plan-tab-new');
+      const bar = topbar();
+      expect(bar.sort).toContain('data-bank-filter-open');
+      expect(bar.sort).toContain('aria-label="Filter and sort"');
+      expect(bar.primary).toContain('aria-label="Add idea"');
+      expect(bar.primary).not.toContain('New plan');
+      // No search of its own.
+      expect(html).not.toContain('Search ideas');
+      // The visible Select at the chip row's end, off until tapped.
+      expect(html).toContain('data-chip-row-select');
+      expect(html).toContain('data-section-select="off"');
       // The side panel, its Expand and the table are gone.
       expect(html).not.toContain('data-bank-expand');
       expect(html).not.toContain('data-bank-table');
@@ -226,51 +319,5 @@ describe('PlanTabPage', () => {
     };
     expect(busy.busy).toBe(true);
     expect(busy.children).toBe('Load more');
-  });
-});
-
-describe('Plan search results', () => {
-  function results(query: string, matched: Record<string, string[]>, bundles = DATA.bundles) {
-    return renderToStaticMarkup(
-      <MemoryRouter>
-        <PlanSearchResults
-          bundles={bundles}
-          thumbs={DATA.thumbs}
-          matchedItems={matched}
-          query={query}
-          timeZone="UTC"
-          now={new Date()}
-          onOpenPlan={() => {}}
-          onOpenItem={() => {}}
-          onClear={() => {}}
-        />
-      </MemoryRouter>,
-    );
-  }
-
-  it('lists each plan as its card, with its matched items, the searched words marked', () => {
-    const html = results('open', { shared: ['i2'] });
-    expect(html).toContain('data-plan-tab-results');
-    expect(html).toContain('data-plan-tab-card="draft"');
-    expect(html).toContain('data-plan-tab-card="shared"');
-    expect(html).toContain('data-plan-tab-match="i2"');
-    expect(html).not.toContain('data-plan-tab-match="i1"');
-    expect(html).toMatch(/<mark[^>]*data-search-mark=""[^>]*>Open<\/mark>/);
-    // A matched item row is a full-height (44px) tappable row.
-    expect(html).toMatch(
-      /<button[^>]*min-h-11[^>]*data-plan-tab-match="i2"|data-plan-tab-match="i2"[^>]*min-h-11/,
-    );
-  });
-
-  it('zero matches: the shared NoResults line, never an "empty" state', () => {
-    const html = results('zz', {}, []);
-    expect(html).toContain('Try another word for &quot;zz&quot;.');
-    expect(html).not.toMatch(/empty|No matches|Nothing/i);
-  });
-
-  it('an item opens in its plan', () => {
-    expect(itemRoute('shared', 'i2')).toBe('/plan/shared?item=i2');
-    expect(matchedItemTitle(DATA.bundles[1] as PlanBundle, 'i2')).toBe('Open idea');
-    expect(matchedItemTitle(DATA.bundles[1] as PlanBundle, 'gone')).toBeNull();
   });
 });

@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { PendingChip, PENDING_CHIP_FAILED } from '@/components/ui/PendingChip';
+import {
+  chipType,
+  PendingChip,
+  PENDING_CHIP_FAILED,
+  readyChipMeta,
+  uploadingChipMeta,
+} from '@/components/ui/PendingChip';
 import { IconButton } from '@/components/ui/IconButton';
 import { IconX } from '@/components/ui/icons';
 
@@ -77,5 +83,49 @@ describe('ui/PendingChip: the one pending-file chip', () => {
     expect(html).toContain(PENDING_CHIP_FAILED.replace("'", '&#x27;'));
     expect(html).toContain('aria-label="Retry a.png"');
     expect(html).toContain('aria-label="Remove a.png"');
+  });
+});
+
+describe('ui/PendingChip meta helpers (pure)', () => {
+  const MB = 1024 * 1024;
+
+  it('chipType: the extension, else the mime subtype, else FILE', () => {
+    expect(chipType('deck.pdf')).toBe('PDF');
+    expect(chipType('photo', 'image/png')).toBe('PNG');
+    expect(chipType('icon', 'image/svg+xml')).toBe('SVG');
+    expect(chipType('notes')).toBe('FILE');
+    expect(chipType('.env', '')).toBe('FILE');
+  });
+
+  it('readyChipMeta: "<TYPE> · <size>", the type alone when the size is unknown', () => {
+    expect(readyChipMeta({ name: 'deck.pdf', size: 1.2 * MB })).toBe('PDF · 1.2 MB');
+    expect(readyChipMeta({ name: 'a.png', mime: 'image/png', size: 2048 })).toBe('PNG · 2 KB');
+    expect(readyChipMeta({ name: 'deck.pdf', size: 0 })).toBe('PDF');
+    expect(readyChipMeta({ name: 'deck.pdf', size: null })).toBe('PDF');
+    expect(readyChipMeta({ name: 'deck.pdf' })).not.toMatch(/%/);
+  });
+
+  it('uploadingChipMeta: "1.2 of 3.4 MB" with bytes, else the size total; never %', () => {
+    expect(uploadingChipMeta(3.4 * MB, 1.2 * MB)).toBe('1.2 of 3.4 MB');
+    expect(uploadingChipMeta(3.4 * MB)).toBe('3.4 MB');
+    expect(uploadingChipMeta(3.4 * MB, null)).toBe('3.4 MB');
+    expect(uploadingChipMeta(3.4 * MB, 1.2 * MB)).not.toMatch(/%/);
+  });
+});
+
+describe('ui/PendingChip dataAttrs slot', () => {
+  it("puts the caller's data hooks on the <li>, beside its own state", () => {
+    const html = renderToStaticMarkup(
+      <ul>
+        <PendingChip
+          thumb={null}
+          title="a.png"
+          meta="PNG"
+          onRemove={() => {}}
+          dataAttrs={{ 'data-plan-concept-file': '' }}
+        />
+      </ul>,
+    );
+    expect(html).toMatch(/<li data-plan-concept-file="" data-pending-chip="ready"/);
   });
 });

@@ -3,8 +3,8 @@
 // composer (the reply passes a parentCommentId-bearing onSubmit). The "+" is
 // chat's ComposerTray limited to Photos, File and Assets. Photos and File
 // reuse the existing chat upload path verbatim (uploadFile -> asset-upload
-// worker, which returns asset VERSION ids); picked files show as removable chips
-// with per-file progress and inline failure, and never throw. Assets is chat's
+// worker, which returns asset VERSION ids); picked files show as ui/PendingChip
+// (uploading with the ring, ready, or failed with Retry), and never throw. Assets is chat's
 // AssetPicker: a library pick is already uploaded, so its chip carries the
 // pick's current version id and sends with the uploads. The composer owns
 // no trace and no write wrapper: it hands the body + completed version ids back
@@ -19,19 +19,23 @@ import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ComposerFrame } from '@/components/ui/Composer';
 import { ErrorNote } from '@/components/ui/ErrorNote';
-import { IconButton } from '@/components/ui/IconButton';
+import {
+  PendingChip,
+  readyChipMeta,
+  uploadingChipMeta,
+  type PendingChipStatus,
+} from '@/components/ui/PendingChip';
 import { MentionInput } from '@/components/comments/MentionInput';
 import type { MentionInputHandle } from '@/components/comments/MentionInput';
 import { CommentEmojiButton } from '@/components/comments/CommentEmojiButton';
 import type { MentionCandidate } from '@/lib/workspace-members';
-import { IconFile, IconSend, IconTrash, ICON_SIZE } from '@/components/ui/icons';
+import { IconFile, IconSend, ICON_SIZE } from '@/components/ui/icons';
 import { ComposerTray, type TrayTileId } from '@/components/chat/ComposerTray';
 import { useChatLayout } from '@/components/chat/chat-type';
 import type { AssetPicker as AssetPickerPart } from '@/components/chat/AssetPicker';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { env } from '@/lib/env';
 import { appPresignCache } from '@/lib/shared-presign';
-import { fileExtension } from '@/lib/assets';
 import { precheckFile, UPLOAD_ACCEPT } from '@/lib/asset-upload';
 import { IMAGE_ACCEPT, precheckImage, type ChatAttachmentUpload } from '@/lib/chat/attachments';
 import { isLibraryImage, type LibraryAsset } from '@/lib/chat/asset-picker';
@@ -407,7 +411,7 @@ export function CommentComposer({
       {chipCount > 0 ? (
         <ul ref={chipsRef} className="flex flex-wrap gap-2">
           {pending.map((item) => (
-            <PendingChip
+            <FileUploadChip
               key={item.id}
               item={item}
               onRemove={() => removePending(item.id)}
@@ -415,7 +419,7 @@ export function CommentComposer({
             />
           ))}
           {library.map((asset) => (
-            <LibraryChip
+            <LibraryPickChip
               key={libraryChipKey(asset)}
               asset={asset}
               onRemove={() => removeLibrary(asset.versionId)}
@@ -464,26 +468,75 @@ export function CommentComposer({
   );
 }
 
+/** A picked file's chip thumb: its own picture, else the file glyph. */
+function UploadThumb({ previewUrl }: { previewUrl: string | null }): ReactElement {
+  return previewUrl !== null ? (
+    <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+  ) : (
+    <IconFile size={ICON_SIZE.inline} />
+  );
+}
+
+/** An upload's state as ui/PendingChip draws it. The comment path reports no bytes, so progress is null. Pure. */
+export function uploadChipStatus(status: PendingStatus): PendingChipStatus {
+  if (status.state === 'uploading') return { state: 'uploading', progress: null };
+  if (status.state === 'error') return { state: 'failed' };
+  return { state: 'ready' };
+}
+
+/** An upload chip's meta: the file's size while it uploads, "PDF · 1.2 MB" once done. Pure. */
+export function uploadChipMeta(item: Pick<Pending, 'file' | 'status'>): string {
+  return item.status.state === 'uploading'
+    ? uploadingChipMeta(item.file.size)
+    : readyChipMeta({ name: item.file.name, mime: item.file.type, size: item.file.size });
+}
+
 /**
- * One library pick (Assets) as a removable chip: the same chip as an upload's,
- * done from the start (it is already uploaded). The thumb is the image through
- * the shared presign cache (chat's library chip), else the file glyph.
+ * One picked file as ui/PendingChip: uploading (ring + X cancels), ready
+ * (type · size, trailing X removes) or failed (Retry when retryable). Shared by
+ * CommentComposer, SlotComposer and ConceptSheet.
  */
-export function LibraryChip({
+export function FileUploadChip({
+  item,
+  onRemove,
+  onRetry,
+  dataAttrs,
+}: {
+  item: Pick<Pending, 'file' | 'previewUrl' | 'status' | 'retryable'>;
+  onRemove: () => void;
+  /** FT17: re-run a failed upload; offered only when the failure was not the pre-check. */
+  onRetry?: (() => void) | undefined;
+  dataAttrs?: Readonly<Record<`data-${string}`, string>> | undefined;
+}): ReactElement {
+  return (
+    <PendingChip
+      thumb={<UploadThumb previewUrl={item.previewUrl} />}
+      title={item.file.name}
+      meta={uploadChipMeta(item)}
+      status={uploadChipStatus(item.status)}
+      onRemove={onRemove}
+      onRetry={onRetry !== undefined && canRetryPending(item) ? onRetry : undefined}
+      dataAttrs={dataAttrs}
+    />
+  );
+}
+
+/**
+ * One library pick (Assets) as ui/PendingChip, ready from the start (it is
+ * already uploaded). The thumb is the image through the shared presign cache,
+ * else the file glyph.
+ */
+export function LibraryPickChip({
   asset,
   onRemove,
 }: {
   asset: LibraryAsset;
   onRemove: () => void;
 }): ReactElement {
-  const image = isLibraryImage(asset);
   return (
-    <li
-      data-library-chip={asset.versionId}
-      className="flex items-center gap-2 rounded-xl border bg-panel-2 py-1 pl-1 pr-1 lit-card-muted"
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3">
-        {image ? (
+    <PendingChip
+      thumb={
+        isLibraryImage(asset) ? (
           <Thumbnail
             assetVersionId={asset.versionId}
             cache={appPresignCache()}
@@ -493,73 +546,16 @@ export function LibraryChip({
           />
         ) : (
           <IconFile size={ICON_SIZE.inline} />
-        )}
-      </span>
-      <span className="flex min-w-0 max-w-44 flex-col">
-        <span className="truncate text-sm font-medium text-fg" title={asset.name}>
-          {asset.name}
-        </span>
-        <span className="text-xs text-fg-3">{fileExtension(asset.filename)}</span>
-      </span>
-      <IconButton label={`Remove ${asset.name}`} onClick={onRemove}>
-        <IconTrash size={ICON_SIZE.control} />
-      </IconButton>
-    </li>
-  );
-}
-
-export function PendingChip({
-  item,
-  onRemove,
-  onRetry,
-}: {
-  item: Pending;
-  onRemove: () => void;
-  /** FT17: re-run a failed upload; the chip shows Retry only when given and retryable. */
-  onRetry?: (() => void) | undefined;
-}): ReactElement {
-  const error = item.status.state === 'error';
-  return (
-    <li
-      className={
-        error
-          ? 'flex items-center gap-2 rounded-xl border border-bad lit-bad bg-panel-2 py-1 pl-1 pr-1 lit-card-muted'
-          : 'flex items-center gap-2 rounded-xl border bg-panel-2 py-1 pl-1 pr-1 lit-card-muted'
+        )
       }
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-panel-3 text-fg-3">
-        {item.previewUrl !== null ? (
-          <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <IconFile size={ICON_SIZE.inline} />
-        )}
-      </span>
-      <span className="flex min-w-0 max-w-44 flex-col">
-        <span className="truncate text-sm font-medium text-fg" title={item.file.name}>
-          {item.file.name}
-        </span>
-        <span className={error ? 'truncate text-xs text-bad' : 'text-xs text-fg-3'}>
-          {item.status.state === 'uploading'
-            ? 'Uploading'
-            : item.status.state === 'error'
-              ? item.status.message
-              : fileExtension(item.file.name)}
-        </span>
-      </span>
-      {onRetry !== undefined && canRetryPending(item) ? (
-        <Button
-          type="button"
-          variant="link"
-          className="min-w-11 shrink-0"
-          aria-label={`Retry ${item.file.name}`}
-          onClick={onRetry}
-        >
-          Retry
-        </Button>
-      ) : null}
-      <IconButton label={`Remove ${item.file.name}`} onClick={onRemove}>
-        <IconTrash size={ICON_SIZE.control} />
-      </IconButton>
-    </li>
+      title={asset.name}
+      meta={readyChipMeta({
+        name: asset.filename,
+        mime: asset.version.mime_type,
+        size: asset.version.size_bytes,
+      })}
+      onRemove={onRemove}
+      dataAttrs={{ 'data-library-chip': asset.versionId }}
+    />
   );
 }

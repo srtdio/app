@@ -1,13 +1,19 @@
 // @vitest-environment jsdom
 // X6 Assets page regressions, rendered for real in jsdom with the data reads
 // mocked: a failed files read is a page load error (never a partial grid),
-// ?asset= for a gone file says so, the header offers a "New file" menu, and the
-// page has no folder UI at all.
+// ?asset= for a gone file says so, the top bar carries the page's Sort and its
+// "+" (New file menu), the chip row's Select starts select mode, and the page
+// has no folder UI and no list search at all.
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssetsPage } from '@/components/pages/AssetsPage';
+import {
+  TopbarActionsProvider,
+  useTopbarActionsValue,
+} from '@/components/shell/topbar-actions';
+import { INDUCTION_KEYS } from '@/lib/induction';
 import { resetSessionReads } from '@/lib/session-read';
 import { resetHistorySteps } from '@/lib/chat/use-history-step';
 import type { AssetListItem } from '@/lib/assets';
@@ -105,6 +111,17 @@ function asset(overrides: Partial<AssetListItem> = {}): AssetListItem {
 let root: Root | null = null;
 const flush = () => act(async () => new Promise((r) => setTimeout(r, 0)));
 
+/** Stands in for Topbar: renders what the page published into its two slots. */
+function TopbarProbe() {
+  const { sort, primary } = useTopbarActionsValue();
+  return (
+    <div data-test-topbar="">
+      <div data-test-topbar-sort="">{sort}</div>
+      <div data-test-topbar-primary="">{primary}</div>
+    </div>
+  );
+}
+
 async function mount(path = '/assets'): Promise<void> {
   const host = document.createElement('div');
   document.body.appendChild(host);
@@ -112,7 +129,10 @@ async function mount(path = '/assets'): Promise<void> {
   await act(async () => {
     root?.render(
       <MemoryRouter initialEntries={[path]}>
-        <AssetsPage />
+        <TopbarActionsProvider>
+          <TopbarProbe />
+          <AssetsPage />
+        </TopbarActionsProvider>
       </MemoryRouter>,
     );
   });
@@ -267,19 +287,37 @@ describe('X6 bulk delete keeps the files in use', () => {
   });
 });
 
-describe('Assets header "New file" menu', () => {
-  it('is a visible "New file" text button that opens Upload files and Add link', async () => {
+describe('Assets top bar: Sort and the "+" (New file menu)', () => {
+  it('publishes Sort and the "+" into the top bar, not the page header', async () => {
     listAssets.mockResolvedValue({ ok: true, data: [asset({ folderId: null })] });
     await mount();
 
-    const trigger = button('New file');
-    expect(trigger).toBeDefined();
+    const sortSlot = document.querySelector('[data-test-topbar-sort]');
+    const sort = sortSlot?.querySelector<HTMLButtonElement>('button');
+    expect(sort?.getAttribute('aria-label')).toBe('Sort');
+    const plus = document.querySelector<HTMLButtonElement>(
+      '[data-test-topbar-primary] [data-topbar-plus]',
+    );
+    expect(plus).not.toBeNull();
+    // Nothing of either is left in the page's own header.
+    const header = document.querySelector('[data-chip-row]');
+    expect(header?.querySelector('[data-topbar-plus]')).toBeNull();
+    expect(header?.querySelector('[aria-label="Sort"]')).toBeNull();
+  });
+
+  it('the "+" is named New file, keeps the tour key and opens Upload files and Add link', async () => {
+    listAssets.mockResolvedValue({ ok: true, data: [asset({ folderId: null })] });
+    await mount();
+
+    const trigger = document.querySelector<HTMLButtonElement>('[data-topbar-plus]');
+    expect(trigger?.getAttribute('aria-label')).toBe('New file');
     expect(trigger?.getAttribute('aria-haspopup')).toBe('menu');
     expect(trigger?.getAttribute('aria-expanded')).toBe('false');
-    expect(trigger?.hasAttribute('aria-label')).toBe(false);
-    // IconPlus before the label, like every New button.
+    expect(trigger?.getAttribute('data-induction')).toBe(INDUCTION_KEYS.assetsAdd);
+    // Icon only: the label is the button's name, not its text.
+    expect(trigger?.textContent?.trim()).toBe('');
     expect(trigger?.querySelector('svg')).not.toBeNull();
-    expect(document.querySelector('[aria-label="Add asset"]')).toBeNull();
+    expect(button('New file')).toBeUndefined();
 
     await act(async () => trigger?.click());
     await flush();
@@ -289,6 +327,83 @@ describe('Assets header "New file" menu', () => {
       el.textContent?.trim(),
     );
     expect(items).toEqual(['Upload files', 'Add link']);
+  });
+
+  it('Sort opens the Assets sort options', async () => {
+    listAssets.mockResolvedValue({ ok: true, data: [asset({ folderId: null })] });
+    await mount();
+    const sort = document.querySelector<HTMLButtonElement>('[data-test-topbar-sort] button');
+    await act(async () => sort?.click());
+    await flush();
+    for (const label of ['Newest first', 'Name', 'Size', 'Type']) {
+      expect(text()).toContain(label);
+    }
+  });
+});
+
+describe('Assets has no list search', () => {
+  it('no search box, and a ?q= on the URL filters nothing', async () => {
+    listAssets.mockResolvedValue({
+      ok: true,
+      data: [
+        asset({ id: 'a1', filename: 'one.png', folderId: null }),
+        asset({ id: 'a2', filename: 'two.png', folderId: null }),
+      ],
+    });
+    await mount('/assets?q=one');
+    expect(document.querySelector('input[placeholder="Search files"]')).toBeNull();
+    expect(text()).toContain('one.png');
+    expect(text()).toContain('two.png');
+    // Every page read is the plain list: no search argument.
+    for (const call of listAssets.mock.calls) expect(call.length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('Assets chip row Select (SectionSelect)', () => {
+  const two = () =>
+    listAssets.mockResolvedValue({
+      ok: true,
+      data: [
+        asset({ id: 'a1', filename: 'one.png', folderId: null }),
+        asset({ id: 'a2', filename: 'two.png', folderId: null }),
+      ],
+    });
+  const select = () =>
+    document.querySelector<HTMLButtonElement>('[data-chip-row-select] [data-section-select]');
+
+  it('sits at the end of the chip row, off until tapped', async () => {
+    two();
+    await mount();
+    expect(select()).not.toBeNull();
+    expect(select()?.textContent).toContain('Select');
+    expect(select()?.getAttribute('aria-pressed')).toBe('false');
+    expect(document.querySelector('[data-select-bar]')).toBeNull();
+  });
+
+  it('a tap starts select mode with nothing ticked; a card tap ticks; a second tap leaves', async () => {
+    two();
+    await mount();
+    await act(async () => select()?.click());
+    await flush();
+    expect(select()?.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('[data-select-bar]')).not.toBeNull();
+    expect(document.querySelector('[data-list-card-tick="on"]')).toBeNull();
+
+    await tapCard('one.png');
+    expect(document.querySelector('[data-select-bar-count]')?.textContent).toBe('1 selected');
+
+    await act(async () => select()?.click());
+    await flush();
+    expect(select()?.getAttribute('aria-pressed')).toBe('false');
+    expect(document.querySelector('[data-select-bar]')).toBeNull();
+  });
+
+  it('a right-click still starts it, and the Select shows pressed', async () => {
+    two();
+    await mount();
+    await rightClick('a2');
+    expect(select()?.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('[data-select-bar-count]')?.textContent).toBe('1 selected');
   });
 });
 

@@ -6,6 +6,7 @@ import {
   BUBBLE_FILL,
   FileBubble,
   FileBubbleCard,
+  FileSendingRing,
   SENDING_RATIO,
   fileBubbleState,
   fileMetaParts,
@@ -211,7 +212,7 @@ describe('FileBubble states', () => {
     expect(fileBubbleState(true, false)).toBe('sending');
   });
 
-  it('sending (D5): FileBubble lays the stop ring over the card; it stops the send', () => {
+  it('sending (decision F): FileBubble lays the X ring on the thumb; it stops the send', () => {
     const onCancel = vi.fn();
     const sendingPdf: MessageAttachment = {
       assetId: '',
@@ -230,6 +231,10 @@ describe('FileBubble states', () => {
     expect(html).toContain('data-upload-progress="40"');
     expect(html).toContain('aria-label="Stop sending"');
     expect(html).not.toContain('data-file-progress');
+    // No thumbnail box yet: the ring sits on the icon card's icon spot, never a bar.
+    expect(html).toMatch(/data-file-ring="" class="[^"]*left-px[^"]*w-16/);
+    expect(html.match(/role="progressbar"/g)).toHaveLength(1);
+    expect(html).toMatch(/role="progressbar"[^>]*class="sr-only"/);
     // The ring's button sits after the card's button closes: no nested buttons.
     const card = html.indexOf('aria-label="Open deck.pdf"');
     const ring = html.indexOf('data-upload-ring=""');
@@ -250,6 +255,17 @@ describe('FileBubble states', () => {
       <FileBubble attachment={sendingPdf} cache={cache()} presignEnabled />,
     );
     expect(below).not.toContain('data-upload-ring');
+  });
+
+  it('decision F: with a thumbnail box the ring sits centred on the thumb (its reserved aspect)', () => {
+    const html = renderToStaticMarkup(
+      <FileSendingRing ratio={SENDING_RATIO.pdf} progress={0.25} onCancel={() => {}} />,
+    );
+    expect(html).toMatch(/data-file-ring="" class="[^"]*top-px[^"]*" style="aspect-ratio:1 \/ 1.3"/);
+    expect(html).toContain('data-upload-progress="25"');
+    // The X cancels; no bar, no % text.
+    expect(html).toContain('aria-label="Stop sending"');
+    expect(html.replace(/<[^>]*>/g, '')).not.toMatch(/%/);
   });
 
   it('sent: no ring, the root is the plain fill', () => {

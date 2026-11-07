@@ -7,10 +7,9 @@
 // session (the kept value stays fresh for the session; a plan change marks it
 // stale). A refresh behind the arrival paint is applied only while the person
 // has not touched, scrolled or typed (src/lib/kept-view.ts). Own writes
-// update the kept value (primeRead), so a return shows them. Search (2+
-// characters) runs through the shared server-search runner (250ms debounce,
-// abort in flight). The hook never reads before the Plan tab's own paint: the
-// read starts in an effect.
+// update the kept value (primeRead), so a return shows them. The Bank has no
+// search of its own (the top bar's CommandPalette is the one search). The hook
+// never reads before the Plan tab's own paint: the read starts in an effect.
 //
 // Own writes made elsewhere (Move to bank from the Plan or item screen, Plan
 // it, From bank, Delete, Archive, Show / Hide, Star) ride PLAN_CHANGED_EVENT
@@ -55,7 +54,6 @@ import {
   enrichBankIdeas,
   readBankPage,
   readOpenPlanRows,
-  searchBank,
   type BankChange,
   type BankIdea,
   type BankPage,
@@ -68,7 +66,6 @@ import { logger } from '@/lib/logger';
 import { mark } from '@/lib/perf-marks';
 import { planWeekLabel } from '@/lib/plan-week';
 import { weekRangeOf } from '@/lib/plan-tab';
-import { useServerSearch, type ServerSearch } from '@/lib/search/server-search';
 import { invalidateReads, peekKept, primeRead, readKey, sharedRead } from '@/lib/session-read';
 import { supabase } from '@/lib/supabase';
 import { subscribeBankLive } from '@/lib/plan-tab/bank-live';
@@ -234,9 +231,8 @@ export type BankLoad =
 
 export interface BankData {
   load: BankLoad;
-  /** The shown ideas in order (search answer while searching), or null before any. */
+  /** The shown ideas in order, or null before any. */
   ideas: BankIdea[] | null;
-  search: ServerSearch<BankIdea[]>;
   /** Load more while more remain; null otherwise. */
   more: { busy: boolean; onMore: () => void } | null;
   retry: () => void;
@@ -255,7 +251,6 @@ export function useBankData(input: {
   userId: string | null;
   enabled: boolean;
   filter: BankFilter;
-  searchText: string;
   /**
    * The Bank is open and painted, on the agency side: subscribe to its live
    * topic. False closes the subscription (the chip, panel or table closed).
@@ -340,7 +335,6 @@ export function useBankData(input: {
   useWorkspaceDataChanged(reload);
   // An own write elsewhere: the kept page was patched (patchKeptBankPages);
   // show it with no read. Any other plan change re-reads behind what is shown.
-  const searchRef = useRef<ServerSearch<BankIdea[]> | null>(null);
   useEffect(() => {
     const onPlan = (event: Event): void => {
       const change = bankChangeOf(event);
@@ -348,7 +342,6 @@ export function useBankData(input: {
         reload();
         return;
       }
-      searchRef.current?.update((ideas) => applyBankChange(ideas, change, filterRef.current));
       if (key === null) return;
       const kept = peekKept<Result<BankPage>>(key);
       if (kept?.ok === true) setState({ key, load: { status: 'ready', page: kept.data } });
@@ -410,51 +403,28 @@ export function useBankData(input: {
     });
   }, [key, workspaceId, moreBusy]);
 
-  const search = useServerSearch<BankIdea[]>(
-    input.searchText,
-    (query, signal) =>
-      workspaceId === null
-        ? Promise.resolve({ ok: true as const, data: [] })
-        : searchBank(
-            supabase,
-            bankQueryOf(workspaceId, filterRef.current, new Date()),
-            query,
-            signal,
-          ),
-    `${workspaceId ?? ''}:${key ?? ''}`,
-  );
-  searchRef.current = search;
-
-  const patch = useCallback<BankData['patch']>(
-    (edit) => {
-      search.update((ideas) => edit(ideas));
-      setState((prev) => {
-        if (prev.load.status !== 'ready' || prev.key === null) return prev;
-        const page: BankPage = {
-          ...prev.load.page,
-          ideas: sortBankIdeas(edit(prev.load.page.ideas), filterRef.current.sort),
-        };
-        primeRead<Result<BankPage>>(prev.key, { ok: true, data: page }, Number.POSITIVE_INFINITY);
-        return { key: prev.key, load: { status: 'ready', page } };
-      });
-    },
-    [search],
-  );
+  const patch = useCallback<BankData['patch']>((edit) => {
+    setState((prev) => {
+      if (prev.load.status !== 'ready' || prev.key === null) return prev;
+      const page: BankPage = {
+        ...prev.load.page,
+        ideas: sortBankIdeas(edit(prev.load.page.ideas), filterRef.current.sort),
+      };
+      primeRead<Result<BankPage>>(prev.key, { ok: true, data: page }, Number.POSITIVE_INFINITY);
+      return { key: prev.key, load: { status: 'ready', page } };
+    });
+  }, []);
 
   const retry = useCallback(() => void read(false), [read]);
-  const pageIdeas = load.status === 'ready' ? load.page.ideas : null;
-  const ideas = search.active ? search.data : pageIdeas;
+  const ideas = load.status === 'ready' ? load.page.ideas : null;
   const more = useMemo(
     () =>
-      !search.active && load.status === 'ready' && load.page.nextCursor !== null
-        ? { busy: moreBusy, onMore }
-        : null,
-    [search.active, load, moreBusy, onMore],
+      load.status === 'ready' && load.page.nextCursor !== null ? { busy: moreBusy, onMore } : null,
+    [load, moreBusy, onMore],
   );
   return {
     load,
     ideas,
-    search,
     more,
     retry,
     patch,
