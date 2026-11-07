@@ -90,9 +90,7 @@ describe('the plan card lines', () => {
     expect(html).toMatch(
       /data-list-card-preview=""[^>]*data-plan-tab-dates=""[^>]*>6–12 Nov · 1 post</,
     );
-    expect(html).toMatch(
-      /data-list-card-time=""[^>]*data-plan-tab-start=""[^>]*>Starts Fri</,
-    );
+    expect(html).toMatch(/data-list-card-time=""[^>]*data-plan-tab-start=""[^>]*>Starts Fri</);
     expect(html).toMatch(/data-list-card-tag=""[^>]*data-plan-tab-progress=""/);
     expect(html).toContain('0 of 1 OK');
     expect(html).not.toContain('data-plan-tab-draft');

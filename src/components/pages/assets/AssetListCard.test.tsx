@@ -92,7 +92,9 @@ describe('Assets item is ui/ListCard', () => {
     expect(out).toMatch(/data-list-card-line="1"[^]*data-asset-name="" title="report.pdf"/);
     expect(out).toMatch(/data-list-card-preview=""[^>]*data-asset-meta=""[^>]*>PDF · 12 pages · /);
     // formatAdded on the device zone: uploaded earlier the same day reads its clock time.
-    expect(out).toMatch(/data-list-card-line="3"[^]*data-asset-uploaded=""[^>]*>\d{1,2}:\d{2} (AM|PM)</);
+    expect(out).toMatch(
+      /data-list-card-line="3"[^]*data-asset-uploaded=""[^>]*>\d{1,2}:\d{2} (AM|PM)</,
+    );
     expect(out).toMatch(/data-asset-tag=""[^]*>PDF</);
     // The old tile frame is gone.
     expect(out).not.toContain('data-tile');

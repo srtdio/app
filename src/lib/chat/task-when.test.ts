@@ -76,9 +76,7 @@ describe('the date line', () => {
 
   it('done tasks: what was due and when it was done', () => {
     const done = { status: 'done' as const, doneAt: '2026-10-30T09:00:00.000Z' };
-    expect(rowDateLine({ ...done, dueOn: '2026-10-31' }, CAL)?.text).toBe(
-      'Due 31 Oct · done Fri',
-    );
+    expect(rowDateLine({ ...done, dueOn: '2026-10-31' }, CAL)?.text).toBe('Due 31 Oct · done Fri');
     expect(rowDateLine({ ...done, dueOn: null }, CAL)?.text).toBe('Done Fri');
     // The done time is formatAgo (on the workspace zone); a done task is never overdue.
     const today = { ...done, doneAt: '2026-11-05T09:00:00.000Z', dueOn: null };

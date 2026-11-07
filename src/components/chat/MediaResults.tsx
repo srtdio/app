@@ -655,7 +655,8 @@ export function MediaResults(props: MediaResultsProps): ReactElement {
     channelsById: props.channelsById,
   };
   const dateOf = (item: ChipItem): string => searchDateLabel(item.createdAt, nowMs);
-  const sentAtLabel = (item: ChipItem): string => formatAgo(item.createdAt, new Date(nowMs), timeZone);
+  const sentAtLabel = (item: ChipItem): string =>
+    formatAgo(item.createdAt, new Date(nowMs), timeZone);
   const showInChat = (item: ChipItem): void => {
     setOpenKey(null);
     props.onShowInChat(item.channelId, item.messageId);

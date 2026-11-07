@@ -237,8 +237,9 @@ describe('SharedPostCardList', () => {
         new Map([['u1', 'Asha Rao']]),
       );
     // Short on the shared minute clock (formatAgo), the same in every locale.
-    const AGO = /just now|\d+[mh]|Yesterday|Mon|Tue|Wed|Thu|Fri|Sat|Sun|\d{1,2} [A-Z][a-z]{2}( \d{4})?/
-      .source;
+    const AGO =
+      /just now|\d+[mh]|Yesterday|Mon|Tue|Wed|Thu|Fri|Sat|Sun|\d{1,2} [A-Z][a-z]{2}( \d{4})?/
+        .source;
     deviceLocale('en-IN');
     expect(named()).toMatch(new RegExp(`Approved by Asha · (${AGO})`));
     vi.restoreAllMocks();
