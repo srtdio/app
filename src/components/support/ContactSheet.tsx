@@ -84,7 +84,9 @@ export function ContactSheet({ open, onClose, workspaceName, request }: ContactS
         <p className="text-base text-fg-2">
           Tell us what you need. Someone from the team replies by email.
         </p>
-        <div className="flex min-w-0 items-center gap-2 rounded-xl border bg-panel-2 lit-card-muted py-1 pl-3 pr-1">
+        {/* Flat look: the address and its Copy sit on the sheet, no grey box; the
+            44 Copy keeps the row height. */}
+        <div className="flex min-w-0 items-center gap-2">
           <span className="min-w-0 flex-1 break-all text-base font-medium text-fg">
             {SUPPORT_EMAIL}
           </span>

@@ -130,10 +130,11 @@ describe('Chip visible by density (36 Cozy, 32 Compact, 40 Calm), 44 tap box', (
     );
   });
 
-  it('the add chip keeps its dashed edge on the face, flat (no lit-chip)', () => {
+  it('the add chip is a plain "+" pill: the rest hairline, fg ink, no dashed box, flat (no lit-chip)', () => {
     const html = renderToStaticMarkup(<Chip label="Add" variant="add" />);
     const face = /<span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
-    expect(face).toContain('border-dashed border-border-strong text-fg-3');
+    expect(face).toContain('border-border-strong text-fg');
+    expect(face).not.toContain('border-dashed');
     expect(face).not.toContain('lit-chip');
   });
 
@@ -194,16 +195,15 @@ describe('Chip edges (8 Nov 2026): rest on the strong edge, picked on the ink li
     }
   });
 
-  it("the 'add' variant is unchanged: dashed strong edge in fg-3, selected or not", () => {
+  it("the 'add' variant: solid strong hairline in fg ink, selected or not", () => {
     for (const selected of [undefined, false, true]) {
       const face = faceClass(
         renderToStaticMarkup(
           <Chip label="Add" variant="add" {...(selected !== undefined ? { selected } : {})} />,
         ),
       );
-      expect(face).toEqual(
-        expect.arrayContaining(['border-dashed', 'border-border-strong', 'text-fg-3']),
-      );
+      expect(face).toEqual(expect.arrayContaining(['border-border-strong', 'text-fg']));
+      expect(face).not.toContain('border-dashed');
       expect(face).not.toContain('text-fg-2');
       expect(face).not.toContain('border-fg');
     }

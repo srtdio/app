@@ -1788,10 +1788,16 @@ export type BankSort = 'active' | 'newest' | 'oldest' | 'name';
 
 /**
  * Ideas a Bank page holds: the screen's fill count (lib/use-fill-count, read
- * once per app load), at least 12. Load more reads the next page of the same
- * size with the same .limit(n + 1) query.
+ * once per app load, again once if the density changed), at least 12. Read at
+ * call time (sync, no read), so the first page and every Load more follow the
+ * active density. Load more reads the next page of the same size with the same
+ * .limit(n + 1) query.
  */
-export const BANK_PAGE_SIZE = Math.max(12, getFillCount());
+export function bankPageSize(): number {
+  return Math.max(12, getFillCount());
+}
+/** bankPageSize() as it was when this module loaded (tests). */
+export const BANK_PAGE_SIZE = bankPageSize();
 /** Search answers at most this many ideas (one read, no pages). */
 export const BANK_SEARCH_LIMIT = 50;
 
@@ -1930,7 +1936,8 @@ async function readBankGroup(
   starred: boolean,
   after: { key: string | null; id: string } | null,
   ids: readonly string[] | null,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  size: number,
 ): Promise<Result<PlanItemRow[]>> {
   const { column, ascending } = bankSortKey(q.sort);
   let query = bankBase(client, q, ITEM_COLUMNS);
@@ -1940,7 +1947,7 @@ async function readBankGroup(
   query = query
     .order(column, { ascending, nullsFirst: false })
     .order('id', { ascending })
-    .limit(BANK_PAGE_SIZE + 1);
+    .limit(size + 1);
   const res = (await abortable(query, signal)) as SelectResult;
   if (res.error !== null) return fail(`plan_items: ${res.error.message}`);
   return { ok: true, data: (res.data ?? []) as PlanItemRow[] };
@@ -1956,21 +1963,22 @@ export function bankPageOf(
   cursor: BankCursor | null,
   starred: readonly PlanItemRow[],
   rest: readonly PlanItemRow[],
+  size: number = bankPageSize(),
 ): { rows: PlanItemRow[]; nextCursor: BankCursor | null } {
   const at = (row: PlanItemRow | undefined): { key: string | null; id: string } | null =>
     row !== undefined ? { key: bankSortValue(row, sort), id: row.id } : null;
   if (cursor !== null && !cursor.starred) {
-    const rows = rest.slice(0, BANK_PAGE_SIZE);
+    const rows = rest.slice(0, size);
     return {
       rows,
-      nextCursor: rest.length > BANK_PAGE_SIZE ? { starred: false, after: at(rows.at(-1)) } : null,
+      nextCursor: rest.length > size ? { starred: false, after: at(rows.at(-1)) } : null,
     };
   }
-  if (starred.length > BANK_PAGE_SIZE) {
-    const rows = starred.slice(0, BANK_PAGE_SIZE);
+  if (starred.length > size) {
+    const rows = starred.slice(0, size);
     return { rows, nextCursor: { starred: true, after: at(rows.at(-1)) } };
   }
-  const room = BANK_PAGE_SIZE - starred.length;
+  const room = size - starred.length;
   const tail = rest.slice(0, room);
   const rows = [...starred, ...tail];
   if (rest.length > room) {
@@ -2042,7 +2050,8 @@ export async function enrichBankIdeas(
 
 /**
  * One page of the Bank: starred ideas first, then the rest, each in the sort's
- * order, 12 a page with a keyset cursor. One plan_items read per group, then
+ * order, `size` a page (the caller's fill count; bankPageSize() by default)
+ * with a keyset cursor. One plan_items read per group, then
  * one read per table for the page's rows; nothing is ever counted. RLS limits
  * a client to ideas shown to them. Never throws.
  */
@@ -2051,6 +2060,7 @@ export async function readBankPage(
   q: BankQuery,
   cursor: BankCursor | null,
   signal?: AbortSignal,
+  size: number = bankPageSize(),
 ): Promise<Result<BankPage>> {
   try {
     let ids: string[] | null = null;
@@ -2063,7 +2073,7 @@ export async function readBankPage(
     const empty: Result<PlanItemRow[]> = { ok: true, data: [] };
     const [starred, rest] = await Promise.all([
       cursor === null || cursor.starred
-        ? readBankGroup(client, q, true, cursor?.after ?? null, ids, signal)
+        ? readBankGroup(client, q, true, cursor?.after ?? null, ids, signal, size)
         : Promise.resolve(empty),
       readBankGroup(
         client,
@@ -2072,11 +2082,12 @@ export async function readBankPage(
         cursor !== null && !cursor.starred ? cursor.after : null,
         ids,
         signal,
+        size,
       ),
     ]);
     if (!starred.ok) return starred;
     if (!rest.ok) return rest;
-    const page = bankPageOf(q.sort, cursor, starred.data, rest.data);
+    const page = bankPageOf(q.sort, cursor, starred.data, rest.data, size);
     const ideas = await enrichBankIdeas(client, page.rows, signal);
     if (!ideas.ok) return ideas;
     return { ok: true, data: { ideas: ideas.data, nextCursor: page.nextCursor } };

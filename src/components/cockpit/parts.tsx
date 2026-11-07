@@ -60,10 +60,8 @@ export function Stats({
       )}
     >
       {items.map((item) => (
-        <div
-          key={item.label}
-          className="flex min-w-0 flex-col gap-1 rounded-xl border bg-panel lit-card p-3"
-        >
+        // Flat look: a stat is a plain column on the page, no card frame.
+        <div key={item.label} className="flex min-w-0 flex-col gap-1 py-3">
           <dt className="truncate text-sm text-fg-2">{item.label}</dt>
           <dd className="font-mono text-2xl font-semibold tabular-nums text-fg">
             {item.value === null ? '-' : countText(item.value)}

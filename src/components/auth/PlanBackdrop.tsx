@@ -186,11 +186,12 @@ function PhonePlan({ weeks, weekdays, monthLabel }: PlanProps): ReactElement {
           </div>
         ))}
       </div>
-      <div className="mx-12 mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+      {/* The app's flat list rows (flat look): rows touching, no card frame. */}
+      <div className="mx-12 mt-3 flex min-h-0 flex-1 flex-col overflow-hidden">
         {listThumbs.map((cell) => (
           <div
             key={`${cell.day}-${cell.inMonth ? 'in' : 'out'}`}
-            className="flex items-center gap-3 rounded-xl border bg-panel p-2 lit-card"
+            className="flex items-center gap-3 py-2"
           >
             <Thumb thumb={cell.thumb} className="h-10 w-10 shrink-0" />
             <Bar className="h-3 w-1/2" />

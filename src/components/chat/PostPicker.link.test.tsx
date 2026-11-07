@@ -255,7 +255,9 @@ describe('link mode', () => {
     const pressed = rowButtons().filter((b) => b.getAttribute('aria-pressed') === 'true');
     expect(pressed).toHaveLength(1);
     expect(text(pressed[0] ?? null)).toContain('Bhai Dooj');
-    expect(pressed[0]?.className).toContain('lit-selected');
+    // Flat look: the picked row is the panel-2 fill plus the check, no outline frame.
+    expect(pressed[0]?.className).toContain('bg-panel-2');
+    expect(pressed[0]?.className).not.toContain('lit-card');
     expect(pressed[0]?.querySelector('svg')).not.toBeNull();
     await act(async () => {
       rowButtons()[0]?.click();

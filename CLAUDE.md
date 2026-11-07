@@ -126,7 +126,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Pinned exit bar: every HeaderBar with a back "<" on a screen that opens over the app stays pinned while the page scrolls (phone page mode: sticky at --shell-sticky-top, safe area kept). On the post screen the checkpoint progress row sits inside the pinned block under the bar.
 - Annotations are ink, never gold: caption highlight = fg underline + numbered ink circle; quote chip = fg rail + circle; photo pin = the checkpoint circle (resolved goes good). Agency pin = ink dot, no number.
 - Comment and slot composers = chat composer: leading "+" tray with Photos, File, Assets only; no paper clip. Personal notes composer hint stays "Note" (allowed exception).
-- Checkpoints: one lit-card-muted section, threads split by hairlines; resolved points fold to one line at the bottom; numbers never change; replies fold to the latest.
+- Checkpoints: one flat section (top hairline, 8 Nov 2026), threads split by hairlines; resolved points fold to one line at the bottom; numbers never change; replies fold to the latest.
 - Every UI change: light + dark parity, visual baselines + layout checks (e2e/visual/layout-checks.ts) updated in the same PR; data-induction targets keep the tour working.
 
 ## Canonical living docs

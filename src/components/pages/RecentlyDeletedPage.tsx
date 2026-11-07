@@ -4,6 +4,7 @@ import { Bone, BoxSkeleton, useHadBoxes, useSettleOnLanding } from '@/lib/motion
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ErrorNote } from '@/components/ui/ErrorNote';
 import { ICON_SIZE, IconTrash } from '@/components/ui/icons';
 import { useOptionalToast } from '@/components/ui/toast';
 import { PageHead } from '@/components/shell/PageHead';
@@ -90,9 +91,7 @@ export function RecentlyDeletedView({
 
       {failed ? (
         <div className="mt-4">
-          <div role="alert" className="rounded-xl border border-bad px-4 py-3 text-base text-bad">
-            {errorText('load deleted files', null)}
-          </div>
+          <ErrorNote>{errorText('load deleted files', null)}</ErrorNote>
           <div className="mt-3">
             <Button onClick={onRetry}>Retry</Button>
           </div>
@@ -100,17 +99,17 @@ export function RecentlyDeletedView({
       ) : showBoxes ? (
         <BoxSkeleton lit="flat" label="Loading deleted files" className="mt-4 flex flex-col gap-2">
           {['box-0', 'box-1', 'box-2'].map((key) => (
-            <Bone lit="lit-card" key={key} as="div" className="h-28 rounded-xl" />
+            <Bone lit="flat" key={key} as="div" className="h-28 rounded-lg" />
           ))}
         </BoxSkeleton>
       ) : items.length > 0 ? (
         <>
           <ul
             ref={listRef}
-            className="mt-4 divide-y divide-border rounded-xl border bg-panel lit-card"
+            className="mt-4 divide-y divide-border border-b border-border"
           >
             {items.map((item) => (
-              <li key={item.id} className="px-4 py-3">
+              <li key={item.id} className="py-3">
                 <p className="text-base font-medium text-fg [overflow-wrap:anywhere]">
                   {item.name}
                 </p>

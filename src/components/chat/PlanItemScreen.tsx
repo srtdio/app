@@ -1821,7 +1821,7 @@ export function PlanItemScreen(props: {
             {item.post_id !== null ? (
               <PostSheetPlanRowsContext.Provider value={planRows}>
                 <Suspense
-                  fallback={<Bone lit="lit-card" as="div" className="m-4 h-44 rounded-xl" />}
+                  fallback={<Bone lit="flat" as="div" className="m-4 h-44 rounded-lg" />}
                 >
                   <PostDetailPage
                     postId={item.post_id}
@@ -1969,7 +1969,7 @@ export function PlanItemScreen(props: {
             <section ref={commentsRef} className="flex flex-col gap-3" aria-label="Comments">
               <h4 className={SECTION_LABEL}>Comments</h4>
               {read.status === 'loading' ? (
-                <Bone lit="lit-card" as="div" className="h-18 rounded-xl" />
+                <Bone lit="flat" as="div" className="h-18 rounded-lg" />
               ) : read.status === 'error' ? (
                 <ScreenFailed onRetry={reload} />
               ) : shown.length === 0 ? (
@@ -2253,7 +2253,7 @@ export function LinkedPostPage(props: {
         />
       }
     >
-      <Suspense fallback={<Bone lit="lit-card" as="div" className="m-4 h-44 rounded-xl" />}>
+      <Suspense fallback={<Bone lit="flat" as="div" className="m-4 h-44 rounded-lg" />}>
         <PostDetailPage
           postId={props.postId}
           embedded
@@ -2292,7 +2292,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="failed"
-        className="flex min-h-18 items-center justify-between gap-3 rounded-xl border bg-panel px-4 lit-card"
+        className="flex min-h-18 items-center justify-between gap-3"
       >
         <p className="text-base text-fg-2">{CONCEPT_FILES_READ_FAILED}</p>
         <Button data-plan-media-retry="" onClick={props.onRetry}>
@@ -2312,7 +2312,7 @@ function ItemMedia(props: {
     return (
       <div
         data-plan-media="empty"
-        className="flex h-28 items-center justify-center rounded-lg border border-dashed border-border-strong bg-panel-2 text-md text-fg-3 lit-well"
+        className="flex min-h-11 items-center text-md text-fg-3"
       >
         No files
       </div>
@@ -2346,7 +2346,7 @@ function ItemMedia(props: {
               onClick={() => open(file)}
               className="flex min-w-0 flex-col gap-1"
             >
-              <span className="block w-full overflow-hidden rounded-xl border bg-panel-2 lit-card-muted">
+              <span className="block w-full overflow-hidden rounded-picture bg-panel-2">
                 <Thumbnail
                   assetVersionId={file.versionId}
                   cache={sharedCardPresignCache()}

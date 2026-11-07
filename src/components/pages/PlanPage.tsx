@@ -265,7 +265,7 @@ export function PlanBankItemPage(): ReactElement {
         </div>
       ) : (
         <div className="flex flex-col gap-3 p-4">
-          <Bone lit="lit-card" as="div" className="h-28 rounded-xl" />
+          <Bone lit="flat" as="div" className="h-28 rounded-lg" />
         </div>
       )}
     </PlanFrame>

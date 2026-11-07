@@ -459,19 +459,19 @@ interface SearchState {
 }
 
 /**
- * A row card on the bg body, 8px apart (the list's gap). PressableRow provides
- * the width, 44px minimum, left alignment and press; card gives the 12px corners.
- * Picked: lit-selected replaces lit-card.
+ * A flat row (the flat look): rows touch, a --border hairline under each, no
+ * card frame. PressableRow provides the width, 44px minimum, left alignment and
+ * press; flat gives square corners. Picked: the panel-2 fill plus the check.
  */
-const ROW_BASE = 'flex gap-3 border bg-panel p-3 mv-tint';
+const ROW_BASE = 'flex gap-3 border-b border-border px-1 py-3 mv-tint';
 
 function rowClass(active: boolean): string {
-  return cn(ROW_BASE, 'items-start', active ? 'lit-selected' : 'lit-card');
+  return cn(ROW_BASE, 'items-start', active && 'bg-panel-2');
 }
 
 /** A post row: the 48px cover sets the height, so the text centres beside it. */
 function postRowClass(active: boolean): string {
-  return cn(ROW_BASE, 'items-center', active ? 'lit-selected' : 'lit-card');
+  return cn(ROW_BASE, 'items-center', active && 'bg-panel-2');
 }
 
 // ---------------------------------------------------------------------------
@@ -1019,7 +1019,7 @@ export interface PostRowContext {
 }
 
 const LIST_CLASS =
-  '-mx-4 flex max-h-[50dvh] flex-col gap-2 overflow-y-auto bg-bg px-4 py-2 sm:max-h-none sm:min-h-0 sm:flex-1';
+  '-mx-4 flex max-h-[50dvh] flex-col overflow-y-auto px-4 py-2 sm:max-h-none sm:min-h-0 sm:flex-1';
 
 /** Loading state: three static placeholder rows (no motion). */
 export function PickerSkeleton(): ReactElement {
@@ -1029,7 +1029,7 @@ export function PickerSkeleton(): ReactElement {
         <li
           key={`bone-${i}`}
           data-skeleton-row=""
-          className="flex min-h-11 items-center gap-3 rounded-xl border bg-panel p-3 lit-card"
+          className="flex min-h-11 items-center gap-3 border-b border-border px-1 py-3"
         >
           <span className="h-12 w-12 shrink-0 rounded-lg bg-panel-3" />
           <span className="flex min-w-0 flex-1 flex-col gap-2">
@@ -1171,7 +1171,7 @@ export function PostRow(props: PostRowContext & { post: PostPickerPageRow }): Re
       <PressableRow
         type="button"
         aria-pressed={active}
-        card
+        flat
         onClick={() => props.onToggle(post)}
         className={postRowClass(active)}
       >
@@ -1266,7 +1266,7 @@ export function BriefPickerList(props: {
             <PressableRow
               type="button"
               aria-pressed={active}
-              card
+              flat
               onClick={() => props.onToggle(brief)}
               className={rowClass(active)}
             >

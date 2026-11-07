@@ -13,7 +13,8 @@
 // client cannot see asks first (PR 816's "{plan} is shared with approvers"
 // sheet). Done: "Planned in {plan}, {date}" with Undo (plan_item_to_bank).
 // A planned idea starts with no review ("Not checked yet"). Tokens only;
-// rows are lit-card cards, the sheet lit-overlay (ui/Sheet).
+// rows are flat, split by hairlines, edge to edge; the sheet keeps
+// lit-overlay (ui/Sheet).
 // Many-pick mode (`multi`, New plan's Add from bank): a tap ticks the idea in
 // or out (ui/SelectCheck), nothing is written and no plan is asked for; the
 // palette picks many; Done closes. The caller holds the ticks.
@@ -370,7 +371,7 @@ export function BankPickSheet(props: {
     ) : (
       <div data-plan-from-bank-loading="" className="flex flex-col gap-2">
         {[0, 1, 2].map((n) => (
-          <Bone key={n} lit="lit-card" className="h-16 w-full rounded-xl" />
+          <Bone key={n} lit="flat" className="h-16 w-full rounded-lg" />
         ))}
       </div>
     );
@@ -382,18 +383,18 @@ export function BankPickSheet(props: {
     );
   } else {
     body = (
-      <div data-plan-from-bank-list="" className="flex flex-col gap-2">
+      <div data-plan-from-bank-list="" className="-mx-4 flex flex-col">
         {ideas.map((idea) => (
           <PressableRow
             key={idea.id}
-            card
+            flat
             type="button"
             data-plan-from-bank-idea={idea.id}
             disabled={busy}
             aria-busy={busy && pickedId === idea.id ? true : undefined}
             {...(multi !== undefined ? { 'aria-pressed': multi.selected.has(idea.id) } : {})}
             onClick={() => (multi !== undefined ? multi.onToggle(idea) : void pick(idea))}
-            className="lit-card flex items-center gap-3 rounded-xl border bg-panel p-3 text-left"
+            className="flex items-center gap-3 border-b border-border px-4 py-3 text-left"
           >
             <BankThumb idea={idea} size={44} />
             <span className="flex min-w-0 flex-1 flex-col gap-1">
@@ -411,7 +412,7 @@ export function BankPickSheet(props: {
           </PressableRow>
         ))}
         {load.status === 'ready' && load.next !== null ? (
-          <div className="pt-2">
+          <div className="px-4 pt-2">
             <PlanTabLoadMore more={{ busy: load.busy, onMore: more }} />
           </div>
         ) : null}

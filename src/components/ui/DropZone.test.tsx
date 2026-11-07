@@ -20,13 +20,13 @@ describe('DropZone', () => {
     expect(el.props['aria-label']).toBe('Add images');
   });
 
-  it('is a dashed, strong-bordered panel-2 target with a 12px radius and a centred column', () => {
+  it('is a dashed, strong-bordered flat target (no grey fill) with a 12px radius and a centred column', () => {
     const t = tokens(render());
+    // Flat look: the dashed edge is the drop target; no panel fill or well.
+    expect(t.some((c) => /^bg-panel/.test(c) || /^lit-well/.test(c))).toBe(false);
     for (const cls of [
       'border-dashed',
       'border-border-strong',
-      'bg-panel-2',
-      'lit-well-soft',
       'rounded-xl',
       'flex-col',
       'items-center',

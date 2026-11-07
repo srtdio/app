@@ -736,7 +736,7 @@ export function MembersInviteForm({
         ) : null}
 
         {rows.length > 0 ? (
-          <ul aria-label="People to invite" className="flex flex-col gap-2">
+          <ul aria-label="People to invite" className="flex flex-col">
             {rows.map((row) => {
               const invalid = !isValidInviteEmail(row.email);
               const suggestion = suggestEmailFix(row.email);
@@ -747,7 +747,7 @@ export function MembersInviteForm({
                     if (el === null) rowEls.current.delete(String(row.key));
                     else rowEls.current.set(String(row.key), el);
                   }}
-                  className="flex flex-col rounded-xl border bg-panel-2 lit-card-muted py-1 pl-3 pr-1"
+                  className="flex flex-col py-1"
                 >
                   <div className="flex items-center gap-2">
                     <input

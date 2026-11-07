@@ -271,9 +271,9 @@ describe('Chip', () => {
     const add = tokens(
       faceOf(Chip({ label: 'Add', variant: 'add' }) as ReactElement).props.className,
     );
-    expect(add).toContain('border-dashed');
+    expect(add).not.toContain('border-dashed');
     expect(add).toContain('border-border-strong');
-    expect(add).toContain('text-fg-3');
+    expect(add).toContain('text-fg');
     expect(add).not.toContain('lit-chip');
   });
 });

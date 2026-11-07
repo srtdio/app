@@ -31,7 +31,8 @@ export function LoadError({
     <div
       role="alert"
       className={cn(
-        'lit-card flex flex-col items-center gap-3 rounded-xl border bg-panel px-4 py-6 text-center',
+        // Flat look: no card frame; the sentence and Retry sit on the page fill.
+        'flex flex-col items-center gap-3 px-4 py-6 text-center',
         className,
       )}
     >

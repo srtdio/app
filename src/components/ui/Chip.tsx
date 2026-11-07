@@ -146,8 +146,10 @@ export function Chip({
           // Hover/press: the lit-hover overlay. Disabled: fg-3 ink, never a fade.
           'inline-flex min-w-0 flex-1 items-center gap-2 rounded-full border text-md font-medium lit-hover group-disabled:text-fg-3',
           chipFaceSize(size, className),
+          // The add chip (a "+" with its label): the rest hairline, fg ink; no
+          // dashed box (flat look). Selected never changes it.
           variant === 'add'
-            ? 'border-dashed border-border-strong text-fg-3'
+            ? 'border-border-strong text-fg'
             : selected
               ? CHIP_PICKED_EDGE
               : CHIP_REST_EDGE,

@@ -18,7 +18,8 @@ export function EmptyState({ icon, title, description, action, compact = false }
         compact ? null : 'min-h-80',
       )}
     >
-      <div className="w-14 h-14 rounded-xl bg-panel-2 border lit-card flex items-center justify-center text-fg-3 mb-2">
+      {/* Flat look: the glyph alone on the page fill, no grey box; the 56 slot keeps the footprint. */}
+      <div className="w-14 h-14 flex items-center justify-center text-fg-3 mb-2">
         {icon}
       </div>
       <div className="text-lg font-semibold text-fg">{title}</div>

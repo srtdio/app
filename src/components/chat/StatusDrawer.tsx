@@ -402,7 +402,7 @@ export function StatusDrawerList(
     <section
       key={key}
       data-status-section={key}
-      className="mb-3 overflow-hidden rounded-xl border bg-panel p-3 pb-1 lit-card"
+      className="py-3 first:pt-0 [&+&]:border-t [&+&]:border-border"
     >
       <SectionHeader
         sectionKey={key}

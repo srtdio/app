@@ -15,7 +15,7 @@ import { Field } from '@/components/ui/Field';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { Sheet, SheetActions } from '@/components/ui/Sheet';
-import { Card } from '@/components/ui/Card';
+import { Text } from '@/components/ui/Text';
 import { Textarea } from '@/components/ui/Textarea';
 import { ICON_SIZE, IconPaperclip, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
@@ -166,8 +166,8 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
         />
       }
     >
-      <div data-bank-add="" className="flex flex-col gap-4 bg-bg p-4">
-        <Card className="self-stretch">
+      <div data-bank-add="" className="flex flex-col divide-y divide-border">
+        <section className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
           <div className="flex flex-col gap-3">
             <Field label="Title" required>
               {(id) => (
@@ -198,9 +198,11 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
             </Field>
             {error !== null ? <ErrorNote>{error}</ErrorNote> : null}
           </div>
-        </Card>
-        <Card className="self-stretch">
-          <span className="text-base font-medium text-fg">Files</span>
+        </section>
+        <section className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
+          <Text as="h3" role="section">
+            Files
+          </Text>
           <DropZone
             data-bank-add-files=""
             onClick={() => inputRef.current?.click()}
@@ -259,9 +261,11 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
               ))}
             </ul>
           ) : null}
-        </Card>
-        <Card className="self-stretch">
-          <span className="text-base font-medium text-fg">Buckets</span>
+        </section>
+        <section className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
+          <Text as="h3" role="section">
+            Buckets
+          </Text>
           <BucketChips
             buckets={props.buckets}
             picked={null}
@@ -278,7 +282,7 @@ function BankAddSheetBody(props: BankAddSheetProps): ReactElement {
             writes={props.writes}
             onBuckets={props.onBuckets}
           />
-        </Card>
+        </section>
       </div>
     </Sheet>
   );

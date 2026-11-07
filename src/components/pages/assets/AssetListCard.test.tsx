@@ -3,7 +3,6 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  ASSET_LIST_PAGE,
   AssetList,
   AssetListCard,
   assetFacts,
@@ -12,6 +11,7 @@ import {
 import { LIST_CARD_GRID, type ListCardSelect } from '@/components/ui/ListCard';
 import type { PresignCache } from '@/lib/asset-presign';
 import type { AssetListItem } from '@/lib/assets';
+import { getFillCount } from '@/lib/use-fill-count';
 
 // SSR to static markup: useState initializers run (a warm cache peek shows the
 // image) while effects do not. Every Assets item is ui/ListCard: the picture;
@@ -362,15 +362,16 @@ describe('AssetList', () => {
     expect(out.match(/data-list-card-tick="on"/g)).toHaveLength(1);
   });
 
-  it('draws the first page of cards only, with a marker to draw more', () => {
-    const many = Array.from({ length: ASSET_LIST_PAGE + 25 }, (_, i) =>
+  it('draws the first page of cards only (the fill count), with a marker to draw more', () => {
+    const page = getFillCount();
+    const many = Array.from({ length: page + 25 }, (_, i) =>
       makeAsset({ id: `m${i}`, filename: `file-${i}.pdf` }),
     );
     const out = renderToStaticMarkup(
       <AssetList items={many} presignEnabled={false} cache={cache} onOpen={vi.fn()} />,
     );
-    expect(out).toContain(`file-${ASSET_LIST_PAGE - 1}.pdf`);
-    expect(out).not.toContain(`file-${ASSET_LIST_PAGE}.pdf`);
+    expect(out).toContain(`file-${page - 1}.pdf`);
+    expect(out).not.toContain(`file-${page}.pdf`);
     expect(out).toContain('data-asset-list-more');
     const few = renderToStaticMarkup(
       <AssetList items={items} presignEnabled={false} cache={cache} onOpen={vi.fn()} />,
