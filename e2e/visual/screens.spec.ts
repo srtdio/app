@@ -3969,7 +3969,8 @@ SCREENS.push(
         pngFile('set-2.png', 640, 640, [72, 120, 160]),
         pngFile('set-3.png', 640, 640, [96, 144, 96]),
       ]);
-      const album = await firstVisible([page.locator('[data-album="3"]')], 'sending album');
+      // The newest album is the one sending (the thread may hold older albums).
+      const album = await firstVisible([page.locator('[data-album="3"]').last()], 'sending album');
       await expect(album.locator('[data-upload-ring]')).toHaveCount(1);
       await ringSettled(album, 'album');
       await threadStill(page);
