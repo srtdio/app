@@ -21,6 +21,7 @@ import {
   COMMENT_POST_FAILED,
 } from '@/components/pages/pcs/CaptionAnnotationComposer';
 import { stageReasonConfirm } from '@/components/pages/pcs/stage-actions';
+import { WritingBox } from '@/components/ui/WritingBox';
 
 // W2 regressions. node environment, no DOM: hookless trees are walked, and the
 // wiring that lives inside hooks is pinned against the source.
@@ -80,6 +81,11 @@ describe('1. reject / park: confirm with reason, optimistic stage, deferred comm
       (el) => (el.props as { 'aria-label'?: string })['aria-label'] === 'Reason (optional)',
     );
     expect(field).toBeDefined();
+    // The reason is ui/WritingBox in comment mode with no send (the footer keeps
+    // Cancel and Reject).
+    const box = els.find((el) => el.type === WritingBox);
+    expect((box?.props as { mode?: string } | undefined)?.mode).toBe('comment');
+    expect((box?.props as { send?: unknown } | undefined)?.send).toBeUndefined();
     const confirm = els.find(
       (el) => (el.props as { 'data-stage-confirm'?: string })['data-stage-confirm'] === '',
     )!;

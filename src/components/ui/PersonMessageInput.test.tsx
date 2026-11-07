@@ -101,6 +101,23 @@ describe('PersonMessageInput', () => {
     expect(document.activeElement).toBe(input());
   });
 
+  it('is ui/WritingBox in comment mode: reactions on the text line; Aa and Emoji in the row, no + or @', async () => {
+    await mount('touch');
+    const box = document.querySelector<HTMLElement>('[data-writing-box]');
+    expect(box?.getAttribute('data-mode')).toBe('comment');
+    // Focused on mount: the card with its row.
+    expect(box?.dataset.shape).toBe('card');
+    const field = document.querySelector('[data-writing-field]');
+    expect(field?.querySelector('[data-person-reactions]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="Aa"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="Emoji"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="Add attachment"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Mention"]')).toBeNull();
+    await type('hi');
+    expect(sendButton()?.hasAttribute('data-row-send')).toBe(true);
+    expect(sendButton()?.getAttribute('aria-label')).toBe('Send');
+  });
+
   it('empty: the three reactions show inside the box, no Send', async () => {
     await mount('touch');
     expect(reactions().map((b) => b.getAttribute('data-person-reaction'))).toEqual([
