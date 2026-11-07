@@ -138,11 +138,7 @@ describe('ContactSheetView tabs', () => {
   it('renders Media, Files, Links as tap chips; Media selected by default', () => {
     const tree = view(props());
     const chips = findAll(tree, (el) => el.type === Chip);
-    expect(chips.map((c) => c.props.label)).toEqual([
-      'Media',
-      'Files',
-      'Links',
-    ]);
+    expect(chips.map((c) => c.props.label)).toEqual(['Media', 'Files', 'Links']);
     expect(chips.every((c) => c.props.size === 'tap')).toBe(true);
     expect(chips.map((c) => c.props.selected)).toEqual([true, false, false]);
   });

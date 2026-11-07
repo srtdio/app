@@ -51,7 +51,6 @@ import {
   rowSelection,
   createRowHold,
   createSelectionGesture,
-  markOutcomeCopy,
   captureRowAnchor,
   createSelectionScroll,
   restoreRowAnchor,
@@ -3245,15 +3244,6 @@ describe('F11: selection entry keeps the pressed row at its screen Y', () => {
   });
 });
 
-describe('F14: a failed mark never shows raw error text', () => {
-  it('maps any failure to the fixed mark copy; success shows nothing', () => {
-    expect(markOutcomeCopy({ ok: false, message: 'new row violates row-level security' })).toBe(
-      "Couldn't mark. Try again.",
-    );
-    expect(markOutcomeCopy({ ok: true })).toBeNull();
-  });
-});
-
 describe('@mentions in bubbles', () => {
   const ME = '11111111-1111-4111-8111-111111111111';
   const BEN = '22222222-2222-4222-8222-222222222222';
@@ -3893,9 +3883,7 @@ describe('decision 128: every Reply focuses the composer inside the user event',
     const item = items.find((i) => i.key === 'reply');
     expect(item).toBeDefined();
     if (item === undefined) return;
-    synchronously(() =>
-      runMenuItem(item, { openMark: () => log.push('mark'), close: () => log.push('close') }),
-    );
+    synchronously(() => runMenuItem(item, { close: () => log.push('close') }));
     expect(log).toEqual(['focus:noscroll', 'caret:0-0', 'reply:m-reply', 'close']);
   });
 

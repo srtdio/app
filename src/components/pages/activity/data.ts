@@ -1953,44 +1953,37 @@ async function enrichInboxRows(
   // (asset_attachments, image-mime inner join, position then attached_at order),
   // run once over the distinct post ids on the page (no N+1); a failure degrades
   // every thumbnailAssetVersionId to null rather than failing the feed.
-  const [
-    chatRes,
-    planRes,
-    commentsRes,
-    postsRes,
-    briefsRes,
-    firstImagesRes,
-    batchCommentsRes,
-  ] = await Promise.all([
-    chatSources,
-    planSources,
-    commentIds.length > 0
-      ? client.from('comments').select('id, author_user_id, body').in('id', commentIds)
-      : Promise.resolve(null),
-    postsRead,
-    briefIds.length > 0
-      ? client.from('briefs').select('id, title, number').in('id', briefIds)
-      : Promise.resolve(null),
-    postIds.length > 0
-      ? client
-          .from('asset_attachments')
-          .select('entity_id, asset_version_id, asset_versions!inner(mime_type)')
-          .eq('entity_type', 'post')
-          .in('entity_id', postIds)
-          .is('deleted_at', null)
-          .like('asset_versions.mime_type', 'image/%')
-          .order('entity_id', { ascending: true })
-          .order('position', { ascending: true })
-          .order('attached_at', { ascending: true })
-      : Promise.resolve(null),
-    batchIds.length > 0
-      ? client
-          .from('comments')
-          .select('author_user_id, body, ledger_seq, ledger_batch_id')
-          .in('ledger_batch_id', batchIds)
-          .order('ledger_seq', { ascending: true })
-      : Promise.resolve(null),
-  ]);
+  const [chatRes, planRes, commentsRes, postsRes, briefsRes, firstImagesRes, batchCommentsRes] =
+    await Promise.all([
+      chatSources,
+      planSources,
+      commentIds.length > 0
+        ? client.from('comments').select('id, author_user_id, body').in('id', commentIds)
+        : Promise.resolve(null),
+      postsRead,
+      briefIds.length > 0
+        ? client.from('briefs').select('id, title, number').in('id', briefIds)
+        : Promise.resolve(null),
+      postIds.length > 0
+        ? client
+            .from('asset_attachments')
+            .select('entity_id, asset_version_id, asset_versions!inner(mime_type)')
+            .eq('entity_type', 'post')
+            .in('entity_id', postIds)
+            .is('deleted_at', null)
+            .like('asset_versions.mime_type', 'image/%')
+            .order('entity_id', { ascending: true })
+            .order('position', { ascending: true })
+            .order('attached_at', { ascending: true })
+        : Promise.resolve(null),
+      batchIds.length > 0
+        ? client
+            .from('comments')
+            .select('author_user_id, body, ledger_seq, ledger_batch_id')
+            .in('ledger_batch_id', batchIds)
+            .order('ledger_seq', { ascending: true })
+        : Promise.resolve(null),
+    ]);
   mark('activity:wave1');
 
   const commentAuthors = new Map<string, string>();

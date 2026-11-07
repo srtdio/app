@@ -838,9 +838,7 @@ export function notesCard(props: NotesCardProps): ReactElement {
       picture={{ kind: 'icon', icon: IconFile }}
       pictureHooks={{ 'data-notes-picture': '' }}
       title={name}
-      preview={
-        <span data-notes-preview="">{last !== null ? last.preview : NOTES_TILE_LINE}</span>
-      }
+      preview={<span data-notes-preview="">{last !== null ? last.preview : NOTES_TILE_LINE}</span>}
       {...(last !== null && last.time !== ''
         ? { time: last.time, timeHooks: { 'data-notes-time': '' } }
         : {})}

@@ -20,9 +20,7 @@ vi.mock('@/components/chat/PostCard', () => ({
 
 import { AssetGrid, AssetGridSkeleton, AssetTile } from '@/components/chat/AssetPicker';
 import { shapeLibraryRows, type LibraryAsset } from '@/lib/chat/asset-picker';
-import {
-  withLibraryAttachments,
-} from '@/components/chat/Composer';
+import { withLibraryAttachments } from '@/components/chat/Composer';
 import { awaitsUpload, toLibraryAttachment, toLocalAttachment } from '@/lib/chat/attachments';
 
 function asset(n: number, mime: string, filename: string): LibraryAsset {

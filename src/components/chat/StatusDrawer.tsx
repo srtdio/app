@@ -9,7 +9,7 @@
 // by StatusTicker through the motion module); colours are
 // design tokens only, so light and dark match.
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactElement, ReactNode, PointerEvent as ReactPointerEvent, Ref } from 'react';
 import { CountBadge } from '@/components/ui/CountBadge';
 import { Backdrop } from '@/components/ui/Backdrop';

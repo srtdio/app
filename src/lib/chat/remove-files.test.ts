@@ -41,7 +41,6 @@ const ME = '11111111-1111-4111-8111-111111111111';
 const PEER = '22222222-2222-4222-8222-222222222222';
 const CHANNEL = 'group__ws__g1';
 
-
 function message(over: Partial<ThreadMessage> = {}): ThreadMessage {
   return {
     id: 'm1',
@@ -124,10 +123,7 @@ describe('who may remove', () => {
     expect(canRemove(message({ senderUserId: PEER, mine: false }), ME)).toBe(false);
     expect(canRemove(message({ state: 'sending' }), ME)).toBe(false);
     expect(
-      canRemove(
-        message({ attachments: [{ assetId: 'v1', name: 'note', mime: 'audio/mp4' }] }),
-        ME,
-      ),
+      canRemove(message({ attachments: [{ assetId: 'v1', name: 'note', mime: 'audio/mp4' }] }), ME),
     ).toBe(false);
     expect(canRemove(message({ attachments: [] }), ME)).toBe(false);
     expect(canRemove(message({ deleted: true }), ME)).toBe(false);

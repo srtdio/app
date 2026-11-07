@@ -1690,14 +1690,14 @@ export function Composer(props: ComposerProps): ReactElement {
   });
 
   const showMic = shouldShowMic({
-      hasUpload: props.uploadFile !== undefined && editing === undefined,
-      disabled: props.disabled,
-      text,
-      attachmentCount: pending.length + library.length,
-      sharedPostCount: sharedPosts.length + sharedBriefs.length,
-      recording: recorder.recording,
-      voiceBusy,
-    });
+    hasUpload: props.uploadFile !== undefined && editing === undefined,
+    disabled: props.disabled,
+    text,
+    attachmentCount: pending.length + library.length,
+    sharedPostCount: sharedPosts.length + sharedBriefs.length,
+    recording: recorder.recording,
+    voiceBusy,
+  });
 
   const draftCardUrl = draftCardUrlFor(cardText, dismissedCardUrl, editing !== undefined);
 
@@ -1892,8 +1892,8 @@ export function Composer(props: ComposerProps): ReactElement {
             recorder.recording
               ? { kind: 'recording', elapsed: recordingElapsed(recorder.seconds) }
               : voiceBusy || editBusy
-                  ? { kind: 'sending' }
-                  : { kind: 'idle' }
+                ? { kind: 'sending' }
+                : { kind: 'idle' }
           }
           discard={
             <Button
@@ -1983,9 +1983,7 @@ export function Composer(props: ComposerProps): ReactElement {
             />
           }
           side={
-            <>
-              {showsEmojiButton(layout) && !held ? <ComposerEmoji onPick={insertEmoji} /> : null}
-            </>
+            <>{showsEmojiButton(layout) && !held ? <ComposerEmoji onPick={insertEmoji} /> : null}</>
           }
           send={
             recorder.recording ? (

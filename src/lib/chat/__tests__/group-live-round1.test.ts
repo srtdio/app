@@ -262,7 +262,12 @@ describe('H2 new tile paints once, final', () => {
     });
     const list = visibleChannels([oldGroup, busyGroup, dm, newGroup, newDm], lookup, none, '');
     // One list: the two just created lead it.
-    expect(list.slice(0, 2).map((c) => c.channelId).sort()).toEqual(['d-new', 'g-new']);
+    expect(
+      list
+        .slice(0, 2)
+        .map((c) => c.channelId)
+        .sort(),
+    ).toEqual(['d-new', 'g-new']);
     expect(recencyKey(newGroup, lookup)).toBe(now);
   });
 

@@ -56,9 +56,7 @@ async function watchFirstPaint(page: Page): Promise<void> {
     const w = window as unknown as { __tileAtFirstList?: boolean };
     const observer = new MutationObserver(() => {
       if (w.__tileAtFirstList !== undefined) return;
-      const list = document.querySelector(
-        '[aria-label="Loading conversations"], [data-chat-home]',
-      );
+      const list = document.querySelector('[aria-label="Loading conversations"], [data-chat-home]');
       if (list === null) return;
       w.__tileAtFirstList = document.querySelector('[data-notes-tile]') !== null;
       observer.disconnect();

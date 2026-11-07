@@ -447,9 +447,7 @@ export function MenuRow(props: {
       <span data-menu-icon="" className="flex w-6 shrink-0 items-center justify-center">
         {item.icon}
       </span>
-      <span className="min-w-0 flex-1 truncate">
-        {item.label}
-      </span>
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.hint !== undefined ? (
         <span className="shrink-0 text-sm text-fg-3">{item.hint}</span>
       ) : null}

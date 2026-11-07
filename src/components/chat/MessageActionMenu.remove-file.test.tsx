@@ -35,7 +35,6 @@ function msg(over: Partial<ThreadMessage> = {}): ThreadMessage {
   };
 }
 
-
 function base(over: Record<string, unknown> = {}): Parameters<typeof messageMenuItems>[0] {
   return {
     canCopy: true,
@@ -67,9 +66,7 @@ describe('canRemoveSingleFile: who gets "Remove file"', () => {
   });
 
   it("never on someone else's message", () => {
-    expect(canRemoveSingleFile(msg({ senderUserId: 'peer', mine: false }), 'me')).toBe(
-      false,
-    );
+    expect(canRemoveSingleFile(msg({ senderUserId: 'peer', mine: false }), 'me')).toBe(false);
   });
 
   it('never on a voice note', () => {

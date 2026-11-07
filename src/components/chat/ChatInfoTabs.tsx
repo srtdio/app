@@ -21,13 +21,7 @@ import { PressableRow } from '@/components/ui/PressableRow';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SelectCheck } from '@/components/ui/SelectCheck';
-import {
-  ICON_SIZE,
-  IconAlertTriangle,
-  IconFile,
-  IconLink,
-  IconPhoto,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconAlertTriangle, IconFile, IconLink, IconPhoto } from '@/components/ui/icons';
 import { UnsafeLinkText } from '@/components/ui/UnsafeLinkSheet';
 import { checkLink } from '@/lib/links/safety';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';

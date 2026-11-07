@@ -98,9 +98,7 @@ function pageOf(size: number): ChatMessageRow[] {
  * A recording PostgREST-ish client: every from() is one request; chained
  * methods log and return the query; awaiting answers from the page.
  */
-function recordingClient(
-  page: readonly ChatMessageRow[],
-): { db: Client; queries: Query[] } {
+function recordingClient(page: readonly ChatMessageRow[]): { db: Client; queries: Query[] } {
   const queries: Query[] = [];
   const byId = new Map(page.map((r) => [r.id, r]));
   const peerRead = page[Math.floor(page.length / 2)] ?? page[0];

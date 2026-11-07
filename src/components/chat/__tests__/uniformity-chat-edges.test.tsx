@@ -13,11 +13,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import {
-  CHAT_HOME_EDGE,
-  CHAT_HOME_STACK,
-  CHAT_ROW_LIST,
-} from '@/components/chat/ChannelList';
+import { CHAT_HOME_EDGE, CHAT_HOME_STACK, CHAT_ROW_LIST } from '@/components/chat/ChannelList';
 import { chatListPaneClass } from '@/components/chat/ChatConnected';
 import { OWN_BUBBLE_CONTENT } from '@/components/chat/MessageThread';
 import { SelectionHeader } from '@/components/chat/SelectionBar';

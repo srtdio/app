@@ -66,10 +66,7 @@ function item(over: Partial<ActivityItem>): ActivityItem {
 
 const NOW = Date.parse('2026-06-14T01:00:00.000Z');
 
-function renderCard(
-  group: ActivityItem[],
-  extra: { entering?: boolean } = {},
-): string {
+function renderCard(group: ActivityItem[], extra: { entering?: boolean } = {}): string {
   return renderToStaticMarkup(
     <ActivityCard
       group={group}

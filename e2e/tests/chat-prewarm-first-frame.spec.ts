@@ -1,12 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { installHarnessNetwork, type HarnessNetwork } from '../fixtures/harness-routes';
-import {
-  DM_CHANNEL,
-  PEER_NAME,
-  ME,
-  PEER,
-  seedClientPlanWithDraft,
-} from '../fixtures/chat-data';
+import { DM_CHANNEL, PEER_NAME, ME, PEER, seedClientPlanWithDraft } from '../fixtures/chat-data';
 import { delaySupabaseReads, realisticDelay } from '../fixtures/read-delays';
 
 // B2: a chat in the list that the list pre-warmed opens with its rows in the

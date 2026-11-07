@@ -57,7 +57,7 @@ describe('Reply privately row', () => {
     ).find((i) => i.key === 'reply-privately');
     expect(row).toBeDefined();
     if (row === undefined) return;
-    runMenuItem(row, { openMark: () => {}, close });
+    runMenuItem(row, { close });
     expect(onReplyPrivately).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
   });

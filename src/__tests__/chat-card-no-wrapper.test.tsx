@@ -156,9 +156,7 @@ describe('chat cards: the card is the bubble (no wrapper bubble)', () => {
         chip: false,
       }),
     ).toBe(false);
-    expect(isCardOnly(message({ ...base, forwarded: true }), { chip: false })).toBe(
-      false,
-    );
+    expect(isCardOnly(message({ ...base, forwarded: true }), { chip: false })).toBe(false);
     expect(isCardOnly(message(base), { chip: true })).toBe(false);
     expect(isCardOnly(message({}), { chip: false })).toBe(false);
   });

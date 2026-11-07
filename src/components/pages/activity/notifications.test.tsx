@@ -201,10 +201,7 @@ describe('chips', () => {
   });
 
   it('a snoozed alert moves to Snoozed', () => {
-    const snoozed = [
-      plan('plan_opened', { snoozed_until: LATER }),
-      task({ snoozed_until: LATER }),
-    ];
+    const snoozed = [plan('plan_opened', { snoozed_until: LATER }), task({ snoozed_until: LATER })];
     expect(ids('snoozed', snoozed)).toEqual(['plan_opened', 'task']);
     expect(ids('all', snoozed)).toEqual([]);
     expect(ids('unread', snoozed)).toEqual([]);

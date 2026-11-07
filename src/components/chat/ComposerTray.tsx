@@ -140,9 +140,7 @@ export function trayTiles(
       id: 'tasks',
       label: 'Tasks',
       Icon: IconTaskSquare,
-      ...(opts.tasks.unseen
-        ? { dot: true as const, ariaLabel: tasksTileLabel(true) }
-        : {}),
+      ...(opts.tasks.unseen ? { dot: true as const, ariaLabel: tasksTileLabel(true) } : {}),
     });
   }
   return tiles;

@@ -424,11 +424,7 @@ export function InboxStoreProvider({ children }: { children: ReactNode }): React
 
   const value = useMemo<InboxStoreContextValue>(() => ({ unreadCount }), [unreadCount]);
 
-  return (
-    <InboxStoreContext.Provider value={value}>
-      {children}
-    </InboxStoreContext.Provider>
-  );
+  return <InboxStoreContext.Provider value={value}>{children}</InboxStoreContext.Provider>;
 }
 
 export function useInboxStore(): InboxStoreContextValue {

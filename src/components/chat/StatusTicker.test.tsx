@@ -62,8 +62,8 @@ const visible = (html: string): string =>
 
 describe('first paint is final', () => {
   it('holds an empty, inert 36px slot until every read settles, then paints once', () => {
-    const frames = [null, null, bar({ posts: 3, briefs: 2, tasks: 1 })].map(
-      (b) => renderToStaticMarkup(<StatusTickerBar bar={b} />),
+    const frames = [null, null, bar({ posts: 3, briefs: 2, tasks: 1 })].map((b) =>
+      renderToStaticMarkup(<StatusTickerBar bar={b} />),
     );
     expect(frames[0]).toContain('data-loops-strip="pending"');
     expect(frames[0]).toContain('aria-hidden="true"');

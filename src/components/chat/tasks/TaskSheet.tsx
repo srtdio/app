@@ -44,14 +44,7 @@
 // position; laptop: the dialog grows 95% to 100%. A row that arrives rises 8px
 // into place (itemIn). Never a fade. Boxes (Bone) while the list loads. Tokens only.
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { Backdrop } from '@/components/ui/Backdrop';
@@ -64,12 +57,7 @@ import { LoadError } from '@/components/ui/LoadError';
 import { glowTarget } from '@/components/ui/SearchHighlight';
 import { SHEET_FRAME, Sheet } from '@/components/ui/Sheet';
 import { ForwardPicker } from '@/components/chat/ForwardPicker';
-import {
-  ICON_SIZE,
-  IconCalendar,
-  IconForward,
-  IconPlus,
-} from '@/components/ui/icons';
+import { ICON_SIZE, IconCalendar, IconForward, IconPlus } from '@/components/ui/icons';
 import {
   PICK_DATE_LABEL,
   PriorityChip,
@@ -993,9 +981,7 @@ export function TaskSheet(props: TaskSheetProps): ReactElement | null {
             }
           />
         </div>
-        {ready ? (
-          <ChipLine chip={chip} counts={counts} onChip={setPickedChip} />
-        ) : null}
+        {ready ? <ChipLine chip={chip} counts={counts} onChip={setPickedChip} /> : null}
         <div
           ref={bodyRef}
           data-task-sheet=""

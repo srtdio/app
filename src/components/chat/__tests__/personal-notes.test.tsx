@@ -40,10 +40,7 @@ import { runSend } from '@/lib/chat/send-flow';
 import { mentionTargets } from '@/lib/chat/mentions';
 import { windowFocusTrigger } from '@/lib/chat/catch-up';
 import { deleteSelectionBlock, forwardPickerChannels } from '@/lib/chat/forward';
-import {
-  messageMenuItems,
-  ownMessageActions,
-} from '@/components/chat/MessageActionMenu';
+import { messageMenuItems, ownMessageActions } from '@/components/chat/MessageActionMenu';
 import { channelHasClient, draftTileEnabled, trayTiles } from '@/components/chat/ComposerTray';
 import { ThreadHeaderIdentity, threadStripSlot } from '@/components/chat/MessageThread';
 import { channelListContent, showSearchResults } from '@/components/chat/ChannelList';
@@ -383,9 +380,7 @@ describe('menu matrix', () => {
     expect(trayTiles('touch', { notes: true }).find((t) => t.id === 'plan')?.ariaLabel).toBe(
       'Plan, not available in Personal notes',
     );
-    expect(trayTiles('touch', { notes: true }).find((t) => t.id === 'plan')?.disabled).toBe(
-      true,
-    );
+    expect(trayTiles('touch', { notes: true }).find((t) => t.id === 'plan')?.disabled).toBe(true);
     expect(trayTiles('touch').map((t) => t.id)).not.toContain('schedule');
   });
 

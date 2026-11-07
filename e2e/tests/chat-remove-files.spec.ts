@@ -159,9 +159,7 @@ test('the viewer bin reads "Remove photo" on own photos only @theme @desktop', a
   expect(network.blocked).toEqual([]);
 });
 
-test('Remove file on an own single file keeps the text @theme @desktop', async ({
-  page,
-}) => {
+test('Remove file on an own single file keeps the text @theme @desktop', async ({ page }) => {
   test.setTimeout(90_000);
   const { network, recorder } = await setup(page);
   const fileMessageId = String(network.world.dmMessages[35]?.id);

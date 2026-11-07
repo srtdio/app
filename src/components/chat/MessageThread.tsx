@@ -5312,7 +5312,6 @@ export function createSelectionScroll(): SelectionScroll {
   };
 }
 
-
 /** The history.state key that marks the entry selection mode pushed. */
 export const SELECTION_HISTORY_KEY = 'chatSelection';
 
@@ -5786,11 +5785,8 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   const openPartsSettled = openHoldSettled({
     // The side words the ticker and the post and plan cards: only they wait on it.
     side:
-      viewerSide.ready ||
-      (!chatPage && pagePlanIds.length === 0 && pageCards.postIds.length === 0),
-    ticker:
-      !chatPage ||
-      (openPosts.ready && statusCounts.plans.ready && statusCounts.briefs.ready),
+      viewerSide.ready || (!chatPage && pagePlanIds.length === 0 && pageCards.postIds.length === 0),
+    ticker: !chatPage || (openPosts.ready && statusCounts.plans.ready && statusCounts.briefs.ready),
     cards: cardsSettled,
   });
   const openHeld = openHoldApplies({
