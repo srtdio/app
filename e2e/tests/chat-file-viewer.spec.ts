@@ -101,7 +101,9 @@ test('chat files open in the in-app viewer @theme', async ({ page, context }) =>
   const viewer = page.locator('[data-file-viewer="pdf"]');
   await expect(viewer).toBeVisible();
   await expect(viewer.locator('[data-pdf-page="1"] canvas')).toBeVisible();
-  await expect(viewer.locator('[data-page-counter]')).toHaveText(`1 / ${FIXTURE_PDF_PAGES}`);
+  await expect(viewer.locator('[data-viewer-bar-line]')).toHaveText(
+    `Page 1 of ${FIXTURE_PDF_PAGES}`,
+  );
   const painted = await viewer
     .locator('[data-pdf-page="1"] canvas')
     .evaluate((canvas) => (canvas as HTMLCanvasElement).width > 0);

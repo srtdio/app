@@ -96,7 +96,9 @@ async function expectPdfOpen(page: Page): Promise<void> {
   await expect(viewer).toBeVisible({ timeout: 15_000 });
   const canvas = viewer.locator('[data-pdf-page="1"] canvas');
   await expect(canvas).toBeVisible();
-  await expect(viewer.locator('[data-page-counter]')).toHaveText(`1 / ${FIXTURE_PDF_PAGES}`);
+  await expect(viewer.locator('[data-viewer-bar-line]')).toHaveText(
+    `Page 1 of ${FIXTURE_PDF_PAGES}`,
+  );
   expect(await canvas.evaluate((c) => (c as HTMLCanvasElement).width > 0)).toBe(true);
   await expect(viewer.getByText("Couldn't open. Try again.")).toHaveCount(0);
   expectMinTouchTarget(

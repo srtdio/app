@@ -129,7 +129,9 @@ async function expectNoSpinnerNoBlack(page: Page): Promise<void> {
   const drawn = await viewer.locator('[data-pdf-page="1"]').boundingBox();
   expect(Math.abs((drawn?.height ?? 0) - (first.page1?.h ?? -10))).toBeLessThanOrEqual(1);
   expect(Math.abs((drawn?.width ?? 0) - (first.page1?.w ?? -10))).toBeLessThanOrEqual(1);
-  await expect(viewer.locator('[data-page-counter]')).toHaveText(`1 / ${FIXTURE_PDF_PAGES}`);
+  await expect(viewer.locator('[data-viewer-bar-line]')).toHaveText(
+    `Page 1 of ${FIXTURE_PDF_PAGES}`,
+  );
   await expect(viewer.locator('[aria-label="Loading"]')).toHaveCount(0);
 }
 

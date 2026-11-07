@@ -158,7 +158,8 @@ test('storage banner shows at 820 MB and not at 500 MB @theme', async ({ page })
     window.dispatchEvent(new CustomEvent('sorted:upload-complete', { detail: { workspaceId } }));
   }, WORKSPACE_ID);
   const banner = page.getByRole('status').filter({ hasText: 'This workspace has used' });
-  await expect(banner).toHaveText(
+  // The banner holds the message and its "Clear" dismiss (D4d).
+  await expect(banner).toContainText(
     'This workspace has used 820 MB of its 1 GB. Deleted files free up space only after 31 days, or when the owner empties Recently deleted.',
     { timeout: 15_000 },
   );
