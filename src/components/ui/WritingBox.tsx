@@ -362,7 +362,7 @@ export function WritingBox(props: WritingBoxProps) {
         state={state}
         discard={discard}
         send={send}
-        className={className}
+        {...(className !== undefined ? { className } : {})}
       />
     );
   }

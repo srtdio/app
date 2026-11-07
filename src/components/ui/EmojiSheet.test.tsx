@@ -38,7 +38,7 @@ async function mount(opts: { closeOnPick?: boolean } = {}) {
 }
 
 const search = () => document.querySelector<HTMLInputElement>('[data-emoji-search]');
-const cell = (emoji: string, scope: ParentNode = document) =>
+const cell = (emoji: string, scope: Pick<Document, 'querySelectorAll'> = document) =>
   [...scope.querySelectorAll<HTMLButtonElement>('[data-emoji-cell]')].find(
     (b) => b.dataset.emojiCell === emoji,
   );

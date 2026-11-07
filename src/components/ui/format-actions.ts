@@ -347,7 +347,7 @@ export function insertText(el: Field, insert: string): void {
   }
   el.focus({ preventScroll: true });
   if (!execInsert(insert)) {
-    el.append(document.createTextNode(insert));
+    el.appendChild(document.createTextNode(insert));
   }
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }
