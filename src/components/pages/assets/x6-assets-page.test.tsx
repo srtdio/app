@@ -211,7 +211,18 @@ describe('X6 bulk delete keeps the files in use', () => {
     assetDeleteMany.mockResolvedValue({ ok: true, data: null });
     await mount();
 
-    for (const name of ['one.png', 'two.png', 'three.png']) {
+    // Selecting starts from the first card's ⋮ Select row (ui/ListCard has no corner box);
+    // in select mode each card toggles.
+    await act(async () =>
+      document.querySelector<HTMLElement>('[aria-label="More actions for one.png"]')?.click(),
+    );
+    await flush();
+    await act(async () =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .find((row) => row.textContent?.trim() === 'Select')
+        ?.click(),
+    );
+    for (const name of ['two.png', 'three.png']) {
       await act(async () =>
         document.querySelector<HTMLElement>(`[aria-label="Select ${name}"]`)?.click(),
       );
