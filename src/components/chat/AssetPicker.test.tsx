@@ -18,7 +18,16 @@ vi.mock('@/components/chat/PostCard', () => ({
   }),
 }));
 
-import { AssetGrid, AssetGridSkeleton, AssetTile } from '@/components/chat/AssetPicker';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import {
+  AssetGrid,
+  AssetGridSkeleton,
+  AssetTile,
+  assetsFromHits,
+  resolveMissingAssets,
+} from '@/components/chat/AssetPicker';
+import type { WorkspaceHit } from '@/lib/search/workspace-search';
 import { shapeLibraryRows, type LibraryAsset } from '@/lib/chat/asset-picker';
 import { withLibraryAttachments } from '@/components/chat/Composer';
 import { awaitsUpload, toLibraryAttachment, toLocalAttachment } from '@/lib/chat/attachments';
@@ -54,8 +63,6 @@ function grid(over: Partial<Parameters<typeof AssetGrid>[0]> = {}): string {
     <AssetGrid
       rows={[image, pdf]}
       count={2}
-      searching={false}
-      query=""
       loadingMore={false}
       selected={[]}
       onToggle={() => undefined}
@@ -86,6 +93,8 @@ describe('AssetPicker grid', () => {
     expect(html.match(/min-h-11/g)?.length).toBeGreaterThanOrEqual(2);
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('aria-pressed="false"');
+    // The one select circle (ui/SelectCheck), on the picked tile only.
+    expect(html.match(/data-select-check="on"/g)).toHaveLength(1);
     expect(html.match(/bg-accent text-accent-fg/g)).toHaveLength(1);
   });
 
@@ -95,11 +104,8 @@ describe('AssetPicker grid', () => {
     expect(grid({ count: 2 })).not.toContain('Load 50 more');
   });
 
-  it('empty library reads one positive line; empty search is NoResults', () => {
+  it('empty library reads one positive line', () => {
     expect(grid({ rows: [], count: 0 })).toContain('Files added to Assets show up here.');
-    const none = grid({ rows: [], count: 0, searching: true, query: 'deck' });
-    expect(none).toContain('Try another word for &quot;deck&quot;.');
-    expect(none).toContain('Clear search');
   });
 
   it('the loading state is static placeholder tiles (no motion)', () => {
@@ -139,5 +145,53 @@ describe('composer: library picks ride the normal send', () => {
     expect(draft.attachments.filter(awaitsUpload)).toHaveLength(1);
     const plain = { text: 'x', attachments: [local] };
     expect(withLibraryAttachments(plain, [])).toBe(plain);
+  });
+});
+
+function fileHit(id: string, title: string): WorkspaceHit {
+  return {
+    kind: 'file',
+    id,
+    parentId: null,
+    channelId: null,
+    entityType: '',
+    number: null,
+    title,
+    snippet: '',
+    actorUserId: null,
+    actorIsMember: false,
+    createdAt: '2026-09-20T00:00:00Z',
+  };
+}
+
+describe('AssetPicker search: the palette in pick mode', () => {
+  const source = readFileSync(fileURLToPath(new URL('./AssetPicker.tsx', import.meta.url)), 'utf8');
+
+  it('no search field of its own; the header search opens pick mode for files, Add N', () => {
+    expect(source).not.toContain('<Input');
+    expect(source).not.toContain('NoResults');
+    expect(source).not.toContain('ASSET_SEARCH_DEBOUNCE_MS');
+    expect(source).toContain('headerAction={');
+    expect(source).toContain("pickKinds: ['file']");
+    expect(source).toContain('multi: true');
+    expect(source).toContain("verb: 'Add'");
+  });
+
+  it('maps picks back to loaded rows in tick order; the rest are missing', () => {
+    const { found, missing } = assetsFromHits(
+      [fileHit('a2', 'deck.pdf'), fileHit('a9', 'brief.pdf'), fileHit('a1', 'hero.png')],
+      [image, pdf],
+    );
+    expect(found.map((a) => a.assetId)).toEqual(['a2', 'a1']);
+    expect(missing.map((h) => h.id)).toEqual(['a9']);
+  });
+
+  it('a pick not loaded is read by its name and kept only when the id matches', async () => {
+    const read = vi.fn((name: string) =>
+      Promise.resolve(name === 'deck.pdf' ? [image, pdf] : null),
+    );
+    const out = await resolveMissingAssets([fileHit('a2', 'deck.pdf'), fileHit('a7', 'x')], read);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(out.map((a) => a.assetId)).toEqual(['a2']);
   });
 });

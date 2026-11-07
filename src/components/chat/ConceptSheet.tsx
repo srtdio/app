@@ -3,8 +3,10 @@
 // and "Edit concept" (a concept's item screen); the parent owns the form and
 // the submit. The files picker opens over it and closes with it. Uploads go
 // through the comments' upload path (library origin), all at once, and land in
-// the file list when done; Save waits for them and is refused while one has
-// failed, so nothing saves partially. Closing aborts uploads in flight (files
+// the file list when done. Every file is one ui/PendingChip (ready, uploading
+// with the ring, or failed with Retry). Save waits for uploads (busy on its
+// Button, the label kept) and is refused while one has failed, so nothing
+// saves partially. Closing aborts uploads in flight (files
 // already uploaded stay in storage, unlinked). Edit: until the concept's files
 // are known the files section shows a skeleton (or a Retry) and Add / Upload
 // stay hidden. Closing with unsaved input asks "Discard this concept?" on
@@ -19,14 +21,13 @@ import type { Result } from '@srtdio/rpc';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
-import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
-import { ICON_SIZE, IconTrash } from '@/components/ui/icons';
+import { PendingChip, readyChipMeta } from '@/components/ui/PendingChip';
 import { useToast } from '@/components/ui/toast';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { AssetPicker } from '@/components/chat/AssetPicker';
-import { PendingChip } from '@/components/comments/CommentComposer';
+import { FileUploadChip } from '@/components/comments/CommentComposer';
 import { PRESIGN_ENABLED, sharedCardPresignCache } from '@/components/chat/PostCard';
 import { ConceptDateField } from '@/components/chat/PlanScreen';
 import { PlanDayTiles } from '@/components/chat/PlanDayPickerSheet';
@@ -80,9 +81,6 @@ export const CONCEPT_FILES_LIMIT_HINT = `You can add up to ${CONCEPT_FILES_MAX} 
 
 /** The files section when the concept's files could not be read. */
 export const CONCEPT_FILES_READ_FAILED = errorText('load files', null);
-
-/** The Save label while it waits for uploads. */
-export const CONCEPT_SAVE_UPLOADING = 'Uploading…';
 
 /** The files section: known, being read, or the read failed (edit only). */
 export type ConceptFilesState = 'ready' | ConceptFilesReadState;
@@ -348,12 +346,11 @@ export function ConceptSheet(props: {
               <Button
                 variant="primary"
                 data-plan-concept-save=""
-                aria-busy={waiting}
-                busy={busy && !waiting}
+                busy={busy || waiting}
                 disabled={busy || !valid}
                 onClick={save}
               >
-                {waiting ? CONCEPT_SAVE_UPLOADING : edit ? 'Save' : 'Add'}
+                {edit ? 'Save' : 'Add'}
               </Button>
             </div>
           </div>
@@ -429,16 +426,14 @@ export function ConceptSheet(props: {
             </div>
           ) : (
             <>
-              {form.files.length > 0 ? (
-                <div className="grid grid-cols-4 gap-1.5">
+              {/* One pending-file chip (decision F): attached files ready (trailing
+                  X removes), uploads with the ring (X cancels) or failed (Retry). */}
+              {form.files.length > 0 || uploads.length > 0 ? (
+                <ul data-plan-concept-chips="" className="flex flex-wrap gap-2">
                   {form.files.map((f) => (
-                    <div
+                    <PendingChip
                       key={f.versionId}
-                      data-plan-concept-file=""
-                      title={f.name}
-                      className="relative flex min-w-0 flex-col gap-1"
-                    >
-                      <span className="block overflow-hidden rounded-xl border bg-panel-2 lit-card-muted">
+                      thumb={
                         <Thumbnail
                           assetVersionId={f.versionId}
                           cache={sharedCardPresignCache()}
@@ -446,60 +441,29 @@ export function ConceptSheet(props: {
                           fallback={{ kind: 'glyph' }}
                           alt={f.name}
                         />
-                      </span>
-                      <span
-                        data-plan-concept-file-name=""
-                        className="block truncate text-sm text-fg-3"
-                      >
-                        {f.name}
-                      </span>
-                      <PressableRow
-                        type="button"
-                        inline
-                        data-plan-concept-file-remove=""
-                        aria-label={`Remove ${f.name}`}
-                        disabled={busy}
-                        onClick={() =>
-                          onChange((x) => ({
-                            ...x,
-                            files: x.files.filter((y) => y.versionId !== f.versionId),
-                          }))
-                        }
-                        className="absolute right-0 top-0 flex h-11 w-11 items-start justify-end p-1"
-                      >
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-panel text-fg-2 lit-media">
-                          <IconTrash size={ICON_SIZE.inline} />
-                        </span>
-                      </PressableRow>
-                    </div>
+                      }
+                      title={f.name}
+                      meta={readyChipMeta({ name: f.name })}
+                      dataAttrs={{ 'data-plan-concept-file': '' }}
+                      onRemove={() => {
+                        if (busy) return;
+                        onChange((x) => ({
+                          ...x,
+                          files: x.files.filter((y) => y.versionId !== f.versionId),
+                        }));
+                      }}
+                    />
                   ))}
-                </div>
-              ) : null}
-              {uploads.length > 0 ? (
-                <ul data-plan-concept-uploads="" className="flex flex-col gap-2">
                   {uploads.map((u) => (
-                    <li
+                    <FileUploadChip
                       key={u.id}
-                      data-plan-concept-upload={u.status.state}
-                      className="flex items-center gap-2"
-                    >
-                      <ul className="min-w-0">
-                        <PendingChip item={u} onRemove={() => controller.remove(u.id)} />
-                      </ul>
-                      {u.status.state === 'error' ? (
-                        <Button
-                          type="button"
-                          variant="link"
-                          data-plan-concept-upload-retry=""
-                          aria-label={`Retry ${u.file.name}`}
-                          disabled={busy}
-                          onClick={() => controller.retry(u.id)}
-                          className="shrink-0"
-                        >
-                          Retry
-                        </Button>
-                      ) : null}
-                    </li>
+                      item={u}
+                      dataAttrs={{ 'data-plan-concept-upload': u.status.state }}
+                      onRemove={() => controller.remove(u.id)}
+                      onRetry={() => {
+                        if (!busy) controller.retry(u.id);
+                      }}
+                    />
                   ))}
                 </ul>
               ) : null}

@@ -266,7 +266,7 @@ export function AssetPicker(props: {
         <Button
           variant="primary"
           className="ml-auto"
-          disabled={selected.length === 0 && !resolving}
+          disabled={selected.length === 0}
           busy={resolving}
           onClick={confirm}
         >

@@ -388,7 +388,8 @@ export function readAssetTabCounts(
 ): Promise<Result<Record<AssetTab, number>>> {
   const key = assetTabCountsKey(userId, workspaceId);
   return sharedRead(key, () => read(client, workspaceId), { isOk: (result) => result.ok }).then(
-    (result) => (result.ok ? { ok: true, data: sanitizeAssetTabCounts(result.data) } : result),
+    (result): Result<Record<AssetTab, number>> =>
+      result.ok ? { ok: true, data: sanitizeAssetTabCounts(result.data) } : result,
   );
 }
 
