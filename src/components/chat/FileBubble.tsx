@@ -29,7 +29,7 @@ import {
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { UploadRing } from '@/components/chat/UploadRing';
+import { UploadRing } from '@/components/ui/UploadRing';
 import { cn } from '@/lib/cn';
 import { humanizeSize } from '@/lib/assets';
 import type { PresignCache } from '@/lib/asset-presign';

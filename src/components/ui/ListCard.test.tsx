@@ -308,7 +308,7 @@ describe('ListCard select mode (long-press / right-click)', () => {
     expect(root).toEqual(expect.arrayContaining(['select-none', '[-webkit-touch-callout:none]']));
   });
 
-  it('the tick is a 20 round badge on the picture corner, hidden (scale 0) outside select mode', () => {
+  it('the tick is SelectCheck at 20 on the picture corner, hidden (scale 0) outside select mode', () => {
     const html = render({ select: select() });
     expect(html).toContain('data-list-card-tick="hidden"');
     const tick = classOf(html, 'data-list-card-tick=');
@@ -322,11 +322,11 @@ describe('ListCard select mode (long-press / right-click)', () => {
     expect(html.indexOf('data-list-card-tick')).toBeLessThan(html.indexOf('data-list-card-title'));
   });
 
-  it('chosen: filled ink with a check, lit-selected, aria-pressed; not chosen: an empty fg-3 ring', () => {
+  it('chosen: the SelectCheck fill with a check, lit-selected, aria-pressed; not chosen: the empty SelectCheck ring', () => {
     const on = render({ select: select({ active: true, chosen: true }) });
     expect(on).toContain('data-list-card-tick="on"');
     expect(classOf(on, 'data-list-card-tick=')).toEqual(
-      expect.arrayContaining(['bg-fg', 'text-panel', 'scale-100']),
+      expect.arrayContaining(['bg-accent', 'text-accent-fg', 'scale-100']),
     );
     expect(on).toMatch(/data-list-card-tick="on"[^>]*><svg/);
     expect(classOf(on, 'data-list-card=""')).toContain('lit-selected');
@@ -334,7 +334,7 @@ describe('ListCard select mode (long-press / right-click)', () => {
     const off = render({ select: select({ active: true, chosen: false }) });
     expect(off).toContain('data-list-card-tick="off"');
     expect(classOf(off, 'data-list-card-tick=')).toEqual(
-      expect.arrayContaining(['border-fg-3', 'bg-panel', 'scale-100']),
+      expect.arrayContaining(['border-border-strong', 'bg-panel', 'scale-100']),
     );
     expect(off).not.toMatch(/data-list-card-tick="off"[^>]*><svg/);
     expect(classOf(off, 'data-list-card=""')).toContain('lit-card');
@@ -342,12 +342,8 @@ describe('ListCard select mode (long-press / right-click)', () => {
   });
 
   it('the tick scales in only (mv-slide on transform): no fade, no rotate, no X', () => {
-    for (const [a, c] of [
-      [true, true],
-      [true, false],
-      [false, false],
-    ] as const) {
-      const cls = listCardTickClass(a, c);
+    for (const a of [true, false]) {
+      const cls = listCardTickClass(a);
       expect(cls).toContain(MOVE_CLASS.slide);
       expect(cls).not.toMatch(/opacity|rotate|translate-x/);
     }

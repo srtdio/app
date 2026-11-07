@@ -93,7 +93,7 @@ const OPACITY_ALLOW: readonly (readonly [string, string, string])[] = [
     'uploading / failed thumbnail: opacity on the image box only; its lit-badge label reads the state',
   ],
   [
-    'chat/UploadRing.tsx',
+    'ui/UploadRing.tsx',
     'bg-overlay opacity-60',
     'the dim layer over an uploading thumbnail (a media overlay, no text)',
   ],

@@ -14,7 +14,8 @@ import { textRole } from '@/components/ui/Text';
 import { Tag, type TagDot } from '@/components/ui/Tag';
 import { Avatar } from '@/components/ui/Avatar';
 import { PostPlaceholder, type PostPlaceholderKind } from '@/components/ui/PostPlaceholder';
-import { ICON_SIZE, IconCheck, type IconProps } from '@/components/ui/icons';
+import { ICON_SIZE, type IconProps } from '@/components/ui/icons';
+import { SelectCheck } from '@/components/ui/SelectCheck';
 import { useSelectGesture, type SelectGesture } from '@/components/ui/useLongPress';
 
 /** data-* hooks (tests, the tour, scroll anchors). Behaviour only, never the look. */
@@ -176,29 +177,23 @@ export const LIST_CARD_COVER =
 export const LIST_CARD_NO_CALLOUT = 'select-none [-webkit-touch-callout:none]';
 
 /**
- * The select tick: a 20 round badge on the picture's bottom-right corner.
- * Chosen: filled ink with a check; not chosen: an empty fg-3 ring on the panel.
+ * The select tick: ui/SelectCheck at its 20 size on the picture's bottom-right
+ * corner (the one select circle: same fill, border and tick as every list).
  * It scales in when select mode starts (mv-slide on transform; instant under
  * Reduce Motion) and never moves anything around it.
  */
-export function listCardTickClass(active: boolean, chosen: boolean): string {
-  return cn(
-    'absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border',
-    MOVE_CLASS.slide,
-    active ? 'scale-100' : 'scale-0',
-    chosen ? 'border-panel bg-fg text-panel' : 'border-fg-3 bg-panel',
-  );
+export function listCardTickClass(active: boolean): string {
+  return cn('absolute -bottom-1 -right-1', MOVE_CLASS.slide, active ? 'scale-100' : 'scale-0');
 }
 
 function Tick({ active, chosen }: { active: boolean; chosen: boolean }): ReactElement {
   return (
-    <span
-      aria-hidden="true"
+    <SelectCheck
+      checked={active && chosen}
+      size="sm"
       data-list-card-tick={active ? (chosen ? 'on' : 'off') : 'hidden'}
-      className={listCardTickClass(active, chosen)}
-    >
-      {active && chosen ? <IconCheck size={ICON_SIZE.inline} /> : null}
-    </span>
+      className={listCardTickClass(active)}
+    />
   );
 }
 

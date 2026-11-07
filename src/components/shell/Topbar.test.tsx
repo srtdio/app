@@ -185,3 +185,25 @@ describe('Topbar scroll modes', () => {
     expect(classes).not.toContain('h-14');
   });
 });
+
+// Decision A (7 Nov): search | sort | filled "+" (always last) | avatar.
+describe('Topbar actions slots', () => {
+  it('in a workspace: sort and "+" slots sit after search and before the avatar', async () => {
+    const { TopbarSlots } = await import('@/components/shell/Topbar');
+    const tree = Topbar({ ...baseProps, workspaceName: 'Acme' });
+    const order = findAll(
+      tree,
+      (el) =>
+        el.type === TopbarSlots ||
+        (el.props as { label?: string }).label === 'Search' ||
+        (el.props as { label?: string }).label === 'Account menu',
+    ).map((el) => (el.type === TopbarSlots ? 'slots' : (el.props as { label?: string }).label));
+    expect(order).toEqual(['Search', 'slots', 'Account menu']);
+  });
+
+  it('workspace-less state: no sort and no "+"', async () => {
+    const { TopbarSlots } = await import('@/components/shell/Topbar');
+    const creating = Topbar({ ...baseProps, workspaceName: null, onCreateWorkspace: () => {} });
+    expect(findAll(creating, (el) => el.type === TopbarSlots)).toHaveLength(0);
+  });
+});

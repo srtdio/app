@@ -42,7 +42,7 @@ import { ICON_SIZE, IconBan, IconDownload, IconFile, IconImage } from '@/compone
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { downloadFile, remoteFileSource } from '@/components/ui/FileViewer';
 import { VoiceNote, type VoiceUrlError, type VoiceUrlResult } from '@/components/chat/VoiceNote';
-import { TileUploadRing } from '@/components/chat/UploadRing';
+import { TileUploadRing } from '@/components/ui/UploadRing';
 import { BUBBLE_FILL, FileBubble } from '@/components/chat/FileBubble';
 import {
   BUBBLE_BODY_TYPE,
@@ -381,7 +381,7 @@ function AttachmentItem({
         </div>
       );
     case 'file':
-      // Sends with its own 44px ring (IconStop inside; a tap stops the send);
+      // Sends with its own 44px ring (IconX inside; a tap stops the send);
       // tap the card to open the in-app viewer.
       return (
         <FileBubble

@@ -48,7 +48,7 @@ import { insertAtCaret } from '@/lib/chat/emoji-list';
 import { PostPicker, warmPostPicker } from '@/components/chat/PostPicker';
 import { MentionPicker, mentionComboboxProps, stepActive } from '@/components/chat/MentionPicker';
 import { ComposerStrip } from '@/components/chat/ComposerStrip';
-import { PendingChip } from '@/components/chat/PendingChip';
+import { PendingChip } from '@/components/ui/PendingChip';
 import { PostRefThumb, type PostRefPost } from '@/components/chat/PostRefChip';
 import {
   ReplyQuoteBox,

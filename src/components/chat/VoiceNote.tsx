@@ -45,7 +45,7 @@ import type {
   ReactNode,
 } from 'react';
 import { Avatar } from '@/components/ui/Avatar';
-import { UploadRing, type UploadRingInk } from '@/components/chat/UploadRing';
+import { UploadRing, type UploadRingInk } from '@/components/ui/UploadRing';
 import { sized, useChatLayout, type ChatSize } from '@/components/chat/chat-type';
 import {
   ICON_SIZE,
