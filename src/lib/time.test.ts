@@ -66,8 +66,12 @@ describe('formatAgo: things that just happened', () => {
   it('week boundary: 6 days back is the weekday, 7 days back is the day', () => {
     expect(formatAgo(ago(6 * DAY), NOW, IST)).toBe('Mon');
     expect(formatAgo(ago(7 * DAY), NOW, IST)).toBe('18 Oct');
-    expect(formatAgo(ago(6 * DAY), NOW, LA)).toBe('Sun');
-    expect(formatAgo(ago(7 * DAY), NOW, LA)).toBe('17 Oct');
+    // 19 Oct 01:44 PDT and 18 Oct 01:44 PDT in Los Angeles.
+    expect(formatAgo(ago(6 * DAY), NOW, LA)).toBe('Mon');
+    expect(formatAgo(ago(7 * DAY), NOW, LA)).toBe('18 Oct');
+    // 18 Oct 23:00 PDT (19 Oct 11:30 IST): under 7 days elapsed, but 7 civil days back in LA.
+    expect(formatAgo('2026-10-19T06:00:00Z', NOW, LA)).toBe('18 Oct');
+    expect(formatAgo('2026-10-19T06:00:00Z', NOW, IST)).toBe('Mon');
   });
   it('across midnight in Asia/Kolkata: minutes stay minutes; 24h+ counts civil days', () => {
     // 24 Oct 23:59 IST to 25 Oct 00:01 IST is two minutes, not "Yesterday".
