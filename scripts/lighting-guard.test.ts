@@ -117,9 +117,7 @@ describe('compareLighting', () => {
   it('fails when a role drops, naming the role and both counts', () => {
     const branch = { ...main, 'src/a.tsx': `const a = 'lit-card';` };
     const cmp = compareLighting(main, branch, NONE, NONE);
-    expect(cmp.drops).toEqual([
-      { role: 'lit-header', main: 1, branch: 0, allowed: 0, ok: false },
-    ]);
+    expect(cmp.drops).toEqual([{ role: 'lit-header', main: 1, branch: 0, allowed: 0, ok: false }]);
     expect(formatTable(cmp.rows).join('\n')).toContain('DROP');
   });
 
@@ -166,7 +164,10 @@ describe('compareLighting', () => {
   });
 
   it('skips tests and home on both sides', () => {
-    const before: FileMap = { 'src/a.test.tsx': `'lit-card'`, 'src/components/home/H.tsx': `'lit-card'` };
+    const before: FileMap = {
+      'src/a.test.tsx': `'lit-card'`,
+      'src/components/home/H.tsx': `'lit-card'`,
+    };
     expect(compareLighting(before, {}, NONE, NONE).drops).toEqual([]);
   });
 });

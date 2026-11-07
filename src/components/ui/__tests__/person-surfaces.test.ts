@@ -17,8 +17,8 @@ const SURFACES: readonly { file: string; what: string }[] = [
   { file: 'chat/PlanItemThread.tsx', what: 'plan comment author + mentions' },
   { file: 'comments/Comments.tsx', what: 'comment author photo + name, @mentions' },
   // Activity cards are ui/ListCard: the whole card is the one tap target (it
-  // opens the thing), so the person's photo there opens the card, like the chat list.
-  { file: 'pages/activity/AvatarStack.tsx', what: 'bucket avatar stack' },
+  // opens the thing), so the person's photo there opens the card, like the chat list
+  // (the bucket AvatarStack is deleted).
   { file: 'pages/settings/MembersList.tsx', what: 'member row photo + name' },
   { file: 'pages/PostDetailPage.tsx', what: 'owner photo + name' },
   { file: 'pages/pcs/PostDetailsSheet.tsx', what: 'owner photo' },

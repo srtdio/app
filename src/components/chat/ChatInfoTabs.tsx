@@ -665,6 +665,8 @@ export interface ChatInfoTabsViewProps {
   onSeeAll?: (tab: ContactTab) => void;
   /** Media and Files select mode; absent or null outside it. */
   selection?: InfoSelection | null | undefined;
+  /** The shared minute clock (the stateful parent's useMinuteClock); now when absent. */
+  nowMs?: number | undefined;
 }
 
 const NONE_EXPANDED: ReadonlySet<ContactTab> = new Set();
@@ -672,7 +674,7 @@ const NO_SEE_ALL = (): void => undefined;
 
 /** The chips and the selected tab's body. Hook-free so tests walk it directly. */
 export function ChatInfoTabsView(props: ChatInfoTabsViewProps): ReactElement {
-  const now = new Date(useMinuteClock());
+  const now = new Date(props.nowMs ?? Date.now());
   const expanded = props.expanded ?? NONE_EXPANDED;
   const onSeeAll = props.onSeeAll ?? NO_SEE_ALL;
   const limit = previewLimit(props.mode, props.tab, expanded);
@@ -1070,6 +1072,7 @@ export function ChatInfoTabs(props: ChatInfoTabsProps): ReactElement {
 
   const tabs = (
     <ChatInfoTabsView
+      nowMs={nowMs}
       tab={tab}
       starred={starred}
       onTab={onTab}

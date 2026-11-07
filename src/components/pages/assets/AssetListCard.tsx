@@ -158,7 +158,7 @@ export function AssetSelectTick({ selected }: { selected: boolean }): ReactEleme
       aria-hidden="true"
       data-card-tick={selected ? 'on' : 'off'}
       className={cn(
-        'flex h-5 w-5 items-center justify-center rounded-sm border',
+        'flex h-5 w-5 items-center justify-center rounded-sm border lit-well',
         selected ? 'border-transparent bg-accent text-accent-fg' : 'border-border-strong bg-panel',
       )}
     >

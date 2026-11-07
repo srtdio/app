@@ -607,10 +607,11 @@ describe('Brief detail content', () => {
   });
 
   it('the due date reads the picked day', async () => {
-    h.getBrief.mockResolvedValue(detail({ target_date: '2026-10-08' }));
+    // A day more than a week ahead reads as the date (formatDue): "Due 8 Oct YYYY".
+    const year = new Date().getFullYear() + 1;
+    h.getBrief.mockResolvedValue(detail({ target_date: `${year}-10-08` }));
     await mount();
-    // "8 Oct" in 2026, "8 Oct 2026" from a later year: both contain the day.
-    expect(text()).toContain('8 Oct');
+    expect(text()).toContain(`Due 8 Oct ${year}`);
   });
 });
 

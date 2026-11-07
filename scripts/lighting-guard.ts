@@ -74,7 +74,10 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
     'lit-well': { count: 2, why: 'Date and time Inputs moved to the shared WhenOptions.' },
   },
   'src/components/pages/BriefCard.tsx': {
-    'lit-card-muted': { count: 1, why: 'Closed brief is <ListCard muted>; ListCard paints lit-card-muted.' },
+    'lit-card-muted': {
+      count: 1,
+      why: 'Closed brief is <ListCard muted>; ListCard paints lit-card-muted.',
+    },
     'lit-hover': { count: 1, why: 'Whole-card tap is the ListCard cover (lit-hover).' },
     'lit-focus': {
       count: 1,
@@ -93,7 +96,10 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
   },
   'src/components/pages/BriefsPage.tsx': {
     'lit-media': { count: 1, why: 'Skeleton card is ListCardBox; its picture box is lit-media.' },
-    'lit-badge': { count: 1, why: 'Skeleton status bone retired with the old card; ListCardBox draws the card.' },
+    'lit-badge': {
+      count: 1,
+      why: 'Skeleton status bone retired with the old card; ListCardBox draws the card.',
+    },
   },
   'src/components/pages/PipelinePage.tsx': {
     'lit-header': { count: 1, why: 'Board column skeleton header retired with the board view.' },
@@ -171,7 +177,7 @@ export const EXPLAINED_DROPS: Record<string, Record<string, { count: number; why
   'src/components/pages/settings/MembersList.tsx': {
     'lit-pill': {
       count: 2,
-      why: 'Catch-up email Tags became a grey mail glyph (the role is the row\'s one tag).',
+      why: "Catch-up email Tags became a grey mail glyph (the role is the row's one tag).",
     },
   },
 };
@@ -394,7 +400,8 @@ export function compareLighting(
       continue;
     }
     const m = explained[file]?.[role];
-    if (m !== undefined) allowances.push({ file, role, count: Math.min(drop, m.count), why: m.why });
+    if (m !== undefined)
+      allowances.push({ file, role, count: Math.min(drop, m.count), why: m.why });
   }
   const allowedCounts: Counts = {};
   for (const a of allowances) allowedCounts[a.role] = (allowedCounts[a.role] ?? 0) + a.count;
