@@ -2651,7 +2651,7 @@ export function composeCreateArgs(input: {
   range: ComposeRange;
   items: readonly ComposeItem[];
   traceId: string;
-}): PlanCreateWithItemsArgs {
+}): Omit<PlanCreateWithItemsArgs, 'p_bank'> {
   const dayOf = (day: ComposeDay): string | null => (day === null || day === 'none' ? null : day);
   const seen = new Set<string>();
   const posts: PlanCreateWithItemsArgs['p_posts'] = [];
