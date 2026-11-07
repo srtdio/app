@@ -1,10 +1,10 @@
 // One removable chip in the composer tray: a picked file (with its upload
 // status), a shared post or a shared brief all use this one look. A 48px thumb,
-// title over one meta line, and a 44px remove control. Tokens only.
+// title over one meta line, and a 44px bin that removes it (never an X). Tokens only.
 
 import type { ReactElement, ReactNode } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconTrash } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 
 export function PendingChip(props: {
@@ -35,7 +35,7 @@ export function PendingChip(props: {
         </span>
       </span>
       <IconButton label={`Remove ${props.title}`} onClick={props.onRemove}>
-        <IconX size={ICON_SIZE.inline} />
+        <IconTrash size={ICON_SIZE.inline} />
       </IconButton>
     </li>
   );

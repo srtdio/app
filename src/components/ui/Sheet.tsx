@@ -4,7 +4,8 @@ import type { MouseEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
+import { LEADING_PULL } from '@/components/ui/layout';
 import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
 import { textRole } from '@/components/ui/Text';
@@ -39,7 +40,7 @@ interface SheetProps {
   /** At lg+ the box widens to 960px so a side column fits beside the form. */
   wide?: boolean;
   /**
-   * Unsaved input. While true, every close path (X, backdrop tap, Escape,
+   * Unsaved input. While true, every close path ("<" back, backdrop tap, Escape,
    * drag down) opens a discard confirm instead of closing. The caller's own
    * actions (the primary button) are never blocked.
    */
@@ -55,8 +56,8 @@ interface SheetProps {
   /** Screen-reader status while busy. Default "Saving…". */
   busyLabel?: string;
   /**
-   * A verb in the header's trailing slot (phone full-screen form: X leading,
-   * the verb trailing). Leave it out for the default (X trailing).
+   * A verb in the header's trailing slot (the confirm stays right). The exit
+   * is always the "<" back on the leading edge.
    */
   headerAction?: ReactNode;
 }
@@ -133,7 +134,7 @@ export function Sheet({
     if (!open) setConfirming(false);
   }, [open]);
 
-  // Every close path (X, backdrop, Escape) funnels here. Busy ignores it; dirty
+  // Every close path ("<" back, backdrop, Escape) funnels here. Busy ignores it; dirty
   // asks first.
   function requestClose(): void {
     if (busy) return;
@@ -199,7 +200,7 @@ export function Sheet({
   useModalFocus(panelRef, open && rendered);
 
   // System or browser Back while there is something to lose: dirty asks (the
-  // same discard confirm as the X), busy keeps the sheet as it is. The guard
+  // same discard confirm as the "<" back), busy keeps the sheet as it is. The guard
   // is released right before a confirmed Discard, so that close pops cleanly;
   // an unmount while guarded releases it in the hook's own cleanup.
   const guard = useBackGuard({
@@ -217,24 +218,26 @@ export function Sheet({
     return null;
   }
 
-  function closeButton(pull: string): ReactNode {
+  // The one exit: "<" back on the leading edge, pulled out by 12 (LEADING_PULL)
+  // so its glyph sits on the content edge. Muted and inert while busy.
+  function backButton(): ReactNode {
     return (
       <IconButton
-        label="Close"
+        label="Back"
         onClick={requestClose}
         {...(busy
           ? {
               'aria-disabled': 'true' as const,
-              // Muted and inert while busy: aria-disabled variants out-rank the
-              // IconButton's own ink, hover and press classes (no "!").
+              // aria-disabled variants out-rank the IconButton's own ink, hover
+              // and press classes (no "!").
               className: cn(
-                pull,
+                LEADING_PULL,
                 'cursor-default aria-disabled:text-fg-3 aria-disabled:hover:bg-transparent aria-disabled:active:scale-100',
               ),
             }
-          : { className: pull })}
+          : { className: LEADING_PULL })}
       >
-        <IconX size={ICON_SIZE.control} />
+        <IconChevronLeft size={ICON_SIZE.control} />
       </IconButton>
     );
   }
@@ -279,14 +282,14 @@ export function Sheet({
       >
         {/* Header 56 on the 16 edge: the title (heading role) takes what the
             actions leave (min-w-0, truncate); the actions never shrink. One
-            exit: X trailing, or X leading when a header verb takes the trailing
-            slot. Each 44 box is pulled out by 12 (the trailing rule). */}
+            exit: the "<" back leading (LEADING_PULL); a header verb, when
+            given, takes the trailing slot. */}
         <div
           data-sheet-grab=""
           className="flex h-14 shrink-0 items-center gap-2 px-4 border-b border-border touch-none md:touch-auto"
           {...drag}
         >
-          {headerAction !== undefined ? closeButton('-ml-3') : null}
+          {backButton()}
           <h2 className={textRole('heading', 'min-w-0 flex-1 truncate')}>{title}</h2>
           {busy ? (
             <span role="status" className="sr-only">
@@ -294,7 +297,7 @@ export function Sheet({
             </span>
           ) : null}
           <span data-sheet-actions="" className="flex shrink-0 items-center gap-2">
-            {headerAction !== undefined ? headerAction : closeButton('-mr-3')}
+            {headerAction}
           </span>
         </div>
         <div

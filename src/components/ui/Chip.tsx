@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { cn } from '@/lib/cn';
 import { MOVE_CLASS } from '@/lib/motion';
-import { ICON_SIZE, IconX } from '@/components/ui/icons';
+import { Button } from '@/components/ui/Button';
 
 interface ChipProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -43,9 +43,9 @@ interface ChipProps extends Omit<
   /** Ref to the rendered <button>; a plain prop so Chip stays a callable function. */
   buttonRef?: Ref<HTMLButtonElement> | undefined;
   /**
-   * A clear action: when set, a trailing X (its own 44x44 button, labelled
-   * "Clear <label> filter") sits on the chip's right end, in the chip's text
-   * colour. Unset, the chip renders exactly as without this prop.
+   * A clear action: when set, a ghost "Clear" text Button (44 tall, its own
+   * button, labelled "Clear <label> filter") sits right after the chip. No X
+   * (no-cross guard). Unset, the chip renders exactly as without this prop.
    */
   onClear?: (() => void) | undefined;
 }
@@ -140,29 +140,25 @@ export function Chip({
             <span className="tabular-nums">{count}</span>
           </>
         ) : null}
-        {onClear !== undefined ? <span aria-hidden="true" className="w-4 shrink-0" /> : null}
       </span>
     </button>
   );
   if (onClear === undefined) return chip;
-  // The X is a sibling (never a button in a button): a 44x44 box on the
-  // chip's right end whose glyph sits where the chip reserved its width,
-  // vertically centred on the 32 chip, 12 in from its right edge.
+  // "Clear" is a sibling (never a button in a button): the shared ghost Button,
+  // 44 tall, 12 side padding, right after the 32 chip in the same 44 row.
   return (
-    <span data-chip-clearable="" className="relative inline-flex shrink-0">
+    <span data-chip-clearable="" className="inline-flex shrink-0 items-center">
       {chip}
-      <button
+      <Button
         type="button"
+        variant="ghost"
         data-chip-clear=""
         aria-label={`Clear ${label} filter`}
         onClick={onClear}
-        className={cn(
-          'absolute inset-y-0 right-0 inline-flex min-h-11 w-11 items-center justify-end rounded-lg pr-3 focus-visible:lit-focus',
-          selected ? 'text-accent-fg' : 'text-fg',
-        )}
+        className="shrink-0 px-3 focus-visible:lit-focus"
       >
-        <IconX size={ICON_SIZE.inline} />
-      </button>
+        Clear
+      </Button>
     </span>
   );
 }

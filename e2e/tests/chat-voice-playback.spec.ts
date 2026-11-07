@@ -25,7 +25,7 @@ test('voice note: tap play starts playback @theme @desktop', async ({ page }) =>
   const note = await openVoiceNote(page);
   await note.getByRole('button', { name: 'Play voice note' }).click();
   await expect(note.getByRole('button', { name: 'Pause voice note' })).toBeVisible();
-  await expect(note.locator('[data-voice-speed]')).toHaveText('1×');
+  await expect(note.locator('[data-voice-speed]')).toHaveText('1x');
   await expect(note.locator('[data-voice-error]')).toHaveCount(0);
 });
 

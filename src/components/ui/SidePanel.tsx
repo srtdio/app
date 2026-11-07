@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { IconButton } from '@/components/ui/IconButton';
-import { ICON_SIZE, IconX } from '@/components/ui/icons';
-import { TRAILING_PULL } from '@/components/ui/layout';
+import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
+import { LEADING_PULL } from '@/components/ui/layout';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
 
@@ -10,7 +10,7 @@ interface SidePanelProps {
   open: boolean;
   onClose: () => void;
   title: string;
-  /** Beside the title, before the X (a status pill, a stamp). */
+  /** Beside the title (a status pill, a stamp). */
   headerExtra?: ReactNode;
   children: ReactNode;
 }
@@ -23,7 +23,7 @@ const SIDE_PANEL_WIDTH_PX = '380px';
  * A laptop right side panel: 380px wide, fixed under the top bar to the
  * bottom of the screen; while it is on screen it sets --side-panel-w, which
  * the page pads by, so the page beside it shrinks and stays usable. Nothing dims and focus is not trapped (it is not
- * a dialog). Title left, X right; Esc closes and returns focus to whatever
+ * a dialog). "<" back leading, then the title; Esc closes and returns focus to whatever
  * had it when the panel opened. Motion: none. A laptop pane opens and closes
  * at once (docs/motion.md, laptop: pane switches are instant); it renders at
  * its final place from the first frame. Phone uses Sheet (rise).
@@ -79,15 +79,14 @@ export function SidePanel({ open, onClose, title, headerExtra, children }: SideP
       )}
     >
       <div className="flex h-full flex-col">
-        {/* Header 56 on the 16 edge; the X is pulled out by 12 (the trailing rule). */}
+        {/* Header 56 on the 16 edge; the one exit is the "<" back leading,
+            pulled out by 12 (LEADING_PULL) so its glyph sits on the edge. */}
         <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+          <IconButton label="Back" onClick={onClose} className={LEADING_PULL}>
+            <IconChevronLeft size={ICON_SIZE.control} />
+          </IconButton>
           <h2 className="min-w-0 truncate text-lg font-semibold">{title}</h2>
           {headerExtra}
-          <span className="ml-auto flex items-center">
-            <IconButton label="Close" onClick={onClose} className={TRAILING_PULL}>
-              <IconX size={ICON_SIZE.control} />
-            </IconButton>
-          </span>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       </div>

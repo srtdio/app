@@ -113,7 +113,10 @@ describe('StorageWarningBanner', () => {
       'This workspace has used 820 MB of its 1 GB. Deleted files free up space only after 31 days, or when the owner empties Recently deleted.',
     );
     const close = banner()!.querySelector<HTMLButtonElement>('button[aria-label="Dismiss"]')!;
-    expect(close.className).toContain('h-11 w-11');
+    // The ghost "Clear" text Button (44 tall tap area), never an X.
+    expect(close.className).toContain('h-11 min-h-11 min-w-11');
+    expect(close.textContent).toBe('Clear');
+    expect(close.querySelector('svg')).toBeNull();
   });
 
   it('never shows for an exempt workspace or when usage is unavailable', async () => {

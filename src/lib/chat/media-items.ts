@@ -5,9 +5,12 @@
 // with 2 links is 2 rows), newest first, then group under month headers
 // ("This week", "October", "September 2025"). Plus the device-cache key and
 // value of each chip's first page, so a chip tap paints before any read.
+// Messages deleted for everyone, or hidden for me once that write held
+// (media-gone.ts), never flatten to an item: a Set lookup, no read.
 
 import { attachmentMetaVideoDurationMs, parseAttachmentMeta } from '@/lib/chat/attachments';
 import { toLinkItems } from '@/lib/chat/channel-media';
+import { withoutGone } from '@/lib/chat/media-gone';
 import type { EntityRoutes } from '@/lib/chat/message-links';
 import type { SearchHit, SearchKind } from '@/lib/chat/search';
 import { civilDay } from '@/lib/time';
@@ -95,7 +98,8 @@ export function flattenMedia(
   kind: MediaKind,
   isRemoved?: RemovedLookup,
 ): MediaItem[] {
-  return hits.flatMap((hit) =>
+  // A message deleted for everyone, or hidden for me and written, lists nothing.
+  return withoutGone(hits, (hit) => hit.id).flatMap((hit) =>
     parseAttachmentMeta(hit.attachmentMeta ?? null, hit.attachmentAssetIds ?? []).flatMap((a) => {
       if (a.assetId === '' || mediaKindOfMime(a.mime) !== kind) return [];
       if (isRemoved?.(hit.channelId, hit.id, a.assetId) === true) return [];
@@ -138,7 +142,7 @@ export function flattenLinks(
   appOrigin: string | null,
   routes: EntityRoutes,
 ): LinkItem[] {
-  return hits.flatMap((hit) =>
+  return withoutGone(hits, (hit) => hit.id).flatMap((hit) =>
     toLinkItems(
       [{ id: hit.id, sender_user_id: hit.senderUserId, body: hit.body, created_at: hit.createdAt }],
       appOrigin,

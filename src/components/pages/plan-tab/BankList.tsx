@@ -48,7 +48,7 @@ import { NoResults } from '@/components/ui/NoResults';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { Tag } from '@/components/ui/Tag';
-import { ICON_SIZE, IconBank, IconFile, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconBank, IconFile, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { IdeaShareFlow, type IdeaShareTarget } from '@/components/chat/IdeaShareFlow';
 import type { BucketOption } from '@/lib/buckets';
@@ -304,7 +304,7 @@ export function bankCardPicture(idea: BankIdea): ListCardPicture {
   };
 }
 
-/** The applied filter line: small removable pills, then Clear. Nothing when nothing is applied. */
+/** The applied filter line: small pills each removed by a bin (no X), then Clear. Nothing when nothing is applied. */
 export function BankFilterLine(props: {
   filter: BankFilter;
   buckets: readonly BucketOption[];
@@ -334,7 +334,7 @@ export function BankFilterLine(props: {
             className={CONTROL_IN_LINE}
             onClick={() => props.onFilter(withoutPill(props.filter, pill.key))}
           >
-            <IconX size={ICON_SIZE.inline} />
+            <IconTrash size={ICON_SIZE.inline} />
           </IconButton>
         </span>
       ))}

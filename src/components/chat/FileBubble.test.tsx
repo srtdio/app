@@ -153,8 +153,43 @@ describe('FileBubble height is final before the image loads', () => {
   });
 });
 
+describe('D1: a single video keeps its own ratio (no crop, no clamp)', () => {
+  const video = new File(['x'], 'clip.mp4', { type: 'video/mp4' });
+  const base: MessageAttachment = {
+    assetId: 'v-vid',
+    name: 'clip.mp4',
+    mime: 'video/mp4',
+    size: 1,
+  };
+  it('a stored or picked size gives the raw height / width, never clamped', () => {
+    expect(reservedRatio({ ...base, thumbW: 1080, thumbH: 1920 })).toBeCloseTo(1920 / 1080);
+    expect(reservedRatio({ ...base, thumbW: 1920, thumbH: 600 })).toBeCloseTo(600 / 1920);
+    const own = {
+      ...base,
+      assetId: '',
+      thumbW: 1000,
+      thumbH: 1000,
+      local: { key: 'l', file: video, previewUrl: null, progress: 0, uploading: true },
+    };
+    expect(reservedRatio(own)).toBe(1);
+  });
+  it('own send with no size read yet keeps the sending box', () => {
+    const own = {
+      ...base,
+      assetId: '',
+      local: { key: 'l', file: video, previewUrl: null, progress: 0, uploading: true },
+    };
+    expect(reservedRatio(own)).toBe(SENDING_RATIO.video);
+  });
+  it('the video thumbnail is contained, never cropped', () => {
+    expect(
+      readFileSync(fileURLToPath(new URL('./FileBubble.tsx', import.meta.url)), 'utf8'),
+    ).toContain("props.kind === 'video' ? 'object-contain'");
+  });
+});
+
 describe('FileBubble states', () => {
-  it('sending: a thin progress bar, no cancel ring', () => {
+  it('sending: the local thumbnail, no thin bar in the card (the ring sits beside it)', () => {
     const html = renderToStaticMarkup(
       <FileBubbleCard
         kind="pdf"
@@ -168,11 +203,61 @@ describe('FileBubble states', () => {
         onOpen={() => {}}
       />,
     );
-    expect(html).toContain('data-file-progress=""');
-    expect(html).toContain('transform:scaleX(0.4)');
+    expect(html).not.toContain('data-file-progress');
+    expect(html).not.toContain('scaleX');
     expect(html).toContain('src="blob:local-thumb"');
+    // The ring is a sibling of the card's button, never nested in it.
     expect(html).not.toContain('data-upload-ring');
     expect(fileBubbleState(true, false)).toBe('sending');
+  });
+
+  it('sending (D5): FileBubble lays the stop ring over the card; it stops the send', () => {
+    const onCancel = vi.fn();
+    const sendingPdf: MessageAttachment = {
+      assetId: '',
+      name: 'deck.pdf',
+      mime: 'application/pdf',
+      size: 10,
+      local: { key: 'local-d5', file: null, previewUrl: null, progress: 0.4, uploading: true },
+    };
+    const html = renderToStaticMarkup(
+      <FileBubble attachment={sendingPdf} cache={cache()} presignEnabled onCancel={onCancel} />,
+    );
+    expect(html).toContain('data-file-state="sending"');
+    expect(html).toMatch(/data-file-bubble="pdf" data-file-state="sending" class="[^"]*relative/);
+    expect(html.match(/data-upload-ring=""/g)).toHaveLength(1);
+    expect(html).toContain('data-ring-variant="file"');
+    expect(html).toContain('data-upload-progress="40"');
+    expect(html).toContain('aria-label="Stop sending"');
+    expect(html).not.toContain('data-file-progress');
+    // The ring's button sits after the card's button closes: no nested buttons.
+    const card = html.indexOf('aria-label="Open deck.pdf"');
+    const ring = html.indexOf('data-upload-ring=""');
+    expect(html.slice(card, ring)).toContain('</button>');
+    // Waiting (no request running): the ring shows 0, then fills.
+    const waiting = renderToStaticMarkup(
+      <FileBubble
+        attachment={{ ...sendingPdf, local: { ...sendingPdf.local!, uploading: false } }}
+        cache={cache()}
+        presignEnabled
+        onCancel={onCancel}
+      />,
+    );
+    expect(waiting).toContain('data-upload-progress="unknown"');
+    expect(waiting).not.toContain('mv-spin');
+    // No stop path (a file below an album): no ring of its own.
+    const below = renderToStaticMarkup(
+      <FileBubble attachment={sendingPdf} cache={cache()} presignEnabled />,
+    );
+    expect(below).not.toContain('data-upload-ring');
+  });
+
+  it('sent: no ring, the root is the plain fill', () => {
+    const html = renderToStaticMarkup(
+      <FileBubble attachment={PDF} cache={cache()} presignEnabled />,
+    );
+    expect(html).not.toContain('data-upload-ring');
+    expect(html).not.toContain('data-file-ring');
   });
 
   it('error: the inline retry line shows and the same tap retries', () => {

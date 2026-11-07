@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // Delete for me U5: the chat home photo viewer's bottom bar. Forward and Delete
-// are opt-in IconButtons (44x44), left of Download, in the overlay ink; every
-// other caller (no onForward / onDelete) keeps today's bar.
+// are opt-in IconButtons (44x44) in the overlay ink. Download lives on the top
+// back bar for every caller (D3), so the bottom bar shows only when there is
+// an action for it.
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -66,29 +67,42 @@ function labels(): string[] {
 
 const DETAILS = { sender: 'Maya', time: '2:14 PM' };
 
-describe('ImageLightbox viewer bar (Forward, Delete, Download)', () => {
-  it('no details and no handlers: no bar', () => {
+function backBar(): HTMLElement | null {
+  return document.body.querySelector<HTMLElement>('[data-lightbox-back-bar]');
+}
+
+describe('ImageLightbox viewer bar (Forward, Delete)', () => {
+  it('no details and no handlers: no bottom bar', () => {
     mount();
     expect(bar()).toBeNull();
   });
 
-  it('details only: Download, no Forward or Delete', () => {
+  it('details only: no bottom bar; Download is on the top back bar', () => {
     mount({ details: DETAILS });
-    expect(labels()).toEqual(['Download']);
+    expect(bar()).toBeNull();
+    expect(backBar()?.querySelector('button[aria-label="Download"]')).not.toBeNull();
   });
 
-  it('with onForward and onDelete: Forward, then Delete, then Download', () => {
+  it('with onForward and onDelete: Forward, then Delete', () => {
     mount({ details: DETAILS, onForward: vi.fn(), onDelete: vi.fn() });
-    expect(labels()).toEqual(['Forward', 'Delete', 'Download']);
+    expect(labels()).toEqual(['Forward', 'Delete']);
   });
 
   it('only the handler passed shows', () => {
     mount({ details: DETAILS, onForward: vi.fn() });
-    expect(labels()).toEqual(['Forward', 'Download']);
+    expect(labels()).toEqual(['Forward']);
     cleanup?.();
     cleanup = null;
     mount({ details: DETAILS, onDelete: vi.fn() });
-    expect(labels()).toEqual(['Delete', 'Download']);
+    expect(labels()).toEqual(['Delete']);
+  });
+
+  it('the bin shows in the bottom bar for a removable photo', () => {
+    mount({
+      details: DETAILS,
+      images: IMAGES.map((image) => ({ ...image, onRemove: vi.fn() })),
+    });
+    expect(labels()).toEqual(['Remove photo']);
   });
 
   it('Forward and Delete report the shown index; both are 44x44 in the overlay ink', () => {

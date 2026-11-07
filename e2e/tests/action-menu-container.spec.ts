@@ -35,9 +35,9 @@ test('phone: the post ⋯ opens a sheet titled Post actions, Copy link first, De
   await openPostMenu(page);
   const sheet = page.getByRole('dialog', { name: 'Post actions', exact: true });
   await expect(sheet).toBeVisible();
-  // Title left, close X right; no Cancel text in the header.
+  // "<" back leading, then the title; no Cancel text in the header.
   await expect(sheet.getByRole('heading', { name: 'Post actions' })).toBeVisible();
-  await expect(sheet.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
   await expect(sheet.getByRole('button', { name: 'Cancel', exact: true })).toHaveCount(0);
   const labels = await rowLabels(page);
   // The full page has nothing to open, so Copy link leads.

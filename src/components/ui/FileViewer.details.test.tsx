@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// The FileViewer's chat extras: sender and sent time at the top centre, and a
-// "Show in chat" button in a bottom bar, each only when its props are given.
-// Without them the sheet is unchanged.
+// The FileViewer's chat extras: sender and sent time as the back bar's title
+// ("{Sender} · {formatAgo}", the file name under it), and a "Show in chat"
+// button in a bottom bar, each only when its props are given. Without them the
+// title is the file name.
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -10,6 +11,7 @@ import {
   FileViewerSheet,
   SHOW_IN_CHAT_LABEL,
   fileViewerDetails,
+  viewerBarTitle,
   type FileViewerProps,
   type FileViewerSource,
 } from '@/components/ui/FileViewer';
@@ -61,21 +63,30 @@ describe('fileViewerDetails', () => {
 });
 
 describe('FileViewer chat extras', () => {
-  it('no props: no details, no Show in chat (unchanged)', () => {
+  it('no props: the title is the file name, no Show in chat', () => {
     const out = html();
     expect(out).not.toContain('data-lightbox-details');
+    expect(out).toMatch(/data-viewer-bar-title=""[^>]*>clip\.mp4</);
     expect(out).not.toContain('data-show-in-chat');
     expect(out).not.toContain(SHOW_IN_CHAT_LABEL);
   });
 
-  it('sender and sentAt: the two-line details block with a mono time', () => {
+  it('sender and sentAt: the back bar title reads "{Sender} · {formatAgo}", the name under it', () => {
     const out = html({ sender: 'Maya', sentAt: AT });
-    expect(out).toContain('data-lightbox-details');
-    expect(out).toContain('Maya');
     // formatAgo: more than 6 days back reads as the day ("23 Oct", year when off-year).
-    expect(out).toMatch(/23 Oct/);
-    expect(out).toMatch(/font-mono[^"]*tabular-nums/);
+    expect(out).toMatch(/data-viewer-bar-title=""[^>]*>Maya · 23 Oct</);
+    expect(out).toMatch(/data-viewer-bar-line=""[^>]*>clip\.mp4</);
+    expect(out).not.toContain('data-lightbox-details');
+    expect(out).toContain('aria-label="Back"');
     expect(out).not.toContain('data-show-in-chat');
+  });
+
+  it('viewerBarTitle: sender · time, either half alone, else the name', () => {
+    expect(viewerBarTitle({ sender: 'Maya', time: '2h' }, 'a.pdf')).toBe('Maya · 2h');
+    expect(viewerBarTitle({ sender: 'Maya', time: '' }, 'a.pdf')).toBe('Maya');
+    expect(viewerBarTitle({ sender: '', time: '2h' }, 'a.pdf')).toBe('2h');
+    expect(viewerBarTitle({ sender: '', time: '' }, 'a.pdf')).toBe('a.pdf');
+    expect(viewerBarTitle(null, 'a.pdf')).toBe('a.pdf');
   });
 
   it('the video still plays in the native player', () => {

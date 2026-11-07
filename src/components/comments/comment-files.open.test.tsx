@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Every comment file opens in-app: a PDF, a docx and a photo from a comment
 // open the in-app viewers with the over-the-app bar ("<" Back, name or
-// "{Name} · {formatAgo}", Download), never a new tab. Chat (no backBar) keeps
-// its X bar unchanged.
+// "{Name} · {formatAgo}", Download), never a new tab. Chat viewers have the
+// same "<" bar (D3).
 import { act } from 'react';
 import type { ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -84,7 +84,7 @@ describe('comment files open in-app', () => {
     const opened = spyNewTab();
     const attachments = toCommentFileAttachments(['v-pdf'], FILES);
     const host = mount(
-      <MessageAttachments attachments={attachments} cache={cache} presignEnabled backBar />,
+      <MessageAttachments attachments={attachments} cache={cache} presignEnabled />,
     );
     expect(host.textContent).toContain('Launch deck.pdf');
     openCard(host, 'Launch deck.pdf');
@@ -102,7 +102,7 @@ describe('comment files open in-app', () => {
     const opened = spyNewTab();
     const attachments = toCommentFileAttachments(['v-doc'], FILES);
     const host = mount(
-      <MessageAttachments attachments={attachments} cache={cache} presignEnabled backBar />,
+      <MessageAttachments attachments={attachments} cache={cache} presignEnabled />,
     );
     openCard(host, 'Brief.docx');
     const sheet = viewer();
@@ -165,7 +165,7 @@ describe('comment files open in-app', () => {
       preview: async () => null,
     };
     const close = (): void => {};
-    mount(<FileViewerSheet name="deck.pdf" kind="pdf" source={source} onClose={close} backBar />);
+    mount(<FileViewerSheet name="deck.pdf" kind="pdf" source={source} onClose={close} />);
     for (let i = 0; i < 6; i++) {
       await act(async () => {
         await new Promise((r) => setTimeout(r, 0));
@@ -177,17 +177,17 @@ describe('comment files open in-app', () => {
   });
 });
 
-describe('chat is unchanged (no backBar)', () => {
-  it('a chat file still opens with the X (Close) bar', () => {
+describe('chat viewers leave with "<" too (D3)', () => {
+  it('a chat file opens with the Back bar, never an X', () => {
     const [pdf] = toCommentFileAttachments(['v-pdf'], FILES);
     const host = mount(<FileBubble attachment={pdf!} cache={cache} presignEnabled />);
     openCard(host, 'Launch deck.pdf');
     const bar = viewer()?.querySelector('[data-viewer-bar]');
-    expect(bar?.querySelector('button[aria-label="Close"]')).not.toBeNull();
-    expect(bar?.querySelector('button[aria-label="Back"]')).toBeNull();
+    expect(bar?.querySelector('button[aria-label="Close"]')).toBeNull();
+    expect(bar?.querySelector('button[aria-label="Back"]')).not.toBeNull();
   });
 
-  it('the chat lightbox keeps "Close viewer" and no back bar', () => {
+  it('the chat lightbox has the back bar and no "Close viewer"', () => {
     const images = toCommentFileAttachments(['v-img1', 'v-img2'], FILES);
     mount(
       <ImageLightbox
@@ -199,7 +199,7 @@ describe('chat is unchanged (no backBar)', () => {
         onClose={() => {}}
       />,
     );
-    expect(document.body.querySelector('button[aria-label="Close viewer"]')).not.toBeNull();
-    expect(document.body.querySelector('[data-lightbox-back-bar]')).toBeNull();
+    expect(document.body.querySelector('button[aria-label="Close viewer"]')).toBeNull();
+    expect(document.body.querySelector('[data-lightbox-back-bar]')).not.toBeNull();
   });
 });

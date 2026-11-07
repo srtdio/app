@@ -22,6 +22,7 @@ import { SectionHeader } from '@/components/shell/SectionHeader';
 import {
   ICON_SIZE,
   IconArrowUpRight,
+  IconBan,
   IconCalendar,
   IconCheck,
   IconLink,
@@ -29,7 +30,6 @@ import {
   IconPipeline,
   IconPlus,
   IconSwitch,
-  IconX,
   type IconProps,
 } from '@/components/ui/icons';
 import { CreatePostSheet } from '@/components/pages/CreatePostSheet';
@@ -487,13 +487,13 @@ export function pipelineSurface(props: PipelineSurfaceProps): ReactElement {
   );
 }
 
-/** One icon per move: Send for review arrow, Approve check, Park pause, Reject X. */
+/** One icon per move: Send for review arrow, Approve check, Park pause, Reject ban (no X). */
 const MOVE_ICON: Record<Stage, ComponentType<IconProps>> = {
   draft: IconSwitch,
   review: IconArrowUpRight,
   approved: IconCheck,
   parked: IconPause,
-  rejected: IconX,
+  rejected: IconBan,
 };
 
 /** One select bar row; `single` rows show only while exactly one post is ticked. */

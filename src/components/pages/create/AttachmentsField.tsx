@@ -16,7 +16,7 @@ import { platformLabel } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
-import { ICON_SIZE, IconFile, IconImagePlus, IconLink, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconFile, IconImagePlus, IconLink, IconTrash } from '@/components/ui/icons';
 import { frameFor, type Frame, type FrameMedia } from '@/lib/platform-specs';
 import {
   COMPOSER_FRAME_MAX_HEIGHT,
@@ -192,7 +192,7 @@ export function attachmentItemList(
           {item.name}
         </span>
         <IconButton label={`Remove ${item.name}`} onClick={() => onRemove(index)}>
-          <IconX size={ICON_SIZE.inline} />
+          <IconTrash size={ICON_SIZE.inline} />
         </IconButton>
       </li>
     );
@@ -1072,12 +1072,15 @@ export function AttachmentsField({
                   </Button>
                 ) : null}
                 {item.error !== null ? (
-                  <IconButton
-                    label={`Dismiss ${item.name}`}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="shrink-0 px-3"
+                    aria-label={`Dismiss ${item.name}`}
                     onClick={() => dismissPending(item.id)}
                   >
-                    <IconX size={ICON_SIZE.inline} />
-                  </IconButton>
+                    Clear
+                  </Button>
                 ) : null}
               </li>
             );

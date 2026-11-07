@@ -10,6 +10,7 @@ vi.mock('@/lib/use-is-laptop', async (importOriginal) => ({
 
 import { SortMenu, sortOptionButtons, type SortOption } from '@/components/ui/SortMenu';
 import { Toast } from '@/components/ui/toast/Toast';
+import { Button } from '@/components/ui/Button';
 
 // Button system regression for the overlay controls this group owns: the sort
 // trigger (was h-9 on desktop, rounded-md), the sort rows (were md:h-9), and the
@@ -57,6 +58,17 @@ function isElement(node: ReactNode): node is ReactElement {
   return typeof node === 'object' && node !== null && 'props' in node;
 }
 
+function allElements(node: ReactNode, out: ReactElement[] = []): ReactElement[] {
+  if (Array.isArray(node)) {
+    node.forEach((child) => allElements(child, out));
+    return out;
+  }
+  if (!isElement(node)) return out;
+  out.push(node);
+  allElements((node.props as { children?: ReactNode }).children, out);
+  return out;
+}
+
 function rawButtons(node: ReactNode, out: ReactElement[] = []): ReactElement[] {
   if (Array.isArray(node)) {
     node.forEach((child) => rawButtons(child, out));
@@ -78,17 +90,19 @@ describe('Toast buttons', () => {
     const action = found.find(
       (el) => (el.props as Record<string, unknown>)['data-toast-action'] === '',
     );
-    const dismiss = found.find(
+    expect(action).toBeDefined();
+    const t = classOf(action!);
+    expect(t).toContain('h-11');
+    expect(t).toContain('rounded-lg');
+    for (const bad of BAD) expect(t).not.toContain(bad);
+    // D4: the dismiss is the shared ghost Button "Clear" (44 tall from the part), no X.
+    const dismiss = allElements(tree).find(
       (el) => (el.props as Record<string, unknown>)['aria-label'] === 'Dismiss notification',
     );
-    expect(action).toBeDefined();
     expect(dismiss).toBeDefined();
-    for (const el of [action!, dismiss!]) {
-      const t = classOf(el);
-      expect(t).toContain('h-11');
-      expect(t).toContain('rounded-lg');
-      for (const bad of BAD) expect(t).not.toContain(bad);
-    }
+    expect(dismiss?.type).toBe(Button);
+    expect((dismiss?.props as { variant?: string }).variant).toBe('ghost');
+    expect((dismiss?.props as { children?: unknown }).children).toBe('Clear');
     expect(classOf(action!)).toContain('text-base');
     expect(classOf(action!)).toContain('font-medium');
   });

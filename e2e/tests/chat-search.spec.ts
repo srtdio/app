@@ -118,7 +118,7 @@ async function runMediaFlow(page: Page): Promise<void> {
   expect(chips).toEqual([...SEARCH_CHIP_ORDER]);
 
   const photo = page.locator('[data-search-chip="photo"]');
-  // The picked chip carries its own X (44x44, "Clear Photos filter"): it
+  // The picked chip carries its own Clear (44 tall, "Clear Photos filter"): it
   // clears the filter and the chat list is back. No All chip.
   await expect(page.locator('[data-chip-clear]')).toHaveCount(0);
   await photo.click();
@@ -126,7 +126,7 @@ async function runMediaFlow(page: Page): Promise<void> {
   await expect(clear).toBeVisible();
   await expect(page.locator('[data-chip-clear]')).toHaveCount(1);
   const box = await clear.boundingBox();
-  expect(Math.round(box?.width ?? 0)).toBe(44);
+  expect(Math.round(box?.width ?? 0)).toBeGreaterThanOrEqual(44);
   expect(Math.round(box?.height ?? 0)).toBe(44);
   await clear.click();
   await expect(photo).toHaveAttribute('aria-pressed', 'false');
@@ -159,9 +159,9 @@ async function runMediaFlow(page: Page): Promise<void> {
   await expect(results.locator(`[data-media-tile^="${MEDIA_MSG.photoAlbum}:"]`)).toHaveCount(3);
   await expect(results.locator(`[data-media-tile^="${MEDIA_MSG.photoOne}:"]`)).toHaveCount(1);
 
-  // The viewer opens with its details on top and Show in chat.
+  // The viewer opens with its "<" back bar (sender · time title) and Show in chat.
   await tile.click();
-  await expect(page.locator('[data-lightbox-details]')).toBeVisible();
+  await expect(page.locator('[data-lightbox-back-bar] [data-lightbox-title]')).toBeVisible();
   const show = page.locator('[data-show-in-chat]');
   await expect(show).toBeVisible();
   await show.click();
@@ -171,7 +171,7 @@ async function runMediaFlow(page: Page): Promise<void> {
   await expect(
     page.locator(`[data-msg-id="${MEDIA_MSG.photoAlbum}"][data-jump-glow]`).first(),
   ).toBeVisible();
-  await expect(page.locator('[data-lightbox-details]')).toHaveCount(0);
+  await expect(page.locator('[data-lightbox-back-bar]')).toHaveCount(0);
   await expect(landed.first()).toContainText(MEDIA_ALBUM_BODY);
   await expect(landed.first()).toBeInViewport();
 

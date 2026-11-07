@@ -52,7 +52,7 @@ describe('SectionHeader type roles', () => {
   });
 
   // Audit A1-01: the placeholder must fit a 360px phone row beside sort and New,
-  // so the insets stay tight and the Clear button's 44px is reserved only while
+  // so the insets stay tight and the ghost Clear button's 64px is reserved only while
   // it shows.
   it('search field uses tight insets while empty', async () => {
     await mount();
@@ -60,7 +60,7 @@ describe('SectionHeader type roles', () => {
     const classes = (input?.className ?? '').split(/\s+/);
     expect(classes).toContain('pl-7');
     expect(classes).toContain('pr-2');
-    expect(classes).not.toContain('pr-11');
+    expect(classes).not.toContain('pr-16');
     expect(classes).not.toContain('pl-9');
     const icon = input?.parentElement?.querySelector('span.pointer-events-none');
     expect((icon?.className ?? '').split(/\s+/)).toContain('left-2');
@@ -70,7 +70,7 @@ describe('SectionHeader type roles', () => {
     await mount('diwali');
     const input = document.querySelector<HTMLInputElement>('input[type="search"]');
     const classes = (input?.className ?? '').split(/\s+/);
-    expect(classes).toContain('pr-11');
+    expect(classes).toContain('pr-16');
     expect(classes).not.toContain('pr-2');
   });
 

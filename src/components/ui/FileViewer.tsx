@@ -40,7 +40,7 @@ import type { MutableRefObject, ReactElement, ReactNode, RefObject } from 'react
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { IconDownload, IconFile, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconDownload, IconFile, ICON_SIZE } from '@/components/ui/icons';
 import { ViewerBackButton } from '@/components/ui/ViewerBackButton';
 import { cn } from '@/lib/cn';
 import { useModalFocus } from '@/lib/modal-focus';
@@ -1099,21 +1099,28 @@ export interface FileViewerProps {
   subtitle?: string | undefined;
   /** The tile's rect to grow from; default: the tile the opening tap hit. */
   from?: Box | null | undefined;
-  /** Chat: who sent the file, shown small at the top centre with `sentAt`. */
+  /** Chat: who sent the file; the bar's title reads "{sender} · {formatAgo(sentAt)}". */
   sender?: string | undefined;
-  /** Chat: when it was sent (ISO), shown as date and time on the device zone. */
+  /** Chat: when it was sent (ISO), shown through formatAgo in the bar's title. */
   sentAt?: string | undefined;
   /** Chat home: a "Show in chat" text button in a bottom bar opens the chat at the file's message. */
   onShowInChat?: (() => void) | undefined;
-  /**
-   * Comments: the over-the-app bar. The exit is "<" (Back) in place of the X,
-   * and a PDF's "Page {i} of {n}" sits under the name in the bar (the bottom
-   * counter chip is not shown). Omitted (chat, Assets): today's bar, unchanged.
-   */
-  backBar?: boolean | undefined;
 }
 
-/** The top bar's line under the name with caller actions: "Page 3 of 12" for a PDF. Pure. */
+/**
+ * The bar's title: "{sender} · {time}" when the caller passed who sent the
+ * file and when (either half left out when empty), else the file's name. Pure.
+ */
+export function viewerBarTitle(
+  details: { sender: string; time: string } | null,
+  name: string,
+): string {
+  if (details === null) return name;
+  const joined = [details.sender, details.time].filter((part) => part !== '').join(' · ');
+  return joined !== '' ? joined : name;
+}
+
+/** The top bar's line under the title: "Page 3 of 12" for a PDF, else the subtitle. Pure. */
 export function viewerBarLine(
   pages: { page: number; total: number } | null,
   subtitle: string | undefined,
@@ -1134,19 +1141,22 @@ function useBodyScrollLock(): void {
   }, []);
 }
 
+/**
+ * The viewer's one top bar: "<" (Back) on the leading edge, the title
+ * ("{Sender} · {formatAgo}" for chat, else the file name) with its line under
+ * it (a PDF's page, the file name under a sender title, or the caller's
+ * subtitle), then the caller's actions or Download. Never an X.
+ */
 function TopBar(props: {
-  name: string;
+  title: string;
   tone: ToneClasses;
   onClose: () => void;
   onDownload: () => void;
   closeRef: RefObject<HTMLButtonElement>;
   actions?: ((barClass: string) => ReactNode) | undefined;
   line?: string | null;
-  /** Comments: "<" (Back) in place of the X, and the line shows under the name. */
-  back?: boolean | undefined;
 }): ReactElement {
   const { tone } = props;
-  const back = props.back === true;
   return (
     <div
       data-viewer-bar=""
@@ -1155,38 +1165,21 @@ function TopBar(props: {
         NO_SELECT,
       )}
     >
-      {back ? (
-        <ViewerBackButton buttonRef={props.closeRef} onClick={props.onClose} className={tone.bar} />
-      ) : (
-        <button
-          ref={props.closeRef}
-          type="button"
-          aria-label="Close"
-          onClick={props.onClose}
-          className={tone.bar}
-        >
-          <IconX size={ICON_SIZE.control} />
-        </button>
-      )}
-      {props.actions !== undefined || back ? (
-        <div className="min-w-0 flex-1 px-1 text-center">
-          <p title={props.name} className={cn('truncate text-base font-medium', tone.fg)}>
-            {middleTruncate(props.name, VIEWER_NAME_BUDGET)}
-          </p>
-          {props.line != null ? (
-            <p data-viewer-bar-line="" className={cn('truncate text-sm', tone.fgDim)}>
-              {props.line}
-            </p>
-          ) : null}
-        </div>
-      ) : (
+      <ViewerBackButton buttonRef={props.closeRef} onClick={props.onClose} className={tone.bar} />
+      <div className="min-w-0 flex-1 px-1 text-center">
         <p
-          title={props.name}
-          className={cn('min-w-0 flex-1 truncate text-center text-base font-medium', tone.fg)}
+          data-viewer-bar-title=""
+          title={props.title}
+          className={cn('truncate text-base font-medium', tone.fg)}
         >
-          {middleTruncate(props.name, VIEWER_NAME_BUDGET)}
+          {middleTruncate(props.title, VIEWER_NAME_BUDGET)}
         </p>
-      )}
+        {props.line != null ? (
+          <p data-viewer-bar-line="" className={cn('truncate text-sm', tone.fgDim)}>
+            {props.line}
+          </p>
+        ) : null}
+      </div>
       {props.actions !== undefined ? (
         props.actions(tone.bar)
       ) : (
@@ -1200,7 +1193,6 @@ function TopBar(props: {
 
 export function FileViewerSheet(props: FileViewerProps): ReactElement {
   const { name, kind, size, source, onLoadError, actions, subtitle, onShowInChat } = props;
-  const back = props.backBar === true;
   const nowMs = useMinuteClock();
   const details = fileViewerDetails(props.sender, props.sentAt, new Date(nowMs));
   // Callers pass a fresh onClose each render: keep the latest in a ref so the
@@ -1227,14 +1219,15 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
     });
   }, [source, name]);
 
-  // Focus moves in (to Close), Tab stays inside, and the opener gets it back
+  // Focus moves in (to Back), Tab stays inside, and the opener gets it back
   // on close. The shared modal-focus stack, so a layer opened over the viewer
   // traps for itself and the layer under it never fights the viewer for Tab.
   useModalFocus(dialogRef, true, { initial: () => closeRef.current });
 
-  // Open: rendered in place, the sheet grows out of the file tile on the first
-  // frame (growFromCard). No tile known: it simply shows.
-  useGrowFromThumb(sheetRef, props.from);
+  // Open: rendered in place, only the file's media area grows out of the file
+  // tile on the first frame (growFromCard); the bar never moves. No tile
+  // known: it simply shows.
+  useGrowFromThumb(sheetRef, props.from, (root) => root.querySelector('[data-viewer-media]'));
 
   // The dim follows a move of the sheet (spring back or rise out), then rests.
   const followDim = useCallback((played: Played): void => {
@@ -1375,32 +1368,21 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
         style={{ transform: `translateY(${dragY}px)` }}
       >
         <TopBar
-          name={name}
+          title={viewerBarTitle(details, name)}
           tone={tone}
           onClose={onClose}
           onDownload={onDownload}
           closeRef={closeRef}
           actions={actions}
-          line={
-            back
-              ? viewerBarLine(kind === 'pdf' ? pages : null, subtitle)
-              : actions !== undefined
-                ? viewerBarLine(null, subtitle)
-                : null
-          }
-          back={back}
+          line={viewerBarLine(
+            kind === 'pdf' ? pages : null,
+            details !== null ? middleTruncate(name, VIEWER_NAME_BUDGET) : subtitle,
+          )}
         />
-        {details !== null ? (
-          <div className="relative z-raised flex shrink-0 justify-center px-14 pb-1">
-            <ViewerDetails
-              sender={details.sender}
-              time={details.time}
-              fgClass={tone.fg}
-              fgDimClass={tone.fgDim}
-            />
-          </div>
-        ) : null}
-        <div className="relative flex min-h-0 flex-1 items-center justify-center">
+        <div
+          data-viewer-media=""
+          className="relative flex min-h-0 flex-1 items-center justify-center"
+        >
           <Renderer
             name={name}
             size={size}
@@ -1431,16 +1413,6 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
             </Button>
           </div>
         ) : null}
-        {pages !== null && kind === 'pdf' && !back ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-[max(env(safe-area-inset-bottom),12px)] flex justify-center">
-            <span
-              data-page-counter=""
-              className={cn('rounded-full px-3 py-1 font-mono text-sm', tone.chip, NO_SELECT)}
-            >
-              {pageCounter(pages.page, pages.total)}
-            </span>
-          </div>
-        ) : null}
         {downloadFailed ? (
           <p
             role="status"
@@ -1454,14 +1426,12 @@ export function FileViewerSheet(props: FileViewerProps): ReactElement {
   );
 }
 
-/** The viewer's crash fallback: still closable, still downloadable. */
+/** The viewer's crash fallback: still closable ("<" Back), still downloadable. */
 export function FileViewerFallback(props: {
   name: string;
   kind: ViewerKind;
   source: FileViewerSource;
   onClose: () => void;
-  /** Comments: "<" (Back) in place of the X. */
-  back?: boolean | undefined;
 }): ReactElement {
   const toneName = viewerTone(props.kind);
   const tone = TONES[toneName];
@@ -1488,19 +1458,7 @@ export function FileViewerFallback(props: {
       className={cn('fixed inset-0 z-viewer flex flex-col', tone.backdrop, NO_SELECT)}
     >
       <div className="flex shrink-0 items-center px-1 pt-[max(env(safe-area-inset-top),4px)]">
-        {props.back === true ? (
-          <ViewerBackButton buttonRef={closeRef} onClick={props.onClose} className={tone.bar} />
-        ) : (
-          <button
-            ref={closeRef}
-            type="button"
-            aria-label="Close"
-            onClick={props.onClose}
-            className={tone.bar}
-          >
-            <IconX size={ICON_SIZE.control} />
-          </button>
-        )}
+        <ViewerBackButton buttonRef={closeRef} onClick={props.onClose} className={tone.bar} />
       </div>
       <div className="flex flex-1 items-center justify-center">
         <ViewerError
@@ -1546,7 +1504,6 @@ export function FileViewer(props: FileViewerProps): ReactElement | null {
             kind={props.kind}
             source={props.source}
             onClose={props.onClose}
-            back={props.backBar}
           />
         }
       >

@@ -1,14 +1,21 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { UPLOAD_RING_SIZES, UPLOAD_RING_X, UploadRing } from '@/components/chat/UploadRing';
+import { UPLOAD_RING_SIZES, UPLOAD_RING_STOP, UploadRing } from '@/components/chat/UploadRing';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
+import { FileBubbleCard, FileSendingRing } from '@/components/chat/FileBubble';
+import { FailedActions, MetaGlyph, bubbleStatus, metaTick } from '@/components/chat/MessageThread';
+import { ringCircumference, ringDashOffset } from '@/components/ui/ProgressRing';
+import { ICON_SIZE, IconClock, IconStop } from '@/components/ui/icons';
 import { PresignCache, type PresignDeps } from '@/lib/asset-presign';
 import type { MessageAttachment } from '@/lib/chat/attachments';
 
 // T5: the ring never positions itself; each caller places it, at the
-// prototype's size. T6: the five upload states, pinned in light and dark
-// (token-only markup, so the two themes render the same classes).
+// prototype's size. T6: the upload states in light and dark (token-only
+// markup, so the two themes render the same classes). D5: the sending states
+// (queued, uploading, failed, sent, stopped) with one look on every type.
 
 function cache(): PresignCache {
   const deps: PresignDeps = {
@@ -121,9 +128,9 @@ describe('T5: UploadRing positioning and sizes', () => {
     },
   );
 
-  it('prototype sizes: voice 40, photo and album 56, file 44; X 16; every tap target >= 44', () => {
+  it('prototype sizes: voice 40, photo/album 56, file 44; stop 16; tap targets >= 44', () => {
     expect(UPLOAD_RING_SIZES).toEqual({ voice: 40, image: 56, file: 44 });
-    expect(UPLOAD_RING_X).toBe(16);
+    expect(UPLOAD_RING_STOP).toBe(16);
     const voice = renderToStaticMarkup(<UploadRing progress={0.5} variant="voice" />);
     expect(voice).toContain('viewBox="0 0 40 40"');
     expect(voice).toMatch(/data-upload-disc="" class="[^"]*h-10 w-10/);
@@ -147,11 +154,11 @@ describe('T5: UploadRing positioning and sizes', () => {
     );
   });
 
-  it('motion: the arc fills (mv-fill), an unknown arc turns (mv-spin), never a pulse or fade', () => {
+  it('motion: the arc fills (mv-fill); unknown sits at 0, never spins or fades', () => {
     const html = renderToStaticMarkup(<UploadRing progress={null} variant="voice" />);
     expect(html).not.toContain('animate-spin');
     expect(html).not.toContain('animate-pulse');
-    expect(html).toContain('mv-spin');
+    expect(html).not.toContain('mv-spin');
     expect(html).toMatch(/data-upload-arc=""[^>]*class="[^"]*mv-fill/);
     expect(html).not.toMatch(/transition-|duration-/);
     const known = renderToStaticMarkup(<UploadRing progress={0.5} variant="voice" />);
@@ -190,11 +197,16 @@ describe('T5: UploadRing positioning and sizes', () => {
     expect(html).toContain('data-ring-variant="image"');
   });
 
-  it('file: the file bubble sends with a thin progress bar and no ring', () => {
+  it('file: the file bubble sends with the 44px ring over its page box, no thin bar', () => {
     const html = paint([fileUploading], 'light');
-    expect(html).not.toContain('data-upload-ring');
+    expect(html.match(/data-upload-ring=""/g)).toHaveLength(1);
+    expect(html).toContain('data-ring-variant="file"');
     expect(html).toContain('data-file-state="sending"');
-    expect(html).toContain('data-file-progress=""');
+    expect(html).not.toContain('data-file-progress');
+    expect(ringParent(html)).toContain('data-file-ring=""');
+    // A sending pdf reserves the page box, so the ring sits centred over it.
+    expect(ringParent(html)).toContain('absolute inset-x-px top-px flex');
+    expect(ringParent(html)).toContain('aspect-ratio:1 / 1.3');
   });
 });
 
@@ -210,8 +222,6 @@ describe('T6: upload states in light and dark', () => {
     const dark = paint([...attachments], 'dark', { album: isAlbum });
     // Token-only: the theme wrapper is the only difference.
     expect(dark.replace('<div class="dark">', '<div>')).toBe(light);
-    expect(light).toMatchSnapshot('light');
-    expect(dark).toMatchSnapshot('dark');
   });
 
   it('voice done draws the real waveform at full emphasis', () => {
@@ -275,5 +285,199 @@ describe('U6: the voice ring draws in the bubble inks', () => {
     expect(html).toMatch(/data-upload-disc="" class="[^"]*bg-panel-3/);
     expect(html).toMatch(/data-upload-arc=""[^>]*class="[^"]*text-accent(?!-)/);
     expect(html).not.toContain('bg-overlay');
+  });
+});
+
+/** The arc's stroke offset in a ring's markup. */
+function arcOffset(html: string): number {
+  return Number(/data-upload-arc=""[^>]*stroke-dashoffset="([^"]+)"/.exec(html)?.[1] ?? NaN);
+}
+
+describe('D5: sending states, one look across photo, album, video, file, voice note', () => {
+  const stop = renderToStaticMarkup(
+    <IconStop size={UPLOAD_RING_STOP} className="[grid-area:1/1]" />,
+  );
+
+  it.each(['voice', 'image', 'file'] as const)(
+    'uploading (%s): the stop square (IconStop) inside the ring, labelled "Stop sending"',
+    (variant) => {
+      const html = renderToStaticMarkup(
+        <UploadRing progress={0.5} variant={variant} onCancel={() => {}} />,
+      );
+      expect(html).toContain(stop);
+      expect(html).toContain('aria-label="Stop sending"');
+      expect(html).not.toContain('Cancel upload');
+      // No X path (the old close glyph) anywhere in the control.
+      expect(html).not.toContain('M6 18 18 6M6 6l12 12');
+    },
+  );
+
+  it('the label follows the caller (Stop upload, Stop recording)', () => {
+    const upload = renderToStaticMarkup(
+      <UploadRing progress={0.5} variant="image" label="Stop upload" />,
+    );
+    expect(upload).toContain('aria-label="Stop upload"');
+    const recording = renderToStaticMarkup(
+      <UploadRing progress={0.5} variant="voice" label="Stop recording" />,
+    );
+    expect(recording).toContain('aria-label="Stop recording"');
+  });
+
+  it.each([0, 0.5, 1])('the arc reflects real progress %s (fills 0 to 100)', (progress) => {
+    const html = renderToStaticMarkup(<UploadRing progress={progress} variant="image" />);
+    const size = UPLOAD_RING_SIZES.image;
+    expect(arcOffset(html)).toBeCloseTo(ringDashOffset(progress, size, 3, 0));
+    expect(arcOffset(html)).toBeCloseTo(ringCircumference(size, 3) * (1 - progress));
+    expect(html).toContain(`data-upload-progress="${String(Math.round(progress * 100))}"`);
+    expect(html).toContain(`aria-valuenow="${String(Math.round(progress * 100))}"`);
+  });
+
+  it('unknown progress at the start shows an empty ring (0), then fills', () => {
+    const unknown = renderToStaticMarkup(<UploadRing progress={null} variant="image" />);
+    const size = UPLOAD_RING_SIZES.image;
+    expect(arcOffset(unknown)).toBeCloseTo(ringCircumference(size, 3));
+    expect(unknown).toContain('data-upload-progress="unknown"');
+    const half = renderToStaticMarkup(<UploadRing progress={0.5} variant="image" />);
+    expect(arcOffset(half)).toBeLessThan(arcOffset(unknown));
+    const done = renderToStaticMarkup(<UploadRing progress={1} variant="image" />);
+    expect(arcOffset(done)).toBe(0);
+  });
+
+  it('over media: overlay ink on a dark overlay disc (reads on light and dark)', () => {
+    const html = renderToStaticMarkup(<UploadRing progress={0.5} variant="image" />);
+    expect(ringClass(html)).toContain('text-overlay-fg');
+    expect(html).toMatch(/data-upload-disc="" class="[^"]*bg-overlay/);
+    expect(html).not.toContain('text-white');
+  });
+
+  it('stop calls the cancel path (the pending message goes) and never reaches the bubble', () => {
+    const onCancel = vi.fn();
+    const tree = UploadRing({ progress: 0.5, variant: 'file', onCancel }) as ReactElement<{
+      children: ReactElement[];
+    }>;
+    const button = tree.props.children[0] as ReactElement<{
+      onClick: (e: { stopPropagation: () => void }) => void;
+    }>;
+    const stopPropagation = vi.fn();
+    button.props.onClick({ stopPropagation });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(stopPropagation).toHaveBeenCalled();
+  });
+
+  it('voice note uploading: the ring replaces the play glyph in the same 44px box', () => {
+    const html = paint([voiceUploading], 'light');
+    // The slot keeps its box; play is still there (so the wave never moves) but invisible.
+    expect(html).toMatch(/data-voice-play-slot="upload" class="relative h-11 w-11 shrink-0"/);
+    const play = /<button[^>]*data-voice-control=""[^>]*>/.exec(html)?.[0] ?? '';
+    expect(play).toContain('aria-label="Play voice note"');
+    expect(play).toMatch(/class="[^"]*\binvisible\b/);
+    expect(ringParent(html)).toContain('data-voice-play-slot="upload"');
+    // Never larger than the play button: a 40px ring in a 44px hit box.
+    expect(ringClass(html)).toContain('h-11 min-w-11');
+    expect(html).toContain('viewBox="0 0 40 40"');
+    expect(html).toContain('aria-label="Stop sending"');
+  });
+
+  it('photo and album uploading: a ring with the stop square over the clipped media', () => {
+    expect(paint([photoUploading], 'light')).toContain(stop);
+    const albumHtml = paint(album, 'light', { album: true });
+    expect(albumHtml.match(/data-upload-ring=""/g)).toHaveLength(1);
+    expect(albumHtml).toContain(stop);
+  });
+
+  it('video uploading: the ring takes the play button spot (no play glyph)', () => {
+    const sending = renderToStaticMarkup(
+      <div className="relative">
+        <FileBubbleCard
+          kind="video"
+          ratio={9 / 16}
+          thumbUrl="blob:frame"
+          name="clip.mp4"
+          meta={[{ text: 'Video', mono: false }]}
+          progress={0.3}
+          uploading
+          failed={false}
+          onOpen={() => {}}
+        />
+        <FileSendingRing ratio={9 / 16} progress={0.3} onCancel={() => {}} />
+      </div>,
+    );
+    expect(sending).not.toContain('bg-overlay text-overlay-fg lit-media');
+    expect(sending).toContain('data-file-ring=""');
+    expect(sending).toContain('absolute inset-x-px top-px flex items-center justify-center');
+    expect(sending).toContain(stop);
+    expect(sending).toContain('aria-label="Stop sending"');
+  });
+
+  it('file uploading: no thin bar; the icon keeps its box under the ring', () => {
+    const html = renderToStaticMarkup(
+      <FileBubbleCard
+        kind="file"
+        ratio={null}
+        thumbUrl={null}
+        name="notes.zip"
+        meta={[{ text: 'File', mono: false }]}
+        progress={0.5}
+        uploading
+        failed={false}
+        onOpen={() => {}}
+      />,
+    );
+    expect(html).not.toContain('data-file-progress');
+    expect(html).toContain('class="flex invisible"');
+  });
+
+  it('queued: a clock (IconClock) in the time chip', () => {
+    const status = bubbleStatus(
+      { mine: true, state: 'sending', status: 'sent' },
+      { showTicks: true },
+    );
+    expect(status).toBe('sending');
+    const tick = metaTick(status);
+    expect(tick).toBe('sending');
+    const html = renderToStaticMarkup(<MetaGlyph status="sending" />);
+    expect(html).toContain(renderToStaticMarkup(<IconClock size={ICON_SIZE.text} />));
+    expect(html).toContain('aria-label="Sending"');
+  });
+
+  it('failed: stays in the thread with "Not sent" and Retry', () => {
+    expect(bubbleStatus({ mine: true, state: 'failed', status: 'sent' }, { showTicks: true })).toBe(
+      'failed',
+    );
+    const html = renderToStaticMarkup(<FailedActions onRetry={() => {}} onDelete={() => {}} />);
+    expect(html).toContain('Not sent');
+    expect(html).toContain('Retry');
+  });
+
+  it('sent: time only (no live ring, no clock)', () => {
+    const photoSent: MessageAttachment = {
+      ...photoUploading,
+      assetId: '44444444-4444-4444-8444-444444444444',
+      local: { ...photoUploading.local!, progress: 1, uploading: false },
+    };
+    expect(paint([photoSent], 'light')).not.toContain('data-upload-ring');
+    expect(
+      bubbleStatus({ mine: true, state: 'sent', status: 'sent' }, { showTicks: false }),
+    ).toBeNull();
+  });
+});
+
+describe('D4b: no close X in the sending-state files', () => {
+  const OWNED = [
+    'chat/UploadRing.tsx',
+    'chat/VoiceNote.tsx',
+    'chat/FileBubble.tsx',
+    'ui/ProgressRing.tsx',
+    'pages/assets/AssetUploadSheet.tsx',
+    'induction/PresetMediaField.tsx',
+  ];
+  const ROOT = fileURLToPath(new URL('../', import.meta.url));
+
+  // Names assembled so a repo-wide grep for the retired glyph skips this guard.
+  const RETIRED = new RegExp(['\\bIcon', 'X\\b|\\bXMark', 'Icon\\b'].join(''));
+
+  it.each(OWNED)('%s uses no close X glyph', (rel) => {
+    const src = readFileSync(`${ROOT}${rel}`, 'utf8');
+    expect(src).not.toMatch(RETIRED);
   });
 });

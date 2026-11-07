@@ -61,6 +61,7 @@ const DOCUMENTED = [
   'IconPaperclip',
   'IconPause',
   'IconPauseFill',
+  'IconStop',
   'IconPhoto',
   'IconPin',
   'IconPipeline',
@@ -92,11 +93,10 @@ const DOCUMENTED = [
   'IconUpload',
   'IconUser',
   'IconVideo',
-  'IconX',
 ];
 
 // 24/solid, filled states only: no stroke.
-const SOLID = new Set(['IconPlay', 'IconPauseFill', 'IconStarFilled']);
+const SOLID = new Set(['IconPlay', 'IconPauseFill', 'IconStarFilled', 'IconStop']);
 // Fixed-box glyphs whose size prop is ignored.
 const FIXED_BOX: Record<string, [string, string]> = {
   IconTickSingle: ['16', '12'],
@@ -212,7 +212,7 @@ describe('non-icon glyphs drawn in the icon file', () => {
     expect(done).toContain('class="stroke-panel"');
   });
 
-  it('DrawnMarkGlyph: the approve tick and reject cross as drawable strokes (pathLength 1, dash 1), drawn at rest', () => {
+  it('DrawnMarkGlyph: the approve tick and reject mark (ban, never a cross) as drawable strokes (pathLength 1, dash 1), drawn at rest', () => {
     const tick = renderToStaticMarkup(<Icons.DrawnMarkGlyph mark="tick" className="text-good" />);
     expect(tick).toContain('d="m4.5 12.75 6 6 9-13.5"');
     expect(tick).toContain('pathLength="1"');
@@ -225,7 +225,8 @@ describe('non-icon glyphs drawn in the icon file', () => {
     const cross = renderToStaticMarkup(
       <Icons.DrawnMarkGlyph mark="cross" size={ICON_SIZE.control} />,
     );
-    expect(cross.match(/data-draw=""/g)).toHaveLength(2);
+    expect(cross.match(/data-draw=""/g)).toHaveLength(1);
+    expect(cross).not.toContain('M6 18 18 6');
     expect(cross).toContain('width="20"');
   });
 

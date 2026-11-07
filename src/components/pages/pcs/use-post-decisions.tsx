@@ -31,7 +31,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { useOptionalToast } from '@/components/ui/toast';
 import { ApproveConfirm, APPROVE_CONFIRM_TITLE } from '@/components/ui/ApproveConfirm';
 import { OnBehalfApproveSheet } from '@/components/ui/OnBehalfApproveSheet';
-import { IconCheck, IconPause, IconX } from '@/components/ui/icons';
+import { IconBan, IconCheck, IconPause } from '@/components/ui/icons';
 import { runCreateCommentBatch } from '@/components/comments/Comments';
 import { runPostReadyNotify } from '@/components/pages/pcs/PostReadyNotice';
 import { isAgencySide, isClient } from '@/components/pages/pcs/roles';
@@ -342,7 +342,7 @@ function decisionMoveRows(args: {
       if (action.to === 'rejected') {
         return {
           key: 'rejected',
-          icon: IconX,
+          icon: IconBan,
           label: action.label,
           danger: true,
           onPick: () => args.onPick('rejected'),

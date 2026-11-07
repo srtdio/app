@@ -39,19 +39,21 @@ describe('ChannelList buttons (design system)', () => {
     expect(on).toContain('aria-pressed="true"');
   });
 
-  it('only the picked chip carries the X: "Clear <chip> filter", 44x44, the chip ink', () => {
+  it('only the picked chip carries Clear: "Clear <chip> filter", 44 tall, ghost ink', () => {
     const html = renderToStaticMarkup(searchChips({ kind: 'photo', onChange: noop }));
     const clears = buttonTags(html).filter((t) => t.includes('data-chip-clear'));
     expect(clears).toHaveLength(1);
     expect(clears[0]).toContain('aria-label="Clear Photos filter"');
-    expect(clears[0]).toContain('min-h-11 w-11');
-    expect(clears[0]).toContain('text-accent-fg');
+    expect(clears[0]).toContain('min-h-11');
+    expect(clears[0]).toContain('min-w-11');
+    expect(clears[0]).toContain('text-fg-2');
+    expect(html).toContain('>Clear<');
     expect(html).not.toMatch(/>All</);
     const none = renderToStaticMarkup(searchChips({ kind: null, onChange: noop }));
     expect(none).not.toContain('data-chip-clear');
   });
 
-  it('the X and the picked chip body both clear the filter', () => {
+  it('Clear and the picked chip body both clear the filter', () => {
     const onChange = vi.fn();
     const tree = searchChips({ kind: 'video', onChange });
     const chips = (tree.props as { children: ReactElement[] }).children;

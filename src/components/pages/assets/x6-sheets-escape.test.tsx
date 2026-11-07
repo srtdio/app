@@ -225,21 +225,22 @@ describe('X6 lightbox', () => {
     const onDelete = vi.fn();
     await mount(lightbox(() => {}, onDelete));
     const bar = document.querySelector<HTMLElement>('[data-lightbox-bar]');
-    for (const label of ['Close viewer', 'Download', 'Copy link', 'Info', 'Delete']) {
+    for (const label of ['Back', 'Download', 'Copy link', 'Info', 'Delete']) {
       const control = bar?.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`);
       expect(control, label).not.toBeNull();
       expect(control?.className).toContain('h-11 w-11');
     }
     expect(bar?.querySelector('[aria-label="Delete"]')?.className).toContain('text-bad');
     expect(bar?.className).toContain('safe-area-inset-top');
-    expect(bar?.textContent).toContain('1 of 2');
+    expect(bar?.querySelector('[data-lightbox-counter]')?.textContent).toBe('1 / 2');
+    expect(bar?.querySelector('[aria-label="Close viewer"]')).toBeNull();
     await act(async () => bar?.querySelector<HTMLButtonElement>('[aria-label="Delete"]')?.click());
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
 
-  it('moves focus to Close on open', async () => {
+  it('moves focus to "<" Back on open', async () => {
     await mount(lightbox(() => {}));
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Close viewer');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Back');
   });
 
   it('Escape closes an open rename, then Info, then the lightbox', async () => {

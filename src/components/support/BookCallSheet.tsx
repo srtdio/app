@@ -9,6 +9,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { IconCheck, ICON_SIZE } from '@/components/ui/icons';
 import { cn } from '@/lib/cn';
 import { env } from '@/lib/env';
@@ -198,13 +199,10 @@ export function BookCallSheet({ open, onClose, workspaceId }: BookCallSheetProps
         {choice?.kind === 'other' ? (
           <div className="flex flex-col gap-2">
             <div className="grid grid-cols-2 gap-2">
-              <Input
-                type="date"
-                aria-label="Date"
-                min={minDate}
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
+              {/* ui/DatePicker, never a native date input; days before tomorrow are greyed. */}
+              <div data-book-call-date="" className="min-w-0">
+                <DatePicker label="Date" min={minDate} value={date} onChange={setDate} />
+              </div>
               <Input
                 type="time"
                 aria-label="Time"

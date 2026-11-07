@@ -84,11 +84,11 @@ import {
 } from '@srtdio/rpc';
 import { postUpdate, type PostCardFields } from '@srtdio/posts';
 import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { Card } from '@/components/ui/Card';
 import { SECTION_LABEL_INK, Text, TEXT_ROLE } from '@/components/ui/Text';
 import { CONTROL_IN_LINE, GUTTER } from '@/components/ui/layout';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
@@ -96,6 +96,7 @@ import { useToast } from '@/components/ui/toast';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useMenuGesture } from '@/components/ui/useLongPress';
 import {
+  DrawnMarkGlyph,
   ICON_SIZE,
   IconCalendar,
   IconChat,
@@ -109,7 +110,6 @@ import {
   IconPlan,
   IconPlus,
   IconTrash,
-  IconX,
 } from '@/components/ui/icons';
 import { NO_TOUCH_SELECT } from '@/components/chat/chat-type';
 import { Thumbnail } from '@/components/media/Thumbnail';
@@ -342,14 +342,14 @@ export function isTextField(target: EventTarget | null): boolean {
  * from the right (docs/motion.md, push: 280 ms in, 240 ms back, a drag from
  * the left 28 px follows the finger and closes past 130 px or on a flick,
  * skipped when the browser already animated the back; the incoming edge is a
- * 1px ring), header with a 44px back (or close) button; a modal dialog
+ * 1px ring), header with a 44px back "<"; a modal dialog
  * (role dialog, aria-modal) whose focus moves in on open and returns to the
  * opener on close (useModalFocus). Laptop (md and up): a right-docked panel,
  * full height and at its final width from its first frame (PLAN_PANEL_WIDTH),
  * border-left, lit as an overlay below 1180px (it sits over the chat) and
  * flat from 1180px (beside the list), no scrim,
  * not modal (role complementary), at once (laptop pane switches are
- * instant), a close X in the header. Opening focuses its
+ * instant), the back "<" in the header closes it. Opening focuses its
  * heading; closing hands focus back to what opened it. Escape: a key inside
  * the panel is the panel's alone (it never reaches the chat): an in-flow
  * viewer inside it first (handed the key on window only), then the screen's
@@ -366,9 +366,12 @@ export function PlanPage(props: {
   onBack: () => void;
   /** Laptop: keep the back button (the Item screen's Back to the list). */
   desktopBack?: boolean;
-  /** Laptop: the header X (default: onBack). */
+  /** Laptop without desktopBack: the back "<" closes the panel with this (default: onBack). */
   onDismiss?: () => void;
-  /** Laptop: the header X's label. */
+  /**
+   * Deprecated and ignored: the laptop close was an X; it is the back "<" now
+   * (aria-label "Back"). Kept so existing callers compile.
+   */
   closeLabel?: string;
   /** Laptop: Escape for an inner layer (drag, pick-up, popover, menu, rename); true when taken. */
   onEscape?: () => boolean;
@@ -377,7 +380,7 @@ export function PlanPage(props: {
   action?: ReactNode;
   /** Replaces the title line (the agency's menu button, the inline rename). */
   titleSlot?: ReactNode;
-  /** The Plan screen's view actions (Add), before the ⋯ / X in the bar's actions. */
+  /** The Plan screen's view actions (Add), before the ⋯ in the bar's actions. */
   twoLine?: { actions?: ReactNode };
   /** Drawn under the header, anchored to it (the header menu). */
   overlay?: ReactNode;
@@ -493,26 +496,17 @@ export function PlanPage(props: {
   // touch device), Tab stays inside, and the opener gets it back on close.
   useModalFocus(pageRef, !desktop && props.open && rendered);
   if (!rendered) return null;
-  const showBack = !desktop || props.desktopBack === true;
-  // One exit per panel: the X shows only where there is no back "<". It is the
-  // bar's last action, so the bar's trailing rule puts its glyph on the edge.
-  const closeButton =
-    desktop && !showBack ? (
-      <IconButton
-        type="button"
-        label={props.closeLabel ?? 'Close'}
-        data-plan-close=""
-        onClick={props.onDismiss ?? props.onBack}
-      >
-        <IconX size={ICON_SIZE.control} />
-      </IconButton>
-    ) : null;
+  // One exit per panel, always the leading back "<" (no-cross rule): on the
+  // phone and on a laptop panel that keeps its back (desktopBack) it is Back;
+  // on a laptop panel without one it closes the panel (onDismiss, else
+  // onBack) and keeps the data-plan-close hook.
+  const laptopClose = desktop && props.desktopBack !== true;
+  const backAction = laptopClose ? (props.onDismiss ?? props.onBack) : props.onBack;
   const actions =
-    props.twoLine?.actions !== undefined || props.action !== undefined || closeButton !== null ? (
+    props.twoLine?.actions !== undefined || props.action !== undefined ? (
       <>
         {props.twoLine?.actions}
         {props.action}
-        {closeButton}
       </>
     ) : undefined;
   return createPortal(
@@ -538,11 +532,15 @@ export function PlanPage(props: {
       )}
     >
       {/* The one header bar: back "<" (leading pull), the title (title role)
-          with its subtitle line, the actions (Add, ⋯, the laptop X) last on
-          the trailing rule. */}
+          with its subtitle line, the actions (Add, ⋯) last on the trailing
+          rule. */}
       <HeaderBar
         title={<Highlight text={props.title} />}
-        {...(showBack ? { onBack: props.onBack, backProps: { label: props.backLabel } } : {})}
+        onBack={backAction}
+        backProps={{
+          label: laptopClose ? 'Back' : props.backLabel,
+          ...(laptopClose ? { 'data-plan-close': '' } : {}),
+        }}
         {...(props.subtitle !== undefined
           ? { subtitle: <span data-plan-page-subtitle="">{props.subtitle}</span> }
           : {})}
@@ -674,9 +672,11 @@ export function PlanConfirmSheet(props: {
 }
 
 /**
- * A concept's optional date: the native date input the plan's From and To use,
- * empty by default, with a 44px clear button while it holds a date. Any date is
- * allowed (inside or outside the plan's range).
+ * A concept's optional date: ui/DatePicker (the plan's From and To use it too),
+ * empty by default, with a ghost "Clear" text button (44px) while it holds a
+ * date. Any date is allowed (inside or outside the plan's range). Disabled is
+ * the native fieldset's: it disables the picker's trigger and Clear together,
+ * so DatePicker needs no disabled prop of its own.
  */
 export function ConceptDateField(props: {
   value: string;
@@ -684,31 +684,32 @@ export function ConceptDateField(props: {
   disabled?: boolean;
 }): ReactElement {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-md text-fg-3">Date (optional)</span>
-      <span className="flex items-center gap-1.5">
-        <Input
-          type="date"
-          data-plan-concept-date=""
-          value={props.value}
-          disabled={props.disabled === true}
-          onChange={(e) => props.onChange(e.target.value)}
-          className="min-w-0 flex-1 font-mono disabled:text-fg-3"
-        />
+    <fieldset
+      data-plan-concept-date=""
+      disabled={props.disabled === true}
+      className="flex min-w-0 flex-col gap-1"
+    >
+      <span aria-hidden="true" className="text-md text-fg-3">
+        Date (optional)
+      </span>
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="min-w-0 flex-1">
+          <DatePicker label="Date (optional)" value={props.value} onChange={props.onChange} />
+        </span>
         {props.value !== '' ? (
-          <IconButton
+          <Button
             type="button"
-            label="Clear date"
+            variant="ghost"
+            aria-label="Clear date"
             data-plan-concept-date-clear=""
-            disabled={props.disabled === true}
             onClick={() => props.onChange('')}
-            className="shrink-0 text-fg-3"
+            className="shrink-0"
           >
-            <IconX size={ICON_SIZE.control} />
-          </IconButton>
+            Clear
+          </Button>
         ) : null}
       </span>
-    </label>
+    </fieldset>
   );
 }
 
@@ -2121,14 +2122,16 @@ export function PlanScreen(props: {
                 <p key={at}>{note}</p>
               ))}
             </div>
-            <IconButton
+            <Button
               type="button"
-              label="Dismiss"
+              variant="ghost"
+              aria-label="Dismiss"
+              data-plan-skipped-dismiss=""
               onClick={() => setSkippedNotes([])}
               className="shrink-0"
             >
-              <IconX size={ICON_SIZE.control} />
-            </IconButton>
+              Clear
+            </Button>
           </div>
         ) : null}
         {read.status === 'loading' ? (
@@ -2511,7 +2514,7 @@ export function PlanHeaderMenu(props: {
 
 /**
  * The inline rename: the title as a text field (1 to 200 characters, trimmed),
- * Cancel (X) and Done, each 44px. Enter is Done, Escape is Cancel.
+ * a ghost Cancel and Done, each 44px. Enter is Done, Escape is Cancel.
  */
 export function RenameField(props: {
   value: string;
@@ -2539,16 +2542,17 @@ export function RenameField(props: {
         }}
         className="min-w-0 flex-1 font-semibold disabled:text-fg-3"
       />
-      <IconButton
+      <Button
         type="button"
-        label="Cancel rename"
+        variant="ghost"
+        aria-label="Cancel rename"
         data-plan-rename-cancel=""
         disabled={props.busy}
         onClick={props.onCancel}
         className="shrink-0"
       >
-        <IconX size={ICON_SIZE.control} />
-      </IconButton>
+        Cancel
+      </Button>
       <Button
         type="button"
         variant="link"
@@ -3008,7 +3012,7 @@ export function PlanSwitch(props: {
             : 'border-border-strong bg-panel lit-chip',
         )}
       >
-        <IconX size={ICON_SIZE.inline} />
+        <DrawnMarkGlyph mark="cross" size={ICON_SIZE.inline} />
         {PLAN_NOT_OK_LABEL}
       </Button>
     </span>
@@ -3040,7 +3044,11 @@ export function PlanDecidedPill(props: {
       onClick={props.onChange}
       className="shrink-0"
     >
-      {ok ? <IconCheck size={ICON_SIZE.inline} /> : <IconX size={ICON_SIZE.inline} />}
+      {ok ? (
+        <IconCheck size={ICON_SIZE.inline} />
+      ) : (
+        <DrawnMarkGlyph mark="cross" size={ICON_SIZE.inline} />
+      )}
       {ok ? PLAN_OK_LABEL : PLAN_NOT_OK_LABEL}
       <span aria-hidden="true">
         <IconChevronDown size={ICON_SIZE.inline} />

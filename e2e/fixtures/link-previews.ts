@@ -14,11 +14,19 @@ export const LOGIN_URL = 'https://drive.google.com/file/d/1aX9/view';
 export const UNSAFE_URL = 'http://g00gle-docs-share.top:8080/login?next=x';
 export const COMMENT_URL = 'https://www.youtube.com/watch?v=hamper45';
 export const COMMENT_TITLE = 'Unboxing a festive hamper in 45 seconds';
+/** A YouTube watch link: the Worker answers its oEmbed title and the i.ytimg.com picture. */
+export const YOUTUBE_URL = 'https://www.youtube.com/watch?v=festive92';
+export const YOUTUBE_TITLE = 'Festive hampers: the full reel';
+/** A page with a title and no picture: the card is the compact 64px row. */
+export const TEXT_URL = 'https://www.notion.so/northwind/Reel-brief-9f2c';
+export const TEXT_TITLE = 'Reel brief: festive hampers';
 
 export const FULL_LINE = `Reference for the reel tone ${FULL_URL}`;
 export const LOGIN_LINE = `Final logo files ${LOGIN_URL}`;
 export const UNSAFE_LINE = `pls see this asap ${UNSAFE_URL}`;
 export const COMMENT_LINE = `Make the opening like this one ${COMMENT_URL}`;
+export const YOUTUBE_LINE = `Cut it like this ${YOUTUBE_URL}`;
+export const TEXT_LINE = `Brief is here ${TEXT_URL}`;
 
 const BASE = { finalDomain: null, viaShortener: null };
 
@@ -54,7 +62,34 @@ const ANSWERS: Record<string, unknown> = {
     video: true,
     durationSeconds: 45,
   },
+  [YOUTUBE_URL]: {
+    type: 'full',
+    domain: 'youtube.com',
+    path: '/watch?v=festive92',
+    letter: 'Y',
+    ...BASE,
+    title: YOUTUBE_TITLE,
+    description: null,
+    siteName: 'YouTube',
+    video: true,
+    durationSeconds: 92,
+  },
+  [TEXT_URL]: {
+    type: 'text',
+    domain: 'notion.so',
+    path: '/northwind/Reel-brief-9f2c',
+    letter: 'N',
+    ...BASE,
+    title: TEXT_TITLE,
+    description: null,
+    siteName: null,
+    video: false,
+    durationSeconds: null,
+  },
 };
+
+/** The YouTube link's picture: a 4:3 frame like i.ytimg.com's hqdefault.jpg (480x360). */
+const YOUTUBE_VIDEO_ID = 'festive92';
 
 /** Put the link lines on the DM's last three messages and one comment on the first post. */
 export function seedLinkBodies(world: ChatWorld, now: number = Date.now()): void {
@@ -110,6 +145,7 @@ export async function installLinkPreviewStub(page: Page): Promise<LinkPreviewStu
   const requested: string[] = [];
   let gate: Promise<void> | null = null;
   const png = solidPng(382, 200, [214, 69, 122]);
+  const youtubePng = solidPng(480, 360, [52, 58, 64]);
   const cors = {
     'access-control-allow-origin': '*',
     'access-control-allow-headers': 'authorization, x-trace-id',
@@ -127,7 +163,7 @@ export async function installLinkPreviewStub(page: Page): Promise<LinkPreviewStu
       await route.fulfill({
         status: 200,
         headers: { ...cors, 'content-type': 'image/png' },
-        body: png,
+        body: target.includes(YOUTUBE_VIDEO_ID) ? youtubePng : png,
       });
       return;
     }

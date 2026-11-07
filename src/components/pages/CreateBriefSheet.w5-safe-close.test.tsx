@@ -148,7 +148,7 @@ describe('CreateBriefSheet: dirty close paths ask first', () => {
     const { onClose } = await mount();
     await type('brief-objective', 'Something');
     await act(async () =>
-      sheet()?.querySelector<HTMLButtonElement>('[aria-label="Close"]')?.click(),
+      sheet()?.querySelector<HTMLButtonElement>('[aria-label="Back"]')?.click(),
     );
     expect(confirm()?.textContent).toContain('Discard this brief?');
     expect(onClose).not.toHaveBeenCalled();
@@ -206,7 +206,7 @@ describe('CreateBriefSheet: every close path is blocked while submitting', () =>
 
     await press('Escape');
     await act(async () =>
-      sheet()?.querySelector<HTMLButtonElement>('[aria-label="Close"]')?.click(),
+      sheet()?.querySelector<HTMLButtonElement>('[aria-label="Back"]')?.click(),
     );
     await act(async () => {
       sheet()?.parentElement?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -220,7 +220,7 @@ describe('CreateBriefSheet: every close path is blocked while submitting', () =>
 });
 
 describe('CreateBriefSheet: header actions like New post (15f)', () => {
-  it('Create brief sits in the sheet header before the X; there is no footer or Cancel', async () => {
+  it('Create brief sits in the sheet header after the leading "<" back; there is no footer or Cancel', async () => {
     await mount();
     const header = document.querySelector<HTMLElement>('[data-composer-header]');
     expect(header).not.toBeNull();
@@ -228,12 +228,13 @@ describe('CreateBriefSheet: header actions like New post (15f)', () => {
     const create = createButton();
     expect(create).toBeTruthy();
     expect(header?.contains(create ?? null)).toBe(true);
-    const close = header?.querySelector<HTMLButtonElement>('[aria-label="Close"]');
-    expect(close).toBeTruthy();
-    // Create comes before the X, as on New post.
+    const back = header?.querySelector<HTMLButtonElement>('[aria-label="Back"]');
+    expect(back).toBeTruthy();
+    expect(header?.querySelector('[aria-label="Close"]')).toBeNull();
+    // The "<" back leads, Create follows on the right, as on New post.
     expect(
-      (create as HTMLElement).compareDocumentPosition(close as HTMLElement) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      (create as HTMLElement).compareDocumentPosition(back as HTMLElement) &
+        Node.DOCUMENT_POSITION_PRECEDING,
     ).toBeTruthy();
     expect(button('Cancel')).toBeUndefined();
   });

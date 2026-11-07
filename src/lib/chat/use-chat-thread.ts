@@ -172,6 +172,7 @@ import type { ChatConnection, ChatStatus } from '@/lib/chat/types';
 import type { PrivateReply } from '@/lib/chat/private-reply';
 import { channelOlderKey, setOlderPageFailed } from '@/lib/chat/older-page-status';
 import { errorText } from '@/lib/error-copy';
+import { mediaMessagesGone } from '@/lib/chat/media-cache-drop';
 
 /**
  * The channel's read cursors for the reading layer: every member's position
@@ -1088,10 +1089,17 @@ export function useChatThread(params: {
   onMessagesDeletedRef.current = params.onMessagesDeleted;
   const onMessageEditedRef = useRef(params.onMessageEdited);
   onMessageEditedRef.current = params.onMessageEdited;
-  /** Messages became tombstones: tell the caller and the store (drafts, outbox, list line). */
+  /**
+   * Messages became tombstones: tell the caller and the store (drafts, outbox,
+   * list line), and drop their media from the chat home chips and their saved
+   * first pages at once (media-cache-drop.ts; no read).
+   */
+  const mediaScopeRef = useRef({ userId: currentUserId, workspaceId });
+  mediaScopeRef.current = { userId: currentUserId, workspaceId };
   const reportDeleted = useCallback((forChannel: string, ids: readonly string[]): void => {
     onMessagesDeletedRef.current?.(forChannel, ids);
     outboxRef.current.messagesDeleted(ids);
+    mediaMessagesGone({ ...mediaScopeRef.current, messageIds: ids });
   }, []);
   const inFlight = useMemo(() => createInFlightGuard(), []);
   const catchingUpRef = useRef(false);

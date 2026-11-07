@@ -436,7 +436,7 @@ describe('F15: close resets, the footer Retry, every outside day', () => {
     await settle();
     expect(sheet('Post A')).not.toBeNull();
     // Skipping A leaves its note and B's sheet up.
-    await click(sheet('Post A')?.querySelector<HTMLElement>('[aria-label="Close"]'));
+    await click(sheet('Post A')?.querySelector<HTMLElement>('[aria-label="Back"]'));
     await settle();
     expect(q('[data-plan-skipped-notes]')).not.toBeNull();
     expect(sheet('Post B')).not.toBeNull();

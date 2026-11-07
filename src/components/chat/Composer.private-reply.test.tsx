@@ -7,7 +7,7 @@ vi.mock('@/lib/logger', () => ({
 import { renderToStaticMarkup } from 'react-dom/server';
 import { isValidElement, type ReactElement } from 'react';
 import { dispatchSend, PrivateReplyBar } from '@/components/chat/Composer';
-import { IconButton } from '@/components/ui/IconButton';
+import { Button } from '@/components/ui/Button';
 import { getDraft, resetDrafts, setPrivateReplyDraft } from '@/lib/chat/drafts';
 import { privateReplyFromDraft, type PrivateReplyDraft } from '@/lib/chat/private-reply';
 
@@ -31,16 +31,17 @@ describe('PrivateReplyBar (the composer quote strip)', () => {
     expect(html).toContain('Can you send the deck?');
     expect(html).toContain('truncate');
     expect(html).toContain('bg-accent');
-    // The reply bar's X, aria-label only (no new visible text).
+    // The reply bar's ghost "Clear", aria-label names the action.
     expect(html).toContain('aria-label="Cancel reply"');
   });
 
-  it('its X removes the quote', () => {
+  it('its ghost "Clear" removes the quote', () => {
     const onRemove = vi.fn();
     const bar = PrivateReplyBar({ quote: QUOTE, preview: 'x', onRemove });
     const box = (bar.props as { children: ReactElement }).children;
     const trailing = (box.props as { trailing: ReactElement }).trailing;
-    expect(isValidElement(trailing) && trailing.type).toBe(IconButton);
+    expect(isValidElement(trailing) && trailing.type).toBe(Button);
+    expect((trailing.props as { children?: unknown }).children).toBe('Clear');
     (trailing.props as { onClick: () => void }).onClick();
     expect(onRemove).toHaveBeenCalledOnce();
   });

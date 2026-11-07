@@ -216,6 +216,11 @@ interface DatePickerProps {
   label?: string;
   /** Days before today are greyed and cannot be picked. */
   disablePast?: boolean;
+  /**
+   * Optional: days before this ISO yyyy-mm-dd day are greyed and cannot be
+   * picked (e.g. tomorrow for Book a call). Wins over disablePast when set.
+   */
+  min?: string;
   /** Show the "Clear date" and "Done" buttons under the grid. */
   actions?: boolean;
   /** The trigger's id (a Field label points at it). */
@@ -228,6 +233,7 @@ export function DatePicker({
   placeholder = 'Select a date',
   label,
   disablePast = false,
+  min,
   actions = false,
   id,
 }: DatePickerProps): ReactElement {
@@ -262,7 +268,8 @@ export function DatePicker({
 
   // The grid's one tab stop. Open: focus moves onto it (the selected day, else
   // today); the arrows move it and cross into the next or previous month.
-  const minISO = disablePast ? todayISO : undefined;
+  const minISO =
+    min !== undefined && parseISO(min) !== null ? min : disablePast ? todayISO : undefined;
   const [focusISO, setFocusISO] = useState('');
   const tabISO = rovingDay(view.year, view.monthIndex, focusISO, value, todayISO, minISO);
   useEffect(() => {

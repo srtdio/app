@@ -101,7 +101,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Edges (L2): page 16 phone / 24 laptop (GUTTER), chat 12 (CHAT_GUTTER), sheets 16. Inside <= outside spacing.
 - Trailing rule: a trailing ⋮, chevron or X is a 44 box pulled out 12 (TRAILING_PULL) so its glyph sits on the content edge; leading back/close mirrors it (LEADING_PULL). Parts apply it, never call sites.
 - Lanes (ui/layout LANE\_\*): unread pill top centre, jump-to-latest bottom trailing above the composer, tip strip in flow above the composer; they never cover a title, a time or each other.
-- Exit: "<" for anything opening over the app; X only for remove / clear / dismiss / cancel upload. One exit per panel.
+- Exit: No X anywhere. Back "<" to leave; stop square to cancel a send; bin to remove; "Clear" to clear or dismiss. One exit per panel. Guard: `src/__tests__/no-cross.test.ts`.
 - States keep their footprint: Button busy keeps width; Sheet busy is on its button; Composer, upload, pending, Not sent and select mode keep row height and slots.
 - Lighting: one lit-_ height per surface (no shadow-_, drop-shadow, backdrop-blur, dark:); outlines lit-selected/lit-focus/lit-bad/lit-drop/lit-today only.
 - Colour: token classes only; greys + amber Review, green Approved, red errors/Reject; no violet/blue, no hex, no text-white. Contrast 4.5:1 text, 3:1 edges.
@@ -117,7 +117,7 @@ Every user action generates a uuid_v7 `trace_id` (`src/lib/trace.ts`) that flows
 - Speed: first paint from what the device holds; no new await, hold, gate or read on a paint or tap path; parts are pure render.
 - Pinned exit bar: every HeaderBar with a back "<" on a screen that opens over the app stays pinned while the page scrolls (phone page mode: sticky at --shell-sticky-top, safe area kept). On the post screen the checkpoint progress row sits inside the pinned block under the bar.
 - Annotations are ink, never gold: caption highlight = fg underline + numbered ink circle; quote chip = fg rail + circle; photo pin = the checkpoint circle (resolved goes good). Agency pin = ink dot, no number.
-- Comment and slot composers = chat composer: leading "+" tray with Photos, File, Assets only; no paper clip.
+- Comment and slot composers = chat composer: leading "+" tray with Photos, File, Assets only; no paper clip. Personal notes composer hint stays "Note" (allowed exception).
 - Checkpoints: one lit-card-muted section, threads split by hairlines; resolved points fold to one line at the bottom; numbers never change; replies fold to the latest.
 - Every UI change: light + dark parity, visual baselines + layout checks (e2e/visual/layout-checks.ts) updated in the same PR; data-induction targets keep the tour working.
 

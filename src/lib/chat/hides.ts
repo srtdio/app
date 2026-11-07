@@ -31,6 +31,8 @@ import {
 } from '@/lib/chat/chat-store';
 import type { ThreadMessage } from '@/lib/chat/thread';
 import { chunkIds } from '@/lib/chat/record';
+import { markMediaGone } from '@/lib/chat/media-gone';
+import { mediaMessagesGone } from '@/lib/chat/media-cache-drop';
 import { whenIdle } from '@/lib/chunk-reload';
 import { SIGNOUT_EVENT } from '@/lib/events';
 import {
@@ -109,6 +111,8 @@ function setBase(workspaceId: string, rows: HiddenRow[]): void {
   const held = entry(workspaceId);
   held.base = rows;
   recompute(held);
+  // Written hides never come back: their media never surfaces again (media-gone.ts).
+  markMediaGone(rows.map((row) => row.message_id));
 }
 
 /** The hidden message ids of a workspace (empty when none or unknown). Never reads. */
@@ -306,6 +310,9 @@ export async function hideMessages(input: {
     primeRead(hidesKey(input.userId, input.workspaceId), held.base, 60_000);
     recompute(held);
   }
+  // The write held (no Undo past here): the chips' saved first pages drop
+  // these messages now, and every media list skips them from here on.
+  mediaMessagesGone({ userId: input.userId, workspaceId: input.workspaceId, messageIds: ids });
 }
 
 /** Forget every workspace's hidden set (sign-out; tests). */

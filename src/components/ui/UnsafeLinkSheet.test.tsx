@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 describe('UnsafeLinkSheet', () => {
-  it('shows the copy, focuses "Don\'t open" and has the header close X', async () => {
+  it('shows the copy, focuses "Don\'t open" and has the header "<" back leading', async () => {
     const { dialog } = await open();
     expect(dialog.textContent).toContain('Check before opening');
     expect(dialog.querySelector('[data-unsafe-url]')?.className).toContain('font-mono');
@@ -42,8 +42,13 @@ describe('UnsafeLinkSheet', () => {
     expect(dialog.className).toContain('lit-overlay');
     expect(dialog.className).not.toMatch(/shadow-|border-border-strong/);
     expect(document.activeElement?.textContent).toBe("Don't open");
-    expect(dialog.querySelector('[aria-label="Close"]')).not.toBeNull();
-    const buttons = [...dialog.querySelectorAll('button:not([aria-label="Close"]), a')];
+    const back = dialog.querySelector<HTMLElement>('[aria-label="Back"]');
+    expect(back).not.toBeNull();
+    // Leading: before the title, pulled by LEADING_PULL; no X anywhere.
+    expect(back?.nextElementSibling?.id).toBe('unsafe-link-title');
+    expect(back?.className).toContain('-ml-3');
+    expect(dialog.querySelector('[aria-label="Close"]')).toBeNull();
+    const buttons = [...dialog.querySelectorAll('button:not([aria-label="Back"]), a')];
     for (const b of buttons) {
       const cls = b.getAttribute('class') ?? '';
       expect(cls).toContain('h-11');
@@ -80,8 +85,8 @@ describe('UnsafeLinkSheet', () => {
     await act(async () => {
       anyway?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
     });
-    // Wraps to the first control: the header's close X.
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Close');
+    // Wraps to the first control: the header's "<" back.
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Back');
   });
 
   it('a downward swipe past the threshold closes; motion is translateY only', async () => {

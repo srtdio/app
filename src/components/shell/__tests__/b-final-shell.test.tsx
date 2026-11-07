@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { HeaderBar } from '@/components/ui/HeaderBar';
 import { IconButton } from '@/components/ui/IconButton';
 import { SHEET_FRAME } from '@/components/ui/Sheet';
-import { ICON_SIZE, IconAlarmClock, IconSearch, IconX, strokeFor } from '@/components/ui/icons';
+import { ICON_SIZE, IconAlarmClock, IconSearch, strokeFor } from '@/components/ui/icons';
 import { PageHead } from '@/components/shell/PageHead';
 import { selectionHeaderSlots } from '@/components/chat/SelectionBar';
 
@@ -67,22 +67,31 @@ describe('Topbar edges', () => {
 });
 
 describe('trailing rule: the part applies it, never the call site', () => {
-  it('a trailing X in HeaderBar is pulled 12 by the part', () => {
+  it('a trailing icon box in HeaderBar is pulled 12 by the part', () => {
     const out = html(
       <HeaderBar
         compact
         title="Switch workspace"
         actions={
-          <IconButton label="Close" onClick={noop}>
-            <IconX size={ICON_SIZE.control} />
+          <IconButton label="Search" onClick={noop}>
+            <IconSearch size={ICON_SIZE.control} />
           </IconButton>
         }
       />,
     );
     expect(out).toContain('[&amp;&gt;button.w-11:last-child]:-mr-3');
     expect(out).toContain('width="20"');
-    const close = /<button[^>]*aria-label="Close"[^>]*>/.exec(out)?.[0] ?? '';
-    expect(close).not.toContain('-mr-3');
+    const trailing = /<button[^>]*aria-label="Search"[^>]*>/.exec(out)?.[0] ?? '';
+    expect(trailing).not.toContain('-mr-3');
+  });
+
+  it('the WorkspaceSwitcher exit is the HeaderBar back "<" leading, never an X', () => {
+    const src = source('../WorkspaceSwitcher.tsx');
+    expect(src).toContain('onBack={requestClose}');
+    expect(src).not.toMatch(/\bIconX\b/);
+    const out = html(<HeaderBar compact title="Switch workspace" onBack={noop} />);
+    expect(out).toMatch(/aria-label="Back"[^>]*-ml-3/);
+    expect(out).not.toContain('aria-label="Close"');
   });
 
   it('WorkspaceSwitcher, Contact and Group info headers are HeaderBar in both modes', () => {

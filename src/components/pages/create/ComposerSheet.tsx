@@ -5,7 +5,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Text } from '@/components/ui/Text';
 import { IconButton } from '@/components/ui/IconButton';
 import { SHEET_FRAME, SHEET_WIDE } from '@/components/ui/Sheet';
-import { ICON_SIZE, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronLeft } from '@/components/ui/icons';
+import { LEADING_PULL } from '@/components/ui/layout';
 import { useBackGuard } from '@/lib/back-guard';
 import { cn } from '@/lib/cn';
 import { useEscapeLayer } from '@/lib/escape-stack';
@@ -24,7 +25,7 @@ interface ComposerSheetProps {
   /** The header's right side: the save buttons. No footer exists. */
   actions: ReactNode;
   children: ReactNode;
-  /** Any change: every close path (X, backdrop, Escape, Back) asks first. */
+  /** Any change: every close path ("<" back, backdrop, Escape, system Back) asks first. */
   dirty?: boolean;
   /** A save is in flight: every close path does nothing. */
   busy?: boolean;
@@ -38,9 +39,9 @@ interface ComposerSheetProps {
 
 /**
  * The full New post sheet's frame (New brief uses it too, narrow): the shared Sheet's panel, motion, focus,
- * Escape and Back handling, with its own header (the title left, then the
- * save buttons, then the close X far right, as every sheet header) and no
- * footer. The shared Sheet's header holds only a title and its X, so this
+ * Escape and Back handling, with its own header (the "<" back leading, as
+ * every sheet header, then the title, then the save buttons on the right) and
+ * no footer. The shared Sheet's header holds one header verb at most, so this
  * frame lives here.
  */
 export function ComposerSheet({
@@ -155,24 +156,26 @@ export function ComposerSheet({
       >
         <div
           data-composer-header=""
-          className="flex min-w-0 items-center gap-2 border-b border-border py-2 pl-4 pr-1 sm:gap-3"
+          className="flex min-w-0 items-center gap-2 border-b border-border px-4 py-2 sm:gap-3"
         >
-          <Text as="h2" role="title" className="min-w-0 flex-1 truncate text-fg">
-            {title}
-          </Text>
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">{actions}</div>
+          {/* The one exit: "<" back leading, pulled out by 12 (LEADING_PULL). */}
           <IconButton
-            label="Close"
+            label="Back"
             onClick={requestClose}
             className={cn(
+              LEADING_PULL,
               'shrink-0',
               // fg-3 sorts after IconButton's fg-2 / hover fg, so it wins unforced.
               busy && 'cursor-default text-fg-3 hover:text-fg-3',
             )}
             {...(busy ? { 'aria-disabled': 'true' as const } : {})}
           >
-            <IconX size={ICON_SIZE.control} />
+            <IconChevronLeft size={ICON_SIZE.control} />
           </IconButton>
+          <Text as="h2" role="title" className="min-w-0 flex-1 truncate text-fg">
+            {title}
+          </Text>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">{actions}</div>
         </div>
         <div className="overflow-y-auto px-4 py-4 pb-[max(16px,env(safe-area-inset-bottom))]">
           {children}

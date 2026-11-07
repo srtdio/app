@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
+import { IconTrash } from '@/components/ui/icons';
+import { RemoveButton } from '@/components/pages/create/RemoveButton';
 import {
   attachmentItemList,
   firstMedia,
@@ -37,6 +39,25 @@ describe('attachment list helpers', () => {
     const removeFile = lastChild(els[1] as ReactElement);
     (removeFile.props as { onClick: () => void }).onClick();
     expect(onRemove).toHaveBeenCalledWith(1);
+  });
+
+  it('a file row removes with the bin, labelled "Remove <name>", never an X', () => {
+    const els = attachmentItemList(items, vi.fn());
+    const removeFile = lastChild(els[1] as ReactElement);
+    const props = removeFile.props as { label: string; children: ReactElement };
+    expect(props.label).toBe('Remove b.pdf');
+    expect(props.children.type).toBe(IconTrash);
+  });
+
+  it('a media tile removes through RemoveButton with the bin glyph', () => {
+    const els = attachmentItemList(items, vi.fn());
+    const remove = lastChild(els[0] as ReactElement);
+    expect(remove.type).toBe(RemoveButton);
+    expect((remove.props as { label: string }).label).toBe('Remove a.png');
+    const button = RemoveButton({ label: 'Remove a.png', onRemove: vi.fn() }) as ReactElement<{
+      children: ReactElement<{ children: ReactElement }>;
+    }>;
+    expect(button.props.children.props.children.type).toBe(IconTrash);
   });
 });
 

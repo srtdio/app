@@ -3,30 +3,35 @@
 // Types: full (picture + favicon letter + domain + title + description, play
 // badge and duration on video pages), text (title, no picture), login ("Sign-in
 // needed to preview"), bare (domain + path), unsafe (warning card that opens
-// UnsafeLinkSheet; never fetched), plus a skeleton of the same size.
+// UnsafeLinkSheet; never fetched), plus a skeleton.
 //
 // Sizes:
-//   'full'    chat bubbles, comments, briefs. 1.91:1 picture box over a body
-//             with fixed line slots.
+//   'full'    chat bubbles, comments, briefs. A 1.91:1 picture box over a body
+//             with fixed line slots, ONLY when there is a picture to show.
 //   'compact' tight spots (brief cards, the chat Links tab): one 64px row.
-//   'draft'   the composer card above the input, with an X.
+//   'draft'   the composer card above the input, with a "Clear" button.
 //
-// Reserved space: every layout has fixed dimensions, and the skeleton is the
-// same box. When a 'full' card first paints as a skeleton, it HOLDS that box for
-// its lifetime: a text/login/bare/unsafe answer is drawn inside the held box
-// (letter tile in the picture slot) instead of collapsing to the compact row,
-// so nothing below it moves. A card whose answer is known at first paint
-// (session cache, unsafe, no Worker URL) uses its natural layout directly. A
-// picture that fails to load turns into the letter tile inside the same box.
+// No picture, no picture box: a 'full' card whose answer has no picture
+// (text, login, bare, unsafe, or a picture that fails to load) is the compact
+// row (letter tile, title, domain), never an empty 1.91:1 slot. A card waiting
+// for its answer shows the tall skeleton (most shared links carry a picture);
+// when the answer has none it settles to the compact row. A card whose answer
+// is known at first paint (session cache, unsafe, no Worker URL) uses its final
+// layout directly.
+//
+// Type comes from ui/Text roles only (heading for titles, secondary for the
+// domain or path); paths are never mono.
 //
 // Remote text is rendered as React text nodes only; there is no HTML sink here.
 // Every external anchor opens a new tab with rel="noopener noreferrer". Colours
 // are tokens only (incoming, outgoing-on-accent and plain surfaces), so light
 // and dark parity comes from the theme.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { IconAlertTriangle, IconPlay, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconAlertTriangle, IconPlay, ICON_SIZE } from '@/components/ui/icons';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { UnsafeLinkSheet } from '@/components/ui/UnsafeLinkSheet';
 import { cn } from '@/lib/cn';
 import { Bone } from '@/lib/motion';
@@ -46,7 +51,7 @@ interface LinkPreviewCardProps {
   /** Surface: an incoming bubble, an outgoing (accent) bubble, or a page. */
   tone?: CardTone;
   size?: CardSize;
-  /** Draft only: the X. Removes the card for this message; the link still sends. */
+  /** Draft only: the "Clear" button. Removes the card for this message; the link still sends. */
   onRemove?: () => void;
   /** Layout-only classes for the outer box (width, margins). */
   className?: string;
@@ -110,8 +115,6 @@ function cardLabel(preview: LinkPreview): string {
 /** The preview for one card: synchronous when known, else fetched once in view. */
 function useLinkPreview(url: string, client: PreviewClient, enabled: boolean) {
   const [preview, setPreview] = useState<LinkPreview | null>(() => client.peek(url));
-  // Whether this card painted a skeleton first: it then keeps that box.
-  const held = useRef(preview === null);
 
   useEffect(() => {
     if (preview !== null || !enabled) return;
@@ -120,7 +123,7 @@ function useLinkPreview(url: string, client: PreviewClient, enabled: boolean) {
     return () => controller.abort();
   }, [client, enabled, preview, url]);
 
-  return { preview, held: held.current };
+  return preview;
 }
 
 function LetterTile(props: { letter: string; tone: CardTone; className: string }): ReactElement {
@@ -138,48 +141,28 @@ function LetterTile(props: { letter: string; tone: CardTone; className: string }
   );
 }
 
-/** The 1.91:1 picture slot: image, or the letter tile when there is none / it failed. */
+/** The 1.91:1 picture slot. Only drawn when there is a picture; a failed load collapses the card. */
 function MediaSlot(props: {
   tone: CardTone;
-  letter: string;
-  src: string | null;
+  src: string;
   video: boolean;
-  warn?: boolean;
+  onError: () => void;
 }): ReactElement {
-  const [failed, setFailed] = useState(false);
-  const showImage = props.src !== null && !failed;
   return (
     <div
       data-card-media=""
-      className={cn(
-        'relative aspect-[1.91/1] w-full overflow-hidden',
-        props.warn === true ? 'bg-warn-soft' : MEDIA_BG[props.tone],
-      )}
+      className={cn('relative aspect-[1.91/1] w-full overflow-hidden', MEDIA_BG[props.tone])}
     >
-      {props.warn === true ? (
-        <span className="absolute inset-0 grid place-items-center text-warn-ink">
-          <IconAlertTriangle size={ICON_SIZE.status} />
-        </span>
-      ) : showImage && props.src !== null ? (
-        <img
-          src={props.src}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          draggable={false}
-          onError={() => setFailed(true)}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      ) : (
-        <span className="absolute inset-0 grid place-items-center">
-          <LetterTile
-            letter={props.letter}
-            tone={props.tone}
-            className="h-14 w-14 rounded-2xl text-3xl"
-          />
-        </span>
-      )}
+      <img
+        src={props.src}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        draggable={false}
+        onError={props.onError}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
       {props.video ? (
         <span className="absolute inset-0 grid place-items-center">
           <span className="grid h-11 w-11 place-items-center rounded-full bg-overlay-badge pl-0.5 lit-media text-overlay-fg">
@@ -205,7 +188,9 @@ function TallBody(props: {
         <LetterTile letter={props.letter} tone={props.tone} className="size-4 rounded text-xs" />
         <span className="min-w-0 truncate">{props.site}</span>
       </div>
-      <div className="line-clamp-2 h-10 text-base font-medium">{props.title}</div>
+      <Text role="heading" as="div" className="line-clamp-2 h-10">
+        {props.title}
+      </Text>
       <div className="line-clamp-2 h-8 text-sm text-fg-2">{props.detail}</div>
     </div>
   );
@@ -287,66 +272,20 @@ function CardLink(props: {
   );
 }
 
+type TitledPreview = Extract<LinkPreview, { type: 'full' | 'text' }>;
+
+/** The tall card: only for a preview with a picture to show. */
 function Tall(props: {
   url: string;
-  preview: LinkPreview;
+  preview: TitledPreview;
   tone: CardTone;
-  imageSrc: string | null;
-  onUnsafe: () => void;
+  imageSrc: string;
+  onImageError: () => void;
 }): ReactElement {
   const { preview, tone } = props;
-  if (preview.type === 'unsafe') {
-    return (
-      <button
-        type="button"
-        onClick={props.onUnsafe}
-        aria-label={cardLabel(preview)}
-        data-card-type="unsafe"
-        className={cn(
-          'block w-full overflow-hidden rounded-xl border text-left lit-card',
-          WARN,
-          NO_CALLOUT,
-          FOCUS,
-        )}
-      >
-        <MediaSlot tone={tone} letter="!" src={null} video={false} warn />
-        <TallBody
-          tone={tone}
-          letter="!"
-          site={preview.domain}
-          title="This link may be unsafe"
-          detail={`${preview.domain} · tap to check`}
-        />
-      </button>
-    );
-  }
   const site = siteText(preview);
-  if (preview.type === 'full' || preview.type === 'text') {
-    const duration =
-      preview.durationSeconds !== null ? ` · ${formatDuration(preview.durationSeconds)}` : '';
-    return (
-      <CardLink
-        url={props.url}
-        label={cardLabel(preview)}
-        type={preview.type}
-        className={CARD_SURFACE[tone]}
-      >
-        <MediaSlot
-          tone={tone}
-          letter={preview.letter}
-          src={preview.type === 'full' ? props.imageSrc : null}
-          video={preview.video}
-        />
-        <TallBody
-          tone={tone}
-          letter={preview.letter}
-          site={`${site}${duration}`}
-          title={preview.title}
-          detail={preview.description ?? ''}
-        />
-      </CardLink>
-    );
-  }
+  const duration =
+    preview.durationSeconds !== null ? ` · ${formatDuration(preview.durationSeconds)}` : '';
   return (
     <CardLink
       url={props.url}
@@ -354,27 +293,27 @@ function Tall(props: {
       type={preview.type}
       className={CARD_SURFACE[tone]}
     >
-      <MediaSlot tone={tone} letter={preview.letter} src={null} video={false} />
+      <MediaSlot
+        tone={tone}
+        src={props.imageSrc}
+        video={preview.video}
+        onError={props.onImageError}
+      />
       <TallBody
         tone={tone}
         letter={preview.letter}
-        site={site}
-        title={
-          preview.path !== '' ? (
-            <span className="break-all font-mono text-sm font-normal text-fg-2">
-              {preview.path}
-            </span>
-          ) : (
-            preview.domain
-          )
-        }
-        detail={preview.type === 'login' ? 'Sign-in needed to preview' : ''}
+        site={`${site}${duration}`}
+        title={preview.title}
+        detail={preview.description ?? ''}
       />
     </CardLink>
   );
 }
 
-/** The 64px row: big letter tile + up to three short lines. */
+/**
+ * The 64px row: letter tile, title, domain (or path). Every answer without a
+ * picture uses it, at every size, so there is never an empty picture box.
+ */
 function Compact(props: {
   url: string;
   preview: LinkPreview;
@@ -398,8 +337,10 @@ function Compact(props: {
       >
         <IconAlertTriangle size={ICON_SIZE.control} className="shrink-0" />
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-base font-medium">This link may be unsafe</span>
-          <span className="truncate text-sm">{`${preview.domain} · tap to check`}</span>
+          <Text role="heading" className="truncate">
+            This link may be unsafe
+          </Text>
+          <Text role="body" className="truncate">{`${preview.domain} · tap to check`}</Text>
         </span>
       </button>
     );
@@ -415,25 +356,23 @@ function Compact(props: {
     >
       <LetterTile letter={preview.letter} tone={tone} className="h-10 w-10 rounded-xl text-base" />
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-base font-medium">
+        <Text role="heading" className="truncate">
           {titled ? preview.title : preview.domain}
-        </span>
+        </Text>
         {via ? (
-          <span className="truncate font-mono text-sm text-fg-3">{siteText(preview)}</span>
+          <Text role="secondary">{siteText(preview)}</Text>
         ) : titled ? (
-          <span className="truncate text-sm text-fg-3">{preview.domain}</span>
+          <Text role="secondary">{preview.domain}</Text>
         ) : preview.path !== '' ? (
-          <span className="truncate font-mono text-sm text-fg-3">{preview.path}</span>
+          <Text role="secondary">{preview.path}</Text>
         ) : null}
-        {preview.type === 'login' ? (
-          <span className="truncate text-sm text-fg-3">Sign-in needed to preview</span>
-        ) : null}
+        {preview.type === 'login' ? <Text role="secondary">Sign-in needed to preview</Text> : null}
       </span>
     </CardLink>
   );
 }
 
-/** The composer's draft card: thumb, two lines, X. Not a link (the draft is not sent yet). */
+/** The composer's draft card: thumb, two lines, Clear. Not a link (the draft is not sent yet). */
 function Draft(props: {
   preview: LinkPreview | null;
   imageSrc: string | null;
@@ -460,8 +399,12 @@ function Draft(props: {
     );
     lines = (
       <>
-        <span className="block truncate text-base font-medium">This link may be unsafe</span>
-        <span className="block truncate text-sm">{preview.domain}</span>
+        <Text role="heading" className="block truncate">
+          This link may be unsafe
+        </Text>
+        <Text role="body" className="block truncate">
+          {preview.domain}
+        </Text>
       </>
     );
   } else {
@@ -484,14 +427,16 @@ function Draft(props: {
     const titled = preview.type === 'full' || preview.type === 'text';
     lines = (
       <>
-        <span className="block truncate text-sm text-fg-3">{siteText(preview)}</span>
-        <span className="line-clamp-2 text-base font-medium">
+        <Text role="secondary" className="block">
+          {siteText(preview)}
+        </Text>
+        <Text role="heading" className="block truncate">
           {titled
             ? preview.title
             : preview.type === 'login'
               ? 'Sign-in needed to preview'
               : preview.path || preview.domain}
-        </span>
+        </Text>
       </>
     );
   }
@@ -508,15 +453,16 @@ function Draft(props: {
       {thumb}
       <span className="min-w-0 flex-1">{lines}</span>
       {props.onRemove !== undefined ? (
-        <button
+        <Button
           type="button"
-          aria-label="Remove preview"
+          variant="ghost"
+          aria-label="Remove link preview"
           data-card-remove=""
           onClick={props.onRemove}
-          className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-xl text-fg-2', FOCUS)}
+          className="shrink-0"
         >
-          <IconX size={ICON_SIZE.control} />
-        </button>
+          Clear
+        </Button>
       ) : null}
     </div>
   );
@@ -527,8 +473,10 @@ export function LinkPreviewCard(props: LinkPreviewCardProps): ReactElement {
   const size = props.size ?? 'full';
   const client = props.client ?? previewClient();
   const { ref, inView } = useInView<HTMLDivElement>(PREVIEW_ROOT_MARGIN);
-  const { preview, held } = useLinkPreview(props.url, client, inView);
+  const preview = useLinkPreview(props.url, client, inView);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // A picture that fails to load collapses the card to the compact row.
+  const [imageFailed, setImageFailed] = useState(false);
   const imageSrc = client.imageUrl(props.url);
   const openSheet = (): void => setSheetOpen(true);
 
@@ -544,14 +492,14 @@ export function LinkPreviewCard(props: LinkPreviewCardProps): ReactElement {
       );
   } else if (preview === null) {
     body = <TallSkeleton tone={tone} />;
-  } else if (held || preview.type === 'full') {
+  } else if (preview.type === 'full' && imageSrc !== null && !imageFailed) {
     body = (
       <Tall
         url={props.url}
         preview={preview}
         tone={tone}
         imageSrc={imageSrc}
-        onUnsafe={openSheet}
+        onImageError={() => setImageFailed(true)}
       />
     );
   } else {

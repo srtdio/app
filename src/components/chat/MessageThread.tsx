@@ -473,7 +473,7 @@ interface MessageThreadProps {
    */
   onDiscard?: (messageId: string) => void;
   /**
-   * The X on an own uploading send: cancel it (its bubble goes). Defaults to
+   * The stop square on an own uploading send: cancel it (its bubble goes). Defaults to
    * the chat store's outbox for this channel when a provider is present.
    */
   onCancelUpload?: (messageId: string) => void;
@@ -1509,7 +1509,7 @@ function metaInk(mine: boolean): string {
 /** Each placement's position: two overlays at the bottom-right, the row in flow. */
 const META_POSITION: Record<MetaPlacement, string> = {
   inline: 'pointer-events-none absolute bottom-1 right-2 inline-flex',
-  pill: 'pointer-events-none absolute bottom-2 right-2 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-media-meta lit-media',
+  pill: 'pointer-events-none absolute bottom-3 right-3 inline-flex rounded-full bg-[color:var(--media-meta-bg)] px-1.5 py-px text-media-meta lit-media',
   row: 'pointer-events-none mt-1 flex justify-end',
   // Inside ui/ChatCard's bottom-trailing time slot, which places and inks it.
   card: 'pointer-events-none inline-flex',
@@ -1739,11 +1739,13 @@ export function bubbleClass(
  * A deleted message's bubble: the same shell, side, radius, tail, padding and
  * light as a peer bubble (panel-2 fill, lit-bubble-other) in secondary ink
  * (fg-3). Its text takes the body size (italic) and its time the normal meta
- * (TombstoneBubble). Focusable for its one-row menu (Delete for me).
+ * (TombstoneBubble). One height always: one line, never wrapping (the label
+ * truncates), the time in flow on the right, so it is exactly as tall as a
+ * one-line text bubble. Focusable for its one-row menu (Delete for me).
  */
 export function tombstoneClass(shape: BubbleShape): string {
   return cn(
-    'relative flex min-w-0 max-w-full items-center gap-1.5 bg-panel-2 text-fg-3 lit-bubble-other focus-visible:lit-focus',
+    'relative flex min-w-0 max-w-full items-center gap-1.5 whitespace-nowrap bg-panel-2 text-fg-3 lit-bubble-other focus-visible:lit-focus',
     NO_TOUCH_SELECT,
     bubbleCorners(shape),
     sized(BUBBLE_PAD, shape.layout),
@@ -2315,7 +2317,7 @@ export function MessageBubble(props: {
   onDiscard?: (messageId: string) => void;
   /** A tombstone's one menu row: hide it for the viewer (Delete for me); absent: inert. */
   onDeleteForMe?: (() => void) | undefined;
-  /** Cancels this own send while its files upload (the UploadRing's X). */
+  /** Cancels this own send while its files upload (the UploadRing's stop square). */
   onCancelUpload?: (messageId: string) => void;
   onJumpToMessage?: (messageId: string) => void;
   /** A Reply privately quote tapped: open where it points; absent: the quote is static. */
@@ -2425,7 +2427,7 @@ export function MessageBubble(props: {
             cardMeta: <BubbleMetaView meta={meta} mine={mine} placement="card" />,
           }
         : { inBubble: false };
-  // An own send still uploading can be cancelled with the ring's X; once
+  // An own send still uploading can be stopped with the ring's stop square; once
   // recorded, refused or missing its files it cannot.
   const onCancelUpload = props.onCancelUpload;
   const cancelUpload =
@@ -2514,12 +2516,23 @@ export function MessageBubble(props: {
               className={tombstoneClass(shape)}
               onDeleteForMe={selecting ? undefined : props.onDeleteForMe}
             >
-              <IconBan size={ICON_SIZE.inline} />
-              <span className={cn(bodyText(layout), 'italic')}>
+              <IconBan size={ICON_SIZE.inline} className="shrink-0" />
+              {/* One line: the label truncates, never wraps; the time sits in flow on its right. */}
+              <span
+                data-tombstone-label=""
+                className={cn(
+                  'min-w-0 truncate whitespace-nowrap italic',
+                  sized(BUBBLE_BODY_TYPE, layout),
+                )}
+              >
                 {deletedMessageLabel({ mine })}
-                <MetaSpacer meta={tombMeta} />
               </span>
-              <BubbleMetaView meta={tombMeta} mine={false} placement="inline" />
+              <BubbleMetaView
+                meta={tombMeta}
+                mine={false}
+                placement="inline"
+                className="static ml-1.5"
+              />
             </TombstoneBubble>,
             rail,
             railEdge,
@@ -5679,7 +5692,7 @@ function MessageThreadView(props: MessageThreadViewProps): ReactElement {
   // Everything per chat is keyed on the channel id (the parent also remounts
   // the thread per channel), never the title.
   const channelId = props.channelId;
-  // The X on an own uploading send: the caller's handler, else this chat's outbox.
+  // The stop square on an own uploading send: the caller's handler, else this chat's outbox.
   const storeCancel = useCancelUpload();
   const propCancel = props.onCancelUpload;
   const onCancelUpload = useMemo<((messageId: string) => void) | undefined>(() => {

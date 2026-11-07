@@ -5,11 +5,17 @@ import {
   MemoryLayer,
   RateCap,
   USER_AGENT,
+  YOUTUBE_FALLBACK_TITLE,
+  YOUTUBE_OEMBED,
+  YOUTUBE_OEMBED_TIMEOUT_MS,
   cleanText,
   decodeEntities,
+  fetchYouTubeTitle,
   handleRequest,
   normalizeUrl,
   parseDuration,
+  youtubeThumbnail,
+  youtubeVideoId,
   type Fetcher,
   type LinkPreview,
   type LinkPreviewDeps,
@@ -482,5 +488,118 @@ describe('link-preview worker: memory and login edges', () => {
 
   it('leaves a query without tracking params byte-for-byte', () => {
     expect(normalizeUrl('https://example.com/s?q=a%20b')).toBe('https://example.com/s?q=a%20b');
+  });
+});
+
+describe('link-preview worker: YouTube', () => {
+  const ID = 'dQw4w9WgXcQ';
+
+  function oembed(title: unknown): Response {
+    return new Response(JSON.stringify({ title, author_name: 'Someone' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  it('parses the video id from watch, shorts, youtu.be and m. links', () => {
+    expect(youtubeVideoId(new URL(`https://www.youtube.com/watch?v=${ID}`))).toBe(ID);
+    expect(youtubeVideoId(new URL(`https://youtube.com/watch?v=${ID}&t=42s`))).toBe(ID);
+    expect(youtubeVideoId(new URL(`https://m.youtube.com/watch?v=${ID}`))).toBe(ID);
+    expect(youtubeVideoId(new URL(`https://www.youtube.com/shorts/${ID}`))).toBe(ID);
+    expect(youtubeVideoId(new URL(`https://youtube.com/shorts/${ID}?feature=share`))).toBe(ID);
+    expect(youtubeVideoId(new URL(`https://youtu.be/${ID}`))).toBe(ID);
+    expect(youtubeVideoId(new URL(`https://youtu.be/${ID}?si=abc`))).toBe(ID);
+  });
+
+  it('rejects invalid ids and other hosts', () => {
+    expect(youtubeVideoId(new URL('https://www.youtube.com/watch?v=abc'))).toBeNull();
+    expect(youtubeVideoId(new URL('https://www.youtube.com/watch?v=dQw4w9WgXcQ1'))).toBeNull();
+    expect(youtubeVideoId(new URL('https://www.youtube.com/watch?v=dQw4w9W%3CXcQ'))).toBeNull();
+    expect(youtubeVideoId(new URL('https://youtu.be/'))).toBeNull();
+    expect(youtubeVideoId(new URL('https://www.youtube.com/shorts/'))).toBeNull();
+    expect(youtubeVideoId(new URL('https://www.youtube.com/channel/UC1234567890'))).toBeNull();
+    expect(youtubeVideoId(new URL(`https://evil-youtube.com/watch?v=${ID}`))).toBeNull();
+    expect(youtubeVideoId(new URL(`https://youtube.com.evil.top/watch?v=${ID}`))).toBeNull();
+    expect(youtubeVideoId(new URL(`http://www.youtube.com/watch?v=${ID}`))).toBeNull();
+  });
+
+  it('uses the oEmbed title, the fixed thumbnail and never fetches the page', async () => {
+    const t = setup((url) => (url.startsWith(YOUTUBE_OEMBED) ? oembed('How we pack') : html('')));
+    const p = await t.preview(`https://youtu.be/${ID}`);
+    expect(p.type).toBe('full');
+    if (p.type !== 'full') return;
+    expect(p.title).toBe('How we pack');
+    expect(p.domain).toBe('youtube.com');
+    expect(p.video).toBe(true);
+    expect(t.calls).toHaveLength(1);
+    const call = t.calls[0];
+    expect(call?.url).toBe(
+      `${YOUTUBE_OEMBED}?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${ID}`)}&format=json`,
+    );
+    expect(call?.traceId).toBe(TRACE);
+    expect(youtubeThumbnail(ID)).toBe(`https://i.ytimg.com/vi/${ID}/hqdefault.jpg`);
+  });
+
+  it('serves the thumbnail through /image', async () => {
+    const t = setup((url) =>
+      url.startsWith(YOUTUBE_OEMBED)
+        ? oembed('Clip')
+        : new Response(new Uint8Array(10), {
+            status: 200,
+            headers: { 'content-type': 'image/jpeg' },
+          }),
+    );
+    const link = `https://www.youtube.com/watch?v=${ID}`;
+    await t.preview(link);
+    const res = await t.call(`/image?url=${encodeURIComponent(link)}`, false);
+    expect(res.status).toBe(200);
+    expect(t.calls.some((c) => c.url === `https://i.ytimg.com/vi/${ID}/hqdefault.jpg`)).toBe(true);
+  });
+
+  it('keeps the picture with a fallback title when oEmbed fails', async () => {
+    const t = setup(() => new Response(null, { status: 500 }));
+    const p = await t.preview(`https://www.youtube.com/shorts/${ID}`);
+    expect(p.type).toBe('full');
+    expect(p.type === 'full' && p.title).toBe(YOUTUBE_FALLBACK_TITLE);
+    expect(p.type === 'full' && p.domain).toBe('youtube.com');
+  });
+
+  it('falls back without throwing when oEmbed times out', async () => {
+    vi.useFakeTimers();
+    try {
+      const hang: Fetcher = (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        });
+      const pending = fetchYouTubeTitle(ID, hang, TRACE);
+      await vi.advanceTimersByTimeAsync(YOUTUBE_OEMBED_TIMEOUT_MS + 10);
+      await expect(pending).resolves.toBeNull();
+
+      const t = setup(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            );
+          }),
+      );
+      const result = t.preview(`https://www.youtube.com/watch?v=${ID}`);
+      // Step the clock so the timer armed after the async auth/cache reads fires too.
+      for (let ms = 0; ms <= YOUTUBE_OEMBED_TIMEOUT_MS + 200; ms += 100) {
+        await vi.advanceTimersByTimeAsync(100);
+      }
+      const p = await result;
+      expect(p.type === 'full' && p.title).toBe(YOUTUBE_FALLBACK_TITLE);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignores an oEmbed answer without a usable title', async () => {
+    const t = setup(() => oembed(42));
+    const p = await t.preview(`https://www.youtube.com/watch?v=${ID}`);
+    expect(p.type === 'full' && p.title).toBe(YOUTUBE_FALLBACK_TITLE);
   });
 });

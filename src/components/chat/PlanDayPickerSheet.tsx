@@ -5,14 +5,15 @@
 // "No date" sits under the tiles (hidden where a date cannot be cleared), then
 // the footnote pointing at the plan dates. PlanDayTiles is the same grid drawn
 // inline (the concept sheet). PlanDatesSheet edits the New plan's From and
-// To (at most 5 weeks). No other dates: a plan only holds its own days.
+// To (at most 5 weeks) with ui/DatePicker, never a native date input. No
+// other dates: a plan only holds its own days.
 // Tokens only; the Sheet's translateY motion only.
 
 import { useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { Input } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { Sheet } from '@/components/ui/Sheet';
 import { cn } from '@/lib/cn';
@@ -200,21 +201,6 @@ export function PlanDayPickerSheet(props: {
   );
 }
 
-/**
- * The From / To inputs shrink to their half of the row: WebKit's date input
- * keeps an intrinsic min width (and centres its value) unless its native look
- * is reset, which on a 320px iPhone pushed To past the screen edge.
- */
-export const DATE_FIT =
-  'block min-w-0 appearance-none [-webkit-appearance:none] [&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:min-h-[1.5em] [&::-webkit-calendar-picker-indicator]:m-0';
-
-/**
- * The date inputs' own classes on top of ui/Input (which owns the field look:
- * border, fill, radius, padding, focus and the 16px phone text): the WebKit
- * fit, mono digits and the disabled dim.
- */
-export const DATE_FIELD = cn(DATE_FIT, 'font-mono disabled:text-fg-3');
-
 const PLAN_DATES_TITLE = 'Plan dates';
 const PLAN_DATES_HINT = 'Up to 5 weeks. Items on days you drop go back to "Pick a day".';
 const PLAN_DATES_SAVE = 'Save dates';
@@ -267,20 +253,19 @@ export function PlanDatesSheet(props: {
               ['endsOn', 'To'],
             ] as const
           ).map(([field, label]) => (
-            <label key={field} className="flex w-full min-w-0 flex-col gap-1">
-              <span className="text-md text-fg-3">{label}</span>
-              <Input
-                type="date"
-                data-plan-date={field}
+            <div key={field} data-plan-date={field} className="flex w-full min-w-0 flex-col gap-1">
+              <span aria-hidden="true" className="text-md text-fg-3">
+                {label}
+              </span>
+              <DatePicker
+                label={label}
                 value={draft[field]}
-                onChange={(e) => {
-                  const value = e.target.value;
+                onChange={(value) => {
                   setDraft((r) => ({ ...r, [field]: value }));
                   setError(null);
                 }}
-                className={DATE_FIELD}
               />
-            </label>
+            </div>
           ))}
         </div>
         {error !== null ? (

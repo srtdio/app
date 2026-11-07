@@ -145,7 +145,7 @@ test('the viewer bin reads "Remove photo" on own photos only @theme @desktop', a
   await expect(viewer).toBeVisible();
   await expect(viewer.getByRole('button', { name: 'Download' }).first()).toBeVisible();
   await expect(viewer.getByRole('button', { name: 'Remove photo' })).toHaveCount(0);
-  await viewer.getByRole('button', { name: 'Close viewer' }).click();
+  await viewer.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(viewer).toHaveCount(0);
 
   // An own photo: the bin, then the Undo strip.

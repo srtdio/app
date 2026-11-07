@@ -495,8 +495,9 @@ describe('PersonCardHost on phone', () => {
     const sheet = document.querySelector<HTMLElement>('[role="dialog"]');
     expect(sheet).not.toBeNull();
     expect(sheet?.querySelector('h2')?.textContent).toBe('Leo Martins');
-    // The Sheet's X is there.
-    expect(sheet?.querySelector('[aria-label="Close"]')).not.toBeNull();
+    // The Sheet's "<" back is there, no X.
+    expect(sheet?.querySelector('[aria-label="Back"]')).not.toBeNull();
+    expect(sheet?.querySelector('[aria-label="Close"]')).toBeNull();
     expect(document.body.textContent).not.toContain(PERSON_CARD_COPY.hint);
     expect(document.activeElement).toBe(messageInput());
   });
@@ -526,14 +527,19 @@ describe('keyboardInset', () => {
 });
 
 describe('PersonCardHost on laptop', () => {
-  it('renders a ~320px popover beside the anchor with a Close X and no hint', async () => {
+  it('renders a ~320px popover beside the anchor with a leading "<" back and no hint', async () => {
     laptop.value = true;
     await mountHost();
     await open(LEO);
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
     expect(dialog).not.toBeNull();
     expect(dialog?.getAttribute('aria-label')).toBe('Leo Martins');
-    expect(dialog?.querySelector('[aria-label="Close"]')).not.toBeNull();
+    const back = dialog?.querySelector<HTMLElement>('[aria-label="Back"]');
+    expect(back).not.toBeNull();
+    // Leading: first in the header row, before the photo; pulled by LEADING_PULL.
+    expect(back?.parentElement?.firstElementChild).toBe(back);
+    expect(back?.className).toContain('-ml-3');
+    expect(dialog?.querySelector('[aria-label="Close"]')).toBeNull();
     expect(dialog?.textContent).not.toContain(PERSON_CARD_COPY.hint);
     expect(PERSON_POPOVER_W).toBe(320);
     expect(dialog?.style.width).toBe(`${PERSON_POPOVER_W}px`);
@@ -563,11 +569,11 @@ describe('PersonCardHost on laptop', () => {
     expect(document.activeElement).toBe(cardButtons()[0]);
   });
 
-  it('the X closes and focus returns to the trigger', async () => {
+  it('the "<" back closes and focus returns to the trigger', async () => {
     laptop.value = true;
     await mountHost();
     const trigger = await open(LEO);
-    const x = document.querySelector<HTMLButtonElement>('[role="dialog"] [aria-label="Close"]');
+    const x = document.querySelector<HTMLButtonElement>('[role="dialog"] [aria-label="Back"]');
     await act(async () => {
       x?.click();
       await wait(10);

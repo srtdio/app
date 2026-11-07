@@ -12,6 +12,9 @@ import {
   albumTiles,
   attachmentView,
   inlineImageBox,
+  singleTileRatio,
+  singleTileStyle,
+  tileFit,
 } from '@/components/chat/MessageAttachments';
 import { BUBBLE_FILL } from '@/components/chat/FileBubble';
 import { PressableRow } from '@/components/ui/PressableRow';
@@ -302,7 +305,7 @@ describe('instant send tile (local preview + upload progress)', () => {
     expect(html).toContain('0:07');
     // The ring holds the play spot; play is faded out under it.
     expect(html).toContain('data-voice-play-slot="upload"');
-    expect(html).toContain('aria-label="Cancel upload"');
+    expect(html).toContain('aria-label="Stop sending"');
     expect(html).toContain('data-upload-progress="25"');
     // Attribute order follows the primitive (class renders first).
     expect(html).toMatch(
@@ -431,7 +434,7 @@ describe('instant send tile (local preview + upload progress)', () => {
     );
     expect(html).toContain('src="blob:preview"');
     expect(html).toContain('brightness-75');
-    expect(html).toContain('aria-label="Cancel upload"');
+    expect(html).toContain('aria-label="Stop sending"');
     expect(html).toContain('data-upload-progress="40"');
     expect(html).toContain('absolute left-1/2 top-1/2 z-raised -translate-x-1/2 -translate-y-1/2');
     expect(html).toMatch(/role="progressbar"[^>]*class="sr-only"/);
@@ -450,11 +453,11 @@ describe('instant send tile (local preview + upload progress)', () => {
       />,
     );
     expect(html).toContain('data-upload-progress="unknown"');
-    expect(html).toContain('mv-spin');
+    expect(html).not.toContain('mv-spin');
     expect(html).not.toContain('animate-pulse');
   });
 
-  it('T6: a sending file is a FileBubble with a thin bar and no ring (no cancel)', () => {
+  it('T6: a sending file is a FileBubble with its own file ring (stop sending), no bar', () => {
     const { cache } = spiedCache();
     const pdf: MessageAttachment = {
       assetId: '',
@@ -473,8 +476,10 @@ describe('instant send tile (local preview + upload progress)', () => {
     );
     expect(html).toContain('brief.pdf');
     expect(html).toContain('data-file-state="sending"');
-    expect(html).toContain('style="transform:scaleX(0.5)"');
-    expect(html).not.toContain('data-upload-ring');
+    expect(html).toMatch(
+      /data-upload-ring=""[^>]*data-ring-variant="file"|data-ring-variant="file"[^>]*data-upload-ring=""/,
+    );
+    expect(html).not.toContain('scaleX');
     const sent = renderToStaticMarkup(
       <MessageAttachments
         attachments={[
@@ -517,7 +522,8 @@ describe('album grid', () => {
 
   it('maps the image count to the tile layout', () => {
     expect(albumGridClass(1)).toBe('grid grid-cols-1');
-    expect(albumTiles(1)).toEqual([{ index: 0, className: 'aspect-[4/3] max-h-80', more: 0 }]);
+    // One photo: no box class of its own (no 4:3, no height cap); its ratio comes from the photo.
+    expect(albumTiles(1)).toEqual([{ index: 0, className: 'w-full', more: 0 }]);
     expect(albumGridClass(2)).toBe('grid grid-cols-2');
     expect(albumTiles(2).map((t) => t.className)).toEqual(['aspect-square', 'aspect-square']);
     expect(albumTiles(3).map((t) => t.className)).toEqual([
@@ -720,5 +726,90 @@ describe('inline image box (comments): final on first paint', () => {
     const box = inlineImageBox({});
     expect(box.width).toBe('256px');
     expect(Number(box.aspectRatio)).toBeCloseTo(4 / 3);
+  });
+});
+
+describe('D1: a single photo is the whole photo at its own ratio (no grid, no crop)', () => {
+  const sized = (w?: number, h?: number): MessageAttachment => ({
+    assetId: IMG_VERSION,
+    name: 'tall.png',
+    mime: 'image/png',
+    ...(w !== undefined && h !== undefined ? { thumbW: w, thumbH: h } : {}),
+  });
+
+  it('singleTileRatio / singleTileStyle: the stored size, else none', () => {
+    expect(singleTileRatio(sized(1080, 1920))).toBeCloseTo(1080 / 1920);
+    expect(singleTileStyle(sized(1080, 1920))).toEqual({ aspectRatio: '1080 / 1920' });
+    expect(singleTileRatio(sized())).toBeNull();
+    expect(singleTileStyle(sized())).toBeUndefined();
+    expect(singleTileRatio({ thumbW: 0, thumbH: 10 })).toBeNull();
+  });
+
+  it('tileFit: cover in a grid, contain for a sized single, natural when unknown', () => {
+    expect(tileFit(2, sized(10, 20))).toBe('cover');
+    expect(tileFit(1, sized(10, 20))).toBe('contain');
+    expect(tileFit(1, sized())).toBe('natural');
+  });
+
+  it('a sized single tile takes its aspect ratio inline, object-contain, no cover, no height cap', () => {
+    const { cache } = spiedCache();
+    const html = renderToStaticMarkup(
+      <AlbumGrid images={[sized(900, 1600)]} cache={cache} presignEnabled onOpen={() => {}} />,
+    );
+    expect(html).toContain('aspect-ratio:900 / 1600');
+    expect(html).not.toContain('aspect-[4/3]');
+    expect(html).not.toMatch(/max-h-\d/);
+    expect(html).not.toContain('object-cover');
+  });
+
+  it('an own send uses the pick-time size: final box on first paint, preview contained', () => {
+    const { cache } = spiedCache();
+    const own: MessageAttachment = {
+      assetId: '',
+      name: 'pick.jpg',
+      mime: 'image/jpeg',
+      thumbW: 3024,
+      thumbH: 4032,
+      local: { key: 'local-own', file: null, previewUrl: 'blob:own', progress: 0.2 },
+    };
+    const html = renderToStaticMarkup(
+      <AlbumGrid images={[own]} cache={cache} presignEnabled onOpen={() => {}} />,
+    );
+    expect(html).toContain('aspect-ratio:3024 / 4032');
+    expect(html).toMatch(
+      /<img[^>]*src="blob:own"[^>]*object-contain|object-contain[^"]*"[^>]*src="blob:own"/,
+    );
+    expect(html).not.toContain('object-cover');
+  });
+
+  it('no size known: no guessed box; the photo is hidden until it reports its size', () => {
+    const { cache } = spiedCache();
+    const own: MessageAttachment = {
+      assetId: '',
+      name: 'pick.jpg',
+      mime: 'image/jpeg',
+      local: { key: 'local-own', file: null, previewUrl: 'blob:own', progress: 0.2 },
+    };
+    const html = renderToStaticMarkup(
+      <AlbumGrid images={[own]} cache={cache} presignEnabled onOpen={() => {}} />,
+    );
+    expect(html).not.toContain('aspect-ratio');
+    expect(html).not.toContain('aspect-[4/3]');
+    expect(html).toMatch(/<img[^>]*class="[^"]*invisible/);
+    expect(html).not.toContain('object-cover');
+  });
+
+  it('two photos keep the square grid (object-cover), unchanged', () => {
+    const { cache } = spiedCache();
+    const two = [sized(900, 1600), { ...sized(1600, 900), assetId: FILE_VERSION }].map((a, i) => ({
+      ...a,
+      local: { key: `l-${i}`, file: null, previewUrl: `blob:${i}`, progress: 1 },
+    }));
+    const html = renderToStaticMarkup(
+      <AlbumGrid images={two} cache={cache} presignEnabled onOpen={() => {}} />,
+    );
+    expect(html.match(/aspect-square/g)).toHaveLength(2);
+    expect(html).toContain('object-cover');
+    expect(html).not.toContain('aspect-ratio:');
   });
 });

@@ -309,7 +309,11 @@ test('the photo viewer: Forward, Delete and Download; Delete for me moves to the
   const labels = await bar
     .locator('button[aria-label]')
     .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
-  expect(labels).toEqual(['Forward', 'Delete', 'Download']);
+  expect(labels).toEqual(['Forward', 'Delete']);
+  // Download sits on the top back bar, right of the counter (D3).
+  await expect(
+    viewer.locator('[data-lightbox-back-bar]').getByRole('button', { name: 'Download' }),
+  ).toBeVisible();
   for (const name of ['Forward', 'Delete']) {
     const box = await bar.getByRole('button', { name, exact: true }).boundingBox();
     expect(Math.round(box?.width ?? 0)).toBe(44);

@@ -181,7 +181,7 @@ describe('PostDetailsSheet target date (flow B 28)', () => {
   it('B3: closing with an unsaved date asks "Discard changes?" and writes nothing', async () => {
     const { onClose, onChangeTargetDate } = await mount();
     await pickDay(29);
-    await click(document.querySelector('button[aria-label="Close"]'));
+    await click(document.querySelector('button[aria-label="Back"]'));
     const dialog = document.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain('Discard changes?');
     expect(onClose).not.toHaveBeenCalled();
@@ -190,7 +190,7 @@ describe('PostDetailsSheet target date (flow B 28)', () => {
 
   it('B3: closing with no unsaved date closes at once', async () => {
     const { onClose } = await mount();
-    await click(document.querySelector('button[aria-label="Close"]'));
+    await click(document.querySelector('button[aria-label="Back"]'));
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(onClose).toHaveBeenCalledTimes(1);
   });

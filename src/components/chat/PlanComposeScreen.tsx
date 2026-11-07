@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/Input';
 import { IconButton } from '@/components/ui/IconButton';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { ICON_SIZE, IconChevronRight, IconPlus, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconChevronRight, IconPlus, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import {
   ConceptSheet,
@@ -93,8 +93,6 @@ import { civilDaysBetween, civilToday, formatCivilDayHeader } from '@/lib/plan-w
 import { supabase } from '@/lib/supabase';
 import { generateTraceId } from '@/lib/trace';
 import { TEXT_ROLE } from '@/components/ui/Text';
-
-export { DATE_FIELD, DATE_FIT } from '@/components/chat/PlanDayPickerSheet';
 
 /** Every new plan is a Draft (audience team); plan_create_with_items makes it so. */
 export const NEW_PLAN_AUDIENCE = 'team';
@@ -738,7 +736,7 @@ export function ComposeItemRow(props: {
           onClick={props.onRemove}
           className="-my-1.5 -mr-1.5 shrink-0"
         >
-          <IconX size={ICON_SIZE.control} />
+          <IconTrash size={ICON_SIZE.control} />
         </IconButton>
       </div>
       {item.kind === 'concept' && item.description !== '' ? (

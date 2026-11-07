@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { useModalFocus } from '@/lib/modal-focus';
-import { IconCheck, IconChevronLeft, IconX } from '@/components/ui/icons';
+import { IconCheck, IconChevronLeft } from '@/components/ui/icons';
 import { DEMO_HREF } from './config';
 import { FEATURES, featureId, showFeature, type FeatureKey } from './features';
 import { Wordmark } from './Wordmark';
@@ -65,7 +65,7 @@ function Menu({
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
-  // Focus lands on Close while open, Tab stays inside the menu, and the menu
+  // Focus lands on Back while open, Tab stays inside the menu, and the menu
   // button gets focus back on close (shared modal focus).
   useModalFocus(panelRef, open, { initial: () => closeRef.current });
 
@@ -104,18 +104,19 @@ function Menu({
     >
       <nav className="panel">
         <div className="ph">
-          <a className="logo" href={homeHref(surface, '#top')} aria-label="srtd home">
-            <Wordmark />
-          </a>
+          {/* The one exit: "<" back on the leading edge, then the wordmark. */}
           <button
             ref={closeRef}
             className="icon-btn"
             type="button"
-            aria-label="Close menu"
+            aria-label="Back"
             onClick={onClose}
           >
-            <IconX size={20} />
+            <IconChevronLeft size={20} />
           </button>
+          <a className="logo" href={homeHref(surface, '#top')} aria-label="srtd home">
+            <Wordmark />
+          </a>
         </div>
 
         <div className="nav-feat">

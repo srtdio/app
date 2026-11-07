@@ -7,7 +7,14 @@ import { Input } from '@/components/ui/Input';
 import { Sheet } from '@/components/ui/Sheet';
 import { IconButton } from '@/components/ui/IconButton';
 import { DropZone } from '@/components/ui/DropZone';
-import { ICON_SIZE, IconCheck, IconFile, IconPlus, IconUpload, IconX } from '@/components/ui/icons';
+import {
+  ICON_SIZE,
+  IconCheck,
+  IconFile,
+  IconPlus,
+  IconTrash,
+  IconUpload,
+} from '@/components/ui/icons';
 import { Card } from '@/components/ui/Card';
 import { humanizeSize } from '@/lib/assets';
 import {
@@ -678,7 +685,7 @@ export function AssetUploadSheet({
                     onClick={() => remove(item.id)}
                     disabled={running}
                   >
-                    <IconX size={ICON_SIZE.nav} />
+                    <IconTrash size={ICON_SIZE.nav} />
                   </IconButton>
                 }
                 className="self-stretch"

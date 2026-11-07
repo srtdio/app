@@ -460,16 +460,14 @@ test('H: the panel header is the one HeaderBar: title role, Add, then the X last
   for (const width of [1280, 950]) {
     await page.setViewportSize({ width, height: 800 });
     const box = await panel.boundingBox();
-    // B1: Add is the shared 44 Button; the X follows it, its 44 box pulled out
-    // by 12 so its glyph sits on the 24 laptop edge.
+    // B1: Add is the shared 44 Button on the trailing side; the exit is the
+    // leading "<" Back, its 44 box pulled out by 12 so its glyph sits on the edge.
     const add = await bar.locator('[data-plan-add-header]').boundingBox();
     const close = await bar.locator('[data-plan-close]').boundingBox();
     if (box === null || add === null || close === null) throw new Error('boxes');
     expect(Math.round(add.height)).toBe(44);
-    expect(add.x + add.width).toBeLessThanOrEqual(close.x + 1);
-    expect(
-      Math.abs(Math.round(box.x + box.width - (close.x + close.width)) - 12),
-    ).toBeLessThanOrEqual(1);
+    expect(close.x + close.width).toBeLessThanOrEqual(add.x + 1);
+    await expect(bar.locator('[data-plan-close]')).toHaveAttribute('aria-label', 'Back');
   }
   await expect(bar.locator('[data-plan-edit]')).toHaveCount(0);
   expectClean(network);

@@ -22,7 +22,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { PressableRow } from '@/components/ui/PressableRow';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sheet } from '@/components/ui/Sheet';
-import { ICON_SIZE, IconX } from '@/components/ui/icons';
+import { ICON_SIZE, IconTrash } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/toast';
 import { Thumbnail } from '@/components/media/Thumbnail';
 import { AssetPicker } from '@/components/chat/AssetPicker';
@@ -468,7 +468,7 @@ export function ConceptSheet(props: {
                         className="absolute right-0 top-0 flex h-11 w-11 items-start justify-end p-1"
                       >
                         <span className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-panel text-fg-2 lit-media">
-                          <IconX size={ICON_SIZE.inline} />
+                          <IconTrash size={ICON_SIZE.inline} />
                         </span>
                       </PressableRow>
                     </div>

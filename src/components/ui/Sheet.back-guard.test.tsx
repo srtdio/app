@@ -132,11 +132,11 @@ describe('Sheet and the Back guard', () => {
     expect(guarded()).toBe(false);
   });
 
-  it('ConfirmDialog itself does not guard: the X path of a dirty sheet adds no second entry', async () => {
+  it('ConfirmDialog itself does not guard: the "<" back path of a dirty sheet adds no second entry', async () => {
     await mount({ dirty: true });
     const marker = stepMarkerOf(window.history.state, BACK_GUARD_STEP_KEY);
     await act(async () =>
-      sheet()?.querySelector<HTMLButtonElement>('[aria-label="Close"]')?.click(),
+      sheet()?.querySelector<HTMLButtonElement>('[aria-label="Back"]')?.click(),
     );
     await settle();
     expect(confirm()).not.toBeNull();

@@ -15,11 +15,10 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field } from '@/components/ui/Field';
 import { Backdrop } from '@/components/ui/Backdrop';
 import { HeaderBar } from '@/components/ui/HeaderBar';
-import { IconButton } from '@/components/ui/IconButton';
 import { Input } from '@/components/ui/Input';
 import { PlatformMark } from '@/components/ui/PlatformMark';
 import { PressableRow } from '@/components/ui/PressableRow';
-import { IconCheck, IconPlus, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconCheck, IconPlus, ICON_SIZE } from '@/components/ui/icons';
 import { storeInductionStep } from '@/components/induction/induction-data';
 import { anotherWorkspaceRequest } from '@/lib/support';
 import { supabase } from '@/lib/supabase';
@@ -313,17 +312,9 @@ export function WorkspaceSwitcher({ onInductionStep }: WorkspaceSwitcherProps = 
         aria-label={title}
         className="relative flex w-full max-w-md max-h-[84svh] flex-col overflow-hidden rounded-xl border bg-panel lit-overlay outline-none"
       >
-        {/* The one header bar (ui/HeaderBar, 56): title, the X a 44 box under
-            the trailing rule, glyph 20. */}
-        <HeaderBar
-          compact
-          title={title}
-          actions={
-            <IconButton label="Close" onClick={requestClose}>
-              <IconX size={ICON_SIZE.control} />
-            </IconButton>
-          }
-        />
+        {/* The one header bar (ui/HeaderBar, 56): the "<" back leading (the
+            part applies the leading pull), then the title. */}
+        <HeaderBar compact title={title} onBack={requestClose} />
 
         {mode === 'list' ? (
           <div className="flex flex-col overflow-y-auto p-1">

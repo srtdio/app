@@ -21,6 +21,7 @@ import {
 } from '@/lib/chat/chat-store';
 import { rowToThreadMessage, type ChatMessageRow } from '@/lib/chat/thread';
 import { resolveMentionText } from '@/lib/chat/mentions';
+import { subscribeMediaGone, withoutGone } from '@/lib/chat/media-gone';
 import { formatAgo } from '@/lib/time';
 import { generateTraceId } from '@/lib/trace';
 import { errorText } from '@/lib/error-copy';
@@ -307,6 +308,13 @@ export function createSearchRunner(options: {
     state = next;
     if (!disposed) options.onChange(next);
   };
+  // A message deleted for everyone, or hidden for me once written, leaves the
+  // loaded hits at once (media-gone.ts): no read. Any shown state re-emits,
+  // so the chat home re-renders and re-peeks its saved chip page too.
+  const offGone = subscribeMediaGone(() => {
+    if (disposed || state.status === 'idle') return;
+    emit({ ...state, hits: withoutGone(state.hits, (h) => h.id) });
+  });
   const stop = (): void => {
     if (timer !== null) clearTimer(timer);
     timer = null;
@@ -336,7 +344,7 @@ export function createSearchRunner(options: {
           query,
           kind,
           status: 'ready',
-          hits: result.data.hits,
+          hits: withoutGone(result.data.hits, (h) => h.id),
           hasMore: cursor !== null,
         });
       });
@@ -387,7 +395,10 @@ export function createSearchRunner(options: {
     const seen = new Set(state.hits.map((h) => h.id));
     emit({
       ...state,
-      hits: [...state.hits, ...result.data.hits.filter((h) => !seen.has(h.id))],
+      hits: [
+        ...state.hits,
+        ...withoutGone(result.data.hits, (h) => h.id).filter((h) => !seen.has(h.id)),
+      ],
       hasMore: cursor !== null,
       loadingMore: false,
       moreFailed: false,
@@ -417,6 +428,7 @@ export function createSearchRunner(options: {
       generation += 1;
       stop();
       disposed = true;
+      offGone();
     },
   };
 }

@@ -14,7 +14,14 @@
 //  - dismiss: Y axis only (swipe down at 1x follows the finger; the backdrop
 //    dim tracks the image's position; released past the line it rises out,
 //    else springs back; docs/motion.md, rise);
-//  - open: the image grows out of the thumbnail that opened it (growFromCard).
+//  - open: only the image grows out of the thumbnail that opened it
+//    (growFromCard); no image mounted yet (spinner, error): it simply shows.
+//    The dialog, its bars and arrows never move with the grow.
+//
+// Exit: one "<" (Back) on the leading edge of the top bar (ViewerBackButton),
+// never an X. The bar reads "{Sender} · {formatAgo}" (or the caller's title,
+// else the file name), "{i} / {n}" only with more than one image, then
+// Download. Arrows show only when the viewer holds more than one image.
 //  - zoom: scale plus pan (translate) on the current image only, pinch 1..4x
 //    and double-tap 1x <-> 2.5x. The pane itself never moves while zoomed.
 
@@ -32,7 +39,6 @@ import {
   IconDownload,
   IconForward,
   IconTrash,
-  IconX,
   ICON_SIZE,
 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/Button';
@@ -327,8 +333,8 @@ export function indexAfterRemove(index: number, count: number): number | null {
 }
 
 /**
- * Optional (chat): who sent the image and when, shown small at the top centre
- * (two lines), plus the bin and Download in the bottom bar.
+ * Optional (chat): who sent the image and when, shown as the back bar's title
+ * ("{sender} · {time}"), plus the bin in the bottom bar.
  */
 export interface LightboxDetails {
   sender: string;
@@ -339,6 +345,24 @@ export interface LightboxDetails {
 // The top-centre details block and the Show in chat label/skin live in the
 // FileViewer (so its lazy chunk never pulls this module in) and are shared here.
 export { SHOW_IN_CHAT_LABEL, SHOW_IN_CHAT_OVERLAY_CLASS, ViewerDetails };
+
+/**
+ * The back bar's title: the caller's own title when it passes one (comments),
+ * else "{sender} · {time}" from the details (either half left out when empty),
+ * else the image's name. Pure.
+ */
+export function lightboxTitle(
+  override: string | undefined,
+  details: LightboxDetails | undefined,
+  name: string,
+): string {
+  if (override !== undefined && override !== '') return override;
+  if (details !== undefined) {
+    const joined = [details.sender, details.time].filter((part) => part !== '').join(' · ');
+    if (joined !== '') return joined;
+  }
+  return name;
+}
 
 /** The current image's display URL: its local preview, else the shared presign. */
 function useImageUrl(
@@ -467,8 +491,8 @@ export interface ImageLightboxProps {
   onIndexChange: (index: number) => void;
   onClose: () => void;
   /**
-   * Chat: sender + time at the top centre, and the bin (onRemove) and Download
-   * in a bottom bar. Comments omit it.
+   * Chat: sender + time as the back bar's title ("{sender} · {time}"), and the
+   * bin (onRemove) in a bottom bar. Comments omit it.
    */
   details?: LightboxDetails;
   /**
@@ -492,18 +516,18 @@ export interface ImageLightboxProps {
   /** The thumbnail's rect to grow from; default: the thumbnail the opening tap hit. */
   from?: Box | null;
   /**
-   * Comments: the top bar becomes the over-the-app bar: "<" (Back) on the
-   * leading edge, `title` ("{Name} · {formatAgo}", formatted by the caller)
-   * in the middle, then the "{i} / {n}" counter (more than one photo) and
-   * Download on the trailing edge. The X and the bottom bar are not shown.
-   * Omitted (chat, posts, assets): today's bar, unchanged.
+   * The back bar's title in place of the one built from `details` (comments
+   * pass "{Name} · {formatAgo}", formatted by the caller). Every viewer has
+   * the back bar ("<", title, "{i} / {n}" with more than one photo, Download);
+   * this only names it. Omitted: lightboxTitle(details, image name).
    */
   backBar?: { title: string } | undefined;
 }
 
 /**
- * The comment viewer's top bar: "<" Back, the title, the counter (more than
- * one photo) and Download. Hook-free apart from DownloadControl.
+ * The viewer's one top bar: "<" Back on the leading edge, the title, the
+ * counter (more than one photo) and Download. Hook-free apart from
+ * DownloadControl.
  */
 function BackBar(props: {
   title: string;
@@ -609,15 +633,10 @@ export function ImageLightbox({
   // focus back on close (the shared modal focus; only the top layer traps).
   useModalFocus(dialogRef, true, { initial: () => closeRef.current });
 
-  // Open: rendered in place, the image grows out of its thumbnail on the first
-  // frame (growFromCard). No thumbnail known: it simply shows.
-  useGrowFromThumb(
-    dialogRef,
-    from,
-    (root) =>
-      root.querySelector('[data-lightbox-pane] img') ??
-      root.querySelector('[data-motion-axis="zoom"]'),
-  );
+  // Open: rendered in place, ONLY the image grows out of its thumbnail on the
+  // first frame (growFromCard). No thumbnail known, or the image is not
+  // mounted yet (spinner): it simply shows. The dialog never grows.
+  useGrowFromThumb(dialogRef, from, (root) => root.querySelector('[data-lightbox-pane] img'));
 
   // The dim follows a move of the image (spring back or rise out), then rests.
   const followDim = useCallback((played: Played): void => {
@@ -843,40 +862,15 @@ export function ImageLightbox({
         className="absolute inset-0 bg-overlay backdrop-blur-xl"
         style={dragY > 0 ? { opacity: dismissOpacity(dragY) } : undefined}
       />
-      {backBar !== undefined ? (
-        <BackBar
-          title={backBar.title}
-          counter={multiple ? lightboxCounter(index, count) : null}
-          image={current}
-          cache={cache}
-          presignEnabled={presignEnabled}
-          onClose={onClose}
-          closeRef={closeRef}
-        />
-      ) : (
-        <div className={cn('relative flex shrink-0 items-center gap-2 px-3', SAFE_TOP_BAR_CLASS)}>
-          {multiple ? (
-            <span className="shrink-0 font-mono text-md tabular-nums text-overlay-fg">
-              {lightboxCounter(index, count)}
-            </span>
-          ) : null}
-          {details !== undefined ? (
-            // Top centre, clear of the counter (left) and Close (right).
-            <div className="pointer-events-none absolute inset-x-20 top-0 flex h-14 items-center justify-center">
-              <ViewerDetails sender={details.sender} time={details.time} />
-            </div>
-          ) : null}
-          <button
-            ref={closeRef}
-            type="button"
-            aria-label="Close viewer"
-            onClick={onClose}
-            className={cn(TOOLBAR_BUTTON, 'ml-auto')}
-          >
-            <IconX size={ICON_SIZE.control} />
-          </button>
-        </div>
-      )}
+      <BackBar
+        title={lightboxTitle(backBar?.title, details, current.name)}
+        counter={multiple ? lightboxCounter(index, count) : null}
+        image={current}
+        cache={cache}
+        presignEnabled={presignEnabled}
+        onClose={onClose}
+        closeRef={closeRef}
+      />
 
       <div
         data-lightbox-pane=""
@@ -935,10 +929,10 @@ export function ImageLightbox({
         </div>
       ) : null}
 
-      {details !== undefined ||
-      onShowInChat !== undefined ||
+      {onShowInChat !== undefined ||
       onForward !== undefined ||
-      onDelete !== undefined ? (
+      onDelete !== undefined ||
+      (details !== undefined && current.onRemove !== undefined) ? (
         <div
           data-testid="viewer-bar"
           className="relative flex h-16 shrink-0 items-center gap-3 px-4 pb-[env(safe-area-inset-bottom)]"
@@ -984,14 +978,6 @@ export function ImageLightbox({
             >
               <IconTrash size={ICON_SIZE.control} />
             </button>
-          ) : null}
-          {details !== undefined ? (
-            <DownloadControl
-              key={`${current.assetId}:${current.src ?? ''}`}
-              image={current}
-              cache={cache}
-              presignEnabled={presignEnabled}
-            />
           ) : null}
         </div>
       ) : null}

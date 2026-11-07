@@ -240,7 +240,8 @@ describe('reject: the cross draws only once the move is saved', () => {
     rpc.resolve({ ok: true, data: 'p1' });
     await flush();
     expect(landed()).toBe('rejected');
-    expect(drawCalls()).toHaveLength(2);
+    // The reject mark is the ban glyph (one stroke), never a cross (D4).
+    expect(drawCalls()).toHaveLength(1);
   });
 
   it('park draws nothing, before or after the save', async () => {

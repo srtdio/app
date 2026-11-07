@@ -12,7 +12,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { isImageMime } from '@srtdio/storage';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { IconVideo, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconTrash, IconVideo, ICON_SIZE } from '@/components/ui/icons';
 import {
   ComposerMediaFrame,
   firstMedia,
@@ -389,7 +389,7 @@ function MediaTile({
       )}
       <IconButton type="button" label={label} onClick={onRemove} className="absolute right-0 top-0">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-overlay-badge text-overlay-fg">
-          <IconX size={ICON_SIZE.control} />
+          <IconTrash size={ICON_SIZE.control} />
         </span>
       </IconButton>
     </li>

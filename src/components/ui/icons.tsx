@@ -68,12 +68,12 @@ import {
   TrashIcon,
   UserIcon,
   ViewColumnsIcon,
-  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import {
   PauseIcon as PauseSolid,
   PlayIcon as PlaySolid,
   StarIcon as StarSolid,
+  StopIcon as StopSolid,
 } from '@heroicons/react/24/solid';
 
 /**
@@ -173,10 +173,6 @@ function Hero({
       aria-hidden="true"
     />
   );
-}
-
-export function IconX(props: IconProps) {
-  return <Hero icon={XMarkIcon} {...props} />;
 }
 
 export function IconUser(props: IconProps) {
@@ -418,6 +414,11 @@ export function IconPause(props: IconProps) {
 
 export function IconPauseFill(props: IconProps) {
   return <Hero icon={PauseSolid} solid {...props} />;
+}
+
+/** Stop a send, upload or recording: a solid square, drawn inside the progress ring. */
+export function IconStop(props: IconProps) {
+  return <Hero icon={StopSolid} solid {...props} />;
 }
 
 export function IconCalendar(props: IconProps) {
@@ -671,8 +672,8 @@ export function TaskBoxGlyph(props: { done: boolean; size: number }) {
 }
 
 /**
- * The approve tick or reject cross as a drawable glyph: the same drawings as
- * IconCheck and IconX (Heroicons paths), each stroke with pathLength 1 and a
+ * The approve tick or reject mark as a drawable glyph: the same drawings as
+ * IconCheck and IconBan (Heroicons paths), each stroke with pathLength 1 and a
  * dash of 1, so drawTick (src/lib/motion) can draw it by stroke-dashoffset.
  * Its final state (offset 0) is fully drawn: with motion off it simply shows.
  * Not a separate concept: the decision mark after a landed approve or reject.
@@ -682,7 +683,12 @@ export function DrawnMarkGlyph(props: {
   size?: number;
   className?: string;
 }) {
-  const paths = props.mark === 'tick' ? ['m4.5 12.75 6 6 9-13.5'] : ['M6 18 18 6', 'M6 6l12 12'];
+  const paths =
+    props.mark === 'tick'
+      ? ['m4.5 12.75 6 6 9-13.5']
+      : [
+          'M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636',
+        ];
   const extra = props.className !== undefined ? { className: props.className } : {};
   return (
     <Svg size={props.size ?? ICON_SIZE.inline} {...extra}>

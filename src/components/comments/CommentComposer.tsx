@@ -24,7 +24,7 @@ import { MentionInput } from '@/components/comments/MentionInput';
 import type { MentionInputHandle } from '@/components/comments/MentionInput';
 import { CommentEmojiButton } from '@/components/comments/CommentEmojiButton';
 import type { MentionCandidate } from '@/lib/workspace-members';
-import { IconFile, IconSend, IconX, ICON_SIZE } from '@/components/ui/icons';
+import { IconFile, IconSend, IconTrash, ICON_SIZE } from '@/components/ui/icons';
 import { ComposerTray, type TrayTileId } from '@/components/chat/ComposerTray';
 import { useChatLayout } from '@/components/chat/chat-type';
 import type { AssetPicker as AssetPickerPart } from '@/components/chat/AssetPicker';
@@ -502,7 +502,7 @@ export function LibraryChip({
         <span className="text-xs text-fg-3">{fileExtension(asset.filename)}</span>
       </span>
       <IconButton label={`Remove ${asset.name}`} onClick={onRemove}>
-        <IconX size={ICON_SIZE.control} />
+        <IconTrash size={ICON_SIZE.control} />
       </IconButton>
     </li>
   );
@@ -558,7 +558,7 @@ export function PendingChip({
         </Button>
       ) : null}
       <IconButton label={`Remove ${item.file.name}`} onClick={onRemove}>
-        <IconX size={ICON_SIZE.control} />
+        <IconTrash size={ICON_SIZE.control} />
       </IconButton>
     </li>
   );
