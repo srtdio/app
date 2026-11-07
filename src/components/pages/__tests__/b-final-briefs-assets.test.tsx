@@ -121,7 +121,8 @@ describe('Assets item is ui/ListCard', () => {
     expect(meta).toBeGreaterThan(name);
     expect(time).toBeGreaterThan(meta);
     expect(tag).toBeGreaterThan(time);
-    expect(out).toContain('>3 hours ago<');
+    // formatAdded on the device zone: uploaded the same day reads its clock time.
+    expect(out).toMatch(/data-asset-uploaded=""[^>]*>\d{1,2}:\d{2} (AM|PM)</);
     expect(out).not.toContain('data-tile');
   });
 
@@ -202,13 +203,13 @@ describe('Brief card is ui/ListCard', () => {
     expect(out).not.toContain('opacity');
   });
 
-  it('line 3 reads the due words: Due today, Due in N days, else Overdue in the bad tone', () => {
+  it('line 3 reads the due words: Due today, Due Wed, else Overdue in the bad tone', () => {
     expect(card({}, new Date('2026-07-01T09:00:00Z'))).toMatch(
       /data-brief-due="[^"]*"[^>]*>Due today</,
     );
-    expect(card({}, new Date('2026-06-28T09:00:00Z'))).toContain('>Due in 3 days<');
+    expect(card({}, new Date('2026-06-28T09:00:00Z'))).toContain('>Due Wed<');
     const late = card({}, new Date('2026-07-03T09:00:00Z'));
-    expect(late).toMatch(/data-list-card-time=""[^>]*class="[^"]*text-bad[^"]*">Overdue 2 days</);
+    expect(late).toMatch(/data-list-card-time=""[^>]*class="[^"]*text-bad[^"]*">Overdue 2d</);
     // A closed brief is never overdue.
     const closed = card({ status: 'closed' }, new Date('2026-07-03T09:00:00Z'));
     expect(closed).not.toContain('Overdue');

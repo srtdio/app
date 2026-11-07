@@ -159,7 +159,7 @@ describe('the Plan tab and the Bank on ListCard (phone and laptop)', () => {
     const bank = read('pages/plan-tab/BankList.tsx');
     expect(bank).toContain('<ListCard');
     expect(bank).toContain('LIST_CARD_GRID');
-    expect(bank).toContain('formatRelative');
+    expect(bank).toContain('formatAdded');
     expect(bank).not.toContain('<SidePanel');
     expect(bank).not.toContain('<table');
     const tab = read('pages/PlanTabPage.tsx');

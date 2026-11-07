@@ -91,7 +91,7 @@ describe('the plan card lines', () => {
       /data-list-card-preview=""[^>]*data-plan-tab-dates=""[^>]*>6–12 Nov · 1 post</,
     );
     expect(html).toMatch(
-      /data-list-card-time=""[^>]*data-plan-tab-start=""[^>]*>Starts in 2 days</,
+      /data-list-card-time=""[^>]*data-plan-tab-start=""[^>]*>Starts Fri</,
     );
     expect(html).toMatch(/data-list-card-tag=""[^>]*data-plan-tab-progress=""/);
     expect(html).toContain('0 of 1 OK');
@@ -105,7 +105,7 @@ describe('the plan card lines', () => {
     };
     const html = card(draft);
     expect(html).toContain('1–7 Nov · 1 post · only your team sees this');
-    expect(html).toContain('Started 3 days ago');
+    expect(html).toContain('Started 3d ago');
     expect(html).toMatch(/data-list-card-tag=""[^>]*data-plan-tab-draft=""/);
     expect(html).toContain('>Draft<');
   });
