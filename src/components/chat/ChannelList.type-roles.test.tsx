@@ -107,7 +107,9 @@ describe('chat list type roles', () => {
   });
 
   it('zero state: names what shows up here (lg/600 fg), no Clear search', () => {
-    const [title] = paint(list([]), 'div', 'Chats with your team show up here.');
+    const title = paint(list([]), 'div', 'Chats with your team show up here.').find((e) =>
+      e.classList.contains('text-lg'),
+    );
     expect(classes(title as Element)).toEqual(
       expect.arrayContaining(['text-lg', 'font-semibold', 'text-fg']),
     );

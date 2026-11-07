@@ -3,7 +3,7 @@ import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   TopbarActionsProvider,
@@ -77,7 +77,7 @@ describe('topbar actions (decision A)', () => {
 
   it('pure: no fetch, no await, no rpc in the module', () => {
     const src = readFileSync(
-      fileURLToPath(new URL('./topbar-actions.tsx', import.meta.url)),
+      join(process.cwd(), 'src/components/shell/topbar-actions.tsx'),
       'utf8',
     );
     expect(src).not.toMatch(/\bawait\b|fetchWithTrace|callRpc|supabase/);

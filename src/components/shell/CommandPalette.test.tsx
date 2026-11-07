@@ -375,7 +375,7 @@ describe('CommandPalette', () => {
       fileURLToPath(new URL('./CommandPalette.tsx', import.meta.url)),
       'utf8',
     );
-    expect(src.match(/key=\{`\$\{section\.label\}:\$\{item\.id\}`\}/g)).toHaveLength(3);
+    expect(src.match(/key=\{`\$\{section\.label\}:\$\{item\.id\}`\}/g)).toHaveLength(4);
     expect(src).not.toMatch(/key=\{item\.id\}/);
     // Both open the item in its plan.
     const targets = sections('diwali', search).flatMap((x) =>
@@ -851,7 +851,7 @@ describe('recent titles freshness pass', () => {
   // Effects are shimmed in this env, so the effect's wiring is read from source.
   const src = readFileSync(fileURLToPath(new URL('./CommandPalette.tsx', import.meta.url)), 'utf8');
   const start = src.indexOf('// Freshness: once per session per workspace');
-  const effect = src.slice(start, src.indexOf('}, [', start) + 40);
+  const effect = src.slice(start, src.indexOf('}, [', start) + 60);
 
   it('a workspace key arriving while the palette is open does not start a second pass', () => {
     // The key is read through a ref at pass time, never an effect dependency.
