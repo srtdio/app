@@ -151,16 +151,51 @@ describe('WritingBox caption and field modes', () => {
 });
 
 describe('WritingBox expand', () => {
-  it('phone: expands full screen with the title, keeps the field, collapses', () => {
+  it('phone: the editor moves to <body> full screen with the title, keeps the field, collapses back', () => {
     const host = mount(<Harness mode="comment" initial="draft" />);
     const area = byLabel(host, 'Message');
     act(() => byLabel(host, 'Expand')?.click());
-    expect(q(host, '[data-writing-box]')?.dataset.expanded).toBe('phone');
-    expect(host.textContent).toContain('Caption');
-    expect(byLabel(host, 'Message')).toBe(area);
-    act(() => (host.querySelectorAll('[aria-label="Collapse"]')[0] as HTMLElement).click());
-    expect(q(host, '[data-writing-box]')?.dataset.expanded).toBeUndefined();
+    // Out of the page's tree: no transformed or clipping ancestor can cut it.
+    const box = document.querySelector<HTMLElement>('[data-writing-box]');
+    expect(box?.dataset.expanded).toBe('phone');
+    expect(host.contains(box)).toBe(false);
+    expect(box?.closest('[data-writing-host]')?.parentElement).toBe(document.body);
+    expect(document.body.textContent).toContain('Caption');
+    // The same field node (never remounted), text kept.
+    expect(document.querySelector('[aria-label="Message"]')).toBe(area);
+    act(() => (document.querySelectorAll('[aria-label="Collapse"]')[0] as HTMLElement).click());
+    const back = q(host, '[data-writing-box]');
+    expect(back).not.toBeNull();
+    expect(back?.dataset.expanded).toBeUndefined();
     expect((byLabel(host, 'Message') as HTMLTextAreaElement).value).toBe('draft');
+    expect(byLabel(host, 'Message')).toBe(area);
+  });
+
+  it('phone: Send from the editor puts the box back in its form first', () => {
+    let sent = 0;
+    const ref = { current: null as HTMLTextAreaElement | null };
+    const host = mount(
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          sent += 1;
+        }}
+      >
+        <WritingBox
+          mode="comment"
+          laptop={false}
+          field={() => ref.current}
+          hasText
+          send={<button type="submit">Send</button>}
+          input={<textarea ref={ref} aria-label="Message" defaultValue="x" />}
+        />
+      </form>,
+    );
+    act(() => byLabel(host, 'Expand')?.click());
+    const send = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Send');
+    act(() => send?.click());
+    expect(host.querySelector('form')?.contains(send ?? null)).toBe(true);
+    expect(sent).toBe(1);
   });
 
   it('laptop: grows in place; Esc collapses', () => {

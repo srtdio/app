@@ -24,7 +24,17 @@
 // first tap (React.lazy); the keyboard inset is read only while expanded on a
 // phone; selectionchange is listened to only while the format row is open.
 
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+import { createPortal } from 'react-dom';
 import type { KeyboardEvent, MouseEvent, PointerEvent, ReactNode } from 'react';
 import { ComposerFrame, type ComposerState } from '@/components/ui/Composer';
 import {
@@ -62,6 +72,10 @@ import { useKeyboardInset } from '@/lib/use-keyboard-inset';
 
 const EmojiSheet = lazy(() => import('@/components/ui/EmojiSheet'));
 const AddLinkSheet = lazy(() => import('@/components/ui/AddLinkSheet'));
+
+const noSubscribe = (): (() => void) => () => undefined;
+const isBrowser = (): boolean => true;
+const isServer = (): boolean => false;
 
 export type WritingMode = 'chat' | 'comment' | 'field' | 'caption';
 
@@ -351,10 +365,59 @@ export function WritingBox(props: WritingBoxProps) {
     }
   };
 
+  // The box renders into one stable host node, so React never remounts the
+  // field. Collapsed, the host sits in place (a display: contents slot);
+  // expanded on a phone it moves to <body>, so no transformed or clipping
+  // ancestor (page slides, sheets, overflow) can trap or cut the full-screen
+  // editor. Moving the node keeps the text, caret, bars and attachments.
+  const [host] = useState<HTMLDivElement | null>(() => {
+    if (typeof document === 'undefined') return null;
+    const node = document.createElement('div');
+    node.style.display = 'contents';
+    node.dataset.writingHost = '';
+    return node;
+  });
+  // A server render (static markup) has no portals: the box renders in place.
+  const inBrowser = useSyncExternalStore(noSubscribe, isBrowser, isServer);
+  const slotNode = useRef<HTMLDivElement | null>(null);
+  const expandedOnPhone = useRef(false);
+  expandedOnPhone.current = phoneExpanded;
+  // Attached before the box's own children commit, so an autoFocus field is
+  // already in the document when it focuses.
+  const slotRef = useCallback(
+    (slot: HTMLDivElement | null): void => {
+      slotNode.current = slot;
+      if (slot !== null && host !== null && !expandedOnPhone.current && host.parentNode !== slot) {
+        slot.appendChild(host);
+      }
+    },
+    [host],
+  );
+  useLayoutEffect(() => {
+    if (host === null) return;
+    const target = phoneExpanded ? document.body : slotNode.current;
+    if (target === null || host.parentNode === target) return;
+    const el = field();
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+    const sel = el !== null && active !== null && el.contains(active) ? fieldSelection(el) : null;
+    target.appendChild(host);
+    if (el !== null && sel !== null) restoreSelection(el, sel.start, sel.end);
+    // The live format mirror follows the field's new size (Textarea listens).
+    window.dispatchEvent(new Event('resize'));
+  }, [phoneExpanded, host, field]);
+  useEffect(() => () => host?.remove(), [host]);
+
   // Send closes the format row and the expanded editor (Slack keeps neither).
+  // On a phone the box goes back into its form first, so the send button's
+  // own submit still reaches the form.
   const onSendCapture = (): void => {
     setFormatOpen(false);
-    if (expanded) setExpanded(false);
+    if (!expanded) return;
+    const slot = slotNode.current;
+    if (!laptop && host !== null && slot !== null && host.parentNode !== slot) {
+      slot.appendChild(host);
+    }
+    setExpanded(false);
   };
 
   if (state.kind === 'recording') {
@@ -552,7 +615,7 @@ export function WritingBox(props: WritingBoxProps) {
     </div>
   );
 
-  return (
+  const content = (
     <div
       ref={rootRef}
       data-writing-box=""
@@ -619,5 +682,11 @@ export function WritingBox(props: WritingBoxProps) {
         ) : null}
       </div>
     </div>
+  );
+  return (
+    <>
+      <div ref={slotRef} data-writing-slot="" className="contents" />
+      {host !== null && inBrowser ? createPortal(content, host) : content}
+    </>
   );
 }

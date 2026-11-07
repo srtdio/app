@@ -475,6 +475,26 @@ test('S9 phone: expand, ten lines, collapse keeps the text, expand, send closes 
   await key(box, 'Expand').click();
   await expect(root).toHaveAttribute('data-expanded', 'phone');
   await expect(page.locator('[data-expanded-bar]')).toBeVisible();
+  // The editor covers the whole screen width from the top, nothing cut: it
+  // lives on <body> while expanded, out of any clipping or moving ancestor.
+  const editor = await page.evaluate(() => {
+    const el = document.querySelector('[data-writing-box][data-expanded="phone"]');
+    const r = el?.getBoundingClientRect();
+    return {
+      onBody: el?.closest('[data-writing-host]')?.parentElement === document.body,
+      left: r?.left ?? -1,
+      top: r?.top ?? -1,
+      right: r?.right ?? 0,
+      height: r?.height ?? 0,
+      width: window.innerWidth,
+      viewH: window.visualViewport?.height ?? window.innerHeight,
+    };
+  });
+  expect(editor.onBody).toBe(true);
+  expect(editor.left).toBe(0);
+  expect(editor.top).toBe(0);
+  expect(Math.round(editor.right)).toBe(editor.width);
+  expect(editor.height).toBeGreaterThan(editor.viewH * 0.5);
   // The same field: the text and the caret stayed.
   await expect(field).toHaveValue('Line 1');
   await expect(field).toBeFocused();
