@@ -58,8 +58,8 @@ function viewAsClient(network: HarnessNetwork): void {
 
 /**
  * A1: the row is date tile | title block | thumbnail, then the PLAN and POST
- * lines. The thumbnail (56px) sits 29px from the viewport's right edge (the
- * day card's 16px gutter, 1px edge and 12px padding); the
+ * lines. The thumbnail (56px) sits 33px from the viewport's right edge (the
+ * day card's 16px gutter, 1px edge and 16px padding, ui/Card); the
  * day's one date tile (56x56) sits left of the rows, its top level with the
  * day's first thumbnail.
  */
@@ -73,7 +73,7 @@ async function expectRowLayout(page: Page, itemId: string): Promise<void> {
   expect(row !== null && thumb !== null && viewport !== null).toBe(true);
   if (row === null || thumb === null || viewport === null) return;
   expect(Math.round(thumb.width)).toBe(56);
-  expect(Math.round(viewport.width - (thumb.x + thumb.width))).toBe(16 + 1 + 12);
+  expect(Math.round(viewport.width - (thumb.x + thumb.width))).toBe(16 + 1 + 16);
   const day = page.locator('[data-plan-day]').filter({ has: wrap });
   await expect(day.locator('[data-plan-day-col]')).toHaveCount(1);
   const col = await day.locator('[data-plan-day-col]').boundingBox();

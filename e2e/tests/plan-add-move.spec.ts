@@ -103,7 +103,7 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   const plus = plan.locator('[data-plan-add-header]');
   expectMinTouchTarget(await plus.boundingBox());
 
-  // A1: one 56x56 date tile per day: an 18px weekday strip on top, the
+  // A1: one 56x56 date tile per day: a 20px weekday strip on top (h-5, the 4px grid), the
   // number centred below it.
   const wed = dayBlock(plan, '2026-10-14');
   await expect(wed.locator('[data-plan-day-col]')).toHaveCount(1);
@@ -146,7 +146,7 @@ test('agency: aligned list, Add a concept and a post to a day', async ({ page })
   if (col === null || weekday === null || digits === null) throw new Error('day boxes');
   expect(col.width).toBe(56);
   expect(col.height).toBe(56);
-  expect(Math.round(weekday.height)).toBe(18);
+  expect(Math.round(weekday.height)).toBe(20);
   expect(weekday.y - col.y).toBeLessThanOrEqual(1.5);
   expect(digits.y).toBeGreaterThanOrEqual(weekday.y + weekday.height - 0.5);
   for (const b of [weekday, digits]) {

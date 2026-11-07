@@ -126,7 +126,7 @@ function typeOf(locator: Locator) {
 // Type roles on Pipeline (design rules, locked 24 Oct 2026). Pipeline has no
 // page title or PageHead: its screen header is the Filter and sort sheet title
 // (15px/600), the sheet's Due date label is a section label (12px/600,
-// uppercase), a card title is 14px/500 and the search field renders 16px on
+// uppercase), a list card title is 15px/600 (heading) and the search field renders 16px on
 // the phone (iOS zoom).
 test(
   'Pipeline type roles: sheet header 15px, section label 12px uppercase, card title 15px',
@@ -134,7 +134,7 @@ test(
   async ({ page }) => {
     const network = await installHarnessNetwork(page);
     await page.goto('/pipeline');
-    const cardTitle = page.locator('[data-card-title]', { hasText: 'Monday carousel' }).first();
+    const cardTitle = page.locator('[data-list-card-title]', { hasText: 'Monday carousel' }).first();
     await expect(cardTitle).toBeVisible({ timeout: 15_000 });
     const cardType = await typeOf(cardTitle);
     expect(cardType.size).toBe('15px');
