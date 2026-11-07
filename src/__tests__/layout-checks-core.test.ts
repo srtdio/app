@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   boxText,
+  CHIP_FACE_BY_DENSITY,
+  CHIP_FACE_PX,
+  CHIP_HIT_PX,
   chipViolations,
   clipBox,
   distinctRoles,
@@ -14,6 +17,8 @@ import {
   lineCount,
   lineHeightPx,
   movedSideways,
+  layoutDensity,
+  LIST_CARD_GEOM_BY_DENSITY,
   LIST_CARD_HEIGHT_PX,
   listCardViolations,
   overlappingPairs,
@@ -29,6 +34,7 @@ import {
   wrapsPastOneLine,
   type Box,
   type ChipGeom,
+  type LayoutDensity,
   type ListCardGeom,
   type TapTarget,
 } from '../../e2e/visual/layout-checks-core';
@@ -370,56 +376,109 @@ describe('messages', () => {
   });
 });
 
-describe('list cards (ui/ListCard): 60 tall flat rows, the 40 picture at 16,10 in the bled row, 12 to the text', () => {
+describe('list cards (ui/ListCard): the density height flat rows (72 Cozy default), the picture at 16 and the inset in the bled row, 12 to the text', () => {
   // A flat row bled -mx-4 from the 16 gutter: row at x 0, no border; picture
-  // at 0 + 16 = 16, top 10 (centred in 60); text at 16 + 40 + 12 = 68.
-  const good = (y: number, height = 60): ListCardGeom => ({
-    label: `card@${y}`,
-    card: { x: 0, y, width: 390, height },
-    borderLeft: 0,
-    borderTop: 0,
-    picture: { x: 16, y: y + 10, width: 40, height: 40 },
-    text: { x: 68, y: y + 9, width: 306, height: 42 },
+  // at 0 + 16 = 16, top the density inset (Cozy 12, centred in 72); text at
+  // 16 + 48 + 12 = 76 (Compact: 16 + 40 + 12 = 68).
+  const good = (y: number, height?: number, density: LayoutDensity = 'cozy'): ListCardGeom => {
+    const g = LIST_CARD_GEOM_BY_DENSITY[density];
+    return {
+      label: `card@${y}`,
+      card: { x: 0, y, width: 390, height: height ?? g.height },
+      borderLeft: 0,
+      borderTop: 0,
+      picture: { x: 16, y: y + g.insetY, width: g.picture, height: g.picture },
+      text: { x: 16 + g.picture + 12, y: y + (g.height - 44) / 2, width: 390 - g.picture - 44, height: 44 },
+    };
+  };
+
+  it('the density geometry: Compact 10 + 40 + 10 = 60, Cozy 12 + 48 + 12 = 72, Calm 16 + 48 + 16 = 80', () => {
+    expect(LIST_CARD_GEOM_BY_DENSITY).toEqual({
+      compact: { height: 60, picture: 40, insetY: 10 },
+      cozy: { height: 72, picture: 48, insetY: 12 },
+      calm: { height: 80, picture: 48, insetY: 16 },
+    });
+    for (const g of Object.values(LIST_CARD_GEOM_BY_DENSITY)) {
+      expect(g.insetY + g.picture + g.insetY).toBe(g.height);
+    }
+    expect(LIST_CARD_HEIGHT_PX).toBe(72);
+  });
+
+  it('layoutDensity reads <html data-density>: Cozy when absent or unknown', () => {
+    expect(layoutDensity(undefined)).toBe('cozy');
+    expect(layoutDensity(null)).toBe('cozy');
+    expect(layoutDensity('')).toBe('cozy');
+    expect(layoutDensity('roomy')).toBe('cozy');
+    expect(layoutDensity('compact')).toBe('compact');
+    expect(layoutDensity('cozy')).toBe('cozy');
+    expect(layoutDensity('calm')).toBe('calm');
   });
 
   it('passes rows of one height with the picture in place (rows touch, no gap)', () => {
-    expect(listCardViolations([good(0), good(60), good(120.6, 60.4)])).toEqual([]);
+    expect(listCardViolations([good(0), good(72), good(144.6, 72.4)])).toEqual([]);
   });
 
+  it.each(['compact', 'cozy', 'calm'] as const)(
+    'passes the %s rows when checked against that density',
+    (density) => {
+      const h = LIST_CARD_GEOM_BY_DENSITY[density].height;
+      expect(
+        listCardViolations([good(0, h, density), good(h, h, density)], density),
+      ).toEqual([]);
+    },
+  );
+
   it('fails a row more than 1px taller than the first', () => {
-    const out = listCardViolations([good(0), good(60, 76)]);
+    const out = listCardViolations([good(0), good(72, 88)]);
     expect(out.filter((m) => m.includes('cards differ'))).toHaveLength(1);
   });
 
-  it('every list row is 60 tall on every screen (the seven lists are one height)', () => {
-    expect(LIST_CARD_HEIGHT_PX).toBe(60);
-    // Equal to each other but not 60: a screen whose rows all kept the old 74 card still fails.
-    const tall = listCardViolations([good(0, 74), good(74, 74)]);
-    expect(tall).toHaveLength(2);
-    for (const m of tall) expect(m).toContain('not 60');
-    expect(listCardViolations([good(0, 59.2)])).toEqual([]);
+  it('every list row is the density height on every screen (the seven lists are one height)', () => {
+    // Equal to each other but not 72: a screen whose rows all kept the old 60 row fails in Cozy.
+    const short = listCardViolations([good(0, 60, 'compact'), good(60, 60, 'compact')]);
+    expect(short.filter((m) => m.includes('not 72'))).toHaveLength(2);
+    expect(listCardViolations([good(0, 71.2)])).toEqual([]);
+    // A Cozy row on a Compact page fails, and a Compact row on a Calm page.
+    expect(
+      listCardViolations([good(0)], 'compact').some((m) => m.includes('not 60')),
+    ).toBe(true);
+    expect(
+      listCardViolations([good(0, 60, 'compact')], 'calm').some((m) => m.includes('not 80')),
+    ).toBe(true);
   });
 
-  it('fails a picture that is not 40x40 (the old 48 too)', () => {
+  it('fails a picture that is not the density square (48 Cozy / Calm, 40 Compact)', () => {
     const card = good(0);
-    const out = listCardViolations([{ ...card, picture: { x: 16, y: 10, width: 48, height: 48 } }]);
-    expect(out.some((m) => m.includes('not 40x40'))).toBe(true);
+    const out = listCardViolations([{ ...card, picture: { x: 16, y: 12, width: 40, height: 40 } }]);
+    expect(out.some((m) => m.includes('not 48x48'))).toBe(true);
+    const compact = good(0, 60, 'compact');
+    const big = listCardViolations(
+      [{ ...compact, picture: { x: 16, y: 10, width: 48, height: 48 } }],
+      'compact',
+    );
+    expect(big.some((m) => m.includes('not 40x40'))).toBe(true);
   });
 
-  it('fails a picture not at 16,10 inside the bled row (the old boxed 12,12 too)', () => {
+  it('fails a picture not at 16 and the density inset inside the bled row (the old boxed 12,12 too)', () => {
     const card = good(0);
-    const off = listCardViolations([{ ...card, picture: { x: 20, y: 10, width: 40, height: 40 } }]);
-    expect(off.some((m) => m.includes('not 16,10'))).toBe(true);
+    const off = listCardViolations([{ ...card, picture: { x: 20, y: 12, width: 48, height: 48 } }]);
+    expect(off.some((m) => m.includes('not 16,12'))).toBe(true);
     // The old card: 1px border and 12 padding, i.e. a row that is not bled.
     const boxed = listCardViolations([
-      { ...card, borderLeft: 1, borderTop: 1, picture: { x: 13, y: 13, width: 40, height: 40 } },
+      { ...card, borderLeft: 1, borderTop: 1, picture: { x: 13, y: 13, width: 48, height: 48 } },
     ]);
-    expect(boxed.some((m) => m.includes('not 16,10'))).toBe(true);
+    expect(boxed.some((m) => m.includes('not 16,12'))).toBe(true);
+    const calm = good(0, 80, 'calm');
+    const calmOff = listCardViolations(
+      [{ ...calm, picture: { x: 16, y: 12, width: 48, height: 48 } }],
+      'calm',
+    );
+    expect(calmOff.some((m) => m.includes('not 16,16'))).toBe(true);
   });
 
   it('fails text not 12 after the picture', () => {
     const card = good(0);
-    const out = listCardViolations([{ ...card, text: { x: 76, y: 9, width: 200, height: 42 } }]);
+    const out = listCardViolations([{ ...card, text: { x: 84, y: 14, width: 200, height: 44 } }]);
     expect(out.some((m) => m.includes('not 12'))).toBe(true);
   });
 
@@ -505,13 +564,13 @@ describe('trayTileViolations', () => {
 describe('list cards: no preview puts the tag under the time', () => {
   const card = (tagRight: number, over: Partial<ListCardGeom> = {}): ListCardGeom => ({
     label: 'card',
-    card: { x: 0, y: 0, width: 390, height: 60 },
+    card: { x: 0, y: 0, width: 390, height: 72 },
     borderLeft: 0,
     borderTop: 0,
-    picture: { x: 16, y: 10, width: 40, height: 40 },
-    text: { x: 68, y: 9, width: 306, height: 42 },
-    time: { x: 344, y: 9, width: 30, height: 20 },
-    tag: { x: tagRight - 40, y: 39, width: 40, height: 20 },
+    picture: { x: 16, y: 12, width: 48, height: 48 },
+    text: { x: 76, y: 14, width: 298, height: 44 },
+    time: { x: 344, y: 14, width: 30, height: 20 },
+    tag: { x: tagRight - 40, y: 38, width: 40, height: 20 },
     hasPreview: false,
     unread: false,
     ...over,
@@ -533,7 +592,7 @@ describe('list cards: no preview puts the tag under the time', () => {
   });
 });
 
-describe('chips (ui/Chip): visible 32, tap box 44', () => {
+describe('chips (ui/Chip): visible by density (32 / 36 / 40), tap box 44', () => {
   const chip = (faceHeight: number, hit: Partial<Box> = {}): ChipGeom => {
     const h = { x: 16, y: 100, width: 60, height: 44, ...hit };
     return {
@@ -543,26 +602,43 @@ describe('chips (ui/Chip): visible 32, tap box 44', () => {
     };
   };
 
-  it('passes a 32 face centred in a 44 box', () => {
-    expect(chipViolations([chip(32), chip(32, { width: 44 })])).toEqual([]);
+  it('the density faces: Compact 32, Cozy 36 (default), Calm 40; the tap box 44 in all', () => {
+    expect(CHIP_FACE_BY_DENSITY).toEqual({ compact: 32, cozy: 36, calm: 40 });
+    expect(CHIP_FACE_PX).toBe(36);
+    expect(CHIP_HIT_PX).toBe(44);
   });
 
-  it('fails a face that is still 44 tall', () => {
-    expect(chipViolations([chip(44)])).toEqual([expect.stringContaining('not 32')]);
+  it('passes a 36 face centred in a 44 box (Cozy default)', () => {
+    expect(chipViolations([chip(36), chip(36, { width: 44 })])).toEqual([]);
+  });
+
+  it.each([
+    ['compact', 32],
+    ['cozy', 36],
+    ['calm', 40],
+  ] as const)('passes the %s face (%i) centred in a 44 box', (density, face) => {
+    expect(chipViolations([chip(face), chip(face, { width: 44 })], density)).toEqual([]);
+  });
+
+  it('fails a face that is not the density height (a 32 on Cozy, a 36 on Calm, a 44 anywhere)', () => {
+    expect(chipViolations([chip(32)])).toEqual([expect.stringContaining('not 36')]);
+    expect(chipViolations([chip(36)], 'calm')).toEqual([expect.stringContaining('not 40')]);
+    expect(chipViolations([chip(36)], 'compact')).toEqual([expect.stringContaining('not 32')]);
+    expect(chipViolations([chip(44)])).toEqual([expect.stringContaining('not 36')]);
   });
 
   it('fails a tap box under 44 tall or wide', () => {
-    expect(chipViolations([chip(32, { height: 32 })]).some((m) => m.includes('not 44'))).toBe(true);
-    expect(chipViolations([chip(32, { width: 41.5 })])).toEqual([
+    expect(chipViolations([chip(36, { height: 36 })]).some((m) => m.includes('not 44'))).toBe(true);
+    expect(chipViolations([chip(36, { width: 41.5 })])).toEqual([
       expect.stringContaining('under 44'),
     ]);
   });
 
   it('fails a face pushed off centre, or a chip with no face', () => {
-    const off = chip(32);
+    const off = chip(36);
     off.face = { ...off.face!, y: off.hit.y };
     expect(chipViolations([off])).toEqual([expect.stringContaining('not centred')]);
-    expect(chipViolations([{ ...chip(32), face: null }])).toEqual([
+    expect(chipViolations([{ ...chip(36), face: null }])).toEqual([
       expect.stringContaining('no visible chip face'),
     ]);
   });

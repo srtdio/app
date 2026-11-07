@@ -2,7 +2,13 @@
 // aria-selected on a tab chip, neither on an action chip.
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { Chip, chipStateAria } from '@/components/ui/Chip';
+import {
+  Chip,
+  CHIP_FACE_SIZE,
+  CHIP_PICKED_EDGE,
+  CHIP_REST_EDGE,
+  chipStateAria,
+} from '@/components/ui/Chip';
 
 describe('chipStateAria', () => {
   it('toggle chips are aria-pressed; tab chips are role tab + aria-selected', () => {
@@ -97,8 +103,8 @@ describe('Chip onClear', () => {
   });
 });
 
-describe('Chip 32 visible, 44 tap box', () => {
-  it('the button is the transparent 44 box; the face is the 32 chip, 12 side padding, text-md', () => {
+describe('Chip visible by density (36 Cozy, 32 Compact, 40 Calm), 44 tap box', () => {
+  it('the button is the transparent 44 box; the face is the density chip (16 side padding, 12 in Compact), text-md', () => {
     for (const size of ['sm', 'tap'] as const) {
       const html = renderToStaticMarkup(<Chip label="Open" size={size} selected={false} />);
       const button = /<button[^>]*>/.exec(html)?.[0] ?? '';
@@ -140,8 +146,81 @@ describe('Chip 32 visible, 44 tap box', () => {
     expect(button).not.toContain('px-2');
     expect(button).not.toContain('truncate');
     const face = /<span data-chip-face=""[^>]*>/.exec(html)?.[0] ?? '';
-    expect(face).toContain('px-2');
-    expect(face).not.toContain('px-3');
+    const faceTokens = (/class="([^"]*)"/.exec(face)?.[1] ?? '').split(' ');
+    expect(faceTokens).toContain('px-2');
+    // The call site's px-2 replaces the Cozy px-4 (twMerge); the density
+    // variants are a separate group and stay.
+    expect(faceTokens).not.toContain('px-4');
+    expect(faceTokens).not.toContain('px-3');
     expect(face).toContain('truncate');
+  });
+});
+
+describe('Chip edges (8 Nov 2026): rest on the strong edge, picked on the ink line', () => {
+  const faceClass = (html: string): string[] =>
+    (/<span data-chip-face=""[^>]*class="([^"]*)"/.exec(html)?.[1] ?? '').split(' ');
+
+  it('the exported edges', () => {
+    expect(CHIP_REST_EDGE).toBe('border-border-strong text-fg-2');
+    expect(CHIP_PICKED_EDGE).toBe('border-fg text-fg');
+    expect(CHIP_FACE_SIZE).toBe('min-h-9 px-4 compact:min-h-8 compact:px-3 calm:min-h-10');
+  });
+
+  it('rest: border-border-strong in fg-2, never the plain hairline, no fill', () => {
+    for (const html of [
+      renderToStaticMarkup(<Chip label="Open" />),
+      renderToStaticMarkup(<Chip label="Open" selected={false} />),
+      renderToStaticMarkup(<Chip label="Open" size="tap" selected={false} />),
+    ]) {
+      const face = faceClass(html);
+      expect(face).toEqual(expect.arrayContaining(['border', 'border-border-strong', 'text-fg-2']));
+      expect(face).not.toContain('border-border');
+      expect(face).not.toContain('border-fg');
+      expect(face.filter((c) => c.startsWith('bg-'))).toEqual([]);
+    }
+  });
+
+  it('picked: the ink line border-fg in fg, no fill, no strong edge', () => {
+    for (const html of [
+      renderToStaticMarkup(<Chip label="Open" selected />),
+      renderToStaticMarkup(<Chip label="Open" tab selected />),
+      renderToStaticMarkup(<Chip label="Open" size="tap" selected />),
+    ]) {
+      const face = faceClass(html);
+      expect(face).toEqual(expect.arrayContaining(['border', 'border-fg', 'text-fg']));
+      expect(face).not.toContain('border-border-strong');
+      expect(face).not.toContain('text-fg-2');
+      expect(face.filter((c) => c.startsWith('bg-'))).toEqual([]);
+    }
+  });
+
+  it("the 'add' variant is unchanged: dashed strong edge in fg-3, selected or not", () => {
+    for (const selected of [undefined, false, true]) {
+      const face = faceClass(
+        renderToStaticMarkup(
+          <Chip label="Add" variant="add" {...(selected !== undefined ? { selected } : {})} />,
+        ),
+      );
+      expect(face).toEqual(
+        expect.arrayContaining(['border-dashed', 'border-border-strong', 'text-fg-3']),
+      );
+      expect(face).not.toContain('text-fg-2');
+      expect(face).not.toContain('border-fg');
+    }
+  });
+
+  it("size 'tap' centres the label in its cell; the face size follows the density", () => {
+    const tap = faceClass(renderToStaticMarkup(<Chip label="Cozy" size="tap" />));
+    expect(tap).toEqual(
+      expect.arrayContaining([
+        'justify-center',
+        'text-center',
+        'min-h-9',
+        'compact:min-h-8',
+        'calm:min-h-10',
+      ]),
+    );
+    const sm = faceClass(renderToStaticMarkup(<Chip label="Cozy" />));
+    expect(sm).not.toContain('text-center');
   });
 });

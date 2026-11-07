@@ -1999,6 +1999,111 @@ SCREENS.push({
   steps: planScreenToday,
 });
 
+// Density (Compact / Cozy / Calm, 8 Nov 2026; Cozy is the default every other
+// screen shows). The device's density is set before the app boots: the boot
+// key (src/lib/density bootDensity) and this account's key (adoptUserDensity),
+// with the users row agreeing so the profile read's reconcile keeps it.
+type VisualDensity = 'compact' | 'cozy' | 'calm';
+
+/** A prepare step that boots the app in `density` on this device for ME. */
+function withDensity(density: VisualDensity) {
+  return async (network: HarnessNetwork, page: Page): Promise<void> => {
+    for (const u of network.world.tables.users ?? []) {
+      if (u.id === ME) u.density = density;
+    }
+    await page.addInitScript(
+      ([bootKey, userKey, value]) => {
+        window.localStorage.setItem(bootKey, value);
+        window.localStorage.setItem(userKey, value);
+      },
+      ['sorted-density', `sorted-density:${ME}`, density] as const,
+    );
+  };
+}
+
+/** <html data-density> is the density the screen was asked for (before the shot). */
+async function expectDensity(page: Page, density: VisualDensity): Promise<void> {
+  await expect(page.locator('html')).toHaveAttribute('data-density', density);
+}
+
+/** The account menu (Topbar avatar), open on its Density row. */
+async function openAccountMenuDensity(page: Page): Promise<void> {
+  await tap([page.getByRole('button', { name: 'Account menu' })], 'Account menu');
+  await waitFor([page.locator('[data-density-row]')], 'Density row');
+  await waitFor([page.locator('[data-density-pick="cozy"][data-selected="true"]')], 'Cozy picked');
+}
+
+// The account menu with the Density row under Appearance (Cozy picked).
+SCREENS.push({
+  name: 'account-menu-density',
+  seed: creator,
+  url: '/pipeline',
+  steps: async (page) => {
+    await pipelineReady(page);
+    await openAccountMenuDensity(page);
+  },
+});
+
+// New plan (agency): Add from bank opens the bank picker in many-pick mode.
+SCREENS.push({
+  name: 'new-plan-bank',
+  seed: creator,
+  extra: seedChatPlanBank,
+  url: '/chat',
+  steps: async (page) => {
+    await openDm(page);
+    await pickTrayTile(page, 'plan');
+    const plans = page.getByRole('dialog', { name: 'Plans' });
+    await tap([plans.locator('[data-plan-pick-new]')], 'New plan');
+    const compose = page.locator('[data-plan-page="compose"]');
+    await tap([compose.locator('[data-plan-add-bank]')], 'Add from bank');
+    await waitFor(
+      [page.locator(`[data-plan-from-bank-idea="${FROM_BANK_IDEAS[0]}"]`)],
+      'bank picker list',
+    );
+  },
+});
+
+// The plan screen in each density.
+for (const density of ['compact', 'cozy', 'calm'] as const) {
+  SCREENS.push({
+    name: `plan-screen-${density}`,
+    seed: creator,
+    extra: seedChatPlan,
+    prepare: withDensity(density),
+    url: '/chat',
+    steps: async (page) => {
+      await openChatPlan(page);
+      await expectDensity(page, density);
+    },
+  });
+}
+
+// The two list screens in the non-default densities (rows 60 / 80, chips 32 /
+// 40; layout-checks reads <html data-density> for the list-card and chip rules).
+for (const density of ['compact', 'calm'] as const) {
+  SCREENS.push({
+    name: `pipeline-${density}`,
+    seed: creator,
+    prepare: withDensity(density),
+    url: '/pipeline',
+    steps: async (page) => {
+      await pipelineReady(page);
+      await expectDensity(page, density);
+    },
+  });
+  SCREENS.push({
+    name: `chat-list-${density}`,
+    seed: creator,
+    prepare: withDensity(density),
+    url: '/chat',
+    steps: async (page) => {
+      await chatListAllRows(page);
+      await expectDensity(page, density);
+    },
+  });
+}
+
 // The New chat sheet with New group blocked by the groups-per-workspace rule
 // (20261029120000_group_limit.sql): the workspace's group_allowance (1, the
 // default) is already used, so capabilities_for_workspace answers
@@ -4801,7 +4906,8 @@ async function capture(screen: Screen, page: Page): Promise<void> {
 
 // The screens that list ui/ListCards (Pipeline, Briefs, Assets, the Chat
 // list, Activity, the Plan tab and its Bank): checkLayout's list-card rule
-// (every row 60 tall, the 40 picture at 16,10 in the bled row, 12 to the text)
+// (every row the density height, 72 Cozy / 60 Compact / 80 Calm, the picture
+// at 16 and the density inset in the bled row, 12 to the text)
 // runs on every screen; these must show cards. The chip screens above may land
 // on a chip's zero line, so they are checked whenever cards show.
 const LIST_CARD_SCREENS = new Set([
@@ -4829,6 +4935,10 @@ const LIST_CARD_SCREENS = new Set([
   'assets-select-on',
   'plan-tab-bank-select-on',
   'chat-list-select-on',
+  'pipeline-compact',
+  'pipeline-calm',
+  'chat-list-compact',
+  'chat-list-calm',
 ]);
 
 // Laptop dark: these screens also run in the laptop-dark project

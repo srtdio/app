@@ -289,25 +289,54 @@ export function boxText(box: Box): string {
   return `${r(box.x)},${r(box.y)} ${r(box.width)}x${r(box.height)}`;
 }
 
-/** ui/ListCard's geometry (src/components/ui/ListCard.tsx, flat look 7 Nov 2026). */
-export const LIST_CARD_PICTURE_PX = 40;
+/**
+ * Density (8 Nov 2026): <html data-density> is compact, cozy (the default) or
+ * calm. List rows and chips size by it through CSS; the checks read it from the
+ * page and measure against that density's numbers.
+ */
+export type LayoutDensity = 'compact' | 'cozy' | 'calm';
+export const DEFAULT_LAYOUT_DENSITY: LayoutDensity = 'cozy';
+
+/** The density a page's <html data-density> names; Cozy when absent or unknown. Pure. */
+export function layoutDensity(value: string | null | undefined): LayoutDensity {
+  return value === 'compact' || value === 'calm' || value === 'cozy'
+    ? value
+    : DEFAULT_LAYOUT_DENSITY;
+}
+
+/**
+ * ui/ListCard's geometry per density (src/components/ui/ListCard.tsx): the row
+ * height, the picture (square) and its inset above and below.
+ * Compact 10 + 40 + 10 = 60; Cozy 12 + 48 + 12 = 72; Calm 16 + 48 + 16 = 80.
+ */
+export const LIST_CARD_GEOM_BY_DENSITY: Record<
+  LayoutDensity,
+  { height: number; picture: number; insetY: number }
+> = {
+  compact: { height: 60, picture: 40, insetY: 10 },
+  cozy: { height: 72, picture: 48, insetY: 12 },
+  calm: { height: 80, picture: 48, insetY: 16 },
+};
+
+/** ui/ListCard's picture in the default density (Cozy 48). */
+export const LIST_CARD_PICTURE_PX = LIST_CARD_GEOM_BY_DENSITY.cozy.picture;
 /**
  * The picture's left inset inside the row box: the row bleeds -mx-4 past the
  * gutter and pads px-4 back, so the picture sits 16 inside the bled row (on
  * the page gutter). No border.
  */
 export const LIST_CARD_INSET_X_PX = 16;
-/** The picture's top inset: centred in the 60 row, 10 above and below the 40. */
-export const LIST_CARD_INSET_Y_PX = 10;
+/** The picture's top inset in the default density: centred in the 72 row, 12 above and below the 48. */
+export const LIST_CARD_INSET_Y_PX = LIST_CARD_GEOM_BY_DENSITY.cozy.insetY;
 /** Picture to text column. */
 export const LIST_CARD_GAP_PX = 12;
 /**
  * Every ui/ListCard in all seven lists (Pipeline, Briefs, Assets, the Chat list,
- * Activity, the Plan tab and its Bank) is this tall: the flat h-15 row, 10 +
- * the 40 picture + 10 (the two 20 lines and the 2 between, 42, centre inside
- * it). No border, no radius.
+ * Activity, the Plan tab and its Bank) is the density height: in the default
+ * Cozy the flat h-18 row, 12 + the 48 picture + 12 (the two 20 lines and the 4
+ * between, 44, centre inside it). No border, no radius.
  */
-export const LIST_CARD_HEIGHT_PX = 60;
+export const LIST_CARD_HEIGHT_PX = LIST_CARD_GEOM_BY_DENSITY.cozy.height;
 /** Cards are the same height (on a screen, and LIST_CARD_HEIGHT_PX) within this many px. */
 export const LIST_CARD_HEIGHT_TOLERANCE_PX = 1;
 /** Sizes and offsets within this many px are equal (sub-pixel layout rounding). */
@@ -337,14 +366,19 @@ const near = (a: number, b: number, tolerance = LIST_CARD_PX_TOLERANCE): boolean
 
 /**
  * The list card rule: every card on a screen has the same height (within 1px),
- * and that height is LIST_CARD_HEIGHT_PX (60) on every screen, so the seven lists'
- * rows are one height across the app; each row's picture is 40x40, on the left,
- * 16 inside the bled row (x) and 10 from its top (y), with the text column 12
- * after it. Pure.
+ * and that height is the density's (Compact 60, Cozy 72, Calm 80) on every
+ * screen, so the seven lists' rows are one height across the app; each row's
+ * picture is the density's square (40 Compact, else 48), on the left, 16 inside
+ * the bled row (x) and the density inset (10 / 12 / 16) from its top (y), with
+ * the text column 12 after it. Pure.
  */
-export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
+export function listCardViolations(
+  cards: readonly ListCardGeom[],
+  density: LayoutDensity = DEFAULT_LAYOUT_DENSITY,
+): string[] {
   const out: string[] = [];
   const first = cards[0];
+  const geom = LIST_CARD_GEOM_BY_DENSITY[density];
   for (const c of cards) {
     if (
       first !== undefined &&
@@ -354,9 +388,9 @@ export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
         `${c.label} is ${c.card.height}px tall, ${first.label} is ${first.card.height}px (cards differ)`,
       );
     }
-    if (Math.abs(c.card.height - LIST_CARD_HEIGHT_PX) > LIST_CARD_HEIGHT_TOLERANCE_PX) {
+    if (Math.abs(c.card.height - geom.height) > LIST_CARD_HEIGHT_TOLERANCE_PX) {
       out.push(
-        `${c.label} is ${c.card.height}px tall, not ${LIST_CARD_HEIGHT_PX} (every list card is one height)`,
+        `${c.label} is ${c.card.height}px tall, not ${geom.height} (every list card is one height; ${density})`,
       );
     }
     if (c.picture === null) {
@@ -364,16 +398,16 @@ export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
       continue;
     }
     const p = c.picture;
-    if (!near(p.width, LIST_CARD_PICTURE_PX) || !near(p.height, LIST_CARD_PICTURE_PX)) {
+    if (!near(p.width, geom.picture) || !near(p.height, geom.picture)) {
       out.push(
-        `${c.label} picture is ${p.width}x${p.height}, not ${LIST_CARD_PICTURE_PX}x${LIST_CARD_PICTURE_PX}`,
+        `${c.label} picture is ${p.width}x${p.height}, not ${geom.picture}x${geom.picture}`,
       );
     }
     const left = p.x - c.card.x - c.borderLeft;
     const top = p.y - c.card.y - c.borderTop;
-    if (!near(left, LIST_CARD_INSET_X_PX) || !near(top, LIST_CARD_INSET_Y_PX)) {
+    if (!near(left, LIST_CARD_INSET_X_PX) || !near(top, geom.insetY)) {
       out.push(
-        `${c.label} picture sits ${left},${top} inside the row, not ${LIST_CARD_INSET_X_PX},${LIST_CARD_INSET_Y_PX} (left, top)`,
+        `${c.label} picture sits ${left},${top} inside the row, not ${LIST_CARD_INSET_X_PX},${geom.insetY} (left, top)`,
       );
     }
     if (c.text !== null) {
@@ -399,8 +433,17 @@ export function listCardViolations(cards: readonly ListCardGeom[]): string[] {
   return out;
 }
 
-/** ui/Chip: the visible face is 32 tall inside a tap box at least 44 tall and wide. */
-export const CHIP_FACE_PX = 32;
+/**
+ * ui/Chip: the visible face by density (Compact 32, Cozy 36, Calm 40) inside a
+ * tap box at least 44 tall and wide in every density.
+ */
+export const CHIP_FACE_BY_DENSITY: Record<LayoutDensity, number> = {
+  compact: 32,
+  cozy: 36,
+  calm: 40,
+};
+/** The chip face in the default density (Cozy 36). */
+export const CHIP_FACE_PX = CHIP_FACE_BY_DENSITY.cozy;
 export const CHIP_HIT_PX = 44;
 
 /** One ui/Chip: its tap box (the button) and its visible face ([data-chip-face]). */
@@ -411,11 +454,15 @@ export interface ChipGeom {
 }
 
 /**
- * The chip rule: the face is 32 tall (0.5px rounding), vertically centred in a
- * tap box at least 44 tall and 44 wide. Pure.
+ * The chip rule: the face is the density height (32 / 36 / 40, 0.5px
+ * rounding), vertically centred in a tap box at least 44 tall and 44 wide. Pure.
  */
-export function chipViolations(chips: readonly ChipGeom[]): string[] {
+export function chipViolations(
+  chips: readonly ChipGeom[],
+  density: LayoutDensity = DEFAULT_LAYOUT_DENSITY,
+): string[] {
   const out: string[] = [];
+  const faceHeight = CHIP_FACE_BY_DENSITY[density];
   for (const c of chips) {
     if (c.hit.height < CHIP_HIT_PX - LIST_CARD_PX_TOLERANCE) {
       out.push(`${c.label} tap box is ${c.hit.height}px tall, not 44`);
@@ -427,8 +474,8 @@ export function chipViolations(chips: readonly ChipGeom[]): string[] {
       out.push(`${c.label} has no visible chip face`);
       continue;
     }
-    if (!near(c.face.height, CHIP_FACE_PX)) {
-      out.push(`${c.label} chip is ${c.face.height}px tall, not 32`);
+    if (!near(c.face.height, faceHeight)) {
+      out.push(`${c.label} chip is ${c.face.height}px tall, not ${faceHeight} (${density})`);
     }
     const above = c.face.y - c.hit.y;
     const below = c.hit.y + c.hit.height - (c.face.y + c.face.height);

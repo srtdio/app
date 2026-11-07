@@ -275,7 +275,7 @@ describe('ActivityCard pictures', () => {
     expect(video).toContain('data-post-placeholder="video"');
   });
 
-  it('a mention is that person: the actor photo circle at 40', () => {
+  it('a mention is that person: the actor photo circle at 48 (40 in Compact)', () => {
     const html = renderCard([
       item({
         eventType: 'mention',

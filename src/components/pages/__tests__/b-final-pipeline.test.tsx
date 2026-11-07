@@ -66,7 +66,9 @@ describe('Pipeline card is ui/ListCard', () => {
   it('renders the part: the flat row frame, 16 sides, one press surface behind the content', () => {
     const out = card({ viewer: { role: 'agency', approverFirstNames: [] } });
     expect(out).toContain('data-list-card=""');
-    expect(out).toMatch(/data-list-card=""[^>]*class="relative -mx-4 flex h-15 min-w-0 px-4\b/);
+    expect(out).toMatch(
+      /data-list-card=""[^>]*class="relative -mx-4 flex h-18 min-w-0 px-4 py-3 compact:h-15 compact:py-row-inset calm:h-20 calm:py-4\b/,
+    );
     expect(out).not.toContain('lit-card');
     expect(out).not.toContain('rounded-xl');
     expect(out).not.toMatch(/data-list-card-body=""[^>]*class="[^"]*\bp-3\b/);
