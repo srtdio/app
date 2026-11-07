@@ -3,6 +3,7 @@
 // its files confirm), "Delete for me" (hides it from this person only, behind
 // an Undo), then Cancel. Both deletes are danger Buttons. The rule of which
 // rows show is deleteChoices / selectionDeleteChoices (src/lib/chat/delete-flow.ts).
+// Phone: full-width stack. Laptop: one row on the trailing edge, Cancel first.
 
 import type { ReactElement } from 'react';
 import { Button } from '@/components/ui/Button';
@@ -27,13 +28,13 @@ export function DeleteSheet(props: {
 }): ReactElement {
   return (
     <Sheet open={props.open} onClose={props.onClose} title={deleteSheetTitle(props.count)}>
-      <div data-testid="delete-sheet" className="flex flex-col gap-2">
+      <div data-testid="delete-sheet" className="flex flex-col gap-2 md:flex-row-reverse md:justify-start">
         {props.everyone ? (
           <Button
             type="button"
             variant="danger"
             data-delete-choice="everyone"
-            className="w-full"
+            className="w-full md:w-auto"
             onClick={() => {
               props.onClose();
               props.onEveryone();
@@ -46,7 +47,7 @@ export function DeleteSheet(props: {
           type="button"
           variant="danger"
           data-delete-choice="me"
-          className="w-full"
+          className="w-full md:w-auto"
           onClick={() => {
             props.onClose();
             props.onForMe();
@@ -58,7 +59,7 @@ export function DeleteSheet(props: {
           type="button"
           variant="secondary"
           data-delete-choice="cancel"
-          className="w-full"
+          className="w-full md:w-auto"
           onClick={props.onClose}
         >
           Cancel
